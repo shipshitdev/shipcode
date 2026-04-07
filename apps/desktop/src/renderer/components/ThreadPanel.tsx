@@ -70,6 +70,16 @@ export function ThreadPanel() {
 					issues={issues}
 					onIssueClick={() => {/* TODO: select thread linked to issue */}}
 					onRefresh={() => refetchIssues()}
+					onStartPipeline={(issue) => {
+						window.shipcode.invoke('github:start-issue', {
+							projectId: activeProjectId,
+							issueNumber: issue.issueNumber,
+						}).then(() => refetchIssues())
+					}}
+					onRetry={(issue) => {
+						// Reset issue to todo status — TODO: implement IPC handler
+						refetchIssues()
+					}}
 				/>
 			) : (
 			<ThreadList

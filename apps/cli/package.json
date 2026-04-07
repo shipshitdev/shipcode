@@ -1,0 +1,28 @@
+{
+  "name": "@shipcode/cli",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "shipcode": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@shipcode/shared": "workspace:*",
+    "@shipcode/db": "workspace:*",
+    "@shipcode/git": "workspace:*",
+    "@shipcode/agents": "workspace:*",
+    "@shipcode/pipeline": "workspace:*",
+    "commander": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}

@@ -154,6 +154,42 @@ export function registerIpcHandlers(
     return cached
   })
 
+  ipcMain.handle('github:start-issue', async (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
+    const project = queries.projects.getById(projectId)
+    if (!project) throw new Error(`Project ${projectId} not found`)
+
+    const issue = queries.githubIssues.getByNumber(projectId, issueNumber)
+    if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`)
+
+    // Idempotency: reject if issue already has an active thread
+    if (issue.threadId) {
+      const thread = queries.threads.getById(issue.threadId)
+      if (thread && !['failed', 'completed'].includes(thread.status)) {
+        throw new Error(`Issue #${issueNumber} already has active thread`)
+      }
+    }
+
+    // Update status and create thread
+    queries.githubIssues.updatePipelineStatus(issue.id, 'planning')
+    const thread = queries.threads.create(projectId, issue.body ?? issue.title, issue.title)
+    queries.githubIssues.linkThread(issue.id, thread.id)
+
+    // Start pipeline
+    try {
+      await pipeline.startFromGitHubIssue(
+        project.id,
+        project.path,
+        { number: issue.issueNumber, title: issue.title, body: issue.body, labels: issue.labels },
+        'claude'
+      )
+    } catch (err) {
+      // Rollback
+      queries.githubIssues.updatePipelineStatus(issue.id, 'todo')
+      queries.threads.updateStatus(thread.id, 'failed')
+      throw err
+    }
+  })
+
   // === Verification handlers ===
   ipcMain.handle('verification:get', (_event, { threadId }: { threadId: string }) => {
     return queries.verifications.getLatest(threadId)
