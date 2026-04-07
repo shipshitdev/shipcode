@@ -1,14 +1,14 @@
 import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useAppStore } from '../stores/app-store'
-import type { SystemHealth } from '@crosscode/shared'
+import type { SystemHealth } from '@shipcode/shared'
 
 export function HealthBanner() {
 	const { systemHealth, setSystemHealth } = useAppStore()
 
 	const { data } = useQuery<SystemHealth>({
 		queryKey: ['health'],
-		queryFn: () => window.crosscode.invoke('health:check'),
+		queryFn: () => window.shipcode.invoke('health:check'),
 		staleTime: 60_000,
 	})
 

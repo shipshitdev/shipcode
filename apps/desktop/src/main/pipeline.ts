@@ -1,9 +1,9 @@
 import type { BrowserWindow } from 'electron'
-import type { ProcessManager } from '@crosscode/agents'
-import { StreamParser, buildPlanPrompt, buildReviewPrompt, buildRevisionPrompt, buildVerificationPrompt } from '@crosscode/agents'
-import type { ThreadQueries, PlanQueries, ReviewQueries, VerificationQueries, GitHubIssueQueries } from '@crosscode/db'
-import type { CrossCodePlan, PipelinePhase } from '@crosscode/shared'
-import { PIPELINE_MAX_RETRIES, MAX_VERIFICATION_RETRIES, MAX_REVIEW_ROUNDS } from '@crosscode/shared'
+import type { ProcessManager } from '@shipcode/agents'
+import { StreamParser, buildPlanPrompt, buildReviewPrompt, buildRevisionPrompt, buildVerificationPrompt } from '@shipcode/agents'
+import type { ThreadQueries, PlanQueries, ReviewQueries, VerificationQueries, GitHubIssueQueries } from '@shipcode/db'
+import type { ShipCodePlan, PipelinePhase } from '@shipcode/shared'
+import { PIPELINE_MAX_RETRIES, MAX_VERIFICATION_RETRIES, MAX_REVIEW_ROUNDS } from '@shipcode/shared'
 
 interface PipelineContext {
   threadId: string
@@ -116,7 +116,7 @@ export function createPipeline(deps: PipelineDeps) {
     deps.processManager.on('exit', exitHandler)
   }
 
-  async function startReview(threadId: string, plan: CrossCodePlan) {
+  async function startReview(threadId: string, plan: ShipCodePlan) {
     const context = activePipelines.get(threadId)
     if (!context) return
 
@@ -195,7 +195,7 @@ export function createPipeline(deps: PipelineDeps) {
     deps.processManager.on('exit', exitHandler)
   }
 
-  async function startRevision(threadId: string, plan: CrossCodePlan, reviewFeedback: string) {
+  async function startRevision(threadId: string, plan: ShipCodePlan, reviewFeedback: string) {
     const context = activePipelines.get(threadId)
     if (!context) return
 
@@ -238,7 +238,7 @@ export function createPipeline(deps: PipelineDeps) {
     deps.processManager.on('exit', exitHandler)
   }
 
-  async function startExecution(threadId: string, plan: CrossCodePlan) {
+  async function startExecution(threadId: string, plan: ShipCodePlan) {
     const context = activePipelines.get(threadId)
     if (!context) return
 
@@ -431,7 +431,7 @@ export function createPipeline(deps: PipelineDeps) {
       // Build PR body
       const latestPlan = deps.plans.getLatest(threadId)
       const plan = latestPlan?.structured
-      const title = plan?.objective ?? `CrossCode: Issue #${context.githubIssueNumber}`
+      const title = plan?.objective ?? `ShipCode: Issue #${context.githubIssueNumber}`
       const body = [
         `## Summary`,
         plan?.objective ?? '',
@@ -439,7 +439,7 @@ export function createPipeline(deps: PipelineDeps) {
         `Closes #${context.githubIssueNumber}`,
         '',
         `---`,
-        `*Autonomous implementation by CrossCode*`,
+        `*Autonomous implementation by ShipCode*`,
       ].join('\n')
 
       // Create PR
@@ -457,7 +457,7 @@ export function createPipeline(deps: PipelineDeps) {
         // Comment on issue
         try {
           execSync(
-            `gh issue comment ${context.githubIssueNumber} --body "PR #${prNumber} created by CrossCode."`,
+            `gh issue comment ${context.githubIssueNumber} --body "PR #${prNumber} created by ShipCode."`,
             { cwd, encoding: 'utf-8' }
           )
         } catch {}

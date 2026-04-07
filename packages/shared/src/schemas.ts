@@ -14,7 +14,7 @@ export const planFileChangeSchema = z.object({
   fromPath: z.string().optional(),
 })
 
-export const crossCodePlanSchema = z.object({
+export const shipCodePlanSchema = z.object({
   id: z.string().min(1),
   threadId: z.string().min(1),
   version: z.number().int().positive(),

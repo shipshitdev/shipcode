@@ -1,6 +1,6 @@
 import type {
   AppSettings,
-  CrossCodePlan,
+  ShipCodePlan,
   DiffRecord,
   FileChange,
   GitHubIssueCacheRecord,
@@ -35,7 +35,7 @@ export interface IpcInvokeChannels {
   'pipeline:skip-review': { args: { threadId: string }; result: void }
 
   'plan:get': { args: { threadId: string }; result: PlanRecord | null }
-  'plan:update': { args: { planId: string; structured: CrossCodePlan }; result: void }
+  'plan:update': { args: { planId: string; structured: ShipCodePlan }; result: void }
 
   'review:get': { args: { planId: string }; result: ReviewRecord | null }
 
@@ -71,7 +71,7 @@ export interface IpcStreamChannels {
   'agent:output': { processId: string; chunk: string }
   'agent:state': { processId: string; type: string; state: AgentState }
   'pipeline:phase': { threadId: string; phase: PipelinePhase }
-  'plan:parsed': { threadId: string; plan: CrossCodePlan }
+  'plan:parsed': { threadId: string; plan: ShipCodePlan }
   'review:parsed': { threadId: string; review: PlanReview }
   'files:changed': { projectId: string; changes: FileChange[] }
   'verification:parsed': { threadId: string; verification: VerificationResult }

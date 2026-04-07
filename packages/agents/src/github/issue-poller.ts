@@ -1,4 +1,4 @@
-import type { GitHubIssue } from '@crosscode/shared'
+import type { GitHubIssue } from '@shipcode/shared'
 import type { GhCli } from './gh-cli'
 
 export class IssuePoller {

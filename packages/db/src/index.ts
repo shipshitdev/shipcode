@@ -16,7 +16,7 @@ let db: Database.Database | null = null
 export function getDatabase(dataDir: string): Database.Database {
   if (db) return db
 
-  const dbPath = path.join(dataDir, 'crosscode.db')
+  const dbPath = path.join(dataDir, 'shipcode.db')
   db = new Database(dbPath)
 
   // Enable WAL mode for better concurrent read performance

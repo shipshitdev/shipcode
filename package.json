@@ -9,7 +9,7 @@
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
     "clean": "turbo run clean",
-    "dev:desktop": "turbo run dev --filter=@crosscode/desktop"
+    "dev:desktop": "turbo run dev --filter=@shipcode/desktop"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",

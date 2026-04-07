@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3'
 import { nanoid } from 'nanoid'
-import type { PlanRecord, PlanStatus, CrossCodePlan } from '@crosscode/shared'
+import type { PlanRecord, PlanStatus, ShipCodePlan } from '@shipcode/shared'
 
 export class PlanQueries {
   constructor(private db: Database.Database) {}
@@ -17,7 +17,7 @@ export class PlanQueries {
     return row ? mapPlan(row) : null
   }
 
-  create(threadId: string, rawOutput: string, structured: CrossCodePlan | null, version: number): PlanRecord {
+  create(threadId: string, rawOutput: string, structured: ShipCodePlan | null, version: number): PlanRecord {
     const id = nanoid()
     const now = new Date().toISOString()
     const structuredJson = structured ? JSON.stringify(structured) : null
@@ -34,7 +34,7 @@ export class PlanQueries {
     this.db.prepare('UPDATE plans SET status = ? WHERE id = ?').run(status, id)
   }
 
-  updateStructured(id: string, structured: CrossCodePlan): void {
+  updateStructured(id: string, structured: ShipCodePlan): void {
     this.db.prepare('UPDATE plans SET structured = ? WHERE id = ?').run(JSON.stringify(structured), id)
   }
 

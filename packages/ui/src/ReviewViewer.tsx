@@ -1,4 +1,4 @@
-import type { PlanReview, ReviewFinding } from '@crosscode/shared'
+import type { PlanReview, ReviewFinding } from '@shipcode/shared'
 
 interface ReviewViewerProps {
 	review: PlanReview | null

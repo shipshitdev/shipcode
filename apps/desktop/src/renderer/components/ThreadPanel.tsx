@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAppStore } from '../stores/app-store'
-import { ThreadList, KanbanBoard } from '@crosscode/ui'
-import type { Thread, GitHubIssueCacheRecord } from '@crosscode/shared'
+import { ThreadList, KanbanBoard } from '@shipcode/ui'
+import type { Thread, GitHubIssueCacheRecord } from '@shipcode/shared'
 
 export function ThreadPanel() {
 	const { activeProjectId, activeThreadId, selectThread, kanbanView, toggleKanbanView } = useAppStore()
@@ -12,20 +12,20 @@ export function ThreadPanel() {
 
 	const { data: threads = [] } = useQuery<Thread[]>({
 		queryKey: ['threads', activeProjectId],
-		queryFn: () => window.crosscode.invoke('thread:list', { projectId: activeProjectId }),
+		queryFn: () => window.shipcode.invoke('thread:list', { projectId: activeProjectId }),
 		enabled: !!activeProjectId,
 	})
 
 	const { data: issues = [], refetch: refetchIssues } = useQuery<GitHubIssueCacheRecord[]>({
 		queryKey: ['github-issues', activeProjectId],
-		queryFn: () => window.crosscode.invoke('github:refresh-issues', { projectId: activeProjectId }),
+		queryFn: () => window.shipcode.invoke('github:refresh-issues', { projectId: activeProjectId }),
 		enabled: !!activeProjectId && kanbanView,
 		staleTime: 30_000,
 	})
 
 	const createThread = useMutation({
 		mutationFn: (prompt: string) =>
-			window.crosscode.invoke<Thread>('thread:create', {
+			window.shipcode.invoke<Thread>('thread:create', {
 				projectId: activeProjectId,
 				prompt,
 				useWorktree: true,

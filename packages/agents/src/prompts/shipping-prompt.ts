@@ -1,7 +1,7 @@
-import type { CrossCodePlan, PlanReview, VerificationResult } from '@crosscode/shared'
+import type { ShipCodePlan, PlanReview, VerificationResult } from '@shipcode/shared'
 
 export function buildPRBody(
-  plan: CrossCodePlan,
+  plan: ShipCodePlan,
   reviews: PlanReview[],
   verification: VerificationResult | null,
   issueNumber: number
@@ -60,7 +60,7 @@ export function buildPRBody(
   sections.push(`Closes #${issueNumber}`)
   sections.push('')
   sections.push(`---`)
-  sections.push(`*Autonomous implementation by CrossCode*`)
+  sections.push(`*Autonomous implementation by ShipCode*`)
 
   return sections.join('\n')
 }

@@ -174,7 +174,7 @@ html, body, #root {
   color: var(--text-muted);
 }
 
-/* Thread List (from @crosscode/ui) */
+/* Thread List (from @shipcode/ui) */
 .thread-list {
   display: flex;
   flex-direction: column;

@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3'
 import { nanoid } from 'nanoid'
-import type { VerificationResult, VerificationRecord } from '@crosscode/shared'
+import type { VerificationResult, VerificationRecord } from '@shipcode/shared'
 
 export class VerificationQueries {
   constructor(private db: Database.Database) {}

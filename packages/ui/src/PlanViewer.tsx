@@ -1,9 +1,9 @@
-import type { CrossCodePlan } from '@crosscode/shared'
+import type { ShipCodePlan } from '@shipcode/shared'
 
 interface PlanViewerProps {
-	plan: CrossCodePlan | null
+	plan: ShipCodePlan | null
 	isEditable?: boolean
-	onPlanEdit?: (plan: CrossCodePlan) => void
+	onPlanEdit?: (plan: ShipCodePlan) => void
 }
 
 export function PlanViewer({ plan, isEditable = false, onPlanEdit }: PlanViewerProps) {

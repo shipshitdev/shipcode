@@ -1,5 +1,5 @@
 {
-  "name": "@crosscode/agents",
+  "name": "@shipcode/agents",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -17,7 +17,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@crosscode/shared": "workspace:*",
+    "@shipcode/shared": "workspace:*",
     "node-pty": "^1.0.0",
     "nanoid": "^5.0.9"
   },

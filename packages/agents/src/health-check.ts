@@ -1,6 +1,6 @@
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
-import type { CliHealth, SystemHealth } from '@crosscode/shared'
+import type { CliHealth, SystemHealth } from '@shipcode/shared'
 
 const execAsync = promisify(exec)
 

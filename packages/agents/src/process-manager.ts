@@ -2,7 +2,7 @@ import * as pty from 'node-pty'
 import { nanoid } from 'nanoid'
 import { EventEmitter } from 'node:events'
 import { execSync } from 'node:child_process'
-import type { AgentType, AgentState } from '@crosscode/shared'
+import type { AgentType, AgentState } from '@shipcode/shared'
 
 function getShellEnv(): Record<string, string> {
   try {

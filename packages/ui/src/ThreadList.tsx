@@ -1,4 +1,4 @@
-import type { Thread } from '@crosscode/shared'
+import type { Thread } from '@shipcode/shared'
 
 interface ThreadListProps {
 	threads: Thread[]

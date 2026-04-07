@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { useAppStore } from '../stores/app-store'
 import { useIpc } from '../hooks/useIpc'
-import { PipelineStatus, PlanViewer, ReviewViewer, VerificationViewer, DiffViewer } from '@crosscode/ui'
+import { PipelineStatus, PlanViewer, ReviewViewer, VerificationViewer, DiffViewer } from '@shipcode/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import type { DiffRecord } from '@crosscode/shared'
+import type { DiffRecord } from '@shipcode/shared'
 
 export function ActiveThread() {
 	const { activeProjectId, activeThreadId, currentPlan, currentReview, currentVerification, pipelinePhase, toggleTerminal } = useAppStore()
@@ -15,7 +15,7 @@ export function ActiveThread() {
 
 	const { data: diffs = [] } = useQuery<DiffRecord[]>({
 		queryKey: ['diffs', activeThreadId],
-		queryFn: () => window.crosscode.invoke('diff:list', { threadId: activeThreadId }),
+		queryFn: () => window.shipcode.invoke('diff:list', { threadId: activeThreadId }),
 		enabled: !!activeThreadId && (pipelinePhase === 'executing' || pipelinePhase === 'completed'),
 		refetchInterval: pipelinePhase === 'executing' ? 2000 : false,
 	})
@@ -24,7 +24,7 @@ export function ActiveThread() {
 		return (
 			<div className="active-thread active-thread--empty">
 				<div className="active-thread__welcome">
-					<h2>Welcome to CrossCode</h2>
+					<h2>Welcome to ShipCode</h2>
 					<p>Select a thread or create a new one to start the plan/review loop.</p>
 					<div className="active-thread__shortcuts">
 						<kbd>⌘N</kbd> New thread
@@ -39,7 +39,7 @@ export function ActiveThread() {
 	const handleStart = async () => {
 		setIsStarting(true)
 		try {
-			await window.crosscode.invoke('pipeline:start', { threadId: activeThreadId })
+			await window.shipcode.invoke('pipeline:start', { threadId: activeThreadId })
 			// Open terminal so user can see CLI output
 			const store = useAppStore.getState()
 			if (!store.terminalVisible) toggleTerminal()
@@ -53,13 +53,13 @@ export function ActiveThread() {
 	}
 
 	const handleApprove = async () => {
-		await window.crosscode.invoke('pipeline:approve', { threadId: activeThreadId })
+		await window.shipcode.invoke('pipeline:approve', { threadId: activeThreadId })
 		queryClient.invalidateQueries({ queryKey: ['threads'] })
 	}
 
 	const handleReject = async () => {
 		const feedback = prompt('What should be changed?') ?? 'Please revise the plan.'
-		await window.crosscode.invoke('pipeline:reject', {
+		await window.shipcode.invoke('pipeline:reject', {
 			threadId: activeThreadId,
 			feedback,
 		})
@@ -67,7 +67,7 @@ export function ActiveThread() {
 	}
 
 	const handleSkipReview = async () => {
-		await window.crosscode.invoke('pipeline:skip-review', { threadId: activeThreadId })
+		await window.shipcode.invoke('pipeline:skip-review', { threadId: activeThreadId })
 		queryClient.invalidateQueries({ queryKey: ['threads'] })
 	}
 
@@ -195,8 +195,8 @@ export function ActiveThread() {
 								onClick={async () => {
 									const message = currentPlan
 										? `feat: ${currentPlan.objective}`
-										: 'feat: CrossCode changes'
-									await window.crosscode.invoke('git:commit', {
+										: 'feat: ShipCode changes'
+									await window.shipcode.invoke('git:commit', {
 										projectId: activeProjectId,
 										message,
 									})
@@ -208,7 +208,7 @@ export function ActiveThread() {
 								type="button"
 								className="btn btn--secondary"
 								onClick={async () => {
-									await window.crosscode.invoke('git:push', {
+									await window.shipcode.invoke('git:push', {
 										projectId: activeProjectId,
 									})
 								}}

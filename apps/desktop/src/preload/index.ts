@@ -16,4 +16,4 @@ const api = {
   },
 }
 
-contextBridge.exposeInMainWorld('crosscode', api)
+contextBridge.exposeInMainWorld('shipcode', api)

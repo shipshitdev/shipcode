@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3'
 import { nanoid } from 'nanoid'
-import type { GitHubIssueCacheRecord, IssuePipelineStatus } from '@crosscode/shared'
+import type { GitHubIssueCacheRecord, IssuePipelineStatus } from '@shipcode/shared'
 
 export class GitHubIssueQueries {
   constructor(private db: Database.Database) {}

@@ -1,5 +1,5 @@
-import type { CrossCodePlan } from '@crosscode/shared'
-import { PLAN_FENCE_TAG } from '@crosscode/shared'
+import type { ShipCodePlan } from '@shipcode/shared'
+import { PLAN_FENCE_TAG } from '@shipcode/shared'
 
 const PLAN_SCHEMA_DESCRIPTION = `{
   "id": "plan-<timestamp>-<shortid>",
@@ -53,7 +53,7 @@ Use thread ID: "${threadId}"
 }
 
 export function buildRevisionPrompt(
-  originalPlan: CrossCodePlan,
+  originalPlan: ShipCodePlan,
   reviewFeedback: string,
   threadId: string
 ): string {

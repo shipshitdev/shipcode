@@ -1,4 +1,4 @@
-import type { GitHubIssueCacheRecord } from '@crosscode/shared'
+import type { GitHubIssueCacheRecord } from '@shipcode/shared'
 
 interface IssueCardProps {
 	issue: GitHubIssueCacheRecord

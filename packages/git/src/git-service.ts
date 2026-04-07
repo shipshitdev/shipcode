@@ -1,5 +1,5 @@
 import { simpleGit, type SimpleGit, type StatusResult } from 'simple-git'
-import type { GitState } from '@crosscode/shared'
+import type { GitState } from '@shipcode/shared'
 
 export class GitService {
   private git: SimpleGit

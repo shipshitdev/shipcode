@@ -1,6 +1,6 @@
-import { PLAN_FENCE_TAG, REVIEW_FENCE_TAG, VERIFICATION_FENCE_TAG, ERROR_PATTERNS } from '@crosscode/shared'
-import type { CrossCodePlan, PlanReview, VerificationResult, ErrorType } from '@crosscode/shared'
-import { crossCodePlanSchema, planReviewSchema, verificationResultSchema } from '@crosscode/shared'
+import { PLAN_FENCE_TAG, REVIEW_FENCE_TAG, VERIFICATION_FENCE_TAG, ERROR_PATTERNS } from '@shipcode/shared'
+import type { ShipCodePlan, PlanReview, VerificationResult, ErrorType } from '@shipcode/shared'
+import { shipCodePlanSchema, planReviewSchema, verificationResultSchema } from '@shipcode/shared'
 
 export interface ParseResult<T> {
   success: boolean
@@ -31,8 +31,8 @@ export class StreamParser {
     return Date.now() - this.lastOutputTime
   }
 
-  extractPlan(): ParseResult<CrossCodePlan> {
-    return this.extractFencedBlock<CrossCodePlan>(PLAN_FENCE_TAG, crossCodePlanSchema)
+  extractPlan(): ParseResult<ShipCodePlan> {
+    return this.extractFencedBlock<ShipCodePlan>(PLAN_FENCE_TAG, shipCodePlanSchema)
   }
 
   extractReview(): ParseResult<PlanReview> {

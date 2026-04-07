@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { CrossCodePlan, PlanReview, PipelinePhase, Project, Thread, SystemHealth, VerificationResult, GitHubIssueCacheRecord } from '@crosscode/shared'
+import type { ShipCodePlan, PlanReview, PipelinePhase, Project, Thread, SystemHealth, VerificationResult, GitHubIssueCacheRecord } from '@shipcode/shared'
 
 interface AppState {
 	// Selection
@@ -11,7 +11,7 @@ interface AppState {
 	terminalVisible: boolean
 
 	// Live data
-	currentPlan: CrossCodePlan | null
+	currentPlan: ShipCodePlan | null
 	currentReview: PlanReview | null
 	pipelinePhase: PipelinePhase
 	systemHealth: SystemHealth | null
@@ -29,7 +29,7 @@ interface AppState {
 	selectThread: (id: string | null) => void
 	toggleSidebar: () => void
 	toggleTerminal: () => void
-	setPlan: (plan: CrossCodePlan | null) => void
+	setPlan: (plan: ShipCodePlan | null) => void
 	setReview: (review: PlanReview | null) => void
 	setPipelinePhase: (phase: PipelinePhase) => void
 	setSystemHealth: (health: SystemHealth) => void

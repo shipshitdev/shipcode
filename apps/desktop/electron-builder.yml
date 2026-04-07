@@ -1,5 +1,5 @@
-appId: com.crosscode.app
-productName: CrossCode
+appId: com.shipcode.app
+productName: ShipCode
 directories:
   output: out
   buildResources: resources

@@ -1,5 +1,5 @@
-import type { CrossCodePlan } from '@crosscode/shared'
-import { VERIFICATION_FENCE_TAG } from '@crosscode/shared'
+import type { ShipCodePlan } from '@shipcode/shared'
+import { VERIFICATION_FENCE_TAG } from '@shipcode/shared'
 
 const VERIFICATION_SCHEMA_DESCRIPTION = `{
   "threadId": "<thread-id>",
@@ -23,7 +23,7 @@ const VERIFICATION_SCHEMA_DESCRIPTION = `{
 }`
 
 export function buildVerificationPrompt(
-  plan: CrossCodePlan,
+  plan: ShipCodePlan,
   diff: string,
   acceptanceCriteria: string[]
 ): string {

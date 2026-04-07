@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAppStore } from '../stores/app-store'
-import type { Project } from '@crosscode/shared'
+import type { Project } from '@shipcode/shared'
 
 export function ProjectSidebar() {
 	const { activeProjectId, selectProject, sidebarCollapsed, toggleSidebar } = useAppStore()
@@ -8,14 +8,14 @@ export function ProjectSidebar() {
 
 	const { data: projects = [] } = useQuery<Project[]>({
 		queryKey: ['projects'],
-		queryFn: () => window.crosscode.invoke('project:list'),
+		queryFn: () => window.shipcode.invoke('project:list'),
 	})
 
 	const addProject = useMutation({
 		mutationFn: async () => {
-			const path = await window.crosscode.invoke<string | null>('dialog:open-directory')
+			const path = await window.shipcode.invoke<string | null>('dialog:open-directory')
 			if (!path) return null
-			return window.crosscode.invoke<Project>('project:add', { path })
+			return window.shipcode.invoke<Project>('project:add', { path })
 		},
 		onSuccess: (project) => {
 			if (project) {
@@ -38,7 +38,7 @@ export function ProjectSidebar() {
 	return (
 		<aside className="sidebar">
 			<div className="sidebar__header">
-				<h1 className="sidebar__title">CrossCode</h1>
+				<h1 className="sidebar__title">ShipCode</h1>
 				<button type="button" className="sidebar__toggle" onClick={toggleSidebar}>
 					◀
 				</button>

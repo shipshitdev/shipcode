@@ -23,7 +23,7 @@ export const IGNORED_DIRECTORIES = [
   'build',
   '.next',
   '.turbo',
-  '.crosscode',
+  '.shipcode',
 ]
 
 export const ERROR_PATTERNS = [
@@ -38,11 +38,11 @@ export const ERROR_PATTERNS = [
 
 export type ErrorType = (typeof ERROR_PATTERNS)[number]['type']
 
-export const WORKTREE_DIR = '.crosscode/worktrees'
+export const WORKTREE_DIR = '.shipcode/worktrees'
 
-export const PLAN_FENCE_TAG = 'crosscode-plan'
-export const REVIEW_FENCE_TAG = 'crosscode-review'
-export const VERIFICATION_FENCE_TAG = 'crosscode-verification'
+export const PLAN_FENCE_TAG = 'shipcode-plan'
+export const REVIEW_FENCE_TAG = 'shipcode-review'
+export const VERIFICATION_FENCE_TAG = 'shipcode-verification'
 export const MAX_REVIEW_ROUNDS = 2
 export const MAX_VERIFICATION_RETRIES = 1
 export const GITHUB_POLL_INTERVAL_MS = 30_000

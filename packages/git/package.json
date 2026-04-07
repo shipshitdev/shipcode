@@ -1,5 +1,5 @@
 {
-  "name": "@crosscode/git",
+  "name": "@shipcode/git",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -17,7 +17,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@crosscode/shared": "workspace:*",
+    "@shipcode/shared": "workspace:*",
     "simple-git": "^3.27.0"
   },
   "devDependencies": {

@@ -1,4 +1,4 @@
-import type { VerificationResult } from '@crosscode/shared'
+import type { VerificationResult } from '@shipcode/shared'
 
 interface VerificationViewerProps {
 	verification: VerificationResult

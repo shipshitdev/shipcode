@@ -1,5 +1,5 @@
-import type { CrossCodePlan } from '@crosscode/shared'
-import { REVIEW_FENCE_TAG } from '@crosscode/shared'
+import type { ShipCodePlan } from '@shipcode/shared'
+import { REVIEW_FENCE_TAG } from '@shipcode/shared'
 
 const REVIEW_SCHEMA_DESCRIPTION = `{
   "planId": "<plan-id>",
@@ -20,7 +20,7 @@ const REVIEW_SCHEMA_DESCRIPTION = `{
   "suggestedChanges": ["Specific change 1", "Specific change 2"]
 }`
 
-export function buildReviewPrompt(plan: CrossCodePlan, contextFiles?: string, autonomous?: boolean): string {
+export function buildReviewPrompt(plan: ShipCodePlan, contextFiles?: string, autonomous?: boolean): string {
   let prompt = `You are a senior code reviewer evaluating an implementation plan for correctness, security, performance, and design quality.
 
 ## Plan to Review

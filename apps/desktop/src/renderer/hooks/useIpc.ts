@@ -9,28 +9,28 @@ export function useIpc() {
 
 		// Listen for pipeline phase changes
 		unsubscribers.push(
-			window.crosscode.on('pipeline:phase', (data: any) => {
+			window.shipcode.on('pipeline:phase', (data: any) => {
 				setPipelinePhase(data.phase)
 			})
 		)
 
 		// Listen for parsed plans
 		unsubscribers.push(
-			window.crosscode.on('plan:parsed', (data: any) => {
+			window.shipcode.on('plan:parsed', (data: any) => {
 				setPlan(data.plan)
 			})
 		)
 
 		// Listen for parsed reviews
 		unsubscribers.push(
-			window.crosscode.on('review:parsed', (data: any) => {
+			window.shipcode.on('review:parsed', (data: any) => {
 				setReview(data.review)
 			})
 		)
 
 		// Listen for parsed verifications
 		unsubscribers.push(
-			window.crosscode.on('verification:parsed', (data: any) => {
+			window.shipcode.on('verification:parsed', (data: any) => {
 				const store = useAppStore.getState()
 				if (store.activeThreadId === data.threadId) {
 					store.setVerification(data.verification)
@@ -40,14 +40,14 @@ export function useIpc() {
 
 		// Listen for GitHub issues updates
 		unsubscribers.push(
-			window.crosscode.on('github:issues-updated', (data: any) => {
+			window.shipcode.on('github:issues-updated', (data: any) => {
 				useAppStore.getState().setGithubIssues(data.issues)
 			})
 		)
 
 		// Listen for agent output
 		unsubscribers.push(
-			window.crosscode.on('agent:output', (data: any) => {
+			window.shipcode.on('agent:output', (data: any) => {
 				appendAgentOutput(data.processId, data.chunk)
 			})
 		)
@@ -60,7 +60,7 @@ export function useIpc() {
 
 export function useInvoke<T>(channel: string) {
 	return useCallback(
-		(args?: unknown): Promise<T> => window.crosscode.invoke<T>(channel, args),
+		(args?: unknown): Promise<T> => window.shipcode.invoke<T>(channel, args),
 		[channel]
 	)
 }

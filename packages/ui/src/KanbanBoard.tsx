@@ -1,4 +1,4 @@
-import type { GitHubIssueCacheRecord, IssuePipelineStatus } from '@crosscode/shared'
+import type { GitHubIssueCacheRecord, IssuePipelineStatus } from '@shipcode/shared'
 
 interface KanbanBoardProps {
 	issues: GitHubIssueCacheRecord[]

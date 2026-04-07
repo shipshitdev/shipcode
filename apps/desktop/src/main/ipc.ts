@@ -1,8 +1,8 @@
 import { type IpcMain, type BrowserWindow, dialog } from 'electron'
-import type { ProjectQueries, ThreadQueries, PlanQueries, ReviewQueries, DiffQueries, SettingsQueries, VerificationQueries, GitHubIssueQueries } from '@crosscode/db'
-import type { ProcessManager } from '@crosscode/agents'
-import { checkSystemHealth, GhCli } from '@crosscode/agents'
-import { GitService, WorktreeManager } from '@crosscode/git'
+import type { ProjectQueries, ThreadQueries, PlanQueries, ReviewQueries, DiffQueries, SettingsQueries, VerificationQueries, GitHubIssueQueries } from '@shipcode/db'
+import type { ProcessManager } from '@shipcode/agents'
+import { checkSystemHealth, GhCli } from '@shipcode/agents'
+import { GitService, WorktreeManager } from '@shipcode/git'
 import type { Pipeline } from './pipeline'
 
 interface Queries {

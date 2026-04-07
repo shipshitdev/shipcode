@@ -1,6 +1,6 @@
 import { simpleGit, type SimpleGit } from 'simple-git'
 import path from 'node:path'
-import { WORKTREE_DIR } from '@crosscode/shared'
+import { WORKTREE_DIR } from '@shipcode/shared'
 
 export class WorktreeManager {
   private git: SimpleGit
@@ -14,7 +14,7 @@ export class WorktreeManager {
   }
 
   getBranchName(threadId: string): string {
-    return `crosscode/${threadId}`
+    return `shipcode/${threadId}`
   }
 
   async create(threadId: string, baseBranch?: string): Promise<{ worktreePath: string; branch: string }> {

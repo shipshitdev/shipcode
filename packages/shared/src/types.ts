@@ -1,6 +1,6 @@
 // === Plan Types ===
 
-export interface CrossCodePlan {
+export interface ShipCodePlan {
   id: string
   threadId: string
   version: number
@@ -133,7 +133,7 @@ export interface PlanRecord {
   threadId: string
   version: number
   rawOutput: string
-  structured: CrossCodePlan | null
+  structured: ShipCodePlan | null
   status: PlanStatus
   createdAt: string
 }

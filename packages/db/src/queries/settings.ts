@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3'
-import type { AppSettings } from '@crosscode/shared'
-import { DEFAULT_SETTINGS } from '@crosscode/shared'
+import type { AppSettings } from '@shipcode/shared'
+import { DEFAULT_SETTINGS } from '@shipcode/shared'
 
 export class SettingsQueries {
   constructor(private db: Database.Database) {}

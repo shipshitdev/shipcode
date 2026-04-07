@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3'
 import { nanoid } from 'nanoid'
-import type { Project } from '@crosscode/shared'
+import type { Project } from '@shipcode/shared'
 import path from 'node:path'
 
 export class ProjectQueries {

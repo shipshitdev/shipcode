@@ -1,4 +1,4 @@
-import { type PipelinePhase } from '@crosscode/shared'
+import { type PipelinePhase } from '@shipcode/shared'
 
 const PHASES: { key: PipelinePhase; label: string }[] = [
 	{ key: 'planning', label: 'Plan' },

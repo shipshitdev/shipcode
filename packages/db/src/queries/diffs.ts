@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3'
 import { nanoid } from 'nanoid'
-import type { DiffRecord } from '@crosscode/shared'
+import type { DiffRecord } from '@shipcode/shared'
 
 export class DiffQueries {
   constructor(private db: Database.Database) {}

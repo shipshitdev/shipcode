@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3'
 import { nanoid } from 'nanoid'
-import type { Thread, ThreadStatus } from '@crosscode/shared'
+import type { Thread, ThreadStatus } from '@shipcode/shared'
 
 export class ThreadQueries {
   constructor(private db: Database.Database) {}

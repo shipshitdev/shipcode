@@ -1,4 +1,4 @@
-import type { DiffRecord } from '@crosscode/shared'
+import type { DiffRecord } from '@shipcode/shared'
 
 interface DiffViewerProps {
 	diffs: DiffRecord[]

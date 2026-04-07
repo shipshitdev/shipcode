@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3'
 import { nanoid } from 'nanoid'
-import type { ReviewRecord, PlanReview } from '@crosscode/shared'
+import type { ReviewRecord, PlanReview } from '@shipcode/shared'
 
 export class ReviewQueries {
   constructor(private db: Database.Database) {}
