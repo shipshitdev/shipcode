@@ -1,7 +1,7 @@
 import { type IpcMain, type BrowserWindow, dialog } from 'electron'
-import type { ProjectQueries, ThreadQueries, PlanQueries, ReviewQueries, DiffQueries, SettingsQueries } from '@crosscode/db'
+import type { ProjectQueries, ThreadQueries, PlanQueries, ReviewQueries, DiffQueries, SettingsQueries, VerificationQueries, GitHubIssueQueries } from '@crosscode/db'
 import type { ProcessManager } from '@crosscode/agents'
-import { checkSystemHealth } from '@crosscode/agents'
+import { checkSystemHealth, GhCli } from '@crosscode/agents'
 import { GitService, WorktreeManager } from '@crosscode/git'
 import type { Pipeline } from './pipeline'
 
@@ -12,6 +12,8 @@ interface Queries {
   reviews: ReviewQueries
   diffs: DiffQueries
   settings: SettingsQueries
+  verifications: VerificationQueries
+  githubIssues: GitHubIssueQueries
 }
 
 export function registerIpcHandlers(
@@ -120,6 +122,41 @@ export function registerIpcHandlers(
       properties: ['openDirectory'],
     })
     return result.canceled ? null : result.filePaths[0] ?? null
+  })
+
+  // === GitHub handlers ===
+  ipcMain.handle('github:list-issues', (_event, { projectId }: { projectId: string }) => {
+    return queries.githubIssues.list(projectId)
+  })
+
+  ipcMain.handle('github:refresh-issues', async (_event, { projectId }: { projectId: string }) => {
+    const project = queries.projects.getById(projectId)
+    if (!project) throw new Error(`Project ${projectId} not found`)
+
+    const ghCli = new GhCli(project.path)
+    const issues = await ghCli.listAllIssues()
+
+    // Upsert all issues into cache
+    for (const issue of issues) {
+      queries.githubIssues.upsert({
+        projectId,
+        issueNumber: issue.number,
+        title: issue.title,
+        body: issue.body,
+        labels: issue.labels,
+        assignee: issue.assignee,
+        state: issue.state,
+      })
+    }
+
+    const cached = queries.githubIssues.list(projectId)
+    mainWindow.webContents.send('github:issues-updated', { projectId, issues: cached })
+    return cached
+  })
+
+  // === Verification handlers ===
+  ipcMain.handle('verification:get', (_event, { threadId }: { threadId: string }) => {
+    return queries.verifications.getLatest(threadId)
   })
 
   // === Pipeline handlers (wired to actual pipeline) ===

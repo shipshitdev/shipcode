@@ -2,10 +2,10 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAppStore } from '../stores/app-store'
 import { ThreadList, KanbanBoard } from '@crosscode/ui'
-import type { Thread } from '@crosscode/shared'
+import type { Thread, GitHubIssueCacheRecord } from '@crosscode/shared'
 
 export function ThreadPanel() {
-	const { activeProjectId, activeThreadId, selectThread, kanbanView, githubIssues, toggleKanbanView } = useAppStore()
+	const { activeProjectId, activeThreadId, selectThread, kanbanView, toggleKanbanView } = useAppStore()
 	const queryClient = useQueryClient()
 	const [newPrompt, setNewPrompt] = useState('')
 	const [showInput, setShowInput] = useState(false)
@@ -14,6 +14,13 @@ export function ThreadPanel() {
 		queryKey: ['threads', activeProjectId],
 		queryFn: () => window.crosscode.invoke('thread:list', { projectId: activeProjectId }),
 		enabled: !!activeProjectId,
+	})
+
+	const { data: issues = [], refetch: refetchIssues } = useQuery<GitHubIssueCacheRecord[]>({
+		queryKey: ['github-issues', activeProjectId],
+		queryFn: () => window.crosscode.invoke('github:refresh-issues', { projectId: activeProjectId }),
+		enabled: !!activeProjectId && kanbanView,
+		staleTime: 30_000,
 	})
 
 	const createThread = useMutation({
@@ -60,9 +67,9 @@ export function ThreadPanel() {
 
 			{kanbanView ? (
 				<KanbanBoard
-					issues={githubIssues}
+					issues={issues}
 					onIssueClick={() => {/* TODO: select thread linked to issue */}}
-					onRefresh={() => window.crosscode.invoke('github:refresh-issues', { projectId: activeProjectId })}
+					onRefresh={() => refetchIssues()}
 				/>
 			) : (
 			<ThreadList
@@ -73,7 +80,7 @@ export function ThreadPanel() {
 			/>
 			)}
 
-			{showInput && (
+			{!kanbanView && showInput && (
 				<div className="thread-panel__new-input">
 					<textarea
 						className="thread-panel__textarea"

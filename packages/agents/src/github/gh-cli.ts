@@ -28,6 +28,26 @@ export class GhCli {
     }))
   }
 
+  async listAllIssues(): Promise<GitHubIssue[]> {
+    const { stdout } = await execFileAsync('gh', [
+      'issue', 'list',
+      '--state', 'open',
+      '--json', 'number,title,body,labels,assignees,state,url',
+      '--limit', '100',
+    ], { cwd: this.cwd })
+
+    const raw = JSON.parse(stdout) as Record<string, unknown>[]
+    return raw.map(r => ({
+      number: r.number as number,
+      title: r.title as string,
+      body: (r.body as string) ?? null,
+      labels: ((r.labels as Array<{ name: string }>) ?? []).map(l => l.name),
+      assignee: ((r.assignees as Array<{ login: string }>) ?? [])[0]?.login ?? null,
+      state: ((r.state as string)?.toLowerCase() ?? 'open') as 'open' | 'closed',
+      url: (r.url as string) ?? '',
+    }))
+  }
+
   async listAllAgentIssues(): Promise<GitHubIssue[]> {
     const [claude, codex] = await Promise.all([
       this.listIssues('agent:claude').catch(() => []),
