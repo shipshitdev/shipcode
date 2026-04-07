@@ -1,5 +1,8 @@
 # ShipCode
 
+> **Warning**
+> This project is under active development and not yet ready for production use. APIs, architecture, and features may change without notice.
+
 Autonomous AI coding pipeline. GitHub issues in, pull requests out.
 
 Label a GitHub issue with `agent:claude` or `agent:codex`, and ShipCode handles the rest: plan, adversarial review, implement, verify, and ship a PR. No human gates until the PR is created.
