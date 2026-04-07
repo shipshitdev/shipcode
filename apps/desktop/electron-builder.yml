@@ -1,0 +1,19 @@
+appId: com.crosscode.app
+productName: CrossCode
+directories:
+  output: out
+  buildResources: resources
+files:
+  - dist/**/*
+  - package.json
+mac:
+  target:
+    - dmg
+    - zip
+  category: public.app-category.developer-tools
+  hardenedRuntime: true
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Development

@@ -1,0 +1,21 @@
+{
+  "name": "shipcode",
+  "private": true,
+  "packageManager": "bun@1.2.0",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "clean": "turbo run clean",
+    "dev:desktop": "turbo run dev --filter=@crosscode/desktop"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@electron/rebuild": "^4.0.3",
+    "@types/node": "^22.0.0",
+    "turbo": "^2.4.0",
+    "typescript": "^5.7.0"
+  }
+}
