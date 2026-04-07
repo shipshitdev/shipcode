@@ -1,0 +1,24 @@
+# Pipeline Overview
+
+The ShipCode pipeline is a state machine that processes GitHub issues through multiple phases.
+
+## Phases
+
+| Phase | Model | Description |
+|-------|-------|-------------|
+| Plan | Opus 4.6 | Rewrites issue into spec + structured plan |
+| Review | Codex (high reasoning) | Adversarial critique, max 2 rounds |
+| Execute | Routed model | Implements in isolated git worktree |
+| Verify | Opus 4.6 | Checks diff against acceptance criteria |
+| Ship | gh CLI | Push branch, create PR |
+
+## State Machine
+
+```
+Todo → Planning → Reviewing ⇄ Revising → Executing → Verifying → Completed
+                                                                ↘ Failed
+```
+
+## Autonomous Mode
+
+When triggered by a GitHub issue label, the pipeline runs without human intervention until a PR is created. The only human gate is the PR review itself.

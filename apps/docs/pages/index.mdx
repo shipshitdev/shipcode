@@ -1,0 +1,22 @@
+# ShipCode
+
+Autonomous AI coding pipeline. GitHub issues in, pull requests out.
+
+## What is ShipCode?
+
+ShipCode turns GitHub issues into pull requests autonomously. Label an issue with `agent:claude` or `agent:codex`, and ShipCode handles planning, adversarial review, implementation, verification, and PR creation.
+
+## Quick Start
+
+```bash
+bun install
+bun run dev:desktop
+```
+
+## How it works
+
+1. **Plan** — Opus 4.6 rewrites the issue into a spec and structured plan
+2. **Review** — Codex critiques the plan with high reasoning (max 2 rounds)
+3. **Execute** — Routed model implements in an isolated git worktree
+4. **Verify** — Opus checks the diff against acceptance criteria
+5. **Ship** — Push branch, create PR, link to issue

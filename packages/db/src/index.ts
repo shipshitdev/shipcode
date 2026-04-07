@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3'
 import path from 'node:path'
-import { migrate, migrateV2 } from './schema'
+import { migrate, migrateV2, migrateV3 } from './schema'
 
 export { ProjectQueries } from './queries/projects'
 export { ThreadQueries } from './queries/threads'
@@ -25,6 +25,7 @@ export function getDatabase(dataDir: string): Database.Database {
 
   migrate(db)
   migrateV2(db)
+  migrateV3(db)
   return db
 }
 

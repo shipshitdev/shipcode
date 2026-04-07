@@ -137,3 +137,22 @@ export function migrateV2(db: Database.Database): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (2)`)
   })()
 }
+
+export function migrateV3(db: Database.Database): void {
+  const row = db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get() as { version: number } | undefined
+  if (row && row.version >= 3) return
+
+  db.transaction(() => {
+    // Add last_status_label column to github_issue_cache
+    try { db.exec('ALTER TABLE github_issue_cache ADD COLUMN last_status_label TEXT') } catch {}
+
+    // Reclassify unclaimed queued issues as todo
+    db.exec(`
+      UPDATE github_issue_cache
+      SET pipeline_status = 'todo'
+      WHERE pipeline_status = 'queued' AND claimed_at IS NULL AND thread_id IS NULL
+    `)
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (3)`)
+  })()
+}

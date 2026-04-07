@@ -4,7 +4,8 @@ import fs from 'node:fs'
 import { getDatabase, closeDatabase, ProjectQueries, ThreadQueries, PlanQueries, ReviewQueries, DiffQueries, SettingsQueries, VerificationQueries, GitHubIssueQueries } from '@shipcode/db'
 import { ProcessManager } from '@shipcode/agents'
 import { registerIpcHandlers } from './ipc'
-import { createPipeline } from './pipeline'
+import { createPipeline } from '@shipcode/pipeline'
+import { createElectronEmitter } from './pipeline-bridge'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -46,8 +47,9 @@ function createWindow() {
   }
 
   // Initialize pipeline state machine
+  const emitter = createElectronEmitter(mainWindow)
   const pipeline = createPipeline({
-    mainWindow,
+    emitter,
     processManager,
     threads: queries.threads,
     plans: queries.plans,

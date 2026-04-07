@@ -186,6 +186,11 @@ export interface AppSettings {
   githubPollingIntervalMs: number
   githubBotUsername: string
   autoPickupEnabled: boolean
+  statusLabelMappings: StatusLabelMapping
+}
+
+export interface StatusLabelMapping {
+  [pipelineStatus: string]: string
 }
 
 // === CLI Health ===
@@ -237,10 +242,12 @@ export interface GitHubIssueCacheRecord {
   claimedAt: string | null
   claimedBy: string | null
   lastPhaseUpdate: string | null
+  lastStatusLabel: string | null
   fetchedAt: string
 }
 
 export type IssuePipelineStatus =
+  | 'todo'
   | 'queued'
   | 'planning'
   | 'reviewing'

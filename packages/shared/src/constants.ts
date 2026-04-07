@@ -1,3 +1,16 @@
+export const DEFAULT_STATUS_LABEL_MAPPINGS: Record<string, string> = {
+  todo: '',
+  queued: 'status:queued',
+  planning: 'status:in-progress',
+  reviewing: 'status:in-progress',
+  revising: 'status:in-progress',
+  executing: 'status:in-progress',
+  verifying: 'status:in-progress',
+  shipping: 'status:in-progress',
+  completed: 'status:done',
+  failed: 'status:failed',
+}
+
 export const DEFAULT_SETTINGS = {
   theme: 'system' as const,
   defaultWorktreeEnabled: true,
@@ -8,6 +21,7 @@ export const DEFAULT_SETTINGS = {
   githubPollingIntervalMs: 30_000,
   githubBotUsername: '',
   autoPickupEnabled: false,
+  statusLabelMappings: DEFAULT_STATUS_LABEL_MAPPINGS as Record<string, string>,
 }
 
 export const PIPELINE_MAX_RETRIES = 3

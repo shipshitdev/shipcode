@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3'
 import type { AppSettings } from '@shipcode/shared'
-import { DEFAULT_SETTINGS } from '@shipcode/shared'
+import { DEFAULT_SETTINGS, DEFAULT_STATUS_LABEL_MAPPINGS } from '@shipcode/shared'
 
 export class SettingsQueries {
   constructor(private db: Database.Database) {}
@@ -22,6 +22,7 @@ export class SettingsQueries {
       githubPollingIntervalMs: stored.githubPollingIntervalMs ? parseInt(stored.githubPollingIntervalMs, 10) : DEFAULT_SETTINGS.githubPollingIntervalMs,
       githubBotUsername: stored.githubBotUsername ?? DEFAULT_SETTINGS.githubBotUsername,
       autoPickupEnabled: stored.autoPickupEnabled === 'true' ? true : (stored.autoPickupEnabled === 'false' ? false : DEFAULT_SETTINGS.autoPickupEnabled),
+      statusLabelMappings: stored.statusLabelMappings ? JSON.parse(stored.statusLabelMappings) : DEFAULT_STATUS_LABEL_MAPPINGS,
     }
   }
 
@@ -36,7 +37,7 @@ export class SettingsQueries {
       }
     })
 
-    const entries = Object.entries(patch).map(([k, v]) => [k, String(v)] as [string, string])
+    const entries = Object.entries(patch).map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v) : String(v)] as [string, string])
     transaction(entries)
   }
 }

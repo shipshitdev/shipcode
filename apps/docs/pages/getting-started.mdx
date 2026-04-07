@@ -1,0 +1,36 @@
+# Getting Started
+
+## Prerequisites
+
+- [Bun](https://bun.sh) >= 1.2
+- [Claude Code CLI](https://claude.ai/claude-code) (`claude`)
+- [Codex CLI](https://github.com/openai/codex) (`codex`)
+- [GitHub CLI](https://cli.github.com) (`gh`) — authenticated
+- Git
+
+## Installation
+
+```bash
+git clone https://github.com/shipshitdev/shipcode
+cd shipcode
+bun install
+```
+
+## Running the Desktop App
+
+```bash
+bun run dev:desktop
+```
+
+## Adding a Repository
+
+1. Click **+ Add Repository** in the sidebar
+2. Select your project directory
+3. ShipCode detects git remote and default branch automatically
+
+## Your First Pipeline
+
+1. Switch to the **Issues** tab
+2. Click **Refresh** to load GitHub issues
+3. Drag an issue from **Todo** to **Planning**
+4. Watch the pipeline run: Plan → Review → Execute → Verify → Ship

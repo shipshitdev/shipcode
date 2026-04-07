@@ -3,7 +3,7 @@ import type { ProjectQueries, ThreadQueries, PlanQueries, ReviewQueries, DiffQue
 import type { ProcessManager } from '@shipcode/agents'
 import { checkSystemHealth, GhCli } from '@shipcode/agents'
 import { GitService, WorktreeManager } from '@shipcode/git'
-import type { Pipeline } from './pipeline'
+import type { Pipeline } from '@shipcode/pipeline'
 
 interface Queries {
   projects: ProjectQueries

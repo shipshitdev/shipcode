@@ -1,41 +1,14 @@
-import type { BrowserWindow } from 'electron'
-import type { ProcessManager } from '@shipcode/agents'
 import { StreamParser, buildPlanPrompt, buildReviewPrompt, buildRevisionPrompt, buildVerificationPrompt } from '@shipcode/agents'
-import type { ThreadQueries, PlanQueries, ReviewQueries, VerificationQueries, GitHubIssueQueries } from '@shipcode/db'
-import type { ShipCodePlan, PipelinePhase } from '@shipcode/shared'
+import type { ShipCodePlan } from '@shipcode/shared'
 import { PIPELINE_MAX_RETRIES, MAX_VERIFICATION_RETRIES, MAX_REVIEW_ROUNDS } from '@shipcode/shared'
-
-interface PipelineContext {
-  threadId: string
-  projectPath: string
-  worktreePath: string | null
-  retryCount: number
-  autonomous: boolean
-  reviewRound: number
-  verificationRetries: number
-  githubIssueNumber: number | null
-  githubRepo: string | null
-  executorModel: 'claude' | 'codex'
-  baseBranch: string
-  forkPointSha: string
-}
-
-interface PipelineDeps {
-  mainWindow: BrowserWindow
-  processManager: ProcessManager
-  threads: ThreadQueries
-  plans: PlanQueries
-  reviews: ReviewQueries
-  verifications: VerificationQueries
-  githubIssues: GitHubIssueQueries
-}
+import type { PipelineContext, PipelineDeps } from './types'
 
 export function createPipeline(deps: PipelineDeps) {
   const activePipelines = new Map<string, PipelineContext>()
 
-  function emitPhase(threadId: string, phase: PipelinePhase) {
+  function emitPhase(threadId: string, phase: Parameters<typeof deps.threads.updateStatus>[1]) {
     deps.threads.updateStatus(threadId, phase)
-    deps.mainWindow.webContents.send('pipeline:phase', { threadId, phase })
+    deps.emitter.emit({ type: 'pipeline:phase', threadId, phase })
   }
 
   async function startPlanGeneration(threadId: string, prompt: string, projectPath: string, worktreePath: string | null) {
@@ -99,7 +72,7 @@ export function createPipeline(deps: PipelineDeps) {
       if (result.success && result.data) {
         const plan = deps.plans.create(threadId, result.raw, result.data, 1)
         deps.plans.updateStatus(plan.id, 'pending_review')
-        deps.mainWindow.webContents.send('plan:parsed', { threadId, plan: result.data })
+        deps.emitter.emit({ type: 'plan:parsed', threadId, plan: result.data })
 
         if (context.autonomous) {
           // Autonomous: go directly to review
@@ -151,7 +124,7 @@ export function createPipeline(deps: PipelineDeps) {
 
       if (result.success && result.data && latestPlan) {
         deps.reviews.create(latestPlan.id, result.raw, result.data)
-        deps.mainWindow.webContents.send('review:parsed', { threadId, review: result.data })
+        deps.emitter.emit({ type: 'review:parsed', threadId, review: result.data })
 
         if (result.data.decision === 'approve') {
           if (context.autonomous) {
@@ -227,7 +200,7 @@ export function createPipeline(deps: PipelineDeps) {
         deps.plans.supersedeAll(threadId)
         const newPlan = deps.plans.create(threadId, result.raw, result.data, plan.version + 1)
         deps.plans.updateStatus(newPlan.id, 'pending_review')
-        deps.mainWindow.webContents.send('plan:parsed', { threadId, plan: result.data })
+        deps.emitter.emit({ type: 'plan:parsed', threadId, plan: result.data })
         startReview(threadId, result.data)
       } else {
         deps.plans.create(threadId, result.raw, null, plan.version + 1)
@@ -346,7 +319,7 @@ export function createPipeline(deps: PipelineDeps) {
 
       if (result.success && result.data) {
         deps.verifications.create(threadId, latestPlan.id, result.raw, result.data)
-        deps.mainWindow.webContents.send('verification:parsed', { threadId, verification: result.data })
+        deps.emitter.emit({ type: 'verification:parsed', threadId, verification: result.data })
 
         if (result.data.result === 'passed') {
           startCommitAndPush(threadId)

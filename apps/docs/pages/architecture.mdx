@@ -1,0 +1,27 @@
+# Architecture
+
+ShipCode is a Turborepo monorepo with multiple apps and shared packages.
+
+## Structure
+
+```
+apps/
+  desktop/          Electron + Vite + React 19
+  cli/              Headless CLI (commander)
+  docs/             This documentation (Nextra)
+packages/
+  pipeline/         Pipeline state machine
+  shared/           Types, schemas, constants
+  agents/           Process manager, prompts, GitHub CLI
+  db/               SQLite persistence
+  git/              Git operations + worktree manager
+  ui/               React components
+```
+
+## Key Design Decisions
+
+- **`gh` CLI over GitHub API** — no OAuth, uses existing auth
+- **Adversarial review** — different model families catch different blind spots
+- **PR is the human gate** — fully autonomous until PR creation
+- **Fork-point SHA for diffs** — stable diffs even when base branch moves
+- **SQLite** — single-file database, no external dependencies
