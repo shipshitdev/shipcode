@@ -81,9 +81,11 @@ export class WorktreeManager {
       return result.trim().replace('origin/', '')
     } catch {
       const branches = await this.git.branchLocal()
+      // Check current branch first, then common defaults
+      if (branches.current) return branches.current
       if (branches.all.includes('main')) return 'main'
       if (branches.all.includes('master')) return 'master'
-      return branches.current ?? 'main'
+      return 'main'
     }
   }
 }

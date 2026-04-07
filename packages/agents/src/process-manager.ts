@@ -1,7 +1,27 @@
 import * as pty from 'node-pty'
 import { nanoid } from 'nanoid'
 import { EventEmitter } from 'node:events'
+import { execSync } from 'node:child_process'
 import type { AgentType, AgentState } from '@crosscode/shared'
+
+function getShellEnv(): Record<string, string> {
+  try {
+    const shell = process.env.SHELL ?? '/bin/zsh'
+    const output = execSync(`${shell} -ilc 'env'`, { encoding: 'utf-8', timeout: 5000 })
+    const env: Record<string, string> = {}
+    for (const line of output.split('\n')) {
+      const idx = line.indexOf('=')
+      if (idx > 0) {
+        env[line.slice(0, idx)] = line.slice(idx + 1)
+      }
+    }
+    return env
+  } catch {
+    return process.env as Record<string, string>
+  }
+}
+
+let cachedEnv: Record<string, string> | null = null
 
 export interface ManagedProcess {
   id: string
@@ -29,12 +49,16 @@ export class ProcessManager extends EventEmitter {
   ): ManagedProcess {
     const id = nanoid()
 
+    if (!cachedEnv) {
+      cachedEnv = getShellEnv()
+    }
+
     const ptyProcess = pty.spawn(command, args, {
       name: 'xterm-256color',
       cols: 120,
       rows: 30,
       cwd,
-      env: { ...process.env, FORCE_COLOR: '1' },
+      env: { ...cachedEnv, FORCE_COLOR: '1' },
     })
 
     const managed: ManagedProcess = {
