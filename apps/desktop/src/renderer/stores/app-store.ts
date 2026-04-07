@@ -9,6 +9,7 @@ interface AppState {
 	// UI state
 	sidebarCollapsed: boolean
 	terminalVisible: boolean
+	settingsVisible: boolean
 
 	// Live data
 	currentPlan: ShipCodePlan | null
@@ -29,6 +30,7 @@ interface AppState {
 	selectThread: (id: string | null) => void
 	toggleSidebar: () => void
 	toggleTerminal: () => void
+	toggleSettings: () => void
 	setPlan: (plan: ShipCodePlan | null) => void
 	setReview: (review: PlanReview | null) => void
 	setPipelinePhase: (phase: PipelinePhase) => void
@@ -45,6 +47,7 @@ export const useAppStore = create<AppState>((set) => ({
 	activeThreadId: null,
 	sidebarCollapsed: false,
 	terminalVisible: false,
+	settingsVisible: false,
 	currentPlan: null,
 	currentReview: null,
 	pipelinePhase: 'idle',
@@ -58,6 +61,7 @@ export const useAppStore = create<AppState>((set) => ({
 	selectThread: (id) => set({ activeThreadId: id, currentPlan: null, currentReview: null, currentVerification: null, pipelinePhase: 'idle' }),
 	toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
 	toggleTerminal: () => set((s) => ({ terminalVisible: !s.terminalVisible })),
+	toggleSettings: () => set((s) => ({ settingsVisible: !s.settingsVisible })),
 	setPlan: (plan) => set({ currentPlan: plan }),
 	setReview: (review) => set({ currentReview: review }),
 	setPipelinePhase: (phase) => set({ pipelinePhase: phase }),
