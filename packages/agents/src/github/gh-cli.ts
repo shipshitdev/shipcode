@@ -83,6 +83,22 @@ export class GhCli {
     }
   }
 
+  async createIssue(options: {
+    title: string
+    body?: string
+    labels?: string[]
+  }): Promise<GitHubIssue> {
+    const args = ['issue', 'create', '--title', options.title]
+    if (options.body) args.push('--body', options.body)
+    if (options.labels?.length) args.push('--label', options.labels.join(','))
+
+    const { stdout } = await execFileAsync('gh', args, { cwd: this.cwd })
+    // gh issue create outputs the issue URL, e.g. https://github.com/owner/repo/issues/42
+    const match = stdout.match(/\/issues\/(\d+)/)
+    if (!match) throw new Error(`Failed to parse issue number from: ${stdout}`)
+    return this.getIssue(parseInt(match[1], 10))
+  }
+
   async createPR(options: {
     title: string
     body: string

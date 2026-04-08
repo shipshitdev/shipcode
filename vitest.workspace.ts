@@ -1,0 +1,1 @@
+export default ['packages/shared', 'packages/agents', 'packages/db']

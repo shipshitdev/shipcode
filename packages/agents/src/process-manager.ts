@@ -21,6 +21,21 @@ function getShellEnv(): Record<string, string> {
   }
 }
 
+/** Resolve a command to its actual binary path, skipping shell aliases. */
+function resolveCommand(command: string): string {
+  try {
+    const shell = process.env.SHELL ?? '/bin/zsh'
+    // whence -p (zsh) or type -P (bash) skips aliases and returns the binary path
+    const resolved = execSync(
+      `${shell} -ilc 'whence -p ${command} 2>/dev/null || type -P ${command} 2>/dev/null'`,
+      { encoding: 'utf-8', timeout: 5000 }
+    ).trim()
+    return resolved || command
+  } catch {
+    return command
+  }
+}
+
 let cachedEnv: Record<string, string> | null = null
 
 export interface ManagedProcess {
@@ -53,13 +68,40 @@ export class ProcessManager extends EventEmitter {
       cachedEnv = getShellEnv()
     }
 
-    const ptyProcess = pty.spawn(command, args, {
-      name: 'xterm-256color',
-      cols: 120,
-      rows: 30,
-      cwd,
-      env: { ...cachedEnv, FORCE_COLOR: '1' },
-    })
+    const resolvedCommand = resolveCommand(command)
+
+    let ptyProcess: pty.IPty
+    try {
+      ptyProcess = pty.spawn(resolvedCommand, args, {
+        name: 'xterm-256color',
+        cols: 120,
+        rows: 30,
+        cwd,
+        env: { ...cachedEnv, FORCE_COLOR: '1' },
+      })
+    } catch (err) {
+      // Spawn failed (e.g. binary not found, alias instead of real path).
+      // Emit error as output + synthetic exit so pipeline handles it gracefully.
+      const errorMsg = `Failed to spawn ${command} (resolved: ${resolvedCommand}): ${err instanceof Error ? err.message : err}`
+      const managed: ManagedProcess = {
+        id,
+        type,
+        state: 'exited',
+        pty: null as unknown as pty.IPty,
+        cwd,
+        exitCode: 127,
+      }
+      this.processes.set(id, managed)
+
+      // Defer events so callers can attach listeners first
+      queueMicrotask(() => {
+        this.emit('output', id, `\x1b[31mError: ${errorMsg}\x1b[0m\r\n`)
+        this.emit('stateChange', id, type, 'exited')
+        this.emit('exit', id, 127)
+      })
+
+      return managed
+    }
 
     const managed: ManagedProcess = {
       id,

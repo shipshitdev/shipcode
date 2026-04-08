@@ -26,6 +26,10 @@ interface AppState {
 	// Agent output buffers
 	agentOutputs: Record<string, string[]>
 
+	// Command palette & modals
+	commandPaletteOpen: boolean
+	createIssueModalOpen: boolean
+
 	// Actions
 	selectProject: (id: string | null) => void
 	selectThread: (id: string | null) => void
@@ -42,6 +46,9 @@ interface AppState {
 	toggleKanbanView: () => void
 	appendAgentOutput: (processId: string, chunk: string) => void
 	clearAgentOutput: (processId: string) => void
+	toggleCommandPalette: () => void
+	openCreateIssueModal: () => void
+	closeCreateIssueModal: () => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -59,6 +66,8 @@ export const useAppStore = create<AppState>((set) => ({
 	githubIssues: [],
 	kanbanView: true,
 	agentOutputs: {},
+	commandPaletteOpen: false,
+	createIssueModalOpen: false,
 
 	selectProject: (id) => set({ activeProjectId: id, activeThreadId: null, activeIssue: null, currentPlan: null, currentReview: null, currentVerification: null, pipelinePhase: 'idle' }),
 	selectThread: (id) => set({ activeThreadId: id, currentPlan: null, currentReview: null, currentVerification: null, pipelinePhase: 'idle' }),
@@ -92,4 +101,7 @@ export const useAppStore = create<AppState>((set) => ({
 			const { [processId]: _, ...rest } = s.agentOutputs
 			return { agentOutputs: rest }
 		}),
+	toggleCommandPalette: () => set((s) => ({ commandPaletteOpen: !s.commandPaletteOpen })),
+	openCreateIssueModal: () => set({ createIssueModalOpen: true, commandPaletteOpen: false }),
+	closeCreateIssueModal: () => set({ createIssueModalOpen: false }),
 }))

@@ -1,0 +1,23 @@
+.app__settings-toggle {
+  position: fixed;
+  top: calc(var(--titlebar-height) + 8px);
+  right: 12px;
+  z-index: 100;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  -webkit-app-region: no-drag;
+
+  &:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+  }
+}

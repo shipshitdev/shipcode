@@ -1,0 +1,95 @@
+.pipeline-status {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  gap: 0;
+}
+
+.pipeline-step {
+  display: flex;
+  align-items: center;
+}
+
+.pipeline-phase {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: none;
+  border: none;
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) {
+    color: var(--text-secondary);
+  }
+
+  &:disabled {
+    cursor: default;
+  }
+
+  &__indicator {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    font-size: 10px;
+    font-weight: 700;
+    border: 2px solid var(--text-muted);
+    color: var(--text-muted);
+  }
+
+  &--active {
+    .pipeline-phase__indicator {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--bg-primary);
+    }
+
+    .pipeline-phase__label {
+      color: var(--accent);
+    }
+  }
+
+  &--completed {
+    .pipeline-phase__indicator {
+      background: var(--success);
+      border-color: var(--success);
+      color: var(--bg-primary);
+    }
+
+    .pipeline-phase__label {
+      color: var(--success);
+    }
+  }
+
+  &--failed {
+    .pipeline-phase__indicator {
+      background: var(--danger);
+      border-color: var(--danger);
+      color: var(--bg-primary);
+    }
+
+    .pipeline-phase__label {
+      color: var(--danger);
+    }
+  }
+}
+
+.pipeline-connector {
+  width: 24px;
+  height: 2px;
+  background: var(--text-muted);
+  margin: 0 2px;
+
+  &--completed {
+    background: var(--success);
+  }
+}

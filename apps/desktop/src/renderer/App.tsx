@@ -10,8 +10,12 @@ import { SettingsPanel } from './components/SettingsPanel'
 import { TerminalDrawer } from './components/TerminalDrawer'
 import { HealthBanner } from './components/HealthBanner'
 import { OnboardingWizard } from './components/onboarding/OnboardingWizard'
+import { CommandPalette } from './components/CommandPalette'
+import { CreateIssueModal } from './components/CreateIssueModal'
+import { useGlobalKeyboard } from './hooks/useGlobalKeyboard'
 
 export function App() {
+	useGlobalKeyboard()
 	const queryClient = useQueryClient()
 	const { terminalVisible, settingsVisible, kanbanView, activeIssue, toggleSettings } = useAppStore()
 
@@ -51,6 +55,8 @@ export function App() {
 				{settingsVisible ? '✕' : '⚙'}
 			</button>
 			{terminalVisible && <TerminalDrawer />}
+			<CommandPalette />
+			<CreateIssueModal />
 		</div>
 	)
 }

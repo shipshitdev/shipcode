@@ -1,0 +1,65 @@
+.status-mapping {
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+
+    h4 {
+      margin: 0;
+    }
+  }
+
+  &__actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  &__table {
+    width: 100%;
+    border-collapse: collapse;
+
+    th {
+      text-align: left;
+      padding: 8px;
+      color: var(--text-secondary);
+      border-bottom: 1px solid var(--bg-tertiary);
+      font-weight: 500;
+    }
+
+    td {
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--bg-tertiary);
+    }
+  }
+
+  &__status {
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+
+  &__input {
+    width: 100%;
+    padding: 4px 8px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--bg-hover);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-family: inherit;
+
+    &:focus {
+      border-color: var(--accent);
+      outline: none;
+    }
+
+    &::placeholder {
+      color: var(--text-muted);
+    }
+  }
+
+  &__hint {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+}

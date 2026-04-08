@@ -12,6 +12,7 @@
     }
   },
   "scripts": {
+    "test": "vitest run",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"

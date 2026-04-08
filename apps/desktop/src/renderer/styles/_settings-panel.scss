@@ -1,0 +1,45 @@
+.settings-panel {
+  flex: 1;
+  padding: 24px;
+  max-width: 600px;
+  overflow-y: auto;
+
+  h3 {
+    margin-bottom: 20px;
+  }
+
+  &__section {
+    margin-bottom: 32px;
+
+    h4 {
+      margin-bottom: 12px;
+      color: var(--text-secondary);
+    }
+  }
+
+  &__field {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--bg-tertiary);
+
+    span {
+      color: var(--text-primary);
+    }
+
+    input[type="number"] {
+      width: 120px;
+      padding: 4px 8px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--bg-hover);
+      border-radius: var(--radius);
+      color: var(--text-primary);
+    }
+
+    input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+    }
+  }
+}

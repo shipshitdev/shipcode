@@ -62,6 +62,9 @@ export function StepAuthCheck({ authResult, onRecheck, isChecking }: Props) {
 								<span className="onboarding__badge onboarding__badge--warning">Not authenticated</span>
 							)}
 						</span>
+						{ghAuth?.version && (
+							<span className="onboarding__auth-version">gh {ghAuth.version}</span>
+						)}
 					</div>
 				</div>
 			) : (

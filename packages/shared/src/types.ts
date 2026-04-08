@@ -312,5 +312,6 @@ export interface GhAuthStatus {
   installed: boolean
   authenticated: boolean
   username: string | null
+  version: string | null
   error: string | null
 }
