@@ -8,6 +8,7 @@
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
+    "test": "turbo run test",
     "clean": "turbo run clean",
     "dev:desktop": "turbo run dev --filter=@shipcode/desktop",
     "deps:update": "bunx npm-check-updates -u --deep && bun install",
@@ -17,12 +18,9 @@
   "devDependencies": {
     "@biomejs/biome": "2.4.10",
     "@types/node": "25.5.2",
+    "esbuild": "0.25.12",
     "turbo": "2.9.5",
     "typescript": "6.0.2",
-    "esbuild": "0.25.12"
+    "vitest": "^4.1.3"
   }
 }
-
-
-
-

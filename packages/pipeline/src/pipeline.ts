@@ -12,21 +12,25 @@ export function createPipeline(deps: PipelineDeps) {
   }
 
   async function startPlanGeneration(threadId: string, prompt: string, projectPath: string, worktreePath: string | null) {
-    const context: PipelineContext = {
-      threadId,
-      projectPath,
-      worktreePath,
-      retryCount: 0,
-      autonomous: false,
-      reviewRound: 0,
-      verificationRetries: 0,
-      githubIssueNumber: null,
-      githubRepo: null,
-      executorModel: 'claude',
-      baseBranch: '',
-      forkPointSha: '',
+    // Reuse existing context on retries — only create fresh context on first call
+    let context = activePipelines.get(threadId)
+    if (!context) {
+      context = {
+        threadId,
+        projectPath,
+        worktreePath,
+        retryCount: 0,
+        autonomous: false,
+        reviewRound: 0,
+        verificationRetries: 0,
+        githubIssueNumber: null,
+        githubRepo: null,
+        executorModel: 'claude',
+        baseBranch: '',
+        forkPointSha: '',
+      }
+      activePipelines.set(threadId, context)
     }
-    activePipelines.set(threadId, context)
 
     emitPhase(threadId, 'planning')
 
@@ -472,7 +476,18 @@ export function createPipeline(deps: PipelineDeps) {
     })
 
     const prompt = `GitHub Issue #${issue.number}: ${issue.title}\n\n${issue.body ?? ''}`
-    startPlanGeneration(threadId, prompt, projectPath, null)
+    await startPlanGeneration(threadId, prompt, projectPath, null)
+
+    // Patch in-memory context with autonomous fields (startPlanGeneration creates the context)
+    const ctx = activePipelines.get(threadId)
+    if (ctx) {
+      ctx.autonomous = true
+      ctx.githubIssueNumber = issue.number
+      ctx.githubRepo = null
+      ctx.executorModel = executorModel
+      ctx.baseBranch = baseBranch
+      ctx.forkPointSha = forkPointSha
+    }
   }
 
   function cancel(threadId: string) {

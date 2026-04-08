@@ -1,0 +1,345 @@
+import { vi, describe, it, expect, beforeEach } from 'vitest'
+
+const mockExecFileAsync = vi.hoisted(() => vi.fn())
+vi.mock('node:child_process', async () => {
+	const { promisify } = await import('node:util')
+	const fn = vi.fn()
+	;(fn as any)[promisify.custom] = mockExecFileAsync
+	return { execFile: fn }
+})
+
+import { GhCli } from './gh-cli'
+
+function success(stdout: string) {
+	mockExecFileAsync.mockResolvedValueOnce({ stdout, stderr: '' })
+}
+
+function failure(message = 'command failed') {
+	mockExecFileAsync.mockRejectedValueOnce(new Error(message))
+}
+
+describe('GhCli', () => {
+	let gh: GhCli
+
+	beforeEach(() => {
+		vi.clearAllMocks()
+		gh = new GhCli('/test/repo')
+	})
+
+	describe('listIssues', () => {
+		it('maps JSON response to GitHubIssue[]', async () => {
+			const raw = [
+				{
+					number: 1,
+					title: 'Bug report',
+					body: 'Something broke',
+					labels: [{ name: 'bug' }, { name: 'agent:claude' }],
+					assignees: [{ login: 'alice' }],
+					state: 'OPEN',
+					url: 'https://github.com/owner/repo/issues/1',
+				},
+			]
+			success(JSON.stringify(raw))
+
+			const issues = await gh.listIssues('agent:claude')
+
+			expect(issues).toEqual([
+				{
+					number: 1,
+					title: 'Bug report',
+					body: 'Something broke',
+					labels: ['bug', 'agent:claude'],
+					assignee: 'alice',
+					state: 'open',
+					url: 'https://github.com/owner/repo/issues/1',
+				},
+			])
+			expect(mockExecFileAsync).toHaveBeenCalledWith(
+				'gh',
+				['issue', 'list', '--label', 'agent:claude', '--state', 'open',
+					'--json', 'number,title,body,labels,assignees,state,url', '--limit', '50'],
+				{ cwd: '/test/repo' },
+			)
+		})
+
+		it('returns assignee=null for empty assignees', async () => {
+			const raw = [{
+				number: 2,
+				title: 'No assignee',
+				body: null,
+				labels: [],
+				assignees: [],
+				state: 'OPEN',
+				url: '',
+			}]
+			success(JSON.stringify(raw))
+
+			const issues = await gh.listIssues('bug')
+
+			expect(issues[0].assignee).toBeNull()
+			expect(issues[0].body).toBeNull()
+		})
+
+		it('lowercases state', async () => {
+			const raw = [{ number: 3, title: 'T', body: '', labels: [], assignees: [], state: 'CLOSED', url: '' }]
+			success(JSON.stringify(raw))
+
+			const issues = await gh.listIssues('x')
+			expect(issues[0].state).toBe('closed')
+		})
+	})
+
+	describe('listAllIssues', () => {
+		it('returns mapped issues with --limit 100', async () => {
+			const raw = [
+				{ number: 10, title: 'All', body: 'desc', labels: [{ name: 'feat' }], assignees: [{ login: 'bob' }], state: 'OPEN', url: 'https://github.com/o/r/issues/10' },
+			]
+			success(JSON.stringify(raw))
+
+			const issues = await gh.listAllIssues()
+
+			expect(issues).toHaveLength(1)
+			expect(issues[0].labels).toEqual(['feat'])
+			expect(mockExecFileAsync).toHaveBeenCalledWith(
+				'gh',
+				expect.arrayContaining(['--limit', '100']),
+				{ cwd: '/test/repo' },
+			)
+		})
+
+		it('returns empty array for empty response', async () => {
+			success('[]')
+
+			const issues = await gh.listAllIssues()
+			expect(issues).toEqual([])
+		})
+	})
+
+	describe('listAllAgentIssues', () => {
+		it('deduplicates by issue number across both labels', async () => {
+			const claudeIssues = [
+				{ number: 1, title: 'Shared', body: '', labels: [{ name: 'agent:claude' }], assignees: [], state: 'OPEN', url: '' },
+				{ number: 2, title: 'Claude only', body: '', labels: [{ name: 'agent:claude' }], assignees: [], state: 'OPEN', url: '' },
+			]
+			const codexIssues = [
+				{ number: 1, title: 'Shared', body: '', labels: [{ name: 'agent:codex' }], assignees: [], state: 'OPEN', url: '' },
+				{ number: 3, title: 'Codex only', body: '', labels: [{ name: 'agent:codex' }], assignees: [], state: 'OPEN', url: '' },
+			]
+
+			success(JSON.stringify(claudeIssues))
+			success(JSON.stringify(codexIssues))
+
+			const issues = await gh.listAllAgentIssues()
+
+			expect(issues).toHaveLength(3)
+			const numbers = issues.map(i => i.number)
+			expect(numbers).toEqual([1, 2, 3])
+		})
+
+		it('handles one label query failing', async () => {
+			failure('agent:claude not found')
+			success(JSON.stringify([
+				{ number: 5, title: 'Codex', body: '', labels: [], assignees: [], state: 'OPEN', url: '' },
+			]))
+
+			const issues = await gh.listAllAgentIssues()
+
+			expect(issues).toHaveLength(1)
+			expect(issues[0].number).toBe(5)
+		})
+
+		it('handles both failing and returns empty', async () => {
+			failure()
+			failure()
+
+			const issues = await gh.listAllAgentIssues()
+			expect(issues).toEqual([])
+		})
+	})
+
+	describe('getIssue', () => {
+		it('returns single mapped issue', async () => {
+			const raw = {
+				number: 42,
+				title: 'The issue',
+				body: 'Details here',
+				labels: [{ name: 'bug' }],
+				assignees: [{ login: 'carol' }],
+				state: 'OPEN',
+				url: 'https://github.com/o/r/issues/42',
+			}
+			success(JSON.stringify(raw))
+
+			const issue = await gh.getIssue(42)
+
+			expect(issue).toEqual({
+				number: 42,
+				title: 'The issue',
+				body: 'Details here',
+				labels: ['bug'],
+				assignee: 'carol',
+				state: 'open',
+				url: 'https://github.com/o/r/issues/42',
+			})
+			expect(mockExecFileAsync).toHaveBeenCalledWith(
+				'gh',
+				['issue', 'view', '42', '--json', 'number,title,body,labels,assignees,state,url'],
+				{ cwd: '/test/repo' },
+			)
+		})
+
+		it('handles null body', async () => {
+			const raw = { number: 7, title: 'No body', body: null, labels: [], assignees: [], state: 'OPEN', url: '' }
+			success(JSON.stringify(raw))
+
+			const issue = await gh.getIssue(7)
+			expect(issue.body).toBeNull()
+		})
+	})
+
+	describe('createPR', () => {
+		it('extracts PR number from URL', async () => {
+			success('https://github.com/owner/repo/pull/7\n')
+
+			const prNumber = await gh.createPR({
+				title: 'My PR',
+				body: 'PR body',
+				head: 'feat/branch',
+			})
+
+			expect(prNumber).toBe(7)
+			const args = mockExecFileAsync.mock.calls[0][1]
+			expect(args).toEqual([
+				'pr', 'create',
+				'--title', 'My PR',
+				'--body', 'PR body',
+				'--head', 'feat/branch',
+			])
+		})
+
+		it('includes --base and --label when provided', async () => {
+			success('https://github.com/o/r/pull/99\n')
+
+			await gh.createPR({
+				title: 'PR',
+				body: 'body',
+				head: 'feat/x',
+				base: 'main',
+				labels: ['review', 'urgent'],
+			})
+
+			const args = mockExecFileAsync.mock.calls[0][1]
+			expect(args).toContain('--base')
+			expect(args).toContain('main')
+			expect(args).toContain('--label')
+			expect(args).toContain('review,urgent')
+		})
+
+		it('throws when URL missing PR number', async () => {
+			success('no match here\n')
+
+			await expect(gh.createPR({ title: 'X', body: 'Y', head: 'z' }))
+				.rejects.toThrow('Failed to parse PR number from')
+		})
+	})
+
+	describe('addIssueComment', () => {
+		it('calls with correct args and resolves', async () => {
+			success('')
+
+			await gh.addIssueComment(42, 'Hello world')
+
+			expect(mockExecFileAsync).toHaveBeenCalledWith(
+				'gh',
+				['issue', 'comment', '42', '--body', 'Hello world'],
+				{ cwd: '/test/repo' },
+			)
+		})
+	})
+
+	describe('setStatusLabel', () => {
+		it('removes existing status:* labels and adds new one', async () => {
+			const labelsResponse = { labels: [{ name: 'status:queued' }, { name: 'status:in-progress' }, { name: 'bug' }] }
+
+			success(JSON.stringify(labelsResponse)) // view
+			success('')  // remove status:queued
+			success('')  // remove status:in-progress
+			success('')  // add new label
+
+			await gh.setStatusLabel(10, 'status:ready-for-review')
+
+			// View call
+			expect(mockExecFileAsync.mock.calls[0][1]).toEqual(
+				['issue', 'view', '10', '--json', 'labels'],
+			)
+			// Remove calls
+			expect(mockExecFileAsync.mock.calls[1][1]).toContain('--remove-label')
+			expect(mockExecFileAsync.mock.calls[1][1]).toContain('status:queued')
+			expect(mockExecFileAsync.mock.calls[2][1]).toContain('--remove-label')
+			expect(mockExecFileAsync.mock.calls[2][1]).toContain('status:in-progress')
+			// Add call
+			expect(mockExecFileAsync.mock.calls[3][1]).toContain('--add-label')
+			expect(mockExecFileAsync.mock.calls[3][1]).toContain('status:ready-for-review')
+		})
+
+		it('skips removal when no status:* labels exist', async () => {
+			const labelsResponse = { labels: [{ name: 'bug' }] }
+
+			success(JSON.stringify(labelsResponse)) // view
+			success('')  // add
+
+			await gh.setStatusLabel(5, 'status:queued')
+
+			expect(mockExecFileAsync).toHaveBeenCalledTimes(2)
+			expect(mockExecFileAsync.mock.calls[1][1]).toContain('--add-label')
+		})
+
+		it('handles fetch failure gracefully and still adds label', async () => {
+			failure('view failed') // view fails
+			success('')            // add succeeds
+
+			await gh.setStatusLabel(5, 'status:in-progress')
+
+			expect(mockExecFileAsync).toHaveBeenCalledTimes(2)
+			expect(mockExecFileAsync.mock.calls[1][1]).toContain('--add-label')
+			expect(mockExecFileAsync.mock.calls[1][1]).toContain('status:in-progress')
+		})
+
+		it('handles removal failure and continues', async () => {
+			const labelsResponse = { labels: [{ name: 'status:queued' }] }
+
+			success(JSON.stringify(labelsResponse)) // view
+			failure('remove failed')                 // remove fails
+			success('')                              // add succeeds
+
+			await gh.setStatusLabel(5, 'status:in-progress')
+
+			expect(mockExecFileAsync).toHaveBeenCalledTimes(3)
+			expect(mockExecFileAsync.mock.calls[2][1]).toContain('--add-label')
+		})
+
+		it('handles addition failure without throwing', async () => {
+			const labelsResponse = { labels: [] }
+
+			success(JSON.stringify(labelsResponse)) // view
+			failure('add failed')                    // add fails
+
+			await expect(gh.setStatusLabel(5, 'status:queued')).resolves.toBeUndefined()
+		})
+	})
+
+	describe('getRepoSlug', () => {
+		it('returns trimmed nameWithOwner', async () => {
+			success('  owner/repo  \n')
+
+			const slug = await gh.getRepoSlug()
+
+			expect(slug).toBe('owner/repo')
+			expect(mockExecFileAsync).toHaveBeenCalledWith(
+				'gh',
+				['repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner'],
+				{ cwd: '/test/repo' },
+			)
+		})
+	})
+})
