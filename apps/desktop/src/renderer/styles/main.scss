@@ -3,17 +3,11 @@
 @use 'sidebar';
 @use 'thread-panel';
 @use 'active-thread';
-@use 'pipeline-status';
-@use 'plan-viewer';
-@use 'review-viewer';
-@use 'diff-viewer';
 @use 'terminal-drawer';
 @use 'buttons';
 @use 'scrollbar';
 @use 'settings-toggle';
 @use 'settings-panel';
-@use 'status-mapping-editor';
-@use 'kanban-board';
 @use 'onboarding-wizard';
 @use 'issue-detail';
 @use 'plan-history';

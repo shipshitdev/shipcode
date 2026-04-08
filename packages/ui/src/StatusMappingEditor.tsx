@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react'
 import type { StatusLabelMapping } from '@shipcode/shared'
+import { Button } from './primitives/button'
+import { Input } from './primitives/input'
+import { cn } from './lib/utils'
 
 interface StatusMappingEditorProps {
 	mappings: StatusLabelMapping
@@ -56,42 +59,50 @@ export function StatusMappingEditor({ mappings, onSave }: StatusMappingEditorPro
 	}
 
 	return (
-		<div className="status-mapping">
-			<div className="status-mapping__header">
-				<h4>Status → GitHub Label Mapping</h4>
-				<div className="status-mapping__actions">
-					<button
+		<div>
+			<div className="flex items-center justify-between mb-3">
+				<h4 className="m-0 text-text-primary font-medium">Status → GitHub Label Mapping</h4>
+				<div className="flex gap-2">
+					<Button
 						type="button"
-						className="btn btn--ghost"
+						variant="ghost"
+						size="sm"
 						onClick={handleReset}
 					>
 						Reset to Defaults
-					</button>
-					<button
+					</Button>
+					<Button
 						type="button"
-						className="btn btn--primary"
+						variant="default"
+						size="sm"
 						onClick={handleSave}
 						disabled={!dirty}
 					>
 						Save
-					</button>
+					</Button>
 				</div>
 			</div>
-			<table className="status-mapping__table">
+			<table className="w-full border-collapse">
 				<thead>
 					<tr>
-						<th>Pipeline Status</th>
-						<th>GitHub Label</th>
+						<th className="text-left p-2 text-text-secondary border-b border-bg-tertiary font-medium">
+							Pipeline Status
+						</th>
+						<th className="text-left p-2 text-text-secondary border-b border-bg-tertiary font-medium">
+							GitHub Label
+						</th>
 					</tr>
 				</thead>
 				<tbody>
 					{PIPELINE_STATUSES.map(({ key, label }) => (
 						<tr key={key}>
-							<td className="status-mapping__status">{label}</td>
-							<td>
-								<input
+							<td className="px-2 py-1.5 border-b border-bg-tertiary text-text-primary font-medium">
+								{label}
+							</td>
+							<td className="px-2 py-1.5 border-b border-bg-tertiary">
+								<Input
 									type="text"
-									className="status-mapping__input"
+									className="h-7 px-2 py-1"
 									value={local[key] ?? ''}
 									onChange={(e) => handleChange(key, e.target.value)}
 									placeholder="(no label)"
@@ -101,7 +112,7 @@ export function StatusMappingEditor({ mappings, onSave }: StatusMappingEditorPro
 					))}
 				</tbody>
 			</table>
-			<p className="status-mapping__hint">
+			<p className="mt-2 text-xs text-text-muted">
 				Empty = no label applied for that status. Labels are auto-created on GitHub if they don't exist.
 			</p>
 		</div>

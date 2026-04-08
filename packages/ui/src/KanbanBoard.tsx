@@ -3,6 +3,8 @@ import { DndContext, DragOverlay, closestCorners, type DragEndEvent, type DragSt
 import { useDroppable } from '@dnd-kit/core'
 import { useDraggable } from '@dnd-kit/core'
 import type { GitHubIssueCacheRecord, IssuePipelineStatus } from '@shipcode/shared'
+import { cn } from './lib/utils'
+import { Badge } from './primitives/badge'
 
 interface KanbanBoardProps {
 	issues: GitHubIssueCacheRecord[]
@@ -30,26 +32,28 @@ function DraggableCard({ issue, onClick }: { issue: GitHubIssueCacheRecord; onCl
 
 	const style = transform ? {
 		transform: `translate(${transform.x}px, ${transform.y}px)`,
-		opacity: isDragging ? 0.5 : 1,
 	} : undefined
 
 	return (
 		<div
 			ref={setNodeRef}
-			className="kanban__card"
+			className={cn(
+				'rounded-md border border-border bg-bg-primary p-2 cursor-grab hover:border-text-muted transition-colors active:cursor-grabbing',
+				isDragging && 'opacity-50'
+			)}
 			style={style}
 			{...listeners}
 			{...attributes}
 			onClick={(e) => { e.stopPropagation(); onClick() }}
 		>
-			<div className="kanban__card-number">#{issue.issueNumber}</div>
-			<div className="kanban__card-title">{issue.title}</div>
-			<div className="kanban__card-labels">
+			<div className="text-[11px] text-text-muted font-mono mb-0.5">#{issue.issueNumber}</div>
+			<div className="text-xs leading-snug text-text-primary line-clamp-2">{issue.title}</div>
+			<div className="flex flex-wrap gap-1 mt-1">
 				{issue.labels.filter(l => l.startsWith('agent:')).map(l => (
-					<span key={l} className="kanban__card-label">{l}</span>
+					<Badge key={l} variant="accent" className="text-[10px] px-1.5 py-px">{l}</Badge>
 				))}
 				{issue.pipelineStatus !== COLUMNS.find(c => c.statuses.includes(issue.pipelineStatus))?.statuses[0] && (
-					<span className="kanban__card-substatus">{issue.pipelineStatus}</span>
+					<Badge className="text-[10px] px-1.5 py-px">{issue.pipelineStatus}</Badge>
 				)}
 			</div>
 		</div>
@@ -63,14 +67,17 @@ function DroppableColumn({ id, label, issues, droppable, onIssueClick }: {
 	const { setNodeRef, isOver } = useDroppable({ id, disabled: !droppable })
 
 	return (
-		<div className="kanban__column">
-			<div className="kanban__column-header">
+		<div className="flex-1 min-w-[160px] max-w-[240px] flex flex-col bg-bg-secondary rounded-md overflow-hidden">
+			<div className="flex items-center justify-between px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-text-secondary border-b border-border shrink-0">
 				<span>{label}</span>
-				<span className="kanban__column-count">{issues.length}</span>
+				<span className="text-[10px] bg-bg-tertiary text-text-muted px-1.5 py-px rounded-full font-medium">{issues.length}</span>
 			</div>
 			<div
 				ref={setNodeRef}
-				className={`kanban__column-body ${isOver && droppable ? 'kanban__column-body--over' : ''}`}
+				className={cn(
+					'flex-1 overflow-y-auto p-1.5 flex flex-col gap-1 min-h-[60px]',
+					isOver && droppable && 'bg-bg-tertiary border border-dashed border-accent rounded-md'
+				)}
 			>
 				{issues.map(issue => (
 					<DraggableCard key={issue.id} issue={issue} onClick={() => onIssueClick(issue)} />
@@ -113,17 +120,23 @@ export function KanbanBoard({ issues, onIssueClick, onRefresh, onStartPipeline, 
 	}
 
 	return (
-		<div className="kanban">
-			<div className="kanban__header">
-				<h3>GitHub Issues</h3>
-				<button type="button" className="kanban__refresh" onClick={onRefresh}>Refresh</button>
+		<div className="flex flex-col h-full overflow-hidden">
+			<div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+				<h3 className="text-sm font-semibold">GitHub Issues</h3>
+				<button
+					type="button"
+					className="bg-transparent border border-border rounded-md text-text-secondary cursor-pointer px-2.5 py-1 text-xs hover:text-text-primary hover:border-text-secondary"
+					onClick={onRefresh}
+				>
+					Refresh
+				</button>
 			</div>
 			<DndContext
 				collisionDetection={closestCorners}
 				onDragStart={handleDragStart}
 				onDragEnd={handleDragEnd}
 			>
-				<div className="kanban__columns">
+				<div className="flex flex-1 overflow-x-auto overflow-y-hidden gap-0.5 p-3 px-2">
 					{COLUMNS.map(col => {
 						const columnIssues = issues.filter(i => col.statuses.includes(i.pipelineStatus))
 						return (
@@ -140,9 +153,9 @@ export function KanbanBoard({ issues, onIssueClick, onRefresh, onStartPipeline, 
 				</div>
 				<DragOverlay>
 					{activeIssue ? (
-						<div className="kanban__card kanban__card--dragging">
-							<div className="kanban__card-number">#{activeIssue.issueNumber}</div>
-							<div className="kanban__card-title">{activeIssue.title}</div>
+						<div className="opacity-80 bg-bg-secondary border border-accent rounded-md p-2 shadow-lg cursor-grabbing">
+							<div className="text-[11px] text-text-muted font-mono mb-0.5">#{activeIssue.issueNumber}</div>
+							<div className="text-xs leading-snug text-text-primary line-clamp-2">{activeIssue.title}</div>
 						</div>
 					) : null}
 				</DragOverlay>

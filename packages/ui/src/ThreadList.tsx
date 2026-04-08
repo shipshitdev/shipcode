@@ -1,4 +1,6 @@
 import type { Thread } from '@shipcode/shared'
+import { cn } from './lib/utils'
+import { Badge } from './primitives/badge'
 
 interface ThreadListProps {
 	threads: Thread[]
@@ -14,35 +16,55 @@ const STATUS_LABELS: Record<string, string> = {
 	revising: 'Revising...',
 	awaiting_approval: 'Needs Approval',
 	executing: 'Executing...',
-	verifying: 'Verifying...',
 	shipping: 'Shipping...',
 	completed: 'Done',
 	failed: 'Failed',
 }
 
+function getStatusVariant(status: string) {
+	switch (status) {
+		case 'planning':
+		case 'reviewing':
+		case 'revising':
+		case 'executing':
+			return 'accent' as const
+		case 'completed':
+			return 'success' as const
+		case 'failed':
+			return 'danger' as const
+		case 'awaiting_approval':
+			return 'warning' as const
+		default:
+			return 'default' as const
+	}
+}
+
 export function ThreadList({ threads, activeThreadId, onThreadSelect, onNewThread }: ThreadListProps) {
 	return (
-		<div className="thread-list">
-			<div className="thread-list__items">
+		<div className="flex flex-col h-full">
+			<div className="flex-1 overflow-y-auto p-2">
 				{threads.length === 0 ? (
-					<div className="thread-list__empty">
+					<div className="p-6 text-center text-text-muted">
 						<p>No threads yet</p>
-						<p className="thread-list__hint">Create one to get started</p>
+						<p className="text-xs mt-1">Create one to get started</p>
 					</div>
 				) : (
 					threads.map((thread) => (
 						<button
 							type="button"
 							key={thread.id}
-							className={`thread-list__item ${activeThreadId === thread.id ? 'thread-list__item--active' : ''}`}
+							className={cn(
+								'block w-full px-3 py-2.5 bg-transparent border-none rounded-md text-text-primary cursor-pointer text-left mb-0.5 hover:bg-bg-hover',
+								activeThreadId === thread.id && 'bg-bg-tertiary'
+							)}
 							onClick={() => onThreadSelect(thread.id)}
 						>
-							<div className="thread-list__item-title">{thread.title}</div>
-							<div className="thread-list__item-meta">
-								<span className={`thread-list__status thread-list__status--${thread.status}`}>
+							<div className="text-[13px] font-medium truncate">{thread.title}</div>
+							<div className="flex justify-between mt-1 text-[11px]">
+								<Badge variant={getStatusVariant(thread.status)}>
 									{STATUS_LABELS[thread.status] ?? thread.status}
-								</span>
-								<span className="thread-list__time">
+								</Badge>
+								<span className="text-text-muted">
 									{formatRelativeTime(thread.updatedAt)}
 								</span>
 							</div>
@@ -51,7 +73,11 @@ export function ThreadList({ threads, activeThreadId, onThreadSelect, onNewThrea
 				)}
 			</div>
 
-			<button type="button" className="thread-list__new" onClick={onNewThread}>
+			<button
+				type="button"
+				className="m-2 p-2.5 bg-transparent border border-dashed border-border rounded-md text-text-secondary cursor-pointer text-[13px] hover:border-accent hover:text-accent"
+				onClick={onNewThread}
+			>
 				+ New Thread
 			</button>
 		</div>
