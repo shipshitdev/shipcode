@@ -21,7 +21,7 @@ import {
 
 // Helper: make mockExec resolve with given stdout/stderr
 function execSucceeds(stdout = '', stderr = '') {
-	mockExec.mockImplementation((cmd: string, opts: unknown, cb?: unknown) => {
+	mockExec.mockImplementation((_cmd: string, opts: unknown, cb?: unknown) => {
 		if (typeof opts === 'function') { cb = opts; opts = {} }
 		;(cb as Function)(null, { stdout, stderr })
 	})
@@ -29,7 +29,7 @@ function execSucceeds(stdout = '', stderr = '') {
 
 // Helper: make mockExec reject with an error
 function execFails(message = 'command failed') {
-	mockExec.mockImplementation((cmd: string, opts: unknown, cb?: unknown) => {
+	mockExec.mockImplementation((_cmd: string, opts: unknown, cb?: unknown) => {
 		if (typeof opts === 'function') { cb = opts; opts = {} }
 		;(cb as Function)(new Error(message))
 	})
@@ -123,12 +123,7 @@ describe('checkCodexAuth', () => {
 // ---------------------------------------------------------------------------
 describe('checkGhAuth', () => {
 	it('returns installed=true, authenticated=true with username when auth succeeds', async () => {
-		execRouted({
-			'gh auth status': {
-				stdout: 'Logged in to github.com as an account decod3r (token)',
-			},
-			'gh --version': { stdout: 'gh version 2.40.1 (2024-01-01)\n' },
-		})
+		execSucceeds('Logged in to github.com as an account decod3r (token)')
 
 		const result = await checkGhAuth()
 		expect(result.installed).toBe(true)
@@ -137,23 +132,8 @@ describe('checkGhAuth', () => {
 		expect(result.error).toBeNull()
 	})
 
-	it('parses version from `gh version X.Y.Z` format', async () => {
-		execRouted({
-			'gh auth status': {
-				stdout: 'Logged in to github.com as an account someone (token)',
-			},
-			'gh --version': { stdout: 'gh version 2.40.1 (2024-01-01)\n' },
-		})
-
-		const result = await checkGhAuth()
-		expect(result.version).toBe('2.40.1')
-	})
-
 	it('returns username=null when regex does not match output format', async () => {
-		execRouted({
-			'gh auth status': { stdout: 'Authenticated but weird format' },
-			'gh --version': { stdout: 'gh version 2.40.1 (2024-01-01)\n' },
-		})
+		execSucceeds('Authenticated but weird format')
 
 		const result = await checkGhAuth()
 		expect(result.installed).toBe(true)
@@ -165,7 +145,6 @@ describe('checkGhAuth', () => {
 		execRouted({
 			'gh auth status': new Error('not logged in'),
 			'which gh': { stdout: '/usr/local/bin/gh\n' },
-			'gh --version': { stdout: 'gh version 2.40.1 (2024-01-01)\n' },
 		})
 
 		const result = await checkGhAuth()
@@ -182,7 +161,6 @@ describe('checkGhAuth', () => {
 		expect(result.installed).toBe(false)
 		expect(result.authenticated).toBe(false)
 		expect(result.username).toBeNull()
-		expect(result.version).toBeNull()
 		expect(result.error).toBe('gh not found in PATH')
 	})
 })

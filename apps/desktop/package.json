@@ -37,6 +37,9 @@
   "private": true,
   "scripts": {
     "build": "tsc && vite build && electron-builder",
+    "build:code": "tsc && vite build",
+    "build:installer:linux": "electron-builder --linux",
+    "build:installer:mac": "electron-builder --mac",
     "clean": "rm -rf dist out",
     "dev": "vite",
     "start": "electron .",

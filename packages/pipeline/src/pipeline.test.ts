@@ -707,7 +707,6 @@ describe('createPipeline', () => {
 			await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null)
 			pipeline.getContext('t1')!.forkPointSha = 'abc123'
 
-			let callCount = 0
 			mockExecSync.mockImplementation((cmd: string) => {
 				if (cmd.startsWith('git status')) return ''
 				if (cmd.startsWith('git log')) return 'abc123 some commit'

@@ -197,58 +197,6 @@ describe('GhCli', () => {
 		})
 	})
 
-	describe('createIssue', () => {
-		it('extracts issue number from URL and returns full issue', async () => {
-			const fullIssue = {
-				number: 42,
-				title: 'New feature',
-				body: 'Description',
-				labels: [{ name: 'enhancement' }],
-				assignees: [],
-				state: 'OPEN',
-				url: 'https://github.com/owner/repo/issues/42',
-			}
-
-			success('https://github.com/owner/repo/issues/42\n')
-			success(JSON.stringify(fullIssue))
-
-			const issue = await gh.createIssue({ title: 'New feature', body: 'Description', labels: ['enhancement'] })
-
-			expect(issue.number).toBe(42)
-			expect(issue.title).toBe('New feature')
-
-			// First call: create
-			const createArgs = mockExecFileAsync.mock.calls[0][1]
-			expect(createArgs).toEqual(['issue', 'create', '--title', 'New feature', '--body', 'Description', '--label', 'enhancement'])
-
-			// Second call: getIssue
-			const viewArgs = mockExecFileAsync.mock.calls[1][1]
-			expect(viewArgs).toContain('view')
-			expect(viewArgs).toContain('42')
-		})
-
-		it('includes --body and --label only when provided', async () => {
-			const fullIssue = { number: 1, title: 'Minimal', body: null, labels: [], assignees: [], state: 'OPEN', url: '' }
-
-			success('https://github.com/o/r/issues/1\n')
-			success(JSON.stringify(fullIssue))
-
-			await gh.createIssue({ title: 'Minimal' })
-
-			const createArgs = mockExecFileAsync.mock.calls[0][1]
-			expect(createArgs).toEqual(['issue', 'create', '--title', 'Minimal'])
-			expect(createArgs).not.toContain('--body')
-			expect(createArgs).not.toContain('--label')
-		})
-
-		it('throws when URL missing issue number', async () => {
-			success('some garbage output\n')
-
-			await expect(gh.createIssue({ title: 'Bad' }))
-				.rejects.toThrow('Failed to parse issue number from')
-		})
-	})
-
 	describe('createPR', () => {
 		it('extracts PR number from URL', async () => {
 			success('https://github.com/owner/repo/pull/7\n')

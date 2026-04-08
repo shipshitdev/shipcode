@@ -542,7 +542,18 @@ export function createPipeline(deps: PipelineDeps) {
     activePipelines.set(threadId, context)
 
     const prompt = `GitHub Issue #${issue.number}: ${issue.title}\n\n${issue.body ?? ''}`
-    startPlanGeneration(threadId, prompt, projectPath, null)
+    await startPlanGeneration(threadId, prompt, projectPath, null)
+
+    // Patch in-memory context with autonomous fields (startPlanGeneration creates the context)
+    const ctx = activePipelines.get(threadId)
+    if (ctx) {
+      ctx.autonomous = true
+      ctx.githubIssueNumber = issue.number
+      ctx.githubRepo = null
+      ctx.executorModel = executorModel
+      ctx.baseBranch = baseBranch
+      ctx.forkPointSha = forkPointSha
+    }
   }
 
   function cancel(threadId: string) {
