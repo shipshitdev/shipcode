@@ -5,13 +5,19 @@ ShipCode CLI is a headless pipeline runner for terminal workflows.
 ## Installation
 
 ```bash
-# From the monorepo
-bun run build --filter=@shipcode/cli
-bunx shipcode --help
+# Requires Node.js >= 22.5.0
+npx shipcode onboard
+```
+
+Or install globally:
+
+```bash
+npm install -g shipcode
 ```
 
 ## Commands
 
+- `shipcode onboard` — Initialize ShipCode in the current project
 - `shipcode run <issue>` — Process a single GitHub issue
 - `shipcode start` — Interactive mode
 - `shipcode status` — Show active pipelines

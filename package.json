@@ -1,5 +1,5 @@
 {
-  "name": "shipcode",
+  "name": "@shipcode/monorepo",
   "private": true,
   "packageManager": "bun@1.3.11",
   "workspaces": ["apps/*", "packages/*"],
@@ -10,7 +10,9 @@
     "lint": "turbo run lint",
     "clean": "turbo run clean",
     "dev:desktop": "turbo run dev --filter=@shipcode/desktop",
-    "deps:update": "bunx npm-check-updates -u --deep && bun install"
+    "deps:update": "bunx npm-check-updates -u --deep && bun install",
+    "dev:web": "turbo run dev --filter=@shipcode/web",
+    "build:web": "turbo run build --filter=@shipcode/web"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.10",

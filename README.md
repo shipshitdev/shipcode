@@ -38,11 +38,14 @@ Turborepo monorepo with Electron desktop app:
 
 ```
 apps/
+  web/              Marketing site (Next.js + Tailwind)
   desktop/          Electron + Vite + React 19
+  cli/              CLI tool (published as 'shipcode' on npm)
+  docs/             Documentation (Nextra)
 packages/
   shared/           Types, schemas, constants
   agents/           Process manager, prompts, GitHub CLI wrapper
-  db/               SQLite with better-sqlite3
+  db/               SQLite persistence (node:sqlite)
   git/              Git operations + worktree manager
   ui/               React components (kanban board, viewers)
 ```
@@ -55,20 +58,21 @@ packages/
 - [GitHub CLI](https://cli.github.com) (`gh`) with auth configured
 - Git
 
-## Getting started
+## Quick Start
 
 ```bash
-# Install dependencies
+# CLI (requires Node.js >= 22.5.0)
+npx shipcode onboard
+npx shipcode run 42
+```
+
+Or run the desktop app:
+
+```bash
+git clone https://github.com/shipshitdev/shipcode
+cd shipcode
 bun install
-
-# Run the desktop app in dev mode
 bun run dev:desktop
-
-# Typecheck all packages
-bun run typecheck
-
-# Build everything
-bun run build
 ```
 
 ## GitHub integration

@@ -1,28 +1,34 @@
 {
-  "bin": {
-    "shipcode": "./dist/index.js"
+  "name": "shipcode",
+  "version": "0.0.1",
+  "description": "Autonomous AI coding pipeline. GitHub issues in, pull requests out.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": { "shipcode": "./dist/index.js" },
+  "files": ["dist"],
+  "publishConfig": { "access": "public" },
+  "engines": { "node": ">=22.5.0" },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
   },
   "dependencies": {
+    "commander": "^14.0.3",
+    "nanoid": "^5.1.7",
+    "node-pty": "^1.1.0",
+    "simple-git": "^3.35.2",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
     "@shipcode/agents": "workspace:*",
     "@shipcode/db": "workspace:*",
     "@shipcode/git": "workspace:*",
     "@shipcode/pipeline": "workspace:*",
     "@shipcode/shared": "workspace:*",
-    "commander": "14.0.3"
-  },
-  "devDependencies": {
-    "@types/node": "25.5.2",
-    "typescript": "6.0.2"
-  },
-  "main": "./dist/index.js",
-  "name": "@shipcode/cli",
-  "private": true,
-  "scripts": {
-    "build": "tsc",
-    "clean": "rm -rf dist",
-    "dev": "tsc --watch",
-    "typecheck": "tsc --noEmit"
-  },
-  "type": "module",
-  "version": "0.0.1"
+    "@types/node": "^25.5.2",
+    "tsup": "^8.5.0",
+    "typescript": "^6.0.2"
+  }
 }
