@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useAppStore } from '../stores/app-store'
 import { useIpc } from '../hooks/useIpc'
-import { PipelineStatus, PlanViewer, ReviewViewer, VerificationViewer, DiffViewer } from '@shipcode/ui'
+import { PipelineStatus, PlanViewer, ReviewViewer, VerificationViewer, DiffViewer, Button } from '@shipcode/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { DiffRecord } from '@shipcode/shared'
 
@@ -22,14 +22,14 @@ export function ActiveThread() {
 
 	if (!activeThreadId) {
 		return (
-			<div className="active-thread active-thread--empty">
-				<div className="active-thread__welcome">
-					<h2>ShipCode</h2>
+			<div className="flex flex-1 flex-col items-center justify-center overflow-hidden">
+				<div className="text-center text-text-secondary">
+					<h2 className="mb-2 text-xl text-text-primary">ShipCode</h2>
 					<p>Drag an issue to Planning on the kanban, or create a thread to start the pipeline.</p>
-					<div className="active-thread__shortcuts">
-						<kbd>⌘N</kbd> New thread
-						<kbd>⌘K</kbd> Command palette
-						<kbd>Ctrl+`</kbd> Toggle terminal
+					<div className="mt-4 flex gap-4 text-xs text-text-muted">
+						<span><kbd className="mr-1 rounded border border-border bg-bg-tertiary px-2 py-0.5 font-mono text-[11px]">⌘N</kbd> New thread</span>
+						<span><kbd className="mr-1 rounded border border-border bg-bg-tertiary px-2 py-0.5 font-mono text-[11px]">⌘K</kbd> Command palette</span>
+						<span><kbd className="mr-1 rounded border border-border bg-bg-tertiary px-2 py-0.5 font-mono text-[11px]">Ctrl+`</kbd> Toggle terminal</span>
 					</div>
 				</div>
 			</div>
@@ -72,87 +72,86 @@ export function ActiveThread() {
 	}
 
 	return (
-		<div className="active-thread">
+		<div className="flex flex-1 flex-col overflow-hidden">
 			<PipelineStatus currentPhase={pipelinePhase} />
 
-			<div className="active-thread__content">
+			<div className="flex-1 overflow-y-auto p-4">
 				{pipelinePhase === 'idle' && (
-					<div className="active-thread__start">
-						<div className="active-thread__start-content">
-							<h3>Ready to plan</h3>
-							<p>Claude Code will generate an implementation plan, then Codex will review it.</p>
-							<div className="active-thread__start-actions">
-								<button
-									type="button"
-									className="btn btn--primary btn--lg"
+					<div className="flex h-full items-center justify-center">
+						<div className="text-center">
+							<h3 className="mb-2 text-lg">Ready to plan</h3>
+							<p className="mb-5 text-[13px] text-text-secondary">Claude Code will generate an implementation plan, then Codex will review it.</p>
+							<div className="flex justify-center gap-2">
+								<Button
+									size="lg"
 									onClick={handleStart}
 									disabled={isStarting}
 								>
 									{isStarting ? 'Starting...' : 'Start Pipeline (⌘↩)'}
-								</button>
+								</Button>
 							</div>
 						</div>
 					</div>
 				)}
 
 				{(pipelinePhase === 'planning' || pipelinePhase === 'revising') && (
-					<div className="active-thread__planning">
+					<div>
 						{currentPlan ? (
 							<PlanViewer plan={currentPlan} />
 						) : (
-							<div className="active-thread__waiting">
-								<div className="active-thread__spinner-icon">⟳</div>
+							<div className="flex h-[300px] flex-col items-center justify-center text-text-secondary">
+								<div className="mb-4 animate-spin text-[32px] text-accent">⟳</div>
 								<p>Claude Code is generating the implementation plan...</p>
-								<p className="active-thread__hint">Watch the terminal below for real-time output</p>
+								<p className="mt-2 text-xs text-text-muted">Watch the terminal below for real-time output</p>
 							</div>
 						)}
 					</div>
 				)}
 
 				{pipelinePhase === 'reviewing' && (
-					<div className="active-thread__reviewing">
-						<div className="active-thread__split">
+					<div>
+						<div className="grid h-full grid-cols-2 gap-4">
 							<PlanViewer plan={currentPlan} />
 							{currentReview ? (
 								<ReviewViewer review={currentReview} />
 							) : (
-								<div className="review-viewer review-viewer--empty">
-									<p className="review-viewer__placeholder">Codex is reviewing the plan...</p>
+								<div className="flex items-center justify-center text-text-muted">
+									<p>Codex is reviewing the plan...</p>
 								</div>
 							)}
 						</div>
-						<div className="active-thread__review-actions">
-							<button type="button" className="btn btn--ghost" onClick={handleSkipReview}>
+						<div className="flex justify-end py-2">
+							<Button variant="ghost" onClick={handleSkipReview}>
 								Skip Review →
-							</button>
+							</Button>
 						</div>
 					</div>
 				)}
 
 				{pipelinePhase === 'awaiting_approval' && (
-					<div className="active-thread__approval">
-						<div className="active-thread__split">
+					<div>
+						<div className="grid h-full grid-cols-2 gap-4">
 							<PlanViewer plan={currentPlan} isEditable />
 							<ReviewViewer review={currentReview} />
 						</div>
-						<div className="active-thread__approval-actions">
-							<button type="button" className="btn btn--primary" onClick={handleApprove}>
+						<div className="flex justify-center gap-2 border-t border-border p-4">
+							<Button onClick={handleApprove}>
 								Approve & Execute (⌘↩)
-							</button>
-							<button type="button" className="btn btn--secondary" onClick={handleReject}>
+							</Button>
+							<Button variant="secondary" onClick={handleReject}>
 								Request Changes
-							</button>
+							</Button>
 						</div>
 					</div>
 				)}
 
 				{pipelinePhase === 'verifying' && (
-					<div className="active-thread__verifying">
+					<div>
 						{currentVerification ? (
 							<VerificationViewer verification={currentVerification} />
 						) : (
-							<div className="active-thread__waiting">
-								<div className="active-thread__spinner-icon">⟳</div>
+							<div className="flex h-[300px] flex-col items-center justify-center text-text-secondary">
+								<div className="mb-4 animate-spin text-[32px] text-accent">⟳</div>
 								<p>Verifying implementation...</p>
 							</div>
 						)}
@@ -160,38 +159,36 @@ export function ActiveThread() {
 				)}
 
 				{pipelinePhase === 'shipping' && (
-					<div className="active-thread__shipping">
-						<div className="active-thread__waiting">
-							<div className="active-thread__spinner-icon">⟳</div>
+					<div>
+						<div className="flex h-[300px] flex-col items-center justify-center text-text-secondary">
+							<div className="mb-4 animate-spin text-[32px] text-accent">⟳</div>
 							<p>Creating PR...</p>
 						</div>
 					</div>
 				)}
 
 				{pipelinePhase === 'executing' && (
-					<div className="active-thread__executing">
+					<div>
 						{diffs.length > 0 ? (
 							<DiffViewer diffs={diffs} />
 						) : (
-							<div className="active-thread__waiting">
-								<div className="active-thread__spinner-icon">⟳</div>
+							<div className="flex h-[300px] flex-col items-center justify-center text-text-secondary">
+								<div className="mb-4 animate-spin text-[32px] text-accent">⟳</div>
 								<p>Claude Code is executing the approved plan...</p>
-								<p className="active-thread__hint">File changes will appear here as they happen</p>
+								<p className="mt-2 text-xs text-text-muted">File changes will appear here as they happen</p>
 							</div>
 						)}
 					</div>
 				)}
 
 				{pipelinePhase === 'completed' && (
-					<div className="active-thread__completed">
-						<div className="active-thread__success-banner">
+					<div>
+						<div className="mb-4 flex items-center gap-2 rounded-md border border-[#1a5c36] bg-[#0d3321] px-4 py-2.5 font-semibold text-success">
 							<span>✓</span> Plan executed successfully
 						</div>
 						<DiffViewer diffs={diffs} />
-						<div className="active-thread__git-actions">
-							<button
-								type="button"
-								className="btn btn--primary"
+						<div className="flex justify-center gap-2 border-t border-border p-4">
+							<Button
 								onClick={async () => {
 									const message = currentPlan
 										? `feat: ${currentPlan.objective}`
@@ -203,10 +200,9 @@ export function ActiveThread() {
 								}}
 							>
 								Commit Changes (⌘⇧C)
-							</button>
-							<button
-								type="button"
-								className="btn btn--secondary"
+							</Button>
+							<Button
+								variant="secondary"
 								onClick={async () => {
 									await window.shipcode.invoke('git:push', {
 										projectId: activeProjectId,
@@ -214,23 +210,23 @@ export function ActiveThread() {
 								}}
 							>
 								Push (⌘⇧P)
-							</button>
+							</Button>
 						</div>
 					</div>
 				)}
 
 				{pipelinePhase === 'failed' && (
-					<div className="active-thread__failed">
-						<div className="active-thread__error">
-							<h3>Pipeline Failed</h3>
-							<p>Check the terminal for error details.</p>
-							<div className="active-thread__error-actions">
-								<button type="button" className="btn btn--primary" onClick={handleStart}>
+					<div className="flex h-full items-center justify-center">
+						<div className="text-center text-danger">
+							<h3 className="mb-2">Pipeline Failed</h3>
+							<p className="mb-4 text-text-secondary">Check the terminal for error details.</p>
+							<div className="flex justify-center gap-2">
+								<Button onClick={handleStart}>
 									Retry
-								</button>
-								<button type="button" className="btn btn--ghost" onClick={toggleTerminal}>
+								</Button>
+								<Button variant="ghost" onClick={toggleTerminal}>
 									Show Terminal
-								</button>
+								</Button>
 							</div>
 						</div>
 					</div>

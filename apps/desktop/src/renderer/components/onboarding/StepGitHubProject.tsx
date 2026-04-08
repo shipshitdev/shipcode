@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Input, Button } from '@shipcode/ui'
 
 interface Props {
 	selectedRepo: string | null
@@ -33,26 +34,30 @@ export function StepGitHubProject({ selectedRepo, onSelect }: Props) {
 	}, [repos, activeOrg, search])
 
 	return (
-		<div className="onboarding__step">
-			<h3>Connect a GitHub repository</h3>
-			<p className="onboarding__description">
+		<div>
+			<h3 className="text-[15px] font-semibold mb-2">Connect a GitHub repository</h3>
+			<p className="text-text-secondary text-[13px] mb-4 leading-relaxed">
 				Select a repository to enable issue polling and automated PR creation.
 			</p>
 
 			{isLoading ? (
-				<div className="onboarding__loading">Loading repositories...</div>
+				<div className="py-6 text-center text-text-muted">Loading repositories...</div>
 			) : error ? (
-				<div className="onboarding__error">
-					Failed to load repositories. Make sure <code>gh</code> is authenticated.
+				<div className="rounded-md border border-[#5c1f1f] bg-[#3d1111] px-3 py-2.5 text-xs text-danger">
+					Failed to load repositories. Make sure <code className="rounded bg-black/20 px-1 py-0.5">gh</code> is authenticated.
 				</div>
 			) : repos && repos.length > 0 ? (
 				<>
-					{/* Org selector */}
+					{/* Org selector tabs */}
 					{orgs.length > 1 && (
-						<div className="onboarding__org-tabs">
+						<div className="flex gap-1 mb-3">
 							<button
 								type="button"
-								className={`onboarding__org-tab ${activeOrg === null ? 'onboarding__org-tab--active' : ''}`}
+								className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+									activeOrg === null
+										? 'bg-accent text-bg-primary'
+										: 'bg-bg-tertiary text-text-secondary hover:text-text-primary'
+								}`}
 								onClick={() => setActiveOrg(null)}
 							>
 								All
@@ -61,7 +66,11 @@ export function StepGitHubProject({ selectedRepo, onSelect }: Props) {
 								<button
 									type="button"
 									key={org}
-									className={`onboarding__org-tab ${activeOrg === org ? 'onboarding__org-tab--active' : ''}`}
+									className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+										activeOrg === org
+											? 'bg-accent text-bg-primary'
+											: 'bg-bg-tertiary text-text-secondary hover:text-text-primary'
+									}`}
 									onClick={() => setActiveOrg(org)}
 								>
 									{org}
@@ -71,43 +80,47 @@ export function StepGitHubProject({ selectedRepo, onSelect }: Props) {
 					)}
 
 					{/* Search */}
-					<input
+					<Input
 						type="text"
-						className="onboarding__search"
 						placeholder="Search repositories..."
 						value={search}
 						onChange={(e) => setSearch(e.target.value)}
+						className="mb-3"
 					/>
 
 					{/* Repo list */}
-					<div className="onboarding__repo-list">
+					<div className="flex flex-col gap-1 max-h-60 overflow-y-auto mb-3">
 						{filteredRepos.length > 0 ? (
 							filteredRepos.map((repo) => (
 								<button
 									type="button"
 									key={repo}
-									className={`onboarding__repo-item ${selectedRepo === repo ? 'onboarding__repo-item--selected' : ''}`}
+									className={`block w-full text-left rounded-md px-3 py-2 font-mono text-[13px] cursor-pointer transition-colors border ${
+										selectedRepo === repo
+											? 'border-accent bg-accent/10 text-text-primary'
+											: 'border-transparent bg-bg-tertiary text-text-primary hover:border-text-muted'
+									}`}
 									onClick={() => onSelect(repo)}
 								>
 									{repo}
 								</button>
 							))
 						) : (
-							<div className="onboarding__empty">No matching repositories.</div>
+							<div className="py-6 text-center text-text-muted">No matching repositories.</div>
 						)}
 					</div>
 				</>
 			) : (
-				<div className="onboarding__empty">No repositories found.</div>
+				<div className="py-6 text-center text-text-muted">No repositories found.</div>
 			)}
 
-			<button
-				type="button"
-				className="btn btn--ghost onboarding__skip"
+			<Button
+				variant="ghost"
+				className="mt-2 text-xs"
 				onClick={() => onSelect(null)}
 			>
 				Skip GitHub setup
-			</button>
+			</Button>
 		</div>
 	)
 }

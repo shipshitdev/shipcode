@@ -1,6 +1,17 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAppStore } from '../stores/app-store'
+import {
+	Dialog,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+	DialogFooter,
+	Input,
+	Textarea,
+	Label,
+	Button,
+} from '@shipcode/ui'
 
 export function CreateIssueModal() {
 	const queryClient = useQueryClient()
@@ -20,7 +31,7 @@ export function CreateIssueModal() {
 		}
 	}, [createIssueModalOpen])
 
-	if (!createIssueModalOpen || !activeProjectId) return null
+	if (!activeProjectId) return null
 
 	const handleSubmit = async () => {
 		if (!title.trim()) return
@@ -53,56 +64,60 @@ export function CreateIssueModal() {
 	}
 
 	return (
-		<div className="create-issue-overlay" onKeyDown={handleKeyDown}>
-			<div className="create-issue-backdrop" onClick={closeCreateIssueModal} />
-			<div className="create-issue-modal">
-				<h3 className="create-issue-modal__title">Create GitHub Issue</h3>
+		<Dialog open={createIssueModalOpen} onOpenChange={(open) => { if (!open) closeCreateIssueModal() }}>
+			<DialogContent className="max-w-[480px]" onKeyDown={handleKeyDown}>
+				<DialogHeader>
+					<DialogTitle>Create GitHub Issue</DialogTitle>
+				</DialogHeader>
 
-				<label className="create-issue-modal__label">
-					Title
-					<input
-						ref={titleRef}
-						className="create-issue-modal__input"
-						type="text"
-						value={title}
-						onChange={(e) => setTitle(e.target.value)}
-						placeholder="Issue title..."
-					/>
-				</label>
+				<div className="flex flex-col gap-3">
+					<div className="flex flex-col gap-1">
+						<Label htmlFor="issue-title" className="text-xs text-text-secondary">Title</Label>
+						<Input
+							ref={titleRef}
+							id="issue-title"
+							type="text"
+							value={title}
+							onChange={(e) => setTitle(e.target.value)}
+							placeholder="Issue title..."
+						/>
+					</div>
 
-				<label className="create-issue-modal__label">
-					Description
-					<textarea
-						className="create-issue-modal__textarea"
-						value={body}
-						onChange={(e) => setBody(e.target.value)}
-						placeholder="Optional description..."
-						rows={6}
-					/>
-				</label>
+					<div className="flex flex-col gap-1">
+						<Label htmlFor="issue-body" className="text-xs text-text-secondary">Description</Label>
+						<Textarea
+							id="issue-body"
+							value={body}
+							onChange={(e) => setBody(e.target.value)}
+							placeholder="Optional description..."
+							rows={6}
+						/>
+					</div>
 
-				{error && <div className="create-issue-modal__error">{error}</div>}
+					{error && (
+						<div className="rounded-md border border-[#5c1f1f] bg-[#3d1111] px-2.5 py-2 text-xs text-danger">
+							{error}
+						</div>
+					)}
+				</div>
 
-				<div className="create-issue-modal__actions">
-					<button
-						type="button"
-						className="btn btn--secondary"
+				<DialogFooter>
+					<Button
+						variant="secondary"
 						onClick={closeCreateIssueModal}
 						disabled={submitting}
 					>
 						Cancel
-					</button>
-					<button
-						type="button"
-						className="btn btn--primary"
+					</Button>
+					<Button
 						onClick={handleSubmit}
 						disabled={!title.trim() || submitting}
 					>
 						{submitting ? 'Creating...' : 'Create Issue'}
-					</button>
-					<span className="create-issue-modal__hint">⌘↩ to submit</span>
-				</div>
-			</div>
-		</div>
+					</Button>
+					<span className="ml-auto text-[11px] text-text-muted">Cmd+Enter to submit</span>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	)
 }

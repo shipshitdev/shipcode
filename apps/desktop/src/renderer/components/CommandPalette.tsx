@@ -1,6 +1,14 @@
-import { Command } from 'cmdk'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAppStore } from '../stores/app-store'
+import {
+	CommandDialog,
+	CommandInput,
+	CommandList,
+	CommandEmpty,
+	CommandGroup,
+	CommandItem,
+	CommandShortcut,
+} from '@shipcode/ui'
 
 export function CommandPalette() {
 	const queryClient = useQueryClient()
@@ -25,134 +33,116 @@ export function CommandPalette() {
 	}
 
 	return (
-		<Command.Dialog
+		<CommandDialog
 			open={commandPaletteOpen}
 			onOpenChange={toggleCommandPalette}
-			label="Command Palette"
-			className="command-palette"
 		>
-			<Command.Input
-				className="command-palette__input"
-				placeholder="Type a command..."
-			/>
-			<Command.List className="command-palette__list">
-				<Command.Empty className="command-palette__empty">
-					No commands found.
-				</Command.Empty>
+			<CommandInput placeholder="Type a command..." />
+			<CommandList>
+				<CommandEmpty>No commands found.</CommandEmpty>
 
-				<Command.Group heading="GitHub" className="command-palette__group">
+				<CommandGroup heading="GitHub">
 					{activeProjectId && (
 						<>
-							<Command.Item
-								className="command-palette__item"
+							<CommandItem
 								onSelect={() => runAction(() => openCreateIssueModal())}
 							>
-								<span className="command-palette__item-label">Create Issue...</span>
-							</Command.Item>
-							<Command.Item
-								className="command-palette__item"
+								<span className="flex-1">Create Issue...</span>
+							</CommandItem>
+							<CommandItem
 								onSelect={() => runAction(async () => {
 									await window.shipcode.invoke('github:refresh-issues', { projectId: activeProjectId })
 									queryClient.invalidateQueries({ queryKey: ['github-issues'] })
 								})}
 							>
-								<span className="command-palette__item-label">Refresh Issues</span>
-							</Command.Item>
+								<span className="flex-1">Refresh Issues</span>
+							</CommandItem>
 						</>
 					)}
-				</Command.Group>
+				</CommandGroup>
 
 				{activeThreadId && (
-					<Command.Group heading="Pipeline" className="command-palette__group">
+					<CommandGroup heading="Pipeline">
 						{pipelinePhase === 'idle' && (
-							<Command.Item
-								className="command-palette__item"
+							<CommandItem
 								onSelect={() => runAction(() =>
 									window.shipcode.invoke('pipeline:start', { threadId: activeThreadId })
 								)}
 							>
-								<span className="command-palette__item-label">Start Pipeline</span>
-								<kbd className="command-palette__kbd">⌘↩</kbd>
-							</Command.Item>
+								<span className="flex-1">Start Pipeline</span>
+								<CommandShortcut>Cmd+Enter</CommandShortcut>
+							</CommandItem>
 						)}
 						{pipelinePhase === 'awaiting_approval' && (
 							<>
-								<Command.Item
-									className="command-palette__item"
+								<CommandItem
 									onSelect={() => runAction(() =>
 										window.shipcode.invoke('pipeline:approve', { threadId: activeThreadId })
 									)}
 								>
-									<span className="command-palette__item-label">Approve Plan</span>
-								</Command.Item>
-								<Command.Item
-									className="command-palette__item"
+									<span className="flex-1">Approve Plan</span>
+								</CommandItem>
+								<CommandItem
 									onSelect={() => runAction(() =>
 										window.shipcode.invoke('pipeline:reject', { threadId: activeThreadId, feedback: '' })
 									)}
 								>
-									<span className="command-palette__item-label">Reject Plan</span>
-								</Command.Item>
+									<span className="flex-1">Reject Plan</span>
+								</CommandItem>
 							</>
 						)}
-						<Command.Item
-							className="command-palette__item"
+						<CommandItem
 							onSelect={() => runAction(() =>
 								window.shipcode.invoke('pipeline:cancel', { threadId: activeThreadId })
 							)}
 						>
-							<span className="command-palette__item-label">Cancel Pipeline</span>
-						</Command.Item>
-					</Command.Group>
+							<span className="flex-1">Cancel Pipeline</span>
+						</CommandItem>
+					</CommandGroup>
 				)}
 
-				<Command.Group heading="Navigation" className="command-palette__group">
-					<Command.Item
-						className="command-palette__item"
+				<CommandGroup heading="Navigation">
+					<CommandItem
 						onSelect={() => runAction(() => toggleTerminal())}
 					>
-						<span className="command-palette__item-label">Toggle Terminal</span>
-						<kbd className="command-palette__kbd">Ctrl+`</kbd>
-					</Command.Item>
-					<Command.Item
-						className="command-palette__item"
+						<span className="flex-1">Toggle Terminal</span>
+						<CommandShortcut>Ctrl+`</CommandShortcut>
+					</CommandItem>
+					<CommandItem
 						onSelect={() => runAction(() => toggleSettings())}
 					>
-						<span className="command-palette__item-label">Toggle Settings</span>
-					</Command.Item>
-					<Command.Item
-						className="command-palette__item"
+						<span className="flex-1">Toggle Settings</span>
+					</CommandItem>
+					<CommandItem
 						onSelect={() => runAction(() => toggleKanbanView())}
 					>
-						<span className="command-palette__item-label">
+						<span className="flex-1">
 							Switch to {kanbanView ? 'List' : 'Kanban'} View
 						</span>
-					</Command.Item>
-				</Command.Group>
+					</CommandItem>
+				</CommandGroup>
 
 				{activeProjectId && (
-					<Command.Group heading="Git" className="command-palette__group">
-						<Command.Item
-							className="command-palette__item"
+					<CommandGroup heading="Git">
+						<CommandItem
 							onSelect={() => runAction(() =>
 								window.shipcode.invoke('git:commit', { projectId: activeProjectId, message: '' })
 							)}
 						>
-							<span className="command-palette__item-label">Commit Changes</span>
-							<kbd className="command-palette__kbd">⌘⇧C</kbd>
-						</Command.Item>
-						<Command.Item
-							className="command-palette__item"
+							<span className="flex-1">Commit Changes</span>
+							<CommandShortcut>Cmd+Shift+C</CommandShortcut>
+						</CommandItem>
+						<CommandItem
 							onSelect={() => runAction(() =>
 								window.shipcode.invoke('git:push', { projectId: activeProjectId })
 							)}
 						>
-							<span className="command-palette__item-label">Push to Remote</span>
-							<kbd className="command-palette__kbd">⌘⇧P</kbd>
-						</Command.Item>
-					</Command.Group>
+							<span className="flex-1">Push to Remote</span>
+							<CommandShortcut>Cmd+Shift+P</CommandShortcut>
+						</CommandItem>
+					</CommandGroup>
 				)}
-			</Command.List>
-		</Command.Dialog>
+			</CommandList>
+		</CommandDialog>
 	)
 }

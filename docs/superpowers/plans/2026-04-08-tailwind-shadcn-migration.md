@@ -59,9 +59,8 @@ apps/desktop/
     components/
       *.tsx (8 files)             # MODIFY: BEM → Tailwind + shadcn primitives
       onboarding/*.tsx (5 files)  # MODIFY: BEM → Tailwind + shadcn primitives
-  vite.config.ts                  # MODIFY: add @tailwindcss/vite
-  package.json                    # MODIFY: add tailwind, remove sass
-  components.json                 # CREATE: shadcn config
+  postcss.config.mjs              # CREATE: @tailwindcss/postcss plugin
+  package.json                    # MODIFY: add @tailwindcss/postcss, remove sass
 ```
 
 ---
@@ -77,10 +76,11 @@ apps/desktop/
 
 ```bash
 cd /Users/decod3rs/www/shipshitdev/apps/shipcode
-bun add -w --cwd packages/ui tailwindcss@^4.2.1 tailwind-merge@^3.3.0 clsx@^2.1.1 class-variance-authority@^0.7.1 lucide-react@^0.575.0 cmdk@^1.1.1 @radix-ui/react-slot@^1.2.3 @radix-ui/react-dialog@^1.1.14 @radix-ui/react-select@^2.2.5 @radix-ui/react-switch@^1.2.5 @radix-ui/react-label@^2.1.7 @radix-ui/react-alert-dialog@^1.1.14
+bun add -w --cwd packages/ui tailwind-merge@^3.3.0 clsx@^2.1.1 class-variance-authority@^0.7.1 lucide-react@^0.575.0 cmdk@^1.1.1 @radix-ui/react-slot@^1.2.3 @radix-ui/react-dialog@^1.1.14 @radix-ui/react-select@^2.2.5 @radix-ui/react-switch@^1.2.5 @radix-ui/react-label@^2.1.7 @radix-ui/react-alert-dialog@^1.1.14
 ```
 
 Note: `cmdk` moves here from `apps/desktop` since shadcn Command wraps it.
+Note: Do NOT add `tailwindcss` to `packages/ui` — it's a source-only package. Tailwind compilation happens in `apps/desktop` via PostCSS.
 
 - [ ] **Step 2: Add PostCSS + Tailwind to apps/desktop, remove sass**
 
@@ -180,6 +180,30 @@ Create `apps/desktop/src/renderer/styles/app.css`:
   --radius-md: 6px;
   --spacing-titlebar: 38px;
   --spacing-titlebar-plus: 42px;
+}
+
+/* Legacy variable aliases — some JSX uses var(--success) etc. in inline styles.
+   These bridge the gap until all inline var() references are cleaned up in Task 22. */
+@layer base {
+  :root {
+    --bg-primary: #0d1117;
+    --bg-secondary: #161b22;
+    --bg-tertiary: #21262d;
+    --bg-hover: #30363d;
+    --border: #30363d;
+    --text-primary: #e6edf3;
+    --text-secondary: #8b949e;
+    --text-muted: #484f58;
+    --accent: #58a6ff;
+    --accent-hover: #79c0ff;
+    --success: #3fb950;
+    --warning: #d29922;
+    --danger: #f85149;
+    --font-sans: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+    --font-mono: 'SF Mono', 'Fira Code', monospace;
+    --radius: 6px;
+    --titlebar-height: 38px;
+  }
 }
 
 /* Electron-specific utilities */
@@ -295,24 +319,20 @@ const buttonVariants = cva(
 )
 ```
 
-- [ ] **Step 4: Export all primitives from index.ts**
+- [ ] **Step 4: Export ONLY the primitives created in this task from index.ts**
 
-Add to `packages/ui/src/index.ts`:
+Add to `packages/ui/src/index.ts` (only the 6 primitives that exist now):
 ```ts
-// Primitives
+// Primitives (add more as they are created in later tasks)
 export { Button, buttonVariants } from './primitives/button'
 export { Input } from './primitives/input'
-export { Textarea } from './primitives/textarea'
-export { Switch } from './primitives/switch'
-export { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './primitives/select'
 export { Badge, badgeVariants } from './primitives/badge'
 export { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './primitives/card'
-export { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './primitives/table'
 export { Alert, AlertDescription, AlertTitle } from './primitives/alert'
-export { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from './primitives/command'
-export { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './primitives/dialog'
 export { Label } from './primitives/label'
 ```
+
+Additional primitives (Textarea, Switch, Select, Table, Command, Dialog) are added to exports in the specific tasks that create and use them.
 
 - [ ] **Step 5: Verify primitives compile**
 
@@ -642,29 +662,36 @@ git commit -m "refactor: migrate TerminalDrawer to Tailwind"
 
 ---
 
-### Task 19: Migrate CommandPalette
+### Task 19: Migrate CreateIssueModal
 
 **Files:**
-- Modify: `apps/desktop/src/renderer/components/CommandPalette.tsx`
-- Delete after: `_command-palette.scss`
+- Modify: `apps/desktop/src/renderer/components/CreateIssueModal.tsx`
+- Create: `packages/ui/src/primitives/dialog.tsx` (copy from shadcn)
+- Create: `packages/ui/src/primitives/textarea.tsx` (copy from shadcn)
+- Add exports for Dialog + Textarea to `packages/ui/src/index.ts`
 
-- [ ] **Step 1-5:** Replace with shadcn Command (which wraps cmdk). Remove `cmdk` direct usage, use shadcn `CommandDialog`, `CommandInput`, `CommandList`, `CommandGroup`, `CommandItem`.
+NOTE: Migrate this BEFORE CommandPalette because `_command-palette.scss` contains styles for both CommandPalette AND CreateIssueModal. Don't delete that SCSS file until both are migrated.
+
+- [ ] **Step 1-5:** shadcn Dialog + Input + Textarea + Label + Button. Do NOT delete `_command-palette.scss` yet.
 
 ```bash
-git commit -m "refactor: migrate CommandPalette to shadcn Command"
+git commit -m "refactor: migrate CreateIssueModal to shadcn Dialog"
 ```
 
 ---
 
-### Task 20: Migrate CreateIssueModal
+### Task 20: Migrate CommandPalette
 
 **Files:**
-- Modify: `apps/desktop/src/renderer/components/CreateIssueModal.tsx`
+- Modify: `apps/desktop/src/renderer/components/CommandPalette.tsx`
+- Create: `packages/ui/src/primitives/command.tsx` (copy from shadcn)
+- Add Command exports to `packages/ui/src/index.ts`
+- Delete after: `_command-palette.scss` (NOW safe — both consumers migrated)
 
-- [ ] **Step 1-5:** shadcn Dialog + Input + Textarea + Label + Button.
+- [ ] **Step 1-5:** Replace with shadcn Command (which wraps cmdk). Use shadcn `CommandDialog`, `CommandInput`, `CommandList`, `CommandGroup`, `CommandItem`. NOW delete `_command-palette.scss`.
 
 ```bash
-git commit -m "refactor: migrate CreateIssueModal to shadcn Dialog"
+git commit -m "refactor: migrate CommandPalette to shadcn Command"
 ```
 
 ---
@@ -726,6 +753,14 @@ grep -r 'className="[^"]*__\|className="[^"]*--' apps/desktop/src/renderer/ pack
 ```
 
 Should return zero matches.
+
+- [ ] **Step 3b: Clean up legacy CSS variable references in JSX**
+
+```bash
+grep -rn 'var(--bg-\|var(--text-\|var(--accent\|var(--success\|var(--warning\|var(--danger\|var(--border\|var(--radius\|var(--font-\|var(--titlebar' apps/desktop/src/renderer/ packages/ui/src/
+```
+
+Replace any remaining inline `var(--legacy-name)` references with Tailwind classes or `var(--color-*)` tokens. Once all are cleaned up, remove the legacy variable aliases from `app.css`.
 
 - [ ] **Step 4: Verify the app still runs**
 
