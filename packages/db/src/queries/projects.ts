@@ -1,10 +1,10 @@
-import type Database from 'better-sqlite3'
+import type { DatabaseSync } from 'node:sqlite'
 import { nanoid } from 'nanoid'
 import type { Project } from '@shipcode/shared'
 import path from 'node:path'
 
 export class ProjectQueries {
-  constructor(private db: Database.Database) {}
+  constructor(private db: DatabaseSync) {}
 
   list(): Project[] {
     const rows = this.db.prepare('SELECT * FROM projects ORDER BY updated_at DESC').all() as any[]

@@ -1,9 +1,9 @@
-import type Database from 'better-sqlite3'
+import type { DatabaseSync } from 'node:sqlite'
 import { nanoid } from 'nanoid'
 import type { ReviewRecord, PlanReview } from '@shipcode/shared'
 
 export class ReviewQueries {
-  constructor(private db: Database.Database) {}
+  constructor(private db: DatabaseSync) {}
 
   getByPlanId(planId: string): ReviewRecord | null {
     const row = this.db.prepare(

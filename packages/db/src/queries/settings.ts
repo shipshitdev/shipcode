@@ -1,9 +1,10 @@
-import type Database from 'better-sqlite3'
+import type { DatabaseSync } from 'node:sqlite'
 import type { AppSettings } from '@shipcode/shared'
 import { DEFAULT_SETTINGS, DEFAULT_STATUS_LABEL_MAPPINGS } from '@shipcode/shared'
+import { transaction } from '../utils'
 
 export class SettingsQueries {
-  constructor(private db: Database.Database) {}
+  constructor(private db: DatabaseSync) {}
 
   get(): AppSettings {
     const rows = this.db.prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[]
@@ -31,13 +32,11 @@ export class SettingsQueries {
       'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
     )
 
-    const transaction = this.db.transaction((entries: [string, string][]) => {
+    const entries = Object.entries(patch).map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v) : String(v)] as [string, string])
+    transaction(this.db, () => {
       for (const [key, value] of entries) {
         upsert.run(key, value)
       }
     })
-
-    const entries = Object.entries(patch).map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v) : String(v)] as [string, string])
-    transaction(entries)
   }
 }

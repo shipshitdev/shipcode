@@ -1,9 +1,9 @@
-import type Database from 'better-sqlite3'
+import type { DatabaseSync } from 'node:sqlite'
 import { nanoid } from 'nanoid'
 import type { PlanRecord, PlanStatus, ShipCodePlan } from '@shipcode/shared'
 
 export class PlanQueries {
-  constructor(private db: Database.Database) {}
+  constructor(private db: DatabaseSync) {}
 
   getLatest(threadId: string): PlanRecord | null {
     const row = this.db.prepare(

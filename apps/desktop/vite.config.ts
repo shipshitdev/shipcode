@@ -7,7 +7,7 @@ import { builtinModules } from 'node:module'
 
 const NATIVE_EXTERNALS = [
 	'electron',
-	'better-sqlite3',
+	'node:sqlite',
 	'node-pty',
 	'simple-git',
 	'chokidar',

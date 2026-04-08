@@ -24,8 +24,8 @@ export function ActiveThread() {
 		return (
 			<div className="active-thread active-thread--empty">
 				<div className="active-thread__welcome">
-					<h2>Welcome to ShipCode</h2>
-					<p>Select a thread or create a new one to start the plan/review loop.</p>
+					<h2>ShipCode</h2>
+					<p>Drag an issue to Planning on the kanban, or create a thread to start the pipeline.</p>
 					<div className="active-thread__shortcuts">
 						<kbd>⌘N</kbd> New thread
 						<kbd>⌘K</kbd> Command palette

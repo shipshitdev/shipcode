@@ -1,9 +1,9 @@
-import type Database from 'better-sqlite3'
+import type { DatabaseSync } from 'node:sqlite'
 import { nanoid } from 'nanoid'
 import type { Thread, ThreadStatus } from '@shipcode/shared'
 
 export class ThreadQueries {
-  constructor(private db: Database.Database) {}
+  constructor(private db: DatabaseSync) {}
 
   list(projectId: string): Thread[] {
     const rows = this.db.prepare(

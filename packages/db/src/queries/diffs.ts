@@ -1,9 +1,9 @@
-import type Database from 'better-sqlite3'
+import type { DatabaseSync } from 'node:sqlite'
 import { nanoid } from 'nanoid'
 import type { DiffRecord } from '@shipcode/shared'
 
 export class DiffQueries {
-  constructor(private db: Database.Database) {}
+  constructor(private db: DatabaseSync) {}
 
   list(threadId: string): DiffRecord[] {
     const rows = this.db.prepare(

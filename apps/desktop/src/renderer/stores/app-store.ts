@@ -54,7 +54,7 @@ export const useAppStore = create<AppState>((set) => ({
 	systemHealth: null,
 	currentVerification: null,
 	githubIssues: [],
-	kanbanView: false,
+	kanbanView: true,
 	agentOutputs: {},
 
 	selectProject: (id) => set({ activeProjectId: id, activeThreadId: null, currentPlan: null, currentReview: null, currentVerification: null, pipelinePhase: 'idle' }),

@@ -13,8 +13,8 @@ interface KanbanBoardProps {
 }
 
 const COLUMNS: { key: string; label: string; statuses: IssuePipelineStatus[]; droppable: boolean }[] = [
-	{ key: 'todo', label: 'Todo', statuses: ['todo'], droppable: true },
-	{ key: 'planning', label: 'Planning', statuses: ['queued', 'planning'], droppable: true },
+	{ key: 'todo', label: 'Todo', statuses: ['todo', 'queued'], droppable: true },
+	{ key: 'planning', label: 'Planning', statuses: ['planning'], droppable: true },
 	{ key: 'reviewing', label: 'Reviewing', statuses: ['reviewing', 'revising'], droppable: false },
 	{ key: 'executing', label: 'Executing', statuses: ['executing'], droppable: false },
 	{ key: 'verifying', label: 'Verifying', statuses: ['verifying', 'shipping'], droppable: false },
