@@ -1,0 +1,82 @@
+@import "tailwindcss";
+@source "../../../../../packages/ui/src/**/*.tsx";
+
+@theme {
+	--color-bg-primary: #0d1117;
+	--color-bg-secondary: #161b22;
+	--color-bg-tertiary: #21262d;
+	--color-bg-hover: #30363d;
+	--color-border: #30363d;
+	--color-text-primary: #e6edf3;
+	--color-text-secondary: #8b949e;
+	--color-text-muted: #484f58;
+	--color-accent: #58a6ff;
+	--color-accent-hover: #79c0ff;
+	--color-success: #3fb950;
+	--color-warning: #d29922;
+	--color-danger: #f85149;
+
+	--font-sans: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+	--font-mono: 'SF Mono', 'Fira Code', monospace;
+
+	--radius-md: 6px;
+	--spacing-titlebar: 38px;
+	--spacing-titlebar-plus: 42px;
+}
+
+/* Legacy variable aliases — some JSX uses var(--success) etc. in inline styles.
+   These bridge the gap until all inline var() references are cleaned up. */
+@layer base {
+	:root {
+		--bg-primary: #0d1117;
+		--bg-secondary: #161b22;
+		--bg-tertiary: #21262d;
+		--bg-hover: #30363d;
+		--border: #30363d;
+		--text-primary: #e6edf3;
+		--text-secondary: #8b949e;
+		--text-muted: #484f58;
+		--accent: #58a6ff;
+		--accent-hover: #79c0ff;
+		--success: #3fb950;
+		--warning: #d29922;
+		--danger: #f85149;
+		--font-sans: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+		--font-mono: 'SF Mono', 'Fira Code', monospace;
+		--radius: 6px;
+		--titlebar-height: 38px;
+	}
+}
+
+/* Electron-specific utilities */
+@utility app-region-drag {
+	-webkit-app-region: drag;
+}
+@utility app-region-no-drag {
+	-webkit-app-region: no-drag;
+}
+
+@layer base {
+	*,
+	*::before,
+	*::after {
+		box-sizing: border-box;
+		margin: 0;
+		padding: 0;
+	}
+
+	html, body, #root {
+		height: 100%;
+		font-family: var(--font-sans);
+		background: var(--color-bg-primary);
+		color: var(--color-text-primary);
+		font-size: 13px;
+		line-height: 1.5;
+		-webkit-font-smoothing: antialiased;
+	}
+
+	::-webkit-scrollbar { width: 8px; }
+	::-webkit-scrollbar-track { background: transparent; }
+	::-webkit-scrollbar-thumb { background: var(--color-bg-hover); border-radius: 4px; }
+	::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
+}

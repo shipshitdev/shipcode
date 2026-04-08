@@ -7,7 +7,9 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./*": "./src/*.tsx"
+    "./*": "./src/*.tsx",
+    "./lib/utils": "./src/lib/utils.ts",
+    "./primitives/*": "./src/primitives/*.tsx"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
