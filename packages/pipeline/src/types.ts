@@ -40,3 +40,25 @@ export interface PipelineDeps {
   verifications: VerificationQueries
   githubIssues: GitHubIssueQueries
 }
+
+export interface Pipeline {
+  startPlanGeneration: (threadId: string, prompt: string, projectPath: string, worktreePath: string | null) => Promise<void>
+  startReview: (threadId: string, plan: ShipCodePlan) => Promise<void>
+  startRevision: (threadId: string, plan: ShipCodePlan, reviewFeedback: string) => Promise<void>
+  startExecution: (threadId: string, plan: ShipCodePlan) => Promise<void>
+  startVerification: (threadId: string) => Promise<void>
+  startCommitAndPush: (threadId: string) => Promise<void>
+  startShipping: (threadId: string) => Promise<void>
+  startFromGitHubIssue: (
+    threadId: string,
+    projectPath: string,
+    issue: { number: number; title: string; body: string | null; labels: string[] },
+    executorModel: 'claude' | 'codex'
+  ) => Promise<void>
+  initializeContext: (
+    threadId: string,
+    seed: Partial<PipelineContext> & Pick<PipelineContext, 'projectPath'>,
+  ) => PipelineContext
+  cancel: (threadId: string) => void
+  getContext: (threadId: string) => PipelineContext | undefined
+}

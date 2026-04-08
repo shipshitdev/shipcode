@@ -19,6 +19,13 @@ export class GitHubIssueQueries {
     return row ? this.toRecord(row) : null
   }
 
+  getByThreadId(threadId: string): GitHubIssueCacheRecord | null {
+    const row = this.db.prepare(
+      'SELECT * FROM github_issue_cache WHERE thread_id = ?'
+    ).get(threadId) as any | undefined
+    return row ? this.toRecord(row) : null
+  }
+
   upsert(record: Omit<GitHubIssueCacheRecord, 'id' | 'pipelineStatus' | 'threadId' | 'claimedAt' | 'claimedBy' | 'lastPhaseUpdate' | 'lastStatusLabel' | 'fetchedAt'>): GitHubIssueCacheRecord {
     const existing = this.getByNumber(record.projectId, record.issueNumber)
     if (existing) {

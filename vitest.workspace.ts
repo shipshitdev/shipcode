@@ -1,1 +1,1 @@
-export default ['packages/shared', 'packages/agents', 'packages/db', 'packages/pipeline']
+export default ['packages/shared', 'packages/agents', 'packages/db', 'packages/pipeline', 'apps/desktop']

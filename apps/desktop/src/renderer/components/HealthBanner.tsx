@@ -11,7 +11,9 @@ export function HealthBanner() {
 	const { data } = useQuery<SystemHealth>({
 		queryKey: ['health'],
 		queryFn: () => window.shipcode.invoke('health:check'),
-		staleTime: 60_000,
+		staleTime: 30_000,
+		refetchInterval: 60_000,
+		refetchIntervalInBackground: true,
 	})
 
 	const resetOnboarding = useMutation({

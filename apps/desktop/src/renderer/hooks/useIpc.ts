@@ -1,4 +1,5 @@
 import { useEffect, useCallback } from 'react'
+import type { GitHubIssueCacheRecord } from '@shipcode/shared'
 import { useAppStore } from '../stores/app-store'
 
 export function useIpc() {
@@ -10,8 +11,26 @@ export function useIpc() {
 		// Listen for pipeline phase changes (scoped by threadId)
 		unsubscribers.push(
 			window.shipcode.on('pipeline:phase', (data: any) => {
-				if (data.threadId === useAppStore.getState().activeThreadId) {
+				const store = useAppStore.getState()
+				if (data.threadId === store.activeThreadId) {
 					setPipelinePhase(data.phase)
+				}
+
+				if (store.activeProjectId) {
+					window.shipcode.invoke<GitHubIssueCacheRecord[]>('github:list-issues', { projectId: store.activeProjectId }).then((issues) => {
+						useAppStore.getState().setGithubIssues(issues)
+
+						const activeIssue = useAppStore.getState().activeIssue
+						if (!activeIssue) return
+
+						const refreshed = issues.find((issue) => issue.id === activeIssue.id) ?? null
+						useAppStore.setState((state) => ({
+							activeIssue: refreshed,
+							activeThreadId: refreshed?.threadId ?? state.activeThreadId,
+						}))
+					}).catch(() => {
+						// Best-effort sync only.
+					})
 				}
 			})
 		)
@@ -47,7 +66,16 @@ export function useIpc() {
 		// Listen for GitHub issues updates
 		unsubscribers.push(
 			window.shipcode.on('github:issues-updated', (data: any) => {
-				useAppStore.getState().setGithubIssues(data.issues)
+				const store = useAppStore.getState()
+				store.setGithubIssues(data.issues)
+
+				if (store.activeIssue) {
+					const refreshed = data.issues.find((issue: any) => issue.id === store.activeIssue?.id) ?? null
+					useAppStore.setState((state) => ({
+						activeIssue: refreshed,
+						activeThreadId: refreshed?.threadId ?? state.activeThreadId,
+					}))
+				}
 			})
 		)
 

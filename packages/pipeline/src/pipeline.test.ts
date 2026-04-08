@@ -135,6 +135,11 @@ function createMockDeps() {
 			processManager,
 			threads: {
 				updateStatus: vi.fn(),
+				getById: vi.fn(() => ({
+					id: 't1',
+					projectId: 'project-1',
+					githubIssueNumber: 42,
+				})),
 				incrementReviewRound: vi.fn(),
 				setGithubPr: vi.fn(),
 				updateAutonomousFields: vi.fn(),
@@ -154,7 +159,10 @@ function createMockDeps() {
 			verifications: {
 				create: vi.fn(),
 			},
-			githubIssues: {},
+			githubIssues: {
+				getByNumber: vi.fn(() => null),
+				updatePipelineStatus: vi.fn(),
+			},
 		} as unknown as PipelineDeps,
 		emittedEvents,
 		trigger,
@@ -185,6 +193,48 @@ describe('createPipeline', () => {
 			expect(mock.emittedEvents).toContainEqual({
 				type: 'pipeline:phase', threadId: 't1', phase: 'planning',
 			})
+		})
+
+		it('initializeContext seeds state before pipeline start', async () => {
+			const pipeline = createPipeline(mock.deps)
+
+			pipeline.initializeContext('t1', {
+				projectPath: '/proj',
+				worktreePath: '/proj/.shipcode/worktrees/t1',
+				baseBranch: 'main',
+			})
+
+			expect(pipeline.getContext('t1')).toMatchObject({
+				projectPath: '/proj',
+				worktreePath: '/proj/.shipcode/worktrees/t1',
+				baseBranch: 'main',
+			})
+		})
+
+		it('syncs linked GitHub issue status when phases change', async () => {
+			;(mock.deps.githubIssues.getByNumber as any).mockReturnValue({ id: 'issue-1' })
+
+			const pipeline = createPipeline(mock.deps)
+			await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null)
+
+			expect(mock.deps.githubIssues.updatePipelineStatus).toHaveBeenCalledWith('issue-1', 'planning')
+
+			mock.trigger('output', 'proc-1', planBlock())
+			mock.trigger('exit', 'proc-1', 0)
+
+			expect(mock.deps.githubIssues.updatePipelineStatus).toHaveBeenCalledWith('issue-1', 'reviewing')
+		})
+
+		it('maps awaiting_approval to reviewing for linked GitHub issues', async () => {
+			;(mock.deps.githubIssues.getByNumber as any).mockReturnValue({ id: 'issue-1' })
+
+			const pipeline = createPipeline(mock.deps)
+			await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null)
+
+			mock.trigger('output', 'proc-1', 'some random output without a plan block')
+			mock.trigger('exit', 'proc-1', 0)
+
+			expect(mock.deps.githubIssues.updatePipelineStatus).toHaveBeenCalledWith('issue-1', 'reviewing')
 		})
 
 		it('exit 0 + valid plan → creates plan, emits plan:parsed, emits reviewing (manual)', async () => {

@@ -1,10 +1,10 @@
 import nextra from 'nextra'
 
-const withNextra = nextra({
-  theme: 'nextra-theme-docs',
-  themeConfig: './theme.config.tsx',
-})
+const docsBasePath = process.env.DOCS_BASE_PATH || ''
+const withNextra = nextra({})
 
 export default withNextra({
   reactStrictMode: true,
+  basePath: docsBasePath,
+  output: 'export',
 })

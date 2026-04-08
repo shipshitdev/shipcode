@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useAppStore } from '../stores/app-store'
-import { useIpc } from '../hooks/useIpc'
 import { PipelineStatus, PlanViewer, ReviewViewer, VerificationViewer, DiffViewer, Button } from '@shipcode/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { DiffRecord } from '@shipcode/shared'
@@ -9,9 +8,6 @@ export function ActiveThread() {
 	const { activeProjectId, activeThreadId, currentPlan, currentReview, currentVerification, pipelinePhase, toggleTerminal } = useAppStore()
 	const queryClient = useQueryClient()
 	const [isStarting, setIsStarting] = useState(false)
-
-	// Initialize IPC listeners
-	useIpc()
 
 	const { data: diffs = [] } = useQuery<DiffRecord[]>({
 		queryKey: ['diffs', activeThreadId],

@@ -215,6 +215,7 @@ export function registerIpcHandlers(
     const thread = queries.threads.create(projectId, issue.body ?? issue.title, issue.title)
     queries.threads.setGithubIssue(thread.id, issue.issueNumber, project.gitRemote)
     queries.githubIssues.linkThread(issue.id, thread.id)
+    mainWindow.webContents.send('github:issues-updated', { projectId, issues: queries.githubIssues.list(projectId) })
 
     // Start pipeline — pass existing threadId, not projectId
     try {
@@ -228,8 +229,18 @@ export function registerIpcHandlers(
       // Rollback
       queries.githubIssues.updatePipelineStatus(issue.id, 'todo')
       queries.threads.updateStatus(thread.id, 'failed')
+      mainWindow.webContents.send('github:issues-updated', { projectId, issues: queries.githubIssues.list(projectId) })
       throw err
     }
+  })
+
+  ipcMain.handle('github:retry-issue', (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
+    const issue = queries.githubIssues.getByNumber(projectId, issueNumber)
+    if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`)
+
+    queries.githubIssues.updatePipelineStatus(issue.id, 'todo')
+    const allIssues = queries.githubIssues.list(projectId)
+    mainWindow.webContents.send('github:issues-updated', { projectId, issues: allIssues })
   })
 
   // === Verification handlers ===
@@ -257,7 +268,11 @@ export function registerIpcHandlers(
       console.error('Worktree creation failed, running in project root:', err)
     }
 
-    // Start the real pipeline
+    pipeline.initializeContext(threadId, {
+      projectPath: project.path,
+      worktreePath,
+    })
+
     await pipeline.startPlanGeneration(threadId, thread.prompt, project.path, worktreePath)
   })
 
@@ -305,34 +320,12 @@ export function registerIpcHandlers(
 
   ipcMain.handle('onboarding:list-repos', async () => {
     try {
-      // Fetch user repos + org repos in parallel
-      const [userResult, orgsResult] = await Promise.all([
-        execAsync("gh repo list --json nameWithOwner --jq '.[].nameWithOwner' --limit 100", { timeout: 15_000 }),
-        execAsync("gh org list 2>/dev/null || echo ''", { timeout: 10_000 }),
-      ])
-
-      const userRepos = userResult.stdout.trim().split('\n').filter(Boolean)
-      const orgs = orgsResult.stdout.trim().split('\n').filter(Boolean)
-
-      // Fetch repos for each org
-      const orgRepoResults = await Promise.all(
-        orgs.map(async (org) => {
-          try {
-            const result = await execAsync(
-              `gh repo list ${org} --json nameWithOwner --jq '.[].nameWithOwner' --limit 100`,
-              { timeout: 15_000 }
-            )
-            return result.stdout.trim().split('\n').filter(Boolean)
-          } catch {
-            return []
-          }
-        })
+      const { stdout } = await execAsync(
+        "gh api 'user/repos?per_page=100&affiliation=owner,collaborator,organization_member' --paginate --jq '.[].full_name'",
+        { timeout: 20_000 },
       )
 
-      // Combine and deduplicate
-      const allRepos = [...new Set([...userRepos, ...orgRepoResults.flat()])]
-      allRepos.sort()
-      return allRepos
+      return [...new Set(stdout.trim().split('\n').filter(Boolean))].sort((a, b) => a.localeCompare(b))
     } catch {
       return []
     }

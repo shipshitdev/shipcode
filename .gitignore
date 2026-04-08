@@ -4,6 +4,7 @@ out/
 .next/
 .turbo/
 .vercel/
+apps/web/public/docs/
 *.tsbuildinfo
 .env
 .env.local

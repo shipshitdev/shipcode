@@ -2,39 +2,70 @@ import { execFileSync } from 'node:child_process'
 import { StreamParser, buildPlanPrompt, buildReviewPrompt, buildRevisionPrompt, buildVerificationPrompt } from '@shipcode/agents'
 import type { ShipCodePlan } from '@shipcode/shared'
 import { PIPELINE_MAX_RETRIES, MAX_VERIFICATION_RETRIES, MAX_REVIEW_ROUNDS } from '@shipcode/shared'
-import type { PipelineContext, PipelineDeps } from './types'
+import type { Pipeline, PipelineContext, PipelineDeps } from './types'
 
-export function createPipeline(deps: PipelineDeps) {
+export function createPipeline(deps: PipelineDeps): Pipeline {
   const activePipelines = new Map<string, PipelineContext>()
+
+  function mapPhaseToIssueStatus(phase: Parameters<typeof deps.threads.updateStatus>[1]) {
+    switch (phase) {
+      case 'idle':
+        return 'todo' as const
+      case 'awaiting_approval':
+        return 'reviewing' as const
+      default:
+        return phase
+    }
+  }
+
+  function syncIssueStatus(threadId: string, phase: Parameters<typeof deps.threads.updateStatus>[1]) {
+    const thread = deps.threads.getById(threadId)
+    if (!thread?.githubIssueNumber) return
+
+    const issue = deps.githubIssues.getByNumber(thread.projectId, thread.githubIssueNumber)
+    if (!issue) return
+    deps.githubIssues.updatePipelineStatus(issue.id, mapPhaseToIssueStatus(phase))
+  }
+
+  function ensureContext(
+    threadId: string,
+    seed: Partial<PipelineContext> & Pick<PipelineContext, 'projectPath'>,
+  ): PipelineContext {
+    const existing = activePipelines.get(threadId)
+    if (existing) {
+      Object.assign(existing, seed)
+      return existing
+    }
+
+    const context: PipelineContext = {
+      threadId,
+      projectPath: seed.projectPath,
+      worktreePath: seed.worktreePath ?? null,
+      retryCount: seed.retryCount ?? 0,
+      autonomous: seed.autonomous ?? false,
+      reviewRound: seed.reviewRound ?? 0,
+      verificationRetries: seed.verificationRetries ?? 0,
+      githubIssueNumber: seed.githubIssueNumber ?? null,
+      githubRepo: seed.githubRepo ?? null,
+      executorModel: seed.executorModel ?? 'claude',
+      baseBranch: seed.baseBranch ?? '',
+      forkPointSha: seed.forkPointSha ?? '',
+      activeProcessId: seed.activeProcessId ?? null,
+      cancelled: seed.cancelled ?? false,
+      verifiedSha: seed.verifiedSha ?? null,
+    }
+    activePipelines.set(threadId, context)
+    return context
+  }
 
   function emitPhase(threadId: string, phase: Parameters<typeof deps.threads.updateStatus>[1]) {
     deps.threads.updateStatus(threadId, phase)
+    syncIssueStatus(threadId, phase)
     deps.emitter.emit({ type: 'pipeline:phase', threadId, phase })
   }
 
   async function startPlanGeneration(threadId: string, prompt: string, projectPath: string, worktreePath: string | null) {
-    // Reuse existing context on retries — only create fresh context on first call
-    let context = activePipelines.get(threadId)
-    if (!context) {
-      context = {
-        threadId,
-        projectPath,
-        worktreePath,
-        retryCount: 0,
-        autonomous: false,
-        reviewRound: 0,
-        verificationRetries: 0,
-        githubIssueNumber: null,
-        githubRepo: null,
-        executorModel: 'claude',
-        baseBranch: '',
-        forkPointSha: '',
-        activeProcessId: null,
-        cancelled: false,
-        verifiedSha: null,
-      }
-      activePipelines.set(threadId, context)
-    }
+    const context = ensureContext(threadId, { projectPath, worktreePath })
 
     emitPhase(threadId, 'planning')
 
@@ -532,28 +563,25 @@ export function createPipeline(deps: PipelineDeps) {
     })
 
     // Pre-create context with all autonomous fields
-    const context: PipelineContext = {
-      threadId, projectPath, worktreePath: null,
-      retryCount: 0, autonomous: true, reviewRound: 0,
-      verificationRetries: 0, githubIssueNumber: issue.number, githubRepo: null,
-      executorModel, baseBranch, forkPointSha,
-      activeProcessId: null, cancelled: false, verifiedSha: null,
-    }
-    activePipelines.set(threadId, context)
+    ensureContext(threadId, {
+      projectPath,
+      worktreePath: null,
+      retryCount: 0,
+      autonomous: true,
+      reviewRound: 0,
+      verificationRetries: 0,
+      githubIssueNumber: issue.number,
+      githubRepo: null,
+      executorModel,
+      baseBranch,
+      forkPointSha,
+      activeProcessId: null,
+      cancelled: false,
+      verifiedSha: null,
+    })
 
     const prompt = `GitHub Issue #${issue.number}: ${issue.title}\n\n${issue.body ?? ''}`
     await startPlanGeneration(threadId, prompt, projectPath, null)
-
-    // Patch in-memory context with autonomous fields (startPlanGeneration creates the context)
-    const ctx = activePipelines.get(threadId)
-    if (ctx) {
-      ctx.autonomous = true
-      ctx.githubIssueNumber = issue.number
-      ctx.githubRepo = null
-      ctx.executorModel = executorModel
-      ctx.baseBranch = baseBranch
-      ctx.forkPointSha = forkPointSha
-    }
   }
 
   function cancel(threadId: string) {
@@ -577,9 +605,8 @@ export function createPipeline(deps: PipelineDeps) {
     startCommitAndPush,
     startShipping,
     startFromGitHubIssue,
+    initializeContext: ensureContext,
     cancel,
     getContext: (threadId: string) => activePipelines.get(threadId),
   }
 }
-
-export type Pipeline = ReturnType<typeof createPipeline>

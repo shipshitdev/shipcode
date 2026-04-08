@@ -1,0 +1,8 @@
+export default {
+  index: 'Introduction',
+  'getting-started': 'Getting Started',
+  architecture: 'Architecture',
+  pipeline: 'Pipeline',
+  cli: 'CLI',
+  configuration: 'Configuration',
+}

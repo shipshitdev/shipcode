@@ -1,18 +1,25 @@
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMemo, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useAppStore } from '../stores/app-store'
-import { PlanViewer, ReviewViewer, Badge, Button } from '@shipcode/ui'
+import { PlanViewer, ReviewViewer, Badge, Button, Textarea } from '@shipcode/ui'
 import type { Thread, PlanRecord, ReviewRecord } from '@shipcode/shared'
 
 export function IssueDetail() {
-	const { activeIssue, activeThreadId, activeProjectId, selectIssue } = useAppStore()
+	const queryClient = useQueryClient()
+	const { activeIssue, activeThreadId, activeProjectId, selectIssue, pipelinePhase } = useAppStore()
 	const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null)
+	const [feedback, setFeedback] = useState('')
+	const [showRejectForm, setShowRejectForm] = useState(false)
+	const [isSubmitting, setIsSubmitting] = useState(false)
 
 	// Fetch thread data if issue is linked
 	const { data: thread } = useQuery<Thread | null>({
 		queryKey: ['thread', activeThreadId],
 		queryFn: () => window.shipcode.invoke('thread:get', { threadId: activeThreadId }),
 		enabled: !!activeThreadId,
+		refetchInterval: activeThreadId ? 2000 : false,
 	})
 
 	// Fetch plan history
@@ -20,6 +27,7 @@ export function IssueDetail() {
 		queryKey: ['plan-history', activeThreadId],
 		queryFn: () => window.shipcode.invoke('plan:list', { threadId: activeThreadId }),
 		enabled: !!activeThreadId,
+		refetchInterval: activeThreadId ? 2000 : false,
 	})
 
 	// Fetch reviews for all plans
@@ -28,13 +36,70 @@ export function IssueDetail() {
 		queryKey: ['reviews-by-plans', planIds.join(',')],
 		queryFn: () => window.shipcode.invoke('review:list-by-plans', { planIds }),
 		enabled: planIds.length > 0,
+		refetchInterval: activeThreadId ? 2000 : false,
 	})
 
 	// Auto-expand latest plan
 	const latestPlanId = planHistory[0]?.id ?? null
 	const effectiveExpanded = expandedPlanId ?? latestPlanId
+	const latestPlan = useMemo(() => planHistory[0] ?? null, [planHistory])
+	const threadPhase = thread?.status ?? pipelinePhase
+	const canStartPipeline = !activeThreadId && !!activeProjectId
+	const canApprove = !!activeThreadId && !!latestPlan?.structured && threadPhase === 'awaiting_approval'
+	const canReject = !!activeThreadId && threadPhase === 'awaiting_approval'
 
 	if (!activeIssue) return null
+
+	const refreshIssueState = async () => {
+		if (!activeProjectId) return
+		await Promise.all([
+			queryClient.invalidateQueries({ queryKey: ['threads', activeProjectId] }),
+			queryClient.invalidateQueries({ queryKey: ['github-issues', activeProjectId] }),
+			queryClient.invalidateQueries({ queryKey: ['thread', activeThreadId] }),
+			queryClient.invalidateQueries({ queryKey: ['plan-history', activeThreadId] }),
+		])
+	}
+
+	const handleStartPipeline = async () => {
+		if (!activeProjectId) return
+		setIsSubmitting(true)
+		try {
+			await window.shipcode.invoke('github:start-issue', {
+				projectId: activeProjectId,
+				issueNumber: activeIssue.issueNumber,
+			})
+			await refreshIssueState()
+		} finally {
+			setIsSubmitting(false)
+		}
+	}
+
+	const handleApprove = async () => {
+		if (!activeThreadId || !canApprove) return
+		setIsSubmitting(true)
+		try {
+			await window.shipcode.invoke('pipeline:approve', { threadId: activeThreadId })
+			await refreshIssueState()
+		} finally {
+			setIsSubmitting(false)
+		}
+	}
+
+	const handleReject = async () => {
+		if (!activeThreadId || !feedback.trim()) return
+		setIsSubmitting(true)
+		try {
+			await window.shipcode.invoke('pipeline:reject', {
+				threadId: activeThreadId,
+				feedback: feedback.trim(),
+			})
+			setFeedback('')
+			setShowRejectForm(false)
+			await refreshIssueState()
+		} finally {
+			setIsSubmitting(false)
+		}
+	}
 
 	const statusColor = (status: string) => {
 		switch (status) {
@@ -80,11 +145,22 @@ export function IssueDetail() {
 			{/* Content */}
 			<div className="flex-1 overflow-y-auto p-4">
 				{/* Issue body (PRD) */}
-				{activeIssue.body && (
+				{activeIssue.body ? (
 					<div className="mb-5">
 						<h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">Description</h4>
-						<div className="max-h-[300px] overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-bg-secondary p-3 text-[13px] leading-relaxed text-text-primary">
-							{activeIssue.body}
+						<div className="max-h-[300px] overflow-y-auto rounded-md bg-bg-secondary p-3 text-[13px] leading-relaxed text-text-primary">
+							<div className="space-y-3 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-text-secondary [&_code]:rounded [&_code]:bg-bg-tertiary [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-xs [&_h1]:text-base [&_h1]:font-semibold [&_h2]:mt-4 [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:text-sm [&_h3]:font-semibold [&_li]:mb-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:whitespace-pre-wrap [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-bg-tertiary [&_pre]:p-3 [&_pre]:text-xs [&_ul]:list-disc [&_ul]:pl-5">
+								<ReactMarkdown remarkPlugins={[remarkGfm]}>
+									{activeIssue.body}
+								</ReactMarkdown>
+							</div>
+						</div>
+					</div>
+				) : (
+					<div className="mb-5">
+						<h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">Description</h4>
+						<div className="rounded-md bg-bg-secondary p-3 text-[13px] text-text-muted">
+							No issue description provided.
 						</div>
 					</div>
 				)}
@@ -94,7 +170,7 @@ export function IssueDetail() {
 					<div className="mb-5">
 						<h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">Pipeline</h4>
 						<div className="flex flex-col gap-1 text-xs text-text-secondary">
-							<span>Status: <strong className="text-text-primary">{thread.status}</strong></span>
+							<span>Status: <strong className="text-text-primary">{threadPhase}</strong></span>
 							{thread.githubPrNumber && (
 								<span>PR: #{thread.githubPrNumber}</span>
 							)}
@@ -102,6 +178,52 @@ export function IssueDetail() {
 								<span>Branch: {thread.worktreeBranch}</span>
 							)}
 						</div>
+					</div>
+				)}
+
+				{canApprove && (
+					<div className="mb-5 rounded-md border border-border bg-bg-secondary p-3">
+						<div className="mb-3 flex flex-wrap gap-2">
+							<Button onClick={handleApprove} disabled={isSubmitting}>
+								{isSubmitting ? 'Approving...' : 'Approve & Execute'}
+							</Button>
+							<Button
+								variant="secondary"
+								onClick={() => setShowRejectForm((value) => !value)}
+								disabled={isSubmitting}
+							>
+								Request Changes
+							</Button>
+						</div>
+						{showRejectForm && (
+							<div className="flex flex-col gap-2">
+								<Textarea
+									value={feedback}
+									onChange={(event) => setFeedback(event.target.value)}
+									placeholder="Describe what should change before execution..."
+									rows={4}
+								/>
+								<div className="flex justify-end gap-2">
+									<Button
+										variant="ghost"
+										onClick={() => {
+											setShowRejectForm(false)
+											setFeedback('')
+										}}
+										disabled={isSubmitting}
+									>
+										Cancel
+									</Button>
+									<Button
+										variant="secondary"
+										onClick={handleReject}
+										disabled={!feedback.trim() || isSubmitting}
+									>
+										{isSubmitting ? 'Submitting...' : 'Submit Feedback'}
+									</Button>
+								</div>
+							</div>
+						)}
 					</div>
 				)}
 
@@ -161,19 +283,15 @@ export function IssueDetail() {
 				)}
 
 				{/* No thread yet — offer to start */}
-				{!activeThreadId && (
+				{canStartPipeline && (
 					<div className="mb-5 py-6 text-center">
 						<p className="mb-3 text-text-muted">This issue hasn't been picked up by the pipeline yet.</p>
 						<Button
 							size="lg"
-							onClick={() => {
-								window.shipcode.invoke('github:start-issue', {
-									projectId: activeProjectId,
-									issueNumber: activeIssue.issueNumber,
-								})
-							}}
+							onClick={handleStartPipeline}
+							disabled={isSubmitting}
 						>
-							Start Pipeline
+							{isSubmitting ? 'Starting...' : 'Start Pipeline'}
 						</Button>
 					</div>
 				)}

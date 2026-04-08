@@ -57,6 +57,7 @@ export interface IpcInvokeChannels {
   'github:list-issues': { args: { projectId: string }; result: GitHubIssueCacheRecord[] }
   'github:refresh-issues': { args: { projectId: string }; result: GitHubIssueCacheRecord[] }
   'github:start-issue': { args: { projectId: string; issueNumber: number }; result: void }
+  'github:retry-issue': { args: { projectId: string; issueNumber: number }; result: void }
   'github:get-issue': { args: { issueNumber: number; projectId: string }; result: GitHubIssueCacheRecord | null }
   'github:create-issue': {
     args: { projectId: string; title: string; body?: string; labels?: string[] }
@@ -65,7 +66,7 @@ export interface IpcInvokeChannels {
 
   // Plans & Reviews (backfill)
   'plan:list': { args: { threadId: string }; result: PlanRecord[] }
-  'review:list-by-plans': { args: { planIds: string[] }; result: ReviewRecord[] }
+  'review:list-by-plans': { args: { planIds: string[] }; result: Record<string, ReviewRecord> }
 
   // Verification
   'verification:get': { args: { threadId: string }; result: VerificationRecord | null }

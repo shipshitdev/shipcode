@@ -7,13 +7,14 @@
     "react-dom": "19.2.4"
   },
   "devDependencies": {
+    "@types/node": "25.5.2",
     "@types/react": "19.2.14"
   },
   "name": "@shipcode/docs",
   "private": true,
   "scripts": {
     "build": "next build",
-    "dev": "next dev -p 3001",
+    "dev": "sh -c 'next dev -p \"${PORT:-3101}\"'",
     "start": "next start"
   },
   "version": "0.0.1"

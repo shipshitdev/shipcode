@@ -13,9 +13,11 @@ import { OnboardingWizard } from './components/onboarding/OnboardingWizard'
 import { CommandPalette } from './components/CommandPalette'
 import { CreateIssueModal } from './components/CreateIssueModal'
 import { useGlobalKeyboard } from './hooks/useGlobalKeyboard'
+import { useIpc } from './hooks/useIpc'
 
 export function App() {
 	useGlobalKeyboard()
+	useIpc()
 	const queryClient = useQueryClient()
 	const { terminalVisible, settingsVisible, kanbanView, activeIssue, toggleSettings } = useAppStore()
 

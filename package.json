@@ -11,6 +11,9 @@
     "test": "turbo run test",
     "clean": "turbo run clean",
     "dev:desktop": "turbo run dev --filter=@shipcode/desktop",
+    "dev:docs": "turbo run dev --filter=@shipcode/docs",
+    "sync:docs": "sh scripts/sync-docs-to-web.sh",
+    "deploy:web": "bun run sync:docs && vercel deploy --cwd apps/web --prod --yes",
     "deps:update": "bunx npm-check-updates -u --deep && bun install",
     "dev:web": "turbo run dev --filter=@shipcode/web",
     "build:web": "turbo run build --filter=@shipcode/web"

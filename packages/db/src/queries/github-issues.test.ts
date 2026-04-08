@@ -72,6 +72,16 @@ describe('GitHubIssueQueries', () => {
 		expect(issues.getByNumber(projectId, 999)).toBeNull()
 	})
 
+	it('getByThreadId() returns linked issue or null', () => {
+		const record = issues.upsert(makeIssue())
+		const threads = new ThreadQueries(db)
+		const thread = threads.create(projectId, 'prompt', 'title')
+		issues.linkThread(record.id, thread.id)
+
+		expect(issues.getByThreadId(thread.id)?.id).toBe(record.id)
+		expect(issues.getByThreadId('missing')).toBeNull()
+	})
+
 	it('tryClaim() returns true if unclaimed, false if already claimed', () => {
 		const record = issues.upsert(makeIssue())
 		expect(issues.tryClaim(record.id, 'instance-1')).toBe(true)

@@ -79,8 +79,10 @@ export function ThreadPanel() {
 						}).then(() => refetchIssues())
 					}}
 					onRetry={(issue) => {
-						// Reset issue to todo status — TODO: implement IPC handler
-						refetchIssues()
+						window.shipcode.invoke('github:retry-issue', {
+							projectId: activeProjectId,
+							issueNumber: issue.issueNumber,
+						}).then(() => refetchIssues())
 					}}
 				/>
 			) : (
