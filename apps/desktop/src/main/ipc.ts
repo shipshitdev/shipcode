@@ -1,7 +1,11 @@
 import { type IpcMain, type BrowserWindow, dialog } from 'electron'
 import type { ProjectQueries, ThreadQueries, PlanQueries, ReviewQueries, DiffQueries, SettingsQueries, VerificationQueries, GitHubIssueQueries } from '@shipcode/db'
+import { exec } from 'node:child_process'
+import { promisify } from 'node:util'
 import type { ProcessManager } from '@shipcode/agents'
-import { checkSystemHealth, GhCli } from '@shipcode/agents'
+import { checkSystemHealthWithAuth, checkGhAuth, GhCli } from '@shipcode/agents'
+
+const execAsync = promisify(exec)
 import { GitService, WorktreeManager } from '@shipcode/git'
 import type { Pipeline } from '@shipcode/pipeline'
 
@@ -66,6 +70,10 @@ export function registerIpcHandlers(
     return queries.plans.getLatest(threadId)
   })
 
+  ipcMain.handle('plan:list', (_event, { threadId }: { threadId: string }) => {
+    return queries.plans.list(threadId)
+  })
+
   ipcMain.handle('plan:update', (_event, { planId, structured }: { planId: string; structured: any }) => {
     queries.plans.updateStructured(planId, structured)
   })
@@ -73,6 +81,10 @@ export function registerIpcHandlers(
   // === Review handlers ===
   ipcMain.handle('review:get', (_event, { planId }: { planId: string }) => {
     return queries.reviews.getByPlanId(planId)
+  })
+
+  ipcMain.handle('review:list-by-plans', (_event, { planIds }: { planIds: string[] }) => {
+    return queries.reviews.listByPlanIds(planIds)
   })
 
   // === Diff handlers ===
@@ -113,7 +125,7 @@ export function registerIpcHandlers(
 
   // === Health check ===
   ipcMain.handle('health:check', async () => {
-    return checkSystemHealth()
+    return checkSystemHealthWithAuth()
   })
 
   // === Dialog handlers ===
@@ -125,6 +137,10 @@ export function registerIpcHandlers(
   })
 
   // === GitHub handlers ===
+  ipcMain.handle('github:get-issue', (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
+    return queries.githubIssues.getByNumber(projectId, issueNumber)
+  })
+
   ipcMain.handle('github:list-issues', (_event, { projectId }: { projectId: string }) => {
     return queries.githubIssues.list(projectId)
   })
@@ -169,15 +185,16 @@ export function registerIpcHandlers(
       }
     }
 
-    // Update status and create thread
+    // Update status and create thread (single source of thread creation)
     queries.githubIssues.updatePipelineStatus(issue.id, 'planning')
     const thread = queries.threads.create(projectId, issue.body ?? issue.title, issue.title)
+    queries.threads.setGithubIssue(thread.id, issue.issueNumber, project.gitRemote)
     queries.githubIssues.linkThread(issue.id, thread.id)
 
-    // Start pipeline
+    // Start pipeline — pass existing threadId, not projectId
     try {
       await pipeline.startFromGitHubIssue(
-        project.id,
+        thread.id,
         project.path,
         { number: issue.issueNumber, title: issue.title, body: issue.body, labels: issue.labels },
         'claude'
@@ -250,6 +267,27 @@ export function registerIpcHandlers(
   ipcMain.handle('pipeline:skip-review', async (_event, { threadId }: { threadId: string }) => {
     queries.threads.updateStatus(threadId, 'awaiting_approval')
     mainWindow.webContents.send('pipeline:phase', { threadId, phase: 'awaiting_approval' })
+  })
+
+  // === Onboarding handlers ===
+  ipcMain.handle('onboarding:check-auth', async () => {
+    const [health, ghAuth] = await Promise.all([
+      checkSystemHealthWithAuth(),
+      checkGhAuth(),
+    ])
+    return { ...health, ghAuth }
+  })
+
+  ipcMain.handle('onboarding:list-repos', async () => {
+    try {
+      const result = await execAsync(
+        "gh repo list --json nameWithOwner --jq '.[].nameWithOwner' --limit 100",
+        { timeout: 15_000 }
+      )
+      return result.stdout.trim().split('\n').filter(Boolean)
+    } catch {
+      return []
+    }
   })
 
   // === Agent output forwarding to renderer ===

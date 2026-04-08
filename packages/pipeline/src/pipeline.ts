@@ -69,8 +69,9 @@ export function createPipeline(deps: PipelineDeps) {
 
       // Try to extract plan
       const result = parser.extractPlan()
+      const nextVersion = deps.plans.getMaxVersion(threadId) + 1
       if (result.success && result.data) {
-        const plan = deps.plans.create(threadId, result.raw, result.data, 1)
+        const plan = deps.plans.create(threadId, result.raw, result.data, nextVersion)
         deps.plans.updateStatus(plan.id, 'pending_review')
         deps.emitter.emit({ type: 'plan:parsed', threadId, plan: result.data })
 
@@ -82,7 +83,7 @@ export function createPipeline(deps: PipelineDeps) {
         }
       } else {
         // Store raw output even without structured data
-        deps.plans.create(threadId, result.raw, null, 1)
+        deps.plans.create(threadId, result.raw, null, nextVersion)
         emitPhase(threadId, 'awaiting_approval')
       }
     }
@@ -444,13 +445,11 @@ export function createPipeline(deps: PipelineDeps) {
   }
 
   async function startFromGitHubIssue(
-    projectId: string,
+    threadId: string,
     projectPath: string,
     issue: { number: number; title: string; body: string | null; labels: string[] },
     executorModel: 'claude' | 'codex'
   ) {
-    const threadId = deps.threads.create(projectId, issue.body ?? issue.title, issue.title).id
-
     // Determine fork point
     const { execSync } = await import('node:child_process')
     let baseBranch = 'main'

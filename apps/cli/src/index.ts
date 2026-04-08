@@ -20,6 +20,11 @@ program
 	.version('0.0.1')
 
 program
+	.command('onboard')
+	.description('Initialize ShipCode in the current project')
+	.action(onboardCommand)
+
+program
 	.command('status')
 	.description('Show active pipelines and recent threads')
 	.action(statusCommand)
@@ -33,10 +38,5 @@ program
 	.command('start')
 	.description('Interactive mode — prompt for issue number')
 	.action(startCommand)
-
-program
-	.command('onboard')
-	.description('Initialize ShipCode in the current project')
-	.action(onboardCommand)
 
 program.parse()

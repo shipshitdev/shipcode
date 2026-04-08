@@ -5,6 +5,20 @@ import type { PlanRecord, PlanStatus, ShipCodePlan } from '@shipcode/shared'
 export class PlanQueries {
   constructor(private db: DatabaseSync) {}
 
+  getMaxVersion(threadId: string): number {
+    const row = this.db.prepare(
+      'SELECT MAX(version) as max_ver FROM plans WHERE thread_id = ?'
+    ).get(threadId) as { max_ver: number | null } | undefined
+    return Number(row?.max_ver ?? 0)
+  }
+
+  list(threadId: string): PlanRecord[] {
+    const rows = this.db.prepare(
+      'SELECT * FROM plans WHERE thread_id = ? ORDER BY version DESC'
+    ).all(threadId) as any[]
+    return rows.map(mapPlan)
+  }
+
   getLatest(threadId: string): PlanRecord | null {
     const row = this.db.prepare(
       'SELECT * FROM plans WHERE thread_id = ? ORDER BY version DESC LIMIT 1'

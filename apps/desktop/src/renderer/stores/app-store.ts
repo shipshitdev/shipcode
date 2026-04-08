@@ -5,6 +5,7 @@ interface AppState {
 	// Selection
 	activeProjectId: string | null
 	activeThreadId: string | null
+	activeIssue: GitHubIssueCacheRecord | null
 
 	// UI state
 	sidebarCollapsed: boolean
@@ -28,6 +29,7 @@ interface AppState {
 	// Actions
 	selectProject: (id: string | null) => void
 	selectThread: (id: string | null) => void
+	selectIssue: (issue: GitHubIssueCacheRecord | null) => void
 	toggleSidebar: () => void
 	toggleTerminal: () => void
 	toggleSettings: () => void
@@ -45,6 +47,7 @@ interface AppState {
 export const useAppStore = create<AppState>((set) => ({
 	activeProjectId: null,
 	activeThreadId: null,
+	activeIssue: null,
 	sidebarCollapsed: false,
 	terminalVisible: false,
 	settingsVisible: false,
@@ -57,8 +60,16 @@ export const useAppStore = create<AppState>((set) => ({
 	kanbanView: true,
 	agentOutputs: {},
 
-	selectProject: (id) => set({ activeProjectId: id, activeThreadId: null, currentPlan: null, currentReview: null, currentVerification: null, pipelinePhase: 'idle' }),
+	selectProject: (id) => set({ activeProjectId: id, activeThreadId: null, activeIssue: null, currentPlan: null, currentReview: null, currentVerification: null, pipelinePhase: 'idle' }),
 	selectThread: (id) => set({ activeThreadId: id, currentPlan: null, currentReview: null, currentVerification: null, pipelinePhase: 'idle' }),
+	selectIssue: (issue) => set({
+		activeIssue: issue,
+		activeThreadId: issue?.threadId ?? null,
+		currentPlan: null,
+		currentReview: null,
+		currentVerification: null,
+		pipelinePhase: 'idle',
+	}),
 	toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
 	toggleTerminal: () => set((s) => ({ terminalVisible: !s.terminalVisible })),
 	toggleSettings: () => set((s) => ({ settingsVisible: !s.settingsVisible })),
