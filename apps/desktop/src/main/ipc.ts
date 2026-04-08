@@ -170,6 +170,31 @@ export function registerIpcHandlers(
     return cached
   })
 
+  ipcMain.handle('github:create-issue', async (_event, { projectId, title, body, labels }: { projectId: string; title: string; body?: string; labels?: string[] }) => {
+    const project = queries.projects.getById(projectId)
+    if (!project) throw new Error(`Project ${projectId} not found`)
+
+    const ghCli = new GhCli(project.path)
+    const issue = await ghCli.createIssue({ title, body, labels })
+
+    // Cache the new issue in the database
+    queries.githubIssues.upsert({
+      projectId,
+      issueNumber: issue.number,
+      title: issue.title,
+      body: issue.body,
+      labels: issue.labels,
+      assignee: issue.assignee,
+      state: issue.state,
+    })
+
+    // Notify renderer that issues changed
+    const allIssues = queries.githubIssues.list(projectId)
+    mainWindow.webContents.send('github:issues-updated', { projectId, issues: allIssues })
+
+    return queries.githubIssues.getByNumber(projectId, issue.number)
+  })
+
   ipcMain.handle('github:start-issue', async (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
     const project = queries.projects.getById(projectId)
     if (!project) throw new Error(`Project ${projectId} not found`)
@@ -280,11 +305,34 @@ export function registerIpcHandlers(
 
   ipcMain.handle('onboarding:list-repos', async () => {
     try {
-      const result = await execAsync(
-        "gh repo list --json nameWithOwner --jq '.[].nameWithOwner' --limit 100",
-        { timeout: 15_000 }
+      // Fetch user repos + org repos in parallel
+      const [userResult, orgsResult] = await Promise.all([
+        execAsync("gh repo list --json nameWithOwner --jq '.[].nameWithOwner' --limit 100", { timeout: 15_000 }),
+        execAsync("gh org list 2>/dev/null || echo ''", { timeout: 10_000 }),
+      ])
+
+      const userRepos = userResult.stdout.trim().split('\n').filter(Boolean)
+      const orgs = orgsResult.stdout.trim().split('\n').filter(Boolean)
+
+      // Fetch repos for each org
+      const orgRepoResults = await Promise.all(
+        orgs.map(async (org) => {
+          try {
+            const result = await execAsync(
+              `gh repo list ${org} --json nameWithOwner --jq '.[].nameWithOwner' --limit 100`,
+              { timeout: 15_000 }
+            )
+            return result.stdout.trim().split('\n').filter(Boolean)
+          } catch {
+            return []
+          }
+        })
       )
-      return result.stdout.trim().split('\n').filter(Boolean)
+
+      // Combine and deduplicate
+      const allRepos = [...new Set([...userRepos, ...orgRepoResults.flat()])]
+      allRepos.sort()
+      return allRepos
     } catch {
       return []
     }
