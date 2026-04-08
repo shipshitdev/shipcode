@@ -47,7 +47,7 @@ export function ThreadPanel() {
 	}
 
 	return (
-		<div className="thread-panel">
+		<div className={`thread-panel ${kanbanView ? 'thread-panel--kanban' : ''}`}>
 			<div className="thread-panel__view-toggle">
 				<button
 					type="button"

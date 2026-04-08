@@ -1,9 +1,9 @@
-import type Database from 'better-sqlite3'
+import type { DatabaseSync } from 'node:sqlite'
 import { nanoid } from 'nanoid'
 import type { GitHubIssueCacheRecord, IssuePipelineStatus } from '@shipcode/shared'
 
 export class GitHubIssueQueries {
-  constructor(private db: Database.Database) {}
+  constructor(private db: DatabaseSync) {}
 
   list(projectId: string): GitHubIssueCacheRecord[] {
     const rows = this.db.prepare(
@@ -50,7 +50,7 @@ export class GitHubIssueQueries {
     const result = this.db.prepare(
       'UPDATE github_issue_cache SET claimed_at = datetime(\'now\'), claimed_by = ?, last_phase_update = datetime(\'now\') WHERE id = ? AND claimed_at IS NULL'
     ).run(instanceId, id)
-    return result.changes > 0
+    return Number(result.changes) > 0
   }
 
   releaseClaim(id: string): void {

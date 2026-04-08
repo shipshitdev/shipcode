@@ -1,6 +1,7 @@
-import type Database from 'better-sqlite3'
+import type { DatabaseSync } from 'node:sqlite'
+import { transaction } from './utils'
 
-export function migrate(db: Database.Database): void {
+export function migrate(db: DatabaseSync): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS projects (
       id TEXT PRIMARY KEY,
@@ -70,7 +71,7 @@ export function migrate(db: Database.Database): void {
   `)
 }
 
-export function migrateV2(db: Database.Database): void {
+export function migrateV2(db: DatabaseSync): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS schema_version (
       version INTEGER NOT NULL PRIMARY KEY
@@ -80,7 +81,7 @@ export function migrateV2(db: Database.Database): void {
   const row = db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get() as { version: number } | undefined
   if (row && row.version >= 2) return
 
-  db.transaction(() => {
+  transaction(db, () => {
     const alterColumns = [
       'ALTER TABLE threads ADD COLUMN github_issue_number INTEGER',
       'ALTER TABLE threads ADD COLUMN github_pr_number INTEGER',
@@ -135,14 +136,14 @@ export function migrateV2(db: Database.Database): void {
     `)
 
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (2)`)
-  })()
+  })
 }
 
-export function migrateV3(db: Database.Database): void {
+export function migrateV3(db: DatabaseSync): void {
   const row = db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get() as { version: number } | undefined
   if (row && row.version >= 3) return
 
-  db.transaction(() => {
+  transaction(db, () => {
     // Add last_status_label column to github_issue_cache
     try { db.exec('ALTER TABLE github_issue_cache ADD COLUMN last_status_label TEXT') } catch {}
 
@@ -154,5 +155,5 @@ export function migrateV3(db: Database.Database): void {
     `)
 
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (3)`)
-  })()
+  })
 }

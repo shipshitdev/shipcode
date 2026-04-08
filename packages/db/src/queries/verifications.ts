@@ -1,9 +1,9 @@
-import type Database from 'better-sqlite3'
+import type { DatabaseSync } from 'node:sqlite'
 import { nanoid } from 'nanoid'
 import type { VerificationResult, VerificationRecord } from '@shipcode/shared'
 
 export class VerificationQueries {
-  constructor(private db: Database.Database) {}
+  constructor(private db: DatabaseSync) {}
 
   getByThreadId(threadId: string): VerificationRecord[] {
     const rows = this.db.prepare(

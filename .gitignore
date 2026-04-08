@@ -1,9 +1,16 @@
 node_modules/
 dist/
 out/
+.next/
 .turbo/
+.vercel/
 *.tsbuildinfo
 .env
 .env.local
 .env.*.local
-.crosscode/
+.shipcode/
+.DS_Store
+.worktrees/
+bun.lock
+pnpm-lock.yaml
+next-env.d.ts

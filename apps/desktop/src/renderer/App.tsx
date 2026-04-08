@@ -8,7 +8,7 @@ import { TerminalDrawer } from './components/TerminalDrawer'
 import { HealthBanner } from './components/HealthBanner'
 
 export function App() {
-	const { terminalVisible, settingsVisible, toggleSettings } = useAppStore()
+	const { terminalVisible, settingsVisible, kanbanView, toggleSettings } = useAppStore()
 
 	return (
 		<div className="app">
@@ -16,7 +16,7 @@ export function App() {
 			<div className="app__layout">
 				<ProjectSidebar />
 				<ThreadPanel />
-				{settingsVisible ? <SettingsPanel /> : <ActiveThread />}
+				{!kanbanView && (settingsVisible ? <SettingsPanel /> : <ActiveThread />)}
 			</div>
 			<button
 				type="button"

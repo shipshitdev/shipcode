@@ -1,3 +1,11 @@
+// Suppress ExperimentalWarning from node:sqlite (RC module in Node v24).
+// This runs before require('@shipcode/db') in CJS output (vite builds main as CJS).
+const _origEmit = process.emit.bind(process)
+process.emit = function (event: string, ...args: any[]) {
+  if (event === 'warning' && args[0]?.name === 'ExperimentalWarning') return false
+  return _origEmit(event, ...args)
+} as typeof process.emit
+
 import { app, BrowserWindow, ipcMain } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
