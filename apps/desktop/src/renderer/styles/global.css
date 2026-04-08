@@ -1473,6 +1473,41 @@ html, body, #root {
   margin-top: 8px;
 }
 
+.onboarding__org-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.onboarding__org-tab {
+  padding: 4px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.onboarding__org-tab:hover { color: var(--text-primary); border-color: var(--text-muted); }
+.onboarding__org-tab--active { border-color: var(--accent); color: var(--accent); background: rgba(88, 166, 255, 0.1); }
+
+.onboarding__search {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  margin-bottom: 8px;
+}
+
+.onboarding__search:focus { outline: none; border-color: var(--accent); }
+.onboarding__search::placeholder { color: var(--text-muted); }
+
 .onboarding__repo-list {
   display: flex;
   flex-direction: column;
