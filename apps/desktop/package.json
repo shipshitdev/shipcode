@@ -11,7 +11,6 @@
     "@xterm/addon-webgl": "0.19.0",
     "@xterm/xterm": "6.0.0",
     "chokidar": "5.0.0",
-    "cmdk": "^1.1.1",
     "nanoid": "5.1.7",
     "node-pty": "1.1.0",
     "react": "19.2.4",
@@ -20,13 +19,14 @@
     "zustand": "5.0.12"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.1",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.1",
     "electron": "41.2.0",
     "electron-builder": "26.8.1",
     "esbuild": "0.25.5",
-    "sass": "^1.99.0",
+    "tailwindcss": "^4.2.1",
     "typescript": "6.0.2",
     "vite": "8.0.7",
     "vite-plugin-electron": "0.29.1",
