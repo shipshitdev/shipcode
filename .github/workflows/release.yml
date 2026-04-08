@@ -39,7 +39,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-desktop-macos:
-    if: ${{ secrets.CSC_LINK != '' }}
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -49,10 +48,22 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-      - run: bun install
+      - name: Detect macOS signing configuration
+        id: macos-signing
+        run: |
+          if [ -z "${{ secrets.CSC_LINK }}" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "CSC_LINK is not configured; skipping macOS release build."
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.macos-signing.outputs.enabled == 'true'
+        run: bun install
       - name: Build desktop app
+        if: steps.macos-signing.outputs.enabled == 'true'
         run: cd apps/desktop && bun run build:code
       - name: Package macOS installers
+        if: steps.macos-signing.outputs.enabled == 'true'
         run: cd apps/desktop && npx electron-builder --mac
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
@@ -61,6 +72,7 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       - name: Upload macOS binaries to release
+        if: steps.macos-signing.outputs.enabled == 'true'
         run: |
           gh release upload ${{ github.event.release.tag_name }} \
             apps/desktop/out/*.dmg \

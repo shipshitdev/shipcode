@@ -7,7 +7,12 @@ import { PIPELINE_MAX_RETRIES, MAX_REVIEW_ROUNDS, MAX_VERIFICATION_RETRIES } fro
 const { mockExecSync } = vi.hoisted(() => ({ mockExecSync: vi.fn() }))
 vi.mock('node:child_process', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('node:child_process')>()
-	return { ...actual, execSync: mockExecSync }
+	return {
+		...actual,
+		execFileSync: vi.fn((command: string, args: string[] = [], options?: object) =>
+			mockExecSync([command, ...args].join(' '), options)
+		),
+	}
 })
 
 const PLAN_JSON = JSON.stringify({
@@ -99,6 +104,7 @@ function createMockDeps() {
 
 	const processManager = {
 		spawn: vi.fn(() => ({ id: `proc-${++spawnCount}` })),
+		kill: vi.fn(),
 		on: vi.fn((event: string, handler: Function) => {
 			(listeners[event] ??= []).push(handler)
 		}),
@@ -374,7 +380,7 @@ describe('createPipeline', () => {
 			expect(pipeline.getContext('t1')).toBeUndefined()
 		})
 
-		it('parse failure → emits awaiting_approval', async () => {
+		it('parse failure → emits failed', async () => {
 			const pipeline = createPipeline(mock.deps)
 			await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null)
 
@@ -383,7 +389,7 @@ describe('createPipeline', () => {
 			mock.trigger('output', 'proc-2', 'some garbage that is not a review block')
 			mock.trigger('exit', 'proc-2', 0)
 
-			expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'awaiting_approval')
+			expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed')
 		})
 	})
 
