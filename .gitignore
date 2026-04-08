@@ -10,6 +10,7 @@ out/
 .env.*.local
 .shipcode/
 .DS_Store
+.worktrees/
 bun.lock
 pnpm-lock.yaml
 next-env.d.ts
