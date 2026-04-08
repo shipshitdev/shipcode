@@ -1,13 +1,36 @@
 import * as pty from 'node-pty'
 import { nanoid } from 'nanoid'
 import { EventEmitter } from 'node:events'
-import { execSync } from 'node:child_process'
+import { execSync, execFileSync } from 'node:child_process'
 import type { AgentType, AgentState } from '@shipcode/shared'
+
+const ALLOWED_COMMANDS = new Set(['claude', 'codex', 'gh'])
+const TRUSTED_SHELLS = new Set([
+  '/bin/bash', '/bin/zsh', '/bin/sh',
+  '/usr/bin/bash', '/usr/bin/zsh',
+  '/usr/local/bin/bash', '/usr/local/bin/zsh',
+  '/opt/homebrew/bin/bash', '/opt/homebrew/bin/zsh',
+])
+
+const SAFE_ENV_KEYS = new Set([
+  'PATH', 'HOME', 'USER', 'SHELL', 'TERM', 'LANG', 'LC_ALL', 'LC_CTYPE',
+  'TMPDIR', 'XDG_RUNTIME_DIR',
+  'ANTHROPIC_API_KEY', 'OPENAI_API_KEY',
+])
+
+function filterEnv(env: Record<string, string>): Record<string, string> {
+  const filtered: Record<string, string> = {}
+  for (const [key, val] of Object.entries(env)) {
+    if (SAFE_ENV_KEYS.has(key)) filtered[key] = val
+  }
+  return filtered
+}
 
 function getShellEnv(): Record<string, string> {
   try {
     const shell = process.env.SHELL ?? '/bin/zsh'
-    const output = execSync(`${shell} -ilc 'env'`, { encoding: 'utf-8', timeout: 5000 })
+    if (!TRUSTED_SHELLS.has(shell)) return process.env as Record<string, string>
+    const output = execFileSync(shell, ['-ilc', 'env'], { encoding: 'utf-8', timeout: 5000 })
     const env: Record<string, string> = {}
     for (const line of output.split('\n')) {
       const idx = line.indexOf('=')
@@ -21,16 +44,17 @@ function getShellEnv(): Record<string, string> {
   }
 }
 
-/** Resolve a command to its actual binary path, skipping shell aliases. */
 function resolveCommand(command: string): string {
+  if (!ALLOWED_COMMANDS.has(command)) return command
+  const shell = process.env.SHELL
+  if (!shell || !TRUSTED_SHELLS.has(shell)) return command
   try {
-    const shell = process.env.SHELL ?? '/bin/zsh'
-    // whence -p (zsh) or type -P (bash) skips aliases and returns the binary path
-    const resolved = execSync(
-      `${shell} -ilc 'whence -p ${command} 2>/dev/null || type -P ${command} 2>/dev/null'`,
-      { encoding: 'utf-8', timeout: 5000 }
-    ).trim()
-    return resolved || command
+    const resolved = execFileSync(shell, ['-ilc', `command -v ${command}`], {
+      encoding: 'utf-8',
+      timeout: 5000,
+    }).trim()
+    if (resolved.startsWith('/') && !resolved.includes('\n')) return resolved
+    return command
   } catch {
     return command
   }
@@ -77,7 +101,7 @@ export class ProcessManager extends EventEmitter {
         cols: 120,
         rows: 30,
         cwd,
-        env: { ...cachedEnv, FORCE_COLOR: '1' },
+        env: { ...filterEnv(cachedEnv), FORCE_COLOR: '1' },
       })
     } catch (err) {
       // Spawn failed (e.g. binary not found, alias instead of real path).
