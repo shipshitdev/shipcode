@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { StreamParser, buildPlanPrompt, buildReviewPrompt, buildRevisionPrompt, buildVerificationPrompt } from '@shipcode/agents'
 import type { ShipCodePlan } from '@shipcode/shared'
 import { PIPELINE_MAX_RETRIES, MAX_VERIFICATION_RETRIES, MAX_REVIEW_ROUNDS } from '@shipcode/shared'
@@ -28,6 +29,9 @@ export function createPipeline(deps: PipelineDeps) {
         executorModel: 'claude',
         baseBranch: '',
         forkPointSha: '',
+        activeProcessId: null,
+        cancelled: false,
+        verifiedSha: null,
       }
       activePipelines.set(threadId, context)
     }
@@ -41,9 +45,10 @@ export function createPipeline(deps: PipelineDeps) {
     const process = deps.processManager.spawn(
       'claude',
       'claude',
-      ['-p', planPrompt, '--output-format', 'json', '--max-turns', '1'],
+      ['-p', planPrompt, '--output-format', 'json', '--max-turns', '1', '--dangerously-skip-permissions', '--disallowedTools', 'Edit,Write,Bash,NotebookEdit'],
       cwd
     )
+    context.activeProcessId = process.id
 
     // Collect output
     const outputHandler = (processId: string, data: string) => {
@@ -59,14 +64,33 @@ export function createPipeline(deps: PipelineDeps) {
       deps.processManager.removeListener('output', outputHandler)
       deps.processManager.removeListener('exit', exitHandler)
 
+      if (context.cancelled) return
+
+      if (exitCode === 127) {
+        emitPhase(threadId, 'failed')
+        activePipelines.delete(threadId)
+        return
+      }
+
       if (exitCode !== 0) {
-        parser.detectError()
-        if (context.retryCount < PIPELINE_MAX_RETRIES) {
-          context.retryCount++
-          // Retry planning
-          startPlanGeneration(threadId, prompt, projectPath, worktreePath)
+        const result = parser.extractPlan()
+        if (result.success && result.data) {
+          // Plan extracted despite non-zero exit — proceed normally
+          const nextVersion = deps.plans.getMaxVersion(threadId) + 1
+          const plan = deps.plans.create(threadId, result.raw, result.data, nextVersion)
+          deps.plans.updateStatus(plan.id, 'pending_review')
+          deps.emitter.emit({ type: 'plan:parsed', threadId, plan: result.data })
+          if (context.autonomous) { startReview(threadId, result.data) }
+          else { emitPhase(threadId, 'reviewing') }
         } else {
-          emitPhase(threadId, 'failed')
+          parser.detectError()
+          if (context.retryCount < PIPELINE_MAX_RETRIES) {
+            context.retryCount++
+            startPlanGeneration(threadId, prompt, projectPath, worktreePath)
+          } else {
+            emitPhase(threadId, 'failed')
+            activePipelines.delete(threadId)
+          }
         }
         return
       }
@@ -105,14 +129,15 @@ export function createPipeline(deps: PipelineDeps) {
 
     const parser = new StreamParser()
     const args = context.autonomous
-      ? ['-q', reviewPromptText, '--reasoning-effort', 'high']
-      : ['-q', reviewPromptText]
+      ? ['-q', reviewPromptText, '--sandbox', 'read-only', '-a', 'never', '--reasoning-effort', 'high']
+      : ['-q', reviewPromptText, '--sandbox', 'read-only', '-a', 'never']
     const process = deps.processManager.spawn(
       'codex',
       'codex',
       args,
       cwd
     )
+    context.activeProcessId = process.id
 
     const outputHandler = (processId: string, data: string) => {
       if (processId === process.id) parser.feed(data)
@@ -123,6 +148,14 @@ export function createPipeline(deps: PipelineDeps) {
       if (processId !== process.id) return
       deps.processManager.removeListener('output', outputHandler)
       deps.processManager.removeListener('exit', exitHandler)
+
+      if (context.cancelled) return
+
+      if (_exitCode === 127) {
+        emitPhase(threadId, 'failed')
+        activePipelines.delete(threadId)
+        return
+      }
 
       const result = parser.extractReview()
       const latestPlan = deps.plans.getLatest(threadId)
@@ -163,11 +196,12 @@ export function createPipeline(deps: PipelineDeps) {
           activePipelines.delete(threadId)
         }
       } else {
-        // Review couldn't be parsed — go to approval with raw output
+        // Review couldn't be parsed
         if (latestPlan) {
           deps.reviews.create(latestPlan.id, parser.getRawOutput(), null)
         }
-        emitPhase(threadId, 'awaiting_approval')
+        emitPhase(threadId, 'failed')
+        activePipelines.delete(threadId)
       }
     }
     deps.processManager.on('exit', exitHandler)
@@ -186,9 +220,10 @@ export function createPipeline(deps: PipelineDeps) {
     const process = deps.processManager.spawn(
       'claude',
       'claude',
-      ['-p', revisionPrompt, '--output-format', 'json', '--max-turns', '1'],
+      ['-p', revisionPrompt, '--output-format', 'json', '--max-turns', '1', '--dangerously-skip-permissions', '--disallowedTools', 'Edit,Write,Bash,NotebookEdit'],
       cwd
     )
+    context.activeProcessId = process.id
 
     const outputHandler = (processId: string, data: string) => {
       if (processId === process.id) parser.feed(data)
@@ -199,6 +234,8 @@ export function createPipeline(deps: PipelineDeps) {
       if (processId !== process.id) return
       deps.processManager.removeListener('output', outputHandler)
       deps.processManager.removeListener('exit', exitHandler)
+
+      if (context.cancelled) return
 
       const result = parser.extractPlan()
       if (result.success && result.data) {
@@ -225,16 +262,22 @@ export function createPipeline(deps: PipelineDeps) {
     const cwd = context.worktreePath ?? context.projectPath
     const executionPrompt = `Execute this approved implementation plan:\n\n${JSON.stringify(plan, null, 2)}`
 
+    const model = context.executorModel
     const process = deps.processManager.spawn(
-      'claude',
-      'claude',
-      ['-p', executionPrompt, '--allowedTools', 'Edit,Write,Bash,Glob,Grep,Read'],
+      model,
+      model,
+      model === 'claude'
+        ? ['-p', executionPrompt, '--allowedTools', 'Edit,Write,Bash,Glob,Grep,Read', '--dangerously-skip-permissions']
+        : ['-q', executionPrompt, '--sandbox', 'workspace-write', '-a', 'never'],
       cwd
     )
+    context.activeProcessId = process.id
 
     const exitHandler = (processId: string, exitCode: number) => {
       if (processId !== process.id) return
       deps.processManager.removeListener('exit', exitHandler)
+
+      if (context.cancelled) return
 
       if (exitCode === 0) {
         if (context.autonomous) {
@@ -267,11 +310,14 @@ export function createPipeline(deps: PipelineDeps) {
 
     const plan = latestPlan.structured
 
+    // Pin HEAD SHA for verification
+    const headSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf-8' }).trim()
+    context.verifiedSha = headSha
+
     // Generate diff from fork point
-    const { execSync } = await import('node:child_process')
     let diff: string
     try {
-      diff = execSync(`git diff ${context.forkPointSha}..HEAD`, { cwd, encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 })
+      diff = execFileSync('git', ['diff', `${context.forkPointSha}..${headSha}`], { cwd, encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 }).toString()
     } catch {
       diff = ''
     }
@@ -286,7 +332,7 @@ export function createPipeline(deps: PipelineDeps) {
 
     // Check for dirty worktree
     try {
-      const status = execSync('git status --porcelain', { cwd, encoding: 'utf-8' })
+      const status = execFileSync('git', ['status', '--porcelain'], { cwd, encoding: 'utf-8' })
       if (status.trim()) {
         deps.verifications.create(threadId, latestPlan.id, `Dirty worktree: ${status}`, null)
         if (context.verificationRetries < MAX_VERIFICATION_RETRIES) {
@@ -306,9 +352,10 @@ export function createPipeline(deps: PipelineDeps) {
     const process = deps.processManager.spawn(
       'claude',
       'claude',
-      ['-p', verificationPrompt, '--output-format', 'json', '--max-turns', '1'],
+      ['-p', verificationPrompt, '--output-format', 'json', '--max-turns', '1', '--dangerously-skip-permissions', '--disallowedTools', 'Edit,Write,Bash,NotebookEdit'],
       cwd
     )
+    context.activeProcessId = process.id
 
     const outputHandler = (processId: string, data: string) => {
       if (processId === process.id) parser.feed(data)
@@ -319,6 +366,8 @@ export function createPipeline(deps: PipelineDeps) {
       if (processId !== process.id) return
       deps.processManager.removeListener('output', outputHandler)
       deps.processManager.removeListener('exit', exitHandler)
+
+      if (context.cancelled) return
 
       const result = parser.extractVerification()
 
@@ -349,11 +398,18 @@ export function createPipeline(deps: PipelineDeps) {
     if (!context) return
 
     const cwd = context.worktreePath ?? context.projectPath
-    const { execSync } = await import('node:child_process')
 
     try {
+      // Verify HEAD hasn't changed since verification
+      const currentHead = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf-8' }).trim()
+      if (context.verifiedSha && context.verifiedSha !== currentHead) {
+        emitPhase(threadId, 'failed')
+        activePipelines.delete(threadId)
+        return
+      }
+
       // Check if worktree is clean
-      const status = execSync('git status --porcelain', { cwd, encoding: 'utf-8' })
+      const status = execFileSync('git', ['status', '--porcelain'], { cwd, encoding: 'utf-8' })
       if (status.trim()) {
         emitPhase(threadId, 'failed')
         activePipelines.delete(threadId)
@@ -361,7 +417,7 @@ export function createPipeline(deps: PipelineDeps) {
       }
 
       // Verify there are commits ahead of base
-      const ahead = execSync(`git log ${context.forkPointSha}..HEAD --oneline`, { cwd, encoding: 'utf-8' })
+      const ahead = execFileSync('git', ['log', context.forkPointSha + '..HEAD', '--oneline'], { cwd, encoding: 'utf-8' })
       if (!ahead.trim()) {
         emitPhase(threadId, 'failed')
         activePipelines.delete(threadId)
@@ -369,15 +425,15 @@ export function createPipeline(deps: PipelineDeps) {
       }
 
       // Push
-      const branch = execSync('git rev-parse --abbrev-ref HEAD', { cwd, encoding: 'utf-8' }).trim()
-      execSync(`git push origin ${branch} --set-upstream`, { cwd, encoding: 'utf-8' })
+      const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd, encoding: 'utf-8' }).trim()
+      execFileSync('git', ['push', 'origin', branch, '--set-upstream'], { cwd, encoding: 'utf-8' })
 
       startShipping(threadId)
     } catch {
       // Retry push once
       try {
-        const branch = execSync('git rev-parse --abbrev-ref HEAD', { cwd, encoding: 'utf-8' }).trim()
-        execSync(`git push origin ${branch} --set-upstream`, { cwd, encoding: 'utf-8' })
+        const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd, encoding: 'utf-8' }).trim()
+        execFileSync('git', ['push', 'origin', branch, '--set-upstream'], { cwd, encoding: 'utf-8' })
         startShipping(threadId)
       } catch {
         emitPhase(threadId, 'failed')
@@ -400,11 +456,10 @@ export function createPipeline(deps: PipelineDeps) {
     }
 
     const cwd = context.worktreePath ?? context.projectPath
-    const { execSync } = await import('node:child_process')
 
     try {
       // Get branch name
-      const branch = execSync('git rev-parse --abbrev-ref HEAD', { cwd, encoding: 'utf-8' }).trim()
+      const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd, encoding: 'utf-8' }).trim()
 
       // Build PR body
       const latestPlan = deps.plans.getLatest(threadId)
@@ -421,8 +476,9 @@ export function createPipeline(deps: PipelineDeps) {
       ].join('\n')
 
       // Create PR
-      const prOutput = execSync(
-        `gh pr create --title "${title.replace(/"/g, '\\"')}" --body "${body.replace(/"/g, '\\"')}" --head "${branch}"`,
+      const prOutput = execFileSync(
+        'gh',
+        ['pr', 'create', '--title', title, '--body', body, '--head', branch, '--base', context.baseBranch || 'main'],
         { cwd, encoding: 'utf-8' }
       )
 
@@ -434,8 +490,9 @@ export function createPipeline(deps: PipelineDeps) {
 
         // Comment on issue
         try {
-          execSync(
-            `gh issue comment ${context.githubIssueNumber} --body "PR #${prNumber} created by ShipCode."`,
+          execFileSync(
+            'gh',
+            ['issue', 'comment', String(context.githubIssueNumber), '--body', 'PR #' + prNumber + ' created by ShipCode.'],
             { cwd, encoding: 'utf-8' }
           )
         } catch {}
@@ -455,16 +512,15 @@ export function createPipeline(deps: PipelineDeps) {
     executorModel: 'claude' | 'codex'
   ) {
     // Determine fork point
-    const { execSync } = await import('node:child_process')
     let baseBranch = 'main'
     let forkPointSha = ''
     try {
-      baseBranch = execSync('git symbolic-ref refs/remotes/origin/HEAD --short', { cwd: projectPath, encoding: 'utf-8' }).trim().replace('origin/', '')
+      baseBranch = execFileSync('git', ['symbolic-ref', 'refs/remotes/origin/HEAD', '--short'], { cwd: projectPath, encoding: 'utf-8' }).trim().replace('origin/', '')
     } catch {
       baseBranch = 'main'
     }
     try {
-      forkPointSha = execSync(`git rev-parse ${baseBranch}`, { cwd: projectPath, encoding: 'utf-8' }).trim()
+      forkPointSha = execFileSync('git', ['rev-parse', baseBranch], { cwd: projectPath, encoding: 'utf-8' }).trim()
     } catch {}
 
     deps.threads.updateAutonomousFields(threadId, {
@@ -474,6 +530,16 @@ export function createPipeline(deps: PipelineDeps) {
       baseBranch,
       forkPointSha,
     })
+
+    // Pre-create context with all autonomous fields
+    const context: PipelineContext = {
+      threadId, projectPath, worktreePath: null,
+      retryCount: 0, autonomous: true, reviewRound: 0,
+      verificationRetries: 0, githubIssueNumber: issue.number, githubRepo: null,
+      executorModel, baseBranch, forkPointSha,
+      activeProcessId: null, cancelled: false, verifiedSha: null,
+    }
+    activePipelines.set(threadId, context)
 
     const prompt = `GitHub Issue #${issue.number}: ${issue.title}\n\n${issue.body ?? ''}`
     await startPlanGeneration(threadId, prompt, projectPath, null)
@@ -491,6 +557,13 @@ export function createPipeline(deps: PipelineDeps) {
   }
 
   function cancel(threadId: string) {
+    const context = activePipelines.get(threadId)
+    if (context) {
+      context.cancelled = true
+      if (context.activeProcessId) {
+        deps.processManager.kill(context.activeProcessId)
+      }
+    }
     activePipelines.delete(threadId)
     emitPhase(threadId, 'idle')
   }

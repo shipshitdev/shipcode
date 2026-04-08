@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useAppStore } from '../stores/app-store'
-import { PlanViewer, ReviewViewer } from '@shipcode/ui'
+import { PlanViewer, ReviewViewer, Badge, Button } from '@shipcode/ui'
 import type { Thread, PlanRecord, ReviewRecord } from '@shipcode/shared'
 
 export function IssueDetail() {
@@ -47,37 +47,43 @@ export function IssueDetail() {
 	}
 
 	return (
-		<div className="issue-detail">
-			<div className="issue-detail__header">
+		<div className="flex w-[480px] min-w-[380px] shrink-0 flex-col overflow-hidden border-l border-border bg-bg-primary">
+			{/* Header */}
+			<div className="relative shrink-0 border-b border-border p-4">
 				<button
 					type="button"
-					className="issue-detail__close"
+					className="absolute right-3 top-3 cursor-pointer rounded border-none bg-transparent px-2 py-1 text-sm text-text-muted hover:bg-bg-hover hover:text-text-primary"
 					onClick={() => selectIssue(null)}
 					title="Close"
 				>
 					✕
 				</button>
-				<span className="issue-detail__number">#{activeIssue.issueNumber}</span>
-				<h3 className="issue-detail__title">{activeIssue.title}</h3>
-				<div className="issue-detail__meta">
-					<span className={`issue-detail__status issue-detail__status--${activeIssue.pipelineStatus}`}>
+				<span className="font-mono text-xs text-text-muted">#{activeIssue.issueNumber}</span>
+				<h3 className="my-1 pr-8 text-[15px] font-semibold">{activeIssue.title}</h3>
+				<div className="flex flex-wrap gap-1.5">
+					<Badge variant="default" className="text-[11px] uppercase font-semibold">
 						{activeIssue.pipelineStatus}
-					</span>
+					</Badge>
 					{activeIssue.assignee && (
-						<span className="issue-detail__assignee">{activeIssue.assignee}</span>
+						<Badge variant="default" className="text-[11px]">
+							{activeIssue.assignee}
+						</Badge>
 					)}
 					{activeIssue.labels.filter(l => l.startsWith('agent:')).map(l => (
-						<span key={l} className="issue-detail__label">{l}</span>
+						<Badge key={l} className="text-[10px] bg-accent/15 text-accent">
+							{l}
+						</Badge>
 					))}
 				</div>
 			</div>
 
-			<div className="issue-detail__content">
+			{/* Content */}
+			<div className="flex-1 overflow-y-auto p-4">
 				{/* Issue body (PRD) */}
 				{activeIssue.body && (
-					<div className="issue-detail__section">
-						<h4>Description</h4>
-						<div className="issue-detail__body">
+					<div className="mb-5">
+						<h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">Description</h4>
+						<div className="max-h-[300px] overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-bg-secondary p-3 text-[13px] leading-relaxed text-text-primary">
 							{activeIssue.body}
 						</div>
 					</div>
@@ -85,10 +91,10 @@ export function IssueDetail() {
 
 				{/* Pipeline thread info */}
 				{thread && (
-					<div className="issue-detail__section">
-						<h4>Pipeline</h4>
-						<div className="issue-detail__pipeline-info">
-							<span>Status: <strong>{thread.status}</strong></span>
+					<div className="mb-5">
+						<h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">Pipeline</h4>
+						<div className="flex flex-col gap-1 text-xs text-text-secondary">
+							<span>Status: <strong className="text-text-primary">{thread.status}</strong></span>
 							{thread.githubPrNumber && (
 								<span>PR: #{thread.githubPrNumber}</span>
 							)}
@@ -101,37 +107,39 @@ export function IssueDetail() {
 
 				{/* Plan history */}
 				{planHistory.length > 0 && (
-					<div className="issue-detail__section">
-						<h4>Plan History ({planHistory.length} version{planHistory.length !== 1 ? 's' : ''})</h4>
-						<div className="plan-history">
+					<div className="mb-5">
+						<h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+							Plan History ({planHistory.length} version{planHistory.length !== 1 ? 's' : ''})
+						</h4>
+						<div className="flex flex-col gap-1">
 							{planHistory.map(plan => {
 								const isExpanded = effectiveExpanded === plan.id
 								const review = reviewsByPlanId[plan.id]
 
 								return (
-									<div key={plan.id} className={`plan-history__item ${isExpanded ? 'plan-history__item--expanded' : ''}`}>
+									<div key={plan.id} className={`rounded-md border ${isExpanded ? 'border-border' : 'border-transparent'}`}>
 										<button
 											type="button"
-											className="plan-history__header"
+											className="flex w-full items-center gap-2 bg-transparent border-none cursor-pointer px-3 py-2 text-left text-[13px] text-text-primary hover:bg-bg-hover rounded-md"
 											onClick={() => setExpandedPlanId(isExpanded ? null : plan.id)}
 										>
-											<span className="plan-history__version">v{plan.version}</span>
-											<span className="plan-history__status" style={{ color: statusColor(plan.status) }}>
+											<span className="font-mono text-xs font-semibold text-text-muted">v{plan.version}</span>
+											<span className="text-xs" style={{ color: statusColor(plan.status) }}>
 												{plan.status}
 											</span>
 											{review && (
-												<span className={`plan-history__review-badge plan-history__review-badge--${review.decision}`}>
+												<Badge variant={review.decision === 'approve' ? 'success' : 'warning'} className="text-[10px]">
 													{review.decision}
-												</span>
+												</Badge>
 											)}
-											<span className="plan-history__date">
+											<span className="ml-auto text-[11px] text-text-muted">
 												{new Date(plan.createdAt).toLocaleString()}
 											</span>
-											<span className="plan-history__chevron">{isExpanded ? '▾' : '▸'}</span>
+											<span className="text-text-muted">{isExpanded ? '▾' : '▸'}</span>
 										</button>
 
 										{isExpanded && (
-											<div className="plan-history__body">
+											<div className="border-t border-border p-3">
 												{plan.structured && (
 													<PlanViewer plan={plan.structured} />
 												)}
@@ -139,8 +147,8 @@ export function IssueDetail() {
 													<ReviewViewer review={review.structured} />
 												)}
 												{!plan.structured && (
-													<div className="plan-history__raw">
-														<pre>{plan.rawOutput}</pre>
+													<div className="overflow-x-auto">
+														<pre className="whitespace-pre-wrap text-xs text-text-secondary">{plan.rawOutput}</pre>
 													</div>
 												)}
 											</div>
@@ -154,11 +162,10 @@ export function IssueDetail() {
 
 				{/* No thread yet — offer to start */}
 				{!activeThreadId && (
-					<div className="issue-detail__section issue-detail__start">
-						<p>This issue hasn't been picked up by the pipeline yet.</p>
-						<button
-							type="button"
-							className="btn btn--primary btn--lg"
+					<div className="mb-5 py-6 text-center">
+						<p className="mb-3 text-text-muted">This issue hasn't been picked up by the pipeline yet.</p>
+						<Button
+							size="lg"
 							onClick={() => {
 								window.shipcode.invoke('github:start-issue', {
 									projectId: activeProjectId,
@@ -167,14 +174,14 @@ export function IssueDetail() {
 							}}
 						>
 							Start Pipeline
-						</button>
+						</Button>
 					</div>
 				)}
 
 				{/* Thread exists but no plans yet */}
 				{activeThreadId && planHistory.length === 0 && (
-					<div className="issue-detail__section">
-						<p className="issue-detail__empty">Pipeline is running — waiting for plan generation...</p>
+					<div className="mb-5">
+						<p className="py-4 text-center text-[13px] text-text-muted">Pipeline is running — waiting for plan generation...</p>
 					</div>
 				)}
 			</div>

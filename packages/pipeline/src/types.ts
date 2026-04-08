@@ -26,6 +26,9 @@ export interface PipelineContext {
   executorModel: 'claude' | 'codex'
   baseBranch: string
   forkPointSha: string
+  activeProcessId: string | null
+  cancelled: boolean
+  verifiedSha: string | null
 }
 
 export interface PipelineDeps {

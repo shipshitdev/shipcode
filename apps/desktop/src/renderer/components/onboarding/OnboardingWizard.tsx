@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import type { AgentType, AppSettings, GhAuthStatus, StatusLabelMapping, SystemHealth } from '@shipcode/shared'
 import { DEFAULT_STATUS_LABEL_MAPPINGS, CURRENT_ONBOARDING_VERSION } from '@shipcode/shared'
+import { Button, Card } from '@shipcode/ui'
 import { StepAuthCheck, useAuthCheck } from './StepAuthCheck'
 import { StepGitHubProject } from './StepGitHubProject'
 import { StepModelPrefs } from './StepModelPrefs'
@@ -78,26 +79,28 @@ export function OnboardingWizard({ onComplete }: Props) {
 	const isLastStep = step === 3
 
 	return (
-		<div className="onboarding">
-			<div className="onboarding__container">
-				<div className="onboarding__header">
-					<h2>Welcome to ShipCode</h2>
-					<div className="onboarding__progress">
+		<div className="flex items-center justify-center h-screen bg-bg-primary [app-region:drag]">
+			<Card className="w-[520px] max-h-[80vh] flex flex-col overflow-hidden [app-region:no-drag]">
+				<div className="px-6 pt-6 pb-4 border-b border-border">
+					<h2 className="text-lg font-bold mb-4">Welcome to ShipCode</h2>
+					<div className="flex gap-6">
 						{STEP_LABELS.map((label, i) => (
 							<div
 								key={label}
-								className={`onboarding__progress-step ${
-									i === step ? 'onboarding__progress-step--active' : ''
-								} ${i < step ? 'onboarding__progress-step--done' : ''}`}
+								className={`flex items-center gap-1.5 text-xs ${
+									i === step ? 'text-accent' : i < step ? 'text-success' : 'text-text-muted'
+								}`}
 							>
-								<span className="onboarding__progress-dot" />
-								<span className="onboarding__progress-label">{label}</span>
+								<span className={`w-2 h-2 rounded-full ${
+									i === step ? 'bg-accent' : i < step ? 'bg-success' : 'bg-text-muted'
+								}`} />
+								<span>{label}</span>
 							</div>
 						))}
 					</div>
 				</div>
 
-				<div className="onboarding__body">
+				<div className="flex-1 overflow-y-auto p-6">
 					{step === 0 && (
 						<StepAuthCheck
 							authResult={authResult}
@@ -130,34 +133,30 @@ export function OnboardingWizard({ onComplete }: Props) {
 					)}
 				</div>
 
-				<div className="onboarding__footer">
+				<div className="flex items-center gap-2 px-6 py-4 border-t border-border">
 					{step > 0 && (
-						<button type="button" className="btn btn--secondary" onClick={handleBack}>
+						<Button variant="secondary" onClick={handleBack}>
 							Back
-						</button>
+						</Button>
 					)}
-					<div className="onboarding__footer-spacer" />
+					<div className="flex-1" />
 					{isLastStep ? (
-						<button
-							type="button"
-							className="btn btn--primary"
+						<Button
 							onClick={handleFinish}
 							disabled={saveSettings.isPending}
 						>
 							{saveSettings.isPending ? 'Saving...' : 'Finish Setup'}
-						</button>
+						</Button>
 					) : (
-						<button
-							type="button"
-							className="btn btn--primary"
+						<Button
 							onClick={handleNext}
 							disabled={!canNext}
 						>
 							Next
-						</button>
+						</Button>
 					)}
 				</div>
-			</div>
+			</Card>
 		</div>
 	)
 }

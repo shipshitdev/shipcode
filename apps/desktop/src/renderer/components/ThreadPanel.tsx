@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAppStore } from '../stores/app-store'
-import { ThreadList, KanbanBoard } from '@shipcode/ui'
+import { ThreadList, KanbanBoard, Button, Textarea } from '@shipcode/ui'
 import type { Thread, GitHubIssueCacheRecord } from '@shipcode/shared'
 
 export function ThreadPanel() {
@@ -40,29 +40,31 @@ export function ThreadPanel() {
 
 	if (!activeProjectId) {
 		return (
-			<div className="thread-panel thread-panel--empty">
+			<div className="flex w-[300px] min-w-[280px] items-center justify-center border-r border-border bg-bg-primary text-text-muted">
 				<p>Select a project to get started</p>
 			</div>
 		)
 	}
 
 	return (
-		<div className={`thread-panel ${kanbanView ? 'thread-panel--kanban' : ''}`}>
-			<div className="thread-panel__view-toggle">
-				<button
-					type="button"
-					className={!kanbanView ? 'active' : ''}
+		<div className={`flex flex-col bg-bg-primary ${kanbanView ? 'flex-1 min-w-0' : 'w-[300px] min-w-[280px] border-r border-border'}`}>
+			<div className="flex border-b border-border">
+				<Button
+					variant={!kanbanView ? 'secondary' : 'ghost'}
+					size="sm"
+					className="flex-1 rounded-none"
 					onClick={() => kanbanView && toggleKanbanView()}
 				>
 					Threads
-				</button>
-				<button
-					type="button"
-					className={kanbanView ? 'active' : ''}
+				</Button>
+				<Button
+					variant={kanbanView ? 'secondary' : 'ghost'}
+					size="sm"
+					className="flex-1 rounded-none"
 					onClick={() => !kanbanView && toggleKanbanView()}
 				>
 					Issues
-				</button>
+				</Button>
 			</div>
 
 			{kanbanView ? (
@@ -91,9 +93,8 @@ export function ThreadPanel() {
 			)}
 
 			{!kanbanView && showInput && (
-				<div className="thread-panel__new-input">
-					<textarea
-						className="thread-panel__textarea"
+				<div className="border-t border-border p-3">
+					<Textarea
 						placeholder="Describe the feature or task..."
 						value={newPrompt}
 						onChange={(e) => setNewPrompt(e.target.value)}
@@ -108,22 +109,19 @@ export function ThreadPanel() {
 						}}
 						autoFocus
 					/>
-					<div className="thread-panel__actions">
-						<button
-							type="button"
-							className="btn btn--primary"
+					<div className="mt-2 flex gap-2">
+						<Button
 							onClick={() => newPrompt.trim() && createThread.mutate(newPrompt.trim())}
 							disabled={!newPrompt.trim() || createThread.isPending}
 						>
 							{createThread.isPending ? 'Creating...' : 'Create Thread (⌘↩)'}
-						</button>
-						<button
-							type="button"
-							className="btn btn--ghost"
+						</Button>
+						<Button
+							variant="ghost"
 							onClick={() => { setShowInput(false); setNewPrompt('') }}
 						>
 							Cancel
-						</button>
+						</Button>
 					</div>
 				</div>
 			)}

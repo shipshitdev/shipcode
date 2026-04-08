@@ -1,4 +1,5 @@
 import { type PipelinePhase } from '@shipcode/shared'
+import { cn } from './lib/utils'
 
 const PHASES: { key: PipelinePhase; label: string }[] = [
 	{ key: 'planning', label: 'Plan' },
@@ -23,34 +24,50 @@ export function PipelineStatus({ currentPhase, onPhaseClick }: PipelineStatusPro
 	const isFailed = currentPhase === 'failed'
 
 	return (
-		<div className="pipeline-status">
+		<div className="flex items-center px-4 py-3 border-b border-border bg-bg-secondary">
 			{PHASES.map((phase, index) => {
 				const isActive = phase.key === currentPhase
 				const isCompleted = !isFailed && currentIndex > index
 				const isFuture = !isFailed && currentIndex < index
 
-				let className = 'pipeline-phase'
-				if (isActive) className += ' pipeline-phase--active'
-				if (isCompleted) className += ' pipeline-phase--completed'
-				if (isFuture) className += ' pipeline-phase--future'
-				if (isFailed && isActive) className += ' pipeline-phase--failed'
-
 				return (
-					<div key={phase.key} className="pipeline-step">
+					<div key={phase.key} className="flex items-center">
 						<button
 							type="button"
-							className={className}
+							className={cn(
+								'flex items-center gap-1.5 px-2.5 py-1 bg-transparent border-none rounded text-text-muted text-xs whitespace-nowrap cursor-pointer',
+								'hover:not-disabled:text-text-secondary',
+								'disabled:cursor-default',
+							)}
 							onClick={() => onPhaseClick?.(phase.key)}
 							disabled={isFuture}
 						>
-							<span className="pipeline-phase__indicator">
+							<span
+								className={cn(
+									'inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold border-2 border-text-muted text-text-muted',
+									isActive && !isFailed && 'bg-accent border-accent text-bg-primary',
+									isCompleted && 'bg-success border-success text-bg-primary',
+									isFailed && isActive && 'bg-danger border-danger text-bg-primary',
+								)}
+							>
 								{isCompleted ? '✓' : isActive && isFailed ? '✕' : index + 1}
 							</span>
-							<span className="pipeline-phase__label">{phase.label}</span>
+							<span
+								className={cn(
+									isActive && !isFailed && 'text-accent',
+									isCompleted && 'text-success',
+									isFailed && isActive && 'text-danger',
+								)}
+							>
+								{phase.label}
+							</span>
 						</button>
 						{index < PHASES.length - 1 && (
 							<span
-								className={`pipeline-connector ${isCompleted ? 'pipeline-connector--completed' : ''}`}
+								className={cn(
+									'w-6 h-0.5 mx-0.5 bg-text-muted',
+									isCompleted && 'bg-success',
+								)}
 							/>
 						)}
 					</div>

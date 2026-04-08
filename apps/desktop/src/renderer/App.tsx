@@ -10,8 +10,12 @@ import { SettingsPanel } from './components/SettingsPanel'
 import { TerminalDrawer } from './components/TerminalDrawer'
 import { HealthBanner } from './components/HealthBanner'
 import { OnboardingWizard } from './components/onboarding/OnboardingWizard'
+import { CommandPalette } from './components/CommandPalette'
+import { CreateIssueModal } from './components/CreateIssueModal'
+import { useGlobalKeyboard } from './hooks/useGlobalKeyboard'
 
 export function App() {
+	useGlobalKeyboard()
 	const queryClient = useQueryClient()
 	const { terminalVisible, settingsVisible, kanbanView, activeIssue, toggleSettings } = useAppStore()
 
@@ -34,9 +38,9 @@ export function App() {
 	if (!settings) return null
 
 	return (
-		<div className="app">
+		<div className="flex h-screen flex-col overflow-hidden">
 			<HealthBanner />
-			<div className="app__layout">
+			<div className="flex flex-1 overflow-hidden">
 				<ProjectSidebar />
 				<ThreadPanel />
 				{kanbanView && activeIssue && <IssueDetail />}
@@ -44,13 +48,15 @@ export function App() {
 			</div>
 			<button
 				type="button"
-				className="app__settings-toggle"
+				className="fixed top-[calc(var(--titlebar-height)+8px)] right-3 z-100 flex h-7 w-7 cursor-pointer items-center justify-center rounded-[var(--radius)] border border-border bg-bg-tertiary text-sm text-text-secondary app-region-no-drag hover:bg-bg-hover hover:text-text-primary"
 				onClick={toggleSettings}
 				title="Toggle Settings"
 			>
 				{settingsVisible ? '✕' : '⚙'}
 			</button>
 			{terminalVisible && <TerminalDrawer />}
+			<CommandPalette />
+			<CreateIssueModal />
 		</div>
 	)
 }

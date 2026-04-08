@@ -68,25 +68,43 @@ export async function checkCodexAuth(): Promise<boolean> {
   return fileExists(codexAuthPath)
 }
 
+async function getGhVersion(): Promise<string | null> {
+  try {
+    const { stdout } = await execAsync('gh --version', { timeout: 5_000 })
+    const match = stdout.match(/gh version (\S+)/)
+    return match?.[1] ?? null
+  } catch {
+    return null
+  }
+}
+
 export async function checkGhAuth(): Promise<GhAuthStatus> {
   try {
-    const result = await execAsync('gh auth status 2>&1', { timeout: 10_000 })
+    const [result, version] = await Promise.all([
+      execAsync('gh auth status 2>&1', { timeout: 10_000 }),
+      getGhVersion(),
+    ])
     const output = result.stdout + result.stderr
     const usernameMatch = output.match(/Logged in to github\.com.*account\s+(\S+)/)
     return {
       installed: true,
       authenticated: true,
       username: usernameMatch?.[1] ?? null,
+      version,
       error: null,
     }
   } catch (err) {
     // Check if gh is installed but not authenticated
     try {
-      await execAsync('which gh')
+      const [, version] = await Promise.all([
+        execAsync('which gh'),
+        getGhVersion(),
+      ])
       return {
         installed: true,
         authenticated: false,
         username: null,
+        version,
         error: err instanceof Error ? err.message : 'gh auth check failed',
       }
     } catch {
@@ -94,6 +112,7 @@ export async function checkGhAuth(): Promise<GhAuthStatus> {
         installed: false,
         authenticated: false,
         username: null,
+        version: null,
         error: 'gh not found in PATH',
       }
     }

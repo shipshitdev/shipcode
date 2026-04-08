@@ -1,61 +1,84 @@
 import type { PlanReview, ReviewFinding } from '@shipcode/shared'
+import { Badge } from './primitives/badge'
+import { cn } from './lib/utils'
 
 interface ReviewViewerProps {
 	review: PlanReview | null
 }
 
-const SEVERITY_COLORS: Record<ReviewFinding['severity'], string> = {
-	critical: '#ef4444',
-	major: '#f97316',
-	minor: '#eab308',
-	nit: '#9ca3af',
+const severityVariant = (severity: ReviewFinding['severity']) => {
+	switch (severity) {
+		case 'critical': return 'danger' as const
+		case 'major': return 'warning' as const
+		case 'minor': return 'warning' as const
+		case 'nit': return 'default' as const
+	}
+}
+
+const decisionVariant = (decision: string) => {
+	switch (decision) {
+		case 'approve': return 'success' as const
+		case 'request_changes': return 'warning' as const
+		case 'reject': return 'danger' as const
+		default: return 'default' as const
+	}
+}
+
+const severityBorderColor = (severity: ReviewFinding['severity']) => {
+	switch (severity) {
+		case 'critical': return 'border-danger'
+		case 'major': return 'border-warning'
+		case 'minor': return 'border-warning'
+		case 'nit': return 'border-text-muted'
+	}
 }
 
 export function ReviewViewer({ review }: ReviewViewerProps) {
 	if (!review) {
 		return (
-			<div className="review-viewer review-viewer--empty">
-				<p className="review-viewer__placeholder">Waiting for review...</p>
+			<div className="flex items-center justify-center h-full p-4 text-text-muted">
+				<p>Waiting for review...</p>
 			</div>
 		)
 	}
 
-	const decisionClass = `review-viewer__decision review-viewer__decision--${review.decision}`
-
 	return (
-		<div className="review-viewer">
-			<header className="review-viewer__header">
-				<span className={decisionClass}>{review.decision.replace('_', ' ')}</span>
-				<span className="review-viewer__confidence">Confidence: {review.confidence}</span>
+		<div className="p-4 overflow-y-auto">
+			<header className="flex items-center gap-3 mb-3">
+				<Badge variant={decisionVariant(review.decision)} className="uppercase text-[13px] font-bold px-3 py-1">
+					{review.decision.replace('_', ' ')}
+				</Badge>
+				<span className="text-xs text-text-secondary">Confidence: {review.confidence}</span>
 			</header>
 
-			<p className="review-viewer__summary">{review.summary}</p>
+			<p className="mb-4 text-text-secondary text-[13px]">{review.summary}</p>
 
 			{review.findings.length > 0 && (
-				<section className="review-viewer__findings">
-					<h3>Findings ({review.findings.length})</h3>
+				<section>
+					<h3 className="text-[13px] font-semibold text-text-secondary uppercase tracking-wide mb-2">
+						Findings ({review.findings.length})
+					</h3>
 					{review.findings.map((finding) => (
 						<div
 							key={finding.id}
-							className="review-viewer__finding"
-							style={{ borderLeftColor: SEVERITY_COLORS[finding.severity] }}
+							className={cn(
+								'py-2.5 px-3 mb-2 bg-bg-secondary rounded-md border-l-[3px]',
+								severityBorderColor(finding.severity)
+							)}
 						>
-							<div className="review-viewer__finding-header">
-								<span
-									className="review-viewer__severity"
-									style={{ color: SEVERITY_COLORS[finding.severity] }}
-								>
-									{finding.severity.toUpperCase()}
-								</span>
-								<span className="review-viewer__finding-id">{finding.id}</span>
-								<span className="review-viewer__category">{finding.category}</span>
+							<div className="flex items-center gap-2 mb-1.5">
+								<Badge variant={severityVariant(finding.severity)} className="uppercase">
+									{finding.severity}
+								</Badge>
+								<span className="text-[11px] text-text-muted font-mono">{finding.id}</span>
+								<Badge>{finding.category}</Badge>
 							</div>
-							<p className="review-viewer__finding-desc">{finding.description}</p>
+							<p className="text-[13px]">{finding.description}</p>
 							{finding.filePath && (
-								<code className="review-viewer__finding-file">{finding.filePath}</code>
+								<code className="block mt-1 text-[11px] text-text-muted">{finding.filePath}</code>
 							)}
 							{finding.suggestion && (
-								<div className="review-viewer__suggestion">
+								<div className="mt-1.5 p-1.5 px-2 bg-bg-tertiary rounded text-xs">
 									<strong>Suggestion:</strong> {finding.suggestion}
 								</div>
 							)}
@@ -65,11 +88,13 @@ export function ReviewViewer({ review }: ReviewViewerProps) {
 			)}
 
 			{review.suggestedChanges.length > 0 && (
-				<section className="review-viewer__changes">
-					<h3>Suggested Changes</h3>
-					<ul>
+				<section>
+					<h3 className="text-[13px] font-semibold text-text-secondary uppercase tracking-wide mb-2">
+						Suggested Changes
+					</h3>
+					<ul className="list-disc pl-5">
 						{review.suggestedChanges.map((change, i) => (
-							<li key={i}>{change}</li>
+							<li key={i} className="py-0.5 text-[13px]">{change}</li>
 						))}
 					</ul>
 				</section>

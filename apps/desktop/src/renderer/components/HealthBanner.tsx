@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAppStore } from '../stores/app-store'
+import { Alert, AlertDescription, Button } from '@shipcode/ui'
 import type { AppSettings, SystemHealth } from '@shipcode/shared'
 
 export function HealthBanner() {
@@ -43,19 +44,23 @@ export function HealthBanner() {
 	if (issues.length === 0) return null
 
 	return (
-		<div className="health-banner">
-			<span className="health-banner__icon">!</span>
-			<span className="health-banner__text">
-				{issues.join(' · ')}.
-			</span>
-			<button
-				type="button"
-				className="health-banner__action"
+		<Alert
+			variant="warning"
+			className="flex items-center gap-2 rounded-none border-x-0 border-t-0 border-b border-warning/30 bg-warning/10 px-4 py-2 text-xs"
+		>
+			<span className="text-base font-bold leading-none">!</span>
+			<AlertDescription className="text-xs text-warning">
+				{issues.join(' \u00b7 ')}.
+			</AlertDescription>
+			<Button
+				variant="ghost"
+				size="sm"
+				className="ml-auto border border-warning text-warning text-[11px] hover:bg-warning/15"
 				onClick={() => resetOnboarding.mutate()}
 				disabled={resetOnboarding.isPending}
 			>
 				Re-run Setup
-			</button>
-		</div>
+			</Button>
+		</Alert>
 	)
 }

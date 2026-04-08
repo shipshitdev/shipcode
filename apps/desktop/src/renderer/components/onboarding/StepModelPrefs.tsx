@@ -1,4 +1,5 @@
 import type { AgentType } from '@shipcode/shared'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shipcode/ui'
 
 interface Props {
 	plannerModel: AgentType
@@ -14,41 +15,51 @@ const MODELS: { value: AgentType; label: string }[] = [
 
 export function StepModelPrefs({ plannerModel, reviewerModel, onChange, singleAgentMode }: Props) {
 	return (
-		<div className="onboarding__step">
-			<h3>Model preferences</h3>
-			<p className="onboarding__description">
+		<div>
+			<h3 className="text-[15px] font-semibold mb-2">Model preferences</h3>
+			<p className="text-text-secondary text-[13px] mb-4 leading-relaxed">
 				ShipCode uses an adversarial review model: one AI plans, a different one critiques.
 				This catches blind spots that single-model self-review misses.
 			</p>
 
-			<div className="onboarding__model-fields">
-				<label className="onboarding__model-field">
-					<span>Planner</span>
-					<select
+			<div className="flex flex-col gap-3 mb-4">
+				<div className="flex items-center justify-between py-2">
+					<span className="font-medium">Planner</span>
+					<Select
 						value={plannerModel}
-						onChange={(e) => onChange(e.target.value as AgentType, reviewerModel)}
+						onValueChange={(val) => onChange(val as AgentType, reviewerModel)}
 					>
-						{MODELS.map((m) => (
-							<option key={m.value} value={m.value}>{m.label}</option>
-						))}
-					</select>
-				</label>
-				<label className="onboarding__model-field">
-					<span>Reviewer</span>
-					<select
+						<SelectTrigger className="w-[140px]">
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							{MODELS.map((m) => (
+								<SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
+				</div>
+				<div className="flex items-center justify-between py-2">
+					<span className="font-medium">Reviewer</span>
+					<Select
 						value={reviewerModel}
-						onChange={(e) => onChange(plannerModel, e.target.value as AgentType)}
+						onValueChange={(val) => onChange(plannerModel, val as AgentType)}
 						disabled={singleAgentMode}
 					>
-						{MODELS.map((m) => (
-							<option key={m.value} value={m.value}>{m.label}</option>
-						))}
-					</select>
-				</label>
+						<SelectTrigger className="w-[140px]">
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							{MODELS.map((m) => (
+								<SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
+				</div>
 			</div>
 
 			{singleAgentMode && (
-				<div className="onboarding__warning">
+				<div className="rounded-md border border-[#3d2e00] bg-[#1c1c00] px-3 py-2.5 text-xs text-warning">
 					Only one AI CLI is available. Review will be skipped during pipeline execution.
 				</div>
 			)}

@@ -1,4 +1,6 @@
 import type { DiffRecord } from '@shipcode/shared'
+import { Badge } from './primitives/badge'
+import { cn } from './lib/utils'
 
 interface DiffViewerProps {
 	diffs: DiffRecord[]
@@ -6,10 +8,28 @@ interface DiffViewerProps {
 	onFileSelect?: (filePath: string) => void
 }
 
+const actionColor = (action: string) => {
+	switch (action) {
+		case 'create': return 'text-success'
+		case 'delete': return 'text-danger'
+		case 'modify': return 'text-warning'
+		default: return 'text-text-secondary'
+	}
+}
+
+const actionVariant = (action: string) => {
+	switch (action) {
+		case 'create': return 'success' as const
+		case 'delete': return 'danger' as const
+		case 'modify': return 'warning' as const
+		default: return 'default' as const
+	}
+}
+
 export function DiffViewer({ diffs, activeFile, onFileSelect }: DiffViewerProps) {
 	if (diffs.length === 0) {
 		return (
-			<div className="diff-viewer diff-viewer--empty">
+			<div className="flex items-center justify-center h-full text-text-muted">
 				<p>No changes to display</p>
 			</div>
 		)
@@ -18,16 +38,19 @@ export function DiffViewer({ diffs, activeFile, onFileSelect }: DiffViewerProps)
 	const activeDiff = diffs.find((d) => d.filePath === activeFile) ?? diffs[0]
 
 	return (
-		<div className="diff-viewer">
-			<div className="diff-viewer__tabs">
+		<div>
+			<div className="flex gap-0.5 p-2 border-b border-border overflow-x-auto">
 				{diffs.map((diff) => (
 					<button
 						type="button"
 						key={diff.id}
-						className={`diff-viewer__tab ${diff.filePath === activeDiff?.filePath ? 'diff-viewer__tab--active' : ''}`}
+						className={cn(
+							'flex items-center gap-1 px-2.5 py-1 bg-transparent border-none rounded-md text-text-secondary cursor-pointer text-xs whitespace-nowrap hover:bg-bg-tertiary',
+							diff.filePath === activeDiff?.filePath && 'bg-bg-tertiary text-text-primary'
+						)}
 						onClick={() => onFileSelect?.(diff.filePath)}
 					>
-						<span className={`diff-viewer__action diff-viewer__action--${diff.action}`}>
+						<span className={actionColor(diff.action)}>
 							{diff.action === 'create' ? '+' : diff.action === 'delete' ? '-' : '~'}
 						</span>
 						{diff.filePath.split('/').pop()}
@@ -36,23 +59,30 @@ export function DiffViewer({ diffs, activeFile, onFileSelect }: DiffViewerProps)
 			</div>
 
 			{activeDiff && (
-				<div className="diff-viewer__content">
-					<div className="diff-viewer__file-header">
+				<div className="p-2">
+					<div className="flex justify-between px-3 py-1.5 bg-bg-secondary rounded-t-md text-xs">
 						<code>{activeDiff.filePath}</code>
-						<span className={`diff-viewer__file-action diff-viewer__file-action--${activeDiff.action}`}>
+						<Badge variant={actionVariant(activeDiff.action)}>
 							{activeDiff.action}
-						</span>
+						</Badge>
 					</div>
-					<pre className="diff-viewer__diff">
+					<pre className="font-mono text-xs leading-relaxed overflow-x-auto py-2 bg-bg-secondary rounded-b-md">
 						{activeDiff.diffContent
 							? activeDiff.diffContent.split('\n').map((line, i) => {
-									let lineClass = 'diff-line'
-									if (line.startsWith('+') && !line.startsWith('+++')) lineClass += ' diff-line--added'
-									else if (line.startsWith('-') && !line.startsWith('---')) lineClass += ' diff-line--removed'
-									else if (line.startsWith('@@')) lineClass += ' diff-line--hunk'
+									const isAdded = line.startsWith('+') && !line.startsWith('+++')
+									const isRemoved = line.startsWith('-') && !line.startsWith('---')
+									const isHunk = line.startsWith('@@')
 
 									return (
-										<div key={i} className={lineClass}>
+										<div
+											key={i}
+											className={cn(
+												'px-3',
+												isAdded && 'bg-success/15 text-success',
+												isRemoved && 'bg-danger/15 text-danger',
+												isHunk && 'text-accent font-semibold'
+											)}
+										>
 											{line}
 										</div>
 									)

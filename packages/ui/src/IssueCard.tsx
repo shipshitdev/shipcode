@@ -1,23 +1,46 @@
 import type { GitHubIssueCacheRecord } from '@shipcode/shared'
+import { cn } from './lib/utils'
+import { Badge } from './primitives/badge'
 
 interface IssueCardProps {
 	issue: GitHubIssueCacheRecord
 	onClick: () => void
 }
 
+function getStatusVariant(status: string) {
+	switch (status) {
+		case 'completed':
+			return 'success' as const
+		case 'failed':
+			return 'danger' as const
+		case 'planning':
+		case 'reviewing':
+		case 'revising':
+		case 'executing':
+		case 'verifying':
+		case 'shipping':
+			return 'accent' as const
+		default:
+			return 'default' as const
+	}
+}
+
 export function IssueCard({ issue, onClick }: IssueCardProps) {
 	return (
-		<div className="issue-card" onClick={onClick}>
-			<div className="issue-card__header">
-				<span className="issue-card__number">#{issue.issueNumber}</span>
-				<span className={`issue-card__status issue-card__status--${issue.pipelineStatus}`}>
+		<div
+			className="rounded-md border border-border bg-bg-primary p-3 cursor-pointer hover:border-text-muted transition-colors"
+			onClick={onClick}
+		>
+			<div className="flex items-center justify-between">
+				<span className="text-[11px] text-text-muted font-mono">#{issue.issueNumber}</span>
+				<Badge variant={getStatusVariant(issue.pipelineStatus)}>
 					{issue.pipelineStatus}
-				</span>
+				</Badge>
 			</div>
-			<div className="issue-card__title">{issue.title}</div>
-			<div className="issue-card__labels">
+			<div className="text-[13px] font-medium text-text-primary mt-1">{issue.title}</div>
+			<div className="flex flex-wrap gap-1 mt-2">
 				{issue.labels.filter(l => l.startsWith('agent:')).map(l => (
-					<span key={l} className="issue-card__label">{l}</span>
+					<Badge key={l} variant="accent">{l}</Badge>
 				))}
 			</div>
 		</div>

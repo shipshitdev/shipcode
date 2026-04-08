@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { StatusMappingEditor } from '@shipcode/ui'
+import { StatusMappingEditor, Button, Input, Label, Switch } from '@shipcode/ui'
 import type { AppSettings } from '@shipcode/shared'
 
 export function SettingsPanel() {
@@ -21,57 +21,58 @@ export function SettingsPanel() {
 	if (!settings) return null
 
 	return (
-		<div className="settings-panel">
-			<h3>Settings</h3>
+		<div className="flex-1 overflow-y-auto p-6 max-w-[600px]">
+			<h3 className="mb-5">Settings</h3>
 
-			<section className="settings-panel__section">
-				<h4>GitHub Integration</h4>
-				<label className="settings-panel__field">
-					<span>Polling Enabled</span>
-					<input
-						type="checkbox"
+			<section className="mb-8">
+				<h4 className="mb-3 text-text-secondary">GitHub Integration</h4>
+				<div className="flex items-center justify-between border-b border-bg-tertiary py-2">
+					<Label htmlFor="polling-enabled">Polling Enabled</Label>
+					<Switch
+						id="polling-enabled"
 						checked={settings.githubPollingEnabled}
-						onChange={(e) => updateSettings.mutate({ githubPollingEnabled: e.target.checked })}
+						onCheckedChange={(checked) => updateSettings.mutate({ githubPollingEnabled: !!checked })}
 					/>
-				</label>
-				<label className="settings-panel__field">
-					<span>Poll Interval (ms)</span>
-					<input
+				</div>
+				<div className="flex items-center justify-between border-b border-bg-tertiary py-2">
+					<Label htmlFor="poll-interval">Poll Interval (ms)</Label>
+					<Input
+						id="poll-interval"
 						type="number"
+						className="w-[120px]"
 						value={settings.githubPollingIntervalMs}
 						onChange={(e) => updateSettings.mutate({ githubPollingIntervalMs: parseInt(e.target.value, 10) })}
 						min={5000}
 						step={5000}
 					/>
-				</label>
-				<label className="settings-panel__field">
-					<span>Auto-pickup Issues</span>
-					<input
-						type="checkbox"
+				</div>
+				<div className="flex items-center justify-between border-b border-bg-tertiary py-2">
+					<Label htmlFor="auto-pickup">Auto-pickup Issues</Label>
+					<Switch
+						id="auto-pickup"
 						checked={settings.autoPickupEnabled}
-						onChange={(e) => updateSettings.mutate({ autoPickupEnabled: e.target.checked })}
+						onCheckedChange={(checked) => updateSettings.mutate({ autoPickupEnabled: !!checked })}
 					/>
-				</label>
+				</div>
 			</section>
 
-			<section className="settings-panel__section">
+			<section className="mb-8">
 				<StatusMappingEditor
 					mappings={settings.statusLabelMappings}
 					onSave={(mappings) => updateSettings.mutate({ statusLabelMappings: mappings })}
 				/>
 			</section>
 
-			<section className="settings-panel__section">
-				<h4>Setup</h4>
-				<div className="settings-panel__field">
-					<span>Re-run the onboarding wizard</span>
-					<button
-						type="button"
-						className="btn btn--secondary"
+			<section className="mb-8">
+				<h4 className="mb-3 text-text-secondary">Setup</h4>
+				<div className="flex items-center justify-between border-b border-bg-tertiary py-2">
+					<span className="text-text-primary">Re-run the onboarding wizard</span>
+					<Button
+						variant="secondary"
 						onClick={() => updateSettings.mutate({ onboardingVersion: 0 })}
 					>
 						Re-run Setup
-					</button>
+					</Button>
 				</div>
 			</section>
 		</div>
