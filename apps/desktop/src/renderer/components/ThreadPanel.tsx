@@ -5,7 +5,7 @@ import { ThreadList, KanbanBoard } from '@shipcode/ui'
 import type { Thread, GitHubIssueCacheRecord } from '@shipcode/shared'
 
 export function ThreadPanel() {
-	const { activeProjectId, activeThreadId, selectThread, kanbanView, toggleKanbanView } = useAppStore()
+	const { activeProjectId, activeThreadId, selectThread, selectIssue, kanbanView, toggleKanbanView } = useAppStore()
 	const queryClient = useQueryClient()
 	const [newPrompt, setNewPrompt] = useState('')
 	const [showInput, setShowInput] = useState(false)
@@ -68,7 +68,7 @@ export function ThreadPanel() {
 			{kanbanView ? (
 				<KanbanBoard
 					issues={issues}
-					onIssueClick={() => {/* TODO: select thread linked to issue */}}
+					onIssueClick={(issue) => selectIssue(issue)}
 					onRefresh={() => refetchIssues()}
 					onStartPipeline={(issue) => {
 						window.shipcode.invoke('github:start-issue', {

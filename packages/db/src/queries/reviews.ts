@@ -12,6 +12,16 @@ export class ReviewQueries {
     return row ? mapReview(row) : null
   }
 
+  listByPlanIds(planIds: string[]): Record<string, ReviewRecord> {
+    if (planIds.length === 0) return {}
+    const result: Record<string, ReviewRecord> = {}
+    for (const planId of planIds) {
+      const review = this.getByPlanId(planId)
+      if (review) result[planId] = review
+    }
+    return result
+  }
+
   create(planId: string, rawOutput: string, structured: PlanReview | null): ReviewRecord {
     const id = nanoid()
     const now = new Date().toISOString()

@@ -1,3 +1,5 @@
+import type { AppSettings } from './types'
+
 export const DEFAULT_STATUS_LABEL_MAPPINGS: Record<string, string> = {
   todo: '',
   queued: 'status:queued',
@@ -11,18 +13,21 @@ export const DEFAULT_STATUS_LABEL_MAPPINGS: Record<string, string> = {
   failed: 'status:failed',
 }
 
-export const DEFAULT_SETTINGS = {
-  theme: 'system' as const,
+export const DEFAULT_SETTINGS: AppSettings = {
+  theme: 'system',
   defaultWorktreeEnabled: true,
   terminalScrollback: 10_000,
-  plannerModel: 'claude' as const,
-  reviewerModel: 'codex' as const,
+  plannerModel: 'claude',
+  reviewerModel: 'codex',
   githubPollingEnabled: false,
   githubPollingIntervalMs: 30_000,
   githubBotUsername: '',
   autoPickupEnabled: false,
   statusLabelMappings: DEFAULT_STATUS_LABEL_MAPPINGS as Record<string, string>,
+  onboardingVersion: 0,
 }
+
+export const CURRENT_ONBOARDING_VERSION = 1
 
 export const PIPELINE_MAX_RETRIES = 3
 

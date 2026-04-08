@@ -71,6 +71,12 @@ export class ThreadQueries {
     ).run(status, id)
   }
 
+  setGithubIssue(id: string, issueNumber: number, repo: string | null): void {
+    this.db.prepare(
+      'UPDATE threads SET github_issue_number = ?, github_repo = ?, updated_at = datetime(\'now\') WHERE id = ?'
+    ).run(issueNumber, repo, id)
+  }
+
   setGithubPr(id: string, prNumber: number): void {
     this.db.prepare(
       'UPDATE threads SET github_pr_number = ?, updated_at = datetime(\'now\') WHERE id = ?'

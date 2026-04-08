@@ -7,24 +7,30 @@ export function useIpc() {
 	useEffect(() => {
 		const unsubscribers: (() => void)[] = []
 
-		// Listen for pipeline phase changes
+		// Listen for pipeline phase changes (scoped by threadId)
 		unsubscribers.push(
 			window.shipcode.on('pipeline:phase', (data: any) => {
-				setPipelinePhase(data.phase)
+				if (data.threadId === useAppStore.getState().activeThreadId) {
+					setPipelinePhase(data.phase)
+				}
 			})
 		)
 
-		// Listen for parsed plans
+		// Listen for parsed plans (scoped by threadId)
 		unsubscribers.push(
 			window.shipcode.on('plan:parsed', (data: any) => {
-				setPlan(data.plan)
+				if (data.threadId === useAppStore.getState().activeThreadId) {
+					setPlan(data.plan)
+				}
 			})
 		)
 
-		// Listen for parsed reviews
+		// Listen for parsed reviews (scoped by threadId)
 		unsubscribers.push(
 			window.shipcode.on('review:parsed', (data: any) => {
-				setReview(data.review)
+				if (data.threadId === useAppStore.getState().activeThreadId) {
+					setReview(data.review)
+				}
 			})
 		)
 

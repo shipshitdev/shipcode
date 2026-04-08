@@ -187,6 +187,7 @@ export interface AppSettings {
   githubBotUsername: string
   autoPickupEnabled: boolean
   statusLabelMappings: StatusLabelMapping
+  onboardingVersion: number
 }
 
 export interface StatusLabelMapping {
@@ -200,6 +201,7 @@ export interface CliHealth {
   version: string | null
   path: string | null
   error: string | null
+  authenticated: boolean
 }
 
 export interface SystemHealth {
@@ -301,3 +303,14 @@ export type GitHubStatusLabel =
   | 'status:failed'
   | 'status:needs-human-review'
   | 'status:invalid-config'
+
+// === Onboarding Types ===
+
+export type OnboardingStep = 'ai-auth' | 'github-project' | 'model-preferences' | 'label-mapping' | 'complete'
+
+export interface GhAuthStatus {
+  installed: boolean
+  authenticated: boolean
+  username: string | null
+  error: string | null
+}

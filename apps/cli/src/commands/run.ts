@@ -4,8 +4,11 @@ import { getDatabase, ProjectQueries, ThreadQueries, PlanQueries, ReviewQueries,
 import { ProcessManager, GhCli, routeFromLabels } from '@shipcode/agents'
 import { createPipeline } from '@shipcode/pipeline'
 import { createCliEmitter } from '../adapters/cli-emitter'
+import { requireOnboarding } from './guard'
 
 export async function runCommand(issueNumber: string) {
+  if (!requireOnboarding()) return
+
   const num = parseInt(issueNumber, 10)
   if (isNaN(num)) {
     console.error('Invalid issue number:', issueNumber)

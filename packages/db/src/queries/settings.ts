@@ -24,6 +24,7 @@ export class SettingsQueries {
       githubBotUsername: stored.githubBotUsername ?? DEFAULT_SETTINGS.githubBotUsername,
       autoPickupEnabled: stored.autoPickupEnabled === 'true' ? true : (stored.autoPickupEnabled === 'false' ? false : DEFAULT_SETTINGS.autoPickupEnabled),
       statusLabelMappings: stored.statusLabelMappings ? JSON.parse(stored.statusLabelMappings) : DEFAULT_STATUS_LABEL_MAPPINGS,
+      onboardingVersion: stored.onboardingVersion ? parseInt(stored.onboardingVersion, 10) : DEFAULT_SETTINGS.onboardingVersion,
     }
   }
 

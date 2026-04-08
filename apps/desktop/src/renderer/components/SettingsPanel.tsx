@@ -60,6 +60,20 @@ export function SettingsPanel() {
 					onSave={(mappings) => updateSettings.mutate({ statusLabelMappings: mappings })}
 				/>
 			</section>
+
+			<section className="settings-panel__section">
+				<h4>Setup</h4>
+				<div className="settings-panel__field">
+					<span>Re-run the onboarding wizard</span>
+					<button
+						type="button"
+						className="btn btn--secondary"
+						onClick={() => updateSettings.mutate({ onboardingVersion: 0 })}
+					>
+						Re-run Setup
+					</button>
+				</div>
+			</section>
 		</div>
 	)
 }

@@ -3,6 +3,7 @@ import type {
   ShipCodePlan,
   DiffRecord,
   FileChange,
+  GhAuthStatus,
   GitHubIssueCacheRecord,
   GitState,
   PlanRecord,
@@ -63,6 +64,10 @@ export interface IpcInvokeChannels {
 
   // Pipeline extensions
   'pipeline:start-autonomous': { args: { threadId: string }; result: void }
+
+  // Onboarding
+  'onboarding:check-auth': { args: void; result: SystemHealth & { ghAuth: GhAuthStatus } }
+  'onboarding:list-repos': { args: void; result: string[] }
 }
 
 // === Streaming Channels (send/on) ===
