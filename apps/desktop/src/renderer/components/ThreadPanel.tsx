@@ -5,7 +5,7 @@ import type { GitHubIssueCacheRecord, IssuePipelineStatus, Project } from '@ship
 
 export function ThreadPanel() {
 	const queryClient = useQueryClient()
-	const { activeProjectId, selectIssue, openCreateIssueModal } = useAppStore()
+	const { activeProjectId, selectIssue, openCreateIssueModal, activeIssue } = useAppStore()
 
 	const { data: issues = [], refetch: refetchIssues } = useQuery<GitHubIssueCacheRecord[]>({
 		queryKey: ['github-issues', activeProjectId],
@@ -47,6 +47,7 @@ export function ThreadPanel() {
 			<KanbanBoard
 				issues={issues}
 				onIssueClick={(issue) => selectIssue(issue)}
+				selectedIssueNumber={activeIssue?.issueNumber}
 				onRefresh={() => refetchIssues()}
 				onNewIssue={() => openCreateIssueModal()}
 				baseBranch={project?.defaultBranch}

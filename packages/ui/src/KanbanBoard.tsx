@@ -31,6 +31,8 @@ interface KanbanBoardProps {
 	branches?: string[]
 	/** Invoked when the user picks a new base branch from the toolbar Select. */
 	onBaseBranchChange?: (branch: string) => void
+	/** Issue number currently open in the side panel — highlights the card. */
+	selectedIssueNumber?: number
 }
 
 type ColumnKey = 'todo' | 'agent' | 'human' | 'done'
@@ -94,7 +96,7 @@ const COLUMNS: BoardColumn[] = [
 // Only these statuses can be picked up and dragged.
 const DRAGGABLE_STATUSES: IssuePipelineStatus[] = ['todo', 'queued', 'failed']
 
-function DraggableCard({ issue, onClick, onRerun }: { issue: GitHubIssueCacheRecord; onClick: () => void; onRerun?: (issue: GitHubIssueCacheRecord) => void }) {
+function DraggableCard({ issue, onClick, onRerun, isSelected }: { issue: GitHubIssueCacheRecord; onClick: () => void; onRerun?: (issue: GitHubIssueCacheRecord) => void; isSelected?: boolean }) {
 	const draggable = DRAGGABLE_STATUSES.includes(issue.pipelineStatus)
 	const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
 		id: issue.id,
@@ -115,6 +117,7 @@ function DraggableCard({ issue, onClick, onRerun }: { issue: GitHubIssueCacheRec
 				isFailed && 'border-danger/40 bg-danger/[0.04] hover:border-danger/60',
 				isAwaiting && 'border-warning/30 bg-warning/[0.03] hover:border-warning/50',
 				isDragging && 'opacity-50',
+				isSelected && 'ring-1 ring-white/20',
 			)}
 			{...listeners}
 			{...attributes}
@@ -147,9 +150,10 @@ function DraggableCard({ issue, onClick, onRerun }: { issue: GitHubIssueCacheRec
 	)
 }
 
-function DroppableColumn({ id, label, issues, droppable, onIssueClick }: {
+function DroppableColumn({ id, label, issues, droppable, onIssueClick, selectedIssueNumber }: {
 	id: string; label: string; issues: GitHubIssueCacheRecord[]; droppable: boolean
 	onIssueClick: (issue: GitHubIssueCacheRecord) => void
+	selectedIssueNumber?: number
 }) {
 	const { setNodeRef, isOver } = useDroppable({ id, disabled: !droppable })
 
@@ -167,7 +171,7 @@ function DroppableColumn({ id, label, issues, droppable, onIssueClick }: {
 			</div>
 			<div className="flex-1 overflow-y-auto p-1.5 flex flex-col gap-1 min-h-[60px]">
 				{issues.map(issue => (
-					<DraggableCard key={issue.id} issue={issue} onClick={() => onIssueClick(issue)} />
+					<DraggableCard key={issue.id} issue={issue} onClick={() => onIssueClick(issue)} isSelected={issue.issueNumber === selectedIssueNumber} />
 				))}
 			</div>
 		</div>
@@ -180,12 +184,14 @@ function SectionBlock({
 	issues,
 	onIssueClick,
 	onRerun,
+	selectedIssueNumber,
 }: {
 	columnKey: ColumnKey
 	section: PhaseSection
 	issues: GitHubIssueCacheRecord[]
 	onIssueClick: (issue: GitHubIssueCacheRecord) => void
 	onRerun?: (issue: GitHubIssueCacheRecord) => void
+	selectedIssueNumber?: number
 }) {
 	const { setNodeRef, isOver } = useDroppable({
 		id: `${columnKey}:${section.key}`,
@@ -245,7 +251,7 @@ function SectionBlock({
 					)}
 				>
 					{issues.map(issue => (
-						<DraggableCard key={issue.id} issue={issue} onClick={() => onIssueClick(issue)} onRerun={onRerun} />
+						<DraggableCard key={issue.id} issue={issue} onClick={() => onIssueClick(issue)} onRerun={onRerun} isSelected={issue.issueNumber === selectedIssueNumber} />
 					))}
 				</div>
 			)}
@@ -267,11 +273,13 @@ function StackedColumn({
 	issues,
 	onIssueClick,
 	onRerun,
+	selectedIssueNumber,
 }: {
 	column: BoardColumn
 	issues: GitHubIssueCacheRecord[]
 	onIssueClick: (issue: GitHubIssueCacheRecord) => void
 	onRerun?: (issue: GitHubIssueCacheRecord) => void
+	selectedIssueNumber?: number
 }) {
 	const columnIssues = issues.filter(i => column.statuses.includes(i.pipelineStatus))
 
@@ -292,6 +300,7 @@ function StackedColumn({
 							issues={sectionIssues}
 							onIssueClick={onIssueClick}
 							onRerun={onRerun}
+							selectedIssueNumber={selectedIssueNumber}
 						/>
 					)
 				})}
@@ -312,7 +321,7 @@ const customCollisionDetection: CollisionDetection = (args) => {
 	return rectIntersection(args)
 }
 
-export function KanbanBoard({ issues, onIssueClick, onRefresh, onNewIssue, onStartPipeline, onRetry, onRerun, baseBranch, branches, onBaseBranchChange }: KanbanBoardProps) {
+export function KanbanBoard({ issues, onIssueClick, onRefresh, onNewIssue, onStartPipeline, onRetry, onRerun, baseBranch, branches, onBaseBranchChange, selectedIssueNumber }: KanbanBoardProps) {
 	const [activeId, setActiveId] = useState<string | null>(null)
 	const activeIssue = issues.find(i => i.id === activeId)
 
@@ -402,6 +411,7 @@ export function KanbanBoard({ issues, onIssueClick, onRefresh, onNewIssue, onSta
 									issues={issues}
 									onIssueClick={onIssueClick}
 									onRerun={onRerun}
+									selectedIssueNumber={selectedIssueNumber}
 								/>
 							)
 						}
@@ -414,6 +424,7 @@ export function KanbanBoard({ issues, onIssueClick, onRefresh, onNewIssue, onSta
 								issues={columnIssues}
 								droppable={!!col.droppable}
 								onIssueClick={onIssueClick}
+								selectedIssueNumber={selectedIssueNumber}
 							/>
 						)
 					})}

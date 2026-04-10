@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useAppStore } from '../stores/app-store'
-import { PlanViewer, ReviewViewer, Badge, Button, Textarea, X, ExternalLink, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Dialog, DialogContent, DialogTitle } from '@shipcode/ui'
+import { PlanViewer, ReviewViewer, Badge, Button, Textarea, X, ExternalLink, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shipcode/ui'
 import type { Thread, PlanRecord, ReviewRecord, Project, NotificationRecord, PipelinePhase } from '@shipcode/shared'
 
 const ACTIVE_PHASES: PipelinePhase[] = [
@@ -192,6 +192,12 @@ export function IssueDetail() {
 		}
 	}, [activeThreadId])
 
+	useEffect(() => {
+		const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') selectIssue(null) }
+		document.addEventListener('keydown', handler)
+		return () => document.removeEventListener('keydown', handler)
+	}, [selectIssue])
+
 	const phaseIsActive = ACTIVE_PHASES.includes(threadPhase as PipelinePhase)
 
 	const handleExecutorChange = async (model: 'claude' | 'codex' | 'openrouter') => {
@@ -246,13 +252,7 @@ export function IssueDetail() {
 	}
 
 	return (
-		<Dialog open={!!activeIssue} onOpenChange={(open) => { if (!open) selectIssue(null) }}>
-			<DialogContent
-				className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden p-0"
-				aria-describedby={undefined}
-			>
-				{/* Visually hidden title — Radix a11y requirement */}
-				<DialogTitle className="sr-only">{`#${activeIssue.issueNumber} ${activeIssue.title}`}</DialogTitle>
+		<div className="h-full flex flex-col overflow-y-auto bg-bg-base">
 				{/* Header */}
 				<div className="relative shrink-0 border-b border-border p-4">
 					<button
@@ -532,7 +532,6 @@ export function IssueDetail() {
 					</div>
 				)}
 			</div>
-			</DialogContent>
-		</Dialog>
+		</div>
 	)
 }
