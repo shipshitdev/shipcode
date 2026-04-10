@@ -112,7 +112,7 @@ export type PipelinePhase =
   | 'completed'
   | 'failed'
 
-export type AgentType = 'claude' | 'codex' | 'gh'
+export type AgentType = 'claude' | 'codex' | 'gh' | 'openrouter'
 
 export type AgentState = 'starting' | 'running' | 'idle' | 'errored' | 'exited'
 
@@ -182,6 +182,7 @@ export interface AppSettings {
   terminalScrollback: number
   plannerModel: AgentType
   reviewerModel: AgentType
+  verifierModel: AgentType
   githubPollingEnabled: boolean
   githubPollingIntervalMs: number
   githubBotUsername: string
@@ -196,6 +197,18 @@ export interface AppSettings {
   notificationBadgeEnabled: boolean
   notificationSoundEnabled: boolean
   notificationEvents: NotificationEventToggles
+  // OpenRouter integration (Tier 1+). All off by default; set openrouterEnabled=true
+  // plus provide OPENROUTER_API_KEY in env to activate. Individual phase models are
+  // optional overrides; when null, the resolver falls back to the tier defaults
+  // (openrouterDefaultPaidModel / openrouterDefaultFreeModel).
+  openrouterEnabled: boolean
+  openrouterPlannerModel: string | null
+  openrouterReviewerModel: string | null
+  openrouterVerifierModel: string | null
+  openrouterExecutorModel: string | null
+  openrouterDefaultPaidModel: string
+  openrouterDefaultFreeModel: string
+  openrouterExplicitFallback: string
 }
 
 export interface NotificationEventToggles {

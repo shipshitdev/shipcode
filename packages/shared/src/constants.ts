@@ -26,6 +26,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   terminalScrollback: 10_000,
   plannerModel: 'claude',
   reviewerModel: 'codex',
+  verifierModel: 'claude',
   githubPollingEnabled: false,
   githubPollingIntervalMs: 30_000,
   githubBotUsername: '',
@@ -38,6 +39,15 @@ export const DEFAULT_SETTINGS: AppSettings = {
   notificationBadgeEnabled: true,
   notificationSoundEnabled: true,
   notificationEvents: { ...DEFAULT_NOTIFICATION_EVENTS },
+  // OpenRouter — all disabled/null by default so existing deployments are unaffected.
+  openrouterEnabled: false,
+  openrouterPlannerModel: null,
+  openrouterReviewerModel: null,
+  openrouterVerifierModel: null,
+  openrouterExecutorModel: null,
+  openrouterDefaultPaidModel: 'openrouter/auto',
+  openrouterDefaultFreeModel: 'openrouter/free',
+  openrouterExplicitFallback: 'qwen/qwen3.6-plus',
 }
 
 export const CURRENT_ONBOARDING_VERSION = 1
@@ -83,3 +93,10 @@ export const GITHUB_POLL_INTERVAL_MS = 30_000
 export const STALE_LEASE_THRESHOLD_MS = 30 * 60 * 1000
 export const ORPHAN_CLAIM_THRESHOLD_MS = 5 * 60 * 1000
 export const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000
+
+// === OpenRouter ===
+export const OPENROUTER_API_BASE = 'https://openrouter.ai/api/v1'
+export const OPENROUTER_BACKOFF_BASE_MS = 500
+export const OPENROUTER_BACKOFF_MAX_MS = 30_000
+export const OPENROUTER_MAX_HTTP_RETRIES = 5
+export const OPENROUTER_REQUEST_TIMEOUT_MS = 120_000
