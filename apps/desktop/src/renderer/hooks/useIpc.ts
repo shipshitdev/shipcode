@@ -26,6 +26,16 @@ export function useIpc() {
 					store.logTerminalEvent(`[${ts}] phase: ${data.phase}`)
 				}
 
+				// Directly patch the issue's pipelineStatus in the React Query cache —
+				// avoids the github:refresh-issues API round-trip for instant Kanban update.
+				if (store.activeProjectId) {
+					const mappedStatus = data.phase === 'idle' ? 'todo' : data.phase
+					queryClient.setQueryData<GitHubIssueCacheRecord[]>(
+						['github-issues', store.activeProjectId],
+						(prev) => prev?.map(i => i.threadId === data.threadId ? { ...i, pipelineStatus: mappedStatus } : i),
+					)
+				}
+
 				if (store.activeProjectId) {
 					window.shipcode.invoke<GitHubIssueCacheRecord[]>('github:list-issues', { projectId: store.activeProjectId }).then((issues) => {
 						useAppStore.getState().setGithubIssues(issues)
@@ -78,6 +88,10 @@ export function useIpc() {
 			window.shipcode.on('github:issues-updated', (data: any) => {
 				const store = useAppStore.getState()
 				store.setGithubIssues(data.issues)
+				// Directly set React Query cache — data comes from DB so no refetch needed.
+				if (data.projectId) {
+					queryClient.setQueryData(['github-issues', data.projectId], data.issues)
+				}
 
 				if (store.activeIssue) {
 					const refreshed = data.issues.find((issue: any) => issue.id === store.activeIssue?.id) ?? null

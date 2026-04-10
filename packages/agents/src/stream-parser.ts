@@ -65,8 +65,12 @@ export class StreamParser {
    */
   private resolveBuffer(): string {
     const lines = this.buffer.split('\n')
+
+    // ── claude --output-format stream-json ──────────────────────────────────
+    // The complete LLM text is in the final `{"type":"result","result":"..."}` line.
+    // Strip ANSI before parsing — PTY output wraps JSON lines with color codes.
     for (let i = lines.length - 1; i >= 0; i--) {
-      const line = lines[i].trim()
+      const line = this.stripAnsi(lines[i]).trim()
       if (!line) continue
       try {
         const parsed = JSON.parse(line)
@@ -74,9 +78,32 @@ export class StreamParser {
           return parsed.result
         }
       } catch {
-        break // not JSON — treat buffer as plain text
+        continue // skip non-parseable lines (PTY control sequences, etc.)
       }
     }
+
+    // ── codex exec --json ───────────────────────────────────────────────────
+    // The LLM response is split across `item.completed` agent_message events.
+    // JSON.parse unescapes the text so fenced-block regexes match real newlines.
+    const agentTexts: string[] = []
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed) continue
+      try {
+        const parsed = JSON.parse(trimmed)
+        if (
+          parsed.type === 'item.completed' &&
+          parsed.item?.type === 'agent_message' &&
+          typeof parsed.item.text === 'string'
+        ) {
+          agentTexts.push(parsed.item.text)
+        }
+      } catch {
+        // not JSON — skip
+      }
+    }
+    if (agentTexts.length > 0) return agentTexts.join('\n\n')
+
     return this.buffer
   }
 

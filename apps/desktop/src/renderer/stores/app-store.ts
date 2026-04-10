@@ -3,7 +3,7 @@ import type { ShipCodePlan, PlanReview, PipelinePhase, SystemHealth, Verificatio
 
 const AGENT_ACTIVE_STATUSES = new Set<IssuePipelineStatus>(['planning', 'reviewing', 'revising', 'executing', 'verifying', 'shipping'])
 
-export type ViewMode = 'dashboard' | 'project' | 'activity' | 'inbox'
+export type ViewMode = 'dashboard' | 'project' | 'activity' | 'inbox' | 'costs'
 export type SettingsSection = 'general' | 'github' | 'notifications' | 'pipeline' | 'archived'
 
 interface AppState {
@@ -49,6 +49,7 @@ interface AppState {
 	openDashboard: () => void
 	openActivity: () => void
 	openInbox: () => void
+	openCosts: () => void
 	selectProject: (id: string | null) => void
 	selectThread: (id: string | null) => void
 	selectIssue: (issue: GitHubIssueCacheRecord | null) => void
@@ -103,6 +104,7 @@ export const useAppStore = create<AppState>((set) => ({
 	openDashboard: () => set({ viewMode: 'dashboard', activeIssue: null, issueDetailExpanded: false, currentPlan: null, currentReview: null, currentVerification: null }),
 	openActivity: () => set({ viewMode: 'activity', activeIssue: null, issueDetailExpanded: false, currentPlan: null, currentReview: null, currentVerification: null }),
 	openInbox: () => set({ viewMode: 'inbox', activeIssue: null, issueDetailExpanded: false, currentPlan: null, currentReview: null, currentVerification: null }),
+	openCosts: () => set({ viewMode: 'costs', activeIssue: null, issueDetailExpanded: false, currentPlan: null, currentReview: null, currentVerification: null }),
 	selectProject: (id) => set({ activeProjectId: id, activeThreadId: null, activeIssue: null, issueDetailExpanded: false, currentPlan: null, currentReview: null, currentVerification: null, pipelinePhase: 'idle', viewMode: 'project' }),
 	selectThread: (id) => set({ activeThreadId: id, currentPlan: null, currentReview: null, currentVerification: null, pipelinePhase: 'idle', viewMode: 'project' }),
 	selectIssue: (issue) => set((s) => ({

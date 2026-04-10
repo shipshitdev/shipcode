@@ -102,6 +102,9 @@ const COLUMNS: BoardColumn[] = [
 // Only these statuses can be picked up and dragged.
 const DRAGGABLE_STATUSES: IssuePipelineStatus[] = ['todo', 'queued', 'failed']
 
+// Statuses that are actively running in the pipeline — show a live indicator.
+const ACTIVE_STATUSES: IssuePipelineStatus[] = ['planning', 'reviewing', 'revising', 'executing', 'verifying', 'shipping']
+
 function DraggableCard({ issue, onClick, onRerun, isSelected }: { issue: GitHubIssueCacheRecord; onClick: () => void; onRerun?: (issue: GitHubIssueCacheRecord) => void; isSelected?: boolean }) {
 	const draggable = DRAGGABLE_STATUSES.includes(issue.pipelineStatus)
 	const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
@@ -112,6 +115,7 @@ function DraggableCard({ issue, onClick, onRerun, isSelected }: { issue: GitHubI
 
 	const isFailed = issue.pipelineStatus === 'failed'
 	const isAwaiting = issue.pipelineStatus === 'awaiting_approval'
+	const isActive = ACTIVE_STATUSES.includes(issue.pipelineStatus)
 
 	return (
 		<div
@@ -122,12 +126,16 @@ function DraggableCard({ issue, onClick, onRerun, isSelected }: { issue: GitHubI
 				isSelected ? 'border-text-primary/60 bg-elevated' : 'border-border/50 hover:border-border-strong',
 				isFailed && !isSelected && 'border-danger/40 bg-danger/[0.04] hover:border-danger/60',
 				isAwaiting && !isSelected && 'border-warning/30 bg-warning/[0.03] hover:border-warning/50',
+				isActive && !isSelected && 'border-accent/40 bg-accent/[0.03]',
 				isDragging && 'opacity-50',
 			)}
 			{...listeners}
 			{...attributes}
 			onClick={(e) => { e.stopPropagation(); onClick() }}
 		>
+			{isActive && (
+				<span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
+			)}
 			{isFailed && onRerun && (
 				<button
 					type="button"
@@ -320,7 +328,7 @@ function StackedColumn({
 // `closestCorners` was the prior default but it can pick a farther column as
 // "closest" when you drag across the middle of a wide layout, which caused
 // drag-to-Todo from Human to silently land on Agent Loop / Planning.
-const customCollisionDetection: CollisionDetection = (args) => {
+const customCollisionDetection: CollisionDetection = (args: Parameters<CollisionDetection>[0]) => {
 	const pointerCollisions = pointerWithin(args)
 	if (pointerCollisions.length > 0) return pointerCollisions
 	return rectIntersection(args)

@@ -14,6 +14,7 @@ export { GitHubIssueQueries } from './queries/github-issues'
 export { ActivityQueries } from './queries/activity'
 export { NotificationsQueries } from './queries/notifications'
 export { DashboardQueries } from './queries/dashboard'
+export { CostsQueries } from './queries/costs'
 
 let db: DatabaseSync | null = null
 

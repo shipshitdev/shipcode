@@ -7,9 +7,10 @@ process.emit = function (event: string, ...args: any[]) {
 } as typeof process.emit
 
 import { app, BrowserWindow, ipcMain, Menu, shell } from 'electron'
+app.setName('ShipCode')
 import path from 'node:path'
 import fs from 'node:fs'
-import { getDatabase, closeDatabase, ProjectQueries, ThreadQueries, PlanQueries, ReviewQueries, DiffQueries, SettingsQueries, VerificationQueries, GitHubIssueQueries, ActivityQueries, NotificationsQueries, DashboardQueries } from '@shipcode/db'
+import { getDatabase, closeDatabase, ProjectQueries, ThreadQueries, PlanQueries, ReviewQueries, DiffQueries, SettingsQueries, VerificationQueries, GitHubIssueQueries, ActivityQueries, NotificationsQueries, DashboardQueries, CostsQueries } from '@shipcode/db'
 import {
   ProcessManager,
   createClaudeCliProvider,
@@ -69,6 +70,7 @@ function createWindow() {
     activity: new ActivityQueries(db),
     notifications: new NotificationsQueries(db),
     dashboard: new DashboardQueries(db),
+    costs: new CostsQueries(db),
   }
 
   // Notification service — reads settings, writes notifications + activity,

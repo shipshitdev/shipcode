@@ -1,18 +1,26 @@
-import { useState, useMemo } from 'react'
+import { Button, Globe, Input, Lock, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shipcode/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Input, Button } from '@shipcode/ui'
+import { useMemo, useState } from 'react'
+
+interface Repo {
+	name: string
+	private: boolean
+}
 
 interface Props {
 	selectedRepo: string | null
 	onSelect: (repo: string | null) => void
 }
 
+type Visibility = 'all' | 'public' | 'private'
+
 export function StepGitHubProject({ selectedRepo, onSelect }: Props) {
 	const queryClient = useQueryClient()
 	const [activeOrg, setActiveOrg] = useState<string | null>(null)
+	const [visibility, setVisibility] = useState<Visibility>('all')
 	const [search, setSearch] = useState('')
 
-	const { data: repos, isLoading, error, refetch } = useQuery<string[]>({
+	const { data: repos, isLoading, error, refetch } = useQuery<Repo[]>({
 		queryKey: ['onboarding-repos'],
 		queryFn: () => window.shipcode.invoke('onboarding:list-repos'),
 	})
@@ -22,22 +30,21 @@ export function StepGitHubProject({ selectedRepo, onSelect }: Props) {
 		refetch()
 	}
 
-	// Extract unique orgs/owners from repos
 	const orgs = useMemo(() => {
 		if (!repos) return []
-		const owners = new Set(repos.map((r) => r.split('/')[0]))
+		const owners = new Set(repos.map((r) => r.name.split('/')[0]))
 		return Array.from(owners).sort()
 	}, [repos])
 
-	// Filter repos by active org and search query
 	const filteredRepos = useMemo(() => {
 		if (!repos) return []
 		return repos.filter((repo) => {
-			const matchesOrg = activeOrg ? repo.startsWith(`${activeOrg}/`) : true
-			const matchesSearch = search ? repo.toLowerCase().includes(search.toLowerCase()) : true
-			return matchesOrg && matchesSearch
+			const matchesOrg = activeOrg ? repo.name.startsWith(`${activeOrg}/`) : true
+			const matchesVisibility = visibility === 'all' ? true : visibility === 'private' ? repo.private : !repo.private
+			const matchesSearch = search ? repo.name.toLowerCase().includes(search.toLowerCase()) : true
+			return matchesOrg && matchesVisibility && matchesSearch
 		})
-	}, [repos, activeOrg, search])
+	}, [repos, activeOrg, visibility, search])
 
 	return (
 		<div>
@@ -60,36 +67,32 @@ export function StepGitHubProject({ selectedRepo, onSelect }: Props) {
 				</div>
 			) : repos && repos.length > 0 ? (
 				<>
-					{/* Org selector tabs */}
-					{orgs.length > 1 && (
-						<div className="flex gap-1 mb-3">
-							<button
-								type="button"
-								className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-									activeOrg === null
-										? 'bg-accent text-bg-primary'
-										: 'bg-tertiary text-secondary hover:text-primary'
-								}`}
-								onClick={() => setActiveOrg(null)}
-							>
-								All
-							</button>
-							{orgs.map((org) => (
-								<button
-									type="button"
-									key={org}
-									className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-										activeOrg === org
-											? 'bg-accent text-bg-primary'
-											: 'bg-tertiary text-secondary hover:text-primary'
-									}`}
-									onClick={() => setActiveOrg(org)}
-								>
-									{org}
-								</button>
-							))}
-						</div>
-					)}
+					{/* Filters row */}
+					<div className="flex gap-2 mb-3">
+						{orgs.length > 1 && (
+							<Select value={activeOrg ?? '__all__'} onValueChange={(v: string) => setActiveOrg(v === '__all__' ? null : v)}>
+								<SelectTrigger className="h-8 text-xs flex-1">
+									<SelectValue placeholder="All organizations" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="__all__" className="text-xs">All organizations</SelectItem>
+									{orgs.map((org) => (
+										<SelectItem key={org} value={org} className="text-xs">{org}</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						)}
+						<Select value={visibility} onValueChange={(v: string) => setVisibility(v as Visibility)}>
+							<SelectTrigger className="h-8 text-xs w-32 shrink-0">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all" className="text-xs">All</SelectItem>
+								<SelectItem value="public" className="text-xs">Public</SelectItem>
+								<SelectItem value="private" className="text-xs">Private</SelectItem>
+							</SelectContent>
+						</Select>
+					</div>
 
 					{/* Search */}
 					<Input
@@ -106,15 +109,19 @@ export function StepGitHubProject({ selectedRepo, onSelect }: Props) {
 							filteredRepos.map((repo) => (
 								<button
 									type="button"
-									key={repo}
-									className={`block w-full text-left rounded-md px-3 py-2 font-mono text-[13px] cursor-pointer transition-colors border ${
-										selectedRepo === repo
+									key={repo.name}
+									className={`flex items-center gap-2 w-full text-left rounded-md px-3 py-2 font-mono text-[13px] cursor-pointer transition-colors border ${
+										selectedRepo === repo.name
 											? 'border-accent bg-accent/10 text-primary'
 											: 'border-transparent bg-tertiary text-primary hover:border-text-muted'
 									}`}
-									onClick={() => onSelect(repo)}
+									onClick={() => onSelect(repo.name)}
 								>
-									{repo}
+									{repo.private
+										? <Lock size={12} className="shrink-0 text-muted" />
+										: <Globe size={12} className="shrink-0 text-muted" />
+									}
+									{repo.name}
 								</button>
 							))
 						) : (
@@ -128,6 +135,7 @@ export function StepGitHubProject({ selectedRepo, onSelect }: Props) {
 					<p className="text-xs text-muted mb-3">
 						Create a repository at <code className="rounded bg-black/20 px-1 py-0.5">github.com/new</code>, then click Retry.
 					</p>
+
 					<Button variant="secondary" onClick={retry} className="text-xs">
 						Retry
 					</Button>

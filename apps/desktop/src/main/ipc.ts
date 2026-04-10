@@ -11,6 +11,7 @@ import type {
   ActivityQueries,
   NotificationsQueries,
   DashboardQueries,
+  CostsQueries,
 } from '@shipcode/db'
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -38,6 +39,7 @@ interface Queries {
   activity: ActivityQueries
   notifications: NotificationsQueries
   dashboard: DashboardQueries
+  costs: CostsQueries
 }
 
 export function registerIpcHandlers(
@@ -522,6 +524,11 @@ export function registerIpcHandlers(
     return queries.dashboard.countRecentTasks()
   })
 
+  // === Cost tracking ===
+  ipcMain.handle('costs:get-summary', () => {
+    return queries.costs.getSummary()
+  })
+
   // === Notification handlers ===
   ipcMain.handle('notification:list', () => {
     return notificationService.listActive()
@@ -547,11 +554,20 @@ export function registerIpcHandlers(
   ipcMain.handle('onboarding:list-repos', async () => {
     try {
       const { stdout } = await execAsync(
-        "gh api 'user/repos?per_page=100&affiliation=owner,collaborator,organization_member' --paginate --jq '.[].full_name'",
+        "gh api 'user/repos?per_page=100&affiliation=owner,collaborator,organization_member' --paginate --jq '.[] | [.full_name, (.private | tostring)] | join(\":\")'",
         { timeout: 20_000 },
       )
 
-      return [...new Set(stdout.trim().split('\n').filter(Boolean))].sort((a, b) => a.localeCompare(b))
+      const seen = new Set<string>()
+      const repos: { name: string; private: boolean }[] = []
+      for (const line of stdout.trim().split('\n').filter(Boolean)) {
+        const lastColon = line.lastIndexOf(':')
+        const name = line.slice(0, lastColon)
+        if (!name || seen.has(name)) continue
+        seen.add(name)
+        repos.push({ name, private: line.slice(lastColon + 1) === 'true' })
+      }
+      return repos.sort((a, b) => a.name.localeCompare(b.name))
     } catch {
       return []
     }

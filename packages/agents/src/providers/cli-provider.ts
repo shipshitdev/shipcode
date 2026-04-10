@@ -110,12 +110,13 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
     case 'revision':
     case 'verify':
       // Analysis phases: stream-json for real-time terminal output, single turn,
-      // no file-mutating tools.
+      // no file-mutating tools. --verbose is required by stream-json mode.
       return [
         '-p',
         req.prompt,
         '--output-format',
         'stream-json',
+        '--verbose',
         '--max-turns',
         '1',
         '--dangerously-skip-permissions',

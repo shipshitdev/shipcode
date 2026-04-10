@@ -2,6 +2,7 @@ import type {
   ActivePipelineSummary,
   ActivityEntry,
   AppSettings,
+  CostSummary,
   DashboardStats,
   NotificationRecord,
   RecentTask,
@@ -109,6 +110,9 @@ export interface IpcInvokeChannels {
   'dashboard:count-activity': { args: { projectId?: string }; result: number }
   'dashboard:get-recent-tasks': { args: { limit?: number; offset?: number }; result: RecentTask[] }
   'dashboard:count-recent-tasks': { args: void; result: number }
+
+  // Cost tracking
+  'costs:get-summary': { args: void; result: CostSummary }
 
   // Active pipelines listing (for Running Agents panel)
   'pipeline:list-active': { args: void; result: ActivePipelineSummary[] }

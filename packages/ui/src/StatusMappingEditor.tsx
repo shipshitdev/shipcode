@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react'
 import type { StatusLabelMapping } from '@shipcode/shared'
 import { ArrowRight } from 'lucide-react'
 import { Button } from './primitives/button'
-import { Input } from './primitives/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './primitives/select'
 
 interface StatusMappingEditorProps {
 	mappings: StatusLabelMapping
@@ -22,27 +21,27 @@ const PIPELINE_STATUSES = [
 	{ key: 'failed', label: 'Failed' },
 ]
 
-export function StatusMappingEditor({ mappings, onSave }: StatusMappingEditorProps) {
-	const [local, setLocal] = useState<StatusLabelMapping>({ ...mappings })
-	const [dirty, setDirty] = useState(false)
+const PRESET_LABELS = [
+	'status:queued',
+	'status:in-progress',
+	'status:done',
+	'status:failed',
+]
 
-	useEffect(() => {
-		setLocal({ ...mappings })
-		setDirty(false)
-	}, [mappings])
+const NONE = '__none__'
+
+export function StatusMappingEditor({ mappings, onSave }: StatusMappingEditorProps) {
+	// Unique label values in use across the mapping (excluding empty)
+	const activeLabels = [...new Set(Object.values(mappings).filter(Boolean))]
+	// Merge presets + active values, deduplicated, sorted
+	const options = [...new Set([...PRESET_LABELS, ...activeLabels])].sort()
 
 	function handleChange(key: string, value: string) {
-		setLocal((prev) => ({ ...prev, [key]: value }))
-		setDirty(true)
-	}
-
-	function handleSave() {
-		onSave(local)
-		setDirty(false)
+		onSave({ ...mappings, [key]: value === NONE ? '' : value })
 	}
 
 	function handleReset() {
-		const defaults: StatusLabelMapping = {
+		onSave({
 			todo: '',
 			queued: 'status:queued',
 			planning: 'status:in-progress',
@@ -54,9 +53,7 @@ export function StatusMappingEditor({ mappings, onSave }: StatusMappingEditorPro
 			shipping: 'status:in-progress',
 			completed: 'status:done',
 			failed: 'status:failed',
-		}
-		setLocal(defaults)
-		setDirty(true)
+		})
 	}
 
 	return (
@@ -67,58 +64,49 @@ export function StatusMappingEditor({ mappings, onSave }: StatusMappingEditorPro
 					<ArrowRight size={14} className="text-muted" />
 					GitHub Label Mapping
 				</h4>
-				<div className="flex gap-2">
-					<Button
-						type="button"
-						variant="ghost"
-						size="sm"
-						onClick={handleReset}
-					>
-						Reset to Defaults
-					</Button>
-					<Button
-						type="button"
-						variant="default"
-						size="sm"
-						onClick={handleSave}
-						disabled={!dirty}
-					>
-						Save
-					</Button>
-				</div>
+				<Button type="button" variant="ghost" size="sm" onClick={handleReset}>
+					Reset to Defaults
+				</Button>
 			</div>
 			<table className="w-full border-collapse">
 				<thead>
 					<tr>
-						<th className="text-left p-2 text-secondary border-b border-bg-tertiary font-medium">
+						<th className="text-left p-2 text-secondary border-b border-border font-medium text-xs uppercase tracking-wide">
 							Pipeline Status
 						</th>
-						<th className="text-left p-2 text-secondary border-b border-bg-tertiary font-medium">
+						<th className="text-left p-2 text-secondary border-b border-border font-medium text-xs uppercase tracking-wide">
 							GitHub Label
 						</th>
 					</tr>
 				</thead>
 				<tbody>
 					{PIPELINE_STATUSES.map(({ key, label }) => (
-						<tr key={key}>
-							<td className="px-2 py-1.5 border-b border-bg-tertiary text-primary font-medium">
+						<tr key={key} className="group">
+							<td className="px-2 py-1.5 border-b border-border text-primary text-sm">
 								{label}
 							</td>
-							<td className="px-2 py-1.5 border-b border-bg-tertiary">
-								<Input
-									type="text"
-									className="h-7 px-2 py-1"
-									value={local[key] ?? ''}
-									onChange={(e) => handleChange(key, e.target.value)}
-									placeholder="(no label)"
-								/>
+							<td className="px-2 py-1.5 border-b border-border">
+								<Select
+									value={mappings[key] || NONE}
+									onValueChange={(v: string) => handleChange(key, v)}
+								>
+									<SelectTrigger className="h-7 text-xs border-0 bg-transparent hover:bg-elevated focus:bg-elevated px-2">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value={NONE} className="text-xs text-muted">(no label)</SelectItem>
+										{options.map((opt) => (
+											<SelectItem key={opt} value={opt} className="text-xs font-mono">{opt}</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
 							</td>
 						</tr>
 					))}
 				</tbody>
 			</table>
 			<p className="mt-2 text-xs text-muted">
-				Empty = no label applied for that status. Labels are auto-created on GitHub if they don't exist.
+				Labels are auto-created on GitHub if they don't exist.
 			</p>
 		</div>
 	)

@@ -398,6 +398,33 @@ export interface DashboardStats {
   failedLast7d: number
 }
 
+export interface ProjectCostSummary {
+  projectId: string
+  projectName: string
+  totalCostUsd: number
+  totalTokensPrompt: number
+  totalTokensCompletion: number
+  taskCount: number
+}
+
+export interface CostSummary {
+  totalCostAllTime: number
+  totalCost7d: number
+  totalTokensAllTime: number
+  avgCostPerTask: number
+  byProject: ProjectCostSummary[]
+  recentByTask: Array<{
+    threadId: string
+    title: string
+    projectName: string
+    phase: PipelinePhase
+    costUsd: number
+    tokensPrompt: number
+    tokensCompletion: number
+    updatedAt: string
+  }>
+}
+
 export type ActivityKind =
   | 'phase_change'
   | 'plan_parsed'

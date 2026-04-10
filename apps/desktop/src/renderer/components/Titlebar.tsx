@@ -25,6 +25,7 @@ export function Titlebar() {
 
 	return (
 		<div className="relative flex h-[var(--spacing-titlebar)] shrink-0 items-center justify-between border-b border-border bg-primary pl-[84px] pr-2 app-region-drag">
+			<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-[11px] font-semibold tracking-tight text-secondary select-none">ShipCode</span>
 			<div className="flex min-w-0 items-center gap-2 text-xs">
 				<button
 					type="button"

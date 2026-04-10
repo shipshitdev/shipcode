@@ -123,11 +123,11 @@ export function TerminalDrawer() {
 			const newChunks = chunks.slice(prev)
 			if (newChunks.length === 0) continue
 
-			// Detect NDJSON (stream-json) mode: first chunk starts with '{"type":'
-			// Once detected, lineBufferRef entry is created to preserve the detection across updates.
+			// Detect NDJSON (stream-json) mode: look across first ~10 chunks since
+			// PTY may emit control sequences before the first JSON line.
 			const isNdjson =
 				processId in lineBufferRef.current ||
-				(chunks[0]?.trimStart().startsWith('{"type":') ?? false)
+				chunks.slice(0, 10).join('').includes('{"type":"')
 
 			if (isNdjson) {
 				// Buffer-based line processing — handles PTY chunks that split NDJSON lines

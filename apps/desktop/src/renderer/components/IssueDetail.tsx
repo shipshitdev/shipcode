@@ -394,6 +394,19 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 						<span className="font-mono text-[11px] text-primary">#{thread.githubPrNumber}</span>
 					</div>
 				)}
+				<div className="flex flex-col gap-1 rounded-md border border-border bg-secondary p-2">
+					<span className="text-[10px] font-medium uppercase tracking-wide text-muted">Cost</span>
+					<span className="text-[11px] font-medium text-primary">
+						{thread.totalCostUsd === 0 ? '$0.00' : thread.totalCostUsd < 0.005 ? '< $0.01' : `$${thread.totalCostUsd.toFixed(2)}`}
+					</span>
+					{thread.totalTokensPrompt > 0 && (
+						<span className="text-[10px] text-muted">
+							{((thread.totalTokensPrompt + thread.totalTokensCompletion) >= 1000
+								? `${Math.round((thread.totalTokensPrompt + thread.totalTokensCompletion) / 1000)}k`
+								: String(thread.totalTokensPrompt + thread.totalTokensCompletion))} tokens
+						</span>
+					)}
+				</div>
 			</div>
 		</div>
 	) : null

@@ -2,6 +2,7 @@ import type { AppSettings } from '@shipcode/shared'
 import { CURRENT_ONBOARDING_VERSION } from '@shipcode/shared'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ActivityView } from './components/ActivityView'
+import { CostsView } from './components/CostsView'
 import { CommandPalette } from './components/CommandPalette'
 import { CreateIssueModal } from './components/CreateIssueModal'
 import { DashboardView } from './components/DashboardView'
@@ -71,33 +72,37 @@ export function App() {
 			<HealthBanner />
 			<div className="flex flex-1 overflow-hidden">
 				{settingsVisible ? <SettingsSidebar /> : <ProjectSidebar />}
-				<div className="flex flex-1 overflow-hidden">
-					{/* Main content — hidden (not unmounted) when issue detail is expanded */}
-					<div className={activeIssue && issueDetailExpanded ? 'hidden' : 'flex flex-1 overflow-hidden'}>
-						{settingsVisible ? (
-							<SettingsPanel />
-						) : viewMode === 'activity' ? (
-							<ActivityView />
-						) : viewMode === 'inbox' ? (
-							<InboxView />
-						) : showDashboard ? (
-							<DashboardView />
-						) : (
-							<ThreadPanel />
+				<div className="flex flex-col flex-1 overflow-hidden">
+					<div className="flex flex-1 overflow-hidden">
+						{/* Main content — hidden (not unmounted) when issue detail is expanded */}
+						<div className={activeIssue && issueDetailExpanded ? 'hidden' : 'flex flex-1 overflow-hidden'}>
+							{settingsVisible ? (
+								<SettingsPanel />
+							) : viewMode === 'activity' ? (
+								<ActivityView />
+							) : viewMode === 'costs' ? (
+								<CostsView />
+							) : viewMode === 'inbox' ? (
+								<InboxView />
+							) : showDashboard ? (
+								<DashboardView />
+							) : (
+								<ThreadPanel />
+							)}
+						</div>
+						{/* Issue detail — flex-1 when expanded (full-page), fixed 420px when panel */}
+						{activeIssue && (
+							<div className={issueDetailExpanded
+								? 'flex-1 overflow-hidden'
+								: 'w-[420px] shrink-0 border-l border-border overflow-hidden'
+							}>
+								<IssueDetail expanded={issueDetailExpanded} />
+							</div>
 						)}
 					</div>
-					{/* Issue detail — flex-1 when expanded (full-page), fixed 420px when panel */}
-					{activeIssue && (
-						<div className={issueDetailExpanded
-							? 'flex-1 overflow-hidden'
-							: 'w-[420px] shrink-0 border-l border-border overflow-hidden'
-						}>
-							<IssueDetail expanded={issueDetailExpanded} />
-						</div>
-					)}
+					{terminalVisible && <TerminalDrawer />}
 				</div>
 			</div>
-			{terminalVisible && <TerminalDrawer />}
 			<CommandPalette />
 			<CreateIssueModal />
 			<NotificationToaster />
