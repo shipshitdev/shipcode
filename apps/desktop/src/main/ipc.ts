@@ -18,6 +18,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { ProcessManager } from '@shipcode/agents'
 import { checkSystemHealthWithAuth, checkGhAuth, GhCli, enhancePrdDraft } from '@shipcode/agents'
+import { isSafeExternalUrl } from './security'
 
 const execAsync = promisify(exec)
 import { GitService, WorktreeManager } from '@shipcode/git'
@@ -178,18 +179,9 @@ export function registerIpcHandlers(
   // normalized parsed.href passed through, length capped. The renderer is a
   // browser context so we validate everything in main.
   ipcMain.handle('shell:open-external', async (_event, { url }: { url: string }) => {
-    if (typeof url !== 'string' || url.length > 2048) return
-    let parsed: URL
-    try {
-      parsed = new URL(url)
-    } catch {
-      return
-    }
-    if (parsed.protocol !== 'https:') return
-    if (parsed.username || parsed.password) return
-    const host = parsed.hostname.toLowerCase()
-    if (host !== 'github.com' && !host.endsWith('.github.com')) return
-    await shell.openExternal(parsed.href)
+    const validated = isSafeExternalUrl(url)
+    if (!validated.ok) return
+    await shell.openExternal(validated.href)
   })
 
   // === GitHub handlers ===

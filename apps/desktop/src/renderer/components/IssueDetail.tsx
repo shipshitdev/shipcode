@@ -20,7 +20,7 @@ const ACTIVE_PHASES: PipelinePhase[] = [
 //   - ssh scheme: ssh://git@github.com/owner/repo(.git)
 //   - https:      https://github.com/owner/repo(.git)
 // Rejects non-github.com hosts; host comparison is case-insensitive.
-function deriveGithubIssueUrl(remote: string | null | undefined, issueNumber: number): string | null {
+export function deriveGithubIssueUrl(remote: string | null | undefined, issueNumber: number): string | null {
 	if (!remote) return null
 	const trimmed = remote.trim()
 	// scp-style: git@host:owner/repo(.git)

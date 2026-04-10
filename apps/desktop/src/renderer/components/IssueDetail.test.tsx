@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { IssueDetail } from './IssueDetail'
+import { IssueDetail, deriveGithubIssueUrl } from './IssueDetail'
 import { useAppStore } from '../stores/app-store'
 import type { GitHubIssueCacheRecord, PlanRecord, Thread } from '@shipcode/shared'
 
@@ -47,6 +47,14 @@ const makeThread = (overrides: Partial<Thread> = {}): Thread => ({
 	githubRepo: null,
 	createdAt: new Date().toISOString(),
 	updatedAt: new Date().toISOString(),
+	plannerResolvedModel: null,
+	reviewerResolvedModel: null,
+	revisorResolvedModel: null,
+	executorResolvedModel: null,
+	verifierResolvedModel: null,
+	totalTokensPrompt: 0,
+	totalTokensCompletion: 0,
+	totalCostUsd: 0,
 	...overrides,
 })
 
@@ -192,5 +200,61 @@ describe('IssueDetail', () => {
 				feedback: 'Please tighten the acceptance criteria.',
 			})
 		})
+	})
+})
+
+describe('deriveGithubIssueUrl', () => {
+	it('handles ssh:// scheme with .git suffix', () => {
+		expect(deriveGithubIssueUrl('ssh://git@github.com/owner/repo.git', 42)).toBe(
+			'https://github.com/owner/repo/issues/42',
+		)
+	})
+
+	it('handles ssh:// scheme without .git suffix', () => {
+		expect(deriveGithubIssueUrl('ssh://git@github.com/owner/repo', 7)).toBe(
+			'https://github.com/owner/repo/issues/7',
+		)
+	})
+
+	it('handles scp-style remotes (git@github.com:owner/repo.git)', () => {
+		expect(deriveGithubIssueUrl('git@github.com:owner/repo.git', 1)).toBe(
+			'https://github.com/owner/repo/issues/1',
+		)
+	})
+
+	it('handles https remotes with and without .git', () => {
+		expect(deriveGithubIssueUrl('https://github.com/owner/repo.git', 5)).toBe(
+			'https://github.com/owner/repo/issues/5',
+		)
+		expect(deriveGithubIssueUrl('https://github.com/owner/repo', 6)).toBe(
+			'https://github.com/owner/repo/issues/6',
+		)
+	})
+
+	it('is case-insensitive for the host', () => {
+		expect(deriveGithubIssueUrl('https://GITHUB.COM/owner/repo', 9)).toBe(
+			'https://github.com/owner/repo/issues/9',
+		)
+		expect(deriveGithubIssueUrl('git@GITHUB.COM:owner/repo.git', 10)).toBe(
+			'https://github.com/owner/repo/issues/10',
+		)
+	})
+
+	it('returns null for non-github hosts', () => {
+		expect(deriveGithubIssueUrl('git@gitlab.com:owner/repo.git', 1)).toBeNull()
+		expect(deriveGithubIssueUrl('https://gitlab.com/owner/repo', 1)).toBeNull()
+		expect(deriveGithubIssueUrl('ssh://git@bitbucket.org/owner/repo.git', 1)).toBeNull()
+	})
+
+	it('returns null for empty or nullish remotes', () => {
+		expect(deriveGithubIssueUrl(null, 1)).toBeNull()
+		expect(deriveGithubIssueUrl(undefined, 1)).toBeNull()
+		expect(deriveGithubIssueUrl('', 1)).toBeNull()
+	})
+
+	it('trims surrounding whitespace', () => {
+		expect(deriveGithubIssueUrl('  git@github.com:owner/repo.git  ', 2)).toBe(
+			'https://github.com/owner/repo/issues/2',
+		)
 	})
 })
