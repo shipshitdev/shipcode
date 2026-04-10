@@ -24,7 +24,7 @@ export function App() {
 	useGlobalKeyboard()
 	useIpc()
 	const queryClient = useQueryClient()
-	const { terminalVisible, settingsVisible, activeProjectId, viewMode } = useAppStore()
+	const { terminalVisible, settingsVisible, activeProjectId, viewMode, activeIssue } = useAppStore()
 
 	const { data: settings } = useQuery<AppSettings>({
 		queryKey: ['settings'],
@@ -52,22 +52,28 @@ export function App() {
 			<HealthBanner />
 			<div className="flex flex-1 overflow-hidden">
 				{settingsVisible ? <SettingsSidebar /> : <ProjectSidebar />}
-				{settingsVisible ? (
-					<SettingsPanel />
-				) : viewMode === 'activity' ? (
-					<ActivityView />
-				) : viewMode === 'inbox' ? (
-					<InboxView />
-				) : showDashboard ? (
-					<DashboardView />
-				) : (
-					<ThreadPanel />
-				)}
+				<div className="flex flex-1 overflow-hidden">
+					{settingsVisible ? (
+						<SettingsPanel />
+					) : viewMode === 'activity' ? (
+						<ActivityView />
+					) : viewMode === 'inbox' ? (
+						<InboxView />
+					) : showDashboard ? (
+						<DashboardView />
+					) : (
+						<ThreadPanel />
+					)}
+					{activeIssue && (
+						<div className="w-[420px] shrink-0 border-l border-border overflow-hidden">
+							<IssueDetail />
+						</div>
+					)}
+				</div>
 			</div>
 			{terminalVisible && <TerminalDrawer />}
 			<CommandPalette />
 			<CreateIssueModal />
-			<IssueDetail />
 			<NotificationToaster />
 		</div>
 	)
