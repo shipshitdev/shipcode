@@ -67,8 +67,187 @@ describe('ProjectQueries', () => {
 		expect(updated.defaultBranch).toBe('develop')
 	})
 
-	it('unique path constraint throws on duplicate', () => {
-		projects.add('/tmp/same')
-		expect(() => projects.add('/tmp/same')).toThrow()
+	it('add() is idempotent: re-adding same path returns existing row', () => {
+		const first = projects.add('/tmp/same')
+		const second = projects.add('/tmp/same')
+		expect(second.id).toBe(first.id)
+		expect(projects.list().length).toBe(1)
+	})
+
+	it('add() restores an archived project when re-adding its path', () => {
+		const p = projects.add('/tmp/old')
+		expect(projects.archiveIfIdle(p.id)).toBe(true)
+		expect(projects.getById(p.id)!.archived).toBe(true)
+
+		const restored = projects.add('/tmp/old')
+		expect(restored.id).toBe(p.id)
+		expect(restored.archived).toBe(false)
+	})
+
+	// === listVisible / listArchived ===
+
+	it('listVisible() excludes archived rows, listArchived() returns only archived', () => {
+		const active = projects.add('/tmp/active')
+		const archived = projects.add('/tmp/archived')
+		projects.archiveIfIdle(archived.id)
+
+		const visible = projects.listVisible()
+		expect(visible.map((p) => p.id)).toEqual([active.id])
+
+		const arch = projects.listArchived()
+		expect(arch.map((p) => p.id)).toEqual([archived.id])
+
+		const all = projects.list()
+		expect(all.length).toBe(2)
+	})
+
+	// === hasLiveWork / archiveIfIdle / removeIfIdle ===
+
+	it('archiveIfIdle() succeeds on a project with no live work', () => {
+		const p = projects.add('/tmp/quiet')
+		expect(projects.hasLiveWork(p.id)).toBe(false)
+		expect(projects.archiveIfIdle(p.id)).toBe(true)
+		expect(projects.getById(p.id)!.archived).toBe(true)
+	})
+
+	it('archiveIfIdle() is blocked by a thread in an active status', () => {
+		const p = projects.add('/tmp/busy-thread')
+		db.prepare(
+			"INSERT INTO threads (id, project_id, title, prompt, status) VALUES ('t1', ?, 'title', 'prompt', 'executing')"
+		).run(p.id)
+		expect(projects.hasLiveWork(p.id)).toBe(true)
+		expect(projects.archiveIfIdle(p.id)).toBe(false)
+		expect(projects.getById(p.id)!.archived).toBe(false)
+	})
+
+	it('completed threads do NOT block archive/remove', () => {
+		const p = projects.add('/tmp/done-thread')
+		db.prepare(
+			"INSERT INTO threads (id, project_id, title, prompt, status) VALUES ('t1', ?, 'title', 'prompt', 'completed')"
+		).run(p.id)
+		expect(projects.hasLiveWork(p.id)).toBe(false)
+		expect(projects.archiveIfIdle(p.id)).toBe(true)
+		projects.unarchive(p.id)
+		expect(projects.removeIfIdle(p.id)).toBe(true)
+	})
+
+	it('archiveIfIdle() is blocked by an undismissed notification', () => {
+		const p = projects.add('/tmp/notif')
+		// Notifications have a NOT NULL thread_id FK, and inserting any thread
+		// fires the auto-unarchive trigger on archived projects — so we insert
+		// a terminal (completed) thread which does NOT count as live work.
+		db.prepare(
+			"INSERT INTO threads (id, project_id, title, prompt, status) VALUES ('t-notif', ?, 'title', 'prompt', 'completed')"
+		).run(p.id)
+		db.prepare(
+			"INSERT INTO notifications (id, thread_id, project_id, kind, title, body) VALUES ('n1', 't-notif', ?, 'test', 'title', 'body')"
+		).run(p.id)
+		expect(projects.hasLiveWork(p.id)).toBe(true)
+		expect(projects.archiveIfIdle(p.id)).toBe(false)
+	})
+
+	it('archiveIfIdle() is blocked by a claimed github_issue_cache row (orphaned-claim case)', () => {
+		const p = projects.add('/tmp/claimed')
+		db.prepare(
+			`INSERT INTO github_issue_cache (id, project_id, issue_number, title, claimed_at, claimed_by)
+			 VALUES ('i1', ?, 1, 'title', datetime('now'), 'bot')`
+		).run(p.id)
+		expect(projects.hasLiveWork(p.id)).toBe(true)
+		expect(projects.archiveIfIdle(p.id)).toBe(false)
+		expect(projects.removeIfIdle(p.id)).toBe(false)
+	})
+
+	it('removeIfIdle() returns false when live work appears', () => {
+		const p = projects.add('/tmp/race')
+		db.prepare(
+			"INSERT INTO threads (id, project_id, title, prompt, status) VALUES ('t1', ?, 'title', 'prompt', 'planning')"
+		).run(p.id)
+		expect(projects.removeIfIdle(p.id)).toBe(false)
+		expect(projects.getById(p.id)).not.toBeNull()
+	})
+
+	// === auto-unarchive triggers ===
+
+	it('trigger: inserting a new thread on an archived project unarchives it', () => {
+		const p = projects.add('/tmp/trigger-thread')
+		projects.archiveIfIdle(p.id)
+		expect(projects.getById(p.id)!.archived).toBe(true)
+		db.prepare(
+			"INSERT INTO threads (id, project_id, title, prompt) VALUES ('t1', ?, 'title', 'prompt')"
+		).run(p.id)
+		expect(projects.getById(p.id)!.archived).toBe(false)
+	})
+
+	it('trigger: inserting a new notification on an archived project unarchives it', () => {
+		const p = projects.add('/tmp/trigger-notif')
+		// Seed a terminal thread first (required by notifications.thread_id FK).
+		// The thread INSERT also fires the auto-unarchive trigger, so we archive
+		// AFTER the thread is in place.
+		db.prepare(
+			"INSERT INTO threads (id, project_id, title, prompt, status) VALUES ('t-notif', ?, 'title', 'prompt', 'completed')"
+		).run(p.id)
+		projects.archiveIfIdle(p.id)
+		expect(projects.getById(p.id)!.archived).toBe(true)
+		db.prepare(
+			"INSERT INTO notifications (id, thread_id, project_id, kind, title, body) VALUES ('n1', 't-notif', ?, 'test', 'title', 'body')"
+		).run(p.id)
+		expect(projects.getById(p.id)!.archived).toBe(false)
+	})
+
+	it('trigger: inserting a new github_issue_cache row on an archived project unarchives it', () => {
+		const p = projects.add('/tmp/trigger-issue')
+		projects.archiveIfIdle(p.id)
+		expect(projects.getById(p.id)!.archived).toBe(true)
+		db.prepare(
+			`INSERT INTO github_issue_cache (id, project_id, issue_number, title) VALUES ('i1', ?, 1, 'title')`
+		).run(p.id)
+		expect(projects.getById(p.id)!.archived).toBe(false)
+	})
+
+	it('trigger: updating claimed_at on a cached issue unarchives the project', () => {
+		const p = projects.add('/tmp/trigger-claim')
+		// Seed an unclaimed cached issue first
+		db.prepare(
+			`INSERT INTO github_issue_cache (id, project_id, issue_number, title) VALUES ('i1', ?, 1, 'title')`
+		).run(p.id)
+		// Now archive the project (the insert already fired the trigger — re-archive)
+		projects.archiveIfIdle(p.id)
+		expect(projects.getById(p.id)!.archived).toBe(true)
+		// Transition claimed_at NULL → non-NULL
+		db.prepare(`UPDATE github_issue_cache SET claimed_at = datetime('now') WHERE id = 'i1'`).run()
+		expect(projects.getById(p.id)!.archived).toBe(false)
+	})
+
+	it('trigger: metadata updates on a cached issue do NOT unarchive', () => {
+		const p = projects.add('/tmp/trigger-metadata')
+		db.prepare(
+			`INSERT INTO github_issue_cache (id, project_id, issue_number, title) VALUES ('i1', ?, 1, 'title')`
+		).run(p.id)
+		projects.archiveIfIdle(p.id)
+		expect(projects.getById(p.id)!.archived).toBe(true)
+		// Update only title — claimed_at stays NULL
+		db.prepare(`UPDATE github_issue_cache SET title = 'new title' WHERE id = 'i1'`).run()
+		expect(projects.getById(p.id)!.archived).toBe(true)
+	})
+
+	// === pin ===
+
+	it('pin() toggles the pinned flag', () => {
+		const p = projects.add('/tmp/pin')
+		expect(p.pinned).toBe(false)
+		projects.pin(p.id, true)
+		expect(projects.getById(p.id)!.pinned).toBe(true)
+		projects.pin(p.id, false)
+		expect(projects.getById(p.id)!.pinned).toBe(false)
+	})
+
+	it('archiveIfIdle() clears pinned state as a side effect', () => {
+		const p = projects.add('/tmp/pin-then-archive')
+		projects.pin(p.id, true)
+		expect(projects.getById(p.id)!.pinned).toBe(true)
+		expect(projects.archiveIfIdle(p.id)).toBe(true)
+		const after = projects.getById(p.id)!
+		expect(after.archived).toBe(true)
+		expect(after.pinned).toBe(false)
 	})
 })

@@ -249,3 +249,83 @@ export function migrateV6(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (6)`)
   })
 }
+
+export function migrateV7(db: DatabaseSync): void {
+  const row = db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get() as { version: number } | undefined
+  if (row && row.version >= 7) return
+
+  const addColumnIfMissing = (ddl: string): void => {
+    try {
+      db.exec(ddl)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      // Only ignore the specific "already applied" case. Any other failure
+      // (locked DB, malformed schema, partial write) must abort so we retry
+      // on next startup instead of masking the problem and leaving the
+      // projects table missing expected columns.
+      if (!/duplicate column name/i.test(message)) throw err
+    }
+  }
+
+  transaction(db, () => {
+    // Project-level pin + archive state for sidebar management.
+    addColumnIfMissing(`ALTER TABLE projects ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0`)
+    addColumnIfMissing(`ALTER TABLE projects ADD COLUMN archived INTEGER NOT NULL DEFAULT 0`)
+
+    // Defence-in-depth: verify columns actually exist before marking V7 applied.
+    const cols = db.prepare(`PRAGMA table_info(projects)`).all() as { name: string }[]
+    const names = new Set(cols.map((c) => c.name))
+    if (!names.has('pinned') || !names.has('archived')) {
+      throw new Error('migrateV7: projects table is missing pinned/archived columns after ALTER')
+    }
+
+    // Auto-unarchive triggers: when a project is archived but receives new
+    // work (thread, notification, or GitHub issue), flip archived=0 so the
+    // project reappears in the sidebar automatically. This enforces the
+    // "archived = quiet" invariant without threading unarchive calls through
+    // every work-creating IPC handler.
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS projects_unarchive_on_thread_insert
+        AFTER INSERT ON threads
+        WHEN (SELECT archived FROM projects WHERE id = NEW.project_id) = 1
+      BEGIN
+        UPDATE projects SET archived = 0 WHERE id = NEW.project_id;
+      END;
+    `)
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS projects_unarchive_on_notification_insert
+        AFTER INSERT ON notifications
+        WHEN (SELECT archived FROM projects WHERE id = NEW.project_id) = 1
+      BEGIN
+        UPDATE projects SET archived = 0 WHERE id = NEW.project_id;
+      END;
+    `)
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS projects_unarchive_on_github_issue_insert
+        AFTER INSERT ON github_issue_cache
+        WHEN (SELECT archived FROM projects WHERE id = NEW.project_id) = 1
+      BEGIN
+        UPDATE projects SET archived = 0 WHERE id = NEW.project_id;
+      END;
+    `)
+    // UPDATE trigger for github_issue_cache: `GitHubIssueQueries.upsert()`
+    // updates existing rows on `github:refresh-issues`, so an INSERT trigger
+    // alone would miss already-cached issues transitioning into active work.
+    // Scope is narrowly limited to the claim transition (NULL → non-NULL)
+    // so trivial metadata refreshes (labels, title, assignee) on archived
+    // projects do NOT unarchive them — this preserves the user's archive
+    // intent when GitHub polling is enabled.
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS projects_unarchive_on_github_issue_claim
+        AFTER UPDATE OF claimed_at ON github_issue_cache
+        WHEN NEW.claimed_at IS NOT NULL
+          AND OLD.claimed_at IS NULL
+          AND (SELECT archived FROM projects WHERE id = NEW.project_id) = 1
+      BEGIN
+        UPDATE projects SET archived = 0 WHERE id = NEW.project_id;
+      END;
+    `)
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (7)`)
+  })
+}

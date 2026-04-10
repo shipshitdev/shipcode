@@ -6,7 +6,7 @@ process.emit = function (event: string, ...args: any[]) {
   return _origEmit(event, ...args)
 } as typeof process.emit
 
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, shell } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import { getDatabase, closeDatabase, ProjectQueries, ThreadQueries, PlanQueries, ReviewQueries, DiffQueries, SettingsQueries, VerificationQueries, GitHubIssueQueries, ActivityQueries, NotificationsQueries, DashboardQueries } from '@shipcode/db'
@@ -35,6 +35,8 @@ function createWindow() {
     height: 900,
     minWidth: 1024,
     minHeight: 680,
+    backgroundColor: '#050607',
+    show: false,
     titleBarStyle: 'hiddenInset',
     webPreferences: {
       preload: path.join(DIST, 'preload', 'index.js'),
@@ -42,6 +44,10 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: false,
     },
+  })
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow!.show()
   })
 
   // Initialize database
@@ -146,7 +152,69 @@ function createWindow() {
   })
 }
 
-app.whenReady().then(createWindow)
+app.whenReady().then(() => {
+  const menu = Menu.buildFromTemplate([
+    {
+      label: 'ShipCode',
+      submenu: [
+        { label: 'About ShipCode', role: 'about' },
+        { type: 'separator' },
+        { label: 'Hide ShipCode', role: 'hide' },
+        { label: 'Hide Others', role: 'hideOthers' },
+        { label: 'Show All', role: 'unhide' },
+        { type: 'separator' },
+        { label: 'Quit ShipCode', role: 'quit' },
+      ],
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' },
+      ],
+    },
+    {
+      label: 'Window',
+      role: 'window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        { type: 'separator' },
+        { role: 'front' },
+        { role: 'close' },
+      ],
+    },
+    {
+      label: 'Community',
+      submenu: [
+        {
+          label: '⭐  Star on GitHub',
+          click: () => shell.openExternal('https://github.com/shipshitdev/shipcode'),
+        },
+        {
+          label: '🍴  Fork on GitHub',
+          click: () => shell.openExternal('https://github.com/shipshitdev/shipcode/fork'),
+        },
+        { type: 'separator' },
+        {
+          label: '𝕏  @shipshitdev on X',
+          click: () => shell.openExternal('https://x.com/shipshitdev'),
+        },
+        {
+          label: '▶  ShipShitShow on YouTube',
+          click: () => shell.openExternal('https://www.youtube.com/@shipshitshow'),
+        },
+      ],
+    },
+  ])
+  Menu.setApplicationMenu(menu)
+  createWindow()
+})
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

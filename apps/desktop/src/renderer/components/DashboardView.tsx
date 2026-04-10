@@ -1,16 +1,15 @@
 import { useEffect, useState } from 'react'
-import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type {
   ActivePipelineSummary,
   ActivityEntry,
   DashboardStats,
   PipelinePhase,
-  Project,
   RecentTask,
 } from '@shipcode/shared'
 import {
   Card, CardContent, CardFooter, CardHeader, CardTitle,
-  Button, Plus, Pagination,
+  Button, Pagination,
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@shipcode/ui'
 import { useAppStore } from '../stores/app-store'
@@ -117,26 +116,6 @@ export function DashboardView() {
     queryFn: () => window.shipcode.invoke<DashboardStats>('dashboard:get-stats'),
     refetchInterval: 5000,
   })
-
-  const { data: projects = [] } = useQuery<Project[]>({
-    queryKey: ['projects'],
-    queryFn: () => window.shipcode.invoke<Project[]>('project:list'),
-  })
-
-  const addProject = useMutation({
-    mutationFn: async () => {
-      const projectPath = await window.shipcode.invoke<string | null>('dialog:open-directory')
-      if (!projectPath) return null
-      return window.shipcode.invoke<Project>('project:add', { path: projectPath })
-    },
-    onSuccess: (project) => {
-      if (project) {
-        queryClient.invalidateQueries({ queryKey: ['projects'] })
-        selectProject(project.id)
-      }
-    },
-  })
-
 
   const { data: running = [] } = useQuery<ActivePipelineSummary[]>({
     queryKey: ['dashboard', 'running'],
@@ -285,31 +264,6 @@ export function DashboardView() {
             </CardContent>
           </Card>
 
-          {/* Projects — only shown on first run (no projects yet) as an onboarding CTA */}
-          {projects.length === 0 && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Add your first project</CardTitle>
-                  <Button
-                    size="xs"
-                    variant="secondary"
-                    onClick={() => addProject.mutate()}
-                    disabled={addProject.isPending}
-                  >
-                    <Plus size={12} />
-                    Add repository
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted">
-                  No projects yet. Click <span className="text-secondary">Add repository</span> or use the sidebar to get started.
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           {/* Activity + Recent tasks */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <Card>
@@ -411,7 +365,7 @@ export function DashboardView() {
                           className="cursor-pointer hover:bg-hover"
                           onClick={() => handleRowClick(task.projectId, task.threadId)}
                         >
-                          <TableCell className="w-px whitespace-nowrap pr-2">
+                          <TableCell className="w-px whitespace-nowrap pr-2 align-top pt-2.5">
                             <PhaseChip phase={task.phase} />
                           </TableCell>
                           <TableCell className="max-w-0 w-full">
@@ -419,8 +373,11 @@ export function DashboardView() {
                               {task.githubIssueNumber ? `#${task.githubIssueNumber} ` : ''}
                               {task.title}
                             </div>
+                            <div className="truncate text-[11px] text-muted">
+                              {task.projectName} · {task.phase.replace(/_/g, ' ')}
+                            </div>
                           </TableCell>
-                          <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-muted">
+                          <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-muted align-top pt-2.5">
                             {timeAgo(task.updatedAt)}
                           </TableCell>
                         </TableRow>

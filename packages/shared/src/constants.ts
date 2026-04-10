@@ -34,6 +34,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autoPickupEnabled: false,
   statusLabelMappings: DEFAULT_STATUS_LABEL_MAPPINGS as Record<string, string>,
   onboardingVersion: 0,
+  projectSortOrder: 'recent',
   worktreeRoot: null,
   notificationsEnabled: true,
   notificationOsEnabled: true,

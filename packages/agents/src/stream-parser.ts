@@ -56,16 +56,41 @@ export class StreamParser {
     return null
   }
 
+  /**
+   * Resolve the buffer text for parsing. When the buffer contains NDJSON
+   * (--output-format stream-json), the complete LLM response is in the
+   * `result` field of the final `{"type":"result",...}` line. Extract it so
+   * fenced-block searches work against the actual LLM text, not raw NDJSON.
+   * Falls back to the raw buffer for plain-text output (execute phase, codex).
+   */
+  private resolveBuffer(): string {
+    const lines = this.buffer.split('\n')
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i].trim()
+      if (!line) continue
+      try {
+        const parsed = JSON.parse(line)
+        if (parsed.type === 'result' && typeof parsed.result === 'string') {
+          return parsed.result
+        }
+      } catch {
+        break // not JSON — treat buffer as plain text
+      }
+    }
+    return this.buffer
+  }
+
   private extractFencedBlock<T>(tag: string, schema: { parse: (data: unknown) => T }): ParseResult<T> {
-    const raw = this.buffer
+    const raw = this.buffer  // stored as-is (original output)
+    const text = this.resolveBuffer()  // resolved LLM text for parsing
 
     // Look for ```tag ... ``` blocks
     const fenceRegex = new RegExp(`\`\`\`${tag}\\s*\\n([\\s\\S]*?)\`\`\``, 'm')
-    const match = raw.match(fenceRegex)
+    const match = text.match(fenceRegex)
 
     if (!match) {
       // Try to find raw JSON object in the output as fallback
-      const jsonMatch = this.tryExtractJson(raw)
+      const jsonMatch = this.tryExtractJson(text)
       if (jsonMatch) {
         try {
           const parsed = schema.parse(JSON.parse(jsonMatch))

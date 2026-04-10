@@ -109,13 +109,13 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
     case 'plan':
     case 'revision':
     case 'verify':
-      // Analysis/structured-output phases: JSON output, single turn,
+      // Analysis phases: stream-json for real-time terminal output, single turn,
       // no file-mutating tools.
       return [
         '-p',
         req.prompt,
         '--output-format',
-        'json',
+        'stream-json',
         '--max-turns',
         '1',
         '--dangerously-skip-permissions',
@@ -154,21 +154,18 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
  */
 function buildCodexArgs(req: ProviderRequest): string[] {
   switch (req.phase) {
-    case 'review': {
-      // Review runs read-only. Autonomous mode adds reasoning-effort high.
-      const isAutonomous = req.phaseHints?.reasoningEffort === 'high'
-      const base = ['-q', req.prompt, '--sandbox', 'read-only', '-a', 'never']
-      return isAutonomous ? [...base, '--reasoning-effort', 'high'] : base
-    }
+    case 'review':
+      // Review runs read-only. --json streams NDJSON events for terminal display.
+      // --full-auto suppresses interactive approval prompts.
+      return ['exec', req.prompt, '--sandbox', 'read-only', '--json', '--full-auto']
     case 'execute':
-      return ['-q', req.prompt, '--sandbox', 'workspace-write', '-a', 'never']
+      // Execution needs workspace-write. --full-auto = on-request approvals.
+      return ['exec', req.prompt, '--sandbox', 'workspace-write', '--json', '--full-auto']
     case 'plan':
     case 'revision':
     case 'verify':
       // Codex does not handle these phases in the current pipeline.
-      // The registry should never dispatch here, but we provide a
-      // conservative fallback so the types don't require `never`.
-      return ['-q', req.prompt, '--sandbox', 'read-only', '-a', 'never']
+      return ['exec', req.prompt, '--sandbox', 'read-only', '--json', '--full-auto']
   }
 }
 

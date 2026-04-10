@@ -47,6 +47,7 @@ export class SettingsQueries {
       autoPickupEnabled: parseBool(stored.autoPickupEnabled, DEFAULT_SETTINGS.autoPickupEnabled),
       statusLabelMappings: stored.statusLabelMappings ? JSON.parse(stored.statusLabelMappings) : DEFAULT_STATUS_LABEL_MAPPINGS,
       onboardingVersion: stored.onboardingVersion ? parseInt(stored.onboardingVersion, 10) : DEFAULT_SETTINGS.onboardingVersion,
+      projectSortOrder: (stored.projectSortOrder as AppSettings['projectSortOrder']) ?? DEFAULT_SETTINGS.projectSortOrder,
       worktreeRoot: readWorktreeRoot(stored.worktreeRoot),
       notificationsEnabled: parseBool(stored.notificationsEnabled, DEFAULT_SETTINGS.notificationsEnabled),
       notificationOsEnabled: parseBool(stored.notificationOsEnabled, DEFAULT_SETTINGS.notificationOsEnabled),

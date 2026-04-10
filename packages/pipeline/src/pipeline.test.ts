@@ -5,6 +5,18 @@ import type { PipelineDeps } from './types'
 import { createPipeline } from './pipeline'
 import { DEFAULT_SETTINGS, PIPELINE_MAX_RETRIES, MAX_REVIEW_ROUNDS, MAX_VERIFICATION_RETRIES } from '@shipcode/shared'
 
+vi.mock('@shipcode/git', () => {
+	class WorktreeManager {
+		create = vi.fn().mockResolvedValue({ worktreePath: '/fake/worktree', branch: 'shipcode/t1' })
+		remove = vi.fn().mockResolvedValue({ success: true })
+	}
+	class GitService {
+		listBranches = vi.fn().mockResolvedValue([])
+		getDefaultBranch = vi.fn().mockResolvedValue('main')
+	}
+	return { WorktreeManager, GitService }
+})
+
 const { mockExecSync } = vi.hoisted(() => ({ mockExecSync: vi.fn() }))
 vi.mock('node:child_process', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('node:child_process')>()
@@ -178,6 +190,7 @@ function createMockDeps() {
 				updateAutonomousFields: vi.fn(),
 				setResolvedModel: vi.fn(),
 				addTokenUsage: vi.fn(),
+				setWorktree: vi.fn(),
 			},
 			plans: {
 				getMaxVersion: vi.fn(() => 0),

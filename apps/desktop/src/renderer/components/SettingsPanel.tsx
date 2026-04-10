@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { StatusMappingEditor, Button, Input, Label, Switch, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shipcode/ui'
-import type { AppSettings } from '@shipcode/shared'
+import type { AppSettings, Project } from '@shipcode/shared'
 import { useAppStore } from '../stores/app-store'
 
 export function SettingsPanel() {
@@ -19,6 +19,23 @@ export function SettingsPanel() {
 			window.shipcode.invoke('settings:set', patch),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ['settings'] })
+		},
+	})
+
+	// Archived projects query — top-level hook (Rules of Hooks) but only
+	// fetches when the Archived section is open, via `enabled`.
+	const { data: archivedProjects = [] } = useQuery<Project[]>({
+		queryKey: ['projects-archived'],
+		queryFn: () => window.shipcode.invoke<Project[]>('project:list-archived'),
+		enabled: settingsSection === 'archived',
+	})
+
+	const unarchiveProject = useMutation({
+		mutationFn: (projectId: string) => window.shipcode.invoke('project:unarchive', { projectId }),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ['projects'] })
+			queryClient.invalidateQueries({ queryKey: ['projects-visible'] })
+			queryClient.invalidateQueries({ queryKey: ['projects-archived'] })
 		},
 	})
 
@@ -236,6 +253,45 @@ export function SettingsPanel() {
 								mappings={settings.statusLabelMappings}
 								onSave={(mappings) => updateSettings.mutate({ statusLabelMappings: mappings })}
 							/>
+						</section>
+					</>
+				)}
+
+				{settingsSection === 'archived' && (
+					<>
+						<h3 className="mb-5">Archived</h3>
+						<section className="mb-8">
+							<h4 className="mb-3 text-secondary">Archived Projects</h4>
+							<p className="mb-3 text-xs text-secondary">
+								Archived projects are hidden from the sidebar but remain navigable via Activity and
+								notifications. They re-appear automatically when new work arrives, or you can
+								restore one manually here.
+							</p>
+							{archivedProjects.length === 0 ? (
+								<p className="text-[13px] text-muted">No archived projects.</p>
+							) : (
+								<div className="space-y-1">
+									{archivedProjects.map((p) => (
+										<div
+											key={p.id}
+											className="flex items-center justify-between rounded-md border border-border bg-tertiary px-3 py-2"
+										>
+											<div className="min-w-0 flex-1">
+												<div className="text-[13px] text-primary truncate">{p.name}</div>
+												<div className="text-[11px] text-muted truncate">{p.path}</div>
+											</div>
+											<Button
+												size="sm"
+												variant="secondary"
+												onClick={() => unarchiveProject.mutate(p.id)}
+												disabled={unarchiveProject.isPending}
+											>
+												Restore
+											</Button>
+										</div>
+									))}
+								</div>
+							)}
 						</section>
 					</>
 				)}

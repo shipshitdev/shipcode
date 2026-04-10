@@ -58,8 +58,20 @@ export function registerIpcHandlers(
   }
 
   // === Project handlers ===
+  // `project:list` returns the full registry (including archived projects).
+  // The sidebar uses `project:list-visible` for the filtered list; Titlebar,
+  // IssueDetail, and ThreadPanel continue to use `project:list` so they can
+  // resolve archived projects that are still navigable via deep links.
   ipcMain.handle('project:list', () => {
     return queries.projects.list()
+  })
+
+  ipcMain.handle('project:list-visible', () => {
+    return queries.projects.listVisible()
+  })
+
+  ipcMain.handle('project:list-archived', () => {
+    return queries.projects.listArchived()
   })
 
   ipcMain.handle('project:add', async (_event, { path: projectPath }: { path: string }) => {
@@ -78,24 +90,63 @@ export function registerIpcHandlers(
   })
 
   ipcMain.handle('project:remove', async (_event, { projectId }: { projectId: string }) => {
-    // Best-effort: remove any ShipCode worktrees this project owns so they don't
-    // become orphans under the global worktree root after the DB row is deleted.
+    // Fast pre-check: bail early without running slow worktree cleanup if the
+    // project clearly has active work. The final safety guarantee comes from
+    // `removeIfIdle()`'s atomic DELETE below.
+    if (queries.projects.hasLiveWork(projectId)) {
+      throw new Error(
+        'Cannot remove a project with active work. Stop running pipelines and dismiss notifications first.',
+      )
+    }
+
+    // Worktree cleanup — fail closed on errors. The previous implementation
+    // silently swallowed cleanup failures and deleted the project row anyway,
+    // leaving orphaned worktrees on disk with no registry entry to recover
+    // them. Now we collect real failures and throw before any DB mutation.
     const project = queries.projects.getById(projectId)
     if (project) {
-      try {
-        const appSettings = queries.settings.get()
-        const worktreeManager = new WorktreeManager(project.path, { worktreeRoot: appSettings.worktreeRoot })
-        const threads = queries.threads.list(projectId)
-        for (const t of threads) {
-          if (t.worktreePath && t.worktreeBranch) {
-            await worktreeManager.remove(t.worktreePath, t.worktreeBranch).catch(() => {})
+      const appSettings = queries.settings.get()
+      const worktreeManager = new WorktreeManager(project.path, { worktreeRoot: appSettings.worktreeRoot })
+      const threads = queries.threads.list(projectId)
+      const failures: string[] = []
+      for (const t of threads) {
+        if (t.worktreePath && t.worktreeBranch) {
+          const result = await worktreeManager.remove(t.worktreePath, t.worktreeBranch)
+          if (result.error) {
+            failures.push(`${t.worktreePath}: ${result.error}`)
           }
         }
-      } catch (err) {
-        console.error('Worktree cleanup during project:remove failed (continuing):', err)
+      }
+      if (failures.length > 0) {
+        throw new Error(
+          `Failed to clean up ${failures.length} worktree(s). Project not removed:\n${failures.join('\n')}`,
+        )
       }
     }
-    queries.projects.remove(projectId)
+
+    // Atomic final DELETE: refuses to remove the row if live work appeared
+    // during the (slow) worktree cleanup phase.
+    const removed = queries.projects.removeIfIdle(projectId)
+    if (!removed) {
+      throw new Error('New work appeared during cleanup. Project not removed. Retry after stopping pipelines.')
+    }
+  })
+
+  ipcMain.handle('project:pin', (_event, { projectId, pinned }: { projectId: string; pinned: boolean }) => {
+    queries.projects.pin(projectId, pinned)
+  })
+
+  ipcMain.handle('project:archive', (_event, { projectId }: { projectId: string }) => {
+    const archived = queries.projects.archiveIfIdle(projectId)
+    if (!archived) {
+      throw new Error(
+        'Cannot archive a project with active work. Stop running pipelines and dismiss notifications first.',
+      )
+    }
+  })
+
+  ipcMain.handle('project:unarchive', (_event, { projectId }: { projectId: string }) => {
+    queries.projects.unarchive(projectId)
   })
 
   // === Thread handlers ===
@@ -389,25 +440,15 @@ export function registerIpcHandlers(
     const project = queries.projects.getById(thread.projectId)
     if (!project) throw new Error(`Project ${thread.projectId} not found`)
 
-    // Optionally set up worktree
-    let worktreePath: string | null = null
-    try {
-      const appSettings = queries.settings.get()
-      const worktreeManager = new WorktreeManager(project.path, { worktreeRoot: appSettings.worktreeRoot })
-      const wt = await worktreeManager.create(threadId, project.defaultBranch)
-      worktreePath = wt.worktreePath
-      queries.threads.setWorktree(threadId, wt.branch, wt.worktreePath)
-    } catch (err) {
-      // Worktree creation failed — run in project root instead
-      console.error('Worktree creation failed, running in project root:', err)
-    }
-
+    // Worktree is created lazily in startExecution; baseBranch must be seeded
+    // here so startExecution can resolve which branch to fork from.
     pipeline.initializeContext(threadId, {
       projectPath: project.path,
-      worktreePath,
+      worktreePath: null,
+      baseBranch: project.defaultBranch,
     })
 
-    await pipeline.startPlanGeneration(threadId, thread.prompt, project.path, worktreePath)
+    await pipeline.startPlanGeneration(threadId, thread.prompt, project.path, null)
   })
 
   ipcMain.handle('pipeline:approve', async (_event, { threadId }: { threadId: string }) => {

@@ -27,9 +27,14 @@ import type {
 
 export interface IpcInvokeChannels {
   'project:list': { args: void; result: Project[] }
+  'project:list-visible': { args: void; result: Project[] }
+  'project:list-archived': { args: void; result: Project[] }
   'project:get': { args: { projectId: string }; result: Project | null }
   'project:add': { args: { path: string }; result: Project }
   'project:remove': { args: { projectId: string }; result: void }
+  'project:pin': { args: { projectId: string; pinned: boolean }; result: void }
+  'project:archive': { args: { projectId: string }; result: void }
+  'project:unarchive': { args: { projectId: string }; result: void }
   'project:set-default-branch': { args: { projectId: string; branch: string }; result: Project }
 
   'thread:list': { args: { projectId: string }; result: Thread[] }

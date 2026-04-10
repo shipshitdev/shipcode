@@ -1,10 +1,10 @@
-import { useQuery } from '@tanstack/react-query'
 import type { DashboardStats, Project } from '@shipcode/shared'
-import { Settings, X, PanelLeftClose, PanelLeftOpen } from '@shipcode/ui'
+import { PanelLeftClose, PanelLeftOpen, Settings, Terminal, X } from '@shipcode/ui'
+import { useQuery } from '@tanstack/react-query'
 import { useAppStore } from '../stores/app-store'
 
 export function Titlebar() {
-	const { settingsVisible, toggleSettings, openDashboard, activeProjectId, sidebarCollapsed, toggleSidebar } = useAppStore()
+	const { settingsVisible, toggleSettings, openDashboard, activeProjectId, sidebarCollapsed, toggleSidebar, terminalVisible, toggleTerminal } = useAppStore()
 
 	const { data: projects = [] } = useQuery<Project[]>({
 		queryKey: ['projects'],
@@ -56,6 +56,15 @@ export function Titlebar() {
 						{liveCount} running
 					</button>
 				)}
+				<button
+					type="button"
+					className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-none bg-transparent app-region-no-drag hover:bg-elevated transition-colors"
+					style={{ color: terminalVisible ? 'var(--text-primary)' : undefined }}
+					onClick={toggleTerminal}
+					title={terminalVisible ? 'Hide terminal' : 'Show terminal'}
+				>
+					<Terminal size={14} className="text-secondary" />
+				</button>
 				<button
 					type="button"
 					className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-secondary app-region-no-drag hover:bg-elevated hover:text-primary transition-colors"

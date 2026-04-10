@@ -4,7 +4,7 @@ import type { ShipCodePlan, PlanReview, PipelinePhase, SystemHealth, Verificatio
 const AGENT_ACTIVE_STATUSES = new Set<IssuePipelineStatus>(['planning', 'reviewing', 'revising', 'executing', 'verifying', 'shipping'])
 
 export type ViewMode = 'dashboard' | 'project' | 'activity' | 'inbox'
-export type SettingsSection = 'general' | 'github' | 'notifications' | 'pipeline'
+export type SettingsSection = 'general' | 'github' | 'notifications' | 'pipeline' | 'archived'
 
 interface AppState {
 	// Selection
@@ -18,6 +18,7 @@ interface AppState {
 	terminalVisible: boolean
 	settingsVisible: boolean
 	settingsSection: SettingsSection
+	issueDetailExpanded: boolean
 
 	// Live data
 	currentPlan: ShipCodePlan | null
@@ -31,6 +32,9 @@ interface AppState {
 
 	// Agent output buffers
 	agentOutputs: Record<string, string[]>
+
+	// Terminal event log (phase transitions, process lifecycle — resets on thread switch)
+	terminalEvents: string[]
 
 	// Notifications (in-app toaster + history)
 	notifications: NotificationRecord[]
@@ -61,9 +65,11 @@ interface AppState {
 	setGithubIssues: (issues: GitHubIssueCacheRecord[]) => void
 	appendAgentOutput: (processId: string, chunk: string) => void
 	clearAgentOutput: (processId: string) => void
+	logTerminalEvent: (line: string) => void
 	addNotification: (notification: NotificationRecord) => void
 	removeNotification: (id: string) => void
 	clearNotifications: () => void
+	toggleIssueDetailExpanded: () => void
 	toggleCommandPalette: () => void
 	openCreateIssueModal: () => void
 	openEditPrdModal: (issueNumber: number, body: string) => void
@@ -79,6 +85,7 @@ export const useAppStore = create<AppState>((set) => ({
 	terminalVisible: false,
 	settingsVisible: false,
 	settingsSection: 'general' as SettingsSection,
+	issueDetailExpanded: false,
 	currentPlan: null,
 	currentReview: null,
 	pipelinePhase: 'idle',
@@ -86,16 +93,17 @@ export const useAppStore = create<AppState>((set) => ({
 	currentVerification: null,
 	githubIssues: [],
 	agentOutputs: {},
+	terminalEvents: [],
 	notifications: [],
 	commandPaletteOpen: false,
 	createIssueModalOpen: false,
 	editingPrd: null,
 
 	setViewMode: (mode) => set({ viewMode: mode }),
-	openDashboard: () => set({ viewMode: 'dashboard', activeIssue: null, currentPlan: null, currentReview: null, currentVerification: null }),
-	openActivity: () => set({ viewMode: 'activity', activeIssue: null, currentPlan: null, currentReview: null, currentVerification: null }),
-	openInbox: () => set({ viewMode: 'inbox', activeIssue: null, currentPlan: null, currentReview: null, currentVerification: null }),
-	selectProject: (id) => set({ activeProjectId: id, activeThreadId: null, activeIssue: null, currentPlan: null, currentReview: null, currentVerification: null, pipelinePhase: 'idle', viewMode: 'project' }),
+	openDashboard: () => set({ viewMode: 'dashboard', activeIssue: null, issueDetailExpanded: false, currentPlan: null, currentReview: null, currentVerification: null }),
+	openActivity: () => set({ viewMode: 'activity', activeIssue: null, issueDetailExpanded: false, currentPlan: null, currentReview: null, currentVerification: null }),
+	openInbox: () => set({ viewMode: 'inbox', activeIssue: null, issueDetailExpanded: false, currentPlan: null, currentReview: null, currentVerification: null }),
+	selectProject: (id) => set({ activeProjectId: id, activeThreadId: null, activeIssue: null, issueDetailExpanded: false, currentPlan: null, currentReview: null, currentVerification: null, pipelinePhase: 'idle', viewMode: 'project' }),
 	selectThread: (id) => set({ activeThreadId: id, currentPlan: null, currentReview: null, currentVerification: null, pipelinePhase: 'idle', viewMode: 'project' }),
 	selectIssue: (issue) => set((s) => ({
 		activeIssue: issue,
@@ -104,6 +112,9 @@ export const useAppStore = create<AppState>((set) => ({
 		currentReview: null,
 		currentVerification: null,
 		pipelinePhase: 'idle',
+		terminalEvents: [],
+		// Keep expanded mode when switching between issues; reset when closing.
+		issueDetailExpanded: issue ? s.issueDetailExpanded : false,
 		// Auto-open terminal when the selected issue has an agent actively running
 		terminalVisible: issue && AGENT_ACTIVE_STATUSES.has(issue.pipelineStatus) ? true : s.terminalVisible,
 	})),
@@ -129,6 +140,8 @@ export const useAppStore = create<AppState>((set) => ({
 			const { [processId]: _, ...rest } = s.agentOutputs
 			return { agentOutputs: rest }
 		}),
+	logTerminalEvent: (line) =>
+		set((s) => ({ terminalEvents: [...s.terminalEvents, line] })),
 	addNotification: (notification) =>
 		set((s) => {
 			// Replace existing record with same id (re-fired) or prepend new.
@@ -138,6 +151,7 @@ export const useAppStore = create<AppState>((set) => ({
 	removeNotification: (id) =>
 		set((s) => ({ notifications: s.notifications.filter((n) => n.id !== id) })),
 	clearNotifications: () => set({ notifications: [] }),
+	toggleIssueDetailExpanded: () => set((s) => ({ issueDetailExpanded: !s.issueDetailExpanded })),
 	toggleCommandPalette: () => set((s) => ({ commandPaletteOpen: !s.commandPaletteOpen })),
 	openCreateIssueModal: () => set({ createIssueModalOpen: true, editingPrd: null, commandPaletteOpen: false }),
 	openEditPrdModal: (issueNumber, body) => set({

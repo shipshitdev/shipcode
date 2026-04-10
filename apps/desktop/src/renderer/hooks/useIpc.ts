@@ -21,6 +21,9 @@ export function useIpc() {
 					if (data.phase === 'planning') {
 						store.openTerminal()
 					}
+					// Log phase transition to terminal event log
+					const ts = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
+					store.logTerminalEvent(`[${ts}] phase: ${data.phase}`)
 				}
 
 				if (store.activeProjectId) {
@@ -93,6 +96,17 @@ export function useIpc() {
 			})
 		)
 
+		// Log agent process lifecycle events to the terminal
+		unsubscribers.push(
+			window.shipcode.on('agent:state', (data: any) => {
+				if (data.state !== 'running' && data.state !== 'exited') return
+				const store = useAppStore.getState()
+				const ts = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
+				const label = data.state === 'running' ? 'started' : 'exited'
+				store.logTerminalEvent(`[${ts}] ${data.type} process ${label}`)
+			})
+		)
+
 		// === Mission Control: dashboard invalidation ===
 		unsubscribers.push(
 			window.shipcode.on('dashboard:invalidate', (data: any) => {
@@ -145,6 +159,7 @@ export function useIpc() {
 			for (const unsub of unsubscribers) unsub()
 		}
 	}, [setPlan, setReview, setPipelinePhase, setVerification, setGithubIssues, appendAgentOutput, addNotification, removeNotification, queryClient])
+
 }
 
 export function useInvoke<T>(channel: string) {

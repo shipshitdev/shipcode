@@ -56,6 +56,8 @@ export interface Project {
   path: string
   gitRemote: string | null
   defaultBranch: string
+  pinned: boolean
+  archived: boolean
   createdAt: string
   updatedAt: string
 }
@@ -218,6 +220,8 @@ export interface AppSettings {
   autoPickupEnabled: boolean
   statusLabelMappings: StatusLabelMapping
   onboardingVersion: number
+  // Sidebar project ordering preference (pinned projects always float to top first)
+  projectSortOrder: 'alpha' | 'recent' | 'added'
   // null = default (~/.shipcode/worktrees), '' = project-local legacy, else absolute or ~-prefixed
   worktreeRoot: string | null
   // Notifications

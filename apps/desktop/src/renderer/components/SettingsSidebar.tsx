@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { cn, ChevronLeft, Settings, Folder } from '@shipcode/ui'
+import { cn, ChevronLeft, Settings, Folder, Archive } from '@shipcode/ui'
 import { useAppStore } from '../stores/app-store'
 import type { SettingsSection } from '../stores/app-store'
 
@@ -40,6 +40,11 @@ const SECTIONS: { key: SettingsSection; label: string; icon: ReactNode }[] = [
 				<path d="M8 4v3.5M8 7.5l-4 4M8 7.5l4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
 			</svg>
 		),
+	},
+	{
+		key: 'archived',
+		label: 'Archived',
+		icon: <Archive size={14} />,
 	},
 ]
 

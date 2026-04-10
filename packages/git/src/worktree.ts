@@ -46,19 +46,48 @@ export class WorktreeManager {
    * Remove a worktree using its persisted path and branch rather than
    * recomputing from threadId. This insulates cleanup from settings changes
    * that happened after the worktree was created.
+   *
+   * Returns structured per-step results so callers can distinguish "already
+   * gone" (safe, treated as success) from real failures (surfaced via
+   * `error`). The `project:remove` handler uses this signal to fail closed
+   * before deleting the registry row — previously the method swallowed all
+   * errors, which allowed orphaned worktrees on disk with no project row to
+   * recover them.
    */
-  async remove(worktreePath: string, branch: string): Promise<void> {
+  async remove(
+    worktreePath: string,
+    branch: string,
+  ): Promise<{ worktreeRemoved: boolean; branchDeleted: boolean; error?: string }> {
+    let worktreeRemoved = false
+    let branchDeleted = false
+
     try {
       await this.git.raw(['worktree', 'remove', worktreePath, '--force'])
-    } catch {
-      // Worktree may already be removed
+      worktreeRemoved = true
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      // "not a working tree" / "is not a working tree" / "no such file" → already gone
+      if (/not a working tree|is not a working tree|no such file|does not exist/i.test(msg)) {
+        worktreeRemoved = true
+      } else {
+        return { worktreeRemoved, branchDeleted, error: `worktree remove: ${msg}` }
+      }
     }
 
     try {
       await this.git.deleteLocalBranch(branch, true)
-    } catch {
-      // Branch may already be deleted
+      branchDeleted = true
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      // "not found" → already gone
+      if (/not found|does not exist/i.test(msg)) {
+        branchDeleted = true
+      } else {
+        return { worktreeRemoved, branchDeleted, error: `branch delete: ${msg}` }
+      }
     }
+
+    return { worktreeRemoved, branchDeleted }
   }
 
   /**

@@ -367,6 +367,26 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     const context = activePipelines.get(threadId)
     if (!context) return
 
+    // Create the worktree now — this is the first phase that writes to the repo.
+    // context.baseBranch is always set before we reach here: startFromGitHubIssue
+    // resolves it via git symbolic-ref, and pipeline:start seeds it via initializeContext.
+    if (!context.worktreePath) {
+      try {
+        const appSettings = deps.settings.get()
+        const worktreeManager = new WorktreeManager(context.projectPath, {
+          worktreeRoot: appSettings.worktreeRoot,
+        })
+        const wt = await worktreeManager.create(threadId, context.baseBranch || undefined)
+        context.worktreePath = wt.worktreePath
+        deps.threads.setWorktree(threadId, wt.branch, wt.worktreePath)
+      } catch (err) {
+        console.error(`[pipeline] worktree creation failed for thread ${threadId}:`, err)
+        emitPhase(threadId, 'failed')
+        activePipelines.delete(threadId)
+        return
+      }
+    }
+
     emitPhase(threadId, 'executing')
 
     const executionPrompt = `Execute this approved implementation plan:\n\n${JSON.stringify(plan, null, 2)}`
@@ -652,33 +672,13 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       forkPointSha,
     })
 
-    // Create a worktree per thread. This is the CR-3 fix from the
-    // adversarial review: worktree creation used to live in desktop IPC,
-    // which meant the CLI path and any future callers ran EXECUTE
-    // against the project root. Doing it here covers every entry point.
-    //
-    // Best-effort: if worktree creation fails we log and fall back to
-    // null (which the pipeline resolves to projectPath via `cwd =
-    // worktreePath ?? projectPath`). The OpenRouter execute harness
-    // refuses to run when cwd === projectPath as defense in depth, so a
-    // failed worktree won't silently corrupt the user's tree for that
-    // executor; claude/codex CLIs preserve their historical behavior.
-    let worktreePath: string | null = null
-    try {
-      const appSettings = deps.settings.get()
-      const worktreeManager = new WorktreeManager(projectPath, { worktreeRoot: appSettings.worktreeRoot })
-      const wt = await worktreeManager.create(threadId, baseBranch)
-      worktreePath = wt.worktreePath
-      deps.threads.setWorktree(threadId, wt.branch, wt.worktreePath)
-    } catch (err) {
-      // Log but continue — matches the desktop IPC fallback behavior.
-      console.error(`[pipeline] worktree creation failed for thread ${threadId}, falling back to project root:`, err)
-    }
+    // Worktree creation is deferred to startExecution — it is only needed
+    // when the executor writes to disk. Planning and review run in projectPath.
 
     // Pre-create context with all autonomous fields
     ensureContext(threadId, {
       projectPath,
-      worktreePath,
+      worktreePath: null,
       retryCount: 0,
       autonomous: true,
       reviewRound: 0,
@@ -695,7 +695,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     })
 
     const prompt = `GitHub Issue #${issue.number}: ${issue.title}\n\n${issue.body ?? ''}`
-    await startPlanGeneration(threadId, prompt, projectPath, worktreePath)
+    await startPlanGeneration(threadId, prompt, projectPath, null)
   }
 
   function cancel(threadId: string) {

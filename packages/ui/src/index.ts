@@ -4,19 +4,29 @@ export type { StatusBadgeVariant } from './lib/status-variant'
 
 // Icons — re-exported from lucide-react so apps import via @shipcode/ui
 export {
+  Archive,
   ArrowRight,
+  ArrowUpDown,
   Check,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
   Folder,
+  Layers,
   Loader2,
+  Maximize2,
+  Minimize2,
+  MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
+  Pin,
+  PinOff,
   Plus,
   RefreshCw,
   Settings,
   Sparkles,
+  Terminal,
+  Trash2,
   X,
 } from 'lucide-react'
 
@@ -33,6 +43,7 @@ export { Table, TableBody, TableCaption, TableCell, TableFooter, TableHead, Tabl
 export { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './primitives/dialog'
 export { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator, CommandShortcut } from './primitives/command'
 export { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './primitives/select'
+export { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from './primitives/dropdown-menu'
 export { Pagination } from './primitives/pagination'
 export type { PaginationProps } from './primitives/pagination'
 

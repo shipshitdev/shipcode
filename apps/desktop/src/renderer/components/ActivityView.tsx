@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ActivityEntry } from '@shipcode/shared'
-import { Card, CardContent, Loader2, Button } from '@shipcode/ui'
+import { Card, CardContent, Loader2, Button, Table, TableBody, TableCell, TableRow } from '@shipcode/ui'
 import { useAppStore } from '../stores/app-store'
 
 function timeAgo(input: string | number): string {
@@ -51,7 +51,7 @@ function groupByDay(entries: ActivityEntry[]): { label: string; entries: Activit
 
 export function ActivityView() {
 	const queryClient = useQueryClient()
-	const { selectProject } = useAppStore()
+	const { selectProject, selectThread } = useAppStore()
 
 	const { data: activity = [], isLoading, isError, refetch } = useQuery<ActivityEntry[]>({
 		queryKey: ['activity', { limit: 200 }],
@@ -106,39 +106,41 @@ export function ActivityView() {
 							</div>
 							<Card>
 								<CardContent className="p-0">
-									<ul className="divide-y divide-border">
-										{group.entries.map((entry) => {
-											const clickable = entry.projectId !== null
+									<Table>
+										<TableBody>
+											{group.entries.map((entry) => {
+												const clickable = entry.projectId !== null
 
-											return (
-												<li key={entry.id} className="flex items-start gap-3 px-4 py-3">
-													<span className="mt-0.5 inline-flex w-14 shrink-0 items-center justify-center rounded border border-border bg-tertiary px-1 py-0.5 text-[9px] uppercase text-muted">
-														{entry.actor}
-													</span>
-													{clickable ? (
-														<button
-															type="button"
-															onClick={() => selectProject(entry.projectId!)}
-															className="flex-1 cursor-pointer border-none bg-transparent text-left text-secondary hover:text-primary"
-														>
-															<div className="truncate text-[13px]">{entry.title}</div>
+												return (
+													<TableRow
+														key={entry.id}
+														className={clickable ? 'cursor-pointer hover:bg-hover' : undefined}
+														onClick={() => {
+															if (entry.projectId) {
+																selectProject(entry.projectId)
+																if (entry.threadId) selectThread(entry.threadId)
+															}
+														}}
+													>
+														<TableCell className="w-px whitespace-nowrap pr-2 align-top pt-2.5">
+															<span className="inline-flex items-center justify-center rounded border border-border bg-tertiary px-1 py-0.5 text-[9px] uppercase text-muted">
+																{entry.actor}
+															</span>
+														</TableCell>
+														<TableCell className="max-w-0 w-full">
+															<div className="truncate text-[12px] text-primary">{entry.title}</div>
 															{entry.subtitle && (
 																<div className="truncate text-[11px] text-muted">{entry.subtitle}</div>
 															)}
-														</button>
-													) : (
-														<div className="flex-1 text-left text-secondary">
-															<div className="truncate text-[13px]">{entry.title}</div>
-															{entry.subtitle && (
-																<div className="truncate text-[11px] text-muted">{entry.subtitle}</div>
-															)}
-														</div>
-													)}
-													<span className="shrink-0 text-[10px] text-muted">{timeAgo(entry.createdAt)}</span>
-												</li>
-											)
-										})}
-									</ul>
+														</TableCell>
+														<TableCell className="w-px whitespace-nowrap text-right text-[10px] text-muted">
+															{timeAgo(entry.createdAt)}
+														</TableCell>
+													</TableRow>
+												)
+											})}
+										</TableBody>
+									</Table>
 								</CardContent>
 							</Card>
 						</div>
