@@ -2,8 +2,6 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
 	cn,
-	PanelLeftClose,
-	PanelLeftOpen,
 	Folder,
 	Plus,
 	Pin,
@@ -31,7 +29,7 @@ const SORT_LABELS: Record<SortOrder, string> = {
 }
 
 export function ProjectSidebar() {
-	const { activeProjectId, viewMode, settingsVisible, selectProject, openDashboard, openActivity, openInbox, sidebarCollapsed, toggleSidebar } = useAppStore()
+	const { activeProjectId, viewMode, settingsVisible, selectProject, openDashboard, openActivity, openInbox, sidebarCollapsed } = useAppStore()
 	const queryClient = useQueryClient()
 	const [openMenuId, setOpenMenuId] = useState<string | null>(null)
 
@@ -122,20 +120,7 @@ export function ProjectSidebar() {
 	})
 
 	if (sidebarCollapsed) {
-		return (
-			<aside className="flex w-[48px] min-w-[48px] flex-col border-r border-border bg-primary">
-				<div className="flex items-center px-3 py-3">
-					<button
-						type="button"
-						className="cursor-pointer rounded-md border-none bg-transparent p-1.5 text-secondary hover:bg-hover hover:text-primary"
-						onClick={toggleSidebar}
-						title="Expand sidebar"
-					>
-						<PanelLeftOpen size={14} />
-					</button>
-				</div>
-			</aside>
-		)
+		return null
 	}
 
 	const liveCount = stats?.agentsRunning ?? 0
@@ -152,15 +137,7 @@ export function ProjectSidebar() {
 
 	return (
 		<aside className="flex w-[256px] min-w-[256px] flex-col border-r border-border bg-primary">
-			<div className="flex items-center gap-2 px-3 py-3">
-				<button
-					type="button"
-					className="cursor-pointer rounded-md border-none bg-transparent p-1.5 text-secondary hover:bg-hover hover:text-primary shrink-0"
-					onClick={toggleSidebar}
-					title="Collapse sidebar"
-				>
-					<PanelLeftClose size={14} />
-				</button>
+			<div className="flex items-center px-4 py-3">
 				<h1 className="text-sm font-semibold tracking-tight text-primary">ShipCode</h1>
 			</div>
 
