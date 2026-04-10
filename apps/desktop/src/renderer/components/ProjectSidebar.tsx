@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { cn, ChevronLeft, Folder, Plus } from '@shipcode/ui'
+import { cn, PanelLeftClose, Folder, Plus } from '@shipcode/ui'
 import { useAppStore } from '../stores/app-store'
 import type { DashboardStats, NotificationRecord, Project } from '@shipcode/shared'
 
@@ -55,7 +55,7 @@ export function ProjectSidebar() {
 					onClick={toggleSidebar}
 					title="Collapse sidebar"
 				>
-					<ChevronLeft size={14} />
+					<PanelLeftClose size={14} />
 				</button>
 			</div>
 
