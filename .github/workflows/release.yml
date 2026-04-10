@@ -108,6 +108,60 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  update-homebrew-cask:
+    needs: build-desktop-macos
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tap repo
+        uses: actions/checkout@v4
+        with:
+          repository: shipshitdev/homebrew-shipcode
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          ref: master
+
+      - name: Download macOS release artifacts
+        run: |
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"
+          gh release download "v${VERSION}" \
+            --repo shipshitdev/shipcode \
+            --pattern "*.dmg" \
+            --dir ./artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute SHA256 hashes
+        id: sha
+        run: |
+          ARM_FILE=$(ls artifacts/*arm64*.dmg 2>/dev/null | head -1)
+          INTEL_FILE=$(ls artifacts/*.dmg 2>/dev/null | grep -v arm64 | head -1)
+          if [ -n "$ARM_FILE" ]; then
+            echo "arm_sha=$(shasum -a 256 "$ARM_FILE" | awk '{print $1}')" >> $GITHUB_OUTPUT
+          fi
+          if [ -n "$INTEL_FILE" ]; then
+            echo "intel_sha=$(shasum -a 256 "$INTEL_FILE" | awk '{print $1}')" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update cask version and SHA256
+        run: |
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"
+          sed -i "s/version \".*\"/version \"${VERSION}\"/" Casks/shipcode.rb
+          if [ -n "${{ steps.sha.outputs.arm_sha }}" ]; then
+            sed -i "s|arm:   \"[a-f0-9]*\"|arm:   \"${{ steps.sha.outputs.arm_sha }}\"|" Casks/shipcode.rb
+          fi
+          if [ -n "${{ steps.sha.outputs.intel_sha }}" ]; then
+            sed -i "s|intel: \"[a-f0-9]*\"|intel: \"${{ steps.sha.outputs.intel_sha }}\"|" Casks/shipcode.rb
+          fi
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/shipcode.rb
+          git commit -m "chore: bump shipcode to ${{ github.event.release.tag_name }}"
+          git push
+
   publish-cli:
     runs-on: ubuntu-latest
     steps:

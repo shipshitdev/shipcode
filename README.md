@@ -58,15 +58,23 @@ packages/
 - [GitHub CLI](https://cli.github.com) (`gh`) with auth configured
 - Git
 
-## Quick Start
+## Install
+
+**Desktop app (macOS, Homebrew):**
 
 ```bash
-# CLI (requires Node.js >= 22.5.0)
+brew tap shipshitdev/shipcode
+brew install --cask shipcode
+```
+
+**CLI (Node.js >= 22.5.0):**
+
+```bash
 npx shipcode onboard
 npx shipcode run 42
 ```
 
-Or run the desktop app:
+**From source:**
 
 ```bash
 git clone https://github.com/shipshitdev/shipcode
