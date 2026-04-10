@@ -6,10 +6,12 @@ export {
   Check,
   ChevronLeft,
   ChevronRight,
+  ExternalLink,
   Folder,
   Loader2,
   Plus,
   Settings,
+  Sparkles,
   X,
 } from 'lucide-react'
 

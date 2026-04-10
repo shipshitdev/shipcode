@@ -59,6 +59,12 @@ export interface ProviderRequest {
    * the filesystem (only execute) MUST confine to this directory.
    */
   cwd: string
+  /**
+   * The raw project root. The openrouter execute harness refuses to run
+   * if `cwd === projectPath` — defense in depth against a caller that
+   * forgot to create a worktree. All other phases can ignore this.
+   */
+  projectPath: string
   /** Explicit model override. Takes precedence over settings defaults. */
   modelHint?: string
   /**

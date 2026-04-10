@@ -100,3 +100,58 @@ export const OPENROUTER_BACKOFF_BASE_MS = 500
 export const OPENROUTER_BACKOFF_MAX_MS = 30_000
 export const OPENROUTER_MAX_HTTP_RETRIES = 5
 export const OPENROUTER_REQUEST_TIMEOUT_MS = 120_000
+
+// === Tier 2: Tool-call execute harness ===
+
+/** Hard cap on agent-loop iterations per execute run. */
+export const MAX_TOOL_CALL_ITERATIONS = 30
+
+/** Same (toolName, argsHash) firing this many times in a row = pathological loop, fail out. */
+export const MAX_DUPLICATE_TOOL_CALLS = 3
+
+/** Total tokens (prompt + completion) across one execute run. Circuit breaker, not $ budget. */
+export const MAX_EXECUTE_TOTAL_TOKENS = 500_000
+
+/** Upper bound on a single read tool's return size. */
+export const MAX_READ_BYTES = 500_000
+
+/** Wall-clock timeout for a single shell-readonly tool invocation. */
+export const SHELL_EXEC_TIMEOUT_MS = 30_000
+
+/**
+ * Commands the read-only shell tool is allowed to execute. Intentionally
+ * excludes any shell interpreter (bash, zsh, sh) to prevent command
+ * chaining; the harness always invokes execFile with shell:false.
+ *
+ * Subcommand restrictions (e.g. `git push` is forbidden) are enforced
+ * at the tool level, not here.
+ */
+export const SHELL_ALLOWLIST: readonly string[] = [
+  // Source control (read-only subcommands only — enforced in shell-readonly.ts)
+  'git',
+  // Runtimes (version checks, script execution, etc.)
+  'node', 'bun', 'deno',
+  // Package managers (list, info, exec, run scripts — read-mostly)
+  'npm', 'pnpm', 'yarn',
+  // TypeScript + build tools
+  'tsc', 'bunx',
+  // Search / navigation
+  'rg', 'grep', 'find', 'ls', 'tree',
+  // File inspection
+  'cat', 'head', 'tail', 'wc', 'file', 'stat',
+  // Scripting runtimes
+  'python', 'python3',
+]
+
+/**
+ * Git subcommands the shell-readonly tool refuses outright. These mutate
+ * refs or the working tree in ways the tool-call harness should not be
+ * able to trigger — file edits go through the dedicated Edit/Write tools.
+ */
+export const GIT_BLOCKED_SUBCOMMANDS: readonly string[] = [
+  'push', 'reset', 'checkout', 'clean', 'rm', 'mv',
+  'rebase', 'merge', 'cherry-pick', 'revert',
+  'commit', 'add', 'stash', 'tag', 'branch',
+  'config', 'remote', 'fetch', 'pull',
+  'worktree',
+]

@@ -11,6 +11,7 @@ function req(overrides: Partial<ProviderRequest> = {}): ProviderRequest {
     phase: 'plan',
     prompt: 'do stuff',
     cwd: '/tmp/wt',
+    projectPath: '/tmp/proj',
     signal: new AbortController().signal,
     threadId: 't1',
     ...overrides,
