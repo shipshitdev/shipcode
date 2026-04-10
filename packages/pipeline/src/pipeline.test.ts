@@ -840,6 +840,9 @@ describe('createPipeline', () => {
 			const pipeline = createPipeline(mock.deps)
 			await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null)
 			pipeline.getContext('t1')!.githubIssueNumber = 42
+			// baseBranch is a hard prerequisite for PR creation (invariant
+			// added alongside the per-project base-branch selector).
+			pipeline.getContext('t1')!.baseBranch = 'main'
 
 			mockExecSync.mockImplementation((cmd: string) => {
 				if (cmd.startsWith('git rev-parse')) return 'feat/branch'
@@ -858,6 +861,7 @@ describe('createPipeline', () => {
 			const pipeline = createPipeline(mock.deps)
 			await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null)
 			pipeline.getContext('t1')!.githubIssueNumber = 42
+			pipeline.getContext('t1')!.baseBranch = 'main'
 
 			mockExecSync.mockImplementation((cmd: string) => {
 				if (cmd.startsWith('git rev-parse')) return 'feat/branch'
