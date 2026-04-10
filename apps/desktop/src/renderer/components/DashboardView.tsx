@@ -376,7 +376,7 @@ export function DashboardView() {
                       {activitySlice.map((entry) => (
                         <TableRow
                           key={entry.id}
-                          className="cursor-pointer"
+                          className="cursor-pointer hover:bg-bg-hover"
                           onClick={() => {
                             if (entry.projectId && entry.threadId) {
                               handleRowClick(entry.projectId, entry.threadId)
@@ -384,12 +384,12 @@ export function DashboardView() {
                           }}
                         >
                           <TableCell className="w-px whitespace-nowrap pr-2 align-top pt-2.5">
-                            <span className="inline-flex items-center justify-center rounded border border-border bg-bg-tertiary px-1 py-0.5 text-[9px] uppercase text-text-muted">
+                            <span className="inline-flex items-center justify-center rounded border border-border bg-bg-tertiary px-1 py-0.5 text-[9px] uppercase text-text-secondary">
                               {entry.actor}
                             </span>
                           </TableCell>
                           <TableCell className="max-w-0 w-full">
-                            <div className="truncate text-[12px] text-text-secondary">{entry.title}</div>
+                            <div className="truncate text-[12px] text-text-primary">{entry.title}</div>
                             {entry.subtitle ? (
                               <div className="truncate text-[11px] text-text-muted">{entry.subtitle}</div>
                             ) : null}
@@ -441,14 +441,14 @@ export function DashboardView() {
                       {tasksSlice.map((task) => (
                         <TableRow
                           key={task.threadId}
-                          className="cursor-pointer"
+                          className="cursor-pointer hover:bg-bg-hover"
                           onClick={() => handleRowClick(task.projectId, task.threadId)}
                         >
                           <TableCell className="w-px whitespace-nowrap pr-2">
                             <PhaseChip phase={task.phase} />
                           </TableCell>
                           <TableCell className="max-w-0 w-full">
-                            <div className="truncate text-[12px] text-text-secondary">
+                            <div className="truncate text-[12px] text-text-primary">
                               {task.githubIssueNumber ? `#${task.githubIssueNumber} ` : ''}
                               {task.title}
                             </div>

@@ -65,11 +65,11 @@ export function ProjectSidebar() {
 					type="button"
 					className={cn(
 						'flex w-full cursor-pointer items-center gap-2 rounded-md border-none bg-transparent px-3 py-2 text-left text-[13px] text-text-secondary app-region-no-drag hover:bg-bg-hover hover:text-text-primary focus:outline-none',
-						!settingsVisible && viewMode === 'dashboard' && 'bg-bg-tertiary text-text-primary',
+						!settingsVisible && viewMode === 'dashboard' && 'bg-bg-tertiary text-text-primary font-medium',
 					)}
 					onClick={() => openDashboard()}
 				>
-					<svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0 text-text-muted">
+					<svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0 text-text-secondary">
 						<rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1" stroke="currentColor" strokeWidth="1.4" />
 						<rect x="9" y="1.5" width="5.5" height="5.5" rx="1" stroke="currentColor" strokeWidth="1.4" />
 						<rect x="1.5" y="9" width="5.5" height="5.5" rx="1" stroke="currentColor" strokeWidth="1.4" />
@@ -89,11 +89,11 @@ export function ProjectSidebar() {
 					type="button"
 					className={cn(
 						'flex w-full cursor-pointer items-center gap-2 rounded-md border-none bg-transparent px-3 py-2 text-left text-[13px] text-text-secondary app-region-no-drag hover:bg-bg-hover hover:text-text-primary focus:outline-none',
-						!settingsVisible && viewMode === 'activity' && 'bg-bg-tertiary text-text-primary',
+						!settingsVisible && viewMode === 'activity' && 'bg-bg-tertiary text-text-primary font-medium',
 					)}
 					onClick={() => openActivity()}
 				>
-					<svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0 text-text-muted">
+					<svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0 text-text-secondary">
 						<line x1="3" y1="4" x2="13" y2="4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
 						<line x1="3" y1="8" x2="13" y2="8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
 						<line x1="3" y1="12" x2="9" y2="12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
@@ -106,11 +106,11 @@ export function ProjectSidebar() {
 					type="button"
 					className={cn(
 						'flex w-full cursor-pointer items-center gap-2 rounded-md border-none bg-transparent px-3 py-2 text-left text-[13px] text-text-secondary app-region-no-drag hover:bg-bg-hover hover:text-text-primary focus:outline-none',
-						!settingsVisible && viewMode === 'inbox' && 'bg-bg-tertiary text-text-primary',
+						!settingsVisible && viewMode === 'inbox' && 'bg-bg-tertiary text-text-primary font-medium',
 					)}
 					onClick={() => openInbox()}
 				>
-					<svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0 text-text-muted">
+					<svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0 text-text-secondary">
 						<path
 							d="M8 1.5A4.5 4.5 0 0 0 3.5 6v3.5L2 11h12l-1.5-1.5V6A4.5 4.5 0 0 0 8 1.5z"
 							stroke="currentColor"
@@ -139,12 +139,12 @@ export function ProjectSidebar() {
 						key={project.id}
 						className={cn(
 							'flex w-full cursor-pointer items-center gap-2 rounded-md border-none bg-transparent px-3 py-2 text-left text-[13px] text-text-secondary app-region-no-drag hover:bg-bg-hover hover:text-text-primary focus:outline-none',
-							viewMode === 'project' && activeProjectId === project.id && 'bg-bg-tertiary text-text-primary',
+							viewMode === 'project' && activeProjectId === project.id && 'bg-bg-tertiary text-text-primary font-medium',
 						)}
 						onClick={() => selectProject(project.id)}
 					>
-						<Folder size={14} className="shrink-0 text-text-muted" />
-						<span className="truncate">{project.name}</span>
+						<Folder size={14} className="shrink-0 text-text-secondary" />
+						<span className="truncate text-text-primary">{project.name}</span>
 					</button>
 				))}
 			</div>
