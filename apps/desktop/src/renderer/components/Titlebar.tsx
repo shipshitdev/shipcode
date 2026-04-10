@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import type { DashboardStats, Project } from '@shipcode/shared'
-import { Settings, X } from '@shipcode/ui'
+import { Settings, X, ChevronRight } from '@shipcode/ui'
 import { useAppStore } from '../stores/app-store'
 
 export function Titlebar() {
-	const { settingsVisible, toggleSettings, openDashboard, activeProjectId } = useAppStore()
+	const { settingsVisible, toggleSettings, openDashboard, activeProjectId, sidebarCollapsed, toggleSidebar } = useAppStore()
 
 	const { data: projects = [] } = useQuery<Project[]>({
 		queryKey: ['projects'],
@@ -26,6 +26,16 @@ export function Titlebar() {
 	return (
 		<div className="relative flex h-[var(--spacing-titlebar)] shrink-0 items-center justify-between border-b border-border bg-bg-primary pl-[84px] pr-2 app-region-drag">
 			<div className="flex min-w-0 items-center gap-2 text-xs">
+				{sidebarCollapsed && (
+					<button
+						type="button"
+						className="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-text-secondary app-region-no-drag hover:bg-bg-hover hover:text-text-primary focus:outline-none"
+						onClick={toggleSidebar}
+						title="Show sidebar"
+					>
+						<ChevronRight size={14} />
+					</button>
+				)}
 				{activeProject ? (
 					<>
 						<span className="text-text-muted">ShipCode</span>

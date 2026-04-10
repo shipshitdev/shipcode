@@ -49,16 +49,23 @@ export class ActivityQueries {
     return mapRow(row)
   }
 
-  listRecent(limit = 50, projectId?: string): ActivityEntry[] {
+  listRecent(limit = 50, projectId?: string, offset = 0): ActivityEntry[] {
     const rows = projectId
       ? this.db.prepare(
-          'SELECT * FROM activity_log WHERE project_id = ? ORDER BY created_at DESC LIMIT ?'
-        ).all(projectId, limit) as any[]
+          'SELECT * FROM activity_log WHERE project_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?'
+        ).all(projectId, limit, offset) as any[]
       : this.db.prepare(
-          'SELECT * FROM activity_log ORDER BY created_at DESC LIMIT ?'
-        ).all(limit) as any[]
+          'SELECT * FROM activity_log ORDER BY created_at DESC LIMIT ? OFFSET ?'
+        ).all(limit, offset) as any[]
 
     return rows.map(mapRow)
+  }
+
+  countRecent(projectId?: string): number {
+    const row = projectId
+      ? this.db.prepare('SELECT COUNT(*) as n FROM activity_log WHERE project_id = ?').get(projectId) as { n: number }
+      : this.db.prepare('SELECT COUNT(*) as n FROM activity_log').get() as { n: number }
+    return row.n
   }
 
   listByThread(threadId: string, limit = 100): ActivityEntry[] {

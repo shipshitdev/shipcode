@@ -66,6 +66,7 @@ export function CreateIssueModal() {
 		[body],
 	)
 	const clampedError = useMemo(() => (error ? clampError(error) : null), [error])
+	const derivedTitle = useMemo(() => deriveTitleFromBody(body), [body])
 
 	if (!activeProjectId) return null
 
@@ -86,8 +87,6 @@ export function CreateIssueModal() {
 			setEnhancing(false)
 		}
 	}
-
-	const derivedTitle = useMemo(() => deriveTitleFromBody(body), [body])
 
 	const handleSubmit = async () => {
 		if (!bodyValid) return

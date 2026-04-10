@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import type { ShipCodePlan, PlanReview, PipelinePhase, SystemHealth, VerificationResult, GitHubIssueCacheRecord, NotificationRecord } from '@shipcode/shared'
 
-export type ViewMode = 'dashboard' | 'project'
+export type ViewMode = 'dashboard' | 'project' | 'activity' | 'inbox'
+export type SettingsSection = 'general' | 'github' | 'notifications' | 'pipeline'
 
 interface AppState {
 	// Selection
@@ -14,6 +15,7 @@ interface AppState {
 	sidebarCollapsed: boolean
 	terminalVisible: boolean
 	settingsVisible: boolean
+	settingsSection: SettingsSection
 
 	// Live data
 	currentPlan: ShipCodePlan | null
@@ -39,12 +41,16 @@ interface AppState {
 	// Actions
 	setViewMode: (mode: ViewMode) => void
 	openDashboard: () => void
+	openActivity: () => void
+	openInbox: () => void
 	selectProject: (id: string | null) => void
 	selectThread: (id: string | null) => void
 	selectIssue: (issue: GitHubIssueCacheRecord | null) => void
 	toggleSidebar: () => void
 	toggleTerminal: () => void
+	openTerminal: () => void
 	toggleSettings: () => void
+	setSettingsSection: (section: SettingsSection) => void
 	setPlan: (plan: ShipCodePlan | null) => void
 	setReview: (review: PlanReview | null) => void
 	setPipelinePhase: (phase: PipelinePhase) => void
@@ -70,6 +76,7 @@ export const useAppStore = create<AppState>((set) => ({
 	sidebarCollapsed: false,
 	terminalVisible: false,
 	settingsVisible: false,
+	settingsSection: 'general' as SettingsSection,
 	currentPlan: null,
 	currentReview: null,
 	pipelinePhase: 'idle',
@@ -84,6 +91,8 @@ export const useAppStore = create<AppState>((set) => ({
 
 	setViewMode: (mode) => set({ viewMode: mode }),
 	openDashboard: () => set({ viewMode: 'dashboard', activeIssue: null, currentPlan: null, currentReview: null, currentVerification: null }),
+	openActivity: () => set({ viewMode: 'activity', activeIssue: null, currentPlan: null, currentReview: null, currentVerification: null }),
+	openInbox: () => set({ viewMode: 'inbox', activeIssue: null, currentPlan: null, currentReview: null, currentVerification: null }),
 	selectProject: (id) => set({ activeProjectId: id, activeThreadId: null, activeIssue: null, currentPlan: null, currentReview: null, currentVerification: null, pipelinePhase: 'idle', viewMode: 'project' }),
 	selectThread: (id) => set({ activeThreadId: id, currentPlan: null, currentReview: null, currentVerification: null, pipelinePhase: 'idle', viewMode: 'project' }),
 	selectIssue: (issue) => set({
@@ -96,7 +105,9 @@ export const useAppStore = create<AppState>((set) => ({
 	}),
 	toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
 	toggleTerminal: () => set((s) => ({ terminalVisible: !s.terminalVisible })),
-	toggleSettings: () => set((s) => ({ settingsVisible: !s.settingsVisible })),
+	openTerminal: () => set({ terminalVisible: true }),
+	toggleSettings: () => set((s) => ({ settingsVisible: !s.settingsVisible, settingsSection: 'general' as SettingsSection })),
+	setSettingsSection: (section) => set({ settingsSection: section }),
 	setPlan: (plan) => set({ currentPlan: plan }),
 	setReview: (review) => set({ currentReview: review }),
 	setPipelinePhase: (phase) => set({ pipelinePhase: phase }),
@@ -104,12 +115,11 @@ export const useAppStore = create<AppState>((set) => ({
 	setGithubIssues: (issues) => set({ githubIssues: issues }),
 	setSystemHealth: (health) => set({ systemHealth: health }),
 	appendAgentOutput: (processId, chunk) =>
-		set((s) => ({
-			agentOutputs: {
-				...s.agentOutputs,
-				[processId]: [...(s.agentOutputs[processId] ?? []), chunk],
-			},
-		})),
+		set((s) => {
+			const prev = s.agentOutputs[processId] ?? []
+			const next = prev.length >= 800 ? [...prev.slice(-799), chunk] : [...prev, chunk]
+			return { agentOutputs: { ...s.agentOutputs, [processId]: next } }
+		}),
 	clearAgentOutput: (processId) =>
 		set((s) => {
 			const { [processId]: _, ...rest } = s.agentOutputs

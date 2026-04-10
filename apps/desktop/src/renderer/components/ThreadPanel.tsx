@@ -95,6 +95,19 @@ export function ThreadPanel() {
 							window.alert(`Failed to retry issue #${issue.issueNumber}: ${err?.message ?? err}`)
 						})
 				}}
+				onRerun={(issue) => {
+					setPipelineStatusOptimistic(issue.id, 'planning')
+					window.shipcode.invoke('github:start-issue', {
+						projectId: activeProjectId,
+						issueNumber: issue.issueNumber,
+					})
+						.then(() => refetchIssues())
+						.catch((err) => {
+							refetchIssues()
+							console.error('[threadpanel] rerun failed', { issueNumber: issue.issueNumber, err })
+							window.alert(`Failed to re-run issue #${issue.issueNumber}: ${err?.message ?? err}`)
+						})
+				}}
 			/>
 		</div>
 	)

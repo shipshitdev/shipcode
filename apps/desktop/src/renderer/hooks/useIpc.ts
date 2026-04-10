@@ -16,6 +16,11 @@ export function useIpc() {
 				const store = useAppStore.getState()
 				if (data.threadId === store.activeThreadId) {
 					setPipelinePhase(data.phase)
+					// Auto-open terminal when planning starts so the user sees output immediately.
+					// Scoped to 'planning' only so it fires once per run; manual close is respected.
+					if (data.phase === 'planning') {
+						store.openTerminal()
+					}
 				}
 
 				if (store.activeProjectId) {
@@ -113,6 +118,7 @@ export function useIpc() {
 					return
 				}
 				addNotification(record)
+				queryClient.invalidateQueries({ queryKey: ['notifications'] })
 			})
 		)
 

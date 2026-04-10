@@ -48,6 +48,15 @@ export function registerIpcHandlers(
   pipeline: Pipeline,
   notificationService: NotificationService,
 ): void {
+  // === Startup: reset any threads/issues stuck in agent-loop phases from a prior session ===
+  // processManager is fresh on every launch, so any in-flight DB rows are orphaned.
+  for (const thread of queries.threads.getOrphaned()) {
+    queries.threads.updateStatus(thread.id, 'failed')
+    const issue = queries.githubIssues.getByThreadId(thread.id)
+    if (issue) queries.githubIssues.updatePipelineStatus(issue.id, 'failed')
+    console.log(`[startup] reset orphaned thread ${thread.id} → failed`)
+  }
+
   // === Project handlers ===
   ipcMain.handle('project:list', () => {
     return queries.projects.list()
@@ -292,6 +301,7 @@ export function registerIpcHandlers(
     mainWindow.webContents.send('github:issues-updated', { projectId, issues: queries.githubIssues.list(projectId) })
 
     // Start pipeline — pass existing threadId, not projectId
+    console.log(`[pipeline] starting issue #${issue.issueNumber} "${issue.title}" (thread ${thread.id}, executor: ${issue.executorModel})`)
     try {
       await pipeline.startFromGitHubIssue(
         thread.id,
@@ -455,12 +465,20 @@ export function registerIpcHandlers(
     return queries.dashboard.getStats()
   })
 
-  ipcMain.handle('dashboard:get-activity', (_event, { limit, projectId }: { limit?: number; projectId?: string } = {}) => {
-    return queries.activity.listRecent(limit ?? 50, projectId)
+  ipcMain.handle('dashboard:get-activity', (_event, { limit, offset, projectId }: { limit?: number; offset?: number; projectId?: string } = {}) => {
+    return queries.activity.listRecent(limit ?? 50, projectId, offset ?? 0)
   })
 
-  ipcMain.handle('dashboard:get-recent-tasks', (_event, { limit }: { limit?: number } = {}) => {
-    return queries.dashboard.getRecentTasks(limit ?? 20)
+  ipcMain.handle('dashboard:count-activity', (_event, { projectId }: { projectId?: string } = {}) => {
+    return queries.activity.countRecent(projectId)
+  })
+
+  ipcMain.handle('dashboard:get-recent-tasks', (_event, { limit, offset }: { limit?: number; offset?: number } = {}) => {
+    return queries.dashboard.getRecentTasks(limit ?? 20, offset ?? 0)
+  })
+
+  ipcMain.handle('dashboard:count-recent-tasks', () => {
+    return queries.dashboard.countRecentTasks()
   })
 
   // === Notification handlers ===
@@ -545,10 +563,15 @@ export function registerIpcHandlers(
 
   // === Agent output forwarding to renderer ===
   processManager.on('output', (processId: string, data: string) => {
+    if (mainWindow.webContents.isDestroyed()) return
     mainWindow.webContents.send('agent:output', { processId, chunk: data })
   })
 
   processManager.on('stateChange', (processId: string, type: string, state: string) => {
+    if (state === 'running' || state === 'exited') {
+      console.log(`[process:${type}] ${processId} → ${state}`)
+    }
+    if (mainWindow.webContents.isDestroyed()) return
     mainWindow.webContents.send('agent:state', { processId, type, state })
   })
 }

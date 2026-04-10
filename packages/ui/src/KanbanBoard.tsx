@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { RefreshCw, RotateCcw } from 'lucide-react'
 import { DndContext, DragOverlay, pointerWithin, rectIntersection, type CollisionDetection, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core'
 import { useDroppable } from '@dnd-kit/core'
 import { useDraggable } from '@dnd-kit/core'
@@ -23,6 +24,7 @@ interface KanbanBoardProps {
 	onNewIssue?: () => void
 	onStartPipeline?: (issue: GitHubIssueCacheRecord) => void
 	onRetry?: (issue: GitHubIssueCacheRecord) => void
+	onRerun?: (issue: GitHubIssueCacheRecord) => void
 	/** Per-project base branch that new worktrees fork from. */
 	baseBranch?: string
 	/** Resolvable branch refs sourced from `git:list-branches`. */
@@ -89,15 +91,16 @@ const COLUMNS: BoardColumn[] = [
 	},
 ]
 
-function DraggableCard({ issue, onClick }: { issue: GitHubIssueCacheRecord; onClick: () => void }) {
-	const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+// Only these statuses can be picked up and dragged.
+const DRAGGABLE_STATUSES: IssuePipelineStatus[] = ['todo', 'queued', 'failed']
+
+function DraggableCard({ issue, onClick, onRerun }: { issue: GitHubIssueCacheRecord; onClick: () => void; onRerun?: (issue: GitHubIssueCacheRecord) => void }) {
+	const draggable = DRAGGABLE_STATUSES.includes(issue.pipelineStatus)
+	const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
 		id: issue.id,
 		data: issue,
+		disabled: !draggable,
 	})
-
-	const style = transform ? {
-		transform: `translate(${transform.x}px, ${transform.y}px)`,
-	} : undefined
 
 	const isFailed = issue.pipelineStatus === 'failed'
 	const isAwaiting = issue.pipelineStatus === 'awaiting_approval'
@@ -106,17 +109,28 @@ function DraggableCard({ issue, onClick }: { issue: GitHubIssueCacheRecord; onCl
 		<div
 			ref={setNodeRef}
 			className={cn(
-				'rounded-md border bg-bg-primary p-2 cursor-grab transition-colors active:cursor-grabbing',
+				'relative rounded-md border bg-bg-primary p-2 transition-colors',
+				draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-default',
 				'border-border hover:border-text-muted',
 				isFailed && 'border-danger/40 bg-danger/[0.04] hover:border-danger/60',
 				isAwaiting && 'border-warning/30 bg-warning/[0.03] hover:border-warning/50',
 				isDragging && 'opacity-50',
 			)}
-			style={style}
 			{...listeners}
 			{...attributes}
 			onClick={(e) => { e.stopPropagation(); onClick() }}
 		>
+			{isFailed && onRerun && (
+				<button
+					type="button"
+					className="absolute top-1.5 right-1.5 rounded p-0.5 text-danger/60 hover:text-danger hover:bg-danger/10 transition-colors"
+					title="Re-run pipeline"
+					onPointerDown={(e) => e.stopPropagation()}
+					onClick={(e) => { e.stopPropagation(); onRerun(issue) }}
+				>
+					<RotateCcw size={11} />
+				</button>
+			)}
 			<div className="text-[11px] text-text-muted font-mono mb-0.5">#{issue.issueNumber}</div>
 			<div className="text-xs leading-snug text-text-primary line-clamp-2">{issue.title}</div>
 			<div className="flex flex-wrap gap-1 mt-1">
@@ -165,11 +179,13 @@ function SectionBlock({
 	section,
 	issues,
 	onIssueClick,
+	onRerun,
 }: {
 	columnKey: ColumnKey
 	section: PhaseSection
 	issues: GitHubIssueCacheRecord[]
 	onIssueClick: (issue: GitHubIssueCacheRecord) => void
+	onRerun?: (issue: GitHubIssueCacheRecord) => void
 }) {
 	const { setNodeRef, isOver } = useDroppable({
 		id: `${columnKey}:${section.key}`,
@@ -229,7 +245,7 @@ function SectionBlock({
 					)}
 				>
 					{issues.map(issue => (
-						<DraggableCard key={issue.id} issue={issue} onClick={() => onIssueClick(issue)} />
+						<DraggableCard key={issue.id} issue={issue} onClick={() => onIssueClick(issue)} onRerun={onRerun} />
 					))}
 				</div>
 			)}
@@ -250,10 +266,12 @@ function StackedColumn({
 	column,
 	issues,
 	onIssueClick,
+	onRerun,
 }: {
 	column: BoardColumn
 	issues: GitHubIssueCacheRecord[]
 	onIssueClick: (issue: GitHubIssueCacheRecord) => void
+	onRerun?: (issue: GitHubIssueCacheRecord) => void
 }) {
 	const columnIssues = issues.filter(i => column.statuses.includes(i.pipelineStatus))
 
@@ -273,6 +291,7 @@ function StackedColumn({
 							section={section}
 							issues={sectionIssues}
 							onIssueClick={onIssueClick}
+							onRerun={onRerun}
 						/>
 					)
 				})}
@@ -293,7 +312,7 @@ const customCollisionDetection: CollisionDetection = (args) => {
 	return rectIntersection(args)
 }
 
-export function KanbanBoard({ issues, onIssueClick, onRefresh, onNewIssue, onStartPipeline, onRetry, baseBranch, branches, onBaseBranchChange }: KanbanBoardProps) {
+export function KanbanBoard({ issues, onIssueClick, onRefresh, onNewIssue, onStartPipeline, onRetry, onRerun, baseBranch, branches, onBaseBranchChange }: KanbanBoardProps) {
 	const [activeId, setActiveId] = useState<string | null>(null)
 	const activeIssue = issues.find(i => i.id === activeId)
 
@@ -330,30 +349,32 @@ export function KanbanBoard({ issues, onIssueClick, onRefresh, onNewIssue, onSta
 
 	return (
 		<div className="flex flex-col h-full overflow-hidden">
-			<div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0 gap-3">
+			<div className="flex items-center px-4 py-3 border-b border-border shrink-0 gap-3">
 				<h3 className="text-sm font-semibold shrink-0">GitHub Issues</h3>
-				{baseBranch && branches && branches.length > 0 && onBaseBranchChange && (
-					<div className="flex items-center gap-2 min-w-0 flex-1 max-w-[280px]">
-						<span className="text-[11px] text-text-muted font-mono shrink-0">base:</span>
-						<Select value={baseBranch} onValueChange={onBaseBranchChange}>
-							<SelectTrigger className="h-7 text-xs font-mono truncate">
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent>
-								{branches.map((b) => (
-									<SelectItem key={b} value={b} className="text-xs font-mono">{b}</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-					</div>
-				)}
+				<div className="flex-1" />
 				<div className="flex items-center gap-2 shrink-0">
+					{baseBranch && branches && branches.length > 0 && onBaseBranchChange && (
+						<div className="flex items-center gap-2 min-w-0 max-w-[200px] shrink-0">
+							<span className="text-[11px] text-text-muted font-mono shrink-0">base:</span>
+							<Select value={baseBranch} onValueChange={onBaseBranchChange}>
+								<SelectTrigger className="h-7 text-xs font-mono truncate">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									{branches.map((b) => (
+										<SelectItem key={b} value={b} className="text-xs font-mono">{b}</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
+					)}
 					<button
 						type="button"
-						className="bg-transparent border border-border rounded-md text-text-secondary cursor-pointer px-2.5 py-1 text-xs hover:text-text-primary hover:border-text-secondary"
+						className="flex items-center justify-center h-7 w-7 bg-transparent border border-border rounded-md text-text-secondary cursor-pointer hover:text-text-primary hover:border-text-secondary"
 						onClick={onRefresh}
+						title="Refresh"
 					>
-						Refresh
+						<RefreshCw size={13} />
 					</button>
 					{onNewIssue && (
 						<button
@@ -380,6 +401,7 @@ export function KanbanBoard({ issues, onIssueClick, onRefresh, onNewIssue, onSta
 									column={col}
 									issues={issues}
 									onIssueClick={onIssueClick}
+									onRerun={onRerun}
 								/>
 							)
 						}

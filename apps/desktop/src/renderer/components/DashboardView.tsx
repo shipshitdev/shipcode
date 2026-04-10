@@ -8,7 +8,11 @@ import type {
   Project,
   RecentTask,
 } from '@shipcode/shared'
-import { Card, CardContent, CardHeader, CardTitle, Button, Folder, Plus } from '@shipcode/ui'
+import {
+  Card, CardContent, CardFooter, CardHeader, CardTitle,
+  Button, Folder, Plus, Pagination,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@shipcode/ui'
 import { useAppStore } from '../stores/app-store'
 
 const PHASE_COLOR: Partial<Record<PipelinePhase, string>> = {
@@ -96,6 +100,8 @@ export function DashboardView() {
   const queryClient = useQueryClient()
   const selectProject = useAppStore((s) => s.selectProject)
   const selectThread = useAppStore((s) => s.selectThread)
+  const openActivity = useAppStore((s) => s.openActivity)
+  const openInbox = useAppStore((s) => s.openInbox)
 
   const { data: stats } = useQuery<DashboardStats>({
     queryKey: ['dashboard', 'stats'],
@@ -132,17 +138,38 @@ export function DashboardView() {
     refetchInterval: 2000,
   })
 
+  const PAGE_SIZE = 5
+  const [activityPage, setActivityPage] = useState(1)
+  const [tasksPage, setTasksPage] = useState(1)
+
   const { data: activity = [] } = useQuery<ActivityEntry[]>({
-    queryKey: ['dashboard', 'activity'],
-    queryFn: () => window.shipcode.invoke<ActivityEntry[]>('dashboard:get-activity', { limit: 30 }),
+    queryKey: ['dashboard', 'activity', activityPage],
+    queryFn: () => window.shipcode.invoke<ActivityEntry[]>('dashboard:get-activity', { limit: PAGE_SIZE, offset: (activityPage - 1) * PAGE_SIZE }),
     refetchInterval: 5000,
   })
 
+  const { data: activityTotal = 0 } = useQuery<number>({
+    queryKey: ['dashboard', 'activity-count'],
+    queryFn: () => window.shipcode.invoke<number>('dashboard:count-activity'),
+    refetchInterval: 10_000,
+  })
+
   const { data: recent = [] } = useQuery<RecentTask[]>({
-    queryKey: ['dashboard', 'recent'],
-    queryFn: () => window.shipcode.invoke<RecentTask[]>('dashboard:get-recent-tasks', { limit: 12 }),
+    queryKey: ['dashboard', 'recent', tasksPage],
+    queryFn: () => window.shipcode.invoke<RecentTask[]>('dashboard:get-recent-tasks', { limit: PAGE_SIZE, offset: (tasksPage - 1) * PAGE_SIZE }),
     refetchInterval: 5000,
   })
+
+  const { data: recentTotal = 0 } = useQuery<number>({
+    queryKey: ['dashboard', 'recent-count'],
+    queryFn: () => window.shipcode.invoke<number>('dashboard:count-recent-tasks'),
+    refetchInterval: 10_000,
+  })
+
+  const activityTotalPages = Math.max(1, Math.ceil(activityTotal / PAGE_SIZE))
+  const tasksTotalPages = Math.max(1, Math.ceil(recentTotal / PAGE_SIZE))
+  const activitySlice = activity
+  const tasksSlice = recent
 
   const handleRowClick = (projectId: string, threadId: string) => {
     selectProject(projectId)
@@ -183,16 +210,18 @@ export function DashboardView() {
               value={stats?.tasksInProgress ?? 0}
               subtitle={stats ? `${stats.tasksOpen} open · ${stats.tasksBlocked} blocked` : '—'}
             />
-            <StatCard
-              label="Pending Approvals"
-              value={stats?.pendingApprovals ?? 0}
-              subtitle={
-                stats?.staleApprovals
-                  ? `${stats.staleApprovals} stale > 24h`
-                  : 'no stale items'
-              }
-              tone={stats && stats.pendingApprovals > 0 ? 'danger' : 'default'}
-            />
+            <button type="button" onClick={openInbox} className="w-full cursor-pointer border-none bg-transparent p-0 text-left">
+              <StatCard
+                label="Pending Approvals"
+                value={stats?.pendingApprovals ?? 0}
+                subtitle={
+                  stats?.staleApprovals
+                    ? `${stats.staleApprovals} stale > 24h`
+                    : 'no stale items'
+                }
+                tone={stats && stats.pendingApprovals > 0 ? 'danger' : 'default'}
+              />
+            </button>
             <StatCard
               label="Shipped (7d)"
               value={stats?.shippedLast7d ?? 0}
@@ -298,7 +327,16 @@ export function DashboardView() {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle>Recent Activity</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Recent Activity</CardTitle>
+                  <button
+                    type="button"
+                    onClick={openActivity}
+                    className="cursor-pointer border-none bg-transparent text-[11px] text-text-muted hover:text-text-primary"
+                  >
+                    View all →
+                  </button>
+                </div>
               </CardHeader>
               <CardContent className="pt-0">
                 {activity.length === 0 ? (
@@ -306,37 +344,64 @@ export function DashboardView() {
                     No activity yet.
                   </div>
                 ) : (
-                  <ul className="space-y-2">
-                    {activity.map((entry) => (
-                      <li key={entry.id} className="flex items-start gap-2 text-[12px]">
-                        <span className="mt-0.5 inline-flex w-12 shrink-0 items-center justify-center rounded border border-border bg-bg-tertiary px-1 py-0.5 text-[9px] uppercase text-text-muted">
-                          {entry.actor}
-                        </span>
-                        <button
-                          type="button"
+                  <Table>
+                    <TableHeader className="sr-only">
+                      <TableRow>
+                        <TableHead>Actor</TableHead>
+                        <TableHead>Activity</TableHead>
+                        <TableHead>Time</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {activitySlice.map((entry) => (
+                        <TableRow
+                          key={entry.id}
+                          className="cursor-pointer"
                           onClick={() => {
                             if (entry.projectId && entry.threadId) {
                               handleRowClick(entry.projectId, entry.threadId)
                             }
                           }}
-                          className="flex-1 cursor-pointer border-none bg-transparent text-left text-text-secondary hover:text-text-primary"
                         >
-                          <div className="truncate">{entry.title}</div>
-                          {entry.subtitle ? (
-                            <div className="truncate text-[11px] text-text-muted">{entry.subtitle}</div>
-                          ) : null}
-                        </button>
-                        <span className="text-[10px] text-text-muted">{timeAgo(entry.createdAt)}</span>
-                      </li>
-                    ))}
-                  </ul>
+                          <TableCell className="w-px whitespace-nowrap pr-2 align-top pt-2.5">
+                            <span className="inline-flex items-center justify-center rounded border border-border bg-bg-tertiary px-1 py-0.5 text-[9px] uppercase text-text-muted">
+                              {entry.actor}
+                            </span>
+                          </TableCell>
+                          <TableCell className="max-w-0 w-full">
+                            <div className="truncate text-[12px] text-text-secondary">{entry.title}</div>
+                            {entry.subtitle ? (
+                              <div className="truncate text-[11px] text-text-muted">{entry.subtitle}</div>
+                            ) : null}
+                          </TableCell>
+                          <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-text-muted">
+                            {timeAgo(entry.createdAt)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 )}
               </CardContent>
+              {activityTotalPages > 1 && (
+                <CardFooter className="pt-0 pb-4 px-5">
+                  <Pagination page={activityPage} totalPages={activityTotalPages} onPageChange={setActivityPage} className="w-full" />
+                </CardFooter>
+              )}
             </Card>
 
             <Card>
               <CardHeader>
-                <CardTitle>Recent Tasks</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Recent Tasks</CardTitle>
+                  <button
+                    type="button"
+                    onClick={openInbox}
+                    className="cursor-pointer border-none bg-transparent text-[11px] text-text-muted hover:text-text-primary"
+                  >
+                    Inbox →
+                  </button>
+                </div>
               </CardHeader>
               <CardContent className="pt-0">
                 {recent.length === 0 ? (
@@ -344,24 +409,44 @@ export function DashboardView() {
                     No recent tasks.
                   </div>
                 ) : (
-                  <ul className="space-y-2">
-                    {recent.map((task) => (
-                      <li key={task.threadId} className="flex items-center gap-2 text-[12px]">
-                        <PhaseChip phase={task.phase} />
-                        <button
-                          type="button"
+                  <Table>
+                    <TableHeader className="sr-only">
+                      <TableRow>
+                        <TableHead>Phase</TableHead>
+                        <TableHead>Title</TableHead>
+                        <TableHead>Time</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {tasksSlice.map((task) => (
+                        <TableRow
+                          key={task.threadId}
+                          className="cursor-pointer"
                           onClick={() => handleRowClick(task.projectId, task.threadId)}
-                          className="flex-1 cursor-pointer truncate border-none bg-transparent text-left text-text-secondary hover:text-text-primary"
                         >
-                          {task.githubIssueNumber ? `#${task.githubIssueNumber} ` : ''}
-                          {task.title}
-                        </button>
-                        <span className="text-[10px] text-text-muted">{timeAgo(task.updatedAt)}</span>
-                      </li>
-                    ))}
-                  </ul>
+                          <TableCell className="w-px whitespace-nowrap pr-2">
+                            <PhaseChip phase={task.phase} />
+                          </TableCell>
+                          <TableCell className="max-w-0 w-full">
+                            <div className="truncate text-[12px] text-text-secondary">
+                              {task.githubIssueNumber ? `#${task.githubIssueNumber} ` : ''}
+                              {task.title}
+                            </div>
+                          </TableCell>
+                          <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-text-muted">
+                            {timeAgo(task.updatedAt)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 )}
               </CardContent>
+              {tasksTotalPages > 1 && (
+                <CardFooter className="pt-0 pb-4 px-5">
+                  <Pagination page={tasksPage} totalPages={tasksTotalPages} onPageChange={setTasksPage} className="w-full" />
+                </CardFooter>
+              )}
             </Card>
           </div>
         </div>

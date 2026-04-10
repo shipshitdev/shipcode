@@ -98,7 +98,7 @@ export class DashboardQueries {
     }
   }
 
-  getRecentTasks(limit = 20): RecentTask[] {
+  getRecentTasks(limit = 20, offset = 0): RecentTask[] {
     const rows = this.db.prepare(
       `SELECT
          t.id as thread_id,
@@ -112,8 +112,8 @@ export class DashboardQueries {
        INNER JOIN projects p ON p.id = t.project_id
        WHERE t.status != 'idle'
        ORDER BY t.updated_at DESC
-       LIMIT ?`
-    ).all(limit) as any[]
+       LIMIT ? OFFSET ?`
+    ).all(limit, offset) as any[]
 
     return rows.map((row) => ({
       threadId: row.thread_id,
@@ -124,5 +124,12 @@ export class DashboardQueries {
       githubIssueNumber: row.github_issue_number,
       updatedAt: row.updated_at,
     }))
+  }
+
+  countRecentTasks(): number {
+    const row = this.db.prepare(
+      `SELECT COUNT(*) as n FROM threads t WHERE t.status != 'idle'`
+    ).get() as { n: number }
+    return row.n
   }
 }

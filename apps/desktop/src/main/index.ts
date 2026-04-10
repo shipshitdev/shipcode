@@ -109,10 +109,31 @@ function createWindow() {
   // Register IPC handlers
   registerIpcHandlers(ipcMain, mainWindow, queries, processManager, pipeline, notificationService)
 
+  // Content-Security-Policy — set before any content loads.
+  // Dev relaxes script-src for Vite's eval-based HMR and allows the WS connection.
+  // Prod is strict: no eval, no remote origins.
+  // 'unsafe-inline' is required in dev for @vitejs/plugin-react's HMR preamble.
+  const scriptSrc = RENDERER_URL ? "'self' 'unsafe-eval' 'unsafe-inline'" : "'self'"
+  const connectSrc = RENDERER_URL
+    ? "'self' ws://localhost:5173 http://localhost:5173"
+    : "'self'"
+  // Dev: notify.wav resolves to http://localhost:5173/...; prod: Vite bundles to blob: URL
+  const mediaSrc = RENDERER_URL ? "'self' http://localhost:5173" : "'self' blob:"
+  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          `default-src 'none'; script-src ${scriptSrc}; style-src 'self' 'unsafe-inline'; connect-src ${connectSrc}; img-src 'self' data: https:; font-src 'self' data:; media-src ${mediaSrc}`,
+        ],
+      },
+    })
+  })
+
   // Load renderer
   if (RENDERER_URL) {
     mainWindow.loadURL(RENDERER_URL)
-    mainWindow.webContents.openDevTools()
+    mainWindow.webContents.openDevTools({ mode: 'bottom' })
   } else {
     mainWindow.loadFile(RENDERER_HTML)
   }

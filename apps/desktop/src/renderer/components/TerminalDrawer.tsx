@@ -4,10 +4,11 @@ import { useAppStore } from '../stores/app-store'
 export function TerminalDrawer() {
 	const { toggleTerminal, agentOutputs } = useAppStore()
 
-	// Combine all agent outputs for display
+	// Combine all agent outputs for display; slice to last 80 KB to prevent GPU OOM
 	const allOutput = Object.entries(agentOutputs)
 		.flatMap(([, chunks]) => chunks)
 		.join('')
+		.slice(-80_000)
 
 	return (
 		<div className="flex h-[250px] flex-col border-t border-border bg-bg-secondary">

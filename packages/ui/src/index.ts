@@ -10,6 +10,7 @@ export {
   Folder,
   Loader2,
   Plus,
+  RefreshCw,
   Settings,
   Sparkles,
   X,
@@ -24,9 +25,12 @@ export { Alert, AlertTitle, AlertDescription, alertVariants } from './primitives
 export { Label } from './primitives/label'
 export { Textarea } from './primitives/textarea'
 export { Switch } from './primitives/switch'
+export { Table, TableBody, TableCaption, TableCell, TableFooter, TableHead, TableHeader, TableRow } from './primitives/table'
 export { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './primitives/dialog'
 export { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator, CommandShortcut } from './primitives/command'
 export { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './primitives/select'
+export { Pagination } from './primitives/pagination'
+export type { PaginationProps } from './primitives/pagination'
 
 // Domain components
 export { PipelineStatus } from './PipelineStatus'

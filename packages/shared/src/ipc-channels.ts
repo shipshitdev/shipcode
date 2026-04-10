@@ -100,8 +100,10 @@ export interface IpcInvokeChannels {
 
   // Mission Control dashboard
   'dashboard:get-stats': { args: void; result: DashboardStats }
-  'dashboard:get-activity': { args: { limit?: number; projectId?: string }; result: ActivityEntry[] }
-  'dashboard:get-recent-tasks': { args: { limit?: number }; result: RecentTask[] }
+  'dashboard:get-activity': { args: { limit?: number; offset?: number; projectId?: string }; result: ActivityEntry[] }
+  'dashboard:count-activity': { args: { projectId?: string }; result: number }
+  'dashboard:get-recent-tasks': { args: { limit?: number; offset?: number }; result: RecentTask[] }
+  'dashboard:count-recent-tasks': { args: void; result: number }
 
   // Active pipelines listing (for Running Agents panel)
   'pipeline:list-active': { args: void; result: ActivePipelineSummary[] }

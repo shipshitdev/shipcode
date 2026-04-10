@@ -87,6 +87,7 @@ export function IssueDetail() {
 	const latestPlan = useMemo(() => planHistory[0] ?? null, [planHistory])
 	const threadPhase = thread?.status ?? pipelinePhase
 	const canStartPipeline = !activeThreadId && !!activeProjectId
+	const canRerun = !!activeIssue && activeIssue.pipelineStatus === 'failed' && !!activeProjectId
 	const canApprove = !!activeThreadId && !!latestPlan?.structured && threadPhase === 'awaiting_approval'
 	const canReject = !!activeThreadId && threadPhase === 'awaiting_approval'
 
@@ -104,6 +105,20 @@ export function IssueDetail() {
 
 	const handleStartPipeline = async () => {
 		if (!activeProjectId) return
+		setIsSubmitting(true)
+		try {
+			await window.shipcode.invoke('github:start-issue', {
+				projectId: activeProjectId,
+				issueNumber: activeIssue.issueNumber,
+			})
+			await refreshIssueState()
+		} finally {
+			setIsSubmitting(false)
+		}
+	}
+
+	const handleRerun = async () => {
+		if (!activeProjectId || !activeIssue) return
 		setIsSubmitting(true)
 		try {
 			await window.shipcode.invoke('github:start-issue', {
@@ -491,6 +506,21 @@ export function IssueDetail() {
 							disabled={isSubmitting}
 						>
 							{isSubmitting ? 'Starting...' : 'Start Pipeline'}
+						</Button>
+					</div>
+				)}
+
+				{/* Pipeline failed — offer to re-run */}
+				{canRerun && (
+					<div className="mb-5 py-6 text-center">
+						<p className="mb-3 text-text-muted">Pipeline failed. You can re-run it from the beginning.</p>
+						<Button
+							size="lg"
+							variant="outline"
+							onClick={handleRerun}
+							disabled={isSubmitting}
+						>
+							{isSubmitting ? 'Starting...' : 'Re-run Pipeline'}
 						</Button>
 					</div>
 				)}

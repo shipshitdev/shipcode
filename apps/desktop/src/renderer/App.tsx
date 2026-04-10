@@ -8,6 +8,9 @@ import { DashboardView } from './components/DashboardView'
 import { ThreadPanel } from './components/ThreadPanel'
 import { IssueDetail } from './components/IssueDetail'
 import { SettingsPanel } from './components/SettingsPanel'
+import { SettingsSidebar } from './components/SettingsSidebar'
+import { ActivityView } from './components/ActivityView'
+import { InboxView } from './components/InboxView'
 import { TerminalDrawer } from './components/TerminalDrawer'
 import { HealthBanner } from './components/HealthBanner'
 import { OnboardingWizard } from './components/onboarding/OnboardingWizard'
@@ -48,9 +51,13 @@ export function App() {
 			<Titlebar />
 			<HealthBanner />
 			<div className="flex flex-1 overflow-hidden">
-				<ProjectSidebar />
+				{settingsVisible ? <SettingsSidebar /> : <ProjectSidebar />}
 				{settingsVisible ? (
 					<SettingsPanel />
+				) : viewMode === 'activity' ? (
+					<ActivityView />
+				) : viewMode === 'inbox' ? (
+					<InboxView />
 				) : showDashboard ? (
 					<DashboardView />
 				) : (
