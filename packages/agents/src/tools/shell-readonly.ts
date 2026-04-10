@@ -1,33 +1,52 @@
 /**
- * ShellReadOnly tool — allowlisted, non-interpolated command execution.
+ * ShellReadOnly tool — strict allowlist, non-interpolated command execution.
  *
  * Lets the model run a narrow set of read-only commands (git status,
- * tsc --noEmit, bun test, rg, etc.) without giving it shell access.
- * Every invocation runs via `execFile` with `shell: false`, so:
+ * tsc --noEmit, rg, etc.) without giving it shell access. Every
+ * invocation runs via `execFile` with `shell: false`, so:
  *
  *   - No command chaining (`;`, `&&`, `||`) — the chars are literal in argv.
  *   - No redirection (`>`, `<`, `|`) — same reason.
  *   - No expansion (`$(...)`, backticks, `~`) — never interpreted.
- *   - The `command` itself must be in SHELL_ALLOWLIST.
- *   - For `git`, the first positional arg must NOT be in GIT_BLOCKED_SUBCOMMANDS.
- *   - cwd is the worktree; the tool cannot escape via -C / --git-dir flags
- *     because git subcommands like `-C /etc git log` would require the
- *     model to pass `-C` as args[0] which is blocked below.
  *
- * The tool is not a sandbox. It is a blunt allowlist, intended as the
- * minimum viable way for the model to run its own tests / typechecks
- * before claiming execute is done. Anything that needs broader surface
- * should wait for a proper sandbox design.
+ * Enforcement layers:
+ *
+ *   1. The `command` itself must be in SHELL_ALLOWLIST. Interpreters
+ *      and package managers (`node`, `python`, `npm`, `bun`, etc.) are
+ *      intentionally NOT in the allowlist because they can execute
+ *      arbitrary code via `-e` / `-c` / `exec` / `run`. If the model
+ *      needs to run tests, VERIFY phase handles that after execute.
+ *
+ *   2. For `git`, the first positional arg (after skipping global
+ *      options we allow) must be in GIT_ALLOWED_SUBCOMMANDS — an
+ *      allowlist rather than a blocklist, so new upstream subcommands
+ *      are rejected by default.
+ *
+ *   3. Git global options that can escape the worktree or inject shell
+ *      (`-C<path>`, `--git-dir`, `--work-tree`, `-c alias.X='!...'`,
+ *      `--config-env`, `--exec-path`, etc.) are rejected before the
+ *      subcommand is parsed. Both the spaced form (`-C /etc`) and the
+ *      stuck form (`-C/etc`) are caught.
+ *
+ *   4. `cwd` is resolved via `fs.realpath()` before the child is
+ *      spawned. Symlinks inside the worktree that resolve outside are
+ *      rejected at call time, matching the TOCTOU mitigation used by
+ *      the file tools' path-guard.
+ *
+ * This is NOT a sandbox. It's a read-only allowlist. Anything that
+ * needs broader surface waits for a proper sandbox design.
  */
 
 import { execFile } from 'node:child_process'
+import fs from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import { z } from 'zod'
 import {
   SHELL_ALLOWLIST,
   SHELL_EXEC_TIMEOUT_MS,
-  GIT_BLOCKED_SUBCOMMANDS,
+  GIT_ALLOWED_SUBCOMMANDS,
+  GIT_BLOCKED_GLOBAL_OPTION_PREFIXES,
 } from '@shipcode/shared'
 import type { Tool, ToolContext, ToolResult } from './types'
 
@@ -42,16 +61,17 @@ const ShellReadOnlyInput = z.object({
 
 type ShellReadOnlyInput = z.infer<typeof ShellReadOnlyInput>
 
-const ALLOWLIST_SET = new Set(SHELL_ALLOWLIST)
-const GIT_BLOCKED_SET = new Set(GIT_BLOCKED_SUBCOMMANDS)
+const ALLOWLIST_SET = new Set<string>(SHELL_ALLOWLIST)
+const GIT_ALLOWED_SET = new Set<string>(GIT_ALLOWED_SUBCOMMANDS)
 
 export const shellReadOnlyTool: Tool<ShellReadOnlyInput> = {
   name: 'shell',
   description:
     'Run an allowlisted read-only command. Allowed commands: ' +
     SHELL_ALLOWLIST.join(', ') +
-    '. Git mutating subcommands (push, reset, checkout, commit, etc.) are blocked — use the edit/write tools for file changes. ' +
-    'Commands run with shell: false, so metacharacters in args are literal; no chaining, redirection, or expansion.',
+    '. For git, only these subcommands are permitted: ' +
+    GIT_ALLOWED_SUBCOMMANDS.join(', ') +
+    '. Commands run with shell: false, so metacharacters in args are literal; no chaining, redirection, or expansion. For file changes use the edit/write tools.',
   schema: ShellReadOnlyInput,
   parameters: {
     type: 'object',
@@ -83,34 +103,25 @@ export const shellReadOnlyTool: Tool<ShellReadOnlyInput> = {
       }
     }
 
-    // Block git's mutating subcommands. We specifically reject ANY arg
-    // starting with `-C` or `--git-dir`/`--work-tree` to prevent the
-    // model from redirecting git to another repository.
+    // Git gets special treatment because its global options can escape
+    // the worktree, redirect the config source, or inject shell via
+    // aliases. Validate globals, then require the subcommand to be in
+    // the explicit allowlist.
     if (input.command === 'git') {
-      const firstArg = input.args[0]
-      if (firstArg && GIT_BLOCKED_SET.has(firstArg)) {
-        return {
-          ok: false,
-          error: `git subcommand '${firstArg}' is blocked. Use the edit/write tools for file changes.`,
-        }
-      }
-      for (const arg of input.args) {
-        if (arg === '-C' || arg.startsWith('--git-dir') || arg.startsWith('--work-tree')) {
-          return {
-            ok: false,
-            error: `git arg '${arg}' is blocked (would escape the worktree).`,
-          }
-        }
+      const gitCheck = validateGitArgs(input.args)
+      if (gitCheck !== null) {
+        return { ok: false, error: gitCheck }
       }
     }
 
-    // cwd must resolve inside the worktree. We use path.resolve to
-    // normalize `..` and then check the result is still under the
-    // worktree via a trailing-separator prefix check (so /foo is not
-    // accepted as under /foobar).
-    const resolvedCwd = resolveWorktreeCwd(ctx.worktreePath, input.cwd)
-    if (resolvedCwd === null) {
-      return { ok: false, error: `cwd '${input.cwd}' escapes the worktree` }
+    // cwd must resolve to a path inside the REAL worktree (after
+    // following symlinks). This matches path-guard.ts's TOCTOU
+    // mitigation for the file tools.
+    let resolvedCwd: string
+    try {
+      resolvedCwd = await resolveWorktreeCwd(ctx.worktreePath, input.cwd)
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
 
     if (ctx.signal.aborted) return { ok: false, error: 'aborted' }
@@ -155,20 +166,166 @@ export const shellReadOnlyTool: Tool<ShellReadOnlyInput> = {
 }
 
 /**
+ * Walk git's arg list, rejecting any global option that can:
+ *   - redirect the effective cwd/worktree (`-C`, `--git-dir`, `--work-tree`)
+ *   - inject shell via aliases (`-c alias.X=!...`, `--config-env`, `-c core.sshCommand=...`)
+ *   - escape the binary (`--exec-path`)
+ *
+ * If the global options check out, require the first non-global arg to
+ * be in GIT_ALLOWED_SUBCOMMANDS.
+ *
+ * Returns null on success, or an error message on rejection.
+ */
+function validateGitArgs(args: string[]): string | null {
+  let i = 0
+  while (i < args.length) {
+    const arg = args[i]
+
+    // Any arg starting with a blocked global option prefix is rejected.
+    // This catches BOTH `-C /path` AND `-C/path` AND `--git-dir=...`
+    // AND `--work-tree=...`. startsWith covers the stuck form and the
+    // `=value` form.
+    const blockedPrefix = GIT_BLOCKED_GLOBAL_OPTION_PREFIXES.find((p) => {
+      // Exact match (-C alone) or startsWith for attached/= forms
+      return arg === p || arg.startsWith(p)
+    })
+    if (blockedPrefix !== undefined) {
+      return `git arg '${arg}' is blocked (prefix '${blockedPrefix}' can escape the worktree or alter git behavior).`
+    }
+
+    // -c name=value : one-off config. Reject aliases (which can inject
+    // shell via `!`) and any ssh/gpg/pager command override that could
+    // execute arbitrary binaries.
+    if (arg === '-c') {
+      const value = args[i + 1]
+      if (typeof value !== 'string') {
+        return `git '-c' missing value`
+      }
+      const rejection = validateGitConfigValue(value)
+      if (rejection !== null) return rejection
+      i += 2
+      continue
+    }
+    if (arg.startsWith('-c') && arg.length > 2) {
+      // Stuck form `-cname=value`
+      const value = arg.slice(2)
+      const rejection = validateGitConfigValue(value)
+      if (rejection !== null) return rejection
+      i++
+      continue
+    }
+
+    // Once we hit a non-option arg, that's the subcommand. Require it
+    // to be in the explicit allowlist.
+    if (!arg.startsWith('-')) {
+      if (!GIT_ALLOWED_SET.has(arg)) {
+        return `git subcommand '${arg}' is not in the read-only allowlist (${GIT_ALLOWED_SUBCOMMANDS.join(', ')}). Use the edit/write tools for file changes.`
+      }
+      // Stop scanning — anything after the subcommand is that
+      // subcommand's own args, and we trust our subcommand allowlist
+      // to mean "these are read-only and do not take shell-injection flags".
+      return null
+    }
+
+    // Unknown option form. Reject rather than silently pass — the
+    // surface is narrow and we'd rather fail loud than guess.
+    return `git option '${arg}' is not recognized; only explicit read-only subcommands are allowed.`
+  }
+
+  // No subcommand provided — `git` alone prints help. That's harmless
+  // but not useful; reject for clarity.
+  return `git invocation missing a subcommand (allowed: ${GIT_ALLOWED_SUBCOMMANDS.join(', ')}).`
+}
+
+/**
+ * Validate a single `-c key=value` pair. Rejects alias injection, ssh
+ * command override, gpg program override, pager/editor override, and
+ * anything that looks like a `!shell` leading value.
+ */
+function validateGitConfigValue(entry: string): string | null {
+  // `entry` looks like `key=value` or just `key` (no value is harmless
+  // at git's level; reject anyway for parser simplicity).
+  const eq = entry.indexOf('=')
+  if (eq === -1) {
+    return `git '-c ${entry}' missing value`
+  }
+  const key = entry.slice(0, eq).toLowerCase()
+  const value = entry.slice(eq + 1)
+
+  // Any alias.* entry with a `!` value executes as a shell command.
+  // Same logic: reject ANY alias.* even without the bang — aliases are
+  // not useful in a read-only context.
+  if (key.startsWith('alias.')) {
+    return `git '-c ${entry}' is blocked (aliases can execute shell commands).`
+  }
+
+  // Leading `!` in any config value that ends up being executed —
+  // core.sshCommand, core.pager, core.editor, core.askPass,
+  // credential.helper, sendemail.smtpEncryption, etc. — runs as shell.
+  if (value.trimStart().startsWith('!')) {
+    return `git '-c ${entry}' is blocked (value starts with '!', which git interprets as shell).`
+  }
+
+  // Any override of a command-style config is a shell vector. Block
+  // the well-known ones rather than chase the full list.
+  const COMMAND_CONFIG_KEYS = new Set([
+    'core.sshcommand',
+    'core.editor',
+    'core.pager',
+    'core.askpass',
+    'core.hookspath',
+    'credential.helper',
+    'pager',
+    'http.sslcapath',
+  ])
+  if (COMMAND_CONFIG_KEYS.has(key)) {
+    return `git '-c ${entry}' is blocked (${key} is a command-style config).`
+  }
+
+  return null
+}
+
+/**
  * Resolve the model-provided cwd against the worktree root and return
- * an absolute path if it stays inside the worktree, or null if it
+ * an absolute path if it stays inside the worktree, or throw if it
  * escapes.
  *
- * - Undefined/empty/`.` → worktree root
- * - Absolute paths → rejected if outside the worktree
- * - Relative paths → joined + resolved, then checked via trailing-
- *   separator prefix so '/foo' can't pass as under '/foobar'
+ * Uses fs.realpath() on BOTH the worktree and the candidate so symlinks
+ * inside the worktree pointing elsewhere (a TOCTOU vector the previous
+ * lexical prefix check missed) are rejected at access time.
+ *
+ * - Undefined/empty/`.` → worktree root (realpath'd once)
+ * - Absolute paths → rejected if the realpath is outside the worktree
+ * - Relative paths → joined to the worktree, realpath'd, then checked
  */
-function resolveWorktreeCwd(worktreePath: string, sub: string | undefined): string | null {
-  if (!sub || sub === '.' || sub === '') return worktreePath
-  const resolved = path.isAbsolute(sub) ? path.resolve(sub) : path.resolve(worktreePath, sub)
-  const boundary = worktreePath.endsWith(path.sep) ? worktreePath : worktreePath + path.sep
-  const candidate = resolved.endsWith(path.sep) ? resolved : resolved + path.sep
-  if (candidate !== boundary && !candidate.startsWith(boundary)) return null
-  return resolved
+async function resolveWorktreeCwd(worktreePath: string, sub: string | undefined): Promise<string> {
+  const worktreeReal = await fs.realpath(worktreePath)
+
+  if (!sub || sub === '.' || sub === '') return worktreeReal
+
+  const candidate = path.isAbsolute(sub) ? sub : path.resolve(worktreeReal, sub)
+
+  // If the candidate doesn't exist yet, fs.realpath throws. Since the
+  // shell tool's cwd MUST exist (execFile will fail otherwise), let
+  // the error propagate — we don't support creating directories here.
+  let candidateReal: string
+  try {
+    candidateReal = await fs.realpath(candidate)
+  } catch (err) {
+    throw new Error(`cwd '${sub}' does not exist or is unreachable: ${(err as Error).message}`)
+  }
+
+  const boundary = worktreeReal.endsWith(path.sep) ? worktreeReal : worktreeReal + path.sep
+  const candidateNorm = candidateReal.endsWith(path.sep) ? candidateReal : candidateReal + path.sep
+  if (candidateNorm !== boundary && !candidateNorm.startsWith(boundary)) {
+    throw new Error(`cwd '${sub}' escapes the worktree (resolves to ${candidateReal}, worktree is ${worktreeReal})`)
+  }
+  return candidateReal
+}
+
+// Exported for unit tests
+export const _internals = {
+  validateGitArgs,
+  validateGitConfigValue,
+  resolveWorktreeCwd,
 }

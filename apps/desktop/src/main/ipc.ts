@@ -513,8 +513,13 @@ export function registerIpcHandlers(
         'Success Criteria, Out of Scope, Dependencies, Verification Plan, Risks & Open Questions.'
     }
 
+    // enhancePrdDraft only accepts 'claude' | 'codex'. AppSettings.plannerModel
+    // widened to AgentType in Tier 1 (claude | codex | gh | openrouter), so
+    // when the user picks 'openrouter' or 'gh' we fall back to 'claude' rather
+    // than double-casting an unsupported value through the type system.
     const settings = queries.settings.get()
-    const plannerModel = ((settings.plannerModel as string) ?? 'claude') as 'claude' | 'codex'
+    const plannerModel: 'claude' | 'codex' =
+      settings.plannerModel === 'codex' ? 'codex' : 'claude'
 
     try {
       return await enhancePrdDraft({

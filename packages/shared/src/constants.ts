@@ -119,39 +119,67 @@ export const MAX_READ_BYTES = 500_000
 export const SHELL_EXEC_TIMEOUT_MS = 30_000
 
 /**
- * Commands the read-only shell tool is allowed to execute. Intentionally
- * excludes any shell interpreter (bash, zsh, sh) to prevent command
- * chaining; the harness always invokes execFile with shell:false.
+ * Commands the read-only shell tool is allowed to execute.
  *
- * Subcommand restrictions (e.g. `git push` is forbidden) are enforced
- * at the tool level, not here.
+ * This is a STRICT read-only allowlist. The previous draft included
+ * `node`, `bun`, `deno`, `python`, `python3`, `npm`, `pnpm`, `yarn`,
+ * and the generic `git` entry — all of which let the model execute
+ * arbitrary code (`node -e`, `python -c`, `npm run`, `git alias='!…'`)
+ * and so broke the "read-only" contract. Those are gone.
+ *
+ * What's left is binaries that inspect filesystem/process state and
+ * return it, without side effects on the worktree. `tsc` is in because
+ * `--noEmit` is read-only; `git` is ALSO in but is handled specially
+ * below (GIT_ALLOWED_SUBCOMMANDS is an allowlist, not blocklist, so
+ * only non-mutating subcommands pass).
+ *
+ * The harness always invokes execFile with `shell: false`, so
+ * metacharacters in args are literal (no chaining, no redirection,
+ * no expansion). This is NOT a sandbox — it's a blunt allowlist.
  */
 export const SHELL_ALLOWLIST: readonly string[] = [
-  // Source control (read-only subcommands only — enforced in shell-readonly.ts)
+  // Source control (subcommand-restricted via GIT_ALLOWED_SUBCOMMANDS)
   'git',
-  // Runtimes (version checks, script execution, etc.)
-  'node', 'bun', 'deno',
-  // Package managers (list, info, exec, run scripts — read-mostly)
-  'npm', 'pnpm', 'yarn',
-  // TypeScript + build tools
-  'tsc', 'bunx',
-  // Search / navigation
+  // TypeScript typecheck — tsc --noEmit is read-only. `tsc --emit` will
+  // write to the worktree, but since we confine cwd to the worktree and
+  // the resulting files still land under path-guard territory, accept it.
+  'tsc',
+  // Search / navigation — all pure read
   'rg', 'grep', 'find', 'ls', 'tree',
-  // File inspection
+  // File inspection — all pure read
   'cat', 'head', 'tail', 'wc', 'file', 'stat',
-  // Scripting runtimes
-  'python', 'python3',
-]
+] as const
 
 /**
- * Git subcommands the shell-readonly tool refuses outright. These mutate
- * refs or the working tree in ways the tool-call harness should not be
- * able to trigger — file edits go through the dedicated Edit/Write tools.
+ * Git subcommands the shell-readonly tool EXPLICITLY ALLOWS. This is an
+ * allowlist, not a blocklist — anything else (including new subcommands
+ * git adds in the future) is rejected by default. Much safer than the
+ * previous blocklist approach, which would silently permit any new
+ * mutating command Git added upstream.
  */
-export const GIT_BLOCKED_SUBCOMMANDS: readonly string[] = [
-  'push', 'reset', 'checkout', 'clean', 'rm', 'mv',
-  'rebase', 'merge', 'cherry-pick', 'revert',
-  'commit', 'add', 'stash', 'tag', 'branch',
-  'config', 'remote', 'fetch', 'pull',
-  'worktree',
-]
+export const GIT_ALLOWED_SUBCOMMANDS: readonly string[] = [
+  'status', 'log', 'diff', 'show', 'blame',
+  'rev-parse', 'rev-list', 'ls-files', 'ls-tree', 'cat-file',
+  'describe', 'name-rev', 'shortlog',
+  'for-each-ref', 'symbolic-ref',
+  'grep',
+] as const
+
+/**
+ * Git global options that are always rejected before subcommand parsing.
+ * These can redirect git's effective working directory, source arbitrary
+ * config, or inject shell aliases (e.g. `-c alias.x='!rm -rf /'`).
+ *
+ * Use startsWith so the attached-argument forms `-C<path>`,
+ * `--git-dir=<p>`, `--work-tree=<p>`, `--config-env=<k>=<v>` are caught
+ * together with their spaced counterparts.
+ */
+export const GIT_BLOCKED_GLOBAL_OPTION_PREFIXES: readonly string[] = [
+  '-C',
+  '--git-dir',
+  '--work-tree',
+  '--exec-path',
+  '--namespace',
+  '--config-env',
+  '--super-prefix',
+] as const
