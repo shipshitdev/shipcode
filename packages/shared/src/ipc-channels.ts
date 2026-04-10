@@ -27,8 +27,10 @@ import type {
 
 export interface IpcInvokeChannels {
   'project:list': { args: void; result: Project[] }
+  'project:get': { args: { projectId: string }; result: Project | null }
   'project:add': { args: { path: string }; result: Project }
   'project:remove': { args: { projectId: string }; result: void }
+  'project:set-default-branch': { args: { projectId: string; branch: string }; result: Project }
 
   'thread:list': { args: { projectId: string }; result: Thread[] }
   'thread:create': { args: { projectId: string; prompt: string; useWorktree: boolean }; result: Thread }
@@ -50,6 +52,7 @@ export interface IpcInvokeChannels {
   'git:status': { args: { projectId: string }; result: GitState }
   'git:commit': { args: { projectId: string; message: string }; result: string }
   'git:push': { args: { projectId: string }; result: void }
+  'git:list-branches': { args: { projectId: string }; result: string[] }
 
   'settings:get': { args: void; result: AppSettings }
   'settings:set': { args: Partial<AppSettings>; result: void }

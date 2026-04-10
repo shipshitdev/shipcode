@@ -37,6 +37,12 @@ export class ProjectQueries {
       `UPDATE projects SET git_remote = ?, default_branch = ?, updated_at = datetime('now') WHERE id = ?`
     ).run(gitRemote, defaultBranch, id)
   }
+
+  updateDefaultBranch(id: string, branch: string): void {
+    this.db.prepare(
+      `UPDATE projects SET default_branch = ?, updated_at = datetime('now') WHERE id = ?`
+    ).run(branch, id)
+  }
 }
 
 function mapProject(row: any): Project {

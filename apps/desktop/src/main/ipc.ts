@@ -306,6 +306,7 @@ export function registerIpcHandlers(
         project.path,
         { number: issue.issueNumber, title: issue.title, body: issue.body, labels: issue.labels },
         issue.executorModel,
+        { baseBranch: project.defaultBranch },
       )
     } catch (err) {
       // Rollback
@@ -334,6 +335,37 @@ export function registerIpcHandlers(
     const allIssues = queries.githubIssues.list(projectId)
     mainWindow.webContents.send('github:issues-updated', { projectId, issues: allIssues })
     return queries.githubIssues.getByNumber(projectId, issueNumber)
+  })
+
+  // === Project + base-branch handlers ===
+
+  ipcMain.handle('project:get', (_event, { projectId }: { projectId: string }) => {
+    return queries.projects.getById(projectId)
+  })
+
+  ipcMain.handle('git:list-branches', async (_event, { projectId }: { projectId: string }) => {
+    const project = queries.projects.getById(projectId)
+    if (!project) throw new Error(`Project ${projectId} not found`)
+    const git = new GitService(project.path)
+    return git.listBranches(project.defaultBranch)
+  })
+
+  ipcMain.handle('project:set-default-branch', async (_event, { projectId, branch }: { projectId: string; branch: string }) => {
+    if (!branch || typeof branch !== 'string') throw new Error('branch is required')
+    const project = queries.projects.getById(projectId)
+    if (!project) throw new Error(`Project ${projectId} not found`)
+
+    // Sanity-check: the branch must appear in the normalized list. This
+    // blocks injection of nonexistent refs and any shipcode/* internals
+    // that are filtered out of listBranches().
+    const git = new GitService(project.path)
+    const branches = await git.listBranches(project.defaultBranch)
+    if (!branches.includes(branch)) {
+      throw new Error(`Branch '${branch}' not found in project ${project.name}`)
+    }
+
+    queries.projects.updateDefaultBranch(projectId, branch)
+    return queries.projects.getById(projectId)!
   })
 
   // === Verification handlers ===

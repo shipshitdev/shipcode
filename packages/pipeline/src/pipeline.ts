@@ -546,9 +546,12 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       ].join('\n')
 
       // Create PR
+      if (!context.baseBranch) {
+        throw new Error(`Thread ${threadId}: missing baseBranch at PR creation`)
+      }
       const prOutput = execFileSync(
         'gh',
-        ['pr', 'create', '--title', title, '--body', body, '--head', branch, '--base', context.baseBranch || 'main'],
+        ['pr', 'create', '--title', title, '--body', body, '--head', branch, '--base', context.baseBranch],
         { cwd, encoding: 'utf-8' }
       )
 
@@ -580,15 +583,21 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     projectPath: string,
     issue: { number: number; title: string; body: string | null; labels: string[] },
     executorModel: PipelineExecutorModel,
-    executorModelOverride: string | null = null,
+    options?: { baseBranch?: string; executorModelOverride?: string | null },
   ) {
-    // Determine fork point
-    let baseBranch = 'main'
+    const executorModelOverride = options?.executorModelOverride ?? null
+
+    // Determine fork point. Caller-provided baseBranch wins (the Kanban
+    // per-project selector flows through here). When absent, fall back to
+    // symbolic-ref derivation so CLI/tests that don't pass a base still work.
+    let baseBranch = options?.baseBranch ?? ''
     let forkPointSha = ''
-    try {
-      baseBranch = execFileSync('git', ['symbolic-ref', 'refs/remotes/origin/HEAD', '--short'], { cwd: projectPath, encoding: 'utf-8' }).trim().replace('origin/', '')
-    } catch {
-      baseBranch = 'main'
+    if (!baseBranch) {
+      try {
+        baseBranch = execFileSync('git', ['symbolic-ref', 'refs/remotes/origin/HEAD', '--short'], { cwd: projectPath, encoding: 'utf-8' }).trim().replace('origin/', '')
+      } catch {
+        baseBranch = 'main'
+      }
     }
     try {
       forkPointSha = execFileSync('git', ['rev-parse', baseBranch], { cwd: projectPath, encoding: 'utf-8' }).trim()

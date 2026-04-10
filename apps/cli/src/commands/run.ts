@@ -85,7 +85,7 @@ export async function runCommand(issueNumber: string) {
     project.path,
     { number: issue.number, title: issue.title, body: issue.body, labels: issue.labels },
     executorModel,
-    executorModelOverride,
+    { baseBranch: project.defaultBranch, executorModelOverride },
   )
 
   // Wait for pipeline to complete

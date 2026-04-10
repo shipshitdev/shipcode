@@ -78,7 +78,7 @@ export interface Pipeline {
     projectPath: string,
     issue: { number: number; title: string; body: string | null; labels: string[] },
     executorModel: PipelineExecutorModel,
-    executorModelOverride?: string | null,
+    options?: { baseBranch?: string; executorModelOverride?: string | null },
   ) => Promise<void>
   initializeContext: (
     threadId: string,

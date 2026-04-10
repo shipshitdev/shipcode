@@ -6,6 +6,7 @@ import type { GitHubIssueCacheRecord, IssuePipelineStatus } from '@shipcode/shar
 import { cn } from './lib/utils'
 import { getStatusBadgeVariant } from './lib/status-variant'
 import { Badge } from './primitives/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './primitives/select'
 
 // Static map for the drag overlay border. Tailwind's JIT needs string-literal
 // class names, so we cannot interpolate (`border-${variant}`).
@@ -22,6 +23,12 @@ interface KanbanBoardProps {
 	onNewIssue?: () => void
 	onStartPipeline?: (issue: GitHubIssueCacheRecord) => void
 	onRetry?: (issue: GitHubIssueCacheRecord) => void
+	/** Per-project base branch that new worktrees fork from. */
+	baseBranch?: string
+	/** Resolvable branch refs sourced from `git:list-branches`. */
+	branches?: string[]
+	/** Invoked when the user picks a new base branch from the toolbar Select. */
+	onBaseBranchChange?: (branch: string) => void
 }
 
 type ColumnKey = 'todo' | 'agent' | 'human' | 'done'
@@ -286,7 +293,7 @@ const customCollisionDetection: CollisionDetection = (args) => {
 	return rectIntersection(args)
 }
 
-export function KanbanBoard({ issues, onIssueClick, onRefresh, onNewIssue, onStartPipeline, onRetry }: KanbanBoardProps) {
+export function KanbanBoard({ issues, onIssueClick, onRefresh, onNewIssue, onStartPipeline, onRetry, baseBranch, branches, onBaseBranchChange }: KanbanBoardProps) {
 	const [activeId, setActiveId] = useState<string | null>(null)
 	const activeIssue = issues.find(i => i.id === activeId)
 
@@ -323,9 +330,24 @@ export function KanbanBoard({ issues, onIssueClick, onRefresh, onNewIssue, onSta
 
 	return (
 		<div className="flex flex-col h-full overflow-hidden">
-			<div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
-				<h3 className="text-sm font-semibold">GitHub Issues</h3>
-				<div className="flex items-center gap-2">
+			<div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0 gap-3">
+				<h3 className="text-sm font-semibold shrink-0">GitHub Issues</h3>
+				{baseBranch && branches && branches.length > 0 && onBaseBranchChange && (
+					<div className="flex items-center gap-2 min-w-0 flex-1 max-w-[280px]">
+						<span className="text-[11px] text-text-muted font-mono shrink-0">base:</span>
+						<Select value={baseBranch} onValueChange={onBaseBranchChange}>
+							<SelectTrigger className="h-7 text-xs font-mono truncate">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								{branches.map((b) => (
+									<SelectItem key={b} value={b} className="text-xs font-mono">{b}</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					</div>
+				)}
+				<div className="flex items-center gap-2 shrink-0">
 					<button
 						type="button"
 						className="bg-transparent border border-border rounded-md text-text-secondary cursor-pointer px-2.5 py-1 text-xs hover:text-text-primary hover:border-text-secondary"
