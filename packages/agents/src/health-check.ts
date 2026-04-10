@@ -4,6 +4,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import type { CliHealth, GhAuthStatus, SystemHealth } from '@shipcode/shared'
+import { OPENROUTER_API_BASE } from '@shipcode/shared'
 
 const execAsync = promisify(exec)
 
@@ -66,6 +67,92 @@ export async function checkCodexAuth(): Promise<boolean> {
   // Check for Codex auth config file
   const codexAuthPath = join(homedir(), '.codex', 'auth.json')
   return fileExists(codexAuthPath)
+}
+
+export type OpenRouterAuthStatus =
+  | { ok: true; label?: string }
+  | { ok: false; reason: 'missing_key' | 'invalid_key' | 'unreachable' | 'model_deprecated'; message: string }
+
+/**
+ * Validate OpenRouter API key against the live service and (optionally)
+ * check whether a pinned model is still served. Non-fatal: callers treat
+ * a failure as a warning, not a hard error, so pipelines configured to
+ * use claude/codex still onboard cleanly.
+ *
+ * @param apiKey - the OPENROUTER_API_KEY env value; pass `undefined` to
+ *                 signal "not set"
+ * @param pinnedModel - optional model slug to validate via /models/{id}
+ */
+export async function checkOpenRouterAuth(
+  apiKey: string | undefined,
+  pinnedModel?: string | null,
+): Promise<OpenRouterAuthStatus> {
+  if (!apiKey) {
+    return { ok: false, reason: 'missing_key', message: 'OPENROUTER_API_KEY is not set' }
+  }
+
+  // Hit /auth/key to validate credentials. OpenRouter's public docs call
+  // this endpoint `GET /api/v1/auth/key`, but it's also historically been
+  // reachable at `/key` — we hit the documented one.
+  let keyResponse: Response
+  try {
+    keyResponse = await fetch(`${OPENROUTER_API_BASE}/auth/key`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(10_000),
+    })
+  } catch (err) {
+    return {
+      ok: false,
+      reason: 'unreachable',
+      message: err instanceof Error ? err.message : 'OpenRouter unreachable',
+    }
+  }
+
+  if (keyResponse.status === 401 || keyResponse.status === 403) {
+    return { ok: false, reason: 'invalid_key', message: `OpenRouter rejected API key (HTTP ${keyResponse.status})` }
+  }
+  if (!keyResponse.ok) {
+    return { ok: false, reason: 'unreachable', message: `OpenRouter auth check returned HTTP ${keyResponse.status}` }
+  }
+
+  let label: string | undefined
+  try {
+    const body = await keyResponse.json() as { data?: { label?: string } }
+    label = body?.data?.label
+  } catch {
+    // Non-fatal — auth was OK.
+  }
+
+  // Optional: verify the user's pinned model is still served. OpenRouter
+  // deprecates free models occasionally, so this catches stale config
+  // before the pipeline hits a 404 mid-run.
+  if (pinnedModel) {
+    try {
+      // /models returns the whole catalog; scanning it is cheaper than
+      // assuming a /models/{id} endpoint exists (it doesn't reliably).
+      const modelsRes = await fetch(`${OPENROUTER_API_BASE}/models`, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(10_000),
+      })
+      if (modelsRes.ok) {
+        const body = await modelsRes.json() as { data?: Array<{ id: string }> }
+        const exists = body?.data?.some((m) => m.id === pinnedModel) ?? false
+        if (!exists) {
+          return {
+            ok: false,
+            reason: 'model_deprecated',
+            message: `OpenRouter model '${pinnedModel}' is not available (may be deprecated)`,
+          }
+        }
+      }
+    } catch {
+      // Non-fatal — key was OK, we just couldn't verify the model.
+    }
+  }
+
+  return { ok: true, label }
 }
 
 async function getGhVersion(): Promise<string | null> {
