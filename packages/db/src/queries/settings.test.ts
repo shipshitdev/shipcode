@@ -28,6 +28,52 @@ describe('SettingsQueries', () => {
 		expect(s.githubBotUsername).toBe('')
 		expect(s.autoPickupEnabled).toBe(false)
 		expect(s.onboardingVersion).toBe(0)
+		expect(s.worktreeRoot).toBeNull()
+	})
+
+	describe('worktreeRoot', () => {
+		it('round-trips a ~-prefixed path', () => {
+			settings.set({ worktreeRoot: '~/scratch/wt' })
+			expect(settings.get().worktreeRoot).toBe('~/scratch/wt')
+		})
+
+		it('round-trips an absolute path', () => {
+			settings.set({ worktreeRoot: '/tmp/shipcode-wt' })
+			expect(settings.get().worktreeRoot).toBe('/tmp/shipcode-wt')
+		})
+
+		it('round-trips empty string (legacy project-local)', () => {
+			settings.set({ worktreeRoot: '' })
+			expect(settings.get().worktreeRoot).toBeNull()
+		})
+
+		it('clearing to null stores empty string, reads back as null', () => {
+			settings.set({ worktreeRoot: '~/foo' })
+			settings.set({ worktreeRoot: null })
+			const row = db
+				.prepare("SELECT value FROM settings WHERE key = 'worktreeRoot'")
+				.get() as { value: string } | undefined
+			expect(row?.value).toBe('')
+			expect(settings.get().worktreeRoot).toBeNull()
+		})
+
+		it('legacy JS literal "null" string in db reads back as null', () => {
+			// Simulate a value that could have been written by the pre-fix serializer.
+			db.prepare("INSERT INTO settings (key, value) VALUES ('worktreeRoot', 'null')").run()
+			expect(settings.get().worktreeRoot).toBeNull()
+		})
+
+		it('rejects relative paths before writing to db', () => {
+			expect(() => settings.set({ worktreeRoot: 'relative/path' })).toThrow()
+			const row = db
+				.prepare("SELECT value FROM settings WHERE key = 'worktreeRoot'")
+				.get() as { value: string } | undefined
+			expect(row).toBeUndefined()
+		})
+
+		it('rejects ~user paths', () => {
+			expect(() => settings.set({ worktreeRoot: '~alice/foo' })).toThrow(/~user/)
+		})
 	})
 
 	it('set() persists values', () => {

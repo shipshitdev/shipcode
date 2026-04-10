@@ -157,3 +157,95 @@ export function migrateV3(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (3)`)
   })
 }
+
+export function migrateV4(db: DatabaseSync): void {
+  const row = db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get() as { version: number } | undefined
+  if (row && row.version >= 4) return
+
+  transaction(db, () => {
+    // Per-issue executor model selection (claude | codex) — defaults to 'claude'.
+    // The existing threads.executor_model (v2) remains as the pipeline-context default
+    // for non-GitHub threads; this column stores the user's choice per cached issue.
+    try { db.exec("ALTER TABLE github_issue_cache ADD COLUMN executor_model TEXT NOT NULL DEFAULT 'claude'") } catch {}
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (4)`)
+  })
+}
+
+export function migrateV5(db: DatabaseSync): void {
+  const row = db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get() as { version: number } | undefined
+  if (row && row.version >= 5) return
+
+  transaction(db, () => {
+    // Mission Control activity feed — chronological log of pipeline events
+    // across all projects. Written by the pipeline-bridge fan-out; read by
+    // DashboardQueries for the "Recent Activity" column.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS activity_log (
+        id TEXT PRIMARY KEY,
+        thread_id TEXT REFERENCES threads(id) ON DELETE CASCADE,
+        project_id TEXT REFERENCES projects(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL,
+        actor TEXT NOT NULL,
+        title TEXT NOT NULL,
+        subtitle TEXT,
+        metadata TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_activity_created ON activity_log(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_activity_thread ON activity_log(thread_id);
+      CREATE INDEX IF NOT EXISTS idx_activity_project ON activity_log(project_id);
+
+      -- Persistent notification records for the dock-badge count and in-app
+      -- history. Written by NotificationService.fire(), dismissed by user
+      -- action or auto-dismissed when the relevant thread is viewed.
+      CREATE TABLE IF NOT EXISTS notifications (
+        id TEXT PRIMARY KEY,
+        thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+        project_id TEXT REFERENCES projects(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        dismissed_at TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_notifications_active ON notifications(dismissed_at, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_notifications_thread ON notifications(thread_id);
+    `)
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (5)`)
+  })
+}
+
+export function migrateV6(db: DatabaseSync): void {
+  const row = db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get() as { version: number } | undefined
+  if (row && row.version >= 6) return
+
+  transaction(db, () => {
+    // Tier 3 telemetry: per-phase resolved model + running token + cost
+    // totals. Resolved columns capture what openrouter/auto actually
+    // routed to when the pipeline uses the meta-router; for claude/codex
+    // they just hold the literal 'claude'/'codex' string.
+    //
+    // Forward-only migration — no downgrade path, matching the rest of
+    // the schema. Operators must restore from backup if they need to
+    // downgrade.
+    const alterColumns = [
+      'ALTER TABLE threads ADD COLUMN planner_resolved_model TEXT',
+      'ALTER TABLE threads ADD COLUMN reviewer_resolved_model TEXT',
+      'ALTER TABLE threads ADD COLUMN revisor_resolved_model TEXT',
+      'ALTER TABLE threads ADD COLUMN executor_resolved_model TEXT',
+      'ALTER TABLE threads ADD COLUMN verifier_resolved_model TEXT',
+      "ALTER TABLE threads ADD COLUMN total_tokens_prompt INTEGER NOT NULL DEFAULT 0",
+      "ALTER TABLE threads ADD COLUMN total_tokens_completion INTEGER NOT NULL DEFAULT 0",
+      "ALTER TABLE threads ADD COLUMN total_cost_usd REAL NOT NULL DEFAULT 0",
+    ]
+    for (const sql of alterColumns) {
+      try { db.exec(sql) } catch {}
+    }
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (6)`)
+  })
+}

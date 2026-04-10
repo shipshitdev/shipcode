@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite'
 import { nanoid } from 'nanoid'
-import type { GitHubIssueCacheRecord, IssuePipelineStatus } from '@shipcode/shared'
+import type { ExecutorModel, GitHubIssueCacheRecord, IssuePipelineStatus } from '@shipcode/shared'
 
 export class GitHubIssueQueries {
   constructor(private db: DatabaseSync) {}
@@ -26,7 +26,7 @@ export class GitHubIssueQueries {
     return row ? this.toRecord(row) : null
   }
 
-  upsert(record: Omit<GitHubIssueCacheRecord, 'id' | 'pipelineStatus' | 'threadId' | 'claimedAt' | 'claimedBy' | 'lastPhaseUpdate' | 'lastStatusLabel' | 'fetchedAt'>): GitHubIssueCacheRecord {
+  upsert(record: Omit<GitHubIssueCacheRecord, 'id' | 'pipelineStatus' | 'threadId' | 'claimedAt' | 'claimedBy' | 'lastPhaseUpdate' | 'lastStatusLabel' | 'executorModel' | 'fetchedAt'>): GitHubIssueCacheRecord {
     const existing = this.getByNumber(record.projectId, record.issueNumber)
     if (existing) {
       this.db.prepare(
@@ -100,6 +100,12 @@ export class GitHubIssueQueries {
     ).run(label, id)
   }
 
+  updateExecutorModel(id: string, model: ExecutorModel): void {
+    this.db.prepare(
+      'UPDATE github_issue_cache SET executor_model = ? WHERE id = ?'
+    ).run(model, id)
+  }
+
   private toRecord(row: any): GitHubIssueCacheRecord {
     return {
       id: row.id,
@@ -116,6 +122,7 @@ export class GitHubIssueQueries {
       claimedBy: row.claimed_by,
       lastPhaseUpdate: row.last_phase_update,
       lastStatusLabel: row.last_status_label ?? null,
+      executorModel: (row.executor_model === 'codex' ? 'codex' : 'claude'),
       fetchedAt: row.fetched_at,
     }
   }

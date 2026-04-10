@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
 import { getDatabase, ProjectQueries } from '@shipcode/db'
-import { checkSystemHealth, checkClaudeAuth } from '@shipcode/agents'
+import { checkSystemHealth, checkClaudeAuth, checkOpenRouterAuth } from '@shipcode/agents'
 import { GitService } from '@shipcode/git'
 import { DEFAULT_STATUS_LABEL_MAPPINGS } from '@shipcode/shared'
 
@@ -49,6 +49,24 @@ export async function onboardCommand() {
 	}
 
 	console.log('  ⚠ codex — auth not verifiable (ensure API key is configured)')
+
+	// OpenRouter is optional. A missing key is a warning, not a failure,
+	// because the pipeline still works with claude/codex alone.
+	const openrouterKey = process.env.OPENROUTER_API_KEY
+	if (openrouterKey) {
+		const orAuth = await checkOpenRouterAuth(openrouterKey)
+		if (orAuth.ok) {
+			console.log(`  ✓ openrouter — authenticated${orAuth.label ? ` (${orAuth.label})` : ''}`)
+		} else if (orAuth.reason === 'invalid_key') {
+			console.log(`  ⚠ openrouter — ${orAuth.message}`)
+		} else if (orAuth.reason === 'unreachable') {
+			console.log(`  ⚠ openrouter — ${orAuth.message}`)
+		} else if (orAuth.reason === 'model_deprecated') {
+			console.log(`  ⚠ openrouter — ${orAuth.message}`)
+		}
+	} else {
+		console.log('  ⚠ openrouter — OPENROUTER_API_KEY not set (optional)')
+	}
 
 	// 2. Repo context verification
 	console.log('\nVerifying GitHub repository...')

@@ -1,13 +1,30 @@
-import { type IpcMain, type BrowserWindow, dialog } from 'electron'
-import type { ProjectQueries, ThreadQueries, PlanQueries, ReviewQueries, DiffQueries, SettingsQueries, VerificationQueries, GitHubIssueQueries } from '@shipcode/db'
+import { type IpcMain, type BrowserWindow, dialog, shell } from 'electron'
+import type {
+  ProjectQueries,
+  ThreadQueries,
+  PlanQueries,
+  ReviewQueries,
+  DiffQueries,
+  SettingsQueries,
+  VerificationQueries,
+  GitHubIssueQueries,
+  ActivityQueries,
+  NotificationsQueries,
+  DashboardQueries,
+} from '@shipcode/db'
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
+import fs from 'node:fs'
+import path from 'node:path'
 import type { ProcessManager } from '@shipcode/agents'
-import { checkSystemHealthWithAuth, checkGhAuth, GhCli } from '@shipcode/agents'
+import { checkSystemHealthWithAuth, checkGhAuth, GhCli, enhancePrdDraft } from '@shipcode/agents'
+import { isSafeExternalUrl } from './security'
 
 const execAsync = promisify(exec)
 import { GitService, WorktreeManager } from '@shipcode/git'
 import type { Pipeline } from '@shipcode/pipeline'
+import type { ActivePipelineSummary, ExecutorModel } from '@shipcode/shared'
+import type { NotificationService } from './notification-service'
 
 interface Queries {
   projects: ProjectQueries
@@ -18,6 +35,9 @@ interface Queries {
   settings: SettingsQueries
   verifications: VerificationQueries
   githubIssues: GitHubIssueQueries
+  activity: ActivityQueries
+  notifications: NotificationsQueries
+  dashboard: DashboardQueries
 }
 
 export function registerIpcHandlers(
@@ -25,7 +45,8 @@ export function registerIpcHandlers(
   mainWindow: BrowserWindow,
   queries: Queries,
   processManager: ProcessManager,
-  pipeline: Pipeline
+  pipeline: Pipeline,
+  notificationService: NotificationService,
 ): void {
   // === Project handlers ===
   ipcMain.handle('project:list', () => {
@@ -47,7 +68,24 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('project:remove', (_event, { projectId }: { projectId: string }) => {
+  ipcMain.handle('project:remove', async (_event, { projectId }: { projectId: string }) => {
+    // Best-effort: remove any ShipCode worktrees this project owns so they don't
+    // become orphans under the global worktree root after the DB row is deleted.
+    const project = queries.projects.getById(projectId)
+    if (project) {
+      try {
+        const appSettings = queries.settings.get()
+        const worktreeManager = new WorktreeManager(project.path, { worktreeRoot: appSettings.worktreeRoot })
+        const threads = queries.threads.list(projectId)
+        for (const t of threads) {
+          if (t.worktreePath && t.worktreeBranch) {
+            await worktreeManager.remove(t.worktreePath, t.worktreeBranch).catch(() => {})
+          }
+        }
+      } catch (err) {
+        console.error('Worktree cleanup during project:remove failed (continuing):', err)
+      }
+    }
     queries.projects.remove(projectId)
   })
 
@@ -136,6 +174,16 @@ export function registerIpcHandlers(
     return result.canceled ? null : result.filePaths[0] ?? null
   })
 
+  // Open an external URL in the user's default browser.
+  // Hardened bridge: https-only, github.com host allowlist, userinfo rejected,
+  // normalized parsed.href passed through, length capped. The renderer is a
+  // browser context so we validate everything in main.
+  ipcMain.handle('shell:open-external', async (_event, { url }: { url: string }) => {
+    const validated = isSafeExternalUrl(url)
+    if (!validated.ok) return
+    await shell.openExternal(validated.href)
+  })
+
   // === GitHub handlers ===
   ipcMain.handle('github:get-issue', (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
     return queries.githubIssues.getByNumber(projectId, issueNumber)
@@ -170,7 +218,7 @@ export function registerIpcHandlers(
     return cached
   })
 
-  ipcMain.handle('github:create-issue', async (_event, { projectId, title, body, labels }: { projectId: string; title: string; body?: string; labels?: string[] }) => {
+  ipcMain.handle('github:create-issue', async (_event, { projectId, title, body, labels }: { projectId: string; title: string; body: string; labels?: string[] }) => {
     const project = queries.projects.getById(projectId)
     if (!project) throw new Error(`Project ${projectId} not found`)
 
@@ -193,6 +241,32 @@ export function registerIpcHandlers(
     mainWindow.webContents.send('github:issues-updated', { projectId, issues: allIssues })
 
     return queries.githubIssues.getByNumber(projectId, issue.number)
+  })
+
+  ipcMain.handle('github:edit-issue-body', async (_event, { projectId, issueNumber, body }: { projectId: string; issueNumber: number; body: string }) => {
+    const project = queries.projects.getById(projectId)
+    if (!project) throw new Error(`Project ${projectId} not found`)
+
+    const ghCli = new GhCli(project.path)
+    await ghCli.editIssueBody(issueNumber, body)
+
+    // Re-fetch canonical state from GitHub after the edit so the cache reflects
+    // whatever GitHub actually stored (GitHub may trim whitespace, etc.).
+    const issue = await ghCli.getIssue(issueNumber)
+    queries.githubIssues.upsert({
+      projectId,
+      issueNumber: issue.number,
+      title: issue.title,
+      body: issue.body,
+      labels: issue.labels,
+      assignee: issue.assignee,
+      state: issue.state,
+    })
+
+    const allIssues = queries.githubIssues.list(projectId)
+    mainWindow.webContents.send('github:issues-updated', { projectId, issues: allIssues })
+
+    return queries.githubIssues.getByNumber(projectId, issueNumber)
   })
 
   ipcMain.handle('github:start-issue', async (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
@@ -223,7 +297,8 @@ export function registerIpcHandlers(
         thread.id,
         project.path,
         { number: issue.issueNumber, title: issue.title, body: issue.body, labels: issue.labels },
-        'claude'
+        issue.executorModel,
+        { baseBranch: project.defaultBranch },
       )
     } catch (err) {
       // Rollback
@@ -243,6 +318,54 @@ export function registerIpcHandlers(
     mainWindow.webContents.send('github:issues-updated', { projectId, issues: allIssues })
   })
 
+  ipcMain.handle('github:set-executor', (_event, { projectId, issueNumber, model }: { projectId: string; issueNumber: number; model: ExecutorModel }) => {
+    const issue = queries.githubIssues.getByNumber(projectId, issueNumber)
+    if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`)
+    // Widened from claude|codex only after Tier 1 added the OpenRouter
+    // HTTP provider. Keep the explicit runtime whitelist so unknown
+    // values still fail loud — we don't want the renderer to smuggle
+    // arbitrary strings past the type system.
+    if (model !== 'claude' && model !== 'codex' && model !== 'openrouter') {
+      throw new Error(`Invalid executor model: ${model}`)
+    }
+
+    queries.githubIssues.updateExecutorModel(issue.id, model)
+    const allIssues = queries.githubIssues.list(projectId)
+    mainWindow.webContents.send('github:issues-updated', { projectId, issues: allIssues })
+    return queries.githubIssues.getByNumber(projectId, issueNumber)
+  })
+
+  // === Project + base-branch handlers ===
+
+  ipcMain.handle('project:get', (_event, { projectId }: { projectId: string }) => {
+    return queries.projects.getById(projectId)
+  })
+
+  ipcMain.handle('git:list-branches', async (_event, { projectId }: { projectId: string }) => {
+    const project = queries.projects.getById(projectId)
+    if (!project) throw new Error(`Project ${projectId} not found`)
+    const git = new GitService(project.path)
+    return git.listBranches(project.defaultBranch)
+  })
+
+  ipcMain.handle('project:set-default-branch', async (_event, { projectId, branch }: { projectId: string; branch: string }) => {
+    if (!branch || typeof branch !== 'string') throw new Error('branch is required')
+    const project = queries.projects.getById(projectId)
+    if (!project) throw new Error(`Project ${projectId} not found`)
+
+    // Sanity-check: the branch must appear in the normalized list. This
+    // blocks injection of nonexistent refs and any shipcode/* internals
+    // that are filtered out of listBranches().
+    const git = new GitService(project.path)
+    const branches = await git.listBranches(project.defaultBranch)
+    if (!branches.includes(branch)) {
+      throw new Error(`Branch '${branch}' not found in project ${project.name}`)
+    }
+
+    queries.projects.updateDefaultBranch(projectId, branch)
+    return queries.projects.getById(projectId)!
+  })
+
   // === Verification handlers ===
   ipcMain.handle('verification:get', (_event, { threadId }: { threadId: string }) => {
     return queries.verifications.getLatest(threadId)
@@ -259,7 +382,8 @@ export function registerIpcHandlers(
     // Optionally set up worktree
     let worktreePath: string | null = null
     try {
-      const worktreeManager = new WorktreeManager(project.path)
+      const appSettings = queries.settings.get()
+      const worktreeManager = new WorktreeManager(project.path, { worktreeRoot: appSettings.worktreeRoot })
       const wt = await worktreeManager.create(threadId, project.defaultBranch)
       worktreePath = wt.worktreePath
       queries.threads.setWorktree(threadId, wt.branch, wt.worktreePath)
@@ -309,6 +433,49 @@ export function registerIpcHandlers(
     mainWindow.webContents.send('pipeline:phase', { threadId, phase: 'awaiting_approval' })
   })
 
+  // === Mission Control / Dashboard handlers ===
+  ipcMain.handle('pipeline:list-active', (): ActivePipelineSummary[] => {
+    const summaries = pipeline.listActive()
+    return summaries.map((s) => {
+      const thread = queries.threads.getById(s.threadId)
+      const project = thread ? queries.projects.getById(thread.projectId) : null
+      return {
+        threadId: s.threadId,
+        projectId: thread?.projectId ?? '',
+        projectName: project?.name ?? 'Unknown project',
+        threadTitle: thread?.title ?? s.threadId,
+        phase: s.phase,
+        startedAt: s.startedAt,
+        activeProcessId: s.activeProcessId,
+      }
+    })
+  })
+
+  ipcMain.handle('dashboard:get-stats', () => {
+    return queries.dashboard.getStats()
+  })
+
+  ipcMain.handle('dashboard:get-activity', (_event, { limit, projectId }: { limit?: number; projectId?: string } = {}) => {
+    return queries.activity.listRecent(limit ?? 50, projectId)
+  })
+
+  ipcMain.handle('dashboard:get-recent-tasks', (_event, { limit }: { limit?: number } = {}) => {
+    return queries.dashboard.getRecentTasks(limit ?? 20)
+  })
+
+  // === Notification handlers ===
+  ipcMain.handle('notification:list', () => {
+    return notificationService.listActive()
+  })
+
+  ipcMain.handle('notification:dismiss', (_event, { id }: { id: string }) => {
+    notificationService.dismiss(id)
+  })
+
+  ipcMain.handle('notification:dismiss-all', () => {
+    notificationService.dismissAll()
+  })
+
   // === Onboarding handlers ===
   ipcMain.handle('onboarding:check-auth', async () => {
     const [health, ghAuth] = await Promise.all([
@@ -328,6 +495,51 @@ export function registerIpcHandlers(
       return [...new Set(stdout.trim().split('\n').filter(Boolean))].sort((a, b) => a.localeCompare(b))
     } catch {
       return []
+    }
+  })
+
+  // === AI-assisted PRD enhancement (in-place refinement) ===
+  ipcMain.handle('ai:enhance-prd', async (_event, { projectId, draftBody }: { projectId: string; draftBody: string }) => {
+    const project = queries.projects.getById(projectId)
+    if (!project) throw new Error(`Project ${projectId} not found`)
+
+    // Load the repo's writing-prds skill. Preferred location is
+    // .agents/skills/writing-prds/SKILL.md inside the target project. If the
+    // project doesn't have one, fall back to a minimal inline instruction so
+    // enhancement still works — but the result will be less repo-tailored.
+    const skillPath = path.join(project.path, '.agents', 'skills', 'writing-prds', 'SKILL.md')
+    let skillContent: string
+    try {
+      skillContent = fs.readFileSync(skillPath, 'utf-8')
+    } catch {
+      skillContent =
+        'You are drafting a PRD that will be consumed by the ShipCode pipeline\'s planner agent. ' +
+        'The PRD lives in a GitHub issue body. Required sections: Executive Summary, Problem Statement, ' +
+        'Goals, Non-Goals, User Stories, Functional Requirements, Non-Functional Requirements, ' +
+        'Success Criteria, Out of Scope, Dependencies, Verification Plan, Risks & Open Questions.'
+    }
+
+    // enhancePrdDraft only accepts 'claude' | 'codex'. AppSettings.plannerModel
+    // widened to AgentType in Tier 1 (claude | codex | gh | openrouter), so
+    // when the user picks 'openrouter' or 'gh' we fall back to 'claude' rather
+    // than double-casting an unsupported value through the type system.
+    const settings = queries.settings.get()
+    const plannerModel: 'claude' | 'codex' =
+      settings.plannerModel === 'codex' ? 'codex' : 'claude'
+
+    try {
+      return await enhancePrdDraft({
+        draftBody: draftBody ?? '',
+        skillContent,
+        plannerModel,
+        cwd: project.path,
+      })
+    } catch (err) {
+      // Full trace stays in main-process stdout for devtools/console debugging.
+      console.error('[ai:enhance-prd]', err)
+      // Short, prompt-free message crosses the IPC boundary to the renderer.
+      const short = err instanceof Error ? err.message.split('\n')[0].slice(0, 300) : 'Enhancement failed'
+      throw new Error(short)
     }
   })
 

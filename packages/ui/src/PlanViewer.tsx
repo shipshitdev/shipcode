@@ -1,4 +1,5 @@
 import type { ShipCodePlan } from '@shipcode/shared'
+import { Square } from 'lucide-react'
 import { Badge } from './primitives/badge'
 import { cn } from './lib/utils'
 
@@ -106,8 +107,9 @@ export function PlanViewer({ plan, isEditable = false, onPlanEdit }: PlanViewerP
 					</h3>
 					<ul className="list-none p-0">
 						{plan.acceptanceCriteria.map((criteria, i) => (
-							<li key={i} className="py-1 pl-4 text-[13px] relative before:content-['☐'] before:absolute before:left-0 before:text-text-muted">
-								{criteria}
+							<li key={i} className="flex items-start gap-2 py-1 text-[13px]">
+								<Square size={12} className="mt-1 shrink-0 text-text-muted" />
+								<span>{criteria}</span>
 							</li>
 						))}
 					</ul>

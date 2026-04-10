@@ -20,7 +20,8 @@
   "dependencies": {
     "@shipcode/shared": "workspace:*",
     "@shipcode/agents": "workspace:*",
-    "@shipcode/db": "workspace:*"
+    "@shipcode/db": "workspace:*",
+    "@shipcode/git": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^6.0.2",

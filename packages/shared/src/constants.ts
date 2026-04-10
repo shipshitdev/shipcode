@@ -13,18 +13,41 @@ export const DEFAULT_STATUS_LABEL_MAPPINGS: Record<string, string> = {
   failed: 'status:failed',
 }
 
+export const DEFAULT_NOTIFICATION_EVENTS = {
+  awaitingApproval: true,
+  failed: true,
+  completed: true,
+  verificationExhausted: true,
+} as const
+
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
   defaultWorktreeEnabled: true,
   terminalScrollback: 10_000,
   plannerModel: 'claude',
   reviewerModel: 'codex',
+  verifierModel: 'claude',
   githubPollingEnabled: false,
   githubPollingIntervalMs: 30_000,
   githubBotUsername: '',
   autoPickupEnabled: false,
   statusLabelMappings: DEFAULT_STATUS_LABEL_MAPPINGS as Record<string, string>,
   onboardingVersion: 0,
+  worktreeRoot: null,
+  notificationsEnabled: true,
+  notificationOsEnabled: true,
+  notificationBadgeEnabled: true,
+  notificationSoundEnabled: true,
+  notificationEvents: { ...DEFAULT_NOTIFICATION_EVENTS },
+  // OpenRouter — all disabled/null by default so existing deployments are unaffected.
+  openrouterEnabled: false,
+  openrouterPlannerModel: null,
+  openrouterReviewerModel: null,
+  openrouterVerifierModel: null,
+  openrouterExecutorModel: null,
+  openrouterDefaultPaidModel: 'openrouter/auto',
+  openrouterDefaultFreeModel: 'openrouter/free',
+  openrouterExplicitFallback: 'qwen/qwen3.6-plus',
 }
 
 export const CURRENT_ONBOARDING_VERSION = 1
@@ -59,6 +82,8 @@ export type ErrorType = (typeof ERROR_PATTERNS)[number]['type']
 
 export const WORKTREE_DIR = '.shipcode/worktrees'
 
+export const DEFAULT_WORKTREE_ROOT = '~/.shipcode/worktrees'
+
 export const PLAN_FENCE_TAG = 'shipcode-plan'
 export const REVIEW_FENCE_TAG = 'shipcode-review'
 export const VERIFICATION_FENCE_TAG = 'shipcode-verification'
@@ -68,3 +93,93 @@ export const GITHUB_POLL_INTERVAL_MS = 30_000
 export const STALE_LEASE_THRESHOLD_MS = 30 * 60 * 1000
 export const ORPHAN_CLAIM_THRESHOLD_MS = 5 * 60 * 1000
 export const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000
+
+// === OpenRouter ===
+export const OPENROUTER_API_BASE = 'https://openrouter.ai/api/v1'
+export const OPENROUTER_BACKOFF_BASE_MS = 500
+export const OPENROUTER_BACKOFF_MAX_MS = 30_000
+export const OPENROUTER_MAX_HTTP_RETRIES = 5
+export const OPENROUTER_REQUEST_TIMEOUT_MS = 120_000
+
+// === Tier 2: Tool-call execute harness ===
+
+/** Hard cap on agent-loop iterations per execute run. */
+export const MAX_TOOL_CALL_ITERATIONS = 30
+
+/** Same (toolName, argsHash) firing this many times in a row = pathological loop, fail out. */
+export const MAX_DUPLICATE_TOOL_CALLS = 3
+
+/** Total tokens (prompt + completion) across one execute run. Circuit breaker, not $ budget. */
+export const MAX_EXECUTE_TOTAL_TOKENS = 500_000
+
+/** Upper bound on a single read tool's return size. */
+export const MAX_READ_BYTES = 500_000
+
+/** Wall-clock timeout for a single shell-readonly tool invocation. */
+export const SHELL_EXEC_TIMEOUT_MS = 30_000
+
+/**
+ * Commands the read-only shell tool is allowed to execute.
+ *
+ * This is a STRICT read-only allowlist. The previous draft included
+ * `node`, `bun`, `deno`, `python`, `python3`, `npm`, `pnpm`, `yarn`,
+ * and the generic `git` entry — all of which let the model execute
+ * arbitrary code (`node -e`, `python -c`, `npm run`, `git alias='!…'`)
+ * and so broke the "read-only" contract. Those are gone.
+ *
+ * What's left is binaries that inspect filesystem/process state and
+ * return it, without side effects on the worktree. `tsc` is in because
+ * `--noEmit` is read-only; `git` is ALSO in but is handled specially
+ * below (GIT_ALLOWED_SUBCOMMANDS is an allowlist, not blocklist, so
+ * only non-mutating subcommands pass).
+ *
+ * The harness always invokes execFile with `shell: false`, so
+ * metacharacters in args are literal (no chaining, no redirection,
+ * no expansion). This is NOT a sandbox — it's a blunt allowlist.
+ */
+export const SHELL_ALLOWLIST: readonly string[] = [
+  // Source control (subcommand-restricted via GIT_ALLOWED_SUBCOMMANDS)
+  'git',
+  // TypeScript typecheck — tsc --noEmit is read-only. `tsc --emit` will
+  // write to the worktree, but since we confine cwd to the worktree and
+  // the resulting files still land under path-guard territory, accept it.
+  'tsc',
+  // Search / navigation — all pure read
+  'rg', 'grep', 'find', 'ls', 'tree',
+  // File inspection — all pure read
+  'cat', 'head', 'tail', 'wc', 'file', 'stat',
+] as const
+
+/**
+ * Git subcommands the shell-readonly tool EXPLICITLY ALLOWS. This is an
+ * allowlist, not a blocklist — anything else (including new subcommands
+ * git adds in the future) is rejected by default. Much safer than the
+ * previous blocklist approach, which would silently permit any new
+ * mutating command Git added upstream.
+ */
+export const GIT_ALLOWED_SUBCOMMANDS: readonly string[] = [
+  'status', 'log', 'diff', 'show', 'blame',
+  'rev-parse', 'rev-list', 'ls-files', 'ls-tree', 'cat-file',
+  'describe', 'name-rev', 'shortlog',
+  'for-each-ref', 'symbolic-ref',
+  'grep',
+] as const
+
+/**
+ * Git global options that are always rejected before subcommand parsing.
+ * These can redirect git's effective working directory, source arbitrary
+ * config, or inject shell aliases (e.g. `-c alias.x='!rm -rf /'`).
+ *
+ * Use startsWith so the attached-argument forms `-C<path>`,
+ * `--git-dir=<p>`, `--work-tree=<p>`, `--config-env=<k>=<v>` are caught
+ * together with their spaced counterparts.
+ */
+export const GIT_BLOCKED_GLOBAL_OPTION_PREFIXES: readonly string[] = [
+  '-C',
+  '--git-dir',
+  '--work-tree',
+  '--exec-path',
+  '--namespace',
+  '--config-env',
+  '--super-prefix',
+] as const

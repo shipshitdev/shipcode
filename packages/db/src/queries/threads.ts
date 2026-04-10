@@ -83,6 +83,47 @@ export class ThreadQueries {
     ).run(prNumber, id)
   }
 
+  /**
+   * Persist what model actually served a given phase. For
+   * openrouter/auto runs this captures whatever the meta-router
+   * ultimately picked (e.g. 'anthropic/claude-sonnet-4-6'); for
+   * claude/codex it just holds the CLI name.
+   */
+  setResolvedModel(
+    id: string,
+    phase: 'plan' | 'review' | 'revision' | 'execute' | 'verify',
+    model: string,
+  ): void {
+    const column = (() => {
+      switch (phase) {
+        case 'plan': return 'planner_resolved_model'
+        case 'review': return 'reviewer_resolved_model'
+        case 'revision': return 'revisor_resolved_model'
+        case 'execute': return 'executor_resolved_model'
+        case 'verify': return 'verifier_resolved_model'
+      }
+    })()
+    this.db.prepare(
+      `UPDATE threads SET ${column} = ?, updated_at = datetime('now') WHERE id = ?`
+    ).run(model, id)
+  }
+
+  /**
+   * Accumulate token + cost usage for a thread. Called after each
+   * provider call that reports usage. Uses SQL-side arithmetic so
+   * concurrent writers can't lose counts.
+   */
+  addTokenUsage(id: string, promptTokens: number, completionTokens: number, costUsd: number): void {
+    this.db.prepare(
+      `UPDATE threads SET
+         total_tokens_prompt = total_tokens_prompt + ?,
+         total_tokens_completion = total_tokens_completion + ?,
+         total_cost_usd = total_cost_usd + ?,
+         updated_at = datetime('now')
+       WHERE id = ?`
+    ).run(promptTokens, completionTokens, costUsd, id)
+  }
+
   hasActivePipeline(projectId: string): boolean {
     const row = this.db.prepare(
       'SELECT 1 FROM threads WHERE project_id = ? AND status IN (\'planning\', \'reviewing\', \'revising\', \'executing\', \'verifying\', \'shipping\') LIMIT 1'
@@ -120,5 +161,13 @@ function mapThread(row: any): Thread {
     githubRepo: row.github_repo ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    plannerResolvedModel: row.planner_resolved_model ?? null,
+    reviewerResolvedModel: row.reviewer_resolved_model ?? null,
+    revisorResolvedModel: row.revisor_resolved_model ?? null,
+    executorResolvedModel: row.executor_resolved_model ?? null,
+    verifierResolvedModel: row.verifier_resolved_model ?? null,
+    totalTokensPrompt: row.total_tokens_prompt ?? 0,
+    totalTokensCompletion: row.total_tokens_completion ?? 0,
+    totalCostUsd: row.total_cost_usd ?? 0,
   }
 }

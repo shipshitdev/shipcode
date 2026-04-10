@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import type { ProcessManager } from '@shipcode/agents'
+import type { ProcessManager, AgentProvider } from '@shipcode/agents'
+import { createClaudeCliProvider, createCodexCliProvider, createProviderRegistry } from '@shipcode/agents'
 import type { PipelineDeps } from './types'
 import { createPipeline } from './pipeline'
-import { PIPELINE_MAX_RETRIES, MAX_REVIEW_ROUNDS, MAX_VERIFICATION_RETRIES } from '@shipcode/shared'
+import { DEFAULT_SETTINGS, PIPELINE_MAX_RETRIES, MAX_REVIEW_ROUNDS, MAX_VERIFICATION_RETRIES } from '@shipcode/shared'
 
 const { mockExecSync } = vi.hoisted(() => ({ mockExecSync: vi.fn() }))
 vi.mock('node:child_process', async (importOriginal) => {
@@ -113,10 +114,19 @@ function createMockDeps() {
 		}),
 	} as unknown as ProcessManager
 
-	const trigger = (event: string, ...args: any[]) => {
+	/**
+	 * Trigger a mock processManager event. Async because the real CLI
+	 * provider resolves its generate() Promise on the `exit` event via
+	 * a microtask hop — callers should `await` trigger to ensure the
+	 * phase completion logic runs before assertions.
+	 */
+	const trigger = async (event: string, ...args: any[]) => {
 		// Copy the array to avoid mutation during iteration when handlers remove themselves
 		const handlers = [...(listeners[event] ?? [])]
 		handlers.forEach(h => h(...args))
+		// Let provider.generate() promise + completion IIFE settle
+		await new Promise(r => setImmediate(r))
+		await new Promise(r => setImmediate(r))
 	}
 
 	const latestPlan = {
@@ -127,6 +137,29 @@ function createMockDeps() {
 		structured: JSON.parse(PLAN_JSON),
 		status: 'pending_review',
 		createdAt: '',
+	}
+
+	// Use real CLI providers wrapping the mock processManager so existing
+	// trigger-based tests continue to drive phase completion via output/exit
+	// events, unchanged. OpenRouter is mocked since Tier 1 tests don't
+	// exercise the HTTP path here (that has its own test file).
+	const claudeProvider = createClaudeCliProvider(processManager)
+	const codexProvider = createCodexCliProvider(processManager)
+	const openrouterProvider: AgentProvider = {
+		id: 'openrouter',
+		supports: new Set(['plan', 'review', 'revision', 'verify']),
+		generate: vi.fn(async () => ({ rawOutput: '', exitCode: 1 })),
+		healthCheck: vi.fn(async () => ({ ok: false })),
+	}
+	const providers = createProviderRegistry({
+		claude: claudeProvider,
+		codex: codexProvider,
+		openrouter: openrouterProvider,
+	})
+
+	const settings = {
+		get: vi.fn(() => ({ ...DEFAULT_SETTINGS })),
+		set: vi.fn(),
 	}
 
 	return {
@@ -143,6 +176,8 @@ function createMockDeps() {
 				incrementReviewRound: vi.fn(),
 				setGithubPr: vi.fn(),
 				updateAutonomousFields: vi.fn(),
+				setResolvedModel: vi.fn(),
+				addTokenUsage: vi.fn(),
 			},
 			plans: {
 				getMaxVersion: vi.fn(() => 0),
@@ -163,6 +198,8 @@ function createMockDeps() {
 				getByNumber: vi.fn(() => null),
 				updatePipelineStatus: vi.fn(),
 			},
+			settings,
+			providers,
 		} as unknown as PipelineDeps,
 		emittedEvents,
 		trigger,
@@ -219,30 +256,30 @@ describe('createPipeline', () => {
 
 			expect(mock.deps.githubIssues.updatePipelineStatus).toHaveBeenCalledWith('issue-1', 'planning')
 
-			mock.trigger('output', 'proc-1', planBlock())
-			mock.trigger('exit', 'proc-1', 0)
+			await mock.trigger('output', 'proc-1', planBlock())
+			await mock.trigger('exit', 'proc-1', 0)
 
 			expect(mock.deps.githubIssues.updatePipelineStatus).toHaveBeenCalledWith('issue-1', 'reviewing')
 		})
 
-		it('maps awaiting_approval to reviewing for linked GitHub issues', async () => {
+		it('passes awaiting_approval through to the linked GitHub issue status', async () => {
 			;(mock.deps.githubIssues.getByNumber as any).mockReturnValue({ id: 'issue-1' })
 
 			const pipeline = createPipeline(mock.deps)
 			await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null)
 
-			mock.trigger('output', 'proc-1', 'some random output without a plan block')
-			mock.trigger('exit', 'proc-1', 0)
+			await mock.trigger('output', 'proc-1', 'some random output without a plan block')
+			await mock.trigger('exit', 'proc-1', 0)
 
-			expect(mock.deps.githubIssues.updatePipelineStatus).toHaveBeenCalledWith('issue-1', 'reviewing')
+			expect(mock.deps.githubIssues.updatePipelineStatus).toHaveBeenCalledWith('issue-1', 'awaiting_approval')
 		})
 
 		it('exit 0 + valid plan → creates plan, emits plan:parsed, emits reviewing (manual)', async () => {
 			const pipeline = createPipeline(mock.deps)
 			await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null)
 
-			mock.trigger('output', 'proc-1', planBlock())
-			mock.trigger('exit', 'proc-1', 0)
+			await mock.trigger('output', 'proc-1', planBlock())
+			await mock.trigger('exit', 'proc-1', 0)
 
 			expect(mock.deps.plans.create).toHaveBeenCalled()
 			expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'pending_review')
@@ -259,8 +296,8 @@ describe('createPipeline', () => {
 			const ctx = pipeline.getContext('t1')!
 			ctx.autonomous = true
 
-			mock.trigger('output', 'proc-1', planBlock())
-			mock.trigger('exit', 'proc-1', 0)
+			await mock.trigger('output', 'proc-1', planBlock())
+			await mock.trigger('exit', 'proc-1', 0)
 
 			// startReview was called → spawns a codex process
 			expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(2)
@@ -272,8 +309,8 @@ describe('createPipeline', () => {
 			const pipeline = createPipeline(mock.deps)
 			await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null)
 
-			mock.trigger('output', 'proc-1', 'some random output without a plan block')
-			mock.trigger('exit', 'proc-1', 0)
+			await mock.trigger('output', 'proc-1', 'some random output without a plan block')
+			await mock.trigger('exit', 'proc-1', 0)
 
 			expect(mock.deps.plans.create).toHaveBeenCalledWith('t1', expect.any(String), null, 1)
 			expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'awaiting_approval')
@@ -283,7 +320,7 @@ describe('createPipeline', () => {
 			const pipeline = createPipeline(mock.deps)
 			await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null)
 
-			mock.trigger('exit', 'proc-1', 1)
+			await mock.trigger('exit', 'proc-1', 1)
 
 			// Should have spawned a second process (retry)
 			expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(2)
@@ -295,7 +332,7 @@ describe('createPipeline', () => {
 
 			// First attempt + 3 retries = 4 total failures
 			for (let i = 1; i <= PIPELINE_MAX_RETRIES + 1; i++) {
-				mock.trigger('exit', `proc-${i}`, 1)
+				await mock.trigger('exit', `proc-${i}`, 1)
 			}
 
 			expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(PIPELINE_MAX_RETRIES + 1)
@@ -307,19 +344,19 @@ describe('createPipeline', () => {
 			await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null)
 
 			// First failure: retryCount becomes 1
-			mock.trigger('exit', 'proc-1', 1)
+			await mock.trigger('exit', 'proc-1', 1)
 			expect(pipeline.getContext('t1')!.retryCount).toBe(1)
 
 			// Second failure: retryCount becomes 2
-			mock.trigger('exit', 'proc-2', 1)
+			await mock.trigger('exit', 'proc-2', 1)
 			expect(pipeline.getContext('t1')!.retryCount).toBe(2)
 
 			// Third failure: retryCount becomes 3
-			mock.trigger('exit', 'proc-3', 1)
+			await mock.trigger('exit', 'proc-3', 1)
 			expect(pipeline.getContext('t1')!.retryCount).toBe(3)
 
 			// Fourth failure: exhausted → should emit failed
-			mock.trigger('exit', 'proc-4', 1)
+			await mock.trigger('exit', 'proc-4', 1)
 			expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed')
 		})
 	})
@@ -356,8 +393,8 @@ describe('createPipeline', () => {
 			await pipeline.startReview('t1', JSON.parse(PLAN_JSON))
 
 			// proc-2 is the review process
-			mock.trigger('output', 'proc-2', reviewBlock(REVIEW_APPROVE_JSON))
-			mock.trigger('exit', 'proc-2', 0)
+			await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_APPROVE_JSON))
+			await mock.trigger('exit', 'proc-2', 0)
 
 			expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'executing')
 		})
@@ -368,8 +405,8 @@ describe('createPipeline', () => {
 
 			await pipeline.startReview('t1', JSON.parse(PLAN_JSON))
 
-			mock.trigger('output', 'proc-2', reviewBlock(REVIEW_APPROVE_JSON))
-			mock.trigger('exit', 'proc-2', 0)
+			await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_APPROVE_JSON))
+			await mock.trigger('exit', 'proc-2', 0)
 
 			expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'awaiting_approval')
 		})
@@ -382,8 +419,8 @@ describe('createPipeline', () => {
 
 			await pipeline.startReview('t1', JSON.parse(PLAN_JSON))
 
-			mock.trigger('output', 'proc-2', reviewBlock(REVIEW_REQUEST_CHANGES_JSON))
-			mock.trigger('exit', 'proc-2', 0)
+			await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_REQUEST_CHANGES_JSON))
+			await mock.trigger('exit', 'proc-2', 0)
 
 			expect(mock.deps.threads.incrementReviewRound).toHaveBeenCalledWith('t1')
 			expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'revising')
@@ -397,8 +434,8 @@ describe('createPipeline', () => {
 
 			await pipeline.startReview('t1', JSON.parse(PLAN_JSON))
 
-			mock.trigger('output', 'proc-2', reviewBlock(REVIEW_REQUEST_CHANGES_JSON))
-			mock.trigger('exit', 'proc-2', 0)
+			await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_REQUEST_CHANGES_JSON))
+			await mock.trigger('exit', 'proc-2', 0)
 
 			expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'executing')
 		})
@@ -411,8 +448,8 @@ describe('createPipeline', () => {
 
 			await pipeline.startReview('t1', JSON.parse(PLAN_JSON))
 
-			mock.trigger('output', 'proc-2', reviewBlock(REVIEW_REQUEST_CHANGES_CRITICAL_JSON))
-			mock.trigger('exit', 'proc-2', 0)
+			await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_REQUEST_CHANGES_CRITICAL_JSON))
+			await mock.trigger('exit', 'proc-2', 0)
 
 			expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed')
 		})
@@ -423,8 +460,8 @@ describe('createPipeline', () => {
 
 			await pipeline.startReview('t1', JSON.parse(PLAN_JSON))
 
-			mock.trigger('output', 'proc-2', reviewBlock(REVIEW_REJECT_JSON))
-			mock.trigger('exit', 'proc-2', 0)
+			await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_REJECT_JSON))
+			await mock.trigger('exit', 'proc-2', 0)
 
 			expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed')
 			expect(pipeline.getContext('t1')).toBeUndefined()
@@ -436,8 +473,8 @@ describe('createPipeline', () => {
 
 			await pipeline.startReview('t1', JSON.parse(PLAN_JSON))
 
-			mock.trigger('output', 'proc-2', 'some garbage that is not a review block')
-			mock.trigger('exit', 'proc-2', 0)
+			await mock.trigger('output', 'proc-2', 'some garbage that is not a review block')
+			await mock.trigger('exit', 'proc-2', 0)
 
 			expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed')
 		})
@@ -460,8 +497,8 @@ describe('createPipeline', () => {
 			await pipeline.startRevision('t1', JSON.parse(PLAN_JSON), 'feedback')
 
 			// proc-2 is the revision process
-			mock.trigger('output', 'proc-2', planBlock())
-			mock.trigger('exit', 'proc-2', 0)
+			await mock.trigger('output', 'proc-2', planBlock())
+			await mock.trigger('exit', 'proc-2', 0)
 
 			expect(mock.deps.plans.supersedeAll).toHaveBeenCalledWith('t1')
 			expect(mock.deps.plans.create).toHaveBeenCalledWith(
@@ -477,8 +514,8 @@ describe('createPipeline', () => {
 
 			await pipeline.startRevision('t1', JSON.parse(PLAN_JSON), 'feedback')
 
-			mock.trigger('output', 'proc-2', 'garbage output')
-			mock.trigger('exit', 'proc-2', 0)
+			await mock.trigger('output', 'proc-2', 'garbage output')
+			await mock.trigger('exit', 'proc-2', 0)
 
 			expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed')
 			expect(pipeline.getContext('t1')).toBeUndefined()
@@ -511,7 +548,7 @@ describe('createPipeline', () => {
 			await pipeline.startExecution('t1', JSON.parse(PLAN_JSON))
 
 			// proc-2 is execution
-			mock.trigger('exit', 'proc-2', 0)
+			await mock.trigger('exit', 'proc-2', 0)
 
 			expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'verifying')
 		})
@@ -522,7 +559,7 @@ describe('createPipeline', () => {
 
 			await pipeline.startExecution('t1', JSON.parse(PLAN_JSON))
 
-			mock.trigger('exit', 'proc-2', 0)
+			await mock.trigger('exit', 'proc-2', 0)
 
 			expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'completed')
 			expect(pipeline.getContext('t1')).toBeUndefined()
@@ -534,7 +571,7 @@ describe('createPipeline', () => {
 
 			await pipeline.startExecution('t1', JSON.parse(PLAN_JSON))
 
-			mock.trigger('exit', 'proc-2', 1)
+			await mock.trigger('exit', 'proc-2', 1)
 
 			expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed')
 			expect(pipeline.getContext('t1')).toBeUndefined()
@@ -634,8 +671,8 @@ describe('createPipeline', () => {
 			await pipeline.startVerification('t1')
 
 			// proc-2 is verification process
-			mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_PASSED_JSON))
-			mock.trigger('exit', 'proc-2', 0)
+			await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_PASSED_JSON))
+			await mock.trigger('exit', 'proc-2', 0)
 
 			// startCommitAndPush is async — wait for it to settle
 			await flush()
@@ -664,8 +701,8 @@ describe('createPipeline', () => {
 
 			await pipeline.startVerification('t1')
 
-			mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_FAILED_JSON))
-			mock.trigger('exit', 'proc-2', 0)
+			await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_FAILED_JSON))
+			await mock.trigger('exit', 'proc-2', 0)
 
 			// startExecution is async — wait for it to settle
 			await flush()
@@ -688,11 +725,23 @@ describe('createPipeline', () => {
 
 			await pipeline.startVerification('t1')
 
-			mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_FAILED_JSON))
-			mock.trigger('exit', 'proc-2', 0)
+			await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_FAILED_JSON))
+			await mock.trigger('exit', 'proc-2', 0)
 
 			expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed')
 			expect(pipeline.getContext('t1')).toBeUndefined()
+
+			// When retries are exhausted, the pipeline MUST emit
+			// 'pipeline:verification-exhausted' so the desktop bridge can
+			// distinguish this failure from a generic 'failed' and fire
+			// the dedicated notification kind. Regression test for a
+			// coverage gap CodeRabbit flagged on the original Tier 1 PR.
+			expect(mock.emittedEvents).toContainEqual(
+				expect.objectContaining({
+					type: 'pipeline:verification-exhausted',
+					threadId: 't1',
+				}),
+			)
 		})
 	})
 
@@ -805,6 +854,9 @@ describe('createPipeline', () => {
 			const pipeline = createPipeline(mock.deps)
 			await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null)
 			pipeline.getContext('t1')!.githubIssueNumber = 42
+			// baseBranch is a hard prerequisite for PR creation (invariant
+			// added alongside the per-project base-branch selector).
+			pipeline.getContext('t1')!.baseBranch = 'main'
 
 			mockExecSync.mockImplementation((cmd: string) => {
 				if (cmd.startsWith('git rev-parse')) return 'feat/branch'
@@ -823,6 +875,7 @@ describe('createPipeline', () => {
 			const pipeline = createPipeline(mock.deps)
 			await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null)
 			pipeline.getContext('t1')!.githubIssueNumber = 42
+			pipeline.getContext('t1')!.baseBranch = 'main'
 
 			mockExecSync.mockImplementation((cmd: string) => {
 				if (cmd.startsWith('git rev-parse')) return 'feat/branch'
@@ -948,6 +1001,142 @@ describe('createPipeline', () => {
 		it('returns undefined for missing pipeline', () => {
 			const pipeline = createPipeline(mock.deps)
 			expect(pipeline.getContext('nonexistent')).toBeUndefined()
+		})
+	})
+
+	// ─── Tier 3: pipeline:model-resolved telemetry ─────────────────────
+
+	describe('Tier 3 telemetry', () => {
+		it('emits pipeline:model-resolved + persists when provider reports resolvedModel', async () => {
+			// Swap the openrouter provider with a scripted one that returns
+			// a fake resolvedModel + usage, and point plannerModel at it.
+			const openrouterProvider: any = {
+				id: 'openrouter',
+				supports: new Set(['plan', 'review', 'revision', 'verify', 'execute']),
+				generate: vi.fn(async () => ({
+					rawOutput: planBlock(),
+					exitCode: 0,
+					resolvedModel: 'anthropic/claude-sonnet-4-6',
+					tokensUsed: { prompt: 1200, completion: 450 },
+					costUsd: 0.0031,
+				})),
+				healthCheck: vi.fn(async () => ({ ok: true })),
+			}
+			const registry = createProviderRegistry({
+				claude: (mock.deps as any).providers.for('claude', 'plan'),
+				codex: (mock.deps as any).providers.for('codex', 'review'),
+				openrouter: openrouterProvider,
+			})
+			const deps = { ...mock.deps, providers: registry }
+			;(deps.settings.get as any).mockReturnValue({ ...DEFAULT_SETTINGS, plannerModel: 'openrouter' })
+
+			const pipeline = createPipeline(deps)
+			await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null)
+			await new Promise((r) => setImmediate(r))
+			await new Promise((r) => setImmediate(r))
+
+			// The emitted events should include pipeline:model-resolved with the full payload
+			const resolvedEvent = mock.emittedEvents.find((e: any) => e.type === 'pipeline:model-resolved')
+			expect(resolvedEvent).toBeDefined()
+			expect(resolvedEvent).toMatchObject({
+				type: 'pipeline:model-resolved',
+				threadId: 't1',
+				phase: 'plan',
+				resolvedModel: 'anthropic/claude-sonnet-4-6',
+				tokensUsed: { prompt: 1200, completion: 450 },
+				costUsd: 0.0031,
+			})
+
+			// And the thread row should have been updated via the queries
+			expect(mock.deps.threads.setResolvedModel).toHaveBeenCalledWith(
+				't1', 'plan', 'anthropic/claude-sonnet-4-6',
+			)
+			expect(mock.deps.threads.addTokenUsage).toHaveBeenCalledWith('t1', 1200, 450, 0.0031)
+		})
+
+		it('does NOT emit model-resolved when the provider omits resolvedModel', async () => {
+			// Baseline claude-cli provider returns `resolvedModel: 'claude'`
+			// so we get an event — verify the opposite by stubbing a
+			// provider that returns no resolvedModel at all.
+			const silentProvider: any = {
+				id: 'openrouter',
+				supports: new Set(['plan', 'review', 'revision', 'verify', 'execute']),
+				generate: vi.fn(async () => ({ rawOutput: planBlock(), exitCode: 0 })),
+				healthCheck: vi.fn(async () => ({ ok: true })),
+			}
+			const registry = createProviderRegistry({
+				claude: (mock.deps as any).providers.for('claude', 'plan'),
+				codex: (mock.deps as any).providers.for('codex', 'review'),
+				openrouter: silentProvider,
+			})
+			const deps = { ...mock.deps, providers: registry }
+			;(deps.settings.get as any).mockReturnValue({ ...DEFAULT_SETTINGS, plannerModel: 'openrouter' })
+
+			const pipeline = createPipeline(deps)
+			await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null)
+			await new Promise((r) => setImmediate(r))
+			await new Promise((r) => setImmediate(r))
+
+			const resolvedEvent = mock.emittedEvents.find((e: any) => e.type === 'pipeline:model-resolved')
+			expect(resolvedEvent).toBeUndefined()
+			expect(mock.deps.threads.setResolvedModel).not.toHaveBeenCalled()
+			expect(mock.deps.threads.addTokenUsage).not.toHaveBeenCalled()
+		})
+
+		it('emits model-resolved for claude-cli too (resolvedModel defaults to "claude")', async () => {
+			// The CLI provider sets resolvedModel: 'claude' unconditionally,
+			// so plan phase under the default settings should emit the event.
+			const pipeline = createPipeline(mock.deps)
+			await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null)
+
+			// Drive the CLI provider's spawn → exit cycle
+			await mock.trigger('output', 'proc-1', planBlock())
+			await mock.trigger('exit', 'proc-1', 0)
+
+			const resolvedEvents = mock.emittedEvents.filter((e: any) => e.type === 'pipeline:model-resolved')
+			expect(resolvedEvents.length).toBeGreaterThan(0)
+			expect(resolvedEvents[0]).toMatchObject({
+				phase: 'plan',
+				resolvedModel: 'claude',
+			})
+			// No tokensUsed/costUsd because the CLI provider doesn't report them
+			expect((resolvedEvents[0] as any).tokensUsed).toBeUndefined()
+		})
+
+		it('skips addTokenUsage when provider reports resolvedModel but no tokensUsed', async () => {
+			const partialProvider: any = {
+				id: 'openrouter',
+				supports: new Set(['plan', 'review', 'revision', 'verify', 'execute']),
+				generate: vi.fn(async () => ({
+					rawOutput: planBlock(),
+					exitCode: 0,
+					resolvedModel: 'openrouter/auto',
+					// no tokensUsed
+				})),
+				healthCheck: vi.fn(async () => ({ ok: true })),
+			}
+			const registry = createProviderRegistry({
+				claude: (mock.deps as any).providers.for('claude', 'plan'),
+				codex: (mock.deps as any).providers.for('codex', 'review'),
+				openrouter: partialProvider,
+			})
+			const deps = { ...mock.deps, providers: registry }
+			;(deps.settings.get as any).mockReturnValue({ ...DEFAULT_SETTINGS, plannerModel: 'openrouter' })
+
+			const pipeline = createPipeline(deps)
+			await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null)
+			await new Promise((r) => setImmediate(r))
+			await new Promise((r) => setImmediate(r))
+
+			// Still emits the event (with resolvedModel only)
+			const resolvedEvent = mock.emittedEvents.find((e: any) => e.type === 'pipeline:model-resolved')
+			expect(resolvedEvent).toBeDefined()
+			expect((resolvedEvent as any).tokensUsed).toBeUndefined()
+
+			// Still persists resolvedModel
+			expect(mock.deps.threads.setResolvedModel).toHaveBeenCalledWith('t1', 'plan', 'openrouter/auto')
+			// But does NOT call addTokenUsage
+			expect(mock.deps.threads.addTokenUsage).not.toHaveBeenCalled()
 		})
 	})
 })

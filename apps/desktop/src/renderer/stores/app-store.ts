@@ -1,5 +1,7 @@
 import { create } from 'zustand'
-import type { ShipCodePlan, PlanReview, PipelinePhase, Project, Thread, SystemHealth, VerificationResult, GitHubIssueCacheRecord } from '@shipcode/shared'
+import type { ShipCodePlan, PlanReview, PipelinePhase, SystemHealth, VerificationResult, GitHubIssueCacheRecord, NotificationRecord } from '@shipcode/shared'
+
+export type ViewMode = 'dashboard' | 'project'
 
 interface AppState {
 	// Selection
@@ -8,6 +10,7 @@ interface AppState {
 	activeIssue: GitHubIssueCacheRecord | null
 
 	// UI state
+	viewMode: ViewMode
 	sidebarCollapsed: boolean
 	terminalVisible: boolean
 	settingsVisible: boolean
@@ -21,16 +24,21 @@ interface AppState {
 	// Verification & issues
 	currentVerification: VerificationResult | null
 	githubIssues: GitHubIssueCacheRecord[]
-	kanbanView: boolean
 
 	// Agent output buffers
 	agentOutputs: Record<string, string[]>
 
+	// Notifications (in-app toaster + history)
+	notifications: NotificationRecord[]
+
 	// Command palette & modals
 	commandPaletteOpen: boolean
 	createIssueModalOpen: boolean
+	editingPrd: { issueNumber: number; body: string } | null
 
 	// Actions
+	setViewMode: (mode: ViewMode) => void
+	openDashboard: () => void
 	selectProject: (id: string | null) => void
 	selectThread: (id: string | null) => void
 	selectIssue: (issue: GitHubIssueCacheRecord | null) => void
@@ -43,11 +51,14 @@ interface AppState {
 	setSystemHealth: (health: SystemHealth) => void
 	setVerification: (verification: VerificationResult | null) => void
 	setGithubIssues: (issues: GitHubIssueCacheRecord[]) => void
-	toggleKanbanView: () => void
 	appendAgentOutput: (processId: string, chunk: string) => void
 	clearAgentOutput: (processId: string) => void
+	addNotification: (notification: NotificationRecord) => void
+	removeNotification: (id: string) => void
+	clearNotifications: () => void
 	toggleCommandPalette: () => void
 	openCreateIssueModal: () => void
+	openEditPrdModal: (issueNumber: number, body: string) => void
 	closeCreateIssueModal: () => void
 }
 
@@ -55,6 +66,7 @@ export const useAppStore = create<AppState>((set) => ({
 	activeProjectId: null,
 	activeThreadId: null,
 	activeIssue: null,
+	viewMode: 'dashboard',
 	sidebarCollapsed: false,
 	terminalVisible: false,
 	settingsVisible: false,
@@ -64,13 +76,16 @@ export const useAppStore = create<AppState>((set) => ({
 	systemHealth: null,
 	currentVerification: null,
 	githubIssues: [],
-	kanbanView: true,
 	agentOutputs: {},
+	notifications: [],
 	commandPaletteOpen: false,
 	createIssueModalOpen: false,
+	editingPrd: null,
 
-	selectProject: (id) => set({ activeProjectId: id, activeThreadId: null, activeIssue: null, currentPlan: null, currentReview: null, currentVerification: null, pipelinePhase: 'idle' }),
-	selectThread: (id) => set({ activeThreadId: id, currentPlan: null, currentReview: null, currentVerification: null, pipelinePhase: 'idle' }),
+	setViewMode: (mode) => set({ viewMode: mode }),
+	openDashboard: () => set({ viewMode: 'dashboard', activeIssue: null, currentPlan: null, currentReview: null, currentVerification: null }),
+	selectProject: (id) => set({ activeProjectId: id, activeThreadId: null, activeIssue: null, currentPlan: null, currentReview: null, currentVerification: null, pipelinePhase: 'idle', viewMode: 'project' }),
+	selectThread: (id) => set({ activeThreadId: id, currentPlan: null, currentReview: null, currentVerification: null, pipelinePhase: 'idle', viewMode: 'project' }),
 	selectIssue: (issue) => set({
 		activeIssue: issue,
 		activeThreadId: issue?.threadId ?? null,
@@ -87,7 +102,6 @@ export const useAppStore = create<AppState>((set) => ({
 	setPipelinePhase: (phase) => set({ pipelinePhase: phase }),
 	setVerification: (verification) => set({ currentVerification: verification }),
 	setGithubIssues: (issues) => set({ githubIssues: issues }),
-	toggleKanbanView: () => set((s) => ({ kanbanView: !s.kanbanView })),
 	setSystemHealth: (health) => set({ systemHealth: health }),
 	appendAgentOutput: (processId, chunk) =>
 		set((s) => ({
@@ -101,7 +115,21 @@ export const useAppStore = create<AppState>((set) => ({
 			const { [processId]: _, ...rest } = s.agentOutputs
 			return { agentOutputs: rest }
 		}),
+	addNotification: (notification) =>
+		set((s) => {
+			// Replace existing record with same id (re-fired) or prepend new.
+			const filtered = s.notifications.filter((n) => n.id !== notification.id)
+			return { notifications: [notification, ...filtered] }
+		}),
+	removeNotification: (id) =>
+		set((s) => ({ notifications: s.notifications.filter((n) => n.id !== id) })),
+	clearNotifications: () => set({ notifications: [] }),
 	toggleCommandPalette: () => set((s) => ({ commandPaletteOpen: !s.commandPaletteOpen })),
-	openCreateIssueModal: () => set({ createIssueModalOpen: true, commandPaletteOpen: false }),
-	closeCreateIssueModal: () => set({ createIssueModalOpen: false }),
+	openCreateIssueModal: () => set({ createIssueModalOpen: true, editingPrd: null, commandPaletteOpen: false }),
+	openEditPrdModal: (issueNumber, body) => set({
+		createIssueModalOpen: true,
+		editingPrd: { issueNumber, body },
+		commandPaletteOpen: false,
+	}),
+	closeCreateIssueModal: () => set({ createIssueModalOpen: false, editingPrd: null }),
 }))

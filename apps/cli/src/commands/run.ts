@@ -1,7 +1,15 @@
 import path from 'node:path'
 import fs from 'node:fs'
-import { getDatabase, ProjectQueries, ThreadQueries, PlanQueries, ReviewQueries, VerificationQueries, GitHubIssueQueries } from '@shipcode/db'
-import { ProcessManager, GhCli, routeFromLabels } from '@shipcode/agents'
+import { getDatabase, ProjectQueries, ThreadQueries, PlanQueries, ReviewQueries, VerificationQueries, GitHubIssueQueries, SettingsQueries } from '@shipcode/db'
+import {
+  ProcessManager,
+  GhCli,
+  routeFromLabels,
+  createClaudeCliProvider,
+  createCodexCliProvider,
+  createOpenRouterProvider,
+  createProviderRegistry,
+} from '@shipcode/agents'
 import { createPipeline } from '@shipcode/pipeline'
 import { createCliEmitter } from '../adapters/cli-emitter'
 import { requireOnboarding } from './guard'
@@ -26,6 +34,7 @@ export async function runCommand(issueNumber: string) {
   const reviews = new ReviewQueries(db)
   const verifications = new VerificationQueries(db)
   const githubIssues = new GitHubIssueQueries(db)
+  const settings = new SettingsQueries(db)
 
   // Find or create project
   let project = projects.list().find(p => p.path === cwd)
@@ -41,13 +50,23 @@ export async function runCommand(issueNumber: string) {
   // Route model from labels
   const route = routeFromLabels(issue.labels)
   const executorModel = 'error' in route ? 'claude' : route.executorModel
+  const executorModelOverride = 'error' in route ? null : (route.modelOverride ?? null)
 
   console.log(`Issue: ${issue.title}`)
-  console.log(`Model: ${executorModel}`)
+  console.log(`Model: ${executorModel}${executorModelOverride ? ` (${executorModelOverride})` : ''}`)
   console.log(`Starting pipeline...\n`)
 
   const emitter = createCliEmitter()
   const processManager = new ProcessManager()
+
+  const providers = createProviderRegistry({
+    claude: createClaudeCliProvider(processManager),
+    codex: createCodexCliProvider(processManager),
+    openrouter: createOpenRouterProvider({
+      getApiKey: () => process.env.OPENROUTER_API_KEY,
+      getSettings: () => settings.get(),
+    }),
+  })
 
   const pipeline = createPipeline({
     emitter,
@@ -57,13 +76,16 @@ export async function runCommand(issueNumber: string) {
     reviews,
     verifications,
     githubIssues,
+    settings,
+    providers,
   })
 
   await pipeline.startFromGitHubIssue(
     project.id,
     project.path,
     { number: issue.number, title: issue.title, body: issue.body, labels: issue.labels },
-    executorModel
+    executorModel,
+    { baseBranch: project.defaultBranch, executorModelOverride },
   )
 
   // Wait for pipeline to complete

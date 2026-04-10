@@ -1,3 +1,4 @@
+import { X } from '@shipcode/ui'
 import { useAppStore } from '../stores/app-store'
 
 export function TerminalDrawer() {
@@ -14,10 +15,11 @@ export function TerminalDrawer() {
 				<span className="text-xs font-semibold text-text-secondary">Terminal</span>
 				<button
 					type="button"
-					className="cursor-pointer rounded border-none bg-transparent px-1.5 py-0.5 text-text-secondary hover:bg-bg-hover"
+					className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-text-secondary hover:bg-bg-hover hover:text-text-primary"
 					onClick={toggleTerminal}
+					title="Close terminal"
 				>
-					✕
+					<X size={14} />
 				</button>
 			</div>
 			<div className="flex-1 overflow-y-auto px-3 py-2">

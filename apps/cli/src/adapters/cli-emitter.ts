@@ -8,6 +8,26 @@ export function createCliEmitter(): PipelineEmitter {
         case 'pipeline:phase':
           console.log(`[${timestamp}] Phase: ${event.phase}`)
           break
+        case 'pipeline:verification-exhausted':
+          console.log(`[${timestamp}] Verification exhausted after ${event.retries} retries`)
+          break
+        case 'pipeline:model-resolved': {
+          // Build tokens and cost as independent segments. A provider
+          // can theoretically report cost without tokens (unusual but
+          // possible) — the previous nested check dropped the cost in
+          // that case. CodeRabbit flagged this on the initial Tier 3.
+          const parts: string[] = []
+          if (event.tokensUsed) {
+            parts.push(`${event.tokensUsed.prompt}+${event.tokensUsed.completion} tok`)
+          }
+          if (event.costUsd != null) {
+            parts.push(`$${event.costUsd.toFixed(4)}`)
+          }
+          const extras = parts.length > 0 ? ` (${parts.join(', ')})` : ''
+          const via = event.requestedModel !== event.resolvedModel ? ` via ${event.requestedModel}` : ''
+          console.log(`[${timestamp}] ${event.phase}: routed to ${event.resolvedModel}${via}${extras}`)
+          break
+        }
         case 'plan:parsed':
           console.log(`[${timestamp}] Plan generated: ${event.plan.objective}`)
           break

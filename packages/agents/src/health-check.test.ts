@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeEach } from 'vitest'
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
 
 // vi.hoisted runs before vi.mock factories, making these available inside them
 const { mockExec, mockAccess, mockHomedir } = vi.hoisted(() => ({
@@ -15,6 +15,7 @@ import {
 	checkClaudeAuth,
 	checkCodexAuth,
 	checkGhAuth,
+	checkOpenRouterAuth,
 	checkSystemHealth,
 	checkSystemHealthWithAuth,
 } from './health-check'
@@ -267,5 +268,93 @@ describe('checkSystemHealthWithAuth', () => {
 		expect(result.claude.authenticated).toBe(false)
 		expect(result.codex.available).toBe(false)
 		expect(result.codex.authenticated).toBe(false)
+	})
+})
+
+describe('checkOpenRouterAuth', () => {
+	let fetchMock: ReturnType<typeof vi.fn>
+
+	beforeEach(() => {
+		fetchMock = vi.fn()
+		vi.stubGlobal('fetch', fetchMock)
+	})
+
+	afterEach(() => {
+		vi.unstubAllGlobals()
+	})
+
+	it('returns missing_key when no API key is provided', async () => {
+		const res = await checkOpenRouterAuth(undefined)
+		expect(res.ok).toBe(false)
+		if (!res.ok) expect(res.reason).toBe('missing_key')
+		expect(fetchMock).not.toHaveBeenCalled()
+	})
+
+	it('returns missing_key when API key is empty string', async () => {
+		const res = await checkOpenRouterAuth('')
+		expect(res.ok).toBe(false)
+		if (!res.ok) expect(res.reason).toBe('missing_key')
+	})
+
+	it('returns ok on 200 with label', async () => {
+		fetchMock.mockResolvedValueOnce(
+			new Response(JSON.stringify({ data: { label: 'shipcode-dev' } }), { status: 200 }),
+		)
+		const res = await checkOpenRouterAuth('sk-or-v1-abc')
+		expect(res.ok).toBe(true)
+		if (res.ok) expect(res.label).toBe('shipcode-dev')
+	})
+
+	it('returns invalid_key on 401', async () => {
+		fetchMock.mockResolvedValueOnce(new Response('unauthorized', { status: 401 }))
+		const res = await checkOpenRouterAuth('bad-key')
+		expect(res.ok).toBe(false)
+		if (!res.ok) expect(res.reason).toBe('invalid_key')
+	})
+
+	it('returns invalid_key on 403', async () => {
+		fetchMock.mockResolvedValueOnce(new Response('forbidden', { status: 403 }))
+		const res = await checkOpenRouterAuth('bad-key')
+		expect(res.ok).toBe(false)
+		if (!res.ok) expect(res.reason).toBe('invalid_key')
+	})
+
+	it('returns unreachable when fetch throws', async () => {
+		fetchMock.mockRejectedValueOnce(new Error('ECONNRESET'))
+		const res = await checkOpenRouterAuth('k')
+		expect(res.ok).toBe(false)
+		if (!res.ok) {
+			expect(res.reason).toBe('unreachable')
+			expect(res.message).toContain('ECONNRESET')
+		}
+	})
+
+	it('warns when pinned model is not in the catalog', async () => {
+		fetchMock
+			.mockResolvedValueOnce(new Response(JSON.stringify({ data: { label: 'ok' } }), { status: 200 }))
+			.mockResolvedValueOnce(
+				new Response(
+					JSON.stringify({ data: [{ id: 'qwen/qwen3-coder:free' }, { id: 'openrouter/auto' }] }),
+					{ status: 200 },
+				),
+			)
+
+		const res = await checkOpenRouterAuth('k', 'qwen/qwen3.6-plus:free')
+		expect(res.ok).toBe(false)
+		if (!res.ok) expect(res.reason).toBe('model_deprecated')
+	})
+
+	it('returns ok when pinned model IS in the catalog', async () => {
+		fetchMock
+			.mockResolvedValueOnce(new Response(JSON.stringify({ data: { label: 'ok' } }), { status: 200 }))
+			.mockResolvedValueOnce(
+				new Response(
+					JSON.stringify({ data: [{ id: 'qwen/qwen3-coder:free' }, { id: 'openrouter/auto' }] }),
+					{ status: 200 },
+				),
+			)
+
+		const res = await checkOpenRouterAuth('k', 'openrouter/auto')
+		expect(res.ok).toBe(true)
 	})
 })

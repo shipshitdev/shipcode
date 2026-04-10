@@ -1,4 +1,5 @@
 import { type PipelinePhase } from '@shipcode/shared'
+import { Check, X } from 'lucide-react'
 import { cn } from './lib/utils'
 
 const PHASES: { key: PipelinePhase; label: string }[] = [
@@ -50,7 +51,13 @@ export function PipelineStatus({ currentPhase, onPhaseClick }: PipelineStatusPro
 									isFailed && isActive && 'bg-danger border-danger text-bg-primary',
 								)}
 							>
-								{isCompleted ? '✓' : isActive && isFailed ? '✕' : index + 1}
+								{isCompleted ? (
+									<Check size={12} strokeWidth={3} />
+								) : isActive && isFailed ? (
+									<X size={12} strokeWidth={3} />
+								) : (
+									index + 1
+								)}
 							</span>
 							<span
 								className={cn(

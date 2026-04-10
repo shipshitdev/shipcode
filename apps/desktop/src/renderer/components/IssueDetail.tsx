@@ -1,18 +1,60 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useAppStore } from '../stores/app-store'
-import { PlanViewer, ReviewViewer, Badge, Button, Textarea } from '@shipcode/ui'
-import type { Thread, PlanRecord, ReviewRecord } from '@shipcode/shared'
+import { PlanViewer, ReviewViewer, Badge, Button, Textarea, X, ExternalLink, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Dialog, DialogContent, DialogTitle } from '@shipcode/ui'
+import type { Thread, PlanRecord, ReviewRecord, Project, NotificationRecord, PipelinePhase } from '@shipcode/shared'
+
+const ACTIVE_PHASES: PipelinePhase[] = [
+	'planning',
+	'reviewing',
+	'revising',
+	'executing',
+	'verifying',
+	'shipping',
+]
+
+// Derive https://github.com/owner/repo/issues/N from a git remote. Covers:
+//   - scp-style:  git@github.com:owner/repo(.git)
+//   - ssh scheme: ssh://git@github.com/owner/repo(.git)
+//   - https:      https://github.com/owner/repo(.git)
+// Rejects non-github.com hosts; host comparison is case-insensitive.
+export function deriveGithubIssueUrl(remote: string | null | undefined, issueNumber: number): string | null {
+	if (!remote) return null
+	const trimmed = remote.trim()
+	// scp-style: git@host:owner/repo(.git)
+	const scp = trimmed.match(/^git@([^:]+):([^/]+)\/(.+?)(?:\.git)?$/i)
+	if (scp && scp[1].toLowerCase() === 'github.com') {
+		return `https://github.com/${scp[2]}/${scp[3]}/issues/${issueNumber}`
+	}
+	// URL-parseable forms (ssh://git@... or https://...)
+	try {
+		const u = new URL(trimmed)
+		if (u.hostname.toLowerCase() !== 'github.com') return null
+		const parts = u.pathname.replace(/^\/+/, '').replace(/\.git$/i, '').split('/')
+		if (parts.length < 2 || !parts[0] || !parts[1]) return null
+		return `https://github.com/${parts[0]}/${parts[1]}/issues/${issueNumber}`
+	} catch {
+		return null
+	}
+}
 
 export function IssueDetail() {
 	const queryClient = useQueryClient()
-	const { activeIssue, activeThreadId, activeProjectId, selectIssue, pipelinePhase } = useAppStore()
+	const { activeIssue, activeThreadId, activeProjectId, selectIssue, pipelinePhase, openEditPrdModal } = useAppStore()
 	const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null)
 	const [feedback, setFeedback] = useState('')
 	const [showRejectForm, setShowRejectForm] = useState(false)
 	const [isSubmitting, setIsSubmitting] = useState(false)
+	const [isRefreshingFromGithub, setIsRefreshingFromGithub] = useState(false)
+
+	// Shared cache with ProjectSidebar / Titlebar — no extra request.
+	const { data: projects } = useQuery<Project[]>({
+		queryKey: ['projects'],
+		queryFn: () => window.shipcode.invoke('project:list'),
+	})
+	const activeProject = (Array.isArray(projects) ? projects : []).find(p => p.id === activeProjectId) ?? null
 
 	// Fetch thread data if issue is linked
 	const { data: thread } = useQuery<Thread | null>({
@@ -101,6 +143,83 @@ export function IssueDetail() {
 		}
 	}
 
+	const handleCancel = async () => {
+		if (!activeThreadId) return
+		setIsSubmitting(true)
+		try {
+			await window.shipcode.invoke('pipeline:cancel', { threadId: activeThreadId })
+			await refreshIssueState()
+		} finally {
+			setIsSubmitting(false)
+		}
+	}
+
+	// Dismiss any pending notifications for this thread when the user opens it.
+	// Catches the "fired before navigation" case; useIpc.ts handles the
+	// "fired while already viewing" case.
+	useEffect(() => {
+		if (!activeThreadId) return
+		let cancelled = false
+		void (async () => {
+			try {
+				const list = await window.shipcode.invoke<NotificationRecord[]>('notification:list')
+				if (cancelled) return
+				const matching = list.filter((n) => n.threadId === activeThreadId)
+				for (const n of matching) {
+					await window.shipcode.invoke('notification:dismiss', { id: n.id })
+				}
+			} catch {
+				// Best-effort.
+			}
+		})()
+		return () => {
+			cancelled = true
+		}
+	}, [activeThreadId])
+
+	const phaseIsActive = ACTIVE_PHASES.includes(threadPhase as PipelinePhase)
+
+	const handleExecutorChange = async (model: 'claude' | 'codex' | 'openrouter') => {
+		if (!activeProjectId) return
+		await window.shipcode.invoke('github:set-executor', {
+			projectId: activeProjectId,
+			issueNumber: activeIssue!.issueNumber,
+			model,
+		})
+		await queryClient.invalidateQueries({ queryKey: ['github-issues', activeProjectId] })
+	}
+
+	const handleEditPrd = () => {
+		if (!activeIssue) return
+		openEditPrdModal(activeIssue.issueNumber, activeIssue.body ?? '')
+	}
+
+	const githubIssueUrl = activeIssue
+		? deriveGithubIssueUrl(activeProject?.gitRemote ?? null, activeIssue.issueNumber)
+		: null
+
+	const handleOpenOnGithub = async () => {
+		if (!githubIssueUrl) return
+		await window.shipcode.invoke('shell:open-external', { url: githubIssueUrl })
+	}
+
+	const handleRefreshFromGithub = async () => {
+		if (!activeProjectId) return
+		setIsRefreshingFromGithub(true)
+		try {
+			await window.shipcode.invoke('github:refresh-issues', { projectId: activeProjectId })
+			await queryClient.invalidateQueries({ queryKey: ['github-issues', activeProjectId] })
+		} finally {
+			setIsRefreshingFromGithub(false)
+		}
+	}
+
+	// Executor is locked in once the pipeline is mid-loop. It's editable
+	// before the run starts (todo/queued) and after terminal states where
+	// the user will kick off a new run (failed/completed).
+	const EXECUTOR_EDITABLE_STATUSES = new Set(['todo', 'queued', 'failed', 'completed'])
+	const executorEditable = EXECUTOR_EDITABLE_STATUSES.has(activeIssue?.pipelineStatus ?? 'todo')
+
 	const statusColor = (status: string) => {
 		switch (status) {
 			case 'approved': return 'var(--success)'
@@ -112,42 +231,84 @@ export function IssueDetail() {
 	}
 
 	return (
-		<div className="flex w-[480px] min-w-[380px] shrink-0 flex-col overflow-hidden border-l border-border bg-bg-primary">
-			{/* Header */}
-			<div className="relative shrink-0 border-b border-border p-4">
-				<button
-					type="button"
-					className="absolute right-3 top-3 cursor-pointer rounded border-none bg-transparent px-2 py-1 text-sm text-text-muted hover:bg-bg-hover hover:text-text-primary"
-					onClick={() => selectIssue(null)}
-					title="Close"
-				>
-					✕
-				</button>
-				<span className="font-mono text-xs text-text-muted">#{activeIssue.issueNumber}</span>
-				<h3 className="my-1 pr-8 text-[15px] font-semibold">{activeIssue.title}</h3>
-				<div className="flex flex-wrap gap-1.5">
-					<Badge variant="default" className="text-[11px] uppercase font-semibold">
-						{activeIssue.pipelineStatus}
-					</Badge>
-					{activeIssue.assignee && (
-						<Badge variant="default" className="text-[11px]">
-							{activeIssue.assignee}
+		<Dialog open={!!activeIssue} onOpenChange={(open) => { if (!open) selectIssue(null) }}>
+			<DialogContent
+				className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden p-0"
+				aria-describedby={undefined}
+			>
+				{/* Visually hidden title — Radix a11y requirement */}
+				<DialogTitle className="sr-only">{`#${activeIssue.issueNumber} ${activeIssue.title}`}</DialogTitle>
+				{/* Header */}
+				<div className="relative shrink-0 border-b border-border p-4">
+					<button
+						type="button"
+						className="absolute right-3 top-3 flex h-6 w-6 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-text-muted hover:bg-bg-hover hover:text-text-primary"
+						onClick={() => selectIssue(null)}
+						title="Close"
+					>
+						<X size={14} />
+					</button>
+					<div className="flex items-center gap-2 pr-8">
+						<span className="font-mono text-xs text-text-muted">#{activeIssue.issueNumber}</span>
+						{githubIssueUrl && (
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={handleOpenOnGithub}
+								className="h-6 gap-1 text-[11px]"
+								title="Open this issue on github.com"
+							>
+								View on GitHub <ExternalLink size={12} />
+							</Button>
+						)}
+					</div>
+					<h3 className="my-1 pr-8 text-[15px] font-semibold">{activeIssue.title}</h3>
+					<div className="flex flex-wrap gap-1.5">
+						<Badge variant="default" className="text-[11px] uppercase font-semibold">
+							{activeIssue.pipelineStatus}
 						</Badge>
-					)}
-					{activeIssue.labels.filter(l => l.startsWith('agent:')).map(l => (
-						<Badge key={l} className="text-[10px] bg-accent/15 text-accent">
-							{l}
-						</Badge>
-					))}
+						{activeIssue.assignee && (
+							<Badge variant="default" className="text-[11px]">
+								{activeIssue.assignee}
+							</Badge>
+						)}
+						{activeIssue.labels.filter(l => l.startsWith('agent:')).map(l => (
+							<Badge key={l} className="text-[10px] bg-accent/15 text-accent">
+								{l}
+							</Badge>
+						))}
+					</div>
 				</div>
-			</div>
 
 			{/* Content */}
 			<div className="flex-1 overflow-y-auto p-4">
-				{/* Issue body (PRD) */}
-				{activeIssue.body ? (
-					<div className="mb-5">
-						<h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">Description</h4>
+				{/* PRD (GitHub issue body IS the PRD) */}
+				<div className="mb-5">
+					<div className="mb-2 flex items-center justify-between">
+						<h4 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">PRD</h4>
+						<div className="flex gap-1">
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={handleRefreshFromGithub}
+								disabled={isRefreshingFromGithub}
+								className="h-6 text-[11px]"
+								title="Re-fetch issue body from GitHub (use after editing on github.com)"
+							>
+								{isRefreshingFromGithub ? 'Refreshing...' : 'Refresh'}
+							</Button>
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={handleEditPrd}
+								className="h-6 text-[11px]"
+								title="Edit the PRD body (pushes to the GitHub issue on save)"
+							>
+								Edit PRD
+							</Button>
+						</div>
+					</div>
+					{activeIssue.body ? (
 						<div className="max-h-[300px] overflow-y-auto rounded-md bg-bg-secondary p-3 text-[13px] leading-relaxed text-text-primary">
 							<div className="space-y-3 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-text-secondary [&_code]:rounded [&_code]:bg-bg-tertiary [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-xs [&_h1]:text-base [&_h1]:font-semibold [&_h2]:mt-4 [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:text-sm [&_h3]:font-semibold [&_li]:mb-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:whitespace-pre-wrap [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-bg-tertiary [&_pre]:p-3 [&_pre]:text-xs [&_ul]:list-disc [&_ul]:pl-5">
 								<ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -155,20 +316,58 @@ export function IssueDetail() {
 								</ReactMarkdown>
 							</div>
 						</div>
-					</div>
-				) : (
-					<div className="mb-5">
-						<h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">Description</h4>
+					) : (
 						<div className="rounded-md bg-bg-secondary p-3 text-[13px] text-text-muted">
-							No issue description provided.
+							This issue has no PRD body yet. Click "Edit PRD" to author one.
 						</div>
+					)}
+				</div>
+
+
+				{/* Executor selector — editable before the pipeline runs, read-only mid-loop. */}
+				<div className="mb-5">
+					<h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">Agents</h4>
+					<div className="grid grid-cols-[auto,1fr] items-center gap-x-3 gap-y-1.5 text-xs text-text-secondary">
+						<span>Planner</span>
+						<span className="font-mono text-text-primary">claude</span>
+						<span>Reviewer</span>
+						<span className="font-mono text-text-primary">codex</span>
+						<span>Executor</span>
+						{executorEditable ? (
+							<Select value={activeIssue.executorModel} onValueChange={(v) => handleExecutorChange(v as 'claude' | 'codex' | 'openrouter')}>
+								<SelectTrigger className="h-7 w-[140px] text-xs">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="claude">claude</SelectItem>
+									<SelectItem value="codex">codex</SelectItem>
+									<SelectItem value="openrouter">openrouter</SelectItem>
+								</SelectContent>
+							</Select>
+						) : (
+							<span className="font-mono text-text-primary">{activeIssue.executorModel}</span>
+						)}
+						<span>Verifier</span>
+						<span className="font-mono text-text-primary">claude</span>
 					</div>
-				)}
+				</div>
 
 				{/* Pipeline thread info */}
 				{thread && (
 					<div className="mb-5">
-						<h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">Pipeline</h4>
+						<div className="mb-2 flex items-center justify-between">
+							<h4 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">Pipeline</h4>
+							{phaseIsActive && (
+								<Button
+									variant="destructive"
+									size="xs"
+									onClick={handleCancel}
+									disabled={isSubmitting}
+								>
+									Stop
+								</Button>
+							)}
+						</div>
 						<div className="flex flex-col gap-1 text-xs text-text-secondary">
 							<span>Status: <strong className="text-text-primary">{threadPhase}</strong></span>
 							{thread.githubPrNumber && (
@@ -303,6 +502,7 @@ export function IssueDetail() {
 					</div>
 				)}
 			</div>
-		</div>
+			</DialogContent>
+		</Dialog>
 	)
 }

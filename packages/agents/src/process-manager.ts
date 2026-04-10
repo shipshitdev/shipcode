@@ -15,7 +15,7 @@ const TRUSTED_SHELLS = new Set([
 const SAFE_ENV_KEYS = new Set([
   'PATH', 'HOME', 'USER', 'SHELL', 'TERM', 'LANG', 'LC_ALL', 'LC_CTYPE',
   'TMPDIR', 'XDG_RUNTIME_DIR',
-  'ANTHROPIC_API_KEY', 'OPENAI_API_KEY',
+  'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'OPENROUTER_API_KEY',
 ])
 
 function filterEnv(env: Record<string, string>): Record<string, string> {

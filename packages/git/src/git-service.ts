@@ -1,5 +1,6 @@
 import { simpleGit, type SimpleGit, type StatusResult } from 'simple-git'
 import type { GitState } from '@shipcode/shared'
+import { normalizeBranches } from '@shipcode/shared'
 
 export class GitService {
   private git: SimpleGit
@@ -51,6 +52,17 @@ export class GitService {
     } else {
       await git.push()
     }
+  }
+
+  /**
+   * List all branches in this repository as resolvable refs, suitable for
+   * display in the base-branch selector. Local branches keep plain names;
+   * remote-only branches keep their "<remote>/<name>" prefix. Sorted so the
+   * passed `defaultBranch` appears first.
+   */
+  async listBranches(defaultBranch: string): Promise<string[]> {
+    const result = await this.git.branch(['-a'])
+    return normalizeBranches({ raw: result.all, defaultBranch })
   }
 
   async getDefaultBranch(): Promise<string> {

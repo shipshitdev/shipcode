@@ -24,7 +24,7 @@ function DialogContent({ className, children, ...props }: React.ComponentProps<t
 		<DialogPortal>
 			<DialogOverlay />
 			<DialogPrimitive.Content
-				className={cn("fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 border border-border bg-bg-secondary rounded-lg p-6 shadow-lg", className)}
+				className={cn("fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 border border-border bg-bg-elevated rounded-xl p-6 shadow-2xl shadow-black/40", className)}
 				{...props}
 			>
 				{children}

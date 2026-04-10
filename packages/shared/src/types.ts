@@ -96,6 +96,17 @@ export interface Thread {
   githubRepo: string | null
   createdAt: string
   updatedAt: string
+  // Tier 3 telemetry: what openrouter/auto (or claude/codex) actually
+  // served each phase. For non-openrouter runs these just hold 'claude'
+  // or 'codex'. Null until the phase runs.
+  plannerResolvedModel: string | null
+  reviewerResolvedModel: string | null
+  revisorResolvedModel: string | null
+  executorResolvedModel: string | null
+  verifierResolvedModel: string | null
+  totalTokensPrompt: number
+  totalTokensCompletion: number
+  totalCostUsd: number
 }
 
 // === Pipeline Types ===
@@ -112,7 +123,24 @@ export type PipelinePhase =
   | 'completed'
   | 'failed'
 
-export type AgentType = 'claude' | 'codex' | 'gh'
+export type AgentType = 'claude' | 'codex' | 'gh' | 'openrouter'
+
+/**
+ * The subset of AgentType that can drive a pipeline phase. Excludes
+ * 'gh' which is a data-plane CLI, not an LLM executor.
+ *
+ * Single source of truth for every executor-model type annotation in
+ * the monorepo (DB row types, IPC payloads, UI Select values, pipeline
+ * context, etc). Keep this in sync with the `executor_model` SQLite
+ * column contents.
+ *
+ * We use a string literal union rather than a TS enum because:
+ *  - Enums compile to runtime objects (bundle weight in a published
+ *    CLI package). String literals are zero-cost at runtime.
+ *  - SQLite stores strings; no enum ⇄ ordinal round-trip needed.
+ *  - GitHub label values are already strings (`agent:claude`, etc).
+ */
+export type ExecutorModel = 'claude' | 'codex' | 'openrouter'
 
 export type AgentState = 'starting' | 'running' | 'idle' | 'errored' | 'exited'
 
@@ -182,12 +210,40 @@ export interface AppSettings {
   terminalScrollback: number
   plannerModel: AgentType
   reviewerModel: AgentType
+  verifierModel: AgentType
   githubPollingEnabled: boolean
   githubPollingIntervalMs: number
   githubBotUsername: string
   autoPickupEnabled: boolean
   statusLabelMappings: StatusLabelMapping
   onboardingVersion: number
+  // null = default (~/.shipcode/worktrees), '' = project-local legacy, else absolute or ~-prefixed
+  worktreeRoot: string | null
+  // Notifications
+  notificationsEnabled: boolean
+  notificationOsEnabled: boolean
+  notificationBadgeEnabled: boolean
+  notificationSoundEnabled: boolean
+  notificationEvents: NotificationEventToggles
+  // OpenRouter integration (Tier 1+). All off by default; set openrouterEnabled=true
+  // plus provide OPENROUTER_API_KEY in env to activate. Individual phase models are
+  // optional overrides; when null, the resolver falls back to the tier defaults
+  // (openrouterDefaultPaidModel / openrouterDefaultFreeModel).
+  openrouterEnabled: boolean
+  openrouterPlannerModel: string | null
+  openrouterReviewerModel: string | null
+  openrouterVerifierModel: string | null
+  openrouterExecutorModel: string | null
+  openrouterDefaultPaidModel: string
+  openrouterDefaultFreeModel: string
+  openrouterExplicitFallback: string
+}
+
+export interface NotificationEventToggles {
+  awaitingApproval: boolean
+  failed: boolean
+  completed: boolean
+  verificationExhausted: boolean
 }
 
 export interface StatusLabelMapping {
@@ -245,6 +301,12 @@ export interface GitHubIssueCacheRecord {
   claimedBy: string | null
   lastPhaseUpdate: string | null
   lastStatusLabel: string | null
+  // Per-issue executor choice. Widened to the full ExecutorModel union
+  // in Tier 1 so issue-level selection can opt into the OpenRouter HTTP
+  // provider the same way the `agent:openrouter/auto` GitHub label can
+  // at queue time. The DB column is plain TEXT (v4 migration), so
+  // writing this wider value is safe on existing rows.
+  executorModel: ExecutorModel
   fetchedAt: string
 }
 
@@ -254,6 +316,7 @@ export type IssuePipelineStatus =
   | 'planning'
   | 'reviewing'
   | 'revising'
+  | 'awaiting_approval'
   | 'executing'
   | 'verifying'
   | 'shipping'
@@ -314,4 +377,83 @@ export interface GhAuthStatus {
   username: string | null
   version: string | null
   error: string | null
+}
+
+// === Mission Control Dashboard ===
+
+export interface DashboardStats {
+  agentsRunning: number
+  runningByPhase: Partial<Record<PipelinePhase, number>>
+  tasksInProgress: number
+  tasksOpen: number
+  tasksBlocked: number
+  pendingApprovals: number
+  staleApprovals: number
+  shippedLast7d: number
+  failedLast7d: number
+}
+
+export type ActivityKind =
+  | 'phase_change'
+  | 'plan_parsed'
+  | 'review_parsed'
+  | 'verification_parsed'
+  | 'pipeline_started'
+  | 'pipeline_cancelled'
+  | 'pipeline_failed'
+  | 'pipeline_completed'
+  | 'pipeline_verification_exhausted'
+  | 'notification_fired'
+
+export type ActivityActor = 'claude' | 'codex' | 'system' | 'human'
+
+export interface ActivityEntry {
+  id: string
+  threadId: string | null
+  projectId: string | null
+  kind: ActivityKind
+  actor: ActivityActor
+  title: string
+  subtitle: string | null
+  metadata: Record<string, unknown> | null
+  createdAt: string
+}
+
+export interface RecentTask {
+  threadId: string
+  projectId: string
+  projectName: string
+  title: string
+  phase: PipelinePhase
+  githubIssueNumber: number | null
+  updatedAt: string
+}
+
+export interface ActivePipelineSummary {
+  threadId: string
+  projectId: string
+  projectName: string
+  threadTitle: string
+  phase: PipelinePhase
+  startedAt: number
+  activeProcessId: string | null
+}
+
+// === Notifications ===
+
+export type NotificationKind =
+  | 'awaiting_approval'
+  | 'failed'
+  | 'completed'
+  | 'verification_exhausted'
+
+export interface NotificationRecord {
+  id: string
+  threadId: string
+  projectId: string | null
+  kind: NotificationKind
+  title: string
+  body: string
+  createdAt: string
+  dismissedAt: string | null
 }
