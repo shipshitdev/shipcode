@@ -27,6 +27,7 @@ import type {
 } from './types'
 import type { OpenRouterChatMessage } from './openrouter-http'
 import { OpenRouterClient, OpenRouterError } from './openrouter-http'
+import { executeViaOpenRouter } from './openrouter-execute'
 
 // System prompts for each phase. The existing prompt builders in
 // `packages/agents/src/prompts/` already produce fully-formed user
@@ -35,13 +36,13 @@ import { OpenRouterClient, OpenRouterError } from './openrouter-http'
 //
 // Note the claude/codex CLIs wrap their own system prompts; when we
 // route through OpenRouter we lose those wrappers, so we replicate the
-// essential structure here.
-const SYSTEM_PROMPTS: Record<ProviderPhase, string> = {
+// essential structure here. The execute phase has its own system
+// prompt inside openrouter-execute.ts (the tool-call harness).
+const SYSTEM_PROMPTS: Partial<Record<ProviderPhase, string>> = {
   plan: 'You are a senior software engineer creating implementation plans. Emit a single fenced ```shipcode-plan JSON block containing the plan. Do not include any other fenced blocks.',
   review: 'You are a senior software engineer reviewing an implementation plan. Emit a single fenced ```shipcode-review JSON block containing your review. Do not include any other fenced blocks.',
   revision: 'You are a senior software engineer revising an implementation plan based on review feedback. Emit a single fenced ```shipcode-plan JSON block containing the revised plan. Do not include any other fenced blocks.',
   verify: 'You are a senior software engineer verifying that an implementation matches its plan. Emit a single fenced ```shipcode-verification JSON block containing the verification result. Do not include any other fenced blocks.',
-  execute: '', // Tier 2
 }
 
 export interface OpenRouterProviderDeps {
@@ -57,28 +58,15 @@ export interface OpenRouterProviderDeps {
 }
 
 export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentProvider {
-  // Tier 1: plan/review/revision/verify. Execute added in Tier 2.
-  const supports = new Set<ProviderPhase>(['plan', 'review', 'revision', 'verify'])
+  // Tier 2: all five phases. Execute goes through the tool-call harness
+  // in openrouter-execute.ts; the other four go through plain chat.
+  const supports = new Set<ProviderPhase>(['plan', 'review', 'revision', 'verify', 'execute'])
 
   return {
     id: 'openrouter',
     supports,
 
     async generate(req: ProviderRequest): Promise<ProviderResponse> {
-      // Tier 2 guard — explicit error so the pipeline gets a clear
-      // signal instead of silently falling through.
-      if (req.phase === 'execute') {
-        return {
-          rawOutput: '',
-          exitCode: 1,
-          providerError: {
-            kind: 'not_found',
-            message: 'openrouter execute is not implemented in Tier 1 — use claude or codex',
-            retryable: false,
-          },
-        }
-      }
-
       const apiKey = deps.getApiKey()
       if (!apiKey) {
         return {
@@ -99,10 +87,19 @@ export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentPro
         ? deps.createClient(apiKey)
         : new OpenRouterClient({ apiKey })
 
-      const messages: OpenRouterChatMessage[] = [
-        { role: 'system', content: SYSTEM_PROMPTS[req.phase] },
-        { role: 'user', content: req.prompt },
-      ]
+      // Execute phase runs the tool-call agent loop.
+      if (req.phase === 'execute') {
+        return executeViaOpenRouter(req, { client, model })
+      }
+
+      // Everything else is a single streaming chat completion whose
+      // content flows into the StreamParser at the pipeline level.
+      const systemPrompt = SYSTEM_PROMPTS[req.phase]
+      const messages: OpenRouterChatMessage[] = []
+      if (systemPrompt) {
+        messages.push({ role: 'system', content: systemPrompt })
+      }
+      messages.push({ role: 'user', content: req.prompt })
 
       try {
         const result = await client.chat({ model, messages, stream: true }, req.signal)
@@ -110,7 +107,7 @@ export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentPro
         // Reconstruct a rawOutput shape that the StreamParser understands:
         // the parser only needs the raw text that contains the fenced
         // block, so we just pass `result.content` through. Tool calls
-        // shouldn't appear in Tier 1 phases (we don't pass `tools`).
+        // shouldn't appear in these phases (we don't pass `tools`).
         return {
           rawOutput: result.content,
           exitCode: 0,
