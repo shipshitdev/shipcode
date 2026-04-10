@@ -117,4 +117,76 @@ describe('ThreadQueries', () => {
 		threads.updateStatus(t.id, 'idle')
 		expect(threads.hasActivePipeline(projectId)).toBe(false)
 	})
+
+	// ─── Tier 3: telemetry columns ────────────────────────────────
+
+	describe('Tier 3 telemetry', () => {
+		it('create() seeds telemetry columns with zero / null defaults', () => {
+			const t = threads.create(projectId, 'a', 'A')
+			expect(t.plannerResolvedModel).toBeNull()
+			expect(t.reviewerResolvedModel).toBeNull()
+			expect(t.revisorResolvedModel).toBeNull()
+			expect(t.executorResolvedModel).toBeNull()
+			expect(t.verifierResolvedModel).toBeNull()
+			expect(t.totalTokensPrompt).toBe(0)
+			expect(t.totalTokensCompletion).toBe(0)
+			expect(t.totalCostUsd).toBe(0)
+		})
+
+		it('setResolvedModel() writes the correct column per phase', () => {
+			const t = threads.create(projectId, 'a', 'A')
+
+			threads.setResolvedModel(t.id, 'plan', 'anthropic/claude-sonnet-4-6')
+			threads.setResolvedModel(t.id, 'review', 'openai/gpt-5-codex')
+			threads.setResolvedModel(t.id, 'revision', 'anthropic/claude-opus-4-6')
+			threads.setResolvedModel(t.id, 'execute', 'qwen/qwen3-coder:free')
+			threads.setResolvedModel(t.id, 'verify', 'anthropic/claude-sonnet-4-6')
+
+			const updated = threads.getById(t.id)!
+			expect(updated.plannerResolvedModel).toBe('anthropic/claude-sonnet-4-6')
+			expect(updated.reviewerResolvedModel).toBe('openai/gpt-5-codex')
+			expect(updated.revisorResolvedModel).toBe('anthropic/claude-opus-4-6')
+			expect(updated.executorResolvedModel).toBe('qwen/qwen3-coder:free')
+			expect(updated.verifierResolvedModel).toBe('anthropic/claude-sonnet-4-6')
+		})
+
+		it('setResolvedModel() only touches the target column', () => {
+			const t = threads.create(projectId, 'a', 'A')
+
+			threads.setResolvedModel(t.id, 'plan', 'model-A')
+			threads.setResolvedModel(t.id, 'verify', 'model-B')
+
+			const updated = threads.getById(t.id)!
+			expect(updated.plannerResolvedModel).toBe('model-A')
+			expect(updated.verifierResolvedModel).toBe('model-B')
+			// Untouched columns stay null
+			expect(updated.reviewerResolvedModel).toBeNull()
+			expect(updated.revisorResolvedModel).toBeNull()
+			expect(updated.executorResolvedModel).toBeNull()
+		})
+
+		it('addTokenUsage() accumulates prompt + completion tokens and cost', () => {
+			const t = threads.create(projectId, 'a', 'A')
+
+			threads.addTokenUsage(t.id, 100, 50, 0.0012)
+			let updated = threads.getById(t.id)!
+			expect(updated.totalTokensPrompt).toBe(100)
+			expect(updated.totalTokensCompletion).toBe(50)
+			expect(updated.totalCostUsd).toBeCloseTo(0.0012, 6)
+
+			// Second call accumulates on top
+			threads.addTokenUsage(t.id, 200, 75, 0.0034)
+			updated = threads.getById(t.id)!
+			expect(updated.totalTokensPrompt).toBe(300)
+			expect(updated.totalTokensCompletion).toBe(125)
+			expect(updated.totalCostUsd).toBeCloseTo(0.0046, 6)
+		})
+
+		it('addTokenUsage() accepts zero cost without error', () => {
+			const t = threads.create(projectId, 'a', 'A')
+			threads.addTokenUsage(t.id, 10, 5, 0)
+			const updated = threads.getById(t.id)!
+			expect(updated.totalCostUsd).toBe(0)
+		})
+	})
 })
