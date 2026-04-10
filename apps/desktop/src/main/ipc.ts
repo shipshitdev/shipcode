@@ -1,15 +1,29 @@
-import { type IpcMain, type BrowserWindow, dialog } from 'electron'
-import type { ProjectQueries, ThreadQueries, PlanQueries, ReviewQueries, DiffQueries, SettingsQueries, VerificationQueries, GitHubIssueQueries } from '@shipcode/db'
+import { type IpcMain, type BrowserWindow, dialog, shell } from 'electron'
+import type {
+  ProjectQueries,
+  ThreadQueries,
+  PlanQueries,
+  ReviewQueries,
+  DiffQueries,
+  SettingsQueries,
+  VerificationQueries,
+  GitHubIssueQueries,
+  ActivityQueries,
+  NotificationsQueries,
+  DashboardQueries,
+} from '@shipcode/db'
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
 import fs from 'node:fs'
 import path from 'node:path'
 import type { ProcessManager } from '@shipcode/agents'
-import { checkSystemHealthWithAuth, checkGhAuth, GhCli, generatePrdFromIdea } from '@shipcode/agents'
+import { checkSystemHealthWithAuth, checkGhAuth, GhCli, enhancePrdDraft } from '@shipcode/agents'
 
 const execAsync = promisify(exec)
 import { GitService, WorktreeManager } from '@shipcode/git'
 import type { Pipeline } from '@shipcode/pipeline'
+import type { ActivePipelineSummary } from '@shipcode/shared'
+import type { NotificationService } from './notification-service'
 
 interface Queries {
   projects: ProjectQueries
@@ -20,6 +34,9 @@ interface Queries {
   settings: SettingsQueries
   verifications: VerificationQueries
   githubIssues: GitHubIssueQueries
+  activity: ActivityQueries
+  notifications: NotificationsQueries
+  dashboard: DashboardQueries
 }
 
 export function registerIpcHandlers(
@@ -27,7 +44,8 @@ export function registerIpcHandlers(
   mainWindow: BrowserWindow,
   queries: Queries,
   processManager: ProcessManager,
-  pipeline: Pipeline
+  pipeline: Pipeline,
+  notificationService: NotificationService,
 ): void {
   // === Project handlers ===
   ipcMain.handle('project:list', () => {
@@ -153,6 +171,25 @@ export function registerIpcHandlers(
       properties: ['openDirectory'],
     })
     return result.canceled ? null : result.filePaths[0] ?? null
+  })
+
+  // Open an external URL in the user's default browser.
+  // Hardened bridge: https-only, github.com host allowlist, userinfo rejected,
+  // normalized parsed.href passed through, length capped. The renderer is a
+  // browser context so we validate everything in main.
+  ipcMain.handle('shell:open-external', async (_event, { url }: { url: string }) => {
+    if (typeof url !== 'string' || url.length > 2048) return
+    let parsed: URL
+    try {
+      parsed = new URL(url)
+    } catch {
+      return
+    }
+    if (parsed.protocol !== 'https:') return
+    if (parsed.username || parsed.password) return
+    const host = parsed.hostname.toLowerCase()
+    if (host !== 'github.com' && !host.endsWith('.github.com')) return
+    await shell.openExternal(parsed.href)
   })
 
   // === GitHub handlers ===
@@ -366,6 +403,49 @@ export function registerIpcHandlers(
     mainWindow.webContents.send('pipeline:phase', { threadId, phase: 'awaiting_approval' })
   })
 
+  // === Mission Control / Dashboard handlers ===
+  ipcMain.handle('pipeline:list-active', (): ActivePipelineSummary[] => {
+    const summaries = pipeline.listActive()
+    return summaries.map((s) => {
+      const thread = queries.threads.getById(s.threadId)
+      const project = thread ? queries.projects.getById(thread.projectId) : null
+      return {
+        threadId: s.threadId,
+        projectId: thread?.projectId ?? '',
+        projectName: project?.name ?? 'Unknown project',
+        threadTitle: thread?.title ?? s.threadId,
+        phase: s.phase,
+        startedAt: s.startedAt,
+        activeProcessId: s.activeProcessId,
+      }
+    })
+  })
+
+  ipcMain.handle('dashboard:get-stats', () => {
+    return queries.dashboard.getStats()
+  })
+
+  ipcMain.handle('dashboard:get-activity', (_event, { limit, projectId }: { limit?: number; projectId?: string } = {}) => {
+    return queries.activity.listRecent(limit ?? 50, projectId)
+  })
+
+  ipcMain.handle('dashboard:get-recent-tasks', (_event, { limit }: { limit?: number } = {}) => {
+    return queries.dashboard.getRecentTasks(limit ?? 20)
+  })
+
+  // === Notification handlers ===
+  ipcMain.handle('notification:list', () => {
+    return notificationService.listActive()
+  })
+
+  ipcMain.handle('notification:dismiss', (_event, { id }: { id: string }) => {
+    notificationService.dismiss(id)
+  })
+
+  ipcMain.handle('notification:dismiss-all', () => {
+    notificationService.dismissAll()
+  })
+
   // === Onboarding handlers ===
   ipcMain.handle('onboarding:check-auth', async () => {
     const [health, ghAuth] = await Promise.all([
@@ -388,16 +468,15 @@ export function registerIpcHandlers(
     }
   })
 
-  // === AI-assisted PRD generation ===
-  ipcMain.handle('ai:generate-prd', async (_event, { projectId, userPrompt }: { projectId: string; userPrompt: string }) => {
+  // === AI-assisted PRD enhancement (in-place refinement) ===
+  ipcMain.handle('ai:enhance-prd', async (_event, { projectId, draftBody }: { projectId: string; draftBody: string }) => {
     const project = queries.projects.getById(projectId)
     if (!project) throw new Error(`Project ${projectId} not found`)
-    if (!userPrompt.trim()) throw new Error('Brain-dump is empty')
 
     // Load the repo's writing-prds skill. Preferred location is
     // .agents/skills/writing-prds/SKILL.md inside the target project. If the
     // project doesn't have one, fall back to a minimal inline instruction so
-    // generation still works — but the result will be less repo-tailored.
+    // enhancement still works — but the result will be less repo-tailored.
     const skillPath = path.join(project.path, '.agents', 'skills', 'writing-prds', 'SKILL.md')
     let skillContent: string
     try {
@@ -413,12 +492,20 @@ export function registerIpcHandlers(
     const settings = queries.settings.get()
     const plannerModel = ((settings.plannerModel as string) ?? 'claude') as 'claude' | 'codex'
 
-    return generatePrdFromIdea({
-      userPrompt,
-      skillContent,
-      plannerModel,
-      cwd: project.path,
-    })
+    try {
+      return await enhancePrdDraft({
+        draftBody: draftBody ?? '',
+        skillContent,
+        plannerModel,
+        cwd: project.path,
+      })
+    } catch (err) {
+      // Full trace stays in main-process stdout for devtools/console debugging.
+      console.error('[ai:enhance-prd]', err)
+      // Short, prompt-free message crosses the IPC boundary to the renderer.
+      const short = err instanceof Error ? err.message.split('\n')[0].slice(0, 300) : 'Enhancement failed'
+      throw new Error(short)
+    }
   })
 
   // === Agent output forwarding to renderer ===

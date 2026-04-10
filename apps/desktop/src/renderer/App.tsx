@@ -4,7 +4,7 @@ import { CURRENT_ONBOARDING_VERSION } from '@shipcode/shared'
 import { useAppStore } from './stores/app-store'
 import { Titlebar } from './components/Titlebar'
 import { ProjectSidebar } from './components/ProjectSidebar'
-import { ProjectEmptyState } from './components/ProjectEmptyState'
+import { DashboardView } from './components/DashboardView'
 import { ThreadPanel } from './components/ThreadPanel'
 import { IssueDetail } from './components/IssueDetail'
 import { SettingsPanel } from './components/SettingsPanel'
@@ -13,6 +13,7 @@ import { HealthBanner } from './components/HealthBanner'
 import { OnboardingWizard } from './components/onboarding/OnboardingWizard'
 import { CommandPalette } from './components/CommandPalette'
 import { CreateIssueModal } from './components/CreateIssueModal'
+import { NotificationToaster } from './components/NotificationToaster'
 import { useGlobalKeyboard } from './hooks/useGlobalKeyboard'
 import { useIpc } from './hooks/useIpc'
 
@@ -20,7 +21,7 @@ export function App() {
 	useGlobalKeyboard()
 	useIpc()
 	const queryClient = useQueryClient()
-	const { terminalVisible, settingsVisible, activeIssue, activeProjectId } = useAppStore()
+	const { terminalVisible, settingsVisible, activeProjectId, viewMode } = useAppStore()
 
 	const { data: settings } = useQuery<AppSettings>({
 		queryKey: ['settings'],
@@ -40,26 +41,27 @@ export function App() {
 
 	if (!settings) return null
 
+	const showDashboard = viewMode === 'dashboard' || !activeProjectId
+
 	return (
 		<div className="flex h-screen flex-col overflow-hidden">
 			<Titlebar />
 			<HealthBanner />
 			<div className="flex flex-1 overflow-hidden">
 				<ProjectSidebar />
-				{!activeProjectId ? (
-					<ProjectEmptyState />
-				) : settingsVisible ? (
+				{settingsVisible ? (
 					<SettingsPanel />
+				) : showDashboard ? (
+					<DashboardView />
 				) : (
-					<>
-						<ThreadPanel />
-						{activeIssue && <IssueDetail />}
-					</>
+					<ThreadPanel />
 				)}
 			</div>
 			{terminalVisible && <TerminalDrawer />}
 			<CommandPalette />
 			<CreateIssueModal />
+			<IssueDetail />
+			<NotificationToaster />
 		</div>
 	)
 }

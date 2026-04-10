@@ -58,6 +58,8 @@ export interface IpcInvokeChannels {
 
   'dialog:open-directory': { args: void; result: string | null }
 
+  'shell:open-external': { args: { url: string }; result: void }
+
   // GitHub
   'github:list-issues': { args: { projectId: string }; result: GitHubIssueCacheRecord[] }
   'github:refresh-issues': { args: { projectId: string }; result: GitHubIssueCacheRecord[] }
@@ -87,10 +89,10 @@ export interface IpcInvokeChannels {
   'onboarding:check-auth': { args: void; result: SystemHealth & { ghAuth: GhAuthStatus } }
   'onboarding:list-repos': { args: void; result: string[] }
 
-  // AI-assisted PRD generation
-  'ai:generate-prd': {
-    args: { projectId: string; userPrompt: string }
-    result: { title: string; body: string }
+  // AI-assisted PRD enhancement (in-place refinement of a draft PRD body)
+  'ai:enhance-prd': {
+    args: { projectId: string; draftBody: string }
+    result: { body: string }
   }
 
   // Mission Control dashboard
