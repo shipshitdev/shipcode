@@ -1,36 +1,36 @@
-import { useEffect, useRef } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import type { AppSettings, NotificationKind, NotificationRecord } from '@shipcode/shared'
-import { X } from '@shipcode/ui'
-import { useAppStore } from '../stores/app-store'
-import notifySoundUrl from '../assets/notify.wav?url'
+import { useEffect, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import type { AppSettings, NotificationKind, NotificationRecord } from '@shipcode/shared';
+import { X } from '@shipcode/ui';
+import { useAppStore } from '../stores/app-store';
+import notifySoundUrl from '../assets/notify.wav?url';
 
-const STICKY_KINDS: NotificationKind[] = ['awaiting_approval', 'verification_exhausted']
-const AUTO_DISMISS_MS = 8_000
+const STICKY_KINDS: NotificationKind[] = ['awaiting_approval', 'verification_exhausted'];
+const AUTO_DISMISS_MS = 8_000;
 
 const KIND_TONE: Record<NotificationKind, string> = {
   awaiting_approval: 'border-amber-500/40 bg-amber-500/10',
   failed: 'border-danger/40 bg-danger/10',
   verification_exhausted: 'border-danger/40 bg-danger/10',
   completed: 'border-success/40 bg-success/10',
-}
+};
 
 function ToastRow({
   notification,
   onClick,
   onDismiss,
 }: {
-  notification: NotificationRecord
-  onClick: () => void
-  onDismiss: () => void
+  notification: NotificationRecord;
+  onClick: () => void;
+  onDismiss: () => void;
 }) {
-  const sticky = STICKY_KINDS.includes(notification.kind)
+  const sticky = STICKY_KINDS.includes(notification.kind);
 
   useEffect(() => {
-    if (sticky) return
-    const id = setTimeout(onDismiss, AUTO_DISMISS_MS)
-    return () => clearTimeout(id)
-  }, [sticky, onDismiss])
+    if (sticky) return;
+    const id = setTimeout(onDismiss, AUTO_DISMISS_MS);
+    return () => clearTimeout(id);
+  }, [sticky, onDismiss]);
 
   return (
     <div
@@ -55,56 +55,56 @@ function ToastRow({
         <X size={12} />
       </button>
     </div>
-  )
+  );
 }
 
 export function NotificationToaster() {
-  const notifications = useAppStore((s) => s.notifications)
-  const removeNotification = useAppStore((s) => s.removeNotification)
-  const selectProject = useAppStore((s) => s.selectProject)
-  const selectThread = useAppStore((s) => s.selectThread)
-  const setViewMode = useAppStore((s) => s.setViewMode)
+  const notifications = useAppStore((s) => s.notifications);
+  const removeNotification = useAppStore((s) => s.removeNotification);
+  const selectProject = useAppStore((s) => s.selectProject);
+  const selectThread = useAppStore((s) => s.selectThread);
+  const setViewMode = useAppStore((s) => s.setViewMode);
 
   const { data: settings } = useQuery<AppSettings>({
     queryKey: ['settings'],
     queryFn: () => window.shipcode.invoke<AppSettings>('settings:get'),
-  })
+  });
 
-  const lastSeenIdsRef = useRef<Set<string>>(new Set())
+  const lastSeenIdsRef = useRef<Set<string>>(new Set());
 
   // Play sound when a new notification appears.
   useEffect(() => {
-    if (!settings?.notificationSoundEnabled) return
-    const seen = lastSeenIdsRef.current
-    const newOnes = notifications.filter((n) => !seen.has(n.id))
+    if (!settings?.notificationSoundEnabled) return;
+    const seen = lastSeenIdsRef.current;
+    const newOnes = notifications.filter((n) => !seen.has(n.id));
     if (newOnes.length > 0) {
       try {
-        const audio = new Audio(notifySoundUrl)
-        audio.volume = 0.5
+        const audio = new Audio(notifySoundUrl);
+        audio.volume = 0.5;
         audio.play().catch(() => {
           // Autoplay may be blocked until first user interaction; safe to ignore.
-        })
+        });
       } catch {
         // Ignore audio failures
       }
     }
-    lastSeenIdsRef.current = new Set(notifications.map((n) => n.id))
-  }, [notifications, settings?.notificationSoundEnabled])
+    lastSeenIdsRef.current = new Set(notifications.map((n) => n.id));
+  }, [notifications, settings?.notificationSoundEnabled]);
 
   const handleClick = (notification: NotificationRecord) => {
-    if (notification.projectId) selectProject(notification.projectId)
-    selectThread(notification.threadId)
-    setViewMode('project')
-    window.shipcode.invoke('notification:dismiss', { id: notification.id }).catch(() => {})
-    removeNotification(notification.id)
-  }
+    if (notification.projectId) selectProject(notification.projectId);
+    selectThread(notification.threadId);
+    setViewMode('project');
+    window.shipcode.invoke('notification:dismiss', { id: notification.id }).catch(() => {});
+    removeNotification(notification.id);
+  };
 
   const handleDismiss = (id: string) => {
-    window.shipcode.invoke('notification:dismiss', { id }).catch(() => {})
-    removeNotification(id)
-  }
+    window.shipcode.invoke('notification:dismiss', { id }).catch(() => {});
+    removeNotification(id);
+  };
 
-  if (notifications.length === 0) return null
+  if (notifications.length === 0) return null;
 
   return (
     <div className="pointer-events-none fixed bottom-4 right-4 z-50 flex max-w-sm flex-col gap-2">
@@ -118,5 +118,5 @@ export function NotificationToaster() {
         </div>
       ))}
     </div>
-  )
+  );
 }

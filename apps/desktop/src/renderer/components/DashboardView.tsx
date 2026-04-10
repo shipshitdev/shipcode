@@ -1,18 +1,28 @@
-import { useEffect, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   ActivePipelineSummary,
   ActivityEntry,
   DashboardStats,
   PipelinePhase,
   RecentTask,
-} from '@shipcode/shared'
+} from '@shipcode/shared';
 import {
-  Card, CardContent, CardFooter, CardHeader, CardTitle,
-  Button, Pagination,
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@shipcode/ui'
-import { useAppStore } from '../stores/app-store'
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  Button,
+  Pagination,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@shipcode/ui';
+import { useAppStore } from '../stores/app-store';
 
 const PHASE_COLOR: Partial<Record<PipelinePhase, string>> = {
   planning: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
@@ -25,7 +35,7 @@ const PHASE_COLOR: Partial<Record<PipelinePhase, string>> = {
   completed: 'bg-success/15 text-success border-success/30',
   failed: 'bg-danger/15 text-danger border-danger/30',
   idle: 'bg-tertiary text-muted border-border',
-}
+};
 
 function PhaseChip({ phase }: { phase: PipelinePhase }) {
   return (
@@ -36,44 +46,53 @@ function PhaseChip({ phase }: { phase: PipelinePhase }) {
     >
       {phase.replace(/_/g, ' ')}
     </span>
-  )
+  );
 }
 
 function timeAgo(input: string | number): string {
-  const t = typeof input === 'number' ? input : new Date(input).getTime()
-  const diff = Math.max(0, Date.now() - t)
-  const s = Math.floor(diff / 1000)
-  if (s < 60) return `${s}s ago`
-  const m = Math.floor(s / 60)
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ago`
-  const d = Math.floor(h / 24)
-  return `${d}d ago`
+  const t = typeof input === 'number' ? input : new Date(input).getTime();
+  const diff = Math.max(0, Date.now() - t);
+  const s = Math.floor(diff / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
 }
 
 function ElapsedClock({ since }: { since: number }) {
-  const [, tick] = useState(0)
+  const [, tick] = useState(0);
   useEffect(() => {
-    const id = setInterval(() => tick((n) => n + 1), 1000)
-    return () => clearInterval(id)
-  }, [])
-  const elapsed = Date.now() - since
-  const s = Math.floor(elapsed / 1000)
-  if (s < 60) return <>{s}s</>
-  const m = Math.floor(s / 60)
-  const rem = s % 60
-  if (m < 60) return <>{m}m {rem}s</>
-  const h = Math.floor(m / 60)
-  return <>{h}h {m % 60}m</>
+    const id = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const elapsed = Date.now() - since;
+  const s = Math.floor(elapsed / 1000);
+  if (s < 60) return <>{s}s</>;
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  if (m < 60)
+    return (
+      <>
+        {m}m {rem}s
+      </>
+    );
+  const h = Math.floor(m / 60);
+  return (
+    <>
+      {h}h {m % 60}m
+    </>
+  );
 }
 
 interface StatCardProps {
-  label: string
-  value: string | number
-  subtitle?: string
-  tone?: 'default' | 'danger' | 'success'
-  onClick?: () => void
+  label: string;
+  value: string | number;
+  subtitle?: string;
+  tone?: 'default' | 'danger' | 'success';
+  onClick?: () => void;
 }
 
 function StatCard({ label, value, subtitle, tone = 'default', onClick }: StatCardProps) {
@@ -81,90 +100,100 @@ function StatCard({ label, value, subtitle, tone = 'default', onClick }: StatCar
     tone === 'danger'
       ? 'border-danger/40 bg-danger/5'
       : tone === 'success'
-      ? 'border-success/40 bg-success/5'
-      : ''
+        ? 'border-success/40 bg-success/5'
+        : '';
   const card = (
     <Card className={`${toneClass}${onClick ? ' hover:ring-1 hover:ring-border' : ''}`}>
       <CardContent className="p-5 pt-5">
         <div className="text-3xl font-semibold text-primary">{value}</div>
         <div className="mt-1 text-xs uppercase tracking-wide text-secondary">{label}</div>
-        {subtitle ? (
-          <div className="mt-2 text-[11px] text-muted">{subtitle}</div>
-        ) : null}
+        {subtitle ? <div className="mt-2 text-[11px] text-muted">{subtitle}</div> : null}
       </CardContent>
     </Card>
-  )
+  );
   if (onClick) {
     return (
-      <button type="button" onClick={onClick} className="w-full cursor-pointer border-none bg-transparent p-0 text-left">
+      <button
+        type="button"
+        onClick={onClick}
+        className="w-full cursor-pointer border-none bg-transparent p-0 text-left"
+      >
         {card}
       </button>
-    )
+    );
   }
-  return card
+  return card;
 }
 
 export function DashboardView() {
-  const queryClient = useQueryClient()
-  const selectProject = useAppStore((s) => s.selectProject)
-  const selectThread = useAppStore((s) => s.selectThread)
-  const openActivity = useAppStore((s) => s.openActivity)
-  const openInbox = useAppStore((s) => s.openInbox)
+  const queryClient = useQueryClient();
+  const selectProject = useAppStore((s) => s.selectProject);
+  const selectThread = useAppStore((s) => s.selectThread);
+  const openActivity = useAppStore((s) => s.openActivity);
+  const openInbox = useAppStore((s) => s.openInbox);
 
   const { data: stats } = useQuery<DashboardStats>({
     queryKey: ['dashboard', 'stats'],
     queryFn: () => window.shipcode.invoke<DashboardStats>('dashboard:get-stats'),
     refetchInterval: 5000,
-  })
+  });
 
   const { data: running = [] } = useQuery<ActivePipelineSummary[]>({
     queryKey: ['dashboard', 'running'],
     queryFn: () => window.shipcode.invoke<ActivePipelineSummary[]>('pipeline:list-active'),
     refetchInterval: 2000,
-  })
+  });
 
-  const PAGE_SIZE = 5
-  const [activityPage, setActivityPage] = useState(1)
-  const [tasksPage, setTasksPage] = useState(1)
+  const PAGE_SIZE = 5;
+  const [activityPage, setActivityPage] = useState(1);
+  const [tasksPage, setTasksPage] = useState(1);
 
   const { data: activity = [] } = useQuery<ActivityEntry[]>({
     queryKey: ['dashboard', 'activity', activityPage],
-    queryFn: () => window.shipcode.invoke<ActivityEntry[]>('dashboard:get-activity', { limit: PAGE_SIZE, offset: (activityPage - 1) * PAGE_SIZE }),
+    queryFn: () =>
+      window.shipcode.invoke<ActivityEntry[]>('dashboard:get-activity', {
+        limit: PAGE_SIZE,
+        offset: (activityPage - 1) * PAGE_SIZE,
+      }),
     refetchInterval: 5000,
-  })
+  });
 
   const { data: activityTotal = 0 } = useQuery<number>({
     queryKey: ['dashboard', 'activity-count'],
     queryFn: () => window.shipcode.invoke<number>('dashboard:count-activity'),
     refetchInterval: 10_000,
-  })
+  });
 
   const { data: recent = [] } = useQuery<RecentTask[]>({
     queryKey: ['dashboard', 'recent', tasksPage],
-    queryFn: () => window.shipcode.invoke<RecentTask[]>('dashboard:get-recent-tasks', { limit: PAGE_SIZE, offset: (tasksPage - 1) * PAGE_SIZE }),
+    queryFn: () =>
+      window.shipcode.invoke<RecentTask[]>('dashboard:get-recent-tasks', {
+        limit: PAGE_SIZE,
+        offset: (tasksPage - 1) * PAGE_SIZE,
+      }),
     refetchInterval: 5000,
-  })
+  });
 
   const { data: recentTotal = 0 } = useQuery<number>({
     queryKey: ['dashboard', 'recent-count'],
     queryFn: () => window.shipcode.invoke<number>('dashboard:count-recent-tasks'),
     refetchInterval: 10_000,
-  })
+  });
 
-  const activityTotalPages = Math.max(1, Math.ceil(activityTotal / PAGE_SIZE))
-  const tasksTotalPages = Math.max(1, Math.ceil(recentTotal / PAGE_SIZE))
-  const activitySlice = activity
-  const tasksSlice = recent
+  const activityTotalPages = Math.max(1, Math.ceil(activityTotal / PAGE_SIZE));
+  const tasksTotalPages = Math.max(1, Math.ceil(recentTotal / PAGE_SIZE));
+  const activitySlice = activity;
+  const tasksSlice = recent;
 
   const handleRowClick = (projectId: string, threadId: string) => {
-    selectProject(projectId)
-    selectThread(threadId)
-  }
+    selectProject(projectId);
+    selectThread(threadId);
+  };
 
   const handleStop = async (threadId: string) => {
-    await window.shipcode.invoke('pipeline:cancel', { threadId })
-    queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-  }
+    await window.shipcode.invoke('pipeline:cancel', { threadId });
+    queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+  };
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -196,14 +225,16 @@ export function DashboardView() {
               subtitle={stats ? `${stats.tasksOpen} open · ${stats.tasksBlocked} blocked` : '—'}
               onClick={openInbox}
             />
-            <button type="button" onClick={openInbox} className="w-full cursor-pointer border-none bg-transparent p-0 text-left">
+            <button
+              type="button"
+              onClick={openInbox}
+              className="w-full cursor-pointer border-none bg-transparent p-0 text-left"
+            >
               <StatCard
                 label="Pending Approvals"
                 value={stats?.pendingApprovals ?? 0}
                 subtitle={
-                  stats?.staleApprovals
-                    ? `${stats.staleApprovals} stale > 24h`
-                    : 'no stale items'
+                  stats?.staleApprovals ? `${stats.staleApprovals} stale > 24h` : 'no stale items'
                 }
                 tone={stats && stats.pendingApprovals > 0 ? 'danger' : 'default'}
               />
@@ -230,10 +261,7 @@ export function DashboardView() {
               ) : (
                 <ul className="divide-y divide-border">
                   {running.map((row) => (
-                    <li
-                      key={row.threadId}
-                      className="flex items-center gap-3 py-2.5"
-                    >
+                    <li key={row.threadId} className="flex items-center gap-3 py-2.5">
                       <button
                         type="button"
                         onClick={() => handleRowClick(row.projectId, row.threadId)}
@@ -300,7 +328,7 @@ export function DashboardView() {
                           className="cursor-pointer hover:bg-hover"
                           onClick={() => {
                             if (entry.projectId && entry.threadId) {
-                              handleRowClick(entry.projectId, entry.threadId)
+                              handleRowClick(entry.projectId, entry.threadId);
                             }
                           }}
                         >
@@ -312,7 +340,9 @@ export function DashboardView() {
                           <TableCell className="max-w-0 w-full">
                             <div className="truncate text-[12px] text-primary">{entry.title}</div>
                             {entry.subtitle ? (
-                              <div className="truncate text-[11px] text-muted">{entry.subtitle}</div>
+                              <div className="truncate text-[11px] text-muted">
+                                {entry.subtitle}
+                              </div>
                             ) : null}
                           </TableCell>
                           <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-muted">
@@ -326,7 +356,12 @@ export function DashboardView() {
               </CardContent>
               {activityTotalPages > 1 && (
                 <CardFooter className="pt-0 pb-4 px-5">
-                  <Pagination page={activityPage} totalPages={activityTotalPages} onPageChange={setActivityPage} className="w-full" />
+                  <Pagination
+                    page={activityPage}
+                    totalPages={activityTotalPages}
+                    onPageChange={setActivityPage}
+                    className="w-full"
+                  />
                 </CardFooter>
               )}
             </Card>
@@ -388,7 +423,12 @@ export function DashboardView() {
               </CardContent>
               {tasksTotalPages > 1 && (
                 <CardFooter className="pt-0 pb-4 px-5">
-                  <Pagination page={tasksPage} totalPages={tasksTotalPages} onPageChange={setTasksPage} className="w-full" />
+                  <Pagination
+                    page={tasksPage}
+                    totalPages={tasksTotalPages}
+                    onPageChange={setTasksPage}
+                    className="w-full"
+                  />
                 </CardFooter>
               )}
             </Card>
@@ -396,5 +436,5 @@ export function DashboardView() {
         </div>
       </div>
     </div>
-  )
+  );
 }

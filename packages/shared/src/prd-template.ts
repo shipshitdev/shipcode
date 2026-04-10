@@ -54,7 +54,7 @@ blast_radius: contained
 
 ## Risks & Open Questions
 - <Unknowns, edge cases, things that could kill the plan mid-execution.>
-`
+`;
 
 /**
  * Required section headings that must be present in a PRD body for it to be
@@ -69,7 +69,7 @@ export const PRD_REQUIRED_HEADINGS = [
   '## Executive Summary',
   '## Success Criteria',
   '## Out of Scope',
-] as const
+] as const;
 
 /**
  * Lightweight client-side validator — checks that the required headings are
@@ -77,5 +77,5 @@ export const PRD_REQUIRED_HEADINGS = [
  * placeholder content; that's a v2 concern.
  */
 export function bodyHasRequiredPrdSections(body: string): boolean {
-  return PRD_REQUIRED_HEADINGS.every((heading) => body.includes(heading))
+  return PRD_REQUIRED_HEADINGS.every((heading) => body.includes(heading));
 }

@@ -1,96 +1,102 @@
-import type { DiffRecord } from '@shipcode/shared'
-import { Badge } from './primitives/badge'
-import { cn } from './lib/utils'
+import type { DiffRecord } from '@shipcode/shared';
+import { Badge } from './primitives/badge';
+import { cn } from './lib/utils';
 
 interface DiffViewerProps {
-	diffs: DiffRecord[]
-	activeFile?: string
-	onFileSelect?: (filePath: string) => void
+  diffs: DiffRecord[];
+  activeFile?: string;
+  onFileSelect?: (filePath: string) => void;
 }
 
 const actionColor = (action: string) => {
-	switch (action) {
-		case 'create': return 'text-success'
-		case 'delete': return 'text-danger'
-		case 'modify': return 'text-warning'
-		default: return 'text-secondary'
-	}
-}
+  switch (action) {
+    case 'create':
+      return 'text-success';
+    case 'delete':
+      return 'text-danger';
+    case 'modify':
+      return 'text-warning';
+    default:
+      return 'text-secondary';
+  }
+};
 
 const actionVariant = (action: string) => {
-	switch (action) {
-		case 'create': return 'success' as const
-		case 'delete': return 'danger' as const
-		case 'modify': return 'warning' as const
-		default: return 'default' as const
-	}
-}
+  switch (action) {
+    case 'create':
+      return 'success' as const;
+    case 'delete':
+      return 'danger' as const;
+    case 'modify':
+      return 'warning' as const;
+    default:
+      return 'default' as const;
+  }
+};
 
 export function DiffViewer({ diffs, activeFile, onFileSelect }: DiffViewerProps) {
-	if (diffs.length === 0) {
-		return (
-			<div className="flex items-center justify-center h-full text-muted">
-				<p>No changes to display</p>
-			</div>
-		)
-	}
+  if (diffs.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full text-muted">
+        <p>No changes to display</p>
+      </div>
+    );
+  }
 
-	const activeDiff = diffs.find((d) => d.filePath === activeFile) ?? diffs[0]
+  const activeDiff = diffs.find((d) => d.filePath === activeFile) ?? diffs[0];
 
-	return (
-		<div>
-			<div className="flex gap-0.5 p-2 border-b border-border overflow-x-auto">
-				{diffs.map((diff) => (
-					<button
-						type="button"
-						key={diff.id}
-						className={cn(
-							'flex items-center gap-1 px-2.5 py-1 bg-transparent border-none rounded-md text-secondary cursor-pointer text-xs whitespace-nowrap hover:bg-tertiary',
-							diff.filePath === activeDiff?.filePath && 'bg-tertiary text-primary'
-						)}
-						onClick={() => onFileSelect?.(diff.filePath)}
-					>
-						<span className={actionColor(diff.action)}>
-							{diff.action === 'create' ? '+' : diff.action === 'delete' ? '-' : '~'}
-						</span>
-						{diff.filePath.split('/').pop()}
-					</button>
-				))}
-			</div>
+  return (
+    <div>
+      <div className="flex gap-0.5 p-2 border-b border-border overflow-x-auto">
+        {diffs.map((diff) => (
+          <button
+            type="button"
+            key={diff.id}
+            className={cn(
+              'flex items-center gap-1 px-2.5 py-1 bg-transparent border-none rounded-md text-secondary cursor-pointer text-xs whitespace-nowrap hover:bg-tertiary',
+              diff.filePath === activeDiff?.filePath && 'bg-tertiary text-primary',
+            )}
+            onClick={() => onFileSelect?.(diff.filePath)}
+          >
+            <span className={actionColor(diff.action)}>
+              {diff.action === 'create' ? '+' : diff.action === 'delete' ? '-' : '~'}
+            </span>
+            {diff.filePath.split('/').pop()}
+          </button>
+        ))}
+      </div>
 
-			{activeDiff && (
-				<div className="p-2">
-					<div className="flex justify-between px-3 py-1.5 bg-secondary rounded-t-md text-xs">
-						<code>{activeDiff.filePath}</code>
-						<Badge variant={actionVariant(activeDiff.action)}>
-							{activeDiff.action}
-						</Badge>
-					</div>
-					<pre className="font-mono text-xs leading-relaxed overflow-x-auto py-2 bg-secondary rounded-b-md">
-						{activeDiff.diffContent
-							? activeDiff.diffContent.split('\n').map((line, i) => {
-									const isAdded = line.startsWith('+') && !line.startsWith('+++')
-									const isRemoved = line.startsWith('-') && !line.startsWith('---')
-									const isHunk = line.startsWith('@@')
+      {activeDiff && (
+        <div className="p-2">
+          <div className="flex justify-between px-3 py-1.5 bg-secondary rounded-t-md text-xs">
+            <code>{activeDiff.filePath}</code>
+            <Badge variant={actionVariant(activeDiff.action)}>{activeDiff.action}</Badge>
+          </div>
+          <pre className="font-mono text-xs leading-relaxed overflow-x-auto py-2 bg-secondary rounded-b-md">
+            {activeDiff.diffContent
+              ? activeDiff.diffContent.split('\n').map((line, i) => {
+                  const isAdded = line.startsWith('+') && !line.startsWith('+++');
+                  const isRemoved = line.startsWith('-') && !line.startsWith('---');
+                  const isHunk = line.startsWith('@@');
 
-									return (
-										<div
-											key={i}
-											className={cn(
-												'px-3',
-												isAdded && 'bg-success/15 text-success',
-												isRemoved && 'bg-danger/15 text-danger',
-												isHunk && 'text-accent font-semibold'
-											)}
-										>
-											{line}
-										</div>
-									)
-								})
-							: 'No diff content available'}
-					</pre>
-				</div>
-			)}
-		</div>
-	)
+                  return (
+                    <div
+                      key={i}
+                      className={cn(
+                        'px-3',
+                        isAdded && 'bg-success/15 text-success',
+                        isRemoved && 'bg-danger/15 text-danger',
+                        isHunk && 'text-accent font-semibold',
+                      )}
+                    >
+                      {line}
+                    </div>
+                  );
+                })
+              : 'No diff content available'}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
 }

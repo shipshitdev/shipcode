@@ -1,4 +1,4 @@
-const basePath = process.env.DOCS_BASE_PATH || ''
+const basePath = process.env.DOCS_BASE_PATH || '';
 
 const config = {
   navbar: (
@@ -14,6 +14,6 @@ const config = {
   feedback: {
     content: 'Question? Give us feedback',
   },
-}
+};
 
-export default config
+export default config;

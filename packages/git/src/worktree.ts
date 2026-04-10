@@ -1,6 +1,6 @@
-import { simpleGit, type SimpleGit } from 'simple-git'
-import path from 'node:path'
-import { resolveWorktreeParent } from '@shipcode/shared'
+import { simpleGit, type SimpleGit } from 'simple-git';
+import path from 'node:path';
+import { resolveWorktreeParent } from '@shipcode/shared';
 
 export interface WorktreeManagerOptions {
   /**
@@ -9,37 +9,43 @@ export interface WorktreeManagerOptions {
    *   ''               → legacy project-local (<project>/.shipcode/worktrees)
    *   absolute or ~/…  → custom location
    */
-  worktreeRoot?: string | null
+  worktreeRoot?: string | null;
 }
 
 export class WorktreeManager {
-  private git: SimpleGit
+  private git: SimpleGit;
 
-  constructor(private projectPath: string, private options: WorktreeManagerOptions = {}) {
-    this.git = simpleGit(projectPath)
+  constructor(
+    private projectPath: string,
+    private options: WorktreeManagerOptions = {},
+  ) {
+    this.git = simpleGit(projectPath);
   }
 
   getBranchName(threadId: string): string {
-    return `shipcode/${threadId}`
+    return `shipcode/${threadId}`;
   }
 
   getWorktreePath(threadId: string): string {
     return path.join(
       resolveWorktreeParent(this.projectPath, this.options.worktreeRoot ?? null),
       threadId,
-    )
+    );
   }
 
-  async create(threadId: string, baseBranch?: string): Promise<{ worktreePath: string; branch: string }> {
-    const worktreePath = this.getWorktreePath(threadId)
-    const branch = this.getBranchName(threadId)
+  async create(
+    threadId: string,
+    baseBranch?: string,
+  ): Promise<{ worktreePath: string; branch: string }> {
+    const worktreePath = this.getWorktreePath(threadId);
+    const branch = this.getBranchName(threadId);
 
-    const base = baseBranch ?? (await this.getDefaultBranch())
+    const base = baseBranch ?? (await this.getDefaultBranch());
 
     // Create worktree with new branch
-    await this.git.raw(['worktree', 'add', '-b', branch, worktreePath, base])
+    await this.git.raw(['worktree', 'add', '-b', branch, worktreePath, base]);
 
-    return { worktreePath, branch }
+    return { worktreePath, branch };
   }
 
   /**
@@ -58,36 +64,36 @@ export class WorktreeManager {
     worktreePath: string,
     branch: string,
   ): Promise<{ worktreeRemoved: boolean; branchDeleted: boolean; error?: string }> {
-    let worktreeRemoved = false
-    let branchDeleted = false
+    let worktreeRemoved = false;
+    let branchDeleted = false;
 
     try {
-      await this.git.raw(['worktree', 'remove', worktreePath, '--force'])
-      worktreeRemoved = true
+      await this.git.raw(['worktree', 'remove', worktreePath, '--force']);
+      worktreeRemoved = true;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
+      const msg = err instanceof Error ? err.message : String(err);
       // "not a working tree" / "is not a working tree" / "no such file" → already gone
       if (/not a working tree|is not a working tree|no such file|does not exist/i.test(msg)) {
-        worktreeRemoved = true
+        worktreeRemoved = true;
       } else {
-        return { worktreeRemoved, branchDeleted, error: `worktree remove: ${msg}` }
+        return { worktreeRemoved, branchDeleted, error: `worktree remove: ${msg}` };
       }
     }
 
     try {
-      await this.git.deleteLocalBranch(branch, true)
-      branchDeleted = true
+      await this.git.deleteLocalBranch(branch, true);
+      branchDeleted = true;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
+      const msg = err instanceof Error ? err.message : String(err);
       // "not found" → already gone
       if (/not found|does not exist/i.test(msg)) {
-        branchDeleted = true
+        branchDeleted = true;
       } else {
-        return { worktreeRemoved, branchDeleted, error: `branch delete: ${msg}` }
+        return { worktreeRemoved, branchDeleted, error: `branch delete: ${msg}` };
       }
     }
 
-    return { worktreeRemoved, branchDeleted }
+    return { worktreeRemoved, branchDeleted };
   }
 
   /**
@@ -95,55 +101,62 @@ export class WorktreeManager {
    * Returns { path, branch } pairs so callers can act on either identifier.
    */
   async list(): Promise<Array<{ path: string; branch: string }>> {
-    const result = await this.git.raw(['worktree', 'list', '--porcelain'])
-    const worktrees: Array<{ path: string; branch: string }> = []
-    let current: { path?: string; branch?: string } = {}
+    const result = await this.git.raw(['worktree', 'list', '--porcelain']);
+    const worktrees: Array<{ path: string; branch: string }> = [];
+    let current: { path?: string; branch?: string } = {};
     const push = () => {
       if (current.path && current.branch && current.branch.startsWith('shipcode/')) {
-        worktrees.push({ path: current.path, branch: current.branch })
+        worktrees.push({ path: current.path, branch: current.branch });
       }
-    }
+    };
     for (const line of result.split('\n')) {
       if (line.startsWith('worktree ')) {
-        push()
-        current = { path: line.slice('worktree '.length).trim() }
+        push();
+        current = { path: line.slice('worktree '.length).trim() };
       } else if (line.startsWith('branch ')) {
-        current.branch = line.slice('branch '.length).trim().replace(/^refs\/heads\//, '')
+        current.branch = line
+          .slice('branch '.length)
+          .trim()
+          .replace(/^refs\/heads\//, '');
       } else if (line === '') {
-        push()
-        current = {}
+        push();
+        current = {};
       }
     }
-    push()
-    return worktrees
+    push();
+    return worktrees;
   }
 
-  async merge(threadId: string, targetBranch?: string, strategy: 'merge' | 'squash' = 'merge'): Promise<void> {
-    const branch = this.getBranchName(threadId)
-    const target = targetBranch ?? (await this.getDefaultBranch())
+  async merge(
+    threadId: string,
+    targetBranch?: string,
+    strategy: 'merge' | 'squash' = 'merge',
+  ): Promise<void> {
+    const branch = this.getBranchName(threadId);
+    const target = targetBranch ?? (await this.getDefaultBranch());
 
     // Switch to target branch in main worktree
-    await this.git.checkout(target)
+    await this.git.checkout(target);
 
     if (strategy === 'squash') {
-      await this.git.raw(['merge', '--squash', branch])
-      await this.git.commit(`feat: merge ${branch} (squashed)`)
+      await this.git.raw(['merge', '--squash', branch]);
+      await this.git.commit(`feat: merge ${branch} (squashed)`);
     } else {
-      await this.git.merge([branch, '--no-ff'])
+      await this.git.merge([branch, '--no-ff']);
     }
   }
 
   private async getDefaultBranch(): Promise<string> {
     try {
-      const result = await this.git.raw(['symbolic-ref', 'refs/remotes/origin/HEAD', '--short'])
-      return result.trim().replace('origin/', '')
+      const result = await this.git.raw(['symbolic-ref', 'refs/remotes/origin/HEAD', '--short']);
+      return result.trim().replace('origin/', '');
     } catch {
-      const branches = await this.git.branchLocal()
+      const branches = await this.git.branchLocal();
       // Check current branch first, then common defaults
-      if (branches.current) return branches.current
-      if (branches.all.includes('main')) return 'main'
-      if (branches.all.includes('master')) return 'master'
-      return 'main'
+      if (branches.current) return branches.current;
+      if (branches.all.includes('main')) return 'main';
+      if (branches.all.includes('master')) return 'master';
+      return 'main';
     }
   }
 }

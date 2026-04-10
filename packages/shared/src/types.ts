@@ -1,65 +1,65 @@
 // === Plan Types ===
 
 export interface ShipCodePlan {
-  id: string
-  threadId: string
-  version: number
-  objective: string
-  files: PlanFileChange[]
-  steps: PlanStep[]
-  acceptanceCriteria: string[]
-  outOfScope: string[]
-  estimatedComplexity: 'low' | 'medium' | 'high'
-  dependencies: string[]
+  id: string;
+  threadId: string;
+  version: number;
+  objective: string;
+  files: PlanFileChange[];
+  steps: PlanStep[];
+  acceptanceCriteria: string[];
+  outOfScope: string[];
+  estimatedComplexity: 'low' | 'medium' | 'high';
+  dependencies: string[];
 }
 
 export interface PlanStep {
-  order: number
-  description: string
-  files: string[]
-  rationale: string
+  order: number;
+  description: string;
+  files: string[];
+  rationale: string;
 }
 
 export interface PlanFileChange {
-  path: string
-  action: 'create' | 'modify' | 'delete' | 'rename'
-  description: string
-  fromPath?: string
+  path: string;
+  action: 'create' | 'modify' | 'delete' | 'rename';
+  description: string;
+  fromPath?: string;
 }
 
 // === Review Types ===
 
 export interface PlanReview {
-  planId: string
-  decision: 'approve' | 'request_changes' | 'reject'
-  confidence: 'high' | 'medium' | 'low'
-  summary: string
-  findings: ReviewFinding[]
-  suggestedChanges: string[]
+  planId: string;
+  decision: 'approve' | 'request_changes' | 'reject';
+  confidence: 'high' | 'medium' | 'low';
+  summary: string;
+  findings: ReviewFinding[];
+  suggestedChanges: string[];
 }
 
 export interface ReviewFinding {
-  id: string
-  severity: 'critical' | 'major' | 'minor' | 'nit'
-  category: 'correctness' | 'security' | 'performance' | 'design' | 'missing'
-  filePath?: string
-  stepOrder?: number
-  description: string
-  suggestion?: string
+  id: string;
+  severity: 'critical' | 'major' | 'minor' | 'nit';
+  category: 'correctness' | 'security' | 'performance' | 'design' | 'missing';
+  filePath?: string;
+  stepOrder?: number;
+  description: string;
+  suggestion?: string;
 }
 
 // === Project Types ===
 
 export interface Project {
-  id: string
-  name: string
-  path: string
-  gitRemote: string | null
-  defaultBranch: string
-  pinned: boolean
-  archived: boolean
-  createdAt: string
-  updatedAt: string
+  id: string;
+  name: string;
+  path: string;
+  gitRemote: string | null;
+  defaultBranch: string;
+  pinned: boolean;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // === Thread Types ===
@@ -74,41 +74,41 @@ export type ThreadStatus =
   | 'verifying'
   | 'shipping'
   | 'completed'
-  | 'failed'
+  | 'failed';
 
 export interface Thread {
-  id: string
-  projectId: string
-  title: string
-  prompt: string
-  status: ThreadStatus
-  worktreeBranch: string | null
-  worktreePath: string | null
-  plannerModel: string
-  reviewerModel: string
-  executorModel: string
-  reviewRound: number
-  verificationStatus: string | null
-  verificationRetries: number
-  autonomous: boolean
-  baseBranch: string | null
-  forkPointSha: string | null
-  githubIssueNumber: number | null
-  githubPrNumber: number | null
-  githubRepo: string | null
-  createdAt: string
-  updatedAt: string
+  id: string;
+  projectId: string;
+  title: string;
+  prompt: string;
+  status: ThreadStatus;
+  worktreeBranch: string | null;
+  worktreePath: string | null;
+  plannerModel: string;
+  reviewerModel: string;
+  executorModel: string;
+  reviewRound: number;
+  verificationStatus: string | null;
+  verificationRetries: number;
+  autonomous: boolean;
+  baseBranch: string | null;
+  forkPointSha: string | null;
+  githubIssueNumber: number | null;
+  githubPrNumber: number | null;
+  githubRepo: string | null;
+  createdAt: string;
+  updatedAt: string;
   // Tier 3 telemetry: what openrouter/auto (or claude/codex) actually
   // served each phase. For non-openrouter runs these just hold 'claude'
   // or 'codex'. Null until the phase runs.
-  plannerResolvedModel: string | null
-  reviewerResolvedModel: string | null
-  revisorResolvedModel: string | null
-  executorResolvedModel: string | null
-  verifierResolvedModel: string | null
-  totalTokensPrompt: number
-  totalTokensCompletion: number
-  totalCostUsd: number
+  plannerResolvedModel: string | null;
+  reviewerResolvedModel: string | null;
+  revisorResolvedModel: string | null;
+  executorResolvedModel: string | null;
+  verifierResolvedModel: string | null;
+  totalTokensPrompt: number;
+  totalTokensCompletion: number;
+  totalCostUsd: number;
 }
 
 // === Pipeline Types ===
@@ -123,9 +123,9 @@ export type PipelinePhase =
   | 'verifying'
   | 'shipping'
   | 'completed'
-  | 'failed'
+  | 'failed';
 
-export type AgentType = 'claude' | 'codex' | 'gh' | 'openrouter'
+export type AgentType = 'claude' | 'codex' | 'gh' | 'openrouter';
 
 /**
  * The subset of AgentType that can drive a pipeline phase. Excludes
@@ -142,177 +142,177 @@ export type AgentType = 'claude' | 'codex' | 'gh' | 'openrouter'
  *  - SQLite stores strings; no enum ⇄ ordinal round-trip needed.
  *  - GitHub label values are already strings (`agent:claude`, etc).
  */
-export type ExecutorModel = 'claude' | 'codex' | 'openrouter'
+export type ExecutorModel = 'claude' | 'codex' | 'openrouter';
 
-export type AgentState = 'starting' | 'running' | 'idle' | 'errored' | 'exited'
+export type AgentState = 'starting' | 'running' | 'idle' | 'errored' | 'exited';
 
 export interface AgentProcess {
-  id: string
-  type: AgentType
-  state: AgentState
-  cwd: string
-  exitCode: number | null
+  id: string;
+  type: AgentType;
+  state: AgentState;
+  cwd: string;
+  exitCode: number | null;
 }
 
 // === Plan DB Record ===
 
-export type PlanStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 'superseded'
+export type PlanStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 'superseded';
 
 export interface PlanRecord {
-  id: string
-  threadId: string
-  version: number
-  rawOutput: string
-  structured: ShipCodePlan | null
-  status: PlanStatus
-  createdAt: string
+  id: string;
+  threadId: string;
+  version: number;
+  rawOutput: string;
+  structured: ShipCodePlan | null;
+  status: PlanStatus;
+  createdAt: string;
 }
 
 // === Review DB Record ===
 
 export interface ReviewRecord {
-  id: string
-  planId: string
-  decision: PlanReview['decision']
-  confidence: PlanReview['confidence']
-  rawOutput: string
-  structured: PlanReview | null
-  createdAt: string
+  id: string;
+  planId: string;
+  decision: PlanReview['decision'];
+  confidence: PlanReview['confidence'];
+  rawOutput: string;
+  structured: PlanReview | null;
+  createdAt: string;
 }
 
 // === Diff Types ===
 
 export interface DiffRecord {
-  id: string
-  threadId: string
-  filePath: string
-  action: 'create' | 'modify' | 'delete' | 'rename'
-  diffContent: string | null
-  beforeHash: string | null
-  afterHash: string | null
-  createdAt: string
+  id: string;
+  threadId: string;
+  filePath: string;
+  action: 'create' | 'modify' | 'delete' | 'rename';
+  diffContent: string | null;
+  beforeHash: string | null;
+  afterHash: string | null;
+  createdAt: string;
 }
 
 // === Git Types ===
 
 export interface GitState {
-  branch: string
-  commitHash: string
-  isDirty: boolean
-  untrackedCount: number
-  stagedCount: number
-  modifiedCount: number
+  branch: string;
+  commitHash: string;
+  isDirty: boolean;
+  untrackedCount: number;
+  stagedCount: number;
+  modifiedCount: number;
 }
 
 // === Settings ===
 
 export interface AppSettings {
-  theme: 'light' | 'dark' | 'system'
-  defaultWorktreeEnabled: boolean
-  terminalScrollback: number
-  plannerModel: AgentType
-  reviewerModel: AgentType
-  verifierModel: AgentType
-  executorModel: AgentType
-  githubPollingEnabled: boolean
-  githubPollingIntervalMs: number
-  githubBotUsername: string
-  autoPickupEnabled: boolean
-  statusLabelMappings: StatusLabelMapping
-  onboardingVersion: number
+  theme: 'light' | 'dark' | 'system';
+  defaultWorktreeEnabled: boolean;
+  terminalScrollback: number;
+  plannerModel: AgentType;
+  reviewerModel: AgentType;
+  verifierModel: AgentType;
+  executorModel: AgentType;
+  githubPollingEnabled: boolean;
+  githubPollingIntervalMs: number;
+  githubBotUsername: string;
+  autoPickupEnabled: boolean;
+  statusLabelMappings: StatusLabelMapping;
+  onboardingVersion: number;
   // Sidebar project ordering preference (pinned projects always float to top first)
-  projectSortOrder: 'alpha' | 'recent' | 'added'
+  projectSortOrder: 'alpha' | 'recent' | 'added';
   // null = default (~/.shipcode/worktrees), '' = project-local legacy, else absolute or ~-prefixed
-  worktreeRoot: string | null
+  worktreeRoot: string | null;
   // Notifications
-  notificationsEnabled: boolean
-  notificationOsEnabled: boolean
-  notificationBadgeEnabled: boolean
-  notificationSoundEnabled: boolean
-  notificationEvents: NotificationEventToggles
+  notificationsEnabled: boolean;
+  notificationOsEnabled: boolean;
+  notificationBadgeEnabled: boolean;
+  notificationSoundEnabled: boolean;
+  notificationEvents: NotificationEventToggles;
   // OpenRouter integration (Tier 1+). All off by default; set openrouterEnabled=true
   // plus provide OPENROUTER_API_KEY in env to activate. Individual phase models are
   // optional overrides; when null, the resolver falls back to the tier defaults
   // (openrouterDefaultPaidModel / openrouterDefaultFreeModel).
-  openrouterEnabled: boolean
-  openrouterPlannerModel: string | null
-  openrouterReviewerModel: string | null
-  openrouterVerifierModel: string | null
-  openrouterExecutorModel: string | null
-  openrouterDefaultPaidModel: string
-  openrouterDefaultFreeModel: string
-  openrouterExplicitFallback: string
+  openrouterEnabled: boolean;
+  openrouterPlannerModel: string | null;
+  openrouterReviewerModel: string | null;
+  openrouterVerifierModel: string | null;
+  openrouterExecutorModel: string | null;
+  openrouterDefaultPaidModel: string;
+  openrouterDefaultFreeModel: string;
+  openrouterExplicitFallback: string;
 }
 
 export interface NotificationEventToggles {
-  awaitingApproval: boolean
-  failed: boolean
-  completed: boolean
-  verificationExhausted: boolean
+  awaitingApproval: boolean;
+  failed: boolean;
+  completed: boolean;
+  verificationExhausted: boolean;
 }
 
 export interface StatusLabelMapping {
-  [pipelineStatus: string]: string
+  [pipelineStatus: string]: string;
 }
 
 // === CLI Health ===
 
 export interface CliHealth {
-  available: boolean
-  version: string | null
-  path: string | null
-  error: string | null
-  authenticated: boolean
+  available: boolean;
+  version: string | null;
+  path: string | null;
+  error: string | null;
+  authenticated: boolean;
 }
 
 export interface SystemHealth {
-  claude: CliHealth
-  codex: CliHealth
-  git: CliHealth
-  gh: CliHealth
+  claude: CliHealth;
+  codex: CliHealth;
+  git: CliHealth;
+  gh: CliHealth;
 }
 
 // === File Change Events ===
 
 export interface FileChange {
-  path: string
-  type: 'add' | 'change' | 'unlink'
+  path: string;
+  type: 'add' | 'change' | 'unlink';
 }
 
 // === GitHub Types ===
 
 export interface GitHubIssue {
-  number: number
-  title: string
-  body: string | null
-  labels: string[]
-  assignee: string | null
-  state: 'open' | 'closed'
-  url: string
+  number: number;
+  title: string;
+  body: string | null;
+  labels: string[];
+  assignee: string | null;
+  state: 'open' | 'closed';
+  url: string;
 }
 
 export interface GitHubIssueCacheRecord {
-  id: string
-  projectId: string
-  issueNumber: number
-  title: string
-  body: string | null
-  labels: string[]
-  assignee: string | null
-  state: string
-  pipelineStatus: IssuePipelineStatus
-  threadId: string | null
-  claimedAt: string | null
-  claimedBy: string | null
-  lastPhaseUpdate: string | null
-  lastStatusLabel: string | null
+  id: string;
+  projectId: string;
+  issueNumber: number;
+  title: string;
+  body: string | null;
+  labels: string[];
+  assignee: string | null;
+  state: string;
+  pipelineStatus: IssuePipelineStatus;
+  threadId: string | null;
+  claimedAt: string | null;
+  claimedBy: string | null;
+  lastPhaseUpdate: string | null;
+  lastStatusLabel: string | null;
   // Per-issue executor choice. Widened to the full ExecutorModel union
   // in Tier 1 so issue-level selection can opt into the OpenRouter HTTP
   // provider the same way the `agent:openrouter/auto` GitHub label can
   // at queue time. The DB column is plain TEXT (v4 migration), so
   // writing this wider value is safe on existing rows.
-  executorModel: ExecutorModel
-  fetchedAt: string
+  executorModel: ExecutorModel;
+  fetchedAt: string;
 }
 
 export type IssuePipelineStatus =
@@ -326,40 +326,40 @@ export type IssuePipelineStatus =
   | 'verifying'
   | 'shipping'
   | 'completed'
-  | 'failed'
+  | 'failed';
 
 // === Verification Types ===
 
 export interface VerificationResult {
-  threadId: string
-  planId: string
-  result: 'passed' | 'failed'
-  summary: string
-  criteriaResults: CriteriaCheck[]
-  issues: VerificationIssue[]
+  threadId: string;
+  planId: string;
+  result: 'passed' | 'failed';
+  summary: string;
+  criteriaResults: CriteriaCheck[];
+  issues: VerificationIssue[];
 }
 
 export interface CriteriaCheck {
-  criterion: string
-  passed: boolean
-  evidence: string
+  criterion: string;
+  passed: boolean;
+  evidence: string;
 }
 
 export interface VerificationIssue {
-  severity: 'blocker' | 'warning'
-  description: string
-  filePath?: string
+  severity: 'blocker' | 'warning';
+  description: string;
+  filePath?: string;
 }
 
 export interface VerificationRecord {
-  id: string
-  threadId: string
-  planId: string
-  rawOutput: string
-  structured: VerificationResult | null
-  result: 'passed' | 'failed'
-  retryCount: number
-  createdAt: string
+  id: string;
+  threadId: string;
+  planId: string;
+  rawOutput: string;
+  structured: VerificationResult | null;
+  result: 'passed' | 'failed';
+  retryCount: number;
+  createdAt: string;
 }
 
 // === GitHub Status Labels ===
@@ -370,59 +370,66 @@ export type GitHubStatusLabel =
   | 'status:ready-for-review'
   | 'status:failed'
   | 'status:needs-human-review'
-  | 'status:invalid-config'
+  | 'status:invalid-config';
 
 // === Onboarding Types ===
 
-export type OnboardingStep = 'ai-auth' | 'github-project' | 'model-preferences' | 'label-mapping' | 'complete'
+export type OnboardingStep =
+  | 'ai-auth'
+  | 'github-project'
+  | 'model-preferences'
+  | 'label-mapping'
+  | 'complete';
 
 export interface GhAuthStatus {
-  installed: boolean
-  authenticated: boolean
-  username: string | null
-  version: string | null
-  error: string | null
+  installed: boolean;
+  authenticated: boolean;
+  username: string | null;
+  version: string | null;
+  error: string | null;
 }
 
 // === Mission Control Dashboard ===
 
 export interface DashboardStats {
-  agentsRunning: number
-  runningByPhase: Partial<Record<PipelinePhase, number>>
-  tasksInProgress: number
-  tasksOpen: number
-  tasksBlocked: number
-  pendingApprovals: number
-  staleApprovals: number
-  shippedLast7d: number
-  failedLast7d: number
+  agentsRunning: number;
+  runningByPhase: Partial<Record<PipelinePhase, number>>;
+  tasksInProgress: number;
+  tasksOpen: number;
+  tasksBlocked: number;
+  pendingApprovals: number;
+  staleApprovals: number;
+  shippedLast7d: number;
+  failedLast7d: number;
 }
 
 export interface ProjectCostSummary {
-  projectId: string
-  projectName: string
-  totalCostUsd: number
-  totalTokensPrompt: number
-  totalTokensCompletion: number
-  taskCount: number
+  projectId: string;
+  projectName: string;
+  totalCostUsd: number;
+  totalTokensPrompt: number;
+  totalTokensCompletion: number;
+  taskCount: number;
 }
 
 export interface CostSummary {
-  totalCostAllTime: number
-  totalCost7d: number
-  totalTokensAllTime: number
-  avgCostPerTask: number
-  byProject: ProjectCostSummary[]
+  totalCostAllTime: number;
+  totalCost7d: number;
+  totalTokensAllTime: number;
+  totalTokens7d: number;
+  avgCostPerTask: number;
+  avgTokensPerTask: number;
+  byProject: ProjectCostSummary[];
   recentByTask: Array<{
-    threadId: string
-    title: string
-    projectName: string
-    phase: PipelinePhase
-    costUsd: number
-    tokensPrompt: number
-    tokensCompletion: number
-    updatedAt: string
-  }>
+    threadId: string;
+    title: string;
+    projectName: string;
+    phase: PipelinePhase;
+    costUsd: number;
+    tokensPrompt: number;
+    tokensCompletion: number;
+    updatedAt: string;
+  }>;
 }
 
 export type ActivityKind =
@@ -435,40 +442,40 @@ export type ActivityKind =
   | 'pipeline_failed'
   | 'pipeline_completed'
   | 'pipeline_verification_exhausted'
-  | 'notification_fired'
+  | 'notification_fired';
 
-export type ActivityActor = 'claude' | 'codex' | 'system' | 'human'
+export type ActivityActor = 'claude' | 'codex' | 'system' | 'human';
 
 export interface ActivityEntry {
-  id: string
-  threadId: string | null
-  projectId: string | null
-  kind: ActivityKind
-  actor: ActivityActor
-  title: string
-  subtitle: string | null
-  metadata: Record<string, unknown> | null
-  createdAt: string
+  id: string;
+  threadId: string | null;
+  projectId: string | null;
+  kind: ActivityKind;
+  actor: ActivityActor;
+  title: string;
+  subtitle: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
 }
 
 export interface RecentTask {
-  threadId: string
-  projectId: string
-  projectName: string
-  title: string
-  phase: PipelinePhase
-  githubIssueNumber: number | null
-  updatedAt: string
+  threadId: string;
+  projectId: string;
+  projectName: string;
+  title: string;
+  phase: PipelinePhase;
+  githubIssueNumber: number | null;
+  updatedAt: string;
 }
 
 export interface ActivePipelineSummary {
-  threadId: string
-  projectId: string
-  projectName: string
-  threadTitle: string
-  phase: PipelinePhase
-  startedAt: number
-  activeProcessId: string | null
+  threadId: string;
+  projectId: string;
+  projectName: string;
+  threadTitle: string;
+  phase: PipelinePhase;
+  startedAt: number;
+  activeProcessId: string | null;
 }
 
 // === Notifications ===
@@ -477,15 +484,15 @@ export type NotificationKind =
   | 'awaiting_approval'
   | 'failed'
   | 'completed'
-  | 'verification_exhausted'
+  | 'verification_exhausted';
 
 export interface NotificationRecord {
-  id: string
-  threadId: string
-  projectId: string | null
-  kind: NotificationKind
-  title: string
-  body: string
-  createdAt: string
-  dismissedAt: string | null
+  id: string;
+  threadId: string;
+  projectId: string | null;
+  kind: NotificationKind;
+  title: string;
+  body: string;
+  createdAt: string;
+  dismissedAt: string | null;
 }

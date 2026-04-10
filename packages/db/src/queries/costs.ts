@@ -1,5 +1,5 @@
-import type { DatabaseSync } from 'node:sqlite'
-import type { CostSummary, PipelinePhase } from '@shipcode/shared'
+import type { DatabaseSync } from 'node:sqlite';
+import type { CostSummary, PipelinePhase } from '@shipcode/shared';
 
 export class CostsQueries {
   constructor(private db: DatabaseSync) {}
@@ -13,16 +13,18 @@ export class CostsQueries {
            COUNT(*) as task_count
          FROM threads WHERE status != 'idle'`,
       )
-      .get() as { total_cost_all_time: number; total_tokens: number; task_count: number }
+      .get() as { total_cost_all_time: number; total_tokens: number; task_count: number };
 
     const cost7dRow = this.db
       .prepare(
-        `SELECT COALESCE(SUM(total_cost_usd), 0) as n
+        `SELECT
+           COALESCE(SUM(total_cost_usd), 0) as cost,
+           COALESCE(SUM(total_tokens_prompt + total_tokens_completion), 0) as tokens
          FROM threads
          WHERE status != 'idle'
            AND julianday('now') - julianday(updated_at) <= 7.0`,
       )
-      .get() as { n: number }
+      .get() as { cost: number; tokens: number };
 
     const projectRows = this.db
       .prepare(
@@ -40,13 +42,13 @@ export class CostsQueries {
          ORDER BY cost DESC`,
       )
       .all() as Array<{
-      project_id: string
-      project_name: string
-      cost: number
-      tokens_prompt: number
-      tokens_completion: number
-      task_count: number
-    }>
+      project_id: string;
+      project_name: string;
+      cost: number;
+      tokens_prompt: number;
+      tokens_completion: number;
+      task_count: number;
+    }>;
 
     const taskRows = this.db
       .prepare(
@@ -66,21 +68,23 @@ export class CostsQueries {
          LIMIT 20`,
       )
       .all() as Array<{
-      thread_id: string
-      title: string
-      phase: string
-      cost_usd: number
-      tokens_prompt: number
-      tokens_completion: number
-      updated_at: string
-      project_name: string
-    }>
+      thread_id: string;
+      title: string;
+      phase: string;
+      cost_usd: number;
+      tokens_prompt: number;
+      tokens_completion: number;
+      updated_at: string;
+      project_name: string;
+    }>;
 
     return {
       totalCostAllTime: totals.total_cost_all_time,
-      totalCost7d: cost7dRow.n,
+      totalCost7d: cost7dRow.cost,
       totalTokensAllTime: totals.total_tokens,
+      totalTokens7d: cost7dRow.tokens,
       avgCostPerTask: totals.task_count > 0 ? totals.total_cost_all_time / totals.task_count : 0,
+      avgTokensPerTask: totals.task_count > 0 ? totals.total_tokens / totals.task_count : 0,
       byProject: projectRows.map((r) => ({
         projectId: r.project_id,
         projectName: r.project_name,
@@ -99,6 +103,6 @@ export class CostsQueries {
         tokensCompletion: r.tokens_completion,
         updatedAt: r.updated_at,
       })),
-    }
+    };
   }
 }

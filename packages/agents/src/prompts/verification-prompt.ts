@@ -1,5 +1,5 @@
-import type { ShipCodePlan } from '@shipcode/shared'
-import { VERIFICATION_FENCE_TAG } from '@shipcode/shared'
+import type { ShipCodePlan } from '@shipcode/shared';
+import { VERIFICATION_FENCE_TAG } from '@shipcode/shared';
 
 const VERIFICATION_SCHEMA_DESCRIPTION = `{
   "threadId": "<thread-id>",
@@ -20,12 +20,12 @@ const VERIFICATION_SCHEMA_DESCRIPTION = `{
       "filePath": "optional/file/path.ts"
     }
   ]
-}`
+}`;
 
 export function buildVerificationPrompt(
   plan: ShipCodePlan,
   diff: string,
-  acceptanceCriteria: string[]
+  acceptanceCriteria: string[],
 ): string {
   return `You are a senior engineer verifying that an implementation matches its plan and acceptance criteria.
 
@@ -61,5 +61,5 @@ Your verification MUST be valid JSON inside a \`\`\`${VERIFICATION_FENCE_TAG} co
 
 \`\`\`${VERIFICATION_FENCE_TAG}
 ${VERIFICATION_SCHEMA_DESCRIPTION}
-\`\`\``
+\`\`\``;
 }

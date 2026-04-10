@@ -18,16 +18,11 @@
  *   3. Tier default (openrouterDefaultPaidModel = 'openrouter/auto')
  */
 
-import type { AppSettings } from '@shipcode/shared'
-import type {
-  AgentProvider,
-  ProviderPhase,
-  ProviderRequest,
-  ProviderResponse,
-} from './types'
-import type { OpenRouterChatMessage } from './openrouter-http'
-import { OpenRouterClient, OpenRouterError } from './openrouter-http'
-import { executeViaOpenRouter } from './openrouter-execute'
+import type { AppSettings } from '@shipcode/shared';
+import type { AgentProvider, ProviderPhase, ProviderRequest, ProviderResponse } from './types';
+import type { OpenRouterChatMessage } from './openrouter-http';
+import { OpenRouterClient, OpenRouterError } from './openrouter-http';
+import { executeViaOpenRouter } from './openrouter-execute';
 
 // System prompts for each phase. The existing prompt builders in
 // `packages/agents/src/prompts/` already produce fully-formed user
@@ -40,34 +35,37 @@ import { executeViaOpenRouter } from './openrouter-execute'
 // prompt inside openrouter-execute.ts (the tool-call harness).
 const SYSTEM_PROMPTS: Partial<Record<ProviderPhase, string>> = {
   plan: 'You are a senior software engineer creating implementation plans. Emit a single fenced ```shipcode-plan JSON block containing the plan. Do not include any other fenced blocks.',
-  review: 'You are a senior software engineer reviewing an implementation plan. Emit a single fenced ```shipcode-review JSON block containing your review. Do not include any other fenced blocks.',
-  revision: 'You are a senior software engineer revising an implementation plan based on review feedback. Emit a single fenced ```shipcode-plan JSON block containing the revised plan. Do not include any other fenced blocks.',
-  verify: 'You are a senior software engineer verifying that an implementation matches its plan. Emit a single fenced ```shipcode-verification JSON block containing the verification result. Do not include any other fenced blocks.',
-}
+  review:
+    'You are a senior software engineer reviewing an implementation plan. Emit a single fenced ```shipcode-review JSON block containing your review. Do not include any other fenced blocks.',
+  revision:
+    'You are a senior software engineer revising an implementation plan based on review feedback. Emit a single fenced ```shipcode-plan JSON block containing the revised plan. Do not include any other fenced blocks.',
+  verify:
+    'You are a senior software engineer verifying that an implementation matches its plan. Emit a single fenced ```shipcode-verification JSON block containing the verification result. Do not include any other fenced blocks.',
+};
 
 export interface OpenRouterProviderDeps {
   /** Reads the current OpenRouter API key from env at call time. */
-  getApiKey: () => string | undefined
+  getApiKey: () => string | undefined;
   /** Reads the latest AppSettings (may change at runtime via IPC). */
-  getSettings: () => AppSettings
+  getSettings: () => AppSettings;
   /**
    * Factory for the HTTP client. Defaults to `new OpenRouterClient(...)`
    * but can be overridden in tests to inject a mocked client.
    */
-  createClient?: (apiKey: string) => OpenRouterClient
+  createClient?: (apiKey: string) => OpenRouterClient;
 }
 
 export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentProvider {
   // Tier 2: all five phases. Execute goes through the tool-call harness
   // in openrouter-execute.ts; the other four go through plain chat.
-  const supports = new Set<ProviderPhase>(['plan', 'review', 'revision', 'verify', 'execute'])
+  const supports = new Set<ProviderPhase>(['plan', 'review', 'revision', 'verify', 'execute']);
 
   return {
     id: 'openrouter',
     supports,
 
     async generate(req: ProviderRequest): Promise<ProviderResponse> {
-      const apiKey = deps.getApiKey()
+      const apiKey = deps.getApiKey();
       if (!apiKey) {
         return {
           rawOutput: '',
@@ -77,32 +75,32 @@ export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentPro
             message: 'OPENROUTER_API_KEY is not set',
             retryable: false,
           },
-        }
+        };
       }
 
-      const settings = deps.getSettings()
-      const model = resolveModel(req, settings)
+      const settings = deps.getSettings();
+      const model = resolveModel(req, settings);
 
       const client = deps.createClient
         ? deps.createClient(apiKey)
-        : new OpenRouterClient({ apiKey })
+        : new OpenRouterClient({ apiKey });
 
       // Execute phase runs the tool-call agent loop.
       if (req.phase === 'execute') {
-        return executeViaOpenRouter(req, { client, model })
+        return executeViaOpenRouter(req, { client, model });
       }
 
       // Everything else is a single streaming chat completion whose
       // content flows into the StreamParser at the pipeline level.
-      const systemPrompt = SYSTEM_PROMPTS[req.phase]
-      const messages: OpenRouterChatMessage[] = []
+      const systemPrompt = SYSTEM_PROMPTS[req.phase];
+      const messages: OpenRouterChatMessage[] = [];
       if (systemPrompt) {
-        messages.push({ role: 'system', content: systemPrompt })
+        messages.push({ role: 'system', content: systemPrompt });
       }
-      messages.push({ role: 'user', content: req.prompt })
+      messages.push({ role: 'user', content: req.prompt });
 
       try {
-        const result = await client.chat({ model, messages, stream: true }, req.signal)
+        const result = await client.chat({ model, messages, stream: true }, req.signal);
 
         // Reconstruct a rawOutput shape that the StreamParser understands:
         // the parser only needs the raw text that contains the fenced
@@ -115,7 +113,7 @@ export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentPro
           tokensUsed: result.usage
             ? { prompt: result.usage.prompt_tokens, completion: result.usage.completion_tokens }
             : undefined,
-        }
+        };
       } catch (err) {
         if (err instanceof OpenRouterError) {
           return {
@@ -127,7 +125,7 @@ export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentPro
               retryable: err.retryable,
             },
             resolvedModel: model,
-          }
+          };
         }
         return {
           rawOutput: '',
@@ -138,16 +136,16 @@ export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentPro
             retryable: false,
           },
           resolvedModel: model,
-        }
+        };
       }
     },
 
     async healthCheck() {
-      const apiKey = deps.getApiKey()
-      if (!apiKey) return { ok: false, reason: 'OPENROUTER_API_KEY not set' }
-      return { ok: true }
+      const apiKey = deps.getApiKey();
+      if (!apiKey) return { ok: false, reason: 'OPENROUTER_API_KEY not set' };
+      return { ok: true };
     },
-  }
+  };
 }
 
 /**
@@ -155,24 +153,24 @@ export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentPro
  * Precedence: explicit modelHint > per-phase setting override > tier default.
  */
 function resolveModel(req: ProviderRequest, settings: AppSettings): string {
-  if (req.modelHint) return req.modelHint
+  if (req.modelHint) return req.modelHint;
 
   const perPhase = (() => {
     switch (req.phase) {
       case 'plan':
       case 'revision':
-        return settings.openrouterPlannerModel
+        return settings.openrouterPlannerModel;
       case 'review':
-        return settings.openrouterReviewerModel
+        return settings.openrouterReviewerModel;
       case 'verify':
-        return settings.openrouterVerifierModel
+        return settings.openrouterVerifierModel;
       case 'execute':
-        return settings.openrouterExecutorModel
+        return settings.openrouterExecutorModel;
     }
-  })()
+  })();
 
-  if (perPhase) return perPhase
-  return settings.openrouterDefaultPaidModel
+  if (perPhase) return perPhase;
+  return settings.openrouterDefaultPaidModel;
 }
 
-export const _internals = { resolveModel, SYSTEM_PROMPTS }
+export const _internals = { resolveModel, SYSTEM_PROMPTS };

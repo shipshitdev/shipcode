@@ -1,16 +1,19 @@
-import { useEffect, useRef } from 'react'
-import { Terminal } from '@xterm/xterm'
-import { FitAddon } from '@xterm/addon-fit'
-import '@xterm/xterm/css/xterm.css'
-import { X } from '@shipcode/ui'
-import { useAppStore } from '../stores/app-store'
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Terminal } from '@xterm/xterm';
+import { FitAddon } from '@xterm/addon-fit';
+import '@xterm/xterm/css/xterm.css';
+import { cn, Maximize2, Minimize2, X } from '@shipcode/ui';
+import { useAppStore } from '../stores/app-store';
+
+const MIN_HEIGHT = 120;
+const DEFAULT_HEIGHT = 250;
 
 // Strip the final JSON result envelope that claude -p --output-format stream-json emits.
 // The result blob is for StreamParser; not useful to display in the terminal.
-const JSON_RESULT_RE = /\{"type":"result"[^\n]*\n?/g
+const JSON_RESULT_RE = /\{"type":"result"[^\n]*\n?/g;
 
 function sanitize(chunk: string): string {
-	return chunk.replace(JSON_RESULT_RE, '')
+  return chunk.replace(JSON_RESULT_RE, '');
 }
 
 /**
@@ -18,182 +21,341 @@ function sanitize(chunk: string): string {
  * Handles both claude --output-format stream-json and codex exec --json formats.
  * Returns null for events that should not be displayed (system noise, etc.).
  */
-function extractNdjsonText(event: Record<string, unknown>): string | null {
-	// ── claude stream-json ──────────────────────────────────────────────────
-	if (event.type === 'assistant') {
-		const content = (event.message as Record<string, unknown>)?.content
-		if (Array.isArray(content)) {
-			const text = content
-				.filter((c: unknown) => (c as Record<string, unknown>)?.type === 'text')
-				.map((c: unknown) => (c as Record<string, unknown>)?.text as string ?? '')
-				.join('')
-			return text || null
-		}
-	}
-
-	// ── codex exec --json ───────────────────────────────────────────────────
-	const item = event.item as Record<string, unknown> | undefined
-	if (event.type === 'item.started' && item?.type === 'command_execution') {
-		// Show the shell command being run (yellow)
-		return `\x1b[33m$ ${item.command as string}\x1b[0m`
-	}
-	if (event.type === 'item.completed' && item?.type === 'agent_message') {
-		return (item.text as string) || null
-	}
-	if (event.type === 'item.completed' && item?.type === 'command_execution') {
-		const code = item.exit_code as number | null
-		return code === 0 ? '\x1b[32m[exit 0]\x1b[0m' : `\x1b[31m[exit ${code}]\x1b[0m`
-	}
-
-	return null
+/** Format a claude tool_use input into a short, readable summary. */
+function formatToolCall(name: string, input: Record<string, unknown>): string {
+  switch (name) {
+    case 'Read': return `Read ${input.file_path ?? ''}`
+    case 'Write': return `Write ${input.file_path ?? ''}`
+    case 'Edit': return `Edit ${input.file_path ?? ''}`
+    case 'Glob': return `Glob ${input.pattern ?? ''}`
+    case 'Grep': return `Grep "${input.pattern ?? ''}"${input.path ? ` in ${input.path}` : ''}`
+    case 'Bash': {
+      const cmd = String(input.command ?? '')
+      return `$ ${cmd.length > 60 ? cmd.slice(0, 60) + '…' : cmd}`
+    }
+    case 'TodoWrite': return `TodoWrite (${(input.todos as unknown[])?.length ?? '?'} items)`
+    default: {
+      const first = Object.values(input)[0]
+      return first ? `${name}: ${String(first).slice(0, 60)}` : name
+    }
+  }
 }
 
+function extractNdjsonText(event: Record<string, unknown>): string | null {
+  // ── claude stream-json ──────────────────────────────────────────────────
+  if (event.type === 'assistant') {
+    const content = (event.message as Record<string, unknown>)?.content;
+    if (Array.isArray(content)) {
+      const parts: string[] = []
+      for (const c of content as Record<string, unknown>[]) {
+        if (c.type === 'text' && c.text) {
+          parts.push(c.text as string)
+        } else if (c.type === 'tool_use') {
+          const name = c.name as string
+          const input = (c.input ?? {}) as Record<string, unknown>
+          parts.push(`\x1b[2m→ ${formatToolCall(name, input)}\x1b[0m`)
+        }
+      }
+      return parts.join('') || null
+    }
+  }
+
+  // ── codex exec --json ───────────────────────────────────────────────────
+  const item = event.item as Record<string, unknown> | undefined;
+  if (event.type === 'item.started' && item?.type === 'command_execution') {
+    // Show the shell command being run (yellow)
+    return `\x1b[33m$ ${item.command as string}\x1b[0m`;
+  }
+  if (event.type === 'item.completed' && item?.type === 'agent_message') {
+    return (item.text as string) || null;
+  }
+  if (event.type === 'item.completed' && item?.type === 'command_execution') {
+    const code = item.exit_code as number | null;
+    return code === 0 ? '\x1b[32m[exit 0]\x1b[0m' : `\x1b[31m[exit ${code}]\x1b[0m`;
+  }
+
+  return null;
+}
+
+// Fenced blocks that the LLM outputs for structured data — we replace them with
+// a clean indicator rather than dumping raw JSON into the terminal.
+const FENCE_TAGS: Record<string, string> = {
+  'shipcode-plan': '\x1b[2m[Plan ready — open Issue Detail to view]\x1b[0m',
+  'shipcode-review': '\x1b[2m[Review ready — open Issue Detail to view]\x1b[0m',
+  'shipcode-verification': '\x1b[2m[Verification complete — open Issue Detail to view]\x1b[0m',
+};
+const FENCE_RE = new RegExp('```(' + Object.keys(FENCE_TAGS).join('|') + ')');
+
 export function TerminalDrawer() {
-	const { toggleTerminal, agentOutputs } = useAppStore()
-	const terminalEvents = useAppStore((s) => s.terminalEvents)
-	const activeThreadId = useAppStore((s) => s.activeThreadId)
-	const containerRef = useRef<HTMLDivElement>(null)
-	const termRef = useRef<Terminal | null>(null)
-	const fitRef = useRef<FitAddon | null>(null)
-	// Track how many chunks have been written per process (regular streaming)
-	const writtenRef = useRef<Record<string, number | typeof Infinity>>({})
-	// Buffer incomplete NDJSON lines across PTY read chunks
-	const lineBufferRef = useRef<Record<string, string>>({})
-	const prevThreadIdRef = useRef<string | null>(null)
-	// Track how many terminal event lines have been written
-	const eventsWrittenRef = useRef(0)
+  const { toggleTerminal, agentOutputs } = useAppStore();
+  const terminalThreadId = useAppStore((s) => s.terminalThreadId);
+  const terminalEventsByThread = useAppStore((s) => s.terminalEventsByThread);
+  const terminalEvents = terminalThreadId ? (terminalEventsByThread[terminalThreadId] ?? []) : [];
+  // Watch terminal focus thread for reset detection (renamed from activeThreadId)
+  const activeThreadId = terminalThreadId;
+  const activeIssue = useAppStore((s) => s.activeIssue);
+  const pipelinePhase = useAppStore((s) => s.pipelinePhase);
+  const githubIssues = useAppStore((s) => s.githubIssues);
+  const setTerminalThread = useAppStore((s) => s.setTerminalThread);
+  const selectIssue = useAppStore((s) => s.selectIssue);
+  // Track when the current pipeline run started (first event for this thread)
+  const startedAtRef = useRef<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const termRef = useRef<Terminal | null>(null);
+  const fitRef = useRef<FitAddon | null>(null);
+  // Track how many chunks have been written per process (regular streaming)
+  const writtenRef = useRef<Record<string, number | typeof Infinity>>({});
+  // Buffer incomplete NDJSON lines across PTY read chunks
+  const lineBufferRef = useRef<Record<string, string>>({});
+  // Per-process suppression: once a fence tag is detected, suppress remaining text
+  const suppressedRef = useRef<Record<string, boolean>>({});
+  const prevThreadIdRef = useRef<string | null>(null);
+  // Track how many terminal event lines have been written
+  const eventsWrittenRef = useRef(0);
+  // Show skeleton between thread switches until first output arrives
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  // Resize state
+  const [height, setHeight] = useState(DEFAULT_HEIGHT);
+  const [isMaximized, setIsMaximized] = useState(false);
+  const prevHeightRef = useRef(DEFAULT_HEIGHT);
+  const dragStartRef = useRef<{ y: number; h: number } | null>(null);
 
-	// Init xterm once
-	useEffect(() => {
-		if (!containerRef.current) return
-		const term = new Terminal({
-			theme: {
-				background: '#0c0d10',
-				foreground: '#b4b4bc',
-				cursor: '#f4f4f5',
-				selectionBackground: 'rgba(244, 244, 245, 0.2)',
-			},
-			fontFamily: '"SF Mono", SFMono-Regular, Consolas, Menlo, monospace',
-			fontSize: 12,
-			lineHeight: 1.5,
-			cursorBlink: false,
-			disableStdin: true,
-			scrollback: 5000,
-		})
-		const fit = new FitAddon()
-		term.loadAddon(fit)
-		term.open(containerRef.current)
-		fit.fit()
-		termRef.current = term
-		fitRef.current = fit
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    dragStartRef.current = { y: e.clientY, h: height };
+    const onMove = (ev: MouseEvent) => {
+      if (!dragStartRef.current) return;
+      const delta = dragStartRef.current.y - ev.clientY;
+      setHeight(Math.max(MIN_HEIGHT, dragStartRef.current.h + delta));
+      fitRef.current?.fit();
+    };
+    const onUp = () => {
+      dragStartRef.current = null;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      fitRef.current?.fit();
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [height]);
 
-		const ro = new ResizeObserver(() => fit.fit())
-		ro.observe(containerRef.current)
+  const toggleMaximize = useCallback(() => {
+    if (isMaximized) {
+      setHeight(prevHeightRef.current);
+    } else {
+      prevHeightRef.current = height;
+      // Fill available content area — parent flex-col, so use a large value
+      // and let the container clamp it naturally.
+      setHeight(9999);
+    }
+    setIsMaximized((v) => !v);
+    setTimeout(() => fitRef.current?.fit(), 0);
+  }, [isMaximized, height]);
 
-		return () => {
-			ro.disconnect()
-			term.dispose()
-			termRef.current = null
-			fitRef.current = null
-		}
-	}, [])
+  // Init xterm once
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const term = new Terminal({
+      theme: {
+        background: '#0c0d10',
+        foreground: '#b4b4bc',
+        cursor: '#f4f4f5',
+        selectionBackground: 'rgba(244, 244, 245, 0.2)',
+      },
+      fontFamily: '"SF Mono", SFMono-Regular, Consolas, Menlo, monospace',
+      fontSize: 12,
+      lineHeight: 1.5,
+      cursorBlink: false,
+      disableStdin: true,
+      scrollback: 5000,
+    });
+    const fit = new FitAddon();
+    term.loadAddon(fit);
+    term.open(containerRef.current);
+    fit.fit();
+    termRef.current = term;
+    fitRef.current = fit;
 
-	// Clear terminal when the active thread changes (user switched tasks)
-	useEffect(() => {
-		const term = termRef.current
-		if (!term) return
-		if (activeThreadId !== prevThreadIdRef.current) {
-			term.reset()
-			writtenRef.current = {}
-			lineBufferRef.current = {}
-			eventsWrittenRef.current = 0
-			prevThreadIdRef.current = activeThreadId
-		}
-	}, [activeThreadId])
+    const ro = new ResizeObserver(() => fit.fit());
+    ro.observe(containerRef.current);
 
-	// Write incremental agent output as chunks arrive
-	useEffect(() => {
-		const term = termRef.current
-		if (!term) return
+    return () => {
+      ro.disconnect();
+      term.dispose();
+      termRef.current = null;
+      fitRef.current = null;
+    };
+  }, []);
 
-		for (const [processId, chunks] of Object.entries(agentOutputs)) {
-			if (writtenRef.current[processId] === Infinity) continue
+  // Clear terminal when the active thread changes (user switched tasks)
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
+    if (activeThreadId !== prevThreadIdRef.current) {
+      term.reset();
+      writtenRef.current = {};
+      lineBufferRef.current = {};
+      suppressedRef.current = {};
+      eventsWrittenRef.current = 0;
+      startedAtRef.current = null;
+      prevThreadIdRef.current = activeThreadId;
+      // Show skeleton until first output arrives for this thread
+      setIsTransitioning(true);
+    }
+  }, [activeThreadId]);
 
-			const prev = (writtenRef.current[processId] as number) ?? 0
-			const newChunks = chunks.slice(prev)
-			if (newChunks.length === 0) continue
+  // Write incremental agent output as chunks arrive
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
 
-			// Detect NDJSON (stream-json) mode: look across first ~10 chunks since
-			// PTY may emit control sequences before the first JSON line.
-			const isNdjson =
-				processId in lineBufferRef.current ||
-				chunks.slice(0, 10).join('').includes('{"type":"')
+    for (const [processId, chunks] of Object.entries(agentOutputs)) {
+      if (writtenRef.current[processId] === Infinity) continue;
 
-			if (isNdjson) {
-				// Buffer-based line processing — handles PTY chunks that split NDJSON lines
-				let buf = (lineBufferRef.current[processId] ?? '') + newChunks.join('')
-				const lines = buf.split('\n')
-				// Keep the last (potentially incomplete) segment in the buffer
-				lineBufferRef.current[processId] = lines.pop() ?? ''
+      const prev = (writtenRef.current[processId] as number) ?? 0;
+      const newChunks = chunks.slice(prev);
+      // First output for this thread — hide skeleton
+      if (newChunks.length > 0) setIsTransitioning(false);
+      if (newChunks.length === 0) continue;
 
-				for (const line of lines) {
-					const trimmed = line.trim()
-					if (!trimmed) continue
-					try {
-						const event = JSON.parse(trimmed) as Record<string, unknown>
-						const text = extractNdjsonText(event)
-						if (text) {
-							const normalized = text.replace(/\r?\n/g, '\r\n')
-							term.write(normalized.endsWith('\r\n') ? normalized : normalized + '\r\n')
-						}
-					} catch {
-						// Partial or non-JSON segment — skip silently
-					}
-				}
-			} else {
-				// Non-NDJSON streaming (e.g. plain-text PTY output from legacy providers)
-				for (const chunk of newChunks) {
-					const clean = sanitize(chunk)
-					if (clean) term.write(clean)
-				}
-			}
-			writtenRef.current[processId] = chunks.length
-		}
+      // Detect NDJSON (stream-json) mode: look across first ~10 chunks since
+      // PTY may emit control sequences before the first JSON line.
+      const isNdjson =
+        processId in lineBufferRef.current || chunks.slice(0, 10).join('').includes('{"type":"');
 
-		// Clean up tracking for removed processes
-		for (const processId of Object.keys(writtenRef.current)) {
-			if (!agentOutputs[processId]) {
-				delete writtenRef.current[processId]
-				delete lineBufferRef.current[processId]
-			}
-		}
-	}, [agentOutputs])
+      if (isNdjson) {
+        // Buffer-based line processing — handles PTY chunks that split NDJSON lines
+        let buf = (lineBufferRef.current[processId] ?? '') + newChunks.join('');
+        const lines = buf.split('\n');
+        // Keep the last (potentially incomplete) segment in the buffer
+        lineBufferRef.current[processId] = lines.pop() ?? '';
 
-	// Write pipeline event log lines (phase transitions, process lifecycle)
-	useEffect(() => {
-		const term = termRef.current
-		if (!term) return
-		const newEvents = terminalEvents.slice(eventsWrittenRef.current)
-		for (const line of newEvents) {
-			term.write(`\x1b[2m${line}\x1b[0m\r\n`)
-		}
-		eventsWrittenRef.current = terminalEvents.length
-	}, [terminalEvents])
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          try {
+            const event = JSON.parse(trimmed) as Record<string, unknown>;
+            const text = extractNdjsonText(event);
+            if (!text) continue;
 
-	return (
-		<div className="flex h-[250px] flex-col border-t border-border bg-secondary">
-			<div className="flex items-center justify-between border-b border-border px-3 py-1.5">
-				<span className="text-xs font-semibold text-secondary">Terminal</span>
-				<button
-					type="button"
-					className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-secondary hover:bg-hover hover:text-primary"
-					onClick={toggleTerminal}
-					title="Close terminal"
-				>
-					<X size={14} />
-				</button>
-			</div>
-			<div ref={containerRef} className="flex-1 overflow-hidden" />
-		</div>
-	)
+            // Already suppressed (inside a structured fence block)
+            if (suppressedRef.current[processId]) continue;
+
+            const fenceMatch = FENCE_RE.exec(text);
+            if (fenceMatch) {
+              // Write preamble text before the fence, then a clean indicator
+              const before = text.slice(0, fenceMatch.index).trimEnd();
+              if (before) {
+                const normalized = before.replace(/\r?\n/g, '\r\n');
+                term.write(normalized.endsWith('\r\n') ? normalized : normalized + '\r\n');
+              }
+              const tag = fenceMatch[1];
+              term.write((FENCE_TAGS[tag] ?? '\x1b[2m[output ready]\x1b[0m') + '\r\n');
+              suppressedRef.current[processId] = true;
+            } else {
+              const normalized = text.replace(/\r?\n/g, '\r\n');
+              term.write(normalized.endsWith('\r\n') ? normalized : normalized + '\r\n');
+            }
+          } catch {
+            // Partial or non-JSON segment — skip silently
+          }
+        }
+      } else {
+        // Non-NDJSON streaming (e.g. plain-text PTY output from legacy providers)
+        for (const chunk of newChunks) {
+          const clean = sanitize(chunk);
+          if (clean) term.write(clean);
+        }
+      }
+      writtenRef.current[processId] = chunks.length;
+    }
+
+    // Clean up tracking for removed processes
+    for (const processId of Object.keys(writtenRef.current)) {
+      if (!agentOutputs[processId]) {
+        delete writtenRef.current[processId];
+        delete lineBufferRef.current[processId];
+      }
+    }
+  }, [agentOutputs]);
+
+  // Write pipeline event log lines (phase transitions, process lifecycle)
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
+    const newEvents = terminalEvents.slice(eventsWrittenRef.current);
+    // Capture start time from first event of this run
+    if (eventsWrittenRef.current === 0 && newEvents.length > 0 && !startedAtRef.current) {
+      startedAtRef.current = new Date().toLocaleTimeString('en-US', {
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      });
+    }
+    for (const line of newEvents) {
+      term.write(`\x1b[2m${line}\x1b[0m\r\n`);
+    }
+    eventsWrittenRef.current = terminalEvents.length;
+  }, [terminalEvents]);
+
+  const resolvedHeight = isMaximized ? undefined : height;
+
+  return (
+    <div
+      className="flex flex-col border-t border-border bg-secondary shrink-0"
+      style={isMaximized ? { flex: '1 1 0', minHeight: 0 } : { height: resolvedHeight }}
+    >
+      {/* Drag-to-resize handle */}
+      {!isMaximized && (
+        <div
+          className="h-1 cursor-ns-resize hover:bg-accent/30 transition-colors shrink-0"
+          onMouseDown={handleResizeMouseDown}
+        />
+      )}
+      <div className="flex items-center justify-between border-b border-border px-3 py-1.5 shrink-0 gap-3 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 overflow-hidden">
+          <span className="text-xs font-semibold text-secondary shrink-0">Terminal</span>
+          {activeIssue && (
+            <>
+              <span className="text-muted text-xs shrink-0">·</span>
+              <span className="text-xs font-mono text-muted shrink-0">#{activeIssue.issueNumber}</span>
+              <span className="text-xs text-secondary truncate">{activeIssue.title}</span>
+            </>
+          )}
+          {pipelinePhase !== 'idle' && (
+            <>
+              <span className="text-muted text-xs shrink-0">·</span>
+              <span className="text-xs text-accent font-medium shrink-0 capitalize">{pipelinePhase}</span>
+            </>
+          )}
+          {startedAtRef.current && terminalEvents.length > 0 && (
+            <>
+              <span className="text-muted text-xs shrink-0">·</span>
+              <span className="text-xs font-mono text-muted shrink-0">{startedAtRef.current}</span>
+            </>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-secondary hover:bg-hover hover:text-primary"
+            onClick={toggleMaximize}
+            title={isMaximized ? 'Restore terminal' : 'Maximize terminal'}
+          >
+            {isMaximized ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+          </button>
+          <button
+            type="button"
+            className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-secondary hover:bg-hover hover:text-primary"
+            onClick={toggleTerminal}
+            title="Close terminal"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      </div>
+      <div ref={containerRef} className="flex-1 overflow-hidden min-h-0" />
+    </div>
+  );
 }

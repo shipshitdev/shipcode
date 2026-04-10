@@ -37,32 +37,32 @@
  * needs broader surface waits for a proper sandbox design.
  */
 
-import { execFile } from 'node:child_process'
-import fs from 'node:fs/promises'
-import path from 'node:path'
-import { promisify } from 'node:util'
-import { z } from 'zod'
+import { execFile } from 'node:child_process';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { promisify } from 'node:util';
+import { z } from 'zod';
 import {
   SHELL_ALLOWLIST,
   SHELL_EXEC_TIMEOUT_MS,
   GIT_ALLOWED_SUBCOMMANDS,
   GIT_BLOCKED_GLOBAL_OPTION_PREFIXES,
-} from '@shipcode/shared'
-import type { Tool, ToolContext, ToolResult } from './types'
+} from '@shipcode/shared';
+import type { Tool, ToolContext, ToolResult } from './types';
 
-const execFileAsync = promisify(execFile)
+const execFileAsync = promisify(execFile);
 
 const ShellReadOnlyInput = z.object({
   command: z.string().min(1),
   args: z.array(z.string()).default([]),
   /** Working directory, relative to the worktree. Defaults to worktree root. */
   cwd: z.string().optional(),
-})
+});
 
-type ShellReadOnlyInput = z.infer<typeof ShellReadOnlyInput>
+type ShellReadOnlyInput = z.infer<typeof ShellReadOnlyInput>;
 
-const ALLOWLIST_SET = new Set<string>(SHELL_ALLOWLIST)
-const GIT_ALLOWED_SET = new Set<string>(GIT_ALLOWED_SUBCOMMANDS)
+const ALLOWLIST_SET = new Set<string>(SHELL_ALLOWLIST);
+const GIT_ALLOWED_SET = new Set<string>(GIT_ALLOWED_SUBCOMMANDS);
 
 export const shellReadOnlyTool: Tool<ShellReadOnlyInput> = {
   name: 'shell',
@@ -100,7 +100,7 @@ export const shellReadOnlyTool: Tool<ShellReadOnlyInput> = {
       return {
         ok: false,
         error: `command '${input.command}' is not in the shell allowlist. Allowed: ${SHELL_ALLOWLIST.join(', ')}`,
-      }
+      };
     }
 
     // Git gets special treatment because its global options can escape
@@ -108,23 +108,23 @@ export const shellReadOnlyTool: Tool<ShellReadOnlyInput> = {
     // aliases. Validate globals, then require the subcommand to be in
     // the explicit allowlist.
     if (input.command === 'git') {
-      const gitCheck = validateGitArgs(input.args)
+      const gitCheck = validateGitArgs(input.args);
       if (gitCheck !== null) {
-        return { ok: false, error: gitCheck }
+        return { ok: false, error: gitCheck };
       }
     }
 
     // cwd must resolve to a path inside the REAL worktree (after
     // following symlinks). This matches path-guard.ts's TOCTOU
     // mitigation for the file tools.
-    let resolvedCwd: string
+    let resolvedCwd: string;
     try {
-      resolvedCwd = await resolveWorktreeCwd(ctx.worktreePath, input.cwd)
+      resolvedCwd = await resolveWorktreeCwd(ctx.worktreePath, input.cwd);
     } catch (err) {
-      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
 
-    if (ctx.signal.aborted) return { ok: false, error: 'aborted' }
+    if (ctx.signal.aborted) return { ok: false, error: 'aborted' };
 
     try {
       const { stdout, stderr } = await execFileAsync(input.command, input.args, {
@@ -133,37 +133,44 @@ export const shellReadOnlyTool: Tool<ShellReadOnlyInput> = {
         maxBuffer: 2 * 1024 * 1024,
         shell: false,
         signal: ctx.signal,
-      })
-      const combined = (stdout ? `stdout:\n${stdout}` : '') +
-        (stderr ? `${stdout ? '\n' : ''}stderr:\n${stderr}` : '') ||
-        '(no output)'
+      });
+      const combined =
+        (stdout ? `stdout:\n${stdout}` : '') +
+          (stderr ? `${stdout ? '\n' : ''}stderr:\n${stderr}` : '') || '(no output)';
       return {
         ok: true,
         content: combined,
         data: { exitCode: 0, stdout, stderr },
-      }
+      };
     } catch (err) {
       // execFile throws on non-zero exit AND on timeout. We want the
       // model to see the output either way so it can react.
-      const e = err as { code?: number; stdout?: string; stderr?: string; signal?: string; killed?: boolean; message?: string }
+      const e = err as {
+        code?: number;
+        stdout?: string;
+        stderr?: string;
+        signal?: string;
+        killed?: boolean;
+        message?: string;
+      };
       if (e.killed && e.signal === 'SIGTERM') {
-        return { ok: false, error: `command timed out after ${SHELL_EXEC_TIMEOUT_MS}ms` }
+        return { ok: false, error: `command timed out after ${SHELL_EXEC_TIMEOUT_MS}ms` };
       }
-      const stdout = e.stdout ?? ''
-      const stderr = e.stderr ?? ''
-      const exitCode = e.code ?? 1
+      const stdout = e.stdout ?? '';
+      const stderr = e.stderr ?? '';
+      const exitCode = e.code ?? 1;
       return {
         ok: true,
         content:
           `exit ${exitCode}\n` +
           (stdout ? `stdout:\n${stdout}\n` : '') +
           (stderr ? `stderr:\n${stderr}\n` : '') +
-          (stdout || stderr ? '' : e.message ?? 'no output'),
+          (stdout || stderr ? '' : (e.message ?? 'no output')),
         data: { exitCode, stdout, stderr },
-      }
+      };
     }
   },
-}
+};
 
 /**
  * Walk git's arg list, rejecting any global option that can:
@@ -177,9 +184,9 @@ export const shellReadOnlyTool: Tool<ShellReadOnlyInput> = {
  * Returns null on success, or an error message on rejection.
  */
 function validateGitArgs(args: string[]): string | null {
-  let i = 0
+  let i = 0;
   while (i < args.length) {
-    const arg = args[i]
+    const arg = args[i];
 
     // Any arg starting with a blocked global option prefix is rejected.
     // This catches BOTH `-C /path` AND `-C/path` AND `--git-dir=...`
@@ -187,54 +194,54 @@ function validateGitArgs(args: string[]): string | null {
     // `=value` form.
     const blockedPrefix = GIT_BLOCKED_GLOBAL_OPTION_PREFIXES.find((p) => {
       // Exact match (-C alone) or startsWith for attached/= forms
-      return arg === p || arg.startsWith(p)
-    })
+      return arg === p || arg.startsWith(p);
+    });
     if (blockedPrefix !== undefined) {
-      return `git arg '${arg}' is blocked (prefix '${blockedPrefix}' can escape the worktree or alter git behavior).`
+      return `git arg '${arg}' is blocked (prefix '${blockedPrefix}' can escape the worktree or alter git behavior).`;
     }
 
     // -c name=value : one-off config. Reject aliases (which can inject
     // shell via `!`) and any ssh/gpg/pager command override that could
     // execute arbitrary binaries.
     if (arg === '-c') {
-      const value = args[i + 1]
+      const value = args[i + 1];
       if (typeof value !== 'string') {
-        return `git '-c' missing value`
+        return `git '-c' missing value`;
       }
-      const rejection = validateGitConfigValue(value)
-      if (rejection !== null) return rejection
-      i += 2
-      continue
+      const rejection = validateGitConfigValue(value);
+      if (rejection !== null) return rejection;
+      i += 2;
+      continue;
     }
     if (arg.startsWith('-c') && arg.length > 2) {
       // Stuck form `-cname=value`
-      const value = arg.slice(2)
-      const rejection = validateGitConfigValue(value)
-      if (rejection !== null) return rejection
-      i++
-      continue
+      const value = arg.slice(2);
+      const rejection = validateGitConfigValue(value);
+      if (rejection !== null) return rejection;
+      i++;
+      continue;
     }
 
     // Once we hit a non-option arg, that's the subcommand. Require it
     // to be in the explicit allowlist.
     if (!arg.startsWith('-')) {
       if (!GIT_ALLOWED_SET.has(arg)) {
-        return `git subcommand '${arg}' is not in the read-only allowlist (${GIT_ALLOWED_SUBCOMMANDS.join(', ')}). Use the edit/write tools for file changes.`
+        return `git subcommand '${arg}' is not in the read-only allowlist (${GIT_ALLOWED_SUBCOMMANDS.join(', ')}). Use the edit/write tools for file changes.`;
       }
       // Stop scanning — anything after the subcommand is that
       // subcommand's own args, and we trust our subcommand allowlist
       // to mean "these are read-only and do not take shell-injection flags".
-      return null
+      return null;
     }
 
     // Unknown option form. Reject rather than silently pass — the
     // surface is narrow and we'd rather fail loud than guess.
-    return `git option '${arg}' is not recognized; only explicit read-only subcommands are allowed.`
+    return `git option '${arg}' is not recognized; only explicit read-only subcommands are allowed.`;
   }
 
   // No subcommand provided — `git` alone prints help. That's harmless
   // but not useful; reject for clarity.
-  return `git invocation missing a subcommand (allowed: ${GIT_ALLOWED_SUBCOMMANDS.join(', ')}).`
+  return `git invocation missing a subcommand (allowed: ${GIT_ALLOWED_SUBCOMMANDS.join(', ')}).`;
 }
 
 /**
@@ -245,25 +252,25 @@ function validateGitArgs(args: string[]): string | null {
 function validateGitConfigValue(entry: string): string | null {
   // `entry` looks like `key=value` or just `key` (no value is harmless
   // at git's level; reject anyway for parser simplicity).
-  const eq = entry.indexOf('=')
+  const eq = entry.indexOf('=');
   if (eq === -1) {
-    return `git '-c ${entry}' missing value`
+    return `git '-c ${entry}' missing value`;
   }
-  const key = entry.slice(0, eq).toLowerCase()
-  const value = entry.slice(eq + 1)
+  const key = entry.slice(0, eq).toLowerCase();
+  const value = entry.slice(eq + 1);
 
   // Any alias.* entry with a `!` value executes as a shell command.
   // Same logic: reject ANY alias.* even without the bang — aliases are
   // not useful in a read-only context.
   if (key.startsWith('alias.')) {
-    return `git '-c ${entry}' is blocked (aliases can execute shell commands).`
+    return `git '-c ${entry}' is blocked (aliases can execute shell commands).`;
   }
 
   // Leading `!` in any config value that ends up being executed —
   // core.sshCommand, core.pager, core.editor, core.askPass,
   // credential.helper, sendemail.smtpEncryption, etc. — runs as shell.
   if (value.trimStart().startsWith('!')) {
-    return `git '-c ${entry}' is blocked (value starts with '!', which git interprets as shell).`
+    return `git '-c ${entry}' is blocked (value starts with '!', which git interprets as shell).`;
   }
 
   // Any override of a command-style config is a shell vector. Block
@@ -277,12 +284,12 @@ function validateGitConfigValue(entry: string): string | null {
     'credential.helper',
     'pager',
     'http.sslcapath',
-  ])
+  ]);
   if (COMMAND_CONFIG_KEYS.has(key)) {
-    return `git '-c ${entry}' is blocked (${key} is a command-style config).`
+    return `git '-c ${entry}' is blocked (${key} is a command-style config).`;
   }
 
-  return null
+  return null;
 }
 
 /**
@@ -299,28 +306,30 @@ function validateGitConfigValue(entry: string): string | null {
  * - Relative paths → joined to the worktree, realpath'd, then checked
  */
 async function resolveWorktreeCwd(worktreePath: string, sub: string | undefined): Promise<string> {
-  const worktreeReal = await fs.realpath(worktreePath)
+  const worktreeReal = await fs.realpath(worktreePath);
 
-  if (!sub || sub === '.' || sub === '') return worktreeReal
+  if (!sub || sub === '.' || sub === '') return worktreeReal;
 
-  const candidate = path.isAbsolute(sub) ? sub : path.resolve(worktreeReal, sub)
+  const candidate = path.isAbsolute(sub) ? sub : path.resolve(worktreeReal, sub);
 
   // If the candidate doesn't exist yet, fs.realpath throws. Since the
   // shell tool's cwd MUST exist (execFile will fail otherwise), let
   // the error propagate — we don't support creating directories here.
-  let candidateReal: string
+  let candidateReal: string;
   try {
-    candidateReal = await fs.realpath(candidate)
+    candidateReal = await fs.realpath(candidate);
   } catch (err) {
-    throw new Error(`cwd '${sub}' does not exist or is unreachable: ${(err as Error).message}`)
+    throw new Error(`cwd '${sub}' does not exist or is unreachable: ${(err as Error).message}`);
   }
 
-  const boundary = worktreeReal.endsWith(path.sep) ? worktreeReal : worktreeReal + path.sep
-  const candidateNorm = candidateReal.endsWith(path.sep) ? candidateReal : candidateReal + path.sep
+  const boundary = worktreeReal.endsWith(path.sep) ? worktreeReal : worktreeReal + path.sep;
+  const candidateNorm = candidateReal.endsWith(path.sep) ? candidateReal : candidateReal + path.sep;
   if (candidateNorm !== boundary && !candidateNorm.startsWith(boundary)) {
-    throw new Error(`cwd '${sub}' escapes the worktree (resolves to ${candidateReal}, worktree is ${worktreeReal})`)
+    throw new Error(
+      `cwd '${sub}' escapes the worktree (resolves to ${candidateReal}, worktree is ${worktreeReal})`,
+    );
   }
-  return candidateReal
+  return candidateReal;
 }
 
 // Exported for unit tests
@@ -328,4 +337,4 @@ export const _internals = {
   validateGitArgs,
   validateGitConfigValue,
   resolveWorktreeCwd,
-}
+};

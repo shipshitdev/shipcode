@@ -5,4 +5,4 @@ export default {
   pipeline: 'Pipeline',
   cli: 'CLI',
   configuration: 'Configuration',
-}
+};

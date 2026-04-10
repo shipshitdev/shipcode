@@ -19,68 +19,64 @@
  */
 export interface NormalizeBranchesInput {
   /** BranchSummary.all from simple-git */
-  raw: string[]
+  raw: string[];
   /** The project's currently persisted default branch (pinned first if present) */
-  defaultBranch: string
+  defaultBranch: string;
 }
 
-const COMMON_DEFAULTS = ['main', 'master', 'develop', 'trunk']
-const INTERNAL_PREFIX = 'shipcode/'
+const COMMON_DEFAULTS = ['main', 'master', 'develop', 'trunk'];
+const INTERNAL_PREFIX = 'shipcode/';
 
 export function normalizeBranches({ raw, defaultBranch }: NormalizeBranchesInput): string[] {
-  const locals = new Set<string>()
-  const remoteOnly = new Set<string>() // resolvable ref, e.g. "origin/foo"
+  const locals = new Set<string>();
+  const remoteOnly = new Set<string>(); // resolvable ref, e.g. "origin/foo"
 
   for (const name of raw) {
-    if (!name) continue
-    if (name.includes('->')) continue                       // HEAD pointer line
-    if (name.startsWith('(HEAD detached')) continue         // detached HEAD marker
-    if (name.startsWith('(no branch')) continue             // alternate detached marker
+    if (!name) continue;
+    if (name.includes('->')) continue; // HEAD pointer line
+    if (name.startsWith('(HEAD detached')) continue; // detached HEAD marker
+    if (name.startsWith('(no branch')) continue; // alternate detached marker
 
     if (name.startsWith('remotes/')) {
       // remotes/<remote>/<branch...> → "<remote>/<branch...>"
-      const stripped = name.replace(/^remotes\//, '')
-      const firstSlash = stripped.indexOf('/')
-      if (firstSlash < 0) continue
-      const branchPart = stripped.slice(firstSlash + 1)
-      if (branchPart.startsWith(INTERNAL_PREFIX)) continue
-      if (branchPart === 'HEAD') continue
-      remoteOnly.add(stripped)
+      const stripped = name.replace(/^remotes\//, '');
+      const firstSlash = stripped.indexOf('/');
+      if (firstSlash < 0) continue;
+      const branchPart = stripped.slice(firstSlash + 1);
+      if (branchPart.startsWith(INTERNAL_PREFIX)) continue;
+      if (branchPart === 'HEAD') continue;
+      remoteOnly.add(stripped);
     } else {
-      if (name.startsWith(INTERNAL_PREFIX)) continue
-      locals.add(name)
+      if (name.startsWith(INTERNAL_PREFIX)) continue;
+      locals.add(name);
     }
   }
 
   // Dedupe: if local "foo" exists, drop any "*/foo" remote-only entry.
   for (const display of [...remoteOnly]) {
-    const branchPart = display.slice(display.indexOf('/') + 1)
-    if (locals.has(branchPart)) remoteOnly.delete(display)
+    const branchPart = display.slice(display.indexOf('/') + 1);
+    if (locals.has(branchPart)) remoteOnly.delete(display);
   }
 
   // Sort with pinning. defaultBranch may be a plain local ("main") OR a
   // remote-only ref ("origin/trunk") — both are valid persisted values.
-  const pinned: string[] = []
-  const seen = new Set<string>()
+  const pinned: string[] = [];
+  const seen = new Set<string>();
   const push = (name: string) => {
-    if (!name || seen.has(name)) return
-    seen.add(name)
-    pinned.push(name)
-  }
+    if (!name || seen.has(name)) return;
+    seen.add(name);
+    pinned.push(name);
+  };
 
   if (locals.has(defaultBranch) || remoteOnly.has(defaultBranch)) {
-    push(defaultBranch)
+    push(defaultBranch);
   }
   for (const common of COMMON_DEFAULTS) {
-    if (locals.has(common)) push(common)
+    if (locals.has(common)) push(common);
   }
 
-  const localRest = [...locals]
-    .filter((n) => !seen.has(n))
-    .sort((a, b) => a.localeCompare(b))
-  const remoteRest = [...remoteOnly]
-    .filter((n) => !seen.has(n))
-    .sort((a, b) => a.localeCompare(b))
+  const localRest = [...locals].filter((n) => !seen.has(n)).sort((a, b) => a.localeCompare(b));
+  const remoteRest = [...remoteOnly].filter((n) => !seen.has(n)).sort((a, b) => a.localeCompare(b));
 
-  return [...pinned, ...localRest, ...remoteRest]
+  return [...pinned, ...localRest, ...remoteRest];
 }

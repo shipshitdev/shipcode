@@ -26,39 +26,40 @@
  *     file-forever loops without requiring model cooperation
  */
 
-import path from 'node:path'
+import path from 'node:path';
 import {
   MAX_TOOL_CALL_ITERATIONS,
   MAX_EXECUTE_TOTAL_TOKENS,
   MAX_DUPLICATE_TOOL_CALLS,
-} from '@shipcode/shared'
-import { executeToolCall, getToolSchemas, toolCallHash } from '../tools/registry'
-import type { ToolContext } from '../tools/types'
-import { OpenRouterClient, OpenRouterError } from './openrouter-http'
-import type { OpenRouterChatMessage } from './openrouter-http'
-import type { ProviderRequest, ProviderResponse } from './types'
+} from '@shipcode/shared';
+import { executeToolCall, getToolSchemas, toolCallHash } from '../tools/registry';
+import type { ToolContext } from '../tools/types';
+import { OpenRouterClient, OpenRouterError } from './openrouter-http';
+import type { OpenRouterChatMessage } from './openrouter-http';
+import type { ProviderRequest, ProviderResponse } from './types';
 
 /**
  * System prompt for the tool-call execute loop. Deliberately terse —
  * the user prompt (from pipeline.ts startExecution) already carries
  * the plan JSON and instructions.
  */
-const EXECUTE_SYSTEM_PROMPT = `You are ShipCode's autonomous execution agent. Implement the approved plan by calling the provided tools.
+const EXECUTE_SYSTEM_PROMPT =
+  `You are ShipCode's autonomous execution agent. Implement the approved plan by calling the provided tools.
 
 Rules:
 - Only modify files necessary for the plan. Do not make unrelated refactors.
 - Use edit/write to change files, read/glob/grep to navigate, shell for read-only checks (tests, typecheck, git status, git diff).
 - Never call git push, reset, checkout, commit, or any mutating subcommand — those are blocked.
 - When done, emit a final short assistant message confirming what you changed. Do not call any more tools after that.
-- If the plan cannot be completed with the available tools, explain why and stop.`.trim()
+- If the plan cannot be completed with the available tools, explain why and stop.`.trim();
 
 export interface ExecuteDeps {
-  client: OpenRouterClient
+  client: OpenRouterClient;
   /**
    * Model slug to use for execute. Caller resolves this from
    * ProviderRequest.modelHint / AppSettings before invoking.
    */
-  model: string
+  model: string;
 }
 
 /**
@@ -73,7 +74,11 @@ export async function executeViaOpenRouter(
   // Defense-in-depth guard. The pipeline is responsible for creating a
   // worktree before calling execute; this refuses to run if that
   // somehow didn't happen.
-  if (!req.cwd || req.cwd === req.projectPath || path.resolve(req.cwd) === path.resolve(req.projectPath)) {
+  if (
+    !req.cwd ||
+    req.cwd === req.projectPath ||
+    path.resolve(req.cwd) === path.resolve(req.projectPath)
+  ) {
     return {
       rawOutput: '',
       exitCode: 1,
@@ -82,7 +87,7 @@ export async function executeViaOpenRouter(
         message: 'openrouter execute refuses to run without a worktree (cwd === projectPath)',
         retryable: false,
       },
-    }
+    };
   }
 
   if (req.signal.aborted) {
@@ -90,26 +95,26 @@ export async function executeViaOpenRouter(
       rawOutput: '',
       exitCode: 1,
       providerError: { kind: 'network', message: 'aborted before start', retryable: false },
-    }
+    };
   }
 
   const toolCtx: ToolContext = {
     worktreePath: req.cwd,
     signal: req.signal,
     threadId: req.threadId,
-  }
+  };
 
-  const tools = getToolSchemas()
+  const tools = getToolSchemas();
   const messages: OpenRouterChatMessage[] = [
     { role: 'system', content: EXECUTE_SYSTEM_PROMPT },
     { role: 'user', content: req.prompt },
-  ]
+  ];
 
-  let toolCallsExecuted = 0
-  let totalPromptTokens = 0
-  let totalCompletionTokens = 0
-  let lastResolvedModel: string | undefined
-  const recentHashes: string[] = []
+  let toolCallsExecuted = 0;
+  let totalPromptTokens = 0;
+  let totalCompletionTokens = 0;
+  let lastResolvedModel: string | undefined;
+  const recentHashes: string[] = [];
 
   for (let iteration = 0; iteration < MAX_TOOL_CALL_ITERATIONS; iteration++) {
     if (req.signal.aborted) {
@@ -119,10 +124,10 @@ export async function executeViaOpenRouter(
         providerError: { kind: 'network', message: 'aborted', retryable: false },
         resolvedModel: lastResolvedModel,
         tokensUsed: { prompt: totalPromptTokens, completion: totalCompletionTokens },
-      }
+      };
     }
 
-    let response
+    let response;
     try {
       // Non-streaming for the tool-call loop. Streaming is optional for
       // long plan/review phases but tool calls are emitted as a single
@@ -130,7 +135,7 @@ export async function executeViaOpenRouter(
       response = await deps.client.chat(
         { model: deps.model, messages, tools, stream: false },
         req.signal,
-      )
+      );
     } catch (err) {
       if (err instanceof OpenRouterError) {
         return {
@@ -143,7 +148,7 @@ export async function executeViaOpenRouter(
           },
           resolvedModel: lastResolvedModel,
           tokensUsed: { prompt: totalPromptTokens, completion: totalCompletionTokens },
-        }
+        };
       }
       return {
         rawOutput: '',
@@ -154,13 +159,13 @@ export async function executeViaOpenRouter(
           retryable: false,
         },
         resolvedModel: lastResolvedModel,
-      }
+      };
     }
 
-    if (response.model) lastResolvedModel = response.model
+    if (response.model) lastResolvedModel = response.model;
     if (response.usage) {
-      totalPromptTokens += response.usage.prompt_tokens
-      totalCompletionTokens += response.usage.completion_tokens
+      totalPromptTokens += response.usage.prompt_tokens;
+      totalCompletionTokens += response.usage.completion_tokens;
     }
 
     if (totalPromptTokens + totalCompletionTokens > MAX_EXECUTE_TOTAL_TOKENS) {
@@ -174,7 +179,7 @@ export async function executeViaOpenRouter(
         },
         resolvedModel: lastResolvedModel,
         tokensUsed: { prompt: totalPromptTokens, completion: totalCompletionTokens },
-      }
+      };
     }
 
     // Model is calling tools — execute them, append results, loop.
@@ -184,15 +189,15 @@ export async function executeViaOpenRouter(
         role: 'assistant',
         content: null,
         tool_calls: response.toolCalls,
-      })
+      });
 
       for (const call of response.toolCalls) {
-        if (req.signal.aborted) break
+        if (req.signal.aborted) break;
 
         // Duplicate-call detector: catches pathological loops.
-        const hash = toolCallHash(call.function.name, call.function.arguments)
-        recentHashes.push(hash)
-        if (recentHashes.length > MAX_DUPLICATE_TOOL_CALLS) recentHashes.shift()
+        const hash = toolCallHash(call.function.name, call.function.arguments);
+        recentHashes.push(hash);
+        if (recentHashes.length > MAX_DUPLICATE_TOOL_CALLS) recentHashes.shift();
         if (
           recentHashes.length === MAX_DUPLICATE_TOOL_CALLS &&
           recentHashes.every((h) => h === hash)
@@ -204,7 +209,7 @@ export async function executeViaOpenRouter(
             role: 'tool',
             tool_call_id: call.id,
             content: `duplicate tool call detected: the same (${call.function.name}, args) fired ${MAX_DUPLICATE_TOOL_CALLS} times in a row. stopping.`,
-          })
+          });
           return {
             rawOutput: '',
             exitCode: 1,
@@ -215,21 +220,19 @@ export async function executeViaOpenRouter(
             },
             resolvedModel: lastResolvedModel,
             tokensUsed: { prompt: totalPromptTokens, completion: totalCompletionTokens },
-          }
+          };
         }
 
-        const result = await executeToolCall(call.function.name, call.function.arguments, toolCtx)
-        toolCallsExecuted++
+        const result = await executeToolCall(call.function.name, call.function.arguments, toolCtx);
+        toolCallsExecuted++;
 
         messages.push({
           role: 'tool',
           tool_call_id: call.id,
-          content: result.ok
-            ? result.content
-            : `error: ${result.error}`,
-        })
+          content: result.ok ? result.content : `error: ${result.error}`,
+        });
       }
-      continue
+      continue;
     }
 
     // No tool calls this turn. Check finish_reason.
@@ -247,14 +250,14 @@ export async function executeViaOpenRouter(
           },
           resolvedModel: lastResolvedModel,
           tokensUsed: { prompt: totalPromptTokens, completion: totalCompletionTokens },
-        }
+        };
       }
       return {
         rawOutput: response.content,
         exitCode: 0,
         resolvedModel: lastResolvedModel,
         tokensUsed: { prompt: totalPromptTokens, completion: totalCompletionTokens },
-      }
+      };
     }
 
     // Any other finish_reason (length, content_filter, etc.) — fail.
@@ -268,7 +271,7 @@ export async function executeViaOpenRouter(
       },
       resolvedModel: lastResolvedModel,
       tokensUsed: { prompt: totalPromptTokens, completion: totalCompletionTokens },
-    }
+    };
   }
 
   // Iteration cap hit.
@@ -282,5 +285,5 @@ export async function executeViaOpenRouter(
     },
     resolvedModel: lastResolvedModel,
     tokensUsed: { prompt: totalPromptTokens, completion: totalCompletionTokens },
-  }
+  };
 }

@@ -12,30 +12,28 @@
  * the raw (potentially denormalized) user-supplied string downstream.
  */
 
-export type UrlValidation =
-  | { ok: true; href: string }
-  | { ok: false; reason: string }
+export type UrlValidation = { ok: true; href: string } | { ok: false; reason: string };
 
-const MAX_LENGTH = 2048
+const MAX_LENGTH = 2048;
 
 export function isSafeExternalUrl(url: unknown): UrlValidation {
-  if (typeof url !== 'string') return { ok: false, reason: 'not-string' }
-  if (url.length > MAX_LENGTH) return { ok: false, reason: 'length-exceeded' }
+  if (typeof url !== 'string') return { ok: false, reason: 'not-string' };
+  if (url.length > MAX_LENGTH) return { ok: false, reason: 'length-exceeded' };
 
-  let parsed: URL
+  let parsed: URL;
   try {
-    parsed = new URL(url)
+    parsed = new URL(url);
   } catch {
-    return { ok: false, reason: 'invalid-url' }
+    return { ok: false, reason: 'invalid-url' };
   }
 
-  if (parsed.protocol !== 'https:') return { ok: false, reason: 'not-https' }
-  if (parsed.username || parsed.password) return { ok: false, reason: 'userinfo-not-allowed' }
+  if (parsed.protocol !== 'https:') return { ok: false, reason: 'not-https' };
+  if (parsed.username || parsed.password) return { ok: false, reason: 'userinfo-not-allowed' };
 
-  const host = parsed.hostname.toLowerCase()
+  const host = parsed.hostname.toLowerCase();
   if (host !== 'github.com' && !host.endsWith('.github.com')) {
-    return { ok: false, reason: 'host-not-allowed' }
+    return { ok: false, reason: 'host-not-allowed' };
   }
 
-  return { ok: true, href: parsed.href }
+  return { ok: true, href: parsed.href };
 }

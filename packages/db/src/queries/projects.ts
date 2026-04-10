@@ -1,7 +1,7 @@
-import type { DatabaseSync } from 'node:sqlite'
-import { nanoid } from 'nanoid'
-import type { Project } from '@shipcode/shared'
-import path from 'node:path'
+import type { DatabaseSync } from 'node:sqlite';
+import { nanoid } from 'nanoid';
+import type { Project } from '@shipcode/shared';
+import path from 'node:path';
 
 export class ProjectQueries {
   constructor(private db: DatabaseSync) {}
@@ -14,8 +14,8 @@ export class ProjectQueries {
    * The sidebar uses `listVisible()` instead.
    */
   list(): Project[] {
-    const rows = this.db.prepare('SELECT * FROM projects ORDER BY updated_at DESC').all() as any[]
-    return rows.map(mapProject)
+    const rows = this.db.prepare('SELECT * FROM projects ORDER BY updated_at DESC').all() as any[];
+    return rows.map(mapProject);
   }
 
   /**
@@ -24,8 +24,8 @@ export class ProjectQueries {
   listVisible(): Project[] {
     const rows = this.db
       .prepare('SELECT * FROM projects WHERE archived = 0 ORDER BY updated_at DESC')
-      .all() as any[]
-    return rows.map(mapProject)
+      .all() as any[];
+    return rows.map(mapProject);
   }
 
   /**
@@ -34,18 +34,20 @@ export class ProjectQueries {
   listArchived(): Project[] {
     const rows = this.db
       .prepare('SELECT * FROM projects WHERE archived = 1 ORDER BY name ASC')
-      .all() as any[]
-    return rows.map(mapProject)
+      .all() as any[];
+    return rows.map(mapProject);
   }
 
   getById(id: string): Project | null {
-    const row = this.db.prepare('SELECT * FROM projects WHERE id = ?').get(id) as any
-    return row ? mapProject(row) : null
+    const row = this.db.prepare('SELECT * FROM projects WHERE id = ?').get(id) as any;
+    return row ? mapProject(row) : null;
   }
 
   getByPath(projectPath: string): Project | null {
-    const row = this.db.prepare('SELECT * FROM projects WHERE path = ? LIMIT 1').get(projectPath) as any
-    return row ? mapProject(row) : null
+    const row = this.db
+      .prepare('SELECT * FROM projects WHERE path = ? LIMIT 1')
+      .get(projectPath) as any;
+    return row ? mapProject(row) : null;
   }
 
   /**
@@ -54,27 +56,29 @@ export class ProjectQueries {
    * re-adding an archived project from the CLI or Add Repository dialog.
    */
   add(projectPath: string): Project {
-    const existing = this.getByPath(projectPath)
+    const existing = this.getByPath(projectPath);
     if (existing) {
-      this.db.prepare(
-        `UPDATE projects SET archived = 0, updated_at = datetime('now') WHERE id = ?`
-      ).run(existing.id)
-      return this.getById(existing.id)!
+      this.db
+        .prepare(`UPDATE projects SET archived = 0, updated_at = datetime('now') WHERE id = ?`)
+        .run(existing.id);
+      return this.getById(existing.id)!;
     }
 
-    const id = nanoid()
-    const name = path.basename(projectPath)
-    const now = new Date().toISOString()
+    const id = nanoid();
+    const name = path.basename(projectPath);
+    const now = new Date().toISOString();
 
-    this.db.prepare(
-      'INSERT INTO projects (id, name, path, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
-    ).run(id, name, projectPath, now, now)
+    this.db
+      .prepare(
+        'INSERT INTO projects (id, name, path, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+      )
+      .run(id, name, projectPath, now, now);
 
-    return this.getById(id)!
+    return this.getById(id)!;
   }
 
   remove(id: string): void {
-    this.db.prepare('DELETE FROM projects WHERE id = ?').run(id)
+    this.db.prepare('DELETE FROM projects WHERE id = ?').run(id);
   }
 
   /**
@@ -99,13 +103,13 @@ export class ProjectQueries {
           SELECT 1 FROM github_issue_cache
           WHERE project_id = ? AND claimed_at IS NOT NULL
         )
-    `)
-    const result = stmt.run(id, id, id, id)
-    return (result.changes ?? 0) > 0
+    `);
+    const result = stmt.run(id, id, id, id);
+    return (result.changes ?? 0) > 0;
   }
 
   pin(id: string, pinned: boolean): void {
-    this.db.prepare(`UPDATE projects SET pinned = ? WHERE id = ?`).run(pinned ? 1 : 0, id)
+    this.db.prepare(`UPDATE projects SET pinned = ? WHERE id = ?`).run(pinned ? 1 : 0, id);
   }
 
   /**
@@ -131,13 +135,13 @@ export class ProjectQueries {
           SELECT 1 FROM github_issue_cache
           WHERE project_id = ? AND claimed_at IS NOT NULL
         )
-    `)
-    const result = stmt.run(id, id, id, id)
-    return (result.changes ?? 0) > 0
+    `);
+    const result = stmt.run(id, id, id, id);
+    return (result.changes ?? 0) > 0;
   }
 
   unarchive(id: string): void {
-    this.db.prepare(`UPDATE projects SET archived = 0 WHERE id = ?`).run(id)
+    this.db.prepare(`UPDATE projects SET archived = 0 WHERE id = ?`).run(id);
   }
 
   /**
@@ -146,30 +150,36 @@ export class ProjectQueries {
    * guarantee comes from removeIfIdle's atomic DELETE.
    */
   hasLiveWork(id: string): boolean {
-    const liveThread = this.db.prepare(
-      `SELECT 1 FROM threads WHERE project_id = ? AND status NOT IN ('completed','failed','idle') LIMIT 1`
-    ).get(id)
-    if (liveThread) return true
-    const liveNotif = this.db.prepare(
-      `SELECT 1 FROM notifications WHERE project_id = ? AND dismissed_at IS NULL LIMIT 1`
-    ).get(id)
-    if (liveNotif) return true
-    const liveIssue = this.db.prepare(
-      `SELECT 1 FROM github_issue_cache WHERE project_id = ? AND claimed_at IS NOT NULL LIMIT 1`
-    ).get(id)
-    return !!liveIssue
+    const liveThread = this.db
+      .prepare(
+        `SELECT 1 FROM threads WHERE project_id = ? AND status NOT IN ('completed','failed','idle') LIMIT 1`,
+      )
+      .get(id);
+    if (liveThread) return true;
+    const liveNotif = this.db
+      .prepare(`SELECT 1 FROM notifications WHERE project_id = ? AND dismissed_at IS NULL LIMIT 1`)
+      .get(id);
+    if (liveNotif) return true;
+    const liveIssue = this.db
+      .prepare(
+        `SELECT 1 FROM github_issue_cache WHERE project_id = ? AND claimed_at IS NOT NULL LIMIT 1`,
+      )
+      .get(id);
+    return !!liveIssue;
   }
 
   updateGitInfo(id: string, gitRemote: string | null, defaultBranch: string): void {
-    this.db.prepare(
-      `UPDATE projects SET git_remote = ?, default_branch = ?, updated_at = datetime('now') WHERE id = ?`
-    ).run(gitRemote, defaultBranch, id)
+    this.db
+      .prepare(
+        `UPDATE projects SET git_remote = ?, default_branch = ?, updated_at = datetime('now') WHERE id = ?`,
+      )
+      .run(gitRemote, defaultBranch, id);
   }
 
   updateDefaultBranch(id: string, branch: string): void {
-    this.db.prepare(
-      `UPDATE projects SET default_branch = ?, updated_at = datetime('now') WHERE id = ?`
-    ).run(branch, id)
+    this.db
+      .prepare(`UPDATE projects SET default_branch = ?, updated_at = datetime('now') WHERE id = ?`)
+      .run(branch, id);
   }
 }
 
@@ -184,5 +194,5 @@ function mapProject(row: any): Project {
     archived: row.archived === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-  }
+  };
 }

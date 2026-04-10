@@ -7,15 +7,15 @@ export type {
   ProviderRegistry,
   ProviderError,
   ProviderErrorKind,
-} from './types'
+} from './types';
 
-export { createClaudeCliProvider, createCodexCliProvider } from './cli-provider'
-export { createOpenRouterProvider } from './openrouter-provider'
-export type { OpenRouterProviderDeps } from './openrouter-provider'
+export { createClaudeCliProvider, createCodexCliProvider } from './cli-provider';
+export { createOpenRouterProvider } from './openrouter-provider';
+export type { OpenRouterProviderDeps } from './openrouter-provider';
 export {
   OpenRouterClient,
   OpenRouterError,
-} from './openrouter-http'
+} from './openrouter-http';
 export type {
   OpenRouterChatMessage,
   OpenRouterChatRequest,
@@ -25,7 +25,7 @@ export type {
   OpenRouterUsage,
   OpenRouterErrorKind,
   OpenRouterClientOptions,
-} from './openrouter-http'
+} from './openrouter-http';
 
-export { createProviderRegistry } from './registry'
-export type { RegistryProviders } from './registry'
+export { createProviderRegistry } from './registry';
+export type { RegistryProviders } from './registry';

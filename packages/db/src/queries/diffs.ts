@@ -1,27 +1,43 @@
-import type { DatabaseSync } from 'node:sqlite'
-import { nanoid } from 'nanoid'
-import type { DiffRecord } from '@shipcode/shared'
+import type { DatabaseSync } from 'node:sqlite';
+import { nanoid } from 'nanoid';
+import type { DiffRecord } from '@shipcode/shared';
 
 export class DiffQueries {
   constructor(private db: DatabaseSync) {}
 
   list(threadId: string): DiffRecord[] {
-    const rows = this.db.prepare(
-      'SELECT * FROM diffs WHERE thread_id = ? ORDER BY created_at ASC'
-    ).all(threadId) as any[]
-    return rows.map(mapDiff)
+    const rows = this.db
+      .prepare('SELECT * FROM diffs WHERE thread_id = ? ORDER BY created_at ASC')
+      .all(threadId) as any[];
+    return rows.map(mapDiff);
   }
 
-  create(threadId: string, filePath: string, action: string, diffContent: string | null): DiffRecord {
-    const id = nanoid()
-    const now = new Date().toISOString()
+  create(
+    threadId: string,
+    filePath: string,
+    action: string,
+    diffContent: string | null,
+  ): DiffRecord {
+    const id = nanoid();
+    const now = new Date().toISOString();
 
-    this.db.prepare(
-      `INSERT INTO diffs (id, thread_id, file_path, action, diff_content, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    ).run(id, threadId, filePath, action, diffContent, now)
+    this.db
+      .prepare(
+        `INSERT INTO diffs (id, thread_id, file_path, action, diff_content, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, threadId, filePath, action, diffContent, now);
 
-    return { id, threadId, filePath, action: action as any, diffContent, beforeHash: null, afterHash: null, createdAt: now }
+    return {
+      id,
+      threadId,
+      filePath,
+      action: action as any,
+      diffContent,
+      beforeHash: null,
+      afterHash: null,
+      createdAt: now,
+    };
   }
 }
 
@@ -35,5 +51,5 @@ function mapDiff(row: any): DiffRecord {
     beforeHash: row.before_hash,
     afterHash: row.after_hash,
     createdAt: row.created_at,
-  }
+  };
 }

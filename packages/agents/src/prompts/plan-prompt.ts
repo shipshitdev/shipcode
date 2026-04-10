@@ -1,5 +1,5 @@
-import type { ShipCodePlan } from '@shipcode/shared'
-import { PLAN_FENCE_TAG } from '@shipcode/shared'
+import type { ShipCodePlan } from '@shipcode/shared';
+import { PLAN_FENCE_TAG } from '@shipcode/shared';
 
 const PLAN_SCHEMA_DESCRIPTION = `{
   "id": "plan-<timestamp>-<shortid>",
@@ -16,9 +16,13 @@ const PLAN_SCHEMA_DESCRIPTION = `{
   "outOfScope": ["What this does NOT do"],
   "estimatedComplexity": "low|medium|high",
   "dependencies": ["files/packages that must exist"]
-}`
+}`;
 
-export function buildPlanPrompt(userPrompt: string, threadId: string, contextFiles?: string): string {
+export function buildPlanPrompt(
+  userPrompt: string,
+  threadId: string,
+  contextFiles?: string,
+): string {
   let prompt = `You are a senior software architect generating an implementation plan.
 
 ## Task
@@ -43,19 +47,19 @@ Use thread ID: "${threadId}"
 - List ALL files that will be created, modified, or deleted
 - Include clear acceptance criteria
 - Explicitly state what is out of scope
-- Be specific about dependencies`
+- Be specific about dependencies`;
 
   if (contextFiles) {
-    prompt += `\n\n## Relevant Files\n${contextFiles}`
+    prompt += `\n\n## Relevant Files\n${contextFiles}`;
   }
 
-  return prompt
+  return prompt;
 }
 
 export function buildRevisionPrompt(
   originalPlan: ShipCodePlan,
   reviewFeedback: string,
-  threadId: string
+  threadId: string,
 ): string {
   return `You are revising an implementation plan based on review feedback.
 
@@ -75,5 +79,5 @@ ${reviewFeedback}
 
 Use thread ID: "${threadId}"
 
-Output the complete revised plan as JSON inside a \`\`\`${PLAN_FENCE_TAG} block.`
+Output the complete revised plan as JSON inside a \`\`\`${PLAN_FENCE_TAG} block.`;
 }

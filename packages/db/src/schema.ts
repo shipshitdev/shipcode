@@ -1,5 +1,5 @@
-import type { DatabaseSync } from 'node:sqlite'
-import { transaction } from './utils'
+import type { DatabaseSync } from 'node:sqlite';
+import { transaction } from './utils';
 
 export function migrate(db: DatabaseSync): void {
   db.exec(`
@@ -68,7 +68,7 @@ export function migrate(db: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS idx_plans_thread ON plans(thread_id);
     CREATE INDEX IF NOT EXISTS idx_reviews_plan ON reviews(plan_id);
     CREATE INDEX IF NOT EXISTS idx_diffs_thread ON diffs(thread_id);
-  `)
+  `);
 }
 
 export function migrateV2(db: DatabaseSync): void {
@@ -76,27 +76,31 @@ export function migrateV2(db: DatabaseSync): void {
     CREATE TABLE IF NOT EXISTS schema_version (
       version INTEGER NOT NULL PRIMARY KEY
     );
-  `)
+  `);
 
-  const row = db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get() as { version: number } | undefined
-  if (row && row.version >= 2) return
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 2) return;
 
   transaction(db, () => {
     const alterColumns = [
       'ALTER TABLE threads ADD COLUMN github_issue_number INTEGER',
       'ALTER TABLE threads ADD COLUMN github_pr_number INTEGER',
       'ALTER TABLE threads ADD COLUMN github_repo TEXT',
-      'ALTER TABLE threads ADD COLUMN executor_model TEXT DEFAULT \'claude\'',
+      "ALTER TABLE threads ADD COLUMN executor_model TEXT DEFAULT 'claude'",
       'ALTER TABLE threads ADD COLUMN review_round INTEGER DEFAULT 0',
       'ALTER TABLE threads ADD COLUMN verification_status TEXT',
       'ALTER TABLE threads ADD COLUMN verification_retries INTEGER DEFAULT 0',
       'ALTER TABLE threads ADD COLUMN autonomous INTEGER DEFAULT 0',
       'ALTER TABLE threads ADD COLUMN base_branch TEXT',
       'ALTER TABLE threads ADD COLUMN fork_point_sha TEXT',
-    ]
+    ];
 
     for (const sql of alterColumns) {
-      try { db.exec(sql) } catch {}
+      try {
+        db.exec(sql);
+      } catch {}
     }
 
     db.exec(`
@@ -133,48 +137,60 @@ export function migrateV2(db: DatabaseSync): void {
 
       CREATE INDEX IF NOT EXISTS idx_github_issues_project ON github_issue_cache(project_id);
       CREATE INDEX IF NOT EXISTS idx_github_issues_status ON github_issue_cache(pipeline_status);
-    `)
+    `);
 
-    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (2)`)
-  })
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (2)`);
+  });
 }
 
 export function migrateV3(db: DatabaseSync): void {
-  const row = db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get() as { version: number } | undefined
-  if (row && row.version >= 3) return
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 3) return;
 
   transaction(db, () => {
     // Add last_status_label column to github_issue_cache
-    try { db.exec('ALTER TABLE github_issue_cache ADD COLUMN last_status_label TEXT') } catch {}
+    try {
+      db.exec('ALTER TABLE github_issue_cache ADD COLUMN last_status_label TEXT');
+    } catch {}
 
     // Reclassify unclaimed queued issues as todo
     db.exec(`
       UPDATE github_issue_cache
       SET pipeline_status = 'todo'
       WHERE pipeline_status = 'queued' AND claimed_at IS NULL AND thread_id IS NULL
-    `)
+    `);
 
-    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (3)`)
-  })
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (3)`);
+  });
 }
 
 export function migrateV4(db: DatabaseSync): void {
-  const row = db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get() as { version: number } | undefined
-  if (row && row.version >= 4) return
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 4) return;
 
   transaction(db, () => {
     // Per-issue executor model selection (claude | codex) — defaults to 'claude'.
     // The existing threads.executor_model (v2) remains as the pipeline-context default
     // for non-GitHub threads; this column stores the user's choice per cached issue.
-    try { db.exec("ALTER TABLE github_issue_cache ADD COLUMN executor_model TEXT NOT NULL DEFAULT 'claude'") } catch {}
+    try {
+      db.exec(
+        "ALTER TABLE github_issue_cache ADD COLUMN executor_model TEXT NOT NULL DEFAULT 'claude'",
+      );
+    } catch {}
 
-    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (4)`)
-  })
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (4)`);
+  });
 }
 
 export function migrateV5(db: DatabaseSync): void {
-  const row = db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get() as { version: number } | undefined
-  if (row && row.version >= 5) return
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 5) return;
 
   transaction(db, () => {
     // Mission Control activity feed — chronological log of pipeline events
@@ -213,15 +229,17 @@ export function migrateV5(db: DatabaseSync): void {
 
       CREATE INDEX IF NOT EXISTS idx_notifications_active ON notifications(dismissed_at, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_notifications_thread ON notifications(thread_id);
-    `)
+    `);
 
-    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (5)`)
-  })
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (5)`);
+  });
 }
 
 export function migrateV6(db: DatabaseSync): void {
-  const row = db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get() as { version: number } | undefined
-  if (row && row.version >= 6) return
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 6) return;
 
   transaction(db, () => {
     // Tier 3 telemetry: per-phase resolved model + running token + cost
@@ -238,45 +256,49 @@ export function migrateV6(db: DatabaseSync): void {
       'ALTER TABLE threads ADD COLUMN revisor_resolved_model TEXT',
       'ALTER TABLE threads ADD COLUMN executor_resolved_model TEXT',
       'ALTER TABLE threads ADD COLUMN verifier_resolved_model TEXT',
-      "ALTER TABLE threads ADD COLUMN total_tokens_prompt INTEGER NOT NULL DEFAULT 0",
-      "ALTER TABLE threads ADD COLUMN total_tokens_completion INTEGER NOT NULL DEFAULT 0",
-      "ALTER TABLE threads ADD COLUMN total_cost_usd REAL NOT NULL DEFAULT 0",
-    ]
+      'ALTER TABLE threads ADD COLUMN total_tokens_prompt INTEGER NOT NULL DEFAULT 0',
+      'ALTER TABLE threads ADD COLUMN total_tokens_completion INTEGER NOT NULL DEFAULT 0',
+      'ALTER TABLE threads ADD COLUMN total_cost_usd REAL NOT NULL DEFAULT 0',
+    ];
     for (const sql of alterColumns) {
-      try { db.exec(sql) } catch {}
+      try {
+        db.exec(sql);
+      } catch {}
     }
 
-    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (6)`)
-  })
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (6)`);
+  });
 }
 
 export function migrateV7(db: DatabaseSync): void {
-  const row = db.prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1').get() as { version: number } | undefined
-  if (row && row.version >= 7) return
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 7) return;
 
   const addColumnIfMissing = (ddl: string): void => {
     try {
-      db.exec(ddl)
+      db.exec(ddl);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
+      const message = err instanceof Error ? err.message : String(err);
       // Only ignore the specific "already applied" case. Any other failure
       // (locked DB, malformed schema, partial write) must abort so we retry
       // on next startup instead of masking the problem and leaving the
       // projects table missing expected columns.
-      if (!/duplicate column name/i.test(message)) throw err
+      if (!/duplicate column name/i.test(message)) throw err;
     }
-  }
+  };
 
   transaction(db, () => {
     // Project-level pin + archive state for sidebar management.
-    addColumnIfMissing(`ALTER TABLE projects ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0`)
-    addColumnIfMissing(`ALTER TABLE projects ADD COLUMN archived INTEGER NOT NULL DEFAULT 0`)
+    addColumnIfMissing(`ALTER TABLE projects ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0`);
+    addColumnIfMissing(`ALTER TABLE projects ADD COLUMN archived INTEGER NOT NULL DEFAULT 0`);
 
     // Defence-in-depth: verify columns actually exist before marking V7 applied.
-    const cols = db.prepare(`PRAGMA table_info(projects)`).all() as { name: string }[]
-    const names = new Set(cols.map((c) => c.name))
+    const cols = db.prepare(`PRAGMA table_info(projects)`).all() as { name: string }[];
+    const names = new Set(cols.map((c) => c.name));
     if (!names.has('pinned') || !names.has('archived')) {
-      throw new Error('migrateV7: projects table is missing pinned/archived columns after ALTER')
+      throw new Error('migrateV7: projects table is missing pinned/archived columns after ALTER');
     }
 
     // Auto-unarchive triggers: when a project is archived but receives new
@@ -291,7 +313,7 @@ export function migrateV7(db: DatabaseSync): void {
       BEGIN
         UPDATE projects SET archived = 0 WHERE id = NEW.project_id;
       END;
-    `)
+    `);
     db.exec(`
       CREATE TRIGGER IF NOT EXISTS projects_unarchive_on_notification_insert
         AFTER INSERT ON notifications
@@ -299,7 +321,7 @@ export function migrateV7(db: DatabaseSync): void {
       BEGIN
         UPDATE projects SET archived = 0 WHERE id = NEW.project_id;
       END;
-    `)
+    `);
     db.exec(`
       CREATE TRIGGER IF NOT EXISTS projects_unarchive_on_github_issue_insert
         AFTER INSERT ON github_issue_cache
@@ -307,7 +329,7 @@ export function migrateV7(db: DatabaseSync): void {
       BEGIN
         UPDATE projects SET archived = 0 WHERE id = NEW.project_id;
       END;
-    `)
+    `);
     // UPDATE trigger for github_issue_cache: `GitHubIssueQueries.upsert()`
     // updates existing rows on `github:refresh-issues`, so an INSERT trigger
     // alone would miss already-cached issues transitioning into active work.
@@ -324,8 +346,8 @@ export function migrateV7(db: DatabaseSync): void {
       BEGIN
         UPDATE projects SET archived = 0 WHERE id = NEW.project_id;
       END;
-    `)
+    `);
 
-    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (7)`)
-  })
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (7)`);
+  });
 }

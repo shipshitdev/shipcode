@@ -1,54 +1,54 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import type { DatabaseSync } from 'node:sqlite'
-import { createTestDb } from './test-helpers'
-import { transaction } from './utils'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import type { DatabaseSync } from 'node:sqlite';
+import { createTestDb } from './test-helpers';
+import { transaction } from './utils';
 
 describe('transaction', () => {
-	let db: DatabaseSync
+  let db: DatabaseSync;
 
-	beforeEach(() => {
-		db = createTestDb()
-	})
+  beforeEach(() => {
+    db = createTestDb();
+  });
 
-	afterEach(() => {
-		db.close()
-	})
+  afterEach(() => {
+    db.close();
+  });
 
-	it('commits on success', () => {
-		transaction(db, () => {
-			db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('foo', 'bar')
-		})
+  it('commits on success', () => {
+    transaction(db, () => {
+      db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('foo', 'bar');
+    });
 
-		const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('foo') as any
-		expect(row.value).toBe('bar')
-	})
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('foo') as any;
+    expect(row.value).toBe('bar');
+  });
 
-	it('rolls back on error and rethrows', () => {
-		expect(() => {
-			transaction(db, () => {
-				db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('foo', 'bar')
-				throw new Error('boom')
-			})
-		}).toThrow('boom')
+  it('rolls back on error and rethrows', () => {
+    expect(() => {
+      transaction(db, () => {
+        db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('foo', 'bar');
+        throw new Error('boom');
+      });
+    }).toThrow('boom');
 
-		const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('foo')
-		expect(row).toBeUndefined()
-	})
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('foo');
+    expect(row).toBeUndefined();
+  });
 
-	it('runs fn directly without BEGIN/COMMIT if already in transaction', () => {
-		transaction(db, () => {
-			expect(db.isTransaction).toBe(true)
+  it('runs fn directly without BEGIN/COMMIT if already in transaction', () => {
+    transaction(db, () => {
+      expect(db.isTransaction).toBe(true);
 
-			// Nested transaction should just run fn directly
-			const result = transaction(db, () => {
-				db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('nested', 'val')
-				return 42
-			})
+      // Nested transaction should just run fn directly
+      const result = transaction(db, () => {
+        db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('nested', 'val');
+        return 42;
+      });
 
-			expect(result).toBe(42)
-		})
+      expect(result).toBe(42);
+    });
 
-		const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('nested') as any
-		expect(row.value).toBe('val')
-	})
-})
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('nested') as any;
+    expect(row.value).toBe('val');
+  });
+});

@@ -23,9 +23,9 @@
  *   `not_found` for the OpenRouter provider.
  */
 
-import type { AgentType } from '@shipcode/shared'
+import type { AgentType } from '@shipcode/shared';
 
-export type ProviderPhase = 'plan' | 'review' | 'revision' | 'verify' | 'execute'
+export type ProviderPhase = 'plan' | 'review' | 'revision' | 'verify' | 'execute';
 
 /**
  * Phase-specific hints the pipeline passes to the provider. Providers are
@@ -35,51 +35,51 @@ export type ProviderPhase = 'plan' | 'review' | 'revision' | 'verify' | 'execute
  */
 export interface ProviderPhaseHints {
   /** Tools the model is allowed to call (execute phase). */
-  allowedTools?: string[]
+  allowedTools?: string[];
   /** Tools the model is explicitly denied (revision phase). */
-  disallowedTools?: string[]
+  disallowedTools?: string[];
   /** claude --output-format value when applicable. */
-  outputFormat?: 'text' | 'json'
+  outputFormat?: 'text' | 'json';
   /** claude --max-turns value when applicable. */
-  maxTurns?: number
+  maxTurns?: number;
   /** codex --sandbox value when applicable. */
-  sandbox?: 'read-only' | 'workspace-write'
+  sandbox?: 'read-only' | 'workspace-write';
   /** codex -a (approval) value when applicable. */
-  approval?: 'never' | 'untrusted' | 'on-failure'
+  approval?: 'never' | 'untrusted' | 'on-failure';
   /** codex --reasoning-effort when applicable. */
-  reasoningEffort?: 'low' | 'medium' | 'high'
+  reasoningEffort?: 'low' | 'medium' | 'high';
 }
 
 export interface ProviderRequest {
-  phase: ProviderPhase
-  prompt: string
+  phase: ProviderPhase;
+  prompt: string;
   /**
    * Working directory. For execute/revision/verify this is the worktree
    * path; for plan/review it's the project path. Providers that mutate
    * the filesystem (only execute) MUST confine to this directory.
    */
-  cwd: string
+  cwd: string;
   /**
    * The raw project root. The openrouter execute harness refuses to run
    * if `cwd === projectPath` — defense in depth against a caller that
    * forgot to create a worktree. All other phases can ignore this.
    */
-  projectPath: string
+  projectPath: string;
   /** Explicit model override. Takes precedence over settings defaults. */
-  modelHint?: string
+  modelHint?: string;
   /**
    * Cancellation signal. Providers MUST abort in-flight work when this
    * fires. Wired through `PipelineContext.abort.signal` by the pipeline.
    */
-  signal: AbortSignal
+  signal: AbortSignal;
   /** Phase-specific hints (see ProviderPhaseHints). */
-  phaseHints?: ProviderPhaseHints
+  phaseHints?: ProviderPhaseHints;
   /**
    * The threadId this provider call is attributed to. Used by telemetry
    * (Tier 3) to persist resolved-model + token usage against the thread.
    * Providers may log against this ID but must not read thread state.
    */
-  threadId: string
+  threadId: string;
 }
 
 export type ProviderErrorKind =
@@ -90,13 +90,13 @@ export type ProviderErrorKind =
   | 'tool_loop_overflow'
   | 'unexpected_stop'
   | 'binary_missing'
-  | 'unknown'
+  | 'unknown';
 
 export interface ProviderError {
-  kind: ProviderErrorKind
-  message: string
+  kind: ProviderErrorKind;
+  message: string;
   /** If true, the pipeline's per-phase retry logic may retry this call. */
-  retryable: boolean
+  retryable: boolean;
 }
 
 export interface ProviderResponse {
@@ -105,27 +105,27 @@ export interface ProviderResponse {
    * StreamParser should `feed()`. For EXECUTE: empty string — EXECUTE
    * success is signaled by exitCode, not parsed output.
    */
-  rawOutput: string
+  rawOutput: string;
   /**
    * Mirrors subprocess semantics so existing phase completion handlers
    * in pipeline.ts continue to work without change:
    *   - CLI provider: the actual process exit code
    *   - OpenRouter provider: 0 on success-shape, non-zero on provider error
    */
-  exitCode: number
+  exitCode: number;
   /** Structured error diagnostics when `exitCode !== 0`. */
-  providerError?: ProviderError
+  providerError?: ProviderError;
   /** What model actually served the request (e.g. openrouter/auto resolution). */
-  resolvedModel?: string
-  tokensUsed?: { prompt: number; completion: number }
-  costUsd?: number
+  resolvedModel?: string;
+  tokensUsed?: { prompt: number; completion: number };
+  costUsd?: number;
 }
 
 export interface AgentProvider {
-  readonly id: 'claude-cli' | 'codex-cli' | 'openrouter'
-  readonly supports: ReadonlySet<ProviderPhase>
-  generate(req: ProviderRequest): Promise<ProviderResponse>
-  healthCheck(): Promise<{ ok: boolean; reason?: string }>
+  readonly id: 'claude-cli' | 'codex-cli' | 'openrouter';
+  readonly supports: ReadonlySet<ProviderPhase>;
+  generate(req: ProviderRequest): Promise<ProviderResponse>;
+  healthCheck(): Promise<{ ok: boolean; reason?: string }>;
 }
 
 /**
@@ -137,7 +137,7 @@ export interface ProviderRegistry {
    * Resolve the provider to use for the given agent + phase.
    * Throws if no provider supports the phase for this agent.
    */
-  for(agent: AgentType, phase: ProviderPhase): AgentProvider
+  for(agent: AgentType, phase: ProviderPhase): AgentProvider;
   /** All registered providers, keyed by their `id`. */
-  all(): ReadonlyMap<AgentProvider['id'], AgentProvider>
+  all(): ReadonlyMap<AgentProvider['id'], AgentProvider>;
 }

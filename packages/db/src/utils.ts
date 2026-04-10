@@ -1,4 +1,4 @@
-import type { DatabaseSync } from 'node:sqlite'
+import type { DatabaseSync } from 'node:sqlite';
 
 /**
  * Transaction wrapper for node:sqlite's DatabaseSync.
@@ -9,16 +9,16 @@ import type { DatabaseSync } from 'node:sqlite'
  * SAVEPOINT-based nesting. Current codebase has zero nested transactions.
  */
 export function transaction<T>(db: DatabaseSync, fn: () => T): T {
-	if (db.isTransaction) {
-		return fn()
-	}
-	db.exec('BEGIN')
-	try {
-		const result = fn()
-		db.exec('COMMIT')
-		return result
-	} catch (err) {
-		db.exec('ROLLBACK')
-		throw err
-	}
+  if (db.isTransaction) {
+    return fn();
+  }
+  db.exec('BEGIN');
+  try {
+    const result = fn();
+    db.exec('COMMIT');
+    return result;
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
 }

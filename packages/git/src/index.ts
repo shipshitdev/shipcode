@@ -1,2 +1,2 @@
-export { GitService } from './git-service'
-export { WorktreeManager } from './worktree'
+export { GitService } from './git-service';
+export { WorktreeManager } from './worktree';

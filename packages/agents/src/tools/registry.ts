@@ -10,14 +10,14 @@
  *     error (not a throw) so the model can see the issue and retry.
  */
 
-import { editTool } from './edit'
-import { writeTool } from './write'
-import { readTool } from './read'
-import { globTool } from './glob'
-import { grepTool } from './grep'
-import { shellReadOnlyTool } from './shell-readonly'
-import { toOpenAISchema } from './types'
-import type { OpenAIFunctionSchema, Tool, ToolContext, ToolResult } from './types'
+import { editTool } from './edit';
+import { writeTool } from './write';
+import { readTool } from './read';
+import { globTool } from './glob';
+import { grepTool } from './grep';
+import { shellReadOnlyTool } from './shell-readonly';
+import { toOpenAISchema } from './types';
+import type { OpenAIFunctionSchema, Tool, ToolContext, ToolResult } from './types';
 
 /**
  * Ordered list of tools. Array order also controls the order they appear
@@ -31,16 +31,16 @@ const ALL_TOOLS: ReadonlyArray<Tool<unknown>> = [
   globTool as unknown as Tool<unknown>,
   grepTool as unknown as Tool<unknown>,
   shellReadOnlyTool as unknown as Tool<unknown>,
-]
+];
 
-const BY_NAME = new Map<string, Tool<unknown>>(ALL_TOOLS.map((t) => [t.name, t]))
+const BY_NAME = new Map<string, Tool<unknown>>(ALL_TOOLS.map((t) => [t.name, t]));
 
 export function listTools(): ReadonlyArray<Tool<unknown>> {
-  return ALL_TOOLS
+  return ALL_TOOLS;
 }
 
 export function getToolSchemas(): OpenAIFunctionSchema[] {
-  return ALL_TOOLS.map(toOpenAISchema)
+  return ALL_TOOLS.map(toOpenAISchema);
 }
 
 /**
@@ -58,32 +58,32 @@ export async function executeToolCall(
   rawArgs: string,
   ctx: ToolContext,
 ): Promise<ToolResult> {
-  const tool = BY_NAME.get(name)
+  const tool = BY_NAME.get(name);
   if (!tool) {
-    return { ok: false, error: `unknown tool '${name}'` }
+    return { ok: false, error: `unknown tool '${name}'` };
   }
 
-  let parsed: unknown
+  let parsed: unknown;
   try {
-    parsed = JSON.parse(rawArgs || '{}')
+    parsed = JSON.parse(rawArgs || '{}');
   } catch (err) {
-    return { ok: false, error: `invalid JSON in tool arguments: ${(err as Error).message}` }
+    return { ok: false, error: `invalid JSON in tool arguments: ${(err as Error).message}` };
   }
 
-  const validation = tool.schema.safeParse(parsed)
+  const validation = tool.schema.safeParse(parsed);
   if (!validation.success) {
     return {
       ok: false,
       error: `schema error: ${validation.error.issues.map((i) => `${i.path.join('.')} ${i.message}`).join('; ')}`,
-    }
+    };
   }
 
   try {
-    return await tool.execute(validation.data, ctx)
+    return await tool.execute(validation.data, ctx);
   } catch (err) {
     // Tools should not throw for handled conditions. If one does,
     // surface it as a failure so the loop can continue.
-    return { ok: false, error: `tool '${name}' threw: ${(err as Error).message}` }
+    return { ok: false, error: `tool '${name}' threw: ${(err as Error).message}` };
   }
 }
 
@@ -95,22 +95,22 @@ export async function executeToolCall(
 export function toolCallHash(name: string, rawArgs: string): string {
   // Canonicalize the JSON so whitespace/key-order differences don't
   // bypass the duplicate detector.
-  let canon = rawArgs
+  let canon = rawArgs;
   try {
-    canon = JSON.stringify(JSON.parse(rawArgs || '{}'), sortedReplacer)
+    canon = JSON.stringify(JSON.parse(rawArgs || '{}'), sortedReplacer);
   } catch {
     // fall through with raw
   }
-  return `${name}|${canon}`
+  return `${name}|${canon}`;
 }
 
 function sortedReplacer(_key: string, value: unknown): unknown {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
-    const sorted: Record<string, unknown> = {}
+    const sorted: Record<string, unknown> = {};
     for (const k of Object.keys(value as Record<string, unknown>).sort()) {
-      sorted[k] = (value as Record<string, unknown>)[k]
+      sorted[k] = (value as Record<string, unknown>)[k];
     }
-    return sorted
+    return sorted;
   }
-  return value
+  return value;
 }

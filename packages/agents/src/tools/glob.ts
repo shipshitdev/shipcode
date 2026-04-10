@@ -5,22 +5,22 @@
  * platform variance) to keep behavior predictable in tests.
  */
 
-import fs from 'node:fs/promises'
-import path from 'node:path'
-import { z } from 'zod'
-import { IGNORED_DIRECTORIES } from '@shipcode/shared'
-import type { Tool, ToolContext, ToolResult } from './types'
-import { assertPathInWorktree, PathGuardError } from './path-guard'
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { z } from 'zod';
+import { IGNORED_DIRECTORIES } from '@shipcode/shared';
+import type { Tool, ToolContext, ToolResult } from './types';
+import { assertPathInWorktree, PathGuardError } from './path-guard';
 
 const GlobInput = z.object({
   pattern: z.string().min(1),
   /** Root to search from, relative to the worktree. Defaults to '.'. */
   path: z.string().optional(),
-})
+});
 
-type GlobInput = z.infer<typeof GlobInput>
+type GlobInput = z.infer<typeof GlobInput>;
 
-const MAX_MATCHES = 500
+const MAX_MATCHES = 500;
 
 export const globTool: Tool<GlobInput> = {
   name: 'glob',
@@ -39,61 +39,62 @@ export const globTool: Tool<GlobInput> = {
   },
 
   async execute(input: GlobInput, ctx: ToolContext): Promise<ToolResult> {
-    const searchRoot = input.path ?? '.'
-    let rootAbs: string
+    const searchRoot = input.path ?? '.';
+    let rootAbs: string;
     try {
-      rootAbs = await assertPathInWorktree(searchRoot, ctx.worktreePath, { mustExist: true })
+      rootAbs = await assertPathInWorktree(searchRoot, ctx.worktreePath, { mustExist: true });
     } catch (err) {
-      if (err instanceof PathGuardError) return { ok: false, error: err.message }
-      throw err
+      if (err instanceof PathGuardError) return { ok: false, error: err.message };
+      throw err;
     }
 
-    const regex = globToRegex(input.pattern)
-    const matches: string[] = []
+    const regex = globToRegex(input.pattern);
+    const matches: string[] = [];
 
     async function walk(dir: string, rel: string): Promise<void> {
-      if (matches.length >= MAX_MATCHES) return
-      if (ctx.signal.aborted) return
+      if (matches.length >= MAX_MATCHES) return;
+      if (ctx.signal.aborted) return;
 
-      let entries: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }>
+      let entries: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }>;
       try {
-        entries = await fs.readdir(dir, { withFileTypes: true })
+        entries = await fs.readdir(dir, { withFileTypes: true });
       } catch {
-        return
+        return;
       }
 
       for (const entry of entries) {
-        if (matches.length >= MAX_MATCHES) break
-        if (ctx.signal.aborted) break
-        if (IGNORED_DIRECTORIES.includes(entry.name)) continue
+        if (matches.length >= MAX_MATCHES) break;
+        if (ctx.signal.aborted) break;
+        if (IGNORED_DIRECTORIES.includes(entry.name)) continue;
 
-        const childRel = rel === '.' ? entry.name : path.join(rel, entry.name)
-        const childAbs = path.join(dir, entry.name)
+        const childRel = rel === '.' ? entry.name : path.join(rel, entry.name);
+        const childAbs = path.join(dir, entry.name);
 
         if (entry.isDirectory()) {
-          await walk(childAbs, childRel)
+          await walk(childAbs, childRel);
         } else if (entry.isFile()) {
-          if (regex.test(childRel)) matches.push(childRel)
+          if (regex.test(childRel)) matches.push(childRel);
         }
       }
     }
 
-    await walk(rootAbs, searchRoot === '.' ? '.' : searchRoot)
+    await walk(rootAbs, searchRoot === '.' ? '.' : searchRoot);
 
-    if (ctx.signal.aborted) return { ok: false, error: 'aborted' }
+    if (ctx.signal.aborted) return { ok: false, error: 'aborted' };
 
-    matches.sort()
-    const truncated = matches.length >= MAX_MATCHES
+    matches.sort();
+    const truncated = matches.length >= MAX_MATCHES;
 
     return {
       ok: true,
-      content: matches.length === 0
-        ? 'No matches.'
-        : matches.join('\n') + (truncated ? `\n\n[truncated at ${MAX_MATCHES} matches]` : ''),
+      content:
+        matches.length === 0
+          ? 'No matches.'
+          : matches.join('\n') + (truncated ? `\n\n[truncated at ${MAX_MATCHES} matches]` : ''),
       data: { matches, truncated },
-    }
+    };
   },
-}
+};
 
 /**
  * Translate a subset of glob syntax to a RegExp.
@@ -102,50 +103,53 @@ export const globTool: Tool<GlobInput> = {
  * ? (single char except /), {a,b} alternation, [abc] character classes.
  */
 function globToRegex(pattern: string): RegExp {
-  let re = ''
-  let i = 0
+  let re = '';
+  let i = 0;
   while (i < pattern.length) {
-    const c = pattern[i]
+    const c = pattern[i];
     if (c === '*') {
       if (pattern[i + 1] === '*') {
-        re += '.*'
-        i += 2
+        re += '.*';
+        i += 2;
         // Consume an optional trailing slash after `**/`
-        if (pattern[i] === '/') i++
+        if (pattern[i] === '/') i++;
       } else {
-        re += '[^/]*'
-        i++
+        re += '[^/]*';
+        i++;
       }
     } else if (c === '?') {
-      re += '[^/]'
-      i++
+      re += '[^/]';
+      i++;
     } else if (c === '{') {
-      const end = pattern.indexOf('}', i)
+      const end = pattern.indexOf('}', i);
       if (end === -1) {
-        re += '\\{'
-        i++
+        re += '\\{';
+        i++;
       } else {
-        const alts = pattern.slice(i + 1, end).split(',').map(escapeRegex)
-        re += '(?:' + alts.join('|') + ')'
-        i = end + 1
+        const alts = pattern
+          .slice(i + 1, end)
+          .split(',')
+          .map(escapeRegex);
+        re += '(?:' + alts.join('|') + ')';
+        i = end + 1;
       }
     } else if (c === '[') {
-      const end = pattern.indexOf(']', i)
+      const end = pattern.indexOf(']', i);
       if (end === -1) {
-        re += '\\['
-        i++
+        re += '\\[';
+        i++;
       } else {
-        re += pattern.slice(i, end + 1)
-        i = end + 1
+        re += pattern.slice(i, end + 1);
+        i = end + 1;
       }
     } else {
-      re += escapeRegex(c)
-      i++
+      re += escapeRegex(c);
+      i++;
     }
   }
-  return new RegExp('^' + re + '$')
+  return new RegExp('^' + re + '$');
 }
 
 function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

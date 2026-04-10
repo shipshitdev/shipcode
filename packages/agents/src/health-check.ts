@@ -1,40 +1,58 @@
-import { exec } from 'node:child_process'
-import { access } from 'node:fs/promises'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
-import { promisify } from 'node:util'
-import type { CliHealth, GhAuthStatus, SystemHealth } from '@shipcode/shared'
-import { OPENROUTER_API_BASE } from '@shipcode/shared'
+import { exec } from 'node:child_process';
+import { access } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { promisify } from 'node:util';
+import type { CliHealth, GhAuthStatus, SystemHealth } from '@shipcode/shared';
+import { OPENROUTER_API_BASE } from '@shipcode/shared';
 
-const execAsync = promisify(exec)
+const execAsync = promisify(exec);
 
 async function checkCli(command: string, versionFlag: string = '--version'): Promise<CliHealth> {
   try {
-    const whichResult = await execAsync(`which ${command}`)
-    const binaryPath = whichResult.stdout.trim()
+    const whichResult = await execAsync(`which ${command}`);
+    const binaryPath = whichResult.stdout.trim();
 
     if (!binaryPath) {
-      return { available: false, version: null, path: null, error: `${command} not found in PATH`, authenticated: false }
+      return {
+        available: false,
+        version: null,
+        path: null,
+        error: `${command} not found in PATH`,
+        authenticated: false,
+      };
     }
 
     try {
-      const versionResult = await execAsync(`${command} ${versionFlag}`)
-      const version = versionResult.stdout.trim() || versionResult.stderr.trim()
-      return { available: true, version, path: binaryPath, error: null, authenticated: false }
+      const versionResult = await execAsync(`${command} ${versionFlag}`);
+      const version = versionResult.stdout.trim() || versionResult.stderr.trim();
+      return { available: true, version, path: binaryPath, error: null, authenticated: false };
     } catch {
-      return { available: true, version: null, path: binaryPath, error: null, authenticated: false }
+      return {
+        available: true,
+        version: null,
+        path: binaryPath,
+        error: null,
+        authenticated: false,
+      };
     }
   } catch {
-    return { available: false, version: null, path: null, error: `${command} not found in PATH`, authenticated: false }
+    return {
+      available: false,
+      version: null,
+      path: null,
+      error: `${command} not found in PATH`,
+      authenticated: false,
+    };
   }
 }
 
 async function fileExists(path: string): Promise<boolean> {
   try {
-    await access(path)
-    return true
+    await access(path);
+    return true;
   } catch {
-    return false
+    return false;
   }
 }
 
@@ -42,36 +60,40 @@ export async function checkClaudeAuth(): Promise<boolean> {
   try {
     // Try `claude auth status` first (supported in newer CLI versions)
     // execAsync resolves on exit code 0, so reaching here means authenticated
-    await execAsync('claude auth status', { timeout: 10_000 })
-    return true
+    await execAsync('claude auth status', { timeout: 10_000 });
+    return true;
   } catch {
     // Command may not exist in older versions — fall back to credential file check
   }
 
   // Fall back to checking for credential files
-  const credentialPath = join(homedir(), '.claude', '.credentials.json')
-  return fileExists(credentialPath)
+  const credentialPath = join(homedir(), '.claude', '.credentials.json');
+  return fileExists(credentialPath);
 }
 
 export async function checkCodexAuth(): Promise<boolean> {
   // Check for OPENAI_API_KEY via shell spawn (Electron Dock launch doesn't inherit shell env)
   try {
-    const result = await execAsync('printenv OPENAI_API_KEY', { timeout: 5_000 })
+    const result = await execAsync('printenv OPENAI_API_KEY', { timeout: 5_000 });
     if (result.stdout.trim()) {
-      return true
+      return true;
     }
   } catch {
     // Env var not set — try config file
   }
 
   // Check for Codex auth config file
-  const codexAuthPath = join(homedir(), '.codex', 'auth.json')
-  return fileExists(codexAuthPath)
+  const codexAuthPath = join(homedir(), '.codex', 'auth.json');
+  return fileExists(codexAuthPath);
 }
 
 export type OpenRouterAuthStatus =
   | { ok: true; label?: string }
-  | { ok: false; reason: 'missing_key' | 'invalid_key' | 'unreachable' | 'model_deprecated'; message: string }
+  | {
+      ok: false;
+      reason: 'missing_key' | 'invalid_key' | 'unreachable' | 'model_deprecated';
+      message: string;
+    };
 
 /**
  * Validate OpenRouter API key against the live service and (optionally)
@@ -88,38 +110,46 @@ export async function checkOpenRouterAuth(
   pinnedModel?: string | null,
 ): Promise<OpenRouterAuthStatus> {
   if (!apiKey) {
-    return { ok: false, reason: 'missing_key', message: 'OPENROUTER_API_KEY is not set' }
+    return { ok: false, reason: 'missing_key', message: 'OPENROUTER_API_KEY is not set' };
   }
 
   // Hit /auth/key to validate credentials. OpenRouter's public docs call
   // this endpoint `GET /api/v1/auth/key`, but it's also historically been
   // reachable at `/key` — we hit the documented one.
-  let keyResponse: Response
+  let keyResponse: Response;
   try {
     keyResponse = await fetch(`${OPENROUTER_API_BASE}/auth/key`, {
       method: 'GET',
       headers: { Authorization: `Bearer ${apiKey}` },
       signal: AbortSignal.timeout(10_000),
-    })
+    });
   } catch (err) {
     return {
       ok: false,
       reason: 'unreachable',
       message: err instanceof Error ? err.message : 'OpenRouter unreachable',
-    }
+    };
   }
 
   if (keyResponse.status === 401 || keyResponse.status === 403) {
-    return { ok: false, reason: 'invalid_key', message: `OpenRouter rejected API key (HTTP ${keyResponse.status})` }
+    return {
+      ok: false,
+      reason: 'invalid_key',
+      message: `OpenRouter rejected API key (HTTP ${keyResponse.status})`,
+    };
   }
   if (!keyResponse.ok) {
-    return { ok: false, reason: 'unreachable', message: `OpenRouter auth check returned HTTP ${keyResponse.status}` }
+    return {
+      ok: false,
+      reason: 'unreachable',
+      message: `OpenRouter auth check returned HTTP ${keyResponse.status}`,
+    };
   }
 
-  let label: string | undefined
+  let label: string | undefined;
   try {
-    const body = await keyResponse.json() as { data?: { label?: string } }
-    label = body?.data?.label
+    const body = (await keyResponse.json()) as { data?: { label?: string } };
+    label = body?.data?.label;
   } catch {
     // Non-fatal — auth was OK.
   }
@@ -135,16 +165,16 @@ export async function checkOpenRouterAuth(
         method: 'GET',
         headers: { Authorization: `Bearer ${apiKey}` },
         signal: AbortSignal.timeout(10_000),
-      })
+      });
       if (modelsRes.ok) {
-        const body = await modelsRes.json() as { data?: Array<{ id: string }> }
-        const exists = body?.data?.some((m) => m.id === pinnedModel) ?? false
+        const body = (await modelsRes.json()) as { data?: Array<{ id: string }> };
+        const exists = body?.data?.some((m) => m.id === pinnedModel) ?? false;
         if (!exists) {
           return {
             ok: false,
             reason: 'model_deprecated',
             message: `OpenRouter model '${pinnedModel}' is not available (may be deprecated)`,
-          }
+          };
         }
       }
     } catch {
@@ -152,16 +182,16 @@ export async function checkOpenRouterAuth(
     }
   }
 
-  return { ok: true, label }
+  return { ok: true, label };
 }
 
 async function getGhVersion(): Promise<string | null> {
   try {
-    const { stdout } = await execAsync('gh --version', { timeout: 5_000 })
-    const match = stdout.match(/gh version (\S+)/)
-    return match?.[1] ?? null
+    const { stdout } = await execAsync('gh --version', { timeout: 5_000 });
+    const match = stdout.match(/gh version (\S+)/);
+    return match?.[1] ?? null;
   } catch {
-    return null
+    return null;
   }
 }
 
@@ -170,30 +200,27 @@ export async function checkGhAuth(): Promise<GhAuthStatus> {
     const [result, version] = await Promise.all([
       execAsync('gh auth status 2>&1', { timeout: 10_000 }),
       getGhVersion(),
-    ])
-    const output = result.stdout + result.stderr
-    const usernameMatch = output.match(/Logged in to github\.com.*account\s+(\S+)/)
+    ]);
+    const output = result.stdout + result.stderr;
+    const usernameMatch = output.match(/Logged in to github\.com.*account\s+(\S+)/);
     return {
       installed: true,
       authenticated: true,
       username: usernameMatch?.[1] ?? null,
       version,
       error: null,
-    }
+    };
   } catch (err) {
     // Check if gh is installed but not authenticated
     try {
-      const [, version] = await Promise.all([
-        execAsync('which gh'),
-        getGhVersion(),
-      ])
+      const [, version] = await Promise.all([execAsync('which gh'), getGhVersion()]);
       return {
         installed: true,
         authenticated: false,
         username: null,
         version,
         error: err instanceof Error ? err.message : 'gh auth check failed',
-      }
+      };
     } catch {
       return {
         installed: false,
@@ -201,7 +228,7 @@ export async function checkGhAuth(): Promise<GhAuthStatus> {
         username: null,
         version: null,
         error: 'gh not found in PATH',
-      }
+      };
     }
   }
 }
@@ -212,9 +239,9 @@ export async function checkSystemHealth(): Promise<SystemHealth> {
     checkCli('codex', '--version'),
     checkCli('git', '--version'),
     checkCli('gh', '--version'),
-  ])
+  ]);
 
-  return { claude, codex, git, gh }
+  return { claude, codex, git, gh };
 }
 
 export async function checkSystemHealthWithAuth(): Promise<SystemHealth> {
@@ -222,11 +249,11 @@ export async function checkSystemHealthWithAuth(): Promise<SystemHealth> {
     checkSystemHealth(),
     checkClaudeAuth(),
     checkCodexAuth(),
-  ])
+  ]);
 
   return {
     ...health,
     claude: { ...health.claude, authenticated: health.claude.available && claudeAuth },
     codex: { ...health.codex, authenticated: health.codex.available && codexAuth },
-  }
+  };
 }

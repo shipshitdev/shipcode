@@ -18,13 +18,13 @@
  * the pipeline fails loud and early rather than silently.
  */
 
-import type { AgentType } from '@shipcode/shared'
-import type { AgentProvider, ProviderPhase, ProviderRegistry } from './types'
+import type { AgentType } from '@shipcode/shared';
+import type { AgentProvider, ProviderPhase, ProviderRegistry } from './types';
 
 export interface RegistryProviders {
-  claude: AgentProvider
-  codex: AgentProvider
-  openrouter: AgentProvider
+  claude: AgentProvider;
+  codex: AgentProvider;
+  openrouter: AgentProvider;
 }
 
 export function createProviderRegistry(providers: RegistryProviders): ProviderRegistry {
@@ -32,34 +32,34 @@ export function createProviderRegistry(providers: RegistryProviders): ProviderRe
     [providers.claude.id, providers.claude],
     [providers.codex.id, providers.codex],
     [providers.openrouter.id, providers.openrouter],
-  ])
+  ]);
 
   function forAgent(agent: AgentType): AgentProvider {
     switch (agent) {
       case 'claude':
-        return providers.claude
+        return providers.claude;
       case 'codex':
-        return providers.codex
+        return providers.codex;
       case 'openrouter':
-        return providers.openrouter
+        return providers.openrouter;
       case 'gh':
-        throw new Error("ProviderRegistry: 'gh' is not an LLM agent and has no provider")
+        throw new Error("ProviderRegistry: 'gh' is not an LLM agent and has no provider");
     }
   }
 
   return {
     for(agent: AgentType, phase: ProviderPhase): AgentProvider {
-      const provider = forAgent(agent)
+      const provider = forAgent(agent);
       if (!provider.supports.has(phase)) {
         throw new Error(
           `ProviderRegistry: provider '${provider.id}' does not support phase '${phase}' ` +
             `(agent=${agent})`,
-        )
+        );
       }
-      return provider
+      return provider;
     },
     all() {
-      return byId
+      return byId;
     },
-  }
+  };
 }

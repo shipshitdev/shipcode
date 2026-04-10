@@ -2,7 +2,10 @@
   "name": "@shipcode/monorepo",
   "private": true,
   "packageManager": "bun@1.3.12",
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "postinstall": "sh scripts/fix-node-pty-permissions.sh",
     "dev": "turbo run dev",
