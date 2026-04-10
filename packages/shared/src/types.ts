@@ -96,6 +96,17 @@ export interface Thread {
   githubRepo: string | null
   createdAt: string
   updatedAt: string
+  // Tier 3 telemetry: what openrouter/auto (or claude/codex) actually
+  // served each phase. For non-openrouter runs these just hold 'claude'
+  // or 'codex'. Null until the phase runs.
+  plannerResolvedModel: string | null
+  reviewerResolvedModel: string | null
+  revisorResolvedModel: string | null
+  executorResolvedModel: string | null
+  verifierResolvedModel: string | null
+  totalTokensPrompt: number
+  totalTokensCompletion: number
+  totalCostUsd: number
 }
 
 // === Pipeline Types ===

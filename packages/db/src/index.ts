@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite'
 import path from 'node:path'
-import { migrate, migrateV2, migrateV3, migrateV4, migrateV5 } from './schema'
+import { migrate, migrateV2, migrateV3, migrateV4, migrateV5, migrateV6 } from './schema'
 
 export { transaction } from './utils'
 export { ProjectQueries } from './queries/projects'
@@ -31,6 +31,7 @@ export function getDatabase(dataDir: string): DatabaseSync {
   migrateV3(db)
   migrateV4(db)
   migrateV5(db)
+  migrateV6(db)
   return db
 }
 
