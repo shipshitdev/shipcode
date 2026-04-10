@@ -1,10 +1,15 @@
-import type { ProcessManager } from '@shipcode/agents'
-import type { ThreadQueries, PlanQueries, ReviewQueries, VerificationQueries, GitHubIssueQueries } from '@shipcode/db'
-import type { ShipCodePlan, PipelinePhase, PlanReview, VerificationResult } from '@shipcode/shared'
+import type { ProcessManager, ProviderRegistry } from '@shipcode/agents'
+import type { ThreadQueries, PlanQueries, ReviewQueries, VerificationQueries, GitHubIssueQueries, SettingsQueries } from '@shipcode/db'
+import type { AgentType, ShipCodePlan, PipelinePhase, PlanReview, VerificationResult } from '@shipcode/shared'
+
+// Models that can drive a pipeline phase. Excludes 'gh' which is a
+// data-plane CLI, not an LLM executor.
+export type PipelineExecutorModel = Exclude<AgentType, 'gh'>
 
 // Typed event contract -- both desktop and CLI adapters must handle these
 export type PipelineEvent =
   | { type: 'pipeline:phase'; threadId: string; phase: PipelinePhase }
+  | { type: 'pipeline:verification-exhausted'; threadId: string; retries: number }
   | { type: 'plan:parsed'; threadId: string; plan: ShipCodePlan }
   | { type: 'review:parsed'; threadId: string; review: PlanReview }
   | { type: 'verification:parsed'; threadId: string; verification: VerificationResult }
@@ -23,12 +28,29 @@ export interface PipelineContext {
   verificationRetries: number
   githubIssueNumber: number | null
   githubRepo: string | null
-  executorModel: 'claude' | 'codex'
+  executorModel: PipelineExecutorModel
+  /** Optional per-run model slug override (e.g. 'openrouter/auto'). */
+  executorModelOverride: string | null
   baseBranch: string
   forkPointSha: string
   activeProcessId: string | null
   cancelled: boolean
   verifiedSha: string | null
+  startedAt: number
+  /**
+   * Per-run AbortController. Providers honor `abort.signal` to cancel
+   * in-flight work (subprocess kill OR HTTP abort). cancel(threadId)
+   * calls abort() in addition to killing any active process.
+   */
+  abort: AbortController
+}
+
+export interface ActivePipelineSummary {
+  threadId: string
+  projectPath: string
+  phase: PipelinePhase
+  startedAt: number
+  activeProcessId: string | null
 }
 
 export interface PipelineDeps {
@@ -39,6 +61,8 @@ export interface PipelineDeps {
   reviews: ReviewQueries
   verifications: VerificationQueries
   githubIssues: GitHubIssueQueries
+  settings: SettingsQueries
+  providers: ProviderRegistry
 }
 
 export interface Pipeline {
@@ -53,7 +77,8 @@ export interface Pipeline {
     threadId: string,
     projectPath: string,
     issue: { number: number; title: string; body: string | null; labels: string[] },
-    executorModel: 'claude' | 'codex'
+    executorModel: PipelineExecutorModel,
+    executorModelOverride?: string | null,
   ) => Promise<void>
   initializeContext: (
     threadId: string,
@@ -61,4 +86,5 @@ export interface Pipeline {
   ) => PipelineContext
   cancel: (threadId: string) => void
   getContext: (threadId: string) => PipelineContext | undefined
+  listActive: () => ActivePipelineSummary[]
 }
