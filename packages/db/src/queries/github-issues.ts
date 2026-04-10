@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite'
 import { nanoid } from 'nanoid'
-import type { GitHubIssueCacheRecord, IssuePipelineStatus } from '@shipcode/shared'
+import type { ExecutorModel, GitHubIssueCacheRecord, IssuePipelineStatus } from '@shipcode/shared'
 
 export class GitHubIssueQueries {
   constructor(private db: DatabaseSync) {}
@@ -100,7 +100,7 @@ export class GitHubIssueQueries {
     ).run(label, id)
   }
 
-  updateExecutorModel(id: string, model: 'claude' | 'codex'): void {
+  updateExecutorModel(id: string, model: ExecutorModel): void {
     this.db.prepare(
       'UPDATE github_issue_cache SET executor_model = ? WHERE id = ?'
     ).run(model, id)

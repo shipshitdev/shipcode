@@ -179,7 +179,7 @@ export function IssueDetail() {
 
 	const phaseIsActive = ACTIVE_PHASES.includes(threadPhase as PipelinePhase)
 
-	const handleExecutorChange = async (model: 'claude' | 'codex') => {
+	const handleExecutorChange = async (model: 'claude' | 'codex' | 'openrouter') => {
 		if (!activeProjectId) return
 		await window.shipcode.invoke('github:set-executor', {
 			projectId: activeProjectId,
@@ -334,13 +334,14 @@ export function IssueDetail() {
 						<span className="font-mono text-text-primary">codex</span>
 						<span>Executor</span>
 						{executorEditable ? (
-							<Select value={activeIssue.executorModel} onValueChange={(v) => handleExecutorChange(v as 'claude' | 'codex')}>
+							<Select value={activeIssue.executorModel} onValueChange={(v) => handleExecutorChange(v as 'claude' | 'codex' | 'openrouter')}>
 								<SelectTrigger className="h-7 w-[140px] text-xs">
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
 									<SelectItem value="claude">claude</SelectItem>
 									<SelectItem value="codex">codex</SelectItem>
+									<SelectItem value="openrouter">openrouter</SelectItem>
 								</SelectContent>
 							</Select>
 						) : (

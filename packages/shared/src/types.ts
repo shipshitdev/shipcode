@@ -125,6 +125,23 @@ export type PipelinePhase =
 
 export type AgentType = 'claude' | 'codex' | 'gh' | 'openrouter'
 
+/**
+ * The subset of AgentType that can drive a pipeline phase. Excludes
+ * 'gh' which is a data-plane CLI, not an LLM executor.
+ *
+ * Single source of truth for every executor-model type annotation in
+ * the monorepo (DB row types, IPC payloads, UI Select values, pipeline
+ * context, etc). Keep this in sync with the `executor_model` SQLite
+ * column contents.
+ *
+ * We use a string literal union rather than a TS enum because:
+ *  - Enums compile to runtime objects (bundle weight in a published
+ *    CLI package). String literals are zero-cost at runtime.
+ *  - SQLite stores strings; no enum ⇄ ordinal round-trip needed.
+ *  - GitHub label values are already strings (`agent:claude`, etc).
+ */
+export type ExecutorModel = 'claude' | 'codex' | 'openrouter'
+
 export type AgentState = 'starting' | 'running' | 'idle' | 'errored' | 'exited'
 
 export interface AgentProcess {
@@ -284,7 +301,12 @@ export interface GitHubIssueCacheRecord {
   claimedBy: string | null
   lastPhaseUpdate: string | null
   lastStatusLabel: string | null
-  executorModel: 'claude' | 'codex'
+  // Per-issue executor choice. Widened to the full ExecutorModel union
+  // in Tier 1 so issue-level selection can opt into the OpenRouter HTTP
+  // provider the same way the `agent:openrouter/auto` GitHub label can
+  // at queue time. The DB column is plain TEXT (v4 migration), so
+  // writing this wider value is safe on existing rows.
+  executorModel: ExecutorModel
   fetchedAt: string
 }
 

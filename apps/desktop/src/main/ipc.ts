@@ -23,7 +23,7 @@ import { isSafeExternalUrl } from './security'
 const execAsync = promisify(exec)
 import { GitService, WorktreeManager } from '@shipcode/git'
 import type { Pipeline } from '@shipcode/pipeline'
-import type { ActivePipelineSummary } from '@shipcode/shared'
+import type { ActivePipelineSummary, ExecutorModel } from '@shipcode/shared'
 import type { NotificationService } from './notification-service'
 
 interface Queries {
@@ -318,10 +318,16 @@ export function registerIpcHandlers(
     mainWindow.webContents.send('github:issues-updated', { projectId, issues: allIssues })
   })
 
-  ipcMain.handle('github:set-executor', (_event, { projectId, issueNumber, model }: { projectId: string; issueNumber: number; model: 'claude' | 'codex' }) => {
+  ipcMain.handle('github:set-executor', (_event, { projectId, issueNumber, model }: { projectId: string; issueNumber: number; model: ExecutorModel }) => {
     const issue = queries.githubIssues.getByNumber(projectId, issueNumber)
     if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`)
-    if (model !== 'claude' && model !== 'codex') throw new Error(`Invalid executor model: ${model}`)
+    // Widened from claude|codex only after Tier 1 added the OpenRouter
+    // HTTP provider. Keep the explicit runtime whitelist so unknown
+    // values still fail loud — we don't want the renderer to smuggle
+    // arbitrary strings past the type system.
+    if (model !== 'claude' && model !== 'codex' && model !== 'openrouter') {
+      throw new Error(`Invalid executor model: ${model}`)
+    }
 
     queries.githubIssues.updateExecutorModel(issue.id, model)
     const allIssues = queries.githubIssues.list(projectId)

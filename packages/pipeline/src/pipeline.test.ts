@@ -730,6 +730,18 @@ describe('createPipeline', () => {
 
 			expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed')
 			expect(pipeline.getContext('t1')).toBeUndefined()
+
+			// When retries are exhausted, the pipeline MUST emit
+			// 'pipeline:verification-exhausted' so the desktop bridge can
+			// distinguish this failure from a generic 'failed' and fire
+			// the dedicated notification kind. Regression test for a
+			// coverage gap CodeRabbit flagged on the original Tier 1 PR.
+			expect(mock.emittedEvents).toContainEqual(
+				expect.objectContaining({
+					type: 'pipeline:verification-exhausted',
+					threadId: 't1',
+				}),
+			)
 		})
 	})
 
