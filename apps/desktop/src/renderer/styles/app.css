@@ -9,17 +9,17 @@
 :root,
 [data-theme="dark"] {
 	--bg-primary: #050607;
-	--bg-secondary: #0a0b0d;
-	--bg-tertiary: #111215;
-	--bg-elevated: #16181c;
-	--bg-hover: #1c1e23;
+	--bg-secondary: #0c0d10;
+	--bg-tertiary: #131518;
+	--bg-elevated: #1a1c21;
+	--bg-hover: #20232a;
 
-	--border: rgba(255, 255, 255, 0.06);
-	--border-strong: rgba(255, 255, 255, 0.10);
+	--border: rgba(255, 255, 255, 0.10);
+	--border-strong: rgba(255, 255, 255, 0.18);
 
 	--text-primary: #f4f4f5;
-	--text-secondary: #a1a1aa;
-	--text-muted: #52525b;
+	--text-secondary: #b4b4bc;
+	--text-muted: #6b6b78;
 
 	--accent: #fafafa;
 	--accent-foreground: #050607;

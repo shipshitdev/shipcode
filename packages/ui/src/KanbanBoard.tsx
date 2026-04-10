@@ -111,9 +111,9 @@ function DraggableCard({ issue, onClick, onRerun, isSelected }: { issue: GitHubI
 		<div
 			ref={setNodeRef}
 			className={cn(
-				'relative rounded-md border bg-bg-primary p-2 transition-colors',
+				'relative rounded-md border bg-bg-elevated p-2 transition-colors',
 				draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-default',
-				'border-border hover:border-text-muted',
+				'border-border/50 hover:border-border-strong',
 				isFailed && 'border-danger/40 bg-danger/[0.04] hover:border-danger/60',
 				isAwaiting && 'border-warning/30 bg-warning/[0.03] hover:border-warning/50',
 				isDragging && 'opacity-50',
@@ -134,14 +134,14 @@ function DraggableCard({ issue, onClick, onRerun, isSelected }: { issue: GitHubI
 					<RotateCcw size={11} />
 				</button>
 			)}
-			<div className="text-[11px] text-text-muted font-mono mb-0.5">#{issue.issueNumber}</div>
-			<div className="text-xs leading-snug text-text-primary line-clamp-2">{issue.title}</div>
+			<div className="text-[11px] text-text-secondary font-mono mb-0.5">#{issue.issueNumber}</div>
+			<div className="text-xs leading-snug text-text-primary font-medium line-clamp-2">{issue.title}</div>
 			<div className="flex flex-wrap gap-1 mt-1">
 				{issue.labels.filter(l => l.startsWith('agent:')).map(l => (
-					<Badge key={l} variant="accent" className="text-[10px] px-1.5 py-px">{l}</Badge>
+					<Badge key={l} variant="accent" className="text-[10px] px-1.5 py-px font-medium">{l}</Badge>
 				))}
 				{issue.pipelineStatus !== COLUMNS.flatMap(c => c.sections ?? [{ statuses: c.statuses }]).find(s => s.statuses.includes(issue.pipelineStatus))?.statuses[0] && (
-					<Badge variant={getStatusBadgeVariant(issue.pipelineStatus)} className="text-[10px] px-1.5 py-px">
+					<Badge variant={getStatusBadgeVariant(issue.pipelineStatus)} className="text-[10px] px-1.5 py-px font-medium">
 						{issue.pipelineStatus}
 					</Badge>
 				)}
@@ -161,11 +161,11 @@ function DroppableColumn({ id, label, issues, droppable, onIssueClick, selectedI
 		<div
 			ref={setNodeRef}
 			className={cn(
-				'flex-1 min-w-[140px] max-w-[220px] flex flex-col bg-bg-secondary rounded-md overflow-hidden transition-colors',
+				'flex-1 min-w-[140px] max-w-[220px] flex flex-col bg-bg-secondary rounded-md overflow-hidden transition-colors border border-border/40',
 				isOver && droppable && 'ring-2 ring-accent bg-bg-tertiary'
 			)}
 		>
-			<div className="flex items-center justify-between px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-text-secondary border-b border-border shrink-0">
+			<div className="flex items-center justify-between px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-text-primary border-b border-border shrink-0">
 				<span>{label}</span>
 				<span className="text-[10px] bg-bg-tertiary text-text-muted px-1.5 py-px rounded-full font-medium">{issues.length}</span>
 			</div>
@@ -284,8 +284,8 @@ function StackedColumn({
 	const columnIssues = issues.filter(i => column.statuses.includes(i.pipelineStatus))
 
 	return (
-		<div className="flex-[1.3] min-w-[180px] max-w-[280px] flex flex-col bg-bg-secondary rounded-md overflow-hidden">
-			<div className="flex items-center justify-between px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-text-secondary border-b border-border shrink-0">
+		<div className="flex-[1.3] min-w-[180px] max-w-[280px] flex flex-col bg-bg-secondary rounded-md overflow-hidden border border-border/40">
+			<div className="flex items-center justify-between px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-text-primary border-b border-border shrink-0">
 				<span>{column.label}</span>
 				<span className="text-[10px] bg-bg-tertiary text-text-muted px-1.5 py-px rounded-full font-medium">{columnIssues.length}</span>
 			</div>
