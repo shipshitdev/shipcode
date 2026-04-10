@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import type {
   ActivePipelineSummary,
@@ -74,17 +74,18 @@ interface StatCardProps {
   value: string | number
   subtitle?: string
   tone?: 'default' | 'danger' | 'success'
+  onClick?: () => void
 }
 
-function StatCard({ label, value, subtitle, tone = 'default' }: StatCardProps) {
+function StatCard({ label, value, subtitle, tone = 'default', onClick }: StatCardProps) {
   const toneClass =
     tone === 'danger'
       ? 'border-danger/40 bg-danger/5'
       : tone === 'success'
       ? 'border-success/40 bg-success/5'
       : ''
-  return (
-    <Card className={toneClass}>
+  const card = (
+    <Card className={`${toneClass}${onClick ? ' hover:ring-1 hover:ring-border' : ''}`}>
       <CardContent className="p-5 pt-5">
         <div className="text-3xl font-semibold text-text-primary">{value}</div>
         <div className="mt-1 text-xs uppercase tracking-wide text-text-secondary">{label}</div>
@@ -94,6 +95,14 @@ function StatCard({ label, value, subtitle, tone = 'default' }: StatCardProps) {
       </CardContent>
     </Card>
   )
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className="w-full cursor-pointer border-none bg-transparent p-0 text-left">
+        {card}
+      </button>
+    )
+  }
+  return card
 }
 
 export function DashboardView() {
@@ -171,6 +180,12 @@ export function DashboardView() {
   const activitySlice = activity
   const tasksSlice = recent
 
+  const runningAgentsRef = useRef<HTMLDivElement>(null)
+
+  const scrollToRunningAgents = () => {
+    runningAgentsRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
+
   const handleRowClick = (projectId: string, threadId: string) => {
     selectProject(projectId)
     selectThread(threadId)
@@ -204,11 +219,13 @@ export function DashboardView() {
                       .join(', ') || 'idle'
                   : '—'
               }
+              onClick={scrollToRunningAgents}
             />
             <StatCard
               label="Tasks In Progress"
               value={stats?.tasksInProgress ?? 0}
               subtitle={stats ? `${stats.tasksOpen} open · ${stats.tasksBlocked} blocked` : '—'}
+              onClick={openInbox}
             />
             <button type="button" onClick={openInbox} className="w-full cursor-pointer border-none bg-transparent p-0 text-left">
               <StatCard
@@ -227,6 +244,7 @@ export function DashboardView() {
               value={stats?.shippedLast7d ?? 0}
               subtitle={stats ? `${stats.failedLast7d} failed` : '—'}
               tone="success"
+              onClick={openActivity}
             />
           </div>
 
@@ -277,6 +295,7 @@ export function DashboardView() {
           </Card>
 
           {/* Running Agents */}
+          <div ref={runningAgentsRef}>
           <Card>
             <CardHeader>
               <CardTitle>Running Agents</CardTitle>
@@ -322,6 +341,7 @@ export function DashboardView() {
               )}
             </CardContent>
           </Card>
+          </div>
 
           {/* Activity + Recent tasks */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
