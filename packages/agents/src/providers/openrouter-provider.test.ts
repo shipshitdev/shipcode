@@ -48,7 +48,7 @@ describe('createOpenRouterProvider', () => {
     vi.restoreAllMocks()
   })
 
-  it('reports execute phase as unsupported in Tier 1', () => {
+  it('supports all five phases as of Tier 2', () => {
     const provider = createOpenRouterProvider({
       getApiKey: () => 'k',
       getSettings: () => settings(),
@@ -57,7 +57,7 @@ describe('createOpenRouterProvider', () => {
     expect(provider.supports.has('review')).toBe(true)
     expect(provider.supports.has('revision')).toBe(true)
     expect(provider.supports.has('verify')).toBe(true)
-    expect(provider.supports.has('execute')).toBe(false)
+    expect(provider.supports.has('execute')).toBe(true)
   })
 
   it('returns auth error when API key is missing', async () => {
@@ -71,15 +71,19 @@ describe('createOpenRouterProvider', () => {
     expect(res.providerError?.retryable).toBe(false)
   })
 
-  it('returns not_found error for execute phase (Tier 2 guard)', async () => {
+  it('execute phase refuses when cwd equals projectPath (defense in depth)', async () => {
+    // Execute with cwd === projectPath should hit the worktree safety
+    // guard inside the execute harness and fail cleanly, NOT mutate
+    // the project root. (The full happy path for execute is covered
+    // in openrouter-execute.test.ts.)
     const provider = createOpenRouterProvider({
       getApiKey: () => 'k',
       getSettings: () => settings(),
     })
-    const res = await provider.generate(req({ phase: 'execute' }))
+    const res = await provider.generate(req({ phase: 'execute', cwd: '/tmp/proj', projectPath: '/tmp/proj' }))
     expect(res.exitCode).toBe(1)
-    expect(res.providerError?.kind).toBe('not_found')
-    expect(res.providerError?.retryable).toBe(false)
+    expect(res.providerError?.kind).toBe('unexpected_stop')
+    expect(res.providerError?.message).toMatch(/worktree/i)
   })
 
   it('surfaces content + resolvedModel + tokens on successful plan phase', async () => {
