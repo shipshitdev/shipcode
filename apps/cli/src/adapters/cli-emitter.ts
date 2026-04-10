@@ -8,6 +8,17 @@ export function createCliEmitter(): PipelineEmitter {
         case 'pipeline:phase':
           console.log(`[${timestamp}] Phase: ${event.phase}`)
           break
+        case 'pipeline:verification-exhausted':
+          console.log(`[${timestamp}] Verification exhausted after ${event.retries} retries`)
+          break
+        case 'pipeline:model-resolved': {
+          const tokens = event.tokensUsed
+            ? ` (${event.tokensUsed.prompt}+${event.tokensUsed.completion} tok${event.costUsd != null ? `, $${event.costUsd.toFixed(4)}` : ''})`
+            : ''
+          const via = event.requestedModel !== event.resolvedModel ? ` via ${event.requestedModel}` : ''
+          console.log(`[${timestamp}] ${event.phase}: routed to ${event.resolvedModel}${via}${tokens}`)
+          break
+        }
         case 'plan:parsed':
           console.log(`[${timestamp}] Plan generated: ${event.plan.objective}`)
           break
