@@ -41,19 +41,11 @@
  * utilities so runtime data-theme swaps take effect without a rebuild.
  * ------------------------------------------------------------------------- */
 @theme inline {
-	--color-bg-primary: var(--bg-primary);
-	--color-bg-secondary: var(--bg-secondary);
-	--color-bg-tertiary: var(--bg-tertiary);
-	--color-bg-elevated: var(--bg-elevated);
-	--color-bg-hover: var(--bg-hover);
-
+	/* Border colors — `border-border` / `border-border-strong` */
 	--color-border: var(--border);
 	--color-border-strong: var(--border-strong);
 
-	--color-text-primary: var(--text-primary);
-	--color-text-secondary: var(--text-secondary);
-	--color-text-muted: var(--text-muted);
-
+	/* Accent / semantic */
 	--color-accent: var(--accent);
 	--color-accent-foreground: var(--accent-foreground);
 	--color-accent-hover: var(--accent-hover);
@@ -75,6 +67,23 @@
 	--spacing-titlebar: 38px;
 	--spacing-titlebar-plus: 42px;
 }
+
+/* ---------------------------------------------------------------------------
+ * Background utilities — bg-primary, bg-secondary, bg-tertiary, bg-elevated,
+ * bg-hover. Using @utility so variants (hover:, dark:, etc.) work correctly.
+ * ------------------------------------------------------------------------- */
+@utility bg-primary { background-color: var(--bg-primary); }
+@utility bg-secondary { background-color: var(--bg-secondary); }
+@utility bg-tertiary { background-color: var(--bg-tertiary); }
+@utility bg-elevated { background-color: var(--bg-elevated); }
+@utility bg-hover { background-color: var(--bg-hover); }
+
+/* ---------------------------------------------------------------------------
+ * Text utilities — text-primary, text-secondary, text-muted.
+ * ------------------------------------------------------------------------- */
+@utility text-primary { color: var(--text-primary); }
+@utility text-secondary { color: var(--text-secondary); }
+@utility text-muted { color: var(--text-muted); }
 
 /* Electron-specific utilities */
 @utility app-region-drag {

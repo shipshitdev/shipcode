@@ -33,7 +33,7 @@ export interface IpcInvokeChannels {
   'project:set-default-branch': { args: { projectId: string; branch: string }; result: Project }
 
   'thread:list': { args: { projectId: string }; result: Thread[] }
-  'thread:create': { args: { projectId: string; prompt: string; useWorktree: boolean }; result: Thread }
+  'thread:create': { args: { projectId: string; prompt: string }; result: Thread }
   'thread:get': { args: { threadId: string }; result: Thread | null }
 
   'pipeline:start': { args: { threadId: string }; result: void }

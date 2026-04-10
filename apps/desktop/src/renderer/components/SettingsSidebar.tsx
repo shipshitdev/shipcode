@@ -47,11 +47,11 @@ export function SettingsSidebar() {
 	const { settingsSection, setSettingsSection, toggleSettings } = useAppStore()
 
 	return (
-		<aside className="flex w-[256px] min-w-[256px] flex-col border-r border-border bg-bg-secondary">
+		<aside className="flex w-[256px] min-w-[256px] flex-col border-r border-border bg-secondary">
 			<div className="px-4 py-3">
 				<button
 					type="button"
-					className="flex cursor-pointer items-center gap-1.5 rounded-md border-none bg-transparent px-1 py-1 text-[13px] text-text-secondary app-region-no-drag hover:text-text-primary"
+					className="flex cursor-pointer items-center gap-1.5 rounded-md border-none bg-transparent px-1 py-1 text-[13px] text-secondary app-region-no-drag hover:text-primary"
 					onClick={toggleSettings}
 				>
 					<ChevronLeft size={14} />
@@ -65,12 +65,12 @@ export function SettingsSidebar() {
 						type="button"
 						key={key}
 						className={cn(
-							'flex w-full cursor-pointer items-center gap-2 rounded-md border-none bg-transparent px-3 py-2 text-left text-[13px] text-text-secondary app-region-no-drag hover:bg-bg-hover hover:text-text-primary',
-							settingsSection === key && 'bg-bg-tertiary text-text-primary',
+							'flex w-full cursor-pointer items-center gap-2 rounded-md border-none bg-transparent px-3 py-2 text-left text-[13px] text-secondary app-region-no-drag hover:bg-hover hover:text-primary',
+							settingsSection === key && 'bg-tertiary text-primary',
 						)}
 						onClick={() => setSettingsSection(key)}
 					>
-						<span className="shrink-0 text-text-muted">{icon}</span>
+						<span className="shrink-0 text-muted">{icon}</span>
 						{label}
 					</button>
 				))}

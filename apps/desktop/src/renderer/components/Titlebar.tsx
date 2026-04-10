@@ -24,12 +24,12 @@ export function Titlebar() {
 	const liveCount = stats?.agentsRunning ?? 0
 
 	return (
-		<div className="relative flex h-[var(--spacing-titlebar)] shrink-0 items-center justify-between border-b border-border bg-bg-primary pl-[84px] pr-2 app-region-drag">
+		<div className="relative flex h-[var(--spacing-titlebar)] shrink-0 items-center justify-between border-b border-border bg-primary pl-[84px] pr-2 app-region-drag">
 			<div className="flex min-w-0 items-center gap-2 text-xs">
 				{sidebarCollapsed && (
 					<button
 						type="button"
-						className="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-text-secondary app-region-no-drag hover:bg-bg-hover hover:text-text-primary focus:outline-none"
+						className="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-secondary app-region-no-drag hover:bg-hover hover:text-primary focus:outline-none"
 						onClick={toggleSidebar}
 						title="Show sidebar"
 					>
@@ -38,12 +38,12 @@ export function Titlebar() {
 				)}
 				{activeProject ? (
 					<>
-						<span className="text-text-muted">ShipCode</span>
-						<span className="text-text-muted">/</span>
-						<span className="truncate text-text-primary">{activeProject.name}</span>
+						<span className="text-muted">ShipCode</span>
+						<span className="text-muted">/</span>
+						<span className="truncate text-primary">{activeProject.name}</span>
 					</>
 				) : (
-					<span className="font-semibold tracking-tight text-text-primary">ShipCode</span>
+					<span className="font-semibold tracking-tight text-primary">ShipCode</span>
 				)}
 			</div>
 			<div className="flex items-center gap-2">
@@ -60,7 +60,7 @@ export function Titlebar() {
 				)}
 				<button
 					type="button"
-					className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-text-secondary app-region-no-drag hover:bg-bg-elevated hover:text-text-primary transition-colors"
+					className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-secondary app-region-no-drag hover:bg-elevated hover:text-primary transition-colors"
 					onClick={toggleSettings}
 					title="Toggle Settings"
 				>

@@ -29,7 +29,7 @@ function Pagination({ page, totalPages, onPageChange, className }: PaginationPro
 				type="button"
 				onClick={() => onPageChange(page - 1)}
 				disabled={page <= 1}
-				className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded border border-border bg-transparent text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+				className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded border border-border bg-transparent text-secondary transition-colors hover:bg-hover hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
 				aria-label="Previous page"
 			>
 				<ChevronLeft size={12} />
@@ -37,7 +37,7 @@ function Pagination({ page, totalPages, onPageChange, className }: PaginationPro
 
 			{getPages().map((p, i) =>
 				p === '…' ? (
-					<span key={`ellipsis-${i}`} className="flex h-6 w-6 items-center justify-center text-[11px] text-text-muted">…</span>
+					<span key={`ellipsis-${i}`} className="flex h-6 w-6 items-center justify-center text-[11px] text-muted">…</span>
 				) : (
 					<button
 						key={p}
@@ -46,8 +46,8 @@ function Pagination({ page, totalPages, onPageChange, className }: PaginationPro
 						className={cn(
 							"inline-flex h-6 min-w-6 cursor-pointer items-center justify-center rounded border px-1.5 text-[11px] tabular-nums transition-colors",
 							p === page
-								? "border-border-strong bg-bg-tertiary text-text-primary"
-								: "border-border bg-transparent text-text-secondary hover:bg-bg-hover hover:text-text-primary"
+								? "border-border-strong bg-tertiary text-primary"
+								: "border-border bg-transparent text-secondary hover:bg-hover hover:text-primary"
 						)}
 					>
 						{p}
@@ -59,7 +59,7 @@ function Pagination({ page, totalPages, onPageChange, className }: PaginationPro
 				type="button"
 				onClick={() => onPageChange(page + 1)}
 				disabled={page >= totalPages}
-				className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded border border-border bg-transparent text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+				className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded border border-border bg-transparent text-secondary transition-colors hover:bg-hover hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
 				aria-label="Next page"
 			>
 				<ChevronRight size={12} />

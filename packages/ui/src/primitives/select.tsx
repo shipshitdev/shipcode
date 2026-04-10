@@ -8,7 +8,7 @@ function Select(props: React.ComponentProps<typeof SelectPrimitive.Root>) {
 function SelectTrigger({ className, children, ...props }: React.ComponentProps<typeof SelectPrimitive.Trigger>) {
 	return (
 		<SelectPrimitive.Trigger
-			className={cn("flex h-8 items-center justify-between rounded-lg border border-border bg-bg-tertiary px-3 py-1.5 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-border-strong disabled:cursor-not-allowed disabled:opacity-50 [&>span]:truncate", className)}
+			className={cn("flex h-8 items-center justify-between rounded-lg border border-border bg-tertiary px-3 py-1.5 text-[13px] text-primary placeholder:text-muted focus:outline-none focus:border-border-strong disabled:cursor-not-allowed disabled:opacity-50 [&>span]:truncate", className)}
 			{...props}
 		>
 			{children}
@@ -22,7 +22,7 @@ function SelectContent({ className, children, position = "popper", ...props }: R
 	return (
 		<SelectPrimitive.Portal>
 			<SelectPrimitive.Content
-				className={cn("relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-xl border border-border bg-bg-elevated text-text-primary shadow-2xl shadow-black/40", position === "popper" && "translate-y-1", className)}
+				className={cn("relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-xl border border-border bg-elevated text-primary shadow-2xl shadow-black/40", position === "popper" && "translate-y-1", className)}
 				position={position}
 				{...props}
 			>
@@ -36,7 +36,7 @@ function SelectContent({ className, children, position = "popper", ...props }: R
 function SelectItem({ className, children, ...props }: React.ComponentProps<typeof SelectPrimitive.Item>) {
 	return (
 		<SelectPrimitive.Item
-			className={cn("relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-bg-hover focus:text-text-primary data-[disabled]:pointer-events-none data-[disabled]:opacity-50", className)}
+			className={cn("relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-hover focus:text-primary data-[disabled]:pointer-events-none data-[disabled]:opacity-50", className)}
 			{...props}
 		>
 			<span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">

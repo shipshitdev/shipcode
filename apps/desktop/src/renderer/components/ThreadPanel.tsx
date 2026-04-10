@@ -43,7 +43,7 @@ export function ThreadPanel() {
 	}
 
 	return (
-		<div className="flex flex-1 min-w-0 flex-col bg-bg-primary">
+		<div className="flex flex-1 min-w-0 flex-col bg-primary">
 			<KanbanBoard
 				issues={issues}
 				onIssueClick={(issue) => selectIssue(issue)}

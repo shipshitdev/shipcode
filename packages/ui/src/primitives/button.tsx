@@ -11,14 +11,14 @@ const buttonVariants = cva(
 				default:
 					"rounded-lg bg-accent text-accent-foreground hover:bg-accent-hover shadow-[inset_0_0_0_1px_rgba(0,0,0,0.08)]",
 				secondary:
-					"rounded-lg bg-bg-tertiary text-text-primary border border-border hover:bg-bg-hover",
+					"rounded-lg bg-tertiary text-primary border border-border hover:bg-hover",
 				outline:
-					"rounded-lg bg-transparent border border-border text-text-primary hover:bg-bg-hover",
+					"rounded-lg bg-transparent border border-border text-primary hover:bg-hover",
 				ghost:
-					"rounded-md bg-transparent text-text-secondary hover:bg-bg-hover hover:text-text-primary",
+					"rounded-md bg-transparent text-secondary hover:bg-hover hover:text-primary",
 				destructive:
 					"rounded-lg bg-danger/15 text-danger border border-danger/30 hover:bg-danger/25",
-				link: "text-text-primary underline-offset-4 hover:underline",
+				link: "text-primary underline-offset-4 hover:underline",
 			},
 			size: {
 				xs: "h-6 px-2 text-[11px] gap-1",

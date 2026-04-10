@@ -36,17 +36,17 @@ export function HowItWorks() {
 				<div className="grid grid-cols-1 md:grid-cols-5 gap-4">
 					{steps.map((step, i) => (
 						<div key={step.title} className="relative flex flex-col items-center">
-							<div className="bg-bg-secondary border border-border rounded-xl p-6 text-center w-full">
+							<div className="bg-secondary border border-border rounded-xl p-6 text-center w-full">
 								<step.icon className="w-8 h-8 text-accent mx-auto mb-3" />
-								<h3 className="font-semibold text-text-primary mb-1">
+								<h3 className="font-semibold text-primary mb-1">
 									{step.title}
 								</h3>
-								<p className="text-sm text-text-secondary">
+								<p className="text-sm text-secondary">
 									{step.description}
 								</p>
 							</div>
 							{i < steps.length - 1 && (
-								<div className="hidden md:block absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 text-text-muted text-lg z-10">
+								<div className="hidden md:block absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 text-muted text-lg z-10">
 									&rarr;
 								</div>
 							)}

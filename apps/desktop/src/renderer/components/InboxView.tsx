@@ -70,8 +70,8 @@ export function InboxView() {
 		<div className="flex flex-1 flex-col overflow-hidden">
 			<div className="flex items-center justify-between border-b border-border px-6 py-4">
 				<div>
-					<h1 className="text-base font-semibold text-text-primary">Inbox</h1>
-					<p className="text-xs text-text-muted">Notifications requiring attention.</p>
+					<h1 className="text-base font-semibold text-primary">Inbox</h1>
+					<p className="text-xs text-muted">Notifications requiring attention.</p>
 				</div>
 				{active.length > 0 && (
 					<Button
@@ -89,19 +89,19 @@ export function InboxView() {
 				<div className="mx-auto max-w-3xl">
 					{isLoading && (
 						<div className="flex items-center justify-center py-16">
-							<Loader2 size={20} className="animate-spin text-text-muted" />
+							<Loader2 size={20} className="animate-spin text-muted" />
 						</div>
 					)}
 
 					{isError && (
 						<div className="flex flex-col items-center gap-3 py-16 text-center">
-							<p className="text-sm text-text-secondary">Failed to load notifications.</p>
+							<p className="text-sm text-secondary">Failed to load notifications.</p>
 							<Button variant="secondary" size="sm" onClick={() => refetch()}>Retry</Button>
 						</div>
 					)}
 
 					{!isLoading && !isError && active.length === 0 && (
-						<div className="rounded-lg border border-dashed border-border px-4 py-12 text-center text-xs text-text-muted">
+						<div className="rounded-lg border border-dashed border-border px-4 py-12 text-center text-xs text-muted">
 							All caught up. No pending notifications.
 						</div>
 					)}
@@ -111,7 +111,7 @@ export function InboxView() {
 							{active.map((n) => (
 								<li
 									key={n.id}
-									className="rounded-lg border border-border bg-bg-elevated p-4"
+									className="rounded-lg border border-border bg-elevated p-4"
 								>
 									<div className="flex items-start justify-between gap-3">
 										<div className="flex items-center gap-2">
@@ -120,13 +120,13 @@ export function InboxView() {
 											>
 												{KIND_LABEL[n.kind]}
 											</span>
-											<span className="text-[13px] font-medium text-text-primary">{n.title}</span>
+											<span className="text-[13px] font-medium text-primary">{n.title}</span>
 										</div>
-										<span className="shrink-0 text-[10px] text-text-muted">{timeAgo(n.createdAt)}</span>
+										<span className="shrink-0 text-[10px] text-muted">{timeAgo(n.createdAt)}</span>
 									</div>
 
 									{n.body && (
-										<p className="mt-2 text-[12px] text-text-secondary">{n.body}</p>
+										<p className="mt-2 text-[12px] text-secondary">{n.body}</p>
 									)}
 
 									<div className="mt-3 flex items-center gap-2">

@@ -2,13 +2,13 @@ export function CodeWindow() {
 	return (
 		<section className="py-24 px-6">
 			<div className="max-w-3xl mx-auto">
-				<div className="bg-bg-secondary border border-border rounded-xl overflow-hidden">
+				<div className="bg-secondary border border-border rounded-xl overflow-hidden">
 					{/* Title bar */}
-					<div className="flex items-center gap-2 px-4 py-3 bg-bg-tertiary border-b border-border">
+					<div className="flex items-center gap-2 px-4 py-3 bg-tertiary border-b border-border">
 						<span className="w-3 h-3 rounded-full bg-danger" />
 						<span className="w-3 h-3 rounded-full bg-warning" />
 						<span className="w-3 h-3 rounded-full bg-success" />
-						<span className="ml-3 text-sm text-text-muted font-mono">
+						<span className="ml-3 text-sm text-muted font-mono">
 							shipcode run 42
 						</span>
 					</div>
@@ -59,7 +59,7 @@ function Line({
 	) : null
 
 	return (
-		<span className="block text-text-secondary">
+		<span className="block text-secondary">
 			{prefix}
 			{text}
 		</span>

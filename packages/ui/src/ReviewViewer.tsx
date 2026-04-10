@@ -36,7 +36,7 @@ const severityBorderColor = (severity: ReviewFinding['severity']) => {
 export function ReviewViewer({ review }: ReviewViewerProps) {
 	if (!review) {
 		return (
-			<div className="flex items-center justify-center h-full p-4 text-text-muted">
+			<div className="flex items-center justify-center h-full p-4 text-muted">
 				<p>Waiting for review...</p>
 			</div>
 		)
@@ -48,21 +48,21 @@ export function ReviewViewer({ review }: ReviewViewerProps) {
 				<Badge variant={decisionVariant(review.decision)} className="uppercase text-[13px] font-bold px-3 py-1">
 					{review.decision.replace('_', ' ')}
 				</Badge>
-				<span className="text-xs text-text-secondary">Confidence: {review.confidence}</span>
+				<span className="text-xs text-secondary">Confidence: {review.confidence}</span>
 			</header>
 
-			<p className="mb-4 text-text-secondary text-[13px]">{review.summary}</p>
+			<p className="mb-4 text-secondary text-[13px]">{review.summary}</p>
 
 			{review.findings.length > 0 && (
 				<section>
-					<h3 className="text-[13px] font-semibold text-text-secondary uppercase tracking-wide mb-2">
+					<h3 className="text-[13px] font-semibold text-secondary uppercase tracking-wide mb-2">
 						Findings ({review.findings.length})
 					</h3>
 					{review.findings.map((finding) => (
 						<div
 							key={finding.id}
 							className={cn(
-								'py-2.5 px-3 mb-2 bg-bg-secondary rounded-md border-l-[3px]',
+								'py-2.5 px-3 mb-2 bg-secondary rounded-md border-l-[3px]',
 								severityBorderColor(finding.severity)
 							)}
 						>
@@ -70,15 +70,15 @@ export function ReviewViewer({ review }: ReviewViewerProps) {
 								<Badge variant={severityVariant(finding.severity)} className="uppercase">
 									{finding.severity}
 								</Badge>
-								<span className="text-[11px] text-text-muted font-mono">{finding.id}</span>
+								<span className="text-[11px] text-muted font-mono">{finding.id}</span>
 								<Badge>{finding.category}</Badge>
 							</div>
 							<p className="text-[13px]">{finding.description}</p>
 							{finding.filePath && (
-								<code className="block mt-1 text-[11px] text-text-muted">{finding.filePath}</code>
+								<code className="block mt-1 text-[11px] text-muted">{finding.filePath}</code>
 							)}
 							{finding.suggestion && (
-								<div className="mt-1.5 p-1.5 px-2 bg-bg-tertiary rounded text-xs">
+								<div className="mt-1.5 p-1.5 px-2 bg-tertiary rounded text-xs">
 									<strong>Suggestion:</strong> {finding.suggestion}
 								</div>
 							)}
@@ -89,7 +89,7 @@ export function ReviewViewer({ review }: ReviewViewerProps) {
 
 			{review.suggestedChanges.length > 0 && (
 				<section>
-					<h3 className="text-[13px] font-semibold text-text-secondary uppercase tracking-wide mb-2">
+					<h3 className="text-[13px] font-semibold text-secondary uppercase tracking-wide mb-2">
 						Suggested Changes
 					</h3>
 					<ul className="list-disc pl-5">

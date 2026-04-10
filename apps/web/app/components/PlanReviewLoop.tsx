@@ -81,7 +81,7 @@ export function PlanReviewLoop() {
 								>
 									{step.agent === 'opus' ? 'Opus' : 'Codex'}
 								</span>
-								<span className="text-lg text-text-primary">
+								<span className="text-lg text-primary">
 									{step.label}
 								</span>
 							</div>

@@ -179,7 +179,7 @@ export function CreateIssueModal() {
 
 				<div className="flex flex-col gap-3">
 					<div className="flex flex-col gap-1">
-						<Label htmlFor="issue-body" className="text-xs text-text-secondary">
+						<Label htmlFor="issue-body" className="text-xs text-secondary">
 							What do you want to build?
 						</Label>
 						<Textarea
@@ -207,7 +207,7 @@ export function CreateIssueModal() {
 					{clampedError && (
 						<div className="max-h-12 overflow-hidden rounded-md border border-danger/30 bg-danger/10 px-2.5 py-2 text-xs text-danger">
 							<span className="line-clamp-1">{clampedError}</span>
-							<span className="ml-2 text-text-muted">(full trace in devtools console)</span>
+							<span className="ml-2 text-muted">(full trace in devtools console)</span>
 						</div>
 					)}
 				</div>
@@ -229,7 +229,7 @@ export function CreateIssueModal() {
 						{submitLabel}
 					</Button>
 					{mode === 'create' && (
-						<label className="flex items-center gap-1.5 text-[11px] text-text-muted cursor-pointer select-none">
+						<label className="flex items-center gap-1.5 text-[11px] text-muted cursor-pointer select-none">
 							<input
 								type="checkbox"
 								checked={submitAnother}
@@ -239,7 +239,7 @@ export function CreateIssueModal() {
 							Submit another
 						</label>
 					)}
-					<span className="ml-auto text-[11px] text-text-muted">⌘↩ to submit</span>
+					<span className="ml-auto text-[11px] text-muted">⌘↩ to submit</span>
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>

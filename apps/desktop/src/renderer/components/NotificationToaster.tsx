@@ -35,7 +35,7 @@ function ToastRow({
   return (
     <div
       className={`group flex items-start gap-2 rounded-xl border px-3 py-2.5 shadow-lg backdrop-blur-sm ${
-        KIND_TONE[notification.kind] ?? 'border-border bg-bg-elevated'
+        KIND_TONE[notification.kind] ?? 'border-border bg-elevated'
       }`}
     >
       <button
@@ -43,13 +43,13 @@ function ToastRow({
         onClick={onClick}
         className="flex-1 cursor-pointer border-none bg-transparent text-left"
       >
-        <div className="text-[12px] font-semibold text-text-primary">{notification.title}</div>
-        <div className="mt-0.5 text-[11px] text-text-secondary">{notification.body}</div>
+        <div className="text-[12px] font-semibold text-primary">{notification.title}</div>
+        <div className="mt-0.5 text-[11px] text-secondary">{notification.body}</div>
       </button>
       <button
         type="button"
         onClick={onDismiss}
-        className="flex h-5 w-5 cursor-pointer items-center justify-center rounded border-none bg-transparent text-text-muted hover:text-text-primary"
+        className="flex h-5 w-5 cursor-pointer items-center justify-center rounded border-none bg-transparent text-muted hover:text-primary"
         title="Dismiss"
       >
         <X size={12} />

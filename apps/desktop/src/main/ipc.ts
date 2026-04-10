@@ -103,7 +103,7 @@ export function registerIpcHandlers(
     return queries.threads.list(projectId)
   })
 
-  ipcMain.handle('thread:create', (_event, { projectId, prompt, useWorktree: _useWorktree }: { projectId: string; prompt: string; useWorktree: boolean }) => {
+  ipcMain.handle('thread:create', (_event, { projectId, prompt }: { projectId: string; prompt: string }) => {
     const title = prompt.length > 60 ? prompt.substring(0, 60) + '...' : prompt
     return queries.threads.create(projectId, prompt, title)
   })

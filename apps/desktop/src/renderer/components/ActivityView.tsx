@@ -74,34 +74,34 @@ export function ActivityView() {
 	return (
 		<div className="flex flex-1 flex-col overflow-hidden">
 			<div className="border-b border-border px-6 py-4">
-				<h1 className="text-base font-semibold text-text-primary">Activity</h1>
-				<p className="text-xs text-text-muted">All pipeline events across every project.</p>
+				<h1 className="text-base font-semibold text-primary">Activity</h1>
+				<p className="text-xs text-muted">All pipeline events across every project.</p>
 			</div>
 
 			<div className="flex-1 overflow-y-auto px-6 py-6">
 				<div className="mx-auto max-w-3xl">
 					{isLoading && (
 						<div className="flex items-center justify-center py-16">
-							<Loader2 size={20} className="animate-spin text-text-muted" />
+							<Loader2 size={20} className="animate-spin text-muted" />
 						</div>
 					)}
 
 					{isError && (
 						<div className="flex flex-col items-center gap-3 py-16 text-center">
-							<p className="text-sm text-text-secondary">Failed to load activity.</p>
+							<p className="text-sm text-secondary">Failed to load activity.</p>
 							<Button variant="secondary" size="sm" onClick={() => refetch()}>Retry</Button>
 						</div>
 					)}
 
 					{!isLoading && !isError && activity.length === 0 && (
-						<div className="rounded-lg border border-dashed border-border px-4 py-12 text-center text-xs text-text-muted">
+						<div className="rounded-lg border border-dashed border-border px-4 py-12 text-center text-xs text-muted">
 							No activity yet.
 						</div>
 					)}
 
 					{!isLoading && !isError && groups.map((group) => (
 						<div key={group.label} className="mb-6">
-							<div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+							<div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted">
 								{group.label}
 							</div>
 							<Card>
@@ -112,29 +112,29 @@ export function ActivityView() {
 
 											return (
 												<li key={entry.id} className="flex items-start gap-3 px-4 py-3">
-													<span className="mt-0.5 inline-flex w-14 shrink-0 items-center justify-center rounded border border-border bg-bg-tertiary px-1 py-0.5 text-[9px] uppercase text-text-muted">
+													<span className="mt-0.5 inline-flex w-14 shrink-0 items-center justify-center rounded border border-border bg-tertiary px-1 py-0.5 text-[9px] uppercase text-muted">
 														{entry.actor}
 													</span>
 													{clickable ? (
 														<button
 															type="button"
 															onClick={() => selectProject(entry.projectId!)}
-															className="flex-1 cursor-pointer border-none bg-transparent text-left text-text-secondary hover:text-text-primary"
+															className="flex-1 cursor-pointer border-none bg-transparent text-left text-secondary hover:text-primary"
 														>
 															<div className="truncate text-[13px]">{entry.title}</div>
 															{entry.subtitle && (
-																<div className="truncate text-[11px] text-text-muted">{entry.subtitle}</div>
+																<div className="truncate text-[11px] text-muted">{entry.subtitle}</div>
 															)}
 														</button>
 													) : (
-														<div className="flex-1 text-left text-text-secondary">
+														<div className="flex-1 text-left text-secondary">
 															<div className="truncate text-[13px]">{entry.title}</div>
 															{entry.subtitle && (
-																<div className="truncate text-[11px] text-text-muted">{entry.subtitle}</div>
+																<div className="truncate text-[11px] text-muted">{entry.subtitle}</div>
 															)}
 														</div>
 													)}
-													<span className="shrink-0 text-[10px] text-text-muted">{timeAgo(entry.createdAt)}</span>
+													<span className="shrink-0 text-[10px] text-muted">{timeAgo(entry.createdAt)}</span>
 												</li>
 											)
 										})}

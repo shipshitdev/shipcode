@@ -29,13 +29,13 @@ export function FeatureGrid() {
 					{features.map((feature) => (
 						<div
 							key={feature.title}
-							className="bg-bg-secondary border border-border rounded-xl p-6"
+							className="bg-secondary border border-border rounded-xl p-6"
 						>
 							<feature.icon className="w-8 h-8 text-accent mb-4" />
-							<h3 className="text-lg font-semibold text-text-primary mb-2">
+							<h3 className="text-lg font-semibold text-primary mb-2">
 								{feature.title}
 							</h3>
-							<p className="text-text-secondary text-sm">
+							<p className="text-secondary text-sm">
 								{feature.description}
 							</p>
 						</div>

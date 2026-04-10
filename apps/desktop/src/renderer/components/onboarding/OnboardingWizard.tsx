@@ -87,7 +87,7 @@ export function OnboardingWizard({ onComplete }: Props) {
 	const isLastStep = step === 3
 
 	return (
-		<div className="flex items-center justify-center h-screen bg-bg-primary [app-region:drag]">
+		<div className="flex items-center justify-center h-screen bg-primary [app-region:drag]">
 			<Card className="w-[520px] max-h-[80vh] flex flex-col overflow-hidden [app-region:no-drag]">
 				<div className="px-6 pt-6 pb-4 border-b border-border">
 					<h2 className="text-lg font-bold mb-4">Welcome to ShipCode</h2>
@@ -96,7 +96,7 @@ export function OnboardingWizard({ onComplete }: Props) {
 							<div
 								key={label}
 								className={`flex items-center gap-1.5 text-xs ${
-									i === step ? 'text-accent' : i < step ? 'text-success' : 'text-text-muted'
+									i === step ? 'text-accent' : i < step ? 'text-success' : 'text-muted'
 								}`}
 							>
 								<span className={`w-2 h-2 rounded-full ${

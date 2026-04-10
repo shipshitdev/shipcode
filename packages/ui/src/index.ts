@@ -1,4 +1,6 @@
 export { cn } from './lib/utils'
+export { getStatusBadgeVariant } from './lib/status-variant'
+export type { StatusBadgeVariant } from './lib/status-variant'
 
 // Icons — re-exported from lucide-react so apps import via @shipcode/ui
 export {

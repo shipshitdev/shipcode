@@ -46,12 +46,12 @@ export function ProjectSidebar() {
 	const inboxCount = notifs.filter((n) => n.dismissedAt === null).length
 
 	return (
-		<aside className="flex w-[256px] min-w-[256px] flex-col border-r border-border bg-bg-secondary">
+		<aside className="flex w-[256px] min-w-[256px] flex-col border-r border-border bg-primary">
 			<div className="flex items-center justify-between px-4 py-3">
-				<h1 className="text-sm font-semibold tracking-tight text-text-primary">ShipCode</h1>
+				<h1 className="text-sm font-semibold tracking-tight text-primary">ShipCode</h1>
 				<button
 					type="button"
-					className="cursor-pointer rounded-md border-none bg-transparent p-1.5 text-text-secondary hover:bg-bg-hover hover:text-text-primary"
+					className="cursor-pointer rounded-md border-none bg-transparent p-1.5 text-secondary hover:bg-hover hover:text-primary"
 					onClick={toggleSidebar}
 					title="Collapse sidebar"
 				>
@@ -64,12 +64,12 @@ export function ProjectSidebar() {
 				<button
 					type="button"
 					className={cn(
-						'flex w-full cursor-pointer items-center gap-2 rounded-md border-none bg-transparent px-3 py-2 text-left text-[13px] text-text-secondary app-region-no-drag hover:bg-bg-hover hover:text-text-primary focus:outline-none',
-						!settingsVisible && viewMode === 'dashboard' && 'bg-bg-tertiary text-text-primary font-medium',
+						'flex w-full cursor-pointer items-center gap-2 rounded-md border-none bg-transparent px-3 py-2 text-left text-[13px] text-secondary app-region-no-drag hover:bg-hover hover:text-primary focus:outline-none',
+						!settingsVisible && viewMode === 'dashboard' && 'bg-tertiary text-primary font-medium',
 					)}
 					onClick={() => openDashboard()}
 				>
-					<svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0 text-text-secondary">
+					<svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0 text-secondary">
 						<rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1" stroke="currentColor" strokeWidth="1.4" />
 						<rect x="9" y="1.5" width="5.5" height="5.5" rx="1" stroke="currentColor" strokeWidth="1.4" />
 						<rect x="1.5" y="9" width="5.5" height="5.5" rx="1" stroke="currentColor" strokeWidth="1.4" />
@@ -77,7 +77,7 @@ export function ProjectSidebar() {
 					</svg>
 					<span className="flex-1 truncate">Mission Control</span>
 					{liveCount > 0 && (
-						<span className="inline-flex items-center gap-1 rounded-full bg-bg-tertiary px-1.5 py-0.5 text-[10px] font-medium text-accent">
+						<span className="inline-flex items-center gap-1 rounded-full bg-tertiary px-1.5 py-0.5 text-[10px] font-medium text-accent">
 							<span className="inline-block h-1.5 w-1.5 rounded-full bg-accent" />
 							{liveCount} live
 						</span>
@@ -88,12 +88,12 @@ export function ProjectSidebar() {
 				<button
 					type="button"
 					className={cn(
-						'flex w-full cursor-pointer items-center gap-2 rounded-md border-none bg-transparent px-3 py-2 text-left text-[13px] text-text-secondary app-region-no-drag hover:bg-bg-hover hover:text-text-primary focus:outline-none',
-						!settingsVisible && viewMode === 'activity' && 'bg-bg-tertiary text-text-primary font-medium',
+						'flex w-full cursor-pointer items-center gap-2 rounded-md border-none bg-transparent px-3 py-2 text-left text-[13px] text-secondary app-region-no-drag hover:bg-hover hover:text-primary focus:outline-none',
+						!settingsVisible && viewMode === 'activity' && 'bg-tertiary text-primary font-medium',
 					)}
 					onClick={() => openActivity()}
 				>
-					<svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0 text-text-secondary">
+					<svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0 text-secondary">
 						<line x1="3" y1="4" x2="13" y2="4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
 						<line x1="3" y1="8" x2="13" y2="8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
 						<line x1="3" y1="12" x2="9" y2="12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
@@ -105,12 +105,12 @@ export function ProjectSidebar() {
 				<button
 					type="button"
 					className={cn(
-						'flex w-full cursor-pointer items-center gap-2 rounded-md border-none bg-transparent px-3 py-2 text-left text-[13px] text-text-secondary app-region-no-drag hover:bg-bg-hover hover:text-text-primary focus:outline-none',
-						!settingsVisible && viewMode === 'inbox' && 'bg-bg-tertiary text-text-primary font-medium',
+						'flex w-full cursor-pointer items-center gap-2 rounded-md border-none bg-transparent px-3 py-2 text-left text-[13px] text-secondary app-region-no-drag hover:bg-hover hover:text-primary focus:outline-none',
+						!settingsVisible && viewMode === 'inbox' && 'bg-tertiary text-primary font-medium',
 					)}
 					onClick={() => openInbox()}
 				>
-					<svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0 text-text-secondary">
+					<svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0 text-secondary">
 						<path
 							d="M8 1.5A4.5 4.5 0 0 0 3.5 6v3.5L2 11h12l-1.5-1.5V6A4.5 4.5 0 0 0 8 1.5z"
 							stroke="currentColor"
@@ -121,14 +121,14 @@ export function ProjectSidebar() {
 					</svg>
 					<span className="flex-1 truncate">Inbox</span>
 					{inboxCount > 0 && (
-						<span className="inline-flex items-center justify-center rounded-full bg-bg-tertiary px-1.5 py-0.5 text-[10px] font-medium text-text-secondary">
+						<span className="inline-flex items-center justify-center rounded-full bg-tertiary px-1.5 py-0.5 text-[10px] font-medium text-secondary">
 							{inboxCount}
 						</span>
 					)}
 				</button>
 			</div>
 
-			<div className="mt-3 px-4 text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+			<div className="mt-3 px-4 text-[10px] font-semibold uppercase tracking-wider text-muted">
 				Projects
 			</div>
 
@@ -138,20 +138,20 @@ export function ProjectSidebar() {
 						type="button"
 						key={project.id}
 						className={cn(
-							'flex w-full cursor-pointer items-center gap-2 rounded-md border-none bg-transparent px-3 py-2 text-left text-[13px] text-text-secondary app-region-no-drag hover:bg-bg-hover hover:text-text-primary focus:outline-none',
-							viewMode === 'project' && activeProjectId === project.id && 'bg-bg-tertiary text-text-primary font-medium',
+							'flex w-full cursor-pointer items-center gap-2 rounded-md border-none bg-transparent px-3 py-2 text-left text-[13px] text-secondary app-region-no-drag hover:bg-hover hover:text-primary focus:outline-none',
+							viewMode === 'project' && activeProjectId === project.id && 'bg-tertiary text-primary font-medium',
 						)}
 						onClick={() => selectProject(project.id)}
 					>
-						<Folder size={14} className="shrink-0 text-text-secondary" />
-						<span className="truncate text-text-primary">{project.name}</span>
+						<Folder size={14} className="shrink-0 text-secondary" />
+						<span className="truncate text-primary">{project.name}</span>
 					</button>
 				))}
 			</div>
 
 			<button
 				type="button"
-				className="m-2 flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-dashed border-border bg-transparent px-3 py-2 text-xs text-text-secondary app-region-no-drag hover:border-border-strong hover:text-text-primary"
+				className="m-2 flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-dashed border-border bg-transparent px-3 py-2 text-xs text-secondary app-region-no-drag hover:border-border-strong hover:text-primary"
 				onClick={() => addProject.mutate()}
 			>
 				<Plus size={12} />

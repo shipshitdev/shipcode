@@ -23,6 +23,7 @@ import { createElectronEmitter } from './pipeline-bridge'
 import { NotificationService } from './notification-service'
 
 let mainWindow: BrowserWindow | null = null
+let processManager: ProcessManager | null = null
 
 const DIST = path.join(__dirname, '..')
 const RENDERER_URL = process.env.VITE_DEV_SERVER_URL
@@ -49,7 +50,7 @@ function createWindow() {
   const db = getDatabase(dataDir)
 
   // Initialize services
-  const processManager = new ProcessManager()
+  processManager = new ProcessManager()
   const queries = {
     projects: new ProjectQueries(db),
     threads: new ThreadQueries(db),
@@ -140,7 +141,7 @@ function createWindow() {
 
   mainWindow.on('closed', () => {
     mainWindow = null
-    processManager.killAll()
+    processManager?.killAll()
     closeDatabase()
   })
 }
@@ -151,6 +152,12 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+// Kill all agent subprocesses before the Electron main process exits (Cmd+Q,
+// force-quit, etc.) so claude/codex don't keep running as orphans.
+app.on('before-quit', () => {
+  processManager?.killAll()
 })
 
 app.on('activate', () => {

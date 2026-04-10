@@ -1,5 +1,7 @@
 import { create } from 'zustand'
-import type { ShipCodePlan, PlanReview, PipelinePhase, SystemHealth, VerificationResult, GitHubIssueCacheRecord, NotificationRecord } from '@shipcode/shared'
+import type { ShipCodePlan, PlanReview, PipelinePhase, SystemHealth, VerificationResult, GitHubIssueCacheRecord, NotificationRecord, IssuePipelineStatus } from '@shipcode/shared'
+
+const AGENT_ACTIVE_STATUSES = new Set<IssuePipelineStatus>(['planning', 'reviewing', 'revising', 'executing', 'verifying', 'shipping'])
 
 export type ViewMode = 'dashboard' | 'project' | 'activity' | 'inbox'
 export type SettingsSection = 'general' | 'github' | 'notifications' | 'pipeline'
@@ -95,14 +97,16 @@ export const useAppStore = create<AppState>((set) => ({
 	openInbox: () => set({ viewMode: 'inbox', activeIssue: null, currentPlan: null, currentReview: null, currentVerification: null }),
 	selectProject: (id) => set({ activeProjectId: id, activeThreadId: null, activeIssue: null, currentPlan: null, currentReview: null, currentVerification: null, pipelinePhase: 'idle', viewMode: 'project' }),
 	selectThread: (id) => set({ activeThreadId: id, currentPlan: null, currentReview: null, currentVerification: null, pipelinePhase: 'idle', viewMode: 'project' }),
-	selectIssue: (issue) => set({
+	selectIssue: (issue) => set((s) => ({
 		activeIssue: issue,
 		activeThreadId: issue?.threadId ?? null,
 		currentPlan: null,
 		currentReview: null,
 		currentVerification: null,
 		pipelinePhase: 'idle',
-	}),
+		// Auto-open terminal when the selected issue has an agent actively running
+		terminalVisible: issue && AGENT_ACTIVE_STATUSES.has(issue.pipelineStatus) ? true : s.terminalVisible,
+	})),
 	toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
 	toggleTerminal: () => set((s) => ({ terminalVisible: !s.terminalVisible })),
 	openTerminal: () => set({ terminalVisible: true }),

@@ -9,6 +9,12 @@ import { getStatusBadgeVariant } from './lib/status-variant'
 import { Badge } from './primitives/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './primitives/select'
 
+const MODEL_DISPLAY: Record<string, string> = {
+	claude: 'sonnet 4.6',
+	codex: 'gpt 5.4',
+	openrouter: 'openrouter',
+}
+
 // Static map for the drag overlay border. Tailwind's JIT needs string-literal
 // class names, so we cannot interpolate (`border-${variant}`).
 function dragOverlayBorderClass(status: IssuePipelineStatus): string {
@@ -111,13 +117,12 @@ function DraggableCard({ issue, onClick, onRerun, isSelected }: { issue: GitHubI
 		<div
 			ref={setNodeRef}
 			className={cn(
-				'relative rounded-md border bg-bg-elevated p-2 transition-colors',
+				'relative rounded-md border bg-elevated p-2 transition-colors outline-none',
 				draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-default',
-				'border-border/50 hover:border-border-strong',
-				isFailed && 'border-danger/40 bg-danger/[0.04] hover:border-danger/60',
-				isAwaiting && 'border-warning/30 bg-warning/[0.03] hover:border-warning/50',
+				isSelected ? 'border-text-primary/60 bg-elevated' : 'border-border/50 hover:border-border-strong',
+				isFailed && !isSelected && 'border-danger/40 bg-danger/[0.04] hover:border-danger/60',
+				isAwaiting && !isSelected && 'border-warning/30 bg-warning/[0.03] hover:border-warning/50',
 				isDragging && 'opacity-50',
-				isSelected && 'ring-1 ring-white/20',
 			)}
 			{...listeners}
 			{...attributes}
@@ -134,8 +139,8 @@ function DraggableCard({ issue, onClick, onRerun, isSelected }: { issue: GitHubI
 					<RotateCcw size={11} />
 				</button>
 			)}
-			<div className="text-[11px] text-text-secondary font-mono mb-0.5">#{issue.issueNumber}</div>
-			<div className="text-xs leading-snug text-text-primary font-medium line-clamp-2">{issue.title}</div>
+			<div className="text-[11px] text-secondary font-mono mb-0.5">#{issue.issueNumber}</div>
+			<div className="text-xs leading-snug text-primary font-medium line-clamp-2">{issue.title}</div>
 			<div className="flex flex-wrap gap-1 mt-1">
 				{issue.labels.filter(l => l.startsWith('agent:')).map(l => (
 					<Badge key={l} variant="accent" className="text-[10px] px-1.5 py-px font-medium">{l}</Badge>
@@ -161,13 +166,13 @@ function DroppableColumn({ id, label, issues, droppable, onIssueClick, selectedI
 		<div
 			ref={setNodeRef}
 			className={cn(
-				'flex-1 min-w-[140px] max-w-[220px] flex flex-col bg-bg-secondary rounded-md overflow-hidden transition-colors border border-border/40',
-				isOver && droppable && 'ring-2 ring-accent bg-bg-tertiary'
+				'flex-1 min-w-[140px] max-w-[220px] flex flex-col bg-secondary rounded-md overflow-hidden transition-colors border border-border/40',
+				isOver && droppable && 'ring-2 ring-accent bg-tertiary'
 			)}
 		>
-			<div className="flex items-center justify-between px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-text-primary border-b border-border shrink-0">
+			<div className="flex items-center justify-between px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-primary border-b border-border shrink-0">
 				<span>{label}</span>
-				<span className="text-[10px] bg-bg-tertiary text-text-muted px-1.5 py-px rounded-full font-medium">{issues.length}</span>
+				<span className="text-[10px] bg-tertiary text-muted px-1.5 py-px rounded-full font-medium">{issues.length}</span>
 			</div>
 			<div className="flex-1 overflow-y-auto p-1.5 flex flex-col gap-1 min-h-[60px]">
 				{issues.map(issue => (
@@ -219,25 +224,25 @@ function SectionBlock({
 		<div className="border-t border-border first:border-t-0">
 			<div className={cn(
 				'flex items-center justify-between px-2 py-1 text-[10px] font-semibold uppercase tracking-wide',
-				empty && 'text-text-muted opacity-50',
-				!empty && !tone && 'text-text-secondary',
+				empty && 'text-muted opacity-50',
+				!empty && !tone && 'text-secondary',
 				tone === 'danger' && 'text-danger',
 				tone === 'warning' && 'text-warning',
 			)}>
 				<span className="flex items-center gap-1.5">
 					<span>{section.label}</span>
 					{showAgent && (
-						<span className="font-mono normal-case text-[9px] font-normal text-text-muted">
-							· {agentLabel}
+						<span className="font-mono normal-case text-[9px] font-normal text-muted">
+							· {MODEL_DISPLAY[agentLabel] ?? agentLabel}
 						</span>
 					)}
 				</span>
 				<span className={cn(
 					// Always reserve a 1px border so the pill size doesn't shift when the
 					// tone switches on/off as issues enter/leave the section.
-					'text-[10px] bg-bg-tertiary px-1.5 py-px rounded-full font-medium border border-transparent',
-					empty && 'text-text-muted/70',
-					!empty && !tone && 'text-text-muted',
+					'text-[10px] bg-tertiary px-1.5 py-px rounded-full font-medium border border-transparent',
+					empty && 'text-muted/70',
+					!empty && !tone && 'text-muted',
 					tone === 'danger' && 'bg-danger/15 text-danger border-danger/25',
 					tone === 'warning' && 'bg-warning/15 text-warning border-warning/25',
 				)}>{count}</span>
@@ -247,7 +252,7 @@ function SectionBlock({
 					ref={section.droppable ? setNodeRef : undefined}
 					className={cn(
 						'flex flex-col gap-1 p-1.5 pt-0',
-						section.droppable && isOver && 'bg-bg-tertiary border border-dashed border-accent rounded-md'
+						section.droppable && isOver && 'bg-tertiary border border-dashed border-accent rounded-md'
 					)}
 				>
 					{issues.map(issue => (
@@ -260,7 +265,7 @@ function SectionBlock({
 					ref={setNodeRef}
 					className={cn(
 						'mx-1.5 mb-1.5 min-h-[36px] rounded border border-dashed',
-						isOver ? 'border-accent bg-bg-tertiary' : 'border-border/50'
+						isOver ? 'border-accent bg-tertiary' : 'border-border/50'
 					)}
 				/>
 			)}
@@ -284,10 +289,10 @@ function StackedColumn({
 	const columnIssues = issues.filter(i => column.statuses.includes(i.pipelineStatus))
 
 	return (
-		<div className="flex-[1.3] min-w-[180px] max-w-[280px] flex flex-col bg-bg-secondary rounded-md overflow-hidden border border-border/40">
-			<div className="flex items-center justify-between px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-text-primary border-b border-border shrink-0">
+		<div className="flex-[1.3] min-w-[180px] max-w-[280px] flex flex-col bg-secondary rounded-md overflow-hidden border border-border/40">
+			<div className="flex items-center justify-between px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-primary border-b border-border shrink-0">
 				<span>{column.label}</span>
-				<span className="text-[10px] bg-bg-tertiary text-text-muted px-1.5 py-px rounded-full font-medium">{columnIssues.length}</span>
+				<span className="text-[10px] bg-tertiary text-muted px-1.5 py-px rounded-full font-medium">{columnIssues.length}</span>
 			</div>
 			<div className="flex-1 overflow-y-auto min-h-[60px]">
 				{(column.sections ?? []).map(section => {
@@ -364,7 +369,7 @@ export function KanbanBoard({ issues, onIssueClick, onRefresh, onNewIssue, onSta
 				<div className="flex items-center gap-2 shrink-0">
 					{baseBranch && branches && branches.length > 0 && onBaseBranchChange && (
 						<div className="flex items-center gap-2 min-w-0 max-w-[200px] shrink-0">
-							<span className="text-[11px] text-text-muted font-mono shrink-0">base:</span>
+							<span className="text-[11px] text-muted font-mono shrink-0">base:</span>
 							<Select value={baseBranch} onValueChange={onBaseBranchChange}>
 								<SelectTrigger className="h-7 text-xs font-mono truncate">
 									<SelectValue />
@@ -379,7 +384,7 @@ export function KanbanBoard({ issues, onIssueClick, onRefresh, onNewIssue, onSta
 					)}
 					<button
 						type="button"
-						className="flex items-center justify-center h-7 w-7 bg-transparent border border-border rounded-md text-text-secondary cursor-pointer hover:text-text-primary hover:border-text-secondary"
+						className="flex items-center justify-center h-7 w-7 bg-transparent border border-border rounded-md text-secondary cursor-pointer hover:text-primary hover:border-text-secondary"
 						onClick={onRefresh}
 						title="Refresh"
 					>
@@ -432,11 +437,11 @@ export function KanbanBoard({ issues, onIssueClick, onRefresh, onNewIssue, onSta
 				<DragOverlay dropAnimation={null}>
 					{activeIssue ? (
 						<div className={cn(
-							'opacity-80 bg-bg-secondary border rounded-md p-2 shadow-lg cursor-grabbing',
+							'opacity-80 bg-secondary border rounded-md p-2 shadow-lg cursor-grabbing',
 							dragOverlayBorderClass(activeIssue.pipelineStatus),
 						)}>
-							<div className="text-[11px] text-text-muted font-mono mb-0.5">#{activeIssue.issueNumber}</div>
-							<div className="text-xs leading-snug text-text-primary line-clamp-2">{activeIssue.title}</div>
+							<div className="text-[11px] text-muted font-mono mb-0.5">#{activeIssue.issueNumber}</div>
+							<div className="text-xs leading-snug text-primary line-clamp-2">{activeIssue.title}</div>
 						</div>
 					) : null}
 				</DragOverlay>

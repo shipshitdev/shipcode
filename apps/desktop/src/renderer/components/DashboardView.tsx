@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import type {
   ActivePipelineSummary,
@@ -10,7 +10,7 @@ import type {
 } from '@shipcode/shared'
 import {
   Card, CardContent, CardFooter, CardHeader, CardTitle,
-  Button, Folder, Plus, Pagination,
+  Button, Plus, Pagination,
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@shipcode/ui'
 import { useAppStore } from '../stores/app-store'
@@ -25,7 +25,7 @@ const PHASE_COLOR: Partial<Record<PipelinePhase, string>> = {
   shipping: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
   completed: 'bg-success/15 text-success border-success/30',
   failed: 'bg-danger/15 text-danger border-danger/30',
-  idle: 'bg-bg-tertiary text-text-muted border-border',
+  idle: 'bg-tertiary text-muted border-border',
 }
 
 function PhaseChip({ phase }: { phase: PipelinePhase }) {
@@ -87,10 +87,10 @@ function StatCard({ label, value, subtitle, tone = 'default', onClick }: StatCar
   const card = (
     <Card className={`${toneClass}${onClick ? ' hover:ring-1 hover:ring-border' : ''}`}>
       <CardContent className="p-5 pt-5">
-        <div className="text-3xl font-semibold text-text-primary">{value}</div>
-        <div className="mt-1 text-xs uppercase tracking-wide text-text-secondary">{label}</div>
+        <div className="text-3xl font-semibold text-primary">{value}</div>
+        <div className="mt-1 text-xs uppercase tracking-wide text-secondary">{label}</div>
         {subtitle ? (
-          <div className="mt-2 text-[11px] text-text-muted">{subtitle}</div>
+          <div className="mt-2 text-[11px] text-muted">{subtitle}</div>
         ) : null}
       </CardContent>
     </Card>
@@ -137,9 +137,6 @@ export function DashboardView() {
     },
   })
 
-  const recentProjects = [...projects]
-    .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
-    .slice(0, 8)
 
   const { data: running = [] } = useQuery<ActivePipelineSummary[]>({
     queryKey: ['dashboard', 'running'],
@@ -180,12 +177,6 @@ export function DashboardView() {
   const activitySlice = activity
   const tasksSlice = recent
 
-  const runningAgentsRef = useRef<HTMLDivElement>(null)
-
-  const scrollToRunningAgents = () => {
-    runningAgentsRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
-
   const handleRowClick = (projectId: string, threadId: string) => {
     selectProject(projectId)
     selectThread(threadId)
@@ -200,8 +191,8 @@ export function DashboardView() {
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex items-center justify-between border-b border-border px-6 py-4">
         <div>
-          <h1 className="text-base font-semibold text-text-primary">Mission Control</h1>
-          <p className="text-xs text-text-muted">Live view of every agent across every project.</p>
+          <h1 className="text-base font-semibold text-primary">Mission Control</h1>
+          <p className="text-xs text-muted">Live view of every agent across every project.</p>
         </div>
       </div>
 
@@ -219,7 +210,6 @@ export function DashboardView() {
                       .join(', ') || 'idle'
                   : '—'
               }
-              onClick={scrollToRunningAgents}
             />
             <StatCard
               label="Tasks In Progress"
@@ -248,61 +238,14 @@ export function DashboardView() {
             />
           </div>
 
-          {/* Projects — quick switcher + add repo */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Projects</CardTitle>
-                <Button
-                  size="xs"
-                  variant="secondary"
-                  onClick={() => addProject.mutate()}
-                  disabled={addProject.isPending}
-                >
-                  <Plus size={12} />
-                  Add repository
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-0">
-              {recentProjects.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-text-muted">
-                  No projects yet. Click <span className="text-text-secondary">Add repository</span> to get started.
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {recentProjects.map((project) => (
-                    <button
-                      key={project.id}
-                      type="button"
-                      onClick={() => selectProject(project.id)}
-                      className="group flex cursor-pointer items-center gap-2.5 rounded-lg border border-border bg-bg-elevated px-3 py-2.5 text-left transition-colors hover:border-border-strong hover:bg-bg-hover"
-                    >
-                      <Folder size={14} className="shrink-0 text-text-muted group-hover:text-text-primary" />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[12px] font-medium text-text-primary">
-                          {project.name}
-                        </div>
-                        <div className="truncate text-[10px] text-text-muted">
-                          {project.path}
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Running Agents */}
-          <div ref={runningAgentsRef}>
+          {/* Running Agents — always first after stats */}
           <Card>
             <CardHeader>
               <CardTitle>Running Agents</CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
               {running.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-text-muted">
+                <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted">
                   No agents running. Start a pipeline to see live status here.
                 </div>
               ) : (
@@ -317,14 +260,14 @@ export function DashboardView() {
                         onClick={() => handleRowClick(row.projectId, row.threadId)}
                         className="flex flex-1 cursor-pointer items-center gap-3 border-none bg-transparent text-left"
                       >
-                        <span className="inline-flex shrink-0 items-center rounded-md border border-border bg-bg-tertiary px-1.5 py-0.5 text-[10px] text-text-secondary">
+                        <span className="inline-flex shrink-0 items-center rounded-md border border-border bg-tertiary px-1.5 py-0.5 text-[10px] text-secondary">
                           {row.projectName}
                         </span>
-                        <span className="flex-1 truncate text-[13px] text-text-primary">
+                        <span className="flex-1 truncate text-[13px] text-primary">
                           {row.threadTitle}
                         </span>
                         <PhaseChip phase={row.phase} />
-                        <span className="w-16 text-right text-[11px] tabular-nums text-text-muted">
+                        <span className="w-16 text-right text-[11px] tabular-nums text-muted">
                           <ElapsedClock since={row.startedAt} />
                         </span>
                       </button>
@@ -341,7 +284,31 @@ export function DashboardView() {
               )}
             </CardContent>
           </Card>
-          </div>
+
+          {/* Projects — only shown on first run (no projects yet) as an onboarding CTA */}
+          {projects.length === 0 && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Add your first project</CardTitle>
+                  <Button
+                    size="xs"
+                    variant="secondary"
+                    onClick={() => addProject.mutate()}
+                    disabled={addProject.isPending}
+                  >
+                    <Plus size={12} />
+                    Add repository
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted">
+                  No projects yet. Click <span className="text-secondary">Add repository</span> or use the sidebar to get started.
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Activity + Recent tasks */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -352,7 +319,7 @@ export function DashboardView() {
                   <button
                     type="button"
                     onClick={openActivity}
-                    className="cursor-pointer border-none bg-transparent text-[11px] text-text-muted hover:text-text-primary"
+                    className="cursor-pointer border-none bg-transparent text-[11px] text-muted hover:text-primary"
                   >
                     View all →
                   </button>
@@ -360,7 +327,7 @@ export function DashboardView() {
               </CardHeader>
               <CardContent className="pt-0">
                 {activity.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-text-muted">
+                  <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted">
                     No activity yet.
                   </div>
                 ) : (
@@ -376,7 +343,7 @@ export function DashboardView() {
                       {activitySlice.map((entry) => (
                         <TableRow
                           key={entry.id}
-                          className="cursor-pointer hover:bg-bg-hover"
+                          className="cursor-pointer hover:bg-hover"
                           onClick={() => {
                             if (entry.projectId && entry.threadId) {
                               handleRowClick(entry.projectId, entry.threadId)
@@ -384,17 +351,17 @@ export function DashboardView() {
                           }}
                         >
                           <TableCell className="w-px whitespace-nowrap pr-2 align-top pt-2.5">
-                            <span className="inline-flex items-center justify-center rounded border border-border bg-bg-tertiary px-1 py-0.5 text-[9px] uppercase text-text-secondary">
+                            <span className="inline-flex items-center justify-center rounded border border-border bg-tertiary px-1 py-0.5 text-[9px] uppercase text-secondary">
                               {entry.actor}
                             </span>
                           </TableCell>
                           <TableCell className="max-w-0 w-full">
-                            <div className="truncate text-[12px] text-text-primary">{entry.title}</div>
+                            <div className="truncate text-[12px] text-primary">{entry.title}</div>
                             {entry.subtitle ? (
-                              <div className="truncate text-[11px] text-text-muted">{entry.subtitle}</div>
+                              <div className="truncate text-[11px] text-muted">{entry.subtitle}</div>
                             ) : null}
                           </TableCell>
-                          <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-text-muted">
+                          <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-muted">
                             {timeAgo(entry.createdAt)}
                           </TableCell>
                         </TableRow>
@@ -417,7 +384,7 @@ export function DashboardView() {
                   <button
                     type="button"
                     onClick={openInbox}
-                    className="cursor-pointer border-none bg-transparent text-[11px] text-text-muted hover:text-text-primary"
+                    className="cursor-pointer border-none bg-transparent text-[11px] text-muted hover:text-primary"
                   >
                     Inbox →
                   </button>
@@ -425,7 +392,7 @@ export function DashboardView() {
               </CardHeader>
               <CardContent className="pt-0">
                 {recent.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-text-muted">
+                  <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted">
                     No recent tasks.
                   </div>
                 ) : (
@@ -441,19 +408,19 @@ export function DashboardView() {
                       {tasksSlice.map((task) => (
                         <TableRow
                           key={task.threadId}
-                          className="cursor-pointer hover:bg-bg-hover"
+                          className="cursor-pointer hover:bg-hover"
                           onClick={() => handleRowClick(task.projectId, task.threadId)}
                         >
                           <TableCell className="w-px whitespace-nowrap pr-2">
                             <PhaseChip phase={task.phase} />
                           </TableCell>
                           <TableCell className="max-w-0 w-full">
-                            <div className="truncate text-[12px] text-text-primary">
+                            <div className="truncate text-[12px] text-primary">
                               {task.githubIssueNumber ? `#${task.githubIssueNumber} ` : ''}
                               {task.title}
                             </div>
                           </TableCell>
-                          <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-text-muted">
+                          <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-muted">
                             {timeAgo(task.updatedAt)}
                           </TableCell>
                         </TableRow>

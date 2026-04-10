@@ -15,11 +15,11 @@ export function VerificationViewer({ verification }: VerificationViewerProps) {
 				</Badge>
 			</div>
 
-			<p className="text-sm text-text-secondary">{verification.summary}</p>
+			<p className="text-sm text-secondary">{verification.summary}</p>
 
 			{verification.criteriaResults.length > 0 && (
 				<div className="space-y-2">
-					<h4 className="text-sm font-semibold text-text-primary">Acceptance Criteria</h4>
+					<h4 className="text-sm font-semibold text-primary">Acceptance Criteria</h4>
 					<ul className="space-y-2">
 						{verification.criteriaResults.map((cr, i) => (
 							<li
@@ -38,8 +38,8 @@ export function VerificationViewer({ verification }: VerificationViewerProps) {
 									{cr.passed ? '\u2713' : '\u2717'}
 								</span>
 								<div className="min-w-0">
-									<div className="text-text-primary">{cr.criterion}</div>
-									<div className="text-xs text-text-muted mt-0.5">{cr.evidence}</div>
+									<div className="text-primary">{cr.criterion}</div>
+									<div className="text-xs text-muted mt-0.5">{cr.evidence}</div>
 								</div>
 							</li>
 						))}
@@ -49,12 +49,12 @@ export function VerificationViewer({ verification }: VerificationViewerProps) {
 
 			{verification.issues.length > 0 && (
 				<div className="space-y-2">
-					<h4 className="text-sm font-semibold text-text-primary">
+					<h4 className="text-sm font-semibold text-primary">
 						Issues ({verification.issues.length})
 					</h4>
 					<ul className="space-y-1.5">
 						{verification.issues.map((issue, i) => (
-							<li key={i} className="flex items-start gap-2 text-sm text-text-primary">
+							<li key={i} className="flex items-start gap-2 text-sm text-primary">
 								<Badge
 									variant={issue.severity === 'blocker' ? 'danger' : issue.severity === 'warning' ? 'warning' : 'default'}
 									className="shrink-0"
@@ -63,7 +63,7 @@ export function VerificationViewer({ verification }: VerificationViewerProps) {
 								</Badge>
 								<span>{issue.description}</span>
 								{issue.filePath && (
-									<code className="text-xs text-text-muted bg-bg-tertiary px-1.5 py-0.5 rounded shrink-0">
+									<code className="text-xs text-muted bg-tertiary px-1.5 py-0.5 rounded shrink-0">
 										{issue.filePath}
 									</code>
 								)}

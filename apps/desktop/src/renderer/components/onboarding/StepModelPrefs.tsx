@@ -17,7 +17,7 @@ export function StepModelPrefs({ plannerModel, reviewerModel, onChange, singleAg
 	return (
 		<div>
 			<h3 className="text-[15px] font-semibold mb-2">Model preferences</h3>
-			<p className="text-text-secondary text-[13px] mb-4 leading-relaxed">
+			<p className="text-secondary text-[13px] mb-4 leading-relaxed">
 				ShipCode uses an adversarial review model: one AI plans, a different one critiques.
 				This catches blind spots that single-model self-review misses.
 			</p>

@@ -32,7 +32,7 @@ export function SettingsPanel() {
 						<h3 className="mb-5">General</h3>
 
 						<section className="mb-8">
-							<h4 className="mb-3 text-text-secondary">Worktree Location</h4>
+							<h4 className="mb-3 text-secondary">Worktree Location</h4>
 							<div className="flex items-center justify-between border-b border-bg-tertiary py-2">
 								<Label htmlFor="worktree-root">Worktree root</Label>
 								<Input
@@ -56,7 +56,7 @@ export function SettingsPanel() {
 									}}
 								/>
 							</div>
-							<p className="text-xs text-text-secondary mt-2">
+							<p className="text-xs text-secondary mt-2">
 								Default: <code>~/.shipcode/worktrees</code>. Use an absolute path or{' '}
 								<code>~/…</code> to customize, or leave blank to reset to default. Relative paths
 								are rejected.
@@ -67,9 +67,9 @@ export function SettingsPanel() {
 						</section>
 
 						<section className="mb-8">
-							<h4 className="mb-3 text-text-secondary">Setup</h4>
+							<h4 className="mb-3 text-secondary">Setup</h4>
 							<div className="flex items-center justify-between border-b border-bg-tertiary py-2">
-								<span className="text-text-primary">Re-run the onboarding wizard</span>
+								<span className="text-primary">Re-run the onboarding wizard</span>
 								<Button
 									variant="secondary"
 									onClick={() => updateSettings.mutate({ onboardingVersion: 0 })}
@@ -86,7 +86,7 @@ export function SettingsPanel() {
 						<h3 className="mb-5">GitHub</h3>
 
 						<section className="mb-8">
-							<h4 className="mb-3 text-text-secondary">GitHub Integration</h4>
+							<h4 className="mb-3 text-secondary">GitHub Integration</h4>
 							<div className="flex items-center justify-between border-b border-bg-tertiary py-2">
 								<Label htmlFor="polling-enabled">Polling Enabled</Label>
 								<Switch
@@ -159,7 +159,7 @@ export function SettingsPanel() {
 									disabled={!settings.notificationsEnabled}
 								/>
 							</div>
-							<div className="mt-3 text-xs uppercase tracking-wide text-text-muted">Notify me when</div>
+							<div className="mt-3 text-xs uppercase tracking-wide text-muted">Notify me when</div>
 							<div className="flex items-center justify-between border-b border-bg-tertiary py-2">
 								<Label htmlFor="notify-awaiting-approval">Awaiting approval</Label>
 								<Switch

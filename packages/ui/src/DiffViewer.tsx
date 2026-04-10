@@ -13,7 +13,7 @@ const actionColor = (action: string) => {
 		case 'create': return 'text-success'
 		case 'delete': return 'text-danger'
 		case 'modify': return 'text-warning'
-		default: return 'text-text-secondary'
+		default: return 'text-secondary'
 	}
 }
 
@@ -29,7 +29,7 @@ const actionVariant = (action: string) => {
 export function DiffViewer({ diffs, activeFile, onFileSelect }: DiffViewerProps) {
 	if (diffs.length === 0) {
 		return (
-			<div className="flex items-center justify-center h-full text-text-muted">
+			<div className="flex items-center justify-center h-full text-muted">
 				<p>No changes to display</p>
 			</div>
 		)
@@ -45,8 +45,8 @@ export function DiffViewer({ diffs, activeFile, onFileSelect }: DiffViewerProps)
 						type="button"
 						key={diff.id}
 						className={cn(
-							'flex items-center gap-1 px-2.5 py-1 bg-transparent border-none rounded-md text-text-secondary cursor-pointer text-xs whitespace-nowrap hover:bg-bg-tertiary',
-							diff.filePath === activeDiff?.filePath && 'bg-bg-tertiary text-text-primary'
+							'flex items-center gap-1 px-2.5 py-1 bg-transparent border-none rounded-md text-secondary cursor-pointer text-xs whitespace-nowrap hover:bg-tertiary',
+							diff.filePath === activeDiff?.filePath && 'bg-tertiary text-primary'
 						)}
 						onClick={() => onFileSelect?.(diff.filePath)}
 					>
@@ -60,13 +60,13 @@ export function DiffViewer({ diffs, activeFile, onFileSelect }: DiffViewerProps)
 
 			{activeDiff && (
 				<div className="p-2">
-					<div className="flex justify-between px-3 py-1.5 bg-bg-secondary rounded-t-md text-xs">
+					<div className="flex justify-between px-3 py-1.5 bg-secondary rounded-t-md text-xs">
 						<code>{activeDiff.filePath}</code>
 						<Badge variant={actionVariant(activeDiff.action)}>
 							{activeDiff.action}
 						</Badge>
 					</div>
-					<pre className="font-mono text-xs leading-relaxed overflow-x-auto py-2 bg-bg-secondary rounded-b-md">
+					<pre className="font-mono text-xs leading-relaxed overflow-x-auto py-2 bg-secondary rounded-b-md">
 						{activeDiff.diffContent
 							? activeDiff.diffContent.split('\n').map((line, i) => {
 									const isAdded = line.startsWith('+') && !line.startsWith('+++')

@@ -62,9 +62,9 @@ export function StatusMappingEditor({ mappings, onSave }: StatusMappingEditorPro
 	return (
 		<div>
 			<div className="flex items-center justify-between mb-3">
-				<h4 className="m-0 flex items-center gap-2 text-text-primary font-medium">
+				<h4 className="m-0 flex items-center gap-2 text-primary font-medium">
 					Status
-					<ArrowRight size={14} className="text-text-muted" />
+					<ArrowRight size={14} className="text-muted" />
 					GitHub Label Mapping
 				</h4>
 				<div className="flex gap-2">
@@ -90,10 +90,10 @@ export function StatusMappingEditor({ mappings, onSave }: StatusMappingEditorPro
 			<table className="w-full border-collapse">
 				<thead>
 					<tr>
-						<th className="text-left p-2 text-text-secondary border-b border-bg-tertiary font-medium">
+						<th className="text-left p-2 text-secondary border-b border-bg-tertiary font-medium">
 							Pipeline Status
 						</th>
-						<th className="text-left p-2 text-text-secondary border-b border-bg-tertiary font-medium">
+						<th className="text-left p-2 text-secondary border-b border-bg-tertiary font-medium">
 							GitHub Label
 						</th>
 					</tr>
@@ -101,7 +101,7 @@ export function StatusMappingEditor({ mappings, onSave }: StatusMappingEditorPro
 				<tbody>
 					{PIPELINE_STATUSES.map(({ key, label }) => (
 						<tr key={key}>
-							<td className="px-2 py-1.5 border-b border-bg-tertiary text-text-primary font-medium">
+							<td className="px-2 py-1.5 border-b border-bg-tertiary text-primary font-medium">
 								{label}
 							</td>
 							<td className="px-2 py-1.5 border-b border-bg-tertiary">
@@ -117,7 +117,7 @@ export function StatusMappingEditor({ mappings, onSave }: StatusMappingEditorPro
 					))}
 				</tbody>
 			</table>
-			<p className="mt-2 text-xs text-text-muted">
+			<p className="mt-2 text-xs text-muted">
 				Empty = no label applied for that status. Labels are auto-created on GitHub if they don't exist.
 			</p>
 		</div>

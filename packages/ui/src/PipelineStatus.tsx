@@ -25,7 +25,7 @@ export function PipelineStatus({ currentPhase, onPhaseClick }: PipelineStatusPro
 	const isFailed = currentPhase === 'failed'
 
 	return (
-		<div className="flex items-center px-4 py-3 border-b border-border bg-bg-secondary">
+		<div className="flex items-center px-4 py-3 border-b border-border bg-secondary">
 			{PHASES.map((phase, index) => {
 				const isActive = phase.key === currentPhase
 				const isCompleted = !isFailed && currentIndex > index
@@ -36,8 +36,8 @@ export function PipelineStatus({ currentPhase, onPhaseClick }: PipelineStatusPro
 						<button
 							type="button"
 							className={cn(
-								'flex items-center gap-1.5 px-2.5 py-1 bg-transparent border-none rounded text-text-muted text-xs whitespace-nowrap cursor-pointer',
-								'hover:not-disabled:text-text-secondary',
+								'flex items-center gap-1.5 px-2.5 py-1 bg-transparent border-none rounded text-muted text-xs whitespace-nowrap cursor-pointer',
+								'hover:not-disabled:text-secondary',
 								'disabled:cursor-default',
 							)}
 							onClick={() => onPhaseClick?.(phase.key)}
@@ -45,7 +45,7 @@ export function PipelineStatus({ currentPhase, onPhaseClick }: PipelineStatusPro
 						>
 							<span
 								className={cn(
-									'inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold border-2 border-text-muted text-text-muted',
+									'inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold border-2 border-text-muted text-muted',
 									isActive && !isFailed && 'bg-accent border-accent text-bg-primary',
 									isCompleted && 'bg-success border-success text-bg-primary',
 									isFailed && isActive && 'bg-danger border-danger text-bg-primary',

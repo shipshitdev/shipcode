@@ -42,13 +42,13 @@ export function StepGitHubProject({ selectedRepo, onSelect }: Props) {
 	return (
 		<div>
 			<h3 className="text-[15px] font-semibold mb-2">Connect a GitHub repository</h3>
-			<p className="text-text-secondary text-[13px] mb-4 leading-relaxed">
+			<p className="text-secondary text-[13px] mb-4 leading-relaxed">
 				Shipcode uses GitHub issues as the PRD and work-item store, and creates pull
 				requests on the selected repo. A repository is required to proceed.
 			</p>
 
 			{isLoading ? (
-				<div className="py-6 text-center text-text-muted">Loading repositories...</div>
+				<div className="py-6 text-center text-muted">Loading repositories...</div>
 			) : error ? (
 				<div className="mb-3">
 					<div className="rounded-md border border-[#5c1f1f] bg-[#3d1111] px-3 py-2.5 text-xs text-danger">
@@ -68,7 +68,7 @@ export function StepGitHubProject({ selectedRepo, onSelect }: Props) {
 								className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
 									activeOrg === null
 										? 'bg-accent text-bg-primary'
-										: 'bg-bg-tertiary text-text-secondary hover:text-text-primary'
+										: 'bg-tertiary text-secondary hover:text-primary'
 								}`}
 								onClick={() => setActiveOrg(null)}
 							>
@@ -81,7 +81,7 @@ export function StepGitHubProject({ selectedRepo, onSelect }: Props) {
 									className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
 										activeOrg === org
 											? 'bg-accent text-bg-primary'
-											: 'bg-bg-tertiary text-text-secondary hover:text-text-primary'
+											: 'bg-tertiary text-secondary hover:text-primary'
 									}`}
 									onClick={() => setActiveOrg(org)}
 								>
@@ -109,8 +109,8 @@ export function StepGitHubProject({ selectedRepo, onSelect }: Props) {
 									key={repo}
 									className={`block w-full text-left rounded-md px-3 py-2 font-mono text-[13px] cursor-pointer transition-colors border ${
 										selectedRepo === repo
-											? 'border-accent bg-accent/10 text-text-primary'
-											: 'border-transparent bg-bg-tertiary text-text-primary hover:border-text-muted'
+											? 'border-accent bg-accent/10 text-primary'
+											: 'border-transparent bg-tertiary text-primary hover:border-text-muted'
 									}`}
 									onClick={() => onSelect(repo)}
 								>
@@ -118,14 +118,14 @@ export function StepGitHubProject({ selectedRepo, onSelect }: Props) {
 								</button>
 							))
 						) : (
-							<div className="py-6 text-center text-text-muted">No matching repositories.</div>
+							<div className="py-6 text-center text-muted">No matching repositories.</div>
 						)}
 					</div>
 				</>
 			) : (
 				<div className="py-6 text-center">
-					<p className="text-text-muted mb-3">No repositories found for your account.</p>
-					<p className="text-xs text-text-muted mb-3">
+					<p className="text-muted mb-3">No repositories found for your account.</p>
+					<p className="text-xs text-muted mb-3">
 						Create a repository at <code className="rounded bg-black/20 px-1 py-0.5">github.com/new</code>, then click Retry.
 					</p>
 					<Button variant="secondary" onClick={retry} className="text-xs">
