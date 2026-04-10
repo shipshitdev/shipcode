@@ -21,6 +21,7 @@
  */
 
 import { execFile } from 'node:child_process'
+import path from 'node:path'
 import { promisify } from 'node:util'
 import { z } from 'zod'
 import {
@@ -103,15 +104,12 @@ export const shellReadOnlyTool: Tool<ShellReadOnlyInput> = {
       }
     }
 
-    // cwd must resolve inside the worktree. We don't use path-guard here
-    // because this tool doesn't touch files directly — it just picks a
-    // working directory for a child process. A simple prefix check is
-    // enough since the model only provides relative paths and execFile
-    // gets an absolute path.
-    const resolvedCwd = input.cwd
-      ? (input.cwd === '.' ? ctx.worktreePath : resolveCwd(ctx.worktreePath, input.cwd))
-      : ctx.worktreePath
-    if (!resolvedCwd.startsWith(ctx.worktreePath)) {
+    // cwd must resolve inside the worktree. We use path.resolve to
+    // normalize `..` and then check the result is still under the
+    // worktree via a trailing-separator prefix check (so /foo is not
+    // accepted as under /foobar).
+    const resolvedCwd = resolveWorktreeCwd(ctx.worktreePath, input.cwd)
+    if (resolvedCwd === null) {
       return { ok: false, error: `cwd '${input.cwd}' escapes the worktree` }
     }
 
@@ -156,10 +154,21 @@ export const shellReadOnlyTool: Tool<ShellReadOnlyInput> = {
   },
 }
 
-function resolveCwd(worktreePath: string, sub: string): string {
-  // We intentionally do NOT use path.resolve here — it would flatten
-  // '../' escapes and let them pass. The model passes relative paths
-  // only; we join them naively and rely on the prefix check above.
-  const joined = sub.startsWith('/') ? sub : `${worktreePath}/${sub}`
-  return joined
+/**
+ * Resolve the model-provided cwd against the worktree root and return
+ * an absolute path if it stays inside the worktree, or null if it
+ * escapes.
+ *
+ * - Undefined/empty/`.` → worktree root
+ * - Absolute paths → rejected if outside the worktree
+ * - Relative paths → joined + resolved, then checked via trailing-
+ *   separator prefix so '/foo' can't pass as under '/foobar'
+ */
+function resolveWorktreeCwd(worktreePath: string, sub: string | undefined): string | null {
+  if (!sub || sub === '.' || sub === '') return worktreePath
+  const resolved = path.isAbsolute(sub) ? path.resolve(sub) : path.resolve(worktreePath, sub)
+  const boundary = worktreePath.endsWith(path.sep) ? worktreePath : worktreePath + path.sep
+  const candidate = resolved.endsWith(path.sep) ? resolved : resolved + path.sep
+  if (candidate !== boundary && !candidate.startsWith(boundary)) return null
+  return resolved
 }
