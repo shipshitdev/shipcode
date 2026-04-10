@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import type { DashboardStats, Project } from '@shipcode/shared'
-import { Settings, X, ChevronRight } from '@shipcode/ui'
+import { Settings, X, PanelLeftOpen } from '@shipcode/ui'
 import { useAppStore } from '../stores/app-store'
 
 export function Titlebar() {
@@ -33,7 +33,7 @@ export function Titlebar() {
 						onClick={toggleSidebar}
 						title="Show sidebar"
 					>
-						<ChevronRight size={14} />
+						<PanelLeftOpen size={14} />
 					</button>
 				)}
 				{activeProject ? (
@@ -60,7 +60,7 @@ export function Titlebar() {
 				)}
 				<button
 					type="button"
-					className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-border bg-bg-elevated text-text-secondary app-region-no-drag hover:bg-bg-hover hover:text-text-primary"
+					className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-text-secondary app-region-no-drag hover:bg-bg-elevated hover:text-text-primary transition-colors"
 					onClick={toggleSettings}
 					title="Toggle Settings"
 				>

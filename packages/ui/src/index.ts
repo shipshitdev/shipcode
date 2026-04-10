@@ -9,6 +9,8 @@ export {
   ExternalLink,
   Folder,
   Loader2,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   RefreshCw,
   Settings,
