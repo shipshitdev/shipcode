@@ -10,6 +10,29 @@ export type PipelineExecutorModel = Exclude<AgentType, 'gh'>
 export type PipelineEvent =
   | { type: 'pipeline:phase'; threadId: string; phase: PipelinePhase }
   | { type: 'pipeline:verification-exhausted'; threadId: string; retries: number }
+  | {
+      /**
+       * Emitted after every provider call that reports which model
+       * actually served the request. For openrouter/auto this is the
+       * meta-router's pick; for claude/codex it's just the CLI name.
+       * Carries token + cost totals for the individual call so the CLI
+       * and desktop adapters can surface per-phase cost without
+       * re-reading the DB.
+       */
+      type: 'pipeline:model-resolved'
+      threadId: string
+      /**
+       * The provider phase name (narrower than PipelinePhase: always
+       * one of plan|review|revision|execute|verify, never idle etc.)
+       */
+      phase: 'plan' | 'review' | 'revision' | 'execute' | 'verify'
+      /** What the caller requested (the model hint or tier default). */
+      requestedModel: string
+      /** What the provider actually served (e.g. 'anthropic/claude-sonnet-4-6'). */
+      resolvedModel: string
+      tokensUsed?: { prompt: number; completion: number }
+      costUsd?: number
+    }
   | { type: 'plan:parsed'; threadId: string; plan: ShipCodePlan }
   | { type: 'review:parsed'; threadId: string; review: PlanReview }
   | { type: 'verification:parsed'; threadId: string; verification: VerificationResult }

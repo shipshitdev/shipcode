@@ -115,6 +115,41 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       threadId: context.threadId,
     })
 
+    // Tier 3 telemetry: if the provider reported which model actually
+    // served the request, persist it + emit an event so UI/CLI can
+    // surface it. Also accumulate token + cost totals against the
+    // thread row. Fire-and-forget persistence — if the threads table
+    // write fails we don't want to tank the pipeline.
+    if (response.resolvedModel) {
+      const requestedModel = modelHint ?? agent
+      try {
+        deps.threads.setResolvedModel(context.threadId, phase, response.resolvedModel)
+      } catch (err) {
+        console.error('[pipeline] setResolvedModel failed:', err)
+      }
+      if (response.tokensUsed) {
+        try {
+          deps.threads.addTokenUsage(
+            context.threadId,
+            response.tokensUsed.prompt,
+            response.tokensUsed.completion,
+            response.costUsd ?? 0,
+          )
+        } catch (err) {
+          console.error('[pipeline] addTokenUsage failed:', err)
+        }
+      }
+      deps.emitter.emit({
+        type: 'pipeline:model-resolved',
+        threadId: context.threadId,
+        phase,
+        requestedModel,
+        resolvedModel: response.resolvedModel,
+        ...(response.tokensUsed ? { tokensUsed: response.tokensUsed } : {}),
+        ...(response.costUsd != null ? { costUsd: response.costUsd } : {}),
+      })
+    }
+
     return {
       rawOutput: response.rawOutput,
       exitCode: response.exitCode,

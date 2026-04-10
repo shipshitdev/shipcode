@@ -176,6 +176,8 @@ function createMockDeps() {
 				incrementReviewRound: vi.fn(),
 				setGithubPr: vi.fn(),
 				updateAutonomousFields: vi.fn(),
+				setResolvedModel: vi.fn(),
+				addTokenUsage: vi.fn(),
 			},
 			plans: {
 				getMaxVersion: vi.fn(() => 0),
@@ -987,6 +989,142 @@ describe('createPipeline', () => {
 		it('returns undefined for missing pipeline', () => {
 			const pipeline = createPipeline(mock.deps)
 			expect(pipeline.getContext('nonexistent')).toBeUndefined()
+		})
+	})
+
+	// ─── Tier 3: pipeline:model-resolved telemetry ─────────────────────
+
+	describe('Tier 3 telemetry', () => {
+		it('emits pipeline:model-resolved + persists when provider reports resolvedModel', async () => {
+			// Swap the openrouter provider with a scripted one that returns
+			// a fake resolvedModel + usage, and point plannerModel at it.
+			const openrouterProvider: any = {
+				id: 'openrouter',
+				supports: new Set(['plan', 'review', 'revision', 'verify', 'execute']),
+				generate: vi.fn(async () => ({
+					rawOutput: planBlock(),
+					exitCode: 0,
+					resolvedModel: 'anthropic/claude-sonnet-4-6',
+					tokensUsed: { prompt: 1200, completion: 450 },
+					costUsd: 0.0031,
+				})),
+				healthCheck: vi.fn(async () => ({ ok: true })),
+			}
+			const registry = createProviderRegistry({
+				claude: (mock.deps as any).providers.for('claude', 'plan'),
+				codex: (mock.deps as any).providers.for('codex', 'review'),
+				openrouter: openrouterProvider,
+			})
+			const deps = { ...mock.deps, providers: registry }
+			;(deps.settings.get as any).mockReturnValue({ ...DEFAULT_SETTINGS, plannerModel: 'openrouter' })
+
+			const pipeline = createPipeline(deps)
+			await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null)
+			await new Promise((r) => setImmediate(r))
+			await new Promise((r) => setImmediate(r))
+
+			// The emitted events should include pipeline:model-resolved with the full payload
+			const resolvedEvent = mock.emittedEvents.find((e: any) => e.type === 'pipeline:model-resolved')
+			expect(resolvedEvent).toBeDefined()
+			expect(resolvedEvent).toMatchObject({
+				type: 'pipeline:model-resolved',
+				threadId: 't1',
+				phase: 'plan',
+				resolvedModel: 'anthropic/claude-sonnet-4-6',
+				tokensUsed: { prompt: 1200, completion: 450 },
+				costUsd: 0.0031,
+			})
+
+			// And the thread row should have been updated via the queries
+			expect(mock.deps.threads.setResolvedModel).toHaveBeenCalledWith(
+				't1', 'plan', 'anthropic/claude-sonnet-4-6',
+			)
+			expect(mock.deps.threads.addTokenUsage).toHaveBeenCalledWith('t1', 1200, 450, 0.0031)
+		})
+
+		it('does NOT emit model-resolved when the provider omits resolvedModel', async () => {
+			// Baseline claude-cli provider returns `resolvedModel: 'claude'`
+			// so we get an event — verify the opposite by stubbing a
+			// provider that returns no resolvedModel at all.
+			const silentProvider: any = {
+				id: 'openrouter',
+				supports: new Set(['plan', 'review', 'revision', 'verify', 'execute']),
+				generate: vi.fn(async () => ({ rawOutput: planBlock(), exitCode: 0 })),
+				healthCheck: vi.fn(async () => ({ ok: true })),
+			}
+			const registry = createProviderRegistry({
+				claude: (mock.deps as any).providers.for('claude', 'plan'),
+				codex: (mock.deps as any).providers.for('codex', 'review'),
+				openrouter: silentProvider,
+			})
+			const deps = { ...mock.deps, providers: registry }
+			;(deps.settings.get as any).mockReturnValue({ ...DEFAULT_SETTINGS, plannerModel: 'openrouter' })
+
+			const pipeline = createPipeline(deps)
+			await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null)
+			await new Promise((r) => setImmediate(r))
+			await new Promise((r) => setImmediate(r))
+
+			const resolvedEvent = mock.emittedEvents.find((e: any) => e.type === 'pipeline:model-resolved')
+			expect(resolvedEvent).toBeUndefined()
+			expect(mock.deps.threads.setResolvedModel).not.toHaveBeenCalled()
+			expect(mock.deps.threads.addTokenUsage).not.toHaveBeenCalled()
+		})
+
+		it('emits model-resolved for claude-cli too (resolvedModel defaults to "claude")', async () => {
+			// The CLI provider sets resolvedModel: 'claude' unconditionally,
+			// so plan phase under the default settings should emit the event.
+			const pipeline = createPipeline(mock.deps)
+			await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null)
+
+			// Drive the CLI provider's spawn → exit cycle
+			await mock.trigger('output', 'proc-1', planBlock())
+			await mock.trigger('exit', 'proc-1', 0)
+
+			const resolvedEvents = mock.emittedEvents.filter((e: any) => e.type === 'pipeline:model-resolved')
+			expect(resolvedEvents.length).toBeGreaterThan(0)
+			expect(resolvedEvents[0]).toMatchObject({
+				phase: 'plan',
+				resolvedModel: 'claude',
+			})
+			// No tokensUsed/costUsd because the CLI provider doesn't report them
+			expect((resolvedEvents[0] as any).tokensUsed).toBeUndefined()
+		})
+
+		it('skips addTokenUsage when provider reports resolvedModel but no tokensUsed', async () => {
+			const partialProvider: any = {
+				id: 'openrouter',
+				supports: new Set(['plan', 'review', 'revision', 'verify', 'execute']),
+				generate: vi.fn(async () => ({
+					rawOutput: planBlock(),
+					exitCode: 0,
+					resolvedModel: 'openrouter/auto',
+					// no tokensUsed
+				})),
+				healthCheck: vi.fn(async () => ({ ok: true })),
+			}
+			const registry = createProviderRegistry({
+				claude: (mock.deps as any).providers.for('claude', 'plan'),
+				codex: (mock.deps as any).providers.for('codex', 'review'),
+				openrouter: partialProvider,
+			})
+			const deps = { ...mock.deps, providers: registry }
+			;(deps.settings.get as any).mockReturnValue({ ...DEFAULT_SETTINGS, plannerModel: 'openrouter' })
+
+			const pipeline = createPipeline(deps)
+			await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null)
+			await new Promise((r) => setImmediate(r))
+			await new Promise((r) => setImmediate(r))
+
+			// Still emits the event (with resolvedModel only)
+			const resolvedEvent = mock.emittedEvents.find((e: any) => e.type === 'pipeline:model-resolved')
+			expect(resolvedEvent).toBeDefined()
+			expect((resolvedEvent as any).tokensUsed).toBeUndefined()
+
+			// Still persists resolvedModel
+			expect(mock.deps.threads.setResolvedModel).toHaveBeenCalledWith('t1', 'plan', 'openrouter/auto')
+			// But does NOT call addTokenUsage
+			expect(mock.deps.threads.addTokenUsage).not.toHaveBeenCalled()
 		})
 	})
 })
