@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { StreamParser, buildPlanPrompt, buildReviewPrompt, buildRevisionPrompt, buildVerificationPrompt } from '@shipcode/agents'
 import type { ProviderPhase, ProviderRequest } from '@shipcode/agents'
+import { WorktreeManager } from '@shipcode/git'
 import type { AgentType, ShipCodePlan } from '@shipcode/shared'
 import { PIPELINE_MAX_RETRIES, MAX_VERIFICATION_RETRIES, MAX_REVIEW_ROUNDS } from '@shipcode/shared'
 import type { Pipeline, PipelineContext, PipelineDeps, PipelineExecutorModel } from './types'
@@ -107,6 +108,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       phase,
       prompt,
       cwd,
+      projectPath: context.projectPath,
       signal: context.abort.signal,
       phaseHints,
       modelHint,
@@ -330,39 +332,38 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
     emitPhase(threadId, 'executing')
 
-    const cwd = context.worktreePath ?? context.projectPath
     const executionPrompt = `Execute this approved implementation plan:\n\n${JSON.stringify(plan, null, 2)}`
 
-    const model = context.executorModel
-    const process = deps.processManager.spawn(
-      model,
-      model,
-      model === 'claude'
-        ? ['-p', executionPrompt, '--allowedTools', 'Edit,Write,Bash,Glob,Grep,Read', '--dangerously-skip-permissions']
-        : ['-q', executionPrompt, '--sandbox', 'workspace-write', '-a', 'never'],
-      cwd
-    )
-    context.activeProcessId = process.id
+    void (async () => {
+      try {
+        const response = await runProviderPhase(context, 'execute', executionPrompt, undefined)
 
-    const exitHandler = (processId: string, exitCode: number) => {
-      if (processId !== process.id) return
-      deps.processManager.removeListener('exit', exitHandler)
+        if (context.cancelled) return
 
-      if (context.cancelled) return
-
-      if (exitCode === 0) {
-        if (context.autonomous) {
-          startVerification(threadId)
+        // EXECUTE preserves the original semantic: exit code 0 means
+        // success, anything non-zero is a failure. Claude/codex CLI
+        // providers return their real subprocess exit code; the
+        // OpenRouter provider's execute harness returns 0 when the
+        // model successfully completed at least one tool call and
+        // stopped cleanly, non-zero otherwise.
+        if (response.exitCode === 0) {
+          if (context.autonomous) {
+            startVerification(threadId)
+          } else {
+            emitPhase(threadId, 'completed')
+            activePipelines.delete(threadId)
+          }
         } else {
-          emitPhase(threadId, 'completed')
+          emitPhase(threadId, 'failed')
           activePipelines.delete(threadId)
         }
-      } else {
-        emitPhase(threadId, 'failed')
-        activePipelines.delete(threadId)
+      } catch {
+        if (!context.cancelled) {
+          emitPhase(threadId, 'failed')
+          activePipelines.delete(threadId)
+        }
       }
-    }
-    deps.processManager.on('exit', exitHandler)
+    })()
   }
 
   async function startVerification(threadId: string) {
@@ -614,10 +615,33 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       forkPointSha,
     })
 
+    // Create a worktree per thread. This is the CR-3 fix from the
+    // adversarial review: worktree creation used to live in desktop IPC,
+    // which meant the CLI path and any future callers ran EXECUTE
+    // against the project root. Doing it here covers every entry point.
+    //
+    // Best-effort: if worktree creation fails we log and fall back to
+    // null (which the pipeline resolves to projectPath via `cwd =
+    // worktreePath ?? projectPath`). The OpenRouter execute harness
+    // refuses to run when cwd === projectPath as defense in depth, so a
+    // failed worktree won't silently corrupt the user's tree for that
+    // executor; claude/codex CLIs preserve their historical behavior.
+    let worktreePath: string | null = null
+    try {
+      const appSettings = deps.settings.get()
+      const worktreeManager = new WorktreeManager(projectPath, { worktreeRoot: appSettings.worktreeRoot })
+      const wt = await worktreeManager.create(threadId, baseBranch)
+      worktreePath = wt.worktreePath
+      deps.threads.setWorktree(threadId, wt.branch, wt.worktreePath)
+    } catch (err) {
+      // Log but continue — matches the desktop IPC fallback behavior.
+      console.error(`[pipeline] worktree creation failed for thread ${threadId}, falling back to project root:`, err)
+    }
+
     // Pre-create context with all autonomous fields
     ensureContext(threadId, {
       projectPath,
-      worktreePath: null,
+      worktreePath,
       retryCount: 0,
       autonomous: true,
       reviewRound: 0,
@@ -634,7 +658,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     })
 
     const prompt = `GitHub Issue #${issue.number}: ${issue.title}\n\n${issue.body ?? ''}`
-    await startPlanGeneration(threadId, prompt, projectPath, null)
+    await startPlanGeneration(threadId, prompt, projectPath, worktreePath)
   }
 
   function cancel(threadId: string) {

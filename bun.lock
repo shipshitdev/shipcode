@@ -155,6 +155,7 @@
       "dependencies": {
         "@shipcode/agents": "workspace:*",
         "@shipcode/db": "workspace:*",
+        "@shipcode/git": "workspace:*",
         "@shipcode/shared": "workspace:*",
       },
       "devDependencies": {
