@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { StatusMappingEditor, Button, Input, Label, Switch } from '@shipcode/ui'
+import { StatusMappingEditor, Button, Input, Label, Switch, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shipcode/ui'
 import type { AppSettings } from '@shipcode/shared'
 import { useAppStore } from '../stores/app-store'
 
@@ -211,6 +211,25 @@ export function SettingsPanel() {
 				{settingsSection === 'pipeline' && (
 					<>
 						<h3 className="mb-5">Pipeline</h3>
+
+						<section className="mb-8">
+							<div className="flex items-center justify-between mb-4">
+								<Label htmlFor="executor-model">Executor model</Label>
+								<Select
+									value={settings.executorModel}
+									onValueChange={(value) => updateSettings.mutate({ executorModel: value as AppSettings['executorModel'] })}
+								>
+									<SelectTrigger id="executor-model" className="w-[160px]">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="claude">claude</SelectItem>
+										<SelectItem value="codex">codex</SelectItem>
+										<SelectItem value="openrouter">openrouter</SelectItem>
+									</SelectContent>
+								</Select>
+							</div>
+						</section>
 
 						<section className="mb-8">
 							<StatusMappingEditor
