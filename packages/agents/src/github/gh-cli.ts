@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import type { GitHubIssue, GitHubStatusLabel } from '@shipcode/shared'
 
@@ -85,18 +85,50 @@ export class GhCli {
 
   async createIssue(options: {
     title: string
-    body?: string
+    body: string
     labels?: string[]
   }): Promise<GitHubIssue> {
-    const args = ['issue', 'create', '--title', options.title]
-    if (options.body) args.push('--body', options.body)
+    // Body is piped via stdin (`--body-file -`) to avoid argv length limits
+    // and shell-escaping issues for multi-KB PRDs.
+    const args = ['issue', 'create', '--title', options.title, '--body-file', '-']
     if (options.labels?.length) args.push('--label', options.labels.join(','))
 
-    const { stdout } = await execFileAsync('gh', args, { cwd: this.cwd })
+    const stdout = await this.spawnWithStdin('gh', args, options.body)
     // gh issue create outputs the issue URL, e.g. https://github.com/owner/repo/issues/42
     const match = stdout.match(/\/issues\/(\d+)/)
     if (!match) throw new Error(`Failed to parse issue number from: ${stdout}`)
     return this.getIssue(parseInt(match[1], 10))
+  }
+
+  async editIssueBody(issueNumber: number, body: string): Promise<void> {
+    // Piping via stdin avoids argv length limits for multi-KB PRD bodies
+    // and avoids any shell-escaping risk for backticks, quotes, etc.
+    await this.spawnWithStdin('gh', [
+      'issue', 'edit', String(issueNumber),
+      '--body-file', '-',
+    ], body)
+  }
+
+  /**
+   * Run a command with stdin piped from a string, async. Used for gh issue
+   * create/edit where the body can exceed argv limits or contain characters
+   * that would need shell-escaping with --body.
+   */
+  private spawnWithStdin(command: string, args: string[], input: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const proc = spawn(command, args, { cwd: this.cwd, stdio: ['pipe', 'pipe', 'pipe'] })
+      let stdout = ''
+      let stderr = ''
+      proc.stdout.on('data', (chunk) => { stdout += chunk })
+      proc.stderr.on('data', (chunk) => { stderr += chunk })
+      proc.on('error', reject)
+      proc.on('close', (code) => {
+        if (code === 0) resolve(stdout)
+        else reject(new Error(`${command} ${args.join(' ')} exited with code ${code}: ${stderr.trim()}`))
+      })
+      proc.stdin.write(input)
+      proc.stdin.end()
+    })
   }
 
   async createPR(options: {

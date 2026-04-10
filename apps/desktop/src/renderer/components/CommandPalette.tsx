@@ -21,8 +21,6 @@ export function CommandPalette() {
 		pipelinePhase,
 		toggleTerminal,
 		toggleSettings,
-		toggleKanbanView,
-		kanbanView,
 	} = useAppStore()
 
 	const close = () => toggleCommandPalette()
@@ -47,7 +45,7 @@ export function CommandPalette() {
 							<CommandItem
 								onSelect={() => runAction(() => openCreateIssueModal())}
 							>
-								<span className="flex-1">Create Issue...</span>
+								<span className="flex-1">New PRD...</span>
 							</CommandItem>
 							<CommandItem
 								onSelect={() => runAction(async () => {
@@ -112,13 +110,6 @@ export function CommandPalette() {
 						onSelect={() => runAction(() => toggleSettings())}
 					>
 						<span className="flex-1">Toggle Settings</span>
-					</CommandItem>
-					<CommandItem
-						onSelect={() => runAction(() => toggleKanbanView())}
-					>
-						<span className="flex-1">
-							Switch to {kanbanView ? 'List' : 'Kanban'} View
-						</span>
 					</CommandItem>
 				</CommandGroup>
 

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import type { StatusLabelMapping } from '@shipcode/shared'
+import { ArrowRight } from 'lucide-react'
 import { Button } from './primitives/button'
 import { Input } from './primitives/input'
-import { cn } from './lib/utils'
 
 interface StatusMappingEditorProps {
 	mappings: StatusLabelMapping
@@ -48,6 +48,7 @@ export function StatusMappingEditor({ mappings, onSave }: StatusMappingEditorPro
 			planning: 'status:in-progress',
 			reviewing: 'status:in-progress',
 			revising: 'status:in-progress',
+			awaiting_approval: 'status:in-progress',
 			executing: 'status:in-progress',
 			verifying: 'status:in-progress',
 			shipping: 'status:in-progress',
@@ -61,7 +62,11 @@ export function StatusMappingEditor({ mappings, onSave }: StatusMappingEditorPro
 	return (
 		<div>
 			<div className="flex items-center justify-between mb-3">
-				<h4 className="m-0 text-text-primary font-medium">Status → GitHub Label Mapping</h4>
+				<h4 className="m-0 flex items-center gap-2 text-text-primary font-medium">
+					Status
+					<ArrowRight size={14} className="text-text-muted" />
+					GitHub Label Mapping
+				</h4>
 				<div className="flex gap-2">
 					<Button
 						type="button"

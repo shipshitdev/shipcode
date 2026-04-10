@@ -4,7 +4,7 @@ import { cn } from "../lib/utils"
 import { Dialog, DialogContent } from "./dialog"
 
 function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>) {
-	return <CommandPrimitive className={cn("flex h-full w-full flex-col overflow-hidden rounded-md bg-bg-secondary text-text-primary", className)} {...props} />
+	return <CommandPrimitive className={cn("flex h-full w-full flex-col overflow-hidden rounded-xl bg-bg-elevated text-text-primary", className)} {...props} />
 }
 function CommandDialog({ children, ...props }: React.ComponentProps<typeof Dialog>) {
 	return (

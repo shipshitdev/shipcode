@@ -11,8 +11,6 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     switch (phase) {
       case 'idle':
         return 'todo' as const
-      case 'awaiting_approval':
-        return 'reviewing' as const
       default:
         return phase
     }

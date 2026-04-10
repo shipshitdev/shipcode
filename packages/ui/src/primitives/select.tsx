@@ -8,7 +8,7 @@ function Select(props: React.ComponentProps<typeof SelectPrimitive.Root>) {
 function SelectTrigger({ className, children, ...props }: React.ComponentProps<typeof SelectPrimitive.Trigger>) {
 	return (
 		<SelectPrimitive.Trigger
-			className={cn("flex h-8 items-center justify-between rounded-md border border-border bg-bg-tertiary px-3 py-1.5 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent disabled:cursor-not-allowed disabled:opacity-50 [&>span]:truncate", className)}
+			className={cn("flex h-8 items-center justify-between rounded-lg border border-border bg-bg-tertiary px-3 py-1.5 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-border-strong disabled:cursor-not-allowed disabled:opacity-50 [&>span]:truncate", className)}
 			{...props}
 		>
 			{children}
@@ -22,7 +22,7 @@ function SelectContent({ className, children, position = "popper", ...props }: R
 	return (
 		<SelectPrimitive.Portal>
 			<SelectPrimitive.Content
-				className={cn("relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-md border border-border bg-bg-secondary text-text-primary shadow-md", position === "popper" && "translate-y-1", className)}
+				className={cn("relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-xl border border-border bg-bg-elevated text-text-primary shadow-2xl shadow-black/40", position === "popper" && "translate-y-1", className)}
 				position={position}
 				{...props}
 			>

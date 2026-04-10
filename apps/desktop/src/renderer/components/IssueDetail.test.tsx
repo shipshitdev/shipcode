@@ -20,6 +20,7 @@ const makeIssue = (overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
 	claimedBy: null,
 	lastPhaseUpdate: null,
 	lastStatusLabel: null,
+	executorModel: 'claude',
 	fetchedAt: new Date().toISOString(),
 	...overrides,
 })
@@ -94,8 +95,8 @@ describe('IssueDetail', () => {
 	beforeEach(() => {
 		cleanup()
 		invokeMock.mockReset()
-		window.shipcode.invoke = invokeMock
-		window.shipcode.on = vi.fn(() => () => {})
+		window.shipcode.invoke = invokeMock as unknown as typeof window.shipcode.invoke
+		window.shipcode.on = vi.fn(() => () => {}) as unknown as typeof window.shipcode.on
 
 		useAppStore.setState({
 			activeProjectId: 'project-1',
@@ -110,7 +111,6 @@ describe('IssueDetail', () => {
 			systemHealth: null,
 			currentVerification: null,
 			githubIssues: [],
-			kanbanView: true,
 			agentOutputs: {},
 			commandPaletteOpen: false,
 			createIssueModalOpen: false,

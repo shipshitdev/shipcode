@@ -13,6 +13,13 @@ export const DEFAULT_STATUS_LABEL_MAPPINGS: Record<string, string> = {
   failed: 'status:failed',
 }
 
+export const DEFAULT_NOTIFICATION_EVENTS = {
+  awaitingApproval: true,
+  failed: true,
+  completed: true,
+  verificationExhausted: true,
+} as const
+
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
   defaultWorktreeEnabled: true,
@@ -25,6 +32,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autoPickupEnabled: false,
   statusLabelMappings: DEFAULT_STATUS_LABEL_MAPPINGS as Record<string, string>,
   onboardingVersion: 0,
+  worktreeRoot: null,
+  notificationsEnabled: true,
+  notificationOsEnabled: true,
+  notificationBadgeEnabled: true,
+  notificationSoundEnabled: true,
+  notificationEvents: { ...DEFAULT_NOTIFICATION_EVENTS },
 }
 
 export const CURRENT_ONBOARDING_VERSION = 1
@@ -58,6 +71,8 @@ export const ERROR_PATTERNS = [
 export type ErrorType = (typeof ERROR_PATTERNS)[number]['type']
 
 export const WORKTREE_DIR = '.shipcode/worktrees'
+
+export const DEFAULT_WORKTREE_ROOT = '~/.shipcode/worktrees'
 
 export const PLAN_FENCE_TAG = 'shipcode-plan'
 export const REVIEW_FENCE_TAG = 'shipcode-review'

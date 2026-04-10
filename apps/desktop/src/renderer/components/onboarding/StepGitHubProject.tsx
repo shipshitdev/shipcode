@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Input, Button } from '@shipcode/ui'
 
 interface Props {
@@ -8,13 +8,19 @@ interface Props {
 }
 
 export function StepGitHubProject({ selectedRepo, onSelect }: Props) {
+	const queryClient = useQueryClient()
 	const [activeOrg, setActiveOrg] = useState<string | null>(null)
 	const [search, setSearch] = useState('')
 
-	const { data: repos, isLoading, error } = useQuery<string[]>({
+	const { data: repos, isLoading, error, refetch } = useQuery<string[]>({
 		queryKey: ['onboarding-repos'],
 		queryFn: () => window.shipcode.invoke('onboarding:list-repos'),
 	})
+
+	const retry = () => {
+		queryClient.invalidateQueries({ queryKey: ['onboarding-repos'] })
+		refetch()
+	}
 
 	// Extract unique orgs/owners from repos
 	const orgs = useMemo(() => {
@@ -37,14 +43,20 @@ export function StepGitHubProject({ selectedRepo, onSelect }: Props) {
 		<div>
 			<h3 className="text-[15px] font-semibold mb-2">Connect a GitHub repository</h3>
 			<p className="text-text-secondary text-[13px] mb-4 leading-relaxed">
-				Select a repository to enable issue polling and automated PR creation.
+				Shipcode uses GitHub issues as the PRD and work-item store, and creates pull
+				requests on the selected repo. A repository is required to proceed.
 			</p>
 
 			{isLoading ? (
 				<div className="py-6 text-center text-text-muted">Loading repositories...</div>
 			) : error ? (
-				<div className="rounded-md border border-[#5c1f1f] bg-[#3d1111] px-3 py-2.5 text-xs text-danger">
-					Failed to load repositories. Make sure <code className="rounded bg-black/20 px-1 py-0.5">gh</code> is authenticated.
+				<div className="mb-3">
+					<div className="rounded-md border border-[#5c1f1f] bg-[#3d1111] px-3 py-2.5 text-xs text-danger">
+						Failed to load repositories. Make sure <code className="rounded bg-black/20 px-1 py-0.5">gh</code> is installed and authenticated (<code className="rounded bg-black/20 px-1 py-0.5">gh auth login</code>), then click Retry.
+					</div>
+					<Button variant="secondary" onClick={retry} className="mt-2 text-xs">
+						Retry
+					</Button>
 				</div>
 			) : repos && repos.length > 0 ? (
 				<>
@@ -111,16 +123,16 @@ export function StepGitHubProject({ selectedRepo, onSelect }: Props) {
 					</div>
 				</>
 			) : (
-				<div className="py-6 text-center text-text-muted">No repositories found.</div>
+				<div className="py-6 text-center">
+					<p className="text-text-muted mb-3">No repositories found for your account.</p>
+					<p className="text-xs text-text-muted mb-3">
+						Create a repository at <code className="rounded bg-black/20 px-1 py-0.5">github.com/new</code>, then click Retry.
+					</p>
+					<Button variant="secondary" onClick={retry} className="text-xs">
+						Retry
+					</Button>
+				</div>
 			)}
-
-			<Button
-				variant="ghost"
-				className="mt-2 text-xs"
-				onClick={() => onSelect(null)}
-			>
-				Skip GitHub setup
-			</Button>
 		</div>
 	)
 }

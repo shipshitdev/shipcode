@@ -2,8 +2,10 @@ import { type IpcMain, type BrowserWindow, dialog } from 'electron'
 import type { ProjectQueries, ThreadQueries, PlanQueries, ReviewQueries, DiffQueries, SettingsQueries, VerificationQueries, GitHubIssueQueries } from '@shipcode/db'
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
+import fs from 'node:fs'
+import path from 'node:path'
 import type { ProcessManager } from '@shipcode/agents'
-import { checkSystemHealthWithAuth, checkGhAuth, GhCli } from '@shipcode/agents'
+import { checkSystemHealthWithAuth, checkGhAuth, GhCli, generatePrdFromIdea } from '@shipcode/agents'
 
 const execAsync = promisify(exec)
 import { GitService, WorktreeManager } from '@shipcode/git'
@@ -47,7 +49,24 @@ export function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle('project:remove', (_event, { projectId }: { projectId: string }) => {
+  ipcMain.handle('project:remove', async (_event, { projectId }: { projectId: string }) => {
+    // Best-effort: remove any ShipCode worktrees this project owns so they don't
+    // become orphans under the global worktree root after the DB row is deleted.
+    const project = queries.projects.getById(projectId)
+    if (project) {
+      try {
+        const appSettings = queries.settings.get()
+        const worktreeManager = new WorktreeManager(project.path, { worktreeRoot: appSettings.worktreeRoot })
+        const threads = queries.threads.list(projectId)
+        for (const t of threads) {
+          if (t.worktreePath && t.worktreeBranch) {
+            await worktreeManager.remove(t.worktreePath, t.worktreeBranch).catch(() => {})
+          }
+        }
+      } catch (err) {
+        console.error('Worktree cleanup during project:remove failed (continuing):', err)
+      }
+    }
     queries.projects.remove(projectId)
   })
 
@@ -170,7 +189,7 @@ export function registerIpcHandlers(
     return cached
   })
 
-  ipcMain.handle('github:create-issue', async (_event, { projectId, title, body, labels }: { projectId: string; title: string; body?: string; labels?: string[] }) => {
+  ipcMain.handle('github:create-issue', async (_event, { projectId, title, body, labels }: { projectId: string; title: string; body: string; labels?: string[] }) => {
     const project = queries.projects.getById(projectId)
     if (!project) throw new Error(`Project ${projectId} not found`)
 
@@ -193,6 +212,32 @@ export function registerIpcHandlers(
     mainWindow.webContents.send('github:issues-updated', { projectId, issues: allIssues })
 
     return queries.githubIssues.getByNumber(projectId, issue.number)
+  })
+
+  ipcMain.handle('github:edit-issue-body', async (_event, { projectId, issueNumber, body }: { projectId: string; issueNumber: number; body: string }) => {
+    const project = queries.projects.getById(projectId)
+    if (!project) throw new Error(`Project ${projectId} not found`)
+
+    const ghCli = new GhCli(project.path)
+    await ghCli.editIssueBody(issueNumber, body)
+
+    // Re-fetch canonical state from GitHub after the edit so the cache reflects
+    // whatever GitHub actually stored (GitHub may trim whitespace, etc.).
+    const issue = await ghCli.getIssue(issueNumber)
+    queries.githubIssues.upsert({
+      projectId,
+      issueNumber: issue.number,
+      title: issue.title,
+      body: issue.body,
+      labels: issue.labels,
+      assignee: issue.assignee,
+      state: issue.state,
+    })
+
+    const allIssues = queries.githubIssues.list(projectId)
+    mainWindow.webContents.send('github:issues-updated', { projectId, issues: allIssues })
+
+    return queries.githubIssues.getByNumber(projectId, issueNumber)
   })
 
   ipcMain.handle('github:start-issue', async (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
@@ -223,7 +268,7 @@ export function registerIpcHandlers(
         thread.id,
         project.path,
         { number: issue.issueNumber, title: issue.title, body: issue.body, labels: issue.labels },
-        'claude'
+        issue.executorModel,
       )
     } catch (err) {
       // Rollback
@@ -243,6 +288,17 @@ export function registerIpcHandlers(
     mainWindow.webContents.send('github:issues-updated', { projectId, issues: allIssues })
   })
 
+  ipcMain.handle('github:set-executor', (_event, { projectId, issueNumber, model }: { projectId: string; issueNumber: number; model: 'claude' | 'codex' }) => {
+    const issue = queries.githubIssues.getByNumber(projectId, issueNumber)
+    if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`)
+    if (model !== 'claude' && model !== 'codex') throw new Error(`Invalid executor model: ${model}`)
+
+    queries.githubIssues.updateExecutorModel(issue.id, model)
+    const allIssues = queries.githubIssues.list(projectId)
+    mainWindow.webContents.send('github:issues-updated', { projectId, issues: allIssues })
+    return queries.githubIssues.getByNumber(projectId, issueNumber)
+  })
+
   // === Verification handlers ===
   ipcMain.handle('verification:get', (_event, { threadId }: { threadId: string }) => {
     return queries.verifications.getLatest(threadId)
@@ -259,7 +315,8 @@ export function registerIpcHandlers(
     // Optionally set up worktree
     let worktreePath: string | null = null
     try {
-      const worktreeManager = new WorktreeManager(project.path)
+      const appSettings = queries.settings.get()
+      const worktreeManager = new WorktreeManager(project.path, { worktreeRoot: appSettings.worktreeRoot })
       const wt = await worktreeManager.create(threadId, project.defaultBranch)
       worktreePath = wt.worktreePath
       queries.threads.setWorktree(threadId, wt.branch, wt.worktreePath)
@@ -329,6 +386,39 @@ export function registerIpcHandlers(
     } catch {
       return []
     }
+  })
+
+  // === AI-assisted PRD generation ===
+  ipcMain.handle('ai:generate-prd', async (_event, { projectId, userPrompt }: { projectId: string; userPrompt: string }) => {
+    const project = queries.projects.getById(projectId)
+    if (!project) throw new Error(`Project ${projectId} not found`)
+    if (!userPrompt.trim()) throw new Error('Brain-dump is empty')
+
+    // Load the repo's writing-prds skill. Preferred location is
+    // .agents/skills/writing-prds/SKILL.md inside the target project. If the
+    // project doesn't have one, fall back to a minimal inline instruction so
+    // generation still works — but the result will be less repo-tailored.
+    const skillPath = path.join(project.path, '.agents', 'skills', 'writing-prds', 'SKILL.md')
+    let skillContent: string
+    try {
+      skillContent = fs.readFileSync(skillPath, 'utf-8')
+    } catch {
+      skillContent =
+        'You are drafting a PRD that will be consumed by the ShipCode pipeline\'s planner agent. ' +
+        'The PRD lives in a GitHub issue body. Required sections: Executive Summary, Problem Statement, ' +
+        'Goals, Non-Goals, User Stories, Functional Requirements, Non-Functional Requirements, ' +
+        'Success Criteria, Out of Scope, Dependencies, Verification Plan, Risks & Open Questions.'
+    }
+
+    const settings = queries.settings.get()
+    const plannerModel = ((settings.plannerModel as string) ?? 'claude') as 'claude' | 'codex'
+
+    return generatePrdFromIdea({
+      userPrompt,
+      skillContent,
+      plannerModel,
+      cwd: project.path,
+    })
   })
 
   // === Agent output forwarding to renderer ===

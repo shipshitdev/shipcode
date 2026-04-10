@@ -225,7 +225,7 @@ describe('createPipeline', () => {
 			expect(mock.deps.githubIssues.updatePipelineStatus).toHaveBeenCalledWith('issue-1', 'reviewing')
 		})
 
-		it('maps awaiting_approval to reviewing for linked GitHub issues', async () => {
+		it('passes awaiting_approval through to the linked GitHub issue status', async () => {
 			;(mock.deps.githubIssues.getByNumber as any).mockReturnValue({ id: 'issue-1' })
 
 			const pipeline = createPipeline(mock.deps)
@@ -234,7 +234,7 @@ describe('createPipeline', () => {
 			mock.trigger('output', 'proc-1', 'some random output without a plan block')
 			mock.trigger('exit', 'proc-1', 0)
 
-			expect(mock.deps.githubIssues.updatePipelineStatus).toHaveBeenCalledWith('issue-1', 'reviewing')
+			expect(mock.deps.githubIssues.updatePipelineStatus).toHaveBeenCalledWith('issue-1', 'awaiting_approval')
 		})
 
 		it('exit 0 + valid plan → creates plan, emits plan:parsed, emits reviewing (manual)', async () => {

@@ -1,28 +1,10 @@
 import type { GitHubIssueCacheRecord } from '@shipcode/shared'
-import { cn } from './lib/utils'
+import { getStatusBadgeVariant } from './lib/status-variant'
 import { Badge } from './primitives/badge'
 
 interface IssueCardProps {
 	issue: GitHubIssueCacheRecord
 	onClick: () => void
-}
-
-function getStatusVariant(status: string) {
-	switch (status) {
-		case 'completed':
-			return 'success' as const
-		case 'failed':
-			return 'danger' as const
-		case 'planning':
-		case 'reviewing':
-		case 'revising':
-		case 'executing':
-		case 'verifying':
-		case 'shipping':
-			return 'accent' as const
-		default:
-			return 'default' as const
-	}
 }
 
 export function IssueCard({ issue, onClick }: IssueCardProps) {
@@ -33,7 +15,7 @@ export function IssueCard({ issue, onClick }: IssueCardProps) {
 		>
 			<div className="flex items-center justify-between">
 				<span className="text-[11px] text-text-muted font-mono">#{issue.issueNumber}</span>
-				<Badge variant={getStatusVariant(issue.pipelineStatus)}>
+				<Badge variant={getStatusBadgeVariant(issue.pipelineStatus)}>
 					{issue.pipelineStatus}
 				</Badge>
 			</div>

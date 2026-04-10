@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite'
 import path from 'node:path'
-import { migrate, migrateV2, migrateV3 } from './schema'
+import { migrate, migrateV2, migrateV3, migrateV4, migrateV5 } from './schema'
 
 export { transaction } from './utils'
 export { ProjectQueries } from './queries/projects'
@@ -11,6 +11,9 @@ export { DiffQueries } from './queries/diffs'
 export { SettingsQueries } from './queries/settings'
 export { VerificationQueries } from './queries/verifications'
 export { GitHubIssueQueries } from './queries/github-issues'
+export { ActivityQueries } from './queries/activity'
+export { NotificationsQueries } from './queries/notifications'
+export { DashboardQueries } from './queries/dashboard'
 
 let db: DatabaseSync | null = null
 
@@ -26,6 +29,8 @@ export function getDatabase(dataDir: string): DatabaseSync {
   migrate(db)
   migrateV2(db)
   migrateV3(db)
+  migrateV4(db)
+  migrateV5(db)
   return db
 }
 

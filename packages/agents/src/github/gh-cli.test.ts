@@ -1,14 +1,44 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest'
+import { EventEmitter } from 'node:events'
 
 const mockExecFileAsync = vi.hoisted(() => vi.fn())
+const mockSpawn = vi.hoisted(() => vi.fn())
 vi.mock('node:child_process', async () => {
 	const { promisify } = await import('node:util')
 	const fn = vi.fn()
 	;(fn as any)[promisify.custom] = mockExecFileAsync
-	return { execFile: fn }
+	return { execFile: fn, spawn: mockSpawn }
 })
 
 import { GhCli } from './gh-cli'
+
+/**
+ * Create a fake ChildProcess that satisfies the surface `spawnWithStdin` uses:
+ * stdout/stderr EventEmitters, an EventEmitter-backed proc for 'error'/'close',
+ * and a stdin stub that captures writes. Returns a `complete(code, stderr?)`
+ * helper the test can call to drive the promise to resolution/rejection.
+ */
+function createFakeProc() {
+	const proc = new EventEmitter() as EventEmitter & {
+		stdout: EventEmitter
+		stderr: EventEmitter
+		stdin: { write: (chunk: string) => boolean; end: () => void }
+	}
+	proc.stdout = new EventEmitter()
+	proc.stderr = new EventEmitter()
+	const stdinWrites: string[] = []
+	let stdinEnded = false
+	proc.stdin = {
+		write: (chunk: string) => { stdinWrites.push(chunk); return true },
+		end: () => { stdinEnded = true },
+	}
+	const complete = (code: number, stderrChunk?: string) => {
+		if (stderrChunk !== undefined) proc.stderr.emit('data', stderrChunk)
+		proc.emit('close', code)
+	}
+	const fail = (err: Error) => proc.emit('error', err)
+	return { proc, stdinWrites, isStdinEnded: () => stdinEnded, complete, fail }
+}
 
 function success(stdout: string) {
 	mockExecFileAsync.mockResolvedValueOnce({ stdout, stderr: '' })
@@ -340,6 +370,56 @@ describe('GhCli', () => {
 				['repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner'],
 				{ cwd: '/test/repo' },
 			)
+		})
+	})
+
+	describe('editIssueBody', () => {
+		it('pipes the body to stdin and resolves on exit 0', async () => {
+			const { proc, stdinWrites, isStdinEnded, complete } = createFakeProc()
+			mockSpawn.mockReturnValueOnce(proc)
+
+			const body = '## Executive Summary\nEverything is fine.\n'
+			const promise = gh.editIssueBody(42, body)
+
+			// Give the event loop a tick so `spawnWithStdin` can attach listeners
+			// and write to stdin before we drive the close event.
+			await Promise.resolve()
+
+			expect(mockSpawn).toHaveBeenCalledWith(
+				'gh',
+				['issue', 'edit', '42', '--body-file', '-'],
+				expect.objectContaining({ cwd: '/test/repo', stdio: ['pipe', 'pipe', 'pipe'] }),
+			)
+			expect(stdinWrites).toEqual([body])
+			expect(isStdinEnded()).toBe(true)
+
+			complete(0)
+			await expect(promise).resolves.toBeUndefined()
+		})
+
+		it('rejects with stderr contents on non-zero exit', async () => {
+			const { proc, complete } = createFakeProc()
+			mockSpawn.mockReturnValueOnce(proc)
+
+			const promise = gh.editIssueBody(7, 'body')
+			await Promise.resolve()
+
+			complete(1, 'GraphQL: Could not resolve to an Issue')
+
+			await expect(promise).rejects.toThrow(/exited with code 1/)
+			await expect(promise).rejects.toThrow(/GraphQL: Could not resolve to an Issue/)
+		})
+
+		it('rejects when the child process emits error', async () => {
+			const { proc, fail } = createFakeProc()
+			mockSpawn.mockReturnValueOnce(proc)
+
+			const promise = gh.editIssueBody(13, 'body')
+			await Promise.resolve()
+
+			fail(new Error('ENOENT'))
+
+			await expect(promise).rejects.toThrow('ENOENT')
 		})
 	})
 })

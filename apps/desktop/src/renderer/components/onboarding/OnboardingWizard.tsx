@@ -43,7 +43,10 @@ export function OnboardingWizard({ onComplete }: Props) {
 	}, [])
 
 	const aiAuthCount = [authResult?.claude.authenticated, authResult?.codex.authenticated].filter(Boolean).length
-	const canAdvanceFromAuth = aiAuthCount >= 1
+	const ghAuthenticated = !!authResult?.ghAuth.authenticated
+	// GitHub is mandatory: shipcode uses GitHub issues as the PRD/work-item store
+	// and the `shipping` phase only creates PRs when a GitHub issue exists.
+	const canAdvanceFromAuth = aiAuthCount >= 1 && ghAuthenticated
 	const singleAgentMode = aiAuthCount === 1
 
 	function handleRecheck() {
@@ -65,17 +68,22 @@ export function OnboardingWizard({ onComplete }: Props) {
 	}
 
 	function handleFinish() {
+		// `selectedRepo` is guaranteed non-null here because step 1 gates advancement
+		// on it — see `canNext` below. GitHub is mandatory throughout the app.
 		const patch: Partial<AppSettings> = {
 			plannerModel,
 			reviewerModel,
 			statusLabelMappings: labelMappings,
-			githubPollingEnabled: selectedRepo !== null,
+			githubPollingEnabled: true,
 			onboardingVersion: CURRENT_ONBOARDING_VERSION,
 		}
 		saveSettings.mutate(patch)
 	}
 
-	const canNext = step === 0 ? canAdvanceFromAuth : true
+	const canNext =
+		step === 0 ? canAdvanceFromAuth :
+		step === 1 ? selectedRepo !== null :
+		true
 	const isLastStep = step === 3
 
 	return (

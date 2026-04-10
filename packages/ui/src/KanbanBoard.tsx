@@ -1,27 +1,85 @@
 import { useState } from 'react'
-import { DndContext, DragOverlay, closestCorners, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core'
+import { DndContext, DragOverlay, pointerWithin, rectIntersection, type CollisionDetection, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core'
 import { useDroppable } from '@dnd-kit/core'
 import { useDraggable } from '@dnd-kit/core'
 import type { GitHubIssueCacheRecord, IssuePipelineStatus } from '@shipcode/shared'
 import { cn } from './lib/utils'
+import { getStatusBadgeVariant } from './lib/status-variant'
 import { Badge } from './primitives/badge'
+
+// Static map for the drag overlay border. Tailwind's JIT needs string-literal
+// class names, so we cannot interpolate (`border-${variant}`).
+function dragOverlayBorderClass(status: IssuePipelineStatus): string {
+	if (status === 'failed') return 'border-danger'
+	if (status === 'awaiting_approval') return 'border-warning'
+	return 'border-accent'
+}
 
 interface KanbanBoardProps {
 	issues: GitHubIssueCacheRecord[]
 	onIssueClick: (issue: GitHubIssueCacheRecord) => void
 	onRefresh: () => void
+	onNewIssue?: () => void
 	onStartPipeline?: (issue: GitHubIssueCacheRecord) => void
 	onRetry?: (issue: GitHubIssueCacheRecord) => void
 }
 
-const COLUMNS: { key: string; label: string; statuses: IssuePipelineStatus[]; droppable: boolean }[] = [
-	{ key: 'todo', label: 'Todo', statuses: ['todo', 'queued'], droppable: true },
-	{ key: 'planning', label: 'Planning', statuses: ['planning'], droppable: true },
-	{ key: 'reviewing', label: 'Reviewing', statuses: ['reviewing', 'revising'], droppable: false },
-	{ key: 'executing', label: 'Executing', statuses: ['executing'], droppable: false },
-	{ key: 'verifying', label: 'Verifying', statuses: ['verifying', 'shipping'], droppable: false },
-	{ key: 'completed', label: 'Completed', statuses: ['completed'], droppable: false },
-	{ key: 'failed', label: 'Failed', statuses: ['failed'], droppable: true },
+type ColumnKey = 'todo' | 'agent' | 'human' | 'done'
+
+type PhaseSection = {
+	key: string
+	label: string
+	statuses: IssuePipelineStatus[]
+	droppable: boolean
+	/**
+	 * Agent assigned to this phase. 'executor' is resolved per-issue from
+	 * `issue.executorModel`; everything else is hardcoded to match
+	 * packages/pipeline/src/pipeline.ts.
+	 */
+	agent: 'claude' | 'codex' | 'executor'
+}
+
+type BoardColumn = {
+	key: ColumnKey
+	label: string
+	statuses: IssuePipelineStatus[]
+	droppable?: boolean
+	sections?: PhaseSection[]
+}
+
+const COLUMNS: BoardColumn[] = [
+	{
+		key: 'todo',
+		label: 'Todo',
+		droppable: true, // failed→todo retry lands here
+		statuses: ['todo', 'queued'],
+	},
+	{
+		key: 'agent',
+		label: 'Agent Loop',
+		statuses: ['planning', 'reviewing', 'revising', 'executing', 'verifying', 'shipping'],
+		sections: [
+			{ key: 'planning', label: 'Planning', statuses: ['planning'], droppable: true, agent: 'claude' },
+			{ key: 'reviewing', label: 'Reviewing', statuses: ['reviewing', 'revising'], droppable: false, agent: 'codex' },
+			{ key: 'executing', label: 'Executing', statuses: ['executing'], droppable: false, agent: 'executor' },
+			{ key: 'verifying', label: 'Verifying', statuses: ['verifying', 'shipping'], droppable: false, agent: 'claude' },
+		],
+	},
+	{
+		key: 'human',
+		label: 'Human',
+		statuses: ['awaiting_approval', 'failed'],
+		sections: [
+			{ key: 'awaiting', label: 'Awaiting Approval', statuses: ['awaiting_approval'], droppable: false, agent: 'claude' },
+			{ key: 'failed', label: 'Failed', statuses: ['failed'], droppable: false, agent: 'claude' },
+		],
+	},
+	{
+		key: 'done',
+		label: 'Done',
+		droppable: false,
+		statuses: ['completed'],
+	},
 ]
 
 function DraggableCard({ issue, onClick }: { issue: GitHubIssueCacheRecord; onClick: () => void }) {
@@ -34,12 +92,18 @@ function DraggableCard({ issue, onClick }: { issue: GitHubIssueCacheRecord; onCl
 		transform: `translate(${transform.x}px, ${transform.y}px)`,
 	} : undefined
 
+	const isFailed = issue.pipelineStatus === 'failed'
+	const isAwaiting = issue.pipelineStatus === 'awaiting_approval'
+
 	return (
 		<div
 			ref={setNodeRef}
 			className={cn(
-				'rounded-md border border-border bg-bg-primary p-2 cursor-grab hover:border-text-muted transition-colors active:cursor-grabbing',
-				isDragging && 'opacity-50'
+				'rounded-md border bg-bg-primary p-2 cursor-grab transition-colors active:cursor-grabbing',
+				'border-border hover:border-text-muted',
+				isFailed && 'border-danger/40 bg-danger/[0.04] hover:border-danger/60',
+				isAwaiting && 'border-warning/30 bg-warning/[0.03] hover:border-warning/50',
+				isDragging && 'opacity-50',
 			)}
 			style={style}
 			{...listeners}
@@ -52,8 +116,10 @@ function DraggableCard({ issue, onClick }: { issue: GitHubIssueCacheRecord; onCl
 				{issue.labels.filter(l => l.startsWith('agent:')).map(l => (
 					<Badge key={l} variant="accent" className="text-[10px] px-1.5 py-px">{l}</Badge>
 				))}
-				{issue.pipelineStatus !== COLUMNS.find(c => c.statuses.includes(issue.pipelineStatus))?.statuses[0] && (
-					<Badge className="text-[10px] px-1.5 py-px">{issue.pipelineStatus}</Badge>
+				{issue.pipelineStatus !== COLUMNS.flatMap(c => c.sections ?? [{ statuses: c.statuses }]).find(s => s.statuses.includes(issue.pipelineStatus))?.statuses[0] && (
+					<Badge variant={getStatusBadgeVariant(issue.pipelineStatus)} className="text-[10px] px-1.5 py-px">
+						{issue.pipelineStatus}
+					</Badge>
 				)}
 			</div>
 		</div>
@@ -67,18 +133,18 @@ function DroppableColumn({ id, label, issues, droppable, onIssueClick }: {
 	const { setNodeRef, isOver } = useDroppable({ id, disabled: !droppable })
 
 	return (
-		<div className="flex-1 min-w-[160px] max-w-[240px] flex flex-col bg-bg-secondary rounded-md overflow-hidden">
+		<div
+			ref={setNodeRef}
+			className={cn(
+				'flex-1 min-w-[140px] max-w-[220px] flex flex-col bg-bg-secondary rounded-md overflow-hidden transition-colors',
+				isOver && droppable && 'ring-2 ring-accent bg-bg-tertiary'
+			)}
+		>
 			<div className="flex items-center justify-between px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-text-secondary border-b border-border shrink-0">
 				<span>{label}</span>
 				<span className="text-[10px] bg-bg-tertiary text-text-muted px-1.5 py-px rounded-full font-medium">{issues.length}</span>
 			</div>
-			<div
-				ref={setNodeRef}
-				className={cn(
-					'flex-1 overflow-y-auto p-1.5 flex flex-col gap-1 min-h-[60px]',
-					isOver && droppable && 'bg-bg-tertiary border border-dashed border-accent rounded-md'
-				)}
-			>
+			<div className="flex-1 overflow-y-auto p-1.5 flex flex-col gap-1 min-h-[60px]">
 				{issues.map(issue => (
 					<DraggableCard key={issue.id} issue={issue} onClick={() => onIssueClick(issue)} />
 				))}
@@ -87,11 +153,144 @@ function DroppableColumn({ id, label, issues, droppable, onIssueClick }: {
 	)
 }
 
-export function KanbanBoard({ issues, onIssueClick, onRefresh, onStartPipeline, onRetry }: KanbanBoardProps) {
+function SectionBlock({
+	columnKey,
+	section,
+	issues,
+	onIssueClick,
+}: {
+	columnKey: ColumnKey
+	section: PhaseSection
+	issues: GitHubIssueCacheRecord[]
+	onIssueClick: (issue: GitHubIssueCacheRecord) => void
+}) {
+	const { setNodeRef, isOver } = useDroppable({
+		id: `${columnKey}:${section.key}`,
+		disabled: !section.droppable,
+	})
+	const count = issues.length
+	const empty = count === 0
+	// Only the Agent Loop column shows agent badges. Human/Failed/Done skip them.
+	const showAgent = columnKey === 'agent'
+	// For the executor row, resolve per-issue from the first card; when empty, default.
+	const agentLabel = section.agent === 'executor'
+		? (issues[0]?.executorModel ?? 'claude')
+		: section.agent
+
+	// Tone highlights non-empty human-action sections so they pull the eye.
+	// Stays null when the section is empty to avoid false alarms.
+	const tone: 'danger' | 'warning' | null =
+		section.key === 'failed' && !empty
+			? 'danger'
+			: section.key === 'awaiting' && !empty
+				? 'warning'
+				: null
+
+	return (
+		<div className="border-t border-border first:border-t-0">
+			<div className={cn(
+				'flex items-center justify-between px-2 py-1 text-[10px] font-semibold uppercase tracking-wide',
+				empty && 'text-text-muted opacity-50',
+				!empty && !tone && 'text-text-secondary',
+				tone === 'danger' && 'text-danger',
+				tone === 'warning' && 'text-warning',
+			)}>
+				<span className="flex items-center gap-1.5">
+					<span>{section.label}</span>
+					{showAgent && (
+						<span className="font-mono normal-case text-[9px] font-normal text-text-muted">
+							· {agentLabel}
+						</span>
+					)}
+				</span>
+				<span className={cn(
+					// Always reserve a 1px border so the pill size doesn't shift when the
+					// tone switches on/off as issues enter/leave the section.
+					'text-[10px] bg-bg-tertiary px-1.5 py-px rounded-full font-medium border border-transparent',
+					empty && 'text-text-muted/70',
+					!empty && !tone && 'text-text-muted',
+					tone === 'danger' && 'bg-danger/15 text-danger border-danger/25',
+					tone === 'warning' && 'bg-warning/15 text-warning border-warning/25',
+				)}>{count}</span>
+			</div>
+			{!empty && (
+				<div
+					ref={section.droppable ? setNodeRef : undefined}
+					className={cn(
+						'flex flex-col gap-1 p-1.5 pt-0',
+						section.droppable && isOver && 'bg-bg-tertiary border border-dashed border-accent rounded-md'
+					)}
+				>
+					{issues.map(issue => (
+						<DraggableCard key={issue.id} issue={issue} onClick={() => onIssueClick(issue)} />
+					))}
+				</div>
+			)}
+			{empty && section.droppable && (
+				<div
+					ref={setNodeRef}
+					className={cn(
+						'mx-1.5 mb-1.5 min-h-[36px] rounded border border-dashed',
+						isOver ? 'border-accent bg-bg-tertiary' : 'border-border/50'
+					)}
+				/>
+			)}
+		</div>
+	)
+}
+
+function StackedColumn({
+	column,
+	issues,
+	onIssueClick,
+}: {
+	column: BoardColumn
+	issues: GitHubIssueCacheRecord[]
+	onIssueClick: (issue: GitHubIssueCacheRecord) => void
+}) {
+	const columnIssues = issues.filter(i => column.statuses.includes(i.pipelineStatus))
+
+	return (
+		<div className="flex-[1.3] min-w-[180px] max-w-[280px] flex flex-col bg-bg-secondary rounded-md overflow-hidden">
+			<div className="flex items-center justify-between px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-text-secondary border-b border-border shrink-0">
+				<span>{column.label}</span>
+				<span className="text-[10px] bg-bg-tertiary text-text-muted px-1.5 py-px rounded-full font-medium">{columnIssues.length}</span>
+			</div>
+			<div className="flex-1 overflow-y-auto min-h-[60px]">
+				{(column.sections ?? []).map(section => {
+					const sectionIssues = columnIssues.filter(i => section.statuses.includes(i.pipelineStatus))
+					return (
+						<SectionBlock
+							key={section.key}
+							columnKey={column.key}
+							section={section}
+							issues={sectionIssues}
+							onIssueClick={onIssueClick}
+						/>
+					)
+				})}
+			</div>
+		</div>
+	)
+}
+
+// Custom collision detection: prefer whatever droppable the user's pointer is
+// actually over (most intuitive for multi-column kanban), and fall back to
+// rectangle intersection when the pointer is in a gap between columns.
+// `closestCorners` was the prior default but it can pick a farther column as
+// "closest" when you drag across the middle of a wide layout, which caused
+// drag-to-Todo from Human to silently land on Agent Loop / Planning.
+const customCollisionDetection: CollisionDetection = (args) => {
+	const pointerCollisions = pointerWithin(args)
+	if (pointerCollisions.length > 0) return pointerCollisions
+	return rectIntersection(args)
+}
+
+export function KanbanBoard({ issues, onIssueClick, onRefresh, onNewIssue, onStartPipeline, onRetry }: KanbanBoardProps) {
 	const [activeId, setActiveId] = useState<string | null>(null)
 	const activeIssue = issues.find(i => i.id === activeId)
 
-	function getColumnForIssue(issue: GitHubIssueCacheRecord): string {
+	function getColumnForIssue(issue: GitHubIssueCacheRecord): ColumnKey {
 		return COLUMNS.find(c => c.statuses.includes(issue.pipelineStatus))?.key ?? 'todo'
 	}
 
@@ -106,38 +305,62 @@ export function KanbanBoard({ issues, onIssueClick, onRefresh, onStartPipeline, 
 
 		const issue = active.data.current as GitHubIssueCacheRecord
 		const sourceColumn = getColumnForIssue(issue)
-		const destColumn = over.id as string
+		const dropId = String(over.id)
 
-		if (sourceColumn === destColumn) return
-
-		// Only allow: todo -> planning, failed -> todo
-		if (sourceColumn === 'todo' && destColumn === 'planning' && onStartPipeline) {
+		// Only two transitions are allowed:
+		// 1. todo → agent:planning (start pipeline)
+		if (sourceColumn === 'todo' && dropId === 'agent:planning' && onStartPipeline) {
 			onStartPipeline(issue)
-		} else if (sourceColumn === 'failed' && destColumn === 'todo' && onRetry) {
-			onRetry(issue)
+			return
 		}
-		// All other transitions are rejected (card snaps back)
+		// 2. human → todo (retry failed, never awaiting_approval)
+		if (sourceColumn === 'human' && dropId === 'todo' && issue.pipelineStatus === 'failed' && onRetry) {
+			onRetry(issue)
+			return
+		}
+		// All other drops: no-op (snap back)
 	}
 
 	return (
 		<div className="flex flex-col h-full overflow-hidden">
 			<div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
 				<h3 className="text-sm font-semibold">GitHub Issues</h3>
-				<button
-					type="button"
-					className="bg-transparent border border-border rounded-md text-text-secondary cursor-pointer px-2.5 py-1 text-xs hover:text-text-primary hover:border-text-secondary"
-					onClick={onRefresh}
-				>
-					Refresh
-				</button>
+				<div className="flex items-center gap-2">
+					<button
+						type="button"
+						className="bg-transparent border border-border rounded-md text-text-secondary cursor-pointer px-2.5 py-1 text-xs hover:text-text-primary hover:border-text-secondary"
+						onClick={onRefresh}
+					>
+						Refresh
+					</button>
+					{onNewIssue && (
+						<button
+							type="button"
+							className="bg-accent text-accent-foreground rounded-md cursor-pointer px-2.5 py-1 text-xs font-medium hover:bg-accent-hover shadow-[inset_0_0_0_1px_rgba(0,0,0,0.08)]"
+							onClick={onNewIssue}
+						>
+							+ New PRD
+						</button>
+					)}
+				</div>
 			</div>
 			<DndContext
-				collisionDetection={closestCorners}
+				collisionDetection={customCollisionDetection}
 				onDragStart={handleDragStart}
 				onDragEnd={handleDragEnd}
 			>
 				<div className="flex flex-1 overflow-x-auto overflow-y-hidden gap-0.5 p-3 px-2">
 					{COLUMNS.map(col => {
+						if (col.sections) {
+							return (
+								<StackedColumn
+									key={col.key}
+									column={col}
+									issues={issues}
+									onIssueClick={onIssueClick}
+								/>
+							)
+						}
 						const columnIssues = issues.filter(i => col.statuses.includes(i.pipelineStatus))
 						return (
 							<DroppableColumn
@@ -145,15 +368,18 @@ export function KanbanBoard({ issues, onIssueClick, onRefresh, onStartPipeline, 
 								id={col.key}
 								label={col.label}
 								issues={columnIssues}
-								droppable={col.droppable}
+								droppable={!!col.droppable}
 								onIssueClick={onIssueClick}
 							/>
 						)
 					})}
 				</div>
-				<DragOverlay>
+				<DragOverlay dropAnimation={null}>
 					{activeIssue ? (
-						<div className="opacity-80 bg-bg-secondary border border-accent rounded-md p-2 shadow-lg cursor-grabbing">
+						<div className={cn(
+							'opacity-80 bg-bg-secondary border rounded-md p-2 shadow-lg cursor-grabbing',
+							dragOverlayBorderClass(activeIssue.pipelineStatus),
+						)}>
 							<div className="text-[11px] text-text-muted font-mono mb-0.5">#{activeIssue.issueNumber}</div>
 							<div className="text-xs leading-snug text-text-primary line-clamp-2">{activeIssue.title}</div>
 						</div>

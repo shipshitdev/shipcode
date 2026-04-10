@@ -1,20 +1,33 @@
 import { simpleGit, type SimpleGit } from 'simple-git'
 import path from 'node:path'
-import { WORKTREE_DIR } from '@shipcode/shared'
+import { resolveWorktreeParent } from '@shipcode/shared'
+
+export interface WorktreeManagerOptions {
+  /**
+   * User-configured worktree root.
+   *   null | undefined → use DEFAULT_WORKTREE_ROOT (~/.shipcode/worktrees)
+   *   ''               → legacy project-local (<project>/.shipcode/worktrees)
+   *   absolute or ~/…  → custom location
+   */
+  worktreeRoot?: string | null
+}
 
 export class WorktreeManager {
   private git: SimpleGit
 
-  constructor(private projectPath: string) {
+  constructor(private projectPath: string, private options: WorktreeManagerOptions = {}) {
     this.git = simpleGit(projectPath)
-  }
-
-  getWorktreePath(threadId: string): string {
-    return path.join(this.projectPath, WORKTREE_DIR, threadId)
   }
 
   getBranchName(threadId: string): string {
     return `shipcode/${threadId}`
+  }
+
+  getWorktreePath(threadId: string): string {
+    return path.join(
+      resolveWorktreeParent(this.projectPath, this.options.worktreeRoot ?? null),
+      threadId,
+    )
   }
 
   async create(threadId: string, baseBranch?: string): Promise<{ worktreePath: string; branch: string }> {
@@ -29,10 +42,12 @@ export class WorktreeManager {
     return { worktreePath, branch }
   }
 
-  async remove(threadId: string): Promise<void> {
-    const worktreePath = this.getWorktreePath(threadId)
-    const branch = this.getBranchName(threadId)
-
+  /**
+   * Remove a worktree using its persisted path and branch rather than
+   * recomputing from threadId. This insulates cleanup from settings changes
+   * that happened after the worktree was created.
+   */
+  async remove(worktreePath: string, branch: string): Promise<void> {
     try {
       await this.git.raw(['worktree', 'remove', worktreePath, '--force'])
     } catch {
@@ -46,17 +61,31 @@ export class WorktreeManager {
     }
   }
 
-  async list(): Promise<string[]> {
+  /**
+   * List all ShipCode worktrees in this project by branch-name prefix.
+   * Returns { path, branch } pairs so callers can act on either identifier.
+   */
+  async list(): Promise<Array<{ path: string; branch: string }>> {
     const result = await this.git.raw(['worktree', 'list', '--porcelain'])
-    const worktrees: string[] = []
-    for (const line of result.split('\n')) {
-      if (line.startsWith('worktree ')) {
-        const wtPath = line.replace('worktree ', '').trim()
-        if (wtPath.includes(WORKTREE_DIR)) {
-          worktrees.push(wtPath)
-        }
+    const worktrees: Array<{ path: string; branch: string }> = []
+    let current: { path?: string; branch?: string } = {}
+    const push = () => {
+      if (current.path && current.branch && current.branch.startsWith('shipcode/')) {
+        worktrees.push({ path: current.path, branch: current.branch })
       }
     }
+    for (const line of result.split('\n')) {
+      if (line.startsWith('worktree ')) {
+        push()
+        current = { path: line.slice('worktree '.length).trim() }
+      } else if (line.startsWith('branch ')) {
+        current.branch = line.slice('branch '.length).trim().replace(/^refs\/heads\//, '')
+      } else if (line === '') {
+        push()
+        current = {}
+      }
+    }
+    push()
     return worktrees
   }
 

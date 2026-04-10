@@ -188,6 +188,21 @@ export interface AppSettings {
   autoPickupEnabled: boolean
   statusLabelMappings: StatusLabelMapping
   onboardingVersion: number
+  // null = default (~/.shipcode/worktrees), '' = project-local legacy, else absolute or ~-prefixed
+  worktreeRoot: string | null
+  // Notifications
+  notificationsEnabled: boolean
+  notificationOsEnabled: boolean
+  notificationBadgeEnabled: boolean
+  notificationSoundEnabled: boolean
+  notificationEvents: NotificationEventToggles
+}
+
+export interface NotificationEventToggles {
+  awaitingApproval: boolean
+  failed: boolean
+  completed: boolean
+  verificationExhausted: boolean
 }
 
 export interface StatusLabelMapping {
@@ -245,6 +260,7 @@ export interface GitHubIssueCacheRecord {
   claimedBy: string | null
   lastPhaseUpdate: string | null
   lastStatusLabel: string | null
+  executorModel: 'claude' | 'codex'
   fetchedAt: string
 }
 
@@ -254,6 +270,7 @@ export type IssuePipelineStatus =
   | 'planning'
   | 'reviewing'
   | 'revising'
+  | 'awaiting_approval'
   | 'executing'
   | 'verifying'
   | 'shipping'
@@ -314,4 +331,83 @@ export interface GhAuthStatus {
   username: string | null
   version: string | null
   error: string | null
+}
+
+// === Mission Control Dashboard ===
+
+export interface DashboardStats {
+  agentsRunning: number
+  runningByPhase: Partial<Record<PipelinePhase, number>>
+  tasksInProgress: number
+  tasksOpen: number
+  tasksBlocked: number
+  pendingApprovals: number
+  staleApprovals: number
+  shippedLast7d: number
+  failedLast7d: number
+}
+
+export type ActivityKind =
+  | 'phase_change'
+  | 'plan_parsed'
+  | 'review_parsed'
+  | 'verification_parsed'
+  | 'pipeline_started'
+  | 'pipeline_cancelled'
+  | 'pipeline_failed'
+  | 'pipeline_completed'
+  | 'pipeline_verification_exhausted'
+  | 'notification_fired'
+
+export type ActivityActor = 'claude' | 'codex' | 'system' | 'human'
+
+export interface ActivityEntry {
+  id: string
+  threadId: string | null
+  projectId: string | null
+  kind: ActivityKind
+  actor: ActivityActor
+  title: string
+  subtitle: string | null
+  metadata: Record<string, unknown> | null
+  createdAt: string
+}
+
+export interface RecentTask {
+  threadId: string
+  projectId: string
+  projectName: string
+  title: string
+  phase: PipelinePhase
+  githubIssueNumber: number | null
+  updatedAt: string
+}
+
+export interface ActivePipelineSummary {
+  threadId: string
+  projectId: string
+  projectName: string
+  threadTitle: string
+  phase: PipelinePhase
+  startedAt: number
+  activeProcessId: string | null
+}
+
+// === Notifications ===
+
+export type NotificationKind =
+  | 'awaiting_approval'
+  | 'failed'
+  | 'completed'
+  | 'verification_exhausted'
+
+export interface NotificationRecord {
+  id: string
+  threadId: string
+  projectId: string | null
+  kind: NotificationKind
+  title: string
+  body: string
+  createdAt: string
+  dismissedAt: string | null
 }

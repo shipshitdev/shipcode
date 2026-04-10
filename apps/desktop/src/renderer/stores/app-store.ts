@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { ShipCodePlan, PlanReview, PipelinePhase, Project, Thread, SystemHealth, VerificationResult, GitHubIssueCacheRecord } from '@shipcode/shared'
+import type { ShipCodePlan, PlanReview, PipelinePhase, SystemHealth, VerificationResult, GitHubIssueCacheRecord } from '@shipcode/shared'
 
 interface AppState {
 	// Selection
@@ -21,7 +21,6 @@ interface AppState {
 	// Verification & issues
 	currentVerification: VerificationResult | null
 	githubIssues: GitHubIssueCacheRecord[]
-	kanbanView: boolean
 
 	// Agent output buffers
 	agentOutputs: Record<string, string[]>
@@ -29,6 +28,7 @@ interface AppState {
 	// Command palette & modals
 	commandPaletteOpen: boolean
 	createIssueModalOpen: boolean
+	editingPrd: { issueNumber: number; body: string } | null
 
 	// Actions
 	selectProject: (id: string | null) => void
@@ -43,11 +43,11 @@ interface AppState {
 	setSystemHealth: (health: SystemHealth) => void
 	setVerification: (verification: VerificationResult | null) => void
 	setGithubIssues: (issues: GitHubIssueCacheRecord[]) => void
-	toggleKanbanView: () => void
 	appendAgentOutput: (processId: string, chunk: string) => void
 	clearAgentOutput: (processId: string) => void
 	toggleCommandPalette: () => void
 	openCreateIssueModal: () => void
+	openEditPrdModal: (issueNumber: number, body: string) => void
 	closeCreateIssueModal: () => void
 }
 
@@ -64,10 +64,10 @@ export const useAppStore = create<AppState>((set) => ({
 	systemHealth: null,
 	currentVerification: null,
 	githubIssues: [],
-	kanbanView: true,
 	agentOutputs: {},
 	commandPaletteOpen: false,
 	createIssueModalOpen: false,
+	editingPrd: null,
 
 	selectProject: (id) => set({ activeProjectId: id, activeThreadId: null, activeIssue: null, currentPlan: null, currentReview: null, currentVerification: null, pipelinePhase: 'idle' }),
 	selectThread: (id) => set({ activeThreadId: id, currentPlan: null, currentReview: null, currentVerification: null, pipelinePhase: 'idle' }),
@@ -87,7 +87,6 @@ export const useAppStore = create<AppState>((set) => ({
 	setPipelinePhase: (phase) => set({ pipelinePhase: phase }),
 	setVerification: (verification) => set({ currentVerification: verification }),
 	setGithubIssues: (issues) => set({ githubIssues: issues }),
-	toggleKanbanView: () => set((s) => ({ kanbanView: !s.kanbanView })),
 	setSystemHealth: (health) => set({ systemHealth: health }),
 	appendAgentOutput: (processId, chunk) =>
 		set((s) => ({
@@ -102,6 +101,11 @@ export const useAppStore = create<AppState>((set) => ({
 			return { agentOutputs: rest }
 		}),
 	toggleCommandPalette: () => set((s) => ({ commandPaletteOpen: !s.commandPaletteOpen })),
-	openCreateIssueModal: () => set({ createIssueModalOpen: true, commandPaletteOpen: false }),
-	closeCreateIssueModal: () => set({ createIssueModalOpen: false }),
+	openCreateIssueModal: () => set({ createIssueModalOpen: true, editingPrd: null, commandPaletteOpen: false }),
+	openEditPrdModal: (issueNumber, body) => set({
+		createIssueModalOpen: true,
+		editingPrd: { issueNumber, body },
+		commandPaletteOpen: false,
+	}),
+	closeCreateIssueModal: () => set({ createIssueModalOpen: false, editingPrd: null }),
 }))

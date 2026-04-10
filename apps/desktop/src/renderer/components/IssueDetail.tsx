@@ -3,16 +3,17 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useAppStore } from '../stores/app-store'
-import { PlanViewer, ReviewViewer, Badge, Button, Textarea } from '@shipcode/ui'
+import { PlanViewer, ReviewViewer, Badge, Button, Textarea, X, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shipcode/ui'
 import type { Thread, PlanRecord, ReviewRecord } from '@shipcode/shared'
 
 export function IssueDetail() {
 	const queryClient = useQueryClient()
-	const { activeIssue, activeThreadId, activeProjectId, selectIssue, pipelinePhase } = useAppStore()
+	const { activeIssue, activeThreadId, activeProjectId, selectIssue, pipelinePhase, openEditPrdModal } = useAppStore()
 	const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null)
 	const [feedback, setFeedback] = useState('')
 	const [showRejectForm, setShowRejectForm] = useState(false)
 	const [isSubmitting, setIsSubmitting] = useState(false)
+	const [isRefreshingFromGithub, setIsRefreshingFromGithub] = useState(false)
 
 	// Fetch thread data if issue is linked
 	const { data: thread } = useQuery<Thread | null>({
@@ -101,6 +102,38 @@ export function IssueDetail() {
 		}
 	}
 
+	const handleExecutorChange = async (model: 'claude' | 'codex') => {
+		if (!activeProjectId) return
+		await window.shipcode.invoke('github:set-executor', {
+			projectId: activeProjectId,
+			issueNumber: activeIssue!.issueNumber,
+			model,
+		})
+		await queryClient.invalidateQueries({ queryKey: ['github-issues', activeProjectId] })
+	}
+
+	const handleEditPrd = () => {
+		if (!activeIssue) return
+		openEditPrdModal(activeIssue.issueNumber, activeIssue.body ?? '')
+	}
+
+	const handleRefreshFromGithub = async () => {
+		if (!activeProjectId) return
+		setIsRefreshingFromGithub(true)
+		try {
+			await window.shipcode.invoke('github:refresh-issues', { projectId: activeProjectId })
+			await queryClient.invalidateQueries({ queryKey: ['github-issues', activeProjectId] })
+		} finally {
+			setIsRefreshingFromGithub(false)
+		}
+	}
+
+	// Executor is locked in once the pipeline is mid-loop. It's editable
+	// before the run starts (todo/queued) and after terminal states where
+	// the user will kick off a new run (failed/completed).
+	const EXECUTOR_EDITABLE_STATUSES = new Set(['todo', 'queued', 'failed', 'completed'])
+	const executorEditable = EXECUTOR_EDITABLE_STATUSES.has(activeIssue?.pipelineStatus ?? 'todo')
+
 	const statusColor = (status: string) => {
 		switch (status) {
 			case 'approved': return 'var(--success)'
@@ -117,11 +150,11 @@ export function IssueDetail() {
 			<div className="relative shrink-0 border-b border-border p-4">
 				<button
 					type="button"
-					className="absolute right-3 top-3 cursor-pointer rounded border-none bg-transparent px-2 py-1 text-sm text-text-muted hover:bg-bg-hover hover:text-text-primary"
+					className="absolute right-3 top-3 flex h-6 w-6 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-text-muted hover:bg-bg-hover hover:text-text-primary"
 					onClick={() => selectIssue(null)}
 					title="Close"
 				>
-					✕
+					<X size={14} />
 				</button>
 				<span className="font-mono text-xs text-text-muted">#{activeIssue.issueNumber}</span>
 				<h3 className="my-1 pr-8 text-[15px] font-semibold">{activeIssue.title}</h3>
@@ -144,10 +177,33 @@ export function IssueDetail() {
 
 			{/* Content */}
 			<div className="flex-1 overflow-y-auto p-4">
-				{/* Issue body (PRD) */}
-				{activeIssue.body ? (
-					<div className="mb-5">
-						<h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">Description</h4>
+				{/* PRD (GitHub issue body IS the PRD) */}
+				<div className="mb-5">
+					<div className="mb-2 flex items-center justify-between">
+						<h4 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">PRD</h4>
+						<div className="flex gap-1">
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={handleRefreshFromGithub}
+								disabled={isRefreshingFromGithub}
+								className="h-6 text-[11px]"
+								title="Re-fetch issue body from GitHub (use after editing on github.com)"
+							>
+								{isRefreshingFromGithub ? 'Refreshing...' : 'Refresh'}
+							</Button>
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={handleEditPrd}
+								className="h-6 text-[11px]"
+								title="Edit the PRD body (pushes to the GitHub issue on save)"
+							>
+								Edit PRD
+							</Button>
+						</div>
+					</div>
+					{activeIssue.body ? (
 						<div className="max-h-[300px] overflow-y-auto rounded-md bg-bg-secondary p-3 text-[13px] leading-relaxed text-text-primary">
 							<div className="space-y-3 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-text-secondary [&_code]:rounded [&_code]:bg-bg-tertiary [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-xs [&_h1]:text-base [&_h1]:font-semibold [&_h2]:mt-4 [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:text-sm [&_h3]:font-semibold [&_li]:mb-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:whitespace-pre-wrap [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-bg-tertiary [&_pre]:p-3 [&_pre]:text-xs [&_ul]:list-disc [&_ul]:pl-5">
 								<ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -155,15 +211,40 @@ export function IssueDetail() {
 								</ReactMarkdown>
 							</div>
 						</div>
-					</div>
-				) : (
-					<div className="mb-5">
-						<h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">Description</h4>
+					) : (
 						<div className="rounded-md bg-bg-secondary p-3 text-[13px] text-text-muted">
-							No issue description provided.
+							This issue has no PRD body yet. Click "Edit PRD" to author one.
 						</div>
+					)}
+				</div>
+
+
+				{/* Executor selector — editable before the pipeline runs, read-only mid-loop. */}
+				<div className="mb-5">
+					<h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">Agents</h4>
+					<div className="grid grid-cols-[auto,1fr] items-center gap-x-3 gap-y-1.5 text-xs text-text-secondary">
+						<span>Planner</span>
+						<span className="font-mono text-text-primary">claude</span>
+						<span>Reviewer</span>
+						<span className="font-mono text-text-primary">codex</span>
+						<span>Executor</span>
+						{executorEditable ? (
+							<Select value={activeIssue.executorModel} onValueChange={(v) => handleExecutorChange(v as 'claude' | 'codex')}>
+								<SelectTrigger className="h-7 w-[140px] text-xs">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="claude">claude</SelectItem>
+									<SelectItem value="codex">codex</SelectItem>
+								</SelectContent>
+							</Select>
+						) : (
+							<span className="font-mono text-text-primary">{activeIssue.executorModel}</span>
+						)}
+						<span>Verifier</span>
+						<span className="font-mono text-text-primary">claude</span>
 					</div>
-				)}
+				</div>
 
 				{/* Pipeline thread info */}
 				{thread && (

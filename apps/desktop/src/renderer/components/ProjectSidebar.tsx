@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { cn } from '@shipcode/ui'
+import { cn, ChevronLeft, ChevronRight, Folder, Plus } from '@shipcode/ui'
 import { useAppStore } from '../stores/app-store'
 import type { Project } from '@shipcode/shared'
 
@@ -28,28 +28,30 @@ export function ProjectSidebar() {
 
 	if (sidebarCollapsed) {
 		return (
-			<aside className="flex w-12 min-w-12 items-start justify-center border-r border-border bg-bg-secondary pt-[var(--titlebar-height)] app-region-drag">
+			<aside className="flex w-12 min-w-12 items-start justify-center border-r border-border bg-bg-secondary pt-2">
 				<button
 					type="button"
-					className="cursor-pointer rounded-[var(--radius)] border-none bg-transparent p-1 text-text-secondary app-region-no-drag hover:text-text-primary"
+					className="cursor-pointer rounded-md border-none bg-transparent p-1.5 text-text-secondary hover:bg-bg-hover hover:text-text-primary"
 					onClick={toggleSidebar}
+					title="Expand sidebar"
 				>
-					▶
+					<ChevronRight size={14} />
 				</button>
 			</aside>
 		)
 	}
 
 	return (
-		<aside className="flex w-[220px] min-w-[220px] flex-col border-r border-border bg-bg-secondary app-region-drag">
-			<div className="flex items-center justify-between px-4 py-3 pt-[calc(var(--spacing-titlebar)+4px)] app-region-drag">
-				<h1 className="text-sm font-bold tracking-tight text-text-primary">ShipCode</h1>
+		<aside className="flex w-[256px] min-w-[256px] flex-col border-r border-border bg-bg-secondary">
+			<div className="flex items-center justify-between px-4 py-3">
+				<h1 className="text-sm font-semibold tracking-tight text-text-primary">Projects</h1>
 				<button
 					type="button"
-					className="cursor-pointer rounded-[var(--radius)] border-none bg-transparent p-1 text-text-secondary app-region-no-drag hover:text-text-primary"
+					className="cursor-pointer rounded-md border-none bg-transparent p-1.5 text-text-secondary hover:bg-bg-hover hover:text-text-primary"
 					onClick={toggleSidebar}
+					title="Collapse sidebar"
 				>
-					◀
+					<ChevronLeft size={14} />
 				</button>
 			</div>
 
@@ -59,23 +61,24 @@ export function ProjectSidebar() {
 						type="button"
 						key={project.id}
 						className={cn(
-							'flex w-full cursor-pointer items-center gap-2 rounded-[var(--radius)] border-none bg-transparent px-3 py-2 text-left text-[13px] text-text-secondary app-region-no-drag hover:bg-bg-hover hover:text-text-primary',
+							'flex w-full cursor-pointer items-center gap-2 rounded-md border-none bg-transparent px-3 py-2 text-left text-[13px] text-text-secondary app-region-no-drag hover:bg-bg-hover hover:text-text-primary',
 							activeProjectId === project.id && 'bg-bg-tertiary text-text-primary',
 						)}
 						onClick={() => selectProject(project.id)}
 					>
-						<span>📁</span>
-						<span>{project.name}</span>
+						<Folder size={14} className="shrink-0 text-text-muted" />
+						<span className="truncate">{project.name}</span>
 					</button>
 				))}
 			</div>
 
 			<button
 				type="button"
-				className="m-2 cursor-pointer rounded-[var(--radius)] border border-dashed border-border bg-transparent px-3 py-2 text-xs text-text-secondary app-region-no-drag hover:border-accent hover:text-accent"
+				className="m-2 flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-dashed border-border bg-transparent px-3 py-2 text-xs text-text-secondary app-region-no-drag hover:border-border-strong hover:text-text-primary"
 				onClick={() => addProject.mutate()}
 			>
-				+ Add Repository
+				<Plus size={12} />
+				Add Repository
 			</button>
 		</aside>
 	)

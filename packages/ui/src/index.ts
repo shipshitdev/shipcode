@@ -1,5 +1,18 @@
 export { cn } from './lib/utils'
 
+// Icons — re-exported from lucide-react so apps import via @shipcode/ui
+export {
+  ArrowRight,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Folder,
+  Loader2,
+  Plus,
+  Settings,
+  X,
+} from 'lucide-react'
+
 // Primitives (more added incrementally as tasks need them)
 export { Button, buttonVariants } from './primitives/button'
 export { Input } from './primitives/input'
@@ -20,6 +33,5 @@ export { ReviewViewer } from './ReviewViewer'
 export { VerificationViewer } from './VerificationViewer'
 export { KanbanBoard } from './KanbanBoard'
 export { IssueCard } from './IssueCard'
-export { ThreadList } from './ThreadList'
 export { DiffViewer } from './DiffViewer'
 export { StatusMappingEditor } from './StatusMappingEditor'

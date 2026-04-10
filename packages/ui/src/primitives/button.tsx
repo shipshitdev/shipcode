@@ -4,20 +4,29 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "../lib/utils"
 
 const buttonVariants = cva(
-	"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-[13px] font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+	"inline-flex items-center justify-center gap-2 whitespace-nowrap text-[13px] font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border-strong [&_svg]:pointer-events-none [&_svg]:shrink-0",
 	{
 		variants: {
 			variant: {
-				default: "bg-accent text-bg-primary hover:bg-accent-hover",
-				secondary: "bg-bg-tertiary text-text-primary border border-border hover:bg-bg-hover",
-				ghost: "bg-transparent text-text-secondary hover:text-text-primary",
-				destructive: "bg-danger text-text-primary hover:bg-danger/90",
-				link: "text-accent underline-offset-4 hover:underline",
+				default:
+					"rounded-lg bg-accent text-accent-foreground hover:bg-accent-hover shadow-[inset_0_0_0_1px_rgba(0,0,0,0.08)]",
+				secondary:
+					"rounded-lg bg-bg-tertiary text-text-primary border border-border hover:bg-bg-hover",
+				outline:
+					"rounded-lg bg-transparent border border-border text-text-primary hover:bg-bg-hover",
+				ghost:
+					"rounded-md bg-transparent text-text-secondary hover:bg-bg-hover hover:text-text-primary",
+				destructive:
+					"rounded-lg bg-danger/15 text-danger border border-danger/30 hover:bg-danger/25",
+				link: "text-text-primary underline-offset-4 hover:underline",
 			},
 			size: {
-				default: "h-8 px-3.5 py-1.5",
+				xs: "h-6 px-2 text-[11px] gap-1",
 				sm: "h-7 px-2.5 text-xs",
-				lg: "h-10 px-6 py-2.5 text-[15px]",
+				default: "h-8 px-3.5 py-1.5",
+				md: "h-8 px-3.5 py-1.5",
+				lg: "h-9 px-4 text-[13px]",
+				xl: "h-10 px-5 text-[14px]",
 				icon: "h-8 w-8",
 			},
 		},

@@ -1,5 +1,10 @@
 import type {
+  ActivePipelineSummary,
+  ActivityEntry,
   AppSettings,
+  DashboardStats,
+  NotificationRecord,
+  RecentTask,
   ShipCodePlan,
   DiffRecord,
   FileChange,
@@ -60,8 +65,12 @@ export interface IpcInvokeChannels {
   'github:retry-issue': { args: { projectId: string; issueNumber: number }; result: void }
   'github:get-issue': { args: { issueNumber: number; projectId: string }; result: GitHubIssueCacheRecord | null }
   'github:create-issue': {
-    args: { projectId: string; title: string; body?: string; labels?: string[] }
+    args: { projectId: string; title: string; body: string; labels?: string[] }
     result: GitHubIssueCacheRecord
+  }
+  'github:edit-issue-body': {
+    args: { projectId: string; issueNumber: number; body: string }
+    result: GitHubIssueCacheRecord | null
   }
 
   // Plans & Reviews (backfill)
@@ -77,6 +86,25 @@ export interface IpcInvokeChannels {
   // Onboarding
   'onboarding:check-auth': { args: void; result: SystemHealth & { ghAuth: GhAuthStatus } }
   'onboarding:list-repos': { args: void; result: string[] }
+
+  // AI-assisted PRD generation
+  'ai:generate-prd': {
+    args: { projectId: string; userPrompt: string }
+    result: { title: string; body: string }
+  }
+
+  // Mission Control dashboard
+  'dashboard:get-stats': { args: void; result: DashboardStats }
+  'dashboard:get-activity': { args: { limit?: number; projectId?: string }; result: ActivityEntry[] }
+  'dashboard:get-recent-tasks': { args: { limit?: number }; result: RecentTask[] }
+
+  // Active pipelines listing (for Running Agents panel)
+  'pipeline:list-active': { args: void; result: ActivePipelineSummary[] }
+
+  // Notifications
+  'notification:list': { args: void; result: NotificationRecord[] }
+  'notification:dismiss': { args: { id: string }; result: void }
+  'notification:dismiss-all': { args: void; result: void }
 }
 
 // === Streaming Channels (send/on) ===
@@ -85,10 +113,15 @@ export interface IpcStreamChannels {
   'agent:output': { processId: string; chunk: string }
   'agent:state': { processId: string; type: string; state: AgentState }
   'pipeline:phase': { threadId: string; phase: PipelinePhase }
+  'pipeline:verification-exhausted': { threadId: string; retries: number }
   'plan:parsed': { threadId: string; plan: ShipCodePlan }
   'review:parsed': { threadId: string; review: PlanReview }
   'files:changed': { projectId: string; changes: FileChange[] }
   'verification:parsed': { threadId: string; verification: VerificationResult }
   'github:issues-updated': { projectId: string; issues: GitHubIssueCacheRecord[] }
   'github:issue-status': { projectId: string; issueNumber: number; status: string }
+  'notification:fire': NotificationRecord
+  'notification:focus-thread': { threadId: string; projectId: string | null }
+  'activity:appended': ActivityEntry
+  'dashboard:invalidate': { kinds: Array<'stats' | 'activity' | 'running' | 'recent'> }
 }
