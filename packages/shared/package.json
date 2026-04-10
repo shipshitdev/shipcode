@@ -19,9 +19,9 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "zod": "^4.3.6"
+    "zod": "4.3.6"
   },
   "devDependencies": {
-    "typescript": "^6.0.2"
+    "typescript": "6.0.2"
   }
 }

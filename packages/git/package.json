@@ -18,9 +18,9 @@
   },
   "dependencies": {
     "@shipcode/shared": "workspace:*",
-    "simple-git": "^3.35.2"
+    "simple-git": "3.35.2"
   },
   "devDependencies": {
-    "typescript": "^6.0.2"
+    "typescript": "6.0.2"
   }
 }

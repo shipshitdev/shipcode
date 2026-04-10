@@ -19,9 +19,9 @@
   },
   "dependencies": {
     "@shipcode/shared": "workspace:*",
-    "nanoid": "^5.1.7"
+    "nanoid": "5.1.7"
   },
   "devDependencies": {
-    "typescript": "^6.0.2"
+    "typescript": "6.0.2"
   }
 }
