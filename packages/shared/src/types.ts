@@ -211,6 +211,7 @@ export interface AppSettings {
   plannerModel: AgentType
   reviewerModel: AgentType
   verifierModel: AgentType
+  executorModel: AgentType
   githubPollingEnabled: boolean
   githubPollingIntervalMs: number
   githubBotUsername: string

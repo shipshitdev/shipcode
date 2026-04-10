@@ -122,7 +122,7 @@ export class GitHubIssueQueries {
       claimedBy: row.claimed_by,
       lastPhaseUpdate: row.last_phase_update,
       lastStatusLabel: row.last_status_label ?? null,
-      executorModel: (row.executor_model === 'codex' ? 'codex' : 'claude'),
+      executorModel: (row.executor_model === 'codex' ? 'codex' : row.executor_model === 'openrouter' ? 'openrouter' : 'claude'),
       fetchedAt: row.fetched_at,
     }
   }

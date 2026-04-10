@@ -27,6 +27,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   plannerModel: 'claude',
   reviewerModel: 'codex',
   verifierModel: 'claude',
+  executorModel: 'claude',
   githubPollingEnabled: false,
   githubPollingIntervalMs: 30_000,
   githubBotUsername: '',

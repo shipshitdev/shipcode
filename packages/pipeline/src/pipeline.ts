@@ -78,7 +78,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       case 'verify':
         return settings.verifierModel as PipelineExecutorModel
       case 'execute':
-        return context.executorModel
+        if (context.executorModelOverride) return context.executorModelOverride as PipelineExecutorModel
+        if (context.executorModel) return context.executorModel
+        return settings.executorModel as PipelineExecutorModel
     }
   }
 

@@ -40,6 +40,7 @@ export class SettingsQueries {
       terminalScrollback: stored.terminalScrollback ? parseInt(stored.terminalScrollback, 10) : DEFAULT_SETTINGS.terminalScrollback,
       plannerModel: (stored.plannerModel as AppSettings['plannerModel']) ?? DEFAULT_SETTINGS.plannerModel,
       reviewerModel: (stored.reviewerModel as AppSettings['reviewerModel']) ?? DEFAULT_SETTINGS.reviewerModel,
+      executorModel: (stored.executorModel as AppSettings['executorModel']) ?? DEFAULT_SETTINGS.executorModel,
       githubPollingEnabled: parseBool(stored.githubPollingEnabled, DEFAULT_SETTINGS.githubPollingEnabled),
       githubPollingIntervalMs: stored.githubPollingIntervalMs ? parseInt(stored.githubPollingIntervalMs, 10) : DEFAULT_SETTINGS.githubPollingIntervalMs,
       githubBotUsername: stored.githubBotUsername ?? DEFAULT_SETTINGS.githubBotUsername,
