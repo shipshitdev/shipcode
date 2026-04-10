@@ -44,6 +44,7 @@ export function CreateIssueModal() {
 	const [enhancing, setEnhancing] = useState(false)
 	const [submitting, setSubmitting] = useState(false)
 	const [error, setError] = useState<string | null>(null)
+	const [submitAnother, setSubmitAnother] = useState(false)
 	const bodyRef = useRef<HTMLTextAreaElement>(null)
 
 	const mode: 'create' | 'edit' = editingPrd ? 'edit' : 'create'
@@ -60,7 +61,8 @@ export function CreateIssueModal() {
 		setTimeout(() => bodyRef.current?.focus(), 50)
 	}, [createIssueModalOpen, mode, editingPrd])
 
-	const bodyValid = bodyHasRequiredPrdSections(body)
+	// Edit mode: keep the PRD sections validation. Create mode: just check non-empty.
+	const editBodyValid = bodyHasRequiredPrdSections(body)
 	const missingSections = useMemo(
 		() => PRD_REQUIRED_HEADINGS.filter((h) => !body.includes(h)),
 		[body],
@@ -89,7 +91,11 @@ export function CreateIssueModal() {
 	}
 
 	const handleSubmit = async () => {
-		if (!bodyValid) return
+		if (mode === 'edit') {
+			if (!editBodyValid) return
+		} else {
+			if (!derivedTitle || body.trim().length === 0) return
+		}
 		if (mode === 'create' && !derivedTitle) return
 		setSubmitting(true)
 		setError(null)
@@ -119,6 +125,12 @@ export function CreateIssueModal() {
 					console.error('[CreateIssueModal] start-issue failed', startErr)
 					// Don't block the success path — the issue is on GitHub either way.
 				}
+				if (submitAnother) {
+					// Reset form and stay open so the user can submit the next idea.
+					setBody('')
+					setSubmitting(false)
+					return
+				}
 				selectIssue(created)
 			}
 			closeCreateIssueModal()
@@ -141,22 +153,28 @@ export function CreateIssueModal() {
 		}
 	}
 
+	const bodyIsEmpty = body.trim().length === 0
+
+	// Submit disabled logic differs by mode.
 	const titleMissing = mode === 'create' && !derivedTitle
-	const submitDisabled = titleMissing || !bodyValid || submitting || enhancing
+	const submitDisabled =
+		mode === 'edit'
+			? !editBodyValid || submitting || enhancing
+			: titleMissing || bodyIsEmpty || submitting || enhancing
+
 	const submitLabel = submitting
 		? mode === 'edit'
 			? 'Saving...'
 			: 'Creating & planning...'
 		: mode === 'edit'
 			? 'Save PRD'
-			: 'Create & Plan'
-	const bodyIsEmpty = body.trim().length === 0
+			: 'Create Plan'
 
 	return (
 		<Dialog open={createIssueModalOpen} onOpenChange={(open) => { if (!open) closeCreateIssueModal() }}>
 			<DialogContent className="max-w-[720px]" onKeyDown={handleKeyDown}>
 				<DialogHeader>
-					<DialogTitle>{mode === 'edit' ? 'Edit PRD' : 'New PRD'}</DialogTitle>
+					<DialogTitle>{mode === 'edit' ? 'Edit PRD' : 'New Issue'}</DialogTitle>
 				</DialogHeader>
 
 				<div className="flex flex-col gap-3">
@@ -171,26 +189,16 @@ export function CreateIssueModal() {
 							onChange={(e) => setBody(e.target.value)}
 							placeholder={
 								mode === 'create'
-									? 'Free-form. A paragraph or a few bullets.\n\n' +
-									  'Example: "Add a keyboard shortcut (cmd+shift+c) that copies the\n' +
-									  "active kanban card's GitHub issue URL. Should show a toast to\n" +
-									  'confirm. Only copy the URL, nothing else."\n\n' +
-									  'Then click "Generate with AI" to structure it into a full PRD.'
+									? 'Describe what you want to build…'
 									: 'PRD markdown...'
 							}
 							rows={22}
-							className={mode === 'edit' || bodyValid ? 'font-mono text-xs' : 'text-[13px]'}
+							className={mode === 'edit' && editBodyValid ? 'font-mono text-xs' : mode === 'edit' ? 'font-mono text-xs' : 'text-[13px]'}
 							disabled={enhancing}
 						/>
-						{mode === 'create' && !bodyValid && (
-							<p className="text-[11px] text-text-muted">
-								The AI reads <code className="font-mono">.agents/skills/writing-prds/SKILL.md</code> from
-								this repo and expands your idea into a full PRD (title + structured body).
-							</p>
-						)}
 					</div>
 
-					{!bodyValid && body.length > 0 && (
+					{mode === 'edit' && !editBodyValid && body.length > 0 && (
 						<div className="max-h-20 overflow-y-auto rounded-md border border-warning/30 bg-warning/10 px-2.5 py-2 text-xs text-warning">
 							Missing required sections: {missingSections.join(', ')}
 						</div>
@@ -215,11 +223,22 @@ export function CreateIssueModal() {
 						title="Let AI structure your idea into a full PRD using this repo's writing-prds skill"
 					>
 						<Sparkles size={14} />
-						{enhancing ? 'Generating…' : 'Generate with AI'}
+						{enhancing ? 'Enhancing…' : 'Enhance with AI'}
 					</Button>
 					<Button onClick={handleSubmit} disabled={submitDisabled}>
 						{submitLabel}
 					</Button>
+					{mode === 'create' && (
+						<label className="flex items-center gap-1.5 text-[11px] text-text-muted cursor-pointer select-none">
+							<input
+								type="checkbox"
+								checked={submitAnother}
+								onChange={(e) => setSubmitAnother(e.target.checked)}
+								className="h-3 w-3 accent-primary"
+							/>
+							Submit another
+						</label>
+					)}
 					<span className="ml-auto text-[11px] text-text-muted">⌘↩ to submit</span>
 				</DialogFooter>
 			</DialogContent>
