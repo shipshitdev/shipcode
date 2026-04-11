@@ -32,6 +32,7 @@ export function App() {
     viewMode,
     activeIssue,
     issueDetailExpanded,
+    issueDetailCollapsed,
   } = useAppStore();
 
   const { data: settings } = useQuery<AppSettings>({
@@ -42,15 +43,21 @@ export function App() {
   if (settings && (settings.onboardingVersion ?? 0) < CURRENT_ONBOARDING_VERSION) {
     return (
       <OnboardingWizard
-        onComplete={async () => {
+        onComplete={async (newProjectId?: string) => {
           queryClient.invalidateQueries({ queryKey: ['settings'] });
           queryClient.invalidateQueries({ queryKey: ['health'] });
-          const projects = await queryClient.fetchQuery<Project[]>({
-            queryKey: ['projects-visible'],
-            queryFn: () => window.shipcode.invoke('project:list-visible'),
-          });
-          if (projects && projects.length > 0) {
-            useAppStore.getState().selectProject(projects[0].id);
+          if (newProjectId) {
+            queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
+            useAppStore.getState().selectProject(newProjectId);
+            window.shipcode.invoke('github:refresh-issues', { projectId: newProjectId }).catch(() => {});
+          } else {
+            const projects = await queryClient.fetchQuery<Project[]>({
+              queryKey: ['projects-visible'],
+              queryFn: () => window.shipcode.invoke('project:list-visible'),
+            });
+            if (projects && projects.length > 0) {
+              useAppStore.getState().selectProject(projects[0].id);
+            }
           }
         }}
       />
@@ -124,7 +131,7 @@ export function App() {
             {terminalVisible && <TerminalDrawer />}
           </div>
           {/* Right panel — full height, spans over the terminal */}
-          {activeIssue && !issueDetailExpanded && (
+          {activeIssue && !issueDetailExpanded && !issueDetailCollapsed && (
             <div className="w-[420px] shrink-0 border-l border-border overflow-hidden">
               <IssueDetail expanded={false} />
             </div>

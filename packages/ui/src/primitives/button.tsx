@@ -13,6 +13,7 @@ const buttonVariants = cva(
         secondary: 'rounded-lg bg-tertiary text-primary border border-border hover:bg-hover',
         outline: 'rounded-lg bg-transparent border border-border text-primary hover:bg-hover',
         ghost: 'rounded-md bg-transparent text-secondary hover:bg-hover hover:text-primary',
+        pill: 'rounded-md bg-transparent text-secondary hover:text-primary border border-border hover:border-text-secondary',
         destructive:
           'rounded-lg bg-danger/15 text-danger border border-danger/30 hover:bg-danger/25',
         link: 'text-primary underline-offset-4 hover:underline',

@@ -7,10 +7,13 @@ export { MODEL_DISPLAY, modelDisplay } from './lib/model-display';
 export {
   Archive,
   ArrowRight,
+  Copy,
   ArrowUpDown,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   ExternalLink,
   Folder,
   Globe,
@@ -89,6 +92,7 @@ export {
 } from './primitives/dropdown-menu';
 export { Pagination } from './primitives/pagination';
 export type { PaginationProps } from './primitives/pagination';
+export { SettingsRow } from './primitives/settings-row';
 
 // Domain components
 export { PipelineStatus } from './PipelineStatus';

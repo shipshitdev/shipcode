@@ -4,6 +4,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { cn, Maximize2, Minimize2, X } from '@shipcode/ui';
 import { useAppStore } from '../stores/app-store';
+import type { GitHubIssueCacheRecord } from '@shipcode/shared';
 
 const MIN_HEIGHT = 120;
 const DEFAULT_HEIGHT = 250;
@@ -63,10 +64,19 @@ function extractNdjsonText(event: Record<string, unknown>): string | null {
   // ── codex exec --json ───────────────────────────────────────────────────
   const item = event.item as Record<string, unknown> | undefined;
   if (event.type === 'item.started' && item?.type === 'command_execution') {
-    // Show the shell command being run (yellow)
     return `\x1b[33m$ ${item.command as string}\x1b[0m`;
   }
+  // Real-time text streaming: item.delta carries incremental tokens as they generate.
+  // When present, item.completed agent_message is suppressed by the caller to avoid
+  // double-printing the same text.
+  if (event.type === 'item.delta') {
+    const delta = event.delta as Record<string, unknown> | undefined;
+    if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
+      return delta.text;
+    }
+  }
   if (event.type === 'item.completed' && item?.type === 'agent_message') {
+    // Fallback only — caller suppresses this if item.delta events were already streamed.
     return (item.text as string) || null;
   }
   if (event.type === 'item.completed' && item?.type === 'command_execution') {
@@ -86,18 +96,37 @@ const FENCE_TAGS: Record<string, string> = {
 };
 const FENCE_RE = new RegExp('```(' + Object.keys(FENCE_TAGS).join('|') + ')');
 
+const AGENT_ACTIVE_STATUSES = new Set(['planning', 'reviewing', 'revising', 'executing', 'verifying', 'shipping']);
+
 export function TerminalDrawer() {
   const { toggleTerminal, agentOutputs } = useAppStore();
   const terminalThreadId = useAppStore((s) => s.terminalThreadId);
   const terminalEventsByThread = useAppStore((s) => s.terminalEventsByThread);
   const terminalEvents = terminalThreadId ? (terminalEventsByThread[terminalThreadId] ?? []) : [];
-  // Watch terminal focus thread for reset detection (renamed from activeThreadId)
-  const activeThreadId = terminalThreadId;
   const activeIssue = useAppStore((s) => s.activeIssue);
   const pipelinePhase = useAppStore((s) => s.pipelinePhase);
+  const currentModel = useAppStore((s) => s.currentModel);
   const githubIssues = useAppStore((s) => s.githubIssues);
+  const processToThread = useAppStore((s) => s.processToThread);
   const setTerminalThread = useAppStore((s) => s.setTerminalThread);
   const selectIssue = useAppStore((s) => s.selectIssue);
+
+  // Pinned issue: tracks the last non-null activeIssue so header stays populated
+  // when the user navigates to Dashboard/Costs/Activity.
+  const [pinnedIssue, setPinnedIssue] = useState<GitHubIssueCacheRecord | null>(null);
+  useEffect(() => {
+    if (activeIssue) setPinnedIssue(activeIssue);
+  }, [activeIssue]);
+  // Also sync pinnedIssue when terminalThreadId points to a different issue than current pinnedIssue
+  useEffect(() => {
+    if (!terminalThreadId) return;
+    const found = githubIssues.find((i) => i.threadId === terminalThreadId);
+    if (found) setPinnedIssue(found);
+  }, [terminalThreadId, githubIssues]);
+
+  // Running tasks: issues with an active pipeline status — shown as tabs
+  const runningTabs = githubIssues.filter((i) => AGENT_ACTIVE_STATUSES.has(i.pipelineStatus));
+
   // Track when the current pipeline run started (first event for this thread)
   const startedAtRef = useRef<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -109,6 +138,9 @@ export function TerminalDrawer() {
   const lineBufferRef = useRef<Record<string, string>>({});
   // Per-process suppression: once a fence tag is detected, suppress remaining text
   const suppressedRef = useRef<Record<string, boolean>>({});
+  // Codex item.delta dedup: track item IDs that have received delta events so we
+  // can suppress the redundant item.completed agent_message for the same item.
+  const deltaItemIdsRef = useRef<Record<string, Set<string>>>({});
   const prevThreadIdRef = useRef<string | null>(null);
   // Track how many terminal event lines have been written
   const eventsWrittenRef = useRef(0);
@@ -161,6 +193,23 @@ export function TerminalDrawer() {
         foreground: '#b4b4bc',
         cursor: '#f4f4f5',
         selectionBackground: 'rgba(244, 244, 245, 0.2)',
+        // Catppuccin Mocha palette for readable ANSI colors on the dark background
+        black: '#1a1b1e',
+        red: '#f38ba8',
+        green: '#a6e3a1',
+        yellow: '#f9e2af',
+        blue: '#89b4fa',
+        magenta: '#cba6f7',
+        cyan: '#89dceb',
+        white: '#cdd6f4',
+        brightBlack: '#585b70',
+        brightRed: '#f38ba8',
+        brightGreen: '#a6e3a1',
+        brightYellow: '#f9e2af',
+        brightBlue: '#89b4fa',
+        brightMagenta: '#cba6f7',
+        brightCyan: '#89dceb',
+        brightWhite: '#ffffff',
       },
       fontFamily: '"SF Mono", SFMono-Regular, Consolas, Menlo, monospace',
       fontSize: 12,
@@ -187,30 +236,35 @@ export function TerminalDrawer() {
     };
   }, []);
 
-  // Clear terminal when the active thread changes (user switched tasks)
+  // Clear terminal when the focused terminal thread changes
   useEffect(() => {
     const term = termRef.current;
     if (!term) return;
-    if (activeThreadId !== prevThreadIdRef.current) {
+    if (terminalThreadId !== prevThreadIdRef.current) {
       term.reset();
       writtenRef.current = {};
       lineBufferRef.current = {};
       suppressedRef.current = {};
+      deltaItemIdsRef.current = {};
       eventsWrittenRef.current = 0;
       startedAtRef.current = null;
-      prevThreadIdRef.current = activeThreadId;
+      prevThreadIdRef.current = terminalThreadId;
       // Show skeleton until first output arrives for this thread
       setIsTransitioning(true);
     }
-  }, [activeThreadId]);
+  }, [terminalThreadId]);
 
-  // Write incremental agent output as chunks arrive
+  // Write incremental agent output as chunks arrive (filtered to current terminal thread)
   useEffect(() => {
     const term = termRef.current;
     if (!term) return;
 
     for (const [processId, chunks] of Object.entries(agentOutputs)) {
       if (writtenRef.current[processId] === Infinity) continue;
+
+      // Only show output for processes belonging to the currently focused thread
+      const mappedThread = processToThread[processId];
+      if (mappedThread && terminalThreadId && mappedThread !== terminalThreadId) continue;
 
       const prev = (writtenRef.current[processId] as number) ?? 0;
       const newChunks = chunks.slice(prev);
@@ -235,6 +289,26 @@ export function TerminalDrawer() {
           if (!trimmed) continue;
           try {
             const event = JSON.parse(trimmed) as Record<string, unknown>;
+
+            // Track Codex item.delta events so we can suppress the redundant
+            // item.completed agent_message for the same item (avoids double-print).
+            if (event.type === 'item.delta' && typeof event.item_id === 'string') {
+              if (!deltaItemIdsRef.current[processId]) {
+                deltaItemIdsRef.current[processId] = new Set();
+              }
+              deltaItemIdsRef.current[processId].add(event.item_id);
+            }
+
+            // Suppress item.completed agent_message when deltas were already streamed.
+            if (
+              event.type === 'item.completed' &&
+              (event.item as Record<string, unknown>)?.type === 'agent_message' &&
+              typeof event.item_id === 'string' &&
+              deltaItemIdsRef.current[processId]?.has(event.item_id)
+            ) {
+              continue;
+            }
+
             const text = extractNdjsonText(event);
             if (!text) continue;
 
@@ -277,7 +351,7 @@ export function TerminalDrawer() {
         delete lineBufferRef.current[processId];
       }
     }
-  }, [agentOutputs]);
+  }, [agentOutputs, processToThread, terminalThreadId]);
 
   // Write pipeline event log lines (phase transitions, process lifecycle)
   useEffect(() => {
@@ -292,14 +366,18 @@ export function TerminalDrawer() {
         minute: '2-digit',
         second: '2-digit',
       });
+      // Hide skeleton when events start arriving
+      if (newEvents.length > 0) setIsTransitioning(false);
     }
     for (const line of newEvents) {
-      term.write(`\x1b[2m${line}\x1b[0m\r\n`);
+      // Lines already contain their own ANSI codes — write directly without wrapping
+      term.write(`${line}\r\n`);
     }
     eventsWrittenRef.current = terminalEvents.length;
   }, [terminalEvents]);
 
   const resolvedHeight = isMaximized ? undefined : height;
+  const displayIssue = pinnedIssue;
 
   return (
     <div
@@ -316,17 +394,23 @@ export function TerminalDrawer() {
       <div className="flex items-center justify-between border-b border-border px-3 py-1.5 shrink-0 gap-3 min-w-0">
         <div className="flex items-center gap-2 min-w-0 overflow-hidden">
           <span className="text-xs font-semibold text-secondary shrink-0">Terminal</span>
-          {activeIssue && (
+          {displayIssue && (
             <>
               <span className="text-muted text-xs shrink-0">·</span>
-              <span className="text-xs font-mono text-muted shrink-0">#{activeIssue.issueNumber}</span>
-              <span className="text-xs text-secondary truncate">{activeIssue.title}</span>
+              <span className="text-xs font-mono text-muted shrink-0">#{displayIssue.issueNumber}</span>
+              <span className="text-xs text-secondary truncate">{displayIssue.title}</span>
             </>
           )}
           {pipelinePhase !== 'idle' && (
             <>
               <span className="text-muted text-xs shrink-0">·</span>
               <span className="text-xs text-accent font-medium shrink-0 capitalize">{pipelinePhase}</span>
+            </>
+          )}
+          {currentModel && pipelinePhase !== 'idle' && (
+            <>
+              <span className="text-muted text-xs shrink-0">·</span>
+              <span className="text-xs font-mono text-muted shrink-0 truncate max-w-[180px]">{currentModel}</span>
             </>
           )}
           {startedAtRef.current && terminalEvents.length > 0 && (
@@ -337,6 +421,26 @@ export function TerminalDrawer() {
           )}
         </div>
         <div className="flex items-center gap-1">
+          {/* Running task tabs */}
+          {runningTabs.length > 1 && runningTabs.map((issue) => (
+            <button
+              key={issue.threadId}
+              type="button"
+              onClick={() => {
+                setTerminalThread(issue.threadId ?? null);
+                selectIssue(issue);
+              }}
+              className={cn(
+                'flex h-6 items-center gap-1 cursor-pointer rounded-md border-none px-2 text-xs transition-colors',
+                issue.threadId === terminalThreadId
+                  ? 'bg-hover text-primary'
+                  : 'bg-transparent text-secondary hover:bg-hover hover:text-primary',
+              )}
+              title={`#${issue.issueNumber} ${issue.title}`}
+            >
+              <span className="font-mono">#{issue.issueNumber}</span>
+            </button>
+          ))}
           <button
             type="button"
             className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-secondary hover:bg-hover hover:text-primary"
@@ -355,7 +459,21 @@ export function TerminalDrawer() {
           </button>
         </div>
       </div>
-      <div ref={containerRef} className="flex-1 overflow-hidden min-h-0" />
+      <div className="relative flex-1 overflow-hidden min-h-0">
+        <div ref={containerRef} className="absolute inset-0" />
+        {/* Skeleton overlay while switching threads */}
+        {isTransitioning && (
+          <div className="absolute inset-0 flex flex-col gap-2 p-3 bg-[#0c0d10]">
+            {[70, 50, 85, 40, 65].map((w, i) => (
+              <div
+                key={i}
+                className="h-3 rounded animate-pulse bg-white/5"
+                style={{ width: `${w}%` }}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -124,13 +124,20 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         ? context.executorModelOverride
         : undefined;
 
+    // Inject plannerMaxTurns for Claude-driven analysis phases.
+    // execute has no --max-turns limit; review is always 1 (structural).
+    const PLANNER_PHASES: ProviderPhase[] = ['plan', 'revision', 'verify'];
+    const mergedHints: ProviderRequest['phaseHints'] = PLANNER_PHASES.includes(phase)
+      ? { maxTurns: deps.settings.get().plannerMaxTurns, ...phaseHints }
+      : phaseHints;
+
     const response = await provider.generate({
       phase,
       prompt,
       cwd,
       projectPath: context.projectPath,
       signal: context.abort.signal,
-      phaseHints,
+      phaseHints: mergedHints,
       modelHint,
       threadId: context.threadId,
     });
@@ -177,8 +184,18 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     };
   }
 
-  function emitPhase(threadId: string, phase: Parameters<typeof deps.threads.updateStatus>[1]) {
-    deps.threads.updateStatus(threadId, phase);
+  function emitPhase(
+    threadId: string,
+    phase: Parameters<typeof deps.threads.updateStatus>[1],
+    error?: string,
+  ) {
+    // Only pass the error arg when there's a value — avoids explicit undefined
+    // in mock.calls, which makes toHaveBeenCalledWith(id, status) work cleanly.
+    if (error !== undefined) {
+      deps.threads.updateStatus(threadId, phase, error);
+    } else {
+      deps.threads.updateStatus(threadId, phase);
+    }
     syncIssueStatus(threadId, phase);
     deps.emitter.emit({ type: 'pipeline:phase', threadId, phase });
   }
@@ -205,7 +222,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         if (context.cancelled) return;
 
         if (response.exitCode === 127) {
-          emitPhase(threadId, 'failed');
+          emitPhase(threadId, 'failed', 'Claude CLI not found (exit 127). Is the claude binary installed and on PATH?');
           activePipelines.delete(threadId);
           return;
         }
@@ -227,12 +244,13 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
               emitPhase(threadId, 'reviewing');
             }
           } else {
-            parser.detectError();
+            const detectedError = parser.detectError();
             if (context.retryCount < PIPELINE_MAX_RETRIES) {
               context.retryCount++;
               startPlanGeneration(threadId, prompt, projectPath, worktreePath);
             } else {
-              emitPhase(threadId, 'failed');
+              const reason = detectedError?.match ?? parser.getRawOutput().trim().split('\n').filter(Boolean).slice(-3).join(' ').slice(0, 280);
+              emitPhase(threadId, 'failed', reason || 'Plan generation failed — no output was produced.');
               activePipelines.delete(threadId);
             }
           }
@@ -258,9 +276,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
           deps.plans.create(threadId, result.raw, null, nextVersion);
           emitPhase(threadId, 'awaiting_approval');
         }
-      } catch {
+      } catch (err) {
         if (!context.cancelled) {
-          emitPhase(threadId, 'failed');
+          emitPhase(threadId, 'failed', `Plan generation error: ${String(err)}`);
           activePipelines.delete(threadId);
         }
       }
@@ -416,7 +434,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         deps.threads.setWorktree(threadId, wt.branch, wt.worktreePath);
       } catch (err) {
         console.error(`[pipeline] worktree creation failed for thread ${threadId}:`, err);
-        emitPhase(threadId, 'failed');
+        emitPhase(threadId, 'failed', `Worktree creation failed: ${String(err)}`);
         activePipelines.delete(threadId);
         return;
       }
@@ -446,12 +464,13 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
             activePipelines.delete(threadId);
           }
         } else {
-          emitPhase(threadId, 'failed');
+          const errSnippet = response.rawOutput.trim().split('\n').slice(-3).join(' ').slice(0, 280);
+          emitPhase(threadId, 'failed', `Execution failed (exit ${response.exitCode})${errSnippet ? `: ${errSnippet}` : ''}`);
           activePipelines.delete(threadId);
         }
-      } catch {
+      } catch (err) {
         if (!context.cancelled) {
-          emitPhase(threadId, 'failed');
+          emitPhase(threadId, 'failed', `Execution error: ${String(err)}`);
           activePipelines.delete(threadId);
         }
       }

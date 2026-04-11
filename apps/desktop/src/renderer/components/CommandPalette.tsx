@@ -1,4 +1,5 @@
-import { useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import type { Project } from '@shipcode/shared';
 import { useAppStore } from '../stores/app-store';
 import {
   CommandDialog,
@@ -21,7 +22,31 @@ export function CommandPalette() {
     pipelinePhase,
     toggleTerminal,
     toggleSettings,
+    toggleSidebar,
+    toggleIssueDetail,
+    activeIssue,
+    openDashboard,
+    openActivity,
+    openInbox,
+    openCosts,
+    selectProject,
   } = useAppStore();
+
+  const addProject = useMutation({
+    mutationFn: async () => {
+      const path = await window.shipcode.invoke<string | null>('dialog:open-directory');
+      if (!path) return null;
+      return window.shipcode.invoke<Project>('project:add', { path });
+    },
+    onSuccess: (project) => {
+      if (project) {
+        queryClient.invalidateQueries({ queryKey: ['projects'] });
+        queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
+        queryClient.invalidateQueries({ queryKey: ['projects-archived'] });
+        selectProject(project.id);
+      }
+    },
+  });
 
   const close = () => toggleCommandPalette();
 
@@ -69,7 +94,6 @@ export function CommandPalette() {
                 }
               >
                 <span className="flex-1">Start Pipeline</span>
-                <CommandShortcut>Cmd+Enter</CommandShortcut>
               </CommandItem>
             )}
             {pipelinePhase === 'awaiting_approval' && (
@@ -109,13 +133,41 @@ export function CommandPalette() {
           </CommandGroup>
         )}
 
-        <CommandGroup heading="Navigation">
-          <CommandItem onSelect={() => runAction(() => toggleTerminal())}>
-            <span className="flex-1">Toggle Terminal</span>
-            <CommandShortcut>Ctrl+`</CommandShortcut>
+        <CommandGroup heading="Go to">
+          <CommandItem onSelect={() => runAction(() => openDashboard())}>
+            <span className="flex-1">Mission Control</span>
+          </CommandItem>
+          <CommandItem onSelect={() => runAction(() => openInbox())}>
+            <span className="flex-1">Inbox</span>
+          </CommandItem>
+          <CommandItem onSelect={() => runAction(() => openActivity())}>
+            <span className="flex-1">Activity</span>
+          </CommandItem>
+          <CommandItem onSelect={() => runAction(() => openCosts())}>
+            <span className="flex-1">Costs</span>
           </CommandItem>
           <CommandItem onSelect={() => runAction(() => toggleSettings())}>
-            <span className="flex-1">Toggle Settings</span>
+            <span className="flex-1">Settings</span>
+          </CommandItem>
+        </CommandGroup>
+
+        <CommandGroup heading="Workspace">
+          <CommandItem onSelect={() => runAction(() => addProject.mutate())}>
+            <span className="flex-1">Add Repository…</span>
+          </CommandItem>
+          <CommandItem onSelect={() => runAction(() => toggleSidebar())}>
+            <span className="flex-1">Toggle Sidebar</span>
+            <CommandShortcut>⌘B</CommandShortcut>
+          </CommandItem>
+          {activeIssue && (
+            <CommandItem onSelect={() => runAction(() => toggleIssueDetail())}>
+              <span className="flex-1">Toggle Issue Detail</span>
+              <CommandShortcut>⌥⌘B</CommandShortcut>
+            </CommandItem>
+          )}
+          <CommandItem onSelect={() => runAction(() => toggleTerminal())}>
+            <span className="flex-1">Toggle Terminal</span>
+            <CommandShortcut>⌘J</CommandShortcut>
           </CommandItem>
         </CommandGroup>
 
@@ -129,7 +181,6 @@ export function CommandPalette() {
               }
             >
               <span className="flex-1">Commit Changes</span>
-              <CommandShortcut>Cmd+Shift+C</CommandShortcut>
             </CommandItem>
             <CommandItem
               onSelect={() =>
@@ -137,7 +188,6 @@ export function CommandPalette() {
               }
             >
               <span className="flex-1">Push to Remote</span>
-              <CommandShortcut>Cmd+Shift+P</CommandShortcut>
             </CommandItem>
           </CommandGroup>
         )}

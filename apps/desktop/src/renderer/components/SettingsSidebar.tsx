@@ -57,7 +57,7 @@ export function SettingsSidebar() {
   const { settingsSection, setSettingsSection, toggleSettings } = useAppStore();
 
   return (
-    <aside className="flex w-[256px] min-w-[256px] flex-col border-r border-border bg-secondary">
+    <aside className="flex w-[256px] min-w-[256px] flex-col border-r border-border bg-primary">
       <div className="px-4 py-3">
         <button
           type="button"

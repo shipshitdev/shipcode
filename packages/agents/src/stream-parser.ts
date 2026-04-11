@@ -223,4 +223,25 @@ export class StreamParser {
     // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping ANSI escape codes
     return text.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
   }
+
+  /**
+   * Strip Claude CLI system/hook event lines from raw output before storage.
+   * These are NDJSON lines with `"type":"system"` or `"type":"rate_limit_event"`
+   * emitted by hooks running inside the subprocess — not LLM output.
+   */
+  static stripSystemEvents(raw: string): string {
+    return raw
+      .split('\n')
+      .filter((line) => {
+        const trimmed = line.trim();
+        if (!trimmed) return true;
+        try {
+          const parsed = JSON.parse(trimmed);
+          return parsed.type !== 'system' && parsed.type !== 'rate_limit_event';
+        } catch {
+          return true;
+        }
+      })
+      .join('\n');
+  }
 }

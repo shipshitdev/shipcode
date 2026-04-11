@@ -96,6 +96,7 @@ export interface Thread {
   githubIssueNumber: number | null;
   githubPrNumber: number | null;
   githubRepo: string | null;
+  lastError: string | null;
   createdAt: string;
   updatedAt: string;
   // Tier 3 telemetry: what openrouter/auto (or claude/codex) actually
@@ -224,6 +225,9 @@ export interface AppSettings {
   projectSortOrder: 'alpha' | 'recent' | 'added';
   // null = default (~/.shipcode/worktrees), '' = project-local legacy, else absolute or ~-prefixed
   worktreeRoot: string | null;
+  // Max turns the planner/verifier Claude CLI is allowed per run (--max-turns).
+  // Does not apply to execute (no limit) or review (always 1, structural).
+  plannerMaxTurns: number;
   // Notifications
   notificationsEnabled: boolean;
   notificationOsEnabled: boolean;

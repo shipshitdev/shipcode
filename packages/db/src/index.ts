@@ -8,6 +8,7 @@ import {
   migrateV5,
   migrateV6,
   migrateV7,
+  migrateV8,
 } from './schema';
 
 export { transaction } from './utils';
@@ -42,6 +43,7 @@ export function getDatabase(dataDir: string): DatabaseSync {
   migrateV5(db);
   migrateV6(db);
   migrateV7(db);
+  migrateV8(db);
   return db;
 }
 

@@ -1,7 +1,13 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAppStore } from '../stores/app-store';
 import { KanbanBoard } from '@shipcode/ui';
-import type { GitHubIssueCacheRecord, IssuePipelineStatus, Project } from '@shipcode/shared';
+import {
+  githubRepoUrl,
+  githubProjectsUrl,
+  type GitHubIssueCacheRecord,
+  type IssuePipelineStatus,
+  type Project,
+} from '@shipcode/shared';
 
 export function ThreadPanel() {
   const queryClient = useQueryClient();
@@ -42,6 +48,9 @@ export function ThreadPanel() {
     );
   };
 
+  const repoUrl = githubRepoUrl(project?.gitRemote);
+  const projectsUrl = githubProjectsUrl(project?.gitRemote);
+
   return (
     <div className="flex flex-1 min-w-0 flex-col bg-primary">
       <KanbanBoard
@@ -52,6 +61,14 @@ export function ThreadPanel() {
         onNewIssue={() => openCreateIssueModal()}
         baseBranch={project?.defaultBranch}
         branches={branches}
+        projectName={project?.name}
+        repoUrl={repoUrl}
+        projectsUrl={projectsUrl}
+        onOpenExternal={(url) =>
+          window.shipcode.invoke('shell:open-external', { url }).catch((err) => {
+            console.error('[threadpanel] open-external failed', { url, err });
+          })
+        }
         onBaseBranchChange={(branch) => {
           // Optimistic cache update so the toolbar reflects the new branch
           // on the same frame as the click, without waiting for IPC.

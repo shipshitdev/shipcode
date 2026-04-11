@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ExternalLink, RefreshCw, RotateCcw } from 'lucide-react';
+import { ChevronDown, ChevronRight, ExternalLink, LayoutGrid, LayoutList, RefreshCw, RotateCcw, User } from 'lucide-react';
 import {
   DndContext,
   DragOverlay,
@@ -16,6 +16,7 @@ import { cn } from './lib/utils';
 import { getStatusBadgeVariant } from './lib/status-variant';
 import { MODEL_DISPLAY } from './lib/model-display';
 import { Badge } from './primitives/badge';
+import { Button, buttonVariants } from './primitives/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './primitives/select';
 
 // Static map for the drag overlay border. Tailwind's JIT needs string-literal
@@ -42,6 +43,18 @@ interface KanbanBoardProps {
   onBaseBranchChange?: (branch: string) => void;
   /** Issue number currently open in the side panel — highlights the card. */
   selectedIssueNumber?: number;
+  /** Project name shown as the toolbar heading (replaces the generic "GitHub Issues"). */
+  projectName?: string;
+  /** `https://github.com/owner/repo` — enables the "repo" quick-link. */
+  repoUrl?: string | null;
+  /** `https://github.com/owner/repo/projects` — enables the "board" quick-link. */
+  projectsUrl?: string | null;
+  /**
+   * Optional interceptor for external link clicks. The Electron renderer passes
+   * a handler that routes through `shell:open-external`; the web app leaves
+   * this undefined and lets the browser follow the `<a href>`.
+   */
+  onOpenExternal?: (url: string) => void;
 }
 
 type ColumnKey = 'todo' | 'agent' | 'human' | 'done';
@@ -173,11 +186,13 @@ function DraggableCard({
       className={cn(
         'group relative rounded-md border bg-elevated p-2 transition-colors outline-none',
         draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-default',
-        isSelected
+        isSelected && !isFailed && !isAwaiting
           ? 'border-text-primary/60 bg-elevated'
-          : 'border-border/50 hover:border-border-strong',
-        isFailed && !isSelected && 'border-danger/40 bg-danger/[0.04] hover:border-danger/60',
-        isAwaiting && !isSelected && 'border-warning/30 bg-warning/[0.03] hover:border-warning/50',
+          : !isSelected
+            ? 'border-border/50 hover:border-border-strong'
+            : '',
+        isFailed && (isSelected ? 'border-danger bg-danger/[0.07]' : 'border-danger/40 bg-danger/[0.04] hover:border-danger/60'),
+        isAwaiting && (isSelected ? 'border-warning bg-warning/[0.07]' : 'border-warning/30 bg-warning/[0.03] hover:border-warning/50'),
         isActive && !isSelected && 'border-accent/40 bg-accent/[0.03]',
         isDragging && 'opacity-50',
       )}
@@ -450,6 +465,149 @@ const customCollisionDetection: CollisionDetection = (args: Parameters<Collision
   return rectIntersection(args);
 };
 
+// ─── List view ───────────────────────────────────────────────────────────────
+
+const LIST_GROUPS: { label: string; statuses: IssuePipelineStatus[]; dotClass: string }[] = [
+  {
+    label: 'In Progress',
+    statuses: ['planning', 'reviewing', 'revising', 'executing', 'verifying', 'shipping'],
+    dotClass: 'bg-accent',
+  },
+  { label: 'Todo',    statuses: ['todo', 'queued'],                    dotClass: 'bg-text-muted' },
+  { label: 'Blocked', statuses: ['awaiting_approval', 'failed'],       dotClass: 'bg-danger' },
+  { label: 'Done',    statuses: ['completed'],                         dotClass: 'bg-success' },
+];
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// Drop target IDs used by handleDragEnd — must match Kanban section IDs
+const LIST_GROUP_DROP_ID: Record<string, string> = {
+  'In Progress': 'agent:planning',
+  'Todo': 'todo',
+  'Blocked': 'todo', // dropping onto Blocked → no-op (no valid transition)
+  'Done': 'done',    // dropping onto Done → no-op
+};
+
+interface DraggableListRowProps {
+  issue: GitHubIssueCacheRecord;
+  dotClass: string;
+  selectedIssueNumber?: number;
+  activeId: string | null;
+  onIssueClick: (issue: GitHubIssueCacheRecord) => void;
+}
+
+function DraggableListRow({ issue, dotClass, selectedIssueNumber, activeId, onIssueClick }: DraggableListRowProps) {
+  const isDraggable = DRAGGABLE_STATUSES.includes(issue.pipelineStatus);
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: issue.id,
+    data: issue,
+    disabled: !isDraggable,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'flex items-center gap-3 w-full text-left px-3 py-2 rounded-md transition-colors text-sm',
+        selectedIssueNumber === issue.issueNumber ? 'bg-accent/10 text-primary' : 'hover:bg-secondary text-primary',
+        isDragging ? 'opacity-40' : '',
+        isDraggable ? 'cursor-grab' : 'cursor-pointer',
+        activeId && activeId !== issue.id ? 'pointer-events-none' : '',
+      )}
+      {...(isDraggable ? { ...attributes, ...listeners } : {})}
+      onClick={!isDragging ? () => onIssueClick(issue) : undefined}
+    >
+      <span className={cn('w-2 h-2 rounded-full shrink-0', dotClass)} />
+      <span className="font-mono text-xs text-secondary shrink-0">#{issue.issueNumber}</span>
+      <span className="flex-1 truncate">{issue.title}</span>
+      <span className="shrink-0 text-secondary text-xs flex items-center gap-1">
+        <User size={11} className="text-muted" />
+        {issue.assignee ?? '—'}
+      </span>
+      <span className="shrink-0 text-muted text-xs">{formatDate(issue.fetchedAt)}</span>
+    </div>
+  );
+}
+
+interface DroppableListGroupProps {
+  label: string;
+  dropId: string;
+  children: React.ReactNode;
+}
+
+function DroppableListGroup({ label: _label, dropId, children }: DroppableListGroupProps) {
+  const { setNodeRef, isOver } = useDroppable({ id: dropId });
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'flex flex-col gap-0.5 rounded-md transition-colors min-h-[2rem]',
+        isOver ? 'bg-accent/5 ring-1 ring-accent/20' : '',
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+interface IssueListViewProps {
+  issues: GitHubIssueCacheRecord[];
+  selectedIssueNumber?: number;
+  activeId: string | null;
+  onIssueClick: (issue: GitHubIssueCacheRecord) => void;
+}
+
+function IssueListView({ issues, selectedIssueNumber, activeId, onIssueClick }: IssueListViewProps) {
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const toggle = (label: string) => setCollapsed((c) => ({ ...c, [label]: !c[label] }));
+
+  return (
+    <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+      {LIST_GROUPS.map(({ label, statuses, dotClass }) => {
+        const groupIssues = issues.filter((i) => statuses.includes(i.pipelineStatus));
+        const isCollapsed = collapsed[label] ?? false;
+        const dropId = LIST_GROUP_DROP_ID[label];
+        return (
+          <div key={label}>
+            <button
+              type="button"
+              className="flex items-center gap-2 text-xs font-semibold text-secondary uppercase tracking-wider mb-2 cursor-pointer hover:text-primary w-full text-left"
+              onClick={() => toggle(label)}
+            >
+              {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+              {label}
+              <span className="text-muted font-normal normal-case tracking-normal ml-0.5">
+                ({groupIssues.length})
+              </span>
+            </button>
+            {!isCollapsed && (
+              <DroppableListGroup label={label} dropId={dropId}>
+                {groupIssues.map((issue) => (
+                  <DraggableListRow
+                    key={issue.id}
+                    issue={issue}
+                    dotClass={dotClass}
+                    selectedIssueNumber={selectedIssueNumber}
+                    activeId={activeId}
+                    onIssueClick={onIssueClick}
+                  />
+                ))}
+                {groupIssues.length === 0 && (
+                  <p className="text-xs text-muted pl-2 py-1">No issues</p>
+                )}
+              </DroppableListGroup>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export function KanbanBoard({
   issues,
   onIssueClick,
@@ -462,9 +620,20 @@ export function KanbanBoard({
   branches,
   onBaseBranchChange,
   selectedIssueNumber,
+  projectName,
+  repoUrl,
+  projectsUrl,
+  onOpenExternal,
 }: KanbanBoardProps) {
+  const handleExternalClick = (url: string) => (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (onOpenExternal) {
+      e.preventDefault();
+      onOpenExternal(url);
+    }
+  };
   const [activeId, setActiveId] = useState<string | null>(null);
   const activeIssue = issues.find((i) => i.id === activeId);
+  const [view, setView] = useState<'kanban' | 'list'>('kanban');
 
   function getColumnForIssue(issue: GitHubIssueCacheRecord): ColumnKey {
     return COLUMNS.find((c) => c.statuses.includes(issue.pipelineStatus))?.key ?? 'todo';
@@ -515,14 +684,45 @@ export function KanbanBoard({
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center px-4 py-3 border-b border-border shrink-0 gap-3">
-        <h3 className="text-sm font-semibold shrink-0">GitHub Issues</h3>
+        <h3 className="text-sm font-semibold shrink-0 truncate">
+          {projectName ?? 'GitHub Issues'}
+        </h3>
+        {(repoUrl || projectsUrl) && (
+          <div className="flex items-center gap-1 shrink-0">
+            {repoUrl && (
+              <Button asChild variant="pill" size="xs" title="Open repository on github.com">
+                <a
+                  href={repoUrl}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  onClick={handleExternalClick(repoUrl)}
+                >
+                  repo
+                  <ExternalLink size={10} />
+                </a>
+              </Button>
+            )}
+            {projectsUrl && (
+              <Button asChild variant="pill" size="xs" title="Open Projects board on github.com">
+                <a
+                  href={projectsUrl}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  onClick={handleExternalClick(projectsUrl)}
+                >
+                  board
+                  <ExternalLink size={10} />
+                </a>
+              </Button>
+            )}
+          </div>
+        )}
         <div className="flex-1" />
         <div className="flex items-center gap-2 shrink-0">
           {baseBranch && branches && branches.length > 0 && onBaseBranchChange && (
-            <div className="flex items-center gap-2 min-w-0 max-w-[200px] shrink-0">
-              <span className="text-[11px] text-muted font-mono shrink-0">base:</span>
+            <div className="flex items-center min-w-0 max-w-[200px] shrink-0">
               <Select value={baseBranch} onValueChange={onBaseBranchChange}>
-                <SelectTrigger className="h-7 text-xs font-mono truncate">
+                <SelectTrigger className={cn(buttonVariants({ variant: 'pill', size: 'xs' }), 'font-mono')}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -535,6 +735,30 @@ export function KanbanBoard({
               </Select>
             </div>
           )}
+          <div className="flex items-center border border-border rounded-md overflow-hidden shrink-0">
+            <button
+              type="button"
+              className={cn(
+                'flex items-center justify-center h-7 w-7 cursor-pointer transition-colors',
+                view === 'list' ? 'bg-secondary text-primary' : 'bg-transparent text-secondary hover:text-primary',
+              )}
+              onClick={() => setView('list')}
+              title="List view"
+            >
+              <LayoutList size={13} />
+            </button>
+            <button
+              type="button"
+              className={cn(
+                'flex items-center justify-center h-7 w-7 cursor-pointer transition-colors border-l border-border',
+                view === 'kanban' ? 'bg-secondary text-primary' : 'bg-transparent text-secondary hover:text-primary',
+              )}
+              onClick={() => setView('kanban')}
+              title="Board view"
+            >
+              <LayoutGrid size={13} />
+            </button>
+          </div>
           <button
             type="button"
             className="flex items-center justify-center h-7 w-7 bg-transparent border border-border rounded-md text-secondary cursor-pointer hover:text-primary hover:border-text-secondary"
@@ -559,34 +783,44 @@ export function KanbanBoard({
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex flex-1 overflow-x-auto overflow-y-hidden gap-0.5 p-3 px-2">
-          {COLUMNS.map((col) => {
-            if (col.sections) {
+        {view === 'list' && (
+          <IssueListView
+            issues={issues}
+            selectedIssueNumber={selectedIssueNumber}
+            activeId={activeId}
+            onIssueClick={onIssueClick}
+          />
+        )}
+        {view === 'kanban' && (
+          <div className="flex flex-1 overflow-x-auto overflow-y-hidden gap-0.5 p-3 px-2">
+            {COLUMNS.map((col) => {
+              if (col.sections) {
+                return (
+                  <StackedColumn
+                    key={col.key}
+                    column={col}
+                    issues={issues}
+                    onIssueClick={onIssueClick}
+                    onRerun={onRerun}
+                    selectedIssueNumber={selectedIssueNumber}
+                  />
+                );
+              }
+              const columnIssues = issues.filter((i) => col.statuses.includes(i.pipelineStatus));
               return (
-                <StackedColumn
+                <DroppableColumn
                   key={col.key}
-                  column={col}
-                  issues={issues}
+                  id={col.key}
+                  label={col.label}
+                  issues={columnIssues}
+                  droppable={!!col.droppable}
                   onIssueClick={onIssueClick}
-                  onRerun={onRerun}
                   selectedIssueNumber={selectedIssueNumber}
                 />
               );
-            }
-            const columnIssues = issues.filter((i) => col.statuses.includes(i.pipelineStatus));
-            return (
-              <DroppableColumn
-                key={col.key}
-                id={col.key}
-                label={col.label}
-                issues={columnIssues}
-                droppable={!!col.droppable}
-                onIssueClick={onIssueClick}
-                selectedIssueNumber={selectedIssueNumber}
-              />
-            );
-          })}
-        </div>
+            })}
+          </div>
+        )}
         <DragOverlay dropAnimation={null}>
           {activeIssue ? (
             <div

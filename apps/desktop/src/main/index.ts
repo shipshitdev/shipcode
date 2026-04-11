@@ -37,6 +37,7 @@ import { registerIpcHandlers } from './ipc';
 import { createPipeline } from '@shipcode/pipeline';
 import { createElectronEmitter } from './pipeline-bridge';
 import { NotificationService } from './notification-service';
+import { HEARTBEAT_TIMEOUT_MS } from '@shipcode/shared';
 
 let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
@@ -133,6 +134,25 @@ function createWindow() {
   // Register IPC handlers
   registerIpcHandlers(ipcMain, mainWindow, queries, processManager, pipeline, notificationService);
 
+  // Watchdog: reset threads stuck in active phases (handles renderer refresh + crash scenarios).
+  // HEARTBEAT_TIMEOUT_MS = 120s. Fires every 30s; skips threads that are live in activePipelines.
+  const watchdogTimer = setInterval(() => {
+    try {
+      const activeIds = new Set(pipeline.listActive().map((s) => s.threadId));
+      for (const thread of queries.threads.getStuck(HEARTBEAT_TIMEOUT_MS)) {
+        if (activeIds.has(thread.id)) continue;
+        const errorMsg = 'Pipeline timed out — process was likely interrupted by an app refresh.';
+        queries.threads.updateStatus(thread.id, 'failed', errorMsg);
+        const issue = queries.githubIssues.getByThreadId(thread.id);
+        if (issue) queries.githubIssues.updatePipelineStatus(issue.id, 'failed');
+        emitter.emit({ type: 'pipeline:phase', threadId: thread.id, phase: 'failed' });
+        console.log(`[watchdog] reset stuck thread ${thread.id} → failed`);
+      }
+    } catch (err) {
+      console.error('[watchdog] error during stuck-thread check:', err);
+    }
+  }, 30_000);
+
   // Content-Security-Policy — set before any content loads.
   // Dev relaxes script-src for Vite's eval-based HMR and allows the WS connection.
   // Prod is strict: no eval, no remote origins.
@@ -161,6 +181,7 @@ function createWindow() {
   }
 
   mainWindow.on('closed', () => {
+    clearInterval(watchdogTimer);
     mainWindow = null;
     processManager?.killAll();
     closeDatabase();
