@@ -21,9 +21,9 @@ export function VerificationViewer({ verification }: VerificationViewerProps) {
         <div className="space-y-2">
           <h4 className="text-sm font-semibold text-primary">Acceptance Criteria</h4>
           <ul className="space-y-2">
-            {verification.criteriaResults.map((cr, i) => (
+            {verification.criteriaResults.map((cr) => (
               <li
-                key={i}
+                key={cr.criterion}
                 className={cn(
                   'flex gap-2 rounded-md border p-2 text-sm',
                   cr.passed ? 'border-success/30 bg-success/5' : 'border-danger/30 bg-danger/5',
@@ -53,8 +53,11 @@ export function VerificationViewer({ verification }: VerificationViewerProps) {
             Issues ({verification.issues.length})
           </h4>
           <ul className="space-y-1.5">
-            {verification.issues.map((issue, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm text-primary">
+            {verification.issues.map((issue) => (
+              <li
+                key={`${issue.severity}:${issue.description}`}
+                className="flex items-start gap-2 text-sm text-primary"
+              >
                 <Badge
                   variant={
                     issue.severity === 'blocker'

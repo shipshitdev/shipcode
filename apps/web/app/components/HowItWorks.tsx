@@ -1,6 +1,6 @@
-import { Fragment } from 'react';
-import { ArrowRight, Tag, FileText, Search, Play, GitPullRequest } from 'lucide-react';
 import { Card } from '@shipcode/ui';
+import { ArrowRight, FileText, GitPullRequest, Play, Search, Tag } from 'lucide-react';
+import { Fragment } from 'react';
 
 const steps = [
   {

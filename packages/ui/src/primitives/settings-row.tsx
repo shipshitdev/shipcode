@@ -9,9 +9,20 @@ interface SettingsRowProps {
   className?: string;
 }
 
-export function SettingsRow({ label, htmlFor, description, children, className }: SettingsRowProps) {
+export function SettingsRow({
+  label,
+  htmlFor,
+  description,
+  children,
+  className,
+}: SettingsRowProps) {
   return (
-    <div className={cn('flex items-center justify-between border-b border-border py-2.5 gap-4', className)}>
+    <div
+      className={cn(
+        'flex items-center justify-between border-b border-border py-2.5 gap-4',
+        className,
+      )}
+    >
       <div className="min-w-0">
         {htmlFor ? (
           <label htmlFor={htmlFor} className="text-sm text-primary cursor-pointer select-none">

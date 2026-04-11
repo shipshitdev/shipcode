@@ -44,6 +44,7 @@ function Pagination({ page, totalPages, onPageChange, className }: PaginationPro
       {getPages().map((p, i) =>
         p === '…' ? (
           <span
+            // biome-ignore lint/suspicious/noArrayIndexKey: ellipsis can appear twice (leading/trailing) so position is the only unique key
             key={`ellipsis-${i}`}
             className="flex h-6 w-6 items-center justify-center text-[11px] text-muted"
           >
@@ -79,5 +80,5 @@ function Pagination({ page, totalPages, onPageChange, className }: PaginationPro
   );
 }
 
-export { Pagination };
 export type { PaginationProps };
+export { Pagination };

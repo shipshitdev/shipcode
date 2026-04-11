@@ -1,7 +1,7 @@
 import type { DiffRecord } from '@shipcode/shared';
+import { cn } from './lib/utils';
 import { Badge } from './primitives/badge';
 import { Button } from './primitives/button';
-import { cn } from './lib/utils';
 
 interface DiffViewerProps {
   diffs: DiffRecord[];
@@ -83,6 +83,7 @@ export function DiffViewer({ diffs, activeFile, onFileSelect }: DiffViewerProps)
 
                   return (
                     <div
+                      // biome-ignore lint/suspicious/noArrayIndexKey: diff lines have stable order; blank lines repeat so index is the only unique key
                       key={i}
                       className={cn(
                         'px-3',

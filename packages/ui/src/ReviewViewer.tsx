@@ -1,6 +1,6 @@
 import type { PlanReview, ReviewFinding } from '@shipcode/shared';
-import { Badge } from './primitives/badge';
 import { cn } from './lib/utils';
+import { Badge } from './primitives/badge';
 
 interface ReviewViewerProps {
   review: PlanReview | null;
@@ -108,8 +108,8 @@ export function ReviewViewer({ review }: ReviewViewerProps) {
             Suggested Changes
           </h3>
           <ul className="list-disc pl-5">
-            {review.suggestedChanges.map((change, i) => (
-              <li key={i} className="py-0.5 text-[13px]">
+            {review.suggestedChanges.map((change) => (
+              <li key={change} className="py-0.5 text-[13px]">
                 {change}
               </li>
             ))}

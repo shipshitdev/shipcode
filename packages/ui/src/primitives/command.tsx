@@ -1,5 +1,5 @@
-import * as React from 'react';
 import { Command as CommandPrimitive } from 'cmdk';
+import type * as React from 'react';
 import { cn } from '../lib/utils';
 import { Dialog, DialogContent } from './dialog';
 
@@ -90,6 +90,7 @@ function CommandShortcut({ className, ...props }: React.ComponentProps<'span'>) 
     <span className={cn('ml-auto text-xs tracking-widest text-muted', className)} {...props} />
   );
 }
+
 export {
   Command,
   CommandDialog,

@@ -1,5 +1,5 @@
-import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
+import type * as React from 'react';
 import { cn } from '../lib/utils';
 
 function Dialog(props: React.ComponentProps<typeof DialogPrimitive.Root>) {
@@ -62,14 +62,15 @@ function DialogDescription({
     <DialogPrimitive.Description className={cn('text-sm text-secondary', className)} {...props} />
   );
 }
+
 export {
   Dialog,
-  DialogTrigger,
-  DialogPortal,
-  DialogOverlay,
   DialogContent,
-  DialogHeader,
-  DialogFooter,
-  DialogTitle,
   DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogOverlay,
+  DialogPortal,
+  DialogTitle,
+  DialogTrigger,
 };
