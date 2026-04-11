@@ -20,7 +20,13 @@ const AGENT_ACTIVE_STATUSES = new Set<IssuePipelineStatus>([
 ]);
 
 export type ViewMode = 'dashboard' | 'project' | 'activity' | 'inbox' | 'costs';
-export type SettingsSection = 'general' | 'github' | 'notifications' | 'pipeline' | 'archived';
+export type SettingsSection =
+  | 'general'
+  | 'github'
+  | 'notifications'
+  | 'pipeline'
+  | 'shortcuts'
+  | 'archived';
 
 interface AppState {
   // Selection

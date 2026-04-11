@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ChevronDown, ChevronRight, ExternalLink, LayoutGrid, LayoutList, RefreshCw, RotateCcw, User } from 'lucide-react';
 import {
   DndContext,
@@ -534,7 +534,7 @@ function DraggableListRow({ issue, dotClass, selectedIssueNumber, activeId, onIs
 interface DroppableListGroupProps {
   label: string;
   dropId: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 function DroppableListGroup({ label: _label, dropId, children }: DroppableListGroupProps) {

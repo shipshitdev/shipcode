@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useAppStore } from '../stores/app-store';
+import { SHORTCUTS, matchesShortcut, type ShortcutId } from '../data/shortcuts';
 
 export function useGlobalKeyboard() {
   const toggleCommandPalette = useAppStore((s) => s.toggleCommandPalette);
@@ -8,31 +9,20 @@ export function useGlobalKeyboard() {
   const toggleIssueDetail = useAppStore((s) => s.toggleIssueDetail);
 
   useEffect(() => {
+    const actions: Record<ShortcutId, () => void> = {
+      'command-palette': toggleCommandPalette,
+      'toggle-terminal': toggleTerminal,
+      'toggle-sidebar': toggleSidebar,
+      'toggle-issue-detail': toggleIssueDetail,
+    };
+
     const handler = (e: KeyboardEvent) => {
-      if (!e.metaKey) return;
-      // cmd+k — command palette
-      if (!e.altKey && !e.shiftKey && e.key === 'k') {
-        e.preventDefault();
-        toggleCommandPalette();
-        return;
-      }
-      // cmd+j — terminal drawer
-      if (!e.altKey && !e.shiftKey && e.key === 'j') {
-        e.preventDefault();
-        toggleTerminal();
-        return;
-      }
-      // cmd+b — project sidebar
-      if (!e.altKey && !e.shiftKey && e.key === 'b') {
-        e.preventDefault();
-        toggleSidebar();
-        return;
-      }
-      // cmd+alt+b — issue detail panel (VS Code "secondary sidebar" convention)
-      if (e.altKey && !e.shiftKey && (e.key === 'b' || e.key === '∫')) {
-        e.preventDefault();
-        toggleIssueDetail();
-        return;
+      for (const shortcut of SHORTCUTS) {
+        if (matchesShortcut(e, shortcut.combo)) {
+          e.preventDefault();
+          actions[shortcut.id]();
+          return;
+        }
       }
     };
 

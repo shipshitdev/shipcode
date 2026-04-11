@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Project } from '@shipcode/shared';
 import { useAppStore } from '../stores/app-store';
+import { getShortcut } from '../data/shortcuts';
 import {
   CommandDialog,
   CommandInput,
@@ -156,18 +157,18 @@ export function CommandPalette() {
             <span className="flex-1">Add Repository…</span>
           </CommandItem>
           <CommandItem onSelect={() => runAction(() => toggleSidebar())}>
-            <span className="flex-1">Toggle Sidebar</span>
-            <CommandShortcut>⌘B</CommandShortcut>
+            <span className="flex-1">{getShortcut('toggle-sidebar').label}</span>
+            <CommandShortcut>{getShortcut('toggle-sidebar').glyph}</CommandShortcut>
           </CommandItem>
           {activeIssue && (
             <CommandItem onSelect={() => runAction(() => toggleIssueDetail())}>
-              <span className="flex-1">Toggle Issue Detail</span>
-              <CommandShortcut>⌥⌘B</CommandShortcut>
+              <span className="flex-1">{getShortcut('toggle-issue-detail').label}</span>
+              <CommandShortcut>{getShortcut('toggle-issue-detail').glyph}</CommandShortcut>
             </CommandItem>
           )}
           <CommandItem onSelect={() => runAction(() => toggleTerminal())}>
-            <span className="flex-1">Toggle Terminal</span>
-            <CommandShortcut>⌘J</CommandShortcut>
+            <span className="flex-1">{getShortcut('toggle-terminal').label}</span>
+            <CommandShortcut>{getShortcut('toggle-terminal').glyph}</CommandShortcut>
           </CommandItem>
         </CommandGroup>
 
