@@ -149,24 +149,16 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
 }
 
 /**
- * Build codex CLI args for a given phase. Mirrors the inline arg
- * construction that previously lived in pipeline.ts verbatim.
+ * Build codex CLI args for a given phase.
+ * Uses the codex v1 CLI interface: -q <prompt> --sandbox <level> -a never.
  */
 function buildCodexArgs(req: ProviderRequest): string[] {
-  switch (req.phase) {
-    case 'review':
-      // Review runs read-only. --json streams NDJSON events for terminal display.
-      // --full-auto suppresses interactive approval prompts.
-      return ['exec', req.prompt, '--sandbox', 'read-only', '--json', '--full-auto'];
-    case 'execute':
-      // Execution needs workspace-write. --full-auto = on-request approvals.
-      return ['exec', req.prompt, '--sandbox', 'workspace-write', '--json', '--full-auto'];
-    case 'plan':
-    case 'revision':
-    case 'verify':
-      // Codex does not handle these phases in the current pipeline.
-      return ['exec', req.prompt, '--sandbox', 'read-only', '--json', '--full-auto'];
+  const sandbox = req.phase === 'execute' ? 'workspace-write' : 'read-only';
+  const args = ['-q', req.prompt, '--sandbox', sandbox, '-a', 'never'];
+  if (req.phaseHints?.reasoningEffort === 'high') {
+    args.push('--reasoning-effort', 'high');
   }
+  return args;
 }
 
 export function createClaudeCliProvider(processManager: ProcessManager): AgentProvider {
