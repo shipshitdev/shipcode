@@ -1,0 +1,38 @@
+# Skills Editor
+
+The Skills Editor is where you edit the prompts that drive each pipeline phase. ShipCode calls these prompts "skills" — they're the PRD generator, plan prompt, review prompt, and verify prompt that the planner / reviewer / executor / verifier use.
+
+The component is [`apps/desktop/src/renderer/components/SkillsView.tsx`](https://github.com/shipshitdev/shipcode/blob/master/apps/desktop/src/renderer/components/SkillsView.tsx).
+
+## What's editable
+
+| Skill | Used by | Purpose |
+|-------|---------|---------|
+| `writing-prds` | PRD generator (new-issue flow) | Turns a one-liner into a full issue body before a pipeline starts |
+| `plan-prompt` | Planner phase | Wraps the issue body into a planner system prompt |
+| `review-prompt` | Reviewer phase | Adversarial critique template |
+| `execute-prompt` | Executor phase | Instructions given to Claude / Codex / OpenRouter during execution |
+| `verify-prompt` | Verifier phase | Acceptance-criteria checker |
+
+Each skill is a markdown file with frontmatter (name, description, model hints). Editing a skill saves it back to disk — **the file on disk is the source of truth**, not the DB.
+
+## Where skills live
+
+- **Repo-scoped skills** — `.agents/skills/<skill-name>/SKILL.md` inside the target repo. These override the built-in skills for that project.
+- **Built-in skills** — shipped with the app, used as a fallback when no repo skill exists.
+
+The PRD generator reads `.agents/skills/writing-prds/SKILL.md` from the **target repo** (the repo whose issue you're writing a PRD for), not from the ShipCode install itself. This means a project can evolve its own PRD style without touching ShipCode.
+
+## Editing flow
+
+1. Open **Skills** from the sidebar
+2. Pick a skill from the left rail
+3. Edit the markdown on the right
+4. Save — writes back to disk and invalidates any cached skill instances
+
+Changes take effect on the next pipeline run. In-flight runs keep the skill they started with.
+
+## Related
+
+- [Pipeline Overview](/pipeline/overview) — which phase uses which skill
+- [Configuration](/configuration) — agent labels that select which executor consumes the execute skill

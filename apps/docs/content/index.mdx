@@ -2,7 +2,7 @@
 
 **Autonomous AI coding pipeline.** GitHub issues in, pull requests out.
 
-Label a GitHub issue with `agent:claude` or `agent:codex`. ShipCode does the rest — plan, adversarial review, implement, verify, ship a PR — with no human gates until the pull request is created.
+Label a GitHub issue with `agent:claude`, `agent:codex`, `agent:openrouter`, `agent:openrouter/auto`, or `agent:openrouter/free`. ShipCode does the rest — plan, adversarial review, implement, verify, ship a PR — with no human gates until the pull request is created.
 
 ## Install
 
@@ -22,12 +22,12 @@ npx shipcode run 42
 
 ## How it works
 
-| Phase | Model | What happens |
-|-------|-------|--------------|
+| Phase | Default model | What happens |
+|-------|---------------|--------------|
 | **Plan** | Opus 4.6 | Rewrites the issue into a spec and structured plan |
-| **Review** | Codex (high reasoning) | Adversarial critique, up to 2 rounds |
-| **Execute** | Routed model | Implements in an isolated git worktree |
-| **Verify** | Opus 4.6 | Checks the diff against acceptance criteria |
+| **Review** | Codex (high reasoning) — set during onboarding | Adversarial critique, up to 2 rounds |
+| **Execute** | Routed per label (claude / codex / openrouter) — configurable in Settings | Implements in an isolated git worktree |
+| **Verify** | Opus 4.6 — set during onboarding | Checks the diff against acceptance criteria |
 | **Ship** | — | Pushes branch, creates PR, links to issue |
 
 ## Why ShipCode?

@@ -1,0 +1,41 @@
+# Kanban Board
+
+The Kanban board is the main view inside a project. Each column corresponds to a phase of the ShipCode pipeline, and each card is a GitHub issue.
+
+## Columns
+
+| Column | Pipeline phase | Contents |
+|--------|----------------|----------|
+| Todo | — | Unclaimed issues with an `agent:*` label but no active pipeline |
+| Planning | `planning` | Planner is rewriting the issue into a structured plan |
+| Reviewing | `reviewing` / `revising` | Reviewer is critiquing the plan (up to `maxReviewRounds`) |
+| Executing | `executing` | Executor is implementing the plan in an isolated git worktree |
+| Verifying | `verifying` | Verifier is checking the diff against acceptance criteria |
+| Completed | `completed` | Pipeline finished, PR opened, issue linked |
+| Failed | `failed` | Pipeline errored out — check the terminal drawer or Inbox |
+
+Planning / Reviewing / Executing / Verifying columns each break down further into sub-sections labeled with the agent and model currently handling that phase (e.g. `Claude · Opus 4.6`, `Codex · high reasoning`, `OpenRouter · auto`).
+
+## Drag to launch
+
+Drag any Todo card into **Planning** to start the pipeline on that issue. The drag honors the `agent:*` label on the GitHub issue and spawns the correct executor.
+
+The Kanban component lives in [`packages/ui/src/KanbanBoard.tsx`](https://github.com/shipshitdev/shipcode/blob/master/packages/ui/src/KanbanBoard.tsx) and is mounted by `apps/desktop/src/renderer/components/ThreadPanel.tsx`.
+
+## List view
+
+Click the toggle in the Kanban header to switch to a flat list view. The list mirrors the same column structure as Planning / Reviewing / Executing / Verifying sub-sections, with agent/model labels on each active row. Use list view when you have more than a handful of concurrent runs and want a denser layout.
+
+## Card actions
+
+Click a card to open the Issue Detail overlay, which shows:
+
+- The GitHub issue PRD (body) with an **Edit PRD** button that opens the Create/Edit modal stacked on top
+- The generated plan (with a [full-screen viewer](/desktop/plan-viewer))
+- Review rounds and reviewer verdicts
+- The diff (once the executor has produced one)
+- Cost + token totals for the thread
+
+## Header quick-links
+
+The Kanban header has a `board` button that opens the project's GitHub Projects v2 board in your browser. By default it links to `https://github.com/<owner>/<repo>/projects`; you can override it to a real Projects v2 URL from [Project Settings](/desktop/project-settings).

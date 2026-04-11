@@ -1,0 +1,72 @@
+# Settings
+
+The Settings panel is a sidebar-on-the-left / content-on-the-right modal that covers every globally configurable ShipCode option. It's mounted from `apps/desktop/src/renderer/components/SettingsPanel.tsx` with navigation from `SettingsSidebar.tsx`.
+
+All settings persist in the local SQLite DB under the single `settings` row. The full type is `AppSettings` in [`packages/shared/src/types.ts`](https://github.com/shipshitdev/shipcode/blob/master/packages/shared/src/types.ts).
+
+## Sections
+
+### General
+
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| `theme` | `system` | Light / dark / follow OS |
+| `projectSortOrder` | `recent` | Sidebar project ordering — alpha / recent / added |
+| `terminalScrollback` | 5000 | Max lines retained in the Terminal drawer per thread |
+| `worktreeRoot` | `~/.shipcode/worktrees` | Where isolated pipeline worktrees live — set to a blank string for legacy project-local behavior |
+
+### Pipeline
+
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| `requireApproval` | false | Pause the pipeline at `awaiting_approval` after review for human sign-off |
+| `maxReviewRounds` | 2 | How many review → revise cycles before falling through (1–5) |
+| `plannerMaxTurns` | 12 | `--max-turns` cap on the planner and verifier Claude CLI runs (1–20). Execute and review are unaffected |
+| `reviewerReasoningEffort` | `high` | Codex reasoning effort for the review phase (low / medium / high) |
+| `autoPickupEnabled` | false | When on, ShipCode auto-pulls new `agent:*`-labeled issues from GitHub on a poll interval |
+| `githubPollingIntervalMs` | 60000 | GitHub polling interval when auto-pickup is enabled |
+| `githubBotUsername` | — | Label filter used to skip issues already handled by the bot |
+
+### Models
+
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| `executorModel` | `claude` | Default executor when no `agent:*` label is present (claude / codex / openrouter) |
+| `plannerModel` | `claude` | Planner model — **editable at onboarding only** |
+| `reviewerModel` | `codex` | Reviewer model — **editable at onboarding only** |
+| `verifierModel` | `claude` | Verifier model — **editable at onboarding only** |
+
+Only the executor is editable from this panel today. Planner, reviewer, and verifier are set during `shipcode onboard` (or the desktop onboarding wizard) and can be changed afterward by editing the `settings` row in the local SQLite DB. A full Models section is on the roadmap.
+
+OpenRouter-specific toggles (`openrouterEnabled`, tier defaults, per-phase overrides) are documented on the [OpenRouter page](/openrouter).
+
+### Notifications
+
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| `notificationsEnabled` | true | Master switch |
+| `notificationOsEnabled` | true | Fire native OS notifications |
+| `notificationBadgeEnabled` | true | Show an unread count badge on the app icon |
+| `notificationSoundEnabled` | false | Play a sound on events |
+| `notificationEvents.awaitingApproval` | on | Fire when a thread enters `awaiting_approval` |
+| `notificationEvents.failed` | on | Fire when any phase fails |
+| `notificationEvents.completed` | on | Fire when a PR is opened |
+| `notificationEvents.verificationExhausted` | on | Fire when the verifier runs out of retries |
+
+### Archived Projects
+
+Unarchive projects that have been hidden from the sidebar. Archived projects retain all their threads, plans, and cost history.
+
+### Shortcuts
+
+Keyboard shortcut reference — not yet remappable. See the page itself for the current binding list.
+
+## Per-project settings
+
+Some settings are per-project rather than global — most notably the [`githubProjectUrl` override](/desktop/project-settings) for the Kanban `board` quick-link.
+
+## Related
+
+- [OpenRouter](/openrouter) — full OpenRouter-specific configuration reference
+- [Project Settings](/desktop/project-settings) — per-project overrides
+- [Pipeline Overview](/pipeline/overview) — how Pipeline-section settings affect each phase

@@ -2,10 +2,15 @@
 
 ## GitHub Labels
 
+Label a GitHub issue with one of the agent labels below and ShipCode will route it to the corresponding executor. Source of truth: [`packages/agents/src/github/model-router.ts`](https://github.com/shipshitdev/shipcode/blob/master/packages/agents/src/github/model-router.ts). Unknown or missing labels fall back to `agent:claude`; multi-agent-label issues return an error.
+
 | Label | Effect |
 |-------|--------|
-| `agent:claude` | Claude implements the issue |
-| `agent:codex` | Codex implements the issue |
+| `agent:claude` | Claude Code implements the issue (default fallback) |
+| `agent:codex` | OpenAI Codex implements the issue |
+| `agent:openrouter` | OpenRouter executor with default model from your settings |
+| `agent:openrouter/auto` | OpenRouter `auto` meta-router — picks the best model per prompt |
+| `agent:openrouter/free` | OpenRouter restricted to free-tier models |
 
 ## Status Labels
 
