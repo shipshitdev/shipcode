@@ -36,6 +36,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   onboardingVersion: 0,
   projectSortOrder: 'recent',
   worktreeRoot: null,
+  plannerMaxTurns: 3,
   notificationsEnabled: true,
   notificationOsEnabled: true,
   notificationBadgeEnabled: true,

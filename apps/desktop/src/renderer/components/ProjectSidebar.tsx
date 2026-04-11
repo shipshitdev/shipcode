@@ -85,6 +85,7 @@ export function ProjectSidebar() {
       if (project) {
         invalidateProjects();
         selectProject(project.id);
+        window.shipcode.invoke('github:refresh-issues', { projectId: project.id }).catch(() => {});
       }
     },
   });

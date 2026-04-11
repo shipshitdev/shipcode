@@ -179,6 +179,18 @@ export class ThreadQueries {
       )
       .all();
   }
+
+  getStuck(thresholdMs: number): Thread[] {
+    const thresholdSec = Math.floor(thresholdMs / 1000);
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM threads
+         WHERE status IN ('planning', 'reviewing', 'revising', 'executing', 'verifying', 'shipping')
+           AND updated_at <= datetime('now', '-' || ? || ' seconds')`,
+      )
+      .all(thresholdSec) as any[];
+    return rows.map(mapThread);
+  }
 }
 
 function mapThread(row: any): Thread {

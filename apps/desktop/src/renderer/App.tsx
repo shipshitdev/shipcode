@@ -43,15 +43,21 @@ export function App() {
   if (settings && (settings.onboardingVersion ?? 0) < CURRENT_ONBOARDING_VERSION) {
     return (
       <OnboardingWizard
-        onComplete={async () => {
+        onComplete={async (newProjectId?: string) => {
           queryClient.invalidateQueries({ queryKey: ['settings'] });
           queryClient.invalidateQueries({ queryKey: ['health'] });
-          const projects = await queryClient.fetchQuery<Project[]>({
-            queryKey: ['projects-visible'],
-            queryFn: () => window.shipcode.invoke('project:list-visible'),
-          });
-          if (projects && projects.length > 0) {
-            useAppStore.getState().selectProject(projects[0].id);
+          if (newProjectId) {
+            queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
+            useAppStore.getState().selectProject(newProjectId);
+            window.shipcode.invoke('github:refresh-issues', { projectId: newProjectId }).catch(() => {});
+          } else {
+            const projects = await queryClient.fetchQuery<Project[]>({
+              queryKey: ['projects-visible'],
+              queryFn: () => window.shipcode.invoke('project:list-visible'),
+            });
+            if (projects && projects.length > 0) {
+              useAppStore.getState().selectProject(projects[0].id);
+            }
           }
         }}
       />

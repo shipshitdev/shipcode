@@ -4,13 +4,13 @@ import {
   StatusMappingEditor,
   Button,
   Input,
-  Label,
   Switch,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SettingsRow,
 } from '@shipcode/ui';
 import type { AppSettings, Project } from '@shipcode/shared';
 import { useAppStore } from '../stores/app-store';
@@ -32,8 +32,6 @@ export function SettingsPanel() {
     },
   });
 
-  // Archived projects query — top-level hook (Rules of Hooks) but only
-  // fetches when the Archived section is open, via `enabled`.
   const { data: archivedProjects = [] } = useQuery<Project[]>({
     queryKey: ['projects-archived'],
     queryFn: () => window.shipcode.invoke<Project[]>('project:list-archived'),
@@ -60,8 +58,7 @@ export function SettingsPanel() {
 
             <section className="mb-8">
               <h4 className="mb-3 text-secondary">Worktree Location</h4>
-              <div className="flex items-center justify-between border-b border-bg-tertiary py-2">
-                <Label htmlFor="worktree-root">Worktree root</Label>
+              <SettingsRow label="Worktree root" htmlFor="worktree-root">
                 <Input
                   id="worktree-root"
                   type="text"
@@ -82,7 +79,7 @@ export function SettingsPanel() {
                     );
                   }}
                 />
-              </div>
+              </SettingsRow>
               <p className="text-xs text-secondary mt-2">
                 Default: <code>~/.shipcode/worktrees</code>. Use an absolute path or{' '}
                 <code>~/…</code> to customize, or leave blank to reset to default. Relative paths
@@ -95,15 +92,14 @@ export function SettingsPanel() {
 
             <section className="mb-8">
               <h4 className="mb-3 text-secondary">Setup</h4>
-              <div className="flex items-center justify-between border-b border-bg-tertiary py-2">
-                <span className="text-primary">Re-run the onboarding wizard</span>
+              <SettingsRow label="Re-run the onboarding wizard">
                 <Button
                   variant="secondary"
                   onClick={() => updateSettings.mutate({ onboardingVersion: 0 })}
                 >
                   Re-run Setup
                 </Button>
-              </div>
+              </SettingsRow>
             </section>
           </>
         )}
@@ -114,18 +110,16 @@ export function SettingsPanel() {
 
             <section className="mb-8">
               <h4 className="mb-3 text-secondary">GitHub Integration</h4>
-              <div className="flex items-center justify-between border-b border-bg-tertiary py-2">
-                <Label htmlFor="polling-enabled">Polling Enabled</Label>
+              <SettingsRow label="Polling enabled" htmlFor="polling-enabled">
                 <Switch
                   id="polling-enabled"
                   checked={settings.githubPollingEnabled}
-                  onCheckedChange={(checked) =>
+                  onCheckedChange={(checked: boolean) =>
                     updateSettings.mutate({ githubPollingEnabled: !!checked })
                   }
                 />
-              </div>
-              <div className="flex items-center justify-between border-b border-bg-tertiary py-2">
-                <Label htmlFor="poll-interval">Poll Interval (ms)</Label>
+              </SettingsRow>
+              <SettingsRow label="Poll interval (ms)" htmlFor="poll-interval">
                 <Input
                   id="poll-interval"
                   type="number"
@@ -137,17 +131,16 @@ export function SettingsPanel() {
                   min={5000}
                   step={5000}
                 />
-              </div>
-              <div className="flex items-center justify-between border-b border-bg-tertiary py-2">
-                <Label htmlFor="auto-pickup">Auto-pickup Issues</Label>
+              </SettingsRow>
+              <SettingsRow label="Auto-pickup issues" htmlFor="auto-pickup">
                 <Switch
                   id="auto-pickup"
                   checked={settings.autoPickupEnabled}
-                  onCheckedChange={(checked) =>
+                  onCheckedChange={(checked: boolean) =>
                     updateSettings.mutate({ autoPickupEnabled: !!checked })
                   }
                 />
-              </div>
+              </SettingsRow>
             </section>
           </>
         )}
@@ -157,56 +150,53 @@ export function SettingsPanel() {
             <h3 className="mb-5">Notifications</h3>
 
             <section className="mb-8">
-              <div className="flex items-center justify-between border-b border-bg-tertiary py-2">
-                <Label htmlFor="notifications-enabled">Enable notifications</Label>
+              <SettingsRow label="Enable notifications" htmlFor="notifications-enabled">
                 <Switch
                   id="notifications-enabled"
                   checked={settings.notificationsEnabled}
-                  onCheckedChange={(checked) =>
+                  onCheckedChange={(checked: boolean) =>
                     updateSettings.mutate({ notificationsEnabled: !!checked })
                   }
                 />
-              </div>
-              <div className="flex items-center justify-between border-b border-bg-tertiary py-2">
-                <Label htmlFor="notification-os">OS notifications</Label>
+              </SettingsRow>
+              <SettingsRow label="OS notifications" htmlFor="notification-os">
                 <Switch
                   id="notification-os"
                   checked={settings.notificationOsEnabled}
-                  onCheckedChange={(checked) =>
+                  onCheckedChange={(checked: boolean) =>
                     updateSettings.mutate({ notificationOsEnabled: !!checked })
                   }
                   disabled={!settings.notificationsEnabled}
                 />
-              </div>
-              <div className="flex items-center justify-between border-b border-bg-tertiary py-2">
-                <Label htmlFor="notification-badge">Dock badge count</Label>
+              </SettingsRow>
+              <SettingsRow label="Dock badge count" htmlFor="notification-badge">
                 <Switch
                   id="notification-badge"
                   checked={settings.notificationBadgeEnabled}
-                  onCheckedChange={(checked) =>
+                  onCheckedChange={(checked: boolean) =>
                     updateSettings.mutate({ notificationBadgeEnabled: !!checked })
                   }
                   disabled={!settings.notificationsEnabled}
                 />
-              </div>
-              <div className="flex items-center justify-between border-b border-bg-tertiary py-2">
-                <Label htmlFor="notification-sound">Play sound</Label>
+              </SettingsRow>
+              <SettingsRow label="Play sound" htmlFor="notification-sound">
                 <Switch
                   id="notification-sound"
                   checked={settings.notificationSoundEnabled}
-                  onCheckedChange={(checked) =>
+                  onCheckedChange={(checked: boolean) =>
                     updateSettings.mutate({ notificationSoundEnabled: !!checked })
                   }
                   disabled={!settings.notificationsEnabled}
                 />
-              </div>
-              <div className="mt-3 text-xs uppercase tracking-wide text-muted">Notify me when</div>
-              <div className="flex items-center justify-between border-b border-bg-tertiary py-2">
-                <Label htmlFor="notify-awaiting-approval">Awaiting approval</Label>
+              </SettingsRow>
+
+              <p className="mt-4 mb-1 text-xs uppercase tracking-wide text-muted">Notify me when</p>
+
+              <SettingsRow label="Awaiting approval" htmlFor="notify-awaiting-approval">
                 <Switch
                   id="notify-awaiting-approval"
                   checked={settings.notificationEvents.awaitingApproval}
-                  onCheckedChange={(checked) =>
+                  onCheckedChange={(checked: boolean) =>
                     updateSettings.mutate({
                       notificationEvents: {
                         ...settings.notificationEvents,
@@ -216,41 +206,39 @@ export function SettingsPanel() {
                   }
                   disabled={!settings.notificationsEnabled}
                 />
-              </div>
-              <div className="flex items-center justify-between border-b border-bg-tertiary py-2">
-                <Label htmlFor="notify-failed">Pipeline failed</Label>
+              </SettingsRow>
+              <SettingsRow label="Pipeline failed" htmlFor="notify-failed">
                 <Switch
                   id="notify-failed"
                   checked={settings.notificationEvents.failed}
-                  onCheckedChange={(checked) =>
+                  onCheckedChange={(checked: boolean) =>
                     updateSettings.mutate({
                       notificationEvents: { ...settings.notificationEvents, failed: !!checked },
                     })
                   }
                   disabled={!settings.notificationsEnabled}
                 />
-              </div>
-              <div className="flex items-center justify-between border-b border-bg-tertiary py-2">
-                <Label htmlFor="notify-completed">Pipeline completed</Label>
+              </SettingsRow>
+              <SettingsRow label="Pipeline completed" htmlFor="notify-completed">
                 <Switch
                   id="notify-completed"
                   checked={settings.notificationEvents.completed}
-                  onCheckedChange={(checked) =>
+                  onCheckedChange={(checked: boolean) =>
                     updateSettings.mutate({
                       notificationEvents: { ...settings.notificationEvents, completed: !!checked },
                     })
                   }
                   disabled={!settings.notificationsEnabled}
                 />
-              </div>
-              <div className="flex items-center justify-between border-b border-bg-tertiary py-2">
-                <Label htmlFor="notify-verification-exhausted">
-                  Verification retries exhausted
-                </Label>
+              </SettingsRow>
+              <SettingsRow
+                label="Verification retries exhausted"
+                htmlFor="notify-verification-exhausted"
+              >
                 <Switch
                   id="notify-verification-exhausted"
                   checked={settings.notificationEvents.verificationExhausted}
-                  onCheckedChange={(checked) =>
+                  onCheckedChange={(checked: boolean) =>
                     updateSettings.mutate({
                       notificationEvents: {
                         ...settings.notificationEvents,
@@ -260,7 +248,7 @@ export function SettingsPanel() {
                   }
                   disabled={!settings.notificationsEnabled}
                 />
-              </div>
+              </SettingsRow>
             </section>
           </>
         )}
@@ -270,11 +258,29 @@ export function SettingsPanel() {
             <h3 className="mb-5">Pipeline</h3>
 
             <section className="mb-8">
-              <div className="flex items-center justify-between mb-4">
-                <Label htmlFor="executor-model">Executor model</Label>
+              <SettingsRow
+                label="Planner max turns"
+                htmlFor="planner-max-turns"
+                description="Max Claude turns for plan / revision / verify phases. Higher = more thorough but slower."
+              >
+                <Input
+                  id="planner-max-turns"
+                  type="number"
+                  className="w-[80px]"
+                  value={settings.plannerMaxTurns}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    if (val >= 1 && val <= 20) updateSettings.mutate({ plannerMaxTurns: val });
+                  }}
+                  min={1}
+                  max={20}
+                  step={1}
+                />
+              </SettingsRow>
+              <SettingsRow label="Executor model" htmlFor="executor-model">
                 <Select
                   value={settings.executorModel}
-                  onValueChange={(value) =>
+                  onValueChange={(value: string) =>
                     updateSettings.mutate({ executorModel: value as AppSettings['executorModel'] })
                   }
                 >
@@ -287,7 +293,7 @@ export function SettingsPanel() {
                     <SelectItem value="openrouter">openrouter</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
+              </SettingsRow>
             </section>
 
             <section className="mb-8">

@@ -64,10 +64,19 @@ function extractNdjsonText(event: Record<string, unknown>): string | null {
   // ── codex exec --json ───────────────────────────────────────────────────
   const item = event.item as Record<string, unknown> | undefined;
   if (event.type === 'item.started' && item?.type === 'command_execution') {
-    // Show the shell command being run (yellow)
     return `\x1b[33m$ ${item.command as string}\x1b[0m`;
   }
+  // Real-time text streaming: item.delta carries incremental tokens as they generate.
+  // When present, item.completed agent_message is suppressed by the caller to avoid
+  // double-printing the same text.
+  if (event.type === 'item.delta') {
+    const delta = event.delta as Record<string, unknown> | undefined;
+    if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
+      return delta.text;
+    }
+  }
   if (event.type === 'item.completed' && item?.type === 'agent_message') {
+    // Fallback only — caller suppresses this if item.delta events were already streamed.
     return (item.text as string) || null;
   }
   if (event.type === 'item.completed' && item?.type === 'command_execution') {
@@ -96,6 +105,7 @@ export function TerminalDrawer() {
   const terminalEvents = terminalThreadId ? (terminalEventsByThread[terminalThreadId] ?? []) : [];
   const activeIssue = useAppStore((s) => s.activeIssue);
   const pipelinePhase = useAppStore((s) => s.pipelinePhase);
+  const currentModel = useAppStore((s) => s.currentModel);
   const githubIssues = useAppStore((s) => s.githubIssues);
   const processToThread = useAppStore((s) => s.processToThread);
   const setTerminalThread = useAppStore((s) => s.setTerminalThread);
@@ -128,6 +138,9 @@ export function TerminalDrawer() {
   const lineBufferRef = useRef<Record<string, string>>({});
   // Per-process suppression: once a fence tag is detected, suppress remaining text
   const suppressedRef = useRef<Record<string, boolean>>({});
+  // Codex item.delta dedup: track item IDs that have received delta events so we
+  // can suppress the redundant item.completed agent_message for the same item.
+  const deltaItemIdsRef = useRef<Record<string, Set<string>>>({});
   const prevThreadIdRef = useRef<string | null>(null);
   // Track how many terminal event lines have been written
   const eventsWrittenRef = useRef(0);
@@ -180,6 +193,23 @@ export function TerminalDrawer() {
         foreground: '#b4b4bc',
         cursor: '#f4f4f5',
         selectionBackground: 'rgba(244, 244, 245, 0.2)',
+        // Catppuccin Mocha palette for readable ANSI colors on the dark background
+        black: '#1a1b1e',
+        red: '#f38ba8',
+        green: '#a6e3a1',
+        yellow: '#f9e2af',
+        blue: '#89b4fa',
+        magenta: '#cba6f7',
+        cyan: '#89dceb',
+        white: '#cdd6f4',
+        brightBlack: '#585b70',
+        brightRed: '#f38ba8',
+        brightGreen: '#a6e3a1',
+        brightYellow: '#f9e2af',
+        brightBlue: '#89b4fa',
+        brightMagenta: '#cba6f7',
+        brightCyan: '#89dceb',
+        brightWhite: '#ffffff',
       },
       fontFamily: '"SF Mono", SFMono-Regular, Consolas, Menlo, monospace',
       fontSize: 12,
@@ -215,6 +245,7 @@ export function TerminalDrawer() {
       writtenRef.current = {};
       lineBufferRef.current = {};
       suppressedRef.current = {};
+      deltaItemIdsRef.current = {};
       eventsWrittenRef.current = 0;
       startedAtRef.current = null;
       prevThreadIdRef.current = terminalThreadId;
@@ -258,6 +289,26 @@ export function TerminalDrawer() {
           if (!trimmed) continue;
           try {
             const event = JSON.parse(trimmed) as Record<string, unknown>;
+
+            // Track Codex item.delta events so we can suppress the redundant
+            // item.completed agent_message for the same item (avoids double-print).
+            if (event.type === 'item.delta' && typeof event.item_id === 'string') {
+              if (!deltaItemIdsRef.current[processId]) {
+                deltaItemIdsRef.current[processId] = new Set();
+              }
+              deltaItemIdsRef.current[processId].add(event.item_id);
+            }
+
+            // Suppress item.completed agent_message when deltas were already streamed.
+            if (
+              event.type === 'item.completed' &&
+              (event.item as Record<string, unknown>)?.type === 'agent_message' &&
+              typeof event.item_id === 'string' &&
+              deltaItemIdsRef.current[processId]?.has(event.item_id)
+            ) {
+              continue;
+            }
+
             const text = extractNdjsonText(event);
             if (!text) continue;
 
@@ -319,7 +370,8 @@ export function TerminalDrawer() {
       if (newEvents.length > 0) setIsTransitioning(false);
     }
     for (const line of newEvents) {
-      term.write(`\x1b[2m${line}\x1b[0m\r\n`);
+      // Lines already contain their own ANSI codes — write directly without wrapping
+      term.write(`${line}\r\n`);
     }
     eventsWrittenRef.current = terminalEvents.length;
   }, [terminalEvents]);
@@ -353,6 +405,12 @@ export function TerminalDrawer() {
             <>
               <span className="text-muted text-xs shrink-0">·</span>
               <span className="text-xs text-accent font-medium shrink-0 capitalize">{pipelinePhase}</span>
+            </>
+          )}
+          {currentModel && pipelinePhase !== 'idle' && (
+            <>
+              <span className="text-muted text-xs shrink-0">·</span>
+              <span className="text-xs font-mono text-muted shrink-0 truncate max-w-[180px]">{currentModel}</span>
             </>
           )}
           {startedAtRef.current && terminalEvents.length > 0 && (

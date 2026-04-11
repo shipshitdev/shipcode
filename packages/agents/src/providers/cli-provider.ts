@@ -104,9 +104,11 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
   switch (req.phase) {
     case 'plan':
     case 'revision':
-    case 'verify':
-      // Analysis phases: stream-json for real-time terminal output, single turn,
+    case 'verify': {
+      // Analysis phases: stream-json for real-time terminal output,
       // no file-mutating tools. --verbose is required by stream-json mode.
+      // maxTurns comes from AppSettings.plannerMaxTurns (default 3) via phaseHints.
+      const maxTurns = String(req.phaseHints?.maxTurns ?? 1);
       return [
         '-p',
         req.prompt,
@@ -114,13 +116,14 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
         'stream-json',
         '--verbose',
         '--max-turns',
-        '1',
+        maxTurns,
         '--dangerously-skip-permissions',
         '--disallowedTools',
         'Edit,Write,Bash,NotebookEdit',
       ];
+    }
     case 'execute':
-      // Execution: full tool surface, no JSON wrapping.
+      // Execution: full tool surface, no JSON wrapping, no turn limit.
       return [
         '-p',
         req.prompt,
@@ -130,7 +133,7 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
       ];
     case 'review':
       // Claude does not review in the current pipeline (codex does).
-      // Kept for symmetry; returns a safe structured-output invocation.
+      // Kept for symmetry; always 1 turn (structural, not configurable).
       return [
         '-p',
         req.prompt,
@@ -177,7 +180,7 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
       parser.feed(result.rawOutput);
       const usage = parser.extractUsage();
       return {
-        rawOutput: result.rawOutput,
+        rawOutput: StreamParser.stripSystemEvents(result.rawOutput),
         exitCode: result.exitCode,
         resolvedModel: 'claude',
         ...(usage

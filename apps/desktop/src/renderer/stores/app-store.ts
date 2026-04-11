@@ -60,6 +60,9 @@ interface AppState {
   terminalThreadId: string | null;
   terminalEventsByThread: Record<string, string[]>;
 
+  // Currently running model (from pipeline:model-resolved, reset on idle)
+  currentModel: string | null;
+
   // Notifications (in-app toaster + history)
   notifications: NotificationRecord[];
 
@@ -94,6 +97,7 @@ interface AppState {
   logTerminalEvent: (line: string) => void;
   setTerminalThread: (id: string | null) => void;
   logTerminalEventForThread: (threadId: string, line: string) => void;
+  setCurrentModel: (model: string | null) => void;
   addNotification: (notification: NotificationRecord) => void;
   removeNotification: (id: string) => void;
   clearNotifications: () => void;
@@ -131,6 +135,7 @@ export const useAppStore = create<AppState>((set) => ({
   commandPaletteOpen: false,
   createIssueModalOpen: false,
   editingPrd: null,
+  currentModel: null,
 
   setViewMode: (mode) => set({ viewMode: mode }),
   openDashboard: () =>
@@ -220,7 +225,8 @@ export const useAppStore = create<AppState>((set) => ({
   setSettingsSection: (section) => set({ settingsSection: section }),
   setPlan: (plan) => set({ currentPlan: plan }),
   setReview: (review) => set({ currentReview: review }),
-  setPipelinePhase: (phase) => set({ pipelinePhase: phase }),
+  setPipelinePhase: (phase) =>
+    set(phase === 'idle' ? { pipelinePhase: phase, currentModel: null } : { pipelinePhase: phase }),
   setVerification: (verification) => set({ currentVerification: verification }),
   setGithubIssues: (issues) => set({ githubIssues: issues }),
   setSystemHealth: (health) => set({ systemHealth: health }),
@@ -239,6 +245,7 @@ export const useAppStore = create<AppState>((set) => ({
     set((s) => ({ processToThread: { ...s.processToThread, [processId]: threadId } })),
   logTerminalEvent: (line) => set((s) => ({ terminalEvents: [...s.terminalEvents, line] })),
   setTerminalThread: (id) => set({ terminalThreadId: id }),
+  setCurrentModel: (model) => set({ currentModel: model }),
   logTerminalEventForThread: (threadId, line) =>
     set((s) => {
       const prev = s.terminalEventsByThread[threadId] ?? [];

@@ -1,6 +1,7 @@
 import { useEffect, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { GitHubIssueCacheRecord, NotificationRecord } from '@shipcode/shared';
+import { modelDisplay } from '@shipcode/ui';
 import { useAppStore } from '../stores/app-store';
 
 export function useIpc() {
@@ -17,6 +18,7 @@ export function useIpc() {
     logTerminalEventForThread,
     setTerminalThread,
     mapProcessToThread,
+    setCurrentModel,
   } = useAppStore();
 
   useEffect(() => {
@@ -33,15 +35,16 @@ export function useIpc() {
           if (data.phase === 'planning') {
             store.openTerminal();
           }
-          // Log phase transition to terminal event log
+          // Log phase transition to terminal event log (colored)
           const ts = new Date().toLocaleTimeString('en-US', {
             hour12: false,
             hour: '2-digit',
             minute: '2-digit',
             second: '2-digit',
           });
-          store.logTerminalEvent(`[${ts}] phase: ${data.phase}`);
-          logTerminalEventForThread(data.threadId, `[${ts}] phase: ${data.phase}`);
+          const phaseLine = `\x1b[2m[${ts}]\x1b[0m phase: \x1b[36m${data.phase}\x1b[0m`;
+          store.logTerminalEvent(phaseLine);
+          logTerminalEventForThread(data.threadId, phaseLine);
           // Also set terminal focus to this thread when it starts
           if (data.phase !== 'idle') setTerminalThread(data.threadId);
         }
@@ -139,7 +142,7 @@ export function useIpc() {
       }),
     );
 
-    // Log agent process lifecycle events to the terminal
+    // Log agent process lifecycle events to the terminal (colored by agent type)
     unsubscribers.push(
       window.shipcode.on('agent:state', (data: any) => {
         if (data.state !== 'running' && data.state !== 'exited') return;
@@ -156,8 +159,65 @@ export function useIpc() {
         if (data.state === 'running' && data.processId && tid) {
           mapProcessToThread(data.processId, tid);
         }
-        store.logTerminalEvent(`[${ts}] ${data.type} process ${label}`);
-        if (tid) logTerminalEventForThread(tid, `[${ts}] ${data.type} process ${label}`);
+        // Color the agent name: claude=cyan, codex=yellow, openrouter=magenta
+        const agentColor =
+          data.type === 'claude' ? '\x1b[36m'
+          : data.type === 'codex' ? '\x1b[33m'
+          : data.type === 'openrouter' ? '\x1b[35m'
+          : '';
+        const agentReset = agentColor ? '\x1b[0m' : '';
+        const exitColor = data.state === 'exited' ? '\x1b[2m' : '';
+        const line = `\x1b[2m[${ts}]\x1b[0m ${exitColor}${agentColor}${data.type}${agentReset}${exitColor} process ${label}\x1b[0m`;
+        store.logTerminalEvent(line);
+        if (tid) logTerminalEventForThread(tid, line);
+      }),
+    );
+
+    // Log model resolution events and update the header model display
+    unsubscribers.push(
+      window.shipcode.on('pipeline:model-resolved', (data: any) => {
+        const store = useAppStore.getState();
+        const isOpenRouter = String(data.requestedModel ?? '').startsWith('openrouter');
+        const isCodex = data.requestedModel === 'codex';
+        // For claude/codex CLIs the resolvedModel is just 'claude'/'codex' — use the
+        // friendly display name instead. For OpenRouter use the actual resolved model
+        // (e.g. 'anthropic/claude-sonnet-4-6') since it carries the real model name.
+        const displayName = isOpenRouter
+          ? data.resolvedModel
+          : modelDisplay(data.requestedModel ?? data.resolvedModel);
+        setCurrentModel(displayName);
+        const ts = new Date().toLocaleTimeString('en-US', {
+          hour12: false,
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        });
+        // Tokens: show for OpenRouter and codex — both report accurate per-call counts.
+        // Claude CLI only reports delta (non-cached) input tokens, which is misleading.
+        const tokenStr =
+          (isOpenRouter || isCodex) && data.tokensUsed
+            ? ` \x1b[2m(${data.tokensUsed.prompt}+${data.tokensUsed.completion} tok)\x1b[0m`
+            : '';
+        // Cost:
+        // - OpenRouter: exact per-call charge from API response
+        // - claude CLI: session-level API-rate estimate (~$) — real cost if API user,
+        //   theoretical if on a subscription plan, still useful for comparison
+        // - codex CLI: estimated from token counts using gpt-5.4 pricing
+        //   ($62.50/MTok input, $375/MTok output) — prefixed ~ to signal it's an estimate
+        let costStr = '';
+        if (isOpenRouter && data.costUsd && data.costUsd > 0) {
+          costStr = ` \x1b[2m$${data.costUsd.toFixed(4)}\x1b[0m`;
+        } else if (!isOpenRouter && data.costUsd && data.costUsd > 0) {
+          costStr = ` \x1b[2m~$${data.costUsd.toFixed(4)}\x1b[0m`;
+        } else if (isCodex && data.tokensUsed) {
+          const estimated =
+            (data.tokensUsed.prompt * 62.5 + data.tokensUsed.completion * 375) / 1_000_000;
+          costStr = ` \x1b[2m~$${estimated.toFixed(4)}\x1b[0m`;
+        }
+        const line = `\x1b[2m[${ts}]\x1b[0m \x1b[35mmodel:\x1b[0m ${displayName}${tokenStr}${costStr}`;
+        const tid = store.terminalThreadId;
+        store.logTerminalEvent(line);
+        if (tid) logTerminalEventForThread(tid, line);
       }),
     );
 
@@ -221,6 +281,7 @@ export function useIpc() {
     logTerminalEventForThread,
     setTerminalThread,
     mapProcessToThread,
+    setCurrentModel,
     queryClient,
   ]);
 }

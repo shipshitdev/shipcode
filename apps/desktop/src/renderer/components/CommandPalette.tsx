@@ -22,6 +22,9 @@ export function CommandPalette() {
     pipelinePhase,
     toggleTerminal,
     toggleSettings,
+    toggleSidebar,
+    toggleIssueDetail,
+    activeIssue,
     openDashboard,
     openActivity,
     openInbox,
@@ -152,6 +155,16 @@ export function CommandPalette() {
           <CommandItem onSelect={() => runAction(() => addProject.mutate())}>
             <span className="flex-1">Add Repository…</span>
           </CommandItem>
+          <CommandItem onSelect={() => runAction(() => toggleSidebar())}>
+            <span className="flex-1">Toggle Sidebar</span>
+            <CommandShortcut>⌘B</CommandShortcut>
+          </CommandItem>
+          {activeIssue && (
+            <CommandItem onSelect={() => runAction(() => toggleIssueDetail())}>
+              <span className="flex-1">Toggle Issue Detail</span>
+              <CommandShortcut>⌥⌘B</CommandShortcut>
+            </CommandItem>
+          )}
           <CommandItem onSelect={() => runAction(() => toggleTerminal())}>
             <span className="flex-1">Toggle Terminal</span>
             <CommandShortcut>⌘J</CommandShortcut>

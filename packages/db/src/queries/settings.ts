@@ -76,6 +76,9 @@ export class SettingsQueries {
         (stored.projectSortOrder as AppSettings['projectSortOrder']) ??
         DEFAULT_SETTINGS.projectSortOrder,
       worktreeRoot: readWorktreeRoot(stored.worktreeRoot),
+      plannerMaxTurns: stored.plannerMaxTurns
+        ? parseInt(stored.plannerMaxTurns, 10)
+        : DEFAULT_SETTINGS.plannerMaxTurns,
       notificationsEnabled: parseBool(
         stored.notificationsEnabled,
         DEFAULT_SETTINGS.notificationsEnabled,
