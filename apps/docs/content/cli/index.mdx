@@ -1,23 +1,76 @@
 # CLI
 
-ShipCode CLI is a headless pipeline runner for terminal workflows.
+`@shipshitdev/shipcode` is the headless pipeline runner. It's a **separate product** from the [desktop app](/desktop/overview) — no GUI, no Electron, just the `shipcode` command. Both share the same pipeline engine, same SQLite DB, and same worktree layout, so you can install one or both.
 
-## Installation
+## When to use the CLI vs the desktop app
+
+| If you want... | Use |
+|---|---|
+| A GUI to watch pipelines, triage issues, edit settings, view costs | [Desktop app](/desktop/overview) |
+| To run the pipeline from a terminal or script | This CLI |
+| CI / GitHub Actions / cron automation | This CLI |
+| Server or container environments without a display | This CLI |
+| Both GUI and terminal access to the same DB | Install both |
+
+The two products do not conflict. They read and write the same local SQLite DB, so a project onboarded via `shipcode onboard` shows up in the desktop app's sidebar automatically (and vice versa).
+
+## Install
 
 ```bash
-# Requires Node.js >= 22.5.0
-npx shipcode onboard
+# Run once without installing
+npx @shipshitdev/shipcode onboard
+
+# Or install globally so the `shipcode` command is always on your PATH
+npm install -g @shipshitdev/shipcode
 ```
 
-Or install globally:
+Requires Node.js ≥ 22.5.0 (for the built-in `node:sqlite` module).
 
-```bash
-npm install -g shipcode
-```
+After a global install, the command name is `shipcode` — the `@shipshitdev/` scope only appears in the `npx` path and in `package.json` metadata. `shipcode --help` lists every command.
 
 ## Commands
 
-- `shipcode onboard` — Initialize ShipCode in the current project
-- `shipcode run <issue>` — Process a single GitHub issue
-- `shipcode start` — Interactive mode
-- `shipcode status` — Show active pipelines
+| Command | Description |
+|---------|-------------|
+| `shipcode onboard` | Doctor check + initialize ShipCode in the current repo |
+| `shipcode status` | Show active pipelines and recent threads |
+| `shipcode run <issue>` | Process a single GitHub issue end-to-end |
+| `shipcode start` | Interactive mode — prompts for an issue number |
+
+Pass `--help` to any subcommand for its flags.
+
+## Onboarding doctor checks
+
+`shipcode onboard` fails fast if any required tool is missing:
+
+- **Required:** `git`, `gh`, `claude`, `codex` on `PATH`
+- **Required auth:** `gh auth login` completed, `claude` authenticated
+- **Optional:** `OPENROUTER_API_KEY` env var — enables the `openrouter` executor + OpenRouter label variants
+
+See [OpenRouter](/openrouter) for details on enabling the third executor.
+
+## Typical workflow
+
+```bash
+cd my-repo
+shipcode onboard              # one-time setup for this repo
+shipcode status               # see what's running (across all projects)
+shipcode run 42               # execute pipeline on issue #42
+```
+
+The pipeline phases (plan → review → execute → verify → ship) are identical to the desktop app. See [Pipeline Overview](/pipeline/overview) for the state machine.
+
+## Environment variables
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `OPENROUTER_API_KEY` | Optional | Enables the `openrouter` executor |
+
+Claude / Codex / gh auth come from their own CLIs — the CLI does not read any other env vars directly.
+
+## See also
+
+- [Getting Started](/getting-started) — prerequisites and first-pipeline walkthrough
+- [Configuration](/configuration) — GitHub label conventions
+- [OpenRouter](/openrouter) — enabling the OpenRouter executor
+- [Pipeline Overview](/pipeline/overview) — state machine reference

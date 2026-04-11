@@ -6,19 +6,28 @@ Label a GitHub issue with `agent:claude`, `agent:codex`, `agent:openrouter`, `ag
 
 ## Install
 
-**Desktop app (macOS):**
+ShipCode ships as two separate products that share the same pipeline engine. Most users only need **one** of them.
+
+**Desktop app (macOS)** — recommended if you want the GUI:
 
 ```bash
 brew tap shipshitdev/shipcode
 brew install --cask shipcode
 ```
 
-**CLI:**
+**CLI** — for terminal, CI, cron jobs, and headless environments:
 
 ```bash
-npx shipcode onboard
-npx shipcode run 42
+# Run once without installing
+npx @shipshitdev/shipcode onboard
+
+# Or install globally
+npm install -g @shipshitdev/shipcode
+shipcode onboard
+shipcode run 42
 ```
+
+See [Getting Started](/getting-started) for prerequisites and [CLI vs Desktop](/cli) for which one fits your workflow.
 
 ## How it works
 

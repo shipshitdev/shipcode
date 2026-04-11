@@ -1,8 +1,21 @@
-# shipcode — CLI
+# @shipshitdev/shipcode
 
-Headless pipeline runner for ShipCode — an autonomous AI coding pipeline that takes GitHub issues in and ships pull requests out.
+Headless CLI for ShipCode — an autonomous AI coding pipeline that takes GitHub issues in and ships pull requests out.
 
-This is the `@shipcode/cli` workspace package, published as [`shipcode`](https://www.npmjs.com/package/shipcode). For the full product and desktop app, see the [docs site](https://shipcode.shipshit.dev/docs) and the [repo root](../../README.md).
+This package is the **terminal / CI / server** entry point. If you want the desktop GUI instead, install [the ShipCode desktop app](https://shipcode.shipshit.dev/docs/getting-started) via `brew install --cask shipcode` — the two share the same pipeline engine but are otherwise separate products. You don't need both.
+
+## Install
+
+```bash
+# Run once without installing
+npx @shipshitdev/shipcode onboard
+
+# Or install globally so the `shipcode` command is always on your PATH
+npm install -g @shipshitdev/shipcode
+shipcode onboard
+```
+
+The `bin` map in `package.json` exposes the command as `shipcode`, so after a global install you type `shipcode`, not `@shipshitdev/shipcode`. Only `npx` carries the scope.
 
 ## Prerequisites
 
@@ -38,15 +51,15 @@ Claude and Codex auth come from their own CLIs (`claude auth`, Codex env vars); 
 From the monorepo root:
 
 ```bash
-bun install                              # install all workspace deps
-bun run --filter shipcode build          # build apps/cli -> apps/cli/dist
-node apps/cli/dist/index.js onboard      # run the built CLI in any repo
+bun install                                             # install all workspace deps
+bun run --filter @shipshitdev/shipcode build            # build apps/cli -> apps/cli/dist
+node apps/cli/dist/index.js onboard                     # run the built CLI in any repo
 ```
 
 Watch mode (rebuild on change):
 
 ```bash
-bun run --filter shipcode dev
+bun run --filter @shipshitdev/shipcode dev
 ```
 
 ## Executors
@@ -71,6 +84,14 @@ The CLI is a thin wrapper over the shared workspace packages:
 - `@shipcode/pipeline` — state machine (plan → review → execute → verify → ship)
 
 See the [architecture docs](https://shipcode.shipshit.dev/docs/architecture) for the full package layout.
+
+## CLI vs Desktop — which do I need?
+
+| If you want... | Use |
+|---|---|
+| A GUI to watch pipelines, triage issues, edit settings, view costs | Desktop app (`brew install --cask shipcode`) |
+| To run the pipeline from a terminal, script, cron job, or CI job | This CLI (`npm i -g @shipshitdev/shipcode`) |
+| Both | Install both — they share the same SQLite DB and worktree layout |
 
 ## See also
 

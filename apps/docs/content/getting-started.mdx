@@ -1,20 +1,22 @@
 # Getting Started
 
+## Which ShipCode do I need?
+
+ShipCode is two separate products that share the same pipeline engine. Pick one:
+
+- **[Desktop App](/desktop/overview)** — full Electron GUI (Kanban board, Mission Control, Terminal drawer, Settings, Plan Viewer). Use this if you want to watch pipelines run, triage issues, and review plans visually.
+- **[CLI](/cli)** — headless `shipcode` command. Use this for terminal-first workflows, CI automation, cron jobs, or server environments without a display.
+
+Both read the same SQLite DB and worktree layout, so you can install both and they stay consistent.
+
 ## Prerequisites
 
-- [Node.js](https://nodejs.org) >= 22.5.0 (for CLI)
+- [Node.js](https://nodejs.org) >= 22.5.0 (for the CLI — required for the built-in `node:sqlite` module)
 - [Bun](https://bun.sh) >= 1.2 (for development)
 - [Claude Code CLI](https://claude.ai/claude-code) (`claude`)
 - [Codex CLI](https://github.com/openai/codex) (`codex`)
 - [GitHub CLI](https://cli.github.com) (`gh`) — authenticated
 - Git
-
-## CLI Quick Start
-
-```bash
-npx shipcode onboard
-npx shipcode run <issue-number>
-```
 
 ## Desktop App
 
@@ -22,6 +24,23 @@ npx shipcode run <issue-number>
 brew tap shipshitdev/shipcode
 brew install --cask shipcode
 ```
+
+Launch ShipCode from Applications. First run opens the onboarding wizard, which doctor-checks the prerequisites above and walks you through adding your first repository.
+
+## CLI Quick Start
+
+```bash
+# Run once without installing
+npx @shipshitdev/shipcode onboard
+npx @shipshitdev/shipcode run <issue-number>
+
+# Or install globally so the `shipcode` command is always on your PATH
+npm install -g @shipshitdev/shipcode
+shipcode onboard
+shipcode run <issue-number>
+```
+
+After a global install the command name is `shipcode`, not `@shipshitdev/shipcode` — the scope only appears on the `npx` path.
 
 ## Adding a Repository
 

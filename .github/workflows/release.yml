@@ -1,8 +1,31 @@
 name: Release
 
+# Manual-dispatch only until Apple signing / notarization is wired.
+# When CSC_LINK + APPLE_* secrets are available, re-enable the
+# `release: published` trigger below and restore the commented
+# `build-desktop-macos` + `update-homebrew-cask` jobs at the bottom.
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag to publish (e.g. v0.1.0). Must match an existing GitHub release for Linux uploads."
+        required: true
+        type: string
+      deploy_web:
+        description: "Deploy apps/web to Vercel production"
+        required: false
+        type: boolean
+        default: true
+      build_linux:
+        description: "Build + upload desktop Linux installers (AppImage + deb)"
+        required: false
+        type: boolean
+        default: true
+      publish_cli:
+        description: "Publish the CLI to npm (requires NPM_TOKEN secret)"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -14,9 +37,10 @@ env:
 
 jobs:
   deploy-web:
+    if: ${{ inputs.deploy_web }}
     runs-on: ubuntu-latest
     env:
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ env.VERCEL_PROJECT_ID_WEB }}
     steps:
       - uses: actions/checkout@v4
@@ -40,6 +64,7 @@ jobs:
         run: vercel deploy --cwd apps/web --prebuilt --prod --token "${{ secrets.VERCEL_TOKEN }}"
 
   build-desktop-linux:
+    if: ${{ inputs.build_linux }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -58,111 +83,15 @@ jobs:
         run: cd apps/desktop && npx electron-builder --linux
       - name: Upload Linux binaries to release
         run: |
-          gh release upload ${{ github.event.release.tag_name }} \
+          gh release upload "${{ inputs.release_tag }}" \
             apps/desktop/out/*.AppImage \
             apps/desktop/out/*.deb \
             --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  build-desktop-macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-      - name: Detect macOS signing configuration
-        id: macos-signing
-        run: |
-          if [ -z "${{ secrets.CSC_LINK }}" ]; then
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "CSC_LINK is not configured; skipping macOS release build."
-          else
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-          fi
-      - if: steps.macos-signing.outputs.enabled == 'true'
-        run: bun install
-      - name: Build desktop app
-        if: steps.macos-signing.outputs.enabled == 'true'
-        run: cd apps/desktop && bun run build:code
-      - name: Package macOS installers
-        if: steps.macos-signing.outputs.enabled == 'true'
-        run: cd apps/desktop && npx electron-builder --mac
-        env:
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      - name: Upload macOS binaries to release
-        if: steps.macos-signing.outputs.enabled == 'true'
-        run: |
-          gh release upload ${{ github.event.release.tag_name }} \
-            apps/desktop/out/*.dmg \
-            apps/desktop/out/*.zip \
-            --clobber
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  update-homebrew-cask:
-    needs: build-desktop-macos
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout tap repo
-        uses: actions/checkout@v4
-        with:
-          repository: shipshitdev/homebrew-shipcode
-          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          ref: master
-
-      - name: Download macOS release artifacts
-        run: |
-          VERSION="${{ github.event.release.tag_name }}"
-          VERSION="${VERSION#v}"
-          gh release download "v${VERSION}" \
-            --repo shipshitdev/shipcode \
-            --pattern "*.dmg" \
-            --dir ./artifacts
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Compute SHA256 hashes
-        id: sha
-        run: |
-          ARM_FILE=$(ls artifacts/*arm64*.dmg 2>/dev/null | head -1)
-          INTEL_FILE=$(ls artifacts/*.dmg 2>/dev/null | grep -v arm64 | head -1)
-          if [ -n "$ARM_FILE" ]; then
-            echo "arm_sha=$(shasum -a 256 "$ARM_FILE" | awk '{print $1}')" >> $GITHUB_OUTPUT
-          fi
-          if [ -n "$INTEL_FILE" ]; then
-            echo "intel_sha=$(shasum -a 256 "$INTEL_FILE" | awk '{print $1}')" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Update cask version and SHA256
-        run: |
-          VERSION="${{ github.event.release.tag_name }}"
-          VERSION="${VERSION#v}"
-          sed -i "s/version \".*\"/version \"${VERSION}\"/" Casks/shipcode.rb
-          if [ -n "${{ steps.sha.outputs.arm_sha }}" ]; then
-            sed -i "s|arm:   \"[a-f0-9]*\"|arm:   \"${{ steps.sha.outputs.arm_sha }}\"|" Casks/shipcode.rb
-          fi
-          if [ -n "${{ steps.sha.outputs.intel_sha }}" ]; then
-            sed -i "s|intel: \"[a-f0-9]*\"|intel: \"${{ steps.sha.outputs.intel_sha }}\"|" Casks/shipcode.rb
-          fi
-
-      - name: Commit and push
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Casks/shipcode.rb
-          git commit -m "chore: bump shipcode to ${{ github.event.release.tag_name }}"
-          git push
-
   publish-cli:
+    if: ${{ inputs.publish_cli }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -175,13 +104,108 @@ jobs:
           registry-url: "https://registry.npmjs.org"
       - run: bun install
       - name: Build CLI and dependencies
-        run: bun run turbo run build --filter=shipcode
+        run: bun run turbo run build --filter=@shipshitdev/shipcode
       - name: Set version from release tag
         run: |
-          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${{ inputs.release_tag }}"
           VERSION="${VERSION#v}"
           cd apps/cli && npm version "$VERSION" --no-git-tag-version
       - name: Publish to npm
         run: cd apps/cli && npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+# ─────────────────────────────────────────────────────────────────
+# DISABLED until Apple codesigning + notarization are wired.
+#
+# Required secrets (currently NOT set in repo Actions secrets):
+#   - CSC_LINK
+#   - CSC_KEY_PASSWORD
+#   - APPLE_ID
+#   - APPLE_APP_SPECIFIC_PASSWORD
+#   - APPLE_TEAM_ID
+#
+# When those are in place, restore the two jobs below and remove
+# this comment block. Then consider flipping the top trigger back
+# to `on: release: published` so cutting a GH release does everything
+# automatically instead of requiring manual dispatch.
+#
+#  build-desktop-macos:
+#    runs-on: macos-latest
+#    steps:
+#      - uses: actions/checkout@v4
+#      - uses: oven-sh/setup-bun@v2
+#        with:
+#          bun-version: ${{ env.BUN_VERSION }}
+#      - uses: actions/setup-node@v4
+#        with:
+#          node-version: ${{ env.NODE_VERSION }}
+#      - run: bun install
+#      - name: Build desktop app
+#        run: cd apps/desktop && bun run build:code
+#      - name: Package macOS installers
+#        run: cd apps/desktop && npx electron-builder --mac
+#        env:
+#          CSC_LINK: ${{ secrets.CSC_LINK }}
+#          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+#          APPLE_ID: ${{ secrets.APPLE_ID }}
+#          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+#          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+#      - name: Upload macOS binaries to release
+#        run: |
+#          gh release upload "${{ inputs.release_tag }}" \
+#            apps/desktop/out/*.dmg \
+#            apps/desktop/out/*.zip \
+#            --clobber
+#        env:
+#          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#
+#  update-homebrew-cask:
+#    needs: build-desktop-macos
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Checkout tap repo
+#        uses: actions/checkout@v4
+#        with:
+#          repository: shipshitdev/homebrew-shipcode
+#          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+#          ref: master
+#      - name: Download macOS release artifacts
+#        run: |
+#          VERSION="${{ inputs.release_tag }}"
+#          VERSION="${VERSION#v}"
+#          gh release download "v${VERSION}" \
+#            --repo shipshitdev/shipcode \
+#            --pattern "*.dmg" \
+#            --dir ./artifacts
+#        env:
+#          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#      - name: Compute SHA256 hashes
+#        id: sha
+#        run: |
+#          ARM_FILE=$(ls artifacts/*arm64*.dmg 2>/dev/null | head -1)
+#          INTEL_FILE=$(ls artifacts/*.dmg 2>/dev/null | grep -v arm64 | head -1)
+#          if [ -n "$ARM_FILE" ]; then
+#            echo "arm_sha=$(shasum -a 256 "$ARM_FILE" | awk '{print $1}')" >> $GITHUB_OUTPUT
+#          fi
+#          if [ -n "$INTEL_FILE" ]; then
+#            echo "intel_sha=$(shasum -a 256 "$INTEL_FILE" | awk '{print $1}')" >> $GITHUB_OUTPUT
+#          fi
+#      - name: Update cask version and SHA256
+#        run: |
+#          VERSION="${{ inputs.release_tag }}"
+#          VERSION="${VERSION#v}"
+#          sed -i "s/version \".*\"/version \"${VERSION}\"/" Casks/shipcode.rb
+#          if [ -n "${{ steps.sha.outputs.arm_sha }}" ]; then
+#            sed -i "s|arm:   \"[a-f0-9]*\"|arm:   \"${{ steps.sha.outputs.arm_sha }}\"|" Casks/shipcode.rb
+#          fi
+#          if [ -n "${{ steps.sha.outputs.intel_sha }}" ]; then
+#            sed -i "s|intel: \"[a-f0-9]*\"|intel: \"${{ steps.sha.outputs.intel_sha }}\"|" Casks/shipcode.rb
+#          fi
+#      - name: Commit and push
+#        run: |
+#          git config user.name "github-actions[bot]"
+#          git config user.email "github-actions[bot]@users.noreply.github.com"
+#          git add Casks/shipcode.rb
+#          git commit -m "chore: bump shipcode to ${{ inputs.release_tag }}"
+#          git push
