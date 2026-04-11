@@ -5,7 +5,7 @@ export function Hero() {
         <h1 className="text-5xl md:text-7xl font-bold tracking-tight">Make Planning Great Again</h1>
         <p className="mt-6 text-xl text-secondary max-w-2xl mx-auto">
           ShipCode plans with Opus, reviews with Codex, and iterates until the plan is bulletproof.
-          Then it executes.
+          Then it executes — with Claude, Codex, or any OpenRouter model.
         </p>
       </div>
     </section>
