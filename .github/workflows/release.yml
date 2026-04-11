@@ -93,6 +93,13 @@ jobs:
   publish-cli:
     if: ${{ inputs.publish_cli }}
     runs-on: ubuntu-latest
+    # id-token: write is required for npm Trusted Publishers (OIDC).
+    # contents: read is required for actions/checkout. The job-level
+    # permissions block fully replaces the top-level, so we re-declare
+    # contents: read explicitly.
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -110,10 +117,13 @@ jobs:
           VERSION="${{ inputs.release_tag }}"
           VERSION="${VERSION#v}"
           cd apps/cli && npm version "$VERSION" --no-git-tag-version
-      - name: Publish to npm
-        run: cd apps/cli && npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish to npm (OIDC / Trusted Publisher)
+        run: cd apps/cli && npm publish --access public --provenance
+        # No NODE_AUTH_TOKEN. Authentication happens via OIDC — the npm
+        # registry verifies the GitHub Actions ID token against the
+        # Trusted Publisher config on the package. One-time setup at
+        # https://www.npmjs.com/package/@shipshitdev/shipcode/access
+        # (Repository: shipshitdev/shipcode, Workflow: release.yml).
 
 # ─────────────────────────────────────────────────────────────────
 # DISABLED until Apple codesigning + notarization are wired.
