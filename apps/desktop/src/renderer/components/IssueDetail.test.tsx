@@ -1,14 +1,14 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { IssueDetail } from './IssueDetail';
-import { useAppStore } from '../stores/app-store';
 import {
   deriveGithubIssueUrl,
   type GitHubIssueCacheRecord,
   type PlanRecord,
   type Thread,
 } from '@shipcode/shared';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useAppStore } from '../stores/app-store';
+import { IssueDetail } from './IssueDetail';
 
 const makeIssue = (overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssueCacheRecord => ({
   id: 'issue-1',
@@ -204,6 +204,7 @@ describe('IssueDetail', () => {
     renderWithProviders();
 
     const approveButton = await screen.findByRole('button', { name: 'Approve & Execute' });
+    expect(approveButton).not.toBeDisabled();
     fireEvent.click(approveButton);
 
     await waitFor(() => {
@@ -211,19 +212,70 @@ describe('IssueDetail', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Request Changes' }));
-    fireEvent.change(
-      screen.getByPlaceholderText('Describe what should change before execution...'),
-      {
-        target: { value: 'Please tighten the acceptance criteria.' },
-      },
-    );
-    fireEvent.click(screen.getByRole('button', { name: /submit/i }));
+    fireEvent.change(screen.getByPlaceholderText('Send direction for another planning round...'), {
+      target: { value: 'Please tighten the acceptance criteria.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Re-plan with feedback' }));
 
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith('pipeline:reject', {
         threadId: thread.id,
         feedback: 'Please tighten the acceptance criteria.',
       });
+    });
+  });
+
+  it('disables Approve but shows Request Changes/Cancel when plan has no structured data', async () => {
+    const thread = makeThread();
+    const plan = makePlan({ structured: null, rawOutput: 'raw fallback' });
+
+    useAppStore.setState({
+      activeThreadId: thread.id,
+      activeIssue: makeIssue({ threadId: thread.id, pipelineStatus: 'reviewing' }),
+      pipelinePhase: 'awaiting_approval',
+    });
+
+    invokeMock.mockImplementation(async (channel, args) => {
+      if (channel === 'thread:get') return thread;
+      if (channel === 'plan:list') return [plan];
+      if (channel === 'review:list-by-plans') return {};
+      if (channel === 'pipeline:cancel') return undefined;
+      return args ?? null;
+    });
+
+    renderWithProviders();
+
+    const approveButton = await screen.findByRole('button', { name: 'Approve & Execute' });
+    expect(approveButton).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Request Changes' })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cancel pipeline' })).not.toBeDisabled();
+  });
+
+  it('invokes pipeline:cancel when Cancel pipeline is clicked', async () => {
+    const thread = makeThread();
+    const plan = makePlan();
+
+    useAppStore.setState({
+      activeThreadId: thread.id,
+      activeIssue: makeIssue({ threadId: thread.id, pipelineStatus: 'reviewing' }),
+      pipelinePhase: 'awaiting_approval',
+    });
+
+    invokeMock.mockImplementation(async (channel, args) => {
+      if (channel === 'thread:get') return thread;
+      if (channel === 'plan:list') return [plan];
+      if (channel === 'review:list-by-plans') return {};
+      if (channel === 'pipeline:cancel') return undefined;
+      return args ?? null;
+    });
+
+    renderWithProviders();
+
+    const cancelButton = await screen.findByRole('button', { name: 'Cancel pipeline' });
+    fireEvent.click(cancelButton);
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('pipeline:cancel', { threadId: thread.id });
     });
   });
 });
