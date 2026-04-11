@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { AppSettings, NotificationKind, NotificationRecord } from '@shipcode/shared';
-import { X } from '@shipcode/ui';
+import { Button, X } from '@shipcode/ui';
 import { useAppStore } from '../stores/app-store';
 import notifySoundUrl from '../assets/notify.wav?url';
 
@@ -38,22 +38,25 @@ function ToastRow({
         KIND_TONE[notification.kind] ?? 'border-border bg-elevated'
       }`}
     >
-      <button
-        type="button"
+      <Button
+        variant="ghost"
         onClick={onClick}
-        className="flex-1 cursor-pointer border-none bg-transparent text-left"
+        className="h-auto flex-1 justify-start whitespace-normal px-0 py-0 text-left font-normal"
       >
-        <div className="text-[12px] font-semibold text-primary">{notification.title}</div>
-        <div className="mt-0.5 text-[11px] text-secondary">{notification.body}</div>
-      </button>
-      <button
-        type="button"
+        <div className="flex flex-col items-start gap-0.5">
+          <div className="text-[12px] font-semibold text-primary">{notification.title}</div>
+          <div className="text-[11px] text-secondary">{notification.body}</div>
+        </div>
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
         onClick={onDismiss}
-        className="flex h-5 w-5 cursor-pointer items-center justify-center rounded border-none bg-transparent text-muted hover:text-primary"
+        className="h-5 w-5 text-muted"
         title="Dismiss"
       >
         <X size={12} />
-      </button>
+      </Button>
     </div>
   );
 }

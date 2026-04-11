@@ -146,8 +146,8 @@ export interface IpcInvokeChannels {
 // === Streaming Channels (send/on) ===
 
 export interface IpcStreamChannels {
-  'agent:output': { processId: string; chunk: string };
-  'agent:state': { processId: string; type: string; state: AgentState };
+  'agent:output': { processId: string; chunk: string; threadId?: string };
+  'agent:state': { processId: string; type: string; state: AgentState; threadId?: string };
   'pipeline:phase': { threadId: string; phase: PipelinePhase };
   'pipeline:verification-exhausted': { threadId: string; retries: number };
   'plan:parsed': { threadId: string; plan: ShipCodePlan };

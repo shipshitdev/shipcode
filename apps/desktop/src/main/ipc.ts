@@ -1,4 +1,5 @@
 import { type IpcMain, type BrowserWindow, dialog, shell } from 'electron';
+import log from 'electron-log/main';
 import type {
   ProjectQueries,
   ThreadQueries,
@@ -66,7 +67,7 @@ export function registerIpcHandlers(
     queries.threads.updateStatus(thread.id, 'failed');
     const issue = queries.githubIssues.getByThreadId(thread.id);
     if (issue) queries.githubIssues.updatePipelineStatus(issue.id, 'failed');
-    console.log(`[startup] reset orphaned thread ${thread.id} → failed`);
+    log.info(`[startup] reset orphaned thread ${thread.id} → failed`);
   }
 
   // === Project handlers ===
@@ -405,7 +406,7 @@ export function registerIpcHandlers(
       });
 
       // Start pipeline — pass existing threadId, not projectId
-      console.log(
+      log.info(
         `[pipeline] starting issue #${issue.issueNumber} "${issue.title}" (thread ${thread.id}, executor: ${issue.executorModel})`,
       );
       try {
@@ -830,7 +831,7 @@ export function registerIpcHandlers(
         });
       } catch (err) {
         // Full trace stays in main-process stdout for devtools/console debugging.
-        console.error('[ai:enhance-prd]', err);
+        log.error('[ai:enhance-prd]', err);
         // Short, prompt-free message crosses the IPC boundary to the renderer.
         const short =
           err instanceof Error ? err.message.split('\n')[0].slice(0, 300) : 'Enhancement failed';
@@ -841,15 +842,25 @@ export function registerIpcHandlers(
 
   // === Agent output forwarding to renderer ===
   processManager.on('output', (processId: string, data: string) => {
-    if (mainWindow.webContents.isDestroyed()) return;
-    mainWindow.webContents.send('agent:output', { processId, chunk: data });
+    if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
+    const proc = processManager.get(processId);
+    try {
+      mainWindow.webContents.send('agent:output', { processId, chunk: data, threadId: proc?.threadId });
+    } catch {
+      // webContents destroyed between check and send — safe to ignore
+    }
   });
 
   processManager.on('stateChange', (processId: string, type: string, state: string) => {
+    if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
     if (state === 'running' || state === 'exited') {
-      console.log(`[process:${type}] ${processId} → ${state}`);
+      log.info(`[process:${type}] ${processId} → ${state}`);
     }
-    if (mainWindow.webContents.isDestroyed()) return;
-    mainWindow.webContents.send('agent:state', { processId, type, state });
+    const proc = processManager.get(processId);
+    try {
+      mainWindow.webContents.send('agent:state', { processId, type, state, threadId: proc?.threadId });
+    } catch {
+      // webContents destroyed between check and send — safe to ignore
+    }
   });
 }

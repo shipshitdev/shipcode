@@ -138,6 +138,9 @@ export function useIpc() {
     // Listen for agent output
     unsubscribers.push(
       window.shipcode.on('agent:output', (data: any) => {
+        // Eagerly populate processToThread from authoritative threadId — covers
+        // spawn-failure output that arrives before any 'running' state event.
+        if (data.threadId && data.processId) mapProcessToThread(data.processId, data.threadId);
         appendAgentOutput(data.processId, data.chunk);
       }),
     );
@@ -154,8 +157,10 @@ export function useIpc() {
           second: '2-digit',
         });
         const label = data.state === 'running' ? 'started' : 'exited';
-        // Associate this processId with the currently focused terminal thread
-        const tid = store.terminalThreadId;
+        // Associate this processId with its owning thread using the authoritative
+        // threadId from the main process (avoids the race where the user has a
+        // different tab focused when the process starts).
+        const tid = data.threadId;
         if (data.state === 'running' && data.processId && tid) {
           mapProcessToThread(data.processId, tid);
         }
@@ -215,7 +220,9 @@ export function useIpc() {
           costStr = ` \x1b[2m~$${estimated.toFixed(4)}\x1b[0m`;
         }
         const line = `\x1b[2m[${ts}]\x1b[0m \x1b[35mmodel:\x1b[0m ${displayName}${tokenStr}${costStr}`;
-        const tid = store.terminalThreadId;
+        // Use the threadId carried by the event (always present from pipeline.ts:204).
+        // Fall back to terminalThreadId only for hypothetical callers that omit it.
+        const tid = data.threadId ?? store.terminalThreadId;
         store.logTerminalEvent(line);
         if (tid) logTerminalEventForThread(tid, line);
       }),

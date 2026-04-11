@@ -1,5 +1,6 @@
 import type { DiffRecord } from '@shipcode/shared';
 import { Badge } from './primitives/badge';
+import { Button } from './primitives/button';
 import { cn } from './lib/utils';
 
 interface DiffViewerProps {
@@ -49,11 +50,12 @@ export function DiffViewer({ diffs, activeFile, onFileSelect }: DiffViewerProps)
     <div>
       <div className="flex gap-0.5 p-2 border-b border-border overflow-x-auto">
         {diffs.map((diff) => (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="xs"
             key={diff.id}
             className={cn(
-              'flex items-center gap-1 px-2.5 py-1 bg-transparent border-none rounded-md text-secondary cursor-pointer text-xs whitespace-nowrap hover:bg-tertiary',
+              'h-auto gap-1 px-2.5 py-1 text-xs font-normal text-secondary hover:bg-tertiary',
               diff.filePath === activeDiff?.filePath && 'bg-tertiary text-primary',
             )}
             onClick={() => onFileSelect?.(diff.filePath)}
@@ -62,7 +64,7 @@ export function DiffViewer({ diffs, activeFile, onFileSelect }: DiffViewerProps)
               {diff.action === 'create' ? '+' : diff.action === 'delete' ? '-' : '~'}
             </span>
             {diff.filePath.split('/').pop()}
-          </button>
+          </Button>
         ))}
       </div>
 

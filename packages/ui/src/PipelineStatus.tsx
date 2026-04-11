@@ -1,5 +1,6 @@
 import { type PipelinePhase } from '@shipcode/shared';
 import { Check, X } from 'lucide-react';
+import { Button } from './primitives/button';
 import { cn } from './lib/utils';
 
 const PHASES: { key: PipelinePhase; label: string }[] = [
@@ -33,13 +34,10 @@ export function PipelineStatus({ currentPhase, onPhaseClick }: PipelineStatusPro
 
         return (
           <div key={phase.key} className="flex items-center">
-            <button
-              type="button"
-              className={cn(
-                'flex items-center gap-1.5 px-2.5 py-1 bg-transparent border-none rounded text-muted text-xs whitespace-nowrap cursor-pointer',
-                'hover:not-disabled:text-secondary',
-                'disabled:cursor-default',
-              )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-auto gap-1.5 px-2.5 py-1 text-xs font-normal text-muted hover:not-disabled:text-secondary disabled:cursor-default disabled:opacity-100"
               onClick={() => onPhaseClick?.(phase.key)}
               disabled={isFuture}
             >
@@ -68,7 +66,7 @@ export function PipelineStatus({ currentPhase, onPhaseClick }: PipelineStatusPro
               >
                 {phase.label}
               </span>
-            </button>
+            </Button>
             {index < PHASES.length - 1 && (
               <span className={cn('w-6 h-0.5 mx-0.5 bg-text-muted', isCompleted && 'bg-success')} />
             )}

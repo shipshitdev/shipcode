@@ -1,6 +1,16 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Button, Textarea, Badge, cn } from '@shipcode/ui';
+import {
+  Button,
+  Textarea,
+  Badge,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  cn,
+} from '@shipcode/ui';
 import { useAppStore } from '../stores/app-store';
 
 // These types mirror what apps/desktop/src/main/ipc.ts builds in `buildSkillRow`.
@@ -186,7 +196,7 @@ export function SkillsView() {
   return (
     <div className="flex flex-1 overflow-hidden">
       {/* Left: phase list */}
-      <aside className="w-[260px] shrink-0 border-r border-subtle overflow-y-auto">
+      <aside className="w-[260px] shrink-0 border-r border-border overflow-y-auto">
         <div className="p-4">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-muted mb-2">
             Pipeline Skills
@@ -201,16 +211,17 @@ export function SkillsView() {
             <label className="block text-[10px] font-semibold uppercase tracking-wider text-muted mb-1">
               Scope
             </label>
-            <select
-              value={scope}
-              onChange={(e) => setScope(e.target.value)}
-              className="w-full rounded border border-subtle bg-secondary text-primary text-[12px] px-2 py-1.5"
-            >
-              <option value={SCOPE_GLOBAL}>Global (all projects)</option>
-              {activeProjectId && (
-                <option value={activeProjectId}>Current project only</option>
-              )}
-            </select>
+            <Select value={scope} onValueChange={setScope}>
+              <SelectTrigger className="w-full text-[12px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={SCOPE_GLOBAL}>Global (all projects)</SelectItem>
+                {activeProjectId && (
+                  <SelectItem value={activeProjectId}>Current project only</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
           </div>
 
           <ul className="flex flex-col gap-1">
@@ -221,22 +232,24 @@ export function SkillsView() {
               const isQuarantined = row.status === 'quarantined';
               return (
                 <li key={entry.phase}>
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
                     onClick={() => setActivePhase(entry.phase)}
                     className={cn(
-                      'w-full text-left rounded px-3 py-2 text-[13px] border border-transparent',
+                      'w-full h-auto justify-start text-left rounded px-3 py-2 text-[13px] border border-transparent whitespace-normal',
                       isActive
-                        ? 'bg-tertiary text-primary border-subtle'
+                        ? 'bg-tertiary text-primary border-border'
                         : 'text-secondary hover:bg-hover hover:text-primary',
                     )}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium">{meta.label}</span>
-                      <SourceBadge source={row.source} quarantined={isQuarantined} />
+                    <div className="flex flex-col w-full gap-0.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium">{meta.label}</span>
+                        <SourceBadge source={row.source} quarantined={isQuarantined} />
+                      </div>
+                      <p className="text-[11px] text-muted leading-snug">{meta.description}</p>
                     </div>
-                    <p className="mt-0.5 text-[11px] text-muted leading-snug">{meta.description}</p>
-                  </button>
+                  </Button>
                 </li>
               );
             })}
@@ -246,7 +259,7 @@ export function SkillsView() {
 
       {/* Right: editor */}
       <section className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl p-8">
+        <div className="p-8">
           {quarantinedRows.length > 0 && (
             <div className="mb-6 rounded border border-red-500/40 bg-red-500/5 p-4">
               <h4 className="text-sm font-semibold text-red-400 mb-1">
@@ -276,26 +289,46 @@ export function SkillsView() {
 
           {activeEntry && editingRow && (
             <>
-              <header className="mb-4">
-                <h3 className="text-base font-semibold text-primary">
-                  {PHASE_LABELS[activePhase].label} skill
-                </h3>
-                <p className="text-[12px] text-secondary mt-0.5">
-                  {PHASE_LABELS[activePhase].description}
-                </p>
-                <div className="mt-2 flex items-center gap-3 text-[11px] text-muted">
-                  <span>
-                    Source: <SourceBadge source={editingRow.source} quarantined={editingRow.status === 'quarantined'} inline />
-                  </span>
-                  <span>Bundled v{activeEntry.bundledVersion}</span>
-                  {editingRow.source !== 'default' && (
+              <header className="mb-4 flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-base font-semibold text-primary">
+                    {PHASE_LABELS[activePhase].label} skill
+                  </h3>
+                  <p className="text-[12px] text-secondary mt-0.5">
+                    {PHASE_LABELS[activePhase].description}
+                  </p>
+                  <div className="mt-2 flex items-center gap-3 text-[11px] text-muted">
                     <span>
-                      Forked from v{editingRow.baseVersion}
-                      {editingRow.baseVersion !== activeEntry.bundledVersion && (
-                        <span className="text-yellow-400 ml-1">(bundled has updated)</span>
-                      )}
+                      Source: <SourceBadge source={editingRow.source} quarantined={editingRow.status === 'quarantined'} inline />
                     </span>
+                    <span>Bundled v{activeEntry.bundledVersion}</span>
+                    {editingRow.source !== 'default' && (
+                      <span>
+                        Forked from v{editingRow.baseVersion}
+                        {editingRow.baseVersion !== activeEntry.bundledVersion && (
+                          <span className="text-yellow-400 ml-1">(bundled has updated)</span>
+                        )}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {draftDirty && (
+                    <span className="text-[11px] text-yellow-400">Unsaved changes</span>
                   )}
+                  <Button
+                    variant="secondary"
+                    onClick={() => resetMutation.mutate()}
+                    disabled={resetMutation.isPending || editingRow.source === 'default'}
+                  >
+                    Reset to default
+                  </Button>
+                  <Button
+                    onClick={handleSave}
+                    disabled={!draftDirty || writeMutation.isPending}
+                  >
+                    {writeMutation.isPending ? 'Saving…' : 'Save'}
+                  </Button>
                 </div>
               </header>
 
@@ -317,26 +350,7 @@ export function SkillsView() {
                 </div>
               )}
 
-              <div className="mt-4 flex items-center gap-2">
-                <Button
-                  onClick={handleSave}
-                  disabled={!draftDirty || writeMutation.isPending}
-                >
-                  {writeMutation.isPending ? 'Saving…' : 'Save'}
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => resetMutation.mutate()}
-                  disabled={resetMutation.isPending || editingRow.source === 'default'}
-                >
-                  Reset to default
-                </Button>
-                {draftDirty && (
-                  <span className="text-[11px] text-yellow-400">Unsaved changes</span>
-                )}
-              </div>
-
-              <div className="mt-6 rounded border border-subtle bg-secondary/40 p-3">
+              <div className="mt-6 rounded border border-border bg-secondary/40 p-3">
                 <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted mb-2">
                   Required slots
                 </h4>

@@ -53,6 +53,7 @@
         "@xterm/addon-webgl": "0.19.0",
         "@xterm/xterm": "6.0.0",
         "chokidar": "5.0.0",
+        "electron-log": "^5.4.3",
         "nanoid": "5.1.7",
         "node-pty": "1.1.0",
         "react": "19.2.5",
@@ -1281,6 +1282,8 @@
     "electron-builder": ["electron-builder@26.8.1", "", { "dependencies": { "app-builder-lib": "26.8.1", "builder-util": "26.8.1", "builder-util-runtime": "9.5.1", "chalk": "^4.1.2", "ci-info": "^4.2.0", "dmg-builder": "26.8.1", "fs-extra": "^10.1.0", "lazy-val": "^1.0.5", "simple-update-notifier": "2.0.0", "yargs": "^17.6.2" }, "bin": { "electron-builder": "cli.js", "install-app-deps": "install-app-deps.js" } }, "sha512-uWhx1r74NGpCagG0ULs/P9Nqv2nsoo+7eo4fLUOB8L8MdWltq9odW/uuLXMFCDGnPafknYLZgjNX0ZIFRzOQAw=="],
 
     "electron-builder-squirrel-windows": ["electron-builder-squirrel-windows@25.1.8", "", { "dependencies": { "app-builder-lib": "25.1.8", "archiver": "^5.3.1", "builder-util": "25.1.7", "fs-extra": "^10.1.0" } }, "sha512-2ntkJ+9+0GFP6nAISiMabKt6eqBB0kX1QqHNWFWAXgi0VULKGisM46luRFpIBiU3u/TDmhZMM8tzvo2Abn3ayg=="],
+
+    "electron-log": ["electron-log@5.4.3", "", {}, "sha512-sOUsM3LjZdugatazSQ/XTyNcw8dfvH1SYhXWiJyfYodAAKOZdHs0txPiLDXFzOZbhXgAgshQkshH2ccq0feyLQ=="],
 
     "electron-publish": ["electron-publish@26.8.1", "", { "dependencies": { "@types/fs-extra": "^9.0.11", "builder-util": "26.8.1", "builder-util-runtime": "9.5.1", "chalk": "^4.1.2", "form-data": "^4.0.5", "fs-extra": "^10.1.0", "lazy-val": "^1.0.5", "mime": "^2.5.2" } }, "sha512-q+jrSTIh/Cv4eGZa7oVR+grEJo/FoLMYBAnSL5GCtqwUpr1T+VgKB/dn1pnzxIxqD8S/jP1yilT9VrwCqINR4w=="],
 

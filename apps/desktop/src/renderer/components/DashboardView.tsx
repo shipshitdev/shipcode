@@ -113,13 +113,13 @@ function StatCard({ label, value, subtitle, tone = 'default', onClick }: StatCar
   );
   if (onClick) {
     return (
-      <button
-        type="button"
+      <Button
+        variant="ghost"
         onClick={onClick}
-        className="w-full cursor-pointer border-none bg-transparent p-0 text-left"
+        className="h-auto w-full justify-start whitespace-normal p-0 text-left font-normal hover:bg-transparent"
       >
         {card}
-      </button>
+      </Button>
     );
   }
   return card;
@@ -225,20 +225,15 @@ export function DashboardView() {
               subtitle={stats ? `${stats.tasksOpen} open · ${stats.tasksBlocked} blocked` : '—'}
               onClick={openInbox}
             />
-            <button
-              type="button"
+            <StatCard
+              label="Pending Approvals"
+              value={stats?.pendingApprovals ?? 0}
+              subtitle={
+                stats?.staleApprovals ? `${stats.staleApprovals} stale > 24h` : 'no stale items'
+              }
+              tone={stats && stats.pendingApprovals > 0 ? 'danger' : 'default'}
               onClick={openInbox}
-              className="w-full cursor-pointer border-none bg-transparent p-0 text-left"
-            >
-              <StatCard
-                label="Pending Approvals"
-                value={stats?.pendingApprovals ?? 0}
-                subtitle={
-                  stats?.staleApprovals ? `${stats.staleApprovals} stale > 24h` : 'no stale items'
-                }
-                tone={stats && stats.pendingApprovals > 0 ? 'danger' : 'default'}
-              />
-            </button>
+            />
             <StatCard
               label="Shipped (7d)"
               value={stats?.shippedLast7d ?? 0}
@@ -262,10 +257,10 @@ export function DashboardView() {
                 <ul className="divide-y divide-border">
                   {running.map((row) => (
                     <li key={row.threadId} className="flex items-center gap-3 py-2.5">
-                      <button
-                        type="button"
+                      <Button
+                        variant="ghost"
                         onClick={() => handleRowClick(row.projectId, row.threadId)}
-                        className="flex flex-1 cursor-pointer items-center gap-3 border-none bg-transparent text-left"
+                        className="h-auto flex-1 justify-start gap-3 px-0 py-0 text-left font-normal hover:bg-transparent"
                       >
                         <span className="inline-flex shrink-0 items-center rounded-md border border-border bg-tertiary px-1.5 py-0.5 text-[10px] text-secondary">
                           {row.projectName}
@@ -277,7 +272,7 @@ export function DashboardView() {
                         <span className="w-16 text-right text-[11px] tabular-nums text-muted">
                           <ElapsedClock since={row.startedAt} />
                         </span>
-                      </button>
+                      </Button>
                       <Button
                         size="xs"
                         variant="destructive"
@@ -298,13 +293,14 @@ export function DashboardView() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>Recent Activity</CardTitle>
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="xs"
                     onClick={openActivity}
-                    className="cursor-pointer border-none bg-transparent text-[11px] text-muted hover:text-primary"
+                    className="h-auto px-0 text-[11px] font-normal text-muted hover:bg-transparent"
                   >
                     View all →
-                  </button>
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
@@ -370,13 +366,14 @@ export function DashboardView() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>Recent Tasks</CardTitle>
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="xs"
                     onClick={openInbox}
-                    className="cursor-pointer border-none bg-transparent text-[11px] text-muted hover:text-primary"
+                    className="h-auto px-0 text-[11px] font-normal text-muted hover:bg-transparent"
                   >
                     Inbox →
-                  </button>
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent className="pt-0">

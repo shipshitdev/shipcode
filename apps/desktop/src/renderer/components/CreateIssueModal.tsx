@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
+import log from 'electron-log/renderer';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   PRD_REQUIRED_HEADINGS,
@@ -15,6 +16,7 @@ import {
   Textarea,
   Label,
   Button,
+  Checkbox,
   Sparkles,
 } from '@shipcode/ui';
 
@@ -91,7 +93,7 @@ export function CreateIssueModal() {
       });
       setBody(result.body);
     } catch (err) {
-      console.error('[CreateIssueModal] enhance failed', err);
+      log.error('[CreateIssueModal] enhance failed', err);
       setError(clampError(err));
     } finally {
       setEnhancing(false);
@@ -133,7 +135,7 @@ export function CreateIssueModal() {
             issueNumber: created.issueNumber,
           });
         } catch (startErr) {
-          console.error('[CreateIssueModal] start-issue failed', startErr);
+          log.error('[CreateIssueModal] start-issue failed', startErr);
           // Don't block the success path — the issue is on GitHub either way.
         }
         if (submitAnother) {
@@ -146,7 +148,7 @@ export function CreateIssueModal() {
       }
       closeCreateIssueModal();
     } catch (err) {
-      console.error('[CreateIssueModal] submit failed', err);
+      log.error('[CreateIssueModal] submit failed', err);
       setError(clampError(err));
     } finally {
       setSubmitting(false);
@@ -254,11 +256,9 @@ export function CreateIssueModal() {
           </Button>
           {mode === 'create' && (
             <label className="flex items-center gap-1.5 text-[11px] text-muted cursor-pointer select-none">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={submitAnother}
                 onChange={(e) => setSubmitAnother(e.target.checked)}
-                className="h-3 w-3 accent-primary"
               />
               Submit another
             </label>

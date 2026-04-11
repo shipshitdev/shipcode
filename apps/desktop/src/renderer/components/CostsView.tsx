@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { CostSummary, PipelinePhase } from '@shipcode/shared';
 import {
+  Button,
   Card,
   CardContent,
   Loader2,
@@ -11,6 +12,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  cn,
 } from '@shipcode/ui';
 import { useAppStore } from '../stores/app-store';
 
@@ -18,6 +20,16 @@ function formatCost(usd: number): string {
   if (usd === 0) return '$0.00';
   if (usd < 0.005) return '< $0.01';
   return `$${usd.toFixed(2)}`;
+}
+
+function formatDateTime(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function formatTokens(n: number): string {
@@ -65,25 +77,31 @@ export function CostsView() {
           <p className="text-xs text-muted">Token spend across all projects and tasks.</p>
         </div>
         <div className="flex items-center rounded-md border border-border bg-secondary p-0.5 text-[11px]">
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="xs"
             onClick={() => setDisplayMode('$')}
-            className={`rounded px-2.5 py-1 transition-colors ${displayMode === '$' ? 'bg-tertiary text-primary font-medium' : 'text-muted hover:text-primary'}`}
+            className={cn(
+              displayMode === '$' ? 'bg-tertiary text-primary font-medium' : 'text-muted',
+            )}
           >
             $
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="ghost"
+            size="xs"
             onClick={() => setDisplayMode('tokens')}
-            className={`rounded px-2.5 py-1 transition-colors ${displayMode === 'tokens' ? 'bg-tertiary text-primary font-medium' : 'text-muted hover:text-primary'}`}
+            className={cn(
+              displayMode === 'tokens' ? 'bg-tertiary text-primary font-medium' : 'text-muted',
+            )}
           >
             tokens
-          </button>
+          </Button>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-6">
-        <div className="mx-auto max-w-3xl space-y-6">
+        <div className="space-y-6">
           {isLoading && (
             <div className="flex items-center justify-center py-16">
               <Loader2 size={20} className="animate-spin text-muted" />
@@ -93,13 +111,9 @@ export function CostsView() {
           {isError && (
             <div className="flex flex-col items-center gap-3 py-16 text-center">
               <p className="text-sm text-secondary">Failed to load cost data.</p>
-              <button
-                type="button"
-                className="rounded-md border border-border bg-secondary px-3 py-1.5 text-xs text-primary hover:bg-hover"
-                onClick={() => refetch()}
-              >
+              <Button variant="secondary" size="sm" onClick={() => refetch()}>
                 Retry
-              </button>
+              </Button>
             </div>
           )}
 
@@ -189,6 +203,7 @@ export function CostsView() {
                           <TableRow>
                             <TableHead>Task</TableHead>
                             <TableHead>Phase</TableHead>
+                            <TableHead>Date</TableHead>
                             <TableHead className="text-right">
                               {displayMode === '$' ? 'Cost' : 'Tokens'}
                             </TableHead>
@@ -213,6 +228,9 @@ export function CostsView() {
                                 >
                                   {t.phase.replace(/_/g, ' ')}
                                 </span>
+                              </TableCell>
+                              <TableCell className="text-[11px] text-muted whitespace-nowrap">
+                                {t.updatedAt ? formatDateTime(t.updatedAt) : '—'}
                               </TableCell>
                               <TableCell className="text-right font-mono text-xs text-primary">
                                 {displayValue(t.costUsd, t.tokensPrompt + t.tokensCompletion)}

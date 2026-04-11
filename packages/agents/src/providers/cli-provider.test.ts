@@ -81,39 +81,42 @@ describe('buildClaudeArgs', () => {
 });
 
 describe('buildCodexArgs', () => {
-  it('review phase (non-autonomous) mirrors pipeline.ts:163', () => {
+  it('review phase (non-autonomous) uses codex exec subcommand', () => {
     expect(buildCodexArgs(req({ phase: 'review' }))).toEqual([
-      '-q',
+      'exec',
       'PROMPT',
       '--sandbox',
       'read-only',
       '-a',
       'never',
+      '--json',
     ]);
   });
 
   it('review phase (autonomous) adds --reasoning-effort high', () => {
     const args = buildCodexArgs(req({ phase: 'review', phaseHints: { reasoningEffort: 'high' } }));
     expect(args).toEqual([
-      '-q',
+      'exec',
       'PROMPT',
       '--sandbox',
       'read-only',
       '-a',
       'never',
+      '--json',
       '--reasoning-effort',
       'high',
     ]);
   });
 
-  it('execute phase mirrors pipeline.ts:301', () => {
+  it('execute phase uses codex exec subcommand', () => {
     expect(buildCodexArgs(req({ phase: 'execute' }))).toEqual([
-      '-q',
+      'exec',
       'PROMPT',
       '--sandbox',
       'workspace-write',
       '-a',
       'never',
+      '--json',
     ]);
   });
 });
@@ -235,7 +238,7 @@ describe('createCodexCliProvider', () => {
     await new Promise((r) => setImmediate(r));
 
     expect(spawnCalls[0].command).toBe('codex');
-    expect(spawnCalls[0].args).toEqual(['-q', 'PROMPT', '--sandbox', 'read-only', '-a', 'never']);
+    expect(spawnCalls[0].args).toEqual(['exec', 'PROMPT', '--sandbox', 'read-only', '-a', 'never', '--json']);
 
     await trigger('exit', 'proc-1', 0);
     const result = await promise;

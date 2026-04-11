@@ -1,4 +1,5 @@
 import type { BrowserWindow } from 'electron';
+import log from 'electron-log/main';
 import type { PipelineEmitter, PipelineEvent } from '@shipcode/pipeline';
 import type { ActivityQueries, ThreadQueries } from '@shipcode/db';
 import type { ActivityKind, PipelinePhase, Thread } from '@shipcode/shared';
@@ -170,7 +171,7 @@ export function createElectronEmitter(
         writeActivity(event, thread);
       } catch (err) {
         // Swallow logging failures to avoid breaking the pipeline.
-        console.error('[pipeline-bridge] activity write failed:', err);
+        log.error('[pipeline-bridge] activity write failed:', err);
       }
 
       // 3. Mark verification-exhausted for dedupe, but do not fire a

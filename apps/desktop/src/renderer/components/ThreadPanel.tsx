@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import log from 'electron-log/renderer';
 import { useAppStore } from '../stores/app-store';
 import { KanbanBoard } from '@shipcode/ui';
 import {
@@ -66,7 +67,7 @@ export function ThreadPanel() {
         projectsUrl={projectsUrl}
         onOpenExternal={(url) =>
           window.shipcode.invoke('shell:open-external', { url }).catch((err) => {
-            console.error('[threadpanel] open-external failed', { url, err });
+            log.error('[threadpanel] open-external failed', { url, err });
           })
         }
         onBaseBranchChange={(branch) => {
@@ -82,7 +83,7 @@ export function ThreadPanel() {
             })
             .catch((err) => {
               queryClient.invalidateQueries({ queryKey: ['project', activeProjectId] });
-              console.error('[threadpanel] set-default-branch failed', err);
+              log.error('[threadpanel] set-default-branch failed', err);
               window.alert(`Failed to set base branch: ${err?.message ?? err}`);
             });
         }}
@@ -96,7 +97,7 @@ export function ThreadPanel() {
             .then(() => refetchIssues())
             .catch((err) => {
               refetchIssues();
-              console.error('[threadpanel] start-issue failed', {
+              log.error('[threadpanel] start-issue failed', {
                 issueNumber: issue.issueNumber,
                 err,
               });
@@ -113,7 +114,7 @@ export function ThreadPanel() {
             .then(() => refetchIssues())
             .catch((err) => {
               refetchIssues();
-              console.error('[threadpanel] retry-issue failed', {
+              log.error('[threadpanel] retry-issue failed', {
                 issueNumber: issue.issueNumber,
                 err,
               });
@@ -130,7 +131,7 @@ export function ThreadPanel() {
             .then(() => refetchIssues())
             .catch((err) => {
               refetchIssues();
-              console.error('[threadpanel] rerun failed', { issueNumber: issue.issueNumber, err });
+              log.error('[threadpanel] rerun failed', { issueNumber: issue.issueNumber, err });
               window.alert(`Failed to re-run issue #${issue.issueNumber}: ${err?.message ?? err}`);
             });
         }}

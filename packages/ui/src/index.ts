@@ -53,6 +53,7 @@ export { Alert, AlertTitle, AlertDescription, alertVariants } from './primitives
 export { Label } from './primitives/label';
 export { Textarea } from './primitives/textarea';
 export { Switch } from './primitives/switch';
+export { Checkbox } from './primitives/checkbox';
 export {
   Table,
   TableBody,

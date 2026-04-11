@@ -6,6 +6,20 @@ process.emit = function (event: string, ...args: any[]) {
   return _origEmit(event, ...args);
 } as typeof process.emit;
 
+// Prevent unhandled errors (e.g. EIO on shutdown, destroyed WebContents race)
+// from showing Electron's crash dialog. Log to file instead.
+import log from 'electron-log/main';
+log.initialize();
+log.transports.file.level = 'info';
+log.transports.console.level = 'info';
+
+process.on('uncaughtException', (err) => {
+  log.error('[main] uncaught exception:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  log.error('[main] unhandled rejection:', reason);
+});
+
 import { app, BrowserWindow, ipcMain, Menu, shell } from 'electron';
 app.setName('ShipCode');
 import path from 'node:path';
@@ -149,10 +163,10 @@ function createWindow() {
         const issue = queries.githubIssues.getByThreadId(thread.id);
         if (issue) queries.githubIssues.updatePipelineStatus(issue.id, 'failed');
         emitter.emit({ type: 'pipeline:phase', threadId: thread.id, phase: 'failed' });
-        console.log(`[watchdog] reset stuck thread ${thread.id} → failed`);
+        log.info(`[watchdog] reset stuck thread ${thread.id} → failed`);
       }
     } catch (err) {
-      console.error('[watchdog] error during stuck-thread check:', err);
+      log.error('[watchdog] error during stuck-thread check:', err);
     }
   }, 30_000);
 

@@ -84,6 +84,7 @@ export interface ManagedProcess {
   pty: pty.IPty;
   cwd: string;
   exitCode: number | null;
+  threadId?: string;
 }
 
 interface ProcessManagerEvents {
@@ -95,7 +96,7 @@ interface ProcessManagerEvents {
 export class ProcessManager extends EventEmitter {
   private processes: Map<string, ManagedProcess> = new Map();
 
-  spawn(type: AgentType, command: string, args: string[], cwd: string): ManagedProcess {
+  spawn(type: AgentType, command: string, args: string[], cwd: string, threadId?: string): ManagedProcess {
     const id = nanoid();
 
     if (!cachedEnv) {
@@ -124,6 +125,7 @@ export class ProcessManager extends EventEmitter {
         pty: null as unknown as pty.IPty,
         cwd,
         exitCode: 127,
+        threadId,
       };
       this.processes.set(id, managed);
 
@@ -142,6 +144,7 @@ export class ProcessManager extends EventEmitter {
       type,
       state: 'starting',
       pty: ptyProcess,
+      threadId,
       cwd,
       exitCode: null,
     };

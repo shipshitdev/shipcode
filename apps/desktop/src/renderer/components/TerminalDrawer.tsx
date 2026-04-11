@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
-import { cn, Maximize2, Minimize2, X } from '@shipcode/ui';
+import { Button, cn, Maximize2, Minimize2, X } from '@shipcode/ui';
 import { useAppStore } from '../stores/app-store';
 import type { GitHubIssueCacheRecord } from '@shipcode/shared';
 
@@ -423,40 +423,41 @@ export function TerminalDrawer() {
         <div className="flex items-center gap-1">
           {/* Running task tabs */}
           {runningTabs.length > 1 && runningTabs.map((issue) => (
-            <button
+            <Button
               key={issue.threadId}
-              type="button"
+              variant="ghost"
+              size="xs"
               onClick={() => {
                 setTerminalThread(issue.threadId ?? null);
                 selectIssue(issue);
               }}
               className={cn(
-                'flex h-6 items-center gap-1 cursor-pointer rounded-md border-none px-2 text-xs transition-colors',
-                issue.threadId === terminalThreadId
-                  ? 'bg-hover text-primary'
-                  : 'bg-transparent text-secondary hover:bg-hover hover:text-primary',
+                'h-6 gap-1 px-2 text-xs',
+                issue.threadId === terminalThreadId && 'bg-hover text-primary',
               )}
               title={`#${issue.issueNumber} ${issue.title}`}
             >
               <span className="font-mono">#{issue.issueNumber}</span>
-            </button>
+            </Button>
           ))}
-          <button
-            type="button"
-            className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-secondary hover:bg-hover hover:text-primary"
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
             onClick={toggleMaximize}
             title={isMaximized ? 'Restore terminal' : 'Maximize terminal'}
           >
             {isMaximized ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-          </button>
-          <button
-            type="button"
-            className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-secondary hover:bg-hover hover:text-primary"
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
             onClick={toggleTerminal}
             title="Close terminal"
           >
             <X size={14} />
-          </button>
+          </Button>
         </div>
       </div>
       <div className="relative flex-1 overflow-hidden min-h-0">

@@ -34,6 +34,7 @@ async function runCli(
   args: string[],
   cwd: string,
   signal: AbortSignal,
+  threadId?: string,
 ): Promise<CliRunResult> {
   if (signal.aborted) {
     return { rawOutput: '', exitCode: 130 };
@@ -41,7 +42,7 @@ async function runCli(
 
   let process: ReturnType<ProcessManager['spawn']>;
   try {
-    process = processManager.spawn(agentId, agentId, args, cwd);
+    process = processManager.spawn(agentId, agentId, args, cwd, threadId);
   } catch (err) {
     // ProcessManager synthesizes an exit event for missing binaries etc.
     // but if spawn() throws synchronously, surface that as exit 127.
@@ -154,7 +155,7 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
  */
 function buildCodexArgs(req: ProviderRequest): string[] {
   const sandbox = req.phase === 'execute' ? 'workspace-write' : 'read-only';
-  const args = ['-q', req.prompt, '--sandbox', sandbox, '-a', 'never'];
+  const args = ['exec', req.prompt, '--sandbox', sandbox, '-a', 'never', '--json'];
   if (req.phaseHints?.reasoningEffort) {
     args.push('--reasoning-effort', req.phaseHints.reasoningEffort);
   }
@@ -167,7 +168,7 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
     supports: new Set<ProviderPhase>(['plan', 'review', 'revision', 'verify', 'execute']),
     async generate(req: ProviderRequest): Promise<ProviderResponse> {
       const args = buildClaudeArgs(req);
-      const result = await runCli(processManager, 'claude', args, req.cwd, req.signal);
+      const result = await runCli(processManager, 'claude', args, req.cwd, req.signal, req.threadId);
       const parser = new StreamParser();
       parser.feed(result.rawOutput);
       const usage = parser.extractUsage();
@@ -209,7 +210,7 @@ export function createCodexCliProvider(processManager: ProcessManager): AgentPro
     supports: new Set<ProviderPhase>(['review', 'execute']),
     async generate(req: ProviderRequest): Promise<ProviderResponse> {
       const args = buildCodexArgs(req);
-      const result = await runCli(processManager, 'codex', args, req.cwd, req.signal);
+      const result = await runCli(processManager, 'codex', args, req.cwd, req.signal, req.threadId);
       const parser = new StreamParser();
       parser.feed(result.rawOutput);
       const usage = parser.extractUsage();

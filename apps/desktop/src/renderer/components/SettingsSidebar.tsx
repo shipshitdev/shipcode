@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { cn, ChevronLeft, Settings, Folder, Archive, Keyboard } from '@shipcode/ui';
+import { Button, cn, ChevronLeft, Settings, Folder, Archive, Keyboard } from '@shipcode/ui';
 import { useAppStore } from '../stores/app-store';
 import type { SettingsSection } from '../stores/app-store';
 
@@ -64,30 +64,31 @@ export function SettingsSidebar() {
   return (
     <aside className="flex w-[256px] min-w-[256px] flex-col border-r border-border bg-primary">
       <div className="px-4 py-3">
-        <button
-          type="button"
-          className="flex cursor-pointer items-center gap-1.5 rounded-md border-none bg-transparent px-1 py-1 text-[13px] text-secondary app-region-no-drag hover:text-primary"
+        <Button
+          variant="ghost"
+          size="sm"
+          className="gap-1.5 px-1 text-[13px] font-normal text-secondary app-region-no-drag"
           onClick={toggleSettings}
         >
           <ChevronLeft size={14} />
           Back to app
-        </button>
+        </Button>
       </div>
 
       <div className="mt-1 px-2">
         {SECTIONS.map(({ key, label, icon }) => (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
             key={key}
             className={cn(
-              'flex w-full cursor-pointer items-center gap-2 rounded-md border-none bg-transparent px-3 py-2 text-left text-[13px] text-secondary app-region-no-drag hover:bg-hover hover:text-primary',
+              'h-auto w-full justify-start gap-2 px-3 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
               settingsSection === key && 'bg-tertiary text-primary',
             )}
             onClick={() => setSettingsSection(key)}
           >
             <span className="shrink-0 text-muted">{icon}</span>
             {label}
-          </button>
+          </Button>
         ))}
       </div>
     </aside>

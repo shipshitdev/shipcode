@@ -308,22 +308,24 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
   const headerButtons = (
     <div className="absolute right-3 top-3 flex items-center gap-0.5">
-      <button
-        type="button"
-        className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-muted hover:bg-hover hover:text-primary"
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-6 w-6 text-muted"
         onClick={toggleIssueDetailExpanded}
         title={expanded ? 'Collapse to panel' : 'Expand to full page'}
       >
         {expanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-      </button>
-      <button
-        type="button"
-        className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-muted hover:bg-hover hover:text-primary"
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-6 w-6 text-muted"
         onClick={() => selectIssue(null)}
         title="Close"
       >
         <X size={14} />
-      </button>
+      </Button>
     </div>
   );
 
@@ -513,9 +515,9 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
                 key={plan.id}
                 className={`rounded-md border ${isExpanded ? 'border-border' : 'border-transparent'}`}
               >
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 bg-transparent border-none cursor-pointer px-3 py-2 text-left text-[13px] text-primary hover:bg-hover rounded-md"
+                <Button
+                  variant="ghost"
+                  className="h-auto w-full justify-start gap-2 rounded-md px-3 py-2 text-left text-[13px] font-normal text-primary"
                   onClick={() => setExpandedPlanId(isExpanded ? null : plan.id)}
                 >
                   <span className="font-mono text-xs font-semibold text-muted">
@@ -536,7 +538,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
                     {new Date(plan.createdAt).toLocaleString()}
                   </span>
                   <span className="text-muted">{isExpanded ? '▾' : '▸'}</span>
-                </button>
+                </Button>
 
                 {isExpanded && (
                   <div className="border-t border-border p-3">
@@ -568,14 +570,15 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
           {/* Header */}
           <div className="relative shrink-0 border-b border-border p-4">
             {headerButtons}
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="xs"
               onClick={toggleIssueDetailExpanded}
-              className="mb-2 flex items-center gap-1 text-xs text-muted hover:text-primary"
+              className="mb-2 h-auto gap-1 px-0 text-xs font-normal text-muted hover:bg-transparent"
             >
               <ChevronLeft size={12} />
               Back to board
-            </button>
+            </Button>
             <div className="flex items-center gap-2 pr-16">
               <span className="font-mono text-xs text-muted">#{activeIssue.issueNumber}</span>
               {githubIssueUrl && (
@@ -661,11 +664,24 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
                   <div className="flex items-center justify-between mb-1">
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-danger">Error</p>
                     <div className="flex items-center gap-2">
-                      <button type="button" onClick={() => navigator.clipboard.writeText([thread?.lastError, planHistory[0]?.rawOutput].filter(Boolean).join('\n\n'))} className="text-danger/60 hover:text-danger" title="Copy to clipboard"><Copy size={12} /></button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 text-danger/60 hover:text-danger"
+                        onClick={() => navigator.clipboard.writeText([thread?.lastError, planHistory[0]?.rawOutput].filter(Boolean).join('\n\n'))}
+                        title="Copy to clipboard"
+                      >
+                        <Copy size={12} />
+                      </Button>
                       {planHistory[0]?.rawOutput && (
-                        <button type="button" onClick={() => setShowRawOutput(v => !v)} className="text-[10px] text-danger/60 hover:text-danger">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5 text-danger/60 hover:text-danger"
+                          onClick={() => setShowRawOutput(v => !v)}
+                        >
                           {showRawOutput ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </div>
@@ -733,11 +749,24 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
                 <div className="flex items-center justify-between mb-1">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-danger">Error</p>
                   <div className="flex items-center gap-2">
-                    <button type="button" onClick={() => navigator.clipboard.writeText([thread?.lastError, planHistory[0]?.rawOutput].filter(Boolean).join('\n\n'))} className="text-danger/60 hover:text-danger" title="Copy to clipboard"><Copy size={12} /></button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 text-danger/60 hover:text-danger"
+                      onClick={() => navigator.clipboard.writeText([thread?.lastError, planHistory[0]?.rawOutput].filter(Boolean).join('\n\n'))}
+                      title="Copy to clipboard"
+                    >
+                      <Copy size={12} />
+                    </Button>
                     {planHistory[0]?.rawOutput && (
-                      <button type="button" onClick={() => setShowRawOutput(v => !v)} className="text-[10px] text-danger/60 hover:text-danger">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 text-danger/60 hover:text-danger"
+                        onClick={() => setShowRawOutput(v => !v)}
+                      >
                         {showRawOutput ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -765,37 +794,38 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
         {/* PRD (GitHub issue body IS the PRD) */}
         <div className="mb-5">
-          <button
-            type="button"
-            onClick={() => setPrdCollapsed((v) => !v)}
-            className="mb-2 flex w-full items-center justify-between text-left"
-          >
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">PRD</h4>
-            <div className="flex items-center gap-1">
-              <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleRefreshFromGithub}
-                  disabled={isRefreshingFromGithub}
-                  className="h-6 text-[11px]"
-                  title="Re-fetch issue body from GitHub (use after editing on github.com)"
-                >
-                  {isRefreshingFromGithub ? 'Refreshing...' : 'Refresh'}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleEditPrd}
-                  className="h-6 text-[11px]"
-                  title="Edit the PRD body (pushes to the GitHub issue on save)"
-                >
-                  Edit PRD
-                </Button>
-              </div>
+          <div className="mb-2 flex w-full items-center justify-between">
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => setPrdCollapsed((v) => !v)}
+              className="h-auto gap-1 px-0 font-normal hover:bg-transparent"
+            >
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">PRD</h4>
               <ChevronRight size={12} className={`text-muted transition-transform ${prdCollapsed ? '' : 'rotate-90'}`} />
+            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleRefreshFromGithub}
+                disabled={isRefreshingFromGithub}
+                className="h-6 text-[11px]"
+                title="Re-fetch issue body from GitHub (use after editing on github.com)"
+              >
+                {isRefreshingFromGithub ? 'Refreshing...' : 'Refresh'}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleEditPrd}
+                className="h-6 text-[11px]"
+                title="Edit the PRD body (pushes to the GitHub issue on save)"
+              >
+                Edit PRD
+              </Button>
             </div>
-          </button>
+          </div>
           {!prdCollapsed && (
             activeIssue.body ? (
               <div className="max-h-[300px] overflow-y-auto rounded-md bg-secondary p-3 text-[13px] leading-relaxed text-primary">

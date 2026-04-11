@@ -207,9 +207,10 @@ function DraggableCard({
         <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
       )}
       {isFailed && onRerun && (
-        <button
-          type="button"
-          className="absolute top-1.5 right-1.5 rounded p-0.5 text-danger/60 hover:text-danger hover:bg-danger/10 transition-colors"
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute top-1.5 right-1.5 h-5 w-5 text-danger/60 hover:bg-danger/10 hover:text-danger"
           title="Re-run pipeline"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
@@ -218,7 +219,7 @@ function DraggableCard({
           }}
         >
           <RotateCcw size={11} />
-        </button>
+        </Button>
       )}
       <div className="text-[11px] text-secondary font-mono mb-0.5">#{issue.issueNumber}</div>
       <div className="text-xs leading-snug text-primary font-medium line-clamp-2">
@@ -243,9 +244,10 @@ function DraggableCard({
             {issue.pipelineStatus}
           </Badge>
         )}
-        <button
-          type="button"
-          className="ml-auto opacity-0 group-hover:opacity-100 rounded p-0.5 text-muted hover:text-primary hover:bg-elevated transition-all"
+        <Button
+          variant="ghost"
+          size="icon"
+          className="ml-auto h-4 w-4 text-muted opacity-0 transition-all group-hover:opacity-100 hover:bg-elevated hover:text-primary"
           title="Open issue detail"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
@@ -254,7 +256,7 @@ function DraggableCard({
           }}
         >
           <ExternalLink size={10} />
-        </button>
+        </Button>
       </div>
     </div>
   );

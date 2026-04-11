@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, type MouseEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
+  Button,
   cn,
   Folder,
   Plus,
@@ -155,10 +156,10 @@ export function ProjectSidebar() {
 
       <div className="px-2 space-y-0.5">
         {/* Dashboard */}
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           className={cn(
-            'flex w-full cursor-pointer items-center gap-2 rounded-md border-none bg-transparent px-3 py-2 text-left text-[13px] text-secondary app-region-no-drag hover:bg-hover hover:text-primary focus:outline-none',
+            'h-auto w-full justify-start gap-2 px-3 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
             !settingsVisible && viewMode === 'dashboard' && 'bg-tertiary text-primary font-medium',
           )}
           onClick={() => openDashboard()}
@@ -214,13 +215,13 @@ export function ProjectSidebar() {
               {liveCount} live
             </span>
           )}
-        </button>
+        </Button>
 
         {/* Activity */}
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           className={cn(
-            'flex w-full cursor-pointer items-center gap-2 rounded-md border-none bg-transparent px-3 py-2 text-left text-[13px] text-secondary app-region-no-drag hover:bg-hover hover:text-primary focus:outline-none',
+            'h-auto w-full justify-start gap-2 px-3 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
             !settingsVisible && viewMode === 'activity' && 'bg-tertiary text-primary font-medium',
           )}
           onClick={() => openActivity()}
@@ -261,13 +262,13 @@ export function ProjectSidebar() {
             />
           </svg>
           <span className="flex-1 truncate">Activity</span>
-        </button>
+        </Button>
 
         {/* Inbox */}
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           className={cn(
-            'flex w-full cursor-pointer items-center gap-2 rounded-md border-none bg-transparent px-3 py-2 text-left text-[13px] text-secondary app-region-no-drag hover:bg-hover hover:text-primary focus:outline-none',
+            'h-auto w-full justify-start gap-2 px-3 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
             !settingsVisible && viewMode === 'inbox' && 'bg-tertiary text-primary font-medium',
           )}
           onClick={() => openInbox()}
@@ -293,13 +294,13 @@ export function ProjectSidebar() {
               {inboxCount}
             </span>
           )}
-        </button>
+        </Button>
 
         {/* Costs */}
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           className={cn(
-            'flex w-full cursor-pointer items-center gap-2 rounded-md border-none bg-transparent px-3 py-2 text-left text-[13px] text-secondary app-region-no-drag hover:bg-hover hover:text-primary focus:outline-none',
+            'h-auto w-full justify-start gap-2 px-3 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
             !settingsVisible && viewMode === 'costs' && 'bg-tertiary text-primary font-medium',
           )}
           onClick={() => openCosts()}
@@ -329,13 +330,13 @@ export function ProjectSidebar() {
             />
           </svg>
           <span className="flex-1 truncate">Costs</span>
-        </button>
+        </Button>
 
         {/* Skills */}
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           className={cn(
-            'flex w-full cursor-pointer items-center gap-2 rounded-md border-none bg-transparent px-3 py-2 text-left text-[13px] text-secondary app-region-no-drag hover:bg-hover hover:text-primary focus:outline-none',
+            'h-auto w-full justify-start gap-2 px-3 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
             !settingsVisible && viewMode === 'skills' && 'bg-tertiary text-primary font-medium',
           )}
           onClick={() => openSkills()}
@@ -356,7 +357,7 @@ export function ProjectSidebar() {
             />
           </svg>
           <span className="flex-1 truncate">Skills</span>
-        </button>
+        </Button>
       </div>
 
       <div className="mt-3 flex items-center justify-between px-4 text-[10px] font-semibold uppercase tracking-wider text-muted">
@@ -364,14 +365,15 @@ export function ProjectSidebar() {
         <div className="flex items-center gap-1">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="cursor-pointer rounded border-none bg-transparent p-0.5 text-muted hover:text-primary"
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-5 w-5 text-muted"
                 title={`Sort: ${SORT_LABELS[sortOrder]}`}
                 aria-label="Sort projects"
               >
                 <ArrowUpDown size={12} />
-              </button>
+              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               {(Object.keys(SORT_LABELS) as SortOrder[]).map((key) => (
@@ -384,31 +386,32 @@ export function ProjectSidebar() {
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-          <button
-            type="button"
-            className="cursor-pointer rounded border-none bg-transparent p-0.5 text-muted hover:text-primary app-region-no-drag"
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-5 w-5 text-muted app-region-no-drag"
             title="Add repository"
             aria-label="Add repository"
             onClick={() => addProject.mutate()}
           >
             <Plus size={12} />
-          </button>
+          </Button>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 py-1">
         {sortedProjects.map((project) => (
           <div key={project.id} className="relative group">
-            <button
-              type="button"
+            <Button
+              variant="ghost"
               className={cn(
-                'flex w-full cursor-pointer items-center gap-2 rounded-md border-none bg-transparent px-3 py-2 text-left text-[13px] text-secondary app-region-no-drag hover:bg-hover hover:text-primary focus:outline-none',
+                'h-auto w-full justify-start gap-2 px-3 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
                 viewMode === 'project' &&
                   activeProjectId === project.id &&
                   'bg-tertiary text-primary font-medium',
               )}
               onClick={() => selectProject(project.id)}
-              onContextMenu={(e) => {
+              onContextMenu={(e: MouseEvent) => {
                 e.preventDefault();
                 setOpenMenuId(project.id);
               }}
@@ -419,20 +422,21 @@ export function ProjectSidebar() {
                 <Folder size={14} className="shrink-0 text-secondary" />
               )}
               <span className="flex-1 truncate text-primary">{project.name}</span>
-            </button>
+            </Button>
 
             <DropdownMenu
               open={openMenuId === project.id}
               onOpenChange={(open) => setOpenMenuId(open ? project.id : null)}
             >
               <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2 cursor-pointer rounded border-none bg-transparent p-1 text-muted opacity-0 group-hover:opacity-100 hover:bg-tertiary hover:text-primary focus:opacity-100 focus:outline-none"
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1.5 top-1/2 h-6 w-6 -translate-y-1/2 text-muted opacity-0 group-hover:opacity-100 focus:opacity-100"
                   aria-label={`More actions for ${project.name}`}
                 >
                   <MoreHorizontal size={12} />
-                </button>
+                </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem
