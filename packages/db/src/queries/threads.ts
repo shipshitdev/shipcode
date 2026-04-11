@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { nanoid } from 'nanoid';
-import type { Thread, ThreadStatus } from '@shipcode/shared';
+import { ISO_NOW_SQL, toIsoUtc, type Thread, type ThreadStatus } from '@shipcode/shared';
 
 export class ThreadQueries {
   constructor(private db: DatabaseSync) {}
@@ -35,12 +35,12 @@ export class ThreadQueries {
     if (lastError !== undefined) {
       this.db
         .prepare(
-          `UPDATE threads SET status = ?, last_error = ?, updated_at = datetime('now') WHERE id = ?`,
+          `UPDATE threads SET status = ?, last_error = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
         )
         .run(status, lastError, id);
     } else {
       this.db
-        .prepare(`UPDATE threads SET status = ?, updated_at = datetime('now') WHERE id = ?`)
+        .prepare(`UPDATE threads SET status = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`)
         .run(status, id);
     }
   }
@@ -48,7 +48,7 @@ export class ThreadQueries {
   setWorktree(id: string, branch: string, worktreePath: string): void {
     this.db
       .prepare(
-        `UPDATE threads SET worktree_branch = ?, worktree_path = ?, updated_at = datetime('now') WHERE id = ?`,
+        `UPDATE threads SET worktree_branch = ?, worktree_path = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
       )
       .run(branch, worktreePath, id);
   }
@@ -56,7 +56,7 @@ export class ThreadQueries {
   clearWorktree(id: string): void {
     this.db
       .prepare(
-        `UPDATE threads SET worktree_branch = NULL, worktree_path = NULL, updated_at = datetime('now') WHERE id = ?`,
+        `UPDATE threads SET worktree_branch = NULL, worktree_path = NULL, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
       )
       .run(id);
   }
@@ -73,7 +73,7 @@ export class ThreadQueries {
   ): void {
     this.db
       .prepare(
-        "UPDATE threads SET autonomous = ?, review_round = ?, executor_model = ?, base_branch = ?, fork_point_sha = ?, updated_at = datetime('now') WHERE id = ?",
+        `UPDATE threads SET autonomous = ?, review_round = ?, executor_model = ?, base_branch = ?, fork_point_sha = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
       )
       .run(
         fields.autonomous ? 1 : 0,
@@ -88,7 +88,7 @@ export class ThreadQueries {
   incrementReviewRound(id: string): void {
     this.db
       .prepare(
-        "UPDATE threads SET review_round = review_round + 1, updated_at = datetime('now') WHERE id = ?",
+        `UPDATE threads SET review_round = review_round + 1, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
       )
       .run(id);
   }
@@ -96,7 +96,7 @@ export class ThreadQueries {
   setVerificationStatus(id: string, status: string): void {
     this.db
       .prepare(
-        "UPDATE threads SET verification_status = ?, updated_at = datetime('now') WHERE id = ?",
+        `UPDATE threads SET verification_status = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
       )
       .run(status, id);
   }
@@ -104,14 +104,14 @@ export class ThreadQueries {
   setGithubIssue(id: string, issueNumber: number, repo: string | null): void {
     this.db
       .prepare(
-        "UPDATE threads SET github_issue_number = ?, github_repo = ?, updated_at = datetime('now') WHERE id = ?",
+        `UPDATE threads SET github_issue_number = ?, github_repo = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
       )
       .run(issueNumber, repo, id);
   }
 
   setGithubPr(id: string, prNumber: number): void {
     this.db
-      .prepare("UPDATE threads SET github_pr_number = ?, updated_at = datetime('now') WHERE id = ?")
+      .prepare(`UPDATE threads SET github_pr_number = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`)
       .run(prNumber, id);
   }
 
@@ -141,7 +141,7 @@ export class ThreadQueries {
       }
     })();
     this.db
-      .prepare(`UPDATE threads SET ${column} = ?, updated_at = datetime('now') WHERE id = ?`)
+      .prepare(`UPDATE threads SET ${column} = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`)
       .run(model, id);
   }
 
@@ -157,7 +157,7 @@ export class ThreadQueries {
          total_tokens_prompt = total_tokens_prompt + ?,
          total_tokens_completion = total_tokens_completion + ?,
          total_cost_usd = total_cost_usd + ?,
-         updated_at = datetime('now')
+         updated_at = ${ISO_NOW_SQL}
        WHERE id = ?`,
       )
       .run(promptTokens, completionTokens, costUsd, id);
@@ -215,8 +215,8 @@ function mapThread(row: any): Thread {
     githubPrNumber: row.github_pr_number ?? null,
     githubRepo: row.github_repo ?? null,
     lastError: row.last_error ?? null,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    createdAt: toIsoUtc(row.created_at) ?? row.created_at,
+    updatedAt: toIsoUtc(row.updated_at) ?? row.updated_at,
     plannerResolvedModel: row.planner_resolved_model ?? null,
     reviewerResolvedModel: row.reviewer_resolved_model ?? null,
     revisorResolvedModel: row.revisor_resolved_model ?? null,

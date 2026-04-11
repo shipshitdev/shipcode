@@ -1,6 +1,12 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { nanoid } from 'nanoid';
-import type { ExecutorModel, GitHubIssueCacheRecord, IssuePipelineStatus } from '@shipcode/shared';
+import {
+  ISO_NOW_SQL,
+  toIsoUtc,
+  type ExecutorModel,
+  type GitHubIssueCacheRecord,
+  type IssuePipelineStatus,
+} from '@shipcode/shared';
 
 export class GitHubIssueQueries {
   constructor(private db: DatabaseSync) {}
@@ -44,7 +50,7 @@ export class GitHubIssueQueries {
     if (existing) {
       this.db
         .prepare(
-          "UPDATE github_issue_cache SET title = ?, body = ?, labels = ?, assignee = ?, state = ?, fetched_at = datetime('now') WHERE id = ?",
+          `UPDATE github_issue_cache SET title = ?, body = ?, labels = ?, assignee = ?, state = ?, fetched_at = ${ISO_NOW_SQL} WHERE id = ?`,
         )
         .run(
           record.title,
@@ -77,9 +83,52 @@ export class GitHubIssueQueries {
   updatePipelineStatus(id: string, status: IssuePipelineStatus): void {
     this.db
       .prepare(
-        "UPDATE github_issue_cache SET pipeline_status = ?, last_phase_update = datetime('now') WHERE id = ?",
+        `UPDATE github_issue_cache SET pipeline_status = ?, last_phase_update = ${ISO_NOW_SQL} WHERE id = ?`,
       )
       .run(status, id);
+  }
+
+  /**
+   * When a GH issue flips to `state = 'closed'` externally (via the web UI,
+   * `gh issue close`, or a Projects v2 workflow), move the local
+   * `pipeline_status` to `'completed'` — but only from terminal or
+   * not-yet-started source states. In-flight statuses
+   * (planning/reviewing/revising/executing/verifying/shipping) are left alone
+   * so the pipeline writer never races with this flip. The SQL guard makes
+   * the operation race-safe without locks.
+   *
+   * Returns `true` iff a row was updated.
+   */
+  markCompletedOnClose(id: string): boolean {
+    const result = this.db
+      .prepare(
+        `UPDATE github_issue_cache
+           SET pipeline_status = 'completed', last_phase_update = ${ISO_NOW_SQL}
+         WHERE id = ?
+           AND pipeline_status IN ('todo','queued','awaiting_approval','failed')`,
+      )
+      .run(id);
+    return Number(result.changes) > 0;
+  }
+
+  /**
+   * Symmetric partner to `markCompletedOnClose`: when a GH issue is reopened,
+   * walk the local `pipeline_status` back from `'completed'` to `'todo'` so
+   * the user can re-run the pipeline. Leaves any non-completed status
+   * untouched (the pipeline might have advanced independently).
+   *
+   * Returns `true` iff a row was updated.
+   */
+  markReopenedOnOpen(id: string): boolean {
+    const result = this.db
+      .prepare(
+        `UPDATE github_issue_cache
+           SET pipeline_status = 'todo', last_phase_update = NULL
+         WHERE id = ?
+           AND pipeline_status = 'completed'`,
+      )
+      .run(id);
+    return Number(result.changes) > 0;
   }
 
   linkThread(id: string, threadId: string): void {
@@ -89,7 +138,7 @@ export class GitHubIssueQueries {
   tryClaim(id: string, instanceId: string): boolean {
     const result = this.db
       .prepare(
-        "UPDATE github_issue_cache SET claimed_at = datetime('now'), claimed_by = ?, last_phase_update = datetime('now') WHERE id = ? AND claimed_at IS NULL",
+        `UPDATE github_issue_cache SET claimed_at = ${ISO_NOW_SQL}, claimed_by = ?, last_phase_update = ${ISO_NOW_SQL} WHERE id = ? AND claimed_at IS NULL`,
       )
       .run(instanceId, id);
     return Number(result.changes) > 0;
@@ -107,7 +156,7 @@ export class GitHubIssueQueries {
     const thresholdSec = Math.floor(olderThanMs / 1000);
     const rows = this.db
       .prepare(
-        "SELECT * FROM github_issue_cache WHERE claimed_at IS NOT NULL AND last_phase_update IS NOT NULL AND last_phase_update < datetime('now', '-' || ? || ' seconds')",
+        `SELECT * FROM github_issue_cache WHERE claimed_at IS NOT NULL AND last_phase_update IS NOT NULL AND last_phase_update < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-' || ? || ' seconds')`,
       )
       .all(thresholdSec) as any[];
     return rows.map((r) => this.toRecord(r));
@@ -125,7 +174,7 @@ export class GitHubIssueQueries {
   getOrphanedClaims(): GitHubIssueCacheRecord[] {
     const rows = this.db
       .prepare(
-        "SELECT * FROM github_issue_cache WHERE claimed_at IS NOT NULL AND thread_id IS NULL AND claimed_at < datetime('now', '-5 minutes')",
+        `SELECT * FROM github_issue_cache WHERE claimed_at IS NOT NULL AND thread_id IS NULL AND claimed_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-5 minutes')`,
       )
       .all() as any[];
     return rows.map((r) => this.toRecord(r));
@@ -133,7 +182,7 @@ export class GitHubIssueQueries {
 
   refreshHeartbeat(id: string): void {
     this.db
-      .prepare("UPDATE github_issue_cache SET last_phase_update = datetime('now') WHERE id = ?")
+      .prepare(`UPDATE github_issue_cache SET last_phase_update = ${ISO_NOW_SQL} WHERE id = ?`)
       .run(id);
   }
 
@@ -159,9 +208,9 @@ export class GitHubIssueQueries {
       state: row.state,
       pipelineStatus: row.pipeline_status,
       threadId: row.thread_id,
-      claimedAt: row.claimed_at,
+      claimedAt: toIsoUtc(row.claimed_at),
       claimedBy: row.claimed_by,
-      lastPhaseUpdate: row.last_phase_update,
+      lastPhaseUpdate: toIsoUtc(row.last_phase_update),
       lastStatusLabel: row.last_status_label ?? null,
       executorModel:
         row.executor_model === 'codex'
@@ -169,7 +218,7 @@ export class GitHubIssueQueries {
           : row.executor_model === 'openrouter'
             ? 'openrouter'
             : 'claude',
-      fetchedAt: row.fetched_at,
+      fetchedAt: toIsoUtc(row.fetched_at) ?? row.fetched_at,
     };
   }
 }

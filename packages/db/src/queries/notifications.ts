@@ -1,6 +1,11 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { nanoid } from 'nanoid';
-import type { NotificationRecord, NotificationKind } from '@shipcode/shared';
+import {
+  ISO_NOW_SQL,
+  toIsoUtc,
+  type NotificationRecord,
+  type NotificationKind,
+} from '@shipcode/shared';
 
 function mapRow(row: any): NotificationRecord {
   return {
@@ -10,8 +15,8 @@ function mapRow(row: any): NotificationRecord {
     kind: row.kind as NotificationKind,
     title: row.title,
     body: row.body,
-    createdAt: row.created_at,
-    dismissedAt: row.dismissed_at,
+    createdAt: toIsoUtc(row.created_at) ?? row.created_at,
+    dismissedAt: toIsoUtc(row.dismissed_at),
   };
 }
 
@@ -58,14 +63,22 @@ export class NotificationsQueries {
   dismiss(id: string): void {
     this.db
       .prepare(
-        `UPDATE notifications SET dismissed_at = datetime('now') WHERE id = ? AND dismissed_at IS NULL`,
+        `UPDATE notifications SET dismissed_at = ${ISO_NOW_SQL} WHERE id = ? AND dismissed_at IS NULL`,
       )
       .run(id);
   }
 
+  dismissByThread(threadId: string): void {
+    this.db
+      .prepare(
+        `UPDATE notifications SET dismissed_at = ${ISO_NOW_SQL} WHERE thread_id = ? AND dismissed_at IS NULL`,
+      )
+      .run(threadId);
+  }
+
   dismissAll(): void {
     this.db
-      .prepare(`UPDATE notifications SET dismissed_at = datetime('now') WHERE dismissed_at IS NULL`)
+      .prepare(`UPDATE notifications SET dismissed_at = ${ISO_NOW_SQL} WHERE dismissed_at IS NULL`)
       .run();
   }
 

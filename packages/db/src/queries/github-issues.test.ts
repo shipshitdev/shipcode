@@ -168,4 +168,78 @@ describe('GitHubIssueQueries', () => {
     const orphaned = issues.getOrphanedClaims();
     expect(orphaned.length).toBe(0);
   });
+
+  describe('close/reopen sync', () => {
+    it('markCompletedOnClose() flips queued → completed (default source status)', () => {
+      const record = issues.upsert(makeIssue());
+      expect(record.pipelineStatus).toBe('queued');
+      const changed = issues.markCompletedOnClose(record.id);
+      expect(changed).toBe(true);
+      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('completed');
+    });
+
+    it('markCompletedOnClose() flips todo → completed', () => {
+      const record = issues.upsert(makeIssue());
+      issues.updatePipelineStatus(record.id, 'todo');
+      expect(issues.markCompletedOnClose(record.id)).toBe(true);
+      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('completed');
+    });
+
+    it('markCompletedOnClose() flips awaiting_approval → completed', () => {
+      const record = issues.upsert(makeIssue());
+      issues.updatePipelineStatus(record.id, 'awaiting_approval');
+      expect(issues.markCompletedOnClose(record.id)).toBe(true);
+      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('completed');
+    });
+
+    it('markCompletedOnClose() flips failed → completed', () => {
+      const record = issues.upsert(makeIssue());
+      issues.updatePipelineStatus(record.id, 'failed');
+      expect(issues.markCompletedOnClose(record.id)).toBe(true);
+      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('completed');
+    });
+
+    it('markCompletedOnClose() does NOT flip executing (in-flight guard)', () => {
+      const record = issues.upsert(makeIssue());
+      issues.updatePipelineStatus(record.id, 'executing');
+      expect(issues.markCompletedOnClose(record.id)).toBe(false);
+      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('executing');
+    });
+
+    it('markCompletedOnClose() does NOT flip planning (in-flight guard)', () => {
+      const record = issues.upsert(makeIssue());
+      issues.updatePipelineStatus(record.id, 'planning');
+      expect(issues.markCompletedOnClose(record.id)).toBe(false);
+      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('planning');
+    });
+
+    it('markCompletedOnClose() is idempotent on already-completed rows', () => {
+      const record = issues.upsert(makeIssue());
+      issues.updatePipelineStatus(record.id, 'completed');
+      expect(issues.markCompletedOnClose(record.id)).toBe(false);
+      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('completed');
+    });
+
+    it('markReopenedOnOpen() flips completed → todo', () => {
+      const record = issues.upsert(makeIssue());
+      issues.updatePipelineStatus(record.id, 'completed');
+      expect(issues.markReopenedOnOpen(record.id)).toBe(true);
+      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('todo');
+    });
+
+    it('markReopenedOnOpen() is a no-op on non-completed source states', () => {
+      const record = issues.upsert(makeIssue());
+      // Default is 'queued'
+      expect(issues.markReopenedOnOpen(record.id)).toBe(false);
+      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('queued');
+
+      issues.updatePipelineStatus(record.id, 'executing');
+      expect(issues.markReopenedOnOpen(record.id)).toBe(false);
+      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('executing');
+
+      issues.updatePipelineStatus(record.id, 'failed');
+      expect(issues.markReopenedOnOpen(record.id)).toBe(false);
+      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('failed');
+    });
+  });
 });

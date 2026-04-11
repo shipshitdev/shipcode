@@ -177,8 +177,10 @@ export class StreamParser {
     const raw = this.buffer; // stored as-is (original output)
     const text = this.resolveBuffer(); // resolved LLM text for parsing
 
-    // Look for ```tag ... ``` blocks
-    const fenceRegex = new RegExp(`\`\`\`${tag}\\s*\\n([\\s\\S]*?)\`\`\``, 'm');
+    // Look for ```tag ... ``` blocks.
+    // Require \n before the closing fence so that ``` inside JSON string values
+    // (e.g. ```ts code examples in step descriptions) don't terminate the match early.
+    const fenceRegex = new RegExp(`\`\`\`${tag}[^\n]*\n([\\s\\S]*?)\n\`\`\``, 'm');
     const match = text.match(fenceRegex);
 
     if (!match) {

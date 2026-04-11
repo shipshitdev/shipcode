@@ -44,11 +44,11 @@ export class GhCli {
         'issue',
         'list',
         '--state',
-        'open',
+        'all',
         '--json',
         'number,title,body,labels,assignees,state,url',
         '--limit',
-        '100',
+        '200',
       ],
       { cwd: this.cwd },
     );
@@ -116,6 +116,36 @@ export class GhCli {
     const match = stdout.match(/\/issues\/(\d+)/);
     if (!match) throw new Error(`Failed to parse issue number from: ${stdout}`);
     return this.getIssue(parseInt(match[1], 10));
+  }
+
+  /**
+   * Add an existing issue to a GitHub Projects v2 board, best-effort.
+   * Shells `gh project item-add <number> --owner <owner> --url <issueUrl>`.
+   *
+   * `--owner` accepts a bare login for both org and user Projects v2, so the
+   * caller does not need to distinguish `ownerType` at this layer. Throws on
+   * non-zero exit — the caller is responsible for deciding whether a failure
+   * should block issue creation (it should not: see `github:create-issue`
+   * in the desktop IPC handler).
+   */
+  async addIssueToProject(opts: {
+    projectNumber: number;
+    owner: string;
+    issueUrl: string;
+  }): Promise<void> {
+    await execFileAsync(
+      'gh',
+      [
+        'project',
+        'item-add',
+        String(opts.projectNumber),
+        '--owner',
+        opts.owner,
+        '--url',
+        opts.issueUrl,
+      ],
+      { cwd: this.cwd },
+    );
   }
 
   async editIssueBody(issueNumber: number, body: string): Promise<void> {

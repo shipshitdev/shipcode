@@ -21,7 +21,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { ProcessManager } from '@shipcode/agents';
 import type { PhaseSkillKey } from '@shipcode/shared';
-import { validateGithubProjectUrl, clampError } from '@shipcode/shared';
+import {
+  validateGithubProjectUrl,
+  clampError,
+  parseGithubProjectUrl,
+} from '@shipcode/shared';
 import {
   checkSystemHealthWithAuth,
   checkGhAuth,
@@ -294,9 +298,12 @@ export function registerIpcHandlers(
     const ghCli = new GhCli(project.path);
     const issues = await ghCli.listAllIssues();
 
-    // Upsert all issues into cache
+    // Upsert all issues into cache. After each upsert, sync external GH
+    // state into the local pipeline_status: closed → completed (guarded),
+    // reopened → todo (guarded). See `markCompletedOnClose` / `markReopenedOnOpen`
+    // for the in-flight guards that keep this race-safe with the pipeline writer.
     for (const issue of issues) {
-      queries.githubIssues.upsert({
+      const rec = queries.githubIssues.upsert({
         projectId,
         issueNumber: issue.number,
         title: issue.title,
@@ -305,6 +312,11 @@ export function registerIpcHandlers(
         assignee: issue.assignee,
         state: issue.state,
       });
+      if (rec.state === 'closed') {
+        queries.githubIssues.markCompletedOnClose(rec.id);
+      } else if (rec.state === 'open') {
+        queries.githubIssues.markReopenedOnOpen(rec.id);
+      }
     }
 
     const cached = queries.githubIssues.list(projectId);
@@ -344,7 +356,32 @@ export function registerIpcHandlers(
       const allIssues = queries.githubIssues.list(projectId);
       mainWindow.webContents.send('github:issues-updated', { projectId, issues: allIssues });
 
-      return queries.githubIssues.getByNumber(projectId, issue.number);
+      // Best-effort: if the project has a Projects v2 board override set,
+      // attach the new issue to that board. Failures never block issue
+      // creation — the issue is already on GitHub; we surface the failure
+      // via `projectAttachWarning` so the modal can show an inline note.
+      const parsed = parseGithubProjectUrl(project.githubProjectUrl);
+      let projectAttachWarning: string | null = null;
+      if (parsed && issue.url) {
+        try {
+          await ghCli.addIssueToProject({
+            projectNumber: parsed.number,
+            owner: parsed.owner,
+            issueUrl: issue.url,
+          });
+        } catch (err) {
+          projectAttachWarning = clampError(err);
+          log.warn('[github:create-issue] project attach failed:', err);
+        }
+      }
+
+      const record = queries.githubIssues.getByNumber(projectId, issue.number);
+      if (!record) {
+        throw new Error(
+          `Created issue #${issue.number} not found in cache after upsert`,
+        );
+      }
+      return { issue: record, projectAttachWarning };
     },
   );
 

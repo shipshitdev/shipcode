@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { nanoid } from 'nanoid';
-import type { VerificationResult, VerificationRecord } from '@shipcode/shared';
+import { toIsoUtc, type VerificationResult, type VerificationRecord } from '@shipcode/shared';
 
 export class VerificationQueries {
   constructor(private db: DatabaseSync) {}
@@ -53,7 +53,7 @@ export class VerificationQueries {
       structured: row.structured ? JSON.parse(row.structured) : null,
       result: row.result,
       retryCount: row.retry_count,
-      createdAt: row.created_at,
+      createdAt: toIsoUtc(row.created_at) ?? row.created_at,
     };
   }
 }

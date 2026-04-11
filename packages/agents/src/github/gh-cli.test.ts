@@ -139,7 +139,7 @@ describe('GhCli', () => {
   });
 
   describe('listAllIssues', () => {
-    it('returns mapped issues with --limit 100', async () => {
+    it('returns mapped issues with --limit 200', async () => {
       const raw = [
         {
           number: 10,
@@ -159,7 +159,7 @@ describe('GhCli', () => {
       expect(issues[0].labels).toEqual(['feat']);
       expect(mockExecFileAsync).toHaveBeenCalledWith(
         'gh',
-        expect.arrayContaining(['--limit', '100']),
+        expect.arrayContaining(['--limit', '200']),
         { cwd: '/test/repo' },
       );
     });

@@ -1,6 +1,11 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { nanoid } from 'nanoid';
-import type { ActivityEntry, ActivityKind, ActivityActor } from '@shipcode/shared';
+import {
+  toIsoUtc,
+  type ActivityEntry,
+  type ActivityKind,
+  type ActivityActor,
+} from '@shipcode/shared';
 
 function mapRow(row: any): ActivityEntry {
   return {
@@ -12,7 +17,7 @@ function mapRow(row: any): ActivityEntry {
     title: row.title,
     subtitle: row.subtitle,
     metadata: row.metadata ? (JSON.parse(row.metadata) as Record<string, unknown>) : null,
-    createdAt: row.created_at,
+    createdAt: toIsoUtc(row.created_at) ?? row.created_at,
   };
 }
 

@@ -134,3 +134,68 @@ export function deriveGithubIssueUrl(
   const base = githubRepoUrl(remote);
   return base ? `${base}/issues/${issueNumber}` : null;
 }
+
+export interface ParsedGithubProject {
+  /** Whether the project lives under an organization or a user. */
+  ownerType: 'orgs' | 'users';
+  /** Organization login or user login, preserved in its original case. */
+  owner: string;
+  /** The numeric project number (e.g., 3 from `/projects/3`). */
+  number: number;
+}
+
+/**
+ * Parse a Projects v2 URL into its components so callers can feed
+ * `gh project item-add <number> --owner <owner>`. Returns `null` for any
+ * value that cannot be used with the item-add command, specifically:
+ *
+ *   - null, empty, or whitespace-only strings
+ *   - the legacy repo-scoped form (`<owner>/<repo>/projects/<n>`), which
+ *     points at the repo's "linked Projects" tab — not a Projects v2 board
+ *   - malformed URLs, non-https, or non-github.com hosts
+ *   - non-numeric project numbers
+ *   - URLs missing the `/projects/<n>` trailing segments
+ *
+ * Owner case is preserved (GitHub logins are case-insensitive, and `gh`
+ * handles any needed normalization on its own).
+ *
+ * `validateGithubProjectUrl` already gates save-time input for this
+ * field; the parser is the read-time counterpart that turns a stored
+ * string into something the CLI can use.
+ */
+export function parseGithubProjectUrl(
+  raw: string | null | undefined,
+): ParsedGithubProject | null {
+  if (raw == null) return null;
+  const trimmed = raw.trim();
+  if (trimmed === '') return null;
+
+  let u: URL;
+  try {
+    u = new URL(trimmed);
+  } catch {
+    return null;
+  }
+
+  if (u.protocol !== 'https:') return null;
+  if (u.hostname.toLowerCase() !== 'github.com') return null;
+
+  const parts = u.pathname.replace(/^\/+/, '').replace(/\/+$/, '').split('/');
+  // orgs/<org>/projects/<n>  or  users/<user>/projects/<n>
+  if (
+    parts.length >= 4 &&
+    (parts[0] === 'orgs' || parts[0] === 'users') &&
+    parts[2] === 'projects' &&
+    /^\d+$/.test(parts[3])
+  ) {
+    return {
+      ownerType: parts[0] as 'orgs' | 'users',
+      owner: parts[1],
+      number: Number.parseInt(parts[3], 10),
+    };
+  }
+  // Legacy repo-scoped form: `<owner>/<repo>/projects/<n>` — cannot be
+  // passed to `gh project item-add`, so treat as unparseable here even
+  // though `validateGithubProjectUrl` accepts it for the quick-link button.
+  return null;
+}

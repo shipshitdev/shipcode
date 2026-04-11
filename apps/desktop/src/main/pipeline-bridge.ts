@@ -187,6 +187,12 @@ export function createElectronEmitter(
 
       // 4. Fire phase-based notifications.
       if (event.type === 'pipeline:phase' && thread) {
+        // When a new run starts, clear any stale notifications (e.g. a previous
+        // 'failed' entry that is no longer relevant once the pipeline re-queues).
+        if (event.phase === 'planning') {
+          deps.notifications.dismissByThread(thread.id);
+        }
+
         if (event.phase === 'awaiting_approval') {
           deps.notifications.fire('awaiting_approval', thread);
         } else if (event.phase === 'failed') {
