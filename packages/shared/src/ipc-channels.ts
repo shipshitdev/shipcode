@@ -127,6 +127,20 @@ export interface IpcInvokeChannels {
   'notification:list': { args: void; result: NotificationRecord[] };
   'notification:dismiss': { args: { id: string }; result: void };
   'notification:dismiss-all': { args: void; result: void };
+
+  // Phase prompt skills (the /skills page). Args/results are typed loosely
+  // here as `unknown` because the concrete types live in @shipcode/agents
+  // (PhaseSkillKey, BundledDefault, ResolvedSkill) and we don't want shared
+  // to depend on agents — would create a cycle. The renderer casts via the
+  // re-exported types in src/renderer/types/skills.ts.
+  'skills:list-for-view': { args: { projectId: string | null }; result: unknown };
+  'skills:read': { args: { projectId: string | null; phase: string }; result: unknown };
+  'skills:write': {
+    args: { projectId: string | null; phase: string; content: string };
+    result: unknown;
+  };
+  'skills:reset': { args: { projectId: string | null; phase: string }; result: unknown };
+  'skills:list-quarantined': { args: void; result: unknown };
 }
 
 // === Streaming Channels (send/on) ===

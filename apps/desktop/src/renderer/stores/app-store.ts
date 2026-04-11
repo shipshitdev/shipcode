@@ -19,7 +19,7 @@ const AGENT_ACTIVE_STATUSES = new Set<IssuePipelineStatus>([
   'shipping',
 ]);
 
-export type ViewMode = 'dashboard' | 'project' | 'activity' | 'inbox' | 'costs';
+export type ViewMode = 'dashboard' | 'project' | 'activity' | 'inbox' | 'costs' | 'skills';
 export type SettingsSection =
   | 'general'
   | 'github'
@@ -83,6 +83,7 @@ interface AppState {
   openActivity: () => void;
   openInbox: () => void;
   openCosts: () => void;
+  openSkills: () => void;
   selectProject: (id: string | null) => void;
   selectThread: (id: string | null) => void;
   selectIssue: (issue: GitHubIssueCacheRecord | null) => void;
@@ -174,6 +175,15 @@ export const useAppStore = create<AppState>((set) => ({
   openCosts: () =>
     set({
       viewMode: 'costs',
+      activeIssue: null,
+      issueDetailExpanded: false,
+      currentPlan: null,
+      currentReview: null,
+      currentVerification: null,
+    }),
+  openSkills: () =>
+    set({
+      viewMode: 'skills',
       activeIssue: null,
       issueDetailExpanded: false,
       currentPlan: null,

@@ -9,6 +9,7 @@ import {
   migrateV6,
   migrateV7,
   migrateV8,
+  migrateV9,
 } from './schema';
 
 export { transaction } from './utils';
@@ -24,6 +25,8 @@ export { ActivityQueries } from './queries/activity';
 export { NotificationsQueries } from './queries/notifications';
 export { DashboardQueries } from './queries/dashboard';
 export { CostsQueries } from './queries/costs';
+export { SkillsQueries } from './queries/skills';
+export type { SkillRow, PhaseSkillKey as DbPhaseSkillKey } from './queries/skills';
 
 let db: DatabaseSync | null = null;
 
@@ -44,6 +47,7 @@ export function getDatabase(dataDir: string): DatabaseSync {
   migrateV6(db);
   migrateV7(db);
   migrateV8(db);
+  migrateV9(db);
   return db;
 }
 

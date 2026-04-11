@@ -238,6 +238,17 @@ function createMockDeps() {
       },
       settings,
       providers,
+      skills: {
+        // Always return null so the loader falls through to the bundled
+        // default. Tests don't exercise per-row overrides — the skill-loader
+        // package has its own dedicated test file for that.
+        get: vi.fn(() => null),
+        set: vi.fn(),
+        delete: vi.fn(),
+        markQuarantined: vi.fn(),
+        listAll: vi.fn(() => []),
+        listQuarantined: vi.fn(() => []),
+      },
     } as unknown as PipelineDeps,
     emittedEvents,
     trigger,

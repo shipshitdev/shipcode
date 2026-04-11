@@ -9,6 +9,7 @@ import {
   VerificationQueries,
   GitHubIssueQueries,
   SettingsQueries,
+  SkillsQueries,
 } from '@shipcode/db';
 import {
   ProcessManager,
@@ -44,6 +45,7 @@ export async function runCommand(issueNumber: string) {
   const verifications = new VerificationQueries(db);
   const githubIssues = new GitHubIssueQueries(db);
   const settings = new SettingsQueries(db);
+  const skills = new SkillsQueries(db);
 
   // Find or create project
   let project = projects.list().find((p) => p.path === cwd);
@@ -89,6 +91,7 @@ export async function runCommand(issueNumber: string) {
     githubIssues,
     settings,
     providers,
+    skills,
   });
 
   await pipeline.startFromGitHubIssue(

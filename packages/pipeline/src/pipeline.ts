@@ -5,8 +5,14 @@ import {
   buildReviewPrompt,
   buildRevisionPrompt,
   buildVerificationPrompt,
+  buildExecutionPrompt,
 } from '@shipcode/agents';
-import type { ProviderPhase, ProviderRequest } from '@shipcode/agents';
+import type {
+  ProviderPhase,
+  ProviderRequest,
+  PhaseSkillKey,
+  SkillValidationError,
+} from '@shipcode/agents';
 import { WorktreeManager } from '@shipcode/git';
 import type { AgentType, ShipCodePlan } from '@shipcode/shared';
 import {
@@ -49,9 +55,16 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       return existing;
     }
 
+    // projectId is looked up once at context creation so per-phase skill
+    // resolution doesn't need to re-query the threads table on every builder
+    // call. Falls back to null when the thread row hasn't been created yet
+    // (e.g. tests, or in-flight initializeContext seeds).
+    const seededProjectId = seed.projectId ?? deps.threads.getById(threadId)?.projectId ?? null;
+
     const context: PipelineContext = {
       threadId,
       projectPath: seed.projectPath,
+      projectId: seededProjectId,
       worktreePath: seed.worktreePath ?? null,
       retryCount: seed.retryCount ?? 0,
       autonomous: seed.autonomous ?? false,
@@ -71,6 +84,27 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     };
     activePipelines.set(threadId, context);
     return context;
+  }
+
+  /**
+   * Build the (context, deps) pair every prompt builder needs. Centralized so
+   * the four call sites stay terse and the fallback handler is wired exactly
+   * once. The onFallback callback emits a `skill:fallback` PipelineEvent that
+   * the desktop adapter routes into the inbox/toaster.
+   */
+  function skillCallSite(context: PipelineContext) {
+    const onFallback = (phase: PhaseSkillKey, error: SkillValidationError | undefined) => {
+      deps.emitter.emit({
+        type: 'skill:fallback',
+        threadId: context.threadId,
+        phase,
+        reason: error?.message ?? 'override quarantined',
+      });
+    };
+    return {
+      context: { projectId: context.projectId },
+      deps: { skills: deps.skills, onFallback },
+    };
   }
 
   /**
@@ -209,7 +243,8 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
     emitPhase(threadId, 'planning');
 
-    const planPrompt = buildPlanPrompt(prompt, threadId);
+    const skill = skillCallSite(context);
+    const planPrompt = buildPlanPrompt(prompt, threadId, skill.context, skill.deps);
 
     // Fire-and-forget: kick off the provider call and let completion run
     // in the background. Callers (CLI, desktop IPC, tests) rely on phase
@@ -281,7 +316,10 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
     emitPhase(threadId, 'reviewing');
 
-    const reviewPromptText = buildReviewPrompt(plan, undefined, true);
+    const skill = skillCallSite(context);
+    const reviewPromptText = buildReviewPrompt(plan, skill.context, skill.deps, {
+      autonomous: context.autonomous,
+    });
 
     void (async () => {
       try {
@@ -377,7 +415,14 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
     emitPhase(threadId, 'revising');
 
-    const revisionPrompt = buildRevisionPrompt(plan, reviewFeedback, threadId);
+    const skill = skillCallSite(context);
+    const revisionPrompt = buildRevisionPrompt(
+      plan,
+      reviewFeedback,
+      threadId,
+      skill.context,
+      skill.deps,
+    );
 
     void (async () => {
       try {
@@ -436,7 +481,8 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
     emitPhase(threadId, 'executing');
 
-    const executionPrompt = `Execute this approved implementation plan:\n\n${JSON.stringify(plan, null, 2)}`;
+    const skill = skillCallSite(context);
+    const executionPrompt = buildExecutionPrompt(plan, skill.context, skill.deps);
 
     void (async () => {
       try {
@@ -527,7 +573,14 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       }
     } catch {}
 
-    const verificationPrompt = buildVerificationPrompt(plan, diff, plan.acceptanceCriteria);
+    const skill = skillCallSite(context);
+    const verificationPrompt = buildVerificationPrompt(
+      plan,
+      diff,
+      plan.acceptanceCriteria,
+      skill.context,
+      skill.deps,
+    );
 
     void (async () => {
       try {

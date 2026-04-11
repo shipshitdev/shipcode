@@ -25,6 +25,7 @@ import {
   NotificationsQueries,
   DashboardQueries,
   CostsQueries,
+  SkillsQueries,
 } from '@shipcode/db';
 import {
   ProcessManager,
@@ -87,6 +88,7 @@ function createWindow() {
     notifications: new NotificationsQueries(db),
     dashboard: new DashboardQueries(db),
     costs: new CostsQueries(db),
+    skills: new SkillsQueries(db),
   };
 
   // Notification service — reads settings, writes notifications + activity,
@@ -129,6 +131,7 @@ function createWindow() {
     githubIssues: queries.githubIssues,
     settings: queries.settings,
     providers,
+    skills: queries.skills,
   });
 
   // Register IPC handlers

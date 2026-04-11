@@ -1,4 +1,4 @@
-import type { ProcessManager, ProviderRegistry } from '@shipcode/agents';
+import type { ProcessManager, ProviderRegistry, PhaseSkillKey } from '@shipcode/agents';
 import type {
   ThreadQueries,
   PlanQueries,
@@ -6,6 +6,7 @@ import type {
   VerificationQueries,
   GitHubIssueQueries,
   SettingsQueries,
+  SkillsQueries,
 } from '@shipcode/db';
 import type {
   AgentType,
@@ -48,7 +49,20 @@ export type PipelineEvent =
     }
   | { type: 'plan:parsed'; threadId: string; plan: ShipCodePlan }
   | { type: 'review:parsed'; threadId: string; review: PlanReview }
-  | { type: 'verification:parsed'; threadId: string; verification: VerificationResult };
+  | { type: 'verification:parsed'; threadId: string; verification: VerificationResult }
+  | {
+      /**
+       * Emitted when a phase skill resolved to a lower tier than expected
+       * because the higher-tier override failed validation. The desktop
+       * adapter routes this into the inbox/toaster so the user knows their
+       * customization is broken AND that the pipeline did not silently
+       * execute a wrong prompt — the bundled default was used instead.
+       */
+      type: 'skill:fallback';
+      threadId: string;
+      phase: PhaseSkillKey;
+      reason: string;
+    };
 
 export interface PipelineEmitter {
   emit(event: PipelineEvent): void;
@@ -57,6 +71,8 @@ export interface PipelineEmitter {
 export interface PipelineContext {
   threadId: string;
   projectPath: string;
+  /** Project ID this thread belongs to. Used to scope per-project skill overrides. */
+  projectId: string | null;
   worktreePath: string | null;
   retryCount: number;
   autonomous: boolean;
@@ -99,6 +115,9 @@ export interface PipelineDeps {
   githubIssues: GitHubIssueQueries;
   settings: SettingsQueries;
   providers: ProviderRegistry;
+  /** Per-phase prompt skill overrides (project + global). The pipeline passes
+   *  this into every prompt builder so resolveSkill walks the tier chain. */
+  skills: SkillsQueries;
 }
 
 export interface Pipeline {

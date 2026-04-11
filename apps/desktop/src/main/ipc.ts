@@ -12,13 +12,22 @@ import type {
   NotificationsQueries,
   DashboardQueries,
   CostsQueries,
+  SkillsQueries,
 } from '@shipcode/db';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { ProcessManager } from '@shipcode/agents';
-import { checkSystemHealthWithAuth, checkGhAuth, GhCli, enhancePrdDraft } from '@shipcode/agents';
+import type { ProcessManager, PhaseSkillKey } from '@shipcode/agents';
+import {
+  checkSystemHealthWithAuth,
+  checkGhAuth,
+  GhCli,
+  enhancePrdDraft,
+  validateSkill,
+  DEFAULT_SKILLS,
+  PHASE_SKILL_KEYS,
+} from '@shipcode/agents';
 import { isSafeExternalUrl } from './security';
 
 const execAsync = promisify(exec);
@@ -40,6 +49,7 @@ interface Queries {
   notifications: NotificationsQueries;
   dashboard: DashboardQueries;
   costs: CostsQueries;
+  skills: SkillsQueries;
 }
 
 export function registerIpcHandlers(
@@ -610,6 +620,133 @@ export function registerIpcHandlers(
   // === Cost tracking ===
   ipcMain.handle('costs:get-summary', () => {
     return queries.costs.getSummary();
+  });
+
+  // === Skills (per-phase prompt overrides) ===
+  // The /skills page is the user's editing surface for the five phase prompts
+  // (planner, reviewer, reviser, executor, verifier). Edits land in the
+  // skills DB table; reads walk project → global → bundled-default. Validation
+  // runs both here (server-side) and in the renderer to give early feedback.
+  //
+  // The bundled DEFAULT_SKILLS object lives in @shipcode/agents — the desktop
+  // adapter is the only place that pulls both halves together.
+
+  function buildSkillRow(phase: PhaseSkillKey, projectId: string | null) {
+    const bundled = DEFAULT_SKILLS[phase];
+    const row = queries.skills.get(projectId, phase);
+    if (!row) {
+      return {
+        phase,
+        projectId,
+        source: 'default' as const,
+        content: bundled.content,
+        baseVersion: bundled.version,
+        schemaVersion: bundled.schemaVersion,
+        bundledVersion: bundled.version,
+        bundledSchemaVersion: bundled.schemaVersion,
+        requiredSlots: bundled.requiredSlots,
+        status: 'ok' as const,
+        statusReason: null,
+        updatedAt: null,
+      };
+    }
+    return {
+      phase,
+      projectId: row.projectId,
+      source: row.projectId === null ? ('global' as const) : ('project' as const),
+      content: row.content,
+      baseVersion: row.baseVersion,
+      schemaVersion: row.schemaVersion,
+      bundledVersion: bundled.version,
+      bundledSchemaVersion: bundled.schemaVersion,
+      requiredSlots: bundled.requiredSlots,
+      status: row.status,
+      statusReason: row.statusReason,
+      updatedAt: row.updatedAt,
+    };
+  }
+
+  // Returns one row per (phase, scope-tier) so the /skills view can show the
+  // resolution chain. Each phase contributes either:
+  //   - 1 entry (when no override exists at the requested scope)
+  //   - 2 entries (project + global), or
+  //   - 1 entry that explains it is the bundled default.
+  // The renderer picks the first non-default tier and presents it in the
+  // editor; the rest are surfaced as "fall-through" badges.
+  ipcMain.handle(
+    'skills:list-for-view',
+    (_event, { projectId }: { projectId: string | null }) => {
+      return PHASE_SKILL_KEYS.map((phase) => {
+        const projectRow = projectId !== null ? buildSkillRow(phase, projectId) : null;
+        const globalRow = buildSkillRow(phase, null);
+        return {
+          phase,
+          requiredSlots: DEFAULT_SKILLS[phase].requiredSlots,
+          bundledVersion: DEFAULT_SKILLS[phase].version,
+          bundledSchemaVersion: DEFAULT_SKILLS[phase].schemaVersion,
+          projectRow,
+          globalRow,
+          // The "active" row is what the resolver would actually use right now.
+          active:
+            projectRow && projectRow.source !== 'default' && projectRow.status === 'ok'
+              ? projectRow
+              : globalRow,
+        };
+      });
+    },
+  );
+
+  ipcMain.handle(
+    'skills:read',
+    (
+      _event,
+      { projectId, phase }: { projectId: string | null; phase: PhaseSkillKey },
+    ) => {
+      return buildSkillRow(phase, projectId);
+    },
+  );
+
+  ipcMain.handle(
+    'skills:write',
+    (
+      _event,
+      {
+        projectId,
+        phase,
+        content,
+      }: { projectId: string | null; phase: PhaseSkillKey; content: string },
+    ) => {
+      // Server-side validation. The renderer pre-validates for early feedback,
+      // but we re-validate here so the contract holds even when the renderer
+      // is bypassed (e.g. tests, or a bug in client validation).
+      const error = validateSkill(phase, content);
+      if (error) {
+        return { ok: false as const, error };
+      }
+      const bundled = DEFAULT_SKILLS[phase];
+      queries.skills.set(projectId, phase, content, bundled.version, bundled.schemaVersion);
+      return { ok: true as const, row: buildSkillRow(phase, projectId) };
+    },
+  );
+
+  ipcMain.handle(
+    'skills:reset',
+    (
+      _event,
+      { projectId, phase }: { projectId: string | null; phase: PhaseSkillKey },
+    ) => {
+      queries.skills.delete(projectId, phase);
+      return buildSkillRow(phase, projectId);
+    },
+  );
+
+  ipcMain.handle('skills:list-quarantined', () => {
+    return queries.skills.listQuarantined().map((row) => ({
+      phase: row.phase,
+      projectId: row.projectId,
+      statusReason: row.statusReason,
+      updatedAt: row.updatedAt,
+    }));
   });
 
   // === Notification handlers ===

@@ -38,6 +38,7 @@ export function ProjectSidebar() {
     openActivity,
     openInbox,
     openCosts,
+    openSkills,
     sidebarCollapsed,
   } = useAppStore();
   const queryClient = useQueryClient();
@@ -328,6 +329,33 @@ export function ProjectSidebar() {
             />
           </svg>
           <span className="flex-1 truncate">Costs</span>
+        </button>
+
+        {/* Skills */}
+        <button
+          type="button"
+          className={cn(
+            'flex w-full cursor-pointer items-center gap-2 rounded-md border-none bg-transparent px-3 py-2 text-left text-[13px] text-secondary app-region-no-drag hover:bg-hover hover:text-primary focus:outline-none',
+            !settingsVisible && viewMode === 'skills' && 'bg-tertiary text-primary font-medium',
+          )}
+          onClick={() => openSkills()}
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            className="shrink-0 text-secondary"
+          >
+            <path
+              d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span className="flex-1 truncate">Skills</span>
         </button>
       </div>
 

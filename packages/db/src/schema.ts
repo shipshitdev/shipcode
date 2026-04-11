@@ -367,3 +367,39 @@ export function migrateV8(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (8)`);
   });
 }
+
+export function migrateV9(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 9) return;
+
+  transaction(db, () => {
+    // Per-phase prompt skill overrides. Composite key (project_id, phase) where
+    // project_id IS NULL is the global override. The runtime loader (in
+    // @shipcode/agents) walks project → global → bundled default and quarantines
+    // any row that fails validation. Quarantined rows are NOT deleted — the
+    // user content is preserved for manual recovery via the /skills page.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS skills (
+        project_id     TEXT,
+        phase          TEXT NOT NULL,
+        content        TEXT NOT NULL,
+        base_version   TEXT NOT NULL,
+        schema_version INTEGER NOT NULL,
+        status         TEXT NOT NULL DEFAULT 'ok',
+        status_reason  TEXT,
+        updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      -- Composite uniqueness: one row per (project_id, phase). NULL project_id
+      -- is the global override; SQLite's UNIQUE treats multiple NULLs as
+      -- distinct, so we use a partial unique index instead of a PRIMARY KEY.
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_skills_project_phase
+        ON skills(COALESCE(project_id, ''), phase);
+      CREATE INDEX IF NOT EXISTS idx_skills_status ON skills(status);
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (9)`);
+  });
+}

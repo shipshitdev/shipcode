@@ -14,6 +14,7 @@ import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
 import { ProjectSidebar } from './components/ProjectSidebar';
 import { SettingsPanel } from './components/SettingsPanel';
 import { SettingsSidebar } from './components/SettingsSidebar';
+import { SkillsView } from './components/SkillsView';
 import { TerminalDrawer } from './components/TerminalDrawer';
 import { ThreadPanel } from './components/ThreadPanel';
 import { Titlebar } from './components/Titlebar';
@@ -113,6 +114,8 @@ export function App() {
                   <ActivityView />
                 ) : viewMode === 'costs' ? (
                   <CostsView />
+                ) : viewMode === 'skills' ? (
+                  <SkillsView />
                 ) : viewMode === 'inbox' ? (
                   <InboxView />
                 ) : showDashboard ? (

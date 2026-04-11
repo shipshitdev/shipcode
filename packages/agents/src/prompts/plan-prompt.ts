@@ -1,5 +1,12 @@
 import type { ShipCodePlan } from '@shipcode/shared';
 import { PLAN_FENCE_TAG } from '@shipcode/shared';
+import {
+  resolveSkill,
+  interpolateSkill,
+  type SkillsRowSource,
+  type SkillValidationError,
+  type PhaseSkillKey,
+} from '../skills';
 
 const PLAN_SCHEMA_DESCRIPTION = `{
   "id": "plan-<timestamp>-<shortid>",
@@ -18,66 +25,60 @@ const PLAN_SCHEMA_DESCRIPTION = `{
   "dependencies": ["files/packages that must exist"]
 }`;
 
+const PLAN_OUTPUT_SCHEMA = `\`\`\`${PLAN_FENCE_TAG}\n${PLAN_SCHEMA_DESCRIPTION}\n\`\`\``;
+
+export interface PlanPromptContext {
+  projectId: string | null;
+}
+
+export interface PlanPromptDeps {
+  skills: SkillsRowSource;
+  onFallback?: (phase: PhaseSkillKey, error: SkillValidationError | undefined) => void;
+}
+
+export interface PlanPromptOptions {
+  contextFiles?: string;
+}
+
 export function buildPlanPrompt(
   userPrompt: string,
   threadId: string,
-  contextFiles?: string,
+  context: PlanPromptContext,
+  deps: PlanPromptDeps,
+  opts: PlanPromptOptions = {},
 ): string {
-  let prompt = `You are a senior software architect generating an implementation plan.
-
-## Task
-${userPrompt}
-
-## Instructions
-1. Analyze the task and the codebase
-2. Create a detailed, step-by-step implementation plan
-3. Output the plan inside a fenced code block tagged \`${PLAN_FENCE_TAG}\`
-
-## Output Format
-Your plan MUST be valid JSON inside a \`\`\`${PLAN_FENCE_TAG} code fence:
-
-\`\`\`${PLAN_FENCE_TAG}
-${PLAN_SCHEMA_DESCRIPTION}
-\`\`\`
-
-Use thread ID: "${threadId}"
-
-## Requirements
-- Each step must be atomic and independently verifiable
-- List ALL files that will be created, modified, or deleted
-- Include clear acceptance criteria
-- Explicitly state what is out of scope
-- Be specific about dependencies`;
-
-  if (contextFiles) {
-    prompt += `\n\n## Relevant Files\n${contextFiles}`;
+  const { skill, fallbackUsed, error } = resolveSkill(
+    'plan-generation',
+    context.projectId,
+    deps,
+  );
+  if (fallbackUsed) {
+    deps.onFallback?.('plan-generation', error);
   }
-
-  return prompt;
+  return interpolateSkill(skill.content, [
+    { key: 'USER_PROMPT', value: userPrompt },
+    { key: 'THREAD_ID', value: threadId },
+    { key: 'CONTEXT_FILES', value: opts.contextFiles ?? 'No extra files provided.' },
+    { key: 'OUTPUT_SCHEMA', value: PLAN_OUTPUT_SCHEMA },
+  ]);
 }
 
 export function buildRevisionPrompt(
   originalPlan: ShipCodePlan,
   reviewFeedback: string,
   threadId: string,
+  context: PlanPromptContext,
+  deps: PlanPromptDeps,
 ): string {
-  return `You are revising an implementation plan based on review feedback.
-
-## Original Plan
-\`\`\`json
-${JSON.stringify(originalPlan, null, 2)}
-\`\`\`
-
-## Review Feedback
-${reviewFeedback}
-
-## Instructions
-1. Address each piece of feedback from the review
-2. Update the plan accordingly
-3. Increment the version number to ${originalPlan.version + 1}
-4. Output the revised plan in a \`\`\`${PLAN_FENCE_TAG} code fence
-
-Use thread ID: "${threadId}"
-
-Output the complete revised plan as JSON inside a \`\`\`${PLAN_FENCE_TAG} block.`;
+  const { skill, fallbackUsed, error } = resolveSkill('plan-revision', context.projectId, deps);
+  if (fallbackUsed) {
+    deps.onFallback?.('plan-revision', error);
+  }
+  return interpolateSkill(skill.content, [
+    { key: 'ORIGINAL_PLAN', value: JSON.stringify(originalPlan, null, 2) },
+    { key: 'REVIEW_FEEDBACK', value: reviewFeedback },
+    { key: 'THREAD_ID', value: threadId },
+    { key: 'NEW_VERSION', value: String(originalPlan.version + 1) },
+    { key: 'OUTPUT_SCHEMA', value: PLAN_OUTPUT_SCHEMA },
+  ]);
 }
