@@ -1,3 +1,5 @@
+'use client';
+
 import { useEffect, useState, type ReactNode } from 'react';
 import { ChevronDown, ChevronRight, ExternalLink, LayoutGrid, LayoutList, RefreshCw, RotateCcw, User } from 'lucide-react';
 import {
@@ -298,7 +300,16 @@ function DraggableCard({
           <Button
             variant="ghost"
             size="icon"
-            className="h-4 w-4 text-muted opacity-0 transition-all group-hover:opacity-100 hover:bg-elevated hover:text-primary"
+            className={cn(
+              'h-4 w-4 opacity-0 transition-all group-hover:opacity-100 hover:bg-elevated',
+              isFailed
+                ? 'text-danger/60 hover:text-danger'
+                : isAwaiting
+                  ? 'text-warning/60 hover:text-warning'
+                  : isActive
+                    ? 'text-agent/60 hover:text-agent'
+                    : 'text-muted hover:text-primary',
+            )}
             title="Open issue detail"
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
