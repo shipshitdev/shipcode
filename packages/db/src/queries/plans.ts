@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { nanoid } from 'nanoid';
-import type { PlanRecord, PlanStatus, ShipCodePlan } from '@shipcode/shared';
+import { toIsoUtc, type PlanRecord, type PlanStatus, type ShipCodePlan } from '@shipcode/shared';
 
 export class PlanQueries {
   constructor(private db: DatabaseSync) {}
@@ -78,6 +78,6 @@ function mapPlan(row: any): PlanRecord {
     rawOutput: row.raw_output,
     structured: row.structured ? JSON.parse(row.structured) : null,
     status: row.status as PlanStatus,
-    createdAt: row.created_at,
+    createdAt: toIsoUtc(row.created_at) ?? row.created_at,
   };
 }

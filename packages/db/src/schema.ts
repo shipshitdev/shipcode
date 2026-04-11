@@ -9,8 +9,8 @@ export function migrate(db: DatabaseSync): void {
       path TEXT NOT NULL UNIQUE,
       git_remote TEXT,
       default_branch TEXT NOT NULL DEFAULT 'main',
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
     );
 
     CREATE TABLE IF NOT EXISTS threads (
@@ -23,8 +23,8 @@ export function migrate(db: DatabaseSync): void {
       worktree_path TEXT,
       planner_model TEXT NOT NULL DEFAULT 'claude',
       reviewer_model TEXT NOT NULL DEFAULT 'codex',
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
     );
 
     CREATE TABLE IF NOT EXISTS plans (
@@ -34,7 +34,7 @@ export function migrate(db: DatabaseSync): void {
       raw_output TEXT NOT NULL,
       structured TEXT,
       status TEXT NOT NULL DEFAULT 'draft',
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
     );
 
     CREATE TABLE IF NOT EXISTS reviews (
@@ -44,7 +44,7 @@ export function migrate(db: DatabaseSync): void {
       confidence TEXT NOT NULL,
       raw_output TEXT NOT NULL,
       structured TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
     );
 
     CREATE TABLE IF NOT EXISTS diffs (
@@ -55,7 +55,7 @@ export function migrate(db: DatabaseSync): void {
       diff_content TEXT,
       before_hash TEXT,
       after_hash TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
     );
 
     CREATE TABLE IF NOT EXISTS settings (
@@ -112,7 +112,7 @@ export function migrateV2(db: DatabaseSync): void {
         structured TEXT,
         result TEXT NOT NULL,
         retry_count INTEGER NOT NULL DEFAULT 0,
-        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
       );
 
       CREATE INDEX IF NOT EXISTS idx_verifications_thread ON verifications(thread_id);
@@ -131,7 +131,7 @@ export function migrateV2(db: DatabaseSync): void {
         claimed_at TEXT,
         claimed_by TEXT,
         last_phase_update TEXT,
-        fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+        fetched_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
         UNIQUE(project_id, issue_number)
       );
 
@@ -206,7 +206,7 @@ export function migrateV5(db: DatabaseSync): void {
         title TEXT NOT NULL,
         subtitle TEXT,
         metadata TEXT,
-        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
       );
 
       CREATE INDEX IF NOT EXISTS idx_activity_created ON activity_log(created_at DESC);
@@ -223,7 +223,7 @@ export function migrateV5(db: DatabaseSync): void {
         kind TEXT NOT NULL,
         title TEXT NOT NULL,
         body TEXT NOT NULL,
-        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
         dismissed_at TEXT
       );
 
@@ -389,7 +389,7 @@ export function migrateV9(db: DatabaseSync): void {
         schema_version INTEGER NOT NULL,
         status         TEXT NOT NULL DEFAULT 'ok',
         status_reason  TEXT,
-        updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
+        updated_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
       );
 
       -- Composite uniqueness: one row per (project_id, phase). NULL project_id

@@ -148,6 +148,11 @@ export class NotificationService {
     return this.notifications.listActive();
   }
 
+  dismissByThread(threadId: string) {
+    this.notifications.dismissByThread(threadId);
+    this.refreshBadge();
+  }
+
   dismiss(id: string) {
     this.notifications.dismiss(id);
     this.refreshBadge();

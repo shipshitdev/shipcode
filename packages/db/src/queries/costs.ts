@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import type { CostSummary, PipelinePhase } from '@shipcode/shared';
+import { toIsoUtc, type CostSummary, type PipelinePhase } from '@shipcode/shared';
 
 export class CostsQueries {
   constructor(private db: DatabaseSync) {}
@@ -104,7 +104,7 @@ export class CostsQueries {
         costUsd: r.cost_usd,
         tokensPrompt: r.tokens_prompt,
         tokensCompletion: r.tokens_completion,
-        updatedAt: r.updated_at,
+        updatedAt: toIsoUtc(r.updated_at) ?? r.updated_at,
       })),
     };
   }

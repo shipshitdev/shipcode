@@ -118,21 +118,21 @@ export function CreateIssueModal() {
         });
         await queryClient.invalidateQueries({ queryKey: ['github-issues'] });
       } else {
-        const created = await window.shipcode.invoke<GitHubIssueCacheRecord>(
-          'github:create-issue',
-          {
-            projectId: activeProjectId,
-            title: derivedTitle,
-            body,
-          },
-        );
+        const created = await window.shipcode.invoke<{
+          issue: GitHubIssueCacheRecord;
+          projectAttachWarning: string | null;
+        }>('github:create-issue', {
+          projectId: activeProjectId,
+          title: derivedTitle,
+          body,
+        });
         await queryClient.invalidateQueries({ queryKey: ['github-issues'] });
         // Kick off the pipeline immediately and open the issue detail
         // so the user can watch planning start.
         try {
           await window.shipcode.invoke('github:start-issue', {
             projectId: activeProjectId,
-            issueNumber: created.issueNumber,
+            issueNumber: created.issue.issueNumber,
           });
         } catch (startErr) {
           log.error('[CreateIssueModal] start-issue failed', startErr);
@@ -144,7 +144,17 @@ export function CreateIssueModal() {
           setSubmitting(false);
           return;
         }
-        selectIssue(created);
+        selectIssue(created.issue);
+        // If best-effort board attach failed, keep the modal open with an
+        // inline warning so the user actually sees it. The issue is already
+        // on GitHub and is selected — they can dismiss and move on.
+        if (created.projectAttachWarning) {
+          setError(
+            `Issue #${created.issue.issueNumber} created, but couldn't add to project board: ${created.projectAttachWarning}`,
+          );
+          setSubmitting(false);
+          return;
+        }
       }
       closeCreateIssueModal();
     } catch (err) {

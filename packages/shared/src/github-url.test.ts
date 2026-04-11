@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { githubProjectsUrl, validateGithubProjectUrl } from './github-url';
+import {
+  githubProjectsUrl,
+  validateGithubProjectUrl,
+  parseGithubProjectUrl,
+} from './github-url';
 
 describe('githubProjectsUrl (with override)', () => {
   it('returns trimmed override when provided', () => {
@@ -121,5 +125,66 @@ describe('validateGithubProjectUrl', () => {
   it('rejects garbage string', () => {
     const r = validateGithubProjectUrl('not a url');
     expect(r.ok).toBe(false);
+  });
+});
+
+describe('parseGithubProjectUrl', () => {
+  it('parses org-scoped Projects v2 URL', () => {
+    expect(parseGithubProjectUrl('https://github.com/orgs/acme/projects/3')).toEqual({
+      ownerType: 'orgs',
+      owner: 'acme',
+      number: 3,
+    });
+  });
+
+  it('parses user-scoped Projects v2 URL', () => {
+    expect(parseGithubProjectUrl('https://github.com/users/alice/projects/12')).toEqual({
+      ownerType: 'users',
+      owner: 'alice',
+      number: 12,
+    });
+  });
+
+  it('tolerates a trailing slash', () => {
+    expect(parseGithubProjectUrl('https://github.com/orgs/acme/projects/3/')).toEqual({
+      ownerType: 'orgs',
+      owner: 'acme',
+      number: 3,
+    });
+  });
+
+  it('preserves original owner case and hyphens', () => {
+    expect(parseGithubProjectUrl('https://github.com/orgs/Acme-Co/projects/3')).toEqual({
+      ownerType: 'orgs',
+      owner: 'Acme-Co',
+      number: 3,
+    });
+  });
+
+  it('returns null for the legacy repo-scoped form', () => {
+    // This is the `<owner>/<repo>/projects/<n>` form: it points at the
+    // repo's "linked Projects" tab, not a Projects v2 board, so the parser
+    // deliberately rejects it even though `validateGithubProjectUrl` accepts
+    // it as an override for the Kanban quick-link button.
+    expect(parseGithubProjectUrl('https://github.com/shipshitdev/shipcode/projects/1')).toBeNull();
+  });
+
+  it('returns null for a non-numeric project number', () => {
+    expect(parseGithubProjectUrl('https://github.com/orgs/acme/projects/abc')).toBeNull();
+  });
+
+  it('returns null when the trailing /<n> segment is missing', () => {
+    expect(parseGithubProjectUrl('https://github.com/orgs/acme/projects')).toBeNull();
+  });
+
+  it('returns null for http (non-https)', () => {
+    expect(parseGithubProjectUrl('http://github.com/orgs/acme/projects/3')).toBeNull();
+  });
+
+  it('returns null for null, undefined, empty, and whitespace inputs', () => {
+    expect(parseGithubProjectUrl(null)).toBeNull();
+    expect(parseGithubProjectUrl(undefined)).toBeNull();
+    expect(parseGithubProjectUrl('')).toBeNull();
+    expect(parseGithubProjectUrl('   ')).toBeNull();
   });
 });

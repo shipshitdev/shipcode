@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { type PhaseSkillKey } from '@shipcode/shared';
+import { ISO_NOW_SQL, toIsoUtc, type PhaseSkillKey } from '@shipcode/shared';
 
 export type { PhaseSkillKey };
 
@@ -23,7 +23,7 @@ function mapRow(row: any): SkillRow {
     schemaVersion: row.schema_version,
     status: row.status as 'ok' | 'quarantined',
     statusReason: row.status_reason,
-    updatedAt: row.updated_at,
+    updatedAt: toIsoUtc(row.updated_at) ?? row.updated_at,
   };
 }
 
@@ -66,7 +66,7 @@ export class SkillsQueries {
           `UPDATE skills
            SET content = ?, base_version = ?, schema_version = ?,
                status = 'ok', status_reason = NULL,
-               updated_at = datetime('now')
+               updated_at = ${ISO_NOW_SQL}
            WHERE COALESCE(project_id, '') = COALESCE(?, '')
              AND phase = ?`,
         )
@@ -105,7 +105,7 @@ export class SkillsQueries {
     this.db
       .prepare(
         `UPDATE skills
-         SET status = 'quarantined', status_reason = ?, updated_at = datetime('now')
+         SET status = 'quarantined', status_reason = ?, updated_at = ${ISO_NOW_SQL}
          WHERE COALESCE(project_id, '') = COALESCE(?, '')
            AND phase = ?`,
       )
