@@ -1,4 +1,4 @@
-import { Shield, GitBranch, CheckCircle, Shuffle } from 'lucide-react';
+import { CheckCircle, GitBranch, Shield, Shuffle } from 'lucide-react';
 
 const features = [
   {

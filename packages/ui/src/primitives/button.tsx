@@ -1,6 +1,6 @@
-import * as React from 'react';
 import { Slot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
+import type * as React from 'react';
 import { cn } from '../lib/utils';
 
 const buttonVariants = cva(
@@ -10,9 +10,12 @@ const buttonVariants = cva(
       variant: {
         default:
           'justify-center rounded-md bg-accent text-accent-foreground hover:bg-accent-hover shadow-[inset_0_0_0_1px_rgba(0,0,0,0.08)]',
-        secondary: 'justify-center rounded-md bg-tertiary text-primary border border-border hover:bg-hover',
-        outline: 'justify-center rounded-md bg-transparent border border-border text-primary hover:bg-hover',
-        ghost: 'justify-start rounded-md bg-transparent text-secondary hover:bg-hover hover:text-primary',
+        secondary:
+          'justify-center rounded-md bg-tertiary text-primary border border-border hover:bg-hover',
+        outline:
+          'justify-center rounded-md bg-transparent border border-border text-primary hover:bg-hover',
+        ghost:
+          'justify-start rounded-md bg-transparent text-secondary hover:bg-hover hover:text-primary',
         pill: 'justify-center rounded-md bg-transparent text-secondary hover:text-primary border border-border hover:border-text-secondary',
         destructive:
           'justify-center rounded-md bg-danger/15 text-danger border border-danger/30 hover:bg-danger/25',

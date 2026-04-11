@@ -16,7 +16,8 @@
       "!**/.env.*",
       "!.agents",
       "!.worktrees",
-      "!.shipcode"
+      "!.shipcode",
+      "!apps/web/public/docs"
     ]
   },
   "formatter": {
@@ -33,6 +34,12 @@
     },
     "parser": {
       "unsafeParameterDecoratorsEnabled": true
+    }
+  },
+  "css": {
+    "parser": {
+      "cssModules": true,
+      "tailwindDirectives": true
     }
   },
   "linter": {

@@ -13,8 +13,9 @@ interface IssueCardProps {
 
 export function IssueCard({ issue, onClick }: IssueCardProps) {
   return (
-    <div
-      className="rounded-md border border-border bg-primary p-3 cursor-pointer hover:border-text-muted transition-colors"
+    <button
+      type="button"
+      className="w-full text-left rounded-md border border-border bg-primary p-3 cursor-pointer hover:border-text-muted transition-colors"
       onClick={onClick}
     >
       <div className="flex items-center justify-between">
@@ -34,6 +35,6 @@ export function IssueCard({ issue, onClick }: IssueCardProps) {
             </Badge>
           ))}
       </div>
-    </div>
+    </button>
   );
 }

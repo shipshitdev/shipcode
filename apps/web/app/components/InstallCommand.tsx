@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
 import { Button } from '@shipcode/ui';
+import { useState } from 'react';
 
 const INSTALL_COMMAND = 'npx @shipshitdev/shipcode';
 

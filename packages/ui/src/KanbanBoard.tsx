@@ -1,22 +1,31 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
-import { ChevronDown, ChevronRight, ExternalLink, LayoutGrid, LayoutList, RefreshCw, RotateCcw, User } from 'lucide-react';
 import {
+  type CollisionDetection,
   DndContext,
+  type DragEndEvent,
   DragOverlay,
+  type DragStartEvent,
   pointerWithin,
   rectIntersection,
-  type CollisionDetection,
-  type DragEndEvent,
-  type DragStartEvent,
+  useDraggable,
+  useDroppable,
 } from '@dnd-kit/core';
-import { useDroppable } from '@dnd-kit/core';
-import { useDraggable } from '@dnd-kit/core';
 import type { GitHubIssueCacheRecord, IssuePipelineStatus } from '@shipcode/shared';
-import { cn } from './lib/utils';
-import { getStatusBadgeVariant } from './lib/status-variant';
+import {
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+  LayoutGrid,
+  LayoutList,
+  RefreshCw,
+  RotateCcw,
+  User,
+} from 'lucide-react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { MODEL_DISPLAY } from './lib/model-display';
+import { getStatusBadgeVariant } from './lib/status-variant';
+import { cn } from './lib/utils';
 import { Badge } from './primitives/badge';
 import { Button, buttonVariants } from './primitives/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './primitives/select';
@@ -191,9 +200,7 @@ function PhaseElapsed({ since }: { since: number }) {
     const id = setInterval(() => setLabel(formatPhaseElapsed(since)), 1000);
     return () => clearInterval(id);
   }, [since]);
-  return (
-    <span className="font-mono tabular-nums text-[10px] text-muted">{label}</span>
-  );
+  return <span className="font-mono tabular-nums text-[10px] text-muted">{label}</span>;
 }
 
 function DraggableCard({
@@ -219,9 +226,12 @@ function DraggableCard({
   const isActive = ACTIVE_STATUSES.includes(issue.pipelineStatus);
   const showPhaseElapsed =
     PHASE_ELAPSED_STATUSES.includes(issue.pipelineStatus) && !!issue.lastPhaseUpdate;
-  const phaseSince = showPhaseElapsed ? new Date(issue.lastPhaseUpdate!).getTime() : 0;
+  const phaseSince =
+    showPhaseElapsed && issue.lastPhaseUpdate ? new Date(issue.lastPhaseUpdate).getTime() : 0;
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: dnd-kit's useDraggable provides keyboard accessibility via listeners/attributes spread below
+    // biome-ignore lint/a11y/useKeyWithClickEvents: dnd-kit KeyboardSensor handles activation; the onClick only forwards selection on pointer click
     <div
       ref={setNodeRef}
       className={cn(
@@ -232,8 +242,14 @@ function DraggableCard({
           : !isSelected && !isActive
             ? 'border-border/50 hover:border-border-strong'
             : '',
-        isFailed && (isSelected ? 'border-danger bg-danger/[0.07]' : 'border-danger/40 bg-danger/[0.04] hover:border-danger/60'),
-        isAwaiting && (isSelected ? 'border-warning bg-warning/[0.07]' : 'border-warning/30 bg-warning/[0.03] hover:border-warning/50'),
+        isFailed &&
+          (isSelected
+            ? 'border-danger bg-danger/[0.07]'
+            : 'border-danger/40 bg-danger/[0.04] hover:border-danger/60'),
+        isAwaiting &&
+          (isSelected
+            ? 'border-warning bg-warning/[0.07]'
+            : 'border-warning/30 bg-warning/[0.03] hover:border-warning/50'),
         // Agent-active cards use the dedicated `--agent` violet so they are
         // visually distinct from failed (red), awaiting (amber), and selected
         // (white). Lower opacity than failed/awaiting because agent work is
@@ -549,8 +565,8 @@ const LIST_COLUMN_LABEL: Record<ColumnKey, string> = {
 // ids `handleDragEnd` recognizes lets the existing transitions still fire from
 // the list view without touching pipeline code.
 const LIST_COLUMN_DROP_ID: Partial<Record<ColumnKey, string>> = {
-  todo: 'todo',                // failed → todo (retry)
-  agent: 'agent:planning',     // todo|failed → agent:planning (start/rerun)
+  todo: 'todo', // failed → todo (retry)
+  agent: 'agent:planning', // todo|failed → agent:planning (start/rerun)
 };
 
 type RowTone = 'default' | 'agent' | 'danger' | 'warning';
@@ -563,7 +579,11 @@ function rowToneFor(status: IssuePipelineStatus): RowTone {
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 interface DraggableListRowProps {
@@ -573,7 +593,12 @@ interface DraggableListRowProps {
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
 }
 
-function DraggableListRow({ issue, selectedIssueNumber, activeId, onIssueClick }: DraggableListRowProps) {
+function DraggableListRow({
+  issue,
+  selectedIssueNumber,
+  activeId,
+  onIssueClick,
+}: DraggableListRowProps) {
   const isDraggable = DRAGGABLE_STATUSES.includes(issue.pipelineStatus);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: issue.id,
@@ -585,6 +610,8 @@ function DraggableListRow({ issue, selectedIssueNumber, activeId, onIssueClick }
   const isActive = tone === 'agent';
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: dnd-kit's useDraggable provides keyboard accessibility via listeners/attributes spread below
+    // biome-ignore lint/a11y/useKeyWithClickEvents: dnd-kit KeyboardSensor handles activation; the onClick only forwards selection on pointer click
     <div
       ref={setNodeRef}
       className={cn(
@@ -666,8 +693,8 @@ function ListSectionBlock({
   const agentLabel =
     section.agent === 'executor'
       ? (issues[0]?.executorModel ??
-         allIssues.find((i) => i.pipelineStatus === 'executing')?.executorModel ??
-         'claude')
+        allIssues.find((i) => i.pipelineStatus === 'executing')?.executorModel ??
+        'claude')
       : section.agent;
 
   const tone: 'danger' | 'warning' | null =
@@ -750,7 +777,12 @@ interface IssueListViewProps {
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
 }
 
-function IssueListView({ issues, selectedIssueNumber, activeId, onIssueClick }: IssueListViewProps) {
+function IssueListView({
+  issues,
+  selectedIssueNumber,
+  activeId,
+  onIssueClick,
+}: IssueListViewProps) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const toggle = (key: string) => setCollapsed((c) => ({ ...c, [key]: !c[key] }));
 
@@ -878,7 +910,7 @@ export function KanbanBoard({
       issue.pipelineStatus === 'failed' &&
       (onRerun ?? onStartPipeline)
     ) {
-      (onRerun ?? onStartPipeline)!(issue);
+      (onRerun ?? onStartPipeline)?.(issue);
       return;
     }
     // 3. human → todo (retry failed → reset to queued)
@@ -935,7 +967,9 @@ export function KanbanBoard({
           {baseBranch && branches && branches.length > 0 && onBaseBranchChange && (
             <div className="flex items-center min-w-0 max-w-[200px] shrink-0">
               <Select value={baseBranch} onValueChange={onBaseBranchChange}>
-                <SelectTrigger className={cn(buttonVariants({ variant: 'pill', size: 'xs' }), 'font-mono')}>
+                <SelectTrigger
+                  className={cn(buttonVariants({ variant: 'pill', size: 'xs' }), 'font-mono')}
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -952,10 +986,7 @@ export function KanbanBoard({
             <Button
               variant="ghost"
               size="icon-sm"
-              className={cn(
-                'rounded-none',
-                view === 'list' && 'bg-secondary text-primary',
-              )}
+              className={cn('rounded-none', view === 'list' && 'bg-secondary text-primary')}
               onClick={() => setView('list')}
               title="List view"
             >
@@ -974,12 +1005,7 @@ export function KanbanBoard({
               <LayoutGrid size={14} />
             </Button>
           </div>
-          <Button
-            variant="outline"
-            size="icon-sm"
-            onClick={onRefresh}
-            title="Refresh"
-          >
+          <Button variant="outline" size="icon-sm" onClick={onRefresh} title="Refresh">
             <RefreshCw size={14} />
           </Button>
           {onNewIssue && (
