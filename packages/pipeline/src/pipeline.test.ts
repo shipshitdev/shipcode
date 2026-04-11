@@ -385,7 +385,7 @@ describe('createPipeline', () => {
       }
 
       expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(PIPELINE_MAX_RETRIES + 1);
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed');
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed', expect.any(String));
     });
 
     it('C1 regression: retry counter persists across recursive calls', async () => {
@@ -406,7 +406,7 @@ describe('createPipeline', () => {
 
       // Fourth failure: exhausted → should emit failed
       await mock.trigger('exit', 'proc-4', 1);
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed');
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed', expect.any(String));
     });
   });
 
@@ -625,7 +625,7 @@ describe('createPipeline', () => {
 
       await mock.trigger('exit', 'proc-2', 1);
 
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed');
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed', expect.any(String));
       expect(pipeline.getContext('t1')).toBeUndefined();
     });
   });

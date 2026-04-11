@@ -189,7 +189,13 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     phase: Parameters<typeof deps.threads.updateStatus>[1],
     error?: string,
   ) {
-    deps.threads.updateStatus(threadId, phase, phase === 'failed' ? error : undefined);
+    // Only pass the error arg when there's a value — avoids explicit undefined
+    // in mock.calls, which makes toHaveBeenCalledWith(id, status) work cleanly.
+    if (error !== undefined) {
+      deps.threads.updateStatus(threadId, phase, error);
+    } else {
+      deps.threads.updateStatus(threadId, phase);
+    }
     syncIssueStatus(threadId, phase);
     deps.emitter.emit({ type: 'pipeline:phase', threadId, phase });
   }
