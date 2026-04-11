@@ -5,8 +5,10 @@ export { MODEL_DISPLAY, modelDisplay } from './lib/model-display';
 
 // Icons — re-exported from lucide-react so apps import via @shipcode/ui
 export {
+  Activity,
   Archive,
   ArrowRight,
+  Bell,
   Copy,
   ArrowUpDown,
   Check,
@@ -14,11 +16,14 @@ export {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  DollarSign,
   ExternalLink,
   Folder,
   Globe,
+  Inbox,
   Keyboard,
   Layers,
+  LayoutGrid,
   Lock,
   Loader2,
   Maximize2,
@@ -34,6 +39,8 @@ export {
   Sparkles,
   Terminal,
   Trash2,
+  Workflow,
+  Wrench,
   X,
 } from 'lucide-react';
 

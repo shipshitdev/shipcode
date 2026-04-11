@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { type PhaseSkillKey } from '@shipcode/shared';
 import {
   Button,
   Textarea,
@@ -13,15 +14,10 @@ import {
 } from '@shipcode/ui';
 import { useAppStore } from '../stores/app-store';
 
-// These types mirror what apps/desktop/src/main/ipc.ts builds in `buildSkillRow`.
-// Kept loose because the IPC channel is typed as `unknown` in shared (to avoid
-// a shared → agents dep cycle).
-type PhaseSkillKey =
-  | 'plan-generation'
-  | 'adversarial-review'
-  | 'plan-revision'
-  | 'plan-execution'
-  | 'plan-verification';
+// The row shape below mirrors what apps/desktop/src/main/ipc.ts builds in
+// `buildSkillRow`. The IPC channel itself is typed as `unknown` in shared to
+// avoid pulling `@shipcode/agents` types (BundledDefault, ResolvedSkill) into
+// the shared package.
 
 interface SkillRowView {
   phase: PhaseSkillKey;
@@ -320,8 +316,9 @@ export function SkillsView() {
                     variant="secondary"
                     onClick={() => resetMutation.mutate()}
                     disabled={resetMutation.isPending || editingRow.source === 'default'}
+                    aria-label="Reset skill to bundled default"
                   >
-                    Reset to default
+                    Reset
                   </Button>
                   <Button
                     onClick={handleSave}

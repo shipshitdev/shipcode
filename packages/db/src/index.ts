@@ -26,7 +26,7 @@ export { NotificationsQueries } from './queries/notifications';
 export { DashboardQueries } from './queries/dashboard';
 export { CostsQueries } from './queries/costs';
 export { SkillsQueries } from './queries/skills';
-export type { SkillRow, PhaseSkillKey as DbPhaseSkillKey } from './queries/skills';
+export type { SkillRow } from './queries/skills';
 
 let db: DatabaseSync | null = null;
 

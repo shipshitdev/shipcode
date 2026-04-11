@@ -1,18 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { type PhaseSkillKey } from '@shipcode/shared';
 
-/**
- * Phase keys are duplicated here as a string-literal type so the db package
- * stays decoupled from @shipcode/agents (which owns the loader and the
- * bundled defaults). The desktop main process is responsible for keeping
- * these in sync; the runtime resolver in @shipcode/agents will catch any
- * drift via validateSkill.
- */
-export type PhaseSkillKey =
-  | 'plan-generation'
-  | 'adversarial-review'
-  | 'plan-revision'
-  | 'plan-execution'
-  | 'plan-verification';
+export type { PhaseSkillKey };
 
 export interface SkillRow {
   projectId: string | null;

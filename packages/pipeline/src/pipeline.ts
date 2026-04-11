@@ -7,14 +7,9 @@ import {
   buildVerificationPrompt,
   buildExecutionPrompt,
 } from '@shipcode/agents';
-import type {
-  ProviderPhase,
-  ProviderRequest,
-  PhaseSkillKey,
-  SkillValidationError,
-} from '@shipcode/agents';
+import type { ProviderPhase, ProviderRequest, SkillValidationError } from '@shipcode/agents';
 import { WorktreeManager } from '@shipcode/git';
-import type { AgentType, ShipCodePlan } from '@shipcode/shared';
+import type { AgentType, PhaseSkillKey, ShipCodePlan } from '@shipcode/shared';
 import {
   PIPELINE_MAX_RETRIES,
   MAX_VERIFICATION_RETRIES,

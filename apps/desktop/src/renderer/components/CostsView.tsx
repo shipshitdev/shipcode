@@ -84,8 +84,9 @@ export function CostsView() {
             className={cn(
               displayMode === '$' ? 'bg-tertiary text-primary font-medium' : 'text-muted',
             )}
+            aria-label="Show costs in US dollars"
           >
-            $
+            USD
           </Button>
           <Button
             variant="ghost"
@@ -94,8 +95,9 @@ export function CostsView() {
             className={cn(
               displayMode === 'tokens' ? 'bg-tertiary text-primary font-medium' : 'text-muted',
             )}
+            aria-label="Show costs in tokens"
           >
-            tokens
+            Tokens
           </Button>
         </div>
       </div>

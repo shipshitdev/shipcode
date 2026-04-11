@@ -573,9 +573,10 @@ function IssueListView({ issues, selectedIssueNumber, activeId, onIssueClick }: 
         const dropId = LIST_GROUP_DROP_ID[label];
         return (
           <div key={label}>
-            <button
-              type="button"
-              className="flex items-center gap-2 text-xs font-semibold text-secondary uppercase tracking-wider mb-2 cursor-pointer hover:text-primary w-full text-left"
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mb-2 h-auto w-full justify-start gap-2 px-0 text-xs font-semibold uppercase tracking-wider text-secondary hover:bg-transparent hover:text-primary"
               onClick={() => toggle(label)}
             >
               {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
@@ -583,7 +584,7 @@ function IssueListView({ issues, selectedIssueNumber, activeId, onIssueClick }: 
               <span className="text-muted font-normal normal-case tracking-normal ml-0.5">
                 ({groupIssues.length})
               </span>
-            </button>
+            </Button>
             {!isCollapsed && (
               <DroppableListGroup label={label} dropId={dropId}>
                 {groupIssues.map((issue) => (
@@ -738,45 +739,44 @@ export function KanbanBoard({
             </div>
           )}
           <div className="flex items-center border border-border rounded-md overflow-hidden shrink-0">
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="icon"
               className={cn(
-                'flex items-center justify-center h-7 w-7 cursor-pointer transition-colors',
-                view === 'list' ? 'bg-secondary text-primary' : 'bg-transparent text-secondary hover:text-primary',
+                'h-7 w-7 rounded-none',
+                view === 'list' && 'bg-secondary text-primary',
               )}
               onClick={() => setView('list')}
               title="List view"
             >
               <LayoutList size={13} />
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
               className={cn(
-                'flex items-center justify-center h-7 w-7 cursor-pointer transition-colors border-l border-border',
-                view === 'kanban' ? 'bg-secondary text-primary' : 'bg-transparent text-secondary hover:text-primary',
+                'h-7 w-7 rounded-none border-l border-border',
+                view === 'kanban' && 'bg-secondary text-primary',
               )}
               onClick={() => setView('kanban')}
               title="Board view"
             >
               <LayoutGrid size={13} />
-            </button>
+            </Button>
           </div>
-          <button
-            type="button"
-            className="flex items-center justify-center h-7 w-7 bg-transparent border border-border rounded-md text-secondary cursor-pointer hover:text-primary hover:border-text-secondary"
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-7 w-7"
             onClick={onRefresh}
             title="Refresh"
           >
             <RefreshCw size={13} />
-          </button>
+          </Button>
           {onNewIssue && (
-            <button
-              type="button"
-              className="bg-accent text-accent-foreground rounded-md cursor-pointer px-2.5 py-1 text-xs font-medium hover:bg-accent-hover shadow-[inset_0_0_0_1px_rgba(0,0,0,0.08)]"
-              onClick={onNewIssue}
-            >
+            <Button size="sm" onClick={onNewIssue}>
               + New PRD
-            </button>
+            </Button>
           )}
         </div>
       </div>

@@ -2,20 +2,9 @@
 // Source files: skills/<phase>/SKILL.md at repo root.
 // Regenerate via: bun run build:skills
 
-export type PhaseSkillKey =
-  | 'plan-generation'
-  | 'adversarial-review'
-  | 'plan-revision'
-  | 'plan-execution'
-  | 'plan-verification';
+import { type PhaseSkillKey } from '@shipcode/shared';
 
-export const PHASE_SKILL_KEYS: readonly PhaseSkillKey[] = [
-  'plan-generation',
-  'adversarial-review',
-  'plan-revision',
-  'plan-execution',
-  'plan-verification',
-] as const;
+export { type PhaseSkillKey, PHASE_SKILL_KEYS } from '@shipcode/shared';
 
 export interface BundledDefault {
   /** Raw markdown including frontmatter. The loader strips frontmatter before sending to the provider. */

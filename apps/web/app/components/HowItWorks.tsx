@@ -1,4 +1,6 @@
-import { Tag, FileText, Search, Play, GitPullRequest } from 'lucide-react';
+import { Fragment } from 'react';
+import { ArrowRight, Tag, FileText, Search, Play, GitPullRequest } from 'lucide-react';
+import { Card } from '@shipcode/ui';
 
 const steps = [
   {
@@ -33,20 +35,20 @@ export function HowItWorks() {
     <section className="py-24 px-6">
       <div className="max-w-6xl mx-auto">
         <h2 className="text-3xl md:text-4xl font-bold text-center mb-16">How It Works</h2>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div className="flex flex-col gap-4 md:flex-row md:items-stretch md:gap-2">
           {steps.map((step, i) => (
-            <div key={step.title} className="relative flex flex-col items-center">
-              <div className="bg-secondary border border-border rounded-xl p-6 text-center w-full">
-                <step.icon className="w-8 h-8 text-accent mx-auto mb-3" />
-                <h3 className="font-semibold text-primary mb-1">{step.title}</h3>
+            <Fragment key={step.title}>
+              <Card className="flex flex-1 flex-col items-center p-6 text-center">
+                <step.icon className="mb-3 h-8 w-8 text-accent" />
+                <h3 className="mb-1 font-semibold text-primary">{step.title}</h3>
                 <p className="text-sm text-secondary">{step.description}</p>
-              </div>
+              </Card>
               {i < steps.length - 1 && (
-                <div className="hidden md:block absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 text-muted text-lg z-10">
-                  &rarr;
+                <div className="hidden md:flex items-center shrink-0 text-muted">
+                  <ArrowRight size={16} />
                 </div>
               )}
-            </div>
+            </Fragment>
           ))}
         </div>
       </div>

@@ -180,7 +180,7 @@ export function CreateIssueModal() {
       ? 'Saving...'
       : 'Creating & planning...'
     : mode === 'edit'
-      ? 'Save PRD'
+      ? 'Save'
       : 'Create Plan';
 
   return (
@@ -251,7 +251,11 @@ export function CreateIssueModal() {
             <Sparkles size={14} />
             {enhancing ? 'Enhancing…' : 'Enhance with AI'}
           </Button>
-          <Button onClick={handleSubmit} disabled={submitDisabled}>
+          <Button
+            onClick={handleSubmit}
+            disabled={submitDisabled}
+            aria-label={mode === 'edit' ? 'Save PRD' : undefined}
+          >
             {submitLabel}
           </Button>
           {mode === 'create' && (

@@ -1,22 +1,27 @@
 import { useState, type MouseEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Button,
-  cn,
-  Folder,
-  Plus,
-  Pin,
-  PinOff,
+  Activity,
   Archive,
-  Trash2,
-  MoreHorizontal,
   ArrowUpDown,
+  Button,
   Check,
+  cn,
+  DollarSign,
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  Folder,
+  Inbox,
+  LayoutGrid,
+  MoreHorizontal,
+  Pin,
+  PinOff,
+  Plus,
+  Trash2,
+  Wrench,
 } from '@shipcode/ui';
 import { useAppStore } from '../stores/app-store';
 import type { AppSettings, DashboardStats, NotificationRecord, Project } from '@shipcode/shared';
@@ -164,50 +169,7 @@ export function ProjectSidebar() {
           )}
           onClick={() => openDashboard()}
         >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 16 16"
-            fill="none"
-            className="shrink-0 text-secondary"
-          >
-            <rect
-              x="1.5"
-              y="1.5"
-              width="5.5"
-              height="5.5"
-              rx="1"
-              stroke="currentColor"
-              strokeWidth="1.4"
-            />
-            <rect
-              x="9"
-              y="1.5"
-              width="5.5"
-              height="5.5"
-              rx="1"
-              stroke="currentColor"
-              strokeWidth="1.4"
-            />
-            <rect
-              x="1.5"
-              y="9"
-              width="5.5"
-              height="5.5"
-              rx="1"
-              stroke="currentColor"
-              strokeWidth="1.4"
-            />
-            <rect
-              x="9"
-              y="9"
-              width="5.5"
-              height="5.5"
-              rx="1"
-              stroke="currentColor"
-              strokeWidth="1.4"
-            />
-          </svg>
+          <LayoutGrid size={14} className="shrink-0 text-secondary" />
           <span className="flex-1 truncate">Mission Control</span>
           {liveCount > 0 && (
             <span className="inline-flex items-center gap-1 rounded-full bg-tertiary px-1.5 py-0.5 text-[10px] font-medium text-accent">
@@ -226,41 +188,7 @@ export function ProjectSidebar() {
           )}
           onClick={() => openActivity()}
         >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 16 16"
-            fill="none"
-            className="shrink-0 text-secondary"
-          >
-            <line
-              x1="3"
-              y1="4"
-              x2="13"
-              y2="4"
-              stroke="currentColor"
-              strokeWidth="1.4"
-              strokeLinecap="round"
-            />
-            <line
-              x1="3"
-              y1="8"
-              x2="13"
-              y2="8"
-              stroke="currentColor"
-              strokeWidth="1.4"
-              strokeLinecap="round"
-            />
-            <line
-              x1="3"
-              y1="12"
-              x2="9"
-              y2="12"
-              stroke="currentColor"
-              strokeWidth="1.4"
-              strokeLinecap="round"
-            />
-          </svg>
+          <Activity size={14} className="shrink-0 text-secondary" />
           <span className="flex-1 truncate">Activity</span>
         </Button>
 
@@ -273,21 +201,7 @@ export function ProjectSidebar() {
           )}
           onClick={() => openInbox()}
         >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 16 16"
-            fill="none"
-            className="shrink-0 text-secondary"
-          >
-            <path
-              d="M8 1.5A4.5 4.5 0 0 0 3.5 6v3.5L2 11h12l-1.5-1.5V6A4.5 4.5 0 0 0 8 1.5z"
-              stroke="currentColor"
-              strokeWidth="1.4"
-              strokeLinejoin="round"
-            />
-            <path d="M6.5 11.5a1.5 1.5 0 0 0 3 0" stroke="currentColor" strokeWidth="1.4" />
-          </svg>
+          <Inbox size={14} className="shrink-0 text-secondary" />
           <span className="flex-1 truncate">Inbox</span>
           {inboxCount > 0 && (
             <span className="inline-flex items-center justify-center rounded-full bg-tertiary px-1.5 py-0.5 text-[10px] font-medium text-secondary">
@@ -305,30 +219,7 @@ export function ProjectSidebar() {
           )}
           onClick={() => openCosts()}
         >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            className="shrink-0 text-secondary"
-          >
-            <line
-              x1="12"
-              y1="1"
-              x2="12"
-              y2="23"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-            <path
-              d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+          <DollarSign size={14} className="shrink-0 text-secondary" />
           <span className="flex-1 truncate">Costs</span>
         </Button>
 
@@ -341,21 +232,7 @@ export function ProjectSidebar() {
           )}
           onClick={() => openSkills()}
         >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            className="shrink-0 text-secondary"
-          >
-            <path
-              d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+          <Wrench size={14} className="shrink-0 text-secondary" />
           <span className="flex-1 truncate">Skills</span>
         </Button>
       </div>

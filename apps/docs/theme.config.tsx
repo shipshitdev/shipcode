@@ -1,19 +1,18 @@
-const basePath = process.env.DOCS_BASE_PATH || '';
+import { Navbar } from 'nextra-theme-docs';
 
 const config = {
   navbar: (
-    <div style={{ fontWeight: 700 }}>
-      <a href={basePath || '/'} style={{ color: 'inherit', textDecoration: 'none' }}>
-        ShipCode
-      </a>
-    </div>
+    <Navbar
+      logo={<span style={{ fontWeight: 700, letterSpacing: '-0.02em' }}>ShipCode</span>}
+      projectLink="https://github.com/shipshitdev/shipcode"
+    />
   ),
   docsRepositoryBase: 'https://github.com/shipshitdev/shipcode/tree/master/apps/docs',
-  footer: <div>ShipCode - Autonomous AI coding pipeline</div>,
   editLink: 'Edit this page',
   feedback: {
     content: 'Question? Give us feedback',
   },
+  darkMode: true,
 };
 
 export default config;

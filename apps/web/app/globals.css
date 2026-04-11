@@ -1,5 +1,6 @@
 /* Token source of truth: packages/shared/src/tokens.ts */
 @import "tailwindcss";
+@source "../../../packages/ui/src/**/*.{ts,tsx}";
 
 :root {
 	--bg-primary: #0d1117;

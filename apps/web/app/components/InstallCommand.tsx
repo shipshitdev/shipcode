@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Button } from '@shipcode/ui';
 
 export function InstallCommand() {
   const [copied, setCopied] = useState(false);
@@ -17,13 +18,9 @@ export function InstallCommand() {
         <span className="text-muted select-none">$</span>
         <span className="text-primary">npx shipcode</span>
         <span className="inline-block w-2 h-5 bg-accent animate-[blink_1s_step-end_infinite]" />
-        <button
-          type="button"
-          onClick={handleCopy}
-          className="ml-4 px-3 py-1 text-xs rounded bg-tertiary text-secondary hover:text-primary hover:bg-hover transition-colors border border-border"
-        >
+        <Button variant="secondary" size="xs" onClick={handleCopy} className="ml-4">
           {copied ? 'Copied!' : 'Copy'}
-        </button>
+        </Button>
       </div>
     </section>
   );

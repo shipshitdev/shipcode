@@ -19,7 +19,8 @@ import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { ProcessManager, PhaseSkillKey } from '@shipcode/agents';
+import type { ProcessManager } from '@shipcode/agents';
+import type { PhaseSkillKey } from '@shipcode/shared';
 import {
   checkSystemHealthWithAuth,
   checkGhAuth,

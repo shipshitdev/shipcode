@@ -490,8 +490,9 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
               variant="secondary"
               onClick={handleReject}
               disabled={!feedback.trim() || isSubmitting}
+              aria-label="Submit review feedback"
             >
-              {isSubmitting ? 'Submitting...' : 'Submit Feedback'}
+              {isSubmitting ? 'Submitting...' : 'Submit'}
             </Button>
           </div>
         </div>

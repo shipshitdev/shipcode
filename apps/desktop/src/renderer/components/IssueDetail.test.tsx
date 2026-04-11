@@ -217,7 +217,7 @@ describe('IssueDetail', () => {
         target: { value: 'Please tighten the acceptance criteria.' },
       },
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Submit Feedback' }));
+    fireEvent.click(screen.getByRole('button', { name: /submit/i }));
 
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith('pipeline:reject', {

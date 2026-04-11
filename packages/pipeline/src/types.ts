@@ -1,4 +1,5 @@
-import type { ProcessManager, ProviderRegistry, PhaseSkillKey } from '@shipcode/agents';
+import type { ProcessManager, ProviderRegistry } from '@shipcode/agents';
+import type { PhaseSkillKey } from '@shipcode/shared';
 import type {
   ThreadQueries,
   PlanQueries,
