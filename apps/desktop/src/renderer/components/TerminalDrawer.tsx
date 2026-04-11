@@ -4,6 +4,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { cn, Maximize2, Minimize2, X } from '@shipcode/ui';
 import { useAppStore } from '../stores/app-store';
+import type { GitHubIssueCacheRecord } from '@shipcode/shared';
 
 const MIN_HEIGHT = 120;
 const DEFAULT_HEIGHT = 250;
@@ -86,18 +87,36 @@ const FENCE_TAGS: Record<string, string> = {
 };
 const FENCE_RE = new RegExp('```(' + Object.keys(FENCE_TAGS).join('|') + ')');
 
+const AGENT_ACTIVE_STATUSES = new Set(['planning', 'reviewing', 'revising', 'executing', 'verifying', 'shipping']);
+
 export function TerminalDrawer() {
   const { toggleTerminal, agentOutputs } = useAppStore();
   const terminalThreadId = useAppStore((s) => s.terminalThreadId);
   const terminalEventsByThread = useAppStore((s) => s.terminalEventsByThread);
   const terminalEvents = terminalThreadId ? (terminalEventsByThread[terminalThreadId] ?? []) : [];
-  // Watch terminal focus thread for reset detection (renamed from activeThreadId)
-  const activeThreadId = terminalThreadId;
   const activeIssue = useAppStore((s) => s.activeIssue);
   const pipelinePhase = useAppStore((s) => s.pipelinePhase);
   const githubIssues = useAppStore((s) => s.githubIssues);
+  const processToThread = useAppStore((s) => s.processToThread);
   const setTerminalThread = useAppStore((s) => s.setTerminalThread);
   const selectIssue = useAppStore((s) => s.selectIssue);
+
+  // Pinned issue: tracks the last non-null activeIssue so header stays populated
+  // when the user navigates to Dashboard/Costs/Activity.
+  const [pinnedIssue, setPinnedIssue] = useState<GitHubIssueCacheRecord | null>(null);
+  useEffect(() => {
+    if (activeIssue) setPinnedIssue(activeIssue);
+  }, [activeIssue]);
+  // Also sync pinnedIssue when terminalThreadId points to a different issue than current pinnedIssue
+  useEffect(() => {
+    if (!terminalThreadId) return;
+    const found = githubIssues.find((i) => i.threadId === terminalThreadId);
+    if (found) setPinnedIssue(found);
+  }, [terminalThreadId, githubIssues]);
+
+  // Running tasks: issues with an active pipeline status — shown as tabs
+  const runningTabs = githubIssues.filter((i) => AGENT_ACTIVE_STATUSES.has(i.pipelineStatus));
+
   // Track when the current pipeline run started (first event for this thread)
   const startedAtRef = useRef<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -187,30 +206,34 @@ export function TerminalDrawer() {
     };
   }, []);
 
-  // Clear terminal when the active thread changes (user switched tasks)
+  // Clear terminal when the focused terminal thread changes
   useEffect(() => {
     const term = termRef.current;
     if (!term) return;
-    if (activeThreadId !== prevThreadIdRef.current) {
+    if (terminalThreadId !== prevThreadIdRef.current) {
       term.reset();
       writtenRef.current = {};
       lineBufferRef.current = {};
       suppressedRef.current = {};
       eventsWrittenRef.current = 0;
       startedAtRef.current = null;
-      prevThreadIdRef.current = activeThreadId;
+      prevThreadIdRef.current = terminalThreadId;
       // Show skeleton until first output arrives for this thread
       setIsTransitioning(true);
     }
-  }, [activeThreadId]);
+  }, [terminalThreadId]);
 
-  // Write incremental agent output as chunks arrive
+  // Write incremental agent output as chunks arrive (filtered to current terminal thread)
   useEffect(() => {
     const term = termRef.current;
     if (!term) return;
 
     for (const [processId, chunks] of Object.entries(agentOutputs)) {
       if (writtenRef.current[processId] === Infinity) continue;
+
+      // Only show output for processes belonging to the currently focused thread
+      const mappedThread = processToThread[processId];
+      if (mappedThread && terminalThreadId && mappedThread !== terminalThreadId) continue;
 
       const prev = (writtenRef.current[processId] as number) ?? 0;
       const newChunks = chunks.slice(prev);
@@ -277,7 +300,7 @@ export function TerminalDrawer() {
         delete lineBufferRef.current[processId];
       }
     }
-  }, [agentOutputs]);
+  }, [agentOutputs, processToThread, terminalThreadId]);
 
   // Write pipeline event log lines (phase transitions, process lifecycle)
   useEffect(() => {
@@ -292,6 +315,8 @@ export function TerminalDrawer() {
         minute: '2-digit',
         second: '2-digit',
       });
+      // Hide skeleton when events start arriving
+      if (newEvents.length > 0) setIsTransitioning(false);
     }
     for (const line of newEvents) {
       term.write(`\x1b[2m${line}\x1b[0m\r\n`);
@@ -300,6 +325,7 @@ export function TerminalDrawer() {
   }, [terminalEvents]);
 
   const resolvedHeight = isMaximized ? undefined : height;
+  const displayIssue = pinnedIssue;
 
   return (
     <div
@@ -316,11 +342,11 @@ export function TerminalDrawer() {
       <div className="flex items-center justify-between border-b border-border px-3 py-1.5 shrink-0 gap-3 min-w-0">
         <div className="flex items-center gap-2 min-w-0 overflow-hidden">
           <span className="text-xs font-semibold text-secondary shrink-0">Terminal</span>
-          {activeIssue && (
+          {displayIssue && (
             <>
               <span className="text-muted text-xs shrink-0">·</span>
-              <span className="text-xs font-mono text-muted shrink-0">#{activeIssue.issueNumber}</span>
-              <span className="text-xs text-secondary truncate">{activeIssue.title}</span>
+              <span className="text-xs font-mono text-muted shrink-0">#{displayIssue.issueNumber}</span>
+              <span className="text-xs text-secondary truncate">{displayIssue.title}</span>
             </>
           )}
           {pipelinePhase !== 'idle' && (
@@ -337,6 +363,26 @@ export function TerminalDrawer() {
           )}
         </div>
         <div className="flex items-center gap-1">
+          {/* Running task tabs */}
+          {runningTabs.length > 1 && runningTabs.map((issue) => (
+            <button
+              key={issue.threadId}
+              type="button"
+              onClick={() => {
+                setTerminalThread(issue.threadId ?? null);
+                selectIssue(issue);
+              }}
+              className={cn(
+                'flex h-6 items-center gap-1 cursor-pointer rounded-md border-none px-2 text-xs transition-colors',
+                issue.threadId === terminalThreadId
+                  ? 'bg-hover text-primary'
+                  : 'bg-transparent text-secondary hover:bg-hover hover:text-primary',
+              )}
+              title={`#${issue.issueNumber} ${issue.title}`}
+            >
+              <span className="font-mono">#{issue.issueNumber}</span>
+            </button>
+          ))}
           <button
             type="button"
             className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-secondary hover:bg-hover hover:text-primary"
@@ -355,7 +401,21 @@ export function TerminalDrawer() {
           </button>
         </div>
       </div>
-      <div ref={containerRef} className="flex-1 overflow-hidden min-h-0" />
+      <div className="relative flex-1 overflow-hidden min-h-0">
+        <div ref={containerRef} className="absolute inset-0" />
+        {/* Skeleton overlay while switching threads */}
+        {isTransitioning && (
+          <div className="absolute inset-0 flex flex-col gap-2 p-3 bg-[#0c0d10]">
+            {[70, 50, 85, 40, 65].map((w, i) => (
+              <div
+                key={i}
+                className="h-3 rounded animate-pulse bg-white/5"
+                style={{ width: `${w}%` }}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

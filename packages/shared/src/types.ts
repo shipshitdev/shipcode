@@ -96,6 +96,7 @@ export interface Thread {
   githubIssueNumber: number | null;
   githubPrNumber: number | null;
   githubRepo: string | null;
+  lastError: string | null;
   createdAt: string;
   updatedAt: string;
   // Tier 3 telemetry: what openrouter/auto (or claude/codex) actually

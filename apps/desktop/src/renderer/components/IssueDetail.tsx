@@ -30,6 +30,7 @@ import type {
   NotificationRecord,
   PipelinePhase,
 } from '@shipcode/shared';
+import { deriveGithubIssueUrl } from '@shipcode/shared';
 
 const PHASE_COLOR: Partial<Record<PipelinePhase, string>> = {
   planning: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
@@ -53,36 +54,8 @@ const ACTIVE_PHASES: PipelinePhase[] = [
   'shipping',
 ];
 
-// Derive https://github.com/owner/repo/issues/N from a git remote. Covers:
-//   - scp-style:  git@github.com:owner/repo(.git)
-//   - ssh scheme: ssh://git@github.com/owner/repo(.git)
-//   - https:      https://github.com/owner/repo(.git)
-// Rejects non-github.com hosts; host comparison is case-insensitive.
-export function deriveGithubIssueUrl(
-  remote: string | null | undefined,
-  issueNumber: number,
-): string | null {
-  if (!remote) return null;
-  const trimmed = remote.trim();
-  // scp-style: git@host:owner/repo(.git)
-  const scp = trimmed.match(/^git@([^:]+):([^/]+)\/(.+?)(?:\.git)?$/i);
-  if (scp && scp[1].toLowerCase() === 'github.com') {
-    return `https://github.com/${scp[2]}/${scp[3]}/issues/${issueNumber}`;
-  }
-  // URL-parseable forms (ssh://git@... or https://...)
-  try {
-    const u = new URL(trimmed);
-    if (u.hostname.toLowerCase() !== 'github.com') return null;
-    const parts = u.pathname
-      .replace(/^\/+/, '')
-      .replace(/\.git$/i, '')
-      .split('/');
-    if (parts.length < 2 || !parts[0] || !parts[1]) return null;
-    return `https://github.com/${parts[0]}/${parts[1]}/issues/${issueNumber}`;
-  } catch {
-    return null;
-  }
-}
+// `deriveGithubIssueUrl` + related helpers live in `@shipcode/shared/github-url`
+// so the Kanban toolbar, IssueDetail, and any future consumer share one parser.
 
 const PRD_PROSE_CLASSES =
   'space-y-3 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-secondary [&_code]:rounded [&_code]:bg-tertiary [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-xs [&_h1]:text-base [&_h1]:font-semibold [&_h2]:mt-4 [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:text-sm [&_h3]:font-semibold [&_li]:mb-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:whitespace-pre-wrap [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-tertiary [&_pre]:p-3 [&_pre]:text-xs [&_ul]:list-disc [&_ul]:pl-5';
@@ -661,8 +634,8 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
             {approvalSection}
             {planHistorySection}
 
-            {/* Thread exists but no plans yet */}
-            {activeThreadId && planHistory.length === 0 && (
+            {/* Thread exists but no plans yet — only while not failed */}
+            {activeThreadId && planHistory.length === 0 && threadPhase !== 'failed' && (
               <div className="mb-5">
                 <p className="py-4 text-center text-[13px] text-muted">
                   Pipeline is running — waiting for plan generation...
@@ -689,11 +662,19 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
           {/* Re-run CTA */}
           {canRerun && (
-            <div className="py-6 text-center">
-              <p className="mb-3 text-sm text-muted">Pipeline failed.</p>
-              <Button size="lg" variant="outline" onClick={handleRerun} disabled={isSubmitting}>
-                {isSubmitting ? 'Starting...' : 'Re-run Pipeline'}
-              </Button>
+            <div className="py-4">
+              {thread?.lastError && (
+                <div className="mb-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2">
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-danger">Error</p>
+                  <p className="text-[12px] text-danger/80 break-words">{thread.lastError}</p>
+                </div>
+              )}
+              <div className="text-center">
+                <p className="mb-3 text-sm text-muted">Pipeline failed.</p>
+                <Button size="lg" variant="outline" onClick={handleRerun} disabled={isSubmitting}>
+                  {isSubmitting ? 'Starting...' : 'Re-run Pipeline'}
+                </Button>
+              </div>
             </div>
           )}
         </div>
@@ -782,20 +763,28 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
           </div>
         )}
 
-        {/* Pipeline failed — offer to re-run */}
+        {/* Pipeline failed — show error + offer to re-run */}
         {canRerun && (
-          <div className="mb-5 py-6 text-center">
-            <p className="mb-3 text-muted">
-              Pipeline failed. You can re-run it from the beginning.
-            </p>
-            <Button size="lg" variant="outline" onClick={handleRerun} disabled={isSubmitting}>
-              {isSubmitting ? 'Starting...' : 'Re-run Pipeline'}
-            </Button>
+          <div className="mb-5">
+            {thread?.lastError && (
+              <div className="mb-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2">
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-danger">Error</p>
+                <p className="text-[12px] text-danger/80 break-words">{thread.lastError}</p>
+              </div>
+            )}
+            <div className="py-4 text-center">
+              <p className="mb-3 text-muted">
+                Pipeline failed. You can re-run it from the beginning.
+              </p>
+              <Button size="lg" variant="outline" onClick={handleRerun} disabled={isSubmitting}>
+                {isSubmitting ? 'Starting...' : 'Re-run Pipeline'}
+              </Button>
+            </div>
           </div>
         )}
 
-        {/* Thread exists but no plans yet */}
-        {activeThreadId && planHistory.length === 0 && (
+        {/* Thread exists but no plans yet — only while not failed */}
+        {activeThreadId && planHistory.length === 0 && threadPhase !== 'failed' && (
           <div className="mb-5">
             <p className="py-4 text-center text-[13px] text-muted">
               Pipeline is running — waiting for plan generation...

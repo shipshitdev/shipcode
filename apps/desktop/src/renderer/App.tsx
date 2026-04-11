@@ -32,6 +32,7 @@ export function App() {
     viewMode,
     activeIssue,
     issueDetailExpanded,
+    issueDetailCollapsed,
   } = useAppStore();
 
   const { data: settings } = useQuery<AppSettings>({
@@ -124,7 +125,7 @@ export function App() {
             {terminalVisible && <TerminalDrawer />}
           </div>
           {/* Right panel — full height, spans over the terminal */}
-          {activeIssue && !issueDetailExpanded && (
+          {activeIssue && !issueDetailExpanded && !issueDetailCollapsed && (
             <div className="w-[420px] shrink-0 border-l border-border overflow-hidden">
               <IssueDetail expanded={false} />
             </div>

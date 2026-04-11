@@ -1,9 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { IssueDetail, deriveGithubIssueUrl } from './IssueDetail';
+import { IssueDetail } from './IssueDetail';
 import { useAppStore } from '../stores/app-store';
-import type { GitHubIssueCacheRecord, PlanRecord, Thread } from '@shipcode/shared';
+import {
+  deriveGithubIssueUrl,
+  type GitHubIssueCacheRecord,
+  type PlanRecord,
+  type Thread,
+} from '@shipcode/shared';
 
 const makeIssue = (overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssueCacheRecord => ({
   id: 'issue-1',
@@ -25,38 +30,41 @@ const makeIssue = (overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
   ...overrides,
 });
 
-const makeThread = (overrides: Partial<Thread> = {}): Thread => ({
-  id: 'thread-1',
-  projectId: 'project-1',
-  title: 'Thread title',
-  prompt: 'Do the thing',
-  status: 'awaiting_approval',
-  worktreeBranch: null,
-  worktreePath: null,
-  plannerModel: 'claude',
-  reviewerModel: 'codex',
-  executorModel: 'claude',
-  reviewRound: 0,
-  verificationStatus: null,
-  verificationRetries: 0,
-  autonomous: false,
-  baseBranch: null,
-  forkPointSha: null,
-  githubIssueNumber: 42,
-  githubPrNumber: null,
-  githubRepo: null,
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-  plannerResolvedModel: null,
-  reviewerResolvedModel: null,
-  revisorResolvedModel: null,
-  executorResolvedModel: null,
-  verifierResolvedModel: null,
-  totalTokensPrompt: 0,
-  totalTokensCompletion: 0,
-  totalCostUsd: 0,
-  ...overrides,
-});
+const makeThread = (overrides: Partial<Thread> = {}): Thread => {
+  const base: Thread = {
+    id: 'thread-1',
+    projectId: 'project-1',
+    title: 'Thread title',
+    prompt: 'Do the thing',
+    status: 'awaiting_approval',
+    worktreeBranch: null,
+    worktreePath: null,
+    plannerModel: 'claude',
+    reviewerModel: 'codex',
+    executorModel: 'claude',
+    reviewRound: 0,
+    verificationStatus: null,
+    verificationRetries: 0,
+    autonomous: false,
+    baseBranch: null,
+    forkPointSha: null,
+    githubIssueNumber: 42,
+    githubPrNumber: null,
+    githubRepo: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    plannerResolvedModel: null,
+    reviewerResolvedModel: null,
+    revisorResolvedModel: null,
+    executorResolvedModel: null,
+    verifierResolvedModel: null,
+    totalTokensPrompt: 0,
+    totalTokensCompletion: 0,
+    totalCostUsd: 0,
+    lastError: null,
+  };
+  return { ...base, ...overrides };
+};
 
 const makePlan = (overrides: Partial<PlanRecord> = {}): PlanRecord => ({
   id: 'plan-1',

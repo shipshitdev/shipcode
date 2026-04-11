@@ -351,3 +351,19 @@ export function migrateV7(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (7)`);
   });
 }
+
+export function migrateV8(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 8) return;
+
+  transaction(db, () => {
+    // Store the last failure reason so the UI can surface it in IssueDetail.
+    try {
+      db.exec('ALTER TABLE threads ADD COLUMN last_error TEXT');
+    } catch {}
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (8)`);
+  });
+}

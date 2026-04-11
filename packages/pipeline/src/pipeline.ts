@@ -177,8 +177,12 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     };
   }
 
-  function emitPhase(threadId: string, phase: Parameters<typeof deps.threads.updateStatus>[1]) {
-    deps.threads.updateStatus(threadId, phase);
+  function emitPhase(
+    threadId: string,
+    phase: Parameters<typeof deps.threads.updateStatus>[1],
+    error?: string,
+  ) {
+    deps.threads.updateStatus(threadId, phase, phase === 'failed' ? error : undefined);
     syncIssueStatus(threadId, phase);
     deps.emitter.emit({ type: 'pipeline:phase', threadId, phase });
   }
@@ -205,7 +209,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         if (context.cancelled) return;
 
         if (response.exitCode === 127) {
-          emitPhase(threadId, 'failed');
+          emitPhase(threadId, 'failed', 'Claude CLI not found (exit 127). Is the claude binary installed and on PATH?');
           activePipelines.delete(threadId);
           return;
         }
@@ -232,7 +236,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
               context.retryCount++;
               startPlanGeneration(threadId, prompt, projectPath, worktreePath);
             } else {
-              emitPhase(threadId, 'failed');
+              emitPhase(threadId, 'failed', `Plan generation failed (exit ${response.exitCode}): no parseable plan after ${PIPELINE_MAX_RETRIES} retries`);
               activePipelines.delete(threadId);
             }
           }
@@ -258,9 +262,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
           deps.plans.create(threadId, result.raw, null, nextVersion);
           emitPhase(threadId, 'awaiting_approval');
         }
-      } catch {
+      } catch (err) {
         if (!context.cancelled) {
-          emitPhase(threadId, 'failed');
+          emitPhase(threadId, 'failed', `Plan generation error: ${String(err)}`);
           activePipelines.delete(threadId);
         }
       }
@@ -416,7 +420,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         deps.threads.setWorktree(threadId, wt.branch, wt.worktreePath);
       } catch (err) {
         console.error(`[pipeline] worktree creation failed for thread ${threadId}:`, err);
-        emitPhase(threadId, 'failed');
+        emitPhase(threadId, 'failed', `Worktree creation failed: ${String(err)}`);
         activePipelines.delete(threadId);
         return;
       }
@@ -446,12 +450,13 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
             activePipelines.delete(threadId);
           }
         } else {
-          emitPhase(threadId, 'failed');
+          const errSnippet = response.rawOutput.trim().split('\n').slice(-3).join(' ').slice(0, 280);
+          emitPhase(threadId, 'failed', `Execution failed (exit ${response.exitCode})${errSnippet ? `: ${errSnippet}` : ''}`);
           activePipelines.delete(threadId);
         }
-      } catch {
+      } catch (err) {
         if (!context.cancelled) {
-          emitPhase(threadId, 'failed');
+          emitPhase(threadId, 'failed', `Execution error: ${String(err)}`);
           activePipelines.delete(threadId);
         }
       }

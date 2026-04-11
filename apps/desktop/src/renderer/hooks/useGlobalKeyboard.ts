@@ -11,7 +11,7 @@ export function useGlobalKeyboard() {
         e.preventDefault();
         toggleCommandPalette();
       }
-      if (e.ctrlKey && e.key === '`') {
+      if (e.metaKey && e.key === 'j') {
         e.preventDefault();
         toggleTerminal();
       }

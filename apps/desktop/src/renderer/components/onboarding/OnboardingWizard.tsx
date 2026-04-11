@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useMutation } from '@tanstack/react-query';
 import type {
   AgentType,
-  AppSettings,
   GhAuthStatus,
+  Project,
   StatusLabelMapping,
   SystemHealth,
 } from '@shipcode/shared';
@@ -23,7 +22,7 @@ interface AuthResult extends SystemHealth {
 }
 
 interface Props {
-  onComplete: () => void;
+  onComplete: (projectId?: string) => void;
 }
 
 export function OnboardingWizard({ onComplete }: Props) {
@@ -37,10 +36,7 @@ export function OnboardingWizard({ onComplete }: Props) {
   );
 
   const authCheck = useAuthCheck();
-  const saveSettings = useMutation({
-    mutationFn: (patch: Partial<AppSettings>) => window.shipcode.invoke('settings:set', patch),
-    onSuccess: onComplete,
-  });
+  const [saving, setSaving] = useState(false);
 
   // Run auth check on mount
   useEffect(() => {
@@ -76,17 +72,28 @@ export function OnboardingWizard({ onComplete }: Props) {
     }
   }
 
-  function handleFinish() {
-    // `selectedRepo` is guaranteed non-null here because step 1 gates advancement
-    // on it — see `canNext` below. GitHub is mandatory throughout the app.
-    const patch: Partial<AppSettings> = {
-      plannerModel,
-      reviewerModel,
-      statusLabelMappings: labelMappings,
-      githubPollingEnabled: true,
-      onboardingVersion: CURRENT_ONBOARDING_VERSION,
-    };
-    saveSettings.mutate(patch);
+  async function handleFinish() {
+    setSaving(true);
+    try {
+      await window.shipcode.invoke('settings:set', {
+        plannerModel,
+        reviewerModel,
+        statusLabelMappings: labelMappings,
+        githubPollingEnabled: true,
+        onboardingVersion: CURRENT_ONBOARDING_VERSION,
+      });
+      let newProjectId: string | undefined;
+      if (selectedRepo) {
+        const localPath = await window.shipcode.invoke<string | null>('dialog:open-directory');
+        if (localPath) {
+          const project = await window.shipcode.invoke<Project>('project:add', { path: localPath });
+          newProjectId = project.id;
+        }
+      }
+      onComplete(newProjectId);
+    } finally {
+      setSaving(false);
+    }
   }
 
   const canNext = step === 0 ? canAdvanceFromAuth : step === 1 ? selectedRepo !== null : true;
@@ -155,8 +162,8 @@ export function OnboardingWizard({ onComplete }: Props) {
           )}
           <div className="flex-1" />
           {isLastStep ? (
-            <Button onClick={handleFinish} disabled={saveSettings.isPending}>
-              {saveSettings.isPending ? 'Saving...' : 'Finish Setup'}
+            <Button onClick={handleFinish} disabled={saving}>
+              {saving ? 'Saving...' : 'Finish Setup'}
             </Button>
           ) : (
             <Button onClick={handleNext} disabled={!canNext}>

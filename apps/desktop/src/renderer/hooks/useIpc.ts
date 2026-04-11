@@ -16,6 +16,7 @@ export function useIpc() {
     removeNotification,
     logTerminalEventForThread,
     setTerminalThread,
+    mapProcessToThread,
   } = useAppStore();
 
   useEffect(() => {
@@ -150,9 +151,12 @@ export function useIpc() {
           second: '2-digit',
         });
         const label = data.state === 'running' ? 'started' : 'exited';
-        store.logTerminalEvent(`[${ts}] ${data.type} process ${label}`);
-        // Route to whichever thread is currently focused in the terminal
+        // Associate this processId with the currently focused terminal thread
         const tid = store.terminalThreadId;
+        if (data.state === 'running' && data.processId && tid) {
+          mapProcessToThread(data.processId, tid);
+        }
+        store.logTerminalEvent(`[${ts}] ${data.type} process ${label}`);
         if (tid) logTerminalEventForThread(tid, `[${ts}] ${data.type} process ${label}`);
       }),
     );
@@ -216,6 +220,7 @@ export function useIpc() {
     removeNotification,
     logTerminalEventForThread,
     setTerminalThread,
+    mapProcessToThread,
     queryClient,
   ]);
 }

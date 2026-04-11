@@ -31,10 +31,18 @@ export class ThreadQueries {
     return this.getById(id)!;
   }
 
-  updateStatus(id: string, status: ThreadStatus): void {
-    this.db
-      .prepare(`UPDATE threads SET status = ?, updated_at = datetime('now') WHERE id = ?`)
-      .run(status, id);
+  updateStatus(id: string, status: ThreadStatus, lastError?: string): void {
+    if (lastError !== undefined) {
+      this.db
+        .prepare(
+          `UPDATE threads SET status = ?, last_error = ?, updated_at = datetime('now') WHERE id = ?`,
+        )
+        .run(status, lastError, id);
+    } else {
+      this.db
+        .prepare(`UPDATE threads SET status = ?, updated_at = datetime('now') WHERE id = ?`)
+        .run(status, id);
+    }
   }
 
   setWorktree(id: string, branch: string, worktreePath: string): void {
@@ -194,6 +202,7 @@ function mapThread(row: any): Thread {
     githubIssueNumber: row.github_issue_number ?? null,
     githubPrNumber: row.github_pr_number ?? null,
     githubRepo: row.github_repo ?? null,
+    lastError: row.last_error ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     plannerResolvedModel: row.planner_resolved_model ?? null,

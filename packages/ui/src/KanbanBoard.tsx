@@ -42,6 +42,18 @@ interface KanbanBoardProps {
   onBaseBranchChange?: (branch: string) => void;
   /** Issue number currently open in the side panel — highlights the card. */
   selectedIssueNumber?: number;
+  /** Project name shown as the toolbar heading (replaces the generic "GitHub Issues"). */
+  projectName?: string;
+  /** `https://github.com/owner/repo` — enables the "repo" quick-link. */
+  repoUrl?: string | null;
+  /** `https://github.com/owner/repo/projects` — enables the "board" quick-link. */
+  projectsUrl?: string | null;
+  /**
+   * Optional interceptor for external link clicks. The Electron renderer passes
+   * a handler that routes through `shell:open-external`; the web app leaves
+   * this undefined and lets the browser follow the `<a href>`.
+   */
+  onOpenExternal?: (url: string) => void;
 }
 
 type ColumnKey = 'todo' | 'agent' | 'human' | 'done';
@@ -462,7 +474,17 @@ export function KanbanBoard({
   branches,
   onBaseBranchChange,
   selectedIssueNumber,
+  projectName,
+  repoUrl,
+  projectsUrl,
+  onOpenExternal,
 }: KanbanBoardProps) {
+  const handleExternalClick = (url: string) => (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (onOpenExternal) {
+      e.preventDefault();
+      onOpenExternal(url);
+    }
+  };
   const [activeId, setActiveId] = useState<string | null>(null);
   const activeIssue = issues.find((i) => i.id === activeId);
 
@@ -515,7 +537,39 @@ export function KanbanBoard({
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center px-4 py-3 border-b border-border shrink-0 gap-3">
-        <h3 className="text-sm font-semibold shrink-0">GitHub Issues</h3>
+        <h3 className="text-sm font-semibold shrink-0 truncate">
+          {projectName ?? 'GitHub Issues'}
+        </h3>
+        {(repoUrl || projectsUrl) && (
+          <div className="flex items-center gap-1 shrink-0">
+            {repoUrl && (
+              <a
+                href={repoUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                onClick={handleExternalClick(repoUrl)}
+                className="flex items-center gap-1 h-6 px-2 text-[11px] text-secondary hover:text-primary rounded-md border border-border hover:border-text-secondary"
+                title="Open repository on github.com"
+              >
+                repo
+                <ExternalLink size={10} />
+              </a>
+            )}
+            {projectsUrl && (
+              <a
+                href={projectsUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                onClick={handleExternalClick(projectsUrl)}
+                className="flex items-center gap-1 h-6 px-2 text-[11px] text-secondary hover:text-primary rounded-md border border-border hover:border-text-secondary"
+                title="Open Projects board on github.com"
+              >
+                board
+                <ExternalLink size={10} />
+              </a>
+            )}
+          </div>
+        )}
         <div className="flex-1" />
         <div className="flex items-center gap-2 shrink-0">
           {baseBranch && branches && branches.length > 0 && onBaseBranchChange && (

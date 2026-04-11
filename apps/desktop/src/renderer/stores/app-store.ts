@@ -35,6 +35,7 @@ interface AppState {
   settingsVisible: boolean;
   settingsSection: SettingsSection;
   issueDetailExpanded: boolean;
+  issueDetailCollapsed: boolean;
 
   // Live data
   currentPlan: ShipCodePlan | null;
@@ -48,6 +49,9 @@ interface AppState {
 
   // Agent output buffers
   agentOutputs: Record<string, string[]>;
+
+  // processId → threadId mapping (populated when agent:state 'running' fires after pipeline:phase)
+  processToThread: Record<string, string>;
 
   // Terminal event log (phase transitions, process lifecycle — resets on thread switch)
   terminalEvents: string[];
@@ -86,6 +90,7 @@ interface AppState {
   setGithubIssues: (issues: GitHubIssueCacheRecord[]) => void;
   appendAgentOutput: (processId: string, chunk: string) => void;
   clearAgentOutput: (processId: string) => void;
+  mapProcessToThread: (processId: string, threadId: string) => void;
   logTerminalEvent: (line: string) => void;
   setTerminalThread: (id: string | null) => void;
   logTerminalEventForThread: (threadId: string, line: string) => void;
@@ -93,6 +98,7 @@ interface AppState {
   removeNotification: (id: string) => void;
   clearNotifications: () => void;
   toggleIssueDetailExpanded: () => void;
+  toggleIssueDetail: () => void;
   toggleCommandPalette: () => void;
   openCreateIssueModal: () => void;
   openEditPrdModal: (issueNumber: number, body: string) => void;
@@ -109,6 +115,7 @@ export const useAppStore = create<AppState>((set) => ({
   settingsVisible: false,
   settingsSection: 'general' as SettingsSection,
   issueDetailExpanded: false,
+  issueDetailCollapsed: false,
   currentPlan: null,
   currentReview: null,
   pipelinePhase: 'idle',
@@ -116,6 +123,7 @@ export const useAppStore = create<AppState>((set) => ({
   currentVerification: null,
   githubIssues: [],
   agentOutputs: {},
+  processToThread: {},
   terminalEvents: [],
   terminalThreadId: null,
   terminalEventsByThread: {},
@@ -174,6 +182,7 @@ export const useAppStore = create<AppState>((set) => ({
       viewMode: 'project',
       terminalThreadId: null,
       terminalEventsByThread: {},
+      processToThread: {},
     }),
   selectThread: (id) =>
     set({
@@ -226,6 +235,8 @@ export const useAppStore = create<AppState>((set) => ({
       const { [processId]: _, ...rest } = s.agentOutputs;
       return { agentOutputs: rest };
     }),
+  mapProcessToThread: (processId, threadId) =>
+    set((s) => ({ processToThread: { ...s.processToThread, [processId]: threadId } })),
   logTerminalEvent: (line) => set((s) => ({ terminalEvents: [...s.terminalEvents, line] })),
   setTerminalThread: (id) => set({ terminalThreadId: id }),
   logTerminalEventForThread: (threadId, line) =>
@@ -244,6 +255,7 @@ export const useAppStore = create<AppState>((set) => ({
     set((s) => ({ notifications: s.notifications.filter((n) => n.id !== id) })),
   clearNotifications: () => set({ notifications: [] }),
   toggleIssueDetailExpanded: () => set((s) => ({ issueDetailExpanded: !s.issueDetailExpanded })),
+  toggleIssueDetail: () => set((s) => ({ issueDetailCollapsed: !s.issueDetailCollapsed })),
   toggleCommandPalette: () => set((s) => ({ commandPaletteOpen: !s.commandPaletteOpen })),
   openCreateIssueModal: () =>
     set({ createIssueModalOpen: true, editingPrd: null, commandPaletteOpen: false }),
