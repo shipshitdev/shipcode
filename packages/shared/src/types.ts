@@ -228,6 +228,13 @@ export interface AppSettings {
   // Max turns the planner/verifier Claude CLI is allowed per run (--max-turns).
   // Does not apply to execute (no limit) or review (always 1, structural).
   plannerMaxTurns: number;
+  // Max review→revise cycles before falling through to execute/awaiting_approval.
+  maxReviewRounds: number;
+  // When true, pipeline pauses at awaiting_approval after review loop for human sign-off.
+  // When false (default), it proceeds directly to execution.
+  requireApproval: boolean;
+  // Codex --reasoning-effort for the review phase.
+  reviewerReasoningEffort: 'low' | 'medium' | 'high';
   // Notifications
   notificationsEnabled: boolean;
   notificationOsEnabled: boolean;

@@ -12,7 +12,6 @@ import type { AgentType, ShipCodePlan } from '@shipcode/shared';
 import {
   PIPELINE_MAX_RETRIES,
   MAX_VERIFICATION_RETRIES,
-  MAX_REVIEW_ROUNDS,
 } from '@shipcode/shared';
 import type { Pipeline, PipelineContext, PipelineDeps, PipelineExecutorModel } from './types';
 
@@ -238,11 +237,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
             const plan = deps.plans.create(threadId, result.raw, result.data, nextVersion);
             deps.plans.updateStatus(plan.id, 'pending_review');
             deps.emitter.emit({ type: 'plan:parsed', threadId, plan: result.data });
-            if (context.autonomous) {
-              startReview(threadId, result.data);
-            } else {
-              emitPhase(threadId, 'reviewing');
-            }
+            startReview(threadId, result.data);
           } else {
             const detectedError = parser.detectError();
             if (context.retryCount < PIPELINE_MAX_RETRIES) {
@@ -265,12 +260,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
           deps.plans.updateStatus(plan.id, 'pending_review');
           deps.emitter.emit({ type: 'plan:parsed', threadId, plan: result.data });
 
-          if (context.autonomous) {
-            // Autonomous: go directly to review
-            startReview(threadId, result.data);
-          } else {
-            emitPhase(threadId, 'reviewing');
-          }
+          startReview(threadId, result.data);
         } else {
           // Store raw output even without structured data
           deps.plans.create(threadId, result.raw, null, nextVersion);
@@ -291,15 +281,12 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
     emitPhase(threadId, 'reviewing');
 
-    const reviewPromptText = buildReviewPrompt(plan, undefined, context.autonomous);
+    const reviewPromptText = buildReviewPrompt(plan, undefined, true);
 
     void (async () => {
       try {
         const response = await runProviderPhase(context, 'review', reviewPromptText, {
-          // Autonomous review gets high reasoning effort — passed as a
-          // phase hint so the codex CLI provider reproduces the original
-          // --reasoning-effort high arg.
-          ...(context.autonomous ? { reasoningEffort: 'high' as const } : {}),
+          reasoningEffort: deps.settings.get().reviewerReasoningEffort,
         });
 
         if (context.cancelled) return;
@@ -321,14 +308,17 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
           deps.emitter.emit({ type: 'review:parsed', threadId, review: result.data });
 
           if (result.data.decision === 'approve') {
-            if (context.autonomous) {
-              startExecution(threadId, latestPlan!.structured!);
-            } else {
+            // Codex satisfied — proceed to execution or hand off to human.
+            if (deps.settings.get().requireApproval) {
               emitPhase(threadId, 'awaiting_approval');
+            } else {
+              startExecution(threadId, latestPlan!.structured!);
             }
           } else if (result.data.decision === 'request_changes') {
-            if (context.autonomous && context.reviewRound < MAX_REVIEW_ROUNDS) {
-              // Check if there are critical/major findings
+            if (context.reviewRound < deps.settings.get().maxReviewRounds) {
+              // Revision loop — runs regardless of autonomous mode.
+              // Both modes loop through review→revise up to MAX_REVIEW_ROUNDS times;
+              // only the terminal state differs (execute vs awaiting_approval).
               context.reviewRound++;
               deps.threads.incrementReviewRound(threadId);
               const feedback =
@@ -341,19 +331,20 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
                   )
                   .join('\n');
               startRevision(threadId, latestPlan!.structured!, feedback);
-            } else if (context.autonomous && context.reviewRound >= MAX_REVIEW_ROUNDS) {
-              // Force-approve only if no critical/major findings remain
+            } else {
+              // Rounds exhausted. Fail hard on critical/major findings;
+              // otherwise fall through to the same terminal as approve.
               const hasCriticalOrMajor = result.data.findings.some(
                 (f: { severity: string }) => f.severity === 'critical' || f.severity === 'major',
               );
               if (hasCriticalOrMajor) {
                 emitPhase(threadId, 'failed');
                 activePipelines.delete(threadId);
+              } else if (deps.settings.get().requireApproval) {
+                emitPhase(threadId, 'awaiting_approval');
               } else {
                 startExecution(threadId, latestPlan!.structured!);
               }
-            } else {
-              emitPhase(threadId, 'revising');
             }
           } else {
             // reject

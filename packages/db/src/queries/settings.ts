@@ -79,6 +79,11 @@ export class SettingsQueries {
       plannerMaxTurns: stored.plannerMaxTurns
         ? parseInt(stored.plannerMaxTurns, 10)
         : DEFAULT_SETTINGS.plannerMaxTurns,
+      maxReviewRounds: stored.maxReviewRounds
+        ? parseInt(stored.maxReviewRounds, 10)
+        : DEFAULT_SETTINGS.maxReviewRounds,
+      requireApproval: parseBool(stored.requireApproval, DEFAULT_SETTINGS.requireApproval),
+      reviewerReasoningEffort: (stored.reviewerReasoningEffort as AppSettings['reviewerReasoningEffort']) ?? DEFAULT_SETTINGS.reviewerReasoningEffort,
       notificationsEnabled: parseBool(
         stored.notificationsEnabled,
         DEFAULT_SETTINGS.notificationsEnabled,

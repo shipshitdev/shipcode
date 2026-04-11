@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { cn, ChevronLeft, Settings, Folder, Archive } from '@shipcode/ui';
+import { cn, ChevronLeft, Settings, Folder, Archive, Keyboard } from '@shipcode/ui';
 import { useAppStore } from '../stores/app-store';
 import type { SettingsSection } from '../stores/app-store';
 
@@ -45,6 +45,11 @@ const SECTIONS: { key: SettingsSection; label: string; icon: ReactNode }[] = [
         />
       </svg>
     ),
+  },
+  {
+    key: 'shortcuts',
+    label: 'Shortcuts',
+    icon: <Keyboard size={14} />,
   },
   {
     key: 'archived',

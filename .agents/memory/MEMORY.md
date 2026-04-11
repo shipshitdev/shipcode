@@ -25,11 +25,10 @@ Loaded after `~/.agents/memory/MEMORY.md` (global). Project-scoped facts only. F
 - **Grep-stable anchors:** `projectSlug`, `resolveWorktreeParent` in `packages/shared/src/worktree-path.ts`.
 - See: `project_worktree_defaults.md`.
 
-## Current branch (TEMPORARY)
+## Current state (2026-04-11)
 
-- `feat/openrouter-tier1` — extends `PipelineExecutorModel` with `"openrouter"`, adds `packages/agents/src/providers/`, plus parallel notifications/dashboard work.
-- Dirty: 25 modified + 8 untracked. Several LSP errors (see `project_current_branch.md` for the list).
-- **DELETE `project_current_branch.md` when this branch lands.**
+- `feat/openrouter-tier1` **merged to master** (PR #17). OpenRouter Tier 1 is live: plan/review/verify can route through OpenRouter. Execute is still claude/codex only (Tier 2 = future).
+- **Unstaged OpenRouter settings UI** in working tree: `SettingsPanel.tsx`, `SettingsSidebar.tsx`, `db/queries/settings.ts`, `types.ts`, `constants.ts`, `ui/index.ts` — not yet committed.
 
 ## Hard rules (from past incidents)
 
@@ -45,6 +44,6 @@ Loaded after `~/.agents/memory/MEMORY.md` (global). Project-scoped facts only. F
 
 ## Further reading
 
-- `project_shipcode_overview.md`, `project_pipeline_flow.md`, `project_worktree_defaults.md`, `project_current_branch.md`
+- `project_shipcode_overview.md`, `project_pipeline_flow.md`, `project_worktree_defaults.md`
 - `feedback_claude_cli_prompts_via_stdin.md`, `feedback_path_as_truth_worktrees.md`
 - `BATCH_2_CANDIDATES.md` — extraction backlog

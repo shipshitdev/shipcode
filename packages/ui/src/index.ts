@@ -17,6 +17,7 @@ export {
   ExternalLink,
   Folder,
   Globe,
+  Keyboard,
   Layers,
   Lock,
   Loader2,

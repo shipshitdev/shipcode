@@ -155,8 +155,8 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
 function buildCodexArgs(req: ProviderRequest): string[] {
   const sandbox = req.phase === 'execute' ? 'workspace-write' : 'read-only';
   const args = ['-q', req.prompt, '--sandbox', sandbox, '-a', 'never'];
-  if (req.phaseHints?.reasoningEffort === 'high') {
-    args.push('--reasoning-effort', 'high');
+  if (req.phaseHints?.reasoningEffort) {
+    args.push('--reasoning-effort', req.phaseHints.reasoningEffort);
   }
   return args;
 }
