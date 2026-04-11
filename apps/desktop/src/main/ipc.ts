@@ -21,6 +21,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { ProcessManager } from '@shipcode/agents';
 import type { PhaseSkillKey } from '@shipcode/shared';
+import { validateGithubProjectUrl, clampError } from '@shipcode/shared';
 import {
   checkSystemHealthWithAuth,
   checkGhAuth,
@@ -500,6 +501,29 @@ export function registerIpcHandlers(
       }
 
       queries.projects.updateDefaultBranch(projectId, branch);
+      return queries.projects.getById(projectId)!;
+    },
+  );
+
+  ipcMain.handle(
+    'project:set-github-project-url',
+    async (_event, { projectId, url }: { projectId: string; url: string | null }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+
+      const result = validateGithubProjectUrl(url);
+      if (!result.ok) {
+        // Clamp: the validator reason is already short, but we route through
+        // clampError to guarantee a single-line <=280 char payload for the
+        // renderer toaster, matching the pattern the repo memory calls out.
+        log.warn('[ipc] project:set-github-project-url rejected', {
+          projectId,
+          reason: result.reason,
+        });
+        throw new Error(clampError(result.reason));
+      }
+
+      queries.projects.updateGithubProjectUrl(projectId, result.value);
       return queries.projects.getById(projectId)!;
     },
   );

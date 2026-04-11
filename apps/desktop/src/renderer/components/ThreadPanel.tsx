@@ -50,7 +50,7 @@ export function ThreadPanel() {
   };
 
   const repoUrl = githubRepoUrl(project?.gitRemote);
-  const projectsUrl = githubProjectsUrl(project?.gitRemote);
+  const projectsUrl = githubProjectsUrl(project?.gitRemote, project?.githubProjectUrl);
 
   return (
     <div className="flex flex-1 min-w-0 flex-col bg-primary">

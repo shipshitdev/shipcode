@@ -431,7 +431,7 @@ describe('createPipeline', () => {
       expect(mock.deps.processManager.spawn).not.toHaveBeenCalled();
     });
 
-    it('autonomous spawns codex with --reasoning-effort high', async () => {
+    it('autonomous spawns codex with -c model_reasoning_effort=<default>', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
       pipeline.getContext('t1')!.autonomous = true;
@@ -441,8 +441,11 @@ describe('createPipeline', () => {
       // proc-1 from startPlanGeneration, proc-2 from startReview
       const reviewCall = (mock.deps.processManager.spawn as any).mock.calls[1];
       expect(reviewCall[1]).toBe('codex');
-      expect(reviewCall[2]).toContain('--reasoning-effort');
-      expect(reviewCall[2]).toContain('high');
+      // codex v0.120.0: -c <key>=<value> before `exec`, not --reasoning-effort after.
+      // The default is 'low' (cost-conscious); read from DEFAULT_SETTINGS so this test
+      // tracks the default automatically if it changes.
+      expect(reviewCall[2]).toContain('-c');
+      expect(reviewCall[2]).toContain(`model_reasoning_effort=${DEFAULT_SETTINGS.reviewerReasoningEffort}`);
     });
 
     it('approve + autonomous → calls startExecution (emits executing)', async () => {

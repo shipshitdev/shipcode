@@ -11,6 +11,7 @@ import { InboxView } from './components/InboxView';
 import { IssueDetail } from './components/IssueDetail';
 import { NotificationToaster } from './components/NotificationToaster';
 import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
+import { ProjectSettingsModal } from './components/ProjectSettingsModal';
 import { ProjectSidebar } from './components/ProjectSidebar';
 import { SettingsPanel } from './components/SettingsPanel';
 import { SettingsSidebar } from './components/SettingsSidebar';
@@ -143,6 +144,7 @@ export function App() {
       </div>
       <CommandPalette />
       <CreateIssueModal />
+      <ProjectSettingsModal />
       <NotificationToaster />
     </div>
   );

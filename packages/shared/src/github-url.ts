@@ -51,10 +51,80 @@ export function githubIssuesUrl(remote: string | null | undefined): string | nul
   return base ? `${base}/issues` : null;
 }
 
-/** GitHub Projects tab for the repo (Projects v2 board list). */
-export function githubProjectsUrl(remote: string | null | undefined): string | null {
+/**
+ * GitHub Projects URL for the Kanban "board" quick-link.
+ *
+ * - If a non-empty `override` is provided (a per-project GitHub Projects v2
+ *   URL), return it verbatim (trimmed). This is the user's hand-picked board.
+ * - Otherwise fall back to `${repoBase}/projects` — the repo's Projects tab,
+ *   which lists any Projects v2 boards linked to this repo.
+ * - Returns `null` when neither an override nor a parseable remote is available,
+ *   so callers can gate the UI affordance.
+ */
+export function githubProjectsUrl(
+  remote: string | null | undefined,
+  override?: string | null,
+): string | null {
+  if (override && override.trim()) return override.trim();
   const base = githubRepoUrl(remote);
   return base ? `${base}/projects` : null;
+}
+
+export type GithubProjectUrlValidation =
+  | { ok: true; value: string | null }
+  | { ok: false; reason: string };
+
+/**
+ * Validate a user-supplied GitHub Projects v2 URL override.
+ *
+ * Accepted shapes (case-insensitive on host):
+ *   - `null` / `''` / whitespace-only → clears the override (`{ok, value: null}`)
+ *   - `https://github.com/orgs/<org>/projects/<n>`
+ *   - `https://github.com/users/<user>/projects/<n>`
+ *   - `https://github.com/<owner>/<repo>/projects/<n>` (legacy classic)
+ *
+ * Rejects non-https, non-github.com hosts, and any github.com path that
+ * doesn't match one of the three shapes above. The reason string is safe
+ * to surface in the modal and short enough for the IPC clamp helper.
+ */
+export function validateGithubProjectUrl(raw: string | null | undefined): GithubProjectUrlValidation {
+  if (raw == null || raw.trim() === '') return { ok: true, value: null };
+  const trimmed = raw.trim();
+
+  let u: URL;
+  try {
+    u = new URL(trimmed);
+  } catch {
+    return { ok: false, reason: 'Not a valid URL' };
+  }
+
+  if (u.protocol !== 'https:') {
+    return { ok: false, reason: 'URL must start with https://' };
+  }
+  if (u.hostname.toLowerCase() !== 'github.com') {
+    return { ok: false, reason: 'Host must be github.com' };
+  }
+
+  const parts = u.pathname.replace(/^\/+/, '').replace(/\/+$/, '').split('/');
+  // orgs/<org>/projects/<n>
+  if (parts.length >= 4 && (parts[0] === 'orgs' || parts[0] === 'users') && parts[2] === 'projects') {
+    if (!/^\d+$/.test(parts[3])) {
+      return { ok: false, reason: 'Project number must be numeric' };
+    }
+    return { ok: true, value: trimmed };
+  }
+  // <owner>/<repo>/projects/<n> (classic repo-scoped project)
+  if (parts.length >= 4 && parts[2] === 'projects') {
+    if (!/^\d+$/.test(parts[3])) {
+      return { ok: false, reason: 'Project number must be numeric' };
+    }
+    return { ok: true, value: trimmed };
+  }
+
+  return {
+    ok: false,
+    reason: 'URL must point to a GitHub Project (e.g. https://github.com/orgs/acme/projects/3)',
+  };
 }
 
 export function deriveGithubIssueUrl(

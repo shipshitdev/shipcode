@@ -255,7 +255,7 @@ export function SkillsView() {
 
       {/* Right: editor */}
       <section className="flex-1 overflow-y-auto">
-        <div className="p-8">
+        <div className="p-8 max-w-5xl">
           {quarantinedRows.length > 0 && (
             <div className="mb-6 rounded border border-red-500/40 bg-red-500/5 p-4">
               <h4 className="text-sm font-semibold text-red-400 mb-1">

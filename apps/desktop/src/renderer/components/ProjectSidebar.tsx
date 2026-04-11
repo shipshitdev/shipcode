@@ -1,5 +1,4 @@
-import { useState, type MouseEvent } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { AppSettings, DashboardStats, NotificationRecord, Project } from '@shipcode/shared';
 import {
   Activity,
   Archive,
@@ -9,10 +8,10 @@ import {
   cn,
   DollarSign,
   DropdownMenu,
-  DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuTrigger,
   Folder,
   Inbox,
   LayoutGrid,
@@ -20,11 +19,12 @@ import {
   Pin,
   PinOff,
   Plus,
+  Settings,
   Trash2,
   Wrench,
 } from '@shipcode/ui';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAppStore } from '../stores/app-store';
-import type { AppSettings, DashboardStats, NotificationRecord, Project } from '@shipcode/shared';
 
 type SortOrder = AppSettings['projectSortOrder'];
 
@@ -45,10 +45,10 @@ export function ProjectSidebar() {
     openInbox,
     openCosts,
     openSkills,
+    openProjectSettingsModal,
     sidebarCollapsed,
   } = useAppStore();
   const queryClient = useQueryClient();
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const { data: projects = [] } = useQuery<Project[]>({
     queryKey: ['projects-visible'],
@@ -164,7 +164,7 @@ export function ProjectSidebar() {
         <Button
           variant="ghost"
           className={cn(
-            'h-auto w-full justify-start gap-2 px-3 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
+            'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
             !settingsVisible && viewMode === 'dashboard' && 'bg-tertiary text-primary font-medium',
           )}
           onClick={() => openDashboard()}
@@ -172,8 +172,11 @@ export function ProjectSidebar() {
           <LayoutGrid size={14} className="shrink-0 text-secondary" />
           <span className="flex-1 truncate">Mission Control</span>
           {liveCount > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-tertiary px-1.5 py-0.5 text-[10px] font-medium text-accent">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent" />
+            <span className="inline-flex items-center gap-1 rounded-full border border-agent/30 bg-agent/10 px-1.5 py-0.5 text-[10px] font-medium text-agent">
+              <span className="relative flex h-1.5 w-1.5 items-center justify-center">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-agent opacity-60" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-agent" />
+              </span>
               {liveCount} live
             </span>
           )}
@@ -183,7 +186,7 @@ export function ProjectSidebar() {
         <Button
           variant="ghost"
           className={cn(
-            'h-auto w-full justify-start gap-2 px-3 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
+            'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
             !settingsVisible && viewMode === 'activity' && 'bg-tertiary text-primary font-medium',
           )}
           onClick={() => openActivity()}
@@ -196,7 +199,7 @@ export function ProjectSidebar() {
         <Button
           variant="ghost"
           className={cn(
-            'h-auto w-full justify-start gap-2 px-3 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
+            'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
             !settingsVisible && viewMode === 'inbox' && 'bg-tertiary text-primary font-medium',
           )}
           onClick={() => openInbox()}
@@ -214,7 +217,7 @@ export function ProjectSidebar() {
         <Button
           variant="ghost"
           className={cn(
-            'h-auto w-full justify-start gap-2 px-3 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
+            'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
             !settingsVisible && viewMode === 'costs' && 'bg-tertiary text-primary font-medium',
           )}
           onClick={() => openCosts()}
@@ -227,7 +230,7 @@ export function ProjectSidebar() {
         <Button
           variant="ghost"
           className={cn(
-            'h-auto w-full justify-start gap-2 px-3 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
+            'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
             !settingsVisible && viewMode === 'skills' && 'bg-tertiary text-primary font-medium',
           )}
           onClick={() => openSkills()}
@@ -244,12 +247,12 @@ export function ProjectSidebar() {
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon"
-                className="h-5 w-5 text-muted"
+                size="icon-xs"
+                className="text-muted"
                 title={`Sort: ${SORT_LABELS[sortOrder]}`}
                 aria-label="Sort projects"
               >
-                <ArrowUpDown size={12} />
+                <ArrowUpDown size={14} />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -265,13 +268,13 @@ export function ProjectSidebar() {
           </DropdownMenu>
           <Button
             variant="ghost"
-            size="icon"
-            className="h-5 w-5 text-muted app-region-no-drag"
+            size="icon-xs"
+            className="text-muted app-region-no-drag"
             title="Add repository"
             aria-label="Add repository"
             onClick={() => addProject.mutate()}
           >
-            <Plus size={12} />
+            <Plus size={14} />
           </Button>
         </div>
       </div>
@@ -282,16 +285,12 @@ export function ProjectSidebar() {
             <Button
               variant="ghost"
               className={cn(
-                'h-auto w-full justify-start gap-2 px-3 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
+                'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
                 viewMode === 'project' &&
                   activeProjectId === project.id &&
                   'bg-tertiary text-primary font-medium',
               )}
               onClick={() => selectProject(project.id)}
-              onContextMenu={(e: MouseEvent) => {
-                e.preventDefault();
-                setOpenMenuId(project.id);
-              }}
             >
               {project.pinned ? (
                 <Pin size={12} className="shrink-0 text-accent fill-accent" />
@@ -301,21 +300,21 @@ export function ProjectSidebar() {
               <span className="flex-1 truncate text-primary">{project.name}</span>
             </Button>
 
-            <DropdownMenu
-              open={openMenuId === project.id}
-              onOpenChange={(open) => setOpenMenuId(open ? project.id : null)}
-            >
+            <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
-                  size="icon"
-                  className="absolute right-1.5 top-1/2 h-6 w-6 -translate-y-1/2 text-muted opacity-0 group-hover:opacity-100 focus:opacity-100"
+                  size="icon-xs"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted opacity-0 group-hover:opacity-100 focus:opacity-100"
                   aria-label={`More actions for ${project.name}`}
                 >
-                  <MoreHorizontal size={12} />
+                  <MoreHorizontal size={14} />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => openProjectSettingsModal(project.id)}>
+                  <Settings size={12} /> Settings
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   onSelect={() =>
                     pinProject.mutate({ projectId: project.id, pinned: !project.pinned })

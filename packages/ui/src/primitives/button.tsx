@@ -4,19 +4,19 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../lib/utils';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap text-[13px] font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border-strong [&_svg]:pointer-events-none [&_svg]:shrink-0',
+  'inline-flex items-center gap-2 whitespace-nowrap text-left text-[13px] font-medium transition-colors cursor-pointer disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border-strong [&_svg]:pointer-events-none [&_svg]:shrink-0',
   {
     variants: {
       variant: {
         default:
-          'rounded-lg bg-accent text-accent-foreground hover:bg-accent-hover shadow-[inset_0_0_0_1px_rgba(0,0,0,0.08)]',
-        secondary: 'rounded-lg bg-tertiary text-primary border border-border hover:bg-hover',
-        outline: 'rounded-lg bg-transparent border border-border text-primary hover:bg-hover',
-        ghost: 'rounded-md bg-transparent text-secondary hover:bg-hover hover:text-primary',
-        pill: 'rounded-md bg-transparent text-secondary hover:text-primary border border-border hover:border-text-secondary',
+          'justify-center rounded-md bg-accent text-accent-foreground hover:bg-accent-hover shadow-[inset_0_0_0_1px_rgba(0,0,0,0.08)]',
+        secondary: 'justify-center rounded-md bg-tertiary text-primary border border-border hover:bg-hover',
+        outline: 'justify-center rounded-md bg-transparent border border-border text-primary hover:bg-hover',
+        ghost: 'justify-start rounded-md bg-transparent text-secondary hover:bg-hover hover:text-primary',
+        pill: 'justify-center rounded-md bg-transparent text-secondary hover:text-primary border border-border hover:border-text-secondary',
         destructive:
-          'rounded-lg bg-danger/15 text-danger border border-danger/30 hover:bg-danger/25',
-        link: 'text-primary underline-offset-4 hover:underline',
+          'justify-center rounded-md bg-danger/15 text-danger border border-danger/30 hover:bg-danger/25',
+        link: 'justify-center text-primary underline-offset-4 hover:underline',
       },
       size: {
         xs: 'h-6 px-2 text-[11px] gap-1',
@@ -25,7 +25,10 @@ const buttonVariants = cva(
         md: 'h-8 px-3.5 py-1.5',
         lg: 'h-9 px-4 text-[13px]',
         xl: 'h-10 px-5 text-[14px]',
-        icon: 'h-8 w-8',
+        'icon-xs': 'h-6 w-6 justify-center',
+        'icon-sm': 'h-7 w-7 justify-center',
+        icon: 'h-8 w-8 justify-center',
+        'icon-lg': 'h-9 w-9 justify-center',
       },
     },
     defaultVariants: {
@@ -46,7 +49,7 @@ function Button({
     asChild?: boolean;
   }) {
   const Comp = asChild ? Slot : 'button';
-  return <Comp className={cn(buttonVariants({ variant, size, className }))} {...props} />;
+  return <Comp className={cn(buttonVariants({ variant, size }), className)} {...props} />;
 }
 
 export { Button, buttonVariants };

@@ -151,15 +151,24 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
 
 /**
  * Build codex CLI args for a given phase.
- * Uses the codex v1 CLI interface: -q <prompt> --sandbox <level> -a never.
+ *
+ * codex v0.120.0 layout: top-level flags come BEFORE the `exec` subcommand,
+ * and the subcommand's own flags (`--sandbox`, `--json`) go after the prompt.
+ *
+ *   codex [-a never] [-c model_reasoning_effort=high] exec <prompt> --sandbox <level> --json
+ *
+ * Previously we passed `-a never` AFTER `exec`, which is invalid — codex errors
+ * out in ~30ms with `unexpected argument '-a' found` and the pipeline sees an
+ * empty review. Same story for `--reasoning-effort`, which was removed as a
+ * standalone flag in 0.120.0 and must now be set via `-c model_reasoning_effort=<effort>`.
  */
 function buildCodexArgs(req: ProviderRequest): string[] {
   const sandbox = req.phase === 'execute' ? 'workspace-write' : 'read-only';
-  const args = ['exec', req.prompt, '--sandbox', sandbox, '-a', 'never', '--json'];
+  const topLevelFlags: string[] = ['-a', 'never'];
   if (req.phaseHints?.reasoningEffort) {
-    args.push('--reasoning-effort', req.phaseHints.reasoningEffort);
+    topLevelFlags.push('-c', `model_reasoning_effort=${req.phaseHints.reasoningEffort}`);
   }
-  return args;
+  return [...topLevelFlags, 'exec', req.prompt, '--sandbox', sandbox, '--json'];
 }
 
 export function createClaudeCliProvider(processManager: ProcessManager): AgentProvider {

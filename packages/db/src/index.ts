@@ -10,6 +10,7 @@ import {
   migrateV7,
   migrateV8,
   migrateV9,
+  migrateV10,
 } from './schema';
 
 export { transaction } from './utils';
@@ -48,6 +49,7 @@ export function getDatabase(dataDir: string): DatabaseSync {
   migrateV7(db);
   migrateV8(db);
   migrateV9(db);
+  migrateV10(db);
   return db;
 }
 

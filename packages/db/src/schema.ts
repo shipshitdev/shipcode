@@ -403,3 +403,21 @@ export function migrateV9(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (9)`);
   });
 }
+
+export function migrateV10(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 10) return;
+
+  transaction(db, () => {
+    // Per-project override for the Kanban `board` quick-link. GitHub Projects v2
+    // live under a user/org and can span multiple repos, so we can't derive this
+    // from `git_remote` alone. NULL means "use the repo Projects tab fallback".
+    try {
+      db.exec('ALTER TABLE projects ADD COLUMN github_project_url TEXT');
+    } catch {}
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (10)`);
+  });
+}

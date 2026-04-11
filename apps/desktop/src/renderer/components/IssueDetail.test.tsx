@@ -157,7 +157,7 @@ describe('IssueDetail', () => {
 
     expect(screen.getByText('Spec body')).toBeInTheDocument();
     expect(screen.getByText('first item')).toBeInTheDocument();
-    expect(screen.getByText('Start Pipeline')).toBeInTheDocument();
+    expect(screen.getByText('Start pipeline')).toBeInTheDocument();
   });
 
   it('starts pipeline from an unclaimed issue', async () => {
@@ -168,7 +168,7 @@ describe('IssueDetail', () => {
     });
 
     renderWithProviders();
-    fireEvent.click(screen.getByRole('button', { name: 'Start Pipeline' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start pipeline' }));
 
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith('github:start-issue', {

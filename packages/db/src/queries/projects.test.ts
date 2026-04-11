@@ -69,6 +69,32 @@ describe('ProjectQueries', () => {
     expect(updated.defaultBranch).toBe('develop');
   });
 
+  it('new projects default githubProjectUrl to null', () => {
+    const p = projects.add('/tmp/gp-default');
+    expect(p.githubProjectUrl).toBeNull();
+  });
+
+  it('updateGithubProjectUrl() persists a value', () => {
+    const p = projects.add('/tmp/gp-set');
+    projects.updateGithubProjectUrl(p.id, 'https://github.com/orgs/acme/projects/3');
+    const updated = projects.getById(p.id)!;
+    expect(updated.githubProjectUrl).toBe('https://github.com/orgs/acme/projects/3');
+  });
+
+  it('updateGithubProjectUrl() clears to null', () => {
+    const p = projects.add('/tmp/gp-clear');
+    projects.updateGithubProjectUrl(p.id, 'https://github.com/orgs/acme/projects/3');
+    projects.updateGithubProjectUrl(p.id, null);
+    expect(projects.getById(p.id)!.githubProjectUrl).toBeNull();
+  });
+
+  it('updateGithubProjectUrl() round-trips through list()', () => {
+    const p = projects.add('/tmp/gp-list');
+    projects.updateGithubProjectUrl(p.id, 'https://github.com/users/alice/projects/7');
+    const fromList = projects.list().find((x) => x.id === p.id)!;
+    expect(fromList.githubProjectUrl).toBe('https://github.com/users/alice/projects/7');
+  });
+
   it('add() is idempotent: re-adding same path returns existing row', () => {
     const first = projects.add('/tmp/same');
     const second = projects.add('/tmp/same');

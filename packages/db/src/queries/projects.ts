@@ -181,6 +181,20 @@ export class ProjectQueries {
       .prepare(`UPDATE projects SET default_branch = ?, updated_at = datetime('now') WHERE id = ?`)
       .run(branch, id);
   }
+
+  /**
+   * Set the per-project GitHub Projects v2 URL override. Pass `null` to clear
+   * (falls back to the repo Projects tab). Callers must validate the URL
+   * with `validateGithubProjectUrl` before reaching this query — the DB layer
+   * trusts what it gets.
+   */
+  updateGithubProjectUrl(id: string, url: string | null): void {
+    this.db
+      .prepare(
+        `UPDATE projects SET github_project_url = ?, updated_at = datetime('now') WHERE id = ?`,
+      )
+      .run(url, id);
+  }
 }
 
 function mapProject(row: any): Project {
@@ -189,6 +203,7 @@ function mapProject(row: any): Project {
     name: row.name,
     path: row.path,
     gitRemote: row.git_remote,
+    githubProjectUrl: row.github_project_url ?? null,
     defaultBranch: row.default_branch,
     pinned: row.pinned === 1,
     archived: row.archived === 1,

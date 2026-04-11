@@ -31,6 +31,7 @@ export {
   MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
+  Pencil,
   Pin,
   PinOff,
   Plus,

@@ -37,6 +37,10 @@ export interface IpcInvokeChannels {
   'project:archive': { args: { projectId: string }; result: void };
   'project:unarchive': { args: { projectId: string }; result: void };
   'project:set-default-branch': { args: { projectId: string; branch: string }; result: Project };
+  'project:set-github-project-url': {
+    args: { projectId: string; url: string | null };
+    result: Project;
+  };
 
   'thread:list': { args: { projectId: string }; result: Thread[] };
   'thread:create': { args: { projectId: string; prompt: string }; result: Thread };

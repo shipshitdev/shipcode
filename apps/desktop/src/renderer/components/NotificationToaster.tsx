@@ -50,12 +50,12 @@ function ToastRow({
       </Button>
       <Button
         variant="ghost"
-        size="icon"
+        size="icon-xs"
         onClick={onDismiss}
-        className="h-5 w-5 text-muted"
+        className="text-muted"
         title="Dismiss"
       >
-        <X size={12} />
+        <X size={14} />
       </Button>
     </div>
   );

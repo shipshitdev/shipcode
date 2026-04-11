@@ -46,7 +46,7 @@ export interface ProviderPhaseHints {
   sandbox?: 'read-only' | 'workspace-write';
   /** codex -a (approval) value when applicable. */
   approval?: 'never' | 'untrusted' | 'on-failure';
-  /** codex --reasoning-effort when applicable. */
+  /** codex reasoning effort. Passed as `-c model_reasoning_effort=<value>` in v0.120.0+. */
   reasoningEffort?: 'low' | 'medium' | 'high';
 }
 

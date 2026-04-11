@@ -55,6 +55,14 @@ export interface Project {
   name: string;
   path: string;
   gitRemote: string | null;
+  /**
+   * Optional override for the Kanban `board` quick-link. GitHub Projects v2
+   * live under a user/org (`/users/<name>/projects/<n>` or `/orgs/<name>/projects/<n>`)
+   * and can span multiple repos, so we can't derive this from `gitRemote` alone.
+   * When null, the Kanban header falls back to `${repoBase}/projects` (the
+   * repo's Projects tab that lists linked boards).
+   */
+  githubProjectUrl: string | null;
   defaultBranch: string;
   pinned: boolean;
   archived: boolean;
@@ -233,7 +241,8 @@ export interface AppSettings {
   // When true, pipeline pauses at awaiting_approval after review loop for human sign-off.
   // When false (default), it proceeds directly to execution.
   requireApproval: boolean;
-  // Codex --reasoning-effort for the review phase.
+  // Codex reasoning effort for the review phase. Applied via
+  // `-c model_reasoning_effort=<value>` on the top-level codex command (v0.120.0+).
   reviewerReasoningEffort: 'low' | 'medium' | 'high';
   // Notifications
   notificationsEnabled: boolean;
@@ -433,6 +442,7 @@ export interface CostSummary {
   byProject: ProjectCostSummary[];
   recentByTask: Array<{
     threadId: string;
+    projectId: string;
     title: string;
     projectName: string;
     phase: PipelinePhase;
