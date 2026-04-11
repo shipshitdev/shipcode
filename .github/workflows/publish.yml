@@ -1,9 +1,14 @@
-name: Release
+name: Publish
 
 # Manual-dispatch only until Apple signing / notarization is wired.
 # When CSC_LINK + APPLE_* secrets are available, re-enable the
 # `release: published` trigger below and restore the commented
 # `build-desktop-macos` + `update-homebrew-cask` jobs at the bottom.
+#
+# File renamed from `release.yml` to `publish.yml` because the previous
+# registration cached a stale state where GitHub kept recording 0-job
+# "failure" runs on every push to master even though the workflow has
+# no push trigger. Renaming forces a fresh workflow registration.
 on:
   workflow_dispatch:
     inputs:
@@ -123,7 +128,13 @@ jobs:
         # registry verifies the GitHub Actions ID token against the
         # Trusted Publisher config on the package. One-time setup at
         # https://www.npmjs.com/package/@shipshitdev/shipcode/access
-        # (Repository: shipshitdev/shipcode, Workflow: release.yml).
+        # (Repository: shipshitdev/shipcode, Workflow: publish.yml).
+        #
+        # IMPORTANT: npm's Trusted Publisher binding pins the workflow
+        # filename exactly (case-sensitive, with .yml extension). If you
+        # rename this file you MUST update the "Workflow filename" field
+        # in the npm package's Trusted Publishing settings or
+        # `npm publish --provenance` will fail with an auth error.
 
 # ─────────────────────────────────────────────────────────────────
 # DISABLED until Apple codesigning + notarization are wired.
