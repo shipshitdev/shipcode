@@ -128,7 +128,13 @@ jobs:
         # registry verifies the GitHub Actions ID token against the
         # Trusted Publisher config on the package. One-time setup at
         # https://www.npmjs.com/package/@shipshitdev/shipcode/access
-        # (Repository: shipshitdev/shipcode, Workflow: release.yml).
+        # (Repository: shipshitdev/shipcode, Workflow: publish.yml).
+        #
+        # IMPORTANT: npm's Trusted Publisher binding pins the workflow
+        # filename exactly (case-sensitive, with .yml extension). If you
+        # rename this file you MUST update the "Workflow filename" field
+        # in the npm package's Trusted Publishing settings or
+        # `npm publish --provenance` will fail with an auth error.
 
 # ─────────────────────────────────────────────────────────────────
 # DISABLED until Apple codesigning + notarization are wired.
