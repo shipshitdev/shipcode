@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [master, develop]
   pull_request:
-    branches: [master]
+    branches: [master, develop]
 
 env:
   BUN_VERSION: "1.3.11"
@@ -22,5 +22,6 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
       - run: bun install
+      - run: bun run lint
       - run: bun run typecheck
       - run: bun run test

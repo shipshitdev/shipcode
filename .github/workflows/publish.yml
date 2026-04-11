@@ -1,9 +1,14 @@
-name: Release
+name: Publish
 
 # Manual-dispatch only until Apple signing / notarization is wired.
 # When CSC_LINK + APPLE_* secrets are available, re-enable the
 # `release: published` trigger below and restore the commented
 # `build-desktop-macos` + `update-homebrew-cask` jobs at the bottom.
+#
+# File renamed from `release.yml` to `publish.yml` because the previous
+# registration cached a stale state where GitHub kept recording 0-job
+# "failure" runs on every push to master even though the workflow has
+# no push trigger. Renaming forces a fresh workflow registration.
 on:
   workflow_dispatch:
     inputs:
