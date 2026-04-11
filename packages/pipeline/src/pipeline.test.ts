@@ -527,6 +527,46 @@ describe('createPipeline', () => {
 
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed');
     });
+
+    it('approve + non-autonomous + !requireApproval → awaiting_approval (no auto-execute)', async () => {
+      // context.autonomous defaults to false; requireApproval defaults to false
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      // do NOT set context.autonomous = true
+
+      await pipeline.startReview('t1', JSON.parse(PLAN_JSON));
+      await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_APPROVE_JSON));
+      await mock.trigger('exit', 'proc-2', 0);
+
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'awaiting_approval');
+    });
+
+    it('request_changes + requireApproval + rounds exhausted + has critical → awaiting_approval', async () => {
+      (mock.deps.settings.get as any).mockReturnValue({ ...DEFAULT_SETTINGS, requireApproval: true });
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      pipeline.getContext('t1')!.autonomous = true;
+      pipeline.getContext('t1')!.reviewRound = MAX_REVIEW_ROUNDS;
+
+      await pipeline.startReview('t1', JSON.parse(PLAN_JSON));
+      await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_REQUEST_CHANGES_CRITICAL_JSON));
+      await mock.trigger('exit', 'proc-2', 0);
+
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'awaiting_approval');
+    });
+
+    it('request_changes + non-autonomous + rounds exhausted + has critical → awaiting_approval', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      // autonomous stays false (default)
+      pipeline.getContext('t1')!.reviewRound = MAX_REVIEW_ROUNDS;
+
+      await pipeline.startReview('t1', JSON.parse(PLAN_JSON));
+      await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_REQUEST_CHANGES_CRITICAL_JSON));
+      await mock.trigger('exit', 'proc-2', 0);
+
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'awaiting_approval');
+    });
   });
 
   // ─── startRevision ─────────────────────────────────────────────────

@@ -309,7 +309,8 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
           if (result.data.decision === 'approve') {
             // Codex satisfied — proceed to execution or hand off to human.
-            if (deps.settings.get().requireApproval) {
+            // Only auto-execute for autonomous threads with approval disabled.
+            if (deps.settings.get().requireApproval || !context.autonomous) {
               emitPhase(threadId, 'awaiting_approval');
             } else {
               startExecution(threadId, latestPlan!.structured!);
@@ -332,18 +333,20 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
                   .join('\n');
               startRevision(threadId, latestPlan!.structured!, feedback);
             } else {
-              // Rounds exhausted. Fail hard on critical/major findings;
-              // otherwise fall through to the same terminal as approve.
-              const hasCriticalOrMajor = result.data.findings.some(
-                (f: { severity: string }) => f.severity === 'critical' || f.severity === 'major',
-              );
-              if (hasCriticalOrMajor) {
-                emitPhase(threadId, 'failed');
-                activePipelines.delete(threadId);
-              } else if (deps.settings.get().requireApproval) {
+              // Rounds exhausted.
+              // In approval mode or for non-autonomous threads, always surface to human.
+              if (deps.settings.get().requireApproval || !context.autonomous) {
                 emitPhase(threadId, 'awaiting_approval');
               } else {
-                startExecution(threadId, latestPlan!.structured!);
+                const hasCriticalOrMajor = result.data.findings.some(
+                  (f: { severity: string }) => f.severity === 'critical' || f.severity === 'major',
+                );
+                if (hasCriticalOrMajor) {
+                  emitPhase(threadId, 'failed');
+                  activePipelines.delete(threadId);
+                } else {
+                  startExecution(threadId, latestPlan!.structured!);
+                }
               }
             }
           } else {
