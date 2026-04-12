@@ -753,13 +753,6 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     </div>
   ) : null;
 
-  // Expanded layout only — panel mode uses pipelineStartCardInner directly (no sticky wrapper needed)
-  const pipelineStartCard = canStartPipeline ? (
-    <div className="sticky -top-4 z-20 -mx-4 -mt-4 mb-4 bg-primary px-4 pt-4 pb-3">
-      {pipelineStartCardInner}
-    </div>
-  ) : null;
-
   const rerunSection = canRerun ? (
     <div className="mb-5">
       {(thread?.lastError || planHistory[0]?.rawOutput) && (
@@ -966,7 +959,11 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
         {/* Right sidebar — properties */}
         <div className="w-72 shrink-0 border-l border-border overflow-y-auto p-4">
-          {pipelineStartCard}
+          {pipelineStartCardInner && (
+            <div className="sticky -top-4 z-20 -mx-4 -mt-4 mb-4 bg-primary px-4 pt-4 pb-3">
+              {pipelineStartCardInner}
+            </div>
+          )}
           {/* Re-run CTA — top action when failed */}
           {rerunSection}
 

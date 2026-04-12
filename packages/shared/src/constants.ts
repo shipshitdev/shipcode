@@ -36,7 +36,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   onboardingVersion: 0,
   projectSortOrder: 'recent',
   worktreeRoot: null,
-  worktreeBranchFormat: 'feat/{id}-{slug}',
+  worktreeBranchFormat: 'ship/{id}-{slug}',
   plannerMaxTurns: 3,
   maxReviewRounds: 2,
   requireApproval: false,

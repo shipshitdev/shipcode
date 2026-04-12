@@ -13,12 +13,12 @@ export interface WorktreeManagerOptions {
   /**
    * Branch naming format for issue-based worktrees.
    * Tokens: {id} = issue number, {slug} = slugified issue title.
-   * Default: 'feat/{id}-{slug}'.
+   * Default: 'ship/{id}-{slug}'.
    */
   branchFormat?: string;
 }
 
-const DEFAULT_BRANCH_FORMAT = 'feat/{id}-{slug}';
+const DEFAULT_BRANCH_FORMAT = 'ship/{id}-{slug}';
 
 function slugify(title: string): string {
   return title
@@ -29,7 +29,7 @@ function slugify(title: string): string {
 }
 
 /** ShipCode-managed branch prefixes for list() filtering. */
-const SHIPCODE_BRANCH_RE = /^(shipcode\/|feat\/\d+-)/;
+const SHIPCODE_BRANCH_RE = /^(shipcode\/|ship\/\d+-)/;
 
 export class WorktreeManager {
   private git: SimpleGit;
@@ -150,10 +150,30 @@ export class WorktreeManager {
       dirName = idOrNumber;
     }
 
-    const worktreePath = path.join(parent, dirName);
-    await this.git.raw(['worktree', 'add', '-b', branch, worktreePath, base]);
-
-    return { worktreePath, branch };
+    // Retry loop: if a concurrent start grabs the branch between our check
+    // and the actual `worktree add`, bump the suffix and try again.
+    const MAX_RETRIES = 3;
+    for (let attempt = 0; ; attempt++) {
+      const worktreePath = path.join(parent, dirName);
+      try {
+        await this.git.raw(['worktree', 'add', '-b', branch, worktreePath, base]);
+        return { worktreePath, branch };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        const isCollision = /already exists|is already checked out/i.test(msg);
+        if (!isCollision || attempt >= MAX_RETRIES) throw err;
+        // Bump suffix and retry
+        const nextN = (branch.match(/-(\d+)$/) ? Number(branch.match(/-(\d+)$/)![1]) + 1 : 2);
+        const rawBranch = typeof idOrNumber === 'number'
+          ? this.formatIssueBranch(idOrNumber, titleOrBase ?? '')
+          : this.getBranchName(idOrNumber);
+        branch = `${rawBranch}-${nextN}`;
+        const rawDir = typeof idOrNumber === 'number'
+          ? this.formatIssueDir(idOrNumber, titleOrBase ?? '')
+          : String(idOrNumber);
+        dirName = `${rawDir}-${nextN}`;
+      }
+    }
   }
 
   /**
@@ -200,7 +220,7 @@ export class WorktreeManager {
   /**
    * List all ShipCode worktrees in this project by branch-name prefix.
    * Returns { path, branch } pairs so callers can act on either identifier.
-   * Matches both legacy `shipcode/` and new `feat/{N}-` branch patterns.
+   * Matches both legacy `shipcode/` and `ship/{N}-` branch patterns.
    */
   async list(): Promise<Array<{ path: string; branch: string }>> {
     const result = await this.git.raw(['worktree', 'list', '--porcelain']);

@@ -234,7 +234,7 @@ export interface AppSettings {
   // null = default (~/.shipcode/worktrees), '' = project-local legacy, else absolute or ~-prefixed
   worktreeRoot: string | null;
   // Branch naming format for worktrees. Tokens: {id} = issue number, {slug} = slugified title.
-  // Default: 'feat/{id}-{slug}'. Falls back to 'shipcode/{threadId}' for non-issue threads.
+  // Default: 'ship/{id}-{slug}'. Falls back to 'shipcode/{threadId}' for non-issue threads.
   worktreeBranchFormat: string;
   // Max turns the planner/verifier Claude CLI is allowed per run (--max-turns).
   // Does not apply to execute (no limit) or review (always 1, structural).

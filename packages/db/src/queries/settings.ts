@@ -136,6 +136,9 @@ export class SettingsQueries {
       if (!REASONING_EFFORTS.includes(patch.reviewerReasoningEffort as any))
         throw new Error('reviewerReasoningEffort must be low|medium|high');
     }
+    if ('worktreeBranchFormat' in patch && patch.worktreeBranchFormat != null) {
+      validateBranchFormat(patch.worktreeBranchFormat);
+    }
 
     const upsert = this.db.prepare(
       'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
@@ -157,6 +160,22 @@ export class SettingsQueries {
 function clampInt(raw: string | undefined, min: number, max: number, fallback: number): number {
   const n = raw ? parseInt(raw, 10) : Number.NaN;
   return Number.isFinite(n) && n >= min && n <= max ? n : fallback;
+}
+
+/** Reject branch format strings that would produce invalid git ref names. */
+function validateBranchFormat(format: string): void {
+  if (!format.includes('{id}')) {
+    throw new Error('worktreeBranchFormat must contain {id} for uniqueness');
+  }
+  // Substitute tokens with safe sample values, then check for illegal ref-name chars.
+  const sample = format.replace(/\{id\}/g, '1').replace(/\{slug\}/g, 'test');
+  // Reject characters git check-ref-format would refuse: space, ~, ^, :, \, ?, *, [, ..
+  if (/[\s~^:?*[\]\\]|\.\./.test(sample)) {
+    throw new Error('worktreeBranchFormat contains characters invalid in a git branch name');
+  }
+  if (sample.startsWith('-') || sample.startsWith('.') || sample.endsWith('.lock')) {
+    throw new Error('worktreeBranchFormat produces an invalid git branch name');
+  }
 }
 
 function readWorktreeRoot(raw: string | undefined): string | null {

@@ -107,28 +107,28 @@ describe('normalizeBranches', () => {
     ).toEqual(['main']);
   });
 
-  it('13. feat/{N}-slug branches are filtered (ShipCode worktree branches)', () => {
+  it('13. ship/{N}-slug branches are filtered (ShipCode worktree branches)', () => {
     expect(
       normalizeBranches({
-        raw: ['main', 'feat/42-add-keyboard-shortcut', 'feat/7-fix-bug'],
+        raw: ['main', 'ship/42-add-keyboard-shortcut', 'ship/7-fix-bug'],
         defaultBranch: 'main',
       }),
     ).toEqual(['main']);
   });
 
-  it('14. feat/something (no digit prefix) is NOT filtered', () => {
+  it('14. feat/something is NOT filtered (user branches)', () => {
     expect(
       normalizeBranches({
-        raw: ['main', 'feat/my-feature'],
+        raw: ['main', 'feat/my-feature', 'feat/42-api-hardening'],
         defaultBranch: 'main',
       }),
-    ).toEqual(['main', 'feat/my-feature']);
+    ).toEqual(['main', 'feat/42-api-hardening', 'feat/my-feature']);
   });
 
-  it('15. remote feat/{N}-slug branches are also filtered', () => {
+  it('15. remote ship/{N}-slug branches are also filtered', () => {
     expect(
       normalizeBranches({
-        raw: ['main', 'remotes/origin/feat/42-add-shortcut'],
+        raw: ['main', 'remotes/origin/ship/42-add-shortcut'],
         defaultBranch: 'main',
       }),
     ).toEqual(['main']);

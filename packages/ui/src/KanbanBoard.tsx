@@ -265,7 +265,7 @@ function DraggableCard({
           (isSelected
             ? 'border-warning bg-warning/[0.07]'
             : 'border-warning/30 bg-warning/[0.03] hover:border-warning/50'),
-        // Agent-active cards use the dedicated `--agent` violet so they are
+        // Agent-active cards use the dedicated `--agent` yellow so they are
         // visually distinct from failed (red), awaiting (amber), and selected
         // (white). Lower opacity than failed/awaiting because agent work is
         // informational — the user is not being asked to act.
@@ -605,7 +605,7 @@ const customCollisionDetection: CollisionDetection = (args: Parameters<Collision
 //
 // The list view mirrors the Kanban's column/section structure so users get the
 // same per-phase breakdown (Planning / Reviewing / Executing / Verifying) with
-// model labels and the purple `agent` tone on active rows — instead of a flat
+// model labels and the yellow `agent` tone on active rows — instead of a flat
 // "In Progress" bucket. COLUMNS is the single source of truth for both views.
 
 // Display override: "Agent Loop" reads as "In Progress" at the list level.
