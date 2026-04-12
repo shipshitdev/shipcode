@@ -109,6 +109,8 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
       // Analysis phases: stream-json for real-time terminal output,
       // no file-mutating tools. --verbose is required by stream-json mode.
       // maxTurns comes from AppSettings.plannerMaxTurns (default 3) via phaseHints.
+      // --max-thinking-tokens enables extended thinking so the terminal
+      // drawer can display reasoning blocks.
       const maxTurns = String(req.phaseHints?.maxTurns ?? 1);
       return [
         '-p',
@@ -118,6 +120,8 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
         '--verbose',
         '--max-turns',
         maxTurns,
+        '--max-thinking-tokens',
+        '32000',
         '--dangerously-skip-permissions',
         '--disallowedTools',
         'Edit,Write,Bash,NotebookEdit',
@@ -165,9 +169,9 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
 function buildCodexArgs(req: ProviderRequest): string[] {
   const sandbox = req.phase === 'execute' ? 'workspace-write' : 'read-only';
   const topLevelFlags: string[] = ['-a', 'never'];
-  if (req.phaseHints?.reasoningEffort) {
-    topLevelFlags.push('-c', `model_reasoning_effort=${req.phaseHints.reasoningEffort}`);
-  }
+  // Default to high reasoning so thinking output is always visible in the terminal.
+  const effort = req.phaseHints?.reasoningEffort ?? 'high';
+  topLevelFlags.push('-c', `model_reasoning_effort=${effort}`);
   return [...topLevelFlags, 'exec', req.prompt, '--sandbox', sandbox, '--json'];
 }
 

@@ -1,5 +1,5 @@
 import type { BrowserWindow } from 'electron';
-import log from 'electron-log/main';
+import log from './logger.service';
 import type { PipelineEmitter, PipelineEvent } from '@shipcode/pipeline';
 import type { ActivityQueries, ThreadQueries } from '@shipcode/db';
 import type { ActivityKind, PipelinePhase, Thread } from '@shipcode/shared';

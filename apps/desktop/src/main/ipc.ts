@@ -1,5 +1,5 @@
 import { type IpcMain, type BrowserWindow, dialog, shell } from 'electron';
-import log from 'electron-log/main';
+import log, { logProcessOutput } from './logger.service';
 import type {
   ProjectQueries,
   ThreadQueries,
@@ -1120,6 +1120,9 @@ export function registerIpcHandlers(
       const normalizer = normalizers.get(processId);
       normalizer?.feed(data);
     }
+
+    // Mirror raw output to app log
+    logProcessOutput(proc?.type ?? 'unknown', data);
 
     try {
       mainWindow.webContents.send('agent:output', {
