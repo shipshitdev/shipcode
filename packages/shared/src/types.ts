@@ -246,9 +246,14 @@ export interface AppSettings {
   // When true, pipeline pauses at awaiting_approval after review loop for human sign-off.
   // When false (default), it proceeds directly to execution.
   requireApproval: boolean;
-  // Codex reasoning effort for the review phase. Applied via
-  // `-c model_reasoning_effort=<value>` on the top-level codex command (v0.120.0+).
+  // Per-phase reasoning effort. Applied as:
+  //   Claude: --max-thinking-tokens (high=32000, medium=8000, low=omit)
+  //   Codex:  -c model_reasoning_effort=<value> (v0.120.0+)
+  //   OpenRouter: reasoning: { effort } in the chat request
+  plannerReasoningEffort: 'low' | 'medium' | 'high';
   reviewerReasoningEffort: 'low' | 'medium' | 'high';
+  executorReasoningEffort: 'low' | 'medium' | 'high';
+  verifierReasoningEffort: 'low' | 'medium' | 'high';
   // Notifications
   notificationsEnabled: boolean;
   notificationOsEnabled: boolean;

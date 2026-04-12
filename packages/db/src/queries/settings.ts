@@ -83,9 +83,18 @@ export class SettingsQueries {
       plannerMaxTurns: clampInt(stored.plannerMaxTurns, 1, 20, DEFAULT_SETTINGS.plannerMaxTurns),
       maxReviewRounds: clampInt(stored.maxReviewRounds, 1, 5, DEFAULT_SETTINGS.maxReviewRounds),
       requireApproval: parseBool(stored.requireApproval, DEFAULT_SETTINGS.requireApproval),
+      plannerReasoningEffort: REASONING_EFFORTS.includes(stored.plannerReasoningEffort as any)
+        ? (stored.plannerReasoningEffort as AppSettings['plannerReasoningEffort'])
+        : DEFAULT_SETTINGS.plannerReasoningEffort,
       reviewerReasoningEffort: REASONING_EFFORTS.includes(stored.reviewerReasoningEffort as any)
         ? (stored.reviewerReasoningEffort as AppSettings['reviewerReasoningEffort'])
         : DEFAULT_SETTINGS.reviewerReasoningEffort,
+      executorReasoningEffort: REASONING_EFFORTS.includes(stored.executorReasoningEffort as any)
+        ? (stored.executorReasoningEffort as AppSettings['executorReasoningEffort'])
+        : DEFAULT_SETTINGS.executorReasoningEffort,
+      verifierReasoningEffort: REASONING_EFFORTS.includes(stored.verifierReasoningEffort as any)
+        ? (stored.verifierReasoningEffort as AppSettings['verifierReasoningEffort'])
+        : DEFAULT_SETTINGS.verifierReasoningEffort,
       notificationsEnabled: parseBool(
         stored.notificationsEnabled,
         DEFAULT_SETTINGS.notificationsEnabled,
@@ -134,9 +143,11 @@ export class SettingsQueries {
       const n = Number(patch.plannerMaxTurns);
       if (!Number.isFinite(n) || n < 1 || n > 20) throw new Error('plannerMaxTurns must be 1–20');
     }
-    if ('reviewerReasoningEffort' in patch && patch.reviewerReasoningEffort != null) {
-      if (!REASONING_EFFORTS.includes(patch.reviewerReasoningEffort as any))
-        throw new Error('reviewerReasoningEffort must be low|medium|high');
+    for (const key of ['plannerReasoningEffort', 'reviewerReasoningEffort', 'executorReasoningEffort', 'verifierReasoningEffort'] as const) {
+      if (key in patch && patch[key] != null) {
+        if (!REASONING_EFFORTS.includes(patch[key] as any))
+          throw new Error(`${key} must be low|medium|high`);
+      }
     }
     if ('worktreeBranchFormat' in patch && patch.worktreeBranchFormat != null) {
       validateBranchFormat(patch.worktreeBranchFormat);

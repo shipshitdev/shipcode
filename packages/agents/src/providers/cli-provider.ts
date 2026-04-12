@@ -98,6 +98,19 @@ async function runCli(
 }
 
 /**
+ * Map reasoning effort to Claude --max-thinking-tokens value.
+ * Returns null when thinking should be omitted entirely (low effort).
+ */
+function claudeThinkingTokens(effort: 'low' | 'medium' | 'high' | undefined): number | null {
+  switch (effort) {
+    case 'low': return null;
+    case 'medium': return 8000;
+    case 'high':
+    default: return 32000;
+  }
+}
+
+/**
  * Build claude CLI args for a given phase. Mirrors the inline arg
  * construction that previously lived in pipeline.ts verbatim.
  */
@@ -110,9 +123,11 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
       // no file-mutating tools. --verbose is required by stream-json mode.
       // maxTurns comes from AppSettings.plannerMaxTurns (default 3) via phaseHints.
       // --max-thinking-tokens enables extended thinking so the terminal
-      // drawer can display reasoning blocks.
+      // drawer can display reasoning blocks. Token budget is controlled by
+      // phaseHints.reasoningEffort (high=32000, medium=8000, low=omit).
       const maxTurns = String(req.phaseHints?.maxTurns ?? 1);
-      return [
+      const thinkingTokens = claudeThinkingTokens(req.phaseHints?.reasoningEffort);
+      const args = [
         '-p',
         req.prompt,
         '--output-format',
@@ -120,22 +135,30 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
         '--verbose',
         '--max-turns',
         maxTurns,
-        '--max-thinking-tokens',
-        '32000',
         '--dangerously-skip-permissions',
         '--disallowedTools',
         'Edit,Write,Bash,NotebookEdit',
       ];
+      if (thinkingTokens !== null) {
+        args.splice(args.indexOf('--dangerously-skip-permissions'), 0, '--max-thinking-tokens', String(thinkingTokens));
+      }
+      return args;
     }
-    case 'execute':
+    case 'execute': {
       // Execution: full tool surface, no JSON wrapping, no turn limit.
-      return [
+      const execArgs = [
         '-p',
         req.prompt,
         '--allowedTools',
         'Edit,Write,Bash,Glob,Grep,Read',
         '--dangerously-skip-permissions',
       ];
+      const execThinking = claudeThinkingTokens(req.phaseHints?.reasoningEffort);
+      if (execThinking !== null) {
+        execArgs.splice(execArgs.indexOf('--dangerously-skip-permissions'), 0, '--max-thinking-tokens', String(execThinking));
+      }
+      return execArgs;
+    }
     case 'review':
       // Claude does not review in the current pipeline (codex does).
       // Kept for symmetry; always 1 turn (structural, not configurable).

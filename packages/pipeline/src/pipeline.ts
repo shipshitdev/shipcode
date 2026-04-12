@@ -298,7 +298,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     // starters returning immediately after emitting the phase transition.
     void (async () => {
       try {
-        const response = await runProviderPhase(context, 'plan', planPrompt, undefined);
+        const response = await runProviderPhase(context, 'plan', planPrompt, {
+          reasoningEffort: deps.settings.get().plannerReasoningEffort,
+        });
 
         if (context.cancelled) return;
 
@@ -480,7 +482,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
     void (async () => {
       try {
-        const response = await runProviderPhase(context, 'revision', revisionPrompt, undefined);
+        const response = await runProviderPhase(context, 'revision', revisionPrompt, {
+          reasoningEffort: deps.settings.get().plannerReasoningEffort,
+        });
 
         if (context.cancelled) return;
 
@@ -559,7 +563,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
     void (async () => {
       try {
-        const response = await runProviderPhase(context, 'execute', executionPrompt, undefined);
+        const response = await runProviderPhase(context, 'execute', executionPrompt, {
+          reasoningEffort: deps.settings.get().executorReasoningEffort,
+        });
 
         if (context.cancelled) return;
 
@@ -746,7 +752,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
     void (async () => {
       try {
-        const response = await runProviderPhase(context, 'verify', verificationPrompt, undefined);
+        const response = await runProviderPhase(context, 'verify', verificationPrompt, {
+          reasoningEffort: deps.settings.get().verifierReasoningEffort,
+        });
 
         if (context.cancelled) return;
 
