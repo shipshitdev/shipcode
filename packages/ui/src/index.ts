@@ -26,12 +26,12 @@ export {
   Maximize2,
   Minimize2,
   MoreHorizontal,
+  PackageCheck,
   PanelLeftClose,
   PanelLeftOpen,
   Pencil,
   Pin,
   PinOff,
-  PackageCheck,
   Plus,
   RefreshCw,
   Settings,
@@ -96,7 +96,16 @@ export { Input } from './primitives/input';
 export { Label } from './primitives/label';
 export type { PaginationProps } from './primitives/pagination';
 export { Pagination } from './primitives/pagination';
-export { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from './primitives/select';
+export {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from './primitives/select';
 export { SettingsRow } from './primitives/settings-row';
 export { Switch } from './primitives/switch';
 export {

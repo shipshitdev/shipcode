@@ -86,10 +86,7 @@ function SelectValue(props: React.ComponentProps<typeof SelectPrimitive.Value>) 
 function SelectGroup(props: React.ComponentProps<typeof SelectPrimitive.Group>) {
   return <SelectPrimitive.Group {...props} />;
 }
-function SelectLabel({
-  className,
-  ...props
-}: React.ComponentProps<typeof SelectPrimitive.Label>) {
+function SelectLabel({ className, ...props }: React.ComponentProps<typeof SelectPrimitive.Label>) {
   return (
     <SelectPrimitive.Label
       className={cn(
@@ -105,11 +102,17 @@ function SelectSeparator({
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Separator>) {
   return (
-    <SelectPrimitive.Separator
-      className={cn('-mx-1 my-1 h-px bg-border', className)}
-      {...props}
-    />
+    <SelectPrimitive.Separator className={cn('-mx-1 my-1 h-px bg-border', className)} {...props} />
   );
 }
 
-export { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue };
+export {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+};

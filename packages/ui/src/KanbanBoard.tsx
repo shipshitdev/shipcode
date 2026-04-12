@@ -29,7 +29,16 @@ import { getStatusBadgeVariant } from './lib/status-variant';
 import { cn } from './lib/utils';
 import { Badge } from './primitives/badge';
 import { Button } from './primitives/button';
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from './primitives/select';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from './primitives/select';
 
 // Static map for the drag overlay border. Tailwind's JIT needs string-literal
 // class names, so we cannot interpolate (`border-${variant}`).
@@ -1109,9 +1118,7 @@ export function KanbanBoard({
           {baseBranch && branches && branches.length > 0 && onBaseBranchChange && (
             <div className="flex items-center border border-border rounded-md overflow-hidden min-w-0 max-w-[240px] shrink-0">
               <Select value={baseBranch} onValueChange={onBaseBranchChange}>
-                <SelectTrigger
-                  className="h-7 gap-1 rounded-none border-0 bg-transparent px-2 text-xs font-mono text-secondary hover:text-primary"
-                >
+                <SelectTrigger className="h-7 gap-1 rounded-none border-0 bg-transparent px-2 text-xs font-mono text-secondary hover:text-primary">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
