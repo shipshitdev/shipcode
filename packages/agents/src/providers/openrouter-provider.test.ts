@@ -119,9 +119,8 @@ describe('createOpenRouterProvider', () => {
 
     await provider.generate(req({ phase: 'plan', modelHint: 'openrouter/auto' }));
 
-    expect(chatSpy).toHaveBeenCalledWith(
+    expect(chatSpy.mock.calls[0][0]).toEqual(
       expect.objectContaining({ model: 'openrouter/auto' }),
-      expect.anything(),
     );
   });
 
@@ -136,9 +135,8 @@ describe('createOpenRouterProvider', () => {
 
     await provider.generate(req({ phase: 'review' }));
 
-    expect(chatSpy).toHaveBeenCalledWith(
+    expect(chatSpy.mock.calls[0][0]).toEqual(
       expect.objectContaining({ model: 'qwen/qwen3-coder:free' }),
-      expect.anything(),
     );
   });
 
@@ -153,9 +151,8 @@ describe('createOpenRouterProvider', () => {
 
     await provider.generate(req({ phase: 'verify' }));
 
-    expect(chatSpy).toHaveBeenCalledWith(
+    expect(chatSpy.mock.calls[0][0]).toEqual(
       expect.objectContaining({ model: 'openrouter/auto' }),
-      expect.anything(),
     );
   });
 

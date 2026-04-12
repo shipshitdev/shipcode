@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
 import {
   Button,
@@ -20,107 +21,76 @@ import type { GitHubIssueCacheRecord } from '@shipcode/shared';
 const MIN_HEIGHT = 120;
 const DEFAULT_HEIGHT = 250;
 
-// Strip the final JSON result envelope that claude -p --output-format stream-json emits.
-// The result blob is for StreamParser; not useful to display in the terminal.
-const JSON_RESULT_RE = /\{"type":"result"[^\n]*\n?/g;
-
-function sanitize(chunk: string): string {
-  return chunk.replace(JSON_RESULT_RE, '');
-}
-
-/**
- * Extract displayable text from a single parsed NDJSON event.
- * Handles both claude --output-format stream-json and codex exec --json formats.
- * Returns null for events that should not be displayed (system noise, etc.).
- */
-/** Format a claude tool_use input into a short, readable summary. */
-function formatToolCall(name: string, input: Record<string, unknown>): string {
-  switch (name) {
-    case 'Read': return `Read ${input.file_path ?? ''}`
-    case 'Write': return `Write ${input.file_path ?? ''}`
-    case 'Edit': return `Edit ${input.file_path ?? ''}`
-    case 'Glob': return `Glob ${input.pattern ?? ''}`
-    case 'Grep': return `Grep "${input.pattern ?? ''}"${input.path ? ` in ${input.path}` : ''}`
-    case 'Bash': {
-      const cmd = String(input.command ?? '')
-      return `$ ${cmd.length > 60 ? cmd.slice(0, 60) + '…' : cmd}`
-    }
-    case 'TodoWrite': return `TodoWrite (${(input.todos as unknown[])?.length ?? '?'} items)`
-    default: {
-      const first = Object.values(input)[0]
-      return first ? `${name}: ${String(first).slice(0, 60)}` : name
-    }
-  }
-}
-
-function extractNdjsonText(event: Record<string, unknown>): string | null {
-  // ── claude stream-json ──────────────────────────────────────────────────
-  if (event.type === 'assistant') {
-    const content = (event.message as Record<string, unknown>)?.content;
-    if (Array.isArray(content)) {
-      const parts: string[] = []
-      for (const c of content as Record<string, unknown>[]) {
-        if (c.type === 'text' && c.text) {
-          parts.push(c.text as string)
-        } else if (c.type === 'tool_use') {
-          const name = c.name as string
-          const input = (c.input ?? {}) as Record<string, unknown>
-          parts.push(`\x1b[2m→ ${formatToolCall(name, input)}\x1b[0m`)
-        }
-      }
-      return parts.join('') || null
-    }
-  }
-
-  // ── codex exec --json ───────────────────────────────────────────────────
-  const item = event.item as Record<string, unknown> | undefined;
-  if (event.type === 'item.started' && item?.type === 'command_execution') {
-    return `\x1b[33m$ ${item.command as string}\x1b[0m`;
-  }
-  // Real-time text streaming: item.delta carries incremental tokens as they generate.
-  // When present, item.completed agent_message is suppressed by the caller to avoid
-  // double-printing the same text.
-  if (event.type === 'item.delta') {
-    const delta = event.delta as Record<string, unknown> | undefined;
-    if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
-      return delta.text;
-    }
-  }
-  if (event.type === 'item.completed' && item?.type === 'agent_message') {
-    // Fallback only — caller suppresses this if item.delta events were already streamed.
-    return (item.text as string) || null;
-  }
-  if (event.type === 'item.completed' && item?.type === 'command_execution') {
-    const code = item.exit_code as number | null;
-    return code === 0 ? '\x1b[32m[exit 0]\x1b[0m' : `\x1b[31m[exit ${code}]\x1b[0m`;
-  }
-
-  return null;
-}
-
-// Fenced blocks that the LLM outputs for structured data — we replace them with
-// a clean indicator rather than dumping raw JSON into the terminal.
-const FENCE_TAGS: Record<string, string> = {
-  'shipcode-plan': '\x1b[2m[Plan ready — open Issue Detail to view]\x1b[0m',
-  'shipcode-review': '\x1b[2m[Review ready — open Issue Detail to view]\x1b[0m',
-  'shipcode-verification': '\x1b[2m[Verification complete — open Issue Detail to view]\x1b[0m',
-};
-const FENCE_RE = new RegExp('```(' + Object.keys(FENCE_TAGS).join('|') + ')');
-
 const AGENT_ACTIVE_STATUSES = new Set(['planning', 'reviewing', 'revising', 'executing', 'testing', 'verifying', 'shipping']);
 
+/**
+ * Render a canonical TerminalEvent into an ANSI-formatted string for xterm.
+ */
+function renderTerminalEvent(event: import('@shipcode/agents').TerminalEvent): string | null {
+  switch (event.kind) {
+    case 'text':
+      return event.content;
+    case 'thinking':
+      // Dim italic for reasoning/thinking blocks
+      return `\x1b[2;3m${event.content}\x1b[0m`;
+    case 'tool_start':
+      return `\x1b[2m\u2192 ${event.summary}\x1b[0m`;
+    case 'tool_end':
+      if (event.exitCode !== undefined) {
+        return event.exitCode === 0
+          ? '\x1b[32m[exit 0]\x1b[0m'
+          : `\x1b[31m[exit ${event.exitCode}]\x1b[0m`;
+      }
+      if (event.durationMs !== undefined) {
+        return `\x1b[2m(${(event.durationMs / 1000).toFixed(1)}s)\x1b[0m`;
+      }
+      return null;
+    case 'turn_start':
+      return `\x1b[2m\u2500\u2500 Turn ${event.turn} \u2500\u2500\x1b[0m`;
+    case 'turn_end': {
+      const parts: string[] = [];
+      if (event.tokensUsed) {
+        parts.push(`${event.tokensUsed.prompt}+${event.tokensUsed.completion} tok`);
+      }
+      if (event.costUsd && event.costUsd > 0) {
+        parts.push(`$${event.costUsd.toFixed(4)}`);
+      }
+      return parts.length > 0 ? `\x1b[2m${parts.join(' \u00b7 ')}\x1b[0m` : null;
+    }
+    case 'lifecycle':
+      // Already contains ANSI codes from useIpc formatting
+      return event.message;
+    case 'raw':
+      return event.content;
+    case 'error':
+      return `\x1b[31m${event.message}\x1b[0m`;
+    case 'done': {
+      const parts: string[] = [];
+      if (event.totalTokens) {
+        parts.push(`${event.totalTokens.prompt}+${event.totalTokens.completion} tok`);
+      }
+      if (event.totalCostUsd && event.totalCostUsd > 0) {
+        parts.push(`~$${event.totalCostUsd.toFixed(4)}`);
+      }
+      return parts.length > 0 ? `\x1b[2m[done: ${parts.join(' \u00b7 ')}]\x1b[0m` : null;
+    }
+    default:
+      return null;
+  }
+}
+
 export function TerminalDrawer() {
-  const { toggleTerminal, agentOutputs } = useAppStore();
+  const { toggleTerminal } = useAppStore();
   const terminalThreadId = useAppStore((s) => s.terminalThreadId);
-  const terminalEventsByThread = useAppStore((s) => s.terminalEventsByThread);
-  const terminalEvents = terminalThreadId ? (terminalEventsByThread[terminalThreadId] ?? []) : [];
+  const canonicalStream = useAppStore((s) =>
+    s.terminalThreadId ? (s.canonicalTerminalStream[s.terminalThreadId] ?? []) : [],
+  );
   const activeIssue = useAppStore((s) => s.activeIssue);
   const pipelinePhase = useAppStore((s) => s.pipelinePhase);
   const currentModel = useAppStore(
     (s) => (s.terminalThreadId ? s.currentModels[s.terminalThreadId] : null) ?? null,
   );
   const githubIssues = useAppStore((s) => s.githubIssues);
-  const processToThread = useAppStore((s) => s.processToThread);
   const setTerminalThread = useAppStore((s) => s.setTerminalThread);
   const selectIssue = useAppStore((s) => s.selectIssue);
 
@@ -145,18 +115,9 @@ export function TerminalDrawer() {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
-  // Track how many chunks have been written per process (regular streaming)
-  const writtenRef = useRef<Record<string, number | typeof Infinity>>({});
-  // Buffer incomplete NDJSON lines across PTY read chunks
-  const lineBufferRef = useRef<Record<string, string>>({});
-  // Per-process suppression: once a fence tag is detected, suppress remaining text
-  const suppressedRef = useRef<Record<string, boolean>>({});
-  // Codex item.delta dedup: track item IDs that have received delta events so we
-  // can suppress the redundant item.completed agent_message for the same item.
-  const deltaItemIdsRef = useRef<Record<string, Set<string>>>({});
   const prevThreadIdRef = useRef<string | null>(null);
-  // Track how many terminal event lines have been written
-  const eventsWrittenRef = useRef(0);
+  // Track how many canonical events have been written
+  const canonicalWrittenRef = useRef(0);
   // Show skeleton between thread switches until first output arrives
   const [isTransitioning, setIsTransitioning] = useState(false);
   // Resize state
@@ -233,6 +194,7 @@ export function TerminalDrawer() {
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
+    term.loadAddon(new WebLinksAddon());
     term.open(containerRef.current);
     fit.fit();
     termRef.current = term;
@@ -255,11 +217,7 @@ export function TerminalDrawer() {
     if (!term) return;
     if (terminalThreadId !== prevThreadIdRef.current) {
       term.reset();
-      writtenRef.current = {};
-      lineBufferRef.current = {};
-      suppressedRef.current = {};
-      deltaItemIdsRef.current = {};
-      eventsWrittenRef.current = 0;
+      canonicalWrittenRef.current = 0;
       startedAtRef.current = null;
       prevThreadIdRef.current = terminalThreadId;
       // Show skeleton only for threads with an active pipeline process —
@@ -271,130 +229,35 @@ export function TerminalDrawer() {
     }
   }, [terminalThreadId]);
 
-  // Write incremental agent output as chunks arrive (filtered to current terminal thread)
+  // Write canonical terminal events (normalized from all providers)
   useEffect(() => {
     const term = termRef.current;
     if (!term) return;
+    const newEvents = canonicalStream.slice(canonicalWrittenRef.current);
+    if (newEvents.length === 0) return;
 
-    for (const [processId, chunks] of Object.entries(agentOutputs)) {
-      if (writtenRef.current[processId] === Infinity) continue;
-
-      // When no thread is selected (e.g. after project switch) show nothing
-      if (!terminalThreadId) continue;
-
-      // Only show output for processes belonging to the currently focused thread
-      const mappedThread = processToThread[processId];
-      if (mappedThread && mappedThread !== terminalThreadId) continue;
-
-      const prev = (writtenRef.current[processId] as number) ?? 0;
-      const newChunks = chunks.slice(prev);
-      // First output for this thread — hide skeleton
-      if (newChunks.length > 0) setIsTransitioning(false);
-      if (newChunks.length === 0) continue;
-
-      // Detect NDJSON (stream-json) mode: look across first ~10 chunks since
-      // PTY may emit control sequences before the first JSON line.
-      const isNdjson =
-        processId in lineBufferRef.current || chunks.slice(0, 10).join('').includes('{"type":"');
-
-      if (isNdjson) {
-        // Buffer-based line processing — handles PTY chunks that split NDJSON lines
-        let buf = (lineBufferRef.current[processId] ?? '') + newChunks.join('');
-        const lines = buf.split('\n');
-        // Keep the last (potentially incomplete) segment in the buffer
-        lineBufferRef.current[processId] = lines.pop() ?? '';
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
-          try {
-            const event = JSON.parse(trimmed) as Record<string, unknown>;
-
-            // Track Codex item.delta events so we can suppress the redundant
-            // item.completed agent_message for the same item (avoids double-print).
-            if (event.type === 'item.delta' && typeof event.item_id === 'string') {
-              if (!deltaItemIdsRef.current[processId]) {
-                deltaItemIdsRef.current[processId] = new Set();
-              }
-              deltaItemIdsRef.current[processId].add(event.item_id);
-            }
-
-            // Suppress item.completed agent_message when deltas were already streamed.
-            if (
-              event.type === 'item.completed' &&
-              (event.item as Record<string, unknown>)?.type === 'agent_message' &&
-              typeof event.item_id === 'string' &&
-              deltaItemIdsRef.current[processId]?.has(event.item_id)
-            ) {
-              continue;
-            }
-
-            const text = extractNdjsonText(event);
-            if (!text) continue;
-
-            // Already suppressed (inside a structured fence block)
-            if (suppressedRef.current[processId]) continue;
-
-            const fenceMatch = FENCE_RE.exec(text);
-            if (fenceMatch) {
-              // Write preamble text before the fence, then a clean indicator
-              const before = text.slice(0, fenceMatch.index).trimEnd();
-              if (before) {
-                const normalized = before.replace(/\r?\n/g, '\r\n');
-                term.write(normalized.endsWith('\r\n') ? normalized : normalized + '\r\n');
-              }
-              const tag = fenceMatch[1];
-              term.write((FENCE_TAGS[tag] ?? '\x1b[2m[output ready]\x1b[0m') + '\r\n');
-              suppressedRef.current[processId] = true;
-            } else {
-              const normalized = text.replace(/\r?\n/g, '\r\n');
-              term.write(normalized.endsWith('\r\n') ? normalized : normalized + '\r\n');
-            }
-          } catch {
-            // Partial or non-JSON segment — skip silently
-          }
-        }
-      } else {
-        // Non-NDJSON streaming (e.g. plain-text PTY output from legacy providers)
-        for (const chunk of newChunks) {
-          const clean = sanitize(chunk);
-          if (clean) term.write(clean);
-        }
-      }
-      writtenRef.current[processId] = chunks.length;
-    }
-
-    // Clean up tracking for removed processes
-    for (const processId of Object.keys(writtenRef.current)) {
-      if (!agentOutputs[processId]) {
-        delete writtenRef.current[processId];
-        delete lineBufferRef.current[processId];
+    // Hide skeleton when first canonical event arrives
+    if (canonicalWrittenRef.current === 0 && newEvents.length > 0) {
+      setIsTransitioning(false);
+      if (!startedAtRef.current) {
+        startedAtRef.current = new Date().toLocaleTimeString('en-US', {
+          hour12: false,
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        });
       }
     }
-  }, [agentOutputs, processToThread, terminalThreadId]);
 
-  // Write pipeline event log lines (phase transitions, process lifecycle)
-  useEffect(() => {
-    const term = termRef.current;
-    if (!term) return;
-    const newEvents = terminalEvents.slice(eventsWrittenRef.current);
-    // Capture start time from first event of this run
-    if (eventsWrittenRef.current === 0 && newEvents.length > 0 && !startedAtRef.current) {
-      startedAtRef.current = new Date().toLocaleTimeString('en-US', {
-        hour12: false,
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      });
-      // Hide skeleton when events start arriving
-      if (newEvents.length > 0) setIsTransitioning(false);
+    for (const event of newEvents) {
+      const text = renderTerminalEvent(event);
+      if (text === null) continue;
+      // Normalize line endings for xterm
+      const normalized = text.replace(/\r?\n/g, '\r\n');
+      term.write(normalized.endsWith('\r\n') ? normalized : normalized + '\r\n');
     }
-    for (const line of newEvents) {
-      // Lines already contain their own ANSI codes — write directly without wrapping
-      term.write(`${line}\r\n`);
-    }
-    eventsWrittenRef.current = terminalEvents.length;
-  }, [terminalEvents]);
+    canonicalWrittenRef.current = canonicalStream.length;
+  }, [canonicalStream]);
 
   const resolvedHeight = isMaximized ? undefined : height;
   const displayIssue = pinnedIssue;
@@ -478,7 +341,7 @@ export function TerminalDrawer() {
               <span className="text-xs font-mono text-muted shrink-0 truncate max-w-[180px]">{currentModel}</span>
             </>
           )}
-          {startedAtRef.current && terminalEvents.length > 0 && (
+          {startedAtRef.current && canonicalStream.length > 0 && (
             <>
               <span className="text-muted text-xs shrink-0">·</span>
               <span className="text-xs font-mono text-muted shrink-0">{startedAtRef.current}</span>

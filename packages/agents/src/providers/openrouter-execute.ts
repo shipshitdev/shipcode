@@ -37,6 +37,7 @@ import type { ToolContext } from '../tools/types';
 import { OpenRouterClient, OpenRouterError } from './openrouter-http';
 import type { OpenRouterChatMessage } from './openrouter-http';
 import type { ProviderRequest, ProviderResponse } from './types';
+import type { TerminalEvent } from '../terminal-events';
 
 /**
  * System prompt for the tool-call execute loop. Deliberately terse —
@@ -60,6 +61,8 @@ export interface ExecuteDeps {
    * ProviderRequest.modelHint / AppSettings before invoking.
    */
   model: string;
+  /** Optional callback for streaming canonical terminal events. */
+  onTerminalEvent?: (event: TerminalEvent) => void;
 }
 
 /**
@@ -116,7 +119,11 @@ export async function executeViaOpenRouter(
   let lastResolvedModel: string | undefined;
   const recentHashes: string[] = [];
 
+  const emit = deps.onTerminalEvent;
+
   for (let iteration = 0; iteration < MAX_TOOL_CALL_ITERATIONS; iteration++) {
+    emit?.({ kind: 'turn_start', turn: iteration + 1 });
+
     if (req.signal.aborted) {
       return {
         rawOutput: '',
@@ -167,6 +174,14 @@ export async function executeViaOpenRouter(
       totalPromptTokens += response.usage.prompt_tokens;
       totalCompletionTokens += response.usage.completion_tokens;
     }
+
+    emit?.({
+      kind: 'turn_end',
+      turn: iteration + 1,
+      tokensUsed: response.usage
+        ? { prompt: response.usage.prompt_tokens, completion: response.usage.completion_tokens }
+        : undefined,
+    });
 
     if (totalPromptTokens + totalCompletionTokens > MAX_EXECUTE_TOTAL_TOKENS) {
       return {
@@ -223,8 +238,28 @@ export async function executeViaOpenRouter(
           };
         }
 
+        // Summarize tool args for terminal display
+        let argSummary = '';
+        try {
+          const parsed = JSON.parse(call.function.arguments);
+          argSummary =
+            parsed.file_path ?? parsed.pattern ?? parsed.command?.slice(0, 60) ?? '';
+        } catch {}
+        emit?.({
+          kind: 'tool_start',
+          name: call.function.name,
+          summary: `${call.function.name} ${argSummary}`.trim(),
+        });
+
+        const toolStart = Date.now();
         const result = await executeToolCall(call.function.name, call.function.arguments, toolCtx);
         toolCallsExecuted++;
+
+        emit?.({
+          kind: 'tool_end',
+          name: call.function.name,
+          durationMs: Date.now() - toolStart,
+        });
 
         messages.push({
           role: 'tool',
@@ -233,6 +268,11 @@ export async function executeViaOpenRouter(
         });
       }
       continue;
+    }
+
+    // Emit any text content from the model
+    if (response.content) {
+      emit?.({ kind: 'text', content: response.content });
     }
 
     // No tool calls this turn. Check finish_reason.
@@ -252,6 +292,10 @@ export async function executeViaOpenRouter(
           tokensUsed: { prompt: totalPromptTokens, completion: totalCompletionTokens },
         };
       }
+      emit?.({
+        kind: 'done',
+        totalTokens: { prompt: totalPromptTokens, completion: totalCompletionTokens },
+      });
       return {
         rawOutput: response.content,
         exitCode: 0,

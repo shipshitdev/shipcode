@@ -19,7 +19,8 @@ import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { ProcessManager } from '@shipcode/agents';
+import type { ProcessManager, TerminalEvent } from '@shipcode/agents';
+import { ClaudeNormalizer, CodexNormalizer } from '@shipcode/agents';
 import type { PhaseSkillKey, ShipCodePlan } from '@shipcode/shared';
 import {
   validateGithubProjectUrl,
@@ -1086,10 +1087,40 @@ export function registerIpcHandlers(
     },
   );
 
+  // === CLI normalizer registry (Claude/Codex NDJSON → canonical TerminalEvents) ===
+  const normalizers = new Map<string, ClaudeNormalizer | CodexNormalizer>();
+
+  function emitTerminalEvent(threadId: string, event: TerminalEvent) {
+    if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
+    try {
+      mainWindow.webContents.send('terminal:event', { threadId, event });
+    } catch {
+      // webContents destroyed between check and send
+    }
+  }
+
+  function ensureNormalizer(processId: string, type: string, threadId: string) {
+    if (normalizers.has(processId)) return;
+    const onEvent = (event: TerminalEvent) => emitTerminalEvent(threadId, event);
+    if (type === 'claude') {
+      normalizers.set(processId, new ClaudeNormalizer(onEvent));
+    } else if (type === 'codex') {
+      normalizers.set(processId, new CodexNormalizer(onEvent));
+    }
+  }
+
   // === Agent output forwarding to renderer ===
   processManager.on('output', (processId: string, data: string) => {
     if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
     const proc = processManager.get(processId);
+
+    // Feed raw output into the normalizer (if one exists for this process type)
+    if (proc?.threadId) {
+      ensureNormalizer(processId, proc.type, proc.threadId);
+      const normalizer = normalizers.get(processId);
+      normalizer?.feed(data);
+    }
+
     try {
       mainWindow.webContents.send('agent:output', {
         processId,
@@ -1102,6 +1133,9 @@ export function registerIpcHandlers(
   });
 
   processManager.on('stateChange', (processId: string, type: string, state: string) => {
+    if (state === 'exited') {
+      normalizers.delete(processId);
+    }
     if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
     if (state === 'running' || state === 'exited') {
       log.info(`[process:${type}] ${processId} → ${state}`);

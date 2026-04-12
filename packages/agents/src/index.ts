@@ -1,3 +1,6 @@
+export type { TerminalEvent } from './terminal-events';
+export { ClaudeNormalizer } from './providers/normalizers/claude-normalizer';
+export { CodexNormalizer } from './providers/normalizers/codex-normalizer';
 export { ProcessManager } from './process-manager';
 export type { ManagedProcess } from './process-manager';
 export { StreamParser } from './stream-parser';

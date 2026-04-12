@@ -87,7 +87,7 @@ export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentPro
 
       // Execute phase runs the tool-call agent loop.
       if (req.phase === 'execute') {
-        return executeViaOpenRouter(req, { client, model });
+        return executeViaOpenRouter(req, { client, model, onTerminalEvent: req.onTerminalEvent });
       }
 
       // Everything else is a single streaming chat completion whose
@@ -100,7 +100,17 @@ export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentPro
       messages.push({ role: 'user', content: req.prompt });
 
       try {
-        const result = await client.chat({ model, messages, stream: true }, req.signal);
+        const result = await client.chat(
+          {
+            model,
+            messages,
+            stream: true,
+            include_reasoning: true,
+            reasoning: { effort: 'high' },
+          },
+          req.signal,
+          req.onTerminalEvent,
+        );
 
         // Reconstruct a rawOutput shape that the StreamParser understands:
         // the parser only needs the raw text that contains the fenced

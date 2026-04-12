@@ -1,4 +1,4 @@
-import type { ProcessManager, ProviderRegistry } from '@shipcode/agents';
+import type { ProcessManager, ProviderRegistry, TerminalEvent } from '@shipcode/agents';
 import type { PhaseSkillKey } from '@shipcode/shared';
 import type {
   ThreadQueries,
@@ -64,6 +64,15 @@ export type PipelineEvent =
       threadId: string;
       phase: PhaseSkillKey;
       reason: string;
+    }
+  | {
+      /**
+       * Canonical terminal event emitted by providers and the test phase.
+       * The renderer reads these instead of parsing raw agent output.
+       */
+      type: 'terminal:event';
+      threadId: string;
+      event: TerminalEvent;
     };
 
 export interface PipelineEmitter {

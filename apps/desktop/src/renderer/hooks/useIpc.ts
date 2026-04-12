@@ -46,6 +46,7 @@ export function useIpc() {
           const phaseLine = `\x1b[2m[${ts}]\x1b[0m phase: \x1b[36m${data.phase}\x1b[0m`;
           store.logTerminalEvent(phaseLine);
           logTerminalEventForThread(data.threadId, phaseLine);
+          store.appendCanonicalEvent(data.threadId, { kind: 'lifecycle', message: phaseLine });
           // Also set terminal focus to this thread when it starts
           if (data.phase !== 'idle') setTerminalThread(data.threadId);
         }
@@ -136,6 +137,15 @@ export function useIpc() {
       }),
     );
 
+    // Listen for canonical terminal events (normalized from all providers)
+    unsubscribers.push(
+      window.shipcode.on('terminal:event', (data: any) => {
+        if (data.threadId && data.event) {
+          useAppStore.getState().appendCanonicalEvent(data.threadId, data.event);
+        }
+      }),
+    );
+
     // Listen for agent output
     unsubscribers.push(
       window.shipcode.on('agent:output', (data: any) => {
@@ -176,7 +186,10 @@ export function useIpc() {
         const exitColor = data.state === 'exited' ? '\x1b[2m' : '';
         const line = `\x1b[2m[${ts}]\x1b[0m ${exitColor}${agentColor}${data.type}${agentReset}${exitColor} process ${label}\x1b[0m`;
         store.logTerminalEvent(line);
-        if (tid) logTerminalEventForThread(tid, line);
+        if (tid) {
+          logTerminalEventForThread(tid, line);
+          store.appendCanonicalEvent(tid, { kind: 'lifecycle', message: line });
+        }
       }),
     );
 
@@ -224,7 +237,10 @@ export function useIpc() {
         }
         const line = `\x1b[2m[${ts}]\x1b[0m \x1b[35mmodel:\x1b[0m ${displayName}${tokenStr}${costStr}`;
         store.logTerminalEvent(line);
-        if (tid) logTerminalEventForThread(tid, line);
+        if (tid) {
+          logTerminalEventForThread(tid, line);
+          store.appendCanonicalEvent(tid, { kind: 'lifecycle', message: line });
+        }
       }),
     );
 

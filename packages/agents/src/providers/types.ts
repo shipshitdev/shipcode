@@ -24,6 +24,7 @@
  */
 
 import type { AgentType } from '@shipcode/shared';
+import type { TerminalEvent } from '../terminal-events';
 
 export type ProviderPhase = 'plan' | 'review' | 'revision' | 'verify' | 'execute';
 
@@ -80,6 +81,12 @@ export interface ProviderRequest {
    * Providers may log against this ID but must not read thread state.
    */
   threadId: string;
+  /**
+   * Optional callback for streaming canonical terminal events.
+   * Providers emit TerminalEvents through this so the terminal drawer
+   * can render a unified stream regardless of backend.
+   */
+  onTerminalEvent?: (event: TerminalEvent) => void;
 }
 
 export type ProviderErrorKind =

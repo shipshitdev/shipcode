@@ -212,6 +212,8 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       phaseHints: mergedHints,
       modelHint,
       threadId: context.threadId,
+      onTerminalEvent: (event) =>
+        deps.emitter.emit({ type: 'terminal:event', threadId: context.threadId, event }),
     });
 
     // Tier 3 telemetry: if the provider reported which model actually
@@ -621,6 +623,11 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         const text = chunk.toString();
         chunks.push(text);
         deps.emitter.emit({ type: 'pipeline:output', threadId, chunk: text });
+        deps.emitter.emit({
+          type: 'terminal:event',
+          threadId,
+          event: { kind: 'raw', content: text },
+        });
       };
 
       child.stdout?.on('data', onData);

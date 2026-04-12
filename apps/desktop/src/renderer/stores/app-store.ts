@@ -9,6 +9,7 @@ import type {
   NotificationRecord,
   IssuePipelineStatus,
 } from '@shipcode/shared';
+import type { TerminalEvent } from '@shipcode/agents';
 
 const AGENT_ACTIVE_STATUSES = new Set<IssuePipelineStatus>([
   'planning',
@@ -72,6 +73,9 @@ interface AppState {
   // Currently running model per thread (from pipeline:model-resolved)
   currentModels: Record<string, string>;
 
+  // Canonical terminal event stream (normalized across all providers)
+  canonicalTerminalStream: Record<string, TerminalEvent[]>;
+
   // Notifications (in-app toaster + history)
   notifications: NotificationRecord[];
 
@@ -111,6 +115,7 @@ interface AppState {
   logTerminalEventForThread: (threadId: string, line: string) => void;
   touchLastActivity: (threadId: string) => void;
   setCurrentModel: (threadId: string, model: string) => void;
+  appendCanonicalEvent: (threadId: string, event: TerminalEvent) => void;
   addNotification: (notification: NotificationRecord) => void;
   removeNotification: (id: string) => void;
   clearNotifications: () => void;
@@ -154,6 +159,7 @@ export const useAppStore = create<AppState>((set) => ({
   projectSettingsModalOpen: false,
   projectSettingsModalProjectId: null,
   currentModels: {},
+  canonicalTerminalStream: {},
 
   setViewMode: (mode) => set({ viewMode: mode }),
   openOverview: () =>
@@ -294,6 +300,12 @@ export const useAppStore = create<AppState>((set) => ({
       const prev = s.terminalEventsByThread[threadId] ?? [];
       const next = prev.length >= 200 ? [...prev.slice(-199), line] : [...prev, line];
       return { terminalEventsByThread: { ...s.terminalEventsByThread, [threadId]: next } };
+    }),
+  appendCanonicalEvent: (threadId, event) =>
+    set((s) => {
+      const prev = s.canonicalTerminalStream[threadId] ?? [];
+      const next = prev.length >= 2000 ? [...prev.slice(-1999), event] : [...prev, event];
+      return { canonicalTerminalStream: { ...s.canonicalTerminalStream, [threadId]: next } };
     }),
   touchLastActivity: (threadId) =>
     set((s) => ({ lastActivityByThread: { ...s.lastActivityByThread, [threadId]: Date.now() } })),
