@@ -40,6 +40,7 @@ export type {
   ExecutePromptOptions,
 } from './prompts/execute-prompt';
 export { buildPRBody } from './prompts/shipping-prompt';
+export { formatPlanComment } from './prompts/plan-comment';
 export { loadRepoContext } from './context-loader';
 export { GhCli } from './github/gh-cli';
 export { IssuePoller } from './github/issue-poller';
