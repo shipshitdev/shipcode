@@ -59,8 +59,14 @@ export function StatusMappingEditor({ mappings, onSave }: StatusMappingEditorPro
           <ArrowRight size={14} className="text-muted" />
           GitHub Label Mapping
         </h4>
-        <Button type="button" variant="ghost" size="sm" onClick={handleReset}>
-          Reset to Defaults
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={handleReset}
+          aria-label="Reset status mapping to defaults"
+        >
+          Reset
         </Button>
       </div>
       <table className="w-full border-collapse">

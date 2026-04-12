@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
+import log from 'electron-log/renderer';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   PRD_REQUIRED_HEADINGS,
@@ -15,6 +16,7 @@ import {
   Textarea,
   Label,
   Button,
+  Checkbox,
   Sparkles,
 } from '@shipcode/ui';
 
@@ -91,7 +93,7 @@ export function CreateIssueModal() {
       });
       setBody(result.body);
     } catch (err) {
-      console.error('[CreateIssueModal] enhance failed', err);
+      log.error('[CreateIssueModal] enhance failed', err);
       setError(clampError(err));
     } finally {
       setEnhancing(false);
@@ -116,24 +118,24 @@ export function CreateIssueModal() {
         });
         await queryClient.invalidateQueries({ queryKey: ['github-issues'] });
       } else {
-        const created = await window.shipcode.invoke<GitHubIssueCacheRecord>(
-          'github:create-issue',
-          {
-            projectId: activeProjectId,
-            title: derivedTitle,
-            body,
-          },
-        );
+        const created = await window.shipcode.invoke<{
+          issue: GitHubIssueCacheRecord;
+          projectAttachWarning: string | null;
+        }>('github:create-issue', {
+          projectId: activeProjectId,
+          title: derivedTitle,
+          body,
+        });
         await queryClient.invalidateQueries({ queryKey: ['github-issues'] });
         // Kick off the pipeline immediately and open the issue detail
         // so the user can watch planning start.
         try {
           await window.shipcode.invoke('github:start-issue', {
             projectId: activeProjectId,
-            issueNumber: created.issueNumber,
+            issueNumber: created.issue.issueNumber,
           });
         } catch (startErr) {
-          console.error('[CreateIssueModal] start-issue failed', startErr);
+          log.error('[CreateIssueModal] start-issue failed', startErr);
           // Don't block the success path — the issue is on GitHub either way.
         }
         if (submitAnother) {
@@ -142,11 +144,21 @@ export function CreateIssueModal() {
           setSubmitting(false);
           return;
         }
-        selectIssue(created);
+        selectIssue(created.issue);
+        // If best-effort board attach failed, keep the modal open with an
+        // inline warning so the user actually sees it. The issue is already
+        // on GitHub and is selected — they can dismiss and move on.
+        if (created.projectAttachWarning) {
+          setError(
+            `Issue #${created.issue.issueNumber} created, but couldn't add to project board: ${created.projectAttachWarning}`,
+          );
+          setSubmitting(false);
+          return;
+        }
       }
       closeCreateIssueModal();
     } catch (err) {
-      console.error('[CreateIssueModal] submit failed', err);
+      log.error('[CreateIssueModal] submit failed', err);
       setError(clampError(err));
     } finally {
       setSubmitting(false);
@@ -178,7 +190,7 @@ export function CreateIssueModal() {
       ? 'Saving...'
       : 'Creating & planning...'
     : mode === 'edit'
-      ? 'Save PRD'
+      ? 'Save'
       : 'Create Plan';
 
   return (
@@ -249,16 +261,18 @@ export function CreateIssueModal() {
             <Sparkles size={14} />
             {enhancing ? 'Enhancing…' : 'Enhance with AI'}
           </Button>
-          <Button onClick={handleSubmit} disabled={submitDisabled}>
+          <Button
+            onClick={handleSubmit}
+            disabled={submitDisabled}
+            aria-label={mode === 'edit' ? 'Save PRD' : undefined}
+          >
             {submitLabel}
           </Button>
           {mode === 'create' && (
             <label className="flex items-center gap-1.5 text-[11px] text-muted cursor-pointer select-none">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={submitAnother}
                 onChange={(e) => setSubmitAnother(e.target.checked)}
-                className="h-3 w-3 accent-primary"
               />
               Submit another
             </label>

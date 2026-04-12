@@ -1,5 +1,6 @@
 import type { ShipCodePlan } from '@shipcode/shared';
 import { REVIEW_FENCE_TAG } from '@shipcode/shared';
+import { resolveSkill, interpolateSkill, type SkillsRowSource, type SkillValidationError } from '../skills';
 
 const REVIEW_SCHEMA_DESCRIPTION = `{
   "planId": "<plan-id>",
@@ -20,51 +21,42 @@ const REVIEW_SCHEMA_DESCRIPTION = `{
   "suggestedChanges": ["Specific change 1", "Specific change 2"]
 }`;
 
+const REVIEW_OUTPUT_SCHEMA = `\`\`\`${REVIEW_FENCE_TAG}\n${REVIEW_SCHEMA_DESCRIPTION}\n\`\`\``;
+
+export interface ReviewPromptContext {
+  projectId: string | null;
+}
+
+export interface ReviewPromptDeps {
+  skills: SkillsRowSource;
+  /** Called when the resolver fell back from an override to a lower tier (e.g. user override quarantined). */
+  onFallback?: (phase: 'adversarial-review', error: SkillValidationError | undefined) => void;
+}
+
+export interface ReviewPromptOptions {
+  contextFiles?: string;
+  autonomous?: boolean;
+}
+
 export function buildReviewPrompt(
   plan: ShipCodePlan,
-  contextFiles?: string,
-  autonomous?: boolean,
+  context: ReviewPromptContext,
+  deps: ReviewPromptDeps,
+  opts: ReviewPromptOptions = {},
 ): string {
-  let prompt = `You are a senior code reviewer evaluating an implementation plan for correctness, security, performance, and design quality.
-
-## Plan to Review
-\`\`\`json
-${JSON.stringify(plan, null, 2)}
-\`\`\`
-
-## Review Criteria
-1. **Correctness**: Will this plan actually achieve the stated objective? Are there logical errors?
-2. **Security**: Are there potential security vulnerabilities (injection, XSS, auth bypass, etc.)?
-3. **Performance**: Will the implementation be efficient? Any N+1 queries, unnecessary re-renders, etc.?
-4. **Design**: Does the plan follow good architecture? Is the approach maintainable?
-5. **Missing**: Is anything missing that should be included? Edge cases? Error handling?
-
-## Severity Guide
-- **critical**: Will cause bugs, security issues, or data loss
-- **major**: Significant design issue or missing functionality
-- **minor**: Improvement that would enhance quality
-- **nit**: Style or preference suggestion
-
-## Output Format
-Your review MUST be valid JSON inside a \`\`\`${REVIEW_FENCE_TAG} code fence:
-
-\`\`\`${REVIEW_FENCE_TAG}
-${REVIEW_SCHEMA_DESCRIPTION}
-\`\`\`
-
-## Decision Guide
-- **approve**: Plan is solid, no critical or major findings
-- **request_changes**: Has critical or major findings that must be addressed
-- **reject**: Plan is fundamentally flawed and needs complete rethinking`;
-
-  if (autonomous) {
-    prompt += `\n\n## Autonomous Mode
-This review is the sole quality gate before autonomous execution. No human will review this plan before it is implemented. Be thorough — you must catch any issues a human reviewer would catch. When in doubt, request_changes.`;
+  const { skill, fallbackUsed, error } = resolveSkill(
+    'adversarial-review',
+    context.projectId,
+    deps,
+  );
+  if (fallbackUsed) {
+    deps.onFallback?.('adversarial-review', error);
   }
-
-  if (contextFiles) {
-    prompt += `\n\n## Relevant Files for Context\n${contextFiles}`;
-  }
-
-  return prompt;
+  return interpolateSkill(skill.content, [
+    { key: 'PLAN_JSON', value: JSON.stringify(plan, null, 2) },
+    { key: 'TARGET_LABEL', value: `plan ${plan.id}` },
+    { key: 'AUTONOMOUS', value: opts.autonomous ? 'yes' : 'no' },
+    { key: 'CONTEXT_FILES', value: opts.contextFiles ?? 'No extra files provided.' },
+    { key: 'OUTPUT_SCHEMA', value: REVIEW_OUTPUT_SCHEMA },
+  ]);
 }

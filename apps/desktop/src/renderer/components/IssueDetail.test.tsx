@@ -1,14 +1,14 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { IssueDetail } from './IssueDetail';
-import { useAppStore } from '../stores/app-store';
 import {
   deriveGithubIssueUrl,
   type GitHubIssueCacheRecord,
   type PlanRecord,
   type Thread,
 } from '@shipcode/shared';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useAppStore } from '../stores/app-store';
+import { IssueDetail } from './IssueDetail';
 
 const makeIssue = (overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssueCacheRecord => ({
   id: 'issue-1',
@@ -157,7 +157,7 @@ describe('IssueDetail', () => {
 
     expect(screen.getByText('Spec body')).toBeInTheDocument();
     expect(screen.getByText('first item')).toBeInTheDocument();
-    expect(screen.getByText('Start Pipeline')).toBeInTheDocument();
+    expect(screen.getByText('Start pipeline')).toBeInTheDocument();
   });
 
   it('starts pipeline from an unclaimed issue', async () => {
@@ -168,7 +168,7 @@ describe('IssueDetail', () => {
     });
 
     renderWithProviders();
-    fireEvent.click(screen.getByRole('button', { name: 'Start Pipeline' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start pipeline' }));
 
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith('github:start-issue', {
@@ -178,7 +178,7 @@ describe('IssueDetail', () => {
     });
   });
 
-  it('supports approve and reject actions when the thread is awaiting approval', async () => {
+  it('approves the plan when the dropdown defaults to Approve & Execute', async () => {
     const thread = makeThread();
     const plan = makePlan();
 
@@ -203,28 +203,65 @@ describe('IssueDetail', () => {
 
     renderWithProviders();
 
-    const approveButton = await screen.findByRole('button', { name: 'Approve & Execute' });
-    fireEvent.click(approveButton);
+    // Default dropdown state is 'approve', so the Confirm button approves
+    const confirmButton = await screen.findByRole('button', { name: 'Confirm' });
+    expect(confirmButton).not.toBeDisabled();
+    fireEvent.click(confirmButton);
 
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith('pipeline:approve', { threadId: thread.id });
     });
+  });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Request Changes' }));
-    fireEvent.change(
-      screen.getByPlaceholderText('Describe what should change before execution...'),
-      {
-        target: { value: 'Please tighten the acceptance criteria.' },
-      },
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Submit Feedback' }));
+  it('renders the approval section even when plan has no structured data', async () => {
+    const thread = makeThread();
+    const plan = makePlan({ structured: null, rawOutput: 'raw fallback' });
 
-    await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith('pipeline:reject', {
-        threadId: thread.id,
-        feedback: 'Please tighten the acceptance criteria.',
-      });
+    useAppStore.setState({
+      activeThreadId: thread.id,
+      activeIssue: makeIssue({ threadId: thread.id, pipelineStatus: 'reviewing' }),
+      pipelinePhase: 'awaiting_approval',
     });
+
+    invokeMock.mockImplementation(async (channel, args) => {
+      if (channel === 'thread:get') return thread;
+      if (channel === 'plan:list') return [plan];
+      if (channel === 'review:list-by-plans') return {};
+      if (channel === 'pipeline:cancel') return undefined;
+      return args ?? null;
+    });
+
+    renderWithProviders();
+
+    // The Confirm button should be disabled because structured is null (canApprove is false)
+    const confirmButton = await screen.findByRole('button', { name: 'Confirm' });
+    expect(confirmButton).toBeDisabled();
+  });
+
+  it('renders the approval dropdown when awaiting approval', async () => {
+    const thread = makeThread();
+    const plan = makePlan();
+
+    useAppStore.setState({
+      activeThreadId: thread.id,
+      activeIssue: makeIssue({ threadId: thread.id, pipelineStatus: 'reviewing' }),
+      pipelinePhase: 'awaiting_approval',
+    });
+
+    invokeMock.mockImplementation(async (channel, args) => {
+      if (channel === 'thread:get') return thread;
+      if (channel === 'plan:list') return [plan];
+      if (channel === 'review:list-by-plans') return {};
+      if (channel === 'pipeline:cancel') return undefined;
+      return args ?? null;
+    });
+
+    renderWithProviders();
+
+    // Approval section is present — the dropdown trigger is a combobox
+    // and the Confirm button is visible when defaulting to 'approve'
+    const confirmButton = await screen.findByRole('button', { name: 'Confirm' });
+    expect(confirmButton).toBeInTheDocument();
   });
 });
 

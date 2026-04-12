@@ -168,4 +168,162 @@ describe('GitHubIssueQueries', () => {
     const orphaned = issues.getOrphanedClaims();
     expect(orphaned.length).toBe(0);
   });
+
+  describe('close/reopen sync', () => {
+    it('markCompletedOnClose() flips queued → completed (default source status)', () => {
+      const record = issues.upsert(makeIssue());
+      expect(record.pipelineStatus).toBe('queued');
+      const changed = issues.markCompletedOnClose(record.id);
+      expect(changed).toBe(true);
+      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('completed');
+    });
+
+    it('markCompletedOnClose() flips todo → completed', () => {
+      const record = issues.upsert(makeIssue());
+      issues.updatePipelineStatus(record.id, 'todo');
+      expect(issues.markCompletedOnClose(record.id)).toBe(true);
+      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('completed');
+    });
+
+    it('markCompletedOnClose() flips awaiting_approval → completed', () => {
+      const record = issues.upsert(makeIssue());
+      issues.updatePipelineStatus(record.id, 'awaiting_approval');
+      expect(issues.markCompletedOnClose(record.id)).toBe(true);
+      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('completed');
+    });
+
+    it('markCompletedOnClose() flips failed → completed', () => {
+      const record = issues.upsert(makeIssue());
+      issues.updatePipelineStatus(record.id, 'failed');
+      expect(issues.markCompletedOnClose(record.id)).toBe(true);
+      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('completed');
+    });
+
+    it('markCompletedOnClose() does NOT flip executing (in-flight guard)', () => {
+      const record = issues.upsert(makeIssue());
+      issues.updatePipelineStatus(record.id, 'executing');
+      expect(issues.markCompletedOnClose(record.id)).toBe(false);
+      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('executing');
+    });
+
+    it('markCompletedOnClose() does NOT flip planning (in-flight guard)', () => {
+      const record = issues.upsert(makeIssue());
+      issues.updatePipelineStatus(record.id, 'planning');
+      expect(issues.markCompletedOnClose(record.id)).toBe(false);
+      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('planning');
+    });
+
+    it('markCompletedOnClose() is idempotent on already-completed rows', () => {
+      const record = issues.upsert(makeIssue());
+      issues.updatePipelineStatus(record.id, 'completed');
+      expect(issues.markCompletedOnClose(record.id)).toBe(false);
+      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('completed');
+    });
+
+    it('markReopenedOnOpen() flips completed → todo', () => {
+      const record = issues.upsert(makeIssue());
+      issues.updatePipelineStatus(record.id, 'completed');
+      expect(issues.markReopenedOnOpen(record.id)).toBe(true);
+      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('todo');
+    });
+
+    it('markReopenedOnOpen() is a no-op on non-completed source states', () => {
+      const record = issues.upsert(makeIssue());
+      // Default is 'queued'
+      expect(issues.markReopenedOnOpen(record.id)).toBe(false);
+      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('queued');
+
+      issues.updatePipelineStatus(record.id, 'executing');
+      expect(issues.markReopenedOnOpen(record.id)).toBe(false);
+      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('executing');
+
+      issues.updatePipelineStatus(record.id, 'failed');
+      expect(issues.markReopenedOnOpen(record.id)).toBe(false);
+      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('failed');
+    });
+  });
+
+  describe('archive', () => {
+    it('list() excludes archived rows', () => {
+      const r1 = issues.upsert(makeIssue({ issueNumber: 1 }));
+      const r2 = issues.upsert(makeIssue({ issueNumber: 2 }));
+      expect(issues.list(projectId)).toHaveLength(2);
+      issues.archiveIssues([r1.id]);
+      const visible = issues.list(projectId);
+      expect(visible).toHaveLength(1);
+      expect(visible[0].id).toBe(r2.id);
+    });
+
+    it('getByNumber() still returns archived rows', () => {
+      const r = issues.upsert(makeIssue({ issueNumber: 1 }));
+      issues.archiveIssues([r.id]);
+      expect(issues.list(projectId)).toHaveLength(0);
+      const found = issues.getByNumber(projectId, 1);
+      expect(found).not.toBeNull();
+      expect(found!.id).toBe(r.id);
+    });
+
+    it('archiveIssues() is a no-op for empty array', () => {
+      issues.upsert(makeIssue({ issueNumber: 1 }));
+      expect(() => issues.archiveIssues([])).not.toThrow();
+      expect(issues.list(projectId)).toHaveLength(1);
+    });
+
+    it('upsert() does NOT clear archived_at on update', () => {
+      const r = issues.upsert(makeIssue({ issueNumber: 1 }));
+      issues.archiveIssues([r.id]);
+      expect(issues.list(projectId)).toHaveLength(0);
+      // Re-upsert same issue (simulates refresh)
+      issues.upsert(makeIssue({ issueNumber: 1, title: 'Updated title' }));
+      // Should still be hidden
+      expect(issues.list(projectId)).toHaveLength(0);
+      // But direct lookup works
+      const found = issues.getByNumber(projectId, 1);
+      expect(found?.title).toBe('Updated title');
+    });
+
+    it('clearArchivedAt() makes row visible again', () => {
+      const r = issues.upsert(makeIssue({ issueNumber: 1 }));
+      issues.archiveIssues([r.id]);
+      expect(issues.list(projectId)).toHaveLength(0);
+      issues.clearArchivedAt(r.id);
+      expect(issues.list(projectId)).toHaveLength(1);
+    });
+
+    it('archiveIssues() only archives the exact ID set (race-safe)', () => {
+      const r1 = issues.upsert(makeIssue({ issueNumber: 1 }));
+      const r2 = issues.upsert(makeIssue({ issueNumber: 2 }));
+      const r3 = issues.upsert(makeIssue({ issueNumber: 3 }));
+      issues.archiveIssues([r1.id, r3.id]);
+      const visible = issues.list(projectId);
+      expect(visible).toHaveLength(1);
+      expect(visible[0].id).toBe(r2.id);
+    });
+
+    it('listCompleted() excludes archived and non-completed rows', () => {
+      const r1 = issues.upsert(makeIssue({ issueNumber: 1 }));
+      const r2 = issues.upsert(makeIssue({ issueNumber: 2 }));
+      issues.upsert(makeIssue({ issueNumber: 3 }));
+      issues.updatePipelineStatus(r1.id, 'completed');
+      issues.updatePipelineStatus(r2.id, 'completed');
+      // issue #3 stays queued
+      issues.archiveIssues([r2.id]); // archive one completed
+      const completed = issues.listCompleted(projectId);
+      expect(completed).toHaveLength(1);
+      expect(completed[0].id).toBe(r1.id);
+    });
+
+    it('clearArchivedAt() during reopen re-exposes the issue', () => {
+      const r = issues.upsert(makeIssue({ issueNumber: 1 }));
+      issues.updatePipelineStatus(r.id, 'completed');
+      issues.archiveIssues([r.id]);
+      expect(issues.list(projectId)).toHaveLength(0);
+      // Simulate refresh: reopen + clear archive
+      issues.markReopenedOnOpen(r.id);
+      issues.clearArchivedAt(r.id);
+      const visible = issues.list(projectId);
+      expect(visible).toHaveLength(1);
+      expect(visible[0].pipelineStatus).toBe('todo');
+    });
+  });
 });

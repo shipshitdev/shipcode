@@ -1,5 +1,5 @@
-import * as React from 'react';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
+import type * as React from 'react';
 import { cn } from '../lib/utils';
 
 function DropdownMenu(props: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
@@ -14,6 +14,7 @@ function DropdownMenuContent({
   className,
   sideOffset = 4,
   align = 'end',
+  onPointerDownOutside,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
   return (
@@ -21,8 +22,15 @@ function DropdownMenuContent({
       <DropdownMenuPrimitive.Content
         sideOffset={sideOffset}
         align={align}
+        onPointerDownOutside={(e) => {
+          const target = e.target as Element | null;
+          if (target?.closest('[data-radix-popper-content-wrapper]')) {
+            e.preventDefault();
+          }
+          onPointerDownOutside?.(e);
+        }}
         className={cn(
-          'z-50 min-w-[160px] overflow-hidden rounded-md border border-border bg-secondary py-1 shadow-lg',
+          'z-50 min-w-[160px] overflow-hidden rounded-md border border-border bg-secondary py-1 shadow-lg app-region-no-drag',
           className,
         )}
         {...props}
@@ -57,8 +65,8 @@ function DropdownMenuSeparator({
 
 export {
   DropdownMenu,
-  DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuTrigger,
 };

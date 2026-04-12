@@ -1,4 +1,5 @@
 import { type IpcMain, type BrowserWindow, dialog, shell } from 'electron';
+import log from 'electron-log/main';
 import type {
   ProjectQueries,
   ThreadQueries,
@@ -12,13 +13,29 @@ import type {
   NotificationsQueries,
   DashboardQueries,
   CostsQueries,
+  SkillsQueries,
 } from '@shipcode/db';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { ProcessManager } from '@shipcode/agents';
-import { checkSystemHealthWithAuth, checkGhAuth, GhCli, enhancePrdDraft } from '@shipcode/agents';
+import type { PhaseSkillKey } from '@shipcode/shared';
+import {
+  validateGithubProjectUrl,
+  clampError,
+  parseGithubProjectUrl,
+  deriveGithubIssueUrl,
+} from '@shipcode/shared';
+import {
+  checkSystemHealthWithAuth,
+  checkGhAuth,
+  GhCli,
+  enhancePrdDraft,
+  validateSkill,
+  DEFAULT_SKILLS,
+  PHASE_SKILL_KEYS,
+} from '@shipcode/agents';
 import { isSafeExternalUrl } from './security';
 
 const execAsync = promisify(exec);
@@ -40,6 +57,7 @@ interface Queries {
   notifications: NotificationsQueries;
   dashboard: DashboardQueries;
   costs: CostsQueries;
+  skills: SkillsQueries;
 }
 
 export function registerIpcHandlers(
@@ -56,7 +74,7 @@ export function registerIpcHandlers(
     queries.threads.updateStatus(thread.id, 'failed');
     const issue = queries.githubIssues.getByThreadId(thread.id);
     if (issue) queries.githubIssues.updatePipelineStatus(issue.id, 'failed');
-    console.log(`[startup] reset orphaned thread ${thread.id} → failed`);
+    log.info(`[startup] reset orphaned thread ${thread.id} → failed`);
   }
 
   // === Project handlers ===
@@ -281,9 +299,12 @@ export function registerIpcHandlers(
     const ghCli = new GhCli(project.path);
     const issues = await ghCli.listAllIssues();
 
-    // Upsert all issues into cache
+    // Upsert all issues into cache. After each upsert, sync external GH
+    // state into the local pipeline_status: closed → completed (guarded),
+    // reopened → todo (guarded). See `markCompletedOnClose` / `markReopenedOnOpen`
+    // for the in-flight guards that keep this race-safe with the pipeline writer.
     for (const issue of issues) {
-      queries.githubIssues.upsert({
+      const rec = queries.githubIssues.upsert({
         projectId,
         issueNumber: issue.number,
         title: issue.title,
@@ -292,12 +313,81 @@ export function registerIpcHandlers(
         assignee: issue.assignee,
         state: issue.state,
       });
+      if (rec.state === 'closed') {
+        queries.githubIssues.markCompletedOnClose(rec.id);
+      } else if (rec.state === 'open') {
+        queries.githubIssues.markReopenedOnOpen(rec.id);
+        queries.githubIssues.clearArchivedAt(rec.id);
+      }
     }
 
     const cached = queries.githubIssues.list(projectId);
     mainWindow.webContents.send('github:issues-updated', { projectId, issues: cached });
     return cached;
   });
+
+  ipcMain.handle(
+    'github:archive-issue',
+    async (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+
+      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
+      if (!issue) throw new Error(`Issue #${issueNumber} not found in project ${projectId}`);
+
+      const ghCli = new GhCli(project.path);
+      await ghCli.closeIssue(issueNumber);
+
+      // GitHub close succeeded. DB write is synchronous/local — failures here
+      // are rare but would leave GitHub closed and board still showing the
+      // issue. Log the inconsistency and surface it so the user can refresh.
+      try {
+        queries.githubIssues.archiveIssues([issue.id]);
+      } catch (err) {
+        log.error('[github:archive-issue] DB archive failed after GitHub close:', err);
+        throw new Error(
+          `Issue #${issueNumber} was closed on GitHub but could not be hidden locally. Refresh the board to sync.`,
+        );
+      }
+
+      const cached = queries.githubIssues.list(projectId);
+      mainWindow.webContents.send('github:issues-updated', { projectId, issues: cached });
+      return { archivedCount: 1 };
+    },
+  );
+
+  ipcMain.handle(
+    'github:archive-all-done',
+    async (_event, { projectId }: { projectId: string }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+
+      // Snapshot completed, non-archived issues before any async work
+      const doneIssues = queries.githubIssues.listCompleted(projectId);
+
+      const ghCli = new GhCli(project.path);
+      const succeededIds: string[] = [];
+      let failedCount = 0;
+
+      for (const issue of doneIssues) {
+        try {
+          await ghCli.closeIssue(issue.issueNumber);
+          succeededIds.push(issue.id);
+        } catch (err) {
+          log.warn(`[github:archive-all-done] close #${issue.issueNumber} failed:`, err);
+          failedCount++;
+        }
+      }
+
+      if (succeededIds.length > 0) {
+        queries.githubIssues.archiveIssues(succeededIds);
+      }
+
+      const cached = queries.githubIssues.list(projectId);
+      mainWindow.webContents.send('github:issues-updated', { projectId, issues: cached });
+      return { archivedCount: succeededIds.length, failedCount };
+    },
+  );
 
   ipcMain.handle(
     'github:create-issue',
@@ -331,7 +421,32 @@ export function registerIpcHandlers(
       const allIssues = queries.githubIssues.list(projectId);
       mainWindow.webContents.send('github:issues-updated', { projectId, issues: allIssues });
 
-      return queries.githubIssues.getByNumber(projectId, issue.number);
+      // Best-effort: if the project has a Projects v2 board override set,
+      // attach the new issue to that board. Failures never block issue
+      // creation — the issue is already on GitHub; we surface the failure
+      // via `projectAttachWarning` so the modal can show an inline note.
+      const parsed = parseGithubProjectUrl(project.githubProjectUrl);
+      let projectAttachWarning: string | null = null;
+      if (parsed && issue.url) {
+        try {
+          await ghCli.addIssueToProject({
+            projectNumber: parsed.number,
+            owner: parsed.owner,
+            issueUrl: issue.url,
+          });
+        } catch (err) {
+          projectAttachWarning = clampError(err);
+          log.warn('[github:create-issue] project attach failed:', err);
+        }
+      }
+
+      const record = queries.githubIssues.getByNumber(projectId, issue.number);
+      if (!record) {
+        throw new Error(
+          `Created issue #${issue.number} not found in cache after upsert`,
+        );
+      }
+      return { issue: record, projectAttachWarning };
     },
   );
 
@@ -367,6 +482,60 @@ export function registerIpcHandlers(
     },
   );
 
+  // Backfill: walk every cached issue for the project and call
+  // `gh project item-add` for each. Idempotent thanks to GhCli's
+  // duplicate-detection guard. Returns a structured summary so the UI
+  // can render "Attached N, already present M, failed K".
+  ipcMain.handle(
+    'github:sync-to-project-board',
+    async (_event, { projectId }: { projectId: string }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+
+      const parsed = parseGithubProjectUrl(project.githubProjectUrl);
+      if (!parsed) {
+        throw new Error(
+          'No GitHub Projects v2 URL set. Paste a board URL above and save first.',
+        );
+      }
+
+      const issues = queries.githubIssues.list(projectId);
+      const ghCli = new GhCli(project.path);
+
+      let attached = 0;
+      let alreadyPresent = 0;
+      let failed = 0;
+      const errors: string[] = [];
+
+      for (const issue of issues) {
+        const issueUrl = deriveGithubIssueUrl(project.gitRemote, issue.issueNumber);
+        if (!issueUrl) {
+          failed += 1;
+          errors.push(`#${issue.issueNumber}: could not derive issue URL from git remote`);
+          continue;
+        }
+        try {
+          const result = await ghCli.addIssueToProject({
+            projectNumber: parsed.number,
+            owner: parsed.owner,
+            issueUrl,
+          });
+          if (result.alreadyPresent) alreadyPresent += 1;
+          else attached += 1;
+        } catch (err) {
+          failed += 1;
+          errors.push(`#${issue.issueNumber}: ${clampError(err)}`);
+          log.warn(`[github:sync-to-project-board] #${issue.issueNumber} failed:`, err);
+        }
+      }
+
+      log.info(
+        `[github:sync-to-project-board] project=${projectId} attached=${attached} alreadyPresent=${alreadyPresent} failed=${failed}`,
+      );
+      return { attached, alreadyPresent, failed, errors };
+    },
+  );
+
   ipcMain.handle(
     'github:start-issue',
     async (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
@@ -394,8 +563,31 @@ export function registerIpcHandlers(
         issues: queries.githubIssues.list(projectId),
       });
 
+      // Best-effort: attach the issue to the project's GitHub Projects v2
+      // board if one is configured. Same idempotent path that
+      // `github:create-issue` uses (see :363-376). Failure is logged but
+      // never blocks the pipeline start — the board is a display surface,
+      // not a runtime dependency.
+      const parsed = parseGithubProjectUrl(project.githubProjectUrl);
+      const issueUrl = deriveGithubIssueUrl(project.gitRemote, issue.issueNumber);
+      if (parsed && issueUrl) {
+        try {
+          const ghCliForAttach = new GhCli(project.path);
+          await ghCliForAttach.addIssueToProject({
+            projectNumber: parsed.number,
+            owner: parsed.owner,
+            issueUrl,
+          });
+        } catch (err) {
+          log.warn(
+            `[github:start-issue] project attach failed for #${issue.issueNumber}:`,
+            err,
+          );
+        }
+      }
+
       // Start pipeline — pass existing threadId, not projectId
-      console.log(
+      log.info(
         `[pipeline] starting issue #${issue.issueNumber} "${issue.title}" (thread ${thread.id}, executor: ${issue.executorModel})`,
       );
       try {
@@ -488,6 +680,29 @@ export function registerIpcHandlers(
       }
 
       queries.projects.updateDefaultBranch(projectId, branch);
+      return queries.projects.getById(projectId)!;
+    },
+  );
+
+  ipcMain.handle(
+    'project:set-github-project-url',
+    async (_event, { projectId, url }: { projectId: string; url: string | null }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+
+      const result = validateGithubProjectUrl(url);
+      if (!result.ok) {
+        // Clamp: the validator reason is already short, but we route through
+        // clampError to guarantee a single-line <=280 char payload for the
+        // renderer toaster, matching the pattern the repo memory calls out.
+        log.warn('[ipc] project:set-github-project-url rejected', {
+          projectId,
+          reason: result.reason,
+        });
+        throw new Error(clampError(result.reason));
+      }
+
+      queries.projects.updateGithubProjectUrl(projectId, result.value);
       return queries.projects.getById(projectId)!;
     },
   );
@@ -612,6 +827,133 @@ export function registerIpcHandlers(
     return queries.costs.getSummary();
   });
 
+  // === Skills (per-phase prompt overrides) ===
+  // The /skills page is the user's editing surface for the five phase prompts
+  // (planner, reviewer, reviser, executor, verifier). Edits land in the
+  // skills DB table; reads walk project → global → bundled-default. Validation
+  // runs both here (server-side) and in the renderer to give early feedback.
+  //
+  // The bundled DEFAULT_SKILLS object lives in @shipcode/agents — the desktop
+  // adapter is the only place that pulls both halves together.
+
+  function buildSkillRow(phase: PhaseSkillKey, projectId: string | null) {
+    const bundled = DEFAULT_SKILLS[phase];
+    const row = queries.skills.get(projectId, phase);
+    if (!row) {
+      return {
+        phase,
+        projectId,
+        source: 'default' as const,
+        content: bundled.content,
+        baseVersion: bundled.version,
+        schemaVersion: bundled.schemaVersion,
+        bundledVersion: bundled.version,
+        bundledSchemaVersion: bundled.schemaVersion,
+        requiredSlots: bundled.requiredSlots,
+        status: 'ok' as const,
+        statusReason: null,
+        updatedAt: null,
+      };
+    }
+    return {
+      phase,
+      projectId: row.projectId,
+      source: row.projectId === null ? ('global' as const) : ('project' as const),
+      content: row.content,
+      baseVersion: row.baseVersion,
+      schemaVersion: row.schemaVersion,
+      bundledVersion: bundled.version,
+      bundledSchemaVersion: bundled.schemaVersion,
+      requiredSlots: bundled.requiredSlots,
+      status: row.status,
+      statusReason: row.statusReason,
+      updatedAt: row.updatedAt,
+    };
+  }
+
+  // Returns one row per (phase, scope-tier) so the /skills view can show the
+  // resolution chain. Each phase contributes either:
+  //   - 1 entry (when no override exists at the requested scope)
+  //   - 2 entries (project + global), or
+  //   - 1 entry that explains it is the bundled default.
+  // The renderer picks the first non-default tier and presents it in the
+  // editor; the rest are surfaced as "fall-through" badges.
+  ipcMain.handle(
+    'skills:list-for-view',
+    (_event, { projectId }: { projectId: string | null }) => {
+      return PHASE_SKILL_KEYS.map((phase) => {
+        const projectRow = projectId !== null ? buildSkillRow(phase, projectId) : null;
+        const globalRow = buildSkillRow(phase, null);
+        return {
+          phase,
+          requiredSlots: DEFAULT_SKILLS[phase].requiredSlots,
+          bundledVersion: DEFAULT_SKILLS[phase].version,
+          bundledSchemaVersion: DEFAULT_SKILLS[phase].schemaVersion,
+          projectRow,
+          globalRow,
+          // The "active" row is what the resolver would actually use right now.
+          active:
+            projectRow && projectRow.source !== 'default' && projectRow.status === 'ok'
+              ? projectRow
+              : globalRow,
+        };
+      });
+    },
+  );
+
+  ipcMain.handle(
+    'skills:read',
+    (
+      _event,
+      { projectId, phase }: { projectId: string | null; phase: PhaseSkillKey },
+    ) => {
+      return buildSkillRow(phase, projectId);
+    },
+  );
+
+  ipcMain.handle(
+    'skills:write',
+    (
+      _event,
+      {
+        projectId,
+        phase,
+        content,
+      }: { projectId: string | null; phase: PhaseSkillKey; content: string },
+    ) => {
+      // Server-side validation. The renderer pre-validates for early feedback,
+      // but we re-validate here so the contract holds even when the renderer
+      // is bypassed (e.g. tests, or a bug in client validation).
+      const error = validateSkill(phase, content);
+      if (error) {
+        return { ok: false as const, error };
+      }
+      const bundled = DEFAULT_SKILLS[phase];
+      queries.skills.set(projectId, phase, content, bundled.version, bundled.schemaVersion);
+      return { ok: true as const, row: buildSkillRow(phase, projectId) };
+    },
+  );
+
+  ipcMain.handle(
+    'skills:reset',
+    (
+      _event,
+      { projectId, phase }: { projectId: string | null; phase: PhaseSkillKey },
+    ) => {
+      queries.skills.delete(projectId, phase);
+      return buildSkillRow(phase, projectId);
+    },
+  );
+
+  ipcMain.handle('skills:list-quarantined', () => {
+    return queries.skills.listQuarantined().map((row) => ({
+      phase: row.phase,
+      projectId: row.projectId,
+      statusReason: row.statusReason,
+      updatedAt: row.updatedAt,
+    }));
+  });
+
   // === Notification handlers ===
   ipcMain.handle('notification:list', () => {
     return notificationService.listActive();
@@ -693,7 +1035,7 @@ export function registerIpcHandlers(
         });
       } catch (err) {
         // Full trace stays in main-process stdout for devtools/console debugging.
-        console.error('[ai:enhance-prd]', err);
+        log.error('[ai:enhance-prd]', err);
         // Short, prompt-free message crosses the IPC boundary to the renderer.
         const short =
           err instanceof Error ? err.message.split('\n')[0].slice(0, 300) : 'Enhancement failed';
@@ -704,15 +1046,25 @@ export function registerIpcHandlers(
 
   // === Agent output forwarding to renderer ===
   processManager.on('output', (processId: string, data: string) => {
-    if (mainWindow.webContents.isDestroyed()) return;
-    mainWindow.webContents.send('agent:output', { processId, chunk: data });
+    if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
+    const proc = processManager.get(processId);
+    try {
+      mainWindow.webContents.send('agent:output', { processId, chunk: data, threadId: proc?.threadId });
+    } catch {
+      // webContents destroyed between check and send — safe to ignore
+    }
   });
 
   processManager.on('stateChange', (processId: string, type: string, state: string) => {
+    if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
     if (state === 'running' || state === 'exited') {
-      console.log(`[process:${type}] ${processId} → ${state}`);
+      log.info(`[process:${type}] ${processId} → ${state}`);
     }
-    if (mainWindow.webContents.isDestroyed()) return;
-    mainWindow.webContents.send('agent:state', { processId, type, state });
+    const proc = processManager.get(processId);
+    try {
+      mainWindow.webContents.send('agent:state', { processId, type, state, threadId: proc?.threadId });
+    } catch {
+      // webContents destroyed between check and send — safe to ignore
+    }
   });
 }

@@ -195,6 +195,21 @@ async function getGhVersion(): Promise<string | null> {
   }
 }
 
+/**
+ * Parse the comma-separated `Token scopes:` line from `gh auth status`
+ * output and check whether `project` (write) is granted. The `project`
+ * scope implies `read:project`. Returns `null` if no scopes line is
+ * found (old gh versions, or auth failed).
+ */
+export function parseGhProjectScope(output: string): boolean | null {
+  const match = output.match(/Token scopes:\s*([^\n]+)/i);
+  if (!match) return null;
+  const scopes = match[1]
+    .split(',')
+    .map((s) => s.trim().replace(/^['"]|['"]$/g, ''));
+  return scopes.includes('project');
+}
+
 export async function checkGhAuth(): Promise<GhAuthStatus> {
   try {
     const [result, version] = await Promise.all([
@@ -209,6 +224,7 @@ export async function checkGhAuth(): Promise<GhAuthStatus> {
       username: usernameMatch?.[1] ?? null,
       version,
       error: null,
+      hasProjectScope: parseGhProjectScope(output),
     };
   } catch (err) {
     // Check if gh is installed but not authenticated
@@ -220,6 +236,7 @@ export async function checkGhAuth(): Promise<GhAuthStatus> {
         username: null,
         version,
         error: err instanceof Error ? err.message : 'gh auth check failed',
+        hasProjectScope: null,
       };
     } catch {
       return {
@@ -228,6 +245,7 @@ export async function checkGhAuth(): Promise<GhAuthStatus> {
         username: null,
         version: null,
         error: 'gh not found in PATH',
+        hasProjectScope: null,
       };
     }
   }

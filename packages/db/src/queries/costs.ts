@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import type { CostSummary, PipelinePhase } from '@shipcode/shared';
+import { toIsoUtc, type CostSummary, type PipelinePhase } from '@shipcode/shared';
 
 export class CostsQueries {
   constructor(private db: DatabaseSync) {}
@@ -54,6 +54,7 @@ export class CostsQueries {
       .prepare(
         `SELECT
            t.id as thread_id,
+           t.project_id,
            t.title,
            t.status as phase,
            t.total_cost_usd as cost_usd,
@@ -69,6 +70,7 @@ export class CostsQueries {
       )
       .all() as Array<{
       thread_id: string;
+      project_id: string;
       title: string;
       phase: string;
       cost_usd: number;
@@ -95,13 +97,14 @@ export class CostsQueries {
       })),
       recentByTask: taskRows.map((r) => ({
         threadId: r.thread_id,
+        projectId: r.project_id,
         title: r.title,
         projectName: r.project_name,
         phase: r.phase as PipelinePhase,
         costUsd: r.cost_usd,
         tokensPrompt: r.tokens_prompt,
         tokensCompletion: r.tokens_completion,
-        updatedAt: r.updated_at,
+        updatedAt: toIsoUtc(r.updated_at) ?? r.updated_at,
       })),
     };
   }

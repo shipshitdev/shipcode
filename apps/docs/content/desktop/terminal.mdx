@@ -1,0 +1,42 @@
+# Terminal
+
+The Terminal drawer is a bottom panel that streams the stdout/stderr of every pipeline subprocess — planner, reviewer, executor, verifier. It's the source-of-truth debugging surface for anything the pipeline does.
+
+The component is [`apps/desktop/src/renderer/components/TerminalDrawer.tsx`](https://github.com/shipshitdev/shipcode/blob/master/apps/desktop/src/renderer/components/TerminalDrawer.tsx).
+
+## Opening the drawer
+
+- Click the Terminal icon in the titlebar, or use the keyboard shortcut
+- The drawer **auto-opens** when a pipeline transitions into a new phase (configurable; fix shipped in Session 17)
+- It's resizable — drag the top edge to make it taller; the split persists across app restarts
+
+## Thread switcher
+
+When multiple pipelines are running concurrently, the drawer title shows a dropdown listing every active thread. Switching between threads swaps the visible streaming output without losing any scrollback from the others.
+
+Before the dropdown (Session 25), the drawer used `#N` pill tabs that overflowed once you had more than 3–4 concurrent runs. The dropdown scales to as many runs as you have.
+
+## Stream coloring
+
+The terminal highlights output by agent and phase:
+
+- **Claude** — blue agent tone
+- **Codex** — green agent tone
+- **OpenRouter** — purple agent tone (matches the active-row tone in the list view)
+- **Planner / Reviewer / Verifier** header lines in a dimmed tone to separate phases
+
+This makes it easy to scan a long run and see which agent was responsible for which output.
+
+## Cost estimation
+
+The drawer header shows a live cost estimate for the active thread, updated as tokens stream in. This is the same number that ends up in the [Costs view](/desktop/costs), just realtime instead of aggregated.
+
+## Keyboard
+
+- `Cmd/Ctrl + ~` — toggle drawer visibility
+- `Cmd/Ctrl + K` — clear the visible thread's output (doesn't clear stored logs)
+
+## Related
+
+- [Costs view](/desktop/costs) — persisted cost totals computed from the same token stream
+- [Plan Viewer](/desktop/plan-viewer) — for looking at the *result* of a planner/review run, not its raw output

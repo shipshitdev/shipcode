@@ -14,7 +14,7 @@ export function CodeWindow() {
           <pre className="px-6 py-5 font-mono text-sm leading-relaxed overflow-x-auto">
             <Line text="Fetching issue #42..." />
             <Line text="Issue: Add dark mode toggle" />
-            <Line text="Model: claude" />
+            <Line text="Label: agent:openrouter/auto → Model: auto-routed" />
             <Line text="" />
             <Line text="Planning..." />
             <Line text="Plan generated (3 steps, 4 files)" check />

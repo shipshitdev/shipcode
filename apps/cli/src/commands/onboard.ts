@@ -3,7 +3,12 @@ import fs from 'node:fs';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import { getDatabase, ProjectQueries } from '@shipcode/db';
-import { checkSystemHealth, checkClaudeAuth, checkOpenRouterAuth } from '@shipcode/agents';
+import {
+  checkSystemHealth,
+  checkClaudeAuth,
+  checkOpenRouterAuth,
+  parseGhProjectScope,
+} from '@shipcode/agents';
 import { GitService } from '@shipcode/git';
 import { DEFAULT_STATUS_LABEL_MAPPINGS } from '@shipcode/shared';
 
@@ -33,8 +38,21 @@ export async function onboardCommand() {
 
   // Auth checks
   try {
-    await execAsync('gh auth status', { timeout: 10_000 });
-    console.log('  ✓ gh — authenticated');
+    const { stdout, stderr } = await execAsync('gh auth status 2>&1', { timeout: 10_000 });
+    const output = (stdout ?? '') + (stderr ?? '');
+    const hasProjectScope = parseGhProjectScope(output);
+    if (hasProjectScope === true) {
+      console.log('  ✓ gh — authenticated (project scope ok)');
+    } else if (hasProjectScope === false) {
+      console.log('  ✓ gh — authenticated');
+      console.log(
+        '  ⚠ gh missing `project` scope — Projects v2 board attach will fail.\n' +
+          '    Fix: gh auth refresh -s project',
+      );
+    } else {
+      // Older gh versions don't print a Token scopes line; skip the warning
+      console.log('  ✓ gh — authenticated');
+    }
   } catch {
     console.error('\n✗ gh is not authenticated. Run: gh auth login');
     process.exit(1);

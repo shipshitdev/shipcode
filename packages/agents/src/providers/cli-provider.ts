@@ -34,6 +34,7 @@ async function runCli(
   args: string[],
   cwd: string,
   signal: AbortSignal,
+  threadId?: string,
 ): Promise<CliRunResult> {
   if (signal.aborted) {
     return { rawOutput: '', exitCode: 130 };
@@ -41,7 +42,7 @@ async function runCli(
 
   let process: ReturnType<ProcessManager['spawn']>;
   try {
-    process = processManager.spawn(agentId, agentId, args, cwd);
+    process = processManager.spawn(agentId, agentId, args, cwd, threadId);
   } catch (err) {
     // ProcessManager synthesizes an exit event for missing binaries etc.
     // but if spawn() throws synchronously, surface that as exit 127.
@@ -150,15 +151,24 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
 
 /**
  * Build codex CLI args for a given phase.
- * Uses the codex v1 CLI interface: -q <prompt> --sandbox <level> -a never.
+ *
+ * codex v0.120.0 layout: top-level flags come BEFORE the `exec` subcommand,
+ * and the subcommand's own flags (`--sandbox`, `--json`) go after the prompt.
+ *
+ *   codex [-a never] [-c model_reasoning_effort=high] exec <prompt> --sandbox <level> --json
+ *
+ * Previously we passed `-a never` AFTER `exec`, which is invalid — codex errors
+ * out in ~30ms with `unexpected argument '-a' found` and the pipeline sees an
+ * empty review. Same story for `--reasoning-effort`, which was removed as a
+ * standalone flag in 0.120.0 and must now be set via `-c model_reasoning_effort=<effort>`.
  */
 function buildCodexArgs(req: ProviderRequest): string[] {
   const sandbox = req.phase === 'execute' ? 'workspace-write' : 'read-only';
-  const args = ['-q', req.prompt, '--sandbox', sandbox, '-a', 'never'];
-  if (req.phaseHints?.reasoningEffort === 'high') {
-    args.push('--reasoning-effort', 'high');
+  const topLevelFlags: string[] = ['-a', 'never'];
+  if (req.phaseHints?.reasoningEffort) {
+    topLevelFlags.push('-c', `model_reasoning_effort=${req.phaseHints.reasoningEffort}`);
   }
-  return args;
+  return [...topLevelFlags, 'exec', req.prompt, '--sandbox', sandbox, '--json'];
 }
 
 export function createClaudeCliProvider(processManager: ProcessManager): AgentProvider {
@@ -167,7 +177,7 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
     supports: new Set<ProviderPhase>(['plan', 'review', 'revision', 'verify', 'execute']),
     async generate(req: ProviderRequest): Promise<ProviderResponse> {
       const args = buildClaudeArgs(req);
-      const result = await runCli(processManager, 'claude', args, req.cwd, req.signal);
+      const result = await runCli(processManager, 'claude', args, req.cwd, req.signal, req.threadId);
       const parser = new StreamParser();
       parser.feed(result.rawOutput);
       const usage = parser.extractUsage();
@@ -209,7 +219,7 @@ export function createCodexCliProvider(processManager: ProcessManager): AgentPro
     supports: new Set<ProviderPhase>(['review', 'execute']),
     async generate(req: ProviderRequest): Promise<ProviderResponse> {
       const args = buildCodexArgs(req);
-      const result = await runCli(processManager, 'codex', args, req.cwd, req.signal);
+      const result = await runCli(processManager, 'codex', args, req.cwd, req.signal, req.threadId);
       const parser = new StreamParser();
       parser.feed(result.rawOutput);
       const usage = parser.extractUsage();

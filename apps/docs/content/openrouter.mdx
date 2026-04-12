@@ -1,0 +1,68 @@
+# OpenRouter
+
+ShipCode ships with a first-class [OpenRouter](https://openrouter.ai) integration as the third executor alongside Claude Code and Codex. OpenRouter lets you route each pipeline phase to any model on their catalog — OSS, frontier, free-tier, or a routed meta-model.
+
+## Enabling
+
+1. Create an account at [openrouter.ai](https://openrouter.ai) and generate an API key.
+2. Export the key before launching the desktop app or CLI:
+
+   ```bash
+   export OPENROUTER_API_KEY=sk-or-v1-...
+   ```
+
+3. Flip on `openrouterEnabled` in the desktop **Settings → Models** panel (or set it directly in the `settings` row of your local SQLite DB).
+
+The `shipcode onboard` command also validates the key and prints a warning if it's missing, invalid, unreachable, or pointed at a deprecated model.
+
+Without a key, OpenRouter is **silently skipped** — the pipeline still works with `claude` and `codex` alone.
+
+## GitHub label variants
+
+Route an individual issue to OpenRouter via label:
+
+| Label | Effect |
+|-------|--------|
+| `agent:openrouter` | Uses the executor model configured in Settings (or the paid-tier default) |
+| `agent:openrouter/auto` | OpenRouter `auto` meta-router — picks the best model per prompt |
+| `agent:openrouter/free` | OpenRouter restricted to free-tier models |
+
+These are defined in [`packages/agents/src/github/model-router.ts`](https://github.com/shipshitdev/shipcode/blob/master/packages/agents/src/github/model-router.ts). Unknown or missing agent labels fall back to `agent:claude`.
+
+## Per-phase model selection
+
+Each pipeline phase can point at a different OpenRouter model. The fields live on the `AppSettings` row (see [`packages/shared/src/types.ts`](https://github.com/shipshitdev/shipcode/blob/master/packages/shared/src/types.ts)):
+
+| Setting | Purpose | Default |
+|---------|---------|---------|
+| `openrouterEnabled` | Master switch — must be `true` or OpenRouter is skipped entirely | `false` |
+| `openrouterPlannerModel` | Override the planner model; `null` → falls through to the paid-tier default | `null` |
+| `openrouterReviewerModel` | Override the reviewer model; `null` → paid-tier default | `null` |
+| `openrouterVerifierModel` | Override the verifier model; `null` → paid-tier default | `null` |
+| `openrouterExecutorModel` | Override the executor model; `null` → paid-tier default | `null` |
+| `openrouterDefaultPaidModel` | Paid-tier fallback used when a per-phase override is `null` | set at onboarding |
+| `openrouterDefaultFreeModel` | Free-tier fallback used by `agent:openrouter/free` | set at onboarding |
+| `openrouterExplicitFallback` | Final fallback when a routed model errors out | set at onboarding |
+
+Only the **executor** model is editable from the desktop Settings panel today. Planner, reviewer, and verifier overrides can be set at onboarding or by directly updating the `settings` row in your local SQLite DB. A full Settings UI for these is on the roadmap.
+
+## Tiers
+
+- **Tier 1 — Provider abstraction.** Adds `openrouter` as a valid `AgentType`; CLI + desktop both recognize it.
+- **Tier 2 — HTTP-backed plan/review/verify.** Planner, reviewer, and verifier phases can talk to OpenRouter directly over HTTP without spawning a local CLI subprocess.
+- **Tier 3 — In-process execute harness + `openrouter/auto`.** The execute phase runs a tool-call loop inside the ShipCode process (no child CLI) and can use the `openrouter/auto` meta-router with per-phase telemetry.
+
+All three tiers shipped in [PR #9](https://github.com/shipshitdev/shipcode/pull/9) (merged 2026-04-10).
+
+## Troubleshooting
+
+- **"OPENROUTER_API_KEY not set (optional)"** from `shipcode onboard` — you haven't exported the key. The pipeline will still run with `claude` / `codex` only.
+- **"invalid_key" / "unreachable" / "model_deprecated"** — the onboarding doctor hit a live check and the key failed. Re-generate the key, check your network, or pick a different default model in Settings.
+- **The pipeline picks the wrong model for a phase** — remember the resolution order: `openrouterEnabled` must be `true`, then the per-phase override is consulted, then `openrouterDefaultPaidModel` (or the free-tier default when the label forces it), then `openrouterExplicitFallback`.
+- **`agent:openrouter/auto` picks an unexpected model** — `auto` is OpenRouter-side routing; you get per-phase telemetry in the desktop Terminal drawer and Costs view so you can see which concrete model answered.
+
+## See also
+
+- [Configuration → GitHub labels](/configuration) — the full agent-label table
+- [Pipeline overview](/pipeline/overview) — how the phase/model mapping works end-to-end
+- [CLI reference](/cli) — `shipcode onboard` OpenRouter auth check

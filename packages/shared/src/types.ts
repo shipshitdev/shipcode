@@ -55,6 +55,14 @@ export interface Project {
   name: string;
   path: string;
   gitRemote: string | null;
+  /**
+   * Optional override for the Kanban `board` quick-link. GitHub Projects v2
+   * live under a user/org (`/users/<name>/projects/<n>` or `/orgs/<name>/projects/<n>`)
+   * and can span multiple repos, so we can't derive this from `gitRemote` alone.
+   * When null, the Kanban header falls back to `${repoBase}/projects` (the
+   * repo's Projects tab that lists linked boards).
+   */
+  githubProjectUrl: string | null;
   defaultBranch: string;
   pinned: boolean;
   archived: boolean;
@@ -228,6 +236,14 @@ export interface AppSettings {
   // Max turns the planner/verifier Claude CLI is allowed per run (--max-turns).
   // Does not apply to execute (no limit) or review (always 1, structural).
   plannerMaxTurns: number;
+  // Max review→revise cycles before falling through to execute/awaiting_approval.
+  maxReviewRounds: number;
+  // When true, pipeline pauses at awaiting_approval after review loop for human sign-off.
+  // When false (default), it proceeds directly to execution.
+  requireApproval: boolean;
+  // Codex reasoning effort for the review phase. Applied via
+  // `-c model_reasoning_effort=<value>` on the top-level codex command (v0.120.0+).
+  reviewerReasoningEffort: 'low' | 'medium' | 'high';
   // Notifications
   notificationsEnabled: boolean;
   notificationOsEnabled: boolean;
@@ -391,6 +407,16 @@ export interface GhAuthStatus {
   username: string | null;
   version: string | null;
   error: string | null;
+  /**
+   * Whether the gh token includes a scope sufficient to read AND write
+   * GitHub Projects v2 (`project`). Required by `gh project item-add`,
+   * which ShipCode uses to attach issues to a project board.
+   *
+   * `null` when authentication failed or the scope list could not be
+   * parsed (e.g. older gh versions). UI should treat `null` as unknown
+   * and not show an error.
+   */
+  hasProjectScope: boolean | null;
 }
 
 // === Mission Control Dashboard ===
@@ -426,6 +452,7 @@ export interface CostSummary {
   byProject: ProjectCostSummary[];
   recentByTask: Array<{
     threadId: string;
+    projectId: string;
     title: string;
     projectName: string;
     phase: PipelinePhase;

@@ -37,6 +37,10 @@ export interface IpcInvokeChannels {
   'project:archive': { args: { projectId: string }; result: void };
   'project:unarchive': { args: { projectId: string }; result: void };
   'project:set-default-branch': { args: { projectId: string; branch: string }; result: Project };
+  'project:set-github-project-url': {
+    args: { projectId: string; url: string | null };
+    result: Project;
+  };
 
   'thread:list': { args: { projectId: string }; result: Thread[] };
   'thread:create': { args: { projectId: string; prompt: string }; result: Thread };
@@ -86,6 +90,23 @@ export interface IpcInvokeChannels {
     args: { projectId: string; issueNumber: number; body: string };
     result: GitHubIssueCacheRecord | null;
   };
+  'github:sync-to-project-board': {
+    args: { projectId: string };
+    result: {
+      attached: number;
+      alreadyPresent: number;
+      failed: number;
+      errors: string[];
+    };
+  };
+  'github:archive-issue': {
+    args: { projectId: string; issueNumber: number };
+    result: { archivedCount: number };
+  };
+  'github:archive-all-done': {
+    args: { projectId: string };
+    result: { archivedCount: number; failedCount: number };
+  };
 
   // Plans & Reviews (backfill)
   'plan:list': { args: { threadId: string }; result: PlanRecord[] };
@@ -127,13 +148,27 @@ export interface IpcInvokeChannels {
   'notification:list': { args: void; result: NotificationRecord[] };
   'notification:dismiss': { args: { id: string }; result: void };
   'notification:dismiss-all': { args: void; result: void };
+
+  // Phase prompt skills (the /skills page). Args/results are typed loosely
+  // here as `unknown` because the concrete types live in @shipcode/agents
+  // (PhaseSkillKey, BundledDefault, ResolvedSkill) and we don't want shared
+  // to depend on agents — would create a cycle. The renderer casts via the
+  // re-exported types in src/renderer/types/skills.ts.
+  'skills:list-for-view': { args: { projectId: string | null }; result: unknown };
+  'skills:read': { args: { projectId: string | null; phase: string }; result: unknown };
+  'skills:write': {
+    args: { projectId: string | null; phase: string; content: string };
+    result: unknown;
+  };
+  'skills:reset': { args: { projectId: string | null; phase: string }; result: unknown };
+  'skills:list-quarantined': { args: void; result: unknown };
 }
 
 // === Streaming Channels (send/on) ===
 
 export interface IpcStreamChannels {
-  'agent:output': { processId: string; chunk: string };
-  'agent:state': { processId: string; type: string; state: AgentState };
+  'agent:output': { processId: string; chunk: string; threadId?: string };
+  'agent:state': { processId: string; type: string; state: AgentState; threadId?: string };
   'pipeline:phase': { threadId: string; phase: PipelinePhase };
   'pipeline:verification-exhausted': { threadId: string; retries: number };
   'plan:parsed': { threadId: string; plan: ShipCodePlan };

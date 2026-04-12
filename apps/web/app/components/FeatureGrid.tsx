@@ -1,4 +1,4 @@
-import { Shield, GitBranch, CheckCircle } from 'lucide-react';
+import { CheckCircle, GitBranch, Shield, Shuffle } from 'lucide-react';
 
 const features = [
   {
@@ -6,6 +6,12 @@ const features = [
     title: 'Adversarial Review',
     description:
       'Different model families catch different blind spots. Opus plans, Codex critiques.',
+  },
+  {
+    icon: Shuffle,
+    title: 'Any Model, Any Phase',
+    description:
+      'Route plan, review, execute, and verify to Claude, Codex, or any OpenRouter model. Mix and match.',
   },
   {
     icon: GitBranch,
@@ -23,7 +29,7 @@ export function FeatureGrid() {
   return (
     <section className="py-24 px-6">
       <div className="max-w-6xl mx-auto">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {features.map((feature) => (
             <div key={feature.title} className="bg-secondary border border-border rounded-xl p-6">
               <feature.icon className="w-8 h-8 text-accent mb-4" />

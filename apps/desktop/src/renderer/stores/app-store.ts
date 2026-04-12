@@ -19,8 +19,14 @@ const AGENT_ACTIVE_STATUSES = new Set<IssuePipelineStatus>([
   'shipping',
 ]);
 
-export type ViewMode = 'dashboard' | 'project' | 'activity' | 'inbox' | 'costs';
-export type SettingsSection = 'general' | 'github' | 'notifications' | 'pipeline' | 'archived';
+export type ViewMode = 'dashboard' | 'project' | 'activity' | 'inbox' | 'costs' | 'skills';
+export type SettingsSection =
+  | 'general'
+  | 'github'
+  | 'notifications'
+  | 'pipeline'
+  | 'shortcuts'
+  | 'archived';
 
 interface AppState {
   // Selection
@@ -70,6 +76,8 @@ interface AppState {
   commandPaletteOpen: boolean;
   createIssueModalOpen: boolean;
   editingPrd: { issueNumber: number; body: string } | null;
+  projectSettingsModalOpen: boolean;
+  projectSettingsModalProjectId: string | null;
 
   // Actions
   setViewMode: (mode: ViewMode) => void;
@@ -77,6 +85,7 @@ interface AppState {
   openActivity: () => void;
   openInbox: () => void;
   openCosts: () => void;
+  openSkills: () => void;
   selectProject: (id: string | null) => void;
   selectThread: (id: string | null) => void;
   selectIssue: (issue: GitHubIssueCacheRecord | null) => void;
@@ -107,6 +116,8 @@ interface AppState {
   openCreateIssueModal: () => void;
   openEditPrdModal: (issueNumber: number, body: string) => void;
   closeCreateIssueModal: () => void;
+  openProjectSettingsModal: (projectId: string) => void;
+  closeProjectSettingsModal: () => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -135,6 +146,8 @@ export const useAppStore = create<AppState>((set) => ({
   commandPaletteOpen: false,
   createIssueModalOpen: false,
   editingPrd: null,
+  projectSettingsModalOpen: false,
+  projectSettingsModalProjectId: null,
   currentModel: null,
 
   setViewMode: (mode) => set({ viewMode: mode }),
@@ -168,6 +181,15 @@ export const useAppStore = create<AppState>((set) => ({
   openCosts: () =>
     set({
       viewMode: 'costs',
+      activeIssue: null,
+      issueDetailExpanded: false,
+      currentPlan: null,
+      currentReview: null,
+      currentVerification: null,
+    }),
+  openSkills: () =>
+    set({
+      viewMode: 'skills',
       activeIssue: null,
       issueDetailExpanded: false,
       currentPlan: null,
@@ -226,7 +248,21 @@ export const useAppStore = create<AppState>((set) => ({
   setPlan: (plan) => set({ currentPlan: plan }),
   setReview: (review) => set({ currentReview: review }),
   setPipelinePhase: (phase) =>
-    set(phase === 'idle' ? { pipelinePhase: phase, currentModel: null } : { pipelinePhase: phase }),
+    set((s) =>
+      phase === 'idle'
+        ? { pipelinePhase: phase, currentModel: null }
+        : {
+            pipelinePhase: phase,
+            // Only auto-open on the first transition INTO an active run (e.g. idle/queued → planning).
+            // If the user closes the terminal mid-run, subsequent phase events (reviewing,
+            // executing, verifying) must not reopen it.
+            terminalVisible:
+              AGENT_ACTIVE_STATUSES.has(phase as IssuePipelineStatus) &&
+              !AGENT_ACTIVE_STATUSES.has(s.pipelinePhase as IssuePipelineStatus)
+                ? true
+                : s.terminalVisible,
+          },
+    ),
   setVerification: (verification) => set({ currentVerification: verification }),
   setGithubIssues: (issues) => set({ githubIssues: issues }),
   setSystemHealth: (health) => set({ systemHealth: health }),
@@ -273,4 +309,12 @@ export const useAppStore = create<AppState>((set) => ({
       commandPaletteOpen: false,
     }),
   closeCreateIssueModal: () => set({ createIssueModalOpen: false, editingPrd: null }),
+  openProjectSettingsModal: (projectId) =>
+    set({
+      projectSettingsModalOpen: true,
+      projectSettingsModalProjectId: projectId,
+      commandPaletteOpen: false,
+    }),
+  closeProjectSettingsModal: () =>
+    set({ projectSettingsModalOpen: false, projectSettingsModalProjectId: null }),
 }));

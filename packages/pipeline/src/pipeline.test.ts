@@ -238,6 +238,17 @@ function createMockDeps() {
       },
       settings,
       providers,
+      skills: {
+        // Always return null so the loader falls through to the bundled
+        // default. Tests don't exercise per-row overrides — the skill-loader
+        // package has its own dedicated test file for that.
+        get: vi.fn(() => null),
+        set: vi.fn(),
+        delete: vi.fn(),
+        markQuarantined: vi.fn(),
+        listAll: vi.fn(() => []),
+        listQuarantined: vi.fn(() => []),
+      },
     } as unknown as PipelineDeps,
     emittedEvents,
     trigger,
@@ -420,7 +431,7 @@ describe('createPipeline', () => {
       expect(mock.deps.processManager.spawn).not.toHaveBeenCalled();
     });
 
-    it('autonomous spawns codex with --reasoning-effort high', async () => {
+    it('autonomous spawns codex with -c model_reasoning_effort=<default>', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
       pipeline.getContext('t1')!.autonomous = true;
@@ -430,8 +441,11 @@ describe('createPipeline', () => {
       // proc-1 from startPlanGeneration, proc-2 from startReview
       const reviewCall = (mock.deps.processManager.spawn as any).mock.calls[1];
       expect(reviewCall[1]).toBe('codex');
-      expect(reviewCall[2]).toContain('--reasoning-effort');
-      expect(reviewCall[2]).toContain('high');
+      // codex v0.120.0: -c <key>=<value> before `exec`, not --reasoning-effort after.
+      // The default is 'low' (cost-conscious); read from DEFAULT_SETTINGS so this test
+      // tracks the default automatically if it changes.
+      expect(reviewCall[2]).toContain('-c');
+      expect(reviewCall[2]).toContain(`model_reasoning_effort=${DEFAULT_SETTINGS.reviewerReasoningEffort}`);
     });
 
     it('approve + autonomous → calls startExecution (emits executing)', async () => {
@@ -526,6 +540,46 @@ describe('createPipeline', () => {
       await mock.trigger('exit', 'proc-2', 0);
 
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed');
+    });
+
+    it('approve + non-autonomous + !requireApproval → awaiting_approval (no auto-execute)', async () => {
+      // context.autonomous defaults to false; requireApproval defaults to false
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      // do NOT set context.autonomous = true
+
+      await pipeline.startReview('t1', JSON.parse(PLAN_JSON));
+      await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_APPROVE_JSON));
+      await mock.trigger('exit', 'proc-2', 0);
+
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'awaiting_approval');
+    });
+
+    it('request_changes + requireApproval + rounds exhausted + has critical → awaiting_approval', async () => {
+      (mock.deps.settings.get as any).mockReturnValue({ ...DEFAULT_SETTINGS, requireApproval: true });
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      pipeline.getContext('t1')!.autonomous = true;
+      pipeline.getContext('t1')!.reviewRound = MAX_REVIEW_ROUNDS;
+
+      await pipeline.startReview('t1', JSON.parse(PLAN_JSON));
+      await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_REQUEST_CHANGES_CRITICAL_JSON));
+      await mock.trigger('exit', 'proc-2', 0);
+
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'awaiting_approval');
+    });
+
+    it('request_changes + non-autonomous + rounds exhausted + has critical → awaiting_approval', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      // autonomous stays false (default)
+      pipeline.getContext('t1')!.reviewRound = MAX_REVIEW_ROUNDS;
+
+      await pipeline.startReview('t1', JSON.parse(PLAN_JSON));
+      await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_REQUEST_CHANGES_CRITICAL_JSON));
+      await mock.trigger('exit', 'proc-2', 0);
+
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'awaiting_approval');
     });
   });
 

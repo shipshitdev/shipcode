@@ -1,12 +1,9 @@
 import type { ShipCodePlan } from '@shipcode/shared';
 import { Square } from 'lucide-react';
 import { Badge } from './primitives/badge';
-import { cn } from './lib/utils';
 
 interface PlanViewerProps {
   plan: ShipCodePlan | null;
-  isEditable?: boolean;
-  onPlanEdit?: (plan: ShipCodePlan) => void;
 }
 
 const fileActionVariant = (action: string) => {
@@ -24,7 +21,7 @@ const fileActionVariant = (action: string) => {
   }
 };
 
-export function PlanViewer({ plan, isEditable = false, onPlanEdit }: PlanViewerProps) {
+export function PlanViewer({ plan }: PlanViewerProps) {
   if (!plan) {
     return (
       <div className="flex items-center justify-center h-full p-4 text-muted">
@@ -113,8 +110,8 @@ export function PlanViewer({ plan, isEditable = false, onPlanEdit }: PlanViewerP
             Acceptance Criteria
           </h3>
           <ul className="list-none p-0">
-            {plan.acceptanceCriteria.map((criteria, i) => (
-              <li key={i} className="flex items-start gap-2 py-1 text-[13px]">
+            {plan.acceptanceCriteria.map((criteria) => (
+              <li key={criteria} className="flex items-start gap-2 py-1 text-[13px]">
                 <Square size={12} className="mt-1 shrink-0 text-muted" />
                 <span>{criteria}</span>
               </li>
@@ -129,9 +126,9 @@ export function PlanViewer({ plan, isEditable = false, onPlanEdit }: PlanViewerP
             Out of Scope
           </h3>
           <ul className="list-none p-0">
-            {plan.outOfScope.map((item, i) => (
+            {plan.outOfScope.map((item) => (
               <li
-                key={i}
+                key={item}
                 className="py-1 pl-4 text-[13px] relative before:content-['—'] before:absolute before:left-0 before:text-muted"
               >
                 {item}

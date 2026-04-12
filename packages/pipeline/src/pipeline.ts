@@ -5,14 +5,14 @@ import {
   buildReviewPrompt,
   buildRevisionPrompt,
   buildVerificationPrompt,
+  buildExecutionPrompt,
 } from '@shipcode/agents';
-import type { ProviderPhase, ProviderRequest } from '@shipcode/agents';
+import type { ProviderPhase, ProviderRequest, SkillValidationError } from '@shipcode/agents';
 import { WorktreeManager } from '@shipcode/git';
-import type { AgentType, ShipCodePlan } from '@shipcode/shared';
+import type { AgentType, PhaseSkillKey, ShipCodePlan } from '@shipcode/shared';
 import {
   PIPELINE_MAX_RETRIES,
   MAX_VERIFICATION_RETRIES,
-  MAX_REVIEW_ROUNDS,
 } from '@shipcode/shared';
 import type { Pipeline, PipelineContext, PipelineDeps, PipelineExecutorModel } from './types';
 
@@ -50,9 +50,16 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       return existing;
     }
 
+    // projectId is looked up once at context creation so per-phase skill
+    // resolution doesn't need to re-query the threads table on every builder
+    // call. Falls back to null when the thread row hasn't been created yet
+    // (e.g. tests, or in-flight initializeContext seeds).
+    const seededProjectId = seed.projectId ?? deps.threads.getById(threadId)?.projectId ?? null;
+
     const context: PipelineContext = {
       threadId,
       projectPath: seed.projectPath,
+      projectId: seededProjectId,
       worktreePath: seed.worktreePath ?? null,
       retryCount: seed.retryCount ?? 0,
       autonomous: seed.autonomous ?? false,
@@ -72,6 +79,27 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     };
     activePipelines.set(threadId, context);
     return context;
+  }
+
+  /**
+   * Build the (context, deps) pair every prompt builder needs. Centralized so
+   * the four call sites stay terse and the fallback handler is wired exactly
+   * once. The onFallback callback emits a `skill:fallback` PipelineEvent that
+   * the desktop adapter routes into the inbox/toaster.
+   */
+  function skillCallSite(context: PipelineContext) {
+    const onFallback = (phase: PhaseSkillKey, error: SkillValidationError | undefined) => {
+      deps.emitter.emit({
+        type: 'skill:fallback',
+        threadId: context.threadId,
+        phase,
+        reason: error?.message ?? 'override quarantined',
+      });
+    };
+    return {
+      context: { projectId: context.projectId },
+      deps: { skills: deps.skills, onFallback },
+    };
   }
 
   /**
@@ -210,7 +238,8 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
     emitPhase(threadId, 'planning');
 
-    const planPrompt = buildPlanPrompt(prompt, threadId);
+    const skill = skillCallSite(context);
+    const planPrompt = buildPlanPrompt(prompt, threadId, skill.context, skill.deps);
 
     // Fire-and-forget: kick off the provider call and let completion run
     // in the background. Callers (CLI, desktop IPC, tests) rely on phase
@@ -238,11 +267,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
             const plan = deps.plans.create(threadId, result.raw, result.data, nextVersion);
             deps.plans.updateStatus(plan.id, 'pending_review');
             deps.emitter.emit({ type: 'plan:parsed', threadId, plan: result.data });
-            if (context.autonomous) {
-              startReview(threadId, result.data);
-            } else {
-              emitPhase(threadId, 'reviewing');
-            }
+            startReview(threadId, result.data);
           } else {
             const detectedError = parser.detectError();
             if (context.retryCount < PIPELINE_MAX_RETRIES) {
@@ -265,12 +290,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
           deps.plans.updateStatus(plan.id, 'pending_review');
           deps.emitter.emit({ type: 'plan:parsed', threadId, plan: result.data });
 
-          if (context.autonomous) {
-            // Autonomous: go directly to review
-            startReview(threadId, result.data);
-          } else {
-            emitPhase(threadId, 'reviewing');
-          }
+          startReview(threadId, result.data);
         } else {
           // Store raw output even without structured data
           deps.plans.create(threadId, result.raw, null, nextVersion);
@@ -291,15 +311,15 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
     emitPhase(threadId, 'reviewing');
 
-    const reviewPromptText = buildReviewPrompt(plan, undefined, context.autonomous);
+    const skill = skillCallSite(context);
+    const reviewPromptText = buildReviewPrompt(plan, skill.context, skill.deps, {
+      autonomous: context.autonomous,
+    });
 
     void (async () => {
       try {
         const response = await runProviderPhase(context, 'review', reviewPromptText, {
-          // Autonomous review gets high reasoning effort — passed as a
-          // phase hint so the codex CLI provider reproduces the original
-          // --reasoning-effort high arg.
-          ...(context.autonomous ? { reasoningEffort: 'high' as const } : {}),
+          reasoningEffort: deps.settings.get().reviewerReasoningEffort,
         });
 
         if (context.cancelled) return;
@@ -321,14 +341,18 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
           deps.emitter.emit({ type: 'review:parsed', threadId, review: result.data });
 
           if (result.data.decision === 'approve') {
-            if (context.autonomous) {
-              startExecution(threadId, latestPlan!.structured!);
-            } else {
+            // Codex satisfied — proceed to execution or hand off to human.
+            // Only auto-execute for autonomous threads with approval disabled.
+            if (deps.settings.get().requireApproval || !context.autonomous) {
               emitPhase(threadId, 'awaiting_approval');
+            } else {
+              startExecution(threadId, latestPlan!.structured!);
             }
           } else if (result.data.decision === 'request_changes') {
-            if (context.autonomous && context.reviewRound < MAX_REVIEW_ROUNDS) {
-              // Check if there are critical/major findings
+            if (context.reviewRound < deps.settings.get().maxReviewRounds) {
+              // Revision loop — runs regardless of autonomous mode.
+              // Both modes loop through review→revise up to MAX_REVIEW_ROUNDS times;
+              // only the terminal state differs (execute vs awaiting_approval).
               context.reviewRound++;
               deps.threads.incrementReviewRound(threadId);
               const feedback =
@@ -341,19 +365,22 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
                   )
                   .join('\n');
               startRevision(threadId, latestPlan!.structured!, feedback);
-            } else if (context.autonomous && context.reviewRound >= MAX_REVIEW_ROUNDS) {
-              // Force-approve only if no critical/major findings remain
-              const hasCriticalOrMajor = result.data.findings.some(
-                (f: { severity: string }) => f.severity === 'critical' || f.severity === 'major',
-              );
-              if (hasCriticalOrMajor) {
-                emitPhase(threadId, 'failed');
-                activePipelines.delete(threadId);
-              } else {
-                startExecution(threadId, latestPlan!.structured!);
-              }
             } else {
-              emitPhase(threadId, 'revising');
+              // Rounds exhausted.
+              // In approval mode or for non-autonomous threads, always surface to human.
+              if (deps.settings.get().requireApproval || !context.autonomous) {
+                emitPhase(threadId, 'awaiting_approval');
+              } else {
+                const hasCriticalOrMajor = result.data.findings.some(
+                  (f: { severity: string }) => f.severity === 'critical' || f.severity === 'major',
+                );
+                if (hasCriticalOrMajor) {
+                  emitPhase(threadId, 'failed');
+                  activePipelines.delete(threadId);
+                } else {
+                  startExecution(threadId, latestPlan!.structured!);
+                }
+              }
             }
           } else {
             // reject
@@ -383,7 +410,14 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
     emitPhase(threadId, 'revising');
 
-    const revisionPrompt = buildRevisionPrompt(plan, reviewFeedback, threadId);
+    const skill = skillCallSite(context);
+    const revisionPrompt = buildRevisionPrompt(
+      plan,
+      reviewFeedback,
+      threadId,
+      skill.context,
+      skill.deps,
+    );
 
     void (async () => {
       try {
@@ -442,7 +476,8 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
     emitPhase(threadId, 'executing');
 
-    const executionPrompt = `Execute this approved implementation plan:\n\n${JSON.stringify(plan, null, 2)}`;
+    const skill = skillCallSite(context);
+    const executionPrompt = buildExecutionPrompt(plan, skill.context, skill.deps);
 
     void (async () => {
       try {
@@ -533,7 +568,14 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       }
     } catch {}
 
-    const verificationPrompt = buildVerificationPrompt(plan, diff, plan.acceptanceCriteria);
+    const skill = skillCallSite(context);
+    const verificationPrompt = buildVerificationPrompt(
+      plan,
+      diff,
+      plan.acceptanceCriteria,
+      skill.context,
+      skill.deps,
+    );
 
     void (async () => {
       try {

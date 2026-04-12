@@ -1,5 +1,11 @@
 import type { ShipCodePlan } from '@shipcode/shared';
 import { VERIFICATION_FENCE_TAG } from '@shipcode/shared';
+import {
+  resolveSkill,
+  interpolateSkill,
+  type SkillsRowSource,
+  type SkillValidationError,
+} from '../skills';
 
 const VERIFICATION_SCHEMA_DESCRIPTION = `{
   "threadId": "<thread-id>",
@@ -22,44 +28,37 @@ const VERIFICATION_SCHEMA_DESCRIPTION = `{
   ]
 }`;
 
+const VERIFICATION_OUTPUT_SCHEMA = `\`\`\`${VERIFICATION_FENCE_TAG}\n${VERIFICATION_SCHEMA_DESCRIPTION}\n\`\`\``;
+
+export interface VerificationPromptContext {
+  projectId: string | null;
+}
+
+export interface VerificationPromptDeps {
+  skills: SkillsRowSource;
+  onFallback?: (phase: 'plan-verification', error: SkillValidationError | undefined) => void;
+}
+
 export function buildVerificationPrompt(
   plan: ShipCodePlan,
   diff: string,
   acceptanceCriteria: string[],
+  context: VerificationPromptContext,
+  deps: VerificationPromptDeps,
 ): string {
-  return `You are a senior engineer verifying that an implementation matches its plan and acceptance criteria.
-
-## Implementation Plan
-\`\`\`json
-${JSON.stringify(plan, null, 2)}
-\`\`\`
-
-## Git Diff (changes made)
-\`\`\`diff
-${diff}
-\`\`\`
-
-## Acceptance Criteria to Verify
-${acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join('\n')}
-
-## Instructions
-1. Read the diff carefully against the plan's file list and steps
-2. Check each acceptance criterion — does the diff satisfy it?
-3. Flag any missing implementations, regressions, or incomplete work
-4. Flag if there are uncommitted changes (dirty worktree = failure)
-
-## Severity Guide
-- **blocker**: Implementation is incomplete, broken, or missing critical functionality
-- **warning**: Minor issue that doesn't block but should be noted
-
-## Result Guide
-- **passed**: All acceptance criteria are met, no blockers found
-- **failed**: One or more acceptance criteria are NOT met, or blockers found
-
-## Output Format
-Your verification MUST be valid JSON inside a \`\`\`${VERIFICATION_FENCE_TAG} code fence:
-
-\`\`\`${VERIFICATION_FENCE_TAG}
-${VERIFICATION_SCHEMA_DESCRIPTION}
-\`\`\``;
+  const { skill, fallbackUsed, error } = resolveSkill(
+    'plan-verification',
+    context.projectId,
+    deps,
+  );
+  if (fallbackUsed) {
+    deps.onFallback?.('plan-verification', error);
+  }
+  const numbered = acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join('\n');
+  return interpolateSkill(skill.content, [
+    { key: 'PLAN_JSON', value: JSON.stringify(plan, null, 2) },
+    { key: 'DIFF', value: diff },
+    { key: 'ACCEPTANCE_CRITERIA', value: numbered },
+    { key: 'OUTPUT_SCHEMA', value: VERIFICATION_OUTPUT_SCHEMA },
+  ]);
 }

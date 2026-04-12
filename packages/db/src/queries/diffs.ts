@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { nanoid } from 'nanoid';
-import type { DiffRecord } from '@shipcode/shared';
+import { toIsoUtc, type DiffRecord } from '@shipcode/shared';
 
 export class DiffQueries {
   constructor(private db: DatabaseSync) {}
@@ -50,6 +50,6 @@ function mapDiff(row: any): DiffRecord {
     diffContent: row.diff_content,
     beforeHash: row.before_hash,
     afterHash: row.after_hash,
-    createdAt: row.created_at,
+    createdAt: toIsoUtc(row.created_at) ?? row.created_at,
   };
 }

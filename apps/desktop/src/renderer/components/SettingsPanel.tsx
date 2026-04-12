@@ -14,6 +14,7 @@ import {
 } from '@shipcode/ui';
 import type { AppSettings, Project } from '@shipcode/shared';
 import { useAppStore } from '../stores/app-store';
+import { SHORTCUTS, type ShortcutCategory, type ShortcutDef } from '../data/shortcuts';
 
 export function SettingsPanel() {
   const queryClient = useQueryClient();
@@ -259,9 +260,41 @@ export function SettingsPanel() {
 
             <section className="mb-8">
               <SettingsRow
+                label="Require approval before execution"
+                htmlFor="require-approval"
+                description="When on, pipeline pauses after review for your sign-off. When off, it executes automatically."
+              >
+                <Switch
+                  id="require-approval"
+                  checked={settings.requireApproval}
+                  onCheckedChange={(checked: boolean) =>
+                    updateSettings.mutate({ requireApproval: checked })
+                  }
+                />
+              </SettingsRow>
+              <SettingsRow
+                label="Review rounds"
+                htmlFor="max-review-rounds"
+                description="How many review→revise cycles before execution or approval."
+              >
+                <Input
+                  id="max-review-rounds"
+                  type="number"
+                  className="w-[80px]"
+                  value={settings.maxReviewRounds}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    if (val >= 1 && val <= 5) updateSettings.mutate({ maxReviewRounds: val });
+                  }}
+                  min={1}
+                  max={5}
+                  step={1}
+                />
+              </SettingsRow>
+              <SettingsRow
                 label="Planner max turns"
                 htmlFor="planner-max-turns"
-                description="Max Claude turns for plan / revision / verify phases. Higher = more thorough but slower."
+                description="Max Claude turns per plan / revision / verify phase."
               >
                 <Input
                   id="planner-max-turns"
@@ -276,6 +309,23 @@ export function SettingsPanel() {
                   max={20}
                   step={1}
                 />
+              </SettingsRow>
+              <SettingsRow label="Reviewer reasoning effort" htmlFor="reviewer-reasoning-effort">
+                <Select
+                  value={settings.reviewerReasoningEffort}
+                  onValueChange={(value: string) =>
+                    updateSettings.mutate({ reviewerReasoningEffort: value as AppSettings['reviewerReasoningEffort'] })
+                  }
+                >
+                  <SelectTrigger id="reviewer-reasoning-effort" className="w-[120px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">low</SelectItem>
+                    <SelectItem value="medium">medium</SelectItem>
+                    <SelectItem value="high">high</SelectItem>
+                  </SelectContent>
+                </Select>
               </SettingsRow>
               <SettingsRow label="Executor model" htmlFor="executor-model">
                 <Select
@@ -304,6 +354,8 @@ export function SettingsPanel() {
             </section>
           </>
         )}
+
+        {settingsSection === 'shortcuts' && <ShortcutsSection />}
 
         {settingsSection === 'archived' && (
           <>
@@ -345,5 +397,52 @@ export function SettingsPanel() {
         )}
       </div>
     </div>
+  );
+}
+
+function ShortcutsSection() {
+  const byCategory = SHORTCUTS.reduce<Record<ShortcutCategory, ShortcutDef[]>>(
+    (acc, shortcut) => {
+      (acc[shortcut.category] ??= []).push(shortcut);
+      return acc;
+    },
+    {} as Record<ShortcutCategory, ShortcutDef[]>,
+  );
+
+  return (
+    <>
+      <h3 className="mb-1">Keyboard Shortcuts</h3>
+      <p className="mb-6 text-xs text-muted">
+        Reference of every shortcut in ShipCode. Remapping isn't supported yet — if you want a
+        different binding, edit{' '}
+        <code className="rounded bg-tertiary px-1 py-0.5 text-[11px]">
+          apps/desktop/src/renderer/data/shortcuts.ts
+        </code>
+        .
+      </p>
+      {(Object.entries(byCategory) as [ShortcutCategory, ShortcutDef[]][]).map(
+        ([category, items]) => (
+          <section key={category} className="mb-6">
+            <h4 className="mb-2 text-xs uppercase tracking-wide text-muted">{category}</h4>
+            <div className="divide-y divide-border rounded-md border border-border bg-tertiary">
+              {items.map((shortcut) => (
+                <div
+                  key={shortcut.id}
+                  className="flex items-center justify-between gap-4 px-4 py-3"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13px] text-primary">{shortcut.label}</div>
+                    <div className="text-[11px] text-muted">{shortcut.description}</div>
+                  </div>
+                  <kbd className="shrink-0 rounded border border-border bg-primary px-2 py-1 font-mono text-[12px] tracking-widest text-secondary">
+                    {shortcut.glyph}
+                  </kbd>
+                </div>
+              ))}
+            </div>
+          </section>
+        ),
+      )}
+    </>
   );
 }

@@ -1,49 +1,60 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { useAppStore } from '../stores/app-store';
+import type {
+  NotificationRecord,
+  PipelinePhase,
+  PlanRecord,
+  Project,
+  ReviewRecord,
+  ShipCodePlan,
+  Thread,
+} from '@shipcode/shared';
+import { deriveGithubIssueUrl, shipCodePlanSchema } from '@shipcode/shared';
 import {
-  PlanViewer,
-  ReviewViewer,
   Badge,
   Button,
-  Textarea,
-  X,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  Copy,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   ExternalLink,
+  getStatusBadgeVariant,
+  Maximize2,
+  Minimize2,
+  MODEL_DISPLAY,
+  Pencil,
+  PlanViewer,
+  RefreshCw,
+  ReviewViewer,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-  MODEL_DISPLAY,
-  getStatusBadgeVariant,
-  ChevronLeft,
-  ChevronRight,
-  ChevronUp,
-  ChevronDown,
-  Copy,
-  Maximize2,
-  Minimize2,
+  Textarea,
+  X,
 } from '@shipcode/ui';
-import type {
-  Thread,
-  PlanRecord,
-  ReviewRecord,
-  Project,
-  NotificationRecord,
-  PipelinePhase,
-} from '@shipcode/shared';
-import { deriveGithubIssueUrl } from '@shipcode/shared';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { useAppStore } from '../stores/app-store';
+
+// See DashboardView for why all 6 agent phases share one color.
+const AGENT_PHASE_CLASSES = 'bg-agent/10 text-agent border-agent/25';
 
 const PHASE_COLOR: Partial<Record<PipelinePhase, string>> = {
-  planning: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-  reviewing: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
-  revising: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
-  awaiting_approval: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-  executing: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
-  verifying: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30',
-  shipping: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+  planning: AGENT_PHASE_CLASSES,
+  reviewing: AGENT_PHASE_CLASSES,
+  revising: AGENT_PHASE_CLASSES,
+  executing: AGENT_PHASE_CLASSES,
+  verifying: AGENT_PHASE_CLASSES,
+  shipping: AGENT_PHASE_CLASSES,
+  awaiting_approval: 'bg-warning/15 text-warning border-warning/30',
   completed: 'bg-success/15 text-success border-success/30',
   failed: 'bg-danger/15 text-danger border-danger/30',
   idle: 'bg-tertiary text-muted border-border',
@@ -58,8 +69,63 @@ const ACTIVE_PHASES: PipelinePhase[] = [
   'shipping',
 ];
 
+const PIPELINE_PREVIEW_PHASES = [
+  { id: 'plan', label: 'Plan' },
+  { id: 'review', label: 'Review' },
+  { id: 'execute', label: 'Execute' },
+  { id: 'verify', label: 'Verify' },
+  { id: 'ship', label: 'Ship' },
+] as const;
+
 // `deriveGithubIssueUrl` + related helpers live in `@shipcode/shared/github-url`
 // so the Kanban toolbar, IssueDetail, and any future consumer share one parser.
+
+function resolveRawPlanText(raw: string): string {
+  const lines = raw.split('\n');
+  // Claude --output-format stream-json: the final result line carries the LLM text
+  for (let i = lines.length - 1; i >= 0; i--) {
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping ANSI codes
+    const line = lines[i].replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').trim();
+    if (!line) continue;
+    try {
+      const parsed = JSON.parse(line);
+      if (parsed.type === 'result' && typeof parsed.result === 'string') return parsed.result;
+    } catch {}
+  }
+  // Codex --json: join agent_message texts
+  const agentTexts: string[] = [];
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t) continue;
+    try {
+      const parsed = JSON.parse(t);
+      if (
+        parsed.type === 'item.completed' &&
+        parsed.item?.type === 'agent_message' &&
+        typeof parsed.item.text === 'string'
+      ) {
+        agentTexts.push(parsed.item.text);
+      }
+    } catch {
+      /* skip */
+    }
+  }
+  if (agentTexts.length > 0) return agentTexts.join('\n\n');
+  return raw;
+}
+
+/** Try to extract and validate a ShipCodePlan from raw pipeline output.
+ * Used client-side to render old plans where `structured` was never stored. */
+function resolveClientSidePlan(rawOutput: string): ShipCodePlan | null {
+  const text = resolveRawPlanText(rawOutput);
+  const match = text.match(/```shipcode-plan[^\n]*\n([\s\S]*?)\n```/m);
+  if (!match) return null;
+  try {
+    return shipCodePlanSchema.parse(JSON.parse(match[1].trim()));
+  } catch {
+    return null;
+  }
+}
 
 const PRD_PROSE_CLASSES =
   'space-y-3 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-secondary [&_code]:rounded [&_code]:bg-tertiary [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-xs [&_h1]:text-base [&_h1]:font-semibold [&_h2]:mt-4 [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:text-sm [&_h3]:font-semibold [&_li]:mb-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:whitespace-pre-wrap [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-tertiary [&_pre]:p-3 [&_pre]:text-xs [&_ul]:list-disc [&_ul]:pl-5';
@@ -75,10 +141,18 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     openEditPrdModal,
     toggleIssueDetailExpanded,
   } = useAppStore();
-  const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
+  // undefined = untouched (auto-expand latest); null = user explicitly collapsed
+  const [expandedPlanId, setExpandedPlanId] = useState<string | null | undefined>(undefined);
+  const prevLatestPlanIdRef = useRef<string | null>(null);
+  const [fullScreenPlanId, setFullScreenPlanId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState('');
-  const [showRejectForm, setShowRejectForm] = useState(false);
+  const [pendingAction, setPendingAction] = useState<'approve' | 'request_changes' | 'cancel'>(
+    'approve',
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isEditingPlan, setIsEditingPlan] = useState(false);
+  const [editPlanText, setEditPlanText] = useState('');
+  const [editPlanError, setEditPlanError] = useState('');
   const [isRefreshingFromGithub, setIsRefreshingFromGithub] = useState(false);
   const [prdCollapsed, setPrdCollapsed] = useState(false);
   const [showRawOutput, setShowRawOutput] = useState(false);
@@ -118,13 +192,31 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
   // Auto-expand latest plan
   const latestPlanId = planHistory[0]?.id ?? null;
-  const effectiveExpanded = expandedPlanId ?? latestPlanId;
+
+  // When a new plan version arrives, auto-follow the new latest — but only
+  // when the user was in auto mode or was already tracking the previous
+  // latest. Preserves deliberate pins to older versions (e.g. a user
+  // inspecting v2 while v4 is produced should not be yanked to v4).
+  useEffect(() => {
+    const prev = prevLatestPlanIdRef.current;
+    if (!latestPlanId || latestPlanId === prev) return;
+    setExpandedPlanId((current) => {
+      if (current === undefined || current === prev) return undefined;
+      return current;
+    });
+    prevLatestPlanIdRef.current = latestPlanId;
+  }, [latestPlanId]);
+
+  const effectiveExpanded = expandedPlanId === undefined ? latestPlanId : expandedPlanId;
   const latestPlan = useMemo(() => planHistory[0] ?? null, [planHistory]);
   const threadPhase = thread?.status ?? pipelinePhase;
   const canStartPipeline = !activeThreadId && !!activeProjectId;
   const canRerun = !!activeIssue && activeIssue.pipelineStatus === 'failed' && !!activeProjectId;
-  const canApprove =
-    !!activeThreadId && !!latestPlan?.structured && threadPhase === 'awaiting_approval';
+  const hasApprovalDecision =
+    !!activeThreadId && threadPhase === 'awaiting_approval' && !!latestPlan;
+  const canApprove = hasApprovalDecision && !!latestPlan?.structured;
+  const fullScreenPlan = planHistory.find((p) => p.id === fullScreenPlanId) ?? null;
+  const fullScreenReview = fullScreenPlan ? reviewsByPlanId[fullScreenPlan.id] : undefined;
 
   if (!activeIssue) return null;
 
@@ -186,7 +278,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         feedback: feedback.trim(),
       });
       setFeedback('');
-      setShowRejectForm(false);
+      setPendingAction('approve');
       await refreshIssueState();
     } finally {
       setIsSubmitting(false);
@@ -308,22 +400,24 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
   const headerButtons = (
     <div className="absolute right-3 top-3 flex items-center gap-0.5">
-      <button
-        type="button"
-        className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-muted hover:bg-hover hover:text-primary"
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        className="text-muted"
         onClick={toggleIssueDetailExpanded}
         title={expanded ? 'Collapse to panel' : 'Expand to full page'}
       >
-        {expanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-      </button>
-      <button
-        type="button"
-        className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md border-none bg-transparent text-muted hover:bg-hover hover:text-primary"
+        {expanded ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        className="text-muted"
         onClick={() => selectIssue(null)}
         title="Close"
       >
-        <X size={14} />
-      </button>
+        <X size={15} strokeWidth={2.25} />
+      </Button>
     </div>
   );
 
@@ -451,45 +545,65 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     </div>
   ) : null;
 
-  const approvalSection = canApprove ? (
+  const approvalSection = hasApprovalDecision ? (
     <div className="mb-5 rounded-md border border-border bg-secondary p-3">
-      <div className="mb-3 flex flex-wrap gap-2">
-        <Button onClick={handleApprove} disabled={isSubmitting}>
-          {isSubmitting ? 'Approving...' : 'Approve & Execute'}
-        </Button>
-        <Button
-          variant="secondary"
-          onClick={() => setShowRejectForm((value) => !value)}
+      <div className="mb-3 flex items-center gap-2">
+        <Select
+          value={pendingAction}
+          onValueChange={(v) =>
+            setPendingAction(v as 'approve' | 'request_changes' | 'cancel')
+          }
           disabled={isSubmitting}
         >
-          Request Changes
-        </Button>
+          <SelectTrigger className="h-8 w-48 text-[12px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="approve">Approve &amp; Execute</SelectItem>
+            <SelectItem value="request_changes">Request Changes</SelectItem>
+            <SelectItem value="cancel">Cancel pipeline</SelectItem>
+          </SelectContent>
+        </Select>
+        {pendingAction === 'approve' && (
+          <Button
+            size="sm"
+            onClick={handleApprove}
+            disabled={isSubmitting || !canApprove}
+            title={
+              !canApprove ? 'Plan could not be parsed — use Request Changes or Cancel' : undefined
+            }
+          >
+            {isSubmitting ? 'Approving...' : 'Confirm'}
+          </Button>
+        )}
+        {pendingAction === 'cancel' && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={handleCancel}
+            disabled={isSubmitting}
+            className="text-danger hover:bg-danger/10 hover:text-danger"
+          >
+            {isSubmitting ? 'Cancelling...' : 'Confirm cancel'}
+          </Button>
+        )}
       </div>
-      {showRejectForm && (
+      {pendingAction === 'request_changes' && (
         <div className="flex flex-col gap-2">
           <Textarea
             value={feedback}
             onChange={(event) => setFeedback(event.target.value)}
-            placeholder="Describe what should change before execution..."
+            placeholder="Send direction for another planning round..."
             rows={4}
           />
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setShowRejectForm(false);
-                setFeedback('');
-              }}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
+          <div className="flex justify-end">
             <Button
               variant="secondary"
+              size="sm"
               onClick={handleReject}
               disabled={!feedback.trim() || isSubmitting}
             >
-              {isSubmitting ? 'Submitting...' : 'Submit Feedback'}
+              {isSubmitting ? 'Submitting...' : 'Re-plan with feedback'}
             </Button>
           </div>
         </div>
@@ -513,50 +627,176 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
                 key={plan.id}
                 className={`rounded-md border ${isExpanded ? 'border-border' : 'border-transparent'}`}
               >
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 bg-transparent border-none cursor-pointer px-3 py-2 text-left text-[13px] text-primary hover:bg-hover rounded-md"
-                  onClick={() => setExpandedPlanId(isExpanded ? null : plan.id)}
-                >
-                  <span className="font-mono text-xs font-semibold text-muted">
-                    v{plan.version}
-                  </span>
-                  <span className="text-xs" style={{ color: statusColor(plan.status) }}>
-                    {plan.status}
-                  </span>
-                  {review && (
-                    <Badge
-                      variant={review.decision === 'approve' ? 'success' : 'warning'}
-                      className="text-[10px]"
-                    >
-                      {review.decision}
-                    </Badge>
-                  )}
-                  <span className="ml-auto text-[11px] text-muted">
-                    {new Date(plan.createdAt).toLocaleString()}
-                  </span>
-                  <span className="text-muted">{isExpanded ? '▾' : '▸'}</span>
-                </button>
-
-                {isExpanded && (
-                  <div className="border-t border-border p-3">
-                    {plan.structured && <PlanViewer plan={plan.structured} />}
-                    {review?.structured && <ReviewViewer review={review.structured} />}
-                    {!plan.structured && (
-                      <div className="overflow-x-auto">
-                        <pre className="whitespace-pre-wrap text-xs text-secondary">
-                          {plan.rawOutput}
-                        </pre>
-                      </div>
+                <div className="flex items-center">
+                  <Button
+                    variant="ghost"
+                    className="h-auto min-w-0 flex-1 justify-start gap-2 rounded-md px-3 py-2 text-left text-[13px] font-normal text-primary"
+                    onClick={() => setExpandedPlanId(isExpanded ? null : plan.id)}
+                  >
+                    <span className="font-mono text-xs font-semibold text-muted">
+                      v{plan.version}
+                    </span>
+                    <span className="text-xs" style={{ color: statusColor(plan.status) }}>
+                      {plan.status}
+                    </span>
+                    {review && (
+                      <Badge
+                        variant={review.decision === 'approve' ? 'success' : 'warning'}
+                        className="text-[10px]"
+                      >
+                        {review.decision}
+                      </Badge>
                     )}
-                  </div>
-                )}
+                    <span className="ml-auto text-[11px] text-muted">
+                      {new Date(plan.createdAt).toLocaleString()}
+                    </span>
+                    {isExpanded ? (
+                      <ChevronDown size={12} className="text-muted" />
+                    ) : (
+                      <ChevronRight size={12} className="text-muted" />
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className="mr-1 shrink-0 text-muted hover:text-primary"
+                    aria-label="View plan full screen"
+                    onClick={() => setFullScreenPlanId(plan.id)}
+                  >
+                    <Maximize2 size={12} />
+                  </Button>
+                </div>
+
+                {isExpanded &&
+                  (() => {
+                    const inlineDisplayPlan =
+                      plan.structured ?? resolveClientSidePlan(plan.rawOutput ?? '');
+                    return (
+                      <div className="border-t border-border p-3">
+                        {inlineDisplayPlan && <PlanViewer plan={inlineDisplayPlan} />}
+                        {review?.structured && <ReviewViewer review={review.structured} />}
+                        {!inlineDisplayPlan && (
+                          <div className="overflow-x-auto">
+                            <pre className="whitespace-pre-wrap text-xs text-secondary">
+                              {resolveRawPlanText(plan.rawOutput ?? '')}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
               </div>
             );
           })}
         </div>
       </div>
     ) : null;
+
+  const pipelineStartCard = canStartPipeline ? (
+    <div className="sticky -top-4 z-20 -mx-4 -mt-4 mb-4 bg-primary px-4 pt-4 pb-3">
+      <div className="rounded-lg border border-border bg-tertiary p-4 shadow-[0_1px_0_0_rgba(0,0,0,0.3)]">
+        <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
+          Ready
+        </div>
+        <h4 className="mb-1.5 text-[14px] font-semibold leading-snug text-primary">
+          Run the agent pipeline
+        </h4>
+        <p className="mb-5 text-[12px] leading-relaxed text-secondary">
+          The issue will move through these phases in an isolated worktree. You'll approve the plan
+          before any code is written.
+        </p>
+
+        <div className="mb-5">
+          <div className="relative">
+            <div
+              aria-hidden="true"
+              className="absolute left-[9px] right-[9px] top-[9px] h-px bg-border"
+            />
+            <ol className="relative grid grid-cols-5 gap-1">
+              {PIPELINE_PREVIEW_PHASES.map((phase, i) => (
+                <li key={phase.id} className="flex min-w-0 flex-col items-center gap-1.5">
+                  <span className="relative flex h-[18px] w-[18px] items-center justify-center rounded-full border border-border bg-tertiary font-mono text-[9px] font-medium text-muted">
+                    {i + 1}
+                  </span>
+                  <span className="w-full truncate text-center text-[9px] font-semibold uppercase tracking-normal text-muted">
+                    {phase.label}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Button size="sm" onClick={handleStartPipeline} disabled={isSubmitting}>
+            {isSubmitting ? 'Starting…' : 'Start pipeline'}
+          </Button>
+          <Button
+            variant="link"
+            size="xs"
+            onClick={handleEditPrd}
+            className="px-0 text-muted hover:text-primary"
+          >
+            Edit PRD first
+          </Button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  const fullScreenClientPlan =
+    fullScreenPlan && !fullScreenPlan.structured
+      ? resolveClientSidePlan(fullScreenPlan.rawOutput ?? '')
+      : null;
+  const fullScreenDisplayPlan = fullScreenPlan?.structured ?? fullScreenClientPlan;
+  const fullScreenIsLatest = fullScreenPlanId === latestPlan?.id;
+
+  const planFullScreenDialog = (
+    <Dialog
+      open={fullScreenPlanId !== null}
+      onOpenChange={(open) => {
+        if (!open) {
+          setFullScreenPlanId(null);
+          setIsEditingPlan(false);
+          setEditPlanError('');
+        }
+      }}
+    >
+      <DialogContent className="max-w-4xl h-[90vh] flex flex-col overflow-hidden p-0 bg-primary">
+        <DialogHeader className="shrink-0 border-b border-border px-6 py-4 flex-row items-center justify-between mb-0">
+          <DialogTitle>
+            Plan v{fullScreenPlan?.version}
+            {fullScreenPlan?.status ? ` — ${fullScreenPlan.status}` : ''}
+          </DialogTitle>
+          <Button variant="ghost" className="h-7 w-7 p-0" onClick={() => setFullScreenPlanId(null)}>
+            <X size={15} strokeWidth={2.25} />
+          </Button>
+        </DialogHeader>
+        <div className="flex-1 overflow-y-auto">
+          {fullScreenDisplayPlan && <PlanViewer plan={fullScreenDisplayPlan} />}
+          {fullScreenReview?.structured && <ReviewViewer review={fullScreenReview.structured} />}
+          {!fullScreenDisplayPlan && fullScreenPlan && (
+            <div className="p-6 text-sm leading-relaxed whitespace-pre-wrap text-secondary">
+              {resolveRawPlanText(fullScreenPlan.rawOutput ?? '')}
+            </div>
+          )}
+        </div>
+        {canApprove && fullScreenIsLatest && (
+          <DialogFooter className="shrink-0 border-t border-border px-6 py-4">
+            <Button
+              onClick={() => {
+                void handleApprove();
+                setFullScreenPlanId(null);
+              }}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Approving...' : 'Approve & Execute'}
+            </Button>
+          </DialogFooter>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
 
   // ─── Expanded (full-page) layout ────────────────────────────────────────
 
@@ -568,14 +808,15 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
           {/* Header */}
           <div className="relative shrink-0 border-b border-border p-4">
             {headerButtons}
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="xs"
               onClick={toggleIssueDetailExpanded}
-              className="mb-2 flex items-center gap-1 text-xs text-muted hover:text-primary"
+              className="mb-2 h-auto gap-1 px-0 text-xs font-normal text-muted hover:bg-transparent"
             >
               <ChevronLeft size={12} />
               Back to board
-            </button>
+            </Button>
             <div className="flex items-center gap-2 pr-16">
               <span className="font-mono text-xs text-muted">#{activeIssue.issueNumber}</span>
               {githubIssueUrl && (
@@ -602,25 +843,25 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">
                   PRD
                 </h4>
-                <div className="flex gap-1">
+                <div className="flex items-center gap-1">
                   <Button
                     variant="ghost"
-                    size="sm"
+                    size="icon-xs"
                     onClick={handleRefreshFromGithub}
                     disabled={isRefreshingFromGithub}
-                    className="h-6 text-[11px]"
                     title="Re-fetch issue body from GitHub"
+                    aria-label="Refresh PRD from GitHub"
                   >
-                    {isRefreshingFromGithub ? 'Refreshing...' : 'Refresh'}
+                    <RefreshCw size={12} className={isRefreshingFromGithub ? 'animate-spin' : ''} />
                   </Button>
                   <Button
                     variant="ghost"
-                    size="sm"
+                    size="icon-xs"
                     onClick={handleEditPrd}
-                    className="h-6 text-[11px]"
                     title="Edit the PRD body"
+                    aria-label="Edit PRD"
                   >
-                    Edit PRD
+                    <Pencil size={13} />
                   </Button>
                 </div>
               </div>
@@ -653,29 +894,65 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
         {/* Right sidebar — properties */}
         <div className="w-72 shrink-0 border-l border-border overflow-y-auto p-4">
+          {pipelineStartCard}
           {/* Re-run CTA — top action when failed */}
           {canRerun && (
             <div className="mb-4">
               {(thread?.lastError || planHistory[0]?.rawOutput) && (
                 <div className="mb-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2">
                   <div className="flex items-center justify-between mb-1">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-danger">Error</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-danger">
+                      Error
+                    </p>
                     <div className="flex items-center gap-2">
-                      <button type="button" onClick={() => navigator.clipboard.writeText([thread?.lastError, planHistory[0]?.rawOutput].filter(Boolean).join('\n\n'))} className="text-danger/60 hover:text-danger" title="Copy to clipboard"><Copy size={12} /></button>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className="text-danger/60 hover:bg-danger/10 hover:text-danger"
+                        onClick={() =>
+                          navigator.clipboard.writeText(
+                            [thread?.lastError, planHistory[0]?.rawOutput]
+                              .filter(Boolean)
+                              .join('\n\n'),
+                          )
+                        }
+                        title="Copy to clipboard"
+                      >
+                        <Copy size={13} />
+                      </Button>
                       {planHistory[0]?.rawOutput && (
-                        <button type="button" onClick={() => setShowRawOutput(v => !v)} className="text-[10px] text-danger/60 hover:text-danger">
-                          {showRawOutput ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                        </button>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          className="text-danger/60 hover:bg-danger/10 hover:text-danger"
+                          onClick={() => setShowRawOutput((v) => !v)}
+                        >
+                          {showRawOutput ? (
+                            <ChevronUp size={16} strokeWidth={2.25} />
+                          ) : (
+                            <ChevronDown size={16} strokeWidth={2.25} />
+                          )}
+                        </Button>
                       )}
                     </div>
                   </div>
-                  {thread?.lastError && <p className="text-[12px] text-danger/80 break-words">{thread.lastError}</p>}
+                  {thread?.lastError && (
+                    <p className="text-[12px] text-danger/80 break-words">{thread.lastError}</p>
+                  )}
                   {showRawOutput && planHistory[0]?.rawOutput && (
-                    <pre className="mt-2 max-h-[200px] overflow-y-auto text-[11px] text-danger/70 whitespace-pre-wrap break-words border-t border-danger/20 pt-2">{planHistory[0].rawOutput}</pre>
+                    <pre className="mt-2 max-h-[200px] overflow-y-auto text-[11px] text-danger/70 whitespace-pre-wrap break-words border-t border-danger/20 pt-2">
+                      {planHistory[0].rawOutput}
+                    </pre>
                   )}
                 </div>
               )}
-              <Button size="sm" variant="outline" onClick={handleRerun} disabled={isSubmitting} className="w-full border-danger/40 text-danger hover:bg-danger/10 hover:border-danger">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleRerun}
+                disabled={isSubmitting}
+                className="w-full border-danger/40 text-danger hover:bg-danger/10 hover:border-danger"
+              >
                 {isSubmitting ? 'Starting...' : 'Re-run Pipeline'}
               </Button>
             </div>
@@ -683,17 +960,8 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
           {agentsSection}
           {pipelineSection}
-
-          {/* Start Pipeline CTA */}
-          {canStartPipeline && (
-            <div className="py-6 text-center">
-              <p className="mb-3 text-sm text-muted">Not yet in pipeline.</p>
-              <Button size="lg" onClick={handleStartPipeline} disabled={isSubmitting}>
-                {isSubmitting ? 'Starting...' : 'Start Pipeline'}
-              </Button>
-            </div>
-          )}
         </div>
+        {planFullScreenDialog}
       </div>
     );
   }
@@ -725,79 +993,111 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4">
+        {pipelineStartCard}
         {/* Re-run CTA — top of content when failed */}
         {canRerun && (
           <div className="mb-5">
             {(thread?.lastError || planHistory[0]?.rawOutput) && (
               <div className="mb-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2">
                 <div className="flex items-center justify-between mb-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-danger">Error</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-danger">
+                    Error
+                  </p>
                   <div className="flex items-center gap-2">
-                    <button type="button" onClick={() => navigator.clipboard.writeText([thread?.lastError, planHistory[0]?.rawOutput].filter(Boolean).join('\n\n'))} className="text-danger/60 hover:text-danger" title="Copy to clipboard"><Copy size={12} /></button>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="text-danger/60 hover:bg-danger/10 hover:text-danger"
+                      onClick={() =>
+                        navigator.clipboard.writeText(
+                          [thread?.lastError, planHistory[0]?.rawOutput]
+                            .filter(Boolean)
+                            .join('\n\n'),
+                        )
+                      }
+                      title="Copy to clipboard"
+                    >
+                      <Copy size={13} />
+                    </Button>
                     {planHistory[0]?.rawOutput && (
-                      <button type="button" onClick={() => setShowRawOutput(v => !v)} className="text-[10px] text-danger/60 hover:text-danger">
-                        {showRawOutput ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                      </button>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className="text-danger/60 hover:bg-danger/10 hover:text-danger"
+                        onClick={() => setShowRawOutput((v) => !v)}
+                      >
+                        {showRawOutput ? (
+                          <ChevronUp size={16} strokeWidth={2.25} />
+                        ) : (
+                          <ChevronDown size={16} strokeWidth={2.25} />
+                        )}
+                      </Button>
                     )}
                   </div>
                 </div>
-                {thread?.lastError && <p className="text-[12px] text-danger/80 break-words">{thread.lastError}</p>}
+                {thread?.lastError && (
+                  <p className="text-[12px] text-danger/80 break-words">{thread.lastError}</p>
+                )}
                 {showRawOutput && planHistory[0]?.rawOutput && (
-                  <pre className="mt-2 max-h-[200px] overflow-y-auto text-[11px] text-danger/70 whitespace-pre-wrap break-words border-t border-danger/20 pt-2">{planHistory[0].rawOutput}</pre>
+                  <pre className="mt-2 max-h-[200px] overflow-y-auto text-[11px] text-danger/70 whitespace-pre-wrap break-words border-t border-danger/20 pt-2">
+                    {planHistory[0].rawOutput}
+                  </pre>
                 )}
               </div>
             )}
-            <Button size="sm" variant="outline" onClick={handleRerun} disabled={isSubmitting} className="w-full border-danger/40 text-danger hover:bg-danger/10 hover:border-danger">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleRerun}
+              disabled={isSubmitting}
+              className="w-full border-danger/40 text-danger hover:bg-danger/10 hover:border-danger"
+            >
               {isSubmitting ? 'Starting...' : 'Re-run Pipeline'}
-            </Button>
-          </div>
-        )}
-
-        {/* No thread yet — offer to start */}
-        {canStartPipeline && (
-          <div className="mb-5 py-6 text-center">
-            <p className="mb-3 text-muted">This issue hasn't been picked up by the pipeline yet.</p>
-            <Button size="lg" onClick={handleStartPipeline} disabled={isSubmitting}>
-              {isSubmitting ? 'Starting...' : 'Start Pipeline'}
             </Button>
           </div>
         )}
 
         {/* PRD (GitHub issue body IS the PRD) */}
         <div className="mb-5">
-          <button
-            type="button"
-            onClick={() => setPrdCollapsed((v) => !v)}
-            className="mb-2 flex w-full items-center justify-between text-left"
-          >
+          <div className="mb-2 flex w-full items-center justify-between">
             <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">PRD</h4>
             <div className="flex items-center gap-1">
-              <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleRefreshFromGithub}
-                  disabled={isRefreshingFromGithub}
-                  className="h-6 text-[11px]"
-                  title="Re-fetch issue body from GitHub (use after editing on github.com)"
-                >
-                  {isRefreshingFromGithub ? 'Refreshing...' : 'Refresh'}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleEditPrd}
-                  className="h-6 text-[11px]"
-                  title="Edit the PRD body (pushes to the GitHub issue on save)"
-                >
-                  Edit PRD
-                </Button>
-              </div>
-              <ChevronRight size={12} className={`text-muted transition-transform ${prdCollapsed ? '' : 'rotate-90'}`} />
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={handleRefreshFromGithub}
+                disabled={isRefreshingFromGithub}
+                title="Re-fetch issue body from GitHub (use after editing on github.com)"
+                aria-label="Refresh PRD from GitHub"
+              >
+                <RefreshCw size={12} className={isRefreshingFromGithub ? 'animate-spin' : ''} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={handleEditPrd}
+                title="Edit the PRD body (pushes to the GitHub issue on save)"
+                aria-label="Edit PRD"
+              >
+                <Pencil size={13} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => setPrdCollapsed((v) => !v)}
+                title={prdCollapsed ? 'Expand PRD' : 'Collapse PRD'}
+                aria-label={prdCollapsed ? 'Expand PRD' : 'Collapse PRD'}
+              >
+                {prdCollapsed ? (
+                  <ChevronDown size={16} strokeWidth={2.25} className="text-muted" />
+                ) : (
+                  <ChevronUp size={16} strokeWidth={2.25} className="text-muted" />
+                )}
+              </Button>
             </div>
-          </button>
-          {!prdCollapsed && (
-            activeIssue.body ? (
+          </div>
+          {!prdCollapsed &&
+            (activeIssue.body ? (
               <div className="max-h-[300px] overflow-y-auto rounded-md bg-secondary p-3 text-[13px] leading-relaxed text-primary">
                 <div className={PRD_PROSE_CLASSES}>
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{activeIssue.body}</ReactMarkdown>
@@ -807,8 +1107,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
               <div className="rounded-md bg-secondary p-3 text-[13px] text-muted">
                 This issue has no PRD body yet. Click "Edit PRD" to author one.
               </div>
-            )
-          )}
+            ))}
         </div>
 
         {agentsSection}
@@ -825,6 +1124,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
           </div>
         )}
       </div>
+      {planFullScreenDialog}
     </div>
   );
 }

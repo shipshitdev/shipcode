@@ -1,20 +1,32 @@
-import { useState } from 'react';
-import { ChevronDown, ChevronRight, ExternalLink, LayoutGrid, LayoutList, RefreshCw, RotateCcw, User } from 'lucide-react';
+'use client';
+
 import {
+  type CollisionDetection,
   DndContext,
+  type DragEndEvent,
   DragOverlay,
+  type DragStartEvent,
   pointerWithin,
   rectIntersection,
-  type CollisionDetection,
-  type DragEndEvent,
-  type DragStartEvent,
+  useDraggable,
+  useDroppable,
 } from '@dnd-kit/core';
-import { useDroppable } from '@dnd-kit/core';
-import { useDraggable } from '@dnd-kit/core';
 import type { GitHubIssueCacheRecord, IssuePipelineStatus } from '@shipcode/shared';
-import { cn } from './lib/utils';
-import { getStatusBadgeVariant } from './lib/status-variant';
+import {
+  Archive,
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+  LayoutGrid,
+  LayoutList,
+  RefreshCw,
+  RotateCcw,
+  User,
+} from 'lucide-react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { MODEL_DISPLAY } from './lib/model-display';
+import { getStatusBadgeVariant } from './lib/status-variant';
+import { cn } from './lib/utils';
 import { Badge } from './primitives/badge';
 import { Button, buttonVariants } from './primitives/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './primitives/select';
@@ -55,6 +67,10 @@ interface KanbanBoardProps {
    * this undefined and lets the browser follow the `<a href>`.
    */
   onOpenExternal?: (url: string) => void;
+  /** Called when user clicks Archive on a single completed issue card. */
+  onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
+  /** Called when user clicks Archive all in the Done column header. */
+  onArchiveAllDone?: () => void;
 }
 
 type ColumnKey = 'todo' | 'agent' | 'human' | 'done';
@@ -158,15 +174,51 @@ const ACTIVE_STATUSES: IssuePipelineStatus[] = [
   'shipping',
 ];
 
+// Statuses where "time in phase" is meaningful. Completed/failed are terminal,
+// todo/queued haven't been picked up yet.
+const PHASE_ELAPSED_STATUSES: IssuePipelineStatus[] = [
+  'planning',
+  'reviewing',
+  'revising',
+  'awaiting_approval',
+  'executing',
+  'verifying',
+  'shipping',
+];
+
+function formatPhaseElapsed(since: number): string {
+  const s = Math.max(0, Math.floor((Date.now() - since) / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${s % 60}s`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${m % 60}m`;
+}
+
+// Live-ticking label showing how long a card has been in its current phase.
+// Re-renders every second so the desktop app's Kanban view stays honest about
+// how long work has been waiting on the agent.
+function PhaseElapsed({ since }: { since: number }) {
+  const [label, setLabel] = useState(() => formatPhaseElapsed(since));
+  useEffect(() => {
+    setLabel(formatPhaseElapsed(since));
+    const id = setInterval(() => setLabel(formatPhaseElapsed(since)), 1000);
+    return () => clearInterval(id);
+  }, [since]);
+  return <span className="font-mono tabular-nums text-[10px] text-muted">{label}</span>;
+}
+
 function DraggableCard({
   issue,
   onClick,
   onRerun,
+  onArchiveIssue,
   isSelected,
 }: {
   issue: GitHubIssueCacheRecord;
   onClick: () => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
+  onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
   isSelected?: boolean;
 }) {
   const draggable = DRAGGABLE_STATUSES.includes(issue.pipelineStatus);
@@ -179,21 +231,40 @@ function DraggableCard({
   const isFailed = issue.pipelineStatus === 'failed';
   const isAwaiting = issue.pipelineStatus === 'awaiting_approval';
   const isActive = ACTIVE_STATUSES.includes(issue.pipelineStatus);
+  const showPhaseElapsed =
+    PHASE_ELAPSED_STATUSES.includes(issue.pipelineStatus) && !!issue.lastPhaseUpdate;
+  const phaseSince =
+    showPhaseElapsed && issue.lastPhaseUpdate ? new Date(issue.lastPhaseUpdate).getTime() : 0;
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: dnd-kit's useDraggable provides keyboard accessibility via listeners/attributes spread below
+    // biome-ignore lint/a11y/useKeyWithClickEvents: dnd-kit KeyboardSensor handles activation; the onClick only forwards selection on pointer click
     <div
       ref={setNodeRef}
       className={cn(
         'group relative rounded-md border bg-elevated p-2 transition-colors outline-none',
         draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-default',
-        isSelected && !isFailed && !isAwaiting
+        isSelected && !isFailed && !isAwaiting && !isActive
           ? 'border-text-primary/60 bg-elevated'
-          : !isSelected
+          : !isSelected && !isActive
             ? 'border-border/50 hover:border-border-strong'
             : '',
-        isFailed && (isSelected ? 'border-danger bg-danger/[0.07]' : 'border-danger/40 bg-danger/[0.04] hover:border-danger/60'),
-        isAwaiting && (isSelected ? 'border-warning bg-warning/[0.07]' : 'border-warning/30 bg-warning/[0.03] hover:border-warning/50'),
-        isActive && !isSelected && 'border-accent/40 bg-accent/[0.03]',
+        isFailed &&
+          (isSelected
+            ? 'border-danger bg-danger/[0.07]'
+            : 'border-danger/40 bg-danger/[0.04] hover:border-danger/60'),
+        isAwaiting &&
+          (isSelected
+            ? 'border-warning bg-warning/[0.07]'
+            : 'border-warning/30 bg-warning/[0.03] hover:border-warning/50'),
+        // Agent-active cards use the dedicated `--agent` violet so they are
+        // visually distinct from failed (red), awaiting (amber), and selected
+        // (white). Lower opacity than failed/awaiting because agent work is
+        // informational — the user is not being asked to act.
+        isActive &&
+          (isSelected
+            ? 'border-agent/70 bg-agent/[0.06]'
+            : 'border-agent/40 bg-agent/[0.03] hover:border-agent/60'),
         isDragging && 'opacity-50',
       )}
       {...listeners}
@@ -204,12 +275,16 @@ function DraggableCard({
       }}
     >
       {isActive && (
-        <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
+        <span className="absolute top-1.5 right-1.5 flex h-2 w-2 items-center justify-center">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-agent opacity-60" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-agent" />
+        </span>
       )}
       {isFailed && onRerun && (
-        <button
-          type="button"
-          className="absolute top-1.5 right-1.5 rounded p-0.5 text-danger/60 hover:text-danger hover:bg-danger/10 transition-colors"
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="absolute top-1.5 right-1.5 text-danger/60 hover:bg-danger/10 hover:text-danger"
           title="Re-run pipeline"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
@@ -217,8 +292,23 @@ function DraggableCard({
             onRerun(issue);
           }}
         >
-          <RotateCcw size={11} />
-        </button>
+          <RotateCcw size={14} />
+        </Button>
+      )}
+      {issue.pipelineStatus === 'completed' && onArchiveIssue && (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="absolute top-1.5 right-1.5 text-muted/60 hover:bg-muted/10 hover:text-muted opacity-0 group-hover:opacity-100 transition-opacity"
+          title="Archive issue"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onArchiveIssue(issue);
+          }}
+        >
+          <Archive size={14} />
+        </Button>
       )}
       <div className="text-[11px] text-secondary font-mono mb-0.5">#{issue.issueNumber}</div>
       <div className="text-xs leading-snug text-primary font-medium line-clamp-2">
@@ -243,18 +333,31 @@ function DraggableCard({
             {issue.pipelineStatus}
           </Badge>
         )}
-        <button
-          type="button"
-          className="ml-auto opacity-0 group-hover:opacity-100 rounded p-0.5 text-muted hover:text-primary hover:bg-elevated transition-all"
-          title="Open issue detail"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            onClick();
-          }}
-        >
-          <ExternalLink size={10} />
-        </button>
+        <div className="ml-auto flex items-center gap-1.5">
+          {showPhaseElapsed && <PhaseElapsed since={phaseSince} />}
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              'h-4 w-4 opacity-0 transition-all group-hover:opacity-100 hover:bg-elevated',
+              isFailed
+                ? 'text-danger/60 hover:text-danger'
+                : isAwaiting
+                  ? 'text-warning/60 hover:text-warning'
+                  : isActive
+                    ? 'text-agent/60 hover:text-agent'
+                    : 'text-muted hover:text-primary',
+            )}
+            title="Open issue detail"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClick();
+            }}
+          >
+            <ChevronRight size={10} />
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -267,6 +370,8 @@ function DroppableColumn({
   droppable,
   onIssueClick,
   selectedIssueNumber,
+  onArchiveAllDone,
+  onArchiveIssue,
 }: {
   id: string;
   label: string;
@@ -274,6 +379,8 @@ function DroppableColumn({
   droppable: boolean;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
   selectedIssueNumber?: number;
+  onArchiveAllDone?: () => void;
+  onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id, disabled: !droppable });
 
@@ -287,9 +394,22 @@ function DroppableColumn({
     >
       <div className="flex items-center justify-between px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-primary border-b border-border shrink-0">
         <span>{label}</span>
-        <span className="text-[10px] bg-tertiary text-muted px-1.5 py-px rounded-full font-medium">
-          {issues.length}
-        </span>
+        <div className="flex items-center gap-1">
+          {onArchiveAllDone && issues.length > 0 && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="text-muted/60 hover:text-muted hover:bg-muted/10"
+              title="Archive all done issues"
+              onClick={onArchiveAllDone}
+            >
+              <Archive size={12} />
+            </Button>
+          )}
+          <span className="text-[10px] bg-tertiary text-muted px-1.5 py-px rounded-full font-medium">
+            {issues.length}
+          </span>
+        </div>
       </div>
       <div className="flex-1 overflow-y-auto p-1.5 flex flex-col gap-1 min-h-[60px]">
         {issues.map((issue) => (
@@ -298,6 +418,7 @@ function DroppableColumn({
             issue={issue}
             onClick={() => onIssueClick(issue)}
             isSelected={issue.issueNumber === selectedIssueNumber}
+            onArchiveIssue={onArchiveIssue}
           />
         ))}
       </div>
@@ -466,52 +587,93 @@ const customCollisionDetection: CollisionDetection = (args: Parameters<Collision
 };
 
 // ─── List view ───────────────────────────────────────────────────────────────
+//
+// The list view mirrors the Kanban's column/section structure so users get the
+// same per-phase breakdown (Planning / Reviewing / Executing / Verifying) with
+// model labels and the purple `agent` tone on active rows — instead of a flat
+// "In Progress" bucket. COLUMNS is the single source of truth for both views.
 
-const LIST_GROUPS: { label: string; statuses: IssuePipelineStatus[]; dotClass: string }[] = [
-  {
-    label: 'In Progress',
-    statuses: ['planning', 'reviewing', 'revising', 'executing', 'verifying', 'shipping'],
-    dotClass: 'bg-accent',
-  },
-  { label: 'Todo',    statuses: ['todo', 'queued'],                    dotClass: 'bg-text-muted' },
-  { label: 'Blocked', statuses: ['awaiting_approval', 'failed'],       dotClass: 'bg-danger' },
-  { label: 'Done',    statuses: ['completed'],                         dotClass: 'bg-success' },
-];
+// Display override: "Agent Loop" reads as "In Progress" at the list level.
+const LIST_COLUMN_LABEL: Record<ColumnKey, string> = {
+  todo: 'Todo',
+  agent: 'In Progress',
+  human: 'Blocked',
+  done: 'Done',
+};
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+// Group-level drop targets. Only Todo + Agent Loop accept drops; mapping to the
+// ids `handleDragEnd` recognizes lets the existing transitions still fire from
+// the list view without touching pipeline code.
+const LIST_COLUMN_DROP_ID: Partial<Record<ColumnKey, string>> = {
+  todo: 'todo', // failed → todo (retry)
+  agent: 'agent:planning', // todo|failed → agent:planning (start/rerun)
+};
+
+type RowTone = 'default' | 'agent' | 'danger' | 'warning';
+
+function rowToneFor(status: IssuePipelineStatus): RowTone {
+  if (status === 'failed') return 'danger';
+  if (status === 'awaiting_approval') return 'warning';
+  if (ACTIVE_STATUSES.includes(status)) return 'agent';
+  return 'default';
 }
 
-// Drop target IDs used by handleDragEnd — must match Kanban section IDs
-const LIST_GROUP_DROP_ID: Record<string, string> = {
-  'In Progress': 'agent:planning',
-  'Todo': 'todo',
-  'Blocked': 'todo', // dropping onto Blocked → no-op (no valid transition)
-  'Done': 'done',    // dropping onto Done → no-op
-};
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
 
 interface DraggableListRowProps {
   issue: GitHubIssueCacheRecord;
-  dotClass: string;
   selectedIssueNumber?: number;
   activeId: string | null;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
+  onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
 }
 
-function DraggableListRow({ issue, dotClass, selectedIssueNumber, activeId, onIssueClick }: DraggableListRowProps) {
+function DraggableListRow({
+  issue,
+  selectedIssueNumber,
+  activeId,
+  onIssueClick,
+  onArchiveIssue,
+}: DraggableListRowProps) {
   const isDraggable = DRAGGABLE_STATUSES.includes(issue.pipelineStatus);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: issue.id,
     data: issue,
     disabled: !isDraggable,
   });
+  const isSelected = selectedIssueNumber === issue.issueNumber;
+  const tone = rowToneFor(issue.pipelineStatus);
+  const isActive = tone === 'agent';
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: dnd-kit's useDraggable provides keyboard accessibility via listeners/attributes spread below
+    // biome-ignore lint/a11y/useKeyWithClickEvents: dnd-kit KeyboardSensor handles activation; the onClick only forwards selection on pointer click
     <div
       ref={setNodeRef}
       className={cn(
-        'flex items-center gap-3 w-full text-left px-3 py-2 rounded-md transition-colors text-sm',
-        selectedIssueNumber === issue.issueNumber ? 'bg-accent/10 text-primary' : 'hover:bg-secondary text-primary',
+        'flex items-center gap-3 w-full text-left pl-3 pr-3 py-2 rounded-md border-l-2 transition-colors text-sm',
+        tone === 'default' &&
+          (isSelected
+            ? 'border-transparent bg-accent/10 text-primary'
+            : 'border-transparent hover:bg-secondary text-primary'),
+        tone === 'agent' &&
+          (isSelected
+            ? 'border-agent bg-agent/[0.08] text-primary'
+            : 'border-agent/60 bg-agent/[0.03] hover:bg-agent/[0.06] text-primary'),
+        tone === 'danger' &&
+          (isSelected
+            ? 'border-danger bg-danger/[0.08] text-primary'
+            : 'border-danger/60 bg-danger/[0.03] hover:bg-danger/[0.06] text-primary'),
+        tone === 'warning' &&
+          (isSelected
+            ? 'border-warning bg-warning/[0.08] text-primary'
+            : 'border-warning/60 bg-warning/[0.03] hover:bg-warning/[0.06] text-primary'),
         isDragging ? 'opacity-40' : '',
         isDraggable ? 'cursor-grab' : 'cursor-pointer',
         activeId && activeId !== issue.id ? 'pointer-events-none' : '',
@@ -519,7 +681,22 @@ function DraggableListRow({ issue, dotClass, selectedIssueNumber, activeId, onIs
       {...(isDraggable ? { ...attributes, ...listeners } : {})}
       onClick={!isDragging ? () => onIssueClick(issue) : undefined}
     >
-      <span className={cn('w-2 h-2 rounded-full shrink-0', dotClass)} />
+      {isActive ? (
+        <span className="relative flex h-2 w-2 shrink-0 items-center justify-center">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-agent opacity-60" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-agent" />
+        </span>
+      ) : (
+        <span
+          className={cn(
+            'w-2 h-2 rounded-full shrink-0',
+            tone === 'danger' && 'bg-danger',
+            tone === 'warning' && 'bg-warning',
+            tone === 'default' &&
+              (issue.pipelineStatus === 'completed' ? 'bg-success' : 'bg-text-muted'),
+          )}
+        />
+      )}
       <span className="font-mono text-xs text-secondary shrink-0">#{issue.issueNumber}</span>
       <span className="flex-1 truncate">{issue.title}</span>
       <span className="shrink-0 text-secondary text-xs flex items-center gap-1">
@@ -527,24 +704,122 @@ function DraggableListRow({ issue, dotClass, selectedIssueNumber, activeId, onIs
         {issue.assignee ?? '—'}
       </span>
       <span className="shrink-0 text-muted text-xs">{formatDate(issue.fetchedAt)}</span>
+      {issue.pipelineStatus === 'completed' && onArchiveIssue && (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="shrink-0 text-muted/50 hover:text-muted hover:bg-muted/10 opacity-0 group-hover:opacity-100 transition-opacity"
+          title="Archive issue"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onArchiveIssue(issue);
+          }}
+        >
+          <Archive size={12} />
+        </Button>
+      )}
+    </div>
+  );
+}
+
+interface ListSectionBlockProps {
+  columnKey: ColumnKey;
+  section: PhaseSection;
+  issues: GitHubIssueCacheRecord[];
+  allIssues: GitHubIssueCacheRecord[];
+  selectedIssueNumber?: number;
+  activeId: string | null;
+  onIssueClick: (issue: GitHubIssueCacheRecord) => void;
+}
+
+function ListSectionBlock({
+  columnKey,
+  section,
+  issues,
+  allIssues,
+  selectedIssueNumber,
+  activeId,
+  onIssueClick,
+}: ListSectionBlockProps) {
+  const count = issues.length;
+  const empty = count === 0;
+  const showAgent = columnKey === 'agent';
+  // Resolve executor per-issue; when the section is empty, fall back to any
+  // active thread's executor so the header still reads correctly, then default.
+  const agentLabel =
+    section.agent === 'executor'
+      ? (issues[0]?.executorModel ??
+        allIssues.find((i) => i.pipelineStatus === 'executing')?.executorModel ??
+        'claude')
+      : section.agent;
+
+  const tone: 'danger' | 'warning' | null =
+    section.key === 'failed' && !empty
+      ? 'danger'
+      : section.key === 'awaiting' && !empty
+        ? 'warning'
+        : null;
+
+  return (
+    <div>
+      <div
+        className={cn(
+          'flex items-center gap-1.5 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide',
+          empty && 'text-muted opacity-50',
+          !empty && !tone && 'text-secondary',
+          tone === 'danger' && 'text-danger',
+          tone === 'warning' && 'text-warning',
+        )}
+      >
+        <span>{section.label}</span>
+        {showAgent && (
+          <span className="font-mono normal-case text-[9px] font-normal text-muted">
+            · {MODEL_DISPLAY[agentLabel] ?? agentLabel}
+          </span>
+        )}
+        <span
+          className={cn(
+            'ml-1 text-[10px] bg-tertiary px-1.5 py-px rounded-full font-medium border border-transparent',
+            empty && 'text-muted/70',
+            !empty && !tone && 'text-muted',
+            tone === 'danger' && 'bg-danger/15 text-danger border-danger/25',
+            tone === 'warning' && 'bg-warning/15 text-warning border-warning/25',
+          )}
+        >
+          {count}
+        </span>
+      </div>
+      {!empty && (
+        <div className="flex flex-col gap-0.5">
+          {issues.map((issue) => (
+            <DraggableListRow
+              key={issue.id}
+              issue={issue}
+              selectedIssueNumber={selectedIssueNumber}
+              activeId={activeId}
+              onIssueClick={onIssueClick}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 interface DroppableListGroupProps {
-  label: string;
-  dropId: string;
-  children: React.ReactNode;
+  dropId?: string;
+  children: ReactNode;
 }
 
-function DroppableListGroup({ label: _label, dropId, children }: DroppableListGroupProps) {
-  const { setNodeRef, isOver } = useDroppable({ id: dropId });
+function DroppableListGroup({ dropId, children }: DroppableListGroupProps) {
+  const { setNodeRef, isOver } = useDroppable({ id: dropId ?? '__noop__', disabled: !dropId });
   return (
     <div
       ref={setNodeRef}
       className={cn(
         'flex flex-col gap-0.5 rounded-md transition-colors min-h-[2rem]',
-        isOver ? 'bg-accent/5 ring-1 ring-accent/20' : '',
+        dropId && isOver ? 'bg-accent/5 ring-1 ring-accent/20' : '',
       )}
     >
       {children}
@@ -557,45 +832,90 @@ interface IssueListViewProps {
   selectedIssueNumber?: number;
   activeId: string | null;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
+  onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
+  onArchiveAllDone?: () => void;
 }
 
-function IssueListView({ issues, selectedIssueNumber, activeId, onIssueClick }: IssueListViewProps) {
+function IssueListView({
+  issues,
+  selectedIssueNumber,
+  activeId,
+  onIssueClick,
+  onArchiveIssue,
+  onArchiveAllDone,
+}: IssueListViewProps) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const toggle = (label: string) => setCollapsed((c) => ({ ...c, [label]: !c[label] }));
+  const toggle = (key: string) => setCollapsed((c) => ({ ...c, [key]: !c[key] }));
 
   return (
     <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-      {LIST_GROUPS.map(({ label, statuses, dotClass }) => {
-        const groupIssues = issues.filter((i) => statuses.includes(i.pipelineStatus));
-        const isCollapsed = collapsed[label] ?? false;
-        const dropId = LIST_GROUP_DROP_ID[label];
+      {COLUMNS.map((col) => {
+        const label = LIST_COLUMN_LABEL[col.key];
+        const columnIssues = issues.filter((i) => col.statuses.includes(i.pipelineStatus));
+        const isCollapsed = collapsed[col.key] ?? false;
+        const dropId = LIST_COLUMN_DROP_ID[col.key];
         return (
-          <div key={label}>
-            <button
-              type="button"
-              className="flex items-center gap-2 text-xs font-semibold text-secondary uppercase tracking-wider mb-2 cursor-pointer hover:text-primary w-full text-left"
-              onClick={() => toggle(label)}
-            >
-              {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-              {label}
-              <span className="text-muted font-normal normal-case tracking-normal ml-0.5">
-                ({groupIssues.length})
-              </span>
-            </button>
+          <div key={col.key}>
+            <div className="mb-2 flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-auto flex-1 justify-start gap-2 px-0 text-xs font-semibold uppercase tracking-wider text-secondary hover:bg-transparent hover:text-primary"
+                onClick={() => toggle(col.key)}
+              >
+                {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                {label}
+                <span className="text-muted font-normal normal-case tracking-normal ml-0.5">
+                  ({columnIssues.length})
+                </span>
+              </Button>
+              {col.key === 'done' && onArchiveAllDone && columnIssues.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="text-muted/60 hover:text-muted hover:bg-muted/10"
+                  title="Archive all done issues"
+                  onClick={onArchiveAllDone}
+                >
+                  <Archive size={12} />
+                </Button>
+              )}
+            </div>
             {!isCollapsed && (
-              <DroppableListGroup label={label} dropId={dropId}>
-                {groupIssues.map((issue) => (
-                  <DraggableListRow
-                    key={issue.id}
-                    issue={issue}
-                    dotClass={dotClass}
-                    selectedIssueNumber={selectedIssueNumber}
-                    activeId={activeId}
-                    onIssueClick={onIssueClick}
-                  />
-                ))}
-                {groupIssues.length === 0 && (
-                  <p className="text-xs text-muted pl-2 py-1">No issues</p>
+              <DroppableListGroup dropId={dropId}>
+                {col.sections ? (
+                  <div className="flex flex-col gap-2">
+                    {col.sections.map((section) => (
+                      <ListSectionBlock
+                        key={section.key}
+                        columnKey={col.key}
+                        section={section}
+                        issues={columnIssues.filter((i) =>
+                          section.statuses.includes(i.pipelineStatus),
+                        )}
+                        allIssues={issues}
+                        selectedIssueNumber={selectedIssueNumber}
+                        activeId={activeId}
+                        onIssueClick={onIssueClick}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <>
+                    {columnIssues.map((issue) => (
+                      <DraggableListRow
+                        key={issue.id}
+                        issue={issue}
+                        selectedIssueNumber={selectedIssueNumber}
+                        activeId={activeId}
+                        onIssueClick={onIssueClick}
+                        onArchiveIssue={col.key === 'done' ? onArchiveIssue : undefined}
+                      />
+                    ))}
+                    {columnIssues.length === 0 && (
+                      <p className="text-xs text-muted pl-2 py-1">No issues</p>
+                    )}
+                  </>
                 )}
               </DroppableListGroup>
             )}
@@ -624,6 +944,8 @@ export function KanbanBoard({
   repoUrl,
   projectsUrl,
   onOpenExternal,
+  onArchiveIssue,
+  onArchiveAllDone,
 }: KanbanBoardProps) {
   const handleExternalClick = (url: string) => (e: React.MouseEvent<HTMLAnchorElement>) => {
     if (onOpenExternal) {
@@ -665,7 +987,7 @@ export function KanbanBoard({
       issue.pipelineStatus === 'failed' &&
       (onRerun ?? onStartPipeline)
     ) {
-      (onRerun ?? onStartPipeline)!(issue);
+      (onRerun ?? onStartPipeline)?.(issue);
       return;
     }
     // 3. human → todo (retry failed → reset to queued)
@@ -690,7 +1012,7 @@ export function KanbanBoard({
         {(repoUrl || projectsUrl) && (
           <div className="flex items-center gap-1 shrink-0">
             {repoUrl && (
-              <Button asChild variant="pill" size="xs" title="Open repository on github.com">
+              <Button asChild variant="outline" size="xs" title="Open repository on github.com">
                 <a
                   href={repoUrl}
                   target="_blank"
@@ -703,7 +1025,7 @@ export function KanbanBoard({
               </Button>
             )}
             {projectsUrl && (
-              <Button asChild variant="pill" size="xs" title="Open Projects board on github.com">
+              <Button asChild variant="outline" size="xs" title="Open Projects board on github.com">
                 <a
                   href={projectsUrl}
                   target="_blank"
@@ -722,7 +1044,9 @@ export function KanbanBoard({
           {baseBranch && branches && branches.length > 0 && onBaseBranchChange && (
             <div className="flex items-center min-w-0 max-w-[200px] shrink-0">
               <Select value={baseBranch} onValueChange={onBaseBranchChange}>
-                <SelectTrigger className={cn(buttonVariants({ variant: 'pill', size: 'xs' }), 'font-mono')}>
+                <SelectTrigger
+                  className={cn(buttonVariants({ variant: 'pill', size: 'xs' }), 'font-mono')}
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -736,45 +1060,35 @@ export function KanbanBoard({
             </div>
           )}
           <div className="flex items-center border border-border rounded-md overflow-hidden shrink-0">
-            <button
-              type="button"
-              className={cn(
-                'flex items-center justify-center h-7 w-7 cursor-pointer transition-colors',
-                view === 'list' ? 'bg-secondary text-primary' : 'bg-transparent text-secondary hover:text-primary',
-              )}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className={cn('rounded-none', view === 'list' && 'bg-secondary text-primary')}
               onClick={() => setView('list')}
               title="List view"
             >
-              <LayoutList size={13} />
-            </button>
-            <button
-              type="button"
+              <LayoutList size={14} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
               className={cn(
-                'flex items-center justify-center h-7 w-7 cursor-pointer transition-colors border-l border-border',
-                view === 'kanban' ? 'bg-secondary text-primary' : 'bg-transparent text-secondary hover:text-primary',
+                'rounded-none border-l border-border',
+                view === 'kanban' && 'bg-secondary text-primary',
               )}
               onClick={() => setView('kanban')}
               title="Board view"
             >
-              <LayoutGrid size={13} />
-            </button>
+              <LayoutGrid size={14} />
+            </Button>
           </div>
-          <button
-            type="button"
-            className="flex items-center justify-center h-7 w-7 bg-transparent border border-border rounded-md text-secondary cursor-pointer hover:text-primary hover:border-text-secondary"
-            onClick={onRefresh}
-            title="Refresh"
-          >
-            <RefreshCw size={13} />
-          </button>
+          <Button variant="outline" size="icon-sm" onClick={onRefresh} title="Refresh">
+            <RefreshCw size={14} />
+          </Button>
           {onNewIssue && (
-            <button
-              type="button"
-              className="bg-accent text-accent-foreground rounded-md cursor-pointer px-2.5 py-1 text-xs font-medium hover:bg-accent-hover shadow-[inset_0_0_0_1px_rgba(0,0,0,0.08)]"
-              onClick={onNewIssue}
-            >
+            <Button size="sm" onClick={onNewIssue}>
               + New PRD
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -789,6 +1103,8 @@ export function KanbanBoard({
             selectedIssueNumber={selectedIssueNumber}
             activeId={activeId}
             onIssueClick={onIssueClick}
+            onArchiveIssue={onArchiveIssue}
+            onArchiveAllDone={onArchiveAllDone}
           />
         )}
         {view === 'kanban' && (
@@ -816,6 +1132,8 @@ export function KanbanBoard({
                   droppable={!!col.droppable}
                   onIssueClick={onIssueClick}
                   selectedIssueNumber={selectedIssueNumber}
+                  onArchiveAllDone={col.key === 'done' ? onArchiveAllDone : undefined}
+                  onArchiveIssue={col.key === 'done' ? onArchiveIssue : undefined}
                 />
               );
             })}

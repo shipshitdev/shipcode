@@ -1,30 +1,32 @@
-export { cn } from './lib/utils';
-export { getStatusBadgeVariant } from './lib/status-variant';
-export type { StatusBadgeVariant } from './lib/status-variant';
-export { MODEL_DISPLAY, modelDisplay } from './lib/model-display';
-
 // Icons — re-exported from lucide-react so apps import via @shipcode/ui
 export {
+  Activity,
   Archive,
   ArrowRight,
-  Copy,
   ArrowUpDown,
+  Bell,
   Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  Copy,
+  DollarSign,
   ExternalLink,
   Folder,
   Globe,
+  Inbox,
+  Keyboard,
   Layers,
-  Lock,
+  LayoutGrid,
   Loader2,
+  Lock,
   Maximize2,
   Minimize2,
   MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
+  Pencil,
   Pin,
   PinOff,
   Plus,
@@ -33,13 +35,24 @@ export {
   Sparkles,
   Terminal,
   Trash2,
+  Workflow,
+  Wrench,
   X,
 } from 'lucide-react';
-
+export { DiffViewer } from './DiffViewer';
+export { IssueCard } from './IssueCard';
+export { KanbanBoard } from './KanbanBoard';
+export { MODEL_DISPLAY, modelDisplay } from './lib/model-display';
+export type { StatusBadgeVariant } from './lib/status-variant';
+export { getStatusBadgeVariant } from './lib/status-variant';
+export { cn } from './lib/utils';
+// Domain components
+export { PipelineStatus } from './PipelineStatus';
+export { PlanViewer } from './PlanViewer';
+export { Alert, AlertDescription, AlertTitle, alertVariants } from './primitives/alert';
+export { Badge, badgeVariants } from './primitives/badge';
 // Primitives (more added incrementally as tasks need them)
 export { Button, buttonVariants } from './primitives/button';
-export { Input } from './primitives/input';
-export { Badge, badgeVariants } from './primitives/badge';
 export {
   Card,
   CardContent,
@@ -48,29 +61,7 @@ export {
   CardHeader,
   CardTitle,
 } from './primitives/card';
-export { Alert, AlertTitle, AlertDescription, alertVariants } from './primitives/alert';
-export { Label } from './primitives/label';
-export { Textarea } from './primitives/textarea';
-export { Switch } from './primitives/switch';
-export {
-  Table,
-  TableBody,
-  TableCaption,
-  TableCell,
-  TableFooter,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from './primitives/table';
-export {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from './primitives/dialog';
+export { Checkbox } from './primitives/checkbox';
 export {
   Command,
   CommandDialog,
@@ -82,24 +73,40 @@ export {
   CommandSeparator,
   CommandShortcut,
 } from './primitives/command';
-export { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './primitives/select';
+export {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from './primitives/dialog';
 export {
   DropdownMenu,
-  DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from './primitives/dropdown-menu';
-export { Pagination } from './primitives/pagination';
+export { Input } from './primitives/input';
+export { Label } from './primitives/label';
 export type { PaginationProps } from './primitives/pagination';
+export { Pagination } from './primitives/pagination';
+export { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './primitives/select';
 export { SettingsRow } from './primitives/settings-row';
-
-// Domain components
-export { PipelineStatus } from './PipelineStatus';
-export { PlanViewer } from './PlanViewer';
+export { Switch } from './primitives/switch';
+export {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from './primitives/table';
+export { Textarea } from './primitives/textarea';
 export { ReviewViewer } from './ReviewViewer';
-export { VerificationViewer } from './VerificationViewer';
-export { KanbanBoard } from './KanbanBoard';
-export { IssueCard } from './IssueCard';
-export { DiffViewer } from './DiffViewer';
 export { StatusMappingEditor } from './StatusMappingEditor';
+export { VerificationViewer } from './VerificationViewer';

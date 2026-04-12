@@ -1,5 +1,6 @@
 import {
   Button,
+  cn,
   Globe,
   Input,
   Lock,
@@ -142,14 +143,15 @@ export function StepGitHubProject({ selectedRepo, onSelect }: Props) {
           <div className="flex flex-col gap-1 max-h-60 overflow-y-auto mb-3">
             {filteredRepos.length > 0 ? (
               filteredRepos.map((repo) => (
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
                   key={repo.name}
-                  className={`flex items-center gap-2 w-full text-left rounded-md px-3 py-2 font-mono text-[13px] cursor-pointer transition-colors border ${
+                  className={cn(
+                    'h-auto w-full justify-start gap-2 rounded-md border px-3 py-2 font-mono text-[13px] font-normal',
                     selectedRepo === repo.name
                       ? 'border-accent bg-accent/10 text-primary'
-                      : 'border-transparent bg-tertiary text-primary hover:border-text-muted'
-                  }`}
+                      : 'border-transparent bg-tertiary text-primary hover:border-text-muted',
+                  )}
                   onClick={() => onSelect(repo.name)}
                 >
                   {repo.private ? (
@@ -158,7 +160,7 @@ export function StepGitHubProject({ selectedRepo, onSelect }: Props) {
                     <Globe size={12} className="shrink-0 text-muted" />
                   )}
                   {repo.name}
-                </button>
+                </Button>
               ))
             ) : (
               <div className="py-6 text-center text-muted">No matching repositories.</div>

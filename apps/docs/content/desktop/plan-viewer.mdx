@@ -1,0 +1,30 @@
+# Plan Viewer
+
+The Plan Viewer is the component that renders a generated pipeline plan — structured sections, rationale, affected files, acceptance criteria — with syntax-highlighted code blocks and a full-screen mode for reading long plans.
+
+It lives in [`packages/ui/src/`](https://github.com/shipshitdev/shipcode/tree/master/packages/ui/src) as a shared primitive and is mounted inline in the IssueDetail overlay at [`apps/desktop/src/renderer/components/IssueDetail.tsx`](https://github.com/shipshitdev/shipcode/blob/master/apps/desktop/src/renderer/components/IssueDetail.tsx#L632).
+
+## Inline vs full-screen
+
+The viewer renders in two modes:
+
+1. **Inline** — embedded directly in the IssueDetail overlay, collapsed by default, expandable to fit the available space.
+2. **Full-screen** — click the `Maximize2` icon on a plan row to open a full-window Dialog with the same content at maximum width. This is the mode to use when reviewing a long plan or comparing plan vs review side-by-side.
+
+The full-screen mode was added in Session 24 specifically to make long plans readable without squinting.
+
+## What the viewer renders
+
+- **Plan version** — ShipCode keeps every planner output as a versioned `PlanRecord` row; the viewer shows which version you're reading
+- **Sections** — parsed from the structured `ShipCodePlan` shape: summary, affected files, implementation steps, risks, acceptance criteria
+- **Rationale blocks** — reviewer comments inlined next to the section they pertain to, when a review round exists
+- **Raw markdown fallback** — if structural parsing fails, the viewer falls back to rendering the raw planner output as plain markdown so you never lose visibility
+
+## Review pairing
+
+When a thread has both a plan and a review, the full-screen viewer shows them side-by-side — plan on the left, reviewer critique on the right — so you can read the adversarial pass in context without scrolling between panes.
+
+## Related
+
+- [Pipeline Overview](/pipeline/overview) — what the plan, review, and revise phases do
+- [Kanban Board](/desktop/kanban) — where you click into IssueDetail to reach the viewer

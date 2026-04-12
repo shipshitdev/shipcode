@@ -1,0 +1,40 @@
+/* ShipCode docs — visual polish on top of nextra-theme-docs defaults */
+
+:root {
+  --nextra-primary-hue: 262deg;
+  --nextra-primary-saturation: 70%;
+}
+
+/* Tighter, more distinct sidebar */
+.nextra-sidebar-container {
+  border-right: 1px solid var(--x-color-gray-200);
+}
+
+/* Slightly more prominent h1 on index/landing pages */
+article h1:first-child {
+  font-size: 2.25rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  margin-bottom: 0.5rem;
+}
+
+/* Tighter paragraph spacing under h1 */
+article h1:first-child + p {
+  font-size: 1.05rem;
+  opacity: 0.75;
+  margin-top: 0;
+}
+
+/* Make table look sharper */
+article table {
+  font-size: 0.9rem;
+}
+
+article table th {
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  opacity: 0.65;
+}

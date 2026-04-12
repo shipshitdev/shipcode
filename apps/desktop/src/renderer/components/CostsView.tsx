@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import type { CostSummary, PipelinePhase } from '@shipcode/shared';
+import type { CostSummary, GitHubIssueCacheRecord, PipelinePhase } from '@shipcode/shared';
 import {
+  Button,
   Card,
   CardContent,
   Loader2,
@@ -11,6 +12,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  cn,
 } from '@shipcode/ui';
 import { useAppStore } from '../stores/app-store';
 
@@ -20,6 +22,16 @@ function formatCost(usd: number): string {
   return `$${usd.toFixed(2)}`;
 }
 
+function formatDateTime(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 function formatTokens(n: number): string {
   if (n === 0) return '—';
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -27,24 +39,51 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
+// See DashboardView for why all 6 agent phases share one color.
+const AGENT_PHASE_CLASSES = 'bg-agent/10 text-agent border-agent/25';
+
 const PHASE_COLOR: Partial<Record<PipelinePhase, string>> = {
-  planning: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-  reviewing: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
-  revising: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
-  awaiting_approval: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
-  executing: 'bg-accent/15 text-accent border-accent/30',
-  verifying: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
-  shipping: 'bg-green-500/15 text-green-400 border-green-500/30',
-  completed: 'bg-green-500/15 text-green-400 border-green-500/30',
-  failed: 'bg-red-500/15 text-red-400 border-red-500/30',
+  planning: AGENT_PHASE_CLASSES,
+  reviewing: AGENT_PHASE_CLASSES,
+  revising: AGENT_PHASE_CLASSES,
+  executing: AGENT_PHASE_CLASSES,
+  verifying: AGENT_PHASE_CLASSES,
+  shipping: AGENT_PHASE_CLASSES,
+  awaiting_approval: 'bg-warning/15 text-warning border-warning/30',
+  completed: 'bg-success/15 text-success border-success/30',
+  failed: 'bg-danger/15 text-danger border-danger/30',
   idle: 'bg-secondary text-muted border-border',
 };
 
 type DisplayMode = '$' | 'tokens';
 
 export function CostsView() {
-  const { selectIssue } = useAppStore();
-  const [displayMode, setDisplayMode] = useState<DisplayMode>('$');
+  const { selectProject, selectThread, selectIssue, setGithubIssues } = useAppStore();
+  // Default to tokens because token counts are exact for every provider,
+  // whereas USD amounts are only real for OpenRouter (billed) and are
+  // best-effort estimates for Claude/Codex CLI runs priced from published rates.
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('tokens');
+  const [navigatingThreadId, setNavigatingThreadId] = useState<string | null>(null);
+
+  // Click-through from the Top Tasks table: switch project, fetch its issues,
+  // and open the IssueDetail sidebar for the matching threadId. The previous
+  // implementation called selectIssue(null) which closed the panel instead of
+  // opening it.
+  const goToTask = async (projectId: string, threadId: string) => {
+    setNavigatingThreadId(threadId);
+    try {
+      selectProject(projectId);
+      selectThread(threadId);
+      const issues = await window.shipcode.invoke<GitHubIssueCacheRecord[]>('github:list-issues', {
+        projectId,
+      });
+      setGithubIssues(issues);
+      const match = issues.find((i) => i.threadId === threadId) ?? null;
+      if (match) selectIssue(match);
+    } finally {
+      setNavigatingThreadId(null);
+    }
+  };
 
   const { data, isLoading, isError, refetch } = useQuery<CostSummary>({
     queryKey: ['costs-summary'],
@@ -62,28 +101,40 @@ export function CostsView() {
       <div className="flex items-center justify-between border-b border-border px-6 py-4">
         <div>
           <h1 className="text-base font-semibold text-primary">Costs</h1>
-          <p className="text-xs text-muted">Token spend across all projects and tasks.</p>
+          <p className="text-xs text-muted">
+            {displayMode === 'tokens'
+              ? 'Token spend across all projects and tasks. Exact counts for every provider.'
+              : 'USD estimates for Claude / Codex CLI runs from published pricing — only OpenRouter amounts are real billing.'}
+          </p>
         </div>
         <div className="flex items-center rounded-md border border-border bg-secondary p-0.5 text-[11px]">
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="xs"
             onClick={() => setDisplayMode('$')}
-            className={`rounded px-2.5 py-1 transition-colors ${displayMode === '$' ? 'bg-tertiary text-primary font-medium' : 'text-muted hover:text-primary'}`}
+            className={cn(
+              displayMode === '$' ? 'bg-tertiary text-primary font-medium' : 'text-muted',
+            )}
+            aria-label="Show costs in US dollars"
           >
-            $
-          </button>
-          <button
-            type="button"
+            USD
+          </Button>
+          <Button
+            variant="ghost"
+            size="xs"
             onClick={() => setDisplayMode('tokens')}
-            className={`rounded px-2.5 py-1 transition-colors ${displayMode === 'tokens' ? 'bg-tertiary text-primary font-medium' : 'text-muted hover:text-primary'}`}
+            className={cn(
+              displayMode === 'tokens' ? 'bg-tertiary text-primary font-medium' : 'text-muted',
+            )}
+            aria-label="Show costs in tokens"
           >
-            tokens
-          </button>
+            Tokens
+          </Button>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-6">
-        <div className="mx-auto max-w-3xl space-y-6">
+        <div className="max-w-5xl space-y-6">
           {isLoading && (
             <div className="flex items-center justify-center py-16">
               <Loader2 size={20} className="animate-spin text-muted" />
@@ -93,13 +144,9 @@ export function CostsView() {
           {isError && (
             <div className="flex flex-col items-center gap-3 py-16 text-center">
               <p className="text-sm text-secondary">Failed to load cost data.</p>
-              <button
-                type="button"
-                className="rounded-md border border-border bg-secondary px-3 py-1.5 text-xs text-primary hover:bg-hover"
-                onClick={() => refetch()}
-              >
+              <Button variant="secondary" size="sm" onClick={() => refetch()}>
                 Retry
-              </button>
+              </Button>
             </div>
           )}
 
@@ -189,6 +236,7 @@ export function CostsView() {
                           <TableRow>
                             <TableHead>Task</TableHead>
                             <TableHead>Phase</TableHead>
+                            <TableHead>Date</TableHead>
                             <TableHead className="text-right">
                               {displayMode === '$' ? 'Cost' : 'Tokens'}
                             </TableHead>
@@ -198,8 +246,11 @@ export function CostsView() {
                           {data.recentByTask.map((t) => (
                             <TableRow
                               key={t.threadId}
-                              className="cursor-pointer hover:bg-hover"
-                              onClick={() => selectIssue(null)}
+                              className={cn(
+                                'cursor-pointer hover:bg-hover',
+                                navigatingThreadId === t.threadId && 'opacity-60',
+                              )}
+                              onClick={() => goToTask(t.projectId, t.threadId)}
                             >
                               <TableCell>
                                 <div className="font-medium text-primary truncate max-w-[260px]">
@@ -214,6 +265,9 @@ export function CostsView() {
                                   {t.phase.replace(/_/g, ' ')}
                                 </span>
                               </TableCell>
+                              <TableCell className="text-[11px] text-muted whitespace-nowrap">
+                                {t.updatedAt ? formatDateTime(t.updatedAt) : '—'}
+                              </TableCell>
                               <TableCell className="text-right font-mono text-xs text-primary">
                                 {displayValue(t.costUsd, t.tokensPrompt + t.tokensCompletion)}
                               </TableCell>
@@ -226,11 +280,6 @@ export function CostsView() {
                 )}
               </section>
 
-              {/* Footer note */}
-              <p className="text-center text-[11px] text-muted">
-                Dollar costs require OpenRouter. Token counts are tracked for all providers (Claude,
-                Codex, OpenRouter).
-              </p>
             </>
           )}
         </div>

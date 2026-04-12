@@ -81,39 +81,44 @@ describe('buildClaudeArgs', () => {
 });
 
 describe('buildCodexArgs', () => {
-  it('review phase (non-autonomous) mirrors pipeline.ts:163', () => {
+  // codex v0.120.0: top-level flags (-a, -c) BEFORE the `exec` subcommand;
+  // subcommand flags (--sandbox, --json) AFTER the prompt.
+  it('review phase (non-autonomous) puts -a never before exec', () => {
     expect(buildCodexArgs(req({ phase: 'review' }))).toEqual([
-      '-q',
+      '-a',
+      'never',
+      'exec',
       'PROMPT',
       '--sandbox',
       'read-only',
-      '-a',
-      'never',
+      '--json',
     ]);
   });
 
-  it('review phase (autonomous) adds --reasoning-effort high', () => {
+  it('review phase (autonomous) sets reasoning effort via -c model_reasoning_effort', () => {
     const args = buildCodexArgs(req({ phase: 'review', phaseHints: { reasoningEffort: 'high' } }));
     expect(args).toEqual([
-      '-q',
+      '-a',
+      'never',
+      '-c',
+      'model_reasoning_effort=high',
+      'exec',
       'PROMPT',
       '--sandbox',
       'read-only',
-      '-a',
-      'never',
-      '--reasoning-effort',
-      'high',
+      '--json',
     ]);
   });
 
-  it('execute phase mirrors pipeline.ts:301', () => {
+  it('execute phase puts -a never before exec', () => {
     expect(buildCodexArgs(req({ phase: 'execute' }))).toEqual([
-      '-q',
+      '-a',
+      'never',
+      'exec',
       'PROMPT',
       '--sandbox',
       'workspace-write',
-      '-a',
-      'never',
+      '--json',
     ]);
   });
 });
@@ -235,7 +240,15 @@ describe('createCodexCliProvider', () => {
     await new Promise((r) => setImmediate(r));
 
     expect(spawnCalls[0].command).toBe('codex');
-    expect(spawnCalls[0].args).toEqual(['-q', 'PROMPT', '--sandbox', 'read-only', '-a', 'never']);
+    expect(spawnCalls[0].args).toEqual([
+      '-a',
+      'never',
+      'exec',
+      'PROMPT',
+      '--sandbox',
+      'read-only',
+      '--json',
+    ]);
 
     await trigger('exit', 'proc-1', 0);
     const result = await promise;
@@ -243,7 +256,7 @@ describe('createCodexCliProvider', () => {
     expect(result.resolvedModel).toBe('codex');
   });
 
-  it('review phase with reasoningEffort hint adds --reasoning-effort high', async () => {
+  it('review phase with reasoningEffort hint sets -c model_reasoning_effort=high', async () => {
     const { pm, trigger, spawnCalls } = createMockProcessManager();
     const provider = createCodexCliProvider(pm);
 
@@ -252,8 +265,8 @@ describe('createCodexCliProvider', () => {
     );
     await new Promise((r) => setImmediate(r));
 
-    expect(spawnCalls[0].args).toContain('--reasoning-effort');
-    expect(spawnCalls[0].args).toContain('high');
+    expect(spawnCalls[0].args).toContain('-c');
+    expect(spawnCalls[0].args).toContain('model_reasoning_effort=high');
 
     await trigger('exit', 'proc-1', 0);
     await promise;

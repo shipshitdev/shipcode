@@ -1,32 +1,48 @@
 # ShipCode
 
-Autonomous AI coding pipeline. GitHub issues in, pull requests out.
+**Autonomous AI coding pipeline.** GitHub issues in, pull requests out.
 
-## What is ShipCode?
+Label a GitHub issue with `agent:claude`, `agent:codex`, `agent:openrouter`, `agent:openrouter/auto`, or `agent:openrouter/free`. ShipCode does the rest — plan, adversarial review, implement, verify, ship a PR — with no human gates until the pull request is created.
 
-ShipCode turns GitHub issues into pull requests autonomously. Label an issue with `agent:claude` or `agent:codex`, and ShipCode handles planning, adversarial review, implementation, verification, and PR creation.
+## Install
 
-## Quick Start
+ShipCode ships as two separate products that share the same pipeline engine. Most users only need **one** of them.
 
-```bash
-# CLI (requires Node.js >= 22.5.0)
-npx shipcode onboard
-npx shipcode run 42
-```
-
-Or run the desktop app:
+**Desktop app (macOS)** — recommended if you want the GUI:
 
 ```bash
-git clone https://github.com/shipshitdev/shipcode
-cd shipcode
-bun install
-bun run dev:desktop
+brew tap shipshitdev/shipcode
+brew install --cask shipcode
 ```
+
+**CLI** — for terminal, CI, cron jobs, and headless environments:
+
+```bash
+# Run once without installing
+npx @shipshitdev/shipcode onboard
+
+# Or install globally
+npm install -g @shipshitdev/shipcode
+shipcode onboard
+shipcode run 42
+```
+
+See [Getting Started](/getting-started) for prerequisites and [CLI vs Desktop](/cli) for which one fits your workflow.
 
 ## How it works
 
-1. **Plan** — Opus 4.6 rewrites the issue into a spec and structured plan
-2. **Review** — Codex critiques the plan with high reasoning (max 2 rounds)
-3. **Execute** — Routed model implements in an isolated git worktree
-4. **Verify** — Opus checks the diff against acceptance criteria
-5. **Ship** — Push branch, create PR, link to issue
+| Phase | Default model | What happens |
+|-------|---------------|--------------|
+| **Plan** | Opus 4.6 | Rewrites the issue into a spec and structured plan |
+| **Review** | Codex (high reasoning) — set during onboarding | Adversarial critique, up to 2 rounds |
+| **Execute** | Routed per label (claude / codex / openrouter) — configurable in Settings | Implements in an isolated git worktree |
+| **Verify** | Opus 4.6 — set during onboarding | Checks the diff against acceptance criteria |
+| **Ship** | — | Pushes branch, creates PR, links to issue |
+
+## Why ShipCode?
+
+Most AI coding tools require you to stay in the loop. ShipCode runs the full pipeline unattended — planning through PR creation — while you work on something else.
+
+- **Adversarial review** catches bad plans before a single line is written
+- **Isolated worktrees** mean each pipeline run is sandboxed from your working tree
+- **Routed models** let you mix Claude, Codex, and OpenRouter models per phase

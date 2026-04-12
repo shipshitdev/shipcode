@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { nanoid } from 'nanoid';
-import type { Project } from '@shipcode/shared';
+import { ISO_NOW_SQL, toIsoUtc, type Project } from '@shipcode/shared';
 import path from 'node:path';
 
 export class ProjectQueries {
@@ -59,7 +59,7 @@ export class ProjectQueries {
     const existing = this.getByPath(projectPath);
     if (existing) {
       this.db
-        .prepare(`UPDATE projects SET archived = 0, updated_at = datetime('now') WHERE id = ?`)
+        .prepare(`UPDATE projects SET archived = 0, updated_at = ${ISO_NOW_SQL} WHERE id = ?`)
         .run(existing.id);
       return this.getById(existing.id)!;
     }
@@ -171,15 +171,29 @@ export class ProjectQueries {
   updateGitInfo(id: string, gitRemote: string | null, defaultBranch: string): void {
     this.db
       .prepare(
-        `UPDATE projects SET git_remote = ?, default_branch = ?, updated_at = datetime('now') WHERE id = ?`,
+        `UPDATE projects SET git_remote = ?, default_branch = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
       )
       .run(gitRemote, defaultBranch, id);
   }
 
   updateDefaultBranch(id: string, branch: string): void {
     this.db
-      .prepare(`UPDATE projects SET default_branch = ?, updated_at = datetime('now') WHERE id = ?`)
+      .prepare(`UPDATE projects SET default_branch = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`)
       .run(branch, id);
+  }
+
+  /**
+   * Set the per-project GitHub Projects v2 URL override. Pass `null` to clear
+   * (falls back to the repo Projects tab). Callers must validate the URL
+   * with `validateGithubProjectUrl` before reaching this query — the DB layer
+   * trusts what it gets.
+   */
+  updateGithubProjectUrl(id: string, url: string | null): void {
+    this.db
+      .prepare(
+        `UPDATE projects SET github_project_url = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
+      )
+      .run(url, id);
   }
 }
 
@@ -189,10 +203,11 @@ function mapProject(row: any): Project {
     name: row.name,
     path: row.path,
     gitRemote: row.git_remote,
+    githubProjectUrl: row.github_project_url ?? null,
     defaultBranch: row.default_branch,
     pinned: row.pinned === 1,
     archived: row.archived === 1,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    createdAt: toIsoUtc(row.created_at) ?? row.created_at,
+    updatedAt: toIsoUtc(row.updated_at) ?? row.updated_at,
   };
 }

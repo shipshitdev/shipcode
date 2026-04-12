@@ -25,11 +25,10 @@ Loaded after `~/.agents/memory/MEMORY.md` (global). Project-scoped facts only. F
 - **Grep-stable anchors:** `projectSlug`, `resolveWorktreeParent` in `packages/shared/src/worktree-path.ts`.
 - See: `project_worktree_defaults.md`.
 
-## Current branch (TEMPORARY)
+## Current state (2026-04-11)
 
-- `feat/openrouter-tier1` — extends `PipelineExecutorModel` with `"openrouter"`, adds `packages/agents/src/providers/`, plus parallel notifications/dashboard work.
-- Dirty: 25 modified + 8 untracked. Several LSP errors (see `project_current_branch.md` for the list).
-- **DELETE `project_current_branch.md` when this branch lands.**
+- **OpenRouter Tier 1/2/3 all shipped** in PR #9 (merged 2026-04-10). Provider abstraction, HTTP backend for plan/review/verify, in-process tool-call EXECUTE harness, and `openrouter/auto` meta-router with per-phase telemetry all live. Tracked under closed epic shipshitdev/shipcode#8 with sub-issues #20/#21/#22. PR #17 (2026-04-11) is a separate test-fix PR — do NOT conflate them.
+- **Pipeline phases can all route through OpenRouter.** Claude and codex CLIs still work unchanged. `AgentType = 'claude' | 'codex' | 'gh' | 'openrouter'`.
 
 ## Hard rules (from past incidents)
 
@@ -45,6 +44,6 @@ Loaded after `~/.agents/memory/MEMORY.md` (global). Project-scoped facts only. F
 
 ## Further reading
 
-- `project_shipcode_overview.md`, `project_pipeline_flow.md`, `project_worktree_defaults.md`, `project_current_branch.md`
+- `project_shipcode_overview.md`, `project_pipeline_flow.md`, `project_worktree_defaults.md`
 - `feedback_claude_cli_prompts_via_stdin.md`, `feedback_path_as_truth_worktrees.md`
 - `BATCH_2_CANDIDATES.md` — extraction backlog

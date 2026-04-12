@@ -4,6 +4,21 @@ import type { GitHubIssue, GitHubStatusLabel } from '@shipcode/shared';
 
 const execFileAsync = promisify(execFile);
 
+/**
+ * Detect whether a `gh project item-add` failure is the "already on the
+ * board" case, which we treat as success in addIssueToProject. The exact
+ * stderr text varies between gh versions; match a few known shapes
+ * conservatively (case-insensitive) to avoid false positives.
+ */
+function isAlreadyOnBoardError(stderr: string): boolean {
+  if (!stderr) return false;
+  return (
+    /already.*(in|on).*project/i.test(stderr) ||
+    /item.*already.*(added|exists)/i.test(stderr) ||
+    /already an item/i.test(stderr)
+  );
+}
+
 export class GhCli {
   constructor(private cwd: string) {}
 
@@ -44,11 +59,11 @@ export class GhCli {
         'issue',
         'list',
         '--state',
-        'open',
+        'all',
         '--json',
         'number,title,body,labels,assignees,state,url',
         '--limit',
-        '100',
+        '200',
       ],
       { cwd: this.cwd },
     );
@@ -116,6 +131,47 @@ export class GhCli {
     const match = stdout.match(/\/issues\/(\d+)/);
     if (!match) throw new Error(`Failed to parse issue number from: ${stdout}`);
     return this.getIssue(parseInt(match[1], 10));
+  }
+
+  /**
+   * Add an existing issue to a GitHub Projects v2 board, best-effort.
+   * Shells `gh project item-add <number> --owner <owner> --url <issueUrl>`.
+   *
+   * `--owner` accepts a bare login for both org and user Projects v2, so the
+   * caller does not need to distinguish `ownerType` at this layer.
+   *
+   * Idempotent: if `gh` reports the issue is already on the board, this
+   * method resolves with `{added: false, alreadyPresent: true}` instead of
+   * throwing. Any other non-zero exit propagates as a thrown Error so the
+   * caller can surface or swallow as appropriate.
+   */
+  async addIssueToProject(opts: {
+    projectNumber: number;
+    owner: string;
+    issueUrl: string;
+  }): Promise<{ added: boolean; alreadyPresent: boolean }> {
+    try {
+      await execFileAsync(
+        'gh',
+        [
+          'project',
+          'item-add',
+          String(opts.projectNumber),
+          '--owner',
+          opts.owner,
+          '--url',
+          opts.issueUrl,
+        ],
+        { cwd: this.cwd },
+      );
+      return { added: true, alreadyPresent: false };
+    } catch (err) {
+      const stderr = String((err as { stderr?: string }).stderr ?? (err as Error).message ?? '');
+      if (isAlreadyOnBoardError(stderr)) {
+        return { added: false, alreadyPresent: true };
+      }
+      throw err;
+    }
   }
 
   async editIssueBody(issueNumber: number, body: string): Promise<void> {
@@ -187,6 +243,10 @@ export class GhCli {
     await execFileAsync('gh', ['issue', 'comment', String(issueNumber), '--body', body], {
       cwd: this.cwd,
     });
+  }
+
+  async closeIssue(issueNumber: number): Promise<void> {
+    await execFileAsync('gh', ['issue', 'close', String(issueNumber)], { cwd: this.cwd });
   }
 
   async setStatusLabel(issueNumber: number, label: GitHubStatusLabel): Promise<void> {

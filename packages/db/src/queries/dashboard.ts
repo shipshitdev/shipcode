@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import type { DashboardStats, PipelinePhase, RecentTask } from '@shipcode/shared';
+import { toIsoUtc, type DashboardStats, type PipelinePhase, type RecentTask } from '@shipcode/shared';
 
 // Phases that represent active work (agent running or waiting on action).
 const ACTIVE_PHASES: PipelinePhase[] = [
@@ -140,7 +140,7 @@ export class DashboardQueries {
       title: row.title,
       phase: row.phase as PipelinePhase,
       githubIssueNumber: row.github_issue_number,
-      updatedAt: row.updated_at,
+      updatedAt: toIsoUtc(row.updated_at) ?? row.updated_at,
     }));
   }
 

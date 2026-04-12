@@ -9,8 +9,8 @@ export function migrate(db: DatabaseSync): void {
       path TEXT NOT NULL UNIQUE,
       git_remote TEXT,
       default_branch TEXT NOT NULL DEFAULT 'main',
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
     );
 
     CREATE TABLE IF NOT EXISTS threads (
@@ -23,8 +23,8 @@ export function migrate(db: DatabaseSync): void {
       worktree_path TEXT,
       planner_model TEXT NOT NULL DEFAULT 'claude',
       reviewer_model TEXT NOT NULL DEFAULT 'codex',
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
     );
 
     CREATE TABLE IF NOT EXISTS plans (
@@ -34,7 +34,7 @@ export function migrate(db: DatabaseSync): void {
       raw_output TEXT NOT NULL,
       structured TEXT,
       status TEXT NOT NULL DEFAULT 'draft',
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
     );
 
     CREATE TABLE IF NOT EXISTS reviews (
@@ -44,7 +44,7 @@ export function migrate(db: DatabaseSync): void {
       confidence TEXT NOT NULL,
       raw_output TEXT NOT NULL,
       structured TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
     );
 
     CREATE TABLE IF NOT EXISTS diffs (
@@ -55,7 +55,7 @@ export function migrate(db: DatabaseSync): void {
       diff_content TEXT,
       before_hash TEXT,
       after_hash TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
     );
 
     CREATE TABLE IF NOT EXISTS settings (
@@ -112,7 +112,7 @@ export function migrateV2(db: DatabaseSync): void {
         structured TEXT,
         result TEXT NOT NULL,
         retry_count INTEGER NOT NULL DEFAULT 0,
-        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
       );
 
       CREATE INDEX IF NOT EXISTS idx_verifications_thread ON verifications(thread_id);
@@ -131,7 +131,7 @@ export function migrateV2(db: DatabaseSync): void {
         claimed_at TEXT,
         claimed_by TEXT,
         last_phase_update TEXT,
-        fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+        fetched_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
         UNIQUE(project_id, issue_number)
       );
 
@@ -206,7 +206,7 @@ export function migrateV5(db: DatabaseSync): void {
         title TEXT NOT NULL,
         subtitle TEXT,
         metadata TEXT,
-        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
       );
 
       CREATE INDEX IF NOT EXISTS idx_activity_created ON activity_log(created_at DESC);
@@ -223,7 +223,7 @@ export function migrateV5(db: DatabaseSync): void {
         kind TEXT NOT NULL,
         title TEXT NOT NULL,
         body TEXT NOT NULL,
-        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
         dismissed_at TEXT
       );
 
@@ -365,5 +365,77 @@ export function migrateV8(db: DatabaseSync): void {
     } catch {}
 
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (8)`);
+  });
+}
+
+export function migrateV9(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 9) return;
+
+  transaction(db, () => {
+    // Per-phase prompt skill overrides. Composite key (project_id, phase) where
+    // project_id IS NULL is the global override. The runtime loader (in
+    // @shipcode/agents) walks project → global → bundled default and quarantines
+    // any row that fails validation. Quarantined rows are NOT deleted — the
+    // user content is preserved for manual recovery via the /skills page.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS skills (
+        project_id     TEXT,
+        phase          TEXT NOT NULL,
+        content        TEXT NOT NULL,
+        base_version   TEXT NOT NULL,
+        schema_version INTEGER NOT NULL,
+        status         TEXT NOT NULL DEFAULT 'ok',
+        status_reason  TEXT,
+        updated_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      );
+
+      -- Composite uniqueness: one row per (project_id, phase). NULL project_id
+      -- is the global override; SQLite's UNIQUE treats multiple NULLs as
+      -- distinct, so we use a partial unique index instead of a PRIMARY KEY.
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_skills_project_phase
+        ON skills(COALESCE(project_id, ''), phase);
+      CREATE INDEX IF NOT EXISTS idx_skills_status ON skills(status);
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (9)`);
+  });
+}
+
+export function migrateV10(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 10) return;
+
+  transaction(db, () => {
+    // Per-project override for the Kanban `board` quick-link. GitHub Projects v2
+    // live under a user/org and can span multiple repos, so we can't derive this
+    // from `git_remote` alone. NULL means "use the repo Projects tab fallback".
+    try {
+      db.exec('ALTER TABLE projects ADD COLUMN github_project_url TEXT');
+    } catch {}
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (10)`);
+  });
+}
+
+export function migrateV11(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 11) return;
+
+  transaction(db, () => {
+    // Timestamp when a DONE issue was archived (closed on GitHub + hidden in UI).
+    // NULL means the issue has not been archived. Non-null means it is hidden from
+    // the Kanban board unless the user explicitly requests archived issues.
+    try {
+      db.exec('ALTER TABLE github_issue_cache ADD COLUMN archived_at TEXT');
+    } catch {}
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (11)`);
   });
 }

@@ -1,0 +1,52 @@
+# Project Settings
+
+Every project has its own per-project settings modal, accessible from the `⋯` menu next to the project name in the sidebar. Unlike the global [Settings panel](/desktop/settings), these overrides only apply to a single project.
+
+The modal lives at [`apps/desktop/src/renderer/components/ProjectSettingsModal.tsx`](https://github.com/shipshitdev/shipcode/blob/master/apps/desktop/src/renderer/components/ProjectSettingsModal.tsx).
+
+## Fields
+
+### Read-only
+
+| Field | Source | Notes |
+|-------|--------|-------|
+| Project name | `projects.name` | Derived from the directory basename at add-time |
+| Git remote | `projects.git_remote` | Auto-detected from `git remote get-url origin` |
+| Default branch | `projects.default_branch` | Auto-detected from `git symbolic-ref refs/remotes/origin/HEAD` |
+
+### Editable
+
+| Field | DB column | Purpose |
+|-------|-----------|---------|
+| GitHub Projects v2 URL | `projects.github_project_url` | Override for the Kanban header `board` button — points it at a real Projects v2 board instead of the repo's `/projects` tab |
+
+## Why the GitHub Projects v2 override exists
+
+GitHub Projects v2 boards live under a **user or org**, not under a repo. A board can span multiple repos, so ShipCode can't derive the real board URL from the project's git remote alone.
+
+By default, the Kanban header's `board` button links to `https://github.com/<owner>/<repo>/projects` — the repo's linked-projects tab, which is a list, not a board. That's a fine fallback when no board exists, but it's the wrong link when you actually have a Projects v2 board set up.
+
+Paste your real board URL into this field and the `board` button rewires to point at it.
+
+## Accepted URL formats
+
+The field accepts all three canonical Projects v2 URL shapes:
+
+- `https://github.com/orgs/<org>/projects/<number>` — org-scoped
+- `https://github.com/users/<user>/projects/<number>` — user-scoped
+- `https://github.com/<owner>/<repo>/projects/<number>` — repo-scoped classic
+
+Validation is inline on blur — a bad URL shows a red border with a hint. Whitespace and empty strings are a valid clear — they reset the override back to the repo's `/projects` fallback.
+
+The validator lives in [`packages/shared/src/github-url.ts`](https://github.com/shipshitdev/shipcode/blob/master/packages/shared/src/github-url.ts).
+
+## Keyboard
+
+- `⌘↩` / `Ctrl+Enter` — save and close
+- `Esc` — close without saving
+- Changes auto-focus back on the Kanban when the modal closes
+
+## Related
+
+- [Kanban Board](/desktop/kanban) — the `board` quick-link that this modal controls
+- [Settings](/desktop/settings) — global settings not covered here

@@ -29,6 +29,8 @@ function readNullable(raw: string | undefined): string | null {
   return raw;
 }
 
+const REASONING_EFFORTS = ['low', 'medium', 'high'] as const;
+
 export class SettingsQueries {
   constructor(private db: DatabaseSync) {}
 
@@ -76,9 +78,12 @@ export class SettingsQueries {
         (stored.projectSortOrder as AppSettings['projectSortOrder']) ??
         DEFAULT_SETTINGS.projectSortOrder,
       worktreeRoot: readWorktreeRoot(stored.worktreeRoot),
-      plannerMaxTurns: stored.plannerMaxTurns
-        ? parseInt(stored.plannerMaxTurns, 10)
-        : DEFAULT_SETTINGS.plannerMaxTurns,
+      plannerMaxTurns: clampInt(stored.plannerMaxTurns, 1, 20, DEFAULT_SETTINGS.plannerMaxTurns),
+      maxReviewRounds: clampInt(stored.maxReviewRounds, 1, 5, DEFAULT_SETTINGS.maxReviewRounds),
+      requireApproval: parseBool(stored.requireApproval, DEFAULT_SETTINGS.requireApproval),
+      reviewerReasoningEffort: REASONING_EFFORTS.includes(stored.reviewerReasoningEffort as any)
+        ? (stored.reviewerReasoningEffort as AppSettings['reviewerReasoningEffort'])
+        : DEFAULT_SETTINGS.reviewerReasoningEffort,
       notificationsEnabled: parseBool(
         stored.notificationsEnabled,
         DEFAULT_SETTINGS.notificationsEnabled,
@@ -117,6 +122,18 @@ export class SettingsQueries {
     if ('worktreeRoot' in patch && patch.worktreeRoot != null && patch.worktreeRoot !== '') {
       expandWorktreeRoot(patch.worktreeRoot);
     }
+    if ('maxReviewRounds' in patch && patch.maxReviewRounds != null) {
+      const n = Number(patch.maxReviewRounds);
+      if (!Number.isFinite(n) || n < 1 || n > 5) throw new Error('maxReviewRounds must be 1–5');
+    }
+    if ('plannerMaxTurns' in patch && patch.plannerMaxTurns != null) {
+      const n = Number(patch.plannerMaxTurns);
+      if (!Number.isFinite(n) || n < 1 || n > 20) throw new Error('plannerMaxTurns must be 1–20');
+    }
+    if ('reviewerReasoningEffort' in patch && patch.reviewerReasoningEffort != null) {
+      if (!REASONING_EFFORTS.includes(patch.reviewerReasoningEffort as any))
+        throw new Error('reviewerReasoningEffort must be low|medium|high');
+    }
 
     const upsert = this.db.prepare(
       'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
@@ -133,6 +150,11 @@ export class SettingsQueries {
       }
     });
   }
+}
+
+function clampInt(raw: string | undefined, min: number, max: number, fallback: number): number {
+  const n = raw ? parseInt(raw, 10) : Number.NaN;
+  return Number.isFinite(n) && n >= min && n <= max ? n : fallback;
 }
 
 function readWorktreeRoot(raw: string | undefined): string | null {

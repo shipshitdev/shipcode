@@ -1,8 +1,28 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { NotificationRecord, NotificationKind } from '@shipcode/shared';
-import { Button, Loader2, Layers, ArrowUpDown } from '@shipcode/ui';
+import type {
+  GitHubIssueCacheRecord,
+  NotificationRecord,
+  NotificationKind,
+} from '@shipcode/shared';
+import {
+  ArrowUpDown,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  Layers,
+  Loader2,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@shipcode/ui';
 import { useAppStore } from '../stores/app-store';
+
+type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info' | 'accent';
 
 function timeAgo(input: string | number): string {
   const t = typeof input === 'number' ? input : new Date(input).getTime();
@@ -17,11 +37,11 @@ function timeAgo(input: string | number): string {
   return `${d}d ago`;
 }
 
-const KIND_BADGE: Record<NotificationKind, string> = {
-  awaiting_approval: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-  failed: 'bg-danger/15 text-danger border-danger/30',
-  completed: 'bg-success/15 text-success border-success/30',
-  verification_exhausted: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
+const KIND_BADGE_VARIANT: Record<NotificationKind, BadgeVariant> = {
+  awaiting_approval: 'warning',
+  failed: 'danger',
+  completed: 'success',
+  verification_exhausted: 'warning',
 };
 
 const KIND_LABEL: Record<NotificationKind, string> = {
@@ -38,13 +58,6 @@ const GROUP_SECTION_LABEL: Record<NotificationKind, string> = {
   completed: 'Completed',
 };
 
-const GROUP_SECTION_COLOR: Record<NotificationKind, string> = {
-  awaiting_approval: 'text-amber-400',
-  failed: 'text-danger',
-  verification_exhausted: 'text-orange-400',
-  completed: 'text-success',
-};
-
 // Priority order for group sections
 const GROUP_ORDER: NotificationKind[] = [
   'awaiting_approval',
@@ -55,10 +68,14 @@ const GROUP_ORDER: NotificationKind[] = [
 
 export function InboxView() {
   const queryClient = useQueryClient();
-  const { removeNotification, clearNotifications, selectProject, selectThread } = useAppStore();
+  const { removeNotification, clearNotifications, selectProject, selectIssue } = useAppStore();
 
   const [groupBy, setGroupBy] = useState<'none' | 'kind'>('none');
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
+  const [navigatingId, setNavigatingId] = useState<string | null>(null);
+  // Stale-navigation guard: each click gets a token; async results are discarded
+  // if a newer click (or user navigation) has since taken over.
+  const navTokenRef = useRef<string | null>(null);
 
   const {
     data: notifications = [],
@@ -103,45 +120,96 @@ export function InboxView() {
     return () => unsub();
   }, [queryClient]);
 
-  const renderNotification = (n: NotificationRecord) => (
-    <li key={n.id} className="rounded-lg border border-border bg-elevated p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span
-            className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${KIND_BADGE[n.kind]}`}
-          >
-            {KIND_LABEL[n.kind]}
-          </span>
-          <span className="text-[13px] font-medium text-primary">{n.title}</span>
-        </div>
-        <span className="shrink-0 text-[10px] text-muted">{timeAgo(n.createdAt)}</span>
-      </div>
+  // Switch project, fetch its issues, locate the one linked to the notification's
+  // threadId, then open the IssueDetail sidebar via selectIssue. Without the
+  // issue lookup, selectThread alone lands the user on the Kanban view without
+  // the detail panel.
+  //
+  // Stale-result guard: rapid multi-clicks or mid-flight project switches can
+  // cause an older IPC response to overwrite the current selection. Each click
+  // mints a new token; any response whose token no longer matches navTokenRef
+  // is silently dropped. On IPC failure the prior project is restored so the
+  // user is not left stranded on a switched-but-empty project.
+  const goToIssue = async (n: NotificationRecord) => {
+    if (!n.projectId) return;
+    const token = n.id;
+    navTokenRef.current = token;
+    setNavigatingId(n.id);
+    const priorProjectId = useAppStore.getState().activeProjectId;
+    try {
+      selectProject(n.projectId);
+      if (!n.threadId) return;
+      const issues = await window.shipcode.invoke<GitHubIssueCacheRecord[]>('github:list-issues', {
+        projectId: n.projectId,
+      });
+      if (navTokenRef.current !== token) return;
+      useAppStore.getState().setGithubIssues(issues);
+      const match = issues.find((i) => i.threadId === n.threadId) ?? null;
+      if (match) selectIssue(match);
+    } catch {
+      if (navTokenRef.current === token) selectProject(priorProjectId);
+    } finally {
+      if (navTokenRef.current === token) setNavigatingId(null);
+    }
+  };
 
-      {n.body && <p className="mt-2 text-[12px] text-secondary">{n.body}</p>}
-
-      <div className="mt-3 flex items-center gap-2">
-        {n.projectId !== null && (
-          <Button
-            variant="secondary"
-            size="xs"
-            onClick={() => {
-              selectProject(n.projectId!);
-              if (n.threadId) selectThread(n.threadId);
-            }}
-          >
-            → Go to issue
-          </Button>
+  const renderRow = (n: NotificationRecord) => (
+    <TableRow key={n.id}>
+      <TableCell className="w-[1%] whitespace-nowrap align-top">
+        <Badge variant={KIND_BADGE_VARIANT[n.kind]}>{KIND_LABEL[n.kind]}</Badge>
+      </TableCell>
+      <TableCell className="align-top">
+        <div className="text-[13px] font-medium text-primary">{n.title}</div>
+        {n.body && (
+          <div className="mt-0.5 line-clamp-2 text-[12px] text-secondary">{n.body}</div>
         )}
-        <Button
-          variant="ghost"
-          size="xs"
-          onClick={() => dismiss.mutate(n.id)}
-          disabled={dismiss.isPending && dismiss.variables === n.id}
-        >
-          Dismiss
-        </Button>
-      </div>
-    </li>
+      </TableCell>
+      <TableCell className="w-[1%] whitespace-nowrap align-top text-[11px] text-muted">
+        {timeAgo(n.createdAt)}
+      </TableCell>
+      <TableCell className="w-[1%] whitespace-nowrap align-top text-right">
+        <div className="flex items-center justify-end gap-1">
+          {n.projectId !== null && (
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => goToIssue(n)}
+              disabled={navigatingId === n.id}
+              aria-label={`Go to issue: ${n.title}`}
+            >
+              Go to issue
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={() => dismiss.mutate(n.id)}
+            disabled={dismiss.isPending && dismiss.variables === n.id}
+            aria-label={`Dismiss notification: ${n.title}`}
+          >
+            Dismiss
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+
+  const renderTable = (rows: NotificationRecord[]) => (
+    <Card>
+      <CardContent className="p-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Status</TableHead>
+              <TableHead>Notification</TableHead>
+              <TableHead>Time</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>{rows.map(renderRow)}</TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   );
 
   return (
@@ -186,7 +254,7 @@ export function InboxView() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-6">
-        <div className="mx-auto max-w-3xl">
+        <div className="max-w-5xl space-y-6">
           {isLoading && (
             <div className="flex items-center justify-center py-16">
               <Loader2 size={20} className="animate-spin text-muted" />
@@ -208,9 +276,7 @@ export function InboxView() {
             </div>
           )}
 
-          {!isLoading && !isError && active.length > 0 && groupBy === 'none' && (
-            <ul className="space-y-3">{sorted.map(renderNotification)}</ul>
-          )}
+          {!isLoading && !isError && active.length > 0 && groupBy === 'none' && renderTable(sorted)}
 
           {!isLoading && !isError && active.length > 0 && groupBy === 'kind' && (
             <div className="space-y-6">
@@ -218,14 +284,12 @@ export function InboxView() {
                 const items = sorted.filter((n) => n.kind === kind);
                 if (items.length === 0) return null;
                 return (
-                  <div key={kind}>
-                    <div
-                      className={`mb-2 text-[10px] font-semibold uppercase tracking-wider ${GROUP_SECTION_COLOR[kind]}`}
-                    >
+                  <section key={kind}>
+                    <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
                       {GROUP_SECTION_LABEL[kind]} · {items.length}
-                    </div>
-                    <ul className="space-y-3">{items.map(renderNotification)}</ul>
-                  </div>
+                    </h2>
+                    {renderTable(items)}
+                  </section>
                 );
               })}
             </div>

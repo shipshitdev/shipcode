@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { nanoid } from 'nanoid';
-import type { ReviewRecord, PlanReview } from '@shipcode/shared';
+import { toIsoUtc, type ReviewRecord, type PlanReview } from '@shipcode/shared';
 
 export class ReviewQueries {
   constructor(private db: DatabaseSync) {}
@@ -48,6 +48,6 @@ function mapReview(row: any): ReviewRecord {
     confidence: row.confidence,
     rawOutput: row.raw_output,
     structured: row.structured ? JSON.parse(row.structured) : null,
-    createdAt: row.created_at,
+    createdAt: toIsoUtc(row.created_at) ?? row.created_at,
   };
 }

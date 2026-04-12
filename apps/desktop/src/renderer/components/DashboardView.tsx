@@ -4,6 +4,7 @@ import type {
   ActivePipelineSummary,
   ActivityEntry,
   DashboardStats,
+  GitHubIssueCacheRecord,
   PipelinePhase,
   RecentTask,
 } from '@shipcode/shared';
@@ -24,14 +25,21 @@ import {
 } from '@shipcode/ui';
 import { useAppStore } from '../stores/app-store';
 
+// Color encodes STATE, not sub-phase — the chip text already carries the phase
+// name. All 6 agent-running phases (plan/review/revise/execute/verify/ship)
+// share the dedicated `agent` violet at low opacity so they are immediately
+// distinguishable from human-action states (awaiting=amber, failed=red) and
+// terminal states (completed=green). Matches the Kanban card treatment.
+const AGENT_PHASE_CLASSES = 'bg-agent/10 text-agent border-agent/25';
+
 const PHASE_COLOR: Partial<Record<PipelinePhase, string>> = {
-  planning: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-  reviewing: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
-  revising: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
-  awaiting_approval: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-  executing: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
-  verifying: 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30',
-  shipping: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+  planning: AGENT_PHASE_CLASSES,
+  reviewing: AGENT_PHASE_CLASSES,
+  revising: AGENT_PHASE_CLASSES,
+  executing: AGENT_PHASE_CLASSES,
+  verifying: AGENT_PHASE_CLASSES,
+  shipping: AGENT_PHASE_CLASSES,
+  awaiting_approval: 'bg-warning/15 text-warning border-warning/30',
   completed: 'bg-success/15 text-success border-success/30',
   failed: 'bg-danger/15 text-danger border-danger/30',
   idle: 'bg-tertiary text-muted border-border',
@@ -91,7 +99,7 @@ interface StatCardProps {
   label: string;
   value: string | number;
   subtitle?: string;
-  tone?: 'default' | 'danger' | 'success';
+  tone?: 'default' | 'danger' | 'success' | 'agent';
   onClick?: () => void;
 }
 
@@ -101,9 +109,11 @@ function StatCard({ label, value, subtitle, tone = 'default', onClick }: StatCar
       ? 'border-danger/40 bg-danger/5'
       : tone === 'success'
         ? 'border-success/40 bg-success/5'
-        : '';
+        : tone === 'agent'
+          ? 'border-agent/35 bg-agent/[0.04]'
+          : '';
   const card = (
-    <Card className={`${toneClass}${onClick ? ' hover:ring-1 hover:ring-border' : ''}`}>
+    <Card className={`w-full h-full${toneClass ? ` ${toneClass}` : ''}${onClick ? ' hover:ring-1 hover:ring-border' : ''}`}>
       <CardContent className="p-5 pt-5">
         <div className="text-3xl font-semibold text-primary">{value}</div>
         <div className="mt-1 text-xs uppercase tracking-wide text-secondary">{label}</div>
@@ -113,13 +123,13 @@ function StatCard({ label, value, subtitle, tone = 'default', onClick }: StatCar
   );
   if (onClick) {
     return (
-      <button
-        type="button"
+      <Button
+        variant="ghost"
         onClick={onClick}
-        className="w-full cursor-pointer border-none bg-transparent p-0 text-left"
+        className="h-full w-full whitespace-normal p-0 text-left font-normal hover:bg-transparent"
       >
         {card}
-      </button>
+      </Button>
     );
   }
   return card;
@@ -129,6 +139,8 @@ export function DashboardView() {
   const queryClient = useQueryClient();
   const selectProject = useAppStore((s) => s.selectProject);
   const selectThread = useAppStore((s) => s.selectThread);
+  const selectIssue = useAppStore((s) => s.selectIssue);
+  const setGithubIssues = useAppStore((s) => s.setGithubIssues);
   const openActivity = useAppStore((s) => s.openActivity);
   const openInbox = useAppStore((s) => s.openInbox);
 
@@ -185,9 +197,23 @@ export function DashboardView() {
   const activitySlice = activity;
   const tasksSlice = recent;
 
-  const handleRowClick = (projectId: string, threadId: string) => {
+  // Click-through from Mission Control rows: switch project, fetch its issues,
+  // and open the IssueDetail sidebar for the matching threadId. Falls back to
+  // selectThread alone if no cached issue matches (e.g. thread with no linked
+  // GitHub issue).
+  const handleRowClick = async (projectId: string, threadId: string) => {
     selectProject(projectId);
     selectThread(threadId);
+    try {
+      const issues = await window.shipcode.invoke<GitHubIssueCacheRecord[]>('github:list-issues', {
+        projectId,
+      });
+      setGithubIssues(issues);
+      const match = issues.find((i) => i.threadId === threadId) ?? null;
+      if (match) selectIssue(match);
+    } catch {
+      // Best-effort — rows still navigate even if the issue fetch fails.
+    }
   };
 
   const handleStop = async (threadId: string) => {
@@ -205,47 +231,49 @@ export function DashboardView() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-6">
-        <div className="mx-auto grid max-w-6xl gap-6">
+        <div className="flex flex-col gap-6 max-w-5xl">
           {/* Stat cards */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard
-              label="Agents Running"
-              value={stats?.agentsRunning ?? 0}
-              subtitle={
-                stats
+          <div className="flex gap-4">
+            {[
+              {
+                label: 'Agents Running',
+                value: stats?.agentsRunning ?? 0,
+                subtitle: stats
                   ? Object.entries(stats.runningByPhase ?? {})
                       .map(([phase, n]) => `${n} ${phase.replace(/_/g, ' ')}`)
                       .join(', ') || 'idle'
-                  : '—'
-              }
-            />
-            <StatCard
-              label="Tasks In Progress"
-              value={stats?.tasksInProgress ?? 0}
-              subtitle={stats ? `${stats.tasksOpen} open · ${stats.tasksBlocked} blocked` : '—'}
-              onClick={openInbox}
-            />
-            <button
-              type="button"
-              onClick={openInbox}
-              className="w-full cursor-pointer border-none bg-transparent p-0 text-left"
-            >
-              <StatCard
-                label="Pending Approvals"
-                value={stats?.pendingApprovals ?? 0}
-                subtitle={
-                  stats?.staleApprovals ? `${stats.staleApprovals} stale > 24h` : 'no stale items'
-                }
-                tone={stats && stats.pendingApprovals > 0 ? 'danger' : 'default'}
-              />
-            </button>
-            <StatCard
-              label="Shipped (7d)"
-              value={stats?.shippedLast7d ?? 0}
-              subtitle={stats ? `${stats.failedLast7d} failed` : '—'}
-              tone="success"
-              onClick={openActivity}
-            />
+                  : '—',
+                tone: (stats && stats.agentsRunning > 0 ? 'agent' : 'default') as
+                  | 'agent'
+                  | 'default',
+              },
+              {
+                label: 'Tasks In Progress',
+                value: stats?.tasksInProgress ?? 0,
+                subtitle: stats ? `${stats.tasksOpen} open · ${stats.tasksBlocked} blocked` : '—',
+                onClick: openInbox,
+              },
+              {
+                label: 'Pending Approvals',
+                value: stats?.pendingApprovals ?? 0,
+                subtitle: stats?.staleApprovals
+                  ? `${stats.staleApprovals} stale > 24h`
+                  : 'no stale items',
+                tone: (stats && stats.pendingApprovals > 0 ? 'danger' : 'default') as 'danger' | 'default',
+                onClick: openInbox,
+              },
+              {
+                label: 'Shipped (7d)',
+                value: stats?.shippedLast7d ?? 0,
+                subtitle: stats ? `${stats.failedLast7d} failed` : '—',
+                tone: 'success' as const,
+                onClick: openActivity,
+              },
+            ].map((card) => (
+              <div key={card.label} className="flex-1 min-w-0">
+                <StatCard {...card} />
+              </div>
+            ))}
           </div>
 
           {/* Running Agents — always first after stats */}
@@ -262,10 +290,10 @@ export function DashboardView() {
                 <ul className="divide-y divide-border">
                   {running.map((row) => (
                     <li key={row.threadId} className="flex items-center gap-3 py-2.5">
-                      <button
-                        type="button"
+                      <Button
+                        variant="ghost"
                         onClick={() => handleRowClick(row.projectId, row.threadId)}
-                        className="flex flex-1 cursor-pointer items-center gap-3 border-none bg-transparent text-left"
+                        className="h-auto flex-1 justify-start gap-3 px-0 py-0 text-left font-normal hover:bg-transparent"
                       >
                         <span className="inline-flex shrink-0 items-center rounded-md border border-border bg-tertiary px-1.5 py-0.5 text-[10px] text-secondary">
                           {row.projectName}
@@ -277,7 +305,7 @@ export function DashboardView() {
                         <span className="w-16 text-right text-[11px] tabular-nums text-muted">
                           <ElapsedClock since={row.startedAt} />
                         </span>
-                      </button>
+                      </Button>
                       <Button
                         size="xs"
                         variant="destructive"
@@ -298,13 +326,14 @@ export function DashboardView() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>Recent Activity</CardTitle>
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="xs"
                     onClick={openActivity}
-                    className="cursor-pointer border-none bg-transparent text-[11px] text-muted hover:text-primary"
+                    className="h-auto px-0 text-[11px] font-normal text-muted hover:bg-transparent"
                   >
                     View all →
-                  </button>
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
@@ -370,13 +399,14 @@ export function DashboardView() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>Recent Tasks</CardTitle>
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="xs"
                     onClick={openInbox}
-                    className="cursor-pointer border-none bg-transparent text-[11px] text-muted hover:text-primary"
+                    className="h-auto px-0 text-[11px] font-normal text-muted hover:bg-transparent"
                   >
                     Inbox →
-                  </button>
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
