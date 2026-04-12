@@ -69,8 +69,8 @@ interface AppState {
   // Timestamp of last agent output chunk received, keyed by threadId
   lastActivityByThread: Record<string, number>;
 
-  // Currently running model (from pipeline:model-resolved, reset on idle)
-  currentModel: string | null;
+  // Currently running model per thread (from pipeline:model-resolved)
+  currentModels: Record<string, string>;
 
   // Notifications (in-app toaster + history)
   notifications: NotificationRecord[];
@@ -110,7 +110,7 @@ interface AppState {
   setTerminalThread: (id: string | null) => void;
   logTerminalEventForThread: (threadId: string, line: string) => void;
   touchLastActivity: (threadId: string) => void;
-  setCurrentModel: (model: string | null) => void;
+  setCurrentModel: (threadId: string, model: string) => void;
   addNotification: (notification: NotificationRecord) => void;
   removeNotification: (id: string) => void;
   clearNotifications: () => void;
@@ -153,7 +153,7 @@ export const useAppStore = create<AppState>((set) => ({
   editingPrd: null,
   projectSettingsModalOpen: false,
   projectSettingsModalProjectId: null,
-  currentModel: null,
+  currentModels: {},
 
   setViewMode: (mode) => set({ viewMode: mode }),
   openOverview: () =>
@@ -255,7 +255,7 @@ export const useAppStore = create<AppState>((set) => ({
   setPipelinePhase: (phase) =>
     set((s) =>
       phase === 'idle'
-        ? { pipelinePhase: phase, currentModel: null }
+        ? { pipelinePhase: phase }
         : {
             pipelinePhase: phase,
             // Only auto-open on the first transition INTO an active run (e.g. idle/queued → planning).
@@ -286,7 +286,8 @@ export const useAppStore = create<AppState>((set) => ({
     set((s) => ({ processToThread: { ...s.processToThread, [processId]: threadId } })),
   logTerminalEvent: (line) => set((s) => ({ terminalEvents: [...s.terminalEvents, line] })),
   setTerminalThread: (id) => set({ terminalThreadId: id }),
-  setCurrentModel: (model) => set({ currentModel: model }),
+  setCurrentModel: (threadId, model) =>
+    set((s) => ({ currentModels: { ...s.currentModels, [threadId]: model } })),
   logTerminalEventForThread: (threadId, line) =>
     set((s) => {
       const prev = s.terminalEventsByThread[threadId] ?? [];

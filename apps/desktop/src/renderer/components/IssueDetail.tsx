@@ -7,6 +7,7 @@ import type {
   ReviewRecord,
   ShipCodePlan,
   Thread,
+  VerificationRecord,
 } from '@shipcode/shared';
 import { deriveGithubIssueUrl, shipCodePlanSchema } from '@shipcode/shared';
 import {
@@ -250,6 +251,25 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     enabled: planIds.length > 0,
     refetchInterval: activeThreadId ? 2000 : false,
   });
+
+  // Fetch latest verification for the thread
+  const { data: latestVerification } = useQuery<VerificationRecord | null>({
+    queryKey: ['verification', activeThreadId],
+    queryFn: () => window.shipcode.invoke('verification:get', { threadId: activeThreadId }),
+    enabled: !!activeThreadId && thread?.status === 'failed',
+  });
+
+  // Pick the right raw output based on which phase failed
+  const failingPhaseOutput = (() => {
+    if (!thread || thread.status !== 'failed') return planHistory[0]?.rawOutput ?? null;
+    // Verification failure — show verification output
+    if (latestVerification?.rawOutput) return latestVerification.rawOutput;
+    // Review failure — show review output for the latest plan
+    const latestReview = planHistory[0]?.id ? reviewsByPlanId[planHistory[0].id] : null;
+    if (latestReview?.rawOutput) return latestReview.rawOutput;
+    // Fall back to plan output
+    return planHistory[0]?.rawOutput ?? null;
+  })();
 
   // Auto-expand latest plan
   const latestPlanId = planHistory[0]?.id ?? null;
@@ -830,7 +850,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
   const rerunSection = canRerun ? (
     <div className="mb-5">
-      {(thread?.lastError || planHistory[0]?.rawOutput) && (
+      {(thread?.lastError || failingPhaseOutput) && (
         <div className="mb-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2">
           <div className="flex items-center justify-between mb-1">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-danger">Error</p>
@@ -841,14 +861,14 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
                 className="text-danger/60 hover:bg-danger/10 hover:text-danger"
                 onClick={() =>
                   navigator.clipboard.writeText(
-                    [thread?.lastError, planHistory[0]?.rawOutput].filter(Boolean).join('\n\n'),
+                    [thread?.lastError, failingPhaseOutput].filter(Boolean).join('\n\n'),
                   )
                 }
                 title="Copy to clipboard"
               >
                 <Copy size={13} />
               </Button>
-              {planHistory[0]?.rawOutput && (
+              {failingPhaseOutput && (
                 <Button
                   variant="ghost"
                   size="icon-xs"
@@ -867,7 +887,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
           {thread?.lastError && (
             <p className="text-[12px] text-danger/80 break-words">{safeErrorMessage(thread.lastError)}</p>
           )}
-          {showRawOutput && planHistory[0]?.rawOutput && (
+          {showRawOutput && failingPhaseOutput && (
             <pre className="mt-2 max-h-[200px] overflow-y-auto text-[11px] text-danger/70 whitespace-pre-wrap break-words border-t border-danger/20 pt-2">
               {planHistory[0].rawOutput}
             </pre>

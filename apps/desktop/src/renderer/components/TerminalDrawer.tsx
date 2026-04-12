@@ -116,7 +116,9 @@ export function TerminalDrawer() {
   const terminalEvents = terminalThreadId ? (terminalEventsByThread[terminalThreadId] ?? []) : [];
   const activeIssue = useAppStore((s) => s.activeIssue);
   const pipelinePhase = useAppStore((s) => s.pipelinePhase);
-  const currentModel = useAppStore((s) => s.currentModel);
+  const currentModel = useAppStore(
+    (s) => (s.terminalThreadId ? s.currentModels[s.terminalThreadId] : null) ?? null,
+  );
   const githubIssues = useAppStore((s) => s.githubIssues);
   const processToThread = useAppStore((s) => s.processToThread);
   const setTerminalThread = useAppStore((s) => s.setTerminalThread);
