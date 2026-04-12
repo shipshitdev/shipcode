@@ -169,11 +169,18 @@ function validateBranchFormat(format: string): void {
   }
   // Substitute tokens with safe sample values, then check for illegal ref-name chars.
   const sample = format.replace(/\{id\}/g, '1').replace(/\{slug\}/g, 'test');
-  // Reject characters git check-ref-format would refuse: space, ~, ^, :, \, ?, *, [, ..
-  if (/[\s~^:?*[\]\\]|\.\./.test(sample)) {
+  // Reject characters git check-ref-format would refuse: space, ~, ^, :, \, ?, *, [, ..,
+  // double slashes, trailing slash, trailing dot, @{, control chars.
+  if (/[\s~^:?*[\]\\@{]|\.\.|\/{2,}/.test(sample)) {
     throw new Error('worktreeBranchFormat contains characters invalid in a git branch name');
   }
-  if (sample.startsWith('-') || sample.startsWith('.') || sample.endsWith('.lock')) {
+  if (
+    sample.startsWith('-') ||
+    sample.startsWith('.') ||
+    sample.endsWith('.lock') ||
+    sample.endsWith('/') ||
+    sample.endsWith('.')
+  ) {
     throw new Error('worktreeBranchFormat produces an invalid git branch name');
   }
 }

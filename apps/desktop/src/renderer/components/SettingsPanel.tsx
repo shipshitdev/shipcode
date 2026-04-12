@@ -12,7 +12,7 @@ import {
   SelectValue,
   SettingsRow,
 } from '@shipcode/ui';
-import type { AppSettings, Project } from '@shipcode/shared';
+import { DEFAULT_SETTINGS, type AppSettings, type Project } from '@shipcode/shared';
 import { useAppStore } from '../stores/app-store';
 import { SHORTCUTS, type ShortcutCategory, type ShortcutDef } from '../data/shortcuts';
 
@@ -93,19 +93,19 @@ export function SettingsPanel() {
                 <Input
                   id="worktree-branch-format"
                   type="text"
-                  placeholder="feat/{id}-{slug}"
+                  placeholder={DEFAULT_SETTINGS.worktreeBranchFormat}
                   className="w-[280px]"
-                  defaultValue={settings.worktreeBranchFormat ?? 'feat/{id}-{slug}'}
+                  defaultValue={settings.worktreeBranchFormat ?? DEFAULT_SETTINGS.worktreeBranchFormat}
                   onBlur={(e) => {
                     const raw = e.target.value.trim();
-                    const next = raw === '' ? 'feat/{id}-{slug}' : raw;
+                    const next = raw === '' ? DEFAULT_SETTINGS.worktreeBranchFormat : raw;
                     updateSettings.mutate({ worktreeBranchFormat: next });
                   }}
                 />
               </SettingsRow>
               <p className="text-xs text-secondary mt-2">
                 Tokens: <code>{'{id}'}</code> = issue number, <code>{'{slug}'}</code> = slugified
-                title. Default: <code>feat/{'{id}'}-{'{slug}'}</code>. Leave blank to reset.
+                title. Default: <code>{DEFAULT_SETTINGS.worktreeBranchFormat}</code>. Leave blank to reset.
               </p>
             </section>
 

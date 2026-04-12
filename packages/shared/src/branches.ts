@@ -25,7 +25,7 @@ export interface NormalizeBranchesInput {
 }
 
 const COMMON_DEFAULTS = ['main', 'master', 'develop', 'trunk'];
-const SHIPCODE_BRANCH_RE = /^(shipcode\/|ship\/\d+-)/;
+const SHIPCODE_BRANCH_RE = /^(shipcode\/|ship\/\d+)/;
 
 export function normalizeBranches({ raw, defaultBranch }: NormalizeBranchesInput): string[] {
   const locals = new Set<string>();
