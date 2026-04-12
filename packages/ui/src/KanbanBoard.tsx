@@ -233,6 +233,7 @@ function DraggableCard({
   onClick,
   onRerun,
   onCancel,
+  onStartPipeline,
   onArchiveIssue,
   isSelected,
   isRerunning,
@@ -241,6 +242,7 @@ function DraggableCard({
   onClick: () => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
   onCancel?: (issue: GitHubIssueCacheRecord) => void;
+  onStartPipeline?: (issue: GitHubIssueCacheRecord) => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
   isSelected?: boolean;
   isRerunning?: boolean;
@@ -255,6 +257,7 @@ function DraggableCard({
   const isFailed = issue.pipelineStatus === 'failed';
   const isAwaiting = issue.pipelineStatus === 'awaiting_approval';
   const isActive = ACTIVE_STATUSES.includes(issue.pipelineStatus);
+  const isQueued = issue.pipelineStatus === 'queued' || issue.pipelineStatus === 'todo';
   const showPhaseElapsed =
     PHASE_ELAPSED_STATUSES.includes(issue.pipelineStatus) && !!issue.lastPhaseUpdate;
   const phaseSince =
@@ -355,7 +358,26 @@ function DraggableCard({
               {l}
             </Badge>
           ))}
-        {isActive && onCancel ? (
+        {isQueued && onStartPipeline ? (
+          <span className="relative inline-flex items-center">
+            <span className="group-hover:opacity-0 transition-opacity pointer-events-none">
+              <PhaseChip status={issue.pipelineStatus} />
+            </span>
+            <Button
+              variant="ghost"
+              size="xs"
+              className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-medium text-agent/70 hover:text-agent hover:bg-agent/10 h-auto px-1.5 py-0.5 rounded"
+              title="Start planning"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onStartPipeline(issue);
+              }}
+            >
+              PLAN
+            </Button>
+          </span>
+        ) : isActive && onCancel ? (
           <span className="relative inline-flex items-center">
             <span className="group-hover:opacity-0 transition-opacity pointer-events-none">
               <PhaseChip status={issue.pipelineStatus} />
@@ -375,20 +397,25 @@ function DraggableCard({
             </Button>
           </span>
         ) : isFailed && onRerun ? (
-          <Button
-            variant="ghost"
-            size="xs"
-            className="h-5 px-1.5 text-[10px] font-medium rounded bg-danger/15 text-danger border border-danger/30 hover:bg-danger/25 disabled:opacity-60"
-            title="Click to retry"
-            disabled={isRerunning}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              onRerun(issue);
-            }}
-          >
-            RETRY
-          </Button>
+          <span className="relative inline-flex items-center">
+            <span className="group-hover:opacity-0 transition-opacity pointer-events-none">
+              <PhaseChip status={issue.pipelineStatus} />
+            </span>
+            <Button
+              variant="ghost"
+              size="xs"
+              className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-medium text-danger/70 hover:text-danger hover:bg-danger/10 h-auto px-1.5 py-0.5 rounded disabled:opacity-60"
+              title="Retry pipeline"
+              disabled={isRerunning}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onRerun(issue);
+              }}
+            >
+              RETRY
+            </Button>
+          </span>
         ) : (
           <PhaseChip status={issue.pipelineStatus} />
         )}
@@ -427,6 +454,7 @@ function DroppableColumn({
   issues,
   droppable,
   onIssueClick,
+  onStartPipeline,
   selectedIssueNumber,
   onArchiveAllDone,
   onArchiveIssue,
@@ -437,6 +465,7 @@ function DroppableColumn({
   issues: GitHubIssueCacheRecord[];
   droppable: boolean;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
+  onStartPipeline?: (issue: GitHubIssueCacheRecord) => void;
   selectedIssueNumber?: number;
   onArchiveAllDone?: () => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
@@ -484,6 +513,7 @@ function DroppableColumn({
             key={issue.id}
             issue={issue}
             onClick={() => onIssueClick(issue)}
+            onStartPipeline={onStartPipeline}
             isSelected={issue.issueNumber === selectedIssueNumber}
             onArchiveIssue={onArchiveIssue}
           />
@@ -1294,6 +1324,7 @@ export function KanbanBoard({
                   droppable={!!col.droppable}
                   onIssueClick={onIssueClick}
                   selectedIssueNumber={selectedIssueNumber}
+                  onStartPipeline={col.key === 'todo' ? onStartPipeline : undefined}
                   onArchiveAllDone={col.key === 'done' ? onArchiveAllDone : undefined}
                   onArchiveIssue={col.key === 'done' ? onArchiveIssue : undefined}
                 />
