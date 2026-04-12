@@ -411,6 +411,17 @@ export function registerIpcHandlers(
     },
   );
 
+  ipcMain.handle('github:list-archived', () => {
+    return queries.githubIssues.listArchived();
+  });
+
+  ipcMain.handle(
+    'github:unarchive-issue',
+    (_event, { issueId }: { issueId: string }) => {
+      queries.githubIssues.clearArchivedAt(issueId);
+    },
+  );
+
   ipcMain.handle(
     'github:create-issue',
     async (

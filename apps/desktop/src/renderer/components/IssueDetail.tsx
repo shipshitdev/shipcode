@@ -626,11 +626,18 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
             </span>
           </div>
         )}
-        {thread.githubPrNumber && (
-          <div className="flex flex-col gap-1 rounded-md border border-border bg-secondary p-2">
-            <span className="text-[10px] font-medium uppercase tracking-wide text-muted">PR</span>
-            <span className="font-mono text-[11px] text-primary">#{thread.githubPrNumber}</span>
-          </div>
+        {thread.githubPrNumber && thread.githubRepo && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              window.shipcode.invoke('shell:open-external', {
+                url: `https://github.com/${thread.githubRepo}/pull/${thread.githubPrNumber}`,
+              })
+            }
+          >
+            #{thread.githubPrNumber} Open PR
+          </Button>
         )}
         <div className="flex flex-col gap-1 rounded-md border border-border bg-secondary p-2">
           <span className="text-[10px] font-medium uppercase tracking-wide text-muted">Cost</span>

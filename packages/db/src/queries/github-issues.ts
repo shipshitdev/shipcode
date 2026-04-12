@@ -210,6 +210,13 @@ export class GitHubIssueQueries {
       .run(id);
   }
 
+  listArchived(): GitHubIssueCacheRecord[] {
+    const rows = this.db
+      .prepare('SELECT * FROM github_issue_cache WHERE archived_at IS NOT NULL ORDER BY archived_at DESC')
+      .all() as any[];
+    return rows.map((r) => this.toRecord(r));
+  }
+
   listCompleted(projectId: string): GitHubIssueCacheRecord[] {
     const rows = this.db
       .prepare(
