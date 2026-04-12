@@ -135,7 +135,7 @@ function StatCard({ label, value, subtitle, tone = 'default', onClick }: StatCar
   return card;
 }
 
-export function DashboardView() {
+export function OverviewView() {
   const queryClient = useQueryClient();
   const selectProject = useAppStore((s) => s.selectProject);
   const selectThread = useAppStore((s) => s.selectThread);
@@ -225,7 +225,7 @@ export function DashboardView() {
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex items-center justify-between border-b border-border px-6 py-4">
         <div>
-          <h1 className="text-base font-semibold text-primary">Mission Control</h1>
+          <h1 className="text-base font-semibold text-primary">Overview</h1>
           <p className="text-xs text-muted">Live view of every agent across every project.</p>
         </div>
       </div>
@@ -330,7 +330,7 @@ export function DashboardView() {
                     variant="ghost"
                     size="xs"
                     onClick={openActivity}
-                    className="h-auto px-0 text-[11px] font-normal text-muted hover:bg-transparent"
+                    className="h-auto px-0 text-[11px] font-normal text-muted hover:bg-transparent capitalize"
                   >
                     View all →
                   </Button>
@@ -403,9 +403,9 @@ export function DashboardView() {
                     variant="ghost"
                     size="xs"
                     onClick={openInbox}
-                    className="h-auto px-0 text-[11px] font-normal text-muted hover:bg-transparent"
+                    className="h-auto px-0 text-[11px] font-normal text-muted hover:bg-transparent capitalize"
                   >
-                    Inbox →
+                    View all →
                   </Button>
                 </div>
               </CardHeader>

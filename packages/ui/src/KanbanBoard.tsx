@@ -161,6 +161,14 @@ const COLUMNS: BoardColumn[] = [
   },
 ];
 
+// Column header dot colors — matches GitHub Projects board defaults.
+const COLUMN_DOT_CLASS: Record<ColumnKey, string> = {
+  todo: 'bg-success',
+  agent: 'bg-agent',
+  human: 'bg-warning',
+  done: 'bg-done',
+};
+
 // Only these statuses can be picked up and dragged.
 const DRAGGABLE_STATUSES: IssuePipelineStatus[] = ['todo', 'queued', 'failed'];
 
@@ -337,9 +345,8 @@ function DraggableCard({
           {showPhaseElapsed && <PhaseElapsed since={phaseSince} />}
           <Button
             variant="ghost"
-            size="icon"
             className={cn(
-              'h-4 w-4 opacity-0 transition-all group-hover:opacity-100 hover:bg-elevated',
+              'h-5 px-1.5 text-[10px] font-medium opacity-0 transition-all group-hover:opacity-100 hover:bg-elevated',
               isFailed
                 ? 'text-danger/60 hover:text-danger'
                 : isAwaiting
@@ -355,7 +362,7 @@ function DraggableCard({
               onClick();
             }}
           >
-            <ChevronRight size={10} />
+            View
           </Button>
         </div>
       </div>
@@ -365,6 +372,7 @@ function DraggableCard({
 
 function DroppableColumn({
   id,
+  columnKey,
   label,
   issues,
   droppable,
@@ -374,6 +382,7 @@ function DroppableColumn({
   onArchiveIssue,
 }: {
   id: string;
+  columnKey: ColumnKey;
   label: string;
   issues: GitHubIssueCacheRecord[];
   droppable: boolean;
@@ -393,7 +402,10 @@ function DroppableColumn({
       )}
     >
       <div className="flex items-center justify-between px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-primary border-b border-border shrink-0">
-        <span>{label}</span>
+        <span className="flex items-center gap-1.5">
+          <span className={cn('w-2 h-2 rounded-full shrink-0', COLUMN_DOT_CLASS[columnKey])} />
+          {label}
+        </span>
         <div className="flex items-center gap-1">
           {onArchiveAllDone && issues.length > 0 && (
             <Button
@@ -411,7 +423,7 @@ function DroppableColumn({
           </span>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto p-1.5 flex flex-col gap-1 min-h-[60px]">
+      <div className={cn('flex-1 overflow-y-auto p-1.5 flex flex-col gap-1 min-h-[60px]', columnKey === 'done' && 'opacity-60')}>
         {issues.map((issue) => (
           <DraggableCard
             key={issue.id}
@@ -547,7 +559,10 @@ function StackedColumn({
   return (
     <div className="flex-[1.3] min-w-[180px] max-w-[280px] flex flex-col bg-secondary rounded-md overflow-hidden border border-border/40">
       <div className="flex items-center justify-between px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-primary border-b border-border shrink-0">
-        <span>{column.label}</span>
+        <span className="flex items-center gap-1.5">
+          <span className={cn('w-2 h-2 rounded-full shrink-0', COLUMN_DOT_CLASS[column.key])} />
+          {column.label}
+        </span>
         <span className="text-[10px] bg-tertiary text-muted px-1.5 py-px rounded-full font-medium">
           {columnIssues.length}
         </span>
@@ -675,6 +690,7 @@ function DraggableListRow({
             ? 'border-warning bg-warning/[0.08] text-primary'
             : 'border-warning/60 bg-warning/[0.03] hover:bg-warning/[0.06] text-primary'),
         isDragging ? 'opacity-40' : '',
+        !isDragging && issue.pipelineStatus === 'completed' && 'opacity-60',
         isDraggable ? 'cursor-grab' : 'cursor-pointer',
         activeId && activeId !== issue.id ? 'pointer-events-none' : '',
       )}
@@ -693,7 +709,7 @@ function DraggableListRow({
             tone === 'danger' && 'bg-danger',
             tone === 'warning' && 'bg-warning',
             tone === 'default' &&
-              (issue.pipelineStatus === 'completed' ? 'bg-success' : 'bg-text-muted'),
+              (issue.pipelineStatus === 'completed' ? 'bg-done' : 'bg-text-muted'),
           )}
         />
       )}
@@ -864,6 +880,7 @@ function IssueListView({
                 onClick={() => toggle(col.key)}
               >
                 {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                <span className={cn('w-2 h-2 rounded-full shrink-0', COLUMN_DOT_CLASS[col.key])} />
                 {label}
                 <span className="text-muted font-normal normal-case tracking-normal ml-0.5">
                   ({columnIssues.length})
@@ -1127,6 +1144,7 @@ export function KanbanBoard({
                 <DroppableColumn
                   key={col.key}
                   id={col.key}
+                  columnKey={col.key}
                   label={col.label}
                   issues={columnIssues}
                   droppable={!!col.droppable}

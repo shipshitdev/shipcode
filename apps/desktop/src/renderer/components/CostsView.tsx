@@ -39,7 +39,7 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
-// See DashboardView for why all 6 agent phases share one color.
+// See OverviewView for why all 6 agent phases share one color.
 const AGENT_PHASE_CLASSES = 'bg-agent/10 text-agent border-agent/25';
 
 const PHASE_COLOR: Partial<Record<PipelinePhase, string>> = {

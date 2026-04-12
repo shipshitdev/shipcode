@@ -16,7 +16,7 @@ import {
 
 vi.mock('@shipcode/git', () => {
   class WorktreeManager {
-    create = vi.fn().mockResolvedValue({ worktreePath: '/fake/worktree', branch: 'shipcode/t1' });
+    create = vi.fn().mockResolvedValue({ worktreePath: '/fake/worktree', branch: 'feat/42-bug' });
     remove = vi.fn().mockResolvedValue({ success: true });
   }
   class GitService {
@@ -1054,6 +1054,7 @@ describe('createPipeline', () => {
       expect(ctx).toBeDefined();
       expect(ctx!.autonomous).toBe(true);
       expect(ctx!.githubIssueNumber).toBe(7);
+      expect(ctx!.githubIssueTitle).toBe('Bug');
       expect(ctx!.baseBranch).toBe('develop');
       expect(ctx!.forkPointSha).toBe('forksha');
       expect(ctx!.executorModel).toBe('codex');

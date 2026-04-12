@@ -89,6 +89,24 @@ export function SettingsPanel() {
               {worktreeRootError ? (
                 <p className="text-xs text-red-500 mt-1">{worktreeRootError}</p>
               ) : null}
+              <SettingsRow label="Branch format" htmlFor="worktree-branch-format">
+                <Input
+                  id="worktree-branch-format"
+                  type="text"
+                  placeholder="feat/{id}-{slug}"
+                  className="w-[280px]"
+                  defaultValue={settings.worktreeBranchFormat ?? 'feat/{id}-{slug}'}
+                  onBlur={(e) => {
+                    const raw = e.target.value.trim();
+                    const next = raw === '' ? 'feat/{id}-{slug}' : raw;
+                    updateSettings.mutate({ worktreeBranchFormat: next });
+                  }}
+                />
+              </SettingsRow>
+              <p className="text-xs text-secondary mt-2">
+                Tokens: <code>{'{id}'}</code> = issue number, <code>{'{slug}'}</code> = slugified
+                title. Default: <code>feat/{'{id}'}-{'{slug}'}</code>. Leave blank to reset.
+              </p>
             </section>
 
             <section className="mb-8">

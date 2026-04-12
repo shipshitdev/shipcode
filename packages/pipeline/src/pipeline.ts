@@ -66,6 +66,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       reviewRound: seed.reviewRound ?? 0,
       verificationRetries: seed.verificationRetries ?? 0,
       githubIssueNumber: seed.githubIssueNumber ?? null,
+      githubIssueTitle: seed.githubIssueTitle ?? null,
       githubRepo: seed.githubRepo ?? null,
       executorModel: seed.executorModel ?? 'claude',
       executorModelOverride: seed.executorModelOverride ?? null,
@@ -462,8 +463,15 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         const appSettings = deps.settings.get();
         const worktreeManager = new WorktreeManager(context.projectPath, {
           worktreeRoot: appSettings.worktreeRoot,
+          branchFormat: appSettings.worktreeBranchFormat,
         });
-        const wt = await worktreeManager.create(threadId, context.baseBranch || undefined);
+        const wt = context.githubIssueNumber
+          ? await worktreeManager.create(
+              context.githubIssueNumber,
+              context.githubIssueTitle ?? '',
+              context.baseBranch || undefined,
+            )
+          : await worktreeManager.create(threadId, context.baseBranch || undefined);
         context.worktreePath = wt.worktreePath;
         deps.threads.setWorktree(threadId, wt.branch, wt.worktreePath);
       } catch (err) {
@@ -827,6 +835,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       reviewRound: 0,
       verificationRetries: 0,
       githubIssueNumber: issue.number,
+      githubIssueTitle: issue.title,
       githubRepo: null,
       executorModel,
       executorModelOverride,

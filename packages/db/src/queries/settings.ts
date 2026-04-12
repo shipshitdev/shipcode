@@ -78,6 +78,8 @@ export class SettingsQueries {
         (stored.projectSortOrder as AppSettings['projectSortOrder']) ??
         DEFAULT_SETTINGS.projectSortOrder,
       worktreeRoot: readWorktreeRoot(stored.worktreeRoot),
+      worktreeBranchFormat:
+        stored.worktreeBranchFormat || DEFAULT_SETTINGS.worktreeBranchFormat,
       plannerMaxTurns: clampInt(stored.plannerMaxTurns, 1, 20, DEFAULT_SETTINGS.plannerMaxTurns),
       maxReviewRounds: clampInt(stored.maxReviewRounds, 1, 5, DEFAULT_SETTINGS.maxReviewRounds),
       requireApproval: parseBool(stored.requireApproval, DEFAULT_SETTINGS.requireApproval),

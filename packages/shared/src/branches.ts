@@ -25,7 +25,7 @@ export interface NormalizeBranchesInput {
 }
 
 const COMMON_DEFAULTS = ['main', 'master', 'develop', 'trunk'];
-const INTERNAL_PREFIX = 'shipcode/';
+const SHIPCODE_BRANCH_RE = /^(shipcode\/|feat\/\d+-)/;
 
 export function normalizeBranches({ raw, defaultBranch }: NormalizeBranchesInput): string[] {
   const locals = new Set<string>();
@@ -43,11 +43,11 @@ export function normalizeBranches({ raw, defaultBranch }: NormalizeBranchesInput
       const firstSlash = stripped.indexOf('/');
       if (firstSlash < 0) continue;
       const branchPart = stripped.slice(firstSlash + 1);
-      if (branchPart.startsWith(INTERNAL_PREFIX)) continue;
+      if (SHIPCODE_BRANCH_RE.test(branchPart)) continue;
       if (branchPart === 'HEAD') continue;
       remoteOnly.add(stripped);
     } else {
-      if (name.startsWith(INTERNAL_PREFIX)) continue;
+      if (SHIPCODE_BRANCH_RE.test(name)) continue;
       locals.add(name);
     }
   }

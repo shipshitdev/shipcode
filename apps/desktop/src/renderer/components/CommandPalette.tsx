@@ -26,7 +26,7 @@ export function CommandPalette() {
     toggleSidebar,
     toggleIssueDetail,
     activeIssue,
-    openDashboard,
+    openOverview,
     openActivity,
     openInbox,
     openCosts,
@@ -135,8 +135,8 @@ export function CommandPalette() {
         )}
 
         <CommandGroup heading="Go to">
-          <CommandItem onSelect={() => runAction(() => openDashboard())}>
-            <span className="flex-1">Mission Control</span>
+          <CommandItem onSelect={() => runAction(() => openOverview())}>
+            <span className="flex-1">Overview</span>
           </CommandItem>
           <CommandItem onSelect={() => runAction(() => openInbox())}>
             <span className="flex-1">Inbox</span>

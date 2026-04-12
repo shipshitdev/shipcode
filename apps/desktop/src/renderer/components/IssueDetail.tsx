@@ -11,6 +11,7 @@ import { deriveGithubIssueUrl, shipCodePlanSchema } from '@shipcode/shared';
 import {
   Badge,
   Button,
+  cn,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -35,6 +36,10 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
   Textarea,
   X,
 } from '@shipcode/ui';
@@ -44,7 +49,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useAppStore } from '../stores/app-store';
 
-// See DashboardView for why all 6 agent phases share one color.
+// See OverviewView for why all 6 agent phases share one color.
 const AGENT_PHASE_CLASSES = 'bg-agent/10 text-agent border-agent/25';
 
 const PHASE_COLOR: Partial<Record<PipelinePhase, string>> = {
@@ -89,7 +94,17 @@ function resolveRawPlanText(raw: string): string {
     if (!line) continue;
     try {
       const parsed = JSON.parse(line);
-      if (parsed.type === 'result' && typeof parsed.result === 'string') return parsed.result;
+      if (parsed.type === 'result') {
+        if (typeof parsed.result === 'string') return parsed.result;
+        // Extended thinking: result is an array of content blocks
+        if (Array.isArray(parsed.result)) {
+          const text = parsed.result
+            .filter((b: { type: string }) => b.type === 'text')
+            .map((b: { text: string }) => b.text)
+            .join('\n');
+          if (text) return text;
+        }
+      }
     } catch {}
   }
   // Codex --json: join agent_message texts
@@ -150,9 +165,6 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     'approve',
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isEditingPlan, setIsEditingPlan] = useState(false);
-  const [editPlanText, setEditPlanText] = useState('');
-  const [editPlanError, setEditPlanError] = useState('');
   const [isRefreshingFromGithub, setIsRefreshingFromGithub] = useState(false);
   const [prdCollapsed, setPrdCollapsed] = useState(false);
   const [showRawOutput, setShowRawOutput] = useState(false);
@@ -547,7 +559,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
   const approvalSection = hasApprovalDecision ? (
     <div className="mb-5 rounded-md border border-border bg-secondary p-3">
-      <div className="mb-3 flex items-center gap-2">
+      <div className={cn('flex items-center gap-2', pendingAction === 'request_changes' && 'mb-3')}>
         <Select
           value={pendingAction}
           onValueChange={(v) =>
@@ -579,10 +591,9 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         {pendingAction === 'cancel' && (
           <Button
             size="sm"
-            variant="ghost"
+            variant="destructive"
             onClick={handleCancel}
             disabled={isSubmitting}
-            className="text-danger hover:bg-danger/10 hover:text-danger"
           >
             {isSubmitting ? 'Cancelling...' : 'Confirm cancel'}
           </Button>
@@ -692,55 +703,118 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       </div>
     ) : null;
 
-  const pipelineStartCard = canStartPipeline ? (
-    <div className="sticky -top-4 z-20 -mx-4 -mt-4 mb-4 bg-primary px-4 pt-4 pb-3">
-      <div className="rounded-lg border border-border bg-tertiary p-4 shadow-[0_1px_0_0_rgba(0,0,0,0.3)]">
-        <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
-          Ready
-        </div>
-        <h4 className="mb-1.5 text-[14px] font-semibold leading-snug text-primary">
-          Run the agent pipeline
-        </h4>
-        <p className="mb-5 text-[12px] leading-relaxed text-secondary">
-          The issue will move through these phases in an isolated worktree. You'll approve the plan
-          before any code is written.
-        </p>
+  const pipelineStartCardInner = canStartPipeline ? (
+    <div className="rounded-lg border border-border bg-tertiary p-4 shadow-[0_1px_0_0_rgba(0,0,0,0.3)]">
+      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
+        Ready
+      </div>
+      <h4 className="mb-1.5 text-[14px] font-semibold leading-snug text-primary">
+        Run the agent pipeline
+      </h4>
+      <p className="mb-5 text-[12px] leading-relaxed text-secondary">
+        The issue will move through these phases in an isolated worktree. You'll approve the plan
+        before any code is written.
+      </p>
 
-        <div className="mb-5">
-          <div className="relative">
-            <div
-              aria-hidden="true"
-              className="absolute left-[9px] right-[9px] top-[9px] h-px bg-border"
-            />
-            <ol className="relative grid grid-cols-5 gap-1">
-              {PIPELINE_PREVIEW_PHASES.map((phase, i) => (
-                <li key={phase.id} className="flex min-w-0 flex-col items-center gap-1.5">
-                  <span className="relative flex h-[18px] w-[18px] items-center justify-center rounded-full border border-border bg-tertiary font-mono text-[9px] font-medium text-muted">
-                    {i + 1}
-                  </span>
-                  <span className="w-full truncate text-center text-[9px] font-semibold uppercase tracking-normal text-muted">
-                    {phase.label}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <Button size="sm" onClick={handleStartPipeline} disabled={isSubmitting}>
-            {isSubmitting ? 'Starting…' : 'Start pipeline'}
-          </Button>
-          <Button
-            variant="link"
-            size="xs"
-            onClick={handleEditPrd}
-            className="px-0 text-muted hover:text-primary"
-          >
-            Edit PRD first
-          </Button>
+      <div className="mb-5">
+        <div className="relative">
+          <div
+            aria-hidden="true"
+            className="absolute left-[9px] right-[9px] top-[9px] h-px bg-border"
+          />
+          <ol className="relative grid grid-cols-5 gap-1">
+            {PIPELINE_PREVIEW_PHASES.map((phase, i) => (
+              <li key={phase.id} className="flex min-w-0 flex-col items-center gap-1.5">
+                <span className="relative flex h-[18px] w-[18px] items-center justify-center rounded-full border border-border bg-tertiary font-mono text-[9px] font-medium text-muted">
+                  {i + 1}
+                </span>
+                <span className="w-full truncate text-center text-[9px] font-semibold uppercase tracking-normal text-muted">
+                  {phase.label}
+                </span>
+              </li>
+            ))}
+          </ol>
         </div>
       </div>
+
+      <div className="flex items-center gap-3">
+        <Button size="sm" onClick={handleStartPipeline} disabled={isSubmitting}>
+          {isSubmitting ? 'Starting…' : 'Start pipeline'}
+        </Button>
+        <Button
+          variant="link"
+          size="xs"
+          onClick={handleEditPrd}
+          className="px-0 text-muted hover:text-primary"
+        >
+          Edit PRD first
+        </Button>
+      </div>
+    </div>
+  ) : null;
+
+  // Expanded layout only — panel mode uses pipelineStartCardInner directly (no sticky wrapper needed)
+  const pipelineStartCard = canStartPipeline ? (
+    <div className="sticky -top-4 z-20 -mx-4 -mt-4 mb-4 bg-primary px-4 pt-4 pb-3">
+      {pipelineStartCardInner}
+    </div>
+  ) : null;
+
+  const rerunSection = canRerun ? (
+    <div className="mb-5">
+      {(thread?.lastError || planHistory[0]?.rawOutput) && (
+        <div className="mb-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-danger">Error</p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="text-danger/60 hover:bg-danger/10 hover:text-danger"
+                onClick={() =>
+                  navigator.clipboard.writeText(
+                    [thread?.lastError, planHistory[0]?.rawOutput].filter(Boolean).join('\n\n'),
+                  )
+                }
+                title="Copy to clipboard"
+              >
+                <Copy size={13} />
+              </Button>
+              {planHistory[0]?.rawOutput && (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="text-danger/60 hover:bg-danger/10 hover:text-danger"
+                  onClick={() => setShowRawOutput((v) => !v)}
+                >
+                  {showRawOutput ? (
+                    <ChevronUp size={16} strokeWidth={2.25} />
+                  ) : (
+                    <ChevronDown size={16} strokeWidth={2.25} />
+                  )}
+                </Button>
+              )}
+            </div>
+          </div>
+          {thread?.lastError && (
+            <p className="text-[12px] text-danger/80 break-words">{thread.lastError}</p>
+          )}
+          {showRawOutput && planHistory[0]?.rawOutput && (
+            <pre className="mt-2 max-h-[200px] overflow-y-auto text-[11px] text-danger/70 whitespace-pre-wrap break-words border-t border-danger/20 pt-2">
+              {planHistory[0].rawOutput}
+            </pre>
+          )}
+        </div>
+      )}
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={handleRerun}
+        disabled={isSubmitting}
+        className="w-full border-danger/40 text-danger hover:bg-danger/10 hover:border-danger"
+      >
+        {isSubmitting ? 'Starting...' : 'Re-run Pipeline'}
+      </Button>
     </div>
   ) : null;
 
@@ -757,8 +831,6 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       onOpenChange={(open) => {
         if (!open) {
           setFullScreenPlanId(null);
-          setIsEditingPlan(false);
-          setEditPlanError('');
         }
       }}
     >
@@ -896,67 +968,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         <div className="w-72 shrink-0 border-l border-border overflow-y-auto p-4">
           {pipelineStartCard}
           {/* Re-run CTA — top action when failed */}
-          {canRerun && (
-            <div className="mb-4">
-              {(thread?.lastError || planHistory[0]?.rawOutput) && (
-                <div className="mb-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-danger">
-                      Error
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        className="text-danger/60 hover:bg-danger/10 hover:text-danger"
-                        onClick={() =>
-                          navigator.clipboard.writeText(
-                            [thread?.lastError, planHistory[0]?.rawOutput]
-                              .filter(Boolean)
-                              .join('\n\n'),
-                          )
-                        }
-                        title="Copy to clipboard"
-                      >
-                        <Copy size={13} />
-                      </Button>
-                      {planHistory[0]?.rawOutput && (
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          className="text-danger/60 hover:bg-danger/10 hover:text-danger"
-                          onClick={() => setShowRawOutput((v) => !v)}
-                        >
-                          {showRawOutput ? (
-                            <ChevronUp size={16} strokeWidth={2.25} />
-                          ) : (
-                            <ChevronDown size={16} strokeWidth={2.25} />
-                          )}
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                  {thread?.lastError && (
-                    <p className="text-[12px] text-danger/80 break-words">{thread.lastError}</p>
-                  )}
-                  {showRawOutput && planHistory[0]?.rawOutput && (
-                    <pre className="mt-2 max-h-[200px] overflow-y-auto text-[11px] text-danger/70 whitespace-pre-wrap break-words border-t border-danger/20 pt-2">
-                      {planHistory[0].rawOutput}
-                    </pre>
-                  )}
-                </div>
-              )}
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleRerun}
-                disabled={isSubmitting}
-                className="w-full border-danger/40 text-danger hover:bg-danger/10 hover:border-danger"
-              >
-                {isSubmitting ? 'Starting...' : 'Re-run Pipeline'}
-              </Button>
-            </div>
-          )}
+          {rerunSection}
 
           {agentsSection}
           {pipelineSection}
@@ -969,7 +981,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   // ─── Panel (default) layout ──────────────────────────────────────────────
 
   return (
-    <div className="h-full flex flex-col overflow-y-auto bg-primary">
+    <div className="h-full flex flex-col overflow-hidden bg-primary">
       {/* Header */}
       <div className="relative shrink-0 border-b border-border p-4">
         {headerButtons}
@@ -991,139 +1003,95 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         {issueBadges}
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4">
-        {pipelineStartCard}
-        {/* Re-run CTA — top of content when failed */}
-        {canRerun && (
+      {/* Primary CTAs — above tabs, always visible */}
+      {pipelineStartCardInner && (
+        <div className="shrink-0 p-4 pb-0">{pipelineStartCardInner}</div>
+      )}
+      {rerunSection && (
+        <div className="shrink-0 px-4 pt-4">{rerunSection}</div>
+      )}
+
+      {/* Tabbed content — min-h-0 required for flex scroll containment */}
+      <Tabs defaultValue="plan" className="flex-1 min-h-0 flex flex-col">
+        <TabsList className="shrink-0 px-4">
+          <TabsTrigger value="plan">Plan</TabsTrigger>
+          <TabsTrigger value="agents">Agents</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="plan" className="p-4">
+          {/* PRD (GitHub issue body IS the PRD) */}
           <div className="mb-5">
-            {(thread?.lastError || planHistory[0]?.rawOutput) && (
-              <div className="mb-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-danger">
-                    Error
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      className="text-danger/60 hover:bg-danger/10 hover:text-danger"
-                      onClick={() =>
-                        navigator.clipboard.writeText(
-                          [thread?.lastError, planHistory[0]?.rawOutput]
-                            .filter(Boolean)
-                            .join('\n\n'),
-                        )
-                      }
-                      title="Copy to clipboard"
-                    >
-                      <Copy size={13} />
-                    </Button>
-                    {planHistory[0]?.rawOutput && (
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        className="text-danger/60 hover:bg-danger/10 hover:text-danger"
-                        onClick={() => setShowRawOutput((v) => !v)}
-                      >
-                        {showRawOutput ? (
-                          <ChevronUp size={16} strokeWidth={2.25} />
-                        ) : (
-                          <ChevronDown size={16} strokeWidth={2.25} />
-                        )}
-                      </Button>
-                    )}
+            <div className="mb-2 flex w-full items-center justify-between">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">PRD</h4>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={handleRefreshFromGithub}
+                  disabled={isRefreshingFromGithub}
+                  title="Re-fetch issue body from GitHub (use after editing on github.com)"
+                  aria-label="Refresh PRD from GitHub"
+                >
+                  <RefreshCw size={12} className={isRefreshingFromGithub ? 'animate-spin' : ''} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={handleEditPrd}
+                  title="Edit the PRD body (pushes to the GitHub issue on save)"
+                  aria-label="Edit PRD"
+                >
+                  <Pencil size={13} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => setPrdCollapsed((v) => !v)}
+                  title={prdCollapsed ? 'Expand PRD' : 'Collapse PRD'}
+                  aria-label={prdCollapsed ? 'Expand PRD' : 'Collapse PRD'}
+                >
+                  {prdCollapsed ? (
+                    <ChevronDown size={16} strokeWidth={2.25} className="text-muted" />
+                  ) : (
+                    <ChevronUp size={16} strokeWidth={2.25} className="text-muted" />
+                  )}
+                </Button>
+              </div>
+            </div>
+            {!prdCollapsed &&
+              (activeIssue.body ? (
+                <div className="max-h-[300px] overflow-y-auto rounded-md bg-secondary p-3 text-[13px] leading-relaxed text-primary">
+                  <div className={PRD_PROSE_CLASSES}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{activeIssue.body}</ReactMarkdown>
                   </div>
                 </div>
-                {thread?.lastError && (
-                  <p className="text-[12px] text-danger/80 break-words">{thread.lastError}</p>
-                )}
-                {showRawOutput && planHistory[0]?.rawOutput && (
-                  <pre className="mt-2 max-h-[200px] overflow-y-auto text-[11px] text-danger/70 whitespace-pre-wrap break-words border-t border-danger/20 pt-2">
-                    {planHistory[0].rawOutput}
-                  </pre>
-                )}
-              </div>
-            )}
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleRerun}
-              disabled={isSubmitting}
-              className="w-full border-danger/40 text-danger hover:bg-danger/10 hover:border-danger"
-            >
-              {isSubmitting ? 'Starting...' : 'Re-run Pipeline'}
-            </Button>
-          </div>
-        )}
-
-        {/* PRD (GitHub issue body IS the PRD) */}
-        <div className="mb-5">
-          <div className="mb-2 flex w-full items-center justify-between">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">PRD</h4>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={handleRefreshFromGithub}
-                disabled={isRefreshingFromGithub}
-                title="Re-fetch issue body from GitHub (use after editing on github.com)"
-                aria-label="Refresh PRD from GitHub"
-              >
-                <RefreshCw size={12} className={isRefreshingFromGithub ? 'animate-spin' : ''} />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={handleEditPrd}
-                title="Edit the PRD body (pushes to the GitHub issue on save)"
-                aria-label="Edit PRD"
-              >
-                <Pencil size={13} />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={() => setPrdCollapsed((v) => !v)}
-                title={prdCollapsed ? 'Expand PRD' : 'Collapse PRD'}
-                aria-label={prdCollapsed ? 'Expand PRD' : 'Collapse PRD'}
-              >
-                {prdCollapsed ? (
-                  <ChevronDown size={16} strokeWidth={2.25} className="text-muted" />
-                ) : (
-                  <ChevronUp size={16} strokeWidth={2.25} className="text-muted" />
-                )}
-              </Button>
-            </div>
-          </div>
-          {!prdCollapsed &&
-            (activeIssue.body ? (
-              <div className="max-h-[300px] overflow-y-auto rounded-md bg-secondary p-3 text-[13px] leading-relaxed text-primary">
-                <div className={PRD_PROSE_CLASSES}>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{activeIssue.body}</ReactMarkdown>
+              ) : (
+                <div className="rounded-md bg-secondary p-3 text-[13px] text-muted">
+                  This issue has no PRD body yet. Click "Edit PRD" to author one.
                 </div>
-              </div>
-            ) : (
-              <div className="rounded-md bg-secondary p-3 text-[13px] text-muted">
-                This issue has no PRD body yet. Click "Edit PRD" to author one.
-              </div>
-            ))}
-        </div>
-
-        {agentsSection}
-        {pipelineSection}
-        {approvalSection}
-        {planHistorySection}
-
-        {/* Thread exists but no plans yet — only while not failed */}
-        {activeThreadId && planHistory.length === 0 && threadPhase !== 'failed' && (
-          <div className="mb-5">
-            <p className="py-4 text-center text-[13px] text-muted">
-              Pipeline is running — waiting for plan generation...
-            </p>
+              ))}
           </div>
-        )}
-      </div>
+
+          {approvalSection}
+          {planHistorySection}
+
+          {/* Thread exists but no plans yet — only while not failed */}
+          {activeThreadId && planHistory.length === 0 && threadPhase !== 'failed' && (
+            <div className="mb-5">
+              <p className="py-4 text-center text-[13px] text-muted">
+                Pipeline is running — waiting for plan generation...
+              </p>
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="agents" className="p-4">
+          {agentsSection}
+          {pipelineSection}
+        </TabsContent>
+      </Tabs>
+
+      {/* Portal-based dialog — outside tabs to avoid unmount on tab switch */}
       {planFullScreenDialog}
     </div>
   );
