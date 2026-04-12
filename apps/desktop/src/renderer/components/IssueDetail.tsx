@@ -146,8 +146,13 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const prevLatestPlanIdRef = useRef<string | null>(null);
   const [fullScreenPlanId, setFullScreenPlanId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState('');
-  const [showRejectForm, setShowRejectForm] = useState(false);
+  const [pendingAction, setPendingAction] = useState<'approve' | 'request_changes' | 'cancel'>(
+    'approve',
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isEditingPlan, setIsEditingPlan] = useState(false);
+  const [editPlanText, setEditPlanText] = useState('');
+  const [editPlanError, setEditPlanError] = useState('');
   const [isRefreshingFromGithub, setIsRefreshingFromGithub] = useState(false);
   const [prdCollapsed, setPrdCollapsed] = useState(false);
   const [showRawOutput, setShowRawOutput] = useState(false);
@@ -273,7 +278,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         feedback: feedback.trim(),
       });
       setFeedback('');
-      setShowRejectForm(false);
+      setPendingAction('approve');
       await refreshIssueState();
     } finally {
       setIsSubmitting(false);
@@ -542,33 +547,48 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
   const approvalSection = hasApprovalDecision ? (
     <div className="mb-5 rounded-md border border-border bg-secondary p-3">
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Button
-          onClick={handleApprove}
-          disabled={isSubmitting || !canApprove}
-          title={
-            !canApprove ? 'Plan could not be parsed — use Request Changes or Cancel' : undefined
+      <div className="mb-3 flex items-center gap-2">
+        <Select
+          value={pendingAction}
+          onValueChange={(v) =>
+            setPendingAction(v as 'approve' | 'request_changes' | 'cancel')
           }
-        >
-          {isSubmitting ? 'Approving...' : 'Approve & Execute'}
-        </Button>
-        <Button
-          variant="secondary"
-          onClick={() => setShowRejectForm((value) => !value)}
           disabled={isSubmitting}
         >
-          Request Changes
-        </Button>
-        <Button
-          variant="ghost"
-          onClick={handleCancel}
-          disabled={isSubmitting}
-          className="ml-auto text-danger hover:bg-danger/10 hover:text-danger"
-        >
-          Cancel pipeline
-        </Button>
+          <SelectTrigger className="h-8 w-48 text-[12px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="approve">Approve &amp; Execute</SelectItem>
+            <SelectItem value="request_changes">Request Changes</SelectItem>
+            <SelectItem value="cancel">Cancel pipeline</SelectItem>
+          </SelectContent>
+        </Select>
+        {pendingAction === 'approve' && (
+          <Button
+            size="sm"
+            onClick={handleApprove}
+            disabled={isSubmitting || !canApprove}
+            title={
+              !canApprove ? 'Plan could not be parsed — use Request Changes or Cancel' : undefined
+            }
+          >
+            {isSubmitting ? 'Approving...' : 'Confirm'}
+          </Button>
+        )}
+        {pendingAction === 'cancel' && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={handleCancel}
+            disabled={isSubmitting}
+            className="text-danger hover:bg-danger/10 hover:text-danger"
+          >
+            {isSubmitting ? 'Cancelling...' : 'Confirm cancel'}
+          </Button>
+        )}
       </div>
-      {showRejectForm && (
+      {pendingAction === 'request_changes' && (
         <div className="flex flex-col gap-2">
           <Textarea
             value={feedback}
@@ -579,6 +599,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
           <div className="flex justify-end">
             <Button
               variant="secondary"
+              size="sm"
               onClick={handleReject}
               disabled={!feedback.trim() || isSubmitting}
             >
@@ -734,7 +755,11 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     <Dialog
       open={fullScreenPlanId !== null}
       onOpenChange={(open) => {
-        if (!open) setFullScreenPlanId(null);
+        if (!open) {
+          setFullScreenPlanId(null);
+          setIsEditingPlan(false);
+          setEditPlanError('');
+        }
       }}
     >
       <DialogContent className="max-w-4xl h-[90vh] flex flex-col overflow-hidden p-0 bg-primary">
