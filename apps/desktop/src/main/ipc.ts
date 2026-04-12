@@ -20,7 +20,7 @@ import { promisify } from 'node:util';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { ProcessManager } from '@shipcode/agents';
-import type { PhaseSkillKey } from '@shipcode/shared';
+import type { PhaseSkillKey, ShipCodePlan } from '@shipcode/shared';
 import {
   validateGithubProjectUrl,
   clampError,
@@ -35,6 +35,7 @@ import {
   validateSkill,
   DEFAULT_SKILLS,
   PHASE_SKILL_KEYS,
+  StreamParser,
 } from '@shipcode/agents';
 import { isSafeExternalUrl } from './security';
 
@@ -58,6 +59,17 @@ interface Queries {
   dashboard: DashboardQueries;
   costs: CostsQueries;
   skills: SkillsQueries;
+}
+
+/** Try to extract a validated ShipCodePlan from raw pipeline output.
+ *  Reuses StreamParser which already handles stream-json / codex unwrapping
+ *  and fenced-block extraction with JSON fallback. */
+function tryParsePlan(rawOutput: string): ShipCodePlan | null {
+  if (!rawOutput) return null;
+  const parser = new StreamParser();
+  parser.feed(rawOutput);
+  const result = parser.extractPlan();
+  return result.success ? result.data : null;
 }
 
 export function registerIpcHandlers(
@@ -442,9 +454,7 @@ export function registerIpcHandlers(
 
       const record = queries.githubIssues.getByNumber(projectId, issue.number);
       if (!record) {
-        throw new Error(
-          `Created issue #${issue.number} not found in cache after upsert`,
-        );
+        throw new Error(`Created issue #${issue.number} not found in cache after upsert`);
       }
       return { issue: record, projectAttachWarning };
     },
@@ -494,9 +504,7 @@ export function registerIpcHandlers(
 
       const parsed = parseGithubProjectUrl(project.githubProjectUrl);
       if (!parsed) {
-        throw new Error(
-          'No GitHub Projects v2 URL set. Paste a board URL above and save first.',
-        );
+        throw new Error('No GitHub Projects v2 URL set. Paste a board URL above and save first.');
       }
 
       const issues = queries.githubIssues.list(projectId);
@@ -579,10 +587,7 @@ export function registerIpcHandlers(
             issueUrl,
           });
         } catch (err) {
-          log.warn(
-            `[github:start-issue] project attach failed for #${issue.issueNumber}:`,
-            err,
-          );
+          log.warn(`[github:start-issue] project attach failed for #${issue.issueNumber}:`, err);
         }
       }
 
@@ -733,11 +738,15 @@ export function registerIpcHandlers(
 
   ipcMain.handle('pipeline:approve', async (_event, { threadId }: { threadId: string }) => {
     const latestPlan = queries.plans.getLatest(threadId);
-    if (latestPlan?.structured) {
-      queries.plans.updateStatus(latestPlan.id, 'approved');
-      await pipeline.startExecution(threadId, latestPlan.structured);
+    const structured = latestPlan?.structured ?? tryParsePlan(latestPlan?.rawOutput ?? '');
+    if (structured) {
+      // Persist the parsed plan so future reads don't re-parse
+      if (!latestPlan?.structured && latestPlan) {
+        queries.plans.updateStructured(latestPlan.id, structured);
+      }
+      queries.plans.updateStatus(latestPlan!.id, 'approved');
+      await pipeline.startExecution(threadId, structured);
     } else {
-      // No structured plan — just mark as executing anyway
       mainWindow.webContents.send('pipeline:phase', { threadId, phase: 'failed' });
     }
   });
@@ -878,35 +887,29 @@ export function registerIpcHandlers(
   //   - 1 entry that explains it is the bundled default.
   // The renderer picks the first non-default tier and presents it in the
   // editor; the rest are surfaced as "fall-through" badges.
-  ipcMain.handle(
-    'skills:list-for-view',
-    (_event, { projectId }: { projectId: string | null }) => {
-      return PHASE_SKILL_KEYS.map((phase) => {
-        const projectRow = projectId !== null ? buildSkillRow(phase, projectId) : null;
-        const globalRow = buildSkillRow(phase, null);
-        return {
-          phase,
-          requiredSlots: DEFAULT_SKILLS[phase].requiredSlots,
-          bundledVersion: DEFAULT_SKILLS[phase].version,
-          bundledSchemaVersion: DEFAULT_SKILLS[phase].schemaVersion,
-          projectRow,
-          globalRow,
-          // The "active" row is what the resolver would actually use right now.
-          active:
-            projectRow && projectRow.source !== 'default' && projectRow.status === 'ok'
-              ? projectRow
-              : globalRow,
-        };
-      });
-    },
-  );
+  ipcMain.handle('skills:list-for-view', (_event, { projectId }: { projectId: string | null }) => {
+    return PHASE_SKILL_KEYS.map((phase) => {
+      const projectRow = projectId !== null ? buildSkillRow(phase, projectId) : null;
+      const globalRow = buildSkillRow(phase, null);
+      return {
+        phase,
+        requiredSlots: DEFAULT_SKILLS[phase].requiredSlots,
+        bundledVersion: DEFAULT_SKILLS[phase].version,
+        bundledSchemaVersion: DEFAULT_SKILLS[phase].schemaVersion,
+        projectRow,
+        globalRow,
+        // The "active" row is what the resolver would actually use right now.
+        active:
+          projectRow && projectRow.source !== 'default' && projectRow.status === 'ok'
+            ? projectRow
+            : globalRow,
+      };
+    });
+  });
 
   ipcMain.handle(
     'skills:read',
-    (
-      _event,
-      { projectId, phase }: { projectId: string | null; phase: PhaseSkillKey },
-    ) => {
+    (_event, { projectId, phase }: { projectId: string | null; phase: PhaseSkillKey }) => {
       return buildSkillRow(phase, projectId);
     },
   );
@@ -936,10 +939,7 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     'skills:reset',
-    (
-      _event,
-      { projectId, phase }: { projectId: string | null; phase: PhaseSkillKey },
-    ) => {
+    (_event, { projectId, phase }: { projectId: string | null; phase: PhaseSkillKey }) => {
       queries.skills.delete(projectId, phase);
       return buildSkillRow(phase, projectId);
     },
@@ -1049,7 +1049,11 @@ export function registerIpcHandlers(
     if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
     const proc = processManager.get(processId);
     try {
-      mainWindow.webContents.send('agent:output', { processId, chunk: data, threadId: proc?.threadId });
+      mainWindow.webContents.send('agent:output', {
+        processId,
+        chunk: data,
+        threadId: proc?.threadId,
+      });
     } catch {
       // webContents destroyed between check and send — safe to ignore
     }
@@ -1062,7 +1066,12 @@ export function registerIpcHandlers(
     }
     const proc = processManager.get(processId);
     try {
-      mainWindow.webContents.send('agent:state', { processId, type, state, threadId: proc?.threadId });
+      mainWindow.webContents.send('agent:state', {
+        processId,
+        type,
+        state,
+        threadId: proc?.threadId,
+      });
     } catch {
       // webContents destroyed between check and send — safe to ignore
     }
