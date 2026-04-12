@@ -13,6 +13,7 @@ import {
 } from '@dnd-kit/core';
 import type { GitHubIssueCacheRecord, IssuePipelineStatus } from '@shipcode/shared';
 import {
+  Archive,
   ChevronDown,
   ChevronRight,
   ExternalLink,
@@ -66,6 +67,10 @@ interface KanbanBoardProps {
    * this undefined and lets the browser follow the `<a href>`.
    */
   onOpenExternal?: (url: string) => void;
+  /** Called when user clicks Archive on a single completed issue card. */
+  onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
+  /** Called when user clicks Archive all in the Done column header. */
+  onArchiveAllDone?: () => void;
 }
 
 type ColumnKey = 'todo' | 'agent' | 'human' | 'done';
@@ -207,11 +212,13 @@ function DraggableCard({
   issue,
   onClick,
   onRerun,
+  onArchiveIssue,
   isSelected,
 }: {
   issue: GitHubIssueCacheRecord;
   onClick: () => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
+  onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
   isSelected?: boolean;
 }) {
   const draggable = DRAGGABLE_STATUSES.includes(issue.pipelineStatus);
@@ -288,6 +295,21 @@ function DraggableCard({
           <RotateCcw size={14} />
         </Button>
       )}
+      {issue.pipelineStatus === 'completed' && onArchiveIssue && (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="absolute top-1.5 right-1.5 text-muted/60 hover:bg-muted/10 hover:text-muted opacity-0 group-hover:opacity-100 transition-opacity"
+          title="Archive issue"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onArchiveIssue(issue);
+          }}
+        >
+          <Archive size={14} />
+        </Button>
+      )}
       <div className="text-[11px] text-secondary font-mono mb-0.5">#{issue.issueNumber}</div>
       <div className="text-xs leading-snug text-primary font-medium line-clamp-2">
         {issue.title}
@@ -348,6 +370,8 @@ function DroppableColumn({
   droppable,
   onIssueClick,
   selectedIssueNumber,
+  onArchiveAllDone,
+  onArchiveIssue,
 }: {
   id: string;
   label: string;
@@ -355,6 +379,8 @@ function DroppableColumn({
   droppable: boolean;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
   selectedIssueNumber?: number;
+  onArchiveAllDone?: () => void;
+  onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id, disabled: !droppable });
 
@@ -368,9 +394,22 @@ function DroppableColumn({
     >
       <div className="flex items-center justify-between px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-primary border-b border-border shrink-0">
         <span>{label}</span>
-        <span className="text-[10px] bg-tertiary text-muted px-1.5 py-px rounded-full font-medium">
-          {issues.length}
-        </span>
+        <div className="flex items-center gap-1">
+          {onArchiveAllDone && issues.length > 0 && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="text-muted/60 hover:text-muted hover:bg-muted/10"
+              title="Archive all done issues"
+              onClick={onArchiveAllDone}
+            >
+              <Archive size={12} />
+            </Button>
+          )}
+          <span className="text-[10px] bg-tertiary text-muted px-1.5 py-px rounded-full font-medium">
+            {issues.length}
+          </span>
+        </div>
       </div>
       <div className="flex-1 overflow-y-auto p-1.5 flex flex-col gap-1 min-h-[60px]">
         {issues.map((issue) => (
@@ -379,6 +418,7 @@ function DroppableColumn({
             issue={issue}
             onClick={() => onIssueClick(issue)}
             isSelected={issue.issueNumber === selectedIssueNumber}
+            onArchiveIssue={onArchiveIssue}
           />
         ))}
       </div>
@@ -591,6 +631,7 @@ interface DraggableListRowProps {
   selectedIssueNumber?: number;
   activeId: string | null;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
+  onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
 }
 
 function DraggableListRow({
@@ -598,6 +639,7 @@ function DraggableListRow({
   selectedIssueNumber,
   activeId,
   onIssueClick,
+  onArchiveIssue,
 }: DraggableListRowProps) {
   const isDraggable = DRAGGABLE_STATUSES.includes(issue.pipelineStatus);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
@@ -662,6 +704,21 @@ function DraggableListRow({
         {issue.assignee ?? '—'}
       </span>
       <span className="shrink-0 text-muted text-xs">{formatDate(issue.fetchedAt)}</span>
+      {issue.pipelineStatus === 'completed' && onArchiveIssue && (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="shrink-0 text-muted/50 hover:text-muted hover:bg-muted/10 opacity-0 group-hover:opacity-100 transition-opacity"
+          title="Archive issue"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onArchiveIssue(issue);
+          }}
+        >
+          <Archive size={12} />
+        </Button>
+      )}
     </div>
   );
 }
@@ -775,6 +832,8 @@ interface IssueListViewProps {
   selectedIssueNumber?: number;
   activeId: string | null;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
+  onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
+  onArchiveAllDone?: () => void;
 }
 
 function IssueListView({
@@ -782,6 +841,8 @@ function IssueListView({
   selectedIssueNumber,
   activeId,
   onIssueClick,
+  onArchiveIssue,
+  onArchiveAllDone,
 }: IssueListViewProps) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const toggle = (key: string) => setCollapsed((c) => ({ ...c, [key]: !c[key] }));
@@ -795,18 +856,31 @@ function IssueListView({
         const dropId = LIST_COLUMN_DROP_ID[col.key];
         return (
           <div key={col.key}>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="mb-2 h-auto w-full justify-start gap-2 px-0 text-xs font-semibold uppercase tracking-wider text-secondary hover:bg-transparent hover:text-primary"
-              onClick={() => toggle(col.key)}
-            >
-              {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-              {label}
-              <span className="text-muted font-normal normal-case tracking-normal ml-0.5">
-                ({columnIssues.length})
-              </span>
-            </Button>
+            <div className="mb-2 flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-auto flex-1 justify-start gap-2 px-0 text-xs font-semibold uppercase tracking-wider text-secondary hover:bg-transparent hover:text-primary"
+                onClick={() => toggle(col.key)}
+              >
+                {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                {label}
+                <span className="text-muted font-normal normal-case tracking-normal ml-0.5">
+                  ({columnIssues.length})
+                </span>
+              </Button>
+              {col.key === 'done' && onArchiveAllDone && columnIssues.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="text-muted/60 hover:text-muted hover:bg-muted/10"
+                  title="Archive all done issues"
+                  onClick={onArchiveAllDone}
+                >
+                  <Archive size={12} />
+                </Button>
+              )}
+            </div>
             {!isCollapsed && (
               <DroppableListGroup dropId={dropId}>
                 {col.sections ? (
@@ -835,6 +909,7 @@ function IssueListView({
                         selectedIssueNumber={selectedIssueNumber}
                         activeId={activeId}
                         onIssueClick={onIssueClick}
+                        onArchiveIssue={col.key === 'done' ? onArchiveIssue : undefined}
                       />
                     ))}
                     {columnIssues.length === 0 && (
@@ -869,6 +944,8 @@ export function KanbanBoard({
   repoUrl,
   projectsUrl,
   onOpenExternal,
+  onArchiveIssue,
+  onArchiveAllDone,
 }: KanbanBoardProps) {
   const handleExternalClick = (url: string) => (e: React.MouseEvent<HTMLAnchorElement>) => {
     if (onOpenExternal) {
@@ -1026,6 +1103,8 @@ export function KanbanBoard({
             selectedIssueNumber={selectedIssueNumber}
             activeId={activeId}
             onIssueClick={onIssueClick}
+            onArchiveIssue={onArchiveIssue}
+            onArchiveAllDone={onArchiveAllDone}
           />
         )}
         {view === 'kanban' && (
@@ -1053,6 +1132,8 @@ export function KanbanBoard({
                   droppable={!!col.droppable}
                   onIssueClick={onIssueClick}
                   selectedIssueNumber={selectedIssueNumber}
+                  onArchiveAllDone={col.key === 'done' ? onArchiveAllDone : undefined}
+                  onArchiveIssue={col.key === 'done' ? onArchiveIssue : undefined}
                 />
               );
             })}

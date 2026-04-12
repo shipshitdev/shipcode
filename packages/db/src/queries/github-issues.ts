@@ -13,7 +13,7 @@ export class GitHubIssueQueries {
 
   list(projectId: string): GitHubIssueCacheRecord[] {
     const rows = this.db
-      .prepare('SELECT * FROM github_issue_cache WHERE project_id = ? ORDER BY fetched_at DESC')
+      .prepare('SELECT * FROM github_issue_cache WHERE project_id = ? AND archived_at IS NULL ORDER BY fetched_at DESC')
       .all(projectId) as any[];
     return rows.map((r) => this.toRecord(r));
   }
@@ -194,6 +194,29 @@ export class GitHubIssueQueries {
 
   updateExecutorModel(id: string, model: ExecutorModel): void {
     this.db.prepare('UPDATE github_issue_cache SET executor_model = ? WHERE id = ?').run(model, id);
+  }
+
+  archiveIssues(ids: string[]): void {
+    if (ids.length === 0) return;
+    const placeholders = ids.map(() => '?').join(', ');
+    this.db
+      .prepare(`UPDATE github_issue_cache SET archived_at = ${ISO_NOW_SQL} WHERE id IN (${placeholders})`)
+      .run(...ids);
+  }
+
+  clearArchivedAt(id: string): void {
+    this.db
+      .prepare('UPDATE github_issue_cache SET archived_at = NULL WHERE id = ?')
+      .run(id);
+  }
+
+  listCompleted(projectId: string): GitHubIssueCacheRecord[] {
+    const rows = this.db
+      .prepare(
+        "SELECT * FROM github_issue_cache WHERE project_id = ? AND pipeline_status = 'completed' AND archived_at IS NULL ORDER BY fetched_at DESC",
+      )
+      .all(projectId) as any[];
+    return rows.map((r) => this.toRecord(r));
   }
 
   private toRecord(row: any): GitHubIssueCacheRecord {

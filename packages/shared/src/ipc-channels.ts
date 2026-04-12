@@ -99,6 +99,14 @@ export interface IpcInvokeChannels {
       errors: string[];
     };
   };
+  'github:archive-issue': {
+    args: { projectId: string; issueNumber: number };
+    result: { archivedCount: number };
+  };
+  'github:archive-all-done': {
+    args: { projectId: string };
+    result: { archivedCount: number; failedCount: number };
+  };
 
   // Plans & Reviews (backfill)
   'plan:list': { args: { threadId: string }; result: PlanRecord[] };

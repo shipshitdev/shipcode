@@ -245,6 +245,10 @@ export class GhCli {
     });
   }
 
+  async closeIssue(issueNumber: number): Promise<void> {
+    await execFileAsync('gh', ['issue', 'close', String(issueNumber)], { cwd: this.cwd });
+  }
+
   async setStatusLabel(issueNumber: number, label: GitHubStatusLabel): Promise<void> {
     // Remove all existing status:* labels first
     try {
