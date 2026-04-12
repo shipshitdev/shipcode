@@ -10,7 +10,26 @@ export interface WorktreeManagerOptions {
    *   absolute or ~/…  → custom location
    */
   worktreeRoot?: string | null;
+  /**
+   * Branch naming format for issue-based worktrees.
+   * Tokens: {id} = issue number, {slug} = slugified issue title.
+   * Default: 'ship/{id}-{slug}'.
+   */
+  branchFormat?: string;
 }
+
+const DEFAULT_BRANCH_FORMAT = 'ship/{id}-{slug}';
+
+function slugify(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 48);
+}
+
+/** ShipCode-managed branch prefixes for list() filtering. */
+const SHIPCODE_BRANCH_RE = /^(shipcode\/|ship\/\d+-)/;
 
 export class WorktreeManager {
   private git: SimpleGit;
@@ -22,43 +41,145 @@ export class WorktreeManager {
     this.git = simpleGit(projectPath);
   }
 
-  getBranchName(threadId: string): string {
-    return `shipcode/${threadId}`;
+  /** Build branch name for an issue-based worktree. */
+  private formatIssueBranch(issueNumber: number, title: string): string {
+    const format = this.options.branchFormat || DEFAULT_BRANCH_FORMAT;
+    const slug = slugify(title);
+    let branch = format
+      .replace(/\{id\}/g, String(issueNumber))
+      .replace(/\{slug\}/g, slug);
+    // Clean up trailing dashes from empty slug
+    branch = branch.replace(/-$/, '');
+    return branch;
   }
 
-  getWorktreePath(threadId: string): string {
-    return path.join(
-      resolveWorktreeParent(this.projectPath, this.options.worktreeRoot ?? null),
-      threadId,
-    );
+  /** Build directory name for an issue-based worktree. */
+  private formatIssueDir(issueNumber: number, title: string): string {
+    const slug = slugify(title);
+    const dir = slug ? `${issueNumber}-${slug}` : String(issueNumber);
+    return dir;
   }
 
+  /** Branch name for an issue-based worktree. */
+  getBranchName(issueNumber: number, title: string): string;
+  /** Legacy branch name for non-issue (manual thread) worktrees. */
+  getBranchName(threadId: string): string;
+  getBranchName(idOrNumber: string | number, title?: string): string {
+    if (typeof idOrNumber === 'number') {
+      return this.formatIssueBranch(idOrNumber, title ?? '');
+    }
+    return `shipcode/${idOrNumber}`;
+  }
+
+  /** Worktree path for an issue-based worktree. */
+  getWorktreePath(issueNumber: number, title: string): string;
+  /** Legacy worktree path for non-issue (manual thread) worktrees. */
+  getWorktreePath(threadId: string): string;
+  getWorktreePath(idOrNumber: string | number, title?: string): string {
+    const parent = resolveWorktreeParent(this.projectPath, this.options.worktreeRoot ?? null);
+    if (typeof idOrNumber === 'number') {
+      return path.join(parent, this.formatIssueDir(idOrNumber, title ?? ''));
+    }
+    return path.join(parent, idOrNumber);
+  }
+
+  /**
+   * Check if a branch already exists. Used for collision detection on re-runs.
+   */
+  private async branchExists(branch: string): Promise<boolean> {
+    try {
+      await this.git.raw(['rev-parse', '--verify', `refs/heads/${branch}`]);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Find a non-colliding branch name by appending -2, -3, etc.
+   */
+  private async resolveUniqueBranch(baseBranch: string): Promise<string> {
+    if (!(await this.branchExists(baseBranch))) return baseBranch;
+    let n = 2;
+    while (await this.branchExists(`${baseBranch}-${n}`)) {
+      n++;
+    }
+    return `${baseBranch}-${n}`;
+  }
+
+  /**
+   * Create a worktree for a GitHub issue (human-readable branch name).
+   */
+  async create(
+    issueNumber: number,
+    title: string,
+    baseBranch?: string,
+  ): Promise<{ worktreePath: string; branch: string }>;
+  /**
+   * Create a worktree for a manual thread (legacy threadId-based name).
+   */
   async create(
     threadId: string,
     baseBranch?: string,
+  ): Promise<{ worktreePath: string; branch: string }>;
+  async create(
+    idOrNumber: string | number,
+    titleOrBase?: string,
+    baseBranch?: string,
   ): Promise<{ worktreePath: string; branch: string }> {
-    const worktreePath = this.getWorktreePath(threadId);
-    const branch = this.getBranchName(threadId);
+    const parent = resolveWorktreeParent(this.projectPath, this.options.worktreeRoot ?? null);
+    const base = typeof idOrNumber === 'number'
+      ? (baseBranch ?? await this.getDefaultBranch())
+      : (titleOrBase ?? await this.getDefaultBranch());
 
-    const base = baseBranch ?? (await this.getDefaultBranch());
+    let branch: string;
+    let dirName: string;
 
-    // Create worktree with new branch
-    await this.git.raw(['worktree', 'add', '-b', branch, worktreePath, base]);
+    if (typeof idOrNumber === 'number') {
+      const title = titleOrBase ?? '';
+      const rawBranch = this.formatIssueBranch(idOrNumber, title);
+      branch = await this.resolveUniqueBranch(rawBranch);
+      dirName = this.formatIssueDir(idOrNumber, title);
+      // If branch was suffixed for collision, match the dir name
+      if (branch !== rawBranch) {
+        const suffix = branch.slice(rawBranch.length);
+        dirName = dirName + suffix;
+      }
+    } else {
+      branch = this.getBranchName(idOrNumber);
+      dirName = idOrNumber;
+    }
 
-    return { worktreePath, branch };
+    // Retry loop: if a concurrent start grabs the branch between our check
+    // and the actual `worktree add`, bump the suffix and try again.
+    const MAX_RETRIES = 3;
+    for (let attempt = 0; ; attempt++) {
+      const worktreePath = path.join(parent, dirName);
+      try {
+        await this.git.raw(['worktree', 'add', '-b', branch, worktreePath, base]);
+        return { worktreePath, branch };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        const isCollision = /already exists|is already checked out/i.test(msg);
+        if (!isCollision || attempt >= MAX_RETRIES) throw err;
+        // Bump suffix and retry
+        const nextN = (branch.match(/-(\d+)$/) ? Number(branch.match(/-(\d+)$/)![1]) + 1 : 2);
+        const rawBranch = typeof idOrNumber === 'number'
+          ? this.formatIssueBranch(idOrNumber, titleOrBase ?? '')
+          : this.getBranchName(idOrNumber);
+        branch = `${rawBranch}-${nextN}`;
+        const rawDir = typeof idOrNumber === 'number'
+          ? this.formatIssueDir(idOrNumber, titleOrBase ?? '')
+          : String(idOrNumber);
+        dirName = `${rawDir}-${nextN}`;
+      }
+    }
   }
 
   /**
    * Remove a worktree using its persisted path and branch rather than
    * recomputing from threadId. This insulates cleanup from settings changes
    * that happened after the worktree was created.
-   *
-   * Returns structured per-step results so callers can distinguish "already
-   * gone" (safe, treated as success) from real failures (surfaced via
-   * `error`). The `project:remove` handler uses this signal to fail closed
-   * before deleting the registry row — previously the method swallowed all
-   * errors, which allowed orphaned worktrees on disk with no project row to
-   * recover them.
    */
   async remove(
     worktreePath: string,
@@ -99,13 +220,14 @@ export class WorktreeManager {
   /**
    * List all ShipCode worktrees in this project by branch-name prefix.
    * Returns { path, branch } pairs so callers can act on either identifier.
+   * Matches both legacy `shipcode/` and `ship/{N}-` branch patterns.
    */
   async list(): Promise<Array<{ path: string; branch: string }>> {
     const result = await this.git.raw(['worktree', 'list', '--porcelain']);
     const worktrees: Array<{ path: string; branch: string }> = [];
     let current: { path?: string; branch?: string } = {};
     const push = () => {
-      if (current.path && current.branch && current.branch.startsWith('shipcode/')) {
+      if (current.path && current.branch && SHIPCODE_BRANCH_RE.test(current.branch)) {
         worktrees.push({ path: current.path, branch: current.branch });
       }
     };
@@ -127,12 +249,15 @@ export class WorktreeManager {
     return worktrees;
   }
 
+  /**
+   * Merge a worktree branch into a target. Uses the DB-stored branch name
+   * directly — does not reconstruct from threadId.
+   */
   async merge(
-    threadId: string,
+    branch: string,
     targetBranch?: string,
     strategy: 'merge' | 'squash' = 'merge',
   ): Promise<void> {
-    const branch = this.getBranchName(threadId);
     const target = targetBranch ?? (await this.getDefaultBranch());
 
     // Switch to target branch in main worktree

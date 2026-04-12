@@ -23,13 +23,22 @@ import {
   RotateCcw,
   User,
 } from 'lucide-react';
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import { MODEL_DISPLAY } from './lib/model-display';
 import { getStatusBadgeVariant } from './lib/status-variant';
 import { cn } from './lib/utils';
 import { Badge } from './primitives/badge';
-import { Button, buttonVariants } from './primitives/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './primitives/select';
+import { Button } from './primitives/button';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from './primitives/select';
 
 // Static map for the drag overlay border. Tailwind's JIT needs string-literal
 // class names, so we cannot interpolate (`border-${variant}`).
@@ -53,6 +62,8 @@ interface KanbanBoardProps {
   branches?: string[];
   /** Invoked when the user picks a new base branch from the toolbar Select. */
   onBaseBranchChange?: (branch: string) => void;
+  /** Invoked when the user clicks the refresh button inside the branch dropdown. */
+  onRefreshBranches?: () => void;
   /** Issue number currently open in the side panel — highlights the card. */
   selectedIssueNumber?: number;
   /** Project name shown as the toolbar heading (replaces the generic "GitHub Issues"). */
@@ -161,6 +172,14 @@ const COLUMNS: BoardColumn[] = [
   },
 ];
 
+// Column header dot colors — matches GitHub Projects board defaults.
+const COLUMN_DOT_CLASS: Record<ColumnKey, string> = {
+  todo: 'bg-success',
+  agent: 'bg-agent',
+  human: 'bg-warning',
+  done: 'bg-done',
+};
+
 // Only these statuses can be picked up and dragged.
 const DRAGGABLE_STATUSES: IssuePipelineStatus[] = ['todo', 'queued', 'failed'];
 
@@ -214,12 +233,14 @@ function DraggableCard({
   onRerun,
   onArchiveIssue,
   isSelected,
+  isRerunning,
 }: {
   issue: GitHubIssueCacheRecord;
   onClick: () => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
   isSelected?: boolean;
+  isRerunning?: boolean;
 }) {
   const draggable = DRAGGABLE_STATUSES.includes(issue.pipelineStatus);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
@@ -257,10 +278,11 @@ function DraggableCard({
           (isSelected
             ? 'border-warning bg-warning/[0.07]'
             : 'border-warning/30 bg-warning/[0.03] hover:border-warning/50'),
-        // Agent-active cards use the dedicated `--agent` violet so they are
+        // Agent-active cards use the dedicated `--agent` yellow so they are
         // visually distinct from failed (red), awaiting (amber), and selected
         // (white). Lower opacity than failed/awaiting because agent work is
         // informational — the user is not being asked to act.
+        isActive && 'shadow-[0_0_12px_rgba(56,189,248,0.18)]',
         isActive &&
           (isSelected
             ? 'border-agent/70 bg-agent/[0.06]'
@@ -275,10 +297,12 @@ function DraggableCard({
       }}
     >
       {isActive && (
-        <span className="absolute top-1.5 right-1.5 flex h-2 w-2 items-center justify-center">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-agent opacity-60" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-agent" />
-        </span>
+        <div className="absolute bottom-0 left-0 right-0 h-[2px] rounded-b-md overflow-hidden bg-agent/15">
+          <div
+            className="absolute h-full w-1/4 rounded-full bg-agent"
+            style={{ animation: 'slide-progress 1.6s ease-in-out infinite' }}
+          />
+        </div>
       )}
       {isFailed && onRerun && (
         <Button
@@ -286,13 +310,14 @@ function DraggableCard({
           size="icon-xs"
           className="absolute top-1.5 right-1.5 text-danger/60 hover:bg-danger/10 hover:text-danger"
           title="Re-run pipeline"
+          disabled={isRerunning}
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
             onRerun(issue);
           }}
         >
-          <RotateCcw size={14} />
+          <RotateCcw size={14} className={isRerunning ? 'animate-spin' : ''} />
         </Button>
       )}
       {issue.pipelineStatus === 'completed' && onArchiveIssue && (
@@ -310,7 +335,10 @@ function DraggableCard({
           <Archive size={14} />
         </Button>
       )}
-      <div className="text-[11px] text-secondary font-mono mb-0.5">#{issue.issueNumber}</div>
+      <div className="flex items-center justify-between mb-0.5">
+        <span className="text-[11px] text-secondary font-mono">#{issue.issueNumber}</span>
+        {showPhaseElapsed && <PhaseElapsed since={phaseSince} />}
+      </div>
       <div className="text-xs leading-snug text-primary font-medium line-clamp-2">
         {issue.title}
       </div>
@@ -334,12 +362,10 @@ function DraggableCard({
           </Badge>
         )}
         <div className="ml-auto flex items-center gap-1.5">
-          {showPhaseElapsed && <PhaseElapsed since={phaseSince} />}
           <Button
             variant="ghost"
-            size="icon"
             className={cn(
-              'h-4 w-4 opacity-0 transition-all group-hover:opacity-100 hover:bg-elevated',
+              'h-5 px-1.5 text-[10px] font-medium opacity-0 transition-all group-hover:opacity-100 hover:bg-elevated',
               isFailed
                 ? 'text-danger/60 hover:text-danger'
                 : isAwaiting
@@ -355,7 +381,7 @@ function DraggableCard({
               onClick();
             }}
           >
-            <ChevronRight size={10} />
+            View
           </Button>
         </div>
       </div>
@@ -365,6 +391,7 @@ function DraggableCard({
 
 function DroppableColumn({
   id,
+  columnKey,
   label,
   issues,
   droppable,
@@ -374,6 +401,7 @@ function DroppableColumn({
   onArchiveIssue,
 }: {
   id: string;
+  columnKey: ColumnKey;
   label: string;
   issues: GitHubIssueCacheRecord[];
   droppable: boolean;
@@ -393,7 +421,10 @@ function DroppableColumn({
       )}
     >
       <div className="flex items-center justify-between px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-primary border-b border-border shrink-0">
-        <span>{label}</span>
+        <span className="flex items-center gap-1.5">
+          <span className={cn('w-2 h-2 rounded-full shrink-0', COLUMN_DOT_CLASS[columnKey])} />
+          {label}
+        </span>
         <div className="flex items-center gap-1">
           {onArchiveAllDone && issues.length > 0 && (
             <Button
@@ -411,7 +442,12 @@ function DroppableColumn({
           </span>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto p-1.5 flex flex-col gap-1 min-h-[60px]">
+      <div
+        className={cn(
+          'flex-1 overflow-y-auto p-1.5 flex flex-col gap-1 min-h-[60px]',
+          columnKey === 'done' && 'opacity-60',
+        )}
+      >
         {issues.map((issue) => (
           <DraggableCard
             key={issue.id}
@@ -433,6 +469,7 @@ function SectionBlock({
   onIssueClick,
   onRerun,
   selectedIssueNumber,
+  rerunningId,
 }: {
   columnKey: ColumnKey;
   section: PhaseSection;
@@ -440,6 +477,7 @@ function SectionBlock({
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
   selectedIssueNumber?: number;
+  rerunningId?: string | null;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `${columnKey}:${section.key}`,
@@ -512,6 +550,7 @@ function SectionBlock({
               onClick={() => onIssueClick(issue)}
               onRerun={onRerun}
               isSelected={issue.issueNumber === selectedIssueNumber}
+              isRerunning={issue.id === rerunningId}
             />
           ))}
         </div>
@@ -535,19 +574,24 @@ function StackedColumn({
   onIssueClick,
   onRerun,
   selectedIssueNumber,
+  rerunningId,
 }: {
   column: BoardColumn;
   issues: GitHubIssueCacheRecord[];
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
   selectedIssueNumber?: number;
+  rerunningId?: string | null;
 }) {
   const columnIssues = issues.filter((i) => column.statuses.includes(i.pipelineStatus));
 
   return (
     <div className="flex-[1.3] min-w-[180px] max-w-[280px] flex flex-col bg-secondary rounded-md overflow-hidden border border-border/40">
       <div className="flex items-center justify-between px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-primary border-b border-border shrink-0">
-        <span>{column.label}</span>
+        <span className="flex items-center gap-1.5">
+          <span className={cn('w-2 h-2 rounded-full shrink-0', COLUMN_DOT_CLASS[column.key])} />
+          {column.label}
+        </span>
         <span className="text-[10px] bg-tertiary text-muted px-1.5 py-px rounded-full font-medium">
           {columnIssues.length}
         </span>
@@ -566,6 +610,7 @@ function StackedColumn({
               onIssueClick={onIssueClick}
               onRerun={onRerun}
               selectedIssueNumber={selectedIssueNumber}
+              rerunningId={rerunningId}
             />
           );
         })}
@@ -590,14 +635,14 @@ const customCollisionDetection: CollisionDetection = (args: Parameters<Collision
 //
 // The list view mirrors the Kanban's column/section structure so users get the
 // same per-phase breakdown (Planning / Reviewing / Executing / Verifying) with
-// model labels and the purple `agent` tone on active rows — instead of a flat
+// model labels and the yellow `agent` tone on active rows — instead of a flat
 // "In Progress" bucket. COLUMNS is the single source of truth for both views.
 
 // Display override: "Agent Loop" reads as "In Progress" at the list level.
 const LIST_COLUMN_LABEL: Record<ColumnKey, string> = {
   todo: 'Todo',
   agent: 'In Progress',
-  human: 'Blocked',
+  human: 'Needs Attention',
   done: 'Done',
 };
 
@@ -675,6 +720,7 @@ function DraggableListRow({
             ? 'border-warning bg-warning/[0.08] text-primary'
             : 'border-warning/60 bg-warning/[0.03] hover:bg-warning/[0.06] text-primary'),
         isDragging ? 'opacity-40' : '',
+        !isDragging && issue.pipelineStatus === 'completed' && 'opacity-60',
         isDraggable ? 'cursor-grab' : 'cursor-pointer',
         activeId && activeId !== issue.id ? 'pointer-events-none' : '',
       )}
@@ -693,7 +739,7 @@ function DraggableListRow({
             tone === 'danger' && 'bg-danger',
             tone === 'warning' && 'bg-warning',
             tone === 'default' &&
-              (issue.pipelineStatus === 'completed' ? 'bg-success' : 'bg-text-muted'),
+              (issue.pipelineStatus === 'completed' ? 'bg-done' : 'bg-text-muted'),
           )}
         />
       )}
@@ -864,6 +910,7 @@ function IssueListView({
                 onClick={() => toggle(col.key)}
               >
                 {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                <span className={cn('w-2 h-2 rounded-full shrink-0', COLUMN_DOT_CLASS[col.key])} />
                 {label}
                 <span className="text-muted font-normal normal-case tracking-normal ml-0.5">
                   ({columnIssues.length})
@@ -939,6 +986,7 @@ export function KanbanBoard({
   baseBranch,
   branches,
   onBaseBranchChange,
+  onRefreshBranches,
   selectedIssueNumber,
   projectName,
   repoUrl,
@@ -956,6 +1004,32 @@ export function KanbanBoard({
   const [activeId, setActiveId] = useState<string | null>(null);
   const activeIssue = issues.find((i) => i.id === activeId);
   const [view, setView] = useState<'kanban' | 'list'>('kanban');
+  const [refreshing, setRefreshing] = useState(false);
+  const [showRefreshToast, setShowRefreshToast] = useState(false);
+  const [rerunningId, setRerunningId] = useState<string | null>(null);
+
+  const handleRerun = useCallback(
+    (issue: GitHubIssueCacheRecord) => {
+      setRerunningId(issue.id);
+      onRerun?.(issue);
+      setTimeout(() => setRerunningId(null), 800);
+    },
+    [onRerun],
+  );
+
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    setShowRefreshToast(true);
+    onRefresh();
+    // Keep the spin for at least 600ms so it's visible
+    setTimeout(() => setRefreshing(false), 600);
+  }, [onRefresh]);
+
+  useEffect(() => {
+    if (!showRefreshToast) return;
+    const id = setTimeout(() => setShowRefreshToast(false), 2000);
+    return () => clearTimeout(id);
+  }, [showRefreshToast]);
 
   function getColumnForIssue(issue: GitHubIssueCacheRecord): ColumnKey {
     return COLUMNS.find((c) => c.statuses.includes(issue.pipelineStatus))?.key ?? 'todo';
@@ -1004,7 +1078,7 @@ export function KanbanBoard({
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="relative flex flex-col h-full overflow-hidden">
       <div className="flex items-center px-4 py-3 border-b border-border shrink-0 gap-3">
         <h3 className="text-sm font-semibold shrink-0 truncate">
           {projectName ?? 'GitHub Issues'}
@@ -1042,21 +1116,57 @@ export function KanbanBoard({
         <div className="flex-1" />
         <div className="flex items-center gap-2 shrink-0">
           {baseBranch && branches && branches.length > 0 && onBaseBranchChange && (
-            <div className="flex items-center min-w-0 max-w-[200px] shrink-0">
+            <div className="flex items-center border border-border rounded-md overflow-hidden min-w-0 max-w-[240px] shrink-0">
               <Select value={baseBranch} onValueChange={onBaseBranchChange}>
-                <SelectTrigger
-                  className={cn(buttonVariants({ variant: 'pill', size: 'xs' }), 'font-mono')}
-                >
+                <SelectTrigger className="h-7 gap-1 rounded-none border-0 bg-transparent px-2 text-xs font-mono text-secondary hover:text-primary">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {branches.map((b) => (
-                    <SelectItem key={b} value={b} className="text-xs font-mono">
-                      {b}
-                    </SelectItem>
-                  ))}
+                  {(() => {
+                    const local = branches.filter((b) => !b.includes('/'));
+                    const remote = branches.filter((b) => b.includes('/'));
+                    return (
+                      <>
+                        {local.length > 0 && (
+                          <SelectGroup>
+                            <SelectLabel>Local</SelectLabel>
+                            {local.map((b) => (
+                              <SelectItem key={b} value={b} className="text-xs font-mono">
+                                {b}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        )}
+                        {local.length > 0 && remote.length > 0 && <SelectSeparator />}
+                        {remote.length > 0 && (
+                          <SelectGroup>
+                            <SelectLabel>Remote</SelectLabel>
+                            {remote.map((b) => (
+                              <SelectItem key={b} value={b} className="text-xs font-mono">
+                                {b}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        )}
+                      </>
+                    );
+                  })()}
                 </SelectContent>
               </Select>
+              {onRefreshBranches && (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="rounded-none border-l border-border"
+                  title="Refresh branches"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRefreshBranches();
+                  }}
+                >
+                  <RefreshCw size={14} />
+                </Button>
+              )}
             </div>
           )}
           <div className="flex items-center border border-border rounded-md overflow-hidden shrink-0">
@@ -1082,8 +1192,8 @@ export function KanbanBoard({
               <LayoutGrid size={14} />
             </Button>
           </div>
-          <Button variant="outline" size="icon-sm" onClick={onRefresh} title="Refresh">
-            <RefreshCw size={14} />
+          <Button variant="outline" size="icon-sm" onClick={handleRefresh} title="Refresh board">
+            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
           </Button>
           {onNewIssue && (
             <Button size="sm" onClick={onNewIssue}>
@@ -1117,7 +1227,8 @@ export function KanbanBoard({
                     column={col}
                     issues={issues}
                     onIssueClick={onIssueClick}
-                    onRerun={onRerun}
+                    onRerun={handleRerun}
+                    rerunningId={rerunningId}
                     selectedIssueNumber={selectedIssueNumber}
                   />
                 );
@@ -1127,6 +1238,7 @@ export function KanbanBoard({
                 <DroppableColumn
                   key={col.key}
                   id={col.key}
+                  columnKey={col.key}
                   label={col.label}
                   issues={columnIssues}
                   droppable={!!col.droppable}
@@ -1157,6 +1269,15 @@ export function KanbanBoard({
           ) : null}
         </DragOverlay>
       </DndContext>
+
+      {showRefreshToast && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-elevated px-3 py-2 shadow-lg text-xs text-secondary">
+            <RefreshCw size={12} className="text-muted" />
+            Board refreshed
+          </div>
+        </div>
+      )}
     </div>
   );
 }

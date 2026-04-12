@@ -106,4 +106,31 @@ describe('normalizeBranches', () => {
       }),
     ).toEqual(['main']);
   });
+
+  it('13. ship/{N}-slug branches are filtered (ShipCode worktree branches)', () => {
+    expect(
+      normalizeBranches({
+        raw: ['main', 'ship/42-add-keyboard-shortcut', 'ship/7-fix-bug'],
+        defaultBranch: 'main',
+      }),
+    ).toEqual(['main']);
+  });
+
+  it('14. feat/something is NOT filtered (user branches)', () => {
+    expect(
+      normalizeBranches({
+        raw: ['main', 'feat/my-feature', 'feat/42-api-hardening'],
+        defaultBranch: 'main',
+      }),
+    ).toEqual(['main', 'feat/42-api-hardening', 'feat/my-feature']);
+  });
+
+  it('15. remote ship/{N}-slug branches are also filtered', () => {
+    expect(
+      normalizeBranches({
+        raw: ['main', 'remotes/origin/ship/42-add-shortcut'],
+        defaultBranch: 'main',
+      }),
+    ).toEqual(['main']);
+  });
 });

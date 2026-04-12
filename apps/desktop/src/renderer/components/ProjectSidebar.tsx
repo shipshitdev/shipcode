@@ -40,7 +40,7 @@ export function ProjectSidebar() {
     viewMode,
     settingsVisible,
     selectProject,
-    openDashboard,
+    openOverview,
     openActivity,
     openInbox,
     openCosts,
@@ -114,7 +114,7 @@ export function ProjectSidebar() {
     onSuccess: (_data, projectId) => {
       if (activeProjectId === projectId) {
         selectProject(null);
-        openDashboard();
+        openOverview();
       }
       invalidateProjects();
     },
@@ -128,7 +128,7 @@ export function ProjectSidebar() {
     onSuccess: (_data, projectId) => {
       if (activeProjectId === projectId) {
         selectProject(null);
-        openDashboard();
+        openOverview();
       }
       invalidateProjects();
     },
@@ -155,22 +155,18 @@ export function ProjectSidebar() {
 
   return (
     <aside className="flex w-[256px] min-w-[256px] flex-col border-r border-border bg-primary">
-      <div className="flex items-center px-4 py-3">
-        <h1 className="text-sm font-semibold tracking-tight text-primary">ShipCode</h1>
-      </div>
-
-      <div className="px-2 space-y-0.5">
-        {/* Dashboard */}
+      <div className="px-2 pt-3 space-y-0.5">
+        {/* Overview */}
         <Button
           variant="ghost"
           className={cn(
             'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
-            !settingsVisible && viewMode === 'dashboard' && 'bg-tertiary text-primary font-medium',
+            !settingsVisible && viewMode === 'overview' && 'bg-tertiary text-primary font-medium',
           )}
-          onClick={() => openDashboard()}
+          onClick={() => openOverview()}
         >
           <LayoutGrid size={14} className="shrink-0 text-secondary" />
-          <span className="flex-1 truncate">Mission Control</span>
+          <span className="flex-1 truncate">Overview</span>
           {liveCount > 0 && (
             <span className="inline-flex items-center gap-1 rounded-full border border-agent/30 bg-agent/10 px-1.5 py-0.5 text-[10px] font-medium text-agent">
               <span className="relative flex h-1.5 w-1.5 items-center justify-center">
@@ -180,19 +176,6 @@ export function ProjectSidebar() {
               {liveCount} live
             </span>
           )}
-        </Button>
-
-        {/* Activity */}
-        <Button
-          variant="ghost"
-          className={cn(
-            'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
-            !settingsVisible && viewMode === 'activity' && 'bg-tertiary text-primary font-medium',
-          )}
-          onClick={() => openActivity()}
-        >
-          <Activity size={14} className="shrink-0 text-secondary" />
-          <span className="flex-1 truncate">Activity</span>
         </Button>
 
         {/* Inbox */}
@@ -213,17 +196,17 @@ export function ProjectSidebar() {
           )}
         </Button>
 
-        {/* Costs */}
+        {/* Activity */}
         <Button
           variant="ghost"
           className={cn(
             'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
-            !settingsVisible && viewMode === 'costs' && 'bg-tertiary text-primary font-medium',
+            !settingsVisible && viewMode === 'activity' && 'bg-tertiary text-primary font-medium',
           )}
-          onClick={() => openCosts()}
+          onClick={() => openActivity()}
         >
-          <DollarSign size={14} className="shrink-0 text-secondary" />
-          <span className="flex-1 truncate">Costs</span>
+          <Activity size={14} className="shrink-0 text-secondary" />
+          <span className="flex-1 truncate">Activity</span>
         </Button>
 
         {/* Skills */}
@@ -237,6 +220,19 @@ export function ProjectSidebar() {
         >
           <Wrench size={14} className="shrink-0 text-secondary" />
           <span className="flex-1 truncate">Skills</span>
+        </Button>
+
+        {/* Costs */}
+        <Button
+          variant="ghost"
+          className={cn(
+            'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
+            !settingsVisible && viewMode === 'costs' && 'bg-tertiary text-primary font-medium',
+          )}
+          onClick={() => openCosts()}
+        >
+          <DollarSign size={14} className="shrink-0 text-secondary" />
+          <span className="flex-1 truncate">Costs</span>
         </Button>
       </div>
 

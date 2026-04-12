@@ -179,27 +179,30 @@ export function createElectronEmitter(
       //    'pipeline:phase failed' would normally fire 'failed', but we
       //    intercept that branch to fire a 'verification_exhausted' kind.
       if (event.type === 'pipeline:verification-exhausted' && thread) {
-        deps.notifications.markVerificationExhausted(event.threadId);
-        // Fire the specialised notification NOW (not on the subsequent
-        // failed phase) so the user knows what actually happened.
-        deps.notifications.fire('verification_exhausted', thread);
+        try {
+          deps.notifications.markVerificationExhausted(event.threadId);
+          deps.notifications.fire('verification_exhausted', thread);
+        } catch (err) {
+          log.error('[pipeline-bridge] notification error:', err);
+        }
       }
 
       // 4. Fire phase-based notifications.
       if (event.type === 'pipeline:phase' && thread) {
-        // When a new run starts, clear any stale notifications (e.g. a previous
-        // 'failed' entry that is no longer relevant once the pipeline re-queues).
-        if (event.phase === 'planning') {
-          deps.notifications.dismissByThread(thread.id);
-        }
+        try {
+          if (event.phase === 'planning') {
+            deps.notifications.dismissByThread(thread.id);
+          }
 
-        if (event.phase === 'awaiting_approval') {
-          deps.notifications.fire('awaiting_approval', thread);
-        } else if (event.phase === 'failed') {
-          // markVerificationExhausted suppresses this inside fire()
-          deps.notifications.fire('failed', thread);
-        } else if (event.phase === 'completed') {
-          deps.notifications.fire('completed', thread);
+          if (event.phase === 'awaiting_approval') {
+            deps.notifications.fire('awaiting_approval', thread);
+          } else if (event.phase === 'failed') {
+            deps.notifications.fire('failed', thread);
+          } else if (event.phase === 'completed') {
+            deps.notifications.fire('completed', thread);
+          }
+        } catch (err) {
+          log.error('[pipeline-bridge] notification error:', err);
         }
       }
 

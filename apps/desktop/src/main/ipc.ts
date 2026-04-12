@@ -350,6 +350,11 @@ export function registerIpcHandlers(
       const ghCli = new GhCli(project.path);
       await ghCli.closeIssue(issueNumber);
 
+      // Best-effort: archive from all Projects v2 boards the issue appears on.
+      ghCli
+        .archiveProjectItems(issueNumber)
+        .catch((err) => log.warn('[github:archive-issue] project board archive failed:', err));
+
       // GitHub close succeeded. DB write is synchronous/local — failures here
       // are rare but would leave GitHub closed and board still showing the
       // issue. Log the inconsistency and surface it so the user can refresh.
@@ -385,6 +390,10 @@ export function registerIpcHandlers(
         try {
           await ghCli.closeIssue(issue.issueNumber);
           succeededIds.push(issue.id);
+          // Best-effort: archive from all Projects v2 boards the issue appears on
+          ghCli
+            .archiveProjectItems(issue.issueNumber)
+            .catch((err) => log.warn(`[github:archive-all-done] project board archive #${issue.issueNumber} failed:`, err));
         } catch (err) {
           log.warn(`[github:archive-all-done] close #${issue.issueNumber} failed:`, err);
           failedCount++;
@@ -661,10 +670,13 @@ export function registerIpcHandlers(
     return queries.projects.getById(projectId);
   });
 
-  ipcMain.handle('git:list-branches', async (_event, { projectId }: { projectId: string }) => {
+  ipcMain.handle('git:list-branches', async (_event, { projectId, fetch }: { projectId: string; fetch?: boolean }) => {
     const project = queries.projects.getById(projectId);
     if (!project) throw new Error(`Project ${projectId} not found`);
     const git = new GitService(project.path);
+    if (fetch) {
+      await git.fetch();
+    }
     return git.listBranches(project.defaultBranch);
   });
 
@@ -733,6 +745,7 @@ export function registerIpcHandlers(
       baseBranch: project.defaultBranch,
     });
 
+    queries.plans.supersedeAll(threadId);
     await pipeline.startPlanGeneration(threadId, thread.prompt, project.path, null);
   });
 

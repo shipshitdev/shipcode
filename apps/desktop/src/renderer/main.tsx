@@ -5,7 +5,7 @@ import { App } from './App';
 import '@fontsource/dm-sans/400.css';
 import '@fontsource/dm-sans/500.css';
 import '@fontsource/dm-sans/600.css';
-import './styles/app.css';
+import './styles/app.scss';
 
 const queryClient = new QueryClient({
   defaultOptions: {

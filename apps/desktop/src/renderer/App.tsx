@@ -5,7 +5,7 @@ import { ActivityView } from './components/ActivityView';
 import { CostsView } from './components/CostsView';
 import { CommandPalette } from './components/CommandPalette';
 import { CreateIssueModal } from './components/CreateIssueModal';
-import { DashboardView } from './components/DashboardView';
+import { OverviewView } from './components/OverviewView';
 import { HealthBanner } from './components/HealthBanner';
 import { InboxView } from './components/InboxView';
 import { IssueDetail } from './components/IssueDetail';
@@ -90,7 +90,7 @@ export function App() {
       </div>
     );
   }
-  const showDashboard = viewMode === 'dashboard' || !activeProjectId;
+  const showOverview = viewMode === 'overview' || !activeProjectId;
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
@@ -119,8 +119,8 @@ export function App() {
                   <SkillsView />
                 ) : viewMode === 'inbox' ? (
                   <InboxView />
-                ) : showDashboard ? (
-                  <DashboardView />
+                ) : showOverview ? (
+                  <OverviewView />
                 ) : (
                   <ThreadPanel />
                 )}

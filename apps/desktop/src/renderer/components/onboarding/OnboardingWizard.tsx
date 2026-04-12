@@ -22,7 +22,7 @@ interface AuthResult extends SystemHealth {
 }
 
 interface Props {
-  onComplete: (projectId?: string) => void;
+  onComplete: (projectId?: string) => void | Promise<void>;
 }
 
 export function OnboardingWizard({ onComplete }: Props) {
@@ -79,7 +79,6 @@ export function OnboardingWizard({ onComplete }: Props) {
         plannerModel,
         reviewerModel,
         statusLabelMappings: labelMappings,
-        githubPollingEnabled: true,
         onboardingVersion: CURRENT_ONBOARDING_VERSION,
       });
       let newProjectId: string | undefined;
@@ -90,7 +89,7 @@ export function OnboardingWizard({ onComplete }: Props) {
           newProjectId = project.id;
         }
       }
-      onComplete(newProjectId);
+      await onComplete(newProjectId);
     } finally {
       setSaving(false);
     }

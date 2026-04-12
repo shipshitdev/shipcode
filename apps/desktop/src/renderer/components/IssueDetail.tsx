@@ -1,4 +1,5 @@
 import type {
+  ActivePipelineSummary,
   NotificationRecord,
   PipelinePhase,
   PlanRecord,
@@ -6,11 +7,13 @@ import type {
   ReviewRecord,
   ShipCodePlan,
   Thread,
+  VerificationRecord,
 } from '@shipcode/shared';
 import { deriveGithubIssueUrl, shipCodePlanSchema } from '@shipcode/shared';
 import {
   Badge,
   Button,
+  cn,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -35,6 +38,10 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
   Textarea,
   X,
 } from '@shipcode/ui';
@@ -44,21 +51,6 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useAppStore } from '../stores/app-store';
 
-// See DashboardView for why all 6 agent phases share one color.
-const AGENT_PHASE_CLASSES = 'bg-agent/10 text-agent border-agent/25';
-
-const PHASE_COLOR: Partial<Record<PipelinePhase, string>> = {
-  planning: AGENT_PHASE_CLASSES,
-  reviewing: AGENT_PHASE_CLASSES,
-  revising: AGENT_PHASE_CLASSES,
-  executing: AGENT_PHASE_CLASSES,
-  verifying: AGENT_PHASE_CLASSES,
-  shipping: AGENT_PHASE_CLASSES,
-  awaiting_approval: 'bg-warning/15 text-warning border-warning/30',
-  completed: 'bg-success/15 text-success border-success/30',
-  failed: 'bg-danger/15 text-danger border-danger/30',
-  idle: 'bg-tertiary text-muted border-border',
-};
 
 const ACTIVE_PHASES: PipelinePhase[] = [
   'planning',
@@ -89,7 +81,17 @@ function resolveRawPlanText(raw: string): string {
     if (!line) continue;
     try {
       const parsed = JSON.parse(line);
-      if (parsed.type === 'result' && typeof parsed.result === 'string') return parsed.result;
+      if (parsed.type === 'result') {
+        if (typeof parsed.result === 'string') return parsed.result;
+        // Extended thinking: result is an array of content blocks
+        if (Array.isArray(parsed.result)) {
+          const text = parsed.result
+            .filter((b: { type: string }) => b.type === 'text')
+            .map((b: { text: string }) => b.text)
+            .join('\n');
+          if (text) return text;
+        }
+      }
     } catch {}
   }
   // Codex --json: join agent_message texts
@@ -130,6 +132,54 @@ function resolveClientSidePlan(rawOutput: string): ShipCodePlan | null {
 const PRD_PROSE_CLASSES =
   'space-y-3 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-secondary [&_code]:rounded [&_code]:bg-tertiary [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-xs [&_h1]:text-base [&_h1]:font-semibold [&_h2]:mt-4 [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:text-sm [&_h3]:font-semibold [&_li]:mb-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:whitespace-pre-wrap [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-tertiary [&_pre]:p-3 [&_pre]:text-xs [&_ul]:list-disc [&_ul]:pl-5';
 
+function PlanWaiting({ threadId }: { threadId: string }) {
+  const lastActivity = useAppStore((s) => s.lastActivityByThread[threadId]);
+  const [, tick] = useState(0);
+
+  const { data: running = [] } = useQuery<ActivePipelineSummary[]>({
+    queryKey: ['dashboard', 'running'],
+    queryFn: () => window.shipcode.invoke<ActivePipelineSummary[]>('pipeline:list-active'),
+    refetchInterval: 2000,
+  });
+
+  useEffect(() => {
+    const id = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const startedAt = running.find((p) => p.threadId === threadId)?.startedAt;
+  const sinceStart = startedAt ? Math.floor((Date.now() - startedAt) / 1000) : null;
+  const sinceOutput = lastActivity ? Math.floor((Date.now() - lastActivity) / 1000) : sinceStart;
+  const stale = (sinceOutput ?? 0) >= 90;
+
+  function fmt(s: number) {
+    if (s < 60) return `${s}s`;
+    return `${Math.floor(s / 60)}m ${s % 60}s`;
+  }
+
+  return (
+    <div className="mb-5 py-4 text-center text-[13px]">
+      <p className="text-muted">
+        Waiting for plan generation
+        {sinceStart !== null && (
+          <> &mdash; <span className="tabular-nums">{fmt(sinceStart)}</span></>
+        )}
+      </p>
+      {lastActivity && !stale && sinceOutput !== null && (
+        <p className="mt-1 text-[11px] text-muted opacity-60">
+          Last output: {fmt(sinceOutput)} ago
+        </p>
+      )}
+      {stale && sinceOutput !== null && (
+        <p className="mt-2 text-[11px] text-warning">
+          No output in {fmt(sinceOutput)} &mdash; the model may be slow or stalled. Open the
+          terminal to diagnose, or cancel and retry.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const queryClient = useQueryClient();
   const {
@@ -150,12 +200,24 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     'approve',
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isEditingPlan, setIsEditingPlan] = useState(false);
-  const [editPlanText, setEditPlanText] = useState('');
-  const [editPlanError, setEditPlanError] = useState('');
   const [isRefreshingFromGithub, setIsRefreshingFromGithub] = useState(false);
   const [prdCollapsed, setPrdCollapsed] = useState(false);
+  const [planHistoryCollapsed, setPlanHistoryCollapsed] = useState(false);
   const [showRawOutput, setShowRawOutput] = useState(false);
+
+  function safeErrorMessage(raw: string): string {
+    const trimmed = raw.trim();
+    if (!trimmed.startsWith('{')) return trimmed;
+    for (const line of trimmed.split('\n').reverse()) {
+      try {
+        const obj = JSON.parse(line.trim()) as Record<string, unknown>;
+        if (obj.type === 'result' && typeof obj.result === 'string') return (obj.result as string).slice(0, 280);
+        if (typeof obj.error === 'string') return (obj.error as string).slice(0, 280);
+      } catch { /* skip */ }
+    }
+    return 'Pipeline failed — see devtools console for full trace.';
+  }
+  const [approveError, setApproveError] = useState<string | null>(null);
 
   // Shared cache with ProjectSidebar / Titlebar — no extra request.
   const { data: projects } = useQuery<Project[]>({
@@ -189,6 +251,25 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     enabled: planIds.length > 0,
     refetchInterval: activeThreadId ? 2000 : false,
   });
+
+  // Fetch latest verification for the thread
+  const { data: latestVerification } = useQuery<VerificationRecord | null>({
+    queryKey: ['verification', activeThreadId],
+    queryFn: () => window.shipcode.invoke('verification:get', { threadId: activeThreadId }),
+    enabled: !!activeThreadId && thread?.status === 'failed',
+  });
+
+  // Pick the right raw output based on which phase failed
+  const failingPhaseOutput = (() => {
+    if (!thread || thread.status !== 'failed') return planHistory[0]?.rawOutput ?? null;
+    // Verification failure — show verification output
+    if (latestVerification?.rawOutput) return latestVerification.rawOutput;
+    // Review failure — show review output for the latest plan
+    const latestReview = planHistory[0]?.id ? reviewsByPlanId[planHistory[0].id] : null;
+    if (latestReview?.rawOutput) return latestReview.rawOutput;
+    // Fall back to plan output
+    return planHistory[0]?.rawOutput ?? null;
+  })();
 
   // Auto-expand latest plan
   const latestPlanId = planHistory[0]?.id ?? null;
@@ -256,7 +337,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const canRerun = !!activeIssue && activeIssue.pipelineStatus === 'failed' && !!activeProjectId;
   const hasApprovalDecision =
     !!activeThreadId && threadPhase === 'awaiting_approval' && !!latestPlan;
-  const canApprove = hasApprovalDecision && !!latestPlan?.structured;
+  const canApprove = hasApprovalDecision && !!(latestPlan?.structured || latestPlan?.rawOutput);
   const fullScreenPlan = planHistory.find((p) => p.id === fullScreenPlanId) ?? null;
   const fullScreenReview = fullScreenPlan ? reviewsByPlanId[fullScreenPlan.id] : undefined;
 
@@ -303,9 +384,13 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const handleApprove = async () => {
     if (!activeThreadId || !canApprove) return;
     setIsSubmitting(true);
+    setApproveError(null);
     try {
       await window.shipcode.invoke('pipeline:approve', { threadId: activeThreadId });
       await refreshIssueState();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setApproveError(msg.split('\n')[0].slice(0, 280));
     } finally {
       setIsSubmitting(false);
     }
@@ -499,14 +584,6 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         )}
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <div className="flex flex-col gap-1 rounded-md border border-border bg-secondary p-2">
-          <span className="text-[10px] font-medium uppercase tracking-wide text-muted">Status</span>
-          <span
-            className={`inline-flex w-fit items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${PHASE_COLOR[threadPhase] ?? PHASE_COLOR.idle}`}
-          >
-            {threadPhase.replace(/_/g, ' ')}
-          </span>
-        </div>
         {thread.worktreeBranch && (
           <div className="flex flex-col gap-1 rounded-md border border-border bg-secondary p-2">
             <span className="text-[10px] font-medium uppercase tracking-wide text-muted">
@@ -547,7 +624,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
   const approvalSection = hasApprovalDecision ? (
     <div className="mb-5 rounded-md border border-border bg-secondary p-3">
-      <div className="mb-3 flex items-center gap-2">
+      <div className={cn('flex items-center gap-2', pendingAction === 'request_changes' && 'mb-3')}>
         <Select
           value={pendingAction}
           onValueChange={(v) =>
@@ -570,7 +647,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
             onClick={handleApprove}
             disabled={isSubmitting || !canApprove}
             title={
-              !canApprove ? 'Plan could not be parsed — use Request Changes or Cancel' : undefined
+              !canApprove ? 'No plan content found — use Request Changes or Cancel' : undefined
             }
           >
             {isSubmitting ? 'Approving...' : 'Confirm'}
@@ -579,10 +656,9 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         {pendingAction === 'cancel' && (
           <Button
             size="sm"
-            variant="ghost"
+            variant="destructive"
             onClick={handleCancel}
             disabled={isSubmitting}
-            className="text-danger hover:bg-danger/10 hover:text-danger"
           >
             {isSubmitting ? 'Cancelling...' : 'Confirm cancel'}
           </Button>
@@ -608,16 +684,37 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
           </div>
         </div>
       )}
+      {approveError && (
+        <p className="mt-2 text-[11px] text-danger">
+          {approveError}{' '}
+          <span className="text-muted">(full trace in devtools console)</span>
+        </p>
+      )}
     </div>
   ) : null;
 
   const planHistorySection =
     planHistory.length > 0 ? (
       <div className="mb-5">
-        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-secondary">
-          Plan History ({planHistory.length} version{planHistory.length !== 1 ? 's' : ''})
-        </h4>
-        <div className="flex flex-col gap-1">
+        <div className="mb-2 flex w-full items-center justify-between">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">
+            Plan History ({planHistory.length} version{planHistory.length !== 1 ? 's' : ''})
+          </h4>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={() => setPlanHistoryCollapsed((v) => !v)}
+            title={planHistoryCollapsed ? 'Expand plan history' : 'Collapse plan history'}
+            aria-label={planHistoryCollapsed ? 'Expand plan history' : 'Collapse plan history'}
+          >
+            {planHistoryCollapsed ? (
+              <ChevronDown size={16} strokeWidth={2.25} className="text-muted" />
+            ) : (
+              <ChevronUp size={16} strokeWidth={2.25} className="text-muted" />
+            )}
+          </Button>
+        </div>
+        {!planHistoryCollapsed && <div className="flex flex-col gap-1">
           {planHistory.map((plan) => {
             const isExpanded = effectiveExpanded === plan.id;
             const review = reviewsByPlanId[plan.id];
@@ -639,7 +736,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
                     <span className="text-xs" style={{ color: statusColor(plan.status) }}>
                       {plan.status}
                     </span>
-                    {review && (
+                    {review && plan.status !== 'superseded' && (
                       <Badge
                         variant={review.decision === 'approve' ? 'success' : 'warning'}
                         className="text-[10px]"
@@ -675,72 +772,137 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
                       <div className="border-t border-border p-3">
                         {inlineDisplayPlan && <PlanViewer plan={inlineDisplayPlan} />}
                         {review?.structured && <ReviewViewer review={review.structured} />}
-                        {!inlineDisplayPlan && (
-                          <div className="overflow-x-auto">
-                            <pre className="whitespace-pre-wrap text-xs text-secondary">
-                              {resolveRawPlanText(plan.rawOutput ?? '')}
-                            </pre>
-                          </div>
-                        )}
+                        {!inlineDisplayPlan && (() => {
+                          const fallbackRaw = plan.rawOutput ?? '';
+                          const resolved = resolveRawPlanText(fallbackRaw);
+                          return resolved === fallbackRaw ? (
+                            <p className="text-xs italic text-muted">
+                              Plan output could not be parsed. Check devtools console for the
+                              full trace.
+                            </p>
+                          ) : (
+                            <div className="overflow-x-auto">
+                              <pre className="whitespace-pre-wrap text-xs text-secondary">
+                                {resolved}
+                              </pre>
+                            </div>
+                          );
+                        })()}
                       </div>
                     );
                   })()}
               </div>
             );
           })}
-        </div>
+        </div>}
       </div>
     ) : null;
 
-  const pipelineStartCard = canStartPipeline ? (
-    <div className="sticky -top-4 z-20 -mx-4 -mt-4 mb-4 bg-primary px-4 pt-4 pb-3">
-      <div className="rounded-lg border border-border bg-tertiary p-4 shadow-[0_1px_0_0_rgba(0,0,0,0.3)]">
-        <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
-          Ready
-        </div>
-        <h4 className="mb-1.5 text-[14px] font-semibold leading-snug text-primary">
-          Run the agent pipeline
-        </h4>
-        <p className="mb-5 text-[12px] leading-relaxed text-secondary">
-          The issue will move through these phases in an isolated worktree. You'll approve the plan
-          before any code is written.
-        </p>
+  const pipelineStartCardInner = canStartPipeline ? (
+    <div className="rounded-lg border border-border bg-tertiary p-4 shadow-[0_1px_0_0_rgba(0,0,0,0.3)]">
+      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
+        Ready
+      </div>
+      <h4 className="mb-1.5 text-[14px] font-semibold leading-snug text-primary">
+        Run the agent pipeline
+      </h4>
+      <p className="mb-5 text-[12px] leading-relaxed text-secondary">
+        The issue will move through these phases in an isolated worktree. You'll approve the plan
+        before any code is written.
+      </p>
 
-        <div className="mb-5">
-          <div className="relative">
-            <div
-              aria-hidden="true"
-              className="absolute left-[9px] right-[9px] top-[9px] h-px bg-border"
-            />
-            <ol className="relative grid grid-cols-5 gap-1">
-              {PIPELINE_PREVIEW_PHASES.map((phase, i) => (
-                <li key={phase.id} className="flex min-w-0 flex-col items-center gap-1.5">
-                  <span className="relative flex h-[18px] w-[18px] items-center justify-center rounded-full border border-border bg-tertiary font-mono text-[9px] font-medium text-muted">
-                    {i + 1}
-                  </span>
-                  <span className="w-full truncate text-center text-[9px] font-semibold uppercase tracking-normal text-muted">
-                    {phase.label}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <Button size="sm" onClick={handleStartPipeline} disabled={isSubmitting}>
-            {isSubmitting ? 'Starting…' : 'Start pipeline'}
-          </Button>
-          <Button
-            variant="link"
-            size="xs"
-            onClick={handleEditPrd}
-            className="px-0 text-muted hover:text-primary"
-          >
-            Edit PRD first
-          </Button>
+      <div className="mb-5">
+        <div className="relative">
+          <div
+            aria-hidden="true"
+            className="absolute left-[9px] right-[9px] top-[9px] h-px bg-border"
+          />
+          <ol className="relative grid grid-cols-5 gap-1">
+            {PIPELINE_PREVIEW_PHASES.map((phase, i) => (
+              <li key={phase.id} className="flex min-w-0 flex-col items-center gap-1.5">
+                <span className="relative flex h-[18px] w-[18px] items-center justify-center rounded-full border border-border bg-tertiary font-mono text-[9px] font-medium text-muted">
+                  {i + 1}
+                </span>
+                <span className="w-full truncate text-center text-[9px] font-semibold uppercase tracking-normal text-muted">
+                  {phase.label}
+                </span>
+              </li>
+            ))}
+          </ol>
         </div>
       </div>
+
+      <div className="flex items-center gap-3">
+        <Button size="sm" onClick={handleStartPipeline} disabled={isSubmitting}>
+          {isSubmitting ? 'Starting…' : 'Start pipeline'}
+        </Button>
+        <Button
+          variant="link"
+          size="xs"
+          onClick={handleEditPrd}
+          className="px-0 text-muted hover:text-primary"
+        >
+          Edit PRD first
+        </Button>
+      </div>
+    </div>
+  ) : null;
+
+  const rerunSection = canRerun ? (
+    <div className="mb-5">
+      {(thread?.lastError || failingPhaseOutput) && (
+        <div className="mb-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-danger">Error</p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="text-danger/60 hover:bg-danger/10 hover:text-danger"
+                onClick={() =>
+                  navigator.clipboard.writeText(
+                    [thread?.lastError, failingPhaseOutput].filter(Boolean).join('\n\n'),
+                  )
+                }
+                title="Copy to clipboard"
+              >
+                <Copy size={13} />
+              </Button>
+              {failingPhaseOutput && (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="text-danger/60 hover:bg-danger/10 hover:text-danger"
+                  onClick={() => setShowRawOutput((v) => !v)}
+                >
+                  {showRawOutput ? (
+                    <ChevronUp size={16} strokeWidth={2.25} />
+                  ) : (
+                    <ChevronDown size={16} strokeWidth={2.25} />
+                  )}
+                </Button>
+              )}
+            </div>
+          </div>
+          {thread?.lastError && (
+            <p className="text-[12px] text-danger/80 break-words">{safeErrorMessage(thread.lastError)}</p>
+          )}
+          {showRawOutput && failingPhaseOutput && (
+            <pre className="mt-2 max-h-[200px] overflow-y-auto text-[11px] text-danger/70 whitespace-pre-wrap break-words border-t border-danger/20 pt-2">
+              {planHistory[0].rawOutput}
+            </pre>
+          )}
+        </div>
+      )}
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={handleRerun}
+        disabled={isSubmitting}
+        className="w-full border-danger/40 text-danger hover:bg-danger/10 hover:border-danger"
+      >
+        {isSubmitting ? 'Starting...' : 'Retry'}
+      </Button>
     </div>
   ) : null;
 
@@ -757,8 +919,6 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       onOpenChange={(open) => {
         if (!open) {
           setFullScreenPlanId(null);
-          setIsEditingPlan(false);
-          setEditPlanError('');
         }
       }}
     >
@@ -883,80 +1043,20 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
             {/* Thread exists but no plans yet — only while not failed */}
             {activeThreadId && planHistory.length === 0 && threadPhase !== 'failed' && (
-              <div className="mb-5">
-                <p className="py-4 text-center text-[13px] text-muted">
-                  Pipeline is running — waiting for plan generation...
-                </p>
-              </div>
+              <PlanWaiting threadId={activeThreadId} />
             )}
           </div>
         </div>
 
         {/* Right sidebar — properties */}
         <div className="w-72 shrink-0 border-l border-border overflow-y-auto p-4">
-          {pipelineStartCard}
-          {/* Re-run CTA — top action when failed */}
-          {canRerun && (
-            <div className="mb-4">
-              {(thread?.lastError || planHistory[0]?.rawOutput) && (
-                <div className="mb-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-danger">
-                      Error
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        className="text-danger/60 hover:bg-danger/10 hover:text-danger"
-                        onClick={() =>
-                          navigator.clipboard.writeText(
-                            [thread?.lastError, planHistory[0]?.rawOutput]
-                              .filter(Boolean)
-                              .join('\n\n'),
-                          )
-                        }
-                        title="Copy to clipboard"
-                      >
-                        <Copy size={13} />
-                      </Button>
-                      {planHistory[0]?.rawOutput && (
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          className="text-danger/60 hover:bg-danger/10 hover:text-danger"
-                          onClick={() => setShowRawOutput((v) => !v)}
-                        >
-                          {showRawOutput ? (
-                            <ChevronUp size={16} strokeWidth={2.25} />
-                          ) : (
-                            <ChevronDown size={16} strokeWidth={2.25} />
-                          )}
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                  {thread?.lastError && (
-                    <p className="text-[12px] text-danger/80 break-words">{thread.lastError}</p>
-                  )}
-                  {showRawOutput && planHistory[0]?.rawOutput && (
-                    <pre className="mt-2 max-h-[200px] overflow-y-auto text-[11px] text-danger/70 whitespace-pre-wrap break-words border-t border-danger/20 pt-2">
-                      {planHistory[0].rawOutput}
-                    </pre>
-                  )}
-                </div>
-              )}
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleRerun}
-                disabled={isSubmitting}
-                className="w-full border-danger/40 text-danger hover:bg-danger/10 hover:border-danger"
-              >
-                {isSubmitting ? 'Starting...' : 'Re-run Pipeline'}
-              </Button>
+          {pipelineStartCardInner && (
+            <div className="sticky -top-4 z-20 -mx-4 -mt-4 mb-4 bg-primary px-4 pt-4 pb-3">
+              {pipelineStartCardInner}
             </div>
           )}
+          {/* Re-run CTA — top action when failed */}
+          {rerunSection}
 
           {agentsSection}
           {pipelineSection}
@@ -969,7 +1069,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   // ─── Panel (default) layout ──────────────────────────────────────────────
 
   return (
-    <div className="h-full flex flex-col overflow-y-auto bg-primary">
+    <div className="h-full flex flex-col overflow-hidden bg-primary">
       {/* Header */}
       <div className="relative shrink-0 border-b border-border p-4">
         {headerButtons}
@@ -991,139 +1091,95 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         {issueBadges}
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4">
-        {pipelineStartCard}
-        {/* Re-run CTA — top of content when failed */}
-        {canRerun && (
+      {/* Primary CTAs — above tabs, always visible */}
+      {pipelineStartCardInner && (
+        <div className="shrink-0 p-4 pb-0">{pipelineStartCardInner}</div>
+      )}
+      {rerunSection && (
+        <div className="shrink-0 px-4 pt-4">{rerunSection}</div>
+      )}
+
+      {/* Tabbed content — min-h-0 required for flex scroll containment */}
+      <Tabs defaultValue="plan" className="flex-1 min-h-0 flex flex-col">
+        <TabsList className="shrink-0 px-4">
+          <TabsTrigger value="plan">Plan</TabsTrigger>
+          <TabsTrigger value="agents">Agents</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="plan" className="p-4">
+          {/* PRD (GitHub issue body IS the PRD) */}
           <div className="mb-5">
-            {(thread?.lastError || planHistory[0]?.rawOutput) && (
-              <div className="mb-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-danger">
-                    Error
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      className="text-danger/60 hover:bg-danger/10 hover:text-danger"
-                      onClick={() =>
-                        navigator.clipboard.writeText(
-                          [thread?.lastError, planHistory[0]?.rawOutput]
-                            .filter(Boolean)
-                            .join('\n\n'),
-                        )
-                      }
-                      title="Copy to clipboard"
-                    >
-                      <Copy size={13} />
-                    </Button>
-                    {planHistory[0]?.rawOutput && (
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        className="text-danger/60 hover:bg-danger/10 hover:text-danger"
-                        onClick={() => setShowRawOutput((v) => !v)}
-                      >
-                        {showRawOutput ? (
-                          <ChevronUp size={16} strokeWidth={2.25} />
-                        ) : (
-                          <ChevronDown size={16} strokeWidth={2.25} />
-                        )}
-                      </Button>
-                    )}
+            <div className="mb-2 flex w-full items-center justify-between">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">PRD</h4>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={handleRefreshFromGithub}
+                  disabled={isRefreshingFromGithub}
+                  title="Re-fetch issue body from GitHub (use after editing on github.com)"
+                  aria-label="Refresh PRD from GitHub"
+                >
+                  <RefreshCw size={12} className={isRefreshingFromGithub ? 'animate-spin' : ''} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={handleEditPrd}
+                  title="Edit the PRD body (pushes to the GitHub issue on save)"
+                  aria-label="Edit PRD"
+                >
+                  <Pencil size={13} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => setPrdCollapsed((v) => !v)}
+                  title={prdCollapsed ? 'Expand PRD' : 'Collapse PRD'}
+                  aria-label={prdCollapsed ? 'Expand PRD' : 'Collapse PRD'}
+                >
+                  {prdCollapsed ? (
+                    <ChevronDown size={16} strokeWidth={2.25} className="text-muted" />
+                  ) : (
+                    <ChevronUp size={16} strokeWidth={2.25} className="text-muted" />
+                  )}
+                </Button>
+              </div>
+            </div>
+            {!prdCollapsed &&
+              (activeIssue.body ? (
+                <div className="max-h-[300px] overflow-y-auto rounded-md bg-secondary p-3 text-[13px] leading-relaxed text-primary">
+                  <div className={PRD_PROSE_CLASSES}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{activeIssue.body}</ReactMarkdown>
                   </div>
                 </div>
-                {thread?.lastError && (
-                  <p className="text-[12px] text-danger/80 break-words">{thread.lastError}</p>
-                )}
-                {showRawOutput && planHistory[0]?.rawOutput && (
-                  <pre className="mt-2 max-h-[200px] overflow-y-auto text-[11px] text-danger/70 whitespace-pre-wrap break-words border-t border-danger/20 pt-2">
-                    {planHistory[0].rawOutput}
-                  </pre>
-                )}
-              </div>
-            )}
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleRerun}
-              disabled={isSubmitting}
-              className="w-full border-danger/40 text-danger hover:bg-danger/10 hover:border-danger"
-            >
-              {isSubmitting ? 'Starting...' : 'Re-run Pipeline'}
-            </Button>
-          </div>
-        )}
-
-        {/* PRD (GitHub issue body IS the PRD) */}
-        <div className="mb-5">
-          <div className="mb-2 flex w-full items-center justify-between">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">PRD</h4>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={handleRefreshFromGithub}
-                disabled={isRefreshingFromGithub}
-                title="Re-fetch issue body from GitHub (use after editing on github.com)"
-                aria-label="Refresh PRD from GitHub"
-              >
-                <RefreshCw size={12} className={isRefreshingFromGithub ? 'animate-spin' : ''} />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={handleEditPrd}
-                title="Edit the PRD body (pushes to the GitHub issue on save)"
-                aria-label="Edit PRD"
-              >
-                <Pencil size={13} />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={() => setPrdCollapsed((v) => !v)}
-                title={prdCollapsed ? 'Expand PRD' : 'Collapse PRD'}
-                aria-label={prdCollapsed ? 'Expand PRD' : 'Collapse PRD'}
-              >
-                {prdCollapsed ? (
-                  <ChevronDown size={16} strokeWidth={2.25} className="text-muted" />
-                ) : (
-                  <ChevronUp size={16} strokeWidth={2.25} className="text-muted" />
-                )}
-              </Button>
-            </div>
-          </div>
-          {!prdCollapsed &&
-            (activeIssue.body ? (
-              <div className="max-h-[300px] overflow-y-auto rounded-md bg-secondary p-3 text-[13px] leading-relaxed text-primary">
-                <div className={PRD_PROSE_CLASSES}>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{activeIssue.body}</ReactMarkdown>
+              ) : (
+                <div className="rounded-md bg-secondary p-3 text-[13px] text-muted">
+                  This issue has no PRD body yet. Click "Edit PRD" to author one.
                 </div>
-              </div>
-            ) : (
-              <div className="rounded-md bg-secondary p-3 text-[13px] text-muted">
-                This issue has no PRD body yet. Click "Edit PRD" to author one.
-              </div>
-            ))}
-        </div>
-
-        {agentsSection}
-        {pipelineSection}
-        {approvalSection}
-        {planHistorySection}
-
-        {/* Thread exists but no plans yet — only while not failed */}
-        {activeThreadId && planHistory.length === 0 && threadPhase !== 'failed' && (
-          <div className="mb-5">
-            <p className="py-4 text-center text-[13px] text-muted">
-              Pipeline is running — waiting for plan generation...
-            </p>
+              ))}
           </div>
-        )}
-      </div>
+
+          {approvalSection}
+          {planHistorySection}
+
+          {/* Thread exists but no plans yet — only while not failed */}
+          {activeThreadId && planHistory.length === 0 && threadPhase !== 'failed' && (
+            <div className="mb-5">
+              <p className="py-4 text-center text-[13px] text-muted">
+                Pipeline is running — waiting for plan generation...
+              </p>
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="agents" className="p-4">
+          {agentsSection}
+          {pipelineSection}
+        </TabsContent>
+      </Tabs>
+
+      {/* Portal-based dialog — outside tabs to avoid unmount on tab switch */}
       {planFullScreenDialog}
     </div>
   );

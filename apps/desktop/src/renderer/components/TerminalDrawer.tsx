@@ -116,7 +116,9 @@ export function TerminalDrawer() {
   const terminalEvents = terminalThreadId ? (terminalEventsByThread[terminalThreadId] ?? []) : [];
   const activeIssue = useAppStore((s) => s.activeIssue);
   const pipelinePhase = useAppStore((s) => s.pipelinePhase);
-  const currentModel = useAppStore((s) => s.currentModel);
+  const currentModel = useAppStore(
+    (s) => (s.terminalThreadId ? s.currentModels[s.terminalThreadId] : null) ?? null,
+  );
   const githubIssues = useAppStore((s) => s.githubIssues);
   const processToThread = useAppStore((s) => s.processToThread);
   const setTerminalThread = useAppStore((s) => s.setTerminalThread);
@@ -482,6 +484,7 @@ export function TerminalDrawer() {
             size="icon-xs"
             onClick={toggleMaximize}
             title={isMaximized ? 'Restore terminal' : 'Maximize terminal'}
+            aria-label={isMaximized ? 'Restore terminal' : 'Maximize terminal'}
           >
             {isMaximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
           </Button>
@@ -490,6 +493,7 @@ export function TerminalDrawer() {
             size="icon-xs"
             onClick={toggleTerminal}
             title="Close terminal"
+            aria-label="Close terminal"
           >
             <X size={14} />
           </Button>

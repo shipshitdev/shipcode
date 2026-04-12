@@ -233,9 +233,10 @@ describe('IssueDetail', () => {
 
     renderWithProviders();
 
-    // The Confirm button should be disabled because structured is null (canApprove is false)
+    // With rawOutput present, approval is allowed even when structured is null
+    // (the rawOutput fallback path from pipeline:approve parses it server-side)
     const confirmButton = await screen.findByRole('button', { name: 'Confirm' });
-    expect(confirmButton).toBeDisabled();
+    expect(confirmButton).toBeEnabled();
   });
 
   it('renders the approval dropdown when awaiting approval', async () => {
@@ -262,6 +263,47 @@ describe('IssueDetail', () => {
     // and the Confirm button is visible when defaulting to 'approve'
     const confirmButton = await screen.findByRole('button', { name: 'Confirm' });
     expect(confirmButton).toBeInTheDocument();
+  });
+
+  it('renders Plan and Agents tab triggers', async () => {
+    invokeMock.mockResolvedValue([]);
+
+    renderWithProviders();
+
+    expect(screen.getByRole('tab', { name: 'Plan' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Agents' })).toBeInTheDocument();
+  });
+
+  it('Plan tab is active by default and shows PRD content', async () => {
+    invokeMock.mockResolvedValue([]);
+
+    renderWithProviders();
+
+    const planTab = screen.getByRole('tab', { name: 'Plan' });
+    expect(planTab).toHaveAttribute('data-state', 'active');
+    expect(screen.getByText('Spec body')).toBeInTheDocument();
+  });
+
+  it('Agents tab starts inactive and Plan tab starts active', async () => {
+    invokeMock.mockResolvedValue([]);
+
+    renderWithProviders();
+
+    expect(screen.getByRole('tab', { name: 'Plan' })).toHaveAttribute('data-state', 'active');
+    expect(screen.getByRole('tab', { name: 'Agents' })).toHaveAttribute('data-state', 'inactive');
+  });
+
+  it('pipeline start card is above the tab bar when pipeline not started', async () => {
+    invokeMock.mockResolvedValue([]);
+
+    renderWithProviders();
+
+    const startButton = screen.getByRole('button', { name: 'Start pipeline' });
+    const planTab = screen.getByRole('tab', { name: 'Plan' });
+    // Start button should appear before the tab list in the DOM
+    expect(startButton.compareDocumentPosition(planTab)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
   });
 });
 

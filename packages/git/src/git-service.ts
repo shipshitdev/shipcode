@@ -60,6 +60,10 @@ export class GitService {
    * remote-only branches keep their "<remote>/<name>" prefix. Sorted so the
    * passed `defaultBranch` appears first.
    */
+  async fetch(): Promise<void> {
+    await this.git.fetch(['--prune']);
+  }
+
   async listBranches(defaultBranch: string): Promise<string[]> {
     const result = await this.git.branch(['-a']);
     return normalizeBranches({ raw: result.all, defaultBranch });

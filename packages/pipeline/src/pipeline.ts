@@ -66,6 +66,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       reviewRound: seed.reviewRound ?? 0,
       verificationRetries: seed.verificationRetries ?? 0,
       githubIssueNumber: seed.githubIssueNumber ?? null,
+      githubIssueTitle: seed.githubIssueTitle ?? null,
       githubRepo: seed.githubRepo ?? null,
       executorModel: seed.executorModel ?? 'claude',
       executorModelOverride: seed.executorModelOverride ?? null,
@@ -146,7 +147,12 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
   ): Promise<{ rawOutput: string; exitCode: number; resolvedModel?: string }> {
     const agent = resolveAgentForPhase(context, phase);
     const provider = deps.providers.for(agent, phase);
-    const cwd = context.worktreePath ?? context.projectPath;
+    // Plan and review run against the project root (no worktree yet).
+    // Execute and verify run in the worktree.
+    const cwd =
+      phase === 'plan' || phase === 'review'
+        ? context.projectPath
+        : (context.worktreePath ?? context.projectPath);
     const modelHint =
       agent === context.executorModel && context.executorModelOverride
         ? context.executorModelOverride
@@ -251,7 +257,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         if (context.cancelled) return;
 
         if (response.exitCode === 127) {
-          emitPhase(threadId, 'failed', 'Claude CLI not found (exit 127). Is the claude binary installed and on PATH?');
+          const agent = resolveAgentForPhase(context, 'plan');
+          const name = agent === 'openrouter' ? 'Provider' : `${agent} CLI`;
+          emitPhase(threadId, 'failed', `${name} not found (exit 127). Is the ${agent} binary installed and on PATH?`);
           activePipelines.delete(threadId);
           return;
         }
@@ -274,8 +282,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
               context.retryCount++;
               startPlanGeneration(threadId, prompt, projectPath, worktreePath);
             } else {
-              const reason = detectedError?.match ?? parser.getRawOutput().trim().split('\n').filter(Boolean).slice(-3).join(' ').slice(0, 280);
-              emitPhase(threadId, 'failed', reason || 'Plan generation failed — no output was produced.');
+              const rawSnippet = detectedError?.match ?? parser.getRawOutput().trim().split('\n').filter(Boolean).slice(-3).join(' ').slice(0, 300);
+              const reason = rawSnippet?.trimStart().startsWith('{') ? '' : rawSnippet;
+              emitPhase(threadId, 'failed', reason || 'Plan generation failed — no structured plan was produced.');
               activePipelines.delete(threadId);
             }
           }
@@ -325,7 +334,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         if (context.cancelled) return;
 
         if (response.exitCode === 127) {
-          emitPhase(threadId, 'failed');
+          const agent = resolveAgentForPhase(context, 'review');
+          const name = agent === 'openrouter' ? 'Provider' : `${agent} CLI`;
+          emitPhase(threadId, 'failed', `${name} not found (exit 127). Is the ${agent} binary installed and on PATH?`);
           activePipelines.delete(threadId);
           return;
         }
@@ -437,12 +448,14 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
           deps.emitter.emit({ type: 'plan:parsed', threadId, plan: result.data });
           startReview(threadId, result.data);
         } else {
+          deps.plans.supersedeAll(threadId);
           deps.plans.create(threadId, result.raw, null, plan.version + 1);
           emitPhase(threadId, 'failed');
           activePipelines.delete(threadId);
         }
       } catch {
         if (!context.cancelled) {
+          deps.plans.supersedeAll(threadId);
           emitPhase(threadId, 'failed');
           activePipelines.delete(threadId);
         }
@@ -462,8 +475,15 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         const appSettings = deps.settings.get();
         const worktreeManager = new WorktreeManager(context.projectPath, {
           worktreeRoot: appSettings.worktreeRoot,
+          branchFormat: appSettings.worktreeBranchFormat,
         });
-        const wt = await worktreeManager.create(threadId, context.baseBranch || undefined);
+        const wt = context.githubIssueNumber
+          ? await worktreeManager.create(
+              context.githubIssueNumber,
+              context.githubIssueTitle ?? '',
+              context.baseBranch || undefined,
+            )
+          : await worktreeManager.create(threadId, context.baseBranch || undefined);
         context.worktreePath = wt.worktreePath;
         deps.threads.setWorktree(threadId, wt.branch, wt.worktreePath);
       } catch (err) {
@@ -499,7 +519,8 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
             activePipelines.delete(threadId);
           }
         } else {
-          const errSnippet = response.rawOutput.trim().split('\n').slice(-3).join(' ').slice(0, 280);
+          const rawErrSnippet = response.rawOutput.trim().split('\n').slice(-3).join(' ').slice(0, 300);
+          const errSnippet = rawErrSnippet.trimStart().startsWith('{') ? '' : rawErrSnippet;
           emitPhase(threadId, 'failed', `Execution failed (exit ${response.exitCode})${errSnippet ? `: ${errSnippet}` : ''}`);
           activePipelines.delete(threadId);
         }
@@ -827,6 +848,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       reviewRound: 0,
       verificationRetries: 0,
       githubIssueNumber: issue.number,
+      githubIssueTitle: issue.title,
       githubRepo: null,
       executorModel,
       executorModelOverride,

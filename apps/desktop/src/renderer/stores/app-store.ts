@@ -19,7 +19,7 @@ const AGENT_ACTIVE_STATUSES = new Set<IssuePipelineStatus>([
   'shipping',
 ]);
 
-export type ViewMode = 'dashboard' | 'project' | 'activity' | 'inbox' | 'costs' | 'skills';
+export type ViewMode = 'overview' | 'project' | 'activity' | 'inbox' | 'costs' | 'skills';
 export type SettingsSection =
   | 'general'
   | 'github'
@@ -66,8 +66,11 @@ interface AppState {
   terminalThreadId: string | null;
   terminalEventsByThread: Record<string, string[]>;
 
-  // Currently running model (from pipeline:model-resolved, reset on idle)
-  currentModel: string | null;
+  // Timestamp of last agent output chunk received, keyed by threadId
+  lastActivityByThread: Record<string, number>;
+
+  // Currently running model per thread (from pipeline:model-resolved)
+  currentModels: Record<string, string>;
 
   // Notifications (in-app toaster + history)
   notifications: NotificationRecord[];
@@ -81,7 +84,7 @@ interface AppState {
 
   // Actions
   setViewMode: (mode: ViewMode) => void;
-  openDashboard: () => void;
+  openOverview: () => void;
   openActivity: () => void;
   openInbox: () => void;
   openCosts: () => void;
@@ -106,7 +109,8 @@ interface AppState {
   logTerminalEvent: (line: string) => void;
   setTerminalThread: (id: string | null) => void;
   logTerminalEventForThread: (threadId: string, line: string) => void;
-  setCurrentModel: (model: string | null) => void;
+  touchLastActivity: (threadId: string) => void;
+  setCurrentModel: (threadId: string, model: string) => void;
   addNotification: (notification: NotificationRecord) => void;
   removeNotification: (id: string) => void;
   clearNotifications: () => void;
@@ -124,7 +128,7 @@ export const useAppStore = create<AppState>((set) => ({
   activeProjectId: null,
   activeThreadId: null,
   activeIssue: null,
-  viewMode: 'dashboard',
+  viewMode: 'overview',
   sidebarCollapsed: false,
   terminalVisible: false,
   settingsVisible: false,
@@ -142,18 +146,19 @@ export const useAppStore = create<AppState>((set) => ({
   terminalEvents: [],
   terminalThreadId: null,
   terminalEventsByThread: {},
+  lastActivityByThread: {},
   notifications: [],
   commandPaletteOpen: false,
   createIssueModalOpen: false,
   editingPrd: null,
   projectSettingsModalOpen: false,
   projectSettingsModalProjectId: null,
-  currentModel: null,
+  currentModels: {},
 
   setViewMode: (mode) => set({ viewMode: mode }),
-  openDashboard: () =>
+  openOverview: () =>
     set({
-      viewMode: 'dashboard',
+      viewMode: 'overview',
       activeIssue: null,
       issueDetailExpanded: false,
       currentPlan: null,
@@ -250,7 +255,7 @@ export const useAppStore = create<AppState>((set) => ({
   setPipelinePhase: (phase) =>
     set((s) =>
       phase === 'idle'
-        ? { pipelinePhase: phase, currentModel: null }
+        ? { pipelinePhase: phase }
         : {
             pipelinePhase: phase,
             // Only auto-open on the first transition INTO an active run (e.g. idle/queued → planning).
@@ -281,13 +286,16 @@ export const useAppStore = create<AppState>((set) => ({
     set((s) => ({ processToThread: { ...s.processToThread, [processId]: threadId } })),
   logTerminalEvent: (line) => set((s) => ({ terminalEvents: [...s.terminalEvents, line] })),
   setTerminalThread: (id) => set({ terminalThreadId: id }),
-  setCurrentModel: (model) => set({ currentModel: model }),
+  setCurrentModel: (threadId, model) =>
+    set((s) => ({ currentModels: { ...s.currentModels, [threadId]: model } })),
   logTerminalEventForThread: (threadId, line) =>
     set((s) => {
       const prev = s.terminalEventsByThread[threadId] ?? [];
       const next = prev.length >= 200 ? [...prev.slice(-199), line] : [...prev, line];
       return { terminalEventsByThread: { ...s.terminalEventsByThread, [threadId]: next } };
     }),
+  touchLastActivity: (threadId) =>
+    set((s) => ({ lastActivityByThread: { ...s.lastActivityByThread, [threadId]: Date.now() } })),
   addNotification: (notification) =>
     set((s) => {
       // Replace existing record with same id (re-fired) or prepend new.

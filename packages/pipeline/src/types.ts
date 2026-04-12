@@ -80,6 +80,7 @@ export interface PipelineContext {
   reviewRound: number;
   verificationRetries: number;
   githubIssueNumber: number | null;
+  githubIssueTitle: string | null;
   githubRepo: string | null;
   executorModel: PipelineExecutorModel;
   /** Optional per-run model slug override (e.g. 'openrouter/auto'). */

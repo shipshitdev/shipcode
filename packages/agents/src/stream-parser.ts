@@ -137,8 +137,16 @@ export class StreamParser {
       if (!line) continue;
       try {
         const parsed = JSON.parse(line);
-        if (parsed.type === 'result' && typeof parsed.result === 'string') {
-          return parsed.result;
+        if (parsed.type === 'result') {
+          if (typeof parsed.result === 'string') return parsed.result;
+          // Extended thinking: result is an array of content blocks
+          if (Array.isArray(parsed.result)) {
+            const text = parsed.result
+              .filter((b: { type: string }) => b.type === 'text')
+              .map((b: { text: string }) => b.text)
+              .join('\n');
+            if (text) return text;
+          }
         }
       } catch {
         continue; // skip non-parseable lines (PTY control sequences, etc.)

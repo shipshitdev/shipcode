@@ -11,7 +11,6 @@ import {
   Button,
   Card,
   CardContent,
-  Layers,
   Loader2,
   Table,
   TableBody,
@@ -19,6 +18,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  X,
 } from '@shipcode/ui';
 import { useAppStore } from '../stores/app-store';
 
@@ -51,26 +51,10 @@ const KIND_LABEL: Record<NotificationKind, string> = {
   verification_exhausted: 'Retries exhausted',
 };
 
-const GROUP_SECTION_LABEL: Record<NotificationKind, string> = {
-  awaiting_approval: 'Awaiting Approval',
-  failed: 'Failed',
-  verification_exhausted: 'Retries Exhausted',
-  completed: 'Completed',
-};
-
-// Priority order for group sections
-const GROUP_ORDER: NotificationKind[] = [
-  'awaiting_approval',
-  'failed',
-  'verification_exhausted',
-  'completed',
-];
-
 export function InboxView() {
   const queryClient = useQueryClient();
   const { removeNotification, clearNotifications, selectProject, selectIssue } = useAppStore();
 
-  const [groupBy, setGroupBy] = useState<'none' | 'kind'>('none');
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [navigatingId, setNavigatingId] = useState<string | null>(null);
   // Stale-navigation guard: each click gets a token; async results are discarded
@@ -138,6 +122,9 @@ export function InboxView() {
     const priorProjectId = useAppStore.getState().activeProjectId;
     try {
       selectProject(n.projectId);
+      // selectProject resets viewMode to 'project' — restore inbox so the
+      // IssueDetail sidebar opens alongside the inbox, not the Kanban board.
+      useAppStore.getState().setViewMode('inbox');
       if (!n.threadId) return;
       const issues = await window.shipcode.invoke<GitHubIssueCacheRecord[]>('github:list-issues', {
         projectId: n.projectId,
@@ -145,9 +132,18 @@ export function InboxView() {
       if (navTokenRef.current !== token) return;
       useAppStore.getState().setGithubIssues(issues);
       const match = issues.find((i) => i.threadId === n.threadId) ?? null;
-      if (match) selectIssue(match);
+      if (match) {
+        selectIssue(match);
+        // If the detail panel was previously collapsed, un-collapse it so the
+        // user actually sees the issue after clicking View.
+        const store = useAppStore.getState();
+        if (store.issueDetailCollapsed) store.toggleIssueDetail();
+      }
     } catch {
-      if (navTokenRef.current === token) selectProject(priorProjectId);
+      if (navTokenRef.current === token) {
+        selectProject(priorProjectId);
+        useAppStore.getState().setViewMode('inbox');
+      }
     } finally {
       if (navTokenRef.current === token) setNavigatingId(null);
     }
@@ -158,36 +154,38 @@ export function InboxView() {
       <TableCell className="w-[1%] whitespace-nowrap align-top">
         <Badge variant={KIND_BADGE_VARIANT[n.kind]}>{KIND_LABEL[n.kind]}</Badge>
       </TableCell>
+      <TableCell className="w-[1%] whitespace-nowrap align-top text-[11px] text-muted">
+        {timeAgo(n.createdAt)}
+      </TableCell>
       <TableCell className="align-top">
         <div className="text-[13px] font-medium text-primary">{n.title}</div>
         {n.body && (
           <div className="mt-0.5 line-clamp-2 text-[12px] text-secondary">{n.body}</div>
         )}
       </TableCell>
-      <TableCell className="w-[1%] whitespace-nowrap align-top text-[11px] text-muted">
-        {timeAgo(n.createdAt)}
-      </TableCell>
       <TableCell className="w-[1%] whitespace-nowrap align-top text-right">
         <div className="flex items-center justify-end gap-1">
           {n.projectId !== null && (
             <Button
               variant="ghost"
-              size="xs"
+              className="h-5 px-1.5 text-[10px] font-medium text-muted hover:text-primary hover:bg-elevated"
               onClick={() => goToIssue(n)}
               disabled={navigatingId === n.id}
-              aria-label={`Go to issue: ${n.title}`}
+              title="Open issue"
+              aria-label={`Open issue: ${n.title}`}
             >
-              Go to issue
+              View
             </Button>
           )}
           <Button
             variant="ghost"
-            size="xs"
+            size="icon-xs"
             onClick={() => dismiss.mutate(n.id)}
             disabled={dismiss.isPending && dismiss.variables === n.id}
+            title="Dismiss"
             aria-label={`Dismiss notification: ${n.title}`}
           >
-            Dismiss
+            <X size={14} />
           </Button>
         </div>
       </TableCell>
@@ -201,8 +199,8 @@ export function InboxView() {
           <TableHeader>
             <TableRow>
               <TableHead>Status</TableHead>
-              <TableHead>Notification</TableHead>
               <TableHead>Time</TableHead>
+              <TableHead>Notification</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -223,16 +221,6 @@ export function InboxView() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setGroupBy((g) => (g === 'none' ? 'kind' : 'none'))}
-            className={`h-7 gap-1.5 text-[11px] ${groupBy === 'kind' ? 'text-primary bg-hover' : 'text-muted'}`}
-            title={groupBy === 'kind' ? 'Ungroup' : 'Group by kind'}
-          >
-            <Layers size={12} />
-            Group
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
             onClick={() => setSortOrder((s) => (s === 'newest' ? 'oldest' : 'newest'))}
             className="h-7 gap-1.5 text-[11px] text-muted"
             title={sortOrder === 'newest' ? 'Showing newest first' : 'Showing oldest first'}
@@ -247,7 +235,7 @@ export function InboxView() {
               onClick={() => dismissAll.mutate()}
               disabled={dismissAll.isPending}
             >
-              Dismiss all
+              Read all
             </Button>
           )}
         </div>
@@ -276,24 +264,7 @@ export function InboxView() {
             </div>
           )}
 
-          {!isLoading && !isError && active.length > 0 && groupBy === 'none' && renderTable(sorted)}
-
-          {!isLoading && !isError && active.length > 0 && groupBy === 'kind' && (
-            <div className="space-y-6">
-              {GROUP_ORDER.map((kind) => {
-                const items = sorted.filter((n) => n.kind === kind);
-                if (items.length === 0) return null;
-                return (
-                  <section key={kind}>
-                    <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
-                      {GROUP_SECTION_LABEL[kind]} · {items.length}
-                    </h2>
-                    {renderTable(items)}
-                  </section>
-                );
-              })}
-            </div>
-          )}
+          {!isLoading && !isError && active.length > 0 && renderTable(sorted)}
         </div>
       </div>
     </div>
