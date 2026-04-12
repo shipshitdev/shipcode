@@ -15,6 +15,7 @@ import {
   checkClaudeAuth,
   checkCodexAuth,
   checkGhAuth,
+  parseGhProjectScope,
   checkOpenRouterAuth,
   checkSystemHealth,
   checkSystemHealthWithAuth,
@@ -172,6 +173,60 @@ describe('checkGhAuth', () => {
     expect(result.authenticated).toBe(false);
     expect(result.username).toBeNull();
     expect(result.error).toBe('gh not found in PATH');
+  });
+
+  it('parses hasProjectScope=true when project scope is in token scopes line', async () => {
+    execSucceeds(
+      'github.com\n  ✓ Logged in to github.com account decod3r (keyring)\n  - Token scopes: \'gist\', \'read:org\', \'repo\', \'workflow\', \'project\'\n',
+    );
+
+    const result = await checkGhAuth();
+    expect(result.hasProjectScope).toBe(true);
+  });
+
+  it('parses hasProjectScope=false when project scope is missing', async () => {
+    execSucceeds(
+      'github.com\n  ✓ Logged in to github.com account decod3r (keyring)\n  - Token scopes: \'gist\', \'read:org\', \'repo\', \'workflow\'\n',
+    );
+
+    const result = await checkGhAuth();
+    expect(result.hasProjectScope).toBe(false);
+  });
+
+  it('returns hasProjectScope=null when no Token scopes line is present', async () => {
+    execSucceeds('Logged in to github.com account decod3r (token)');
+
+    const result = await checkGhAuth();
+    expect(result.hasProjectScope).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseGhProjectScope (pure)
+// ---------------------------------------------------------------------------
+describe('parseGhProjectScope', () => {
+  it('returns true when "project" is in the comma-separated list', () => {
+    expect(
+      parseGhProjectScope("Token scopes: 'gist', 'read:org', 'repo', 'project'"),
+    ).toBe(true);
+  });
+
+  it('returns false when only read:project (or none) is present', () => {
+    // `gh project item-add` requires write — read:project alone is insufficient
+    expect(parseGhProjectScope("Token scopes: 'gist', 'read:org', 'repo', 'read:project'")).toBe(
+      false,
+    );
+    expect(parseGhProjectScope("Token scopes: 'gist', 'read:org', 'repo'")).toBe(false);
+  });
+
+  it('returns null when no Token scopes line is present', () => {
+    expect(parseGhProjectScope('some other gh output')).toBeNull();
+    expect(parseGhProjectScope('')).toBeNull();
+  });
+
+  it('handles unquoted scopes (older gh formats)', () => {
+    expect(parseGhProjectScope('Token scopes: gist, read:org, repo, project')).toBe(true);
+    expect(parseGhProjectScope('Token scopes: gist, read:org, repo')).toBe(false);
   });
 });
 

@@ -25,6 +25,7 @@ import {
   validateGithubProjectUrl,
   clampError,
   parseGithubProjectUrl,
+  deriveGithubIssueUrl,
 } from '@shipcode/shared';
 import {
   checkSystemHealthWithAuth,
@@ -417,6 +418,60 @@ export function registerIpcHandlers(
     },
   );
 
+  // Backfill: walk every cached issue for the project and call
+  // `gh project item-add` for each. Idempotent thanks to GhCli's
+  // duplicate-detection guard. Returns a structured summary so the UI
+  // can render "Attached N, already present M, failed K".
+  ipcMain.handle(
+    'github:sync-to-project-board',
+    async (_event, { projectId }: { projectId: string }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+
+      const parsed = parseGithubProjectUrl(project.githubProjectUrl);
+      if (!parsed) {
+        throw new Error(
+          'No GitHub Projects v2 URL set. Paste a board URL above and save first.',
+        );
+      }
+
+      const issues = queries.githubIssues.list(projectId);
+      const ghCli = new GhCli(project.path);
+
+      let attached = 0;
+      let alreadyPresent = 0;
+      let failed = 0;
+      const errors: string[] = [];
+
+      for (const issue of issues) {
+        const issueUrl = deriveGithubIssueUrl(project.gitRemote, issue.issueNumber);
+        if (!issueUrl) {
+          failed += 1;
+          errors.push(`#${issue.issueNumber}: could not derive issue URL from git remote`);
+          continue;
+        }
+        try {
+          const result = await ghCli.addIssueToProject({
+            projectNumber: parsed.number,
+            owner: parsed.owner,
+            issueUrl,
+          });
+          if (result.alreadyPresent) alreadyPresent += 1;
+          else attached += 1;
+        } catch (err) {
+          failed += 1;
+          errors.push(`#${issue.issueNumber}: ${clampError(err)}`);
+          log.warn(`[github:sync-to-project-board] #${issue.issueNumber} failed:`, err);
+        }
+      }
+
+      log.info(
+        `[github:sync-to-project-board] project=${projectId} attached=${attached} alreadyPresent=${alreadyPresent} failed=${failed}`,
+      );
+      return { attached, alreadyPresent, failed, errors };
+    },
+  );
+
   ipcMain.handle(
     'github:start-issue',
     async (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
@@ -443,6 +498,29 @@ export function registerIpcHandlers(
         projectId,
         issues: queries.githubIssues.list(projectId),
       });
+
+      // Best-effort: attach the issue to the project's GitHub Projects v2
+      // board if one is configured. Same idempotent path that
+      // `github:create-issue` uses (see :363-376). Failure is logged but
+      // never blocks the pipeline start — the board is a display surface,
+      // not a runtime dependency.
+      const parsed = parseGithubProjectUrl(project.githubProjectUrl);
+      const issueUrl = deriveGithubIssueUrl(project.gitRemote, issue.issueNumber);
+      if (parsed && issueUrl) {
+        try {
+          const ghCliForAttach = new GhCli(project.path);
+          await ghCliForAttach.addIssueToProject({
+            projectNumber: parsed.number,
+            owner: parsed.owner,
+            issueUrl,
+          });
+        } catch (err) {
+          log.warn(
+            `[github:start-issue] project attach failed for #${issue.issueNumber}:`,
+            err,
+          );
+        }
+      }
 
       // Start pipeline — pass existing threadId, not projectId
       log.info(

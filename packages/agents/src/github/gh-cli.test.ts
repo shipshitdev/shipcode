@@ -355,6 +355,75 @@ describe('GhCli', () => {
     });
   });
 
+  describe('addIssueToProject', () => {
+    it('shells `gh project item-add` with the right args and returns added=true', async () => {
+      success('');
+
+      const result = await gh.addIssueToProject({
+        projectNumber: 1,
+        owner: 'shipshitdev',
+        issueUrl: 'https://github.com/shipshitdev/shipcode/issues/42',
+      });
+
+      expect(result).toEqual({ added: true, alreadyPresent: false });
+      expect(mockExecFileAsync).toHaveBeenCalledWith(
+        'gh',
+        [
+          'project',
+          'item-add',
+          '1',
+          '--owner',
+          'shipshitdev',
+          '--url',
+          'https://github.com/shipshitdev/shipcode/issues/42',
+        ],
+        { cwd: '/test/repo' },
+      );
+    });
+
+    it('treats "already in project" stderr as alreadyPresent (idempotent)', async () => {
+      const err = new Error('exit 1') as Error & { stderr?: string };
+      err.stderr = 'item already added to project';
+      mockExecFileAsync.mockRejectedValueOnce(err);
+
+      const result = await gh.addIssueToProject({
+        projectNumber: 1,
+        owner: 'shipshitdev',
+        issueUrl: 'https://github.com/shipshitdev/shipcode/issues/16',
+      });
+
+      expect(result).toEqual({ added: false, alreadyPresent: true });
+    });
+
+    it('matches "already in this project" variant', async () => {
+      const err = new Error('exit 1') as Error & { stderr?: string };
+      err.stderr = 'this issue is already in this project board';
+      mockExecFileAsync.mockRejectedValueOnce(err);
+
+      const result = await gh.addIssueToProject({
+        projectNumber: 1,
+        owner: 'org',
+        issueUrl: 'https://github.com/o/r/issues/1',
+      });
+
+      expect(result.alreadyPresent).toBe(true);
+    });
+
+    it('rethrows non-duplicate errors', async () => {
+      const err = new Error('exit 1') as Error & { stderr?: string };
+      err.stderr = 'authentication required';
+      mockExecFileAsync.mockRejectedValueOnce(err);
+
+      await expect(
+        gh.addIssueToProject({
+          projectNumber: 1,
+          owner: 'org',
+          issueUrl: 'https://github.com/o/r/issues/1',
+        }),
+      ).rejects.toThrow('exit 1');
+    });
+  });
+
   describe('addIssueComment', () => {
     it('calls with correct args and resolves', async () => {
       success('');

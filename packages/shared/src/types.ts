@@ -407,6 +407,16 @@ export interface GhAuthStatus {
   username: string | null;
   version: string | null;
   error: string | null;
+  /**
+   * Whether the gh token includes a scope sufficient to read AND write
+   * GitHub Projects v2 (`project`). Required by `gh project item-add`,
+   * which ShipCode uses to attach issues to a project board.
+   *
+   * `null` when authentication failed or the scope list could not be
+   * parsed (e.g. older gh versions). UI should treat `null` as unknown
+   * and not show an error.
+   */
+  hasProjectScope: boolean | null;
 }
 
 // === Mission Control Dashboard ===
