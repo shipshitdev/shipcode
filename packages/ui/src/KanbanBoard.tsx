@@ -16,8 +16,8 @@ import {
   Archive,
   ChevronDown,
   ChevronRight,
-  ExternalLink,
   Columns3,
+  ExternalLink,
   LayoutList,
   RefreshCw,
   RotateCcw,
@@ -1172,7 +1172,10 @@ export function KanbanBoard({
             <Button
               variant="ghost"
               size="icon-sm"
-              className={cn('rounded-none text-muted', view === 'list' && 'bg-accent/15 text-accent')}
+              className={cn(
+                'rounded-none text-muted',
+                view === 'list' && 'bg-accent/15 text-accent',
+              )}
               onClick={() => setView('list')}
               title="List view"
             >

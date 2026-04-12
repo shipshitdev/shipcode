@@ -1,12 +1,6 @@
 import type * as React from 'react';
 import { cn } from '../lib/utils';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from './dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from './dialog';
 
 export { DialogFooter as ModalFooter };
 
@@ -35,7 +29,12 @@ export function Modal({
   children,
 }: ModalProps) {
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+    >
       <DialogContent className={className} onKeyDown={onKeyDown}>
         <DialogHeader
           className={cn(

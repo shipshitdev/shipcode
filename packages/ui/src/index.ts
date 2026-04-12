@@ -45,11 +45,11 @@ export {
 export { DiffViewer } from './DiffViewer';
 export { IssueCard } from './IssueCard';
 export { KanbanBoard } from './KanbanBoard';
-export { PhaseChip } from './PhaseChip';
 export { MODEL_DISPLAY, modelDisplay } from './lib/model-display';
 export type { StatusBadgeVariant } from './lib/status-variant';
 export { getStatusBadgeVariant } from './lib/status-variant';
 export { cn } from './lib/utils';
+export { PhaseChip } from './PhaseChip';
 // Domain components
 export { PipelineStatus } from './PipelineStatus';
 export { PlanViewer } from './PlanViewer';
@@ -86,7 +86,6 @@ export {
   DialogTitle,
   DialogTrigger,
 } from './primitives/dialog';
-export { Modal, ModalFooter } from './primitives/modal';
 export {
   DropdownMenu,
   DropdownMenuContent,
@@ -96,6 +95,7 @@ export {
 } from './primitives/dropdown-menu';
 export { Input } from './primitives/input';
 export { Label } from './primitives/label';
+export { Modal, ModalFooter } from './primitives/modal';
 export type { PaginationProps } from './primitives/pagination';
 export { Pagination } from './primitives/pagination';
 export {
