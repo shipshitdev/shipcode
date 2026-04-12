@@ -23,6 +23,21 @@ const DEFAULT_HEIGHT = 250;
 
 const AGENT_ACTIVE_STATUSES = new Set(['planning', 'reviewing', 'revising', 'executing', 'testing', 'verifying', 'shipping']);
 
+// Braille spinner frames for animated status indicator
+const SPINNER_FRAMES = ['\u280B', '\u2819', '\u2839', '\u2838', '\u283C', '\u2834', '\u2826', '\u2827', '\u2807', '\u280F'];
+const SPINNER_INTERVAL_MS = 80;
+
+// Map pipeline phase to a human-readable label for the spinner
+const PHASE_LABELS: Record<string, string> = {
+  planning: 'Thinking',
+  reviewing: 'Reviewing',
+  revising: 'Thinking',
+  executing: 'Working',
+  testing: 'Running tests',
+  verifying: 'Verifying',
+  shipping: 'Shipping',
+};
+
 /**
  * Render a canonical TerminalEvent into an ANSI-formatted string for xterm.
  */
@@ -118,6 +133,10 @@ export function TerminalDrawer() {
   const prevThreadIdRef = useRef<string | null>(null);
   // Track how many canonical events have been written
   const canonicalWrittenRef = useRef(0);
+  // Animated spinner state
+  const spinnerTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const spinnerActiveRef = useRef(false);
+  const spinnerLabelRef = useRef('Thinking');
   // Show skeleton between thread switches until first output arrives
   const [isTransitioning, setIsTransitioning] = useState(false);
   // Resize state
@@ -216,6 +235,7 @@ export function TerminalDrawer() {
     const term = termRef.current;
     if (!term) return;
     if (terminalThreadId !== prevThreadIdRef.current) {
+      stopSpinner();
       term.reset();
       canonicalWrittenRef.current = 0;
       startedAtRef.current = null;
@@ -228,6 +248,40 @@ export function TerminalDrawer() {
       );
     }
   }, [terminalThreadId]);
+
+  // Spinner helpers — animate a braille spinner on the current line
+  const startSpinner = useCallback((label: string) => {
+    const term = termRef.current;
+    if (!term || spinnerActiveRef.current) return;
+    spinnerActiveRef.current = true;
+    spinnerLabelRef.current = label;
+    let frame = 0;
+    // Write the first frame immediately
+    term.write(`\r\x1b[K\x1b[2;36m${SPINNER_FRAMES[0]} ${label}...\x1b[0m`);
+    spinnerTimerRef.current = setInterval(() => {
+      if (!termRef.current) return;
+      frame = (frame + 1) % SPINNER_FRAMES.length;
+      termRef.current.write(`\r\x1b[K\x1b[2;36m${SPINNER_FRAMES[frame]} ${spinnerLabelRef.current}...\x1b[0m`);
+    }, SPINNER_INTERVAL_MS);
+  }, []);
+
+  const stopSpinner = useCallback(() => {
+    if (!spinnerActiveRef.current) return;
+    if (spinnerTimerRef.current) {
+      clearInterval(spinnerTimerRef.current);
+      spinnerTimerRef.current = null;
+    }
+    spinnerActiveRef.current = false;
+    // Clear the spinner line
+    termRef.current?.write('\r\x1b[K');
+  }, []);
+
+  // Clean up spinner on unmount
+  useEffect(() => {
+    return () => {
+      if (spinnerTimerRef.current) clearInterval(spinnerTimerRef.current);
+    };
+  }, []);
 
   // Write canonical terminal events (normalized from all providers)
   useEffect(() => {
@@ -250,14 +304,67 @@ export function TerminalDrawer() {
     }
 
     for (const event of newEvents) {
+      // Determine spinner behavior based on event kind
+      switch (event.kind) {
+        case 'lifecycle': {
+          // Extract phase from lifecycle message and start spinner
+          const phaseMatch = /phase: \x1b\[36m(\w+)/.exec(event.message);
+          if (phaseMatch) {
+            const phase = phaseMatch[1];
+            const label = PHASE_LABELS[phase] ?? 'Working';
+            // Write the lifecycle line first, then start spinner on next line
+            const normalized = event.message.replace(/\r?\n/g, '\r\n');
+            term.write(normalized + '\r\n');
+            startSpinner(label);
+            continue;
+          }
+          // Non-phase lifecycle events (process start/exit, model resolved)
+          stopSpinner();
+          break;
+        }
+        case 'tool_start':
+          // Stop spinner, write the tool line, then restart with "Working"
+          stopSpinner();
+          break;
+        case 'tool_end':
+          // After tool completes, spinner restarts
+          break;
+        case 'thinking':
+          // Stop any existing spinner — real thinking content is arriving
+          stopSpinner();
+          break;
+        case 'text':
+        case 'raw':
+          stopSpinner();
+          break;
+        case 'turn_start':
+          stopSpinner();
+          break;
+        case 'done':
+        case 'error':
+          stopSpinner();
+          break;
+        default:
+          break;
+      }
+
       const text = renderTerminalEvent(event);
       if (text === null) continue;
       // Normalize line endings for xterm
       const normalized = text.replace(/\r?\n/g, '\r\n');
       term.write(normalized.endsWith('\r\n') ? normalized : normalized + '\r\n');
+
+      // After certain events, start/restart spinner
+      if (event.kind === 'tool_start') {
+        startSpinner('Working');
+      } else if (event.kind === 'tool_end') {
+        startSpinner('Thinking');
+      } else if (event.kind === 'turn_end') {
+        startSpinner('Thinking');
+      }
     }
     canonicalWrittenRef.current = canonicalStream.length;
-  }, [canonicalStream]);
+  }, [canonicalStream, startSpinner, stopSpinner]);
 
   const resolvedHeight = isMaximized ? undefined : height;
   const displayIssue = pinnedIssue;

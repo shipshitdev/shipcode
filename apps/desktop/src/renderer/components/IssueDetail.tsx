@@ -28,6 +28,7 @@ import {
   Minimize2,
   MODEL_DISPLAY,
   Pencil,
+  PipelineStatus,
   PlanViewer,
   RefreshCw,
   ReviewViewer,
@@ -1018,6 +1019,11 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
             <h1 className="my-1 pr-16 text-xl font-semibold">{activeIssue.title}</h1>
             {issueBadges}
           </div>
+          {activeThreadId && threadPhase !== 'idle' && (
+            <div className="shrink-0">
+              <PipelineStatus currentPhase={threadPhase} />
+            </div>
+          )}
           {approvalSection && (
             <div className="shrink-0 border-b border-border px-6 py-4">{approvalSection}</div>
           )}
@@ -1116,6 +1122,13 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         <h3 className="my-1 pr-16 text-[15px] font-semibold">{activeIssue.title}</h3>
         {issueBadges}
       </div>
+
+      {/* Phase stepper — shown once pipeline has started */}
+      {activeThreadId && threadPhase !== 'idle' && (
+        <div className="shrink-0">
+          <PipelineStatus currentPhase={threadPhase} />
+        </div>
+      )}
 
       {/* Primary CTAs — above tabs, always visible */}
       {pipelineStartCardInner && (

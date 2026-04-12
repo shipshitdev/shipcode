@@ -12,6 +12,7 @@ import {
   useDroppable,
 } from '@dnd-kit/core';
 import type { GitHubIssueCacheRecord, IssuePipelineStatus } from '@shipcode/shared';
+import { phaseToProgress } from '@shipcode/shared';
 import {
   Archive,
   ChevronDown,
@@ -297,11 +298,20 @@ function DraggableCard({
         onClick();
       }}
     >
-      {isActive && (
+      {issue.pipelineStatus !== 'todo' && issue.pipelineStatus !== 'queued' && (
         <div className="absolute bottom-0 left-0 right-0 h-[2px] rounded-b-md overflow-hidden bg-agent/15">
           <div
-            className="absolute h-full w-1/4 rounded-full bg-agent"
-            style={{ animation: 'slide-progress 1.6s ease-in-out infinite' }}
+            className={cn(
+              'absolute h-full rounded-full transition-[width] duration-700',
+              issue.pipelineStatus === 'completed'
+                ? 'bg-success'
+                : issue.pipelineStatus === 'awaiting_approval'
+                  ? 'bg-warning'
+                  : issue.pipelineStatus === 'failed'
+                    ? 'bg-danger'
+                    : 'bg-agent',
+            )}
+            style={{ width: `${phaseToProgress(issue.pipelineStatus)}%` }}
           />
         </div>
       )}
@@ -338,7 +348,14 @@ function DraggableCard({
       )}
       <div className="flex items-center justify-between mb-0.5">
         <span className="text-[11px] text-secondary font-mono">#{issue.issueNumber}</span>
-        {showPhaseElapsed && <PhaseElapsed since={phaseSince} />}
+        {showPhaseElapsed && (
+          <span className="flex items-center gap-1.5">
+            <span className="font-mono tabular-nums text-[10px] text-muted">
+              {phaseToProgress(issue.pipelineStatus)}%
+            </span>
+            <PhaseElapsed since={phaseSince} />
+          </span>
+        )}
       </div>
       <div className="text-xs leading-snug text-primary font-medium line-clamp-2">
         {issue.title}

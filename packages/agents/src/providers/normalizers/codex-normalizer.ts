@@ -97,6 +97,15 @@ export class CodexNormalizer {
       return;
     }
 
+    // Reasoning summary from Codex model
+    if (event.type === 'item.completed' && item?.type === 'reasoning') {
+      const text = item.text as string | undefined;
+      if (text) {
+        this.onEvent({ kind: 'thinking', content: text });
+      }
+      return;
+    }
+
     // Agent message completed — suppress if deltas already streamed
     if (event.type === 'item.completed' && item?.type === 'agent_message') {
       const itemId = event.item_id as string | undefined;

@@ -8,10 +8,7 @@ process.emit = function (event: string, ...args: any[]) {
 
 // Prevent unhandled errors (e.g. EIO on shutdown, destroyed WebContents race)
 // from showing Electron's crash dialog. Log to file instead.
-import log from 'electron-log/main';
-log.initialize();
-log.transports.file.level = 'info';
-log.transports.console.level = 'info';
+import log from './logger.service';
 
 process.on('uncaughtException', (err) => {
   log.error('[main] uncaught exception:', err);

@@ -107,6 +107,10 @@ export class ClaudeNormalizer {
       if (!Array.isArray(content)) return;
 
       for (const c of content as Record<string, unknown>[]) {
+        if (c.type === 'thinking' && typeof c.thinking === 'string') {
+          this.onEvent({ kind: 'thinking', content: c.thinking });
+          continue;
+        }
         if (c.type === 'text' && typeof c.text === 'string') {
           // Check for fenced block
           const fenceMatch = FENCE_RE.exec(c.text);
