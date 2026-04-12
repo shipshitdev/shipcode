@@ -100,4 +100,26 @@ describe('DashboardQueries', () => {
 
     expect(dashboard.countRecentTasks()).toBe(1);
   });
+
+  it('getStats().agentsRunningByProject counts running threads per project', () => {
+    const project2Id = projects.add('/tmp/test-project-2').id;
+    const t1 = threads.create(projectId, 'task a', 'Task A');
+    const t2 = threads.create(projectId, 'task b', 'Task B');
+    const t3 = threads.create(project2Id, 'task c', 'Task C');
+    db.prepare(`UPDATE threads SET status = 'planning' WHERE id = ?`).run(t1.id);
+    db.prepare(`UPDATE threads SET status = 'executing' WHERE id = ?`).run(t2.id);
+    db.prepare(`UPDATE threads SET status = 'verifying' WHERE id = ?`).run(t3.id);
+
+    const stats = dashboard.getStats();
+    expect(stats.agentsRunningByProject[projectId]).toBe(2);
+    expect(stats.agentsRunningByProject[project2Id]).toBe(1);
+  });
+
+  it('getStats().agentsRunningByProject excludes awaiting_approval from count', () => {
+    const t = threads.create(projectId, 'blocked', 'Blocked');
+    db.prepare(`UPDATE threads SET status = 'awaiting_approval' WHERE id = ?`).run(t.id);
+
+    const stats = dashboard.getStats();
+    expect(stats.agentsRunningByProject[projectId]).toBeUndefined();
+  });
 });

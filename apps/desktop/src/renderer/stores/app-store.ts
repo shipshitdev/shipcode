@@ -215,6 +215,7 @@ export const useAppStore = create<AppState>((set) => ({
       terminalThreadId: null,
       terminalEventsByThread: {},
       processToThread: {},
+      githubIssues: [],
     }),
   selectThread: (id) =>
     set({

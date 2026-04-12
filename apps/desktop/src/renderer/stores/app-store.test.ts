@@ -59,5 +59,15 @@ describe('app-store', () => {
       expect(state.activeIssue).toBeNull();
       expect(state.activeThreadId).toBeNull();
     });
+
+    it('clears githubIssues on project switch to prevent stale terminal header and tabs', () => {
+      // Populate githubIssues with issues from the current project
+      useAppStore.setState({ githubIssues: [makeIssue(), makeIssue({ id: 'issue-2' })] });
+      expect(useAppStore.getState().githubIssues).toHaveLength(2);
+
+      useAppStore.getState().selectProject('project-2');
+
+      expect(useAppStore.getState().githubIssues).toHaveLength(0);
+    });
   });
 });

@@ -107,7 +107,7 @@ const FENCE_TAGS: Record<string, string> = {
 };
 const FENCE_RE = new RegExp('```(' + Object.keys(FENCE_TAGS).join('|') + ')');
 
-const AGENT_ACTIVE_STATUSES = new Set(['planning', 'reviewing', 'revising', 'executing', 'verifying', 'shipping']);
+const AGENT_ACTIVE_STATUSES = new Set(['planning', 'reviewing', 'revising', 'executing', 'testing', 'verifying', 'shipping']);
 
 export function TerminalDrawer() {
   const { toggleTerminal, agentOutputs } = useAppStore();
@@ -279,9 +279,12 @@ export function TerminalDrawer() {
     for (const [processId, chunks] of Object.entries(agentOutputs)) {
       if (writtenRef.current[processId] === Infinity) continue;
 
+      // When no thread is selected (e.g. after project switch) show nothing
+      if (!terminalThreadId) continue;
+
       // Only show output for processes belonging to the currently focused thread
       const mappedThread = processToThread[processId];
-      if (mappedThread && terminalThreadId && mappedThread !== terminalThreadId) continue;
+      if (mappedThread && mappedThread !== terminalThreadId) continue;
 
       const prev = (writtenRef.current[processId] as number) ?? 0;
       const newChunks = chunks.slice(prev);

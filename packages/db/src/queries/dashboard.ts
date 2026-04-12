@@ -56,6 +56,18 @@ export class DashboardQueries {
       runningByPhase[row.status as PipelinePhase] = row.n;
     }
 
+    // Per-project running count for sidebar badges.
+    const perProjectRows = this.db
+      .prepare(
+        `SELECT project_id, COUNT(*) as n FROM threads
+         WHERE status IN (${placeholders(AGENT_RUNNING_PHASES.length)})
+         GROUP BY project_id`,
+      )
+      .all(...AGENT_RUNNING_PHASES) as Array<{ project_id: string; n: number }>;
+    const agentsRunningByProject: Record<string, number> = Object.fromEntries(
+      perProjectRows.map((r) => [r.project_id, r.n]),
+    );
+
     // Tasks in progress = any active phase (including awaiting_approval).
     const tasksInProgressRow = this.db
       .prepare(
@@ -106,6 +118,7 @@ export class DashboardQueries {
     return {
       agentsRunning: agentsRunningRow.n,
       runningByPhase,
+      agentsRunningByProject,
       tasksInProgress: tasksInProgressRow.n,
       tasksOpen: tasksOpenRow.n,
       tasksBlocked: blockedRow.n,

@@ -281,7 +281,7 @@ export function ProjectSidebar() {
             <Button
               variant="ghost"
               className={cn(
-                'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
+                'h-auto w-full justify-start gap-2 pl-3 pr-8 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
                 viewMode === 'project' &&
                   activeProjectId === project.id &&
                   'bg-tertiary text-primary font-medium',
@@ -294,6 +294,11 @@ export function ProjectSidebar() {
                 <Folder size={14} className="shrink-0 text-secondary" />
               )}
               <span className="flex-1 truncate text-primary">{project.name}</span>
+              {(stats?.agentsRunningByProject?.[project.id] ?? 0) > 0 && (
+                <span className="shrink-0 rounded-full bg-agent/10 border border-agent/30 px-1.5 text-[10px] font-medium text-agent">
+                  {stats!.agentsRunningByProject[project.id]}
+                </span>
+              )}
             </Button>
 
             <DropdownMenu>

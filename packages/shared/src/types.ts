@@ -432,6 +432,7 @@ export interface GhAuthStatus {
 export interface DashboardStats {
   agentsRunning: number;
   runningByPhase: Partial<Record<PipelinePhase, number>>;
+  agentsRunningByProject: Record<string, number>;
   tasksInProgress: number;
   tasksOpen: number;
   tasksBlocked: number;
