@@ -11,11 +11,88 @@ import {
   SelectTrigger,
   SelectValue,
   SettingsRow,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
   Textarea,
 } from '@shipcode/ui';
-import { DEFAULT_SETTINGS, type AppSettings, type Project } from '@shipcode/shared';
+import { DEFAULT_SETTINGS, type AppSettings, type GitHubIssueCacheRecord, type Project } from '@shipcode/shared';
 import { useAppStore } from '../stores/app-store';
 import { SHORTCUTS, type ShortcutCategory, type ShortcutDef } from '../data/shortcuts';
+
+type ExecutorModel = 'claude' | 'codex' | 'openrouter';
+
+function PhaseModelRow({
+  label,
+  htmlFor,
+  modelValue,
+  openrouterModelValue,
+  reasoningEffortValue,
+  validProviders,
+  onModelChange,
+  onOpenrouterModelChange,
+  onReasoningEffortChange,
+}: {
+  label: string;
+  htmlFor: string;
+  modelValue: string;
+  openrouterModelValue: string | null;
+  reasoningEffortValue: 'low' | 'medium' | 'high';
+  validProviders: ExecutorModel[];
+  onModelChange: (v: string) => void;
+  onOpenrouterModelChange: (v: string | null) => void;
+  onReasoningEffortChange: (v: 'low' | 'medium' | 'high') => void;
+}) {
+  return (
+    <>
+      <SettingsRow label={label} htmlFor={htmlFor}>
+        <Select value={modelValue} onValueChange={onModelChange}>
+          <SelectTrigger id={htmlFor} className="w-[160px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {validProviders.includes('claude') && <SelectItem value="claude">Claude</SelectItem>}
+            {validProviders.includes('codex') && <SelectItem value="codex">Codex</SelectItem>}
+            {validProviders.includes('openrouter') && <SelectItem value="openrouter">OpenRouter</SelectItem>}
+          </SelectContent>
+        </Select>
+      </SettingsRow>
+      {modelValue === 'openrouter' && (
+        <SettingsRow
+          label="OpenRouter model ID"
+          htmlFor={`${htmlFor}-or-model`}
+          description="Leave blank to use the default paid model."
+        >
+          <Input
+            id={`${htmlFor}-or-model`}
+            placeholder="e.g. anthropic/claude-sonnet-4-6"
+            defaultValue={openrouterModelValue ?? ''}
+            onBlur={(e) => {
+              const val = e.target.value.trim() || null;
+              onOpenrouterModelChange(val);
+            }}
+          />
+        </SettingsRow>
+      )}
+      <SettingsRow label="Reasoning effort" htmlFor={`${htmlFor}-reasoning`}>
+        <Select
+          value={reasoningEffortValue}
+          onValueChange={(v) => onReasoningEffortChange(v as 'low' | 'medium' | 'high')}
+        >
+          <SelectTrigger id={`${htmlFor}-reasoning`} className="w-[120px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="low">low</SelectItem>
+            <SelectItem value="medium">medium</SelectItem>
+            <SelectItem value="high">high</SelectItem>
+          </SelectContent>
+        </Select>
+      </SettingsRow>
+    </>
+  );
+}
 
 export function SettingsPanel() {
   const queryClient = useQueryClient();
@@ -46,6 +123,21 @@ export function SettingsPanel() {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
       queryClient.invalidateQueries({ queryKey: ['projects-archived'] });
+    },
+  });
+
+  const { data: archivedIssues = [] } = useQuery<GitHubIssueCacheRecord[]>({
+    queryKey: ['issues-archived'],
+    queryFn: () => window.shipcode.invoke<GitHubIssueCacheRecord[]>('github:list-archived'),
+    enabled: settingsSection === 'archived',
+  });
+
+  const unarchiveIssue = useMutation({
+    mutationFn: (issueId: string) =>
+      window.shipcode.invoke('github:unarchive-issue', { issueId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['issues-archived'] });
+      queryClient.invalidateQueries({ queryKey: ['github-issues'] });
     },
   });
 
@@ -329,40 +421,50 @@ export function SettingsPanel() {
                   step={1}
                 />
               </SettingsRow>
-              <SettingsRow label="Reviewer reasoning effort" htmlFor="reviewer-reasoning-effort">
-                <Select
-                  value={settings.reviewerReasoningEffort}
-                  onValueChange={(value: string) =>
-                    updateSettings.mutate({ reviewerReasoningEffort: value as AppSettings['reviewerReasoningEffort'] })
-                  }
-                >
-                  <SelectTrigger id="reviewer-reasoning-effort" className="w-[120px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">low</SelectItem>
-                    <SelectItem value="medium">medium</SelectItem>
-                    <SelectItem value="high">high</SelectItem>
-                  </SelectContent>
-                </Select>
-              </SettingsRow>
-              <SettingsRow label="Executor model" htmlFor="executor-model">
-                <Select
-                  value={settings.executorModel}
-                  onValueChange={(value: string) =>
-                    updateSettings.mutate({ executorModel: value as AppSettings['executorModel'] })
-                  }
-                >
-                  <SelectTrigger id="executor-model" className="w-[160px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="claude">claude</SelectItem>
-                    <SelectItem value="codex">codex</SelectItem>
-                    <SelectItem value="openrouter">openrouter</SelectItem>
-                  </SelectContent>
-                </Select>
-              </SettingsRow>
+              <PhaseModelRow
+                label="Planner model"
+                htmlFor="planner-model"
+                modelValue={settings.plannerModel}
+                openrouterModelValue={settings.openrouterPlannerModel}
+                reasoningEffortValue={settings.plannerReasoningEffort}
+                validProviders={['claude', 'openrouter']}
+                onModelChange={(v) => updateSettings.mutate({ plannerModel: v as AppSettings['plannerModel'] })}
+                onOpenrouterModelChange={(v) => updateSettings.mutate({ openrouterPlannerModel: v })}
+                onReasoningEffortChange={(v) => updateSettings.mutate({ plannerReasoningEffort: v })}
+              />
+              <PhaseModelRow
+                label="Reviewer model"
+                htmlFor="reviewer-model"
+                modelValue={settings.reviewerModel}
+                openrouterModelValue={settings.openrouterReviewerModel}
+                reasoningEffortValue={settings.reviewerReasoningEffort}
+                validProviders={['claude', 'codex', 'openrouter']}
+                onModelChange={(v) => updateSettings.mutate({ reviewerModel: v as AppSettings['reviewerModel'] })}
+                onOpenrouterModelChange={(v) => updateSettings.mutate({ openrouterReviewerModel: v })}
+                onReasoningEffortChange={(v) => updateSettings.mutate({ reviewerReasoningEffort: v })}
+              />
+              <PhaseModelRow
+                label="Executor model"
+                htmlFor="executor-model"
+                modelValue={settings.executorModel}
+                openrouterModelValue={settings.openrouterExecutorModel}
+                reasoningEffortValue={settings.executorReasoningEffort}
+                validProviders={['claude', 'codex']}
+                onModelChange={(v) => updateSettings.mutate({ executorModel: v as AppSettings['executorModel'] })}
+                onOpenrouterModelChange={(v) => updateSettings.mutate({ openrouterExecutorModel: v })}
+                onReasoningEffortChange={(v) => updateSettings.mutate({ executorReasoningEffort: v })}
+              />
+              <PhaseModelRow
+                label="Verifier model"
+                htmlFor="verifier-model"
+                modelValue={settings.verifierModel}
+                openrouterModelValue={settings.openrouterVerifierModel}
+                reasoningEffortValue={settings.verifierReasoningEffort}
+                validProviders={['claude', 'openrouter']}
+                onModelChange={(v) => updateSettings.mutate({ verifierModel: v as AppSettings['verifierModel'] })}
+                onOpenrouterModelChange={(v) => updateSettings.mutate({ openrouterVerifierModel: v })}
+                onReasoningEffortChange={(v) => updateSettings.mutate({ verifierReasoningEffort: v })}
+              />
               <SettingsRow
                 label="Test command"
                 description="Shell command run after execution in the worktree. Leave blank to skip."
@@ -405,39 +507,82 @@ export function SettingsPanel() {
         {settingsSection === 'archived' && (
           <>
             <h3 className="mb-5">Archived</h3>
-            <section className="mb-8">
-              <h4 className="mb-3 text-secondary">Archived Projects</h4>
-              <p className="mb-3 text-xs text-secondary">
-                Archived projects are hidden from the sidebar but remain navigable via Activity and
-                notifications. They re-appear automatically when new work arrives, or you can
-                restore one manually here.
-              </p>
-              {archivedProjects.length === 0 ? (
-                <p className="text-[13px] text-muted">No archived projects.</p>
-              ) : (
-                <div className="space-y-1">
-                  {archivedProjects.map((p) => (
-                    <div
-                      key={p.id}
-                      className="flex items-center justify-between rounded-md border border-border bg-tertiary px-3 py-2"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="text-[13px] text-primary truncate">{p.name}</div>
-                        <div className="text-[11px] text-muted truncate">{p.path}</div>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => unarchiveProject.mutate(p.id)}
-                        disabled={unarchiveProject.isPending}
-                      >
-                        Restore
-                      </Button>
+            <Tabs defaultValue="projects">
+              <TabsList className="mb-5">
+                <TabsTrigger value="projects">Projects</TabsTrigger>
+                <TabsTrigger value="issues">Issues</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="projects">
+                <section className="mb-8">
+                  <p className="mb-3 text-xs text-secondary">
+                    Archived projects are hidden from the sidebar but remain navigable via Activity
+                    and notifications. They re-appear automatically when new work arrives, or you
+                    can restore one manually here.
+                  </p>
+                  {archivedProjects.length === 0 ? (
+                    <p className="text-[13px] text-muted">No archived projects.</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {archivedProjects.map((p) => (
+                        <div
+                          key={p.id}
+                          className="flex items-center justify-between rounded-md border border-border bg-tertiary px-3 py-2"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[13px] text-primary truncate">{p.name}</div>
+                            <div className="text-[11px] text-muted truncate">{p.path}</div>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => unarchiveProject.mutate(p.id)}
+                            disabled={unarchiveProject.isPending}
+                          >
+                            Restore
+                          </Button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )}
-            </section>
+                  )}
+                </section>
+              </TabsContent>
+
+              <TabsContent value="issues">
+                <section className="mb-8">
+                  <p className="mb-3 text-xs text-secondary">
+                    Archived issues are closed on GitHub and hidden from the board. Restoring brings
+                    them back locally but does not reopen them on GitHub.
+                  </p>
+                  {archivedIssues.length === 0 ? (
+                    <p className="text-[13px] text-muted">No archived issues.</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {archivedIssues.map((issue) => (
+                        <div
+                          key={issue.id}
+                          className="flex items-center justify-between rounded-md border border-border bg-tertiary px-3 py-2"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-[13px] text-primary">
+                              #{issue.issueNumber} {issue.title}
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => unarchiveIssue.mutate(issue.id)}
+                            disabled={unarchiveIssue.isPending}
+                          >
+                            Restore
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              </TabsContent>
+            </Tabs>
           </>
         )}
       </div>

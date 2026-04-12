@@ -41,7 +41,7 @@
 	--done: #a855f7;
 }
 
-/* Indeterminate progress bar for active pipeline cards */
+/* Shimmer sweep for active pipeline progress bars */
 @keyframes slide-progress {
 	0%   { transform: translateX(-100%); }
 	100% { transform: translateX(500%); }
@@ -84,6 +84,8 @@
 
 	--spacing-titlebar: 38px;
 	--spacing-titlebar-plus: 42px;
+
+	--animate-slide-progress: slide-progress 2s linear infinite;
 }
 
 /* ---------------------------------------------------------------------------

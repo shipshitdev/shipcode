@@ -107,6 +107,8 @@ export interface IpcInvokeChannels {
     args: { projectId: string };
     result: { archivedCount: number; failedCount: number };
   };
+  'github:list-archived': { args: void; result: GitHubIssueCacheRecord[] };
+  'github:unarchive-issue': { args: { issueId: string }; result: void };
 
   // Plans & Reviews (backfill)
   'plan:list': { args: { threadId: string }; result: PlanRecord[] };

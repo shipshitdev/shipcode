@@ -7,6 +7,8 @@ import {
   buildVerificationPrompt,
   buildExecutionPrompt,
   loadRepoContext,
+  formatPlanComment,
+  GhCli,
 } from '@shipcode/agents';
 import type { ProviderPhase, ProviderRequest, SkillValidationError } from '@shipcode/agents';
 import { WorktreeManager } from '@shipcode/git';
@@ -274,6 +276,17 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     deps.emitter.emit({ type: 'pipeline:phase', threadId, phase });
   }
 
+  async function postPlanComment(context: PipelineContext, plan: ShipCodePlan): Promise<void> {
+    if (!context.githubIssueNumber) return;
+    const cwd = context.projectPath;
+    try {
+      const ghCli = new GhCli(cwd);
+      await ghCli.addIssueComment(context.githubIssueNumber, formatPlanComment(plan));
+    } catch (err) {
+      console.error('[pipeline] Failed to post plan comment:', err);
+    }
+  }
+
   async function startPlanGeneration(
     threadId: string,
     prompt: string,
@@ -298,7 +311,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     // starters returning immediately after emitting the phase transition.
     void (async () => {
       try {
-        const response = await runProviderPhase(context, 'plan', planPrompt, undefined);
+        const response = await runProviderPhase(context, 'plan', planPrompt, {
+          reasoningEffort: deps.settings.get().plannerReasoningEffort,
+        });
 
         if (context.cancelled) return;
 
@@ -402,6 +417,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
             // Codex satisfied — proceed to execution or hand off to human.
             // Only auto-execute for autonomous threads with approval disabled.
             if (deps.settings.get().requireApproval || !context.autonomous) {
+              void postPlanComment(context, latestPlan!.structured!);
               emitPhase(threadId, 'awaiting_approval');
             } else {
               startExecution(threadId, latestPlan!.structured!);
@@ -427,6 +443,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
               // Rounds exhausted.
               // In approval mode or for non-autonomous threads, always surface to human.
               if (deps.settings.get().requireApproval || !context.autonomous) {
+                void postPlanComment(context, latestPlan!.structured!);
                 emitPhase(threadId, 'awaiting_approval');
               } else {
                 const hasCriticalOrMajor = result.data.findings.some(
@@ -480,7 +497,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
     void (async () => {
       try {
-        const response = await runProviderPhase(context, 'revision', revisionPrompt, undefined);
+        const response = await runProviderPhase(context, 'revision', revisionPrompt, {
+          reasoningEffort: deps.settings.get().plannerReasoningEffort,
+        });
 
         if (context.cancelled) return;
 
@@ -559,7 +578,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
     void (async () => {
       try {
-        const response = await runProviderPhase(context, 'execute', executionPrompt, undefined);
+        const response = await runProviderPhase(context, 'execute', executionPrompt, {
+          reasoningEffort: deps.settings.get().executorReasoningEffort,
+        });
 
         if (context.cancelled) return;
 
@@ -746,7 +767,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
     void (async () => {
       try {
-        const response = await runProviderPhase(context, 'verify', verificationPrompt, undefined);
+        const response = await runProviderPhase(context, 'verify', verificationPrompt, {
+          reasoningEffort: deps.settings.get().verifierReasoningEffort,
+        });
 
         if (context.cancelled) return;
 

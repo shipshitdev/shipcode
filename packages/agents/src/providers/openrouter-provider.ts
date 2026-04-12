@@ -100,13 +100,14 @@ export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentPro
       messages.push({ role: 'user', content: req.prompt });
 
       try {
+        const effort = req.phaseHints?.reasoningEffort ?? 'high';
         const result = await client.chat(
           {
             model,
             messages,
             stream: true,
-            include_reasoning: true,
-            reasoning: { effort: 'high' },
+            include_reasoning: effort !== 'low',
+            reasoning: effort !== 'low' ? { effort } : undefined,
           },
           req.signal,
           req.onTerminalEvent,
