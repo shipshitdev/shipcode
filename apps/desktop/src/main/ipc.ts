@@ -317,6 +317,7 @@ export function registerIpcHandlers(
         queries.githubIssues.markCompletedOnClose(rec.id);
       } else if (rec.state === 'open') {
         queries.githubIssues.markReopenedOnOpen(rec.id);
+        queries.githubIssues.clearArchivedAt(rec.id);
       }
     }
 
@@ -324,6 +325,59 @@ export function registerIpcHandlers(
     mainWindow.webContents.send('github:issues-updated', { projectId, issues: cached });
     return cached;
   });
+
+  ipcMain.handle(
+    'github:archive-issue',
+    async (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+
+      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
+      if (!issue) throw new Error(`Issue #${issueNumber} not found in project ${projectId}`);
+
+      const ghCli = new GhCli(project.path);
+      await ghCli.closeIssue(issueNumber);
+
+      queries.githubIssues.archiveIssues([issue.id]);
+
+      const cached = queries.githubIssues.list(projectId);
+      mainWindow.webContents.send('github:issues-updated', { projectId, issues: cached });
+      return { archivedCount: 1 };
+    },
+  );
+
+  ipcMain.handle(
+    'github:archive-all-done',
+    async (_event, { projectId }: { projectId: string }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+
+      // Snapshot completed, non-archived issues before any async work
+      const doneIssues = queries.githubIssues.listCompleted(projectId);
+
+      const ghCli = new GhCli(project.path);
+      const succeededIds: string[] = [];
+      let failedCount = 0;
+
+      for (const issue of doneIssues) {
+        try {
+          await ghCli.closeIssue(issue.issueNumber);
+          succeededIds.push(issue.id);
+        } catch (err) {
+          log.warn(`[github:archive-all-done] close #${issue.issueNumber} failed:`, err);
+          failedCount++;
+        }
+      }
+
+      if (succeededIds.length > 0) {
+        queries.githubIssues.archiveIssues(succeededIds);
+      }
+
+      const cached = queries.githubIssues.list(projectId);
+      mainWindow.webContents.send('github:issues-updated', { projectId, issues: cached });
+      return { archivedCount: succeededIds.length, failedCount };
+    },
+  );
 
   ipcMain.handle(
     'github:create-issue',

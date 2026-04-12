@@ -210,6 +210,15 @@ export class GitHubIssueQueries {
       .run(id);
   }
 
+  listCompleted(projectId: string): GitHubIssueCacheRecord[] {
+    const rows = this.db
+      .prepare(
+        "SELECT * FROM github_issue_cache WHERE project_id = ? AND pipeline_status = 'completed' AND archived_at IS NULL ORDER BY fetched_at DESC",
+      )
+      .all(projectId) as any[];
+    return rows.map((r) => this.toRecord(r));
+  }
+
   private toRecord(row: any): GitHubIssueCacheRecord {
     return {
       id: row.id,
