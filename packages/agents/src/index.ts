@@ -9,6 +9,7 @@ export {
   checkCodexAuth,
   checkGhAuth,
   checkOpenRouterAuth,
+  parseGhProjectScope,
 } from './health-check';
 export type { OpenRouterAuthStatus } from './health-check';
 export { buildPlanPrompt, buildRevisionPrompt } from './prompts/plan-prompt';

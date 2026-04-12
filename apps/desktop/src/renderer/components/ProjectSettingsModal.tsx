@@ -42,6 +42,13 @@ export function ProjectSettingsModal() {
   const [urlInput, setUrlInput] = useState('');
   const [touched, setTouched] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [syncResult, setSyncResult] = useState<{
+    attached: number;
+    alreadyPresent: number;
+    failed: number;
+    errors: string[];
+  } | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   // Seed the input each time the modal opens for a (possibly different) project.
   useEffect(() => {
@@ -49,6 +56,8 @@ export function ProjectSettingsModal() {
     setUrlInput(project?.githubProjectUrl ?? '');
     setTouched(false);
     setSubmitError(null);
+    setSyncResult(null);
+    setSyncError(null);
   }, [projectSettingsModalOpen, project?.id, project?.githubProjectUrl]);
 
   const validation = useMemo(() => validateGithubProjectUrl(urlInput), [urlInput]);
@@ -81,6 +90,48 @@ export function ProjectSettingsModal() {
     if (!validation.ok) return;
     saveMutation.mutate();
   };
+
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      if (!projectSettingsModalProjectId) {
+        throw new Error('No project selected');
+      }
+      return window.shipcode.invoke<{
+        attached: number;
+        alreadyPresent: number;
+        failed: number;
+        errors: string[];
+      }>('github:sync-to-project-board', {
+        projectId: projectSettingsModalProjectId,
+      });
+    },
+    onSuccess: (result) => {
+      setSyncError(null);
+      setSyncResult(result);
+    },
+    onError: (err: unknown) => {
+      log.error('[ProjectSettingsModal] sync failed', err);
+      setSyncResult(null);
+      setSyncError(clampError(err));
+    },
+  });
+
+  const handleSync = () => {
+    setSyncResult(null);
+    setSyncError(null);
+    syncMutation.mutate();
+  };
+
+  // The sync button operates on the SAVED url. If the input is dirty
+  // (user typed something but hasn't pressed Save), the user should
+  // save first — otherwise the toast would be confusing.
+  const inputMatchesSaved = urlInput === (project?.githubProjectUrl ?? '');
+  const hasSavedUrl = !!project?.githubProjectUrl;
+  const canSync =
+    hasSavedUrl &&
+    inputMatchesSaved &&
+    !syncMutation.isPending &&
+    !saveMutation.isPending;
 
   const handleOpenChange = (open: boolean) => {
     if (!open) closeProjectSettingsModal();
@@ -148,6 +199,57 @@ export function ProjectSettingsModal() {
               {showInlineError && !validation.ok && (
                 <p className="text-[11px] text-danger">{validation.reason}</p>
               )}
+
+              <div className="mt-2 flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleSync}
+                    disabled={!canSync}
+                    title={
+                      !hasSavedUrl
+                        ? 'Save a board URL first'
+                        : !inputMatchesSaved
+                          ? 'Save your changes before syncing'
+                          : 'Add every cached issue to the board'
+                    }
+                  >
+                    {syncMutation.isPending ? 'Syncing…' : 'Sync existing issues to board'}
+                  </Button>
+                  {syncResult && (
+                    <span className="text-[11px] text-muted">
+                      Attached {syncResult.attached}, already present {syncResult.alreadyPresent}
+                      {syncResult.failed > 0 ? `, failed ${syncResult.failed}` : ''}
+                    </span>
+                  )}
+                </div>
+                {syncError && (
+                  <div className="rounded-md border border-danger/30 bg-danger/10 px-2.5 py-2 text-[11px] text-danger">
+                    <span className="line-clamp-2">{syncError}</span>
+                  </div>
+                )}
+                {syncResult && syncResult.errors.length > 0 && (
+                  <div className="rounded-md border border-warning/30 bg-warning/10 px-2.5 py-2 text-[11px] text-warning">
+                    <div className="font-medium">
+                      {syncResult.errors.length} issue
+                      {syncResult.errors.length === 1 ? '' : 's'} failed:
+                    </div>
+                    <ul className="mt-1 space-y-0.5">
+                      {syncResult.errors.slice(0, 5).map((err) => (
+                        <li key={err} className="line-clamp-1">
+                          • {err}
+                        </li>
+                      ))}
+                      {syncResult.errors.length > 5 && (
+                        <li className="text-muted">
+                          (+{syncResult.errors.length - 5} more — see logs)
+                        </li>
+                      )}
+                    </ul>
+                  </div>
+                )}
+              </div>
             </div>
 
             {submitError && (

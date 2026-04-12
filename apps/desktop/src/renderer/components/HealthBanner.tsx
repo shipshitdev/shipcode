@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAppStore } from '../stores/app-store';
 import { Alert, AlertDescription, Button } from '@shipcode/ui';
-import type { AppSettings, SystemHealth } from '@shipcode/shared';
+import type { AppSettings, GhAuthStatus, SystemHealth } from '@shipcode/shared';
 
 export function HealthBanner() {
   const queryClient = useQueryClient();
@@ -14,6 +14,17 @@ export function HealthBanner() {
     staleTime: 30_000,
     refetchInterval: 60_000,
     refetchIntervalInBackground: true,
+  });
+
+  // Separate query for the gh project scope. Static-ish; only re-fetches
+  // every 5 minutes. The health:check channel doesn't carry token-scope
+  // info, so we hit onboarding:check-auth which does (via checkGhAuth).
+  const { data: authData } = useQuery<SystemHealth & { ghAuth: GhAuthStatus }>({
+    queryKey: ['onboarding-auth'],
+    queryFn: () => window.shipcode.invoke('onboarding:check-auth'),
+    staleTime: 5 * 60_000,
+    refetchInterval: 5 * 60_000,
+    refetchIntervalInBackground: false,
   });
 
   const resetOnboarding = useMutation({
@@ -41,6 +52,13 @@ export function HealthBanner() {
   }
   if (systemHealth.codex.available && !systemHealth.codex.authenticated) {
     issues.push('Codex CLI not authenticated');
+  }
+
+  // gh project scope — only warn if the auth check ran successfully
+  // AND the scope is explicitly missing. `null` means we couldn't parse
+  // the scope list (older gh versions); skip the warning in that case.
+  if (authData?.ghAuth?.authenticated && authData.ghAuth.hasProjectScope === false) {
+    issues.push('gh missing `project` scope (run: gh auth refresh -s project)');
   }
 
   if (issues.length === 0) return null;

@@ -90,6 +90,15 @@ export interface IpcInvokeChannels {
     args: { projectId: string; issueNumber: number; body: string };
     result: GitHubIssueCacheRecord | null;
   };
+  'github:sync-to-project-board': {
+    args: { projectId: string };
+    result: {
+      attached: number;
+      alreadyPresent: number;
+      failed: number;
+      errors: string[];
+    };
+  };
 
   // Plans & Reviews (backfill)
   'plan:list': { args: { threadId: string }; result: PlanRecord[] };
