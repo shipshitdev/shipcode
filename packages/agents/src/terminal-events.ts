@@ -20,6 +20,7 @@ export type TerminalEvent =
   | { kind: 'lifecycle'; message: string }
   | { kind: 'raw'; content: string }
   | { kind: 'error'; message: string }
+  | { kind: 'action'; label: string; action: 'open-issue-detail' }
   | {
       kind: 'done';
       totalTokens?: { prompt: number; completion: number };

@@ -12,12 +12,12 @@
 
 import type { TerminalEvent } from '../../terminal-events';
 
-const FENCE_TAGS: Record<string, string> = {
-  'shipcode-plan': '[Plan ready -- open Issue Detail to view]',
-  'shipcode-review': '[Review ready -- open Issue Detail to view]',
-  'shipcode-verification': '[Verification complete -- open Issue Detail to view]',
+const FENCE_ACTIONS: Record<string, { label: string; action: 'open-issue-detail' }> = {
+  'shipcode-plan': { label: 'Plan ready', action: 'open-issue-detail' },
+  'shipcode-review': { label: 'Review ready', action: 'open-issue-detail' },
+  'shipcode-verification': { label: 'Verification complete', action: 'open-issue-detail' },
 };
-const FENCE_RE = new RegExp('```(' + Object.keys(FENCE_TAGS).join('|') + ')');
+const FENCE_RE = new RegExp('```(' + Object.keys(FENCE_ACTIONS).join('|') + ')');
 
 function formatToolCall(name: string, input: Record<string, unknown>): string {
   switch (name) {
@@ -117,7 +117,8 @@ export class ClaudeNormalizer {
           if (fenceMatch) {
             const tag = fenceMatch[1];
             this.fenceSuppressed = true;
-            this.onEvent({ kind: 'text', content: FENCE_TAGS[tag] });
+            const act = FENCE_ACTIONS[tag];
+            this.onEvent({ kind: 'action', label: act.label, action: act.action });
             continue;
           }
 

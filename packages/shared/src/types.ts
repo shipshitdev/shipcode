@@ -1,3 +1,12 @@
+// === Context File Types ===
+
+export interface ContextFileInfo {
+  name: string;
+  exists: boolean;
+  size?: number;
+  updatedAt?: string;
+}
+
 // === Plan Types ===
 
 export interface ShipCodePlan {

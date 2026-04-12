@@ -301,10 +301,10 @@ function DraggableCard({
       }}
     >
       {issue.pipelineStatus !== 'todo' && issue.pipelineStatus !== 'queued' && (
-        <div className="absolute bottom-0 left-0 right-0 h-[2px] rounded-b-md overflow-hidden bg-agent/15">
+        <div className="absolute bottom-0 left-0 right-0 h-[3px] rounded-b-md overflow-hidden bg-agent/15">
           <div
             className={cn(
-              'absolute h-full rounded-full transition-[width] duration-700 overflow-hidden',
+              'absolute h-full transition-[width] duration-700',
               issue.pipelineStatus === 'completed'
                 ? 'bg-success'
                 : issue.pipelineStatus === 'awaiting_approval'
@@ -314,13 +314,10 @@ function DraggableCard({
                     : 'bg-agent',
             )}
             style={{ width: `${phaseToProgress(issue.pipelineStatus)}%` }}
-          >
-            {issue.pipelineStatus !== 'completed' &&
-              issue.pipelineStatus !== 'failed' &&
-              issue.pipelineStatus !== 'awaiting_approval' && (
-                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-slide-progress" />
-              )}
-          </div>
+          />
+          {isActive && (
+            <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-slide-progress" />
+          )}
         </div>
       )}
       {issue.pipelineStatus === 'completed' && onArchiveIssue && (

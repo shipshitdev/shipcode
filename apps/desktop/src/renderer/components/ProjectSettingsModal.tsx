@@ -3,6 +3,7 @@ import log from 'electron-log/renderer';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import {
   type Project,
+  type ContextFileInfo,
   validateGithubProjectUrl,
   clampError,
 } from '@shipcode/shared';
@@ -39,6 +40,8 @@ export function ProjectSettingsModal() {
   const [urlInput, setUrlInput] = useState('');
   const [touched, setTouched] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [contextGenerating, setContextGenerating] = useState(false);
+  const [contextError, setContextError] = useState<string | null>(null);
   const [syncResult, setSyncResult] = useState<{
     attached: number;
     alreadyPresent: number;
@@ -55,6 +58,8 @@ export function ProjectSettingsModal() {
     setSubmitError(null);
     setSyncResult(null);
     setSyncError(null);
+    setContextGenerating(false);
+    setContextError(null);
   }, [projectSettingsModalOpen, project?.id, project?.githubProjectUrl]);
 
   const validation = useMemo(() => validateGithubProjectUrl(urlInput), [urlInput]);
@@ -117,6 +122,33 @@ export function ProjectSettingsModal() {
     setSyncResult(null);
     setSyncError(null);
     syncMutation.mutate();
+  };
+
+  const { data: contextFiles, refetch: refetchContext } = useQuery<ContextFileInfo[]>({
+    queryKey: ['context-files', projectSettingsModalProjectId],
+    queryFn: () =>
+      window.shipcode.invoke<ContextFileInfo[]>('context:list', {
+        projectId: projectSettingsModalProjectId!,
+      }),
+    enabled: !!projectSettingsModalProjectId && projectSettingsModalOpen,
+  });
+
+  const handleGenerateContext = async () => {
+    if (!projectSettingsModalProjectId) return;
+    setContextGenerating(true);
+    setContextError(null);
+    try {
+      const result = await window.shipcode.invoke<{ success: boolean; error?: string }>(
+        'context:generate',
+        { projectId: projectSettingsModalProjectId },
+      );
+      if (!result.success) setContextError(result.error ?? 'Generation failed');
+      refetchContext();
+    } catch (err) {
+      setContextError(clampError(err));
+    } finally {
+      setContextGenerating(false);
+    }
   };
 
   // The sync button operates on the SAVED url. If the input is dirty
@@ -244,6 +276,53 @@ export function ProjectSettingsModal() {
                   </div>
                 )}
               </div>
+            </div>
+
+            <div className="flex flex-col gap-2 border-t border-border pt-4">
+              <Label className="text-xs text-secondary">Context Files</Label>
+              <p className="text-[11px] text-muted">
+                Teach the pipeline about your project's goals, tech stack, architecture, and
+                constraints. Generated from your repo's README, package.json, and CLAUDE.md.
+              </p>
+              <div className="flex flex-col gap-1.5">
+                {(['GOAL.md', 'TECH-STACK.md', 'ARCHITECTURE.md', 'CONSTRAINTS.md'] as const).map(
+                  (name) => {
+                    const file = contextFiles?.find((f) => f.name === name);
+                    return (
+                      <div key={name} className="flex items-center gap-2 text-xs">
+                        {file?.exists ? (
+                          <span className="h-2 w-2 rounded-full bg-green-500 shrink-0" />
+                        ) : (
+                          <span className="w-2 shrink-0 text-center text-muted">—</span>
+                        )}
+                        <span className="font-mono text-[12px] text-primary">{name}</span>
+                        {file?.exists && file.size != null && (
+                          <span className="ml-auto text-[11px] text-muted">
+                            {file.size < 1024
+                              ? `${file.size} B`
+                              : `${(file.size / 1024).toFixed(1)} KB`}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  },
+                )}
+              </div>
+              <div className="mt-1">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleGenerateContext}
+                  disabled={contextGenerating || !project}
+                >
+                  {contextGenerating ? 'Generating…' : 'Generate Context'}
+                </Button>
+              </div>
+              {contextError && (
+                <div className="rounded-md border border-danger/30 bg-danger/10 px-2.5 py-2 text-[11px] text-danger">
+                  <span className="line-clamp-2">{contextError}</span>
+                </div>
+              )}
             </div>
 
             {submitError && (

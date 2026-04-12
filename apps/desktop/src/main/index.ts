@@ -56,7 +56,7 @@ let processManager: ProcessManager | null = null;
 
 const DIST = path.join(__dirname, '..');
 const RENDERER_URL = process.env.VITE_DEV_SERVER_URL;
-const RENDERER_HTML = path.join(DIST, 'renderer', 'index.html');
+const RENDERER_HTML = path.join(DIST, 'index.html');
 
 function createWindow() {
   mainWindow = new BrowserWindow({

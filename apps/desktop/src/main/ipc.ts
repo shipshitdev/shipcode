@@ -37,6 +37,9 @@ import {
   DEFAULT_SKILLS,
   PHASE_SKILL_KEYS,
   StreamParser,
+  generateContextFiles,
+  listContextFiles,
+  readContextFile,
 } from '@shipcode/agents';
 import { isSafeExternalUrl } from './security';
 
@@ -1095,6 +1098,39 @@ export function registerIpcHandlers(
           err instanceof Error ? err.message.split('\n')[0].slice(0, 300) : 'Enhancement failed';
         throw new Error(short);
       }
+    },
+  );
+
+  // === Repo context files ===
+  ipcMain.handle('context:list', (_event, { projectId }: { projectId: string }) => {
+    const project = queries.projects.getById(projectId);
+    if (!project) throw new Error(`Project ${projectId} not found`);
+    return listContextFiles(project.path);
+  });
+
+  ipcMain.handle(
+    'context:generate',
+    async (_event, { projectId }: { projectId: string }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+      try {
+        const result = await generateContextFiles(project.path);
+        return { success: result.success, error: result.error };
+      } catch (err) {
+        log.error('[context:generate]', err);
+        const short =
+          err instanceof Error ? err.message.split('\n')[0].slice(0, 300) : 'Generation failed';
+        return { success: false, error: short };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    'context:read',
+    (_event, { projectId, name }: { projectId: string; name: string }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+      return { content: readContextFile(project.path, name) };
     },
   );
 

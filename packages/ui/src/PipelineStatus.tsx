@@ -43,12 +43,15 @@ export function PipelineStatus({ currentPhase, onPhaseClick }: PipelineStatusPro
             >
               <span
                 className={cn(
-                  'inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold border-2 border-text-muted text-muted',
+                  'relative inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold border-2 border-text-muted text-muted',
                   isActive && !isFailed && 'bg-accent border-accent text-bg-primary',
                   isCompleted && 'bg-success border-success text-bg-primary',
                   isFailed && isActive && 'bg-danger border-danger text-bg-primary',
                 )}
               >
+                {isActive && !isFailed && (
+                  <span className="absolute inset-[-3px] rounded-full animate-pulse border-2 border-accent/40" />
+                )}
                 {isCompleted ? (
                   <Check size={12} strokeWidth={3} />
                 ) : isActive && isFailed ? (

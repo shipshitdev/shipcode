@@ -43,6 +43,9 @@ const PHASE_LABELS: Record<string, string> = {
  */
 function renderTerminalEvent(event: import('@shipcode/agents').TerminalEvent): string | null {
   switch (event.kind) {
+    case 'action':
+      // Rendered as React overlay, not xterm text
+      return null;
     case 'text': {
       // Render agent text with a left-border blockquote style
       // so it visually separates from tool calls and commands
@@ -102,6 +105,10 @@ function renderTerminalEvent(event: import('@shipcode/agents').TerminalEvent): s
 
 const EMPTY_STREAM: never[] = [];
 
+// Event kind groups for inserting blank lines at group boundaries in the terminal.
+const LIFECYCLE_KINDS = new Set(['lifecycle']);
+const CONTENT_KINDS = new Set(['text', 'thinking', 'raw']);
+
 export function TerminalDrawer() {
   const { toggleTerminal } = useAppStore();
   const terminalThreadId = useAppStore((s) => s.terminalThreadId);
@@ -145,8 +152,9 @@ export function TerminalDrawer() {
   const spinnerTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const spinnerActiveRef = useRef(false);
   const spinnerLabelRef = useRef('Thinking');
-  // Show skeleton between thread switches until first output arrives
-  const [isTransitioning, setIsTransitioning] = useState(false);
+  const lastKindRef = useRef<string | null>(null);
+  // Action banners (clickable links rendered as React, not xterm text)
+  const [actionBanners, setActionBanners] = useState<Array<{ label: string; action: 'open-issue-detail' }>>([]);
   // Resize state
   const [height, setHeight] = useState(DEFAULT_HEIGHT);
   const [isMaximized, setIsMaximized] = useState(false);
@@ -247,13 +255,31 @@ export function TerminalDrawer() {
       term.reset();
       canonicalWrittenRef.current = 0;
       startedAtRef.current = null;
+      lastKindRef.current = null;
+      setActionBanners([]);
       prevThreadIdRef.current = terminalThreadId;
-      // Show skeleton only for threads with an active pipeline process —
-      // idle/completed/failed threads will never produce output to clear it.
+      // If the stream is empty but a pipeline is actively running on this thread,
+      // start the xterm spinner immediately so the terminal isn't blank.
+      // This covers the case where the app hot-reloaded mid-pipeline and the
+      // historical pipeline:phase event was never re-received.
       const nextIssue = githubIssues.find((i) => i.threadId === terminalThreadId);
-      setIsTransitioning(
-        Boolean(nextIssue && AGENT_ACTIVE_STATUSES.has(nextIssue.pipelineStatus)),
-      );
+      const nextStream = terminalThreadId
+        ? (useAppStore.getState().canonicalTerminalStream[terminalThreadId] ?? [])
+        : [];
+      const isActivePipeline =
+        Boolean(nextIssue) &&
+        (AGENT_ACTIVE_STATUSES.has(nextIssue!.pipelineStatus) ||
+          nextIssue!.pipelineStatus === 'queued');
+      if (nextStream.length === 0 && isActivePipeline) {
+        const label = PHASE_LABELS[nextIssue!.pipelineStatus] ?? 'Working';
+        // Defer past xterm reset so the spinner writes to a clean terminal.
+        // Guard with canonicalWrittenRef check — if events arrived between
+        // the reset and this timeout, the spinner was already started by the
+        // event rendering effect and we should not double-start it.
+        setTimeout(() => {
+          if (canonicalWrittenRef.current === 0) startSpinner(label);
+        }, 0);
+      }
     }
   }, [terminalThreadId]);
 
@@ -298,9 +324,8 @@ export function TerminalDrawer() {
     const newEvents = canonicalStream.slice(canonicalWrittenRef.current);
     if (newEvents.length === 0) return;
 
-    // Hide skeleton when first canonical event arrives
+    // Record start time when first canonical event arrives
     if (canonicalWrittenRef.current === 0 && newEvents.length > 0) {
-      setIsTransitioning(false);
       if (!startedAtRef.current) {
         startedAtRef.current = new Date().toLocaleTimeString('en-US', {
           hour12: false,
@@ -312,6 +337,14 @@ export function TerminalDrawer() {
     }
 
     for (const event of newEvents) {
+      // Action events → clickable React banner, not xterm text
+      if (event.kind === 'action') {
+        stopSpinner();
+        setActionBanners((prev) => [...prev, { label: event.label, action: event.action }]);
+        lastKindRef.current = event.kind;
+        continue;
+      }
+
       // Determine spinner behavior based on event kind
       switch (event.kind) {
         case 'lifecycle': {
@@ -320,14 +353,25 @@ export function TerminalDrawer() {
           if (phaseMatch) {
             const phase = phaseMatch[1];
             const label = PHASE_LABELS[phase] ?? 'Working';
+            // Blank line before phase transitions for visual separation
+            if (lastKindRef.current && !LIFECYCLE_KINDS.has(lastKindRef.current)) {
+              term.write('\r\n');
+            }
             // Write the lifecycle line first, then start spinner on next line
             const normalized = event.message.replace(/\r?\n/g, '\r\n');
             term.write(normalized + '\r\n');
+            lastKindRef.current = event.kind;
             startSpinner(label);
             continue;
           }
           // Non-phase lifecycle events (process start/exit, model resolved)
-          stopSpinner();
+          // Insert blank line when transitioning from content → lifecycle
+          if (lastKindRef.current && CONTENT_KINDS.has(lastKindRef.current)) {
+            stopSpinner();
+            term.write('\r\n');
+          } else {
+            stopSpinner();
+          }
           break;
         }
         case 'tool_start':
@@ -340,13 +384,25 @@ export function TerminalDrawer() {
         case 'thinking':
           // Stop any existing spinner — real thinking content is arriving
           stopSpinner();
+          // Blank line before thinking when coming from lifecycle events
+          if (lastKindRef.current && LIFECYCLE_KINDS.has(lastKindRef.current)) {
+            term.write('\r\n');
+          }
           break;
         case 'text':
         case 'raw':
           stopSpinner();
+          // Blank line before agent text when coming from lifecycle events
+          if (lastKindRef.current && LIFECYCLE_KINDS.has(lastKindRef.current)) {
+            term.write('\r\n');
+          }
           break;
         case 'turn_start':
           stopSpinner();
+          // Always add blank line before turn separators
+          if (lastKindRef.current) {
+            term.write('\r\n');
+          }
           break;
         case 'done':
         case 'error':
@@ -361,6 +417,7 @@ export function TerminalDrawer() {
       // Normalize line endings for xterm
       const normalized = text.replace(/\r?\n/g, '\r\n');
       term.write(normalized.endsWith('\r\n') ? normalized : normalized + '\r\n');
+      lastKindRef.current = event.kind;
 
       // After certain events, start/restart spinner
       if (event.kind === 'tool_start') {
@@ -486,15 +543,23 @@ export function TerminalDrawer() {
       </div>
       <div className="relative flex-1 overflow-hidden min-h-0">
         <div ref={containerRef} className="absolute inset-0" />
-        {/* Skeleton overlay while switching threads */}
-        {isTransitioning && (
-          <div className="absolute inset-0 flex flex-col gap-2 p-3 bg-[#0c0d10]">
-            {[70, 50, 85, 40, 65].map((w, i) => (
-              <div
+        {/* Action banners — clickable links rendered over the terminal */}
+        {actionBanners.length > 0 && (
+          <div className="absolute bottom-0 left-0 right-0 z-10 flex flex-col gap-1 p-2">
+            {actionBanners.map((banner, i) => (
+              <button
                 key={i}
-                className="h-3 rounded animate-pulse bg-white/5"
-                style={{ width: `${w}%` }}
-              />
+                type="button"
+                className="flex items-center gap-2 px-3 py-1.5 rounded text-xs font-medium bg-accent/10 text-accent hover:bg-accent/20 transition-colors cursor-pointer text-left border border-accent/20"
+                onClick={() => {
+                  if (banner.action === 'open-issue-detail' && pinnedIssue) {
+                    selectIssue(pinnedIssue);
+                  }
+                }}
+              >
+                <span>{banner.label}</span>
+                <span className="text-accent/60">-- click to open Issue Detail</span>
+              </button>
             ))}
           </div>
         )}

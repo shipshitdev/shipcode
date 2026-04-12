@@ -29,14 +29,19 @@ export function useIpc() {
     unsubscribers.push(
       window.shipcode.on('pipeline:phase', (data: any) => {
         const store = useAppStore.getState();
+        // Auto-open terminal and focus thread when a pipeline starts running,
+        // even if the user is viewing a different thread.
+        if (data.phase === 'planning') {
+          store.openTerminal();
+          setTerminalThread(data.threadId);
+        }
+        // Update pipeline phase for the active issue's header display
         if (data.threadId === store.activeThreadId) {
           setPipelinePhase(data.phase);
-          // Auto-open terminal when planning starts so the user sees output immediately.
-          // Scoped to 'planning' only so it fires once per run; manual close is respected.
-          if (data.phase === 'planning') {
-            store.openTerminal();
-          }
-          // Log phase transition to terminal event log (colored)
+        }
+        // Always log phase transitions to the thread's canonical stream
+        // so the terminal has content even when the user wasn't viewing this thread.
+        {
           const ts = new Date().toLocaleTimeString('en-US', {
             hour12: false,
             hour: '2-digit',
@@ -47,7 +52,6 @@ export function useIpc() {
           store.logTerminalEvent(phaseLine);
           logTerminalEventForThread(data.threadId, phaseLine);
           store.appendCanonicalEvent(data.threadId, { kind: 'lifecycle', message: phaseLine });
-          // Also set terminal focus to this thread when it starts
           if (data.phase !== 'idle') setTerminalThread(data.threadId);
         }
 

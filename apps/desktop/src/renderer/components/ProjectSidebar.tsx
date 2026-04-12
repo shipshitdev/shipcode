@@ -24,7 +24,12 @@ import {
   Wrench,
 } from '@shipcode/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useRef, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
+
+const SIDEBAR_MIN = 180;
+const SIDEBAR_MAX = 256;
+const SIDEBAR_DEFAULT = SIDEBAR_MAX;
 
 type SortOrder = AppSettings['projectSortOrder'];
 
@@ -137,6 +142,31 @@ export function ProjectSidebar() {
     },
   });
 
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
+  const dragRef = useRef<{ startX: number; startW: number } | null>(null);
+
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    dragRef.current = { startX: e.clientX, startW: sidebarWidth };
+    const onMove = (ev: MouseEvent) => {
+      if (!dragRef.current) return;
+      const delta = ev.clientX - dragRef.current.startX;
+      const next = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, dragRef.current.startW + delta));
+      setSidebarWidth(next);
+    };
+    const onUp = () => {
+      dragRef.current = null;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, [sidebarWidth]);
+
   if (sidebarCollapsed) {
     return null;
   }
@@ -154,7 +184,10 @@ export function ProjectSidebar() {
   });
 
   return (
-    <aside className="flex w-[256px] min-w-[256px] flex-col border-r border-border bg-primary">
+    <aside
+      className="relative flex flex-col border-r border-border bg-primary"
+      style={{ width: sidebarWidth, minWidth: SIDEBAR_MIN, maxWidth: SIDEBAR_MAX }}
+    >
       <div className="px-2 pt-3 space-y-0.5">
         {/* Overview */}
         <Button
@@ -295,8 +328,12 @@ export function ProjectSidebar() {
               )}
               <span className="flex-1 truncate text-primary">{project.name}</span>
               {(stats?.agentsRunningByProject?.[project.id] ?? 0) > 0 && (
-                <span className="shrink-0 rounded-full bg-agent/10 border border-agent/30 px-1.5 text-[10px] font-medium text-agent">
-                  {stats!.agentsRunningByProject[project.id]}
+                <span className="inline-flex items-center gap-1 shrink-0 rounded-full border border-agent/30 bg-agent/10 px-1.5 py-0.5 text-[10px] font-medium text-agent">
+                  <span className="relative flex h-1.5 w-1.5 items-center justify-center">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-agent opacity-60" />
+                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-agent" />
+                  </span>
+                  {stats!.agentsRunningByProject[project.id]} live
                 </span>
               )}
             </Button>
@@ -354,6 +391,11 @@ export function ProjectSidebar() {
           </div>
         ))}
       </div>
+      {/* Drag handle for resizing */}
+      <div
+        className="absolute top-0 right-0 bottom-0 w-1 cursor-col-resize hover:bg-accent/20 active:bg-accent/30 transition-colors"
+        onMouseDown={handleResizeMouseDown}
+      />
     </aside>
   );
 }

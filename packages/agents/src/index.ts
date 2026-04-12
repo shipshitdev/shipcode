@@ -42,6 +42,8 @@ export type {
 export { buildPRBody } from './prompts/shipping-prompt';
 export { formatPlanComment } from './prompts/plan-comment';
 export { loadRepoContext } from './context-loader';
+export { generateContextFiles, listContextFiles, readContextFile } from './context-generator';
+export type { ContextGenerateResult } from './context-generator';
 export { GhCli } from './github/gh-cli';
 export { IssuePoller } from './github/issue-poller';
 export { routeFromLabels } from './github/model-router';

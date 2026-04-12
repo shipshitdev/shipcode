@@ -85,7 +85,10 @@
 	--spacing-titlebar: 38px;
 	--spacing-titlebar-plus: 42px;
 
-	--animate-slide-progress: slide-progress 2s linear infinite;
+}
+
+@utility animate-slide-progress {
+	animation: slide-progress 2s linear infinite;
 }
 
 /* ---------------------------------------------------------------------------

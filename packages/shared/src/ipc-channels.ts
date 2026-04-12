@@ -2,6 +2,7 @@ import type {
   ActivePipelineSummary,
   ActivityEntry,
   AppSettings,
+  ContextFileInfo,
   CostSummary,
   DashboardStats,
   NotificationRecord,
@@ -129,6 +130,11 @@ export interface IpcInvokeChannels {
     args: { projectId: string; draftBody: string };
     result: { body: string };
   };
+
+  // Repo context files (Phase 2)
+  'context:list': { args: { projectId: string }; result: ContextFileInfo[] };
+  'context:generate': { args: { projectId: string }; result: { success: boolean; error?: string } };
+  'context:read': { args: { projectId: string; name: string }; result: { content: string | null } };
 
   // Mission Control dashboard
   'dashboard:get-stats': { args: void; result: DashboardStats };
