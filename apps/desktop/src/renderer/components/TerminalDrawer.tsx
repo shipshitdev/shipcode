@@ -43,18 +43,24 @@ const PHASE_LABELS: Record<string, string> = {
  */
 function renderTerminalEvent(event: import('@shipcode/agents').TerminalEvent): string | null {
   switch (event.kind) {
-    case 'text':
-      return event.content;
-    case 'thinking':
-      // Dim italic for reasoning/thinking blocks
-      return `\x1b[2;3m${event.content}\x1b[0m`;
+    case 'text': {
+      // Render agent text with a left-border blockquote style
+      // so it visually separates from tool calls and commands
+      const lines = event.content.split('\n');
+      const quoted = lines.map((line) => `\x1b[36m\u2502\x1b[0m ${line}`).join('\n');
+      return quoted;
+    }
+    case 'thinking': {
+      // Dim italic with left-border blockquote for reasoning/thinking
+      const lines = event.content.split('\n');
+      const quoted = lines.map((line) => `\x1b[2;35m\u2502\x1b[0m \x1b[2;3m${line}\x1b[0m`).join('\n');
+      return quoted;
+    }
     case 'tool_start':
       return `\x1b[2m\u2192 ${event.summary}\x1b[0m`;
     case 'tool_end':
-      if (event.exitCode !== undefined) {
-        return event.exitCode === 0
-          ? '\x1b[32m[exit 0]\x1b[0m'
-          : `\x1b[31m[exit ${event.exitCode}]\x1b[0m`;
+      if (event.exitCode !== undefined && event.exitCode !== 0) {
+        return `\x1b[31m[exit ${event.exitCode}]\x1b[0m`;
       }
       if (event.durationMs !== undefined) {
         return `\x1b[2m(${(event.durationMs / 1000).toFixed(1)}s)\x1b[0m`;
@@ -94,11 +100,13 @@ function renderTerminalEvent(event: import('@shipcode/agents').TerminalEvent): s
   }
 }
 
+const EMPTY_STREAM: never[] = [];
+
 export function TerminalDrawer() {
   const { toggleTerminal } = useAppStore();
   const terminalThreadId = useAppStore((s) => s.terminalThreadId);
   const canonicalStream = useAppStore((s) =>
-    s.terminalThreadId ? (s.canonicalTerminalStream[s.terminalThreadId] ?? []) : [],
+    s.terminalThreadId ? (s.canonicalTerminalStream[s.terminalThreadId] ?? EMPTY_STREAM) : EMPTY_STREAM,
   );
   const activeIssue = useAppStore((s) => s.activeIssue);
   const pipelinePhase = useAppStore((s) => s.pipelinePhase);
