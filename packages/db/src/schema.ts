@@ -132,6 +132,7 @@ export function migrateV2(db: DatabaseSync): void {
         claimed_by TEXT,
         last_phase_update TEXT,
         fetched_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        archived_at TEXT,
         UNIQUE(project_id, issue_number)
       );
 
@@ -419,5 +420,23 @@ export function migrateV10(db: DatabaseSync): void {
     } catch {}
 
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (10)`);
+  });
+}
+
+export function migrateV11(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 11) return;
+
+  transaction(db, () => {
+    // Timestamp when a DONE issue was archived (closed on GitHub + hidden in UI).
+    // NULL means the issue has not been archived. Non-null means it is hidden from
+    // the Kanban board unless the user explicitly requests archived issues.
+    try {
+      db.exec('ALTER TABLE github_issue_cache ADD COLUMN archived_at TEXT');
+    } catch {}
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (11)`);
   });
 }
