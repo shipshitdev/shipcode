@@ -249,6 +249,76 @@ export class GhCli {
     await execFileAsync('gh', ['issue', 'close', String(issueNumber)], { cwd: this.cwd });
   }
 
+  /**
+   * Archive a GitHub Projects v2 item for the given issue number.
+   * Finds the item ID via GraphQL then calls archiveProjectV2Item mutation.
+   * Idempotent — silently succeeds if the item is already archived.
+   */
+  async archiveProjectItem(opts: {
+    projectNumber: number;
+    owner: string;
+    issueNumber: number;
+  }): Promise<void> {
+    // Step 1: find the project's node ID and the item's node ID
+    const listQuery = `
+      query($owner: String!, $number: Int!) {
+        organization(login: $owner) {
+          projectV2(number: $number) {
+            id
+            items(first: 100) {
+              nodes {
+                id
+                content { ... on Issue { number } }
+              }
+            }
+          }
+        }
+        user(login: $owner) {
+          projectV2(number: $number) {
+            id
+            items(first: 100) {
+              nodes {
+                id
+                content { ... on Issue { number } }
+              }
+            }
+          }
+        }
+      }
+    `;
+    const { stdout: listOut } = await execFileAsync(
+      'gh',
+      ['api', 'graphql', '-f', `query=${listQuery}`, '-F', `owner=${opts.owner}`, '-F', `number=${opts.projectNumber}`],
+      { cwd: this.cwd },
+    );
+    const listData = JSON.parse(listOut) as {
+      data: {
+        organization?: { projectV2: { id: string; items: { nodes: Array<{ id: string; content?: { number?: number } }> } } } | null;
+        user?: { projectV2: { id: string; items: { nodes: Array<{ id: string; content?: { number?: number } }> } } } | null;
+      };
+    };
+
+    const project = listData.data.organization?.projectV2 ?? listData.data.user?.projectV2;
+    if (!project) return; // project not found, skip
+
+    const item = project.items.nodes.find((n) => n.content?.number === opts.issueNumber);
+    if (!item) return; // issue not on this board, skip
+
+    // Step 2: archive the item
+    const archiveMutation = `
+      mutation($projectId: ID!, $itemId: ID!) {
+        archiveProjectV2Item(input: { projectId: $projectId, itemId: $itemId }) {
+          item { id }
+        }
+      }
+    `;
+    await execFileAsync(
+      'gh',
+      ['api', 'graphql', '-f', `query=${archiveMutation}`, '-F', `projectId=${project.id}`, '-F', `itemId=${item.id}`],
+      { cwd: this.cwd },
+    );
+  }
+
   async setStatusLabel(issueNumber: number, label: GitHubStatusLabel): Promise<void> {
     // Remove all existing status:* labels first
     try {
