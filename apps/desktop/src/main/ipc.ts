@@ -350,14 +350,10 @@ export function registerIpcHandlers(
       const ghCli = new GhCli(project.path);
       await ghCli.closeIssue(issueNumber);
 
-      // Best-effort: archive the project board item so it disappears from the
-      // GitHub Projects v2 board too (closing alone only changes issue state).
-      const parsedProject = parseGithubProjectUrl(project.githubProjectUrl);
-      if (parsedProject) {
-        ghCli
-          .archiveProjectItem({ projectNumber: parsedProject.number, owner: parsedProject.owner, issueNumber })
-          .catch((err) => log.warn('[github:archive-issue] project board archive failed:', err));
-      }
+      // Best-effort: archive from all Projects v2 boards the issue appears on.
+      ghCli
+        .archiveProjectItems(issueNumber)
+        .catch((err) => log.warn('[github:archive-issue] project board archive failed:', err));
 
       // GitHub close succeeded. DB write is synchronous/local — failures here
       // are rare but would leave GitHub closed and board still showing the
@@ -387,7 +383,6 @@ export function registerIpcHandlers(
       const doneIssues = queries.githubIssues.listCompleted(projectId);
 
       const ghCli = new GhCli(project.path);
-      const parsedProject = parseGithubProjectUrl(project.githubProjectUrl);
       const succeededIds: string[] = [];
       let failedCount = 0;
 
@@ -395,12 +390,10 @@ export function registerIpcHandlers(
         try {
           await ghCli.closeIssue(issue.issueNumber);
           succeededIds.push(issue.id);
-          // Best-effort: archive from the Projects v2 board too
-          if (parsedProject) {
-            ghCli
-              .archiveProjectItem({ projectNumber: parsedProject.number, owner: parsedProject.owner, issueNumber: issue.issueNumber })
-              .catch((err) => log.warn(`[github:archive-all-done] project board archive #${issue.issueNumber} failed:`, err));
-          }
+          // Best-effort: archive from all Projects v2 boards the issue appears on
+          ghCli
+            .archiveProjectItems(issue.issueNumber)
+            .catch((err) => log.warn(`[github:archive-all-done] project board archive #${issue.issueNumber} failed:`, err));
         } catch (err) {
           log.warn(`[github:archive-all-done] close #${issue.issueNumber} failed:`, err);
           failedCount++;

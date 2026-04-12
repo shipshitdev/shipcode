@@ -254,57 +254,46 @@ export class GhCli {
    * Finds the item ID via GraphQL then calls archiveProjectV2Item mutation.
    * Idempotent — silently succeeds if the item is already archived.
    */
-  async archiveProjectItem(opts: {
-    projectNumber: number;
-    owner: string;
-    issueNumber: number;
-  }): Promise<void> {
-    // Step 1: find the project's node ID and the item's node ID
-    const listQuery = `
-      query($owner: String!, $number: Int!) {
-        organization(login: $owner) {
-          projectV2(number: $number) {
-            id
-            items(first: 100) {
-              nodes {
-                id
-                content { ... on Issue { number } }
-              }
-            }
-          }
-        }
-        user(login: $owner) {
-          projectV2(number: $number) {
-            id
-            items(first: 100) {
-              nodes {
-                id
-                content { ... on Issue { number } }
-              }
+  /**
+   * Archive all GitHub Projects v2 items linked to the given issue.
+   * Queries the issue's own projectItems (no project URL needed) and
+   * calls archiveProjectV2Item for each. Best-effort — caller should
+   * catch/swallow failures.
+   */
+  async archiveProjectItems(issueNumber: number): Promise<void> {
+    // Step 1: get owner/repo from the local git remote
+    const { stdout: repoOut } = await execFileAsync(
+      'gh',
+      ['repo', 'view', '--json', 'owner,name'],
+      { cwd: this.cwd },
+    );
+    const { owner, name: repo } = JSON.parse(repoOut) as { owner: { login: string }; name: string };
+
+    // Step 2: fetch all project items for this issue
+    const itemQuery = `
+      query($owner: String!, $repo: String!, $number: Int!) {
+        repository(owner: $owner, name: $repo) {
+          issue(number: $number) {
+            projectItems(first: 10) {
+              nodes { id project { id } }
             }
           }
         }
       }
     `;
-    const { stdout: listOut } = await execFileAsync(
+    const { stdout: itemOut } = await execFileAsync(
       'gh',
-      ['api', 'graphql', '-f', `query=${listQuery}`, '-F', `owner=${opts.owner}`, '-F', `number=${opts.projectNumber}`],
+      ['api', 'graphql', '-f', `query=${itemQuery}`, '-F', `owner=${owner.login}`, '-F', `repo=${repo}`, '-F', `number=${issueNumber}`],
       { cwd: this.cwd },
     );
-    const listData = JSON.parse(listOut) as {
-      data: {
-        organization?: { projectV2: { id: string; items: { nodes: Array<{ id: string; content?: { number?: number } }> } } } | null;
-        user?: { projectV2: { id: string; items: { nodes: Array<{ id: string; content?: { number?: number } }> } } } | null;
-      };
+    const itemData = JSON.parse(itemOut) as {
+      data: { repository: { issue: { projectItems: { nodes: Array<{ id: string; project: { id: string } }> } } } };
     };
 
-    const project = listData.data.organization?.projectV2 ?? listData.data.user?.projectV2;
-    if (!project) return; // project not found, skip
+    const items = itemData.data.repository?.issue?.projectItems?.nodes ?? [];
+    if (items.length === 0) return;
 
-    const item = project.items.nodes.find((n) => n.content?.number === opts.issueNumber);
-    if (!item) return; // issue not on this board, skip
-
-    // Step 2: archive the item
+    // Step 3: archive each item
     const archiveMutation = `
       mutation($projectId: ID!, $itemId: ID!) {
         archiveProjectV2Item(input: { projectId: $projectId, itemId: $itemId }) {
@@ -312,10 +301,14 @@ export class GhCli {
         }
       }
     `;
-    await execFileAsync(
-      'gh',
-      ['api', 'graphql', '-f', `query=${archiveMutation}`, '-F', `projectId=${project.id}`, '-F', `itemId=${item.id}`],
-      { cwd: this.cwd },
+    await Promise.all(
+      items.map((item) =>
+        execFileAsync(
+          'gh',
+          ['api', 'graphql', '-f', `query=${archiveMutation}`, '-F', `projectId=${item.project.id}`, '-F', `itemId=${item.id}`],
+          { cwd: this.cwd },
+        ),
+      ),
     );
   }
 
