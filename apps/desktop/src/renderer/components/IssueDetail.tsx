@@ -202,6 +202,48 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     prevLatestPlanIdRef.current = latestPlanId;
   }, [latestPlanId]);
 
+  // Dismiss any pending notifications for this thread when the user opens it.
+  // Catches the "fired before navigation" case; useIpc.ts handles the
+  // "fired while already viewing" case.
+  useEffect(() => {
+    if (!activeThreadId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const list = await window.shipcode.invoke<NotificationRecord[]>('notification:list');
+        if (cancelled) return;
+        // Only auto-dismiss informational kinds. 'awaiting_approval' requires
+        // explicit user action (approve/reject) so we leave it in the inbox.
+        const matching = list.filter(
+          (n) => n.threadId === activeThreadId && n.kind !== 'awaiting_approval',
+        );
+        for (const n of matching) {
+          await window.shipcode.invoke('notification:dismiss', { id: n.id });
+        }
+      } catch {
+        // Best-effort.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeThreadId]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (expanded) {
+          // Collapse to panel first; preserve issue selection
+          toggleIssueDetailExpanded();
+        } else {
+          selectIssue(null);
+        }
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [selectIssue, expanded, toggleIssueDetailExpanded]);
+
   const effectiveExpanded = expandedPlanId === undefined ? latestPlanId : expandedPlanId;
   const latestPlan = useMemo(() => planHistory[0] ?? null, [planHistory]);
   const threadPhase = thread?.status ?? pipelinePhase;
@@ -290,48 +332,6 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       setIsSubmitting(false);
     }
   };
-
-  // Dismiss any pending notifications for this thread when the user opens it.
-  // Catches the "fired before navigation" case; useIpc.ts handles the
-  // "fired while already viewing" case.
-  useEffect(() => {
-    if (!activeThreadId) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const list = await window.shipcode.invoke<NotificationRecord[]>('notification:list');
-        if (cancelled) return;
-        // Only auto-dismiss informational kinds. 'awaiting_approval' requires
-        // explicit user action (approve/reject) so we leave it in the inbox.
-        const matching = list.filter(
-          (n) => n.threadId === activeThreadId && n.kind !== 'awaiting_approval',
-        );
-        for (const n of matching) {
-          await window.shipcode.invoke('notification:dismiss', { id: n.id });
-        }
-      } catch {
-        // Best-effort.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [activeThreadId]);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (expanded) {
-          // Collapse to panel first; preserve issue selection
-          toggleIssueDetailExpanded();
-        } else {
-          selectIssue(null);
-        }
-      }
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [selectIssue, expanded, toggleIssueDetailExpanded]);
 
   const phaseIsActive = ACTIVE_PHASES.includes(threadPhase as PipelinePhase);
 
