@@ -682,6 +682,57 @@ describe('createPipeline', () => {
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed', expect.any(String));
       expect(pipeline.getContext('t1')).toBeUndefined();
     });
+
+    it('rehydrateContext restores lost context so startExecution proceeds', async () => {
+      const threadId = 't-rehydrate';
+
+      // Override getById to return a full thread matching the rehydrate target
+      (mock.deps.threads.getById as any).mockImplementation((id: string) => {
+        if (id === threadId) {
+          return {
+            id: threadId,
+            projectId: 'p1',
+            title: 'test',
+            prompt: 'test',
+            status: 'awaiting_approval',
+            worktreePath: null,
+            worktreeBranch: null,
+            plannerModel: 'claude',
+            reviewerModel: 'codex',
+            executorModel: 'claude',
+            reviewRound: 0,
+            verificationStatus: null,
+            verificationRetries: 0,
+            autonomous: false,
+            baseBranch: 'main',
+            forkPointSha: 'abc123',
+            githubIssueNumber: 16,
+            githubPrNumber: null,
+            githubRepo: null,
+            lastError: null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            plannerResolvedModel: null,
+            reviewerResolvedModel: null,
+            revisorResolvedModel: null,
+            executorResolvedModel: null,
+          };
+        }
+        return { id, projectId: 'project-1', githubIssueNumber: 42 };
+      });
+
+      const pipeline = createPipeline(mock.deps);
+
+      // No prior startPlanGeneration -- simulates app restart (no activePipelines entry)
+      pipeline.rehydrateContext(threadId, '/tmp/test-project', 'Demo issue');
+
+      // startExecution should now proceed (not silently return)
+      await pipeline.startExecution(threadId, JSON.parse(PLAN_JSON));
+
+      expect(mock.emittedEvents).toContainEqual(
+        expect.objectContaining({ type: 'pipeline:phase', threadId, phase: 'executing' }),
+      );
+    });
   });
 
   // ─── startVerification ─────────────────────────────────────────────

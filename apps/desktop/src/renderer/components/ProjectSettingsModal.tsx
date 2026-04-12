@@ -8,11 +8,8 @@ import {
 } from '@shipcode/shared';
 import {
   Button,
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  Modal,
+  ModalFooter,
   Input,
   Label,
 } from '@shipcode/ui';
@@ -133,10 +130,6 @@ export function ProjectSettingsModal() {
     !syncMutation.isPending &&
     !saveMutation.isPending;
 
-  const handleOpenChange = (open: boolean) => {
-    if (!open) closeProjectSettingsModal();
-  };
-
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
       e.preventDefault();
@@ -149,12 +142,13 @@ export function ProjectSettingsModal() {
   };
 
   return (
-    <Dialog open={projectSettingsModalOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-[560px]" onKeyDown={handleKeyDown}>
-        <DialogHeader>
-          <DialogTitle>Project Settings</DialogTitle>
-        </DialogHeader>
-
+    <Modal
+      open={projectSettingsModalOpen}
+      onClose={closeProjectSettingsModal}
+      title="Project Settings"
+      className="max-w-[560px]"
+      onKeyDown={handleKeyDown}
+    >
         {!project ? (
           <div className="text-xs text-muted">Loading project…</div>
         ) : (
@@ -260,7 +254,8 @@ export function ProjectSettingsModal() {
           </div>
         )}
 
-        <DialogFooter>
+        <ModalFooter>
+          <span className="mr-auto text-[11px] text-muted">⌘↩ to save</span>
           <Button
             variant="secondary"
             onClick={closeProjectSettingsModal}
@@ -274,9 +269,7 @@ export function ProjectSettingsModal() {
           >
             {saveMutation.isPending ? 'Saving…' : 'Save'}
           </Button>
-          <span className="ml-auto text-[11px] text-muted">⌘↩ to save</span>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </ModalFooter>
+    </Modal>
   );
 }

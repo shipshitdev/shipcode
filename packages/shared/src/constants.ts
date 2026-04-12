@@ -7,6 +7,7 @@ export const DEFAULT_STATUS_LABEL_MAPPINGS: Record<string, string> = {
   reviewing: 'status:in-progress',
   revising: 'status:in-progress',
   executing: 'status:in-progress',
+  testing: '',
   verifying: 'status:in-progress',
   shipping: 'status:in-progress',
   completed: 'status:done',
@@ -55,6 +56,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   openrouterDefaultPaidModel: 'openrouter/auto',
   openrouterDefaultFreeModel: 'openrouter/free',
   openrouterExplicitFallback: 'qwen/qwen3.6-plus',
+  testCommand: null,
+  testingContext: null,
 };
 
 export const CURRENT_ONBOARDING_VERSION = 1;
@@ -96,6 +99,7 @@ export const REVIEW_FENCE_TAG = 'shipcode-review';
 export const VERIFICATION_FENCE_TAG = 'shipcode-verification';
 export const MAX_REVIEW_ROUNDS = 2;
 export const MAX_VERIFICATION_RETRIES = 1;
+export const MAX_TEST_RETRIES = 1;
 export const GITHUB_POLL_INTERVAL_MS = 30_000;
 export const STALE_LEASE_THRESHOLD_MS = 30 * 60 * 1000;
 export const ORPHAN_CLAIM_THRESHOLD_MS = 5 * 60 * 1000;

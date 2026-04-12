@@ -246,20 +246,15 @@ app.whenReady().then(() => {
       label: 'Community',
       submenu: [
         {
-          label: '⭐  Star on GitHub',
+          label: 'GitHub',
           click: () => shell.openExternal('https://github.com/shipshitdev/shipcode'),
         },
         {
-          label: '🍴  Fork on GitHub',
-          click: () => shell.openExternal('https://github.com/shipshitdev/shipcode/fork'),
-        },
-        { type: 'separator' },
-        {
-          label: '𝕏  @shipshitdev on X',
+          label: '@shipshitdev on X',
           click: () => shell.openExternal('https://x.com/shipshitdev'),
         },
         {
-          label: '▶  ShipShitShow on YouTube',
+          label: 'ShipShitShow on YouTube',
           click: () => shell.openExternal('https://www.youtube.com/@shipshitshow'),
         },
       ],

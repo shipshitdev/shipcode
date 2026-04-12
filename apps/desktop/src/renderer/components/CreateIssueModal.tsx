@@ -8,11 +8,8 @@ import {
 } from '@shipcode/shared';
 import { useAppStore } from '../stores/app-store';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
+  Modal,
+  ModalFooter,
   Textarea,
   Label,
   Button,
@@ -194,17 +191,13 @@ export function CreateIssueModal() {
       : 'Create Plan';
 
   return (
-    <Dialog
+    <Modal
       open={createIssueModalOpen}
-      onOpenChange={(open) => {
-        if (!open) closeCreateIssueModal();
-      }}
+      onClose={closeCreateIssueModal}
+      title={mode === 'edit' ? 'Edit PRD' : 'New Issue'}
+      className="max-w-[720px]"
+      onKeyDown={handleKeyDown}
     >
-      <DialogContent className="max-w-[720px]" onKeyDown={handleKeyDown}>
-        <DialogHeader>
-          <DialogTitle>{mode === 'edit' ? 'Edit PRD' : 'New Issue'}</DialogTitle>
-        </DialogHeader>
-
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
             <Label htmlFor="issue-body" className="text-xs text-secondary">
@@ -244,7 +237,8 @@ export function CreateIssueModal() {
           )}
         </div>
 
-        <DialogFooter>
+        <ModalFooter>
+          <span className="mr-auto text-[11px] text-muted">⌘↩ to submit</span>
           <Button
             variant="secondary"
             onClick={closeCreateIssueModal}
@@ -259,14 +253,9 @@ export function CreateIssueModal() {
             title="Let AI structure your idea into a full PRD using this repo's writing-prds skill"
           >
             <Sparkles size={14} />
-            {enhancing ? 'Enhancing…' : 'Enhance with AI'}
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={submitDisabled}
-            aria-label={mode === 'edit' ? 'Save PRD' : undefined}
-          >
-            {submitLabel}
+            {enhancing
+              ? mode === 'edit' ? 'Rewriting…' : 'Writing PRD…'
+              : mode === 'edit' ? 'Rewrite with AI' : 'Write PRD'}
           </Button>
           {mode === 'create' && (
             <label className="flex items-center gap-1.5 text-[11px] text-muted cursor-pointer select-none">
@@ -277,9 +266,14 @@ export function CreateIssueModal() {
               Submit another
             </label>
           )}
-          <span className="ml-auto text-[11px] text-muted">⌘↩ to submit</span>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <Button
+            onClick={handleSubmit}
+            disabled={submitDisabled}
+            aria-label={mode === 'edit' ? 'Save PRD' : undefined}
+          >
+            {submitLabel}
+          </Button>
+        </ModalFooter>
+    </Modal>
   );
 }

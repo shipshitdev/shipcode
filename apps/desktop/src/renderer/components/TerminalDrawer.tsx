@@ -262,8 +262,12 @@ export function TerminalDrawer() {
       eventsWrittenRef.current = 0;
       startedAtRef.current = null;
       prevThreadIdRef.current = terminalThreadId;
-      // Show skeleton until first output arrives for this thread
-      setIsTransitioning(true);
+      // Show skeleton only for threads with an active pipeline process —
+      // idle/completed/failed threads will never produce output to clear it.
+      const nextIssue = githubIssues.find((i) => i.threadId === terminalThreadId);
+      setIsTransitioning(
+        Boolean(nextIssue && AGENT_ACTIVE_STATUSES.has(nextIssue.pipelineStatus)),
+      );
     }
   }, [terminalThreadId]);
 

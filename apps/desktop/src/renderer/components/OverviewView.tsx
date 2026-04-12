@@ -5,7 +5,6 @@ import type {
   ActivityEntry,
   DashboardStats,
   GitHubIssueCacheRecord,
-  PipelinePhase,
   RecentTask,
 } from '@shipcode/shared';
 import {
@@ -20,6 +19,7 @@ import {
   ListTodo,
   PackageCheck,
   Pagination,
+  PhaseChip,
   Table,
   TableBody,
   TableCell,
@@ -29,37 +29,6 @@ import {
 } from '@shipcode/ui';
 import { useAppStore } from '../stores/app-store';
 
-// Color encodes STATE, not sub-phase — the chip text already carries the phase
-// name. All 6 agent-running phases (plan/review/revise/execute/verify/ship)
-// share the dedicated `agent` violet at low opacity so they are immediately
-// distinguishable from human-action states (awaiting=amber, failed=red) and
-// terminal states (completed=green). Matches the Kanban card treatment.
-const AGENT_PHASE_CLASSES = 'bg-agent/10 text-agent border-agent/25';
-
-const PHASE_COLOR: Partial<Record<PipelinePhase, string>> = {
-  planning: AGENT_PHASE_CLASSES,
-  reviewing: AGENT_PHASE_CLASSES,
-  revising: AGENT_PHASE_CLASSES,
-  executing: AGENT_PHASE_CLASSES,
-  verifying: AGENT_PHASE_CLASSES,
-  shipping: AGENT_PHASE_CLASSES,
-  awaiting_approval: 'bg-warning/15 text-warning border-warning/30',
-  completed: 'bg-success/15 text-success border-success/30',
-  failed: 'bg-danger/15 text-danger border-danger/30',
-  idle: 'bg-tertiary text-muted border-border',
-};
-
-function PhaseChip({ phase }: { phase: PipelinePhase }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
-        PHASE_COLOR[phase] ?? PHASE_COLOR.idle
-      }`}
-    >
-      {phase.replace(/_/g, ' ')}
-    </span>
-  );
-}
 
 function timeAgo(input: string | number): string {
   const t = typeof input === 'number' ? input : new Date(input).getTime();
@@ -326,7 +295,7 @@ export function OverviewView() {
                         <span className="flex-1 truncate text-[13px] text-primary">
                           {row.threadTitle}
                         </span>
-                        <PhaseChip phase={row.phase} />
+                        <PhaseChip status={row.phase} />
                         <span className="w-16 text-right text-[11px] tabular-nums text-muted">
                           <ElapsedClock since={row.startedAt} />
                         </span>
@@ -456,7 +425,7 @@ export function OverviewView() {
                           onClick={() => handleRowClick(task.projectId, task.threadId)}
                         >
                           <TableCell className="w-px whitespace-nowrap pr-2 align-top pt-2.5">
-                            <PhaseChip phase={task.phase} />
+                            <PhaseChip status={task.phase} />
                           </TableCell>
                           <TableCell className="max-w-0 w-full">
                             <div className="truncate text-[12px] text-primary">

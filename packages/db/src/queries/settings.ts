@@ -116,6 +116,8 @@ export class SettingsQueries {
         stored.openrouterDefaultFreeModel ?? DEFAULT_SETTINGS.openrouterDefaultFreeModel,
       openrouterExplicitFallback:
         stored.openrouterExplicitFallback ?? DEFAULT_SETTINGS.openrouterExplicitFallback,
+      testCommand: readNullable(stored.testCommand) ?? null,
+      testingContext: readNullable(stored.testingContext) ?? null,
     };
   }
 

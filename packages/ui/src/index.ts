@@ -45,6 +45,7 @@ export {
 export { DiffViewer } from './DiffViewer';
 export { IssueCard } from './IssueCard';
 export { KanbanBoard } from './KanbanBoard';
+export { PhaseChip } from './PhaseChip';
 export { MODEL_DISPLAY, modelDisplay } from './lib/model-display';
 export type { StatusBadgeVariant } from './lib/status-variant';
 export { getStatusBadgeVariant } from './lib/status-variant';
@@ -85,6 +86,7 @@ export {
   DialogTitle,
   DialogTrigger,
 } from './primitives/dialog';
+export { Modal, ModalFooter } from './primitives/modal';
 export {
   DropdownMenu,
   DropdownMenuContent,

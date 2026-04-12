@@ -565,7 +565,7 @@ export function registerIpcHandlers(
       // Idempotency: reject if issue already has an active thread
       if (issue.threadId) {
         const thread = queries.threads.getById(issue.threadId);
-        if (thread && !['failed', 'completed'].includes(thread.status)) {
+        if (thread && !['failed', 'completed', 'idle'].includes(thread.status)) {
           throw new Error(`Issue #${issueNumber} already has active thread`);
         }
       }
@@ -630,6 +630,14 @@ export function registerIpcHandlers(
     (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
+
+      // Cancel any active pipeline for this issue's thread
+      const threads = queries.threads.list(projectId);
+      const thread = threads.find((t: any) => t.githubIssueNumber === issueNumber);
+      if (thread && thread.status !== 'idle' && thread.status !== 'completed') {
+        pipeline.cancel(thread.id);
+        queries.threads.updateStatus(thread.id, 'idle');
+      }
 
       queries.githubIssues.updatePipelineStatus(issue.id, 'todo');
       const allIssues = queries.githubIssues.list(projectId);
@@ -750,6 +758,10 @@ export function registerIpcHandlers(
   });
 
   ipcMain.handle('pipeline:approve', async (_event, { threadId }: { threadId: string }) => {
+    // Idempotency guard -- prevent double-click race
+    const thread = queries.threads.getById(threadId);
+    if (!thread || thread.status !== 'awaiting_approval') return;
+
     const latestPlan = queries.plans.getLatest(threadId);
     const structured = latestPlan?.structured ?? tryParsePlan(latestPlan?.rawOutput ?? '');
     if (structured) {
@@ -758,6 +770,17 @@ export function registerIpcHandlers(
         queries.plans.updateStructured(latestPlan.id, structured);
       }
       queries.plans.updateStatus(latestPlan!.id, 'approved');
+
+      // Rehydrate in-memory pipeline context from DB if lost (e.g. app restart).
+      // Fetch issue title from cache for worktree branch naming.
+      const project = queries.projects.getById(thread.projectId);
+      if (project) {
+        const issue = thread.githubIssueNumber
+          ? queries.githubIssues.getByNumber(project.id, thread.githubIssueNumber)
+          : null;
+        pipeline.rehydrateContext(threadId, project.path, issue?.title);
+      }
+
       await pipeline.startExecution(threadId, structured);
     } else {
       mainWindow.webContents.send('pipeline:phase', { threadId, phase: 'failed' });
@@ -772,6 +795,12 @@ export function registerIpcHandlers(
 
       const project = queries.projects.getById(thread.projectId);
       if (!project) return;
+
+      // Rehydrate in-memory pipeline context if lost (e.g. app restart)
+      const issue = thread.githubIssueNumber
+        ? queries.githubIssues.getByNumber(project.id, thread.githubIssueNumber)
+        : null;
+      pipeline.rehydrateContext(threadId, project.path, issue?.title);
 
       // Supersede old plans and restart planning with feedback
       queries.plans.supersedeAll(threadId);

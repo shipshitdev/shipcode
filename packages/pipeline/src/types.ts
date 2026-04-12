@@ -92,6 +92,11 @@ export interface PipelineContext {
   verifiedSha: string | null;
   startedAt: number;
   /**
+   * Pre-loaded repo context string for injection into phase prompts.
+   * Read once from `<projectPath>/.agents/context/` at pipeline start.
+   */
+  repoContext: string | null;
+  /**
    * Per-run AbortController. Providers honor `abort.signal` to cancel
    * in-flight work (subprocess kill OR HTTP abort). cancel(threadId)
    * calls abort() in addition to killing any active process.
@@ -135,6 +140,13 @@ export interface Pipeline {
   startVerification: (threadId: string) => Promise<void>;
   startCommitAndPush: (threadId: string) => Promise<void>;
   startShipping: (threadId: string) => Promise<void>;
+  /**
+   * Re-create in-memory PipelineContext from persisted Thread state.
+   * Called before startExecution/startPlanGeneration when the user
+   * approves or rejects a plan that was generated in a previous app
+   * session (activePipelines lost on restart).
+   */
+  rehydrateContext: (threadId: string, projectPath: string, issueTitle?: string | null) => void;
   startFromGitHubIssue: (
     threadId: string,
     projectPath: string,

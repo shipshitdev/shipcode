@@ -79,6 +79,7 @@ export type ThreadStatus =
   | 'revising'
   | 'awaiting_approval'
   | 'executing'
+  | 'testing'
   | 'verifying'
   | 'shipping'
   | 'completed'
@@ -129,6 +130,7 @@ export type PipelinePhase =
   | 'revising'
   | 'awaiting_approval'
   | 'executing'
+  | 'testing'
   | 'verifying'
   | 'shipping'
   | 'completed'
@@ -265,6 +267,8 @@ export interface AppSettings {
   openrouterDefaultPaidModel: string;
   openrouterDefaultFreeModel: string;
   openrouterExplicitFallback: string;
+  testCommand: string | null;
+  testingContext: string | null;
 }
 
 export interface NotificationEventToggles {
@@ -346,6 +350,7 @@ export type IssuePipelineStatus =
   | 'revising'
   | 'awaiting_approval'
   | 'executing'
+  | 'testing'
   | 'verifying'
   | 'shipping'
   | 'completed'

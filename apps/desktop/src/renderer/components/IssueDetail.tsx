@@ -11,6 +11,7 @@ import type {
 } from '@shipcode/shared';
 import { deriveGithubIssueUrl, shipCodePlanSchema } from '@shipcode/shared';
 import {
+  Archive,
   Badge,
   Button,
   cn,
@@ -19,11 +20,8 @@ import {
   ChevronRight,
   ChevronUp,
   Copy,
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  Modal,
+  ModalFooter,
   ExternalLink,
   getStatusBadgeVariant,
   Maximize2,
@@ -204,6 +202,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const [prdCollapsed, setPrdCollapsed] = useState(false);
   const [planHistoryCollapsed, setPlanHistoryCollapsed] = useState(false);
   const [showRawOutput, setShowRawOutput] = useState(false);
+  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
 
   function safeErrorMessage(raw: string): string {
     const trimmed = raw.trim();
@@ -333,7 +332,8 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const effectiveExpanded = expandedPlanId === undefined ? latestPlanId : expandedPlanId;
   const latestPlan = useMemo(() => planHistory[0] ?? null, [planHistory]);
   const threadPhase = thread?.status ?? pipelinePhase;
-  const canStartPipeline = !activeThreadId && !!activeProjectId;
+  const canStartPipeline =
+    !activeThreadId && !!activeProjectId && activeIssue?.pipelineStatus !== 'completed';
   const canRerun = !!activeIssue && activeIssue.pipelineStatus === 'failed' && !!activeProjectId;
   const hasApprovalDecision =
     !!activeThreadId && threadPhase === 'awaiting_approval' && !!latestPlan;
@@ -483,8 +483,37 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
   // ─── Shared render sections ──────────────────────────────────────────────
 
+  const handleArchiveConfirmed = () => {
+    if (!activeProjectId || !activeIssue) return;
+    window.shipcode
+      .invoke('github:archive-issue', {
+        projectId: activeProjectId,
+        issueNumber: activeIssue.issueNumber,
+      })
+      .then(() => {
+        setShowArchiveConfirm(false);
+        selectIssue(null);
+        queryClient.invalidateQueries({ queryKey: ['github-issues', activeProjectId] });
+      })
+      .catch((err: Error) => {
+        setShowArchiveConfirm(false);
+        window.alert(`Failed to archive issue: ${err?.message ?? err}`);
+      });
+  };
+
   const headerButtons = (
     <div className="absolute right-3 top-3 flex items-center gap-0.5">
+      {activeIssue.pipelineStatus === 'completed' && (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="text-muted"
+          onClick={() => setShowArchiveConfirm(true)}
+          title="Archive issue"
+        >
+          <Archive size={13} />
+        </Button>
+      )}
       <Button
         variant="ghost"
         size="icon-xs"
@@ -914,48 +943,41 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const fullScreenIsLatest = fullScreenPlanId === latestPlan?.id;
 
   const planFullScreenDialog = (
-    <Dialog
+    <Modal
       open={fullScreenPlanId !== null}
-      onOpenChange={(open) => {
-        if (!open) {
-          setFullScreenPlanId(null);
-        }
-      }}
+      onClose={() => setFullScreenPlanId(null)}
+      title={`Plan v${fullScreenPlan?.version}${fullScreenPlan?.status ? ` — ${fullScreenPlan.status}` : ''}`}
+      className="max-w-4xl h-[90vh] flex flex-col overflow-hidden p-0"
+      headerClassName="shrink-0 border-b border-border px-6 py-4"
+      headerAction={
+        <Button variant="ghost" className="h-7 w-7 p-0" onClick={() => setFullScreenPlanId(null)}>
+          <X size={15} strokeWidth={2.25} />
+        </Button>
+      }
     >
-      <DialogContent className="max-w-4xl h-[90vh] flex flex-col overflow-hidden p-0 bg-primary">
-        <DialogHeader className="shrink-0 border-b border-border px-6 py-4 flex-row items-center justify-between mb-0">
-          <DialogTitle>
-            Plan v{fullScreenPlan?.version}
-            {fullScreenPlan?.status ? ` — ${fullScreenPlan.status}` : ''}
-          </DialogTitle>
-          <Button variant="ghost" className="h-7 w-7 p-0" onClick={() => setFullScreenPlanId(null)}>
-            <X size={15} strokeWidth={2.25} />
-          </Button>
-        </DialogHeader>
-        <div className="flex-1 overflow-y-auto">
-          {fullScreenDisplayPlan && <PlanViewer plan={fullScreenDisplayPlan} />}
-          {fullScreenReview?.structured && <ReviewViewer review={fullScreenReview.structured} />}
-          {!fullScreenDisplayPlan && fullScreenPlan && (
-            <div className="p-6 text-sm leading-relaxed whitespace-pre-wrap text-secondary">
-              {resolveRawPlanText(fullScreenPlan.rawOutput ?? '')}
-            </div>
-          )}
-        </div>
-        {canApprove && fullScreenIsLatest && (
-          <DialogFooter className="shrink-0 border-t border-border px-6 py-4">
-            <Button
-              onClick={() => {
-                void handleApprove();
-                setFullScreenPlanId(null);
-              }}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? 'Approving...' : 'Approve & Execute'}
-            </Button>
-          </DialogFooter>
+      <div className="flex-1 overflow-y-auto">
+        {fullScreenDisplayPlan && <PlanViewer plan={fullScreenDisplayPlan} />}
+        {fullScreenReview?.structured && <ReviewViewer review={fullScreenReview.structured} />}
+        {!fullScreenDisplayPlan && fullScreenPlan && (
+          <div className="p-6 text-sm leading-relaxed whitespace-pre-wrap text-secondary">
+            {resolveRawPlanText(fullScreenPlan.rawOutput ?? '')}
+          </div>
         )}
-      </DialogContent>
-    </Dialog>
+      </div>
+      {canApprove && fullScreenIsLatest && (
+        <ModalFooter className="shrink-0 border-t border-border px-6 py-4">
+          <Button
+            onClick={() => {
+              void handleApprove();
+              setFullScreenPlanId(null);
+            }}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? 'Approving...' : 'Approve & Execute'}
+          </Button>
+        </ModalFooter>
+      )}
+    </Modal>
   );
 
   // ─── Expanded (full-page) layout ────────────────────────────────────────
@@ -994,6 +1016,9 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
             <h1 className="my-1 pr-16 text-xl font-semibold">{activeIssue.title}</h1>
             {issueBadges}
           </div>
+          {approvalSection && (
+            <div className="shrink-0 border-b border-border px-6 py-4">{approvalSection}</div>
+          )}
 
           {/* Scrollable content */}
           <div className="flex-1 overflow-y-auto p-6">
@@ -1038,7 +1063,6 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
               )}
             </div>
 
-            {approvalSection}
             {planHistorySection}
 
             {/* Thread exists but no plans yet — only while not failed */}
@@ -1097,6 +1121,9 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       )}
       {rerunSection && (
         <div className="shrink-0 px-4 pt-4">{rerunSection}</div>
+      )}
+      {approvalSection && (
+        <div className="shrink-0 px-4 pt-4">{approvalSection}</div>
       )}
 
       {/* Tabbed content — min-h-0 required for flex scroll containment */}
@@ -1160,7 +1187,6 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
               ))}
           </div>
 
-          {approvalSection}
           {planHistorySection}
 
           {/* Thread exists but no plans yet — only while not failed */}
@@ -1181,6 +1207,25 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
       {/* Portal-based dialog — outside tabs to avoid unmount on tab switch */}
       {planFullScreenDialog}
+
+      <Modal
+        open={showArchiveConfirm}
+        onClose={() => setShowArchiveConfirm(false)}
+        title={`Archive issue #${activeIssue.issueNumber}?`}
+        className="max-w-sm"
+      >
+        <p className="text-sm text-secondary">
+          This will close the issue on GitHub and remove it from the board.
+        </p>
+        <ModalFooter>
+          <Button variant="ghost" size="sm" onClick={() => setShowArchiveConfirm(false)}>
+            Cancel
+          </Button>
+          <Button size="sm" onClick={handleArchiveConfirmed}>
+            Archive
+          </Button>
+        </ModalFooter>
+      </Modal>
     </div>
   );
 }

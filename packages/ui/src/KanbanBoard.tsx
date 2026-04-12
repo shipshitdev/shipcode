@@ -17,7 +17,7 @@ import {
   ChevronDown,
   ChevronRight,
   ExternalLink,
-  LayoutGrid,
+  Columns3,
   LayoutList,
   RefreshCw,
   RotateCcw,
@@ -25,8 +25,8 @@ import {
 } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import { MODEL_DISPLAY } from './lib/model-display';
-import { getStatusBadgeVariant } from './lib/status-variant';
 import { cn } from './lib/utils';
+import { PhaseChip } from './PhaseChip';
 import { Badge } from './primitives/badge';
 import { Button } from './primitives/button';
 import {
@@ -181,7 +181,7 @@ const COLUMN_DOT_CLASS: Record<ColumnKey, string> = {
 };
 
 // Only these statuses can be picked up and dragged.
-const DRAGGABLE_STATUSES: IssuePipelineStatus[] = ['todo', 'queued', 'failed'];
+const DRAGGABLE_STATUSES: IssuePipelineStatus[] = ['todo', 'queued', 'failed', 'awaiting_approval'];
 
 // Statuses that are actively running in the pipeline — show a live indicator.
 const ACTIVE_STATUSES: IssuePipelineStatus[] = [
@@ -288,6 +288,7 @@ function DraggableCard({
             ? 'border-agent/70 bg-agent/[0.06]'
             : 'border-agent/40 bg-agent/[0.03] hover:border-agent/60'),
         isDragging && 'opacity-50',
+        !isDragging && issue.pipelineStatus === 'completed' && 'opacity-60',
       )}
       {...listeners}
       {...attributes}
@@ -350,17 +351,7 @@ function DraggableCard({
               {l}
             </Badge>
           ))}
-        {issue.pipelineStatus !==
-          COLUMNS.flatMap((c) => c.sections ?? [{ statuses: c.statuses }]).find((s) =>
-            s.statuses.includes(issue.pipelineStatus),
-          )?.statuses[0] && (
-          <Badge
-            variant={getStatusBadgeVariant(issue.pipelineStatus)}
-            className="text-[10px] px-1.5 py-px font-medium"
-          >
-            {issue.pipelineStatus}
-          </Badge>
-        )}
+        <PhaseChip status={issue.pipelineStatus} />
         <div className="ml-auto flex items-center gap-1.5">
           <Button
             variant="ghost"
@@ -437,7 +428,7 @@ function DroppableColumn({
               <Archive size={12} />
             </Button>
           )}
-          <span className="text-[10px] bg-tertiary text-muted px-1.5 py-px rounded-full font-medium">
+          <span className="text-[10px] bg-tertiary text-muted min-w-[18px] text-center px-1.5 py-px rounded-full font-medium">
             {issues.length}
           </span>
         </div>
@@ -491,14 +482,16 @@ function SectionBlock({
   const agentLabel =
     section.agent === 'executor' ? (issues[0]?.executorModel ?? 'claude') : section.agent;
 
-  // Tone highlights non-empty human-action sections so they pull the eye.
+  // Tone highlights non-empty sections so they pull the eye.
   // Stays null when the section is empty to avoid false alarms.
-  const tone: 'danger' | 'warning' | null =
+  const tone: 'danger' | 'warning' | 'agent' | null =
     section.key === 'failed' && !empty
       ? 'danger'
       : section.key === 'awaiting' && !empty
         ? 'warning'
-        : null;
+        : columnKey === 'agent' && !empty
+          ? 'agent'
+          : null;
 
   return (
     <div className="border-t border-border first:border-t-0">
@@ -507,6 +500,7 @@ function SectionBlock({
           'flex items-center justify-between px-2 py-1 text-[10px] font-semibold uppercase tracking-wide',
           empty && 'text-muted opacity-50',
           !empty && !tone && 'text-secondary',
+          tone === 'agent' && 'text-agent',
           tone === 'danger' && 'text-danger',
           tone === 'warning' && 'text-warning',
         )}
@@ -523,9 +517,10 @@ function SectionBlock({
           className={cn(
             // Always reserve a 1px border so the pill size doesn't shift when the
             // tone switches on/off as issues enter/leave the section.
-            'text-[10px] bg-tertiary px-1.5 py-px rounded-full font-medium border border-transparent',
+            'text-[10px] bg-tertiary min-w-[18px] text-center px-1.5 py-px rounded-full font-medium border border-transparent',
             empty && 'text-muted/70',
             !empty && !tone && 'text-muted',
+            tone === 'agent' && 'bg-agent/15 text-agent border-agent/25',
             tone === 'danger' && 'bg-danger/15 text-danger border-danger/25',
             tone === 'warning' && 'bg-warning/15 text-warning border-warning/25',
           )}
@@ -592,7 +587,7 @@ function StackedColumn({
           <span className={cn('w-2 h-2 rounded-full shrink-0', COLUMN_DOT_CLASS[column.key])} />
           {column.label}
         </span>
-        <span className="text-[10px] bg-tertiary text-muted px-1.5 py-px rounded-full font-medium">
+        <span className="text-[10px] bg-tertiary text-muted min-w-[18px] text-center px-1.5 py-px rounded-full font-medium">
           {columnIssues.length}
         </span>
       </div>
@@ -800,12 +795,14 @@ function ListSectionBlock({
         'claude')
       : section.agent;
 
-  const tone: 'danger' | 'warning' | null =
+  const tone: 'danger' | 'warning' | 'agent' | null =
     section.key === 'failed' && !empty
       ? 'danger'
       : section.key === 'awaiting' && !empty
         ? 'warning'
-        : null;
+        : columnKey === 'agent' && !empty
+          ? 'agent'
+          : null;
 
   return (
     <div>
@@ -814,6 +811,7 @@ function ListSectionBlock({
           'flex items-center gap-1.5 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide',
           empty && 'text-muted opacity-50',
           !empty && !tone && 'text-secondary',
+          tone === 'agent' && 'text-agent',
           tone === 'danger' && 'text-danger',
           tone === 'warning' && 'text-warning',
         )}
@@ -826,9 +824,10 @@ function ListSectionBlock({
         )}
         <span
           className={cn(
-            'ml-1 text-[10px] bg-tertiary px-1.5 py-px rounded-full font-medium border border-transparent',
+            'ml-1 text-[10px] bg-tertiary min-w-[18px] text-center px-1.5 py-px rounded-full font-medium border border-transparent',
             empty && 'text-muted/70',
             !empty && !tone && 'text-muted',
+            tone === 'agent' && 'bg-agent/15 text-agent border-agent/25',
             tone === 'danger' && 'bg-danger/15 text-danger border-danger/25',
             tone === 'warning' && 'bg-warning/15 text-warning border-warning/25',
           )}
@@ -1064,11 +1063,11 @@ export function KanbanBoard({
       (onRerun ?? onStartPipeline)?.(issue);
       return;
     }
-    // 3. human → todo (retry failed → reset to queued)
+    // 3. human → todo (reset failed or awaiting_approval back to todo)
     if (
       sourceColumn === 'human' &&
       dropId === 'todo' &&
-      issue.pipelineStatus === 'failed' &&
+      (issue.pipelineStatus === 'failed' || issue.pipelineStatus === 'awaiting_approval') &&
       onRetry
     ) {
       onRetry(issue);
@@ -1173,7 +1172,7 @@ export function KanbanBoard({
             <Button
               variant="ghost"
               size="icon-sm"
-              className={cn('rounded-none', view === 'list' && 'bg-secondary text-primary')}
+              className={cn('rounded-none text-muted', view === 'list' && 'bg-accent/15 text-accent')}
               onClick={() => setView('list')}
               title="List view"
             >
@@ -1183,13 +1182,13 @@ export function KanbanBoard({
               variant="ghost"
               size="icon-sm"
               className={cn(
-                'rounded-none border-l border-border',
-                view === 'kanban' && 'bg-secondary text-primary',
+                'rounded-none border-l border-border text-muted',
+                view === 'kanban' && 'bg-accent/15 text-accent',
               )}
               onClick={() => setView('kanban')}
               title="Board view"
             >
-              <LayoutGrid size={14} />
+              <Columns3 size={14} />
             </Button>
           </div>
           <Button variant="outline" size="icon-sm" onClick={handleRefresh} title="Refresh board">
@@ -1264,6 +1263,10 @@ export function KanbanBoard({
               </div>
               <div className="text-xs leading-snug text-primary line-clamp-2">
                 {activeIssue.title}
+              </div>
+              <div className="flex flex-wrap gap-1 mt-1 items-center">
+                <PhaseChip status={activeIssue.pipelineStatus} />
+                <div className="ml-auto h-5" />
               </div>
             </div>
           ) : null}

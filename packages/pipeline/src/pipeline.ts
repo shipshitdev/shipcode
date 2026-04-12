@@ -9,7 +9,7 @@ import {
 } from '@shipcode/agents';
 import type { ProviderPhase, ProviderRequest, SkillValidationError } from '@shipcode/agents';
 import { WorktreeManager } from '@shipcode/git';
-import type { AgentType, PhaseSkillKey, ShipCodePlan } from '@shipcode/shared';
+import type { PhaseSkillKey, ShipCodePlan } from '@shipcode/shared';
 import {
   PIPELINE_MAX_RETRIES,
   MAX_VERIFICATION_RETRIES,
@@ -80,6 +80,39 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     };
     activePipelines.set(threadId, context);
     return context;
+  }
+
+  /**
+   * Re-create in-memory PipelineContext from the persisted Thread row.
+   * Used when the user approves/rejects a plan after the app restarted
+   * (the in-memory activePipelines Map was cleared).
+   *
+   * Note: worktreePath will typically be null for awaiting_approval
+   * threads since worktrees are created lazily in startExecution.
+   */
+  function rehydrateContext(threadId: string, projectPath: string, issueTitle?: string | null) {
+    if (activePipelines.has(threadId)) return; // already live
+
+    const thread = deps.threads.getById(threadId);
+    if (!thread) return;
+
+    ensureContext(threadId, {
+      projectPath,
+      worktreePath: thread.worktreePath ?? null,
+      retryCount: 0,
+      autonomous: thread.autonomous,
+      reviewRound: thread.reviewRound,
+      verificationRetries: thread.verificationRetries,
+      githubIssueNumber: thread.githubIssueNumber ?? null,
+      githubIssueTitle: issueTitle ?? null,
+      githubRepo: thread.githubRepo ?? null,
+      executorModel: (thread.executorModel as PipelineExecutorModel) || 'claude',
+      baseBranch: thread.baseBranch ?? '',
+      forkPointSha: thread.forkPointSha ?? '',
+      activeProcessId: null,
+      cancelled: false,
+      verifiedSha: null,
+    });
   }
 
   /**
@@ -892,6 +925,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
   }
 
   return {
+    rehydrateContext,
     startPlanGeneration,
     startReview,
     startRevision,

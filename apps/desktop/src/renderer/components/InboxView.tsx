@@ -4,6 +4,7 @@ import type {
   GitHubIssueCacheRecord,
   NotificationRecord,
   NotificationKind,
+  Thread,
 } from '@shipcode/shared';
 import {
   ArrowUpDown,
@@ -131,7 +132,19 @@ export function InboxView() {
       });
       if (navTokenRef.current !== token) return;
       useAppStore.getState().setGithubIssues(issues);
-      const match = issues.find((i) => i.threadId === n.threadId) ?? null;
+      let match = issues.find((i) => i.threadId === n.threadId) ?? null;
+      // Fallback: notification may reference an old thread (e.g. the issue was
+      // retried and now has a different threadId). Look up the thread to get
+      // its githubIssueNumber, then find the issue by number instead.
+      if (!match) {
+        const thread = await window.shipcode.invoke<Thread | null>('thread:get', {
+          threadId: n.threadId,
+        });
+        if (navTokenRef.current !== token) return;
+        if (thread?.githubIssueNumber) {
+          match = issues.find((i) => i.issueNumber === thread.githubIssueNumber) ?? null;
+        }
+      }
       if (match) {
         selectIssue(match);
         // If the detail panel was previously collapsed, un-collapse it so the
