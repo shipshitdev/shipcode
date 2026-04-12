@@ -132,7 +132,6 @@ export function migrateV2(db: DatabaseSync): void {
         claimed_by TEXT,
         last_phase_update TEXT,
         fetched_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-        archived_at TEXT,
         UNIQUE(project_id, issue_number)
       );
 

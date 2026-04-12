@@ -338,7 +338,17 @@ export function registerIpcHandlers(
       const ghCli = new GhCli(project.path);
       await ghCli.closeIssue(issueNumber);
 
-      queries.githubIssues.archiveIssues([issue.id]);
+      // GitHub close succeeded. DB write is synchronous/local — failures here
+      // are rare but would leave GitHub closed and board still showing the
+      // issue. Log the inconsistency and surface it so the user can refresh.
+      try {
+        queries.githubIssues.archiveIssues([issue.id]);
+      } catch (err) {
+        log.error('[github:archive-issue] DB archive failed after GitHub close:', err);
+        throw new Error(
+          `Issue #${issueNumber} was closed on GitHub but could not be hidden locally. Refresh the board to sync.`,
+        );
+      }
 
       const cached = queries.githubIssues.list(projectId);
       mainWindow.webContents.send('github:issues-updated', { projectId, issues: cached });
