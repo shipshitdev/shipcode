@@ -156,17 +156,40 @@ function runClaudeWithStdin(prompt: string, cwd: string, timeoutMs: number): Pro
   });
 }
 
-/** Extract and validate the `shipcode-prd` fenced block from a text blob. */
+/**
+ * Extract and validate the `shipcode-prd` fenced block from a text blob.
+ *
+ * Uses line-by-line parsing instead of regex to avoid false-matching on
+ * triple-backtick sequences embedded inside JSON string values. The closing
+ * fence must be a standalone line of exactly ``` (trimmed). This assumes the
+ * AI outputs compact JSON (newlines escaped as \n), so inner fences never
+ * appear as standalone lines.
+ */
 export function extractPrd(text: string): GeneratedPrd {
-  const fenceRegex = new RegExp(`\`\`\`${PRD_FENCE_TAG}\\s*\\n([\\s\\S]*?)\`\`\``, 'm');
-  const match = text.match(fenceRegex);
-  if (!match) {
+  const openTag = '```' + PRD_FENCE_TAG;
+  const lines = text.split('\n');
+  let collecting = false;
+  const captured: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trimEnd();
+    if (!collecting) {
+      if (trimmed === openTag || trimmed === `${openTag} `) {
+        collecting = true;
+      }
+      continue;
+    }
+    if (trimmed === '```') break;
+    captured.push(line);
+  }
+
+  if (!captured.length) {
     throw new Error(`No \`${PRD_FENCE_TAG}\` fenced block found in AI response`);
   }
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(match[1].trim());
+    parsed = JSON.parse(captured.join('\n').trim());
   } catch (err) {
     throw new Error(
       `Failed to parse PRD JSON inside \`${PRD_FENCE_TAG}\` block: ${

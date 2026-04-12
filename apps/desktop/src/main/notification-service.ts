@@ -149,17 +149,32 @@ export class NotificationService {
   }
 
   dismissByThread(threadId: string) {
+    const active = this.notifications.listByThread(threadId);
     this.notifications.dismissByThread(threadId);
     this.refreshBadge();
+    if (!this.mainWindow.isDestroyed()) {
+      for (const n of active) {
+        this.mainWindow.webContents.send('notification:dismiss', { id: n.id });
+      }
+    }
   }
 
   dismiss(id: string) {
     this.notifications.dismiss(id);
     this.refreshBadge();
+    if (!this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send('notification:dismiss', { id });
+    }
   }
 
   dismissAll() {
+    const active = this.notifications.listActive();
     this.notifications.dismissAll();
     this.refreshBadge();
+    if (!this.mainWindow.isDestroyed()) {
+      for (const n of active) {
+        this.mainWindow.webContents.send('notification:dismiss', { id: n.id });
+      }
+    }
   }
 }

@@ -642,7 +642,7 @@ const customCollisionDetection: CollisionDetection = (args: Parameters<Collision
 const LIST_COLUMN_LABEL: Record<ColumnKey, string> = {
   todo: 'Todo',
   agent: 'In Progress',
-  human: 'Blocked',
+  human: 'Needs Attention',
   done: 'Done',
 };
 

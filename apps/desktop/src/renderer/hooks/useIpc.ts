@@ -270,7 +270,8 @@ export function useIpc() {
     // Drop dismissed notifications from the in-memory toaster stack so the
     // "auto-dismiss after view" path stays in sync with the DB.
     unsubscribers.push(
-      window.shipcode.on('notification:dismiss' as any, (data: any) => {
+      window.shipcode.on('notification:dismiss', (...args: unknown[]) => {
+        const data = args[0] as { id: string } | undefined;
         if (data?.id) removeNotification(data.id);
       }),
     );

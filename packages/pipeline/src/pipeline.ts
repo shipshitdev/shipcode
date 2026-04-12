@@ -147,7 +147,12 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
   ): Promise<{ rawOutput: string; exitCode: number; resolvedModel?: string }> {
     const agent = resolveAgentForPhase(context, phase);
     const provider = deps.providers.for(agent, phase);
-    const cwd = context.worktreePath ?? context.projectPath;
+    // Plan and review run against the project root (no worktree yet).
+    // Execute and verify run in the worktree.
+    const cwd =
+      phase === 'plan' || phase === 'review'
+        ? context.projectPath
+        : (context.worktreePath ?? context.projectPath);
     const modelHint =
       agent === context.executorModel && context.executorModelOverride
         ? context.executorModelOverride
@@ -252,7 +257,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         if (context.cancelled) return;
 
         if (response.exitCode === 127) {
-          emitPhase(threadId, 'failed', 'Claude CLI not found (exit 127). Is the claude binary installed and on PATH?');
+          const agent = resolveAgentForPhase(context, 'plan');
+          const name = agent === 'openrouter' ? 'Provider' : `${agent} CLI`;
+          emitPhase(threadId, 'failed', `${name} not found (exit 127). Is the ${agent} binary installed and on PATH?`);
           activePipelines.delete(threadId);
           return;
         }
@@ -275,7 +282,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
               context.retryCount++;
               startPlanGeneration(threadId, prompt, projectPath, worktreePath);
             } else {
-              const rawSnippet = detectedError?.match ?? parser.getRawOutput().trim().split('\n').filter(Boolean).slice(-3).join(' ').slice(0, 280);
+              const rawSnippet = detectedError?.match ?? parser.getRawOutput().trim().split('\n').filter(Boolean).slice(-3).join(' ').slice(0, 300);
               const reason = rawSnippet?.trimStart().startsWith('{') ? '' : rawSnippet;
               emitPhase(threadId, 'failed', reason || 'Plan generation failed — no structured plan was produced.');
               activePipelines.delete(threadId);
@@ -327,7 +334,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         if (context.cancelled) return;
 
         if (response.exitCode === 127) {
-          emitPhase(threadId, 'failed');
+          const agent = resolveAgentForPhase(context, 'review');
+          const name = agent === 'openrouter' ? 'Provider' : `${agent} CLI`;
+          emitPhase(threadId, 'failed', `${name} not found (exit 127). Is the ${agent} binary installed and on PATH?`);
           activePipelines.delete(threadId);
           return;
         }
@@ -510,7 +519,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
             activePipelines.delete(threadId);
           }
         } else {
-          const rawErrSnippet = response.rawOutput.trim().split('\n').slice(-3).join(' ').slice(0, 280);
+          const rawErrSnippet = response.rawOutput.trim().split('\n').slice(-3).join(' ').slice(0, 300);
           const errSnippet = rawErrSnippet.trimStart().startsWith('{') ? '' : rawErrSnippet;
           emitPhase(threadId, 'failed', `Execution failed (exit ${response.exitCode})${errSnippet ? `: ${errSnippet}` : ''}`);
           activePipelines.delete(threadId);

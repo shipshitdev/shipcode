@@ -482,6 +482,7 @@ export function TerminalDrawer() {
             size="icon-xs"
             onClick={toggleMaximize}
             title={isMaximized ? 'Restore terminal' : 'Maximize terminal'}
+            aria-label={isMaximized ? 'Restore terminal' : 'Maximize terminal'}
           >
             {isMaximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
           </Button>
@@ -490,6 +491,7 @@ export function TerminalDrawer() {
             size="icon-xs"
             onClick={toggleTerminal}
             title="Close terminal"
+            aria-label="Close terminal"
           >
             <X size={14} />
           </Button>

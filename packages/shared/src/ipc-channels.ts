@@ -178,6 +178,7 @@ export interface IpcStreamChannels {
   'github:issues-updated': { projectId: string; issues: GitHubIssueCacheRecord[] };
   'github:issue-status': { projectId: string; issueNumber: number; status: string };
   'notification:fire': NotificationRecord;
+  'notification:dismiss': { id: string };
   'notification:focus-thread': { threadId: string; projectId: string | null };
   'activity:appended': ActivityEntry;
   'dashboard:invalidate': { kinds: Array<'stats' | 'activity' | 'running' | 'recent'> };
