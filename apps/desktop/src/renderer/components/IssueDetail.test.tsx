@@ -233,9 +233,10 @@ describe('IssueDetail', () => {
 
     renderWithProviders();
 
-    // The Confirm button should be disabled because structured is null (canApprove is false)
+    // With rawOutput present, approval is allowed even when structured is null
+    // (the rawOutput fallback path from pipeline:approve parses it server-side)
     const confirmButton = await screen.findByRole('button', { name: 'Confirm' });
-    expect(confirmButton).toBeDisabled();
+    expect(confirmButton).toBeEnabled();
   });
 
   it('renders the approval dropdown when awaiting approval', async () => {
