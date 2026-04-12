@@ -40,7 +40,9 @@ export class ThreadQueries {
         .run(status, lastError, id);
     } else {
       this.db
-        .prepare(`UPDATE threads SET status = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`)
+        .prepare(
+          `UPDATE threads SET status = ?, last_error = NULL, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
+        )
         .run(status, id);
     }
   }

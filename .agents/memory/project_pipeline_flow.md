@@ -17,7 +17,7 @@ The core ShipCode pipeline turns a GitHub issue into a shipped PR.
 
 **State machine:** `packages/pipeline/src/pipeline.ts` owns the `Pipeline` object and `PipelineContext`. Keyed by `threadId`. Each context holds `projectPath`, `worktreePath`, retry counters, `githubIssueNumber`, `verifiedSha`, etc.
 
-**Executor models:** `PipelineExecutorModel` supports `claude | codex | openrouter` (the `openrouter` arm is in progress on `feat/openrouter-tier1`). Each maps to a provider in `packages/agents/src/providers/`.
+**Executor models:** `PipelineExecutorModel` supports `claude | codex | openrouter` (shipped in PR #9, 2026-04-10). Each maps to a provider in `packages/agents/src/providers/`.
 
 **Planner prompt from issues:** when starting from a GitHub issue, the planner prompt is built by concatenating title + body. **Grep-stable anchor:** search for `GitHub Issue #` in `packages/pipeline/src/pipeline.ts`. Because PRDs, issue bodies, and plan prompts are literally the same text, any improvement to one helps all three.
 

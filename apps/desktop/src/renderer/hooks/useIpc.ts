@@ -192,7 +192,8 @@ export function useIpc() {
         const displayName = isOpenRouter
           ? data.resolvedModel
           : modelDisplay(data.requestedModel ?? data.resolvedModel);
-        setCurrentModel(displayName);
+        const tid = data.threadId ?? store.terminalThreadId;
+        if (tid) setCurrentModel(tid, displayName);
         const ts = new Date().toLocaleTimeString('en-US', {
           hour12: false,
           hour: '2-digit',
@@ -222,9 +223,6 @@ export function useIpc() {
           costStr = ` \x1b[2m~$${estimated.toFixed(4)}\x1b[0m`;
         }
         const line = `\x1b[2m[${ts}]\x1b[0m \x1b[35mmodel:\x1b[0m ${displayName}${tokenStr}${costStr}`;
-        // Use the threadId carried by the event (always present from pipeline.ts:204).
-        // Fall back to terminalThreadId only for hypothetical callers that omit it.
-        const tid = data.threadId ?? store.terminalThreadId;
         store.logTerminalEvent(line);
         if (tid) logTerminalEventForThread(tid, line);
       }),
@@ -270,7 +268,8 @@ export function useIpc() {
     // Drop dismissed notifications from the in-memory toaster stack so the
     // "auto-dismiss after view" path stays in sync with the DB.
     unsubscribers.push(
-      window.shipcode.on('notification:dismiss' as any, (data: any) => {
+      window.shipcode.on('notification:dismiss', (...args: unknown[]) => {
+        const data = args[0] as { id: string } | undefined;
         if (data?.id) removeNotification(data.id);
       }),
     );

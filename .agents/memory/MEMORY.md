@@ -34,7 +34,7 @@ Loaded after `~/.agents/memory/MEMORY.md` (global). Project-scoped facts only. F
 
 - **Pipe `claude -p` prompts via stdin, never argv.** Argparser breaks on `---` YAML. Reuse `runClaudeWithStdin` in `packages/agents/src/prd-generator.ts` or `spawnWithStdin` in `packages/agents/src/github/gh-cli.ts`. See: `feedback_claude_cli_prompts_via_stdin.md`.
 - **`WorktreeManager.remove(path, branch)` takes concrete values** — never recompute from `threadId`. Mid-session setting toggles would orphan worktrees. See: `feedback_path_as_truth_worktrees.md`.
-- **Clamp IPC error messages** to first-line + ~280 chars; log full trace to main-process console. (Batch 2 — extract from session 2026-04-10 when promoting.)
+- **Clamp IPC error messages** to first-line + ~300 chars; log full trace to main-process console. (Batch 2 — extract from session 2026-04-10 when promoting.)
 
 ## References
 
