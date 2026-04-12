@@ -275,8 +275,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
               context.retryCount++;
               startPlanGeneration(threadId, prompt, projectPath, worktreePath);
             } else {
-              const reason = detectedError?.match ?? parser.getRawOutput().trim().split('\n').filter(Boolean).slice(-3).join(' ').slice(0, 280);
-              emitPhase(threadId, 'failed', reason || 'Plan generation failed — no output was produced.');
+              const rawSnippet = detectedError?.match ?? parser.getRawOutput().trim().split('\n').filter(Boolean).slice(-3).join(' ').slice(0, 280);
+              const reason = rawSnippet?.trimStart().startsWith('{') ? '' : rawSnippet;
+              emitPhase(threadId, 'failed', reason || 'Plan generation failed — no structured plan was produced.');
               activePipelines.delete(threadId);
             }
           }
@@ -438,12 +439,14 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
           deps.emitter.emit({ type: 'plan:parsed', threadId, plan: result.data });
           startReview(threadId, result.data);
         } else {
+          deps.plans.supersedeAll(threadId);
           deps.plans.create(threadId, result.raw, null, plan.version + 1);
           emitPhase(threadId, 'failed');
           activePipelines.delete(threadId);
         }
       } catch {
         if (!context.cancelled) {
+          deps.plans.supersedeAll(threadId);
           emitPhase(threadId, 'failed');
           activePipelines.delete(threadId);
         }
@@ -507,7 +510,8 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
             activePipelines.delete(threadId);
           }
         } else {
-          const errSnippet = response.rawOutput.trim().split('\n').slice(-3).join(' ').slice(0, 280);
+          const rawErrSnippet = response.rawOutput.trim().split('\n').slice(-3).join(' ').slice(0, 280);
+          const errSnippet = rawErrSnippet.trimStart().startsWith('{') ? '' : rawErrSnippet;
           emitPhase(threadId, 'failed', `Execution failed (exit ${response.exitCode})${errSnippet ? `: ${errSnippet}` : ''}`);
           activePipelines.delete(threadId);
         }

@@ -203,6 +203,19 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const [prdCollapsed, setPrdCollapsed] = useState(false);
   const [planHistoryCollapsed, setPlanHistoryCollapsed] = useState(false);
   const [showRawOutput, setShowRawOutput] = useState(false);
+
+  function safeErrorMessage(raw: string): string {
+    const trimmed = raw.trim();
+    if (!trimmed.startsWith('{')) return trimmed;
+    for (const line of trimmed.split('\n').reverse()) {
+      try {
+        const obj = JSON.parse(line.trim()) as Record<string, unknown>;
+        if (obj.type === 'result' && typeof obj.result === 'string') return (obj.result as string).slice(0, 280);
+        if (typeof obj.error === 'string') return (obj.error as string).slice(0, 280);
+      } catch { /* skip */ }
+    }
+    return 'Pipeline failed — see devtools console for full trace.';
+  }
   const [approveError, setApproveError] = useState<string | null>(null);
 
   // Shared cache with ProjectSidebar / Titlebar — no extra request.
@@ -739,13 +752,22 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
                       <div className="border-t border-border p-3">
                         {inlineDisplayPlan && <PlanViewer plan={inlineDisplayPlan} />}
                         {review?.structured && <ReviewViewer review={review.structured} />}
-                        {!inlineDisplayPlan && (
-                          <div className="overflow-x-auto">
-                            <pre className="whitespace-pre-wrap text-xs text-secondary">
-                              {resolveRawPlanText(plan.rawOutput ?? '')}
-                            </pre>
-                          </div>
-                        )}
+                        {!inlineDisplayPlan && (() => {
+                          const fallbackRaw = plan.rawOutput ?? '';
+                          const resolved = resolveRawPlanText(fallbackRaw);
+                          return resolved === fallbackRaw ? (
+                            <p className="text-xs italic text-muted">
+                              Plan output could not be parsed. Check devtools console for the
+                              full trace.
+                            </p>
+                          ) : (
+                            <div className="overflow-x-auto">
+                              <pre className="whitespace-pre-wrap text-xs text-secondary">
+                                {resolved}
+                              </pre>
+                            </div>
+                          );
+                        })()}
                       </div>
                     );
                   })()}
@@ -843,7 +865,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
             </div>
           </div>
           {thread?.lastError && (
-            <p className="text-[12px] text-danger/80 break-words">{thread.lastError}</p>
+            <p className="text-[12px] text-danger/80 break-words">{safeErrorMessage(thread.lastError)}</p>
           )}
           {showRawOutput && planHistory[0]?.rawOutput && (
             <pre className="mt-2 max-h-[200px] overflow-y-auto text-[11px] text-danger/70 whitespace-pre-wrap break-words border-t border-danger/20 pt-2">
@@ -859,7 +881,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         disabled={isSubmitting}
         className="w-full border-danger/40 text-danger hover:bg-danger/10 hover:border-danger"
       >
-        {isSubmitting ? 'Starting...' : 'Re-run Pipeline'}
+        {isSubmitting ? 'Starting...' : 'Retry'}
       </Button>
     </div>
   ) : null;

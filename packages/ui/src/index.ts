@@ -5,6 +5,7 @@ export {
   ArrowRight,
   ArrowUpDown,
   Bell,
+  Bot,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -19,6 +20,7 @@ export {
   Keyboard,
   Layers,
   LayoutGrid,
+  ListTodo,
   Loader2,
   Lock,
   Maximize2,
@@ -29,6 +31,7 @@ export {
   Pencil,
   Pin,
   PinOff,
+  PackageCheck,
   Plus,
   RefreshCw,
   Settings,
@@ -93,7 +96,7 @@ export { Input } from './primitives/input';
 export { Label } from './primitives/label';
 export type { PaginationProps } from './primitives/pagination';
 export { Pagination } from './primitives/pagination';
-export { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './primitives/select';
+export { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from './primitives/select';
 export { SettingsRow } from './primitives/settings-row';
 export { Switch } from './primitives/switch';
 export {

@@ -745,6 +745,7 @@ export function registerIpcHandlers(
       baseBranch: project.defaultBranch,
     });
 
+    queries.plans.supersedeAll(threadId);
     await pipeline.startPlanGeneration(threadId, thread.prompt, project.path, null);
   });
 

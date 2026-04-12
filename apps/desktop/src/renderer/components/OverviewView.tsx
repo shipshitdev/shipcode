@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   ActivePipelineSummary,
@@ -9,12 +9,16 @@ import type {
   RecentTask,
 } from '@shipcode/shared';
 import {
+  Bell,
+  Bot,
   Card,
   CardContent,
   CardFooter,
   CardHeader,
   CardTitle,
   Button,
+  ListTodo,
+  PackageCheck,
   Pagination,
   Table,
   TableBody,
@@ -100,10 +104,11 @@ interface StatCardProps {
   value: string | number;
   subtitle?: string;
   tone?: 'default' | 'danger' | 'success' | 'agent';
+  icon?: ReactNode;
   onClick?: () => void;
 }
 
-function StatCard({ label, value, subtitle, tone = 'default', onClick }: StatCardProps) {
+function StatCard({ label, value, subtitle, tone = 'default', icon, onClick }: StatCardProps) {
   const toneClass =
     tone === 'danger'
       ? 'border-danger/40 bg-danger/5'
@@ -112,10 +117,21 @@ function StatCard({ label, value, subtitle, tone = 'default', onClick }: StatCar
         : tone === 'agent'
           ? 'border-agent/35 bg-agent/[0.04]'
           : '';
+  const iconColor =
+    tone === 'agent'
+      ? 'var(--color-agent)'
+      : tone === 'danger'
+        ? 'var(--color-danger)'
+        : tone === 'success'
+          ? 'var(--color-success)'
+          : 'var(--text-muted)';
   const card = (
     <Card className={`w-full h-full${toneClass ? ` ${toneClass}` : ''}${onClick ? ' hover:ring-1 hover:ring-border' : ''}`}>
       <CardContent className="p-5 pt-5">
-        <div className="text-3xl font-semibold text-primary">{value}</div>
+        <div className="flex items-start justify-between">
+          <div className="text-3xl font-semibold text-primary">{value}</div>
+          {icon && <div style={{ color: iconColor }}>{icon}</div>}
+        </div>
         <div className="mt-1 text-xs uppercase tracking-wide text-secondary">{label}</div>
         {subtitle ? <div className="mt-2 text-[11px] text-muted">{subtitle}</div> : null}
       </CardContent>
@@ -246,11 +262,16 @@ export function OverviewView() {
                 tone: (stats && stats.agentsRunning > 0 ? 'agent' : 'default') as
                   | 'agent'
                   | 'default',
+                icon: <Bot size={18} />,
               },
               {
                 label: 'Tasks In Progress',
                 value: stats?.tasksInProgress ?? 0,
                 subtitle: stats ? `${stats.tasksOpen} open · ${stats.tasksBlocked} blocked` : '—',
+                tone: (stats && stats.tasksInProgress > 0 ? 'agent' : 'default') as
+                  | 'agent'
+                  | 'default',
+                icon: <ListTodo size={18} />,
                 onClick: openInbox,
               },
               {
@@ -259,7 +280,10 @@ export function OverviewView() {
                 subtitle: stats?.staleApprovals
                   ? `${stats.staleApprovals} stale > 24h`
                   : 'no stale items',
-                tone: (stats && stats.pendingApprovals > 0 ? 'danger' : 'default') as 'danger' | 'default',
+                tone: (stats && stats.pendingApprovals > 0 ? 'danger' : 'default') as
+                  | 'danger'
+                  | 'default',
+                icon: <Bell size={18} />,
                 onClick: openInbox,
               },
               {
@@ -267,6 +291,7 @@ export function OverviewView() {
                 value: stats?.shippedLast7d ?? 0,
                 subtitle: stats ? `${stats.failedLast7d} failed` : '—',
                 tone: 'success' as const,
+                icon: <PackageCheck size={18} />,
                 onClick: openActivity,
               },
             ].map((card) => (

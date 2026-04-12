@@ -29,7 +29,7 @@ import { getStatusBadgeVariant } from './lib/status-variant';
 import { cn } from './lib/utils';
 import { Badge } from './primitives/badge';
 import { Button } from './primitives/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './primitives/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from './primitives/select';
 
 // Static map for the drag overlay border. Tailwind's JIT needs string-literal
 // class names, so we cannot interpolate (`border-${variant}`).
@@ -1115,11 +1115,35 @@ export function KanbanBoard({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {branches.map((b) => (
-                    <SelectItem key={b} value={b} className="text-xs font-mono">
-                      {b}
-                    </SelectItem>
-                  ))}
+                  {(() => {
+                    const local = branches.filter((b) => !b.includes('/'));
+                    const remote = branches.filter((b) => b.includes('/'));
+                    return (
+                      <>
+                        {local.length > 0 && (
+                          <SelectGroup>
+                            <SelectLabel>Local</SelectLabel>
+                            {local.map((b) => (
+                              <SelectItem key={b} value={b} className="text-xs font-mono">
+                                {b}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        )}
+                        {local.length > 0 && remote.length > 0 && <SelectSeparator />}
+                        {remote.length > 0 && (
+                          <SelectGroup>
+                            <SelectLabel>Remote</SelectLabel>
+                            {remote.map((b) => (
+                              <SelectItem key={b} value={b} className="text-xs font-mono">
+                                {b}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        )}
+                      </>
+                    );
+                  })()}
                 </SelectContent>
               </Select>
               {onRefreshBranches && (
