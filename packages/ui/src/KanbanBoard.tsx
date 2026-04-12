@@ -21,7 +21,6 @@ import {
   ExternalLink,
   LayoutList,
   RefreshCw,
-  RotateCcw,
   User,
 } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useState } from 'react';
@@ -57,6 +56,7 @@ interface KanbanBoardProps {
   onStartPipeline?: (issue: GitHubIssueCacheRecord) => void;
   onRetry?: (issue: GitHubIssueCacheRecord) => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
+  onCancel?: (issue: GitHubIssueCacheRecord) => void;
   /** Per-project base branch that new worktrees fork from. */
   baseBranch?: string;
   /** Resolvable branch refs sourced from `git:list-branches`. */
@@ -232,6 +232,7 @@ function DraggableCard({
   issue,
   onClick,
   onRerun,
+  onCancel,
   onArchiveIssue,
   isSelected,
   isRerunning,
@@ -239,6 +240,7 @@ function DraggableCard({
   issue: GitHubIssueCacheRecord;
   onClick: () => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
+  onCancel?: (issue: GitHubIssueCacheRecord) => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
   isSelected?: boolean;
   isRerunning?: boolean;
@@ -321,22 +323,6 @@ function DraggableCard({
           </div>
         </div>
       )}
-      {isFailed && onRerun && (
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="absolute top-1.5 right-1.5 text-danger/60 hover:bg-danger/10 hover:text-danger"
-          title="Re-run pipeline"
-          disabled={isRerunning}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            onRerun(issue);
-          }}
-        >
-          <RotateCcw size={14} className={isRerunning ? 'animate-spin' : ''} />
-        </Button>
-      )}
       {issue.pipelineStatus === 'completed' && onArchiveIssue && (
         <Button
           variant="ghost"
@@ -374,7 +360,43 @@ function DraggableCard({
               {l}
             </Badge>
           ))}
-        <PhaseChip status={issue.pipelineStatus} />
+        {isActive && onCancel ? (
+          <span className="relative inline-flex items-center">
+            <span className="group-hover:opacity-0 transition-opacity pointer-events-none">
+              <PhaseChip status={issue.pipelineStatus} />
+            </span>
+            <Button
+              variant="ghost"
+              size="xs"
+              className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-medium text-danger/70 hover:text-danger hover:bg-danger/10 h-auto px-1.5 py-0.5 rounded"
+              title="Cancel pipeline"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onCancel(issue);
+              }}
+            >
+              Cancel
+            </Button>
+          </span>
+        ) : isFailed && onRerun ? (
+          <Button
+            variant="ghost"
+            size="xs"
+            className="h-5 px-1.5 text-[10px] font-medium rounded bg-danger/15 text-danger border border-danger/30 hover:bg-danger/25 disabled:opacity-60"
+            title="Click to retry"
+            disabled={isRerunning}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onRerun(issue);
+            }}
+          >
+            Failed
+          </Button>
+        ) : (
+          <PhaseChip status={issue.pipelineStatus} />
+        )}
         <div className="ml-auto flex items-center gap-1.5">
           <Button
             variant="ghost"
@@ -482,6 +504,7 @@ function SectionBlock({
   issues,
   onIssueClick,
   onRerun,
+  onCancel,
   selectedIssueNumber,
   rerunningId,
 }: {
@@ -490,6 +513,7 @@ function SectionBlock({
   issues: GitHubIssueCacheRecord[];
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
+  onCancel?: (issue: GitHubIssueCacheRecord) => void;
   selectedIssueNumber?: number;
   rerunningId?: string | null;
 }) {
@@ -567,6 +591,7 @@ function SectionBlock({
               issue={issue}
               onClick={() => onIssueClick(issue)}
               onRerun={onRerun}
+              onCancel={onCancel}
               isSelected={issue.issueNumber === selectedIssueNumber}
               isRerunning={issue.id === rerunningId}
             />
@@ -591,6 +616,7 @@ function StackedColumn({
   issues,
   onIssueClick,
   onRerun,
+  onCancel,
   selectedIssueNumber,
   rerunningId,
 }: {
@@ -598,6 +624,7 @@ function StackedColumn({
   issues: GitHubIssueCacheRecord[];
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
+  onCancel?: (issue: GitHubIssueCacheRecord) => void;
   selectedIssueNumber?: number;
   rerunningId?: string | null;
 }) {
@@ -627,6 +654,7 @@ function StackedColumn({
               issues={sectionIssues}
               onIssueClick={onIssueClick}
               onRerun={onRerun}
+              onCancel={onCancel}
               selectedIssueNumber={selectedIssueNumber}
               rerunningId={rerunningId}
             />
@@ -1005,6 +1033,7 @@ export function KanbanBoard({
   onStartPipeline,
   onRetry,
   onRerun,
+  onCancel,
   baseBranch,
   branches,
   onBaseBranchChange,
@@ -1253,6 +1282,7 @@ export function KanbanBoard({
                     issues={issues}
                     onIssueClick={onIssueClick}
                     onRerun={handleRerun}
+                    onCancel={onCancel}
                     rerunningId={rerunningId}
                     selectedIssueNumber={selectedIssueNumber}
                   />

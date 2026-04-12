@@ -191,6 +191,15 @@ export function ThreadPanel() {
               window.alert(`Failed to re-run issue #${issue.issueNumber}: ${err?.message ?? err}`);
             });
         }}
+        onCancel={(issue) => {
+          if (!issue.threadId) return;
+          window.shipcode
+            .invoke('pipeline:cancel', { threadId: issue.threadId })
+            .then(() => refetchIssues())
+            .catch((err) => {
+              log.error('[threadpanel] cancel failed', { issueNumber: issue.issueNumber, err });
+            });
+        }}
       />
       <Dialog open={archiveConfirm !== null} onOpenChange={(open) => { if (!open) setArchiveConfirm(null); }}>
         <DialogContent className="max-w-sm">
