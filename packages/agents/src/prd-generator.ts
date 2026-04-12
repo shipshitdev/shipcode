@@ -172,13 +172,15 @@ export function extractPrd(text: string): GeneratedPrd {
   const captured: string[] = [];
 
   for (const line of lines) {
-    const trimmed = line.trimEnd();
+    const trimmed = line.trim();
     if (!collecting) {
-      if (trimmed === openTag || trimmed === `${openTag} `) {
+      // Match opening fence with optional trailing whitespace/indentation
+      if (trimmed === openTag || trimmed.startsWith(`${openTag} `)) {
         collecting = true;
       }
       continue;
     }
+    // Match closing fence (may be indented)
     if (trimmed === '```') break;
     captured.push(line);
   }
