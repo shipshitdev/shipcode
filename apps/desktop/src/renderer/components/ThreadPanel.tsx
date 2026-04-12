@@ -1,7 +1,8 @@
+import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
 import { useAppStore } from '../stores/app-store';
-import { KanbanBoard } from '@shipcode/ui';
+import { KanbanBoard, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Button } from '@shipcode/ui';
 import {
   githubRepoUrl,
   githubProjectsUrl,
@@ -43,6 +44,48 @@ export function ThreadPanel() {
   // for the round-trip to the main process. On error we force a refetch to
   // reconcile with the real state.
   const queryKey = ['github-issues', activeProjectId] as const;
+
+  const [archiveConfirm, setArchiveConfirm] = useState<
+    | { type: 'one'; issue: GitHubIssueCacheRecord }
+    | { type: 'all'; count: number }
+    | null
+  >(null);
+
+  const handleArchiveConfirm = () => {
+    if (!archiveConfirm || !activeProjectId) return;
+    const confirm = archiveConfirm;
+    setArchiveConfirm(null);
+
+    if (confirm.type === 'one') {
+      window.shipcode
+        .invoke('github:archive-issue', {
+          projectId: activeProjectId,
+          issueNumber: confirm.issue.issueNumber,
+        })
+        .then(() => refetchIssues())
+        .catch((err) => {
+          refetchIssues();
+          log.error('[threadpanel] archive-issue failed', { err });
+          window.alert(`Failed to archive issue: ${err?.message ?? err}`);
+        });
+    } else {
+      window.shipcode
+        .invoke('github:archive-all-done', { projectId: activeProjectId })
+        .then((result) => {
+          const { archivedCount, failedCount } = result as { archivedCount: number; failedCount: number };
+          refetchIssues();
+          if (failedCount > 0) {
+            window.alert(`Archived ${archivedCount} issues. ${failedCount} could not be closed on GitHub.`);
+          }
+        })
+        .catch((err) => {
+          refetchIssues();
+          log.error('[threadpanel] archive-all-done failed', { err });
+          window.alert(`Failed to archive done issues: ${err?.message ?? err}`);
+        });
+    }
+  };
+
   const setPipelineStatusOptimistic = (id: string, status: IssuePipelineStatus) => {
     queryClient.setQueryData<GitHubIssueCacheRecord[]>(queryKey, (prev) =>
       prev ? prev.map((i) => (i.id === id ? { ...i, pipelineStatus: status } : i)) : prev,
@@ -121,6 +164,11 @@ export function ThreadPanel() {
               window.alert(`Failed to retry issue #${issue.issueNumber}: ${err?.message ?? err}`);
             });
         }}
+        onArchiveIssue={(issue) => setArchiveConfirm({ type: 'one', issue })}
+        onArchiveAllDone={() => {
+          const doneCount = issues.filter((i) => i.pipelineStatus === 'completed').length;
+          setArchiveConfirm({ type: 'all', count: doneCount });
+        }}
         onRerun={(issue) => {
           setPipelineStatusOptimistic(issue.id, 'planning');
           window.shipcode
@@ -136,6 +184,28 @@ export function ThreadPanel() {
             });
         }}
       />
+      <Dialog open={archiveConfirm !== null} onOpenChange={(open) => { if (!open) setArchiveConfirm(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {archiveConfirm?.type === 'one'
+                ? `Archive issue #${archiveConfirm.issue.issueNumber}?`
+                : `Archive ${archiveConfirm?.count ?? 0} done issue${(archiveConfirm?.count ?? 0) !== 1 ? 's' : ''}?`}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-secondary">
+            This will close the issue on GitHub and remove it from the board.
+          </p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setArchiveConfirm(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleArchiveConfirm}>
+              Archive
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
