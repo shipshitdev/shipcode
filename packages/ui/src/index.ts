@@ -96,7 +96,6 @@ export { Pagination } from './primitives/pagination';
 export { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './primitives/select';
 export { SettingsRow } from './primitives/settings-row';
 export { Switch } from './primitives/switch';
-export { Tabs, TabsContent, TabsList, TabsTrigger } from './primitives/tabs';
 export {
   Table,
   TableBody,
@@ -107,6 +106,7 @@ export {
   TableHeader,
   TableRow,
 } from './primitives/table';
+export { Tabs, TabsContent, TabsList, TabsTrigger } from './primitives/tabs';
 export { Textarea } from './primitives/textarea';
 export { ReviewViewer } from './ReviewViewer';
 export { StatusMappingEditor } from './StatusMappingEditor';

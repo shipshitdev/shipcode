@@ -32,12 +32,7 @@ function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPr
 }
 
 function TabsContent({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Content>) {
-  return (
-    <TabsPrimitive.Content
-      className={cn('flex-1 overflow-y-auto', className)}
-      {...props}
-    />
-  );
+  return <TabsPrimitive.Content className={cn('flex-1 overflow-y-auto', className)} {...props} />;
 }
 
 export { Tabs, TabsContent, TabsList, TabsTrigger };

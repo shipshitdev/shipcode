@@ -423,7 +423,12 @@ function DroppableColumn({
           </span>
         </div>
       </div>
-      <div className={cn('flex-1 overflow-y-auto p-1.5 flex flex-col gap-1 min-h-[60px]', columnKey === 'done' && 'opacity-60')}>
+      <div
+        className={cn(
+          'flex-1 overflow-y-auto p-1.5 flex flex-col gap-1 min-h-[60px]',
+          columnKey === 'done' && 'opacity-60',
+        )}
+      >
         {issues.map((issue) => (
           <DraggableCard
             key={issue.id}
