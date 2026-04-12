@@ -300,7 +300,7 @@ function DraggableCard({
         onClick();
       }}
     >
-      {issue.pipelineStatus !== 'todo' && issue.pipelineStatus !== 'queued' && (
+      {issue.pipelineStatus !== 'todo' && issue.pipelineStatus !== 'queued' && issue.pipelineStatus !== 'failed' && (
         <div className="absolute bottom-0 left-0 right-0 h-[3px] rounded-b-md overflow-hidden bg-agent/15">
           <div
             className={cn(
@@ -309,9 +309,7 @@ function DraggableCard({
                 ? 'bg-success'
                 : issue.pipelineStatus === 'awaiting_approval'
                   ? 'bg-warning'
-                  : issue.pipelineStatus === 'failed'
-                    ? 'bg-danger'
-                    : 'bg-agent',
+                  : 'bg-agent',
             )}
             style={{ width: `${phaseToProgress(issue.pipelineStatus)}%` }}
           />
@@ -373,7 +371,7 @@ function DraggableCard({
                 onCancel(issue);
               }}
             >
-              Cancel
+              CANCEL
             </Button>
           </span>
         ) : isFailed && onRerun ? (
@@ -389,7 +387,7 @@ function DraggableCard({
               onRerun(issue);
             }}
           >
-            Failed
+            RETRY
           </Button>
         ) : (
           <PhaseChip status={issue.pipelineStatus} />
