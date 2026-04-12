@@ -21,6 +21,7 @@ export function getStatusBadgeVariant(
     case 'reviewing':
     case 'revising':
     case 'executing':
+    case 'testing':
     case 'verifying':
     case 'shipping':
       return 'accent';

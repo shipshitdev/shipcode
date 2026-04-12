@@ -8,6 +8,7 @@ const ACTIVE_PHASES: PipelinePhase[] = [
   'revising',
   'awaiting_approval',
   'executing',
+  'testing',
   'verifying',
   'shipping',
 ];
@@ -18,6 +19,7 @@ const AGENT_RUNNING_PHASES: PipelinePhase[] = [
   'reviewing',
   'revising',
   'executing',
+  'testing',
   'verifying',
   'shipping',
 ];

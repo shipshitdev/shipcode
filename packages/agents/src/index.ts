@@ -28,10 +28,16 @@ export { buildVerificationPrompt } from './prompts/verification-prompt';
 export type {
   VerificationPromptContext,
   VerificationPromptDeps,
+  VerificationPromptOptions,
 } from './prompts/verification-prompt';
 export { buildExecutionPrompt } from './prompts/execute-prompt';
-export type { ExecutePromptContext, ExecutePromptDeps } from './prompts/execute-prompt';
+export type {
+  ExecutePromptContext,
+  ExecutePromptDeps,
+  ExecutePromptOptions,
+} from './prompts/execute-prompt';
 export { buildPRBody } from './prompts/shipping-prompt';
+export { loadRepoContext } from './context-loader';
 export { GhCli } from './github/gh-cli';
 export { IssuePoller } from './github/issue-poller';
 export { routeFromLabels } from './github/model-router';

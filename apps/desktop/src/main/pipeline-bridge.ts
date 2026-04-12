@@ -40,6 +40,11 @@ const PHASE_ACTIVITY: Partial<
     title: (t) => `${t.title} — executing`,
     subtitle: 'Claude is implementing',
   },
+  testing: {
+    kind: 'phase_change',
+    title: (t) => `${t.title} — running tests`,
+    subtitle: 'Executing test command',
+  },
   verifying: {
     kind: 'phase_change',
     title: (t) => `${t.title} — verifying`,
@@ -158,6 +163,19 @@ export function createElectronEmitter(
 
   return {
     emit(event: PipelineEvent) {
+      if (event.type === 'pipeline:output') {
+        if (!mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+          try {
+            mainWindow.webContents.send('agent:output', {
+              processId: `test-${event.threadId}`,
+              chunk: event.chunk,
+              threadId: event.threadId,
+            });
+          } catch { /* destroyed between check and send */ }
+        }
+        return;
+      }
+
       // 1. Forward to renderer (always — preserves existing behaviour).
       if (!mainWindow.isDestroyed()) {
         mainWindow.webContents.send(event.type, event);

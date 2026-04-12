@@ -67,6 +67,10 @@ Your verification MUST be valid JSON inside a code fence per the schema below.
 \`\`\`
 </structured_output_contract>
 
+<repository_context>
+No extra files provided.
+</repository_context>
+
 <grounding_rules>
 Every \`evidence\` field must point to something concrete in the diff — a file path, a hunk, a function name, a config key.
 Do not invent evidence. If you cannot find proof in the diff, the criterion has not passed.

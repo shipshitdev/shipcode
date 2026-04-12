@@ -320,12 +320,24 @@ Throughout execution:
 - If you encounter a real blocker (missing file, broken dep, bad assumption in the plan), surface it clearly and stop — do not paper over it.
 </execution_method>
 
+<testing_guidance>
+Write tests for new functionality when the plan calls for it or when acceptance criteria reference test coverage.
+Use existing test patterns in the codebase — find at least one existing test file before writing a new one.
+Tests must be colocated with source files unless the project convention differs.
+Do not write tests for code you did not change.
+{{TESTING_CONTEXT}}
+</testing_guidance>
+
 <finding_bar>
 Do not add error handling, fallbacks, or validation for scenarios that cannot happen.
 Do not add comments explaining what the code obviously does.
 Do not add docstrings or type annotations to code you did not change.
 Three similar lines of code are better than a premature abstraction.
 </finding_bar>
+
+<repository_context>
+{{CONTEXT_FILES}}
+</repository_context>
 
 <grounding_rules>
 Every file you create or modify must appear in the plan's \`files\` array.
@@ -337,7 +349,7 @@ If a step requires a tool or command, run it; do not pretend it succeeded.
 {{APPROVED_PLAN}}
 </approved_plan>
 `,
-    version: '075bf8dc3570ddce',
+    version: '075bf8dc3570ddcf',
     requiredSlots: ["APPROVED_PLAN"] as const,
     schemaVersion: 1,
   },
@@ -398,6 +410,10 @@ A warning means a noteworthy concern that does not block — scope creep, minor 
 Your verification MUST be valid JSON inside a code fence per the schema below.
 {{OUTPUT_SCHEMA}}
 </structured_output_contract>
+
+<repository_context>
+{{CONTEXT_FILES}}
+</repository_context>
 
 <grounding_rules>
 Every \`evidence\` field must point to something concrete in the diff — a file path, a hunk, a function name, a config key.

@@ -7,6 +7,7 @@ const PHASE_COLOR: Record<string, string> = {
   reviewing: AGENT_PHASE_CLASSES,
   revising: AGENT_PHASE_CLASSES,
   executing: AGENT_PHASE_CLASSES,
+  testing: AGENT_PHASE_CLASSES,
   verifying: AGENT_PHASE_CLASSES,
   shipping: AGENT_PHASE_CLASSES,
   awaiting_approval: 'bg-warning/15 text-warning border-warning/30',

@@ -39,12 +39,18 @@ export interface VerificationPromptDeps {
   onFallback?: (phase: 'plan-verification', error: SkillValidationError | undefined) => void;
 }
 
+export interface VerificationPromptOptions {
+  contextFiles?: string;
+}
+
 export function buildVerificationPrompt(
   plan: ShipCodePlan,
   diff: string,
   acceptanceCriteria: string[],
   context: VerificationPromptContext,
   deps: VerificationPromptDeps,
+  testOutput?: string | null,
+  opts: VerificationPromptOptions = {},
 ): string {
   const { skill, fallbackUsed, error } = resolveSkill(
     'plan-verification',
@@ -55,10 +61,16 @@ export function buildVerificationPrompt(
     deps.onFallback?.('plan-verification', error);
   }
   const numbered = acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join('\n');
-  return interpolateSkill(skill.content, [
+  const slots = [
     { key: 'PLAN_JSON', value: JSON.stringify(plan, null, 2) },
     { key: 'DIFF', value: diff },
     { key: 'ACCEPTANCE_CRITERIA', value: numbered },
+    { key: 'CONTEXT_FILES', value: opts.contextFiles ?? 'No extra files provided.' },
     { key: 'OUTPUT_SCHEMA', value: VERIFICATION_OUTPUT_SCHEMA },
-  ]);
+  ];
+  const result = interpolateSkill(skill.content, slots);
+  if (testOutput) {
+    return `${result}\n\n<test_results>\n${testOutput}\n</test_results>\n\nIf test results above show failures, treat them as blockers. A clean test run is strong evidence that behavioral acceptance criteria are satisfied.`;
+  }
+  return result;
 }

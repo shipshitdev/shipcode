@@ -48,6 +48,7 @@ export type PipelineEvent =
       tokensUsed?: { prompt: number; completion: number };
       costUsd?: number;
     }
+  | { type: 'pipeline:output'; threadId: string; chunk: string }
   | { type: 'plan:parsed'; threadId: string; plan: ShipCodePlan }
   | { type: 'review:parsed'; threadId: string; review: PlanReview }
   | { type: 'verification:parsed'; threadId: string; verification: VerificationResult }
@@ -79,6 +80,8 @@ export interface PipelineContext {
   autonomous: boolean;
   reviewRound: number;
   verificationRetries: number;
+  testRetries: number;
+  testOutput: string | null;
   githubIssueNumber: number | null;
   githubIssueTitle: string | null;
   githubRepo: string | null;

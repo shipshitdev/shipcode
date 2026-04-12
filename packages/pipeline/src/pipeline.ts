@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import {
   StreamParser,
   buildPlanPrompt,
@@ -6,6 +6,7 @@ import {
   buildRevisionPrompt,
   buildVerificationPrompt,
   buildExecutionPrompt,
+  loadRepoContext,
 } from '@shipcode/agents';
 import type { ProviderPhase, ProviderRequest, SkillValidationError } from '@shipcode/agents';
 import { WorktreeManager } from '@shipcode/git';
@@ -13,6 +14,7 @@ import type { PhaseSkillKey, ShipCodePlan } from '@shipcode/shared';
 import {
   PIPELINE_MAX_RETRIES,
   MAX_VERIFICATION_RETRIES,
+  MAX_TEST_RETRIES,
 } from '@shipcode/shared';
 import type { Pipeline, PipelineContext, PipelineDeps, PipelineExecutorModel } from './types';
 
@@ -65,6 +67,8 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       autonomous: seed.autonomous ?? false,
       reviewRound: seed.reviewRound ?? 0,
       verificationRetries: seed.verificationRetries ?? 0,
+      testRetries: seed.testRetries ?? 0,
+      testOutput: seed.testOutput ?? null,
       githubIssueNumber: seed.githubIssueNumber ?? null,
       githubIssueTitle: seed.githubIssueTitle ?? null,
       githubRepo: seed.githubRepo ?? null,
@@ -76,6 +80,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       cancelled: seed.cancelled ?? false,
       verifiedSha: seed.verifiedSha ?? null,
       startedAt: seed.startedAt ?? Date.now(),
+      repoContext: seed.repoContext ?? null,
       abort: seed.abort ?? new AbortController(),
     };
     activePipelines.set(threadId, context);
@@ -275,10 +280,16 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
   ) {
     const context = ensureContext(threadId, { projectPath, worktreePath });
 
+    if (context.repoContext === null) {
+      context.repoContext = loadRepoContext(projectPath);
+    }
+
     emitPhase(threadId, 'planning');
 
     const skill = skillCallSite(context);
-    const planPrompt = buildPlanPrompt(prompt, threadId, skill.context, skill.deps);
+    const planPrompt = buildPlanPrompt(prompt, threadId, skill.context, skill.deps, {
+      contextFiles: context.repoContext ?? undefined,
+    }, deps.settings.get().testCommand);
 
     // Fire-and-forget: kick off the provider call and let completion run
     // in the background. Callers (CLI, desktop IPC, tests) rely on phase
@@ -356,6 +367,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     const skill = skillCallSite(context);
     const reviewPromptText = buildReviewPrompt(plan, skill.context, skill.deps, {
       autonomous: context.autonomous,
+      contextFiles: context.repoContext ?? undefined,
     });
 
     void (async () => {
@@ -461,6 +473,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       threadId,
       skill.context,
       skill.deps,
+      deps.settings.get().testCommand,
     );
 
     void (async () => {
@@ -530,7 +543,17 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     emitPhase(threadId, 'executing');
 
     const skill = skillCallSite(context);
-    const executionPrompt = buildExecutionPrompt(plan, skill.context, skill.deps);
+    const settings = deps.settings.get();
+    const testFeedback =
+      context.testOutput && context.testRetries > 0
+        ? `\n\n<previous_test_failure>\nTests failed on the previous attempt. Fix these issues before finishing:\n\n${context.testOutput}\n</previous_test_failure>`
+        : '';
+    context.testOutput = null;
+    const basePrompt = buildExecutionPrompt(plan, skill.context, skill.deps, {
+      contextFiles: context.repoContext ?? undefined,
+      testingContext: settings.testingContext,
+    });
+    const executionPrompt = basePrompt + testFeedback;
 
     void (async () => {
       try {
@@ -546,7 +569,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         // stopped cleanly, non-zero otherwise.
         if (response.exitCode === 0) {
           if (context.autonomous) {
-            startVerification(threadId);
+            startTesting(threadId);
           } else {
             emitPhase(threadId, 'completed');
             activePipelines.delete(threadId);
@@ -564,6 +587,87 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         }
       }
     })();
+  }
+
+  async function startTesting(threadId: string) {
+    const context = activePipelines.get(threadId);
+    if (!context) return;
+
+    const testCmd = deps.settings.get().testCommand?.trim();
+    if (!testCmd) {
+      startVerification(threadId);
+      return;
+    }
+
+    emitPhase(threadId, 'testing');
+
+    const cwd = context.worktreePath ?? context.projectPath;
+    const chunks: string[] = [];
+    const TEST_TIMEOUT_MS = 5 * 60 * 1000;
+
+    await new Promise<void>((resolve) => {
+      const child = spawn(testCmd, { cwd, shell: true, signal: context.abort.signal });
+
+      const killTimer = setTimeout(() => {
+        child.kill('SIGTERM');
+        if (!context.cancelled) {
+          emitPhase(threadId, 'failed', 'Test command timed out after 5 minutes.');
+          activePipelines.delete(threadId);
+        }
+        resolve();
+      }, TEST_TIMEOUT_MS);
+
+      const onData = (chunk: Buffer) => {
+        const text = chunk.toString();
+        chunks.push(text);
+        deps.emitter.emit({ type: 'pipeline:output', threadId, chunk: text });
+      };
+
+      child.stdout?.on('data', onData);
+      child.stderr?.on('data', onData);
+
+      child.on('close', (code) => {
+        clearTimeout(killTimer);
+        context.testOutput = chunks.join('').slice(-16384);
+
+        if (code === 0) {
+          startVerification(threadId);
+        } else {
+          if (context.testRetries < MAX_TEST_RETRIES) {
+            context.testRetries++;
+            const latestPlan = deps.plans.getLatest(threadId);
+            if (latestPlan?.structured) {
+              startExecution(threadId, latestPlan.structured);
+            } else {
+              emitPhase(threadId, 'failed', 'Tests failed — plan unavailable for re-execution.');
+              activePipelines.delete(threadId);
+            }
+          } else {
+            deps.emitter.emit({
+              type: 'pipeline:verification-exhausted',
+              threadId,
+              retries: context.testRetries,
+            });
+            emitPhase(
+              threadId,
+              'failed',
+              `Tests failed after ${context.testRetries + 1} attempt(s). See terminal output.`,
+            );
+            activePipelines.delete(threadId);
+          }
+        }
+        resolve();
+      });
+
+      child.on('error', (err) => {
+        clearTimeout(killTimer);
+        if (!context.cancelled) {
+          emitPhase(threadId, 'failed', `Test command error: ${err.message}`);
+          activePipelines.delete(threadId);
+        }
+        resolve();
+      });
+    });
   }
 
   async function startVerification(threadId: string) {
@@ -629,6 +733,8 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       plan.acceptanceCriteria,
       skill.context,
       skill.deps,
+      context.testOutput ?? null,
+      { contextFiles: context.repoContext ?? undefined },
     );
 
     void (async () => {

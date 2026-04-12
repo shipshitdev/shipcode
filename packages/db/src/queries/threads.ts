@@ -168,7 +168,7 @@ export class ThreadQueries {
   hasActivePipeline(projectId: string): boolean {
     const row = this.db
       .prepare(
-        "SELECT 1 FROM threads WHERE project_id = ? AND status IN ('planning', 'reviewing', 'revising', 'executing', 'verifying', 'shipping') LIMIT 1",
+        "SELECT 1 FROM threads WHERE project_id = ? AND status IN ('planning', 'reviewing', 'revising', 'executing', 'testing', 'verifying', 'shipping') LIMIT 1",
       )
       .get(projectId);
     return !!row;
@@ -177,7 +177,7 @@ export class ThreadQueries {
   getOrphaned(): any[] {
     return this.db
       .prepare(
-        "SELECT * FROM threads WHERE status IN ('planning', 'reviewing', 'revising', 'executing', 'verifying', 'shipping')",
+        "SELECT * FROM threads WHERE status IN ('planning', 'reviewing', 'revising', 'executing', 'testing', 'verifying', 'shipping')",
       )
       .all();
   }
@@ -187,7 +187,7 @@ export class ThreadQueries {
     const rows = this.db
       .prepare(
         `SELECT * FROM threads
-         WHERE status IN ('planning', 'reviewing', 'revising', 'executing', 'verifying', 'shipping')
+         WHERE status IN ('planning', 'reviewing', 'revising', 'executing', 'testing', 'verifying', 'shipping')
            AND updated_at <= datetime('now', '-' || ? || ' seconds')`,
       )
       .all(thresholdSec) as any[];

@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
   SettingsRow,
+  Textarea,
 } from '@shipcode/ui';
 import { DEFAULT_SETTINGS, type AppSettings, type Project } from '@shipcode/shared';
 import { useAppStore } from '../stores/app-store';
@@ -361,6 +362,32 @@ export function SettingsPanel() {
                     <SelectItem value="openrouter">openrouter</SelectItem>
                   </SelectContent>
                 </Select>
+              </SettingsRow>
+              <SettingsRow
+                label="Test command"
+                description="Shell command run after execution in the worktree. Leave blank to skip."
+              >
+                <Input
+                  placeholder="e.g. bun run test"
+                  defaultValue={settings.testCommand ?? ''}
+                  onBlur={(e) => {
+                    const val = e.target.value.trim() || null;
+                    updateSettings.mutate({ testCommand: val });
+                  }}
+                />
+              </SettingsRow>
+              <SettingsRow
+                label="Testing context"
+                description="Describe the project's test conventions (framework, file location, mock patterns). Injected into the executor."
+              >
+                <Textarea
+                  placeholder="e.g. Tests use Vitest, colocated as *.test.ts, use vi.mock() for mocking."
+                  defaultValue={settings.testingContext ?? ''}
+                  onBlur={(e) => {
+                    const val = e.target.value.trim() || null;
+                    updateSettings.mutate({ testingContext: val });
+                  }}
+                />
               </SettingsRow>
             </section>
 

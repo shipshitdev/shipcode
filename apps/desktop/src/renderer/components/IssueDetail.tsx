@@ -55,6 +55,7 @@ const ACTIVE_PHASES: PipelinePhase[] = [
   'reviewing',
   'revising',
   'executing',
+  'testing',
   'verifying',
   'shipping',
 ];
@@ -63,6 +64,7 @@ const PIPELINE_PREVIEW_PHASES = [
   { id: 'plan', label: 'Plan' },
   { id: 'review', label: 'Review' },
   { id: 'execute', label: 'Execute' },
+  { id: 'test', label: 'Test' },
   { id: 'verify', label: 'Verify' },
   { id: 'ship', label: 'Ship' },
 ] as const;
