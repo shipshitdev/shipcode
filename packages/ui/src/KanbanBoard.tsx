@@ -423,14 +423,14 @@ function DraggableCard({
           <Button
             variant="ghost"
             className={cn(
-              'h-5 px-1.5 text-[10px] font-medium opacity-0 transition-all group-hover:opacity-100 hover:bg-elevated',
+              'h-5 px-1.5 text-[10px] font-medium opacity-0 transition-all group-hover:opacity-100',
               isFailed
-                ? 'text-danger/60 hover:text-danger'
+                ? 'text-danger/60 hover:text-danger hover:bg-danger/10'
                 : isAwaiting
-                  ? 'text-warning/60 hover:text-warning'
+                  ? 'text-warning/60 hover:text-warning hover:bg-warning/10'
                   : isActive
-                    ? 'text-agent/60 hover:text-agent'
-                    : 'text-muted hover:text-primary',
+                    ? 'text-agent/60 hover:text-agent hover:bg-agent/10'
+                    : 'text-muted hover:text-primary hover:bg-border/20',
             )}
             title="Open issue detail"
             onPointerDown={(e) => e.stopPropagation()}
