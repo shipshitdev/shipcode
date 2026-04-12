@@ -155,11 +155,7 @@ export function ProjectSidebar() {
 
   return (
     <aside className="flex w-[256px] min-w-[256px] flex-col border-r border-border bg-primary">
-      <div className="flex items-center px-4 py-3">
-        <h1 className="text-sm font-semibold tracking-tight text-primary">ShipCode</h1>
-      </div>
-
-      <div className="px-2 space-y-0.5">
+      <div className="px-2 pt-3 space-y-0.5">
         {/* Overview */}
         <Button
           variant="ghost"

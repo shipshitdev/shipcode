@@ -1,4 +1,5 @@
 import type {
+  ActivePipelineSummary,
   NotificationRecord,
   PipelinePhase,
   PlanRecord,
@@ -130,6 +131,54 @@ function resolveClientSidePlan(rawOutput: string): ShipCodePlan | null {
 const PRD_PROSE_CLASSES =
   'space-y-3 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-secondary [&_code]:rounded [&_code]:bg-tertiary [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-xs [&_h1]:text-base [&_h1]:font-semibold [&_h2]:mt-4 [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:text-sm [&_h3]:font-semibold [&_li]:mb-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:whitespace-pre-wrap [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-tertiary [&_pre]:p-3 [&_pre]:text-xs [&_ul]:list-disc [&_ul]:pl-5';
 
+function PlanWaiting({ threadId }: { threadId: string }) {
+  const lastActivity = useAppStore((s) => s.lastActivityByThread[threadId]);
+  const [, tick] = useState(0);
+
+  const { data: running = [] } = useQuery<ActivePipelineSummary[]>({
+    queryKey: ['dashboard', 'running'],
+    queryFn: () => window.shipcode.invoke<ActivePipelineSummary[]>('pipeline:list-active'),
+    refetchInterval: 2000,
+  });
+
+  useEffect(() => {
+    const id = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const startedAt = running.find((p) => p.threadId === threadId)?.startedAt;
+  const sinceStart = startedAt ? Math.floor((Date.now() - startedAt) / 1000) : null;
+  const sinceOutput = lastActivity ? Math.floor((Date.now() - lastActivity) / 1000) : sinceStart;
+  const stale = (sinceOutput ?? 0) >= 90;
+
+  function fmt(s: number) {
+    if (s < 60) return `${s}s`;
+    return `${Math.floor(s / 60)}m ${s % 60}s`;
+  }
+
+  return (
+    <div className="mb-5 py-4 text-center text-[13px]">
+      <p className="text-muted">
+        Waiting for plan generation
+        {sinceStart !== null && (
+          <> &mdash; <span className="tabular-nums">{fmt(sinceStart)}</span></>
+        )}
+      </p>
+      {lastActivity && !stale && sinceOutput !== null && (
+        <p className="mt-1 text-[11px] text-muted opacity-60">
+          Last output: {fmt(sinceOutput)} ago
+        </p>
+      )}
+      {stale && sinceOutput !== null && (
+        <p className="mt-2 text-[11px] text-warning">
+          No output in {fmt(sinceOutput)} &mdash; the model may be slow or stalled. Open the
+          terminal to diagnose, or cancel and retry.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const queryClient = useQueryClient();
   const {
@@ -154,6 +203,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const [prdCollapsed, setPrdCollapsed] = useState(false);
   const [planHistoryCollapsed, setPlanHistoryCollapsed] = useState(false);
   const [showRawOutput, setShowRawOutput] = useState(false);
+  const [approveError, setApproveError] = useState<string | null>(null);
 
   // Shared cache with ProjectSidebar / Titlebar — no extra request.
   const { data: projects } = useQuery<Project[]>({
@@ -301,9 +351,13 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const handleApprove = async () => {
     if (!activeThreadId || !canApprove) return;
     setIsSubmitting(true);
+    setApproveError(null);
     try {
       await window.shipcode.invoke('pipeline:approve', { threadId: activeThreadId });
       await refreshIssueState();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setApproveError(msg.split('\n')[0].slice(0, 280));
     } finally {
       setIsSubmitting(false);
     }
@@ -597,6 +651,12 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
           </div>
         </div>
       )}
+      {approveError && (
+        <p className="mt-2 text-[11px] text-danger">
+          {approveError}{' '}
+          <span className="text-muted">(full trace in devtools console)</span>
+        </p>
+      )}
     </div>
   ) : null;
 
@@ -643,7 +703,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
                     <span className="text-xs" style={{ color: statusColor(plan.status) }}>
                       {plan.status}
                     </span>
-                    {review && (
+                    {review && plan.status !== 'superseded' && (
                       <Badge
                         variant={review.decision === 'approve' ? 'success' : 'warning'}
                         className="text-[10px]"
@@ -941,11 +1001,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
             {/* Thread exists but no plans yet — only while not failed */}
             {activeThreadId && planHistory.length === 0 && threadPhase !== 'failed' && (
-              <div className="mb-5">
-                <p className="py-4 text-center text-[13px] text-muted">
-                  Pipeline is running — waiting for plan generation...
-                </p>
-              </div>
+              <PlanWaiting threadId={activeThreadId} />
             )}
           </div>
         </div>

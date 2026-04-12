@@ -23,12 +23,12 @@ import {
   RotateCcw,
   User,
 } from 'lucide-react';
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import { MODEL_DISPLAY } from './lib/model-display';
 import { getStatusBadgeVariant } from './lib/status-variant';
 import { cn } from './lib/utils';
 import { Badge } from './primitives/badge';
-import { Button, buttonVariants } from './primitives/button';
+import { Button } from './primitives/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './primitives/select';
 
 // Static map for the drag overlay border. Tailwind's JIT needs string-literal
@@ -53,6 +53,8 @@ interface KanbanBoardProps {
   branches?: string[];
   /** Invoked when the user picks a new base branch from the toolbar Select. */
   onBaseBranchChange?: (branch: string) => void;
+  /** Invoked when the user clicks the refresh button inside the branch dropdown. */
+  onRefreshBranches?: () => void;
   /** Issue number currently open in the side panel — highlights the card. */
   selectedIssueNumber?: number;
   /** Project name shown as the toolbar heading (replaces the generic "GitHub Issues"). */
@@ -222,12 +224,14 @@ function DraggableCard({
   onRerun,
   onArchiveIssue,
   isSelected,
+  isRerunning,
 }: {
   issue: GitHubIssueCacheRecord;
   onClick: () => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
   isSelected?: boolean;
+  isRerunning?: boolean;
 }) {
   const draggable = DRAGGABLE_STATUSES.includes(issue.pipelineStatus);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
@@ -269,6 +273,7 @@ function DraggableCard({
         // visually distinct from failed (red), awaiting (amber), and selected
         // (white). Lower opacity than failed/awaiting because agent work is
         // informational — the user is not being asked to act.
+        isActive && 'shadow-[0_0_12px_rgba(56,189,248,0.18)]',
         isActive &&
           (isSelected
             ? 'border-agent/70 bg-agent/[0.06]'
@@ -283,10 +288,12 @@ function DraggableCard({
       }}
     >
       {isActive && (
-        <span className="absolute top-1.5 right-1.5 flex h-2 w-2 items-center justify-center">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-agent opacity-60" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-agent" />
-        </span>
+        <div className="absolute bottom-0 left-0 right-0 h-[2px] rounded-b-md overflow-hidden bg-agent/15">
+          <div
+            className="absolute h-full w-1/4 rounded-full bg-agent"
+            style={{ animation: 'slide-progress 1.6s ease-in-out infinite' }}
+          />
+        </div>
       )}
       {isFailed && onRerun && (
         <Button
@@ -294,13 +301,14 @@ function DraggableCard({
           size="icon-xs"
           className="absolute top-1.5 right-1.5 text-danger/60 hover:bg-danger/10 hover:text-danger"
           title="Re-run pipeline"
+          disabled={isRerunning}
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
             onRerun(issue);
           }}
         >
-          <RotateCcw size={14} />
+          <RotateCcw size={14} className={isRerunning ? 'animate-spin' : ''} />
         </Button>
       )}
       {issue.pipelineStatus === 'completed' && onArchiveIssue && (
@@ -318,7 +326,10 @@ function DraggableCard({
           <Archive size={14} />
         </Button>
       )}
-      <div className="text-[11px] text-secondary font-mono mb-0.5">#{issue.issueNumber}</div>
+      <div className="flex items-center justify-between mb-0.5">
+        <span className="text-[11px] text-secondary font-mono">#{issue.issueNumber}</span>
+        {showPhaseElapsed && <PhaseElapsed since={phaseSince} />}
+      </div>
       <div className="text-xs leading-snug text-primary font-medium line-clamp-2">
         {issue.title}
       </div>
@@ -342,7 +353,6 @@ function DraggableCard({
           </Badge>
         )}
         <div className="ml-auto flex items-center gap-1.5">
-          {showPhaseElapsed && <PhaseElapsed since={phaseSince} />}
           <Button
             variant="ghost"
             className={cn(
@@ -450,6 +460,7 @@ function SectionBlock({
   onIssueClick,
   onRerun,
   selectedIssueNumber,
+  rerunningId,
 }: {
   columnKey: ColumnKey;
   section: PhaseSection;
@@ -457,6 +468,7 @@ function SectionBlock({
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
   selectedIssueNumber?: number;
+  rerunningId?: string | null;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `${columnKey}:${section.key}`,
@@ -529,6 +541,7 @@ function SectionBlock({
               onClick={() => onIssueClick(issue)}
               onRerun={onRerun}
               isSelected={issue.issueNumber === selectedIssueNumber}
+              isRerunning={issue.id === rerunningId}
             />
           ))}
         </div>
@@ -552,12 +565,14 @@ function StackedColumn({
   onIssueClick,
   onRerun,
   selectedIssueNumber,
+  rerunningId,
 }: {
   column: BoardColumn;
   issues: GitHubIssueCacheRecord[];
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
   selectedIssueNumber?: number;
+  rerunningId?: string | null;
 }) {
   const columnIssues = issues.filter((i) => column.statuses.includes(i.pipelineStatus));
 
@@ -586,6 +601,7 @@ function StackedColumn({
               onIssueClick={onIssueClick}
               onRerun={onRerun}
               selectedIssueNumber={selectedIssueNumber}
+              rerunningId={rerunningId}
             />
           );
         })}
@@ -961,6 +977,7 @@ export function KanbanBoard({
   baseBranch,
   branches,
   onBaseBranchChange,
+  onRefreshBranches,
   selectedIssueNumber,
   projectName,
   repoUrl,
@@ -978,6 +995,32 @@ export function KanbanBoard({
   const [activeId, setActiveId] = useState<string | null>(null);
   const activeIssue = issues.find((i) => i.id === activeId);
   const [view, setView] = useState<'kanban' | 'list'>('kanban');
+  const [refreshing, setRefreshing] = useState(false);
+  const [showRefreshToast, setShowRefreshToast] = useState(false);
+  const [rerunningId, setRerunningId] = useState<string | null>(null);
+
+  const handleRerun = useCallback(
+    (issue: GitHubIssueCacheRecord) => {
+      setRerunningId(issue.id);
+      onRerun?.(issue);
+      setTimeout(() => setRerunningId(null), 800);
+    },
+    [onRerun],
+  );
+
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    setShowRefreshToast(true);
+    onRefresh();
+    // Keep the spin for at least 600ms so it's visible
+    setTimeout(() => setRefreshing(false), 600);
+  }, [onRefresh]);
+
+  useEffect(() => {
+    if (!showRefreshToast) return;
+    const id = setTimeout(() => setShowRefreshToast(false), 2000);
+    return () => clearTimeout(id);
+  }, [showRefreshToast]);
 
   function getColumnForIssue(issue: GitHubIssueCacheRecord): ColumnKey {
     return COLUMNS.find((c) => c.statuses.includes(issue.pipelineStatus))?.key ?? 'todo';
@@ -1026,7 +1069,7 @@ export function KanbanBoard({
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="relative flex flex-col h-full overflow-hidden">
       <div className="flex items-center px-4 py-3 border-b border-border shrink-0 gap-3">
         <h3 className="text-sm font-semibold shrink-0 truncate">
           {projectName ?? 'GitHub Issues'}
@@ -1064,10 +1107,10 @@ export function KanbanBoard({
         <div className="flex-1" />
         <div className="flex items-center gap-2 shrink-0">
           {baseBranch && branches && branches.length > 0 && onBaseBranchChange && (
-            <div className="flex items-center min-w-0 max-w-[200px] shrink-0">
+            <div className="flex items-center border border-border rounded-md overflow-hidden min-w-0 max-w-[240px] shrink-0">
               <Select value={baseBranch} onValueChange={onBaseBranchChange}>
                 <SelectTrigger
-                  className={cn(buttonVariants({ variant: 'pill', size: 'xs' }), 'font-mono')}
+                  className="h-7 gap-1 rounded-none border-0 bg-transparent px-2 text-xs font-mono text-secondary hover:text-primary"
                 >
                   <SelectValue />
                 </SelectTrigger>
@@ -1079,6 +1122,20 @@ export function KanbanBoard({
                   ))}
                 </SelectContent>
               </Select>
+              {onRefreshBranches && (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="rounded-none border-l border-border"
+                  title="Refresh branches"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRefreshBranches();
+                  }}
+                >
+                  <RefreshCw size={14} />
+                </Button>
+              )}
             </div>
           )}
           <div className="flex items-center border border-border rounded-md overflow-hidden shrink-0">
@@ -1104,8 +1161,8 @@ export function KanbanBoard({
               <LayoutGrid size={14} />
             </Button>
           </div>
-          <Button variant="outline" size="icon-sm" onClick={onRefresh} title="Refresh">
-            <RefreshCw size={14} />
+          <Button variant="outline" size="icon-sm" onClick={handleRefresh} title="Refresh board">
+            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
           </Button>
           {onNewIssue && (
             <Button size="sm" onClick={onNewIssue}>
@@ -1139,7 +1196,8 @@ export function KanbanBoard({
                     column={col}
                     issues={issues}
                     onIssueClick={onIssueClick}
-                    onRerun={onRerun}
+                    onRerun={handleRerun}
+                    rerunningId={rerunningId}
                     selectedIssueNumber={selectedIssueNumber}
                   />
                 );
@@ -1180,6 +1238,15 @@ export function KanbanBoard({
           ) : null}
         </DragOverlay>
       </DndContext>
+
+      {showRefreshToast && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-elevated px-3 py-2 shadow-lg text-xs text-secondary">
+            <RefreshCw size={12} className="text-muted" />
+            Board refreshed
+          </div>
+        </div>
+      )}
     </div>
   );
 }

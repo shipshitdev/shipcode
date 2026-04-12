@@ -670,10 +670,13 @@ export function registerIpcHandlers(
     return queries.projects.getById(projectId);
   });
 
-  ipcMain.handle('git:list-branches', async (_event, { projectId }: { projectId: string }) => {
+  ipcMain.handle('git:list-branches', async (_event, { projectId, fetch }: { projectId: string; fetch?: boolean }) => {
     const project = queries.projects.getById(projectId);
     if (!project) throw new Error(`Project ${projectId} not found`);
     const git = new GitService(project.path);
+    if (fetch) {
+      await git.fetch();
+    }
     return git.listBranches(project.defaultBranch);
   });
 

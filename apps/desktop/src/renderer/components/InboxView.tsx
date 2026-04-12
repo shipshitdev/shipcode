@@ -132,7 +132,13 @@ export function InboxView() {
       if (navTokenRef.current !== token) return;
       useAppStore.getState().setGithubIssues(issues);
       const match = issues.find((i) => i.threadId === n.threadId) ?? null;
-      if (match) selectIssue(match);
+      if (match) {
+        selectIssue(match);
+        // If the detail panel was previously collapsed, un-collapse it so the
+        // user actually sees the issue after clicking View.
+        const store = useAppStore.getState();
+        if (store.issueDetailCollapsed) store.toggleIssueDetail();
+      }
     } catch {
       if (navTokenRef.current === token) {
         selectProject(priorProjectId);

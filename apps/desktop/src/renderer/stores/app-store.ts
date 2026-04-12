@@ -66,6 +66,9 @@ interface AppState {
   terminalThreadId: string | null;
   terminalEventsByThread: Record<string, string[]>;
 
+  // Timestamp of last agent output chunk received, keyed by threadId
+  lastActivityByThread: Record<string, number>;
+
   // Currently running model (from pipeline:model-resolved, reset on idle)
   currentModel: string | null;
 
@@ -106,6 +109,7 @@ interface AppState {
   logTerminalEvent: (line: string) => void;
   setTerminalThread: (id: string | null) => void;
   logTerminalEventForThread: (threadId: string, line: string) => void;
+  touchLastActivity: (threadId: string) => void;
   setCurrentModel: (model: string | null) => void;
   addNotification: (notification: NotificationRecord) => void;
   removeNotification: (id: string) => void;
@@ -142,6 +146,7 @@ export const useAppStore = create<AppState>((set) => ({
   terminalEvents: [],
   terminalThreadId: null,
   terminalEventsByThread: {},
+  lastActivityByThread: {},
   notifications: [],
   commandPaletteOpen: false,
   createIssueModalOpen: false,
@@ -288,6 +293,8 @@ export const useAppStore = create<AppState>((set) => ({
       const next = prev.length >= 200 ? [...prev.slice(-199), line] : [...prev, line];
       return { terminalEventsByThread: { ...s.terminalEventsByThread, [threadId]: next } };
     }),
+  touchLastActivity: (threadId) =>
+    set((s) => ({ lastActivityByThread: { ...s.lastActivityByThread, [threadId]: Date.now() } })),
   addNotification: (notification) =>
     set((s) => {
       // Replace existing record with same id (re-fired) or prepend new.

@@ -32,14 +32,19 @@
 
 	/* Agent activity — distinct from any human-action status. Used for
 	 * "currently being worked on by an AI agent" states (planning, reviewing,
-	 * revising, executing, verifying, shipping). Yellow-400 matches the GitHub
-	 * Projects "In Progress" column dot color. Intentionally lower visual weight
-	 * than danger/warning because agent activity is informational. */
-	--agent: #facc15;
+	 * revising, executing, verifying, shipping). Sky-400 differentiates agent
+	 * (automated) from warning/amber used for human-attention columns. */
+	--agent: #38bdf8;
 
 	/* Done / completed — purple to match the GitHub Projects "Done" column
 	 * dot. Applied to the Done column header dot and completed-card indicators. */
 	--done: #a855f7;
+}
+
+/* Indeterminate progress bar for active pipeline cards */
+@keyframes slide-progress {
+	0%   { transform: translateX(-100%); }
+	100% { transform: translateX(500%); }
 }
 
 /* Placeholder — not wired up yet; structure is ready for a future pass. */

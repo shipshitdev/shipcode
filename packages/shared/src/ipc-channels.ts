@@ -62,7 +62,7 @@ export interface IpcInvokeChannels {
   'git:status': { args: { projectId: string }; result: GitState };
   'git:commit': { args: { projectId: string; message: string }; result: string };
   'git:push': { args: { projectId: string }; result: void };
-  'git:list-branches': { args: { projectId: string }; result: string[] };
+  'git:list-branches': { args: { projectId: string; fetch?: boolean }; result: string[] };
 
   'settings:get': { args: void; result: AppSettings };
   'settings:set': { args: Partial<AppSettings>; result: void };

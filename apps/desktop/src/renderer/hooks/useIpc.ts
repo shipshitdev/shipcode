@@ -13,6 +13,7 @@ export function useIpc() {
     setVerification,
     setGithubIssues,
     appendAgentOutput,
+    touchLastActivity,
     addNotification,
     removeNotification,
     logTerminalEventForThread,
@@ -142,6 +143,7 @@ export function useIpc() {
         // spawn-failure output that arrives before any 'running' state event.
         if (data.threadId && data.processId) mapProcessToThread(data.processId, data.threadId);
         appendAgentOutput(data.processId, data.chunk);
+        if (data.threadId) touchLastActivity(data.threadId);
       }),
     );
 

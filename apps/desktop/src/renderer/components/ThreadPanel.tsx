@@ -105,6 +105,14 @@ export function ThreadPanel() {
         onNewIssue={() => openCreateIssueModal()}
         baseBranch={project?.defaultBranch}
         branches={branches}
+        onRefreshBranches={() => {
+          window.shipcode
+            .invoke('git:list-branches', { projectId: activeProjectId!, fetch: true })
+            .then((fresh) => {
+              queryClient.setQueryData(['git-branches', activeProjectId], fresh);
+            })
+            .catch((err) => log.error('[threadpanel] refresh branches failed', err));
+        }}
         projectName={project?.name}
         repoUrl={repoUrl}
         projectsUrl={projectsUrl}
