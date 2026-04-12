@@ -49,21 +49,6 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useAppStore } from '../stores/app-store';
 
-// See OverviewView for why all 6 agent phases share one color.
-const AGENT_PHASE_CLASSES = 'bg-agent/10 text-agent border-agent/25';
-
-const PHASE_COLOR: Partial<Record<PipelinePhase, string>> = {
-  planning: AGENT_PHASE_CLASSES,
-  reviewing: AGENT_PHASE_CLASSES,
-  revising: AGENT_PHASE_CLASSES,
-  executing: AGENT_PHASE_CLASSES,
-  verifying: AGENT_PHASE_CLASSES,
-  shipping: AGENT_PHASE_CLASSES,
-  awaiting_approval: 'bg-warning/15 text-warning border-warning/30',
-  completed: 'bg-success/15 text-success border-success/30',
-  failed: 'bg-danger/15 text-danger border-danger/30',
-  idle: 'bg-tertiary text-muted border-border',
-};
 
 const ACTIVE_PHASES: PipelinePhase[] = [
   'planning',
@@ -167,6 +152,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRefreshingFromGithub, setIsRefreshingFromGithub] = useState(false);
   const [prdCollapsed, setPrdCollapsed] = useState(false);
+  const [planHistoryCollapsed, setPlanHistoryCollapsed] = useState(false);
   const [showRawOutput, setShowRawOutput] = useState(false);
 
   // Shared cache with ProjectSidebar / Titlebar — no extra request.
@@ -268,7 +254,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const canRerun = !!activeIssue && activeIssue.pipelineStatus === 'failed' && !!activeProjectId;
   const hasApprovalDecision =
     !!activeThreadId && threadPhase === 'awaiting_approval' && !!latestPlan;
-  const canApprove = hasApprovalDecision && !!latestPlan?.structured;
+  const canApprove = hasApprovalDecision && !!(latestPlan?.structured || latestPlan?.rawOutput);
   const fullScreenPlan = planHistory.find((p) => p.id === fullScreenPlanId) ?? null;
   const fullScreenReview = fullScreenPlan ? reviewsByPlanId[fullScreenPlan.id] : undefined;
 
@@ -511,14 +497,6 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         )}
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <div className="flex flex-col gap-1 rounded-md border border-border bg-secondary p-2">
-          <span className="text-[10px] font-medium uppercase tracking-wide text-muted">Status</span>
-          <span
-            className={`inline-flex w-fit items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${PHASE_COLOR[threadPhase] ?? PHASE_COLOR.idle}`}
-          >
-            {threadPhase.replace(/_/g, ' ')}
-          </span>
-        </div>
         {thread.worktreeBranch && (
           <div className="flex flex-col gap-1 rounded-md border border-border bg-secondary p-2">
             <span className="text-[10px] font-medium uppercase tracking-wide text-muted">
@@ -582,7 +560,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
             onClick={handleApprove}
             disabled={isSubmitting || !canApprove}
             title={
-              !canApprove ? 'Plan could not be parsed — use Request Changes or Cancel' : undefined
+              !canApprove ? 'No plan content found — use Request Changes or Cancel' : undefined
             }
           >
             {isSubmitting ? 'Approving...' : 'Confirm'}
@@ -625,10 +603,25 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const planHistorySection =
     planHistory.length > 0 ? (
       <div className="mb-5">
-        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-secondary">
-          Plan History ({planHistory.length} version{planHistory.length !== 1 ? 's' : ''})
-        </h4>
-        <div className="flex flex-col gap-1">
+        <div className="mb-2 flex w-full items-center justify-between">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">
+            Plan History ({planHistory.length} version{planHistory.length !== 1 ? 's' : ''})
+          </h4>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={() => setPlanHistoryCollapsed((v) => !v)}
+            title={planHistoryCollapsed ? 'Expand plan history' : 'Collapse plan history'}
+            aria-label={planHistoryCollapsed ? 'Expand plan history' : 'Collapse plan history'}
+          >
+            {planHistoryCollapsed ? (
+              <ChevronDown size={16} strokeWidth={2.25} className="text-muted" />
+            ) : (
+              <ChevronUp size={16} strokeWidth={2.25} className="text-muted" />
+            )}
+          </Button>
+        </div>
+        {!planHistoryCollapsed && <div className="flex flex-col gap-1">
           {planHistory.map((plan) => {
             const isExpanded = effectiveExpanded === plan.id;
             const review = reviewsByPlanId[plan.id];
@@ -699,7 +692,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
               </div>
             );
           })}
-        </div>
+        </div>}
       </div>
     ) : null;
 
