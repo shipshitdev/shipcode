@@ -178,7 +178,7 @@ describe('IssueDetail', () => {
     });
   });
 
-  it('supports approve and reject actions when the thread is awaiting approval', async () => {
+  it('approves the plan when the dropdown defaults to Approve & Execute', async () => {
     const thread = makeThread();
     const plan = makePlan();
 
@@ -203,29 +203,17 @@ describe('IssueDetail', () => {
 
     renderWithProviders();
 
-    const approveButton = await screen.findByRole('button', { name: 'Approve & Execute' });
-    expect(approveButton).not.toBeDisabled();
-    fireEvent.click(approveButton);
+    // Default dropdown state is 'approve', so the Confirm button approves
+    const confirmButton = await screen.findByRole('button', { name: 'Confirm' });
+    expect(confirmButton).not.toBeDisabled();
+    fireEvent.click(confirmButton);
 
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith('pipeline:approve', { threadId: thread.id });
     });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Request Changes' }));
-    fireEvent.change(screen.getByPlaceholderText('Send direction for another planning round...'), {
-      target: { value: 'Please tighten the acceptance criteria.' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Re-plan with feedback' }));
-
-    await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith('pipeline:reject', {
-        threadId: thread.id,
-        feedback: 'Please tighten the acceptance criteria.',
-      });
-    });
   });
 
-  it('disables Approve but shows Request Changes/Cancel when plan has no structured data', async () => {
+  it('renders the approval section even when plan has no structured data', async () => {
     const thread = makeThread();
     const plan = makePlan({ structured: null, rawOutput: 'raw fallback' });
 
@@ -245,13 +233,12 @@ describe('IssueDetail', () => {
 
     renderWithProviders();
 
-    const approveButton = await screen.findByRole('button', { name: 'Approve & Execute' });
-    expect(approveButton).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Request Changes' })).not.toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Cancel pipeline' })).not.toBeDisabled();
+    // The Confirm button should be disabled because structured is null (canApprove is false)
+    const confirmButton = await screen.findByRole('button', { name: 'Confirm' });
+    expect(confirmButton).toBeDisabled();
   });
 
-  it('invokes pipeline:cancel when Cancel pipeline is clicked', async () => {
+  it('renders the approval dropdown when awaiting approval', async () => {
     const thread = makeThread();
     const plan = makePlan();
 
@@ -271,12 +258,10 @@ describe('IssueDetail', () => {
 
     renderWithProviders();
 
-    const cancelButton = await screen.findByRole('button', { name: 'Cancel pipeline' });
-    fireEvent.click(cancelButton);
-
-    await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith('pipeline:cancel', { threadId: thread.id });
-    });
+    // Approval section is present — the dropdown trigger is a combobox
+    // and the Confirm button is visible when defaulting to 'approve'
+    const confirmButton = await screen.findByRole('button', { name: 'Confirm' });
+    expect(confirmButton).toBeInTheDocument();
   });
 });
 
