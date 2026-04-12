@@ -43,11 +43,19 @@ const PHASE_LABELS: Record<string, string> = {
  */
 function renderTerminalEvent(event: import('@shipcode/agents').TerminalEvent): string | null {
   switch (event.kind) {
-    case 'text':
-      return event.content;
-    case 'thinking':
-      // Dim italic for reasoning/thinking blocks
-      return `\x1b[2;3m${event.content}\x1b[0m`;
+    case 'text': {
+      // Render agent text with a left-border blockquote style
+      // so it visually separates from tool calls and commands
+      const lines = event.content.split('\n');
+      const quoted = lines.map((line) => `\x1b[36m\u2502\x1b[0m ${line}`).join('\n');
+      return quoted;
+    }
+    case 'thinking': {
+      // Dim italic with left-border blockquote for reasoning/thinking
+      const lines = event.content.split('\n');
+      const quoted = lines.map((line) => `\x1b[2;35m\u2502\x1b[0m \x1b[2;3m${line}\x1b[0m`).join('\n');
+      return quoted;
+    }
     case 'tool_start':
       return `\x1b[2m\u2192 ${event.summary}\x1b[0m`;
     case 'tool_end':
