@@ -303,10 +303,10 @@ describe('GitHubIssueQueries', () => {
     it('listCompleted() excludes archived and non-completed rows', () => {
       const r1 = issues.upsert(makeIssue({ issueNumber: 1 }));
       const r2 = issues.upsert(makeIssue({ issueNumber: 2 }));
-      const r3 = issues.upsert(makeIssue({ issueNumber: 3 }));
+      issues.upsert(makeIssue({ issueNumber: 3 }));
       issues.updatePipelineStatus(r1.id, 'completed');
       issues.updatePipelineStatus(r2.id, 'completed');
-      // r3 stays queued
+      // issue #3 stays queued
       issues.archiveIssues([r2.id]); // archive one completed
       const completed = issues.listCompleted(projectId);
       expect(completed).toHaveLength(1);
