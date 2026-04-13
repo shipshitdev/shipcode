@@ -9,9 +9,14 @@ import {
 } from '@shipcode/agents';
 import {
   DEFAULT_SETTINGS,
+  type GitHubIssueCacheRecord,
+  type GitHubPrCheckSummary,
+  type GitHubPrReviewCommentSummary,
   MAX_REVIEW_ROUNDS,
   MAX_VERIFICATION_RETRIES,
   PIPELINE_MAX_RETRIES,
+  type PlanRecord,
+  type Thread,
 } from '@shipcode/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPipeline } from './pipeline';
@@ -141,6 +146,118 @@ function reviewBlock(json: string) {
 
 function verificationBlock(json: string) {
   return `\`\`\`shipcode-verification\n${json}\n\`\`\``;
+}
+
+function makeThread(overrides: Partial<Thread> = {}): Thread {
+  return {
+    id: 't1',
+    projectId: 'project-1',
+    title: 'test',
+    prompt: 'test',
+    status: 'awaiting_approval',
+    worktreeBranch: null,
+    worktreePath: null,
+    plannerModel: 'claude',
+    reviewerModel: 'codex',
+    verifierModel: 'claude',
+    executorModel: 'claude',
+    reviewRound: 0,
+    verificationStatus: null,
+    verificationRetries: 0,
+    autonomous: false,
+    baseBranch: 'main',
+    forkPointSha: 'abc123',
+    githubIssueNumber: 42,
+    githubPrNumber: null,
+    githubRepo: null,
+    lastError: null,
+    createdAt: '',
+    updatedAt: '',
+    plannerResolvedModel: null,
+    reviewerResolvedModel: null,
+    revisorResolvedModel: null,
+    executorResolvedModel: null,
+    verifierResolvedModel: null,
+    totalTokensPrompt: 0,
+    totalTokensCompletion: 0,
+    totalCostUsd: 0,
+    ...overrides,
+  };
+}
+
+function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssueCacheRecord {
+  return {
+    id: 'issue-1',
+    projectId: 'project-1',
+    issueNumber: 42,
+    title: 'Issue',
+    body: null,
+    labels: [],
+    assignee: null,
+    state: 'open',
+    pipelineStatus: 'todo',
+    threadId: 't1',
+    claimedAt: null,
+    claimedBy: null,
+    lastPhaseUpdate: null,
+    lastStatusLabel: null,
+    plannerModelOverride: null,
+    reviewerModelOverride: null,
+    executorModelOverride: null,
+    verifierModelOverride: null,
+    plannerModelIdOverride: null,
+    reviewerModelIdOverride: null,
+    executorModelIdOverride: null,
+    verifierModelIdOverride: null,
+    linkedPrNumber: null,
+    linkedPrUrl: null,
+    linkedPrIsDraft: false,
+    ciBlocked: false,
+    failingChecks: [],
+    unresolvedReviewComments: [],
+    unresolvedReviewCommentCount: 0,
+    prLastSyncAt: null,
+    fetchedAt: '',
+    ...overrides,
+  };
+}
+
+function makePlanRecord(overrides: Partial<PlanRecord> = {}): PlanRecord {
+  return {
+    id: 'plan-1',
+    threadId: 't1',
+    version: 1,
+    rawOutput: '',
+    structured: JSON.parse(PLAN_JSON),
+    status: 'pending_review',
+    createdAt: '',
+    ...overrides,
+  };
+}
+
+function makeCheck(overrides: Partial<GitHubPrCheckSummary> = {}): GitHubPrCheckSummary {
+  return {
+    name: 'check',
+    status: 'failed',
+    conclusion: 'failure',
+    detailsUrl: null,
+    workflowName: null,
+    ...overrides,
+  };
+}
+
+function makeReviewComment(
+  overrides: Partial<GitHubPrReviewCommentSummary> = {},
+): GitHubPrReviewCommentSummary {
+  return {
+    author: null,
+    body: 'Fix it',
+    url: 'https://github.com/comment',
+    createdAt: '',
+    path: null,
+    line: null,
+    ...overrides,
+  };
 }
 
 function requireContext(
@@ -356,7 +473,7 @@ describe('createPipeline', () => {
     });
 
     it('syncs linked GitHub issue status when phases change', async () => {
-      vi.mocked(mock.deps.githubIssues.getByNumber).mockReturnValue({ id: 'issue-1' });
+      vi.mocked(mock.deps.githubIssues.getByNumber).mockReturnValue(makeIssue());
 
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
@@ -376,7 +493,7 @@ describe('createPipeline', () => {
     });
 
     it('passes awaiting_approval through to the linked GitHub issue status', async () => {
-      vi.mocked(mock.deps.githubIssues.getByNumber).mockReturnValue({ id: 'issue-1' });
+      vi.mocked(mock.deps.githubIssues.getByNumber).mockReturnValue(makeIssue());
 
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
@@ -768,36 +885,15 @@ describe('createPipeline', () => {
       // Override getById to return a full thread matching the rehydrate target
       vi.mocked(mock.deps.threads.getById).mockImplementation((id: string) => {
         if (id === threadId) {
-          return {
+          return makeThread({
             id: threadId,
             projectId: 'p1',
-            title: 'test',
-            prompt: 'test',
-            status: 'awaiting_approval',
-            worktreePath: null,
-            worktreeBranch: null,
-            plannerModel: 'claude',
-            reviewerModel: 'codex',
-            executorModel: 'claude',
-            reviewRound: 0,
-            verificationStatus: null,
-            verificationRetries: 0,
-            autonomous: false,
-            baseBranch: 'main',
-            forkPointSha: 'abc123',
             githubIssueNumber: 16,
-            githubPrNumber: null,
-            githubRepo: null,
-            lastError: null,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
-            plannerResolvedModel: null,
-            reviewerResolvedModel: null,
-            revisorResolvedModel: null,
-            executorResolvedModel: null,
-          };
+          });
         }
-        return { id, projectId: 'project-1', githubIssueNumber: 42 };
+        return makeThread({ id });
       });
 
       const pipeline = createPipeline(mock.deps);
@@ -883,7 +979,7 @@ describe('createPipeline', () => {
     it('no structured plan → emits failed', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
-      vi.mocked(mock.deps.plans.getLatest).mockReturnValue({ id: 'plan-1', structured: null });
+      vi.mocked(mock.deps.plans.getLatest).mockReturnValue(makePlanRecord({ structured: null }));
 
       await pipeline.startVerification('t1');
 
@@ -1186,12 +1282,7 @@ describe('createPipeline', () => {
       // baseBranch is a hard prerequisite for PR creation (invariant
       // added alongside the per-project base-branch selector).
       context.baseBranch = 'main';
-      vi.mocked(mock.deps.githubIssues.getByNumber).mockReturnValue({
-        id: 'issue-1',
-        ciBlocked: false,
-        failingChecks: [],
-        unresolvedReviewComments: [],
-      });
+      vi.mocked(mock.deps.githubIssues.getByNumber).mockReturnValue(makeIssue());
 
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.startsWith('git rev-parse')) return 'feat/branch';
@@ -1222,12 +1313,13 @@ describe('createPipeline', () => {
       context.githubIssueNumber = 42;
       context.projectId = 'project-1';
       context.baseBranch = 'main';
-      vi.mocked(mock.deps.githubIssues.getByNumber).mockReturnValue({
-        id: 'issue-1',
-        ciBlocked: true,
-        failingChecks: [{ name: 'check', status: 'failed', conclusion: 'failure' }],
-        unresolvedReviewComments: [{ body: 'Fix it', url: 'https://github.com/comment' }],
-      });
+      vi.mocked(mock.deps.githubIssues.getByNumber).mockReturnValue(
+        makeIssue({
+          ciBlocked: true,
+          failingChecks: [makeCheck()],
+          unresolvedReviewComments: [makeReviewComment()],
+        }),
+      );
 
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.startsWith('git rev-parse')) return 'feat/branch';
@@ -1247,8 +1339,8 @@ describe('createPipeline', () => {
         linkedPrUrl: 'https://github.com/org/repo/pull/88',
         linkedPrIsDraft: false,
         ciBlocked: true,
-        failingChecks: [{ name: 'check', status: 'failed', conclusion: 'failure' }],
-        unresolvedReviewComments: [{ body: 'Fix it', url: 'https://github.com/comment' }],
+        failingChecks: [makeCheck()],
+        unresolvedReviewComments: [makeReviewComment()],
       });
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'completed');
     });

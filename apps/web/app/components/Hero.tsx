@@ -10,7 +10,7 @@ export function Hero() {
             <span className="text-muted">Issue to PR</span>
           </div>
           <h1 className="mx-auto mt-8 max-w-4xl text-5xl font-semibold tracking-[-0.05em] text-primary md:text-7xl">
-            ShipCode is the fastest way to turn GitHub issues into merged code.
+            GitHub issues to merged code.
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-secondary md:text-xl">
             Plan with Opus, review with Codex, execute in an isolated worktree, and keep verifying

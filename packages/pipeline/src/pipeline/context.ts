@@ -7,27 +7,6 @@ export function createPipelineContextHelpers(
   deps: PipelineDeps,
   activePipelines: Map<string, PipelineContext>,
 ): PipelineContextHelpers {
-  function mapPhaseToIssueStatus(phase: Parameters<typeof deps.threads.updateStatus>[1]) {
-    switch (phase) {
-      case 'idle':
-        return 'todo' as const;
-      default:
-        return phase;
-    }
-  }
-
-  function syncIssueStatus(
-    threadId: string,
-    phase: Parameters<typeof deps.threads.updateStatus>[1],
-  ) {
-    const thread = deps.threads.getById(threadId);
-    if (!thread?.githubIssueNumber) return;
-
-    const issue = deps.githubIssues.getByNumber(thread.projectId, thread.githubIssueNumber);
-    if (!issue) return;
-    deps.githubIssues.updatePipelineStatus(issue.id, mapPhaseToIssueStatus(phase));
-  }
-
   function ensureContext(
     threadId: string,
     seed: Partial<PipelineContext> & Pick<PipelineContext, 'projectPath'>,

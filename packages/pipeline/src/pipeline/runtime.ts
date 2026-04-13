@@ -1,4 +1,4 @@
-import { execFileSync, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, resolve, sep } from 'node:path';
 import type { ProviderPhase, ProviderRequest } from '@shipcode/agents';
@@ -8,10 +8,8 @@ import type { PipelineContextHelpers, PipelineRuntime } from './shared';
 
 export function createPipelineRuntime(
   deps: PipelineDeps,
-  contextHelpers: PipelineContextHelpers,
+  _contextHelpers: PipelineContextHelpers,
 ): PipelineRuntime {
-  const { activePipelines } = contextHelpers;
-
   function emitTerminalRaw(threadId: string, content: string) {
     deps.emitter.emit({ type: 'pipeline:output', threadId, chunk: content });
     deps.emitter.emit({ type: 'terminal:event', threadId, event: { kind: 'raw', content } });

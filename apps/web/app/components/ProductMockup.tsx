@@ -1,159 +1,423 @@
-const issueLines = [
-  'Extend PipelineExecutorModel to include openrouter.',
-  'Wire the provider registry through execute().',
-  'Preserve verifier retries and settings defaults.',
-];
+'use client';
 
-const planItems = [
-  'Update PipelineExecutorModel and settings types',
-  'Add provider registry branch for OpenRouter',
-  'Verify pipeline retries and UI state wiring',
-];
+import type { GitHubIssueCacheRecord, Thread } from '@shipcode/shared';
+import dynamic from 'next/dynamic';
 
-const reviewItems = [
+const KanbanBoard = dynamic(() => import('@shipcode/ui').then((module) => module.KanbanBoard), {
+  ssr: false,
+});
+
+const now = '2026-04-13T20:00:00.000Z';
+const projectId = 'homepage-project';
+
+const issues: GitHubIssueCacheRecord[] = [
   {
-    title: '[P1] pipeline.ts still narrows executorModel',
-    body: 'Accept openrouter in the execute path or the plan can pass review and still fail before spawn.',
+    id: 'issue-201',
+    projectId,
+    issueNumber: 201,
+    title: 'Support OpenRouter as a pipeline executor',
+    body: 'Add OpenRouter as a first-class execution path without breaking verification.',
+    labels: ['p0', 'agent:openrouter'],
+    assignee: 'shipcode',
+    state: 'open',
+    pipelineStatus: 'planning',
+    threadId: 'thread-201',
+    claimedAt: now,
+    claimedBy: 'shipcode',
+    lastPhaseUpdate: now,
+    lastStatusLabel: 'agent:planning',
+    plannerModelOverride: null,
+    reviewerModelOverride: null,
+    executorModelOverride: 'openrouter',
+    verifierModelOverride: null,
+    plannerModelIdOverride: null,
+    reviewerModelIdOverride: null,
+    executorModelIdOverride: 'openrouter/anthropic/claude-sonnet-4',
+    verifierModelIdOverride: null,
+    linkedPrNumber: null,
+    linkedPrUrl: null,
+    linkedPrIsDraft: false,
+    ciBlocked: false,
+    failingChecks: [],
+    unresolvedReviewComments: [],
+    unresolvedReviewCommentCount: 0,
+    prLastSyncAt: null,
+    fetchedAt: now,
   },
   {
-    title: '[P2] AppSettings is missing verifierModel additions',
-    body: 'Initialize the new fields in every context creation site to keep verifier flow stable.',
+    id: 'issue-198',
+    projectId,
+    issueNumber: 198,
+    title: 'Tighten reviewer loop before execution',
+    body: 'Keep reviewer findings actionable and revise until the plan is stable.',
+    labels: ['p1'],
+    assignee: 'shipcode',
+    state: 'open',
+    pipelineStatus: 'reviewing',
+    threadId: 'thread-198',
+    claimedAt: now,
+    claimedBy: 'shipcode',
+    lastPhaseUpdate: now,
+    lastStatusLabel: 'agent:reviewing',
+    plannerModelOverride: null,
+    reviewerModelOverride: 'codex',
+    executorModelOverride: null,
+    verifierModelOverride: null,
+    plannerModelIdOverride: null,
+    reviewerModelIdOverride: null,
+    executorModelIdOverride: null,
+    verifierModelIdOverride: null,
+    linkedPrNumber: null,
+    linkedPrUrl: null,
+    linkedPrIsDraft: false,
+    ciBlocked: false,
+    failingChecks: [],
+    unresolvedReviewComments: [
+      {
+        author: 'codex',
+        body: 'PipelineContext is still missing executorModelOverride in one path.',
+        url: 'https://github.com/shipshitdev/shipcode/pull/243#discussion_r1',
+        createdAt: now,
+        path: 'packages/pipeline/src/pipeline.ts',
+        line: 118,
+      },
+    ],
+    unresolvedReviewCommentCount: 1,
+    prLastSyncAt: now,
+    fetchedAt: now,
+  },
+  {
+    id: 'issue-190',
+    projectId,
+    issueNumber: 190,
+    title: 'Render live verifier status in desktop board',
+    body: 'Show progress and checkpoint context while the verifier is running.',
+    labels: ['p1'],
+    assignee: 'shipcode',
+    state: 'open',
+    pipelineStatus: 'executing',
+    threadId: 'thread-190',
+    claimedAt: now,
+    claimedBy: 'shipcode',
+    lastPhaseUpdate: now,
+    lastStatusLabel: 'agent:executing',
+    plannerModelOverride: null,
+    reviewerModelOverride: null,
+    executorModelOverride: 'claude',
+    verifierModelOverride: null,
+    plannerModelIdOverride: null,
+    reviewerModelIdOverride: null,
+    executorModelIdOverride: null,
+    verifierModelIdOverride: null,
+    linkedPrNumber: 243,
+    linkedPrUrl: 'https://github.com/shipshitdev/shipcode/pull/243',
+    linkedPrIsDraft: true,
+    ciBlocked: false,
+    failingChecks: [],
+    unresolvedReviewComments: [],
+    unresolvedReviewCommentCount: 0,
+    prLastSyncAt: now,
+    fetchedAt: now,
+  },
+  {
+    id: 'issue-176',
+    projectId,
+    issueNumber: 176,
+    title: 'Unblock project deletion when worktree root changes',
+    body: 'Use path-as-truth cleanup so worktree removal does not recompute from settings.',
+    labels: ['p0', 'bug'],
+    assignee: null,
+    state: 'open',
+    pipelineStatus: 'failed',
+    threadId: 'thread-176',
+    claimedAt: now,
+    claimedBy: 'shipcode',
+    lastPhaseUpdate: now,
+    lastStatusLabel: 'human:failed',
+    plannerModelOverride: null,
+    reviewerModelOverride: null,
+    executorModelOverride: null,
+    verifierModelOverride: null,
+    plannerModelIdOverride: null,
+    reviewerModelIdOverride: null,
+    executorModelIdOverride: null,
+    verifierModelIdOverride: null,
+    linkedPrNumber: 241,
+    linkedPrUrl: 'https://github.com/shipshitdev/shipcode/pull/241',
+    linkedPrIsDraft: true,
+    ciBlocked: true,
+    failingChecks: [
+      {
+        name: 'typecheck',
+        status: 'failed',
+        conclusion: 'failure',
+        detailsUrl: 'https://github.com/shipshitdev/shipcode/actions/runs/1',
+        workflowName: 'CI',
+      },
+    ],
+    unresolvedReviewComments: [],
+    unresolvedReviewCommentCount: 0,
+    prLastSyncAt: now,
+    fetchedAt: now,
+  },
+  {
+    id: 'issue-163',
+    projectId,
+    issueNumber: 163,
+    title: 'Polish docs embedding on the web app',
+    body: 'Sync exported docs into /public/docs and simplify the deploy path.',
+    labels: ['p2'],
+    assignee: null,
+    state: 'open',
+    pipelineStatus: 'todo',
+    threadId: null,
+    claimedAt: null,
+    claimedBy: null,
+    lastPhaseUpdate: null,
+    lastStatusLabel: null,
+    plannerModelOverride: null,
+    reviewerModelOverride: null,
+    executorModelOverride: null,
+    verifierModelOverride: null,
+    plannerModelIdOverride: null,
+    reviewerModelIdOverride: null,
+    executorModelIdOverride: null,
+    verifierModelIdOverride: null,
+    linkedPrNumber: null,
+    linkedPrUrl: null,
+    linkedPrIsDraft: false,
+    ciBlocked: false,
+    failingChecks: [],
+    unresolvedReviewComments: [],
+    unresolvedReviewCommentCount: 0,
+    prLastSyncAt: null,
+    fetchedAt: now,
+  },
+  {
+    id: 'issue-155',
+    projectId,
+    issueNumber: 155,
+    title: 'Move desktop notifications into a dedicated service',
+    body: 'Separate notification orchestration from IPC wiring and renderer toast state.',
+    labels: ['p2'],
+    assignee: 'shipcode',
+    state: 'open',
+    pipelineStatus: 'completed',
+    threadId: 'thread-155',
+    claimedAt: now,
+    claimedBy: 'shipcode',
+    lastPhaseUpdate: now,
+    lastStatusLabel: 'done',
+    plannerModelOverride: null,
+    reviewerModelOverride: null,
+    executorModelOverride: null,
+    verifierModelOverride: null,
+    plannerModelIdOverride: null,
+    reviewerModelIdOverride: null,
+    executorModelIdOverride: null,
+    verifierModelIdOverride: null,
+    linkedPrNumber: 239,
+    linkedPrUrl: 'https://github.com/shipshitdev/shipcode/pull/239',
+    linkedPrIsDraft: false,
+    ciBlocked: false,
+    failingChecks: [],
+    unresolvedReviewComments: [],
+    unresolvedReviewCommentCount: 0,
+    prLastSyncAt: now,
+    fetchedAt: now,
   },
 ];
 
-const terminalLines = [
-  { kind: 'dim', text: '> Fetching GitHub Issue #184' },
-  { kind: 'ok', text: '✓ Plan generated (3 tasks)' },
-  { kind: 'warn', text: '⚠ Review found 2 blocking issues' },
-  { kind: 'ok', text: '✓ Plan revised and approved' },
-  { kind: 'dim', text: '> Creating worktree ~/.shipcode/worktrees/shipcode/184' },
-  { kind: 'ok', text: '✓ OpenRouter provider wired' },
-  { kind: 'ok', text: '✓ Typecheck passed' },
-  { kind: 'ok', text: '✓ Verifier retry 1 passed' },
-  { kind: 'dim', text: '> Opening draft PR...' },
-  { kind: 'ok', text: '✓ PR #243 created' },
-  { kind: 'strong', text: 'github.com/shipshitdev/shipcode/pull/243' },
+const threads: Thread[] = [
+  {
+    id: 'thread-201',
+    projectId,
+    title: 'Support OpenRouter as a pipeline executor',
+    prompt: '',
+    status: 'planning',
+    worktreeBranch: 'feat/openrouter-tier1',
+    worktreePath: '~/.shipcode/worktrees/shipcode/thread-201',
+    plannerModel: 'claude',
+    reviewerModel: 'codex',
+    verifierModel: 'claude',
+    executorModel: 'openrouter',
+    reviewRound: 0,
+    verificationStatus: null,
+    verificationRetries: 0,
+    autonomous: true,
+    baseBranch: 'develop',
+    forkPointSha: null,
+    githubIssueNumber: 201,
+    githubPrNumber: null,
+    githubRepo: 'shipshitdev/shipcode',
+    lastError: null,
+    createdAt: now,
+    updatedAt: now,
+    plannerResolvedModel: 'claude-opus-4.1',
+    reviewerResolvedModel: null,
+    revisorResolvedModel: null,
+    executorResolvedModel: null,
+    verifierResolvedModel: null,
+    totalTokensPrompt: 0,
+    totalTokensCompletion: 0,
+    totalCostUsd: 0,
+  },
+  {
+    id: 'thread-198',
+    projectId,
+    title: 'Tighten reviewer loop before execution',
+    prompt: '',
+    status: 'reviewing',
+    worktreeBranch: 'shipcode/198-review-loop',
+    worktreePath: '~/.shipcode/worktrees/shipcode/thread-198',
+    plannerModel: 'claude',
+    reviewerModel: 'codex',
+    verifierModel: 'claude',
+    executorModel: 'claude',
+    reviewRound: 2,
+    verificationStatus: null,
+    verificationRetries: 0,
+    autonomous: true,
+    baseBranch: 'develop',
+    forkPointSha: null,
+    githubIssueNumber: 198,
+    githubPrNumber: null,
+    githubRepo: 'shipshitdev/shipcode',
+    lastError: null,
+    createdAt: now,
+    updatedAt: now,
+    plannerResolvedModel: 'claude-sonnet-4',
+    reviewerResolvedModel: 'codex',
+    revisorResolvedModel: 'claude-sonnet-4',
+    executorResolvedModel: null,
+    verifierResolvedModel: null,
+    totalTokensPrompt: 0,
+    totalTokensCompletion: 0,
+    totalCostUsd: 0,
+  },
+  {
+    id: 'thread-190',
+    projectId,
+    title: 'Render live verifier status in desktop board',
+    prompt: '',
+    status: 'executing',
+    worktreeBranch: 'shipcode/190-live-verifier',
+    worktreePath: '~/.shipcode/worktrees/shipcode/thread-190',
+    plannerModel: 'claude',
+    reviewerModel: 'codex',
+    verifierModel: 'claude',
+    executorModel: 'claude',
+    reviewRound: 1,
+    verificationStatus: null,
+    verificationRetries: 1,
+    autonomous: true,
+    baseBranch: 'develop',
+    forkPointSha: null,
+    githubIssueNumber: 190,
+    githubPrNumber: 243,
+    githubRepo: 'shipshitdev/shipcode',
+    lastError: null,
+    createdAt: now,
+    updatedAt: now,
+    plannerResolvedModel: 'claude-sonnet-4',
+    reviewerResolvedModel: 'codex',
+    revisorResolvedModel: null,
+    executorResolvedModel: 'claude-sonnet-4',
+    verifierResolvedModel: null,
+    totalTokensPrompt: 0,
+    totalTokensCompletion: 0,
+    totalCostUsd: 0,
+  },
+  {
+    id: 'thread-176',
+    projectId,
+    title: 'Unblock project deletion when worktree root changes',
+    prompt: '',
+    status: 'failed',
+    worktreeBranch: 'shipcode/176-worktree-root',
+    worktreePath: '~/.shipcode/worktrees/shipcode/thread-176',
+    plannerModel: 'claude',
+    reviewerModel: 'codex',
+    verifierModel: 'claude',
+    executorModel: 'claude',
+    reviewRound: 1,
+    verificationStatus: 'failed',
+    verificationRetries: 2,
+    autonomous: true,
+    baseBranch: 'develop',
+    forkPointSha: null,
+    githubIssueNumber: 176,
+    githubPrNumber: 241,
+    githubRepo: 'shipshitdev/shipcode',
+    lastError: 'Typecheck failed in packages/git/src/worktree.ts',
+    createdAt: now,
+    updatedAt: now,
+    plannerResolvedModel: 'claude-sonnet-4',
+    reviewerResolvedModel: 'codex',
+    revisorResolvedModel: 'claude-sonnet-4',
+    executorResolvedModel: 'claude-sonnet-4',
+    verifierResolvedModel: 'claude-sonnet-4',
+    totalTokensPrompt: 0,
+    totalTokensCompletion: 0,
+    totalCostUsd: 0,
+  },
+  {
+    id: 'thread-155',
+    projectId,
+    title: 'Move desktop notifications into a dedicated service',
+    prompt: '',
+    status: 'completed',
+    worktreeBranch: 'shipcode/155-notification-service',
+    worktreePath: '~/.shipcode/worktrees/shipcode/thread-155',
+    plannerModel: 'claude',
+    reviewerModel: 'codex',
+    verifierModel: 'claude',
+    executorModel: 'claude',
+    reviewRound: 1,
+    verificationStatus: 'passed',
+    verificationRetries: 0,
+    autonomous: true,
+    baseBranch: 'develop',
+    forkPointSha: null,
+    githubIssueNumber: 155,
+    githubPrNumber: 239,
+    githubRepo: 'shipshitdev/shipcode',
+    lastError: null,
+    createdAt: now,
+    updatedAt: now,
+    plannerResolvedModel: 'claude-sonnet-4',
+    reviewerResolvedModel: 'codex',
+    revisorResolvedModel: null,
+    executorResolvedModel: 'claude-sonnet-4',
+    verifierResolvedModel: 'claude-sonnet-4',
+    totalTokensPrompt: 0,
+    totalTokensCompletion: 0,
+    totalCostUsd: 0,
+  },
 ];
 
 export function ProductMockup() {
   return (
-    <div className="mx-auto w-full max-w-[1400px]">
-      <div className="overflow-hidden rounded-[28px] border border-white/12 bg-[#111216] shadow-[0_0_0_1px_rgba(255,255,255,0.05),0_30px_90px_rgba(0,0,0,0.55)]">
-        <div className="flex items-center gap-3 border-b border-white/10 bg-black/35 px-6 py-4">
-          <span className="h-3 w-3 rounded-full bg-danger" />
-          <span className="h-3 w-3 rounded-full bg-warning" />
-          <span className="h-3 w-3 rounded-full bg-success" />
-          <div className="ml-4 rounded-full bg-white/5 px-4 py-1 font-mono text-xs tracking-[0.22em] text-muted uppercase">
-            shipcode dashboard
-          </div>
-        </div>
-
-        <div className="grid gap-8 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.12),transparent_36%),linear-gradient(180deg,#131419_0%,#0d0d10_100%)] p-8 lg:grid-cols-[390px_1fr_560px]">
-          <section className="rounded-[24px] border border-white/12 bg-[#17181d] p-8 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-            <div className="inline-flex rounded-full bg-blue-500/15 px-3 py-1 text-xs font-medium text-blue-300">
-              issue #184
-            </div>
-            <h3 className="mt-6 text-3xl font-semibold tracking-tight text-primary">
-              Add OpenRouter as a third pipeline executor model
-            </h3>
-            <div className="mt-6 space-y-3 text-base leading-7 text-secondary">
-              {issueLines.map((line) => (
-                <p key={line}>{line}</p>
-              ))}
-            </div>
-
-            <div className="mt-8 border-t border-white/10 pt-8">
-              <div className="text-lg font-semibold text-primary">Execution rails</div>
-              <ul className="mt-4 space-y-3 text-sm text-secondary">
-                <li className="flex items-center gap-3">
-                  <span className="h-2.5 w-2.5 rounded-full bg-agent" />
-                  plan with Opus
-                </li>
-                <li className="flex items-center gap-3">
-                  <span className="h-2.5 w-2.5 rounded-full bg-agent" />
-                  review with Codex
-                </li>
-                <li className="flex items-center gap-3">
-                  <span className="h-2.5 w-2.5 rounded-full bg-agent" />
-                  execute in worktree
-                </li>
-                <li className="flex items-center gap-3">
-                  <span className="h-2.5 w-2.5 rounded-full bg-agent" />
-                  verify until green
-                </li>
-              </ul>
-            </div>
-          </section>
-
-          <div className="space-y-8">
-            <section className="rounded-[24px] border border-white/12 bg-[#17181d] p-8 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-              <div className="flex items-center justify-between gap-4">
-                <h3 className="text-3xl font-semibold tracking-tight text-primary">
-                  Plan review loop
-                </h3>
-                <span className="rounded-full bg-green-500/15 px-3 py-1 text-xs font-medium text-green-300">
-                  review round 2
-                </span>
-              </div>
-              <div className="mt-6 space-y-4">
-                {planItems.map((item, index) => (
-                  <div
-                    key={item}
-                    className="rounded-2xl border border-white/10 bg-[#111216] px-5 py-4 text-left text-lg font-medium text-primary"
-                  >
-                    {index + 1}. {item}
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="rounded-[24px] border border-white/12 bg-[#17181d] p-8 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-              <h3 className="text-3xl font-semibold tracking-tight text-primary">
-                Review findings
-              </h3>
-              <div className="mt-6 space-y-4">
-                {reviewItems.map((item) => (
-                  <article
-                    key={item.title}
-                    className="rounded-2xl border border-white/10 bg-[#111216] p-5"
-                  >
-                    <h4 className="text-lg font-semibold text-primary">{item.title}</h4>
-                    <p className="mt-2 text-sm leading-6 text-secondary">{item.body}</p>
-                  </article>
-                ))}
-              </div>
-            </section>
-          </div>
-
-          <section className="rounded-[24px] border border-white/12 bg-[linear-gradient(180deg,#12161b_0%,#0d1013_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-            <div className="flex items-center gap-3 rounded-t-[24px] border-b border-white/10 bg-black/25 px-6 py-4">
-              <span className="h-3 w-3 rounded-full bg-danger" />
-              <span className="h-3 w-3 rounded-full bg-warning" />
-              <span className="h-3 w-3 rounded-full bg-success" />
-              <div className="ml-4 font-mono text-sm text-muted">shipcode run --thread 184</div>
-            </div>
-            <pre className="overflow-x-auto px-6 py-6 font-mono text-[15px] leading-8">
-              {terminalLines.map((line) => (
-                <div
-                  key={line.text}
-                  className={
-                    line.kind === 'ok'
-                      ? 'text-success'
-                      : line.kind === 'warn'
-                        ? 'text-warning'
-                        : line.kind === 'strong'
-                          ? 'text-primary'
-                          : 'text-muted'
-                  }
-                >
-                  {line.text}
-                </div>
-              ))}
-            </pre>
-          </section>
+    <div className="mx-auto w-full max-w-[1500px] overflow-hidden rounded-[28px] border border-white/10 bg-[#0f1013] shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_30px_90px_rgba(0,0,0,0.55)]">
+      <div className="border-b border-white/8 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_40%),linear-gradient(180deg,#121318_0%,#0d0e12_100%)] px-2 py-2">
+        <div className="h-[780px] overflow-hidden rounded-[22px] border border-white/8 bg-primary">
+          <KanbanBoard
+            issues={issues}
+            threads={threads}
+            onIssueClick={() => {}}
+            onRefresh={() => {}}
+            projectName="ShipCode Dashboard"
+            baseBranch="develop"
+            branches={['develop', 'main', 'feature/homepage-kanban']}
+            onBaseBranchChange={() => {}}
+            onRefreshBranches={() => {}}
+            repoUrl="https://github.com/shipshitdev/shipcode"
+            projectsUrl="https://github.com/shipshitdev/shipcode/projects"
+            onOpenExternal={() => {}}
+            selectedIssueNumber={198}
+          />
         </div>
       </div>
-
       <div
         className="mx-auto -mt-px h-28 w-[98%] scale-y-[-1] rounded-b-3xl opacity-[0.05]"
         style={{
