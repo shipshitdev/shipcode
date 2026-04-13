@@ -1,58 +1,60 @@
-import { type IpcMain, type BrowserWindow, dialog, shell } from 'electron';
-import log, { logProcessOutput } from './logger.service';
-import type {
-  ProjectQueries,
-  ThreadQueries,
-  PlanQueries,
-  ReviewQueries,
-  DiffQueries,
-  SettingsQueries,
-  VerificationQueries,
-  GitHubIssueQueries,
-  CheckpointQueries,
-  ActivityQueries,
-  NotificationsQueries,
-  DashboardQueries,
-  CostsQueries,
-  SkillsQueries,
-} from '@shipcode/db';
 import { exec } from 'node:child_process';
-import { promisify } from 'node:util';
 import fs from 'node:fs';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import type { ProcessManager, TerminalEvent } from '@shipcode/agents';
-import { ClaudeNormalizer, CodexNormalizer } from '@shipcode/agents';
-import type { PhaseSkillKey, ShipCodePlan } from '@shipcode/shared';
 import {
-  validateGithubProjectUrl,
-  clampError,
-  parseGithubProjectUrl,
-  deriveGithubIssueUrl,
-  resolveExecutorModelForIssue,
-  resolvePhaseModelForIssue,
-  resolvePhaseModelIdForIssue,
-  resolvePhaseModelId,
-  resolvePhaseModel,
-  resolvePhaseReasoningEffort,
-} from '@shipcode/shared';
-import {
+  ClaudeNormalizer,
+  CodexNormalizer,
+  checkGhAuth,
   checkIntegrationStatus,
   checkSystemHealthWithAuth,
-  checkGhAuth,
-  GhCli,
-  enhancePrdDraft,
-  validateSkill,
-  validateOpenRouterModel,
   DEFAULT_SKILLS,
-  PHASE_SKILL_KEYS,
-  StreamParser,
+  enhancePrdDraft,
+  GhCli,
   generateContextFiles,
   listContextFiles,
+  PHASE_SKILL_KEYS,
   readContextFile,
+  StreamParser,
+  validateOpenRouterModel,
+  validateSkill,
 } from '@shipcode/agents';
+import type {
+  ActivityQueries,
+  CheckpointQueries,
+  CostsQueries,
+  DashboardQueries,
+  DiffQueries,
+  GitHubIssueQueries,
+  NotificationsQueries,
+  PlanQueries,
+  ProjectQueries,
+  ReviewQueries,
+  SettingsQueries,
+  SkillsQueries,
+  ThreadQueries,
+  VerificationQueries,
+} from '@shipcode/db';
+import type { PhaseSkillKey, ShipCodePlan } from '@shipcode/shared';
+import {
+  clampError,
+  deriveGithubIssueUrl,
+  parseGithubProjectUrl,
+  resolveExecutorModelForIssue,
+  resolvePhaseModel,
+  resolvePhaseModelForIssue,
+  resolvePhaseModelId,
+  resolvePhaseModelIdForIssue,
+  resolvePhaseReasoningEffort,
+  validateGithubProjectUrl,
+} from '@shipcode/shared';
+import { type BrowserWindow, dialog, type IpcMain, shell } from 'electron';
+import log, { logProcessOutput } from './logger.service';
 import { isSafeExternalUrl } from './security';
 
 const execAsync = promisify(exec);
+
 import { GitService, WorktreeManager } from '@shipcode/git';
 import type { Pipeline } from '@shipcode/pipeline';
 import type { ActivePipelineSummary, ExecutorModel } from '@shipcode/shared';
@@ -515,9 +517,12 @@ export function registerIpcHandlers(
     return checkIntegrationStatus(queries.settings.get());
   });
 
-  ipcMain.handle('integrations:validate-openrouter-model', async (_event, { modelId }: { modelId: string }) => {
-    return validateOpenRouterModel(queries.settings.get(), modelId);
-  });
+  ipcMain.handle(
+    'integrations:validate-openrouter-model',
+    async (_event, { modelId }: { modelId: string }) => {
+      return validateOpenRouterModel(queries.settings.get(), modelId);
+    },
+  );
 
   // === Dialog handlers ===
   ipcMain.handle('dialog:open-directory', async () => {
@@ -596,10 +601,7 @@ export function registerIpcHandlers(
       try {
         await syncLinkedPullRequestFeedback(project, issue, queries, notificationService);
       } catch (err) {
-        log.warn(
-          `[github:refresh-issues] PR feedback sync failed for #${issue.issueNumber}:`,
-          err,
-        );
+        log.warn(`[github:refresh-issues] PR feedback sync failed for #${issue.issueNumber}:`, err);
       }
     }
 
@@ -706,12 +708,9 @@ export function registerIpcHandlers(
     return queries.githubIssues.listArchived();
   });
 
-  ipcMain.handle(
-    'github:unarchive-issue',
-    (_event, { issueId }: { issueId: string }) => {
-      queries.githubIssues.clearArchivedAt(issueId);
-    },
-  );
+  ipcMain.handle('github:unarchive-issue', (_event, { issueId }: { issueId: string }) => {
+    queries.githubIssues.clearArchivedAt(issueId);
+  });
 
   ipcMain.handle(
     'github:create-issue',
@@ -1024,7 +1023,11 @@ export function registerIpcHandlers(
         projectId,
         issueNumber,
         phase,
-      }: { projectId: string; issueNumber: number; phase: 'planner' | 'reviewer' | 'executor' | 'verifier' },
+      }: {
+        projectId: string;
+        issueNumber: number;
+        phase: 'planner' | 'reviewer' | 'executor' | 'verifier';
+      },
     ) => {
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
@@ -1069,7 +1072,11 @@ export function registerIpcHandlers(
         projectId,
         issueNumber,
         phase,
-      }: { projectId: string; issueNumber: number; phase: 'planner' | 'reviewer' | 'executor' | 'verifier' },
+      }: {
+        projectId: string;
+        issueNumber: number;
+        phase: 'planner' | 'reviewer' | 'executor' | 'verifier';
+      },
     ) => {
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
@@ -1086,15 +1093,18 @@ export function registerIpcHandlers(
     return enrichProjectPath(queries.projects.getById(projectId));
   });
 
-  ipcMain.handle('git:list-branches', async (_event, { projectId, fetch }: { projectId: string; fetch?: boolean }) => {
-    const project = queries.projects.getById(projectId);
-    if (!project) throw new Error(`Project ${projectId} not found`);
-    const git = new GitService(project.path);
-    if (fetch) {
-      await git.fetch();
-    }
-    return git.listBranches(project.defaultBranch);
-  });
+  ipcMain.handle(
+    'git:list-branches',
+    async (_event, { projectId, fetch }: { projectId: string; fetch?: boolean }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+      const git = new GitService(project.path);
+      if (fetch) {
+        await git.fetch();
+      }
+      return git.listBranches(project.defaultBranch);
+    },
+  );
 
   ipcMain.handle(
     'project:set-default-branch',
@@ -1158,14 +1168,10 @@ export function registerIpcHandlers(
           reviewerModelIdOverride: import('@shipcode/shared').Project['reviewerModelIdOverride'];
           executorModelIdOverride: import('@shipcode/shared').Project['executorModelIdOverride'];
           verifierModelIdOverride: import('@shipcode/shared').Project['verifierModelIdOverride'];
-          plannerReasoningEffortOverride:
-            import('@shipcode/shared').Project['plannerReasoningEffortOverride'];
-          reviewerReasoningEffortOverride:
-            import('@shipcode/shared').Project['reviewerReasoningEffortOverride'];
-          executorReasoningEffortOverride:
-            import('@shipcode/shared').Project['executorReasoningEffortOverride'];
-          verifierReasoningEffortOverride:
-            import('@shipcode/shared').Project['verifierReasoningEffortOverride'];
+          plannerReasoningEffortOverride: import('@shipcode/shared').Project['plannerReasoningEffortOverride'];
+          reviewerReasoningEffortOverride: import('@shipcode/shared').Project['reviewerReasoningEffortOverride'];
+          executorReasoningEffortOverride: import('@shipcode/shared').Project['executorReasoningEffortOverride'];
+          verifierReasoningEffortOverride: import('@shipcode/shared').Project['verifierReasoningEffortOverride'];
         };
       },
     ) => {
@@ -1436,17 +1442,17 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     'costs:list-tasks',
-    (_event, { limit, offset, projectId }: { limit?: number; offset?: number; projectId?: string } = {}) => {
+    (
+      _event,
+      { limit, offset, projectId }: { limit?: number; offset?: number; projectId?: string } = {},
+    ) => {
       return queries.costs.listTasks(limit ?? 20, offset ?? 0, projectId ?? null);
     },
   );
 
-  ipcMain.handle(
-    'costs:count-tasks',
-    (_event, { projectId }: { projectId?: string } = {}) => {
-      return queries.costs.countTasks(projectId ?? null);
-    },
-  );
+  ipcMain.handle('costs:count-tasks', (_event, { projectId }: { projectId?: string } = {}) => {
+    return queries.costs.countTasks(projectId ?? null);
+  });
 
   // === Skills (per-phase prompt overrides) ===
   // The /skills page is the user's editing surface for the five phase prompts

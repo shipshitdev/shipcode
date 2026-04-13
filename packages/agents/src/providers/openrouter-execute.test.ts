@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { executeViaOpenRouter } from './openrouter-execute';
-import type { OpenRouterClient, OpenRouterChatResult, OpenRouterToolCall } from './openrouter-http';
+import type { OpenRouterChatResult, OpenRouterClient, OpenRouterToolCall } from './openrouter-http';
 import type { ProviderRequest } from './types';
 
 /**

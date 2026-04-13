@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { ISO_NOW_SQL, type Thread, type ThreadStatus, toIsoUtc } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
-import { ISO_NOW_SQL, toIsoUtc, type Thread, type ThreadStatus } from '@shipcode/shared';
 
 export class ThreadQueries {
   constructor(private db: DatabaseSync) {}

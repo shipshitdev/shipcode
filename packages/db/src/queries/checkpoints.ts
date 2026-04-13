@@ -1,7 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { nanoid } from 'nanoid';
 import { toIsoUtc } from '@shipcode/shared';
 import type { PipelineCheckpoint, PipelineCheckpointPhase } from '@shipcode/shared/source';
+import { nanoid } from 'nanoid';
 
 function mapRow(row: any): PipelineCheckpoint {
   return {

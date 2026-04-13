@@ -3,9 +3,9 @@ import type {
   AppSettings,
   ExecutorModel,
   IntegrationStatus,
-  PipelineCheckpoint,
   NotificationRecord,
   OpenRouterModelValidation,
+  PipelineCheckpoint,
   PipelinePhase,
   PlanRecord,
   Project,
@@ -17,15 +17,15 @@ import {
   deriveGithubIssueUrl,
   resolveExecutorModelForIssue,
   resolvePhaseModel,
-  resolvePhaseModelId,
   resolvePhaseModelForIssue,
+  resolvePhaseModelId,
 } from '@shipcode/shared';
 import {
   Archive,
   Badge,
   Button,
-  cn,
   ChevronLeft,
+  cn,
   ExternalLink,
   Maximize2,
   Minimize2,
@@ -34,11 +34,12 @@ import {
 } from '@shipcode/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { IssueDetailDialogs } from './issue-detail/IssueDetailDialogs';
-import { IssueDetailActions } from './issue-detail/IssueDetailActions';
-import { IssueDetailTabs } from './issue-detail/IssueDetailTabs';
-import { ACTIVE_PHASES, decodePhaseOption, encodePhaseOption } from './issue-detail/helpers';
 import { useAppStore } from '../stores/app-store';
+import { ACTIVE_PHASES, decodePhaseOption, encodePhaseOption } from './issue-detail/helpers';
+import { IssueDetailActions } from './issue-detail/IssueDetailActions';
+import { IssueDetailDialogs } from './issue-detail/IssueDetailDialogs';
+import { IssueDetailTabs } from './issue-detail/IssueDetailTabs';
+
 const INHERIT_EXECUTOR_VALUE = '__inherit__';
 
 export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
@@ -110,7 +111,9 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   });
   const normalizedIssuePlanHistory = Array.isArray(issuePlanHistory) ? issuePlanHistory : [];
   const normalizedPlanHistory =
-    normalizedIssuePlanHistory.length > 0 ? normalizedIssuePlanHistory : normalizedThreadPlanHistory;
+    normalizedIssuePlanHistory.length > 0
+      ? normalizedIssuePlanHistory
+      : normalizedThreadPlanHistory;
   const { data: issueActivity = [] } = useQuery<ActivityEntry[]>({
     queryKey: ['issue-activity', activeProjectId, activeIssue?.issueNumber],
     queryFn: () =>
@@ -510,30 +513,34 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       : 'claude',
   } as const;
   const projectDefaultPhaseSelections = {
-    planner: settings && activeProject
-      ? {
-          provider: resolvePhaseModel(settings, activeProject, 'planner'),
-          modelId: resolvePhaseModelId(settings, activeProject, 'planner'),
-        }
-      : { provider: 'claude' as ExecutorModel, modelId: null as string | null },
-    reviewer: settings && activeProject
-      ? {
-          provider: resolvePhaseModel(settings, activeProject, 'reviewer'),
-          modelId: resolvePhaseModelId(settings, activeProject, 'reviewer'),
-        }
-      : { provider: 'claude' as ExecutorModel, modelId: null as string | null },
-    executor: settings && activeProject
-      ? {
-          provider: resolvePhaseModel(settings, activeProject, 'executor'),
-          modelId: resolvePhaseModelId(settings, activeProject, 'executor'),
-        }
-      : { provider: 'claude' as ExecutorModel, modelId: null as string | null },
-    verifier: settings && activeProject
-      ? {
-          provider: resolvePhaseModel(settings, activeProject, 'verifier'),
-          modelId: resolvePhaseModelId(settings, activeProject, 'verifier'),
-        }
-      : { provider: 'claude' as ExecutorModel, modelId: null as string | null },
+    planner:
+      settings && activeProject
+        ? {
+            provider: resolvePhaseModel(settings, activeProject, 'planner'),
+            modelId: resolvePhaseModelId(settings, activeProject, 'planner'),
+          }
+        : { provider: 'claude' as ExecutorModel, modelId: null as string | null },
+    reviewer:
+      settings && activeProject
+        ? {
+            provider: resolvePhaseModel(settings, activeProject, 'reviewer'),
+            modelId: resolvePhaseModelId(settings, activeProject, 'reviewer'),
+          }
+        : { provider: 'claude' as ExecutorModel, modelId: null as string | null },
+    executor:
+      settings && activeProject
+        ? {
+            provider: resolvePhaseModel(settings, activeProject, 'executor'),
+            modelId: resolvePhaseModelId(settings, activeProject, 'executor'),
+          }
+        : { provider: 'claude' as ExecutorModel, modelId: null as string | null },
+    verifier:
+      settings && activeProject
+        ? {
+            provider: resolvePhaseModel(settings, activeProject, 'verifier'),
+            modelId: resolvePhaseModelId(settings, activeProject, 'verifier'),
+          }
+        : { provider: 'claude' as ExecutorModel, modelId: null as string | null },
   } as const;
   const effectivePhaseResolvedModels = {
     planner: thread?.plannerResolvedModel ?? effectivePhaseProviders.planner,
@@ -673,7 +680,8 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     </div>
   );
 
-  const headerStatus = activeThreadId && threadPhase !== 'idle' ? threadPhase : activeIssue.pipelineStatus;
+  const headerStatus =
+    activeThreadId && threadPhase !== 'idle' ? threadPhase : activeIssue.pipelineStatus;
   const headerStatusAnimated =
     ACTIVE_PHASES.includes(threadPhase as PipelinePhase) || threadPhase === 'awaiting_approval';
 
@@ -923,9 +931,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
           )}
 
           {/* Scrollable content */}
-          <div className="flex-1 overflow-y-auto p-6">
-            {detailTabs}
-          </div>
+          <div className="flex-1 overflow-y-auto p-6">{detailTabs}</div>
         </div>
         {detailDialogs}
       </div>
@@ -962,15 +968,9 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
       {/* Phase stepper — shown once pipeline has started */}
       {/* Primary CTAs — above tabs, always visible */}
-      {pipelineStartCard && (
-        <div className="shrink-0 p-4 pb-0">{pipelineStartCard}</div>
-      )}
-      {rerunSection && (
-        <div className="shrink-0 px-4 pt-4">{rerunSection}</div>
-      )}
-      {approvalSection && (
-        <div className="shrink-0 px-4 pt-4">{approvalSection}</div>
-      )}
+      {pipelineStartCard && <div className="shrink-0 p-4 pb-0">{pipelineStartCard}</div>}
+      {rerunSection && <div className="shrink-0 px-4 pt-4">{rerunSection}</div>}
+      {approvalSection && <div className="shrink-0 px-4 pt-4">{approvalSection}</div>}
 
       {/* Tabbed content — min-h-0 required for flex scroll containment */}
       <div className="flex-1 min-h-0 overflow-y-auto">{detailTabs}</div>

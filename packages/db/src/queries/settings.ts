@@ -1,8 +1,8 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { AppSettings, NotificationEventToggles } from '@shipcode/shared';
 import {
-  DEFAULT_SETTINGS,
   DEFAULT_NOTIFICATION_EVENTS,
+  DEFAULT_SETTINGS,
   DEFAULT_STATUS_LABEL_MAPPINGS,
   expandWorktreeRoot,
 } from '@shipcode/shared';
@@ -78,8 +78,7 @@ export class SettingsQueries {
         (stored.projectSortOrder as AppSettings['projectSortOrder']) ??
         DEFAULT_SETTINGS.projectSortOrder,
       worktreeRoot: readWorktreeRoot(stored.worktreeRoot),
-      worktreeBranchFormat:
-        stored.worktreeBranchFormat || DEFAULT_SETTINGS.worktreeBranchFormat,
+      worktreeBranchFormat: stored.worktreeBranchFormat || DEFAULT_SETTINGS.worktreeBranchFormat,
       plannerMaxTurns: clampInt(stored.plannerMaxTurns, 1, 20, DEFAULT_SETTINGS.plannerMaxTurns),
       maxReviewRounds: clampInt(stored.maxReviewRounds, 1, 5, DEFAULT_SETTINGS.maxReviewRounds),
       requireApproval: parseBool(stored.requireApproval, DEFAULT_SETTINGS.requireApproval),
@@ -127,7 +126,12 @@ export class SettingsQueries {
         stored.openrouterExplicitFallback ?? DEFAULT_SETTINGS.openrouterExplicitFallback,
       testCommand: readNullable(stored.testCommand) ?? null,
       testingContext: readNullable(stored.testingContext) ?? null,
-      maxConcurrentPipelines: clampInt(stored.maxConcurrentPipelines, 1, 10, DEFAULT_SETTINGS.maxConcurrentPipelines),
+      maxConcurrentPipelines: clampInt(
+        stored.maxConcurrentPipelines,
+        1,
+        10,
+        DEFAULT_SETTINGS.maxConcurrentPipelines,
+      ),
     };
   }
 
@@ -146,9 +150,15 @@ export class SettingsQueries {
     }
     if ('maxConcurrentPipelines' in patch && patch.maxConcurrentPipelines != null) {
       const n = Number(patch.maxConcurrentPipelines);
-      if (!Number.isFinite(n) || n < 1 || n > 10) throw new Error('maxConcurrentPipelines must be 1–10');
+      if (!Number.isFinite(n) || n < 1 || n > 10)
+        throw new Error('maxConcurrentPipelines must be 1–10');
     }
-    for (const key of ['plannerReasoningEffort', 'reviewerReasoningEffort', 'executorReasoningEffort', 'verifierReasoningEffort'] as const) {
+    for (const key of [
+      'plannerReasoningEffort',
+      'reviewerReasoningEffort',
+      'executorReasoningEffort',
+      'verifierReasoningEffort',
+    ] as const) {
       if (key in patch && patch[key] != null) {
         if (!REASONING_EFFORTS.includes(patch[key] as any))
           throw new Error(`${key} must be low|medium|high`);

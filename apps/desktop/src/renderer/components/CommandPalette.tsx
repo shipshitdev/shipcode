@@ -1,16 +1,16 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Project } from '@shipcode/shared';
-import { useAppStore } from '../stores/app-store';
-import { getShortcut } from '../data/shortcuts';
 import {
   CommandDialog,
-  CommandInput,
-  CommandList,
   CommandEmpty,
   CommandGroup,
+  CommandInput,
   CommandItem,
+  CommandList,
   CommandShortcut,
 } from '@shipcode/ui';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { getShortcut } from '../data/shortcuts';
+import { useAppStore } from '../stores/app-store';
 
 export function CommandPalette() {
   const queryClient = useQueryClient();

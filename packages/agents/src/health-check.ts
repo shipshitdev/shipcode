@@ -223,9 +223,21 @@ function buildOpenRouterModelChecks(
   message: string | null,
 ): OpenRouterModelCheck[] {
   const configured: Array<{ key: string; label: string; modelId: string | null }> = [
-    { key: 'default_paid', label: 'Default paid model', modelId: settings.openrouterDefaultPaidModel },
-    { key: 'default_free', label: 'Default free model', modelId: settings.openrouterDefaultFreeModel },
-    { key: 'explicit_fallback', label: 'Explicit fallback', modelId: settings.openrouterExplicitFallback },
+    {
+      key: 'default_paid',
+      label: 'Default paid model',
+      modelId: settings.openrouterDefaultPaidModel,
+    },
+    {
+      key: 'default_free',
+      label: 'Default free model',
+      modelId: settings.openrouterDefaultFreeModel,
+    },
+    {
+      key: 'explicit_fallback',
+      label: 'Explicit fallback',
+      modelId: settings.openrouterExplicitFallback,
+    },
     { key: 'planner', label: 'Planner default', modelId: settings.openrouterPlannerModel },
     { key: 'reviewer', label: 'Reviewer default', modelId: settings.openrouterReviewerModel },
     { key: 'executor', label: 'Executor default', modelId: settings.openrouterExecutorModel },
@@ -285,7 +297,12 @@ export async function checkOpenRouterHealth(settings: AppSettings): Promise<Open
 
   const auth = await checkOpenRouterAuth(apiKey);
   if (!auth.ok) {
-    const authStatus = auth.reason === 'invalid_key' ? 'invalid_key' : auth.reason === 'unreachable' ? 'unreachable' : 'missing_key';
+    const authStatus =
+      auth.reason === 'invalid_key'
+        ? 'invalid_key'
+        : auth.reason === 'unreachable'
+          ? 'unreachable'
+          : 'missing_key';
     return {
       enabled: true,
       keyPresent: true,
@@ -366,9 +383,7 @@ async function getGhVersion(): Promise<string | null> {
 export function parseGhProjectScope(output: string): boolean | null {
   const match = output.match(/Token scopes:\s*([^\n]+)/i);
   if (!match) return null;
-  const scopes = match[1]
-    .split(',')
-    .map((s) => s.trim().replace(/^['"]|['"]$/g, ''));
+  const scopes = match[1].split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, ''));
   return scopes.includes('project');
 }
 

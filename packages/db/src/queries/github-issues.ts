@@ -1,21 +1,23 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { nanoid } from 'nanoid';
 import {
-  ISO_NOW_SQL,
-  toIsoUtc,
   type ExecutorModel,
   type GitHubIssueCacheRecord,
   type GitHubPrCheckSummary,
   type GitHubPrReviewCommentSummary,
+  ISO_NOW_SQL,
   type IssuePipelineStatus,
+  toIsoUtc,
 } from '@shipcode/shared';
+import { nanoid } from 'nanoid';
 
 export class GitHubIssueQueries {
   constructor(private db: DatabaseSync) {}
 
   list(projectId: string): GitHubIssueCacheRecord[] {
     const rows = this.db
-      .prepare('SELECT * FROM github_issue_cache WHERE project_id = ? AND archived_at IS NULL ORDER BY fetched_at DESC')
+      .prepare(
+        'SELECT * FROM github_issue_cache WHERE project_id = ? AND archived_at IS NULL ORDER BY fetched_at DESC',
+      )
       .all(projectId) as any[];
     return rows.map((r) => this.toRecord(r));
   }
@@ -305,19 +307,21 @@ export class GitHubIssueQueries {
     if (ids.length === 0) return;
     const placeholders = ids.map(() => '?').join(', ');
     this.db
-      .prepare(`UPDATE github_issue_cache SET archived_at = ${ISO_NOW_SQL} WHERE id IN (${placeholders})`)
+      .prepare(
+        `UPDATE github_issue_cache SET archived_at = ${ISO_NOW_SQL} WHERE id IN (${placeholders})`,
+      )
       .run(...ids);
   }
 
   clearArchivedAt(id: string): void {
-    this.db
-      .prepare('UPDATE github_issue_cache SET archived_at = NULL WHERE id = ?')
-      .run(id);
+    this.db.prepare('UPDATE github_issue_cache SET archived_at = NULL WHERE id = ?').run(id);
   }
 
   listArchived(): GitHubIssueCacheRecord[] {
     const rows = this.db
-      .prepare('SELECT * FROM github_issue_cache WHERE archived_at IS NOT NULL ORDER BY archived_at DESC')
+      .prepare(
+        'SELECT * FROM github_issue_cache WHERE archived_at IS NOT NULL ORDER BY archived_at DESC',
+      )
       .all() as any[];
     return rows.map((r) => this.toRecord(r));
   }

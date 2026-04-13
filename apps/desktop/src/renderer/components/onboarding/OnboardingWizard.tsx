@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import type {
   AgentType,
   GhAuthStatus,
@@ -6,12 +5,13 @@ import type {
   StatusLabelMapping,
   SystemHealth,
 } from '@shipcode/shared';
-import { DEFAULT_STATUS_LABEL_MAPPINGS, CURRENT_ONBOARDING_VERSION } from '@shipcode/shared';
+import { CURRENT_ONBOARDING_VERSION, DEFAULT_STATUS_LABEL_MAPPINGS } from '@shipcode/shared';
 import { Button, Card } from '@shipcode/ui';
+import { useEffect, useState } from 'react';
 import { StepAuthCheck, useAuthCheck } from './StepAuthCheck';
 import { StepGitHubProject } from './StepGitHubProject';
-import { StepModelPrefs } from './StepModelPrefs';
 import { StepLabelMapping } from './StepLabelMapping';
+import { StepModelPrefs } from './StepModelPrefs';
 
 type Step = 0 | 1 | 2 | 3;
 

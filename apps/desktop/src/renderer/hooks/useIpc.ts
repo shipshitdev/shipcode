@@ -1,7 +1,7 @@
-import { useEffect, useCallback } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import type { GitHubIssueCacheRecord, NotificationRecord } from '@shipcode/shared';
 import { modelDisplay } from '@shipcode/ui';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect } from 'react';
 import { useAppStore } from '../stores/app-store';
 
 export function useIpc() {
@@ -182,10 +182,13 @@ export function useIpc() {
         }
         // Color the agent name: claude=cyan, codex=yellow, openrouter=magenta
         const agentColor =
-          data.type === 'claude' ? '\x1b[36m'
-          : data.type === 'codex' ? '\x1b[33m'
-          : data.type === 'openrouter' ? '\x1b[35m'
-          : '';
+          data.type === 'claude'
+            ? '\x1b[36m'
+            : data.type === 'codex'
+              ? '\x1b[33m'
+              : data.type === 'openrouter'
+                ? '\x1b[35m'
+                : '';
         const agentReset = agentColor ? '\x1b[0m' : '';
         const exitColor = data.state === 'exited' ? '\x1b[2m' : '';
         const line = `\x1b[2m[${ts}]\x1b[0m ${exitColor}${agentColor}${data.type}${agentReset}${exitColor} process ${label}\x1b[0m`;

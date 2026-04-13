@@ -7,7 +7,10 @@ import { loadRepoSetupContract } from './repo-setup-contract';
 const tempDirs: string[] = [];
 
 function makeProject() {
-  const dir = path.join(os.tmpdir(), `shipcode-setup-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+  const dir = path.join(
+    os.tmpdir(),
+    `shipcode-setup-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  );
   mkdirSync(path.join(dir, '.shipcode'), { recursive: true });
   tempDirs.push(dir);
   return dir;

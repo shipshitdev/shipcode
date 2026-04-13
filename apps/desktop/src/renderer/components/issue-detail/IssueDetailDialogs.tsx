@@ -83,7 +83,8 @@ export function IssueDetailDialogs({
         className="max-w-sm"
       >
         <div className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-          Warning: this closes the GitHub issue and archives its GitHub Project card. Archived items disappear from the Done column.
+          Warning: this closes the GitHub issue and archives its GitHub Project card. Archived items
+          disappear from the Done column.
         </div>
         <ModalFooter>
           <Button variant="ghost" size="sm" onClick={onCloseArchiveConfirm}>

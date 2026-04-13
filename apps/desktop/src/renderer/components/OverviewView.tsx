@@ -1,5 +1,3 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   ActivePipelineSummary,
   ActivityEntry,
@@ -10,12 +8,12 @@ import type {
 import {
   Bell,
   Bot,
+  Button,
   Card,
   CardContent,
   CardFooter,
   CardHeader,
   CardTitle,
-  Button,
   ListTodo,
   PackageCheck,
   Pagination,
@@ -27,8 +25,9 @@ import {
   TableHeader,
   TableRow,
 } from '@shipcode/ui';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { type ReactNode, useEffect, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
-
 
 function timeAgo(input: string | number): string {
   const t = typeof input === 'number' ? input : new Date(input).getTime();
@@ -95,7 +94,9 @@ function StatCard({ label, value, subtitle, tone = 'default', icon, onClick }: S
           ? 'var(--color-success)'
           : 'var(--text-muted)';
   const card = (
-    <Card className={`w-full h-full${toneClass ? ` ${toneClass}` : ''}${onClick ? ' hover:ring-1 hover:ring-border' : ''}`}>
+    <Card
+      className={`w-full h-full${toneClass ? ` ${toneClass}` : ''}${onClick ? ' hover:ring-1 hover:ring-border' : ''}`}
+    >
       <CardContent className="p-5 pt-5">
         <div className="flex items-start justify-between">
           <div className="text-3xl font-semibold text-primary">{value}</div>

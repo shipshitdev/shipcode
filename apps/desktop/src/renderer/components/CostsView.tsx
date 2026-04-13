@@ -1,12 +1,17 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import type { CostSummary, CostTaskSummary, GitHubIssueCacheRecord, PipelinePhase } from '@shipcode/shared';
+import type {
+  CostSummary,
+  CostTaskSummary,
+  GitHubIssueCacheRecord,
+  PipelinePhase,
+} from '@shipcode/shared';
 import {
   Button,
   Card,
   CardContent,
   CardFooter,
+  cn,
   Loader2,
+  modelDisplay,
   Pagination,
   Table,
   TableBody,
@@ -14,9 +19,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  cn,
-  modelDisplay,
 } from '@shipcode/ui';
+import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 
 function formatCost(usd: number): string {
@@ -152,7 +157,8 @@ export function CostsView() {
 
   const { data: projectTasksTotal = 0 } = useQuery<number>({
     queryKey: ['costs-project-tasks-count', selectedProjectId],
-    queryFn: () => window.shipcode.invoke<number>('costs:count-tasks', { projectId: selectedProjectId! }),
+    queryFn: () =>
+      window.shipcode.invoke<number>('costs:count-tasks', { projectId: selectedProjectId! }),
     refetchInterval: 30_000,
     enabled: !!selectedProjectId,
   });
@@ -303,7 +309,9 @@ export function CostsView() {
               {selectedProjectId && (
                 <section>
                   <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
-                    {data.byProject.find((p) => p.projectId === selectedProjectId)?.projectName ?? 'Project'} Cost Details
+                    {data.byProject.find((p) => p.projectId === selectedProjectId)?.projectName ??
+                      'Project'}{' '}
+                    Cost Details
                   </h2>
                   <Card>
                     <CardContent className="p-0">
@@ -455,7 +463,6 @@ export function CostsView() {
                   </Card>
                 )}
               </section>
-
             </>
           )}
         </div>

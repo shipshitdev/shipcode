@@ -1,17 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NotificationRecord, Thread } from '@shipcode/shared';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const {
-  setBadgeMock,
-  notificationShowMock,
-  notificationOnMock,
-  notificationIsSupportedMock,
-} = vi.hoisted(() => ({
-  setBadgeMock: vi.fn(),
-  notificationShowMock: vi.fn(),
-  notificationOnMock: vi.fn(),
-  notificationIsSupportedMock: vi.fn(() => true),
-}));
+const { setBadgeMock, notificationShowMock, notificationOnMock, notificationIsSupportedMock } =
+  vi.hoisted(() => ({
+    setBadgeMock: vi.fn(),
+    notificationShowMock: vi.fn(),
+    notificationOnMock: vi.fn(),
+    notificationIsSupportedMock: vi.fn(() => true),
+  }));
 
 vi.mock('electron', () => {
   class NotificationMock {
@@ -79,9 +75,7 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
   };
 }
 
-function makeNotificationRecord(
-  overrides: Partial<NotificationRecord> = {},
-): NotificationRecord {
+function makeNotificationRecord(overrides: Partial<NotificationRecord> = {}): NotificationRecord {
   return {
     id: 'notification-1',
     threadId: 'thread-1',

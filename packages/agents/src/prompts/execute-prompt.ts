@@ -1,7 +1,7 @@
 import type { ShipCodePlan } from '@shipcode/shared';
 import {
-  resolveSkill,
   interpolateSkill,
+  resolveSkill,
   type SkillsRowSource,
   type SkillValidationError,
 } from '../skills';

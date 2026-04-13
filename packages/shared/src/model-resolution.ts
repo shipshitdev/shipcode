@@ -168,7 +168,9 @@ export function resolvePhaseModelIdForIssue(
   return resolvePhaseModelId(settings, project, phase);
 }
 
-export function getIssueCardPhase(status: GitHubIssueCacheRecord['pipelineStatus']): ResolvedPhaseModel | null {
+export function getIssueCardPhase(
+  status: GitHubIssueCacheRecord['pipelineStatus'],
+): ResolvedPhaseModel | null {
   switch (status) {
     case 'todo':
     case 'queued':

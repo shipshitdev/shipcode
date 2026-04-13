@@ -18,8 +18,8 @@
  *    creation is still allowed but only within the worktree subtree.
  */
 
-import path from 'node:path';
 import fs from 'node:fs/promises';
+import path from 'node:path';
 
 export class PathGuardError extends Error {
   constructor(message: string) {

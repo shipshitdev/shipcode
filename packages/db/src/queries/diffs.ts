@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { type DiffRecord, toIsoUtc } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
-import { toIsoUtc, type DiffRecord } from '@shipcode/shared';
 
 export class DiffQueries {
   constructor(private db: DatabaseSync) {}

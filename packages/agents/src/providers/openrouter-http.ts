@@ -482,7 +482,7 @@ function computeBackoffMs(attempt: number, err: OpenRouterError): number {
   if (typeof retryAfterMs === 'number' && retryAfterMs > 0) {
     return Math.min(retryAfterMs, OPENROUTER_BACKOFF_MAX_MS);
   }
-  const base = OPENROUTER_BACKOFF_BASE_MS * Math.pow(2, attempt);
+  const base = OPENROUTER_BACKOFF_BASE_MS * 2 ** attempt;
   const jitter = Math.random() * base * 0.25;
   return Math.min(base + jitter, OPENROUTER_BACKOFF_MAX_MS);
 }

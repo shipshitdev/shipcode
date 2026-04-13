@@ -1,347 +1,42 @@
-import { type Dispatch, type SetStateAction, useEffect, useMemo, useState } from 'react';
-import log from 'electron-log/renderer';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  clampError,
-  type ContextFileInfo,
   type AppSettings,
-  type ExecutorModel,
+  type ContextFileInfo,
+  clampError,
   type IntegrationStatus,
   type OpenRouterModelValidation,
   type Project,
-  resolvePhaseModel,
-  resolvePhaseModelId,
-  resolvePhaseReasoningEffort,
   validateGithubProjectUrl,
 } from '@shipcode/shared';
 import {
   Button,
-  Input,
   Keycap,
-  Label,
   Modal,
   ModalFooter,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from '@shipcode/ui';
-import {
-  formatModelInheritanceLabel,
-  getModelOptions,
-  InheritValueDisplay,
-  PROVIDER_DISPLAY,
-} from './model-provider-options';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import log from 'electron-log/renderer';
+import { useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
-
-const INHERIT_VALUE = '__inherit__';
-const PROJECT_TABS = ['general', 'models', 'context'] as const;
-const PHASES = ['planner', 'reviewer', 'executor', 'verifier'] as const;
-
-type ProjectTab = (typeof PROJECT_TABS)[number];
-type PhaseKey = (typeof PHASES)[number];
-type ContextGeneratorCli = 'claude' | 'codex';
-type ProjectOverrideState = Pick<
-  Project,
-  | 'plannerModelOverride'
-  | 'reviewerModelOverride'
-  | 'executorModelOverride'
-  | 'verifierModelOverride'
-  | 'plannerModelIdOverride'
-  | 'reviewerModelIdOverride'
-  | 'executorModelIdOverride'
-  | 'verifierModelIdOverride'
-  | 'plannerReasoningEffortOverride'
-  | 'reviewerReasoningEffortOverride'
-  | 'executorReasoningEffortOverride'
-  | 'verifierReasoningEffortOverride'
->;
-
-const EMPTY_OVERRIDES: ProjectOverrideState = {
-  plannerModelOverride: null,
-  reviewerModelOverride: null,
-  executorModelOverride: null,
-  verifierModelOverride: null,
-  plannerModelIdOverride: null,
-  reviewerModelIdOverride: null,
-  executorModelIdOverride: null,
-  verifierModelIdOverride: null,
-  plannerReasoningEffortOverride: null,
-  reviewerReasoningEffortOverride: null,
-  executorReasoningEffortOverride: null,
-  verifierReasoningEffortOverride: null,
-};
-
-const PROVIDER_OVERRIDE_KEYS = {
-  planner: 'plannerModelOverride',
-  reviewer: 'reviewerModelOverride',
-  executor: 'executorModelOverride',
-  verifier: 'verifierModelOverride',
-} as const;
-
-const MODEL_ID_OVERRIDE_KEYS = {
-  planner: 'plannerModelIdOverride',
-  reviewer: 'reviewerModelIdOverride',
-  executor: 'executorModelIdOverride',
-  verifier: 'verifierModelIdOverride',
-} as const;
-
-const EFFORT_OVERRIDE_KEYS = {
-  planner: 'plannerReasoningEffortOverride',
-  reviewer: 'reviewerReasoningEffortOverride',
-  executor: 'executorReasoningEffortOverride',
-  verifier: 'verifierReasoningEffortOverride',
-} as const;
-
-const CONTEXT_GENERATOR_OPTIONS: Array<{
-  value: ContextGeneratorCli;
-  label: string;
-}> = [
-  { value: 'claude', label: 'Claude CLI' },
-  { value: 'codex', label: 'Codex CLI' },
-] as const;
-
-const PHASE_META: Array<{
-  key: PhaseKey;
-  label: string;
-  validProviders: ExecutorModel[];
-}> = [
-  { key: 'planner', label: 'Planner', validProviders: ['claude', 'codex', 'openrouter'] },
-  { key: 'reviewer', label: 'Reviewer', validProviders: ['claude', 'codex', 'openrouter'] },
-  { key: 'executor', label: 'Executor', validProviders: ['claude', 'codex', 'openrouter'] },
-  { key: 'verifier', label: 'Verifier', validProviders: ['claude', 'codex', 'openrouter'] },
-];
-
-function buildProjectDraft(project: Project | null | undefined, overrides: ProjectOverrideState): Project | null {
-  if (!project) return null;
-  return { ...project, ...overrides };
-}
-
-function formatInheritedSummary(
-  settings: AppSettings,
-  projectDraft: Project,
-  phase: PhaseKey,
-): string {
-  const provider = resolvePhaseModel(settings, projectDraft, phase);
-  const model = resolvePhaseModelId(settings, projectDraft, phase);
-  const effort = resolvePhaseReasoningEffort(settings, projectDraft, phase);
-  return `${PROVIDER_DISPLAY[provider]}${model ? ` / ${model}` : ''} / ${effort}`;
-}
-
-function ProjectPhaseSettingsRow({
-  phase,
-  label,
-  validProviders,
-  settings,
-  projectDraft,
-  overrides,
-  setOverrides,
-  integrationStatus,
-  modelValidation,
-  setModelValidation,
-}: {
-  phase: PhaseKey;
-  label: string;
-  validProviders: ExecutorModel[];
-  settings: AppSettings;
-  projectDraft: Project;
-  overrides: ProjectOverrideState;
-  setOverrides: Dispatch<SetStateAction<ProjectOverrideState>>;
-  integrationStatus: IntegrationStatus | undefined;
-  modelValidation: Partial<Record<PhaseKey, OpenRouterModelValidation | null>>;
-  setModelValidation: Dispatch<
-    SetStateAction<Partial<Record<PhaseKey, OpenRouterModelValidation | null>>>
-  >;
-}) {
-  const providerKey = PROVIDER_OVERRIDE_KEYS[phase];
-  const modelIdKey = MODEL_ID_OVERRIDE_KEYS[phase];
-  const effortKey = EFFORT_OVERRIDE_KEYS[phase];
-
-  const providerOverride = overrides[providerKey];
-  const modelIdOverride = overrides[modelIdKey];
-  const effortOverride = overrides[effortKey];
-
-  const effectiveProvider = resolvePhaseModel(settings, projectDraft, phase);
-  const modelOptions = getModelOptions(effectiveProvider);
-  const knownModelValues = new Set<string>(modelOptions.map((option) => option.value));
-  const inheritedModelId = resolvePhaseModelId(settings, projectDraft, phase);
-  const inheritedModelLabel = formatModelInheritanceLabel(
-    effectiveProvider,
-    inheritedModelId,
-    modelOptions,
-  );
-  const providerWarning =
-    effectiveProvider === 'openrouter'
-      ? integrationStatus?.openrouter.authStatus !== 'valid'
-        ? integrationStatus?.openrouter.message ?? 'OpenRouter is not ready'
-        : null
-      : null;
-  const validationMessage =
-    modelValidation[phase] && modelValidation[phase]?.status !== 'valid'
-      ? modelValidation[phase]?.message
-      : null;
-
-  return (
-    <div className="rounded-md border border-border bg-secondary/50 p-3">
-      <div className="mb-3">
-        <div className="text-[13px] font-medium text-primary">{label}</div>
-        <div className="text-[11px] text-muted">
-          Inherit currently uses {formatInheritedSummary(settings, projectDraft, phase)}.
-        </div>
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-3">
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-[11px] text-secondary">Provider</Label>
-          <Select
-            value={providerOverride ?? INHERIT_VALUE}
-            onValueChange={(next) => {
-              setOverrides((current) => ({
-                ...current,
-                [providerKey]: next === INHERIT_VALUE ? null : (next as ExecutorModel),
-                [modelIdKey]: null,
-              }));
-              setModelValidation((current) => ({ ...current, [phase]: null }));
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue>
-                {providerOverride === null ? (
-                  <InheritValueDisplay detail={PROVIDER_DISPLAY[effectiveProvider]} />
-                ) : undefined}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={INHERIT_VALUE}>
-                Inherit ({PROVIDER_DISPLAY[effectiveProvider]})
-              </SelectItem>
-              {validProviders.map((provider) => (
-                <SelectItem key={provider} value={provider}>
-                  {PROVIDER_DISPLAY[provider]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-[11px] text-secondary">Model</Label>
-          <Select
-            value={modelIdOverride ?? INHERIT_VALUE}
-            onValueChange={(next) => {
-              setOverrides((current) => ({
-                ...current,
-                [modelIdKey]: next === INHERIT_VALUE ? null : next,
-              }));
-              setModelValidation((current) => ({ ...current, [phase]: null }));
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue>
-                {modelIdOverride === null ? (
-                  <InheritValueDisplay detail={inheritedModelLabel} />
-                ) : undefined}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={INHERIT_VALUE}>Inherit ({inheritedModelLabel})</SelectItem>
-              {modelIdOverride && !knownModelValues.has(modelIdOverride) && (
-                <SelectItem value={modelIdOverride}>{modelIdOverride}</SelectItem>
-              )}
-              {modelOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-[11px] text-secondary">Effort</Label>
-          <Select
-            value={effortOverride ?? INHERIT_VALUE}
-            onValueChange={(next) => {
-              setOverrides((current) => ({
-                ...current,
-                [effortKey]: next === INHERIT_VALUE ? null : (next as Project['plannerReasoningEffortOverride']),
-              }));
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue>
-                {effortOverride === null ? (
-                  <InheritValueDisplay
-                    detail={resolvePhaseReasoningEffort(settings, projectDraft, phase)}
-                  />
-                ) : undefined}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={INHERIT_VALUE}>
-                Inherit ({resolvePhaseReasoningEffort(settings, projectDraft, phase)})
-              </SelectItem>
-              <SelectItem value="low">low</SelectItem>
-              <SelectItem value="medium">medium</SelectItem>
-              <SelectItem value="high">high</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {effectiveProvider === 'openrouter' && phase !== 'executor' && (
-        <div className="mt-3 flex flex-col gap-1.5">
-          <Label className="text-[11px] text-secondary">Custom OpenRouter model slug</Label>
-          <Input
-            key={`${phase}-${modelIdOverride ?? ''}`}
-            placeholder="e.g. anthropic/claude-sonnet-4-6"
-            defaultValue={modelIdOverride ?? ''}
-            onBlur={async (e) => {
-              const next = e.target.value.trim() || null;
-              setOverrides((current) => ({ ...current, [modelIdKey]: next }));
-              if (!next) {
-                setModelValidation((current) => ({ ...current, [phase]: null }));
-                return;
-              }
-              const validation = await window.shipcode.invoke<OpenRouterModelValidation>(
-                'integrations:validate-openrouter-model',
-                { modelId: next },
-              );
-              setModelValidation((current) => ({ ...current, [phase]: validation }));
-            }}
-          />
-          <p className="text-[11px] text-muted">
-            Enter a slug directly to override the curated presets for this project.
-          </p>
-        </div>
-      )}
-
-      {providerWarning && (
-        <div className="mt-3 rounded-md border border-amber-500/20 bg-amber-500/10 px-2.5 py-2 text-[11px] text-amber-300">
-          {providerWarning}
-        </div>
-      )}
-      {validationMessage && (
-        <div className="mt-2 rounded-md border border-amber-500/20 bg-amber-500/10 px-2.5 py-2 text-[11px] text-amber-300">
-          {validationMessage}
-        </div>
-      )}
-    </div>
-  );
-}
+import { ProjectSettingsContextTab } from './project-settings-modal/ProjectSettingsContextTab';
+import { ProjectSettingsGeneralTab } from './project-settings-modal/ProjectSettingsGeneralTab';
+import { ProjectSettingsModelsTab } from './project-settings-modal/ProjectSettingsModelsTab';
+import {
+  buildProjectDraft,
+  type ContextGeneratorCli,
+  EMPTY_OVERRIDES,
+  type PhaseKey,
+  type ProjectOverrideState,
+  type ProjectTab,
+} from './project-settings-modal/shared';
 
 export function ProjectSettingsModal() {
   const queryClient = useQueryClient();
-  const {
-    projectSettingsModalOpen,
-    projectSettingsModalProjectId,
-    closeProjectSettingsModal,
-  } = useAppStore();
+  const { projectSettingsModalOpen, projectSettingsModalProjectId, closeProjectSettingsModal } =
+    useAppStore();
 
   const [activeTab, setActiveTab] = useState<ProjectTab>('general');
   const [urlInput, setUrlInput] = useState('');
@@ -538,7 +233,8 @@ export function ProjectSettingsModal() {
 
   const inputMatchesSaved = urlInput === (project?.githubProjectUrl ?? '');
   const hasSavedUrl = !!project?.githubProjectUrl;
-  const canSync = hasSavedUrl && inputMatchesSaved && !syncMutation.isPending && !saveMutation.isPending;
+  const canSync =
+    hasSavedUrl && inputMatchesSaved && !syncMutation.isPending && !saveMutation.isPending;
   const modalBusy = saveMutation.isPending || contextGenerating;
   const contextCliUnavailableReason =
     contextGeneratorCli === 'claude'
@@ -552,6 +248,30 @@ export function ProjectSettingsModal() {
         : !integrationStatus.system.codex.authenticated
           ? 'Not authenticated'
           : null;
+  const contextCliOptions: Array<{
+    value: ContextGeneratorCli;
+    label: string;
+    disabledReason: string | null;
+  }> = [
+    {
+      value: 'claude',
+      label: 'Claude CLI',
+      disabledReason: !integrationStatus?.system.claude.available
+        ? 'CLI missing'
+        : !integrationStatus.system.claude.authenticated
+          ? 'Not authenticated'
+          : null,
+    },
+    {
+      value: 'codex',
+      label: 'Codex CLI',
+      disabledReason: !integrationStatus?.system.codex.available
+        ? 'CLI missing'
+        : !integrationStatus.system.codex.authenticated
+          ? 'Not authenticated'
+          : null,
+    },
+  ];
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape' && !modalBusy) {
@@ -586,244 +306,55 @@ export function ProjectSettingsModal() {
             </TabsList>
 
             <TabsContent value="general" className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-3">
-                <div className="flex flex-col gap-1">
-                  <Label className="text-xs text-secondary">Name</Label>
-                  <div className="text-[13px] text-primary">{project.name}</div>
-                </div>
-
-                <div className="flex flex-col gap-1">
-                  <Label className="text-xs text-secondary">Git remote</Label>
-                  <div className="truncate font-mono text-xs text-secondary">
-                    {project.gitRemote ?? '(no remote)'}
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-1">
-                  <Label className="text-xs text-secondary">Default branch</Label>
-                  <div className="font-mono text-xs text-secondary">{project.defaultBranch}</div>
-                </div>
-              </div>
-
-              <div className="rounded-md border border-border bg-secondary/30 p-3">
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-[12px] font-medium text-primary">Repository folder</div>
-                    <div className="text-[11px] text-muted">
-                      If you moved this repo on disk, relink the existing project instead of creating a duplicate.
-                    </div>
-                  </div>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      setRelinkError(null);
-                      relinkMutation.mutate();
-                    }}
-                    disabled={relinkMutation.isPending}
-                  >
-                    {relinkMutation.isPending ? 'Locating…' : 'Change folder…'}
-                  </Button>
-                </div>
-                <div className="font-mono text-xs text-secondary break-all">{project.path}</div>
-                {project.pathExists === false && (
-                  <div className="mt-2 rounded-md border border-warning/30 bg-warning/10 px-2.5 py-2 text-[11px] text-warning">
-                    This path is missing. ShipCode will block issue refresh, branch reads, and pipeline actions until you relink it.
-                  </div>
-                )}
-                {relinkError && (
-                  <div className="mt-2 rounded-md border border-danger/30 bg-danger/10 px-2.5 py-2 text-[11px] text-danger">
-                    <span className="line-clamp-2">{relinkError}</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="github-project-url" className="text-xs text-secondary">
-                  GitHub Projects board URL
-                </Label>
-                <Input
-                  id="github-project-url"
-                  type="url"
-                  value={urlInput}
-                  onChange={(e) => setUrlInput(e.target.value)}
-                  onBlur={() => setTouched(true)}
-                  placeholder="https://github.com/orgs/your-org/projects/1"
-                  className={showInlineError ? 'border-danger' : undefined}
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-                <p className="text-[11px] text-muted">
-                  Leave blank to open the repo Projects tab. Paste a full GitHub Projects v2 URL
-                  to link the Kanban <span className="font-mono">board</span> button to the real board.
-                </p>
-                {showInlineError && !validation.ok && (
-                  <p className="text-[11px] text-danger">{validation.reason}</p>
-                )}
-              </div>
-
-              <div className="rounded-md border border-border bg-secondary/30 p-3">
-                <div className="mb-2 text-[12px] font-medium text-primary">Board sync</div>
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={handleSync}
-                      disabled={!canSync}
-                      title={
-                        !hasSavedUrl
-                          ? 'Save a board URL first'
-                          : !inputMatchesSaved
-                            ? 'Save your changes before syncing'
-                            : 'Add every cached issue to the board'
-                      }
-                    >
-                      {syncMutation.isPending ? 'Syncing…' : 'Sync existing issues to board'}
-                    </Button>
-                    {syncResult && (
-                      <span className="text-[11px] text-muted">
-                        Attached {syncResult.attached}, already present {syncResult.alreadyPresent}
-                        {syncResult.failed > 0 ? `, failed ${syncResult.failed}` : ''}
-                      </span>
-                    )}
-                  </div>
-
-                  {syncError && (
-                    <div className="rounded-md border border-danger/30 bg-danger/10 px-2.5 py-2 text-[11px] text-danger">
-                      <span className="line-clamp-2">{syncError}</span>
-                    </div>
-                  )}
-
-                  {syncResult && syncResult.errors.length > 0 && (
-                    <div className="rounded-md border border-warning/30 bg-warning/10 px-2.5 py-2 text-[11px] text-warning">
-                      <div className="font-medium">
-                        {syncResult.errors.length} issue{syncResult.errors.length === 1 ? '' : 's'} failed:
-                      </div>
-                      <ul className="mt-1 space-y-0.5">
-                        {syncResult.errors.slice(0, 5).map((err) => (
-                          <li key={err} className="line-clamp-1">
-                            • {err}
-                          </li>
-                        ))}
-                        {syncResult.errors.length > 5 && (
-                          <li className="text-muted">(+{syncResult.errors.length - 5} more — see logs)</li>
-                        )}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <ProjectSettingsGeneralTab
+                project={project}
+                urlInput={urlInput}
+                setUrlInput={setUrlInput}
+                setTouched={setTouched}
+                showInlineError={showInlineError}
+                validationOk={validation.ok}
+                validationReason={validation.ok ? null : validation.reason}
+                relinkPending={relinkMutation.isPending}
+                relinkError={relinkError}
+                onRelink={() => {
+                  setRelinkError(null);
+                  relinkMutation.mutate();
+                }}
+                canSync={canSync}
+                syncPending={syncMutation.isPending}
+                syncResult={syncResult}
+                syncError={syncError}
+                hasSavedUrl={hasSavedUrl}
+                inputMatchesSaved={inputMatchesSaved}
+                onSync={handleSync}
+              />
             </TabsContent>
 
             <TabsContent value="models" className="space-y-3">
-              <div className="text-[11px] text-muted">
-                Project overrides shadow the global defaults for this repo only. Leave any field on
-                inherit to keep using the global phase setting.
-              </div>
-              {PHASE_META.map((phase) => (
-                <ProjectPhaseSettingsRow
-                  key={phase.key}
-                  phase={phase.key}
-                  label={phase.label}
-                  validProviders={phase.validProviders}
-                  settings={settings}
-                  projectDraft={projectDraft}
-                  overrides={overrides}
-                  setOverrides={setOverrides}
-                  integrationStatus={integrationStatus}
-                  modelValidation={modelValidation}
-                  setModelValidation={setModelValidation}
-                />
-              ))}
+              <ProjectSettingsModelsTab
+                settings={settings}
+                projectDraft={projectDraft}
+                overrides={overrides}
+                setOverrides={setOverrides}
+                integrationStatus={integrationStatus}
+                modelValidation={modelValidation}
+                setModelValidation={setModelValidation}
+              />
             </TabsContent>
 
             <TabsContent value="context" className="space-y-4">
-              <div className="flex flex-col gap-2">
-                <Label className="text-xs text-secondary">Context Files</Label>
-                <p className="text-[11px] text-muted">
-                  Teach the pipeline about your project's goals, tech stack, architecture, and
-                  constraints. Generated from your repo's README, package.json, and CLAUDE.md.
-                </p>
-                <div className="flex flex-col gap-1.5">
-                  {(['GOAL.md', 'TECH-STACK.md', 'ARCHITECTURE.md', 'CONSTRAINTS.md'] as const).map(
-                    (name) => {
-                      const file = contextFiles?.find((entry) => entry.name === name);
-                      return (
-                        <div key={name} className="flex items-center gap-2 text-xs">
-                          {file?.exists ? (
-                            <span className="h-2 w-2 shrink-0 rounded-full bg-green-500" />
-                          ) : (
-                            <span className="w-2 shrink-0 text-center text-muted">—</span>
-                          )}
-                          <span className="font-mono text-[12px] text-primary">{name}</span>
-                          {file?.exists && file.size != null && (
-                            <span className="ml-auto text-[11px] text-muted">
-                              {file.size < 1024 ? `${file.size} B` : `${(file.size / 1024).toFixed(1)} KB`}
-                            </span>
-                          )}
-                        </div>
-                      );
-                    },
-                  )}
-                </div>
-                <div className="mt-1 flex items-end gap-2">
-                  <div className="flex min-w-[180px] flex-col gap-1.5">
-                    <Label className="text-[11px] text-secondary">Generator CLI</Label>
-                    <Select
-                      value={contextGeneratorCli}
-                      onValueChange={(value) => setContextGeneratorCli(value as ContextGeneratorCli)}
-                      disabled={contextGenerating}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CONTEXT_GENERATOR_OPTIONS.map((option) => {
-                          const disabledReason =
-                            option.value === 'claude'
-                              ? !integrationStatus?.system.claude.available
-                                ? 'CLI missing'
-                                : !integrationStatus.system.claude.authenticated
-                                  ? 'Not authenticated'
-                                  : null
-                              : !integrationStatus?.system.codex.available
-                                ? 'CLI missing'
-                                : !integrationStatus.system.codex.authenticated
-                                  ? 'Not authenticated'
-                                  : null;
-                          return (
-                            <SelectItem
-                              key={option.value}
-                              value={option.value}
-                              disabled={!!disabledReason}
-                            >
-                              {option.label}
-                              {disabledReason ? ` (${disabledReason})` : ''}
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleGenerateContext}
-                    disabled={contextGenerating || !!contextCliUnavailableReason}
-                  >
-                    {contextGenerating ? 'Generating…' : 'Generate Context'}
-                  </Button>
-                </div>
-                <p className="text-[11px] text-muted">
-                  Generated files are saved to <span className="font-mono">.agents/context/</span> inside this repo.
-                </p>
-                {contextError && (
-                  <div className="rounded-md border border-danger/30 bg-danger/10 px-2.5 py-2 text-[11px] text-danger">
-                    <span className="line-clamp-2">{contextError}</span>
-                  </div>
-                )}
-              </div>
+              <ProjectSettingsContextTab
+                contextFiles={contextFiles}
+                contextGeneratorCli={contextGeneratorCli}
+                setContextGeneratorCli={setContextGeneratorCli}
+                contextGenerating={contextGenerating}
+                contextCliUnavailableReason={contextCliUnavailableReason}
+                contextError={contextError}
+                cliOptions={contextCliOptions}
+                onGenerateContext={() => {
+                  void handleGenerateContext();
+                }}
+              />
             </TabsContent>
           </Tabs>
 
@@ -836,11 +367,7 @@ export function ProjectSettingsModal() {
       )}
 
       <ModalFooter>
-        <Button
-          variant="secondary"
-          onClick={closeProjectSettingsModal}
-          disabled={modalBusy}
-        >
+        <Button variant="secondary" onClick={closeProjectSettingsModal} disabled={modalBusy}>
           Cancel
         </Button>
         <Button onClick={handleSave} disabled={modalBusy || (touched && !validation.ok)}>

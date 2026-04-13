@@ -1,6 +1,6 @@
-import { simpleGit, type SimpleGit, type StatusResult } from 'simple-git';
 import type { GitState } from '@shipcode/shared';
 import { normalizeBranches } from '@shipcode/shared';
+import { type SimpleGit, type StatusResult, simpleGit } from 'simple-git';
 
 export class GitService {
   private git: SimpleGit;

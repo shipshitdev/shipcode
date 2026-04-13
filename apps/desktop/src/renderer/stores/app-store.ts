@@ -1,15 +1,15 @@
-import { create } from 'zustand';
+import type { TerminalEvent } from '@shipcode/agents';
 import type {
-  ShipCodePlan,
-  PlanReview,
+  GitHubIssueCacheRecord,
+  IssuePipelineStatus,
+  NotificationRecord,
   PipelinePhase,
+  PlanReview,
+  ShipCodePlan,
   SystemHealth,
   VerificationResult,
-  GitHubIssueCacheRecord,
-  NotificationRecord,
-  IssuePipelineStatus,
 } from '@shipcode/shared';
-import type { TerminalEvent } from '@shipcode/agents';
+import { create } from 'zustand';
 
 const AGENT_ACTIVE_STATUSES = new Set<IssuePipelineStatus>([
   'planning',

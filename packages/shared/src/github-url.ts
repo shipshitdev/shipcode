@@ -87,7 +87,9 @@ export type GithubProjectUrlValidation =
  * doesn't match one of the three shapes above. The reason string is safe
  * to surface in the modal and short enough for the IPC clamp helper.
  */
-export function validateGithubProjectUrl(raw: string | null | undefined): GithubProjectUrlValidation {
+export function validateGithubProjectUrl(
+  raw: string | null | undefined,
+): GithubProjectUrlValidation {
   if (raw == null || raw.trim() === '') return { ok: true, value: null };
   const trimmed = raw.trim();
 
@@ -107,7 +109,11 @@ export function validateGithubProjectUrl(raw: string | null | undefined): Github
 
   const parts = u.pathname.replace(/^\/+/, '').replace(/\/+$/, '').split('/');
   // orgs/<org>/projects/<n>
-  if (parts.length >= 4 && (parts[0] === 'orgs' || parts[0] === 'users') && parts[2] === 'projects') {
+  if (
+    parts.length >= 4 &&
+    (parts[0] === 'orgs' || parts[0] === 'users') &&
+    parts[2] === 'projects'
+  ) {
     if (!/^\d+$/.test(parts[3])) {
       return { ok: false, reason: 'Project number must be numeric' };
     }
@@ -163,9 +169,7 @@ export interface ParsedGithubProject {
  * field; the parser is the read-time counterpart that turns a stored
  * string into something the CLI can use.
  */
-export function parseGithubProjectUrl(
-  raw: string | null | undefined,
-): ParsedGithubProject | null {
+export function parseGithubProjectUrl(raw: string | null | undefined): ParsedGithubProject | null {
   if (raw == null) return null;
   const trimmed = raw.trim();
   if (trimmed === '') return null;

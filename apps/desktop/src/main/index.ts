@@ -1,10 +1,10 @@
 // Suppress ExperimentalWarning from node:sqlite (RC module in Node v24).
 // This runs before require('@shipcode/db') in CJS output (vite builds main as CJS).
 const _origEmit = process.emit.bind(process);
-process.emit = function (event: string, ...args: any[]) {
+process.emit = ((event: string, ...args: any[]) => {
   if (event === 'warning' && args[0]?.name === 'ExperimentalWarning') return false;
   return _origEmit(event, ...args);
-} as typeof process.emit;
+}) as typeof process.emit;
 
 // Prevent unhandled errors (e.g. EIO on shutdown, destroyed WebContents race)
 // from showing Electron's crash dialog. Log to file instead.
@@ -18,38 +18,37 @@ process.on('unhandledRejection', (reason) => {
 });
 
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron';
+
 app.setName('ShipCode');
-import path from 'node:path';
+
 import fs from 'node:fs';
+import path from 'node:path';
 import {
-  getDatabase,
-  closeDatabase,
-  ProjectQueries,
-  ThreadQueries,
-  PlanQueries,
-  ReviewQueries,
-  DiffQueries,
-  SettingsQueries,
-  VerificationQueries,
-  GitHubIssueQueries,
-  CheckpointQueries,
-  ActivityQueries,
-  NotificationsQueries,
-  DashboardQueries,
-  CostsQueries,
-  SkillsQueries,
-} from '@shipcode/db';
-import {
-  ProcessManager,
   createClaudeCliProvider,
   createCodexCliProvider,
   createOpenRouterProvider,
   createProviderRegistry,
+  ProcessManager,
 } from '@shipcode/agents';
-import { registerIpcHandlers } from './ipc';
+import {
+  ActivityQueries,
+  CheckpointQueries,
+  CostsQueries,
+  closeDatabase,
+  DashboardQueries,
+  DiffQueries,
+  GitHubIssueQueries,
+  getDatabase,
+  NotificationsQueries,
+  PlanQueries,
+  ProjectQueries,
+  ReviewQueries,
+  SettingsQueries,
+  SkillsQueries,
+  ThreadQueries,
+  VerificationQueries,
+} from '@shipcode/db';
 import { createPipeline } from '@shipcode/pipeline';
-import { createElectronEmitter } from './pipeline-bridge';
-import { NotificationService } from './notification-service';
 import {
   HEARTBEAT_TIMEOUT_MS,
   resolveExecutorModelForIssue,
@@ -57,6 +56,9 @@ import {
   resolvePhaseModelIdForIssue,
   resolvePhaseReasoningEffort,
 } from '@shipcode/shared';
+import { registerIpcHandlers } from './ipc';
+import { NotificationService } from './notification-service';
+import { createElectronEmitter } from './pipeline-bridge';
 
 let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
@@ -213,9 +215,7 @@ function createWindow() {
         });
       }
 
-      log.info(
-        `[queue] auto-promoting #${next.issueNumber} "${next.title}" (thread ${thread.id})`,
-      );
+      log.info(`[queue] auto-promoting #${next.issueNumber} "${next.title}" (thread ${thread.id})`);
 
       pipeline!
         .startFromGitHubIssue(

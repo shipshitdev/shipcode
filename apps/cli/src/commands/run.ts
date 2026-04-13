@@ -1,26 +1,26 @@
-import path from 'node:path';
 import fs from 'node:fs';
+import path from 'node:path';
 import {
-  getDatabase,
-  ProjectQueries,
-  ThreadQueries,
-  PlanQueries,
-  ReviewQueries,
-  VerificationQueries,
-  GitHubIssueQueries,
-  SettingsQueries,
-  SkillsQueries,
-  CheckpointQueries,
-} from '@shipcode/db';
-import {
-  ProcessManager,
-  GhCli,
-  routeFromLabels,
   createClaudeCliProvider,
   createCodexCliProvider,
   createOpenRouterProvider,
   createProviderRegistry,
+  GhCli,
+  ProcessManager,
+  routeFromLabels,
 } from '@shipcode/agents';
+import {
+  CheckpointQueries,
+  GitHubIssueQueries,
+  getDatabase,
+  PlanQueries,
+  ProjectQueries,
+  ReviewQueries,
+  SettingsQueries,
+  SkillsQueries,
+  ThreadQueries,
+  VerificationQueries,
+} from '@shipcode/db';
 import { createPipeline } from '@shipcode/pipeline';
 import { createCliEmitter } from '../adapters/cli-emitter';
 import { requireOnboarding } from './guard';

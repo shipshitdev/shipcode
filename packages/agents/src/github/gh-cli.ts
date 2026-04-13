@@ -1,12 +1,12 @@
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import {
-  PRD_MANAGED_DISCRETE_LABELS,
-  PRD_MANAGED_LABEL_PREFIXES,
   type GitHubIssue,
   type GitHubPrCheckSummary,
   type GitHubPrReviewCommentSummary,
   type GitHubStatusLabel,
+  PRD_MANAGED_DISCRETE_LABELS,
+  PRD_MANAGED_LABEL_PREFIXES,
 } from '@shipcode/shared';
 
 const execFileAsync = promisify(execFile);
@@ -75,9 +75,7 @@ export class GhCli {
 
   private isManagedPrdLabel(label: string): boolean {
     return (
-      PRD_MANAGED_DISCRETE_LABELS.includes(
-        label as (typeof PRD_MANAGED_DISCRETE_LABELS)[number],
-      ) ||
+      PRD_MANAGED_DISCRETE_LABELS.includes(label as (typeof PRD_MANAGED_DISCRETE_LABELS)[number]) ||
       PRD_MANAGED_LABEL_PREFIXES.some((prefix: string) => label.startsWith(prefix))
     );
   }
@@ -100,11 +98,9 @@ export class GhCli {
 
     for (const label of toRemove) {
       try {
-        await execFileAsync(
-          'gh',
-          ['issue', 'edit', String(issueNumber), '--remove-label', label],
-          { cwd: this.cwd },
-        );
+        await execFileAsync('gh', ['issue', 'edit', String(issueNumber), '--remove-label', label], {
+          cwd: this.cwd,
+        });
       } catch {
         // Removal is best-effort.
       }
@@ -112,11 +108,9 @@ export class GhCli {
 
     for (const label of toAdd) {
       try {
-        await execFileAsync(
-          'gh',
-          ['issue', 'edit', String(issueNumber), '--add-label', label],
-          { cwd: this.cwd },
-        );
+        await execFileAsync('gh', ['issue', 'edit', String(issueNumber), '--add-label', label], {
+          cwd: this.cwd,
+        });
       } catch {
         // Addition is best-effort.
       }
@@ -360,28 +354,33 @@ export class GhCli {
   ): Promise<Pick<PullRequestFeedback, 'number' | 'url' | 'isDraft'> | null> {
     const { stdout } = await execFileAsync(
       'gh',
-      ['pr', 'list', '--state', 'all', '--head', head, '--json', 'number,url,isDraft', '--limit', '1'],
+      [
+        'pr',
+        'list',
+        '--state',
+        'all',
+        '--head',
+        head,
+        '--json',
+        'number,url,isDraft',
+        '--limit',
+        '1',
+      ],
       { cwd: this.cwd },
     );
     const rows = JSON.parse(stdout) as Array<{ number: number; url: string; isDraft: boolean }>;
     const found = rows[0];
-    return found
-      ? { number: found.number, url: found.url, isDraft: !!found.isDraft }
-      : null;
+    return found ? { number: found.number, url: found.url, isDraft: !!found.isDraft } : null;
   }
 
-  async updatePullRequest(options: { prNumber: number; title: string; body: string }): Promise<void> {
+  async updatePullRequest(options: {
+    prNumber: number;
+    title: string;
+    body: string;
+  }): Promise<void> {
     await this.spawnWithStdin(
       'gh',
-      [
-        'pr',
-        'edit',
-        String(options.prNumber),
-        '--title',
-        options.title,
-        '--body-file',
-        '-',
-      ],
+      ['pr', 'edit', String(options.prNumber), '--title', options.title, '--body-file', '-'],
       options.body,
     );
   }
@@ -507,7 +506,9 @@ export class GhCli {
                             conclusion?: string | null;
                             status?: string | null;
                             detailsUrl?: string | null;
-                            checkSuite?: { workflowRun?: { workflow?: { name?: string | null } | null } | null } | null;
+                            checkSuite?: {
+                              workflowRun?: { workflow?: { name?: string | null } | null } | null;
+                            } | null;
                           }
                         | {
                             __typename: 'StatusContext';
@@ -548,8 +549,7 @@ export class GhCli {
     }
 
     const failingChecks: GitHubPrCheckSummary[] = [];
-    const contexts =
-      pr.commits?.nodes?.[0]?.commit?.statusCheckRollup?.contexts?.nodes ?? [];
+    const contexts = pr.commits?.nodes?.[0]?.commit?.statusCheckRollup?.contexts?.nodes ?? [];
 
     for (const node of contexts) {
       if (!node) continue;
@@ -652,11 +652,26 @@ export class GhCli {
     `;
     const { stdout: itemOut } = await execFileAsync(
       'gh',
-      ['api', 'graphql', '-f', `query=${itemQuery}`, '-F', `owner=${owner}`, '-F', `repo=${repo}`, '-F', `number=${issueNumber}`],
+      [
+        'api',
+        'graphql',
+        '-f',
+        `query=${itemQuery}`,
+        '-F',
+        `owner=${owner}`,
+        '-F',
+        `repo=${repo}`,
+        '-F',
+        `number=${issueNumber}`,
+      ],
       { cwd: this.cwd },
     );
     const itemData = JSON.parse(itemOut) as {
-      data: { repository: { issue: { projectItems: { nodes: Array<{ id: string; project: { id: string } }> } } } };
+      data: {
+        repository: {
+          issue: { projectItems: { nodes: Array<{ id: string; project: { id: string } }> } };
+        };
+      };
     };
 
     const items = itemData.data.repository?.issue?.projectItems?.nodes ?? [];
@@ -674,7 +689,16 @@ export class GhCli {
       items.map((item) =>
         execFileAsync(
           'gh',
-          ['api', 'graphql', '-f', `query=${archiveMutation}`, '-F', `projectId=${item.project.id}`, '-F', `itemId=${item.id}`],
+          [
+            'api',
+            'graphql',
+            '-f',
+            `query=${archiveMutation}`,
+            '-F',
+            `projectId=${item.project.id}`,
+            '-F',
+            `itemId=${item.id}`,
+          ],
           { cwd: this.cwd },
         ),
       ),

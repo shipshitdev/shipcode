@@ -46,24 +46,18 @@ export function ProjectMissingView({ project }: { project: ProjectWithPathState 
           ShipCode can’t load this project from disk.
         </h2>
         <p className="mt-2 text-sm text-secondary">
-          This project still exists in ShipCode, but its saved folder path no longer resolves. Relink
-          the moved repository folder to keep the same project, issues, threads, and history.
+          This project still exists in ShipCode, but its saved folder path no longer resolves.
+          Relink the moved repository folder to keep the same project, issues, threads, and history.
         </p>
         <div className="mt-4 rounded-md border border-border bg-primary/40 px-3 py-2">
           <div className="text-[11px] text-muted">Saved path</div>
           <div className="mt-1 break-all font-mono text-xs text-primary">{project.path}</div>
         </div>
         <div className="mt-5 flex flex-wrap gap-2">
-          <Button
-            onClick={() => relinkProject.mutate()}
-            disabled={relinkProject.isPending}
-          >
+          <Button onClick={() => relinkProject.mutate()} disabled={relinkProject.isPending}>
             {relinkProject.isPending ? 'Locating…' : 'Locate moved folder'}
           </Button>
-          <Button
-            variant="secondary"
-            onClick={() => openProjectSettingsModal(project.id)}
-          >
+          <Button variant="secondary" onClick={() => openProjectSettingsModal(project.id)}>
             Project settings
           </Button>
         </div>

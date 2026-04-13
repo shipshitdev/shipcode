@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { type PlanReview, type ReviewRecord, toIsoUtc } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
-import { toIsoUtc, type ReviewRecord, type PlanReview } from '@shipcode/shared';
 
 export class ReviewQueries {
   constructor(private db: DatabaseSync) {}

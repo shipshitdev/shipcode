@@ -1,21 +1,21 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { ProcessManager, AgentProvider } from '@shipcode/agents';
+import type { AgentProvider, ProcessManager } from '@shipcode/agents';
 import {
   createClaudeCliProvider,
   createCodexCliProvider,
   createProviderRegistry,
 } from '@shipcode/agents';
-import type { PipelineDeps } from './types';
-import { createPipeline } from './pipeline';
 import {
   DEFAULT_SETTINGS,
-  PIPELINE_MAX_RETRIES,
   MAX_REVIEW_ROUNDS,
   MAX_VERIFICATION_RETRIES,
+  PIPELINE_MAX_RETRIES,
 } from '@shipcode/shared';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createPipeline } from './pipeline';
+import type { PipelineDeps } from './types';
 
 vi.mock('@shipcode/git', () => {
   class WorktreeManager {
@@ -437,7 +437,11 @@ describe('createPipeline', () => {
       }
 
       expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(PIPELINE_MAX_RETRIES + 1);
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed', expect.any(String));
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith(
+        't1',
+        'failed',
+        expect.any(String),
+      );
     });
 
     it('C1 regression: retry counter persists across recursive calls', async () => {
@@ -458,7 +462,11 @@ describe('createPipeline', () => {
 
       // Fourth failure: exhausted → should emit failed
       await mock.trigger('exit', 'proc-4', 1);
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed', expect.any(String));
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith(
+        't1',
+        'failed',
+        expect.any(String),
+      );
     });
   });
 
@@ -486,7 +494,9 @@ describe('createPipeline', () => {
       // The default is 'low' (cost-conscious); read from DEFAULT_SETTINGS so this test
       // tracks the default automatically if it changes.
       expect(reviewCall[2]).toContain('-c');
-      expect(reviewCall[2]).toContain(`model_reasoning_effort=${DEFAULT_SETTINGS.reviewerReasoningEffort}`);
+      expect(reviewCall[2]).toContain(
+        `model_reasoning_effort=${DEFAULT_SETTINGS.reviewerReasoningEffort}`,
+      );
     });
 
     it('approve + autonomous → calls startExecution (emits executing)', async () => {
@@ -600,7 +610,10 @@ describe('createPipeline', () => {
     });
 
     it('request_changes + requireApproval + rounds exhausted + has critical → awaiting_approval', async () => {
-      (mock.deps.settings.get as any).mockReturnValue({ ...DEFAULT_SETTINGS, requireApproval: true });
+      (mock.deps.settings.get as any).mockReturnValue({
+        ...DEFAULT_SETTINGS,
+        requireApproval: true,
+      });
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
       pipeline.getContext('t1')!.autonomous = true;
@@ -723,7 +736,11 @@ describe('createPipeline', () => {
 
       await mock.trigger('exit', 'proc-2', 1);
 
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed', expect.any(String));
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith(
+        't1',
+        'failed',
+        expect.any(String),
+      );
       expect(pipeline.getContext('t1')).toBeUndefined();
     });
 

@@ -1,5 +1,11 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { toIsoUtc, type CostSummary, type CostTaskSummary, type ExecutorModel, type PipelinePhase } from '@shipcode/shared';
+import {
+  type CostSummary,
+  type CostTaskSummary,
+  type ExecutorModel,
+  type PipelinePhase,
+  toIsoUtc,
+} from '@shipcode/shared';
 
 type TaskCostRow = {
   thread_id: string;
@@ -22,9 +28,10 @@ type TaskCostRow = {
   project_name: string;
 };
 
-function resolveProviderAndModel(
-  row: TaskCostRow,
-): { provider: ExecutorModel; model: string | null } {
+function resolveProviderAndModel(row: TaskCostRow): {
+  provider: ExecutorModel;
+  model: string | null;
+} {
   switch (row.phase as PipelinePhase) {
     case 'planning':
       return { provider: row.planner_model as ExecutorModel, model: row.planner_resolved_model };
@@ -41,13 +48,22 @@ function resolveProviderAndModel(
       return { provider: row.verifier_model as ExecutorModel, model: row.verifier_resolved_model };
     case 'completed':
       if (row.verifier_resolved_model) {
-        return { provider: row.verifier_model as ExecutorModel, model: row.verifier_resolved_model };
+        return {
+          provider: row.verifier_model as ExecutorModel,
+          model: row.verifier_resolved_model,
+        };
       }
       if (row.executor_resolved_model) {
-        return { provider: row.executor_model as ExecutorModel, model: row.executor_resolved_model };
+        return {
+          provider: row.executor_model as ExecutorModel,
+          model: row.executor_resolved_model,
+        };
       }
       if (row.reviewer_resolved_model) {
-        return { provider: row.reviewer_model as ExecutorModel, model: row.reviewer_resolved_model };
+        return {
+          provider: row.reviewer_model as ExecutorModel,
+          model: row.reviewer_resolved_model,
+        };
       }
       if (row.revisor_resolved_model) {
         return { provider: row.planner_model as ExecutorModel, model: row.revisor_resolved_model };
@@ -56,13 +72,22 @@ function resolveProviderAndModel(
     case 'failed':
     case 'idle':
       if (row.executor_resolved_model) {
-        return { provider: row.executor_model as ExecutorModel, model: row.executor_resolved_model };
+        return {
+          provider: row.executor_model as ExecutorModel,
+          model: row.executor_resolved_model,
+        };
       }
       if (row.verifier_resolved_model) {
-        return { provider: row.verifier_model as ExecutorModel, model: row.verifier_resolved_model };
+        return {
+          provider: row.verifier_model as ExecutorModel,
+          model: row.verifier_resolved_model,
+        };
       }
       if (row.reviewer_resolved_model) {
-        return { provider: row.reviewer_model as ExecutorModel, model: row.reviewer_resolved_model };
+        return {
+          provider: row.reviewer_model as ExecutorModel,
+          model: row.reviewer_resolved_model,
+        };
       }
       if (row.revisor_resolved_model) {
         return { provider: row.planner_model as ExecutorModel, model: row.revisor_resolved_model };

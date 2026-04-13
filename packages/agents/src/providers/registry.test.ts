@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createProviderRegistry } from './registry';
 import type { AgentProvider, ProviderPhase } from './types';
 
@@ -14,7 +14,13 @@ function makeProvider(id: AgentProvider['id'], phases: ProviderPhase[]): AgentPr
 describe('createProviderRegistry', () => {
   const claude = makeProvider('claude-cli', ['plan', 'review', 'revision', 'verify', 'execute']);
   const codex = makeProvider('codex-cli', ['plan', 'review', 'revision', 'verify', 'execute']);
-  const openrouter = makeProvider('openrouter', ['plan', 'review', 'revision', 'verify', 'execute']);
+  const openrouter = makeProvider('openrouter', [
+    'plan',
+    'review',
+    'revision',
+    'verify',
+    'execute',
+  ]);
   const registry = createProviderRegistry({ claude, codex, openrouter });
 
   it('dispatches claude agent to claude-cli provider', () => {

@@ -1,6 +1,6 @@
-import path from 'node:path';
-import os from 'node:os';
 import { createHash } from 'node:crypto';
+import os from 'node:os';
+import path from 'node:path';
 import { DEFAULT_WORKTREE_ROOT, WORKTREE_DIR } from './constants';
 
 /**

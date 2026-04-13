@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { migrate, migrateV2, migrateV3 } from './schema';
 
 function tableExists(db: DatabaseSync, name: string): boolean {

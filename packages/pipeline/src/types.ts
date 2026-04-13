@@ -1,29 +1,29 @@
 import type {
+  LoadedRepoSetupContract,
   ProcessManager,
   ProviderRegistry,
   TerminalEvent,
-  LoadedRepoSetupContract,
 } from '@shipcode/agents';
-import type { PhaseSkillKey } from '@shipcode/shared';
 import type {
   CheckpointQueries,
-  ProjectQueries,
-  ThreadQueries,
-  PlanQueries,
-  ReviewQueries,
-  VerificationQueries,
   GitHubIssueQueries,
+  PlanQueries,
+  ProjectQueries,
+  ReviewQueries,
   SettingsQueries,
   SkillsQueries,
+  ThreadQueries,
+  VerificationQueries,
 } from '@shipcode/db';
 import type {
   AgentType,
   GitHubPrCheckSummary,
   GitHubPrReviewCommentSummary,
-  ReasoningEffort,
-  ShipCodePlan,
+  PhaseSkillKey,
   PipelinePhase,
   PlanReview,
+  ReasoningEffort,
+  ShipCodePlan,
   VerificationResult,
 } from '@shipcode/shared';
 

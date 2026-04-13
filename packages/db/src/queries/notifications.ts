@@ -1,11 +1,11 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { nanoid } from 'nanoid';
 import {
   ISO_NOW_SQL,
-  toIsoUtc,
-  type NotificationRecord,
   type NotificationKind,
+  type NotificationRecord,
+  toIsoUtc,
 } from '@shipcode/shared';
+import { nanoid } from 'nanoid';
 
 function mapRow(row: any): NotificationRecord {
   return {

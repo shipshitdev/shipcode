@@ -1,6 +1,6 @@
-import { useMutation } from '@tanstack/react-query';
 import type { CliHealth, GhAuthStatus, SystemHealth } from '@shipcode/shared';
 import { Badge, Button } from '@shipcode/ui';
+import { useMutation } from '@tanstack/react-query';
 
 interface AuthResult extends SystemHealth {
   ghAuth: GhAuthStatus;

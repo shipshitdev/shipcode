@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { buildVerificationPrompt } from './verification-prompt';
-import type { SkillsRowSource } from '../skills';
 import type { ShipCodePlan } from '@shipcode/shared';
+import { describe, expect, it } from 'vitest';
+import type { SkillsRowSource } from '../skills';
+import { buildVerificationPrompt } from './verification-prompt';
 
 const noOverrides: SkillsRowSource = {
   get: () => null,
@@ -25,18 +25,36 @@ const sampleDiff = `--- a/src/foo.ts\n+++ b/src/foo.ts\n@@ -1,3 +1,5 @@\n+// new
 
 describe('buildVerificationPrompt', () => {
   it('produces output containing the diff', () => {
-    const result = buildVerificationPrompt(minimalPlan, sampleDiff, minimalPlan.acceptanceCriteria, { projectId: null }, { skills: noOverrides });
+    const result = buildVerificationPrompt(
+      minimalPlan,
+      sampleDiff,
+      minimalPlan.acceptanceCriteria,
+      { projectId: null },
+      { skills: noOverrides },
+    );
     expect(result).toContain('src/foo.ts');
   });
 
   it('produces output containing numbered acceptance criteria', () => {
-    const result = buildVerificationPrompt(minimalPlan, sampleDiff, ['Tests pass', 'No regressions'], { projectId: null }, { skills: noOverrides });
+    const result = buildVerificationPrompt(
+      minimalPlan,
+      sampleDiff,
+      ['Tests pass', 'No regressions'],
+      { projectId: null },
+      { skills: noOverrides },
+    );
     expect(result).toContain('1. Tests pass');
     expect(result).toContain('2. No regressions');
   });
 
   it('includes the plan JSON in output', () => {
-    const result = buildVerificationPrompt(minimalPlan, sampleDiff, minimalPlan.acceptanceCriteria, { projectId: null }, { skills: noOverrides });
+    const result = buildVerificationPrompt(
+      minimalPlan,
+      sampleDiff,
+      minimalPlan.acceptanceCriteria,
+      { projectId: null },
+      { skills: noOverrides },
+    );
     expect(result).toContain(minimalPlan.id);
     expect(result).toContain(minimalPlan.objective);
   });

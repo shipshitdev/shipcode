@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CURRENT_ONBOARDING_VERSION } from '@shipcode/shared';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { existsSyncMock, getDatabaseMock, settingsGetMock } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),

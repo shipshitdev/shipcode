@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { ISO_NOW_SQL, toIsoUtc, type PhaseSkillKey } from '@shipcode/shared';
+import { ISO_NOW_SQL, type PhaseSkillKey, toIsoUtc } from '@shipcode/shared';
 
 export type { PhaseSkillKey };
 
@@ -118,9 +118,7 @@ export class SkillsQueries {
    * chain) and to surface the quarantine banner.
    */
   listAll(): SkillRow[] {
-    const rows = this.db
-      .prepare(`SELECT * FROM skills ORDER BY phase, project_id`)
-      .all() as any[];
+    const rows = this.db.prepare(`SELECT * FROM skills ORDER BY phase, project_id`).all() as any[];
     return rows.map(mapRow);
   }
 

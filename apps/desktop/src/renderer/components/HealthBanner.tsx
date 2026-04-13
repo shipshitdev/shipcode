@@ -1,8 +1,8 @@
-import { useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAppStore } from '../stores/app-store';
-import { Alert, AlertDescription, Button } from '@shipcode/ui';
 import type { AppSettings, GhAuthStatus, SystemHealth } from '@shipcode/shared';
+import { Alert, AlertDescription, Button } from '@shipcode/ui';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { useAppStore } from '../stores/app-store';
 
 export function HealthBanner() {
   const queryClient = useQueryClient();

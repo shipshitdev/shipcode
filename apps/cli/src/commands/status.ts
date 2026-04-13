@@ -1,6 +1,6 @@
-import path from 'node:path';
 import fs from 'node:fs';
-import { getDatabase, ThreadQueries, ProjectQueries } from '@shipcode/db';
+import path from 'node:path';
+import { getDatabase, ProjectQueries, ThreadQueries } from '@shipcode/db';
 
 export async function statusCommand() {
   const dataDir = path.join(process.env.HOME ?? '', '.shipcode', 'data');

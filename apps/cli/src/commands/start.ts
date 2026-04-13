@@ -1,5 +1,5 @@
-import { runCommand } from './run';
 import { createInterface } from 'node:readline';
+import { runCommand } from './run';
 
 export async function startCommand() {
   const rl = createInterface({

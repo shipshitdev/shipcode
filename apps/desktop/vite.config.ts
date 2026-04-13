@@ -1,9 +1,9 @@
-import { defineConfig } from 'vite';
+import { builtinModules } from 'node:module';
+import path from 'node:path';
 import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite';
 import electron from 'vite-plugin-electron';
 import renderer from 'vite-plugin-electron-renderer';
-import path from 'node:path';
-import { builtinModules } from 'node:module';
 
 const NATIVE_EXTERNALS = [
   'electron',

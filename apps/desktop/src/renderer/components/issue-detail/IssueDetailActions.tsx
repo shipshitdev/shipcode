@@ -147,7 +147,9 @@ export function IssueDetailActions({
             </div>
           </div>
           {thread?.lastError && (
-            <p className="text-[12px] text-danger/80 break-words">{safeErrorMessage(thread.lastError)}</p>
+            <p className="text-[12px] text-danger/80 break-words">
+              {safeErrorMessage(thread.lastError)}
+            </p>
           )}
           {showRawOutput && failingPhaseOutput && (
             <pre className="mt-2 max-h-[200px] overflow-y-auto border-t border-danger/20 pt-2 text-[11px] text-danger/70 whitespace-pre-wrap break-words">
@@ -181,7 +183,13 @@ export function IssueDetailActions({
 
   const approvalSection = hasApprovalDecision ? (
     <div className="mb-5 rounded-md border border-border bg-secondary p-3">
-      <div className={pendingAction === 'request_changes' ? 'mb-3 flex items-center gap-2' : 'flex items-center gap-2'}>
+      <div
+        className={
+          pendingAction === 'request_changes'
+            ? 'mb-3 flex items-center gap-2'
+            : 'flex items-center gap-2'
+        }
+      >
         <Select
           value={pendingAction}
           onValueChange={(value) =>

@@ -1,17 +1,17 @@
-import { useState, useMemo, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { type PhaseSkillKey } from '@shipcode/shared';
+import type { PhaseSkillKey } from '@shipcode/shared';
 import {
-  Button,
-  Textarea,
   Badge,
+  Button,
+  cn,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-  cn,
+  Textarea,
 } from '@shipcode/ui';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 
 // The row shape below mirrors what apps/desktop/src/main/ipc.ts builds in
@@ -177,7 +177,10 @@ export function SkillsView() {
   };
 
   const quarantinedRows = useMemo(
-    () => list?.flatMap((e) => [e.projectRow, e.globalRow].filter((r) => r?.status === 'quarantined')) ?? [],
+    () =>
+      list?.flatMap((e) =>
+        [e.projectRow, e.globalRow].filter((r) => r?.status === 'quarantined'),
+      ) ?? [],
     [list],
   );
 
@@ -224,7 +227,8 @@ export function SkillsView() {
             {list.map((entry) => {
               const meta = PHASE_LABELS[entry.phase];
               const isActive = entry.phase === activePhase;
-              const row = projectId !== null ? (entry.projectRow ?? entry.globalRow) : entry.globalRow;
+              const row =
+                projectId !== null ? (entry.projectRow ?? entry.globalRow) : entry.globalRow;
               const isQuarantined = row.status === 'quarantined';
               return (
                 <li key={entry.phase}>
@@ -262,20 +266,21 @@ export function SkillsView() {
                 Quarantined skill overrides
               </h4>
               <p className="text-[11px] text-secondary mb-3">
-                These overrides failed validation and are NOT being used. The bundled default ran
-                in their place. Edit them to fix, or click Reset to discard.
+                These overrides failed validation and are NOT being used. The bundled default ran in
+                their place. Edit them to fix, or click Reset to discard.
               </p>
               <ul className="flex flex-col gap-1">
                 {quarantinedRows.map((row, idx) =>
                   row ? (
-                    <li key={`${row.phase}-${row.projectId ?? 'global'}-${idx}`} className="text-[11px]">
+                    <li
+                      key={`${row.phase}-${row.projectId ?? 'global'}-${idx}`}
+                      className="text-[11px]"
+                    >
                       <span className="font-medium text-primary">
                         {PHASE_LABELS[row.phase].label}
                       </span>{' '}
-                      <span className="text-muted">
-                        ({row.projectId ? 'project' : 'global'})
-                      </span>
-                      : <span className="text-red-300">{row.statusReason}</span>
+                      <span className="text-muted">({row.projectId ? 'project' : 'global'})</span>:{' '}
+                      <span className="text-red-300">{row.statusReason}</span>
                     </li>
                   ) : null,
                 )}
@@ -295,7 +300,12 @@ export function SkillsView() {
                   </p>
                   <div className="mt-2 flex items-center gap-3 text-[11px] text-muted">
                     <span>
-                      Source: <SourceBadge source={editingRow.source} quarantined={editingRow.status === 'quarantined'} inline />
+                      Source:{' '}
+                      <SourceBadge
+                        source={editingRow.source}
+                        quarantined={editingRow.status === 'quarantined'}
+                        inline
+                      />
                     </span>
                     <span>Bundled v{activeEntry.bundledVersion}</span>
                     {editingRow.source !== 'default' && (
@@ -320,10 +330,7 @@ export function SkillsView() {
                   >
                     Reset
                   </Button>
-                  <Button
-                    onClick={handleSave}
-                    disabled={!draftDirty || writeMutation.isPending}
-                  >
+                  <Button onClick={handleSave} disabled={!draftDirty || writeMutation.isPending}>
                     {writeMutation.isPending ? 'Saving…' : 'Save'}
                   </Button>
                 </div>
@@ -386,14 +393,12 @@ function SourceBadge({
       </Badge>
     );
   }
-  const labels: Record<
-    typeof source,
-    { label: string; variant: 'default' | 'success' | 'info' }
-  > = {
-    project: { label: 'Project', variant: 'success' },
-    global: { label: 'Global', variant: 'info' },
-    default: { label: 'Default', variant: 'default' },
-  };
+  const labels: Record<typeof source, { label: string; variant: 'default' | 'success' | 'info' }> =
+    {
+      project: { label: 'Project', variant: 'success' },
+      global: { label: 'Global', variant: 'info' },
+      default: { label: 'Default', variant: 'default' },
+    };
   const meta = labels[source];
   return (
     <Badge variant={meta.variant} className={cn('text-[9px]', inline && 'ml-1')}>

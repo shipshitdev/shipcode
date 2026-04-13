@@ -1,4 +1,4 @@
-import type { ShipCodePlan, PlanReview, VerificationResult } from '@shipcode/shared';
+import type { PlanReview, ShipCodePlan, VerificationResult } from '@shipcode/shared';
 
 export function buildPRBody(
   plan: ShipCodePlan,

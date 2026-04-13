@@ -1,16 +1,16 @@
-import path from 'node:path';
-import fs from 'node:fs';
 import { exec, execFile } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 import { promisify } from 'node:util';
-import { getDatabase, ProjectQueries } from '@shipcode/db';
 import {
-  checkSystemHealth,
   checkClaudeAuth,
   checkOpenRouterAuth,
+  checkSystemHealth,
   parseGhProjectScope,
 } from '@shipcode/agents';
+import { getDatabase, ProjectQueries } from '@shipcode/db';
 import { GitService } from '@shipcode/git';
-import { SHIPCODE_DEFAULT_LABELS, type GitHubLabelDefinition } from '@shipcode/shared';
+import { type GitHubLabelDefinition, SHIPCODE_DEFAULT_LABELS } from '@shipcode/shared';
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);

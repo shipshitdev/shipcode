@@ -1,31 +1,31 @@
 import type {
   ActivePipelineSummary,
   ActivityEntry,
+  AgentState,
   AppSettings,
   ContextFileInfo,
   CostSummary,
   DashboardStats,
-  NotificationRecord,
-  RecentTask,
-  ShipCodePlan,
   DiffRecord,
   FileChange,
   GhAuthStatus,
   GitHubIssueCacheRecord,
   GitState,
   IntegrationStatus,
+  NotificationRecord,
   OpenRouterModelValidation,
   PipelineCheckpoint,
+  PipelinePhase,
   PlanRecord,
   PlanReview,
-  PipelinePhase,
   Project,
+  RecentTask,
   ReviewRecord,
+  ShipCodePlan,
   SystemHealth,
   Thread,
-  AgentState,
-  VerificationResult,
   VerificationRecord,
+  VerificationResult,
 } from './types';
 
 // === Request-Response Channels (invoke/handle) ===
@@ -128,7 +128,13 @@ export interface IpcInvokeChannels {
     result: GitHubIssueCacheRecord;
   };
   'github:edit-issue-body': {
-    args: { projectId: string; issueNumber: number; title: string; body: string; labels?: string[] };
+    args: {
+      projectId: string;
+      issueNumber: number;
+      title: string;
+      body: string;
+      labels?: string[];
+    };
     result: GitHubIssueCacheRecord | null;
   };
   'github:sync-to-project-board': {

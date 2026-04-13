@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { buildPlanPrompt, buildRevisionPrompt } from './plan-prompt';
-import type { SkillsRowSource } from '../skills';
 import type { ShipCodePlan } from '@shipcode/shared';
+import { describe, expect, it } from 'vitest';
+import type { SkillsRowSource } from '../skills';
+import { buildPlanPrompt, buildRevisionPrompt } from './plan-prompt';
 
 // Minimal skills source that always falls back to defaults
 const noOverrides: SkillsRowSource = {
@@ -24,19 +24,35 @@ const minimalPlan: ShipCodePlan = {
 
 describe('buildPlanPrompt', () => {
   it('produces output containing the user prompt', () => {
-    const result = buildPlanPrompt('Add a login button', 'thread-1', { projectId: null }, { skills: noOverrides });
+    const result = buildPlanPrompt(
+      'Add a login button',
+      'thread-1',
+      { projectId: null },
+      { skills: noOverrides },
+    );
     expect(result).toContain('Add a login button');
   });
 
   it('produces output containing the thread ID', () => {
-    const result = buildPlanPrompt('Fix bug', 'thread-xyz', { projectId: null }, { skills: noOverrides });
+    const result = buildPlanPrompt(
+      'Fix bug',
+      'thread-xyz',
+      { projectId: null },
+      { skills: noOverrides },
+    );
     expect(result).toContain('thread-xyz');
   });
 
   it('includes context files when provided', () => {
-    const result = buildPlanPrompt('Fix bug', 'thread-1', { projectId: null }, { skills: noOverrides }, {
-      contextFiles: 'src/auth.ts (modified)',
-    });
+    const result = buildPlanPrompt(
+      'Fix bug',
+      'thread-1',
+      { projectId: null },
+      { skills: noOverrides },
+      {
+        contextFiles: 'src/auth.ts (modified)',
+      },
+    );
     expect(result).toContain('src/auth.ts');
   });
 
@@ -54,17 +70,35 @@ describe('buildPlanPrompt', () => {
 
 describe('buildRevisionPrompt', () => {
   it('produces output containing review feedback', () => {
-    const result = buildRevisionPrompt(minimalPlan, 'Missing error handling', 'thread-1', { projectId: null }, { skills: noOverrides });
+    const result = buildRevisionPrompt(
+      minimalPlan,
+      'Missing error handling',
+      'thread-1',
+      { projectId: null },
+      { skills: noOverrides },
+    );
     expect(result).toContain('Missing error handling');
   });
 
   it('produces output containing incremented version number', () => {
-    const result = buildRevisionPrompt(minimalPlan, 'feedback', 'thread-1', { projectId: null }, { skills: noOverrides });
+    const result = buildRevisionPrompt(
+      minimalPlan,
+      'feedback',
+      'thread-1',
+      { projectId: null },
+      { skills: noOverrides },
+    );
     expect(result).toContain(String(minimalPlan.version + 1));
   });
 
   it('matches snapshot', () => {
-    const result = buildRevisionPrompt(minimalPlan, 'Add tests', 'thread-snap', { projectId: null }, { skills: noOverrides });
+    const result = buildRevisionPrompt(
+      minimalPlan,
+      'Add tests',
+      'thread-snap',
+      { projectId: null },
+      { skills: noOverrides },
+    );
     expect(result).toMatchSnapshot();
   });
 });

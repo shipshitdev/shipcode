@@ -47,7 +47,6 @@ import {
   InheritValueDisplay,
   PROVIDER_DISPLAY,
 } from '../model-provider-options';
-import { PlanWaiting } from './PlanWaiting';
 import {
   encodePhaseOption,
   getPlanStatusPresentation,
@@ -58,6 +57,7 @@ import {
   resolveRawPlanText,
   timeAgo,
 } from './helpers';
+import { PlanWaiting } from './PlanWaiting';
 
 type PhaseKey = 'planner' | 'reviewer' | 'executor' | 'verifier';
 
@@ -219,7 +219,9 @@ export function IssueDetailTabs({
                     {PHASE_PROVIDER_OPTIONS[phase].map((providerOption) => {
                       const selectedSelection = currentPhaseSelections[phase];
                       const selectedModelId =
-                        selectedSelection.provider === providerOption ? selectedSelection.modelId : null;
+                        selectedSelection.provider === providerOption
+                          ? selectedSelection.modelId
+                          : null;
                       return (
                         <SelectGroup key={providerOption}>
                           <SelectLabel>{PROVIDER_DISPLAY[providerOption]}</SelectLabel>
@@ -230,39 +232,45 @@ export function IssueDetailTabs({
                             !getModelOptions(providerOption).some(
                               (option) => option.value === selectedModelId,
                             ) && (
-                              <SelectItem value={encodePhaseOption(providerOption, selectedModelId)}>
+                              <SelectItem
+                                value={encodePhaseOption(providerOption, selectedModelId)}
+                              >
                                 {selectedModelId}
                               </SelectItem>
                             )}
                           {getModelOptions(providerOption).map((option) => (
-                            <SelectItem key={option.value} value={encodePhaseOption(providerOption, option.value)}>
+                            <SelectItem
+                              key={option.value}
+                              value={encodePhaseOption(providerOption, option.value)}
+                            >
                               {option.label}
                             </SelectItem>
                           ))}
                           {providerOption !==
-                            PHASE_PROVIDER_OPTIONS[phase][PHASE_PROVIDER_OPTIONS[phase].length - 1] && (
-                            <SelectSeparator />
-                          )}
+                            PHASE_PROVIDER_OPTIONS[phase][
+                              PHASE_PROVIDER_OPTIONS[phase].length - 1
+                            ] && <SelectSeparator />}
                         </SelectGroup>
                       );
                     })}
                   </SelectContent>
                 </Select>
 
-                {currentPhaseSelections[phase].provider === 'openrouter' && phase !== 'executor' && (
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[10px] uppercase tracking-wide text-muted">
-                      Custom OpenRouter slug
-                    </span>
-                    <Input
-                      key={`${phase}-${currentPhaseSelections[phase].modelId ?? ''}`}
-                      className="h-7 text-[11px]"
-                      placeholder="e.g. anthropic/claude-sonnet-4-6"
-                      defaultValue={currentPhaseSelections[phase].modelId ?? ''}
-                      onBlur={(event) => onPhaseOpenRouterSlugBlur(phase, event.target.value)}
-                    />
-                  </div>
-                )}
+                {currentPhaseSelections[phase].provider === 'openrouter' &&
+                  phase !== 'executor' && (
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] uppercase tracking-wide text-muted">
+                        Custom OpenRouter slug
+                      </span>
+                      <Input
+                        key={`${phase}-${currentPhaseSelections[phase].modelId ?? ''}`}
+                        className="h-7 text-[11px]"
+                        placeholder="e.g. anthropic/claude-sonnet-4-6"
+                        defaultValue={currentPhaseSelections[phase].modelId ?? ''}
+                        onBlur={(event) => onPhaseOpenRouterSlugBlur(phase, event.target.value)}
+                      />
+                    </div>
+                  )}
 
                 {currentPhaseSelections[phase].provider === 'openrouter' &&
                 integrationStatus?.openrouter.authStatus !== 'valid' ? (
@@ -310,7 +318,10 @@ export function IssueDetailTabs({
               <span className="text-[10px] font-medium uppercase tracking-wide text-muted">
                 Pull Request
               </span>
-              <Badge variant={activeIssue.linkedPrIsDraft ? 'warning' : 'success'} className="text-[10px]">
+              <Badge
+                variant={activeIssue.linkedPrIsDraft ? 'warning' : 'success'}
+                className="text-[10px]"
+              >
                 {activeIssue.linkedPrIsDraft ? 'Draft' : 'Ready'}
               </Badge>
             </div>
@@ -441,12 +452,7 @@ export function IssueDetailTabs({
         )}
         {hasPrFeedbackBlockers && activeThreadId && (
           <div className="flex justify-end">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={onStabilizePr}
-              disabled={isSubmitting}
-            >
+            <Button size="sm" variant="outline" onClick={onStabilizePr} disabled={isSubmitting}>
               {isSubmitting ? 'Starting…' : 'Run stabilization pass'}
             </Button>
           </div>
@@ -527,9 +533,7 @@ export function IssueDetailTabs({
                       )}
                     </div>
                     {entry.subtitle && (
-                      <p className="mt-0.5 text-[11px] text-muted break-words">
-                        {entry.subtitle}
-                      </p>
+                      <p className="mt-0.5 text-[11px] text-muted break-words">{entry.subtitle}</p>
                     )}
                   </div>
                   <span className="shrink-0 whitespace-nowrap text-[10px] text-muted">
@@ -581,7 +585,10 @@ export function IssueDetailTabs({
         {!planHistoryCollapsed && (
           <div className="flex flex-col gap-3">
             {planRunGroups.map((runGroup) => (
-              <div key={runGroup.threadId} className="rounded-md border border-border bg-secondary/20">
+              <div
+                key={runGroup.threadId}
+                className="rounded-md border border-border bg-secondary/20"
+              >
                 <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
                   <div className="flex min-w-0 items-center gap-2">
                     <span className="text-[11px] font-semibold uppercase tracking-wide text-secondary">
@@ -648,7 +655,9 @@ export function IssueDetailTabs({
                                   className="text-[10px]"
                                 />
                               ) : (
-                                <span className="text-xs text-muted">{statusPresentation.label}</span>
+                                <span className="text-xs text-muted">
+                                  {statusPresentation.label}
+                                </span>
                               )}
                               {review && plan.status !== 'superseded' && reviewPresentation && (
                                 <Badge
@@ -678,22 +687,23 @@ export function IssueDetailTabs({
                               <div className="border-t border-border p-3">
                                 {inlineDisplayPlan && <PlanViewer plan={inlineDisplayPlan} />}
                                 {review?.structured && <ReviewViewer review={review.structured} />}
-                                {!inlineDisplayPlan && (() => {
-                                  const fallbackRaw = plan.rawOutput ?? '';
-                                  const resolved = resolveRawPlanText(fallbackRaw);
-                                  return resolved === fallbackRaw ? (
-                                    <p className="text-xs italic text-muted">
-                                      Plan output could not be parsed. Check devtools console for the
-                                      full trace.
-                                    </p>
-                                  ) : (
-                                    <div className="overflow-x-auto">
-                                      <pre className="whitespace-pre-wrap text-xs text-secondary">
-                                        {resolved}
-                                      </pre>
-                                    </div>
-                                  );
-                                })()}
+                                {!inlineDisplayPlan &&
+                                  (() => {
+                                    const fallbackRaw = plan.rawOutput ?? '';
+                                    const resolved = resolveRawPlanText(fallbackRaw);
+                                    return resolved === fallbackRaw ? (
+                                      <p className="text-xs italic text-muted">
+                                        Plan output could not be parsed. Check devtools console for
+                                        the full trace.
+                                      </p>
+                                    ) : (
+                                      <div className="overflow-x-auto">
+                                        <pre className="whitespace-pre-wrap text-xs text-secondary">
+                                          {resolved}
+                                        </pre>
+                                      </div>
+                                    );
+                                  })()}
                               </div>
                             );
                           })()}

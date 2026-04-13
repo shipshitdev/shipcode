@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // vi.hoisted runs before vi.mock factories, making these available inside them
 const { mockExec, mockAccess, mockHomedir } = vi.hoisted(() => ({
@@ -11,19 +11,19 @@ vi.mock('node:child_process', () => ({ exec: mockExec }));
 vi.mock('node:fs/promises', () => ({ access: mockAccess }));
 vi.mock('node:os', () => ({ homedir: mockHomedir }));
 
+import { type AppSettings, DEFAULT_SETTINGS } from '@shipcode/shared';
 import {
   checkClaudeAuth,
   checkCodexAuth,
   checkGhAuth,
-  parseGhProjectScope,
+  checkIntegrationStatus,
   checkOpenRouterAuth,
   checkOpenRouterHealth,
-  checkIntegrationStatus,
   checkSystemHealth,
   checkSystemHealthWithAuth,
+  parseGhProjectScope,
   validateOpenRouterModel,
 } from './health-check';
-import { DEFAULT_SETTINGS, type AppSettings } from '@shipcode/shared';
 
 function settings(overrides: Partial<AppSettings> = {}): AppSettings {
   return { ...DEFAULT_SETTINGS, ...overrides };
@@ -185,7 +185,7 @@ describe('checkGhAuth', () => {
 
   it('parses hasProjectScope=true when project scope is in token scopes line', async () => {
     execSucceeds(
-      'github.com\n  ✓ Logged in to github.com account decod3r (keyring)\n  - Token scopes: \'gist\', \'read:org\', \'repo\', \'workflow\', \'project\'\n',
+      "github.com\n  ✓ Logged in to github.com account decod3r (keyring)\n  - Token scopes: 'gist', 'read:org', 'repo', 'workflow', 'project'\n",
     );
 
     const result = await checkGhAuth();
@@ -194,7 +194,7 @@ describe('checkGhAuth', () => {
 
   it('parses hasProjectScope=false when project scope is missing', async () => {
     execSucceeds(
-      'github.com\n  ✓ Logged in to github.com account decod3r (keyring)\n  - Token scopes: \'gist\', \'read:org\', \'repo\', \'workflow\'\n',
+      "github.com\n  ✓ Logged in to github.com account decod3r (keyring)\n  - Token scopes: 'gist', 'read:org', 'repo', 'workflow'\n",
     );
 
     const result = await checkGhAuth();
@@ -214,9 +214,7 @@ describe('checkGhAuth', () => {
 // ---------------------------------------------------------------------------
 describe('parseGhProjectScope', () => {
   it('returns true when "project" is in the comma-separated list', () => {
-    expect(
-      parseGhProjectScope("Token scopes: 'gist', 'read:org', 'repo', 'project'"),
-    ).toBe(true);
+    expect(parseGhProjectScope("Token scopes: 'gist', 'read:org', 'repo', 'project'")).toBe(true);
   });
 
   it('returns false when only read:project (or none) is present', () => {
@@ -473,7 +471,9 @@ describe('checkOpenRouterHealth', () => {
       )
       .mockResolvedValueOnce(
         new Response(
-          JSON.stringify({ data: [{ id: 'openrouter/auto' }, { id: 'anthropic/claude-sonnet-4-6' }] }),
+          JSON.stringify({
+            data: [{ id: 'openrouter/auto' }, { id: 'anthropic/claude-sonnet-4-6' }],
+          }),
           { status: 200 },
         ),
       );
@@ -486,9 +486,9 @@ describe('checkOpenRouterHealth', () => {
     );
     expect(result.authStatus).toBe('valid');
     expect(result.label).toBe('shipcode-dev');
-    expect(result.modelChecks.find((check: { key: string }) => check.key === 'planner')?.status).toBe(
-      'valid',
-    );
+    expect(
+      result.modelChecks.find((check: { key: string }) => check.key === 'planner')?.status,
+    ).toBe('valid');
   });
 });
 
@@ -506,7 +506,10 @@ describe('validateOpenRouterModel', () => {
 
   it('returns unverified when OpenRouter auth is not ready', async () => {
     execFails('not set');
-    const result = await validateOpenRouterModel(settings({ openrouterEnabled: true }), 'openrouter/auto');
+    const result = await validateOpenRouterModel(
+      settings({ openrouterEnabled: true }),
+      'openrouter/auto',
+    );
     expect(result.status).toBe('unverified');
   });
 

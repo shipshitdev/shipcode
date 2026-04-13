@@ -2,9 +2,9 @@
 // Source files: skills/<phase>/SKILL.md at repo root.
 // Regenerate via: bun run build:skills
 
-import { type PhaseSkillKey } from '@shipcode/shared';
+import type { PhaseSkillKey } from '@shipcode/shared';
 
-export { type PhaseSkillKey, PHASE_SKILL_KEYS } from '@shipcode/shared';
+export { PHASE_SKILL_KEYS, type PhaseSkillKey } from '@shipcode/shared';
 
 export interface BundledDefault {
   /** Raw markdown including frontmatter. The loader strips frontmatter before sending to the provider. */
@@ -94,7 +94,7 @@ If a step depends on a fact you cannot verify from the codebase, state the assum
 </repository_context>
 `,
     version: '47b30b969c4b85ef',
-    requiredSlots: ["USER_PROMPT","THREAD_ID","OUTPUT_SCHEMA"] as const,
+    requiredSlots: ['USER_PROMPT', 'THREAD_ID', 'OUTPUT_SCHEMA'] as const,
     schemaVersion: 1,
   },
   'adversarial-review': {
@@ -196,7 +196,7 @@ Before finalizing, check that each finding is:
 </repo_context>
 `,
     version: 'db60d421ef4c94cc',
-    requiredSlots: ["PLAN_JSON","OUTPUT_SCHEMA"] as const,
+    requiredSlots: ['PLAN_JSON', 'OUTPUT_SCHEMA'] as const,
     schemaVersion: 1,
   },
   'plan-revision': {
@@ -273,7 +273,13 @@ Every claim in a \`rationale\` must be defensible from the plan or repo state â€
 </review_feedback>
 `,
     version: 'bfd7874ceb0f332f',
-    requiredSlots: ["ORIGINAL_PLAN","REVIEW_FEEDBACK","THREAD_ID","NEW_VERSION","OUTPUT_SCHEMA"] as const,
+    requiredSlots: [
+      'ORIGINAL_PLAN',
+      'REVIEW_FEEDBACK',
+      'THREAD_ID',
+      'NEW_VERSION',
+      'OUTPUT_SCHEMA',
+    ] as const,
     schemaVersion: 1,
   },
   'plan-execution': {
@@ -350,7 +356,7 @@ If a step requires a tool or command, run it; do not pretend it succeeded.
 </approved_plan>
 `,
     version: '075bf8dc3570ddcf',
-    requiredSlots: ["APPROVED_PLAN"] as const,
+    requiredSlots: ['APPROVED_PLAN'] as const,
     schemaVersion: 1,
   },
   'plan-verification': {
@@ -434,7 +440,7 @@ Do not infer success from the absence of failure.
 </acceptance_criteria>
 `,
     version: 'eafbab0e940a06f7',
-    requiredSlots: ["PLAN_JSON","DIFF","ACCEPTANCE_CRITERIA","OUTPUT_SCHEMA"] as const,
+    requiredSlots: ['PLAN_JSON', 'DIFF', 'ACCEPTANCE_CRITERIA', 'OUTPUT_SCHEMA'] as const,
     schemaVersion: 1,
   },
 };

@@ -1,6 +1,6 @@
-import { simpleGit, type SimpleGit } from 'simple-git';
 import path from 'node:path';
 import { resolveWorktreeParent } from '@shipcode/shared';
+import { type SimpleGit, simpleGit } from 'simple-git';
 
 export interface WorktreeManagerOptions {
   /**
@@ -45,9 +45,7 @@ export class WorktreeManager {
   private formatIssueBranch(issueNumber: number, title: string): string {
     const format = this.options.branchFormat || DEFAULT_BRANCH_FORMAT;
     const slug = slugify(title);
-    let branch = format
-      .replace(/\{id\}/g, String(issueNumber))
-      .replace(/\{slug\}/g, slug);
+    let branch = format.replace(/\{id\}/g, String(issueNumber)).replace(/\{slug\}/g, slug);
     // Clean up trailing dashes from empty slug
     branch = branch.replace(/-$/, '');
     return branch;
@@ -128,9 +126,10 @@ export class WorktreeManager {
     baseBranch?: string,
   ): Promise<{ worktreePath: string; branch: string }> {
     const parent = resolveWorktreeParent(this.projectPath, this.options.worktreeRoot ?? null);
-    const base = typeof idOrNumber === 'number'
-      ? (baseBranch ?? await this.getDefaultBranch())
-      : (titleOrBase ?? await this.getDefaultBranch());
+    const base =
+      typeof idOrNumber === 'number'
+        ? (baseBranch ?? (await this.getDefaultBranch()))
+        : (titleOrBase ?? (await this.getDefaultBranch()));
 
     let branch: string;
     let dirName: string;
@@ -163,14 +162,16 @@ export class WorktreeManager {
         const isCollision = /already exists|is already checked out/i.test(msg);
         if (!isCollision || attempt >= MAX_RETRIES) throw err;
         // Bump suffix and retry
-        const nextN = (branch.match(/-(\d+)$/) ? Number(branch.match(/-(\d+)$/)![1]) + 1 : 2);
-        const rawBranch = typeof idOrNumber === 'number'
-          ? this.formatIssueBranch(idOrNumber, titleOrBase ?? '')
-          : this.getBranchName(idOrNumber);
+        const nextN = branch.match(/-(\d+)$/) ? Number(branch.match(/-(\d+)$/)![1]) + 1 : 2;
+        const rawBranch =
+          typeof idOrNumber === 'number'
+            ? this.formatIssueBranch(idOrNumber, titleOrBase ?? '')
+            : this.getBranchName(idOrNumber);
         branch = `${rawBranch}-${nextN}`;
-        const rawDir = typeof idOrNumber === 'number'
-          ? this.formatIssueDir(idOrNumber, titleOrBase ?? '')
-          : String(idOrNumber);
+        const rawDir =
+          typeof idOrNumber === 'number'
+            ? this.formatIssueDir(idOrNumber, titleOrBase ?? '')
+            : String(idOrNumber);
         dirName = `${rawDir}-${nextN}`;
       }
     }

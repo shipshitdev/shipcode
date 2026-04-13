@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
 import type { ShipCodePlan } from '@shipcode/shared';
+import { describe, expect, it } from 'vitest';
 import { formatPlanComment } from './plan-comment';
 
 function makePlan(overrides: Partial<ShipCodePlan> = {}): ShipCodePlan {

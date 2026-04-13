@@ -125,9 +125,7 @@ export class ClaudeNormalizer {
     // Result line → done event
     if (event.type === 'result') {
       this.flushDeferredFencePrefix();
-      const usage = event.usage as
-        | { input_tokens?: number; output_tokens?: number }
-        | undefined;
+      const usage = event.usage as { input_tokens?: number; output_tokens?: number } | undefined;
       const cost = event.total_cost_usd as number | undefined;
       this.onEvent({
         kind: 'done',
@@ -184,9 +182,7 @@ export class ClaudeNormalizer {
       const openingFence = findOpeningFence(remaining);
       if (!openingFence) {
         const deferredPrefix = getDeferredFencePrefix(remaining);
-        const visibleText = deferredPrefix
-          ? remaining.slice(0, -deferredPrefix.length)
-          : remaining;
+        const visibleText = deferredPrefix ? remaining.slice(0, -deferredPrefix.length) : remaining;
         if (visibleText) {
           this.onEvent({ kind: 'text', content: visibleText });
         }

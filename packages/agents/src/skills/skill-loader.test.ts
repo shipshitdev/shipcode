@@ -1,12 +1,12 @@
-import { describe, it, expect } from 'vitest';
-import {
-  resolveSkill,
-  validateSkill,
-  interpolateSkill,
-  stripFrontmatter,
-  type SkillsRowSource,
-} from './skill-loader';
+import { describe, expect, it } from 'vitest';
 import { DEFAULT_SKILLS } from './defaults.generated';
+import {
+  interpolateSkill,
+  resolveSkill,
+  type SkillsRowSource,
+  stripFrontmatter,
+  validateSkill,
+} from './skill-loader';
 
 const VALID_SKILL = `---
 name: adversarial-review
@@ -25,7 +25,10 @@ requiredSlots:
 `;
 
 function makeSource(
-  rows: Map<string, { content: string; baseVersion: string; schemaVersion: number; status: 'ok' | 'quarantined' }>,
+  rows: Map<
+    string,
+    { content: string; baseVersion: string; schemaVersion: number; status: 'ok' | 'quarantined' }
+  >,
 ): SkillsRowSource & { quarantined: Array<[string, string, string]> } {
   const quarantined: Array<[string, string, string]> = [];
   return {
@@ -163,7 +166,9 @@ describe('resolveSkill', () => {
     expect(result.skill.source).toBe('default');
     expect(result.fallbackUsed).toBe(true);
     expect(result.error?.code).toBe('missing_slot');
-    expect(source.quarantined).toEqual([['GLOBAL', 'adversarial-review', expect.stringContaining('PLAN_JSON')]]);
+    expect(source.quarantined).toEqual([
+      ['GLOBAL', 'adversarial-review', expect.stringContaining('PLAN_JSON')],
+    ]);
   });
 
   it('skips a row already marked quarantined without re-validating', () => {
@@ -200,6 +205,8 @@ describe('resolveSkill', () => {
     expect(result.skill.source).toBe('global');
     expect(result.skill.baseVersion).toBe('g');
     expect(result.fallbackUsed).toBe(true);
-    expect(source.quarantined).toEqual([['proj-A', 'adversarial-review', expect.stringContaining('OUTPUT_SCHEMA')]]);
+    expect(source.quarantined).toEqual([
+      ['proj-A', 'adversarial-review', expect.stringContaining('OUTPUT_SCHEMA')],
+    ]);
   });
 });

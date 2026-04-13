@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { DatabaseSync } from 'node:sqlite';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from '../test-helpers';
+import { PlanQueries } from './plans';
 import { ProjectQueries } from './projects';
 import { ThreadQueries } from './threads';
-import { PlanQueries } from './plans';
 import { VerificationQueries } from './verifications';
 
 describe('VerificationQueries', () => {

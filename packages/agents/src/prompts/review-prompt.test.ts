@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { buildReviewPrompt } from './review-prompt';
-import type { SkillsRowSource } from '../skills';
 import type { ShipCodePlan } from '@shipcode/shared';
+import { describe, expect, it } from 'vitest';
+import type { SkillsRowSource } from '../skills';
+import { buildReviewPrompt } from './review-prompt';
 
 const noOverrides: SkillsRowSource = {
   get: () => null,
@@ -29,17 +29,32 @@ describe('buildReviewPrompt', () => {
   });
 
   it('includes autonomous flag in output', () => {
-    const autonomous = buildReviewPrompt(minimalPlan, { projectId: null }, { skills: noOverrides }, { autonomous: true });
+    const autonomous = buildReviewPrompt(
+      minimalPlan,
+      { projectId: null },
+      { skills: noOverrides },
+      { autonomous: true },
+    );
     expect(autonomous).toContain('yes');
 
-    const manual = buildReviewPrompt(minimalPlan, { projectId: null }, { skills: noOverrides }, { autonomous: false });
+    const manual = buildReviewPrompt(
+      minimalPlan,
+      { projectId: null },
+      { skills: noOverrides },
+      { autonomous: false },
+    );
     expect(manual).toContain('no');
   });
 
   it('includes context files when provided', () => {
-    const result = buildReviewPrompt(minimalPlan, { projectId: null }, { skills: noOverrides }, {
-      contextFiles: 'src/auth.ts (modified)',
-    });
+    const result = buildReviewPrompt(
+      minimalPlan,
+      { projectId: null },
+      { skills: noOverrides },
+      {
+        contextFiles: 'src/auth.ts (modified)',
+      },
+    );
     expect(result).toContain('src/auth.ts');
   });
 

@@ -19,10 +19,10 @@
  */
 
 import type { AppSettings } from '@shipcode/shared';
-import type { AgentProvider, ProviderPhase, ProviderRequest, ProviderResponse } from './types';
+import { executeViaOpenRouter } from './openrouter-execute';
 import type { OpenRouterChatMessage } from './openrouter-http';
 import { OpenRouterClient, OpenRouterError } from './openrouter-http';
-import { executeViaOpenRouter } from './openrouter-execute';
+import type { AgentProvider, ProviderPhase, ProviderRequest, ProviderResponse } from './types';
 
 // System prompts for each phase. The existing prompt builders in
 // `packages/agents/src/prompts/` already produce fully-formed user

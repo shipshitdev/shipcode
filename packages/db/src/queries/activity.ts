@@ -1,11 +1,11 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { nanoid } from 'nanoid';
 import {
-  toIsoUtc,
+  type ActivityActor,
   type ActivityEntry,
   type ActivityKind,
-  type ActivityActor,
+  toIsoUtc,
 } from '@shipcode/shared';
+import { nanoid } from 'nanoid';
 
 function mapRow(row: any): ActivityEntry {
   return {

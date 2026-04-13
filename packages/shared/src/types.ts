@@ -71,7 +71,7 @@ export interface Project {
    * and can span multiple repos, so we can't derive this from `gitRemote` alone.
    * When null, the Kanban header falls back to `${repoBase}/projects` (the
    * repo's Projects tab that lists linked boards).
-  */
+   */
   githubProjectUrl: string | null;
   plannerModelOverride: AgentType | null;
   reviewerModelOverride: AgentType | null;

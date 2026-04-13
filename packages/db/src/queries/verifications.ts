@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { toIsoUtc, type VerificationRecord, type VerificationResult } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
-import { toIsoUtc, type VerificationResult, type VerificationRecord } from '@shipcode/shared';
 
 export class VerificationQueries {
   constructor(private db: DatabaseSync) {}

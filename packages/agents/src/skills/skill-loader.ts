@@ -1,4 +1,4 @@
-import { DEFAULT_SKILLS, type PhaseSkillKey, type BundledDefault } from './defaults.generated';
+import { type BundledDefault, DEFAULT_SKILLS, type PhaseSkillKey } from './defaults.generated';
 
 export interface SkillSlot {
   key: string;
@@ -31,7 +31,12 @@ export interface SkillsRowSource {
   get(
     projectId: string | null,
     phase: PhaseSkillKey,
-  ): { content: string; baseVersion: string; schemaVersion: number; status: 'ok' | 'quarantined' } | null;
+  ): {
+    content: string;
+    baseVersion: string;
+    schemaVersion: number;
+    status: 'ok' | 'quarantined';
+  } | null;
   markQuarantined(projectId: string | null, phase: PhaseSkillKey, reason: string): void;
 }
 
@@ -209,4 +214,4 @@ export function interpolateSkill(content: string, slots: SkillSlot[]): string {
   return result;
 }
 
-export { DEFAULT_SKILLS, type PhaseSkillKey, type BundledDefault };
+export { type BundledDefault, DEFAULT_SKILLS, type PhaseSkillKey };

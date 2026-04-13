@@ -1,7 +1,7 @@
-import type { DatabaseSync } from 'node:sqlite';
-import { nanoid } from 'nanoid';
-import { ISO_NOW_SQL, toIsoUtc, type Project } from '@shipcode/shared';
 import path from 'node:path';
+import type { DatabaseSync } from 'node:sqlite';
+import { ISO_NOW_SQL, type Project, toIsoUtc } from '@shipcode/shared';
+import { nanoid } from 'nanoid';
 
 interface ProjectIdleGuardOptions {
   /**

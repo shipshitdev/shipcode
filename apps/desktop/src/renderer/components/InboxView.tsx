@@ -1,5 +1,3 @@
-import { useEffect, useRef, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   filterAttentionRequiredNotifications,
   type GitHubIssueCacheRecord,
@@ -22,6 +20,8 @@ import {
   TableRow,
   X,
 } from '@shipcode/ui';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 
 type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info' | 'accent';
@@ -177,9 +177,7 @@ export function InboxView() {
       </TableCell>
       <TableCell className="align-top">
         <div className="text-[13px] font-medium text-primary">{n.title}</div>
-        {n.body && (
-          <div className="mt-0.5 line-clamp-2 text-[12px] text-secondary">{n.body}</div>
-        )}
+        {n.body && <div className="mt-0.5 line-clamp-2 text-[12px] text-secondary">{n.body}</div>}
       </TableCell>
       <TableCell className="w-[1%] whitespace-nowrap align-top text-right">
         <div className="flex items-center justify-end gap-1">

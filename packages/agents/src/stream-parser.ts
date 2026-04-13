@@ -1,11 +1,13 @@
+import type { ErrorType, PlanReview, ShipCodePlan, VerificationResult } from '@shipcode/shared';
 import {
-  PLAN_FENCE_TAG,
-  REVIEW_FENCE_TAG,
-  VERIFICATION_FENCE_TAG,
   ERROR_PATTERNS,
+  PLAN_FENCE_TAG,
+  planReviewSchema,
+  REVIEW_FENCE_TAG,
+  shipCodePlanSchema,
+  VERIFICATION_FENCE_TAG,
+  verificationResultSchema,
 } from '@shipcode/shared';
-import type { ShipCodePlan, PlanReview, VerificationResult, ErrorType } from '@shipcode/shared';
-import { shipCodePlanSchema, planReviewSchema, verificationResultSchema } from '@shipcode/shared';
 
 export interface ParseResult<T> {
   success: boolean;
@@ -79,9 +81,7 @@ export class StreamParser {
             costUsd: parsed.total_cost_usd ?? parsed.cost_usd ?? 0,
           };
         }
-      } catch {
-        continue;
-      }
+      } catch {}
     }
 
     // ── Codex --json ─────────────────────────────────────────────────────────
@@ -98,9 +98,7 @@ export class StreamParser {
             costUsd: 0, // Codex CLI doesn't report cost_usd
           };
         }
-      } catch {
-        continue;
-      }
+      } catch {}
     }
 
     return null;
@@ -148,9 +146,7 @@ export class StreamParser {
             if (text) return text;
           }
         }
-      } catch {
-        continue; // skip non-parseable lines (PTY control sequences, etc.)
-      }
+      } catch {}
     }
 
     // ── codex exec --json ───────────────────────────────────────────────────
@@ -249,9 +245,7 @@ export class StreamParser {
         if (parsed.type === 'assistant' && typeof parsed.message?.model === 'string') {
           return parsed.message.model as string;
         }
-      } catch {
-        continue;
-      }
+      } catch {}
     }
     return null;
   }

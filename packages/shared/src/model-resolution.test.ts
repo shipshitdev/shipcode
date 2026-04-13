@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import type { AppSettings, GitHubIssueCacheRecord, Project } from './types';
 import { DEFAULT_SETTINGS } from './constants';
 import {
   getIssueCardPhase,
   resolveExecutorModelForIssue,
-  resolvePhaseModelIdForIssue,
+  resolvePhaseModel,
   resolvePhaseModelForIssue,
   resolvePhaseModelId,
-  resolvePhaseModel,
+  resolvePhaseModelIdForIssue,
   resolvePhaseReasoningEffort,
 } from './model-resolution';
+import type { AppSettings, GitHubIssueCacheRecord, Project } from './types';
 
 function makeProject(overrides: Partial<Project> = {}): Project {
   return {
@@ -137,7 +137,9 @@ describe('model-resolution', () => {
       verifierModelOverride: 'openrouter',
     });
 
-    expect(resolvePhaseModelIdForIssue(settings, project, issue, 'planner')).toBe('claude-opus-4-6');
+    expect(resolvePhaseModelIdForIssue(settings, project, issue, 'planner')).toBe(
+      'claude-opus-4-6',
+    );
     expect(resolvePhaseModelIdForIssue(settings, project, issue, 'reviewer')).toBe('gpt-5.4-mini');
     expect(resolvePhaseModelIdForIssue(settings, project, issue, 'executor')).toBe('gpt-5.4');
     expect(resolvePhaseModelIdForIssue(settings, project, issue, 'verifier')).toBe(
@@ -198,6 +200,8 @@ describe('model-resolution', () => {
       verifierModel: 'openrouter',
       openrouterVerifierModel: 'openrouter/auto',
     };
-    expect(resolvePhaseModelId(withOpenRouterDefaults, project, 'verifier')).toBe('openrouter/auto');
+    expect(resolvePhaseModelId(withOpenRouterDefaults, project, 'verifier')).toBe(
+      'openrouter/auto',
+    );
   });
 });

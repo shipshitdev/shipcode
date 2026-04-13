@@ -191,9 +191,7 @@ export class CodexNormalizer {
       const openingFence = findOpeningFence(remaining);
       if (!openingFence) {
         const deferredPrefix = getDeferredFencePrefix(remaining);
-        const visibleText = deferredPrefix
-          ? remaining.slice(0, -deferredPrefix.length)
-          : remaining;
+        const visibleText = deferredPrefix ? remaining.slice(0, -deferredPrefix.length) : remaining;
         if (visibleText) {
           this.onEvent({ kind: 'text', content: visibleText });
         }

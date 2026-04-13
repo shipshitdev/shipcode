@@ -1,5 +1,5 @@
-import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { EventEmitter } from 'node:events';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockExecFileAsync = vi.hoisted(() => vi.fn());
 const mockSpawn = vi.hoisted(() => vi.fn());
@@ -357,7 +357,9 @@ describe('GhCli', () => {
 
   describe('findPullRequestByHead', () => {
     it('returns the first matching PR for a branch head', async () => {
-      success(JSON.stringify([{ number: 14, url: 'https://github.com/o/r/pull/14', isDraft: true }]));
+      success(
+        JSON.stringify([{ number: 14, url: 'https://github.com/o/r/pull/14', isDraft: true }]),
+      );
 
       const pr = await gh.findPullRequestByHead('feat/branch');
 
@@ -368,7 +370,18 @@ describe('GhCli', () => {
       });
       expect(mockExecFileAsync).toHaveBeenCalledWith(
         'gh',
-        ['pr', 'list', '--state', 'all', '--head', 'feat/branch', '--json', 'number,url,isDraft', '--limit', '1'],
+        [
+          'pr',
+          'list',
+          '--state',
+          'all',
+          '--head',
+          'feat/branch',
+          '--json',
+          'number,url,isDraft',
+          '--limit',
+          '1',
+        ],
         { cwd: '/test/repo' },
       );
     });

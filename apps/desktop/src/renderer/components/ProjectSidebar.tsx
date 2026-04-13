@@ -1,7 +1,7 @@
 import {
-  filterAttentionRequiredNotifications,
   type AppSettings,
   type DashboardStats,
+  filterAttentionRequiredNotifications,
   type NotificationRecord,
   type Project,
 } from '@shipcode/shared';
@@ -9,6 +9,7 @@ import {
   Activity,
   Archive,
   ArrowUpDown,
+  Badge,
   Button,
   Check,
   cn,
@@ -28,7 +29,6 @@ import {
   Settings,
   Trash2,
   Wrench,
-  Badge,
 } from '@shipcode/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useRef, useState } from 'react';
@@ -173,27 +173,30 @@ export function ProjectSidebar() {
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
 
-  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    dragRef.current = { startX: e.clientX, startW: sidebarWidth };
-    const onMove = (ev: MouseEvent) => {
-      if (!dragRef.current) return;
-      const delta = ev.clientX - dragRef.current.startX;
-      const next = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, dragRef.current.startW + delta));
-      setSidebarWidth(next);
-    };
-    const onUp = () => {
-      dragRef.current = null;
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-  }, [sidebarWidth]);
+  const handleResizeMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      dragRef.current = { startX: e.clientX, startW: sidebarWidth };
+      const onMove = (ev: MouseEvent) => {
+        if (!dragRef.current) return;
+        const delta = ev.clientX - dragRef.current.startX;
+        const next = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, dragRef.current.startW + delta));
+        setSidebarWidth(next);
+      };
+      const onUp = () => {
+        dragRef.current = null;
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    },
+    [sidebarWidth],
+  );
 
   if (sidebarCollapsed) {
     return null;

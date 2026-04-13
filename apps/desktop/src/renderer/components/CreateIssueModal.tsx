@@ -1,25 +1,17 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
-import log from 'electron-log/renderer';
-import { useQueryClient } from '@tanstack/react-query';
 import {
-  PRD_REQUIRED_HEADINGS,
-  buildPrdMetadataLabels,
   bodyHasRequiredPrdSections,
-  readPrdIssueMetadata,
+  buildPrdMetadataLabels,
   type GitHubIssueCacheRecord,
+  PRD_REQUIRED_HEADINGS,
   type PrdBlastRadius,
   type PrdEstimatedComplexity,
+  readPrdIssueMetadata,
 } from '@shipcode/shared';
+import { Button, Checkbox, Keycap, Label, Modal, ModalFooter, Textarea } from '@shipcode/ui';
+import { useQueryClient } from '@tanstack/react-query';
+import log from 'electron-log/renderer';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
-import {
-  Modal,
-  ModalFooter,
-  Textarea,
-  Label,
-  Button,
-  Checkbox,
-  Keycap,
-} from '@shipcode/ui';
 
 /**
  * Derive a GitHub issue title from a PRD body. Prefers the first `# ` heading,
@@ -219,44 +211,42 @@ export function CreateIssueModal() {
       className="max-w-[720px]"
       onKeyDown={handleKeyDown}
     >
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="issue-body" className="text-xs text-secondary">
-              What do you want to build?
-            </Label>
-            <Textarea
-              ref={bodyRef}
-              id="issue-body"
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              placeholder={
-                mode === 'create' ? 'Describe what you want to build…' : 'PRD markdown...'
-              }
-              rows={mode === 'create' ? 10 : 14}
-              className={
-                mode === 'edit' && editBodyValid
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="issue-body" className="text-xs text-secondary">
+            What do you want to build?
+          </Label>
+          <Textarea
+            ref={bodyRef}
+            id="issue-body"
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            placeholder={mode === 'create' ? 'Describe what you want to build…' : 'PRD markdown...'}
+            rows={mode === 'create' ? 10 : 14}
+            className={
+              mode === 'edit' && editBodyValid
+                ? 'font-mono text-xs'
+                : mode === 'edit'
                   ? 'font-mono text-xs'
-                  : mode === 'edit'
-                    ? 'font-mono text-xs'
-                    : 'text-[13px]'
-              }
-              disabled={enhancing}
-            />
-          </div>
-
-          {mode === 'edit' && !editBodyValid && body.length > 0 && (
-            <div className="max-h-20 overflow-y-auto rounded-md border border-warning/30 bg-warning/10 px-2.5 py-2 text-xs text-warning">
-              Missing required sections: {missingSections.join(', ')}
-            </div>
-          )}
-
-          {clampedError && (
-            <div className="max-h-12 overflow-hidden rounded-md border border-danger/30 bg-danger/10 px-2.5 py-2 text-xs text-danger">
-              <span className="line-clamp-1">{clampedError}</span>
-              <span className="ml-2 text-muted">(full trace in devtools console)</span>
-            </div>
-          )}
+                  : 'text-[13px]'
+            }
+            disabled={enhancing}
+          />
         </div>
+
+        {mode === 'edit' && !editBodyValid && body.length > 0 && (
+          <div className="max-h-20 overflow-y-auto rounded-md border border-warning/30 bg-warning/10 px-2.5 py-2 text-xs text-warning">
+            Missing required sections: {missingSections.join(', ')}
+          </div>
+        )}
+
+        {clampedError && (
+          <div className="max-h-12 overflow-hidden rounded-md border border-danger/30 bg-danger/10 px-2.5 py-2 text-xs text-danger">
+            <span className="line-clamp-1">{clampedError}</span>
+            <span className="ml-2 text-muted">(full trace in devtools console)</span>
+          </div>
+        )}
+      </div>
 
       <ModalFooter className="items-center border-t border-border px-6 pt-4">
         {mode === 'create' && (

@@ -59,10 +59,7 @@ function parseFrontmatter(raw: string): ParsedPrdFrontmatter {
   return frontmatter;
 }
 
-function readManagedLabelValue(
-  labels: string[],
-  prefix: string,
-): string | null {
+function readManagedLabelValue(labels: string[], prefix: string): string | null {
   const match = labels.find((label) => label.startsWith(prefix));
   return match ? match.slice(prefix.length) : null;
 }

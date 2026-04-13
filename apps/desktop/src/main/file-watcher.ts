@@ -1,7 +1,7 @@
-import { watch, type FSWatcher } from 'chokidar';
-import type { BrowserWindow } from 'electron';
-import { FILE_WATCH_DEBOUNCE_MS, IGNORED_DIRECTORIES } from '@shipcode/shared';
 import type { FileChange } from '@shipcode/shared';
+import { FILE_WATCH_DEBOUNCE_MS, IGNORED_DIRECTORIES } from '@shipcode/shared';
+import { type FSWatcher, watch } from 'chokidar';
+import type { BrowserWindow } from 'electron';
 
 export function createFileWatcher(
   watchPath: string,

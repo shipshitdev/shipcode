@@ -1,8 +1,8 @@
 import type { ShipCodePlan } from '@shipcode/shared';
 import { VERIFICATION_FENCE_TAG } from '@shipcode/shared';
 import {
-  resolveSkill,
   interpolateSkill,
+  resolveSkill,
   type SkillsRowSource,
   type SkillValidationError,
 } from '../skills';
@@ -52,11 +52,7 @@ export function buildVerificationPrompt(
   testOutput?: string | null,
   opts: VerificationPromptOptions = {},
 ): string {
-  const { skill, fallbackUsed, error } = resolveSkill(
-    'plan-verification',
-    context.projectId,
-    deps,
-  );
+  const { skill, fallbackUsed, error } = resolveSkill('plan-verification', context.projectId, deps);
   if (fallbackUsed) {
     deps.onFallback?.('plan-verification', error);
   }

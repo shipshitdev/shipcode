@@ -60,10 +60,7 @@ export function Titlebar() {
           onClick={toggleTerminal}
           title={terminalVisible ? 'Hide terminal' : 'Show terminal'}
         >
-          <Terminal
-            size={14}
-            className={terminalVisible ? 'text-primary' : 'text-secondary'}
-          />
+          <Terminal size={14} className={terminalVisible ? 'text-primary' : 'text-secondary'} />
         </Button>
         <Button
           variant="ghost"

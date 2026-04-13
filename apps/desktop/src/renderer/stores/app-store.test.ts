@@ -1,6 +1,6 @@
+import type { GitHubIssueCacheRecord } from '@shipcode/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useAppStore } from './app-store';
-import type { GitHubIssueCacheRecord } from '@shipcode/shared';
 
 const makeIssue = (overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssueCacheRecord => ({
   id: 'issue-1',

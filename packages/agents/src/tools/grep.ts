@@ -10,10 +10,10 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { z } from 'zod';
 import { IGNORED_DIRECTORIES } from '@shipcode/shared';
-import type { Tool, ToolContext, ToolResult } from './types';
+import { z } from 'zod';
 import { assertPathInWorktree, PathGuardError } from './path-guard';
+import type { Tool, ToolContext, ToolResult } from './types';
 
 const execFileAsync = promisify(execFile);
 

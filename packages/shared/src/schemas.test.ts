@@ -1,13 +1,13 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  shipCodePlanSchema,
-  planFileChangeSchema,
-  planStepSchema,
-  planReviewSchema,
-  reviewFindingSchema,
-  verificationResultSchema,
   criteriaCheckSchema,
+  planFileChangeSchema,
+  planReviewSchema,
+  planStepSchema,
+  reviewFindingSchema,
+  shipCodePlanSchema,
   verificationIssueSchema,
+  verificationResultSchema,
 } from './schemas';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────

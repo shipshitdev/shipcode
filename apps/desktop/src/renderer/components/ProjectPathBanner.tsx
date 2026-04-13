@@ -17,8 +17,8 @@ export function ProjectPathBanner({ project }: { project: ProjectWithPathState |
       <span className="text-base font-bold leading-none">!</span>
       <AlertDescription className="text-xs text-warning">
         <span className="font-medium">{project.name}</span> points to a folder that no longer
-        exists: <span className="font-mono">{project.path}</span>. Issue refresh, branch reads,
-        and pipeline runs will fail until you relink the project to the moved repository folder.
+        exists: <span className="font-mono">{project.path}</span>. Issue refresh, branch reads, and
+        pipeline runs will fail until you relink the project to the moved repository folder.
       </AlertDescription>
     </Alert>
   );

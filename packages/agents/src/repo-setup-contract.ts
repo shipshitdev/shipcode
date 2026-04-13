@@ -2,8 +2,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   REPO_SETUP_CONTRACT_FILE,
-  repoSetupContractSchema,
   type RepoSetupContract,
+  repoSetupContractSchema,
 } from '@shipcode/shared';
 
 export interface LoadedRepoSetupContract {

@@ -484,7 +484,7 @@ export function migrateV12(db: DatabaseSync): void {
     }
 
     try {
-      db.exec('ALTER TABLE threads ADD COLUMN verifier_model TEXT DEFAULT \'claude\'');
+      db.exec("ALTER TABLE threads ADD COLUMN verifier_model TEXT DEFAULT 'claude'");
     } catch {}
 
     try {

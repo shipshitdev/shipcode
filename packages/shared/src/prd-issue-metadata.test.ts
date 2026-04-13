@@ -82,9 +82,7 @@ blast_radius: contained
 
 # PRD: example`;
 
-    expect(
-      readPrdIssueMetadata(raw, ['enhancement', 'complexity:high', 'blast:infra']),
-    ).toEqual({
+    expect(readPrdIssueMetadata(raw, ['enhancement', 'complexity:high', 'blast:infra'])).toEqual({
       cleanBody: '# PRD: example',
       frontmatter: {
         estimated_complexity: 'low',

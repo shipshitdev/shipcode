@@ -6,10 +6,10 @@
  */
 
 import fs from 'node:fs/promises';
-import { z } from 'zod';
 import { MAX_READ_BYTES } from '@shipcode/shared';
-import type { Tool, ToolContext, ToolResult } from './types';
+import { z } from 'zod';
 import { assertPathInWorktree, PathGuardError } from './path-guard';
+import type { Tool, ToolContext, ToolResult } from './types';
 
 const ReadInput = z.object({
   path: z.string().min(1),

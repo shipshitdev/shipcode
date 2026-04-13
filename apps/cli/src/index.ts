@@ -7,10 +7,10 @@ if (major < 22 || (major === 22 && minor < 5)) {
 }
 
 import { Command } from 'commander';
-import { statusCommand } from './commands/status';
+import { onboardCommand } from './commands/onboard';
 import { runCommand } from './commands/run';
 import { startCommand } from './commands/start';
-import { onboardCommand } from './commands/onboard';
+import { statusCommand } from './commands/status';
 
 const program = new Command();
 

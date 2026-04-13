@@ -1,8 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import path from 'node:path';
 import os from 'node:os';
-import { expandWorktreeRoot, projectSlug, resolveWorktreeParent } from './worktree-path';
+import path from 'node:path';
+import { describe, expect, it } from 'vitest';
 import { DEFAULT_WORKTREE_ROOT, WORKTREE_DIR } from './constants';
+import { expandWorktreeRoot, projectSlug, resolveWorktreeParent } from './worktree-path';
 
 describe('expandWorktreeRoot', () => {
   it('returns default (~/.shipcode/worktrees) for null', () => {

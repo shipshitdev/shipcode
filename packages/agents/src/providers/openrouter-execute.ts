@@ -28,16 +28,16 @@
 
 import path from 'node:path';
 import {
-  MAX_TOOL_CALL_ITERATIONS,
-  MAX_EXECUTE_TOTAL_TOKENS,
   MAX_DUPLICATE_TOOL_CALLS,
+  MAX_EXECUTE_TOTAL_TOKENS,
+  MAX_TOOL_CALL_ITERATIONS,
 } from '@shipcode/shared';
+import type { TerminalEvent } from '../terminal-events';
 import { executeToolCall, getToolSchemas, toolCallHash } from '../tools/registry';
 import type { ToolContext } from '../tools/types';
-import { OpenRouterClient, OpenRouterError } from './openrouter-http';
 import type { OpenRouterChatMessage } from './openrouter-http';
+import { type OpenRouterClient, OpenRouterError } from './openrouter-http';
 import type { ProviderRequest, ProviderResponse } from './types';
-import type { TerminalEvent } from '../terminal-events';
 
 /**
  * System prompt for the tool-call execute loop. Deliberately terse —
@@ -242,8 +242,7 @@ export async function executeViaOpenRouter(
         let argSummary = '';
         try {
           const parsed = JSON.parse(call.function.arguments);
-          argSummary =
-            parsed.file_path ?? parsed.pattern ?? parsed.command?.slice(0, 60) ?? '';
+          argSummary = parsed.file_path ?? parsed.pattern ?? parsed.command?.slice(0, 60) ?? '';
         } catch {}
         emit?.({
           kind: 'tool_start',

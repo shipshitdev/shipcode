@@ -1,11 +1,11 @@
 import type { ShipCodePlan } from '@shipcode/shared';
 import { PLAN_FENCE_TAG } from '@shipcode/shared';
 import {
-  resolveSkill,
   interpolateSkill,
+  type PhaseSkillKey,
+  resolveSkill,
   type SkillsRowSource,
   type SkillValidationError,
-  type PhaseSkillKey,
 } from '../skills';
 
 const PLAN_SCHEMA_DESCRIPTION = `{
@@ -48,11 +48,7 @@ export function buildPlanPrompt(
   opts: PlanPromptOptions = {},
   testCommand?: string | null,
 ): string {
-  const { skill, fallbackUsed, error } = resolveSkill(
-    'plan-generation',
-    context.projectId,
-    deps,
-  );
+  const { skill, fallbackUsed, error } = resolveSkill('plan-generation', context.projectId, deps);
   if (fallbackUsed) {
     deps.onFallback?.('plan-generation', error);
   }

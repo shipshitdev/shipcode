@@ -31,7 +31,7 @@ export function formatPlanComment(plan: ShipCodePlan): string {
   sections.push('');
   for (const step of plan.steps) {
     sections.push(`${step.order}. **${step.description}**`);
-    const fileList = step.files.map(f => `\`${f}\``).join(', ');
+    const fileList = step.files.map((f) => `\`${f}\``).join(', ');
     sections.push(`   Files: ${fileList}`);
     sections.push(`   > ${step.rationale}`);
     sections.push('');

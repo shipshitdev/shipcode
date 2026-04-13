@@ -224,7 +224,8 @@ describe('IssueDetail', () => {
       if (channel === 'plan:list') return [];
       if (channel === 'review:list-by-plans') return {};
       if (channel === 'pipeline:retry') return undefined;
-      if (channel === 'github:list-issues') return [makeIssue({ threadId: thread.id, pipelineStatus: 'failed' })];
+      if (channel === 'github:list-issues')
+        return [makeIssue({ threadId: thread.id, pipelineStatus: 'failed' })];
       if (channel === 'thread:list') return [thread];
       return args ?? null;
     });
@@ -629,9 +630,7 @@ describe('IssueDetail', () => {
     const startButton = screen.getByRole('button', { name: 'Start pipeline' });
     const prdTab = screen.getByRole('tab', { name: 'PRD' });
     // Start button should appear before the tab list in the DOM
-    expect(startButton.compareDocumentPosition(prdTab)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING,
-    );
+    expect(startButton.compareDocumentPosition(prdTab)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 });
 

@@ -1,17 +1,17 @@
-import { useEffect, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import log from 'electron-log/renderer';
-import { useAppStore } from '../stores/app-store';
-import { KanbanBoard, Modal, ModalFooter, Button, RefreshCw } from '@shipcode/ui';
 import {
   type AppSettings,
-  githubRepoUrl,
-  githubProjectsUrl,
   type GitHubIssueCacheRecord,
+  githubProjectsUrl,
+  githubRepoUrl,
   type IssuePipelineStatus,
   type Project,
   type Thread,
 } from '@shipcode/shared';
+import { Button, KanbanBoard, Modal, ModalFooter, RefreshCw } from '@shipcode/ui';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import log from 'electron-log/renderer';
+import { useEffect, useState } from 'react';
+import { useAppStore } from '../stores/app-store';
 
 export function ThreadPanel() {
   const queryClient = useQueryClient();
@@ -87,9 +87,7 @@ export function ThreadPanel() {
   const queryKey = ['github-issues', activeProjectId] as const;
 
   const [archiveConfirm, setArchiveConfirm] = useState<
-    | { type: 'one'; issue: GitHubIssueCacheRecord }
-    | { type: 'all'; count: number }
-    | null
+    { type: 'one'; issue: GitHubIssueCacheRecord } | { type: 'all'; count: number } | null
   >(null);
 
   const archiveIssuesOptimistic = (ids: string[]) => {
@@ -117,8 +115,7 @@ export function ThreadPanel() {
         .then(() => {
           setArchiveFeedback({
             tone: 'success',
-            message:
-              `Issue #${confirm.issue.issueNumber} archived. GitHub Projects can take 1-2 minutes to reflect it.`,
+            message: `Issue #${confirm.issue.issueNumber} archived. GitHub Projects can take 1-2 minutes to reflect it.`,
           });
           refreshIssues.mutate(activeProjectId);
         })
@@ -141,7 +138,10 @@ export function ThreadPanel() {
       window.shipcode
         .invoke('github:archive-all-done', { projectId: activeProjectId })
         .then((result) => {
-          const { archivedCount, failedCount } = result as { archivedCount: number; failedCount: number };
+          const { archivedCount, failedCount } = result as {
+            archivedCount: number;
+            failedCount: number;
+          };
           setArchiveFeedback({
             tone: failedCount > 0 ? 'error' : 'success',
             message:
@@ -302,7 +302,8 @@ export function ThreadPanel() {
         className="max-w-sm"
       >
         <div className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-          Warning: this closes the GitHub issue and archives its GitHub Project card. Archived items disappear from the Done column.
+          Warning: this closes the GitHub issue and archives its GitHub Project card. Archived items
+          disappear from the Done column.
         </div>
         <ModalFooter>
           <Button variant="ghost" size="sm" onClick={() => setArchiveConfirm(null)}>

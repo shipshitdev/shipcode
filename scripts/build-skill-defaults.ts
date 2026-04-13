@@ -30,7 +30,10 @@ interface ParsedFrontmatter {
   requiredSlots: string[];
 }
 
-function parseFrontmatter(raw: string, source: string): {
+function parseFrontmatter(
+  raw: string,
+  source: string,
+): {
   frontmatter: ParsedFrontmatter;
   body: string;
 } {
@@ -161,5 +164,7 @@ console.log(`✓ Wrote ${OUT_PATH}`);
 console.log(`  Phases: ${PHASES.length}`);
 for (const p of PHASES) {
   const e = entries[p];
-  console.log(`  - ${p}: schemaVersion=${e.schemaVersion}, slots=[${e.requiredSlots.join(', ')}], ${e.content.length}B, v=${e.version}`);
+  console.log(
+    `  - ${p}: schemaVersion=${e.schemaVersion}, slots=[${e.requiredSlots.join(', ')}], ${e.content.length}B, v=${e.version}`,
+  );
 }

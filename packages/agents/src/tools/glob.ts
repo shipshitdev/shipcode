@@ -7,10 +7,10 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { z } from 'zod';
 import { IGNORED_DIRECTORIES } from '@shipcode/shared';
-import type { Tool, ToolContext, ToolResult } from './types';
+import { z } from 'zod';
 import { assertPathInWorktree, PathGuardError } from './path-guard';
+import type { Tool, ToolContext, ToolResult } from './types';
 
 const GlobInput = z.object({
   pattern: z.string().min(1),

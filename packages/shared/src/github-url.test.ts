@@ -1,9 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import {
-  githubProjectsUrl,
-  validateGithubProjectUrl,
-  parseGithubProjectUrl,
-} from './github-url';
+import { describe, expect, it } from 'vitest';
+import { githubProjectsUrl, parseGithubProjectUrl, validateGithubProjectUrl } from './github-url';
 
 describe('githubProjectsUrl (with override)', () => {
   it('returns trimmed override when provided', () => {
@@ -80,9 +76,10 @@ describe('validateGithubProjectUrl', () => {
   });
 
   it('trims whitespace from accepted URLs', () => {
-    expect(
-      validateGithubProjectUrl('  https://github.com/orgs/acme/projects/3  '),
-    ).toEqual({ ok: true, value: 'https://github.com/orgs/acme/projects/3' });
+    expect(validateGithubProjectUrl('  https://github.com/orgs/acme/projects/3  ')).toEqual({
+      ok: true,
+      value: 'https://github.com/orgs/acme/projects/3',
+    });
   });
 
   it('null is a valid clear', () => {

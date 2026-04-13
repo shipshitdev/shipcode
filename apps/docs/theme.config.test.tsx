@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
 import { isValidElement } from 'react';
+import { describe, expect, it } from 'vitest';
 import themeConfig from './theme.config';
 
 describe('docs theme config', () => {

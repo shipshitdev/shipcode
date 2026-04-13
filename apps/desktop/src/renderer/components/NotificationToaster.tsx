@@ -1,9 +1,9 @@
-import { useEffect, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import type { AppSettings, NotificationKind, NotificationRecord } from '@shipcode/shared';
 import { Button, X } from '@shipcode/ui';
-import { useAppStore } from '../stores/app-store';
+import { useQuery } from '@tanstack/react-query';
+import { useEffect, useRef } from 'react';
 import notifySoundUrl from '../assets/notify.wav?url';
+import { useAppStore } from '../stores/app-store';
 
 const STICKY_KINDS: NotificationKind[] = [
   'awaiting_approval',

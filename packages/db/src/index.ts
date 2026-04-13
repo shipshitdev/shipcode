@@ -1,5 +1,5 @@
-import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import {
   migrate,
   migrateV2,
@@ -20,22 +20,22 @@ import {
   migrateV17,
 } from './schema';
 
-export { transaction } from './utils';
-export { ProjectQueries } from './queries/projects';
-export { ThreadQueries } from './queries/threads';
-export { PlanQueries } from './queries/plans';
-export { ReviewQueries } from './queries/reviews';
-export { DiffQueries } from './queries/diffs';
-export { SettingsQueries } from './queries/settings';
-export { VerificationQueries } from './queries/verifications';
-export { GitHubIssueQueries } from './queries/github-issues';
-export { CheckpointQueries } from './queries/checkpoints';
 export { ActivityQueries } from './queries/activity';
-export { NotificationsQueries } from './queries/notifications';
-export { DashboardQueries } from './queries/dashboard';
+export { CheckpointQueries } from './queries/checkpoints';
 export { CostsQueries } from './queries/costs';
-export { SkillsQueries } from './queries/skills';
+export { DashboardQueries } from './queries/dashboard';
+export { DiffQueries } from './queries/diffs';
+export { GitHubIssueQueries } from './queries/github-issues';
+export { NotificationsQueries } from './queries/notifications';
+export { PlanQueries } from './queries/plans';
+export { ProjectQueries } from './queries/projects';
+export { ReviewQueries } from './queries/reviews';
+export { SettingsQueries } from './queries/settings';
 export type { SkillRow } from './queries/skills';
+export { SkillsQueries } from './queries/skills';
+export { ThreadQueries } from './queries/threads';
+export { VerificationQueries } from './queries/verifications';
+export { transaction } from './utils';
 
 let db: DatabaseSync | null = null;
 

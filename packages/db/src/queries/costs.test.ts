@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { DatabaseSync } from 'node:sqlite';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from '../test-helpers';
+import { CostsQueries } from './costs';
 import { ProjectQueries } from './projects';
 import { ThreadQueries } from './threads';
-import { CostsQueries } from './costs';
 
 describe('CostsQueries', () => {
   let db: DatabaseSync;
@@ -78,7 +78,7 @@ describe('CostsQueries', () => {
     const summary = costs.getSummary();
     expect(summary.byProject).toHaveLength(2);
     const proj1 = summary.byProject.find((p) => p.projectId === projectId)!;
-    expect(proj1.totalCostUsd).toBeCloseTo(0.10);
+    expect(proj1.totalCostUsd).toBeCloseTo(0.1);
     expect(proj1.taskCount).toBe(1);
   });
 
@@ -160,8 +160,12 @@ describe('CostsQueries', () => {
     const t1 = threads.create(projectId, 'task 1', 'Task 1');
     const t2 = threads.create(otherProjectId, 'task 2', 'Task 2');
 
-    db.prepare(`UPDATE threads SET status = 'completed', total_cost_usd = 0.12 WHERE id = ?`).run(t1.id);
-    db.prepare(`UPDATE threads SET status = 'completed', total_cost_usd = 0.34 WHERE id = ?`).run(t2.id);
+    db.prepare(`UPDATE threads SET status = 'completed', total_cost_usd = 0.12 WHERE id = ?`).run(
+      t1.id,
+    );
+    db.prepare(`UPDATE threads SET status = 'completed', total_cost_usd = 0.34 WHERE id = ?`).run(
+      t2.id,
+    );
 
     expect(costs.countTasks()).toBe(2);
     expect(costs.countTasks(projectId)).toBe(1);

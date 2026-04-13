@@ -1,4 +1,10 @@
-import type { ExecutorModel, PipelinePhase, PlanRecord, ReviewRecord, ShipCodePlan } from '@shipcode/shared';
+import type {
+  ExecutorModel,
+  PipelinePhase,
+  PlanRecord,
+  ReviewRecord,
+  ShipCodePlan,
+} from '@shipcode/shared';
 import { shipCodePlanSchema } from '@shipcode/shared';
 
 export const ACTIVE_PHASES: PipelinePhase[] = [
@@ -30,9 +36,18 @@ export const PHASE_PROVIDER_OPTIONS: Record<
   verifier: ['claude', 'codex', 'openrouter'],
 };
 
-export type PlanStatusBadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info' | 'accent';
+export type PlanStatusBadgeVariant =
+  | 'default'
+  | 'success'
+  | 'warning'
+  | 'danger'
+  | 'info'
+  | 'accent';
 
-export function getPlanStatusPresentation(plan: PlanRecord, review?: ReviewRecord): {
+export function getPlanStatusPresentation(
+  plan: PlanRecord,
+  review?: ReviewRecord,
+): {
   label: string;
   phaseStatus: PipelinePhase | 'idle';
   usePhaseChip: boolean;
@@ -117,7 +132,10 @@ export function encodePhaseOption(provider: ExecutorModel, modelId: string | nul
   return `${provider}::${modelId ?? '__default__'}`;
 }
 
-export function decodePhaseOption(value: string): { provider: ExecutorModel; modelId: string | null } {
+export function decodePhaseOption(value: string): {
+  provider: ExecutorModel;
+  modelId: string | null;
+} {
   const [providerRaw, modelIdRaw] = value.split('::');
   const provider =
     providerRaw === 'claude' || providerRaw === 'codex' || providerRaw === 'openrouter'

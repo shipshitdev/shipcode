@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { DatabaseSync } from 'node:sqlite';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from '../test-helpers';
+import { ActivityQueries } from './activity';
 import { ProjectQueries } from './projects';
 import { ThreadQueries } from './threads';
-import { ActivityQueries } from './activity';
 
 describe('ActivityQueries', () => {
   let db: DatabaseSync;
@@ -72,10 +72,24 @@ describe('ActivityQueries', () => {
   });
 
   it('listRecent() returns entries ordered by created_at DESC', () => {
-    const first = activity.create({ threadId, projectId, kind: 'phase_change', actor: 'system', title: 'First' });
+    const first = activity.create({
+      threadId,
+      projectId,
+      kind: 'phase_change',
+      actor: 'system',
+      title: 'First',
+    });
     // Backdate 'First' so 'Second' is definitively newer
-    db.prepare(`UPDATE activity_log SET created_at = datetime('now', '-1 hour') WHERE id = ?`).run(first.id);
-    activity.create({ threadId, projectId, kind: 'phase_change', actor: 'system', title: 'Second' });
+    db.prepare(`UPDATE activity_log SET created_at = datetime('now', '-1 hour') WHERE id = ?`).run(
+      first.id,
+    );
+    activity.create({
+      threadId,
+      projectId,
+      kind: 'phase_change',
+      actor: 'system',
+      title: 'Second',
+    });
 
     const entries = activity.listRecent();
     expect(entries[0].title).toBe('Second');
@@ -86,7 +100,13 @@ describe('ActivityQueries', () => {
     const otherId = projects.add('/tmp/other').id;
     const otherThread = threads.create(otherId, 'other task', 'Other').id;
     activity.create({ threadId, projectId, kind: 'phase_change', actor: 'system', title: 'Mine' });
-    activity.create({ threadId: otherThread, projectId: otherId, kind: 'phase_change', actor: 'system', title: 'Theirs' });
+    activity.create({
+      threadId: otherThread,
+      projectId: otherId,
+      kind: 'phase_change',
+      actor: 'system',
+      title: 'Theirs',
+    });
 
     const mine = activity.listRecent(50, projectId);
     expect(mine).toHaveLength(1);
@@ -95,7 +115,13 @@ describe('ActivityQueries', () => {
 
   it('listRecent() respects limit and offset', () => {
     for (let i = 0; i < 5; i++) {
-      activity.create({ threadId, projectId, kind: 'phase_change', actor: 'system', title: `Entry ${i}` });
+      activity.create({
+        threadId,
+        projectId,
+        kind: 'phase_change',
+        actor: 'system',
+        title: `Entry ${i}`,
+      });
     }
     const page1 = activity.listRecent(2, undefined, 0);
     expect(page1).toHaveLength(2);
@@ -117,7 +143,13 @@ describe('ActivityQueries', () => {
     const otherId = projects.add('/tmp/other').id;
     const otherThread = threads.create(otherId, 'other task', 'Other').id;
     activity.create({ threadId, projectId, kind: 'phase_change', actor: 'system', title: 'Mine' });
-    activity.create({ threadId: otherThread, projectId: otherId, kind: 'phase_change', actor: 'system', title: 'Theirs' });
+    activity.create({
+      threadId: otherThread,
+      projectId: otherId,
+      kind: 'phase_change',
+      actor: 'system',
+      title: 'Theirs',
+    });
 
     expect(activity.countRecent(projectId)).toBe(1);
     expect(activity.countRecent(otherId)).toBe(1);
@@ -127,7 +159,13 @@ describe('ActivityQueries', () => {
   it('listByThread() returns entries for a specific thread', () => {
     const otherThread = threads.create(projectId, 'other', 'Other').id;
     activity.create({ threadId, projectId, kind: 'phase_change', actor: 'system', title: 'Mine' });
-    activity.create({ threadId: otherThread, projectId, kind: 'phase_change', actor: 'system', title: 'Theirs' });
+    activity.create({
+      threadId: otherThread,
+      projectId,
+      kind: 'phase_change',
+      actor: 'system',
+      title: 'Theirs',
+    });
 
     const mine = activity.listByThread(threadId);
     expect(mine).toHaveLength(1);
@@ -142,7 +180,13 @@ describe('ActivityQueries', () => {
     threads.setGithubIssue(secondThread.id, 42, 'owner/repo');
     threads.setGithubIssue(otherIssueThread.id, 43, 'owner/repo');
 
-    activity.create({ threadId, projectId, kind: 'phase_change', actor: 'system', title: 'Run 1 started' });
+    activity.create({
+      threadId,
+      projectId,
+      kind: 'phase_change',
+      actor: 'system',
+      title: 'Run 1 started',
+    });
     activity.create({
       threadId: secondThread.id,
       projectId,
@@ -150,9 +194,9 @@ describe('ActivityQueries', () => {
       actor: 'system',
       title: 'Run 2 started',
     });
-    db.prepare(`UPDATE activity_log SET created_at = datetime('now', '-1 hour') WHERE title = ?`).run(
-      'Run 1 started',
-    );
+    db.prepare(
+      `UPDATE activity_log SET created_at = datetime('now', '-1 hour') WHERE title = ?`,
+    ).run('Run 1 started');
     activity.create({
       threadId: otherIssueThread.id,
       projectId,

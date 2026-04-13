@@ -1,25 +1,25 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, resolve, sep } from 'node:path';
+import type { ProviderPhase, ProviderRequest, SkillValidationError } from '@shipcode/agents';
 import {
-  StreamParser,
+  buildExecutionPrompt,
   buildPlanPrompt,
   buildReviewPrompt,
   buildRevisionPrompt,
   buildVerificationPrompt,
-  buildExecutionPrompt,
-  loadRepoContext,
-  loadRepoSetupContract,
   formatPlanComment,
   GhCli,
+  loadRepoContext,
+  loadRepoSetupContract,
+  StreamParser,
 } from '@shipcode/agents';
-import type { ProviderPhase, ProviderRequest, SkillValidationError } from '@shipcode/agents';
 import { WorktreeManager } from '@shipcode/git';
 import type { PhaseSkillKey, ShipCodePlan } from '@shipcode/shared';
 import {
-  PIPELINE_MAX_RETRIES,
-  MAX_VERIFICATION_RETRIES,
   MAX_TEST_RETRIES,
+  MAX_VERIFICATION_RETRIES,
+  PIPELINE_MAX_RETRIES,
   resolvePhaseModelForIssue,
   resolvePhaseModelIdForIssue,
 } from '@shipcode/shared';
@@ -79,15 +79,19 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       githubIssueNumber: seed.githubIssueNumber ?? null,
       githubIssueTitle: seed.githubIssueTitle ?? null,
       githubRepo: seed.githubRepo ?? null,
-      plannerModel: seed.plannerModel ?? (deps.settings.get().plannerModel as PipelineExecutorModel),
-      reviewerModel: seed.reviewerModel ?? (deps.settings.get().reviewerModel as PipelineExecutorModel),
-      verifierModel: seed.verifierModel ?? (deps.settings.get().verifierModel as PipelineExecutorModel),
+      plannerModel:
+        seed.plannerModel ?? (deps.settings.get().plannerModel as PipelineExecutorModel),
+      reviewerModel:
+        seed.reviewerModel ?? (deps.settings.get().reviewerModel as PipelineExecutorModel),
+      verifierModel:
+        seed.verifierModel ?? (deps.settings.get().verifierModel as PipelineExecutorModel),
       executorModel: seed.executorModel ?? 'claude',
       plannerModelIdOverride: seed.plannerModelIdOverride ?? null,
       reviewerModelIdOverride: seed.reviewerModelIdOverride ?? null,
       executorModelIdOverride: seed.executorModelIdOverride ?? null,
       verifierModelIdOverride: seed.verifierModelIdOverride ?? null,
-      plannerReasoningEffort: seed.plannerReasoningEffort ?? deps.settings.get().plannerReasoningEffort,
+      plannerReasoningEffort:
+        seed.plannerReasoningEffort ?? deps.settings.get().plannerReasoningEffort,
       reviewerReasoningEffort:
         seed.reviewerReasoningEffort ?? deps.settings.get().reviewerReasoningEffort,
       executorReasoningEffort:
@@ -158,13 +162,21 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
           ? resolvePhaseModelForIssue(settings, project, issue, 'executor')
           : (thread.executorModel as PipelineExecutorModel) || 'claude',
       plannerModelIdOverride:
-        issue && project ? resolvePhaseModelIdForIssue(settings, project, issue, 'planner') : project?.plannerModelIdOverride ?? null,
+        issue && project
+          ? resolvePhaseModelIdForIssue(settings, project, issue, 'planner')
+          : (project?.plannerModelIdOverride ?? null),
       reviewerModelIdOverride:
-        issue && project ? resolvePhaseModelIdForIssue(settings, project, issue, 'reviewer') : project?.reviewerModelIdOverride ?? null,
+        issue && project
+          ? resolvePhaseModelIdForIssue(settings, project, issue, 'reviewer')
+          : (project?.reviewerModelIdOverride ?? null),
       executorModelIdOverride:
-        issue && project ? resolvePhaseModelIdForIssue(settings, project, issue, 'executor') : project?.executorModelIdOverride ?? null,
+        issue && project
+          ? resolvePhaseModelIdForIssue(settings, project, issue, 'executor')
+          : (project?.executorModelIdOverride ?? null),
       verifierModelIdOverride:
-        issue && project ? resolvePhaseModelIdForIssue(settings, project, issue, 'verifier') : project?.verifierModelIdOverride ?? null,
+        issue && project
+          ? resolvePhaseModelIdForIssue(settings, project, issue, 'verifier')
+          : (project?.verifierModelIdOverride ?? null),
       plannerReasoningEffort:
         project?.plannerReasoningEffortOverride ?? settings.plannerReasoningEffort,
       reviewerReasoningEffort:
@@ -358,7 +370,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
     const bits: string[] = [];
     if (loaded.contract.setupCommands.length > 0) {
-      bits.push(`Setup commands: ${loaded.contract.setupCommands.map((cmd) => `\`${cmd}\``).join(', ')}`);
+      bits.push(
+        `Setup commands: ${loaded.contract.setupCommands.map((cmd) => `\`${cmd}\``).join(', ')}`,
+      );
     }
     if (loaded.contract.verifyCommands.length > 0) {
       bits.push(
@@ -425,7 +439,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         const header = [comment.author, location].filter(Boolean).join(' — ');
         const body =
           comment.body.length > 600 ? `${comment.body.slice(0, 600).trimEnd()}…` : comment.body;
-        lines.push(`- ${header || 'Review comment'}: ${body.replace(/\s+/g, ' ')}${comment.url ? ` (${comment.url})` : ''}`);
+        lines.push(
+          `- ${header || 'Review comment'}: ${body.replace(/\s+/g, ' ')}${comment.url ? ` (${comment.url})` : ''}`,
+        );
       }
     }
 
@@ -641,7 +657,11 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         if (response.exitCode === 127) {
           const agent = resolveAgentForPhase(context, 'plan');
           const name = agent === 'openrouter' ? 'Provider' : `${agent} CLI`;
-          emitPhase(threadId, 'failed', `${name} not found (exit 127). Is the ${agent} binary installed and on PATH?`);
+          emitPhase(
+            threadId,
+            'failed',
+            `${name} not found (exit 127). Is the ${agent} binary installed and on PATH?`,
+          );
           activePipelines.delete(threadId);
           return;
         }
@@ -667,18 +687,49 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
               // Try to extract a human-readable error from the CLI result JSON
               // (e.g. error_max_turns emits {"type":"result","errors":["..."],...}).
               let cliError: string | null = null;
-              for (const line of parser.getRawOutput().trim().split('\n').filter(Boolean).reverse()) {
+              for (const line of parser
+                .getRawOutput()
+                .trim()
+                .split('\n')
+                .filter(Boolean)
+                .reverse()) {
                 try {
                   const obj = JSON.parse(line.trim()) as Record<string, unknown>;
                   if (obj.type === 'result') {
-                    if (typeof obj.result === 'string') { cliError = obj.result.slice(0, 300); break; }
-                    if (Array.isArray(obj.errors) && obj.errors.length > 0 && typeof obj.errors[0] === 'string') { cliError = obj.errors[0].slice(0, 300); break; }
+                    if (typeof obj.result === 'string') {
+                      cliError = obj.result.slice(0, 300);
+                      break;
+                    }
+                    if (
+                      Array.isArray(obj.errors) &&
+                      obj.errors.length > 0 &&
+                      typeof obj.errors[0] === 'string'
+                    ) {
+                      cliError = obj.errors[0].slice(0, 300);
+                      break;
+                    }
                   }
-                } catch { /* skip */ }
+                } catch {
+                  /* skip */
+                }
               }
-              const rawSnippet = cliError ?? detectedError?.match ?? parser.getRawOutput().trim().split('\n').filter(Boolean).slice(-3).join(' ').slice(0, 300);
+              const rawSnippet =
+                cliError ??
+                detectedError?.match ??
+                parser
+                  .getRawOutput()
+                  .trim()
+                  .split('\n')
+                  .filter(Boolean)
+                  .slice(-3)
+                  .join(' ')
+                  .slice(0, 300);
               const reason = rawSnippet?.trimStart().startsWith('{') ? '' : rawSnippet;
-              emitPhase(threadId, 'failed', reason || 'Plan generation failed — no structured plan was produced.');
+              emitPhase(
+                threadId,
+                'failed',
+                reason || 'Plan generation failed — no structured plan was produced.',
+              );
               activePipelines.delete(threadId);
             }
           }
@@ -731,7 +782,11 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         if (response.exitCode === 127) {
           const agent = resolveAgentForPhase(context, 'review');
           const name = agent === 'openrouter' ? 'Provider' : `${agent} CLI`;
-          emitPhase(threadId, 'failed', `${name} not found (exit 127). Is the ${agent} binary installed and on PATH?`);
+          emitPhase(
+            threadId,
+            'failed',
+            `${name} not found (exit 127). Is the ${agent} binary installed and on PATH?`,
+          );
           activePipelines.delete(threadId);
           return;
         }
@@ -951,9 +1006,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         1 + context.reviewRound + context.testRetries + context.verificationRetries;
       const reason = retryOrdinal > 1 ? 'before_retry' : 'before_execute';
       const label =
-        retryOrdinal > 1
-          ? `Before execute retry ${retryOrdinal}`
-          : 'Before execute attempt 1';
+        retryOrdinal > 1 ? `Before execute retry ${retryOrdinal}` : 'Before execute attempt 1';
 
       if (
         !latest ||
@@ -1014,9 +1067,18 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
             activePipelines.delete(threadId);
           }
         } else {
-          const rawErrSnippet = response.rawOutput.trim().split('\n').slice(-3).join(' ').slice(0, 300);
+          const rawErrSnippet = response.rawOutput
+            .trim()
+            .split('\n')
+            .slice(-3)
+            .join(' ')
+            .slice(0, 300);
           const errSnippet = rawErrSnippet.trimStart().startsWith('{') ? '' : rawErrSnippet;
-          emitPhase(threadId, 'failed', `Execution failed (exit ${response.exitCode})${errSnippet ? `: ${errSnippet}` : ''}`);
+          emitPhase(
+            threadId,
+            'failed',
+            `Execution failed (exit ${response.exitCode})${errSnippet ? `: ${errSnippet}` : ''}`,
+          );
           activePipelines.delete(threadId);
         }
       } catch (err) {
@@ -1070,7 +1132,11 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
             if (latestPlan?.structured) {
               startExecution(threadId, latestPlan.structured);
             } else {
-              emitPhase(threadId, 'failed', 'Verification commands failed — plan unavailable for re-execution.');
+              emitPhase(
+                threadId,
+                'failed',
+                'Verification commands failed — plan unavailable for re-execution.',
+              );
               activePipelines.delete(threadId);
             }
           } else {
@@ -1123,9 +1189,14 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         execFileSync('git', ['add', '-A'], { cwd, encoding: 'utf-8' });
         const title = context.githubIssueTitle ?? 'Apply plan changes';
         const issueRef = context.githubIssueNumber ? ` (#${context.githubIssueNumber})` : '';
-        execFileSync('git', ['commit', '--no-verify', '-m', `${title}${issueRef}`], { cwd, encoding: 'utf-8' });
+        execFileSync('git', ['commit', '--no-verify', '-m', `${title}${issueRef}`], {
+          cwd,
+          encoding: 'utf-8',
+        });
       }
-    } catch { /* if commit fails, the diff check below will catch it */ }
+    } catch {
+      /* if commit fails, the diff check below will catch it */
+    }
 
     // Pin HEAD SHA for verification
     const headSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf-8' }).trim();
@@ -1303,14 +1374,27 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
       const existingPrJson = execFileSync(
         'gh',
-        ['pr', 'list', '--state', 'all', '--head', branch, '--json', 'number,url,isDraft', '--limit', '1'],
+        [
+          'pr',
+          'list',
+          '--state',
+          'all',
+          '--head',
+          branch,
+          '--json',
+          'number,url,isDraft',
+          '--limit',
+          '1',
+        ],
         { cwd, encoding: 'utf-8' },
       );
-      const existingPr = (JSON.parse(existingPrJson) as Array<{
-        number: number;
-        url: string;
-        isDraft: boolean;
-      }>)[0];
+      const existingPr = (
+        JSON.parse(existingPrJson) as Array<{
+          number: number;
+          url: string;
+          isDraft: boolean;
+        }>
+      )[0];
 
       let prNumber: number | null = null;
       let prUrl: string | null = null;
@@ -1499,9 +1583,12 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       githubIssueNumber: issue.number,
       githubIssueTitle: issue.title,
       githubRepo: null,
-      plannerModel: options?.plannerModel ?? (deps.settings.get().plannerModel as PipelineExecutorModel),
-      reviewerModel: options?.reviewerModel ?? (deps.settings.get().reviewerModel as PipelineExecutorModel),
-      verifierModel: options?.verifierModel ?? (deps.settings.get().verifierModel as PipelineExecutorModel),
+      plannerModel:
+        options?.plannerModel ?? (deps.settings.get().plannerModel as PipelineExecutorModel),
+      reviewerModel:
+        options?.reviewerModel ?? (deps.settings.get().reviewerModel as PipelineExecutorModel),
+      verifierModel:
+        options?.verifierModel ?? (deps.settings.get().verifierModel as PipelineExecutorModel),
       executorModel,
       plannerModelIdOverride: options?.plannerModelIdOverride ?? null,
       reviewerModelIdOverride: options?.reviewerModelIdOverride ?? null,

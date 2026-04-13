@@ -204,20 +204,22 @@ function resolveIssuePhaseChip(
 
   const model =
     phase === 'planner'
-      ? thread?.plannerResolvedModel ??
+      ? (thread?.plannerResolvedModel ??
         thread?.plannerModel ??
-        (settings ? resolvePhaseModelForIssue(settings, project, issue, 'planner') : 'claude')
+        (settings ? resolvePhaseModelForIssue(settings, project, issue, 'planner') : 'claude'))
       : phase === 'reviewer'
-        ? thread?.reviewerResolvedModel ??
+        ? (thread?.reviewerResolvedModel ??
           thread?.reviewerModel ??
-          (settings ? resolvePhaseModelForIssue(settings, project, issue, 'reviewer') : 'codex')
+          (settings ? resolvePhaseModelForIssue(settings, project, issue, 'reviewer') : 'codex'))
         : phase === 'executor'
-          ? thread?.executorResolvedModel ??
+          ? (thread?.executorResolvedModel ??
             thread?.executorModel ??
-            (settings ? resolveExecutorModelForIssue(settings, project, issue) : 'claude')
-          : thread?.verifierResolvedModel ??
+            (settings ? resolveExecutorModelForIssue(settings, project, issue) : 'claude'))
+          : (thread?.verifierResolvedModel ??
             thread?.verifierModel ??
-            (settings ? resolvePhaseModelForIssue(settings, project, issue, 'verifier') : 'claude');
+            (settings
+              ? resolvePhaseModelForIssue(settings, project, issue, 'verifier')
+              : 'claude'));
 
   return {
     phase,
@@ -864,7 +866,11 @@ function getIssuePriorityRank(issue: GitHubIssueCacheRecord): number {
   return 99;
 }
 
-function compareIssues(a: GitHubIssueCacheRecord, b: GitHubIssueCacheRecord, order: BoardSortOrder): number {
+function compareIssues(
+  a: GitHubIssueCacheRecord,
+  b: GitHubIssueCacheRecord,
+  order: BoardSortOrder,
+): number {
   if (order === 'title') {
     const byTitle = a.title.localeCompare(b.title);
     if (byTitle !== 0) return byTitle;
@@ -1434,7 +1440,10 @@ export function KanbanBoard({
             </div>
           )}
           <div className="flex items-center border border-border rounded-md overflow-hidden min-w-0 max-w-[140px] shrink-0">
-            <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as BoardSortOrder)}>
+            <Select
+              value={sortOrder}
+              onValueChange={(value) => setSortOrder(value as BoardSortOrder)}
+            >
               <SelectTrigger className="h-7 gap-1 rounded-none border-0 bg-transparent px-2 text-xs text-secondary hover:text-primary">
                 <SelectValue />
               </SelectTrigger>
@@ -1516,7 +1525,9 @@ export function KanbanBoard({
                   />
                 );
               }
-              const columnIssues = sortedIssues.filter((i) => col.statuses.includes(i.pipelineStatus));
+              const columnIssues = sortedIssues.filter((i) =>
+                col.statuses.includes(i.pipelineStatus),
+              );
               return (
                 <DroppableColumn
                   key={col.key}

@@ -1,7 +1,7 @@
-import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 import { closeDatabase, getDatabase } from '../index';
 import { CheckpointQueries } from './checkpoints';
 import { ProjectQueries } from './projects';

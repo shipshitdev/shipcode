@@ -1,8 +1,8 @@
+import type { ActivityQueries, ThreadQueries } from '@shipcode/db';
+import type { PipelineEmitter, PipelineEvent } from '@shipcode/pipeline';
+import type { ActivityKind, PipelinePhase, Thread } from '@shipcode/shared';
 import type { BrowserWindow } from 'electron';
 import log from './logger.service';
-import type { PipelineEmitter, PipelineEvent } from '@shipcode/pipeline';
-import type { ActivityQueries, ThreadQueries } from '@shipcode/db';
-import type { ActivityKind, PipelinePhase, Thread } from '@shipcode/shared';
 import type { NotificationService } from './notification-service';
 
 interface EmitterDeps {
@@ -178,7 +178,9 @@ export function createElectronEmitter(
               chunk: event.chunk,
               threadId: event.threadId,
             });
-          } catch { /* destroyed between check and send */ }
+          } catch {
+            /* destroyed between check and send */
+          }
         }
         return;
       }

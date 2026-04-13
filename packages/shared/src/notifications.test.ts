@@ -1,14 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { NotificationRecord } from './types';
 import {
   ATTENTION_REQUIRED_NOTIFICATION_KINDS,
   filterAttentionRequiredNotifications,
   isAttentionRequiredNotificationKind,
 } from './notifications';
+import type { NotificationRecord } from './types';
 
-function makeNotification(
-  overrides: Partial<NotificationRecord> = {},
-): NotificationRecord {
+function makeNotification(overrides: Partial<NotificationRecord> = {}): NotificationRecord {
   return {
     id: 'notification-1',
     threadId: 'thread-1',

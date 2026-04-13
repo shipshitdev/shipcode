@@ -1,8 +1,8 @@
-import * as pty from 'node-pty';
-import { nanoid } from 'nanoid';
+import { execFileSync, execSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { execSync, execFileSync } from 'node:child_process';
-import type { AgentType, AgentState } from '@shipcode/shared';
+import type { AgentState, AgentType } from '@shipcode/shared';
+import { nanoid } from 'nanoid';
+import * as pty from 'node-pty';
 
 const ALLOWED_COMMANDS = new Set(['claude', 'codex', 'gh']);
 const TRUSTED_SHELLS = new Set([
@@ -96,7 +96,13 @@ interface ProcessManagerEvents {
 export class ProcessManager extends EventEmitter {
   private processes: Map<string, ManagedProcess> = new Map();
 
-  spawn(type: AgentType, command: string, args: string[], cwd: string, threadId?: string): ManagedProcess {
+  spawn(
+    type: AgentType,
+    command: string,
+    args: string[],
+    cwd: string,
+    threadId?: string,
+  ): ManagedProcess {
     const id = nanoid();
 
     if (!cachedEnv) {

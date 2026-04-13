@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
+import { matchesShortcut, SHORTCUTS, type ShortcutId } from '../data/shortcuts';
 import { useAppStore } from '../stores/app-store';
-import { SHORTCUTS, matchesShortcut, type ShortcutId } from '../data/shortcuts';
 
 export function useGlobalKeyboard() {
   const toggleCommandPalette = useAppStore((s) => s.toggleCommandPalette);

@@ -39,7 +39,7 @@ export function formatProviderSelectionLabel(
 ): string {
   const providerLabel = PROVIDER_DISPLAY[provider];
   const modelLabel = modelId
-    ? getModelOptions(provider).find((option) => option.value === modelId)?.label ?? modelId
+    ? (getModelOptions(provider).find((option) => option.value === modelId)?.label ?? modelId)
     : `${providerLabel} default`;
   return `${providerLabel} / ${modelLabel}`;
 }

@@ -1,10 +1,10 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { AppSettings } from '@shipcode/shared';
 import { DEFAULT_SETTINGS } from '@shipcode/shared';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { StreamParser } from '../stream-parser';
+import { type OpenRouterClient, OpenRouterError } from './openrouter-http';
 import { createOpenRouterProvider } from './openrouter-provider';
 import type { ProviderRequest } from './types';
-import { OpenRouterClient, OpenRouterError } from './openrouter-http';
-import { StreamParser } from '../stream-parser';
 
 function req(overrides: Partial<ProviderRequest> = {}): ProviderRequest {
   return {
@@ -119,9 +119,7 @@ describe('createOpenRouterProvider', () => {
 
     await provider.generate(req({ phase: 'plan', modelHint: 'openrouter/auto' }));
 
-    expect(chatSpy.mock.calls[0][0]).toEqual(
-      expect.objectContaining({ model: 'openrouter/auto' }),
-    );
+    expect(chatSpy.mock.calls[0][0]).toEqual(expect.objectContaining({ model: 'openrouter/auto' }));
   });
 
   it('uses per-phase setting when modelHint is absent', async () => {
@@ -151,9 +149,7 @@ describe('createOpenRouterProvider', () => {
 
     await provider.generate(req({ phase: 'verify' }));
 
-    expect(chatSpy.mock.calls[0][0]).toEqual(
-      expect.objectContaining({ model: 'openrouter/auto' }),
-    );
+    expect(chatSpy.mock.calls[0][0]).toEqual(expect.objectContaining({ model: 'openrouter/auto' }));
   });
 
   it('maps OpenRouterError kinds to providerError with preserved retryable flag', async () => {

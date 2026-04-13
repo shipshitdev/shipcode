@@ -1,10 +1,10 @@
-import { app, BrowserWindow, Notification } from 'electron';
+import type { ActivityQueries, NotificationsQueries, SettingsQueries } from '@shipcode/db';
 import {
   filterAttentionRequiredNotifications,
   type NotificationKind,
   type Thread,
 } from '@shipcode/shared';
-import type { NotificationsQueries, SettingsQueries, ActivityQueries } from '@shipcode/db';
+import { app, type BrowserWindow, Notification } from 'electron';
 
 const DEDUPE_WINDOW_MS = 2_000;
 

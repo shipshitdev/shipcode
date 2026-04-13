@@ -7,8 +7,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
-import type { Tool, ToolContext, ToolResult } from './types';
 import { assertPathInWorktree, PathGuardError } from './path-guard';
+import type { Tool, ToolContext, ToolResult } from './types';
 
 const WriteInput = z.object({
   path: z.string().min(1),

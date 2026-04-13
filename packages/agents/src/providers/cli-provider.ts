@@ -16,8 +16,8 @@
  */
 
 import type { ProcessManager } from '../process-manager';
-import type { AgentProvider, ProviderPhase, ProviderRequest, ProviderResponse } from './types';
 import { StreamParser } from '../stream-parser';
+import type { AgentProvider, ProviderPhase, ProviderRequest, ProviderResponse } from './types';
 
 interface CliRunResult {
   rawOutput: string;
@@ -103,10 +103,13 @@ async function runCli(
  */
 function claudeThinkingTokens(effort: 'low' | 'medium' | 'high' | undefined): number | null {
   switch (effort) {
-    case 'low': return null;
-    case 'medium': return 8000;
+    case 'low':
+      return null;
+    case 'medium':
+      return 8000;
     case 'high':
-    default: return 32000;
+    default:
+      return 32000;
   }
 }
 
@@ -142,7 +145,12 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
         'Edit,Write,Bash,NotebookEdit',
       ];
       if (thinkingTokens !== null) {
-        args.splice(args.indexOf('--dangerously-skip-permissions'), 0, '--max-thinking-tokens', String(thinkingTokens));
+        args.splice(
+          args.indexOf('--dangerously-skip-permissions'),
+          0,
+          '--max-thinking-tokens',
+          String(thinkingTokens),
+        );
       }
       return args;
     }
@@ -158,7 +166,12 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
       ];
       const execThinking = claudeThinkingTokens(req.phaseHints?.reasoningEffort);
       if (execThinking !== null) {
-        execArgs.splice(execArgs.indexOf('--dangerously-skip-permissions'), 0, '--max-thinking-tokens', String(execThinking));
+        execArgs.splice(
+          execArgs.indexOf('--dangerously-skip-permissions'),
+          0,
+          '--max-thinking-tokens',
+          String(execThinking),
+        );
       }
       return execArgs;
     }
@@ -209,7 +222,14 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
     supports: new Set<ProviderPhase>(['plan', 'review', 'revision', 'verify', 'execute']),
     async generate(req: ProviderRequest): Promise<ProviderResponse> {
       const args = buildClaudeArgs(req);
-      const result = await runCli(processManager, 'claude', args, req.cwd, req.signal, req.threadId);
+      const result = await runCli(
+        processManager,
+        'claude',
+        args,
+        req.cwd,
+        req.signal,
+        req.threadId,
+      );
       const parser = new StreamParser();
       parser.feed(result.rawOutput);
       const usage = parser.extractUsage();

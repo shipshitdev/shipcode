@@ -9,8 +9,8 @@
 
 import fs from 'node:fs/promises';
 import { z } from 'zod';
-import type { Tool, ToolContext, ToolResult } from './types';
 import { assertPathInWorktree, PathGuardError } from './path-guard';
+import type { Tool, ToolContext, ToolResult } from './types';
 
 const EditInput = z.object({
   path: z.string().min(1),

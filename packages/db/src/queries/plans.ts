@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { type PlanRecord, type PlanStatus, type ShipCodePlan, toIsoUtc } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
-import { toIsoUtc, type PlanRecord, type PlanStatus, type ShipCodePlan } from '@shipcode/shared';
 
 export class PlanQueries {
   constructor(private db: DatabaseSync) {}

@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import {
   Archive,
   Bell,
@@ -10,8 +9,9 @@ import {
   Settings,
   Workflow,
 } from '@shipcode/ui';
-import { useAppStore } from '../stores/app-store';
+import type { ReactNode } from 'react';
 import type { SettingsSection } from '../stores/app-store';
+import { useAppStore } from '../stores/app-store';
 
 const SECTIONS: { key: SettingsSection; label: string; icon: ReactNode }[] = [
   {
@@ -62,7 +62,9 @@ export function SettingsSidebar() {
           className="h-auto w-full justify-start gap-2 px-3 py-2 text-[13px] font-normal text-secondary app-region-no-drag"
           onClick={toggleSettings}
         >
-          <span className="shrink-0 text-muted"><ChevronLeft size={14} /></span>
+          <span className="shrink-0 text-muted">
+            <ChevronLeft size={14} />
+          </span>
           Back to app
         </Button>
       </div>

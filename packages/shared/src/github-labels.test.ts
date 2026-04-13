@@ -14,7 +14,9 @@ describe('SHIPCODE_DEFAULT_LABELS', () => {
   });
 
   it('covers every configured non-empty status label mapping', () => {
-    const defaultStatuses = [...new Set(Object.values(DEFAULT_STATUS_LABEL_MAPPINGS).filter(Boolean))];
+    const defaultStatuses = [
+      ...new Set(Object.values(DEFAULT_STATUS_LABEL_MAPPINGS).filter(Boolean)),
+    ];
     expect(SHIPCODE_STATUS_LABELS.map((label) => label.name)).toEqual(defaultStatuses);
   });
 

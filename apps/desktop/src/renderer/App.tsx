@@ -3,18 +3,18 @@ import { CURRENT_ONBOARDING_VERSION } from '@shipcode/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useRef } from 'react';
 import { ActivityView } from './components/ActivityView';
-import { CostsView } from './components/CostsView';
 import { CommandPalette } from './components/CommandPalette';
+import { CostsView } from './components/CostsView';
 import { CreateIssueModal } from './components/CreateIssueModal';
-import { OverviewView } from './components/OverviewView';
 import { HealthBanner } from './components/HealthBanner';
 import { InboxView } from './components/InboxView';
 import { IssueDetail } from './components/IssueDetail';
 import { NotificationToaster } from './components/NotificationToaster';
+import { OverviewView } from './components/OverviewView';
 import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
-import { ProjectSettingsModal } from './components/ProjectSettingsModal';
-import { ProjectPathBanner } from './components/ProjectPathBanner';
 import { ProjectMissingView } from './components/ProjectMissingView';
+import { ProjectPathBanner } from './components/ProjectPathBanner';
+import { ProjectSettingsModal } from './components/ProjectSettingsModal';
 import { ProjectSidebar } from './components/ProjectSidebar';
 import { SettingsPanel } from './components/SettingsPanel';
 import { SettingsSidebar } from './components/SettingsSidebar';
@@ -57,10 +57,7 @@ export function App() {
         const delta = event.clientX - issueDetailDragRef.current.startX;
         const nextWidth = Math.min(
           ISSUE_DETAIL_MAX_WIDTH,
-          Math.max(
-            ISSUE_DETAIL_MIN_WIDTH,
-            issueDetailDragRef.current.startWidth - delta,
-          ),
+          Math.max(ISSUE_DETAIL_MIN_WIDTH, issueDetailDragRef.current.startWidth - delta),
         );
         setIssueDetailWidth(nextWidth);
       };
@@ -99,7 +96,9 @@ export function App() {
           if (newProjectId) {
             queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
             useAppStore.getState().selectProject(newProjectId);
-            window.shipcode.invoke('github:refresh-issues', { projectId: newProjectId }).catch(() => {});
+            window.shipcode
+              .invoke('github:refresh-issues', { projectId: newProjectId })
+              .catch(() => {});
           } else {
             const projects = await queryClient.fetchQuery<Project[]>({
               queryKey: ['projects-visible'],

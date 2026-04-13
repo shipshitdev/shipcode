@@ -1,6 +1,11 @@
 import type { ShipCodePlan } from '@shipcode/shared';
 import { REVIEW_FENCE_TAG } from '@shipcode/shared';
-import { resolveSkill, interpolateSkill, type SkillsRowSource, type SkillValidationError } from '../skills';
+import {
+  interpolateSkill,
+  resolveSkill,
+  type SkillsRowSource,
+  type SkillValidationError,
+} from '../skills';
 
 const REVIEW_SCHEMA_DESCRIPTION = `{
   "planId": "<plan-id>",
