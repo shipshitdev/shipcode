@@ -1,5 +1,9 @@
 import { app, BrowserWindow, Notification } from 'electron';
-import type { NotificationKind, Thread } from '@shipcode/shared';
+import {
+  filterAttentionRequiredNotifications,
+  type NotificationKind,
+  type Thread,
+} from '@shipcode/shared';
 import type { NotificationsQueries, SettingsQueries, ActivityQueries } from '@shipcode/db';
 
 const DEDUPE_WINDOW_MS = 2_000;
@@ -137,7 +141,7 @@ export class NotificationService {
   }
 
   refreshBadge() {
-    const count = this.notifications.activeCount();
+    const count = filterAttentionRequiredNotifications(this.notifications.listActive()).length;
     if (process.platform === 'darwin' && app.dock) {
       app.dock.setBadge(count > 0 ? String(count) : '');
     }

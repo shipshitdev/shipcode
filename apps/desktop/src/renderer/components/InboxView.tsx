@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type {
-  GitHubIssueCacheRecord,
-  NotificationRecord,
-  NotificationKind,
-  Thread,
+import {
+  filterAttentionRequiredNotifications,
+  type GitHubIssueCacheRecord,
+  type NotificationKind,
+  type NotificationRecord,
+  type Thread,
 } from '@shipcode/shared';
 import {
   ArrowUpDown,
@@ -73,7 +74,9 @@ export function InboxView() {
     refetchInterval: 5000,
   });
 
-  const active = notifications.filter((n) => n.dismissedAt === null);
+  const active = filterAttentionRequiredNotifications(
+    notifications.filter((n) => n.dismissedAt === null),
+  );
 
   // Non-mutating sort — always derive from active, never mutate
   const sorted = [...active].sort((a, b) =>

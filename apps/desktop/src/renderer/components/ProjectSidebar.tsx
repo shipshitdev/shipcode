@@ -1,4 +1,10 @@
-import type { AppSettings, DashboardStats, NotificationRecord, Project } from '@shipcode/shared';
+import {
+  filterAttentionRequiredNotifications,
+  type AppSettings,
+  type DashboardStats,
+  type NotificationRecord,
+  type Project,
+} from '@shipcode/shared';
 import {
   Activity,
   Archive,
@@ -172,7 +178,9 @@ export function ProjectSidebar() {
   }
 
   const liveCount = stats?.agentsRunning ?? 0;
-  const inboxCount = notifs.filter((n) => n.dismissedAt === null).length;
+  const inboxCount = filterAttentionRequiredNotifications(
+    notifs.filter((n) => n.dismissedAt === null),
+  ).length;
 
   // Pinned projects always float to top; within each group, apply the selected sort order.
   const sortedProjects = [...projects].sort((a, b) => {
