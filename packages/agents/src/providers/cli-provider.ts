@@ -115,6 +115,7 @@ function claudeThinkingTokens(effort: 'low' | 'medium' | 'high' | undefined): nu
  * construction that previously lived in pipeline.ts verbatim.
  */
 function buildClaudeArgs(req: ProviderRequest): string[] {
+  const modelArgs = req.modelHint ? ['--model', req.modelHint] : [];
   switch (req.phase) {
     case 'plan':
     case 'revision':
@@ -130,6 +131,7 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
       const args = [
         '-p',
         req.prompt,
+        ...modelArgs,
         '--output-format',
         'stream-json',
         '--verbose',
@@ -149,6 +151,7 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
       const execArgs = [
         '-p',
         req.prompt,
+        ...modelArgs,
         '--allowedTools',
         'Edit,Write,Bash,Glob,Grep,Read',
         '--dangerously-skip-permissions',
@@ -165,6 +168,7 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
       return [
         '-p',
         req.prompt,
+        ...modelArgs,
         '--output-format',
         'json',
         '--max-turns',
@@ -192,6 +196,7 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
 function buildCodexArgs(req: ProviderRequest): string[] {
   const sandbox = req.phase === 'execute' ? 'workspace-write' : 'read-only';
   const topLevelFlags: string[] = ['-a', 'never'];
+  if (req.modelHint) topLevelFlags.push('-m', req.modelHint);
   // Default to high reasoning so thinking output is always visible in the terminal.
   const effort = req.phaseHints?.reasoningEffort ?? 'high';
   topLevelFlags.push('-c', `model_reasoning_effort=${effort}`);

@@ -221,7 +221,7 @@ function resolveIssuePhaseChip(
   return {
     phase,
     model,
-    effort: settings ? resolvePhaseReasoningEffort(settings, phase) : null,
+    effort: settings ? resolvePhaseReasoningEffort(settings, project, phase) : null,
   };
 }
 

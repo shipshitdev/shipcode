@@ -77,6 +77,14 @@ export interface Project {
   reviewerModelOverride: AgentType | null;
   executorModelOverride: AgentType | null;
   verifierModelOverride: AgentType | null;
+  plannerModelIdOverride: string | null;
+  reviewerModelIdOverride: string | null;
+  executorModelIdOverride: string | null;
+  verifierModelIdOverride: string | null;
+  plannerReasoningEffortOverride: ReasoningEffort | null;
+  reviewerReasoningEffortOverride: ReasoningEffort | null;
+  executorReasoningEffortOverride: ReasoningEffort | null;
+  verifierReasoningEffortOverride: ReasoningEffort | null;
   defaultBranch: string;
   pinned: boolean;
   archived: boolean;
@@ -183,6 +191,7 @@ export type AgentType = 'claude' | 'codex' | 'gh' | 'openrouter';
  *  - GitHub label values are already strings (`agent:claude`, etc).
  */
 export type ExecutorModel = 'claude' | 'codex' | 'openrouter';
+export type ReasoningEffort = 'low' | 'medium' | 'high';
 
 export type AgentState = 'starting' | 'running' | 'idle' | 'errored' | 'exited';
 
@@ -279,10 +288,10 @@ export interface AppSettings {
   //   Claude: --max-thinking-tokens (high=32000, medium=8000, low=omit)
   //   Codex:  -c model_reasoning_effort=<value> (v0.120.0+)
   //   OpenRouter: reasoning: { effort } in the chat request
-  plannerReasoningEffort: 'low' | 'medium' | 'high';
-  reviewerReasoningEffort: 'low' | 'medium' | 'high';
-  executorReasoningEffort: 'low' | 'medium' | 'high';
-  verifierReasoningEffort: 'low' | 'medium' | 'high';
+  plannerReasoningEffort: ReasoningEffort;
+  reviewerReasoningEffort: ReasoningEffort;
+  executorReasoningEffort: ReasoningEffort;
+  verifierReasoningEffort: ReasoningEffort;
   // Notifications
   notificationsEnabled: boolean;
   notificationOsEnabled: boolean;

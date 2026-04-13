@@ -7,6 +7,7 @@ import type {
 import type { PhaseSkillKey } from '@shipcode/shared';
 import type {
   CheckpointQueries,
+  ProjectQueries,
   ThreadQueries,
   PlanQueries,
   ReviewQueries,
@@ -19,6 +20,7 @@ import type {
   AgentType,
   GitHubPrCheckSummary,
   GitHubPrReviewCommentSummary,
+  ReasoningEffort,
   ShipCodePlan,
   PipelinePhase,
   PlanReview,
@@ -106,6 +108,14 @@ export interface PipelineContext {
   reviewerModel: PipelineExecutorModel;
   verifierModel: PipelineExecutorModel;
   executorModel: PipelineExecutorModel;
+  plannerModelIdOverride: string | null;
+  reviewerModelIdOverride: string | null;
+  executorModelIdOverride: string | null;
+  verifierModelIdOverride: string | null;
+  plannerReasoningEffort: ReasoningEffort;
+  reviewerReasoningEffort: ReasoningEffort;
+  executorReasoningEffort: ReasoningEffort;
+  verifierReasoningEffort: ReasoningEffort;
   /** Optional per-run model slug override (e.g. 'openrouter/auto'). */
   executorModelOverride: string | null;
   baseBranch: string;
@@ -155,6 +165,7 @@ export interface PipelineDeps {
   verifications: VerificationQueries;
   githubIssues: GitHubIssueQueries;
   checkpoints: CheckpointQueries;
+  projects: ProjectQueries;
   settings: SettingsQueries;
   providers: ProviderRegistry;
   /** Per-phase prompt skill overrides (project + global). The pipeline passes
@@ -202,6 +213,14 @@ export interface Pipeline {
       plannerModel?: PipelineExecutorModel;
       reviewerModel?: PipelineExecutorModel;
       verifierModel?: PipelineExecutorModel;
+      plannerModelIdOverride?: string | null;
+      reviewerModelIdOverride?: string | null;
+      executorModelIdOverride?: string | null;
+      verifierModelIdOverride?: string | null;
+      plannerReasoningEffort?: ReasoningEffort;
+      reviewerReasoningEffort?: ReasoningEffort;
+      executorReasoningEffort?: ReasoningEffort;
+      verifierReasoningEffort?: ReasoningEffort;
     },
   ) => Promise<void>;
   initializeContext: (

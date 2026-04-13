@@ -29,7 +29,9 @@ import {
   parseGithubProjectUrl,
   deriveGithubIssueUrl,
   resolveExecutorModelForIssue,
+  resolvePhaseModelId,
   resolvePhaseModel,
+  resolvePhaseReasoningEffort,
 } from '@shipcode/shared';
 import {
   checkSystemHealthWithAuth,
@@ -93,6 +95,14 @@ function resolveProjectPhaseModels(
     reviewerModel: resolvePhaseModel(settings, project, 'reviewer'),
     verifierModel: resolvePhaseModel(settings, project, 'verifier'),
     executorModel: resolvePhaseModel(settings, project, 'executor'),
+    plannerModelId: resolvePhaseModelId(settings, project, 'planner'),
+    reviewerModelId: resolvePhaseModelId(settings, project, 'reviewer'),
+    verifierModelId: resolvePhaseModelId(settings, project, 'verifier'),
+    executorModelId: resolvePhaseModelId(settings, project, 'executor'),
+    plannerReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'planner'),
+    reviewerReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'reviewer'),
+    verifierReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'verifier'),
+    executorReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'executor'),
   };
 }
 
@@ -228,6 +238,37 @@ export function registerIpcHandlers(
       return enrichProjectPath(project);
     }
   });
+
+  ipcMain.handle(
+    'project:relink-path',
+    async (_event, { projectId, path: projectPath }: { projectId: string; path: string }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+      if (!fs.existsSync(projectPath)) {
+        throw new Error(`Selected folder does not exist: ${projectPath}`);
+      }
+
+      const existing = queries.projects.getByPath(projectPath);
+      if (existing && existing.id !== projectId) {
+        throw new Error(`Another project already points to ${projectPath}`);
+      }
+
+      queries.projects.updatePath(projectId, projectPath);
+
+      try {
+        const git = new GitService(projectPath);
+        const remote = await git.getRemoteUrl();
+        const branch = await git.getDefaultBranch();
+        queries.projects.updateGitInfo(projectId, remote, branch);
+      } catch {
+        // Keep the new path even if git metadata refresh fails. The user may
+        // have selected the repo root incorrectly or the folder may not be a
+        // git checkout yet; the recovery action should still persist.
+      }
+
+      return enrichProjectPath(queries.projects.getById(projectId));
+    },
+  );
 
   ipcMain.handle('project:remove', async (_event, { projectId }: { projectId: string }) => {
     // Fast pre-check: bail early without running slow worktree cleanup if the
@@ -463,7 +504,7 @@ export function registerIpcHandlers(
     if (!project) throw new Error(`Project ${projectId} not found`);
     if (!fs.existsSync(project.path)) {
       throw new Error(
-        `Project path no longer exists: ${project.path}. The folder was likely moved. Re-add the repository from its new location.`,
+        `Project path no longer exists: ${project.path}. Re-add the repository from a valid path.`,
       );
     }
 
@@ -528,11 +569,14 @@ export function registerIpcHandlers(
 
       const ghCli = new GhCli(project.path);
       await ghCli.closeIssue(issueNumber);
-
-      // Best-effort: archive from all Projects v2 boards the issue appears on.
-      ghCli
-        .archiveProjectItems(issueNumber)
-        .catch((err) => log.warn('[github:archive-issue] project board archive failed:', err));
+      try {
+        await ghCli.archiveProjectItems(issueNumber);
+      } catch (err) {
+        log.warn('[github:archive-issue] project board archive failed after GitHub close:', err);
+        throw new Error(
+          `Issue #${issueNumber} was closed on GitHub but could not be archived from the GitHub project board.`,
+        );
+      }
 
       // GitHub close succeeded. DB write is synchronous/local — failures here
       // are rare but would leave GitHub closed and board still showing the
@@ -567,10 +611,6 @@ export function registerIpcHandlers(
       const ghCli = new GhCli(project.path);
       await ghCli.closeIssue(issueNumber);
 
-      ghCli
-        .archiveProjectItems(issueNumber)
-        .catch((err) => log.warn('[github:close-issue] project board archive failed:', err));
-
       queries.githubIssues.updatePipelineStatus(issue.id, 'completed');
 
       const cached = queries.githubIssues.list(projectId);
@@ -594,13 +634,10 @@ export function registerIpcHandlers(
       for (const issue of doneIssues) {
         try {
           await ghCli.closeIssue(issue.issueNumber);
+          await ghCli.archiveProjectItems(issue.issueNumber);
           succeededIds.push(issue.id);
-          // Best-effort: archive from all Projects v2 boards the issue appears on
-          ghCli
-            .archiveProjectItems(issue.issueNumber)
-            .catch((err) => log.warn(`[github:archive-all-done] project board archive #${issue.issueNumber} failed:`, err));
         } catch (err) {
-          log.warn(`[github:archive-all-done] close #${issue.issueNumber} failed:`, err);
+          log.warn(`[github:archive-all-done] archive #${issue.issueNumber} failed:`, err);
           failedCount++;
         }
       }
@@ -856,6 +893,14 @@ export function registerIpcHandlers(
             plannerModel: phaseModels.plannerModel,
             reviewerModel: phaseModels.reviewerModel,
             verifierModel: phaseModels.verifierModel,
+            plannerModelIdOverride: phaseModels.plannerModelId,
+            reviewerModelIdOverride: phaseModels.reviewerModelId,
+            executorModelIdOverride: phaseModels.executorModelId,
+            verifierModelIdOverride: phaseModels.verifierModelId,
+            plannerReasoningEffort: phaseModels.plannerReasoningEffort,
+            reviewerReasoningEffort: phaseModels.reviewerReasoningEffort,
+            executorReasoningEffort: phaseModels.executorReasoningEffort,
+            verifierReasoningEffort: phaseModels.verifierReasoningEffort,
           },
         );
       } catch (err) {
@@ -1001,6 +1046,18 @@ export function registerIpcHandlers(
           reviewerModelOverride: import('@shipcode/shared').Project['reviewerModelOverride'];
           executorModelOverride: import('@shipcode/shared').Project['executorModelOverride'];
           verifierModelOverride: import('@shipcode/shared').Project['verifierModelOverride'];
+          plannerModelIdOverride: import('@shipcode/shared').Project['plannerModelIdOverride'];
+          reviewerModelIdOverride: import('@shipcode/shared').Project['reviewerModelIdOverride'];
+          executorModelIdOverride: import('@shipcode/shared').Project['executorModelIdOverride'];
+          verifierModelIdOverride: import('@shipcode/shared').Project['verifierModelIdOverride'];
+          plannerReasoningEffortOverride:
+            import('@shipcode/shared').Project['plannerReasoningEffortOverride'];
+          reviewerReasoningEffortOverride:
+            import('@shipcode/shared').Project['reviewerReasoningEffortOverride'];
+          executorReasoningEffortOverride:
+            import('@shipcode/shared').Project['executorReasoningEffortOverride'];
+          verifierReasoningEffortOverride:
+            import('@shipcode/shared').Project['verifierReasoningEffortOverride'];
         };
       },
     ) => {
@@ -1037,6 +1094,14 @@ export function registerIpcHandlers(
       reviewerModel: phaseModels.reviewerModel,
       verifierModel: phaseModels.verifierModel,
       executorModel: phaseModels.executorModel,
+      plannerModelIdOverride: phaseModels.plannerModelId,
+      reviewerModelIdOverride: phaseModels.reviewerModelId,
+      executorModelIdOverride: phaseModels.executorModelId,
+      verifierModelIdOverride: phaseModels.verifierModelId,
+      plannerReasoningEffort: phaseModels.plannerReasoningEffort,
+      reviewerReasoningEffort: phaseModels.reviewerReasoningEffort,
+      executorReasoningEffort: phaseModels.executorReasoningEffort,
+      verifierReasoningEffort: phaseModels.verifierReasoningEffort,
       baseBranch: project.defaultBranch,
     });
 

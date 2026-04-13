@@ -13,6 +13,14 @@ export function migrate(db: DatabaseSync): void {
       reviewer_model_override TEXT,
       executor_model_override TEXT,
       verifier_model_override TEXT,
+      planner_model_id_override TEXT,
+      reviewer_model_id_override TEXT,
+      executor_model_id_override TEXT,
+      verifier_model_id_override TEXT,
+      planner_reasoning_effort_override TEXT,
+      reviewer_reasoning_effort_override TEXT,
+      executor_reasoning_effort_override TEXT,
+      verifier_reasoning_effort_override TEXT,
       default_branch TEXT NOT NULL DEFAULT 'main',
       created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
       updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
@@ -547,5 +555,33 @@ export function migrateV14(db: DatabaseSync): void {
     }
 
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (14)`);
+  });
+}
+
+export function migrateV15(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 15) return;
+
+  transaction(db, () => {
+    const projectColumns = [
+      'ALTER TABLE projects ADD COLUMN planner_model_id_override TEXT',
+      'ALTER TABLE projects ADD COLUMN reviewer_model_id_override TEXT',
+      'ALTER TABLE projects ADD COLUMN executor_model_id_override TEXT',
+      'ALTER TABLE projects ADD COLUMN verifier_model_id_override TEXT',
+      'ALTER TABLE projects ADD COLUMN planner_reasoning_effort_override TEXT',
+      'ALTER TABLE projects ADD COLUMN reviewer_reasoning_effort_override TEXT',
+      'ALTER TABLE projects ADD COLUMN executor_reasoning_effort_override TEXT',
+      'ALTER TABLE projects ADD COLUMN verifier_reasoning_effort_override TEXT',
+    ];
+
+    for (const sql of projectColumns) {
+      try {
+        db.exec(sql);
+      } catch {}
+    }
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (15)`);
   });
 }

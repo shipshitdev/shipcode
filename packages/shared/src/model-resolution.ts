@@ -1,4 +1,10 @@
-import type { AppSettings, ExecutorModel, GitHubIssueCacheRecord, Project } from './types';
+import type {
+  AppSettings,
+  ExecutorModel,
+  GitHubIssueCacheRecord,
+  Project,
+  ReasoningEffort,
+} from './types';
 
 export type ResolvedPhaseModel = 'planner' | 'reviewer' | 'executor' | 'verifier';
 
@@ -8,6 +14,14 @@ type ProjectModelOverrides = Pick<
   | 'reviewerModelOverride'
   | 'executorModelOverride'
   | 'verifierModelOverride'
+  | 'plannerModelIdOverride'
+  | 'reviewerModelIdOverride'
+  | 'executorModelIdOverride'
+  | 'verifierModelIdOverride'
+  | 'plannerReasoningEffortOverride'
+  | 'reviewerReasoningEffortOverride'
+  | 'executorReasoningEffortOverride'
+  | 'verifierReasoningEffortOverride'
 >;
 
 type IssueExecutorOverride = Pick<GitHubIssueCacheRecord, 'executorModelOverride'>;
@@ -53,8 +67,19 @@ export function resolveExecutorModelForIssue(
 
 export function resolvePhaseReasoningEffort(
   settings: AppSettings,
+  project: ProjectModelOverrides | null | undefined,
   phase: ResolvedPhaseModel,
-): 'low' | 'medium' | 'high' {
+): ReasoningEffort {
+  const projectOverride =
+    phase === 'planner'
+      ? project?.plannerReasoningEffortOverride
+      : phase === 'reviewer'
+        ? project?.reviewerReasoningEffortOverride
+        : phase === 'executor'
+          ? project?.executorReasoningEffortOverride
+          : project?.verifierReasoningEffortOverride;
+  if (projectOverride) return projectOverride;
+
   switch (phase) {
     case 'planner':
       return settings.plannerReasoningEffort;
@@ -64,6 +89,36 @@ export function resolvePhaseReasoningEffort(
       return settings.executorReasoningEffort;
     case 'verifier':
       return settings.verifierReasoningEffort;
+  }
+}
+
+export function resolvePhaseModelId(
+  settings: AppSettings,
+  project: ProjectModelOverrides | null | undefined,
+  phase: ResolvedPhaseModel,
+): string | null {
+  const projectOverride =
+    phase === 'planner'
+      ? project?.plannerModelIdOverride
+      : phase === 'reviewer'
+        ? project?.reviewerModelIdOverride
+        : phase === 'executor'
+          ? project?.executorModelIdOverride
+          : project?.verifierModelIdOverride;
+  if (projectOverride) return projectOverride;
+
+  const resolvedProvider = resolvePhaseModel(settings, project, phase);
+  if (resolvedProvider !== 'openrouter') return null;
+
+  switch (phase) {
+    case 'planner':
+      return settings.openrouterPlannerModel;
+    case 'reviewer':
+      return settings.openrouterReviewerModel;
+    case 'executor':
+      return settings.openrouterExecutorModel;
+    case 'verifier':
+      return settings.openrouterVerifierModel;
   }
 }
 

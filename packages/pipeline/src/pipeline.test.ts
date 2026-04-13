@@ -255,6 +255,19 @@ function createMockDeps() {
         getLatest: vi.fn(() => null),
         create: vi.fn(),
       },
+      projects: {
+        getById: vi.fn(() => ({
+          id: 'project-1',
+          plannerModelIdOverride: null,
+          reviewerModelIdOverride: null,
+          executorModelIdOverride: null,
+          verifierModelIdOverride: null,
+          plannerReasoningEffortOverride: null,
+          reviewerReasoningEffortOverride: null,
+          executorReasoningEffortOverride: null,
+          verifierReasoningEffortOverride: null,
+        })),
+      },
       settings,
       providers,
       skills: {

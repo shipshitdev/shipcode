@@ -38,6 +38,7 @@ export interface IpcInvokeChannels {
   'project:pin': { args: { projectId: string; pinned: boolean }; result: void };
   'project:archive': { args: { projectId: string }; result: void };
   'project:unarchive': { args: { projectId: string }; result: void };
+  'project:relink-path': { args: { projectId: string; path: string }; result: Project };
   'project:set-default-branch': { args: { projectId: string; branch: string }; result: Project };
   'project:set-github-project-url': {
     args: { projectId: string; url: string | null };
@@ -51,6 +52,14 @@ export interface IpcInvokeChannels {
         reviewerModelOverride: Project['reviewerModelOverride'];
         executorModelOverride: Project['executorModelOverride'];
         verifierModelOverride: Project['verifierModelOverride'];
+        plannerModelIdOverride: Project['plannerModelIdOverride'];
+        reviewerModelIdOverride: Project['reviewerModelIdOverride'];
+        executorModelIdOverride: Project['executorModelIdOverride'];
+        verifierModelIdOverride: Project['verifierModelIdOverride'];
+        plannerReasoningEffortOverride: Project['plannerReasoningEffortOverride'];
+        reviewerReasoningEffortOverride: Project['reviewerReasoningEffortOverride'];
+        executorReasoningEffortOverride: Project['executorReasoningEffortOverride'];
+        verifierReasoningEffortOverride: Project['verifierReasoningEffortOverride'];
       };
     };
     result: Project;

@@ -182,6 +182,13 @@ export class ProjectQueries {
       .run(branch, id);
   }
 
+  updatePath(id: string, projectPath: string): void {
+    const name = path.basename(projectPath);
+    this.db
+      .prepare(`UPDATE projects SET path = ?, name = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`)
+      .run(projectPath, name, id);
+  }
+
   /**
    * Set the per-project GitHub Projects v2 URL override. Pass `null` to clear
    * (falls back to the repo Projects tab). Callers must validate the URL
@@ -203,6 +210,14 @@ export class ProjectQueries {
       reviewerModelOverride: string | null;
       executorModelOverride: string | null;
       verifierModelOverride: string | null;
+      plannerModelIdOverride: string | null;
+      reviewerModelIdOverride: string | null;
+      executorModelIdOverride: string | null;
+      verifierModelIdOverride: string | null;
+      plannerReasoningEffortOverride: Project['plannerReasoningEffortOverride'];
+      reviewerReasoningEffortOverride: Project['reviewerReasoningEffortOverride'];
+      executorReasoningEffortOverride: Project['executorReasoningEffortOverride'];
+      verifierReasoningEffortOverride: Project['verifierReasoningEffortOverride'];
     },
   ): void {
     this.db
@@ -212,6 +227,14 @@ export class ProjectQueries {
                reviewer_model_override = ?,
                executor_model_override = ?,
                verifier_model_override = ?,
+               planner_model_id_override = ?,
+               reviewer_model_id_override = ?,
+               executor_model_id_override = ?,
+               verifier_model_id_override = ?,
+               planner_reasoning_effort_override = ?,
+               reviewer_reasoning_effort_override = ?,
+               executor_reasoning_effort_override = ?,
+               verifier_reasoning_effort_override = ?,
                updated_at = ${ISO_NOW_SQL}
          WHERE id = ?`,
       )
@@ -220,6 +243,14 @@ export class ProjectQueries {
         overrides.reviewerModelOverride,
         overrides.executorModelOverride,
         overrides.verifierModelOverride,
+        overrides.plannerModelIdOverride,
+        overrides.reviewerModelIdOverride,
+        overrides.executorModelIdOverride,
+        overrides.verifierModelIdOverride,
+        overrides.plannerReasoningEffortOverride,
+        overrides.reviewerReasoningEffortOverride,
+        overrides.executorReasoningEffortOverride,
+        overrides.verifierReasoningEffortOverride,
         id,
       );
   }
@@ -236,6 +267,14 @@ function mapProject(row: any): Project {
     reviewerModelOverride: row.reviewer_model_override ?? null,
     executorModelOverride: row.executor_model_override ?? null,
     verifierModelOverride: row.verifier_model_override ?? null,
+    plannerModelIdOverride: row.planner_model_id_override ?? null,
+    reviewerModelIdOverride: row.reviewer_model_id_override ?? null,
+    executorModelIdOverride: row.executor_model_id_override ?? null,
+    verifierModelIdOverride: row.verifier_model_id_override ?? null,
+    plannerReasoningEffortOverride: row.planner_reasoning_effort_override ?? null,
+    reviewerReasoningEffortOverride: row.reviewer_reasoning_effort_override ?? null,
+    executorReasoningEffortOverride: row.executor_reasoning_effort_override ?? null,
+    verifierReasoningEffortOverride: row.verifier_reasoning_effort_override ?? null,
     defaultBranch: row.default_branch,
     pinned: row.pinned === 1,
     archived: row.archived === 1,

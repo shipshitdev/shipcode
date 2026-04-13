@@ -101,6 +101,14 @@ describe('ProjectQueries', () => {
     expect(p.reviewerModelOverride).toBeNull();
     expect(p.executorModelOverride).toBeNull();
     expect(p.verifierModelOverride).toBeNull();
+    expect(p.plannerModelIdOverride).toBeNull();
+    expect(p.reviewerModelIdOverride).toBeNull();
+    expect(p.executorModelIdOverride).toBeNull();
+    expect(p.verifierModelIdOverride).toBeNull();
+    expect(p.plannerReasoningEffortOverride).toBeNull();
+    expect(p.reviewerReasoningEffortOverride).toBeNull();
+    expect(p.executorReasoningEffortOverride).toBeNull();
+    expect(p.verifierReasoningEffortOverride).toBeNull();
   });
 
   it('updateModelOverrides() persists values and clears back to null', () => {
@@ -110,6 +118,14 @@ describe('ProjectQueries', () => {
       reviewerModelOverride: 'claude',
       executorModelOverride: 'codex',
       verifierModelOverride: 'claude',
+      plannerModelIdOverride: 'openrouter/auto',
+      reviewerModelIdOverride: 'claude-opus-4-6',
+      executorModelIdOverride: 'gpt-5.4',
+      verifierModelIdOverride: 'claude-sonnet-4-6',
+      plannerReasoningEffortOverride: 'low',
+      reviewerReasoningEffortOverride: 'medium',
+      executorReasoningEffortOverride: 'high',
+      verifierReasoningEffortOverride: 'medium',
     });
 
     let updated = projects.getById(p.id)!;
@@ -117,12 +133,28 @@ describe('ProjectQueries', () => {
     expect(updated.reviewerModelOverride).toBe('claude');
     expect(updated.executorModelOverride).toBe('codex');
     expect(updated.verifierModelOverride).toBe('claude');
+    expect(updated.plannerModelIdOverride).toBe('openrouter/auto');
+    expect(updated.reviewerModelIdOverride).toBe('claude-opus-4-6');
+    expect(updated.executorModelIdOverride).toBe('gpt-5.4');
+    expect(updated.verifierModelIdOverride).toBe('claude-sonnet-4-6');
+    expect(updated.plannerReasoningEffortOverride).toBe('low');
+    expect(updated.reviewerReasoningEffortOverride).toBe('medium');
+    expect(updated.executorReasoningEffortOverride).toBe('high');
+    expect(updated.verifierReasoningEffortOverride).toBe('medium');
 
     projects.updateModelOverrides(p.id, {
       plannerModelOverride: null,
       reviewerModelOverride: null,
       executorModelOverride: null,
       verifierModelOverride: null,
+      plannerModelIdOverride: null,
+      reviewerModelIdOverride: null,
+      executorModelIdOverride: null,
+      verifierModelIdOverride: null,
+      plannerReasoningEffortOverride: null,
+      reviewerReasoningEffortOverride: null,
+      executorReasoningEffortOverride: null,
+      verifierReasoningEffortOverride: null,
     });
 
     updated = projects.getById(p.id)!;
@@ -130,6 +162,14 @@ describe('ProjectQueries', () => {
     expect(updated.reviewerModelOverride).toBeNull();
     expect(updated.executorModelOverride).toBeNull();
     expect(updated.verifierModelOverride).toBeNull();
+    expect(updated.plannerModelIdOverride).toBeNull();
+    expect(updated.reviewerModelIdOverride).toBeNull();
+    expect(updated.executorModelIdOverride).toBeNull();
+    expect(updated.verifierModelIdOverride).toBeNull();
+    expect(updated.plannerReasoningEffortOverride).toBeNull();
+    expect(updated.reviewerReasoningEffortOverride).toBeNull();
+    expect(updated.executorReasoningEffortOverride).toBeNull();
+    expect(updated.verifierReasoningEffortOverride).toBeNull();
   });
 
   it('add() is idempotent: re-adding same path returns existing row', () => {

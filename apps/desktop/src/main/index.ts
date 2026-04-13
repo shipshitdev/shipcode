@@ -50,7 +50,13 @@ import { registerIpcHandlers } from './ipc';
 import { createPipeline } from '@shipcode/pipeline';
 import { createElectronEmitter } from './pipeline-bridge';
 import { NotificationService } from './notification-service';
-import { HEARTBEAT_TIMEOUT_MS, resolveExecutorModelForIssue, resolvePhaseModel } from '@shipcode/shared';
+import {
+  HEARTBEAT_TIMEOUT_MS,
+  resolveExecutorModelForIssue,
+  resolvePhaseModel,
+  resolvePhaseModelId,
+  resolvePhaseReasoningEffort,
+} from '@shipcode/shared';
 
 let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
@@ -66,6 +72,14 @@ function resolveProjectPhaseModels(
     reviewerModel: resolvePhaseModel(settings, project, 'reviewer'),
     verifierModel: resolvePhaseModel(settings, project, 'verifier'),
     executorModel: resolvePhaseModel(settings, project, 'executor'),
+    plannerModelId: resolvePhaseModelId(settings, project, 'planner'),
+    reviewerModelId: resolvePhaseModelId(settings, project, 'reviewer'),
+    verifierModelId: resolvePhaseModelId(settings, project, 'verifier'),
+    executorModelId: resolvePhaseModelId(settings, project, 'executor'),
+    plannerReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'planner'),
+    reviewerReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'reviewer'),
+    verifierReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'verifier'),
+    executorReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'executor'),
   };
 }
 
@@ -160,6 +174,7 @@ function createWindow() {
     verifications: queries.verifications,
     githubIssues: queries.githubIssues,
     checkpoints: queries.checkpoints,
+    projects: queries.projects,
     settings: queries.settings,
     providers,
     skills: queries.skills,
@@ -212,6 +227,14 @@ function createWindow() {
             plannerModel: phaseModels.plannerModel,
             reviewerModel: phaseModels.reviewerModel,
             verifierModel: phaseModels.verifierModel,
+            plannerModelIdOverride: phaseModels.plannerModelId,
+            reviewerModelIdOverride: phaseModels.reviewerModelId,
+            executorModelIdOverride: phaseModels.executorModelId,
+            verifierModelIdOverride: phaseModels.verifierModelId,
+            plannerReasoningEffort: phaseModels.plannerReasoningEffort,
+            reviewerReasoningEffort: phaseModels.reviewerReasoningEffort,
+            executorReasoningEffort: phaseModels.executorReasoningEffort,
+            verifierReasoningEffort: phaseModels.verifierReasoningEffort,
           },
         )
         .catch((err) => {

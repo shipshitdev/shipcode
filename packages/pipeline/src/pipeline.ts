@@ -81,6 +81,17 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       reviewerModel: seed.reviewerModel ?? (deps.settings.get().reviewerModel as PipelineExecutorModel),
       verifierModel: seed.verifierModel ?? (deps.settings.get().verifierModel as PipelineExecutorModel),
       executorModel: seed.executorModel ?? 'claude',
+      plannerModelIdOverride: seed.plannerModelIdOverride ?? null,
+      reviewerModelIdOverride: seed.reviewerModelIdOverride ?? null,
+      executorModelIdOverride: seed.executorModelIdOverride ?? null,
+      verifierModelIdOverride: seed.verifierModelIdOverride ?? null,
+      plannerReasoningEffort: seed.plannerReasoningEffort ?? deps.settings.get().plannerReasoningEffort,
+      reviewerReasoningEffort:
+        seed.reviewerReasoningEffort ?? deps.settings.get().reviewerReasoningEffort,
+      executorReasoningEffort:
+        seed.executorReasoningEffort ?? deps.settings.get().executorReasoningEffort,
+      verifierReasoningEffort:
+        seed.verifierReasoningEffort ?? deps.settings.get().verifierReasoningEffort,
       executorModelOverride: seed.executorModelOverride ?? null,
       baseBranch: seed.baseBranch ?? '',
       forkPointSha: seed.forkPointSha ?? '',
@@ -111,6 +122,8 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
     const thread = deps.threads.getById(threadId);
     if (!thread) return;
+    const project = deps.projects.getById(thread.projectId);
+    const settings = deps.settings.get();
 
     ensureContext(threadId, {
       projectPath,
@@ -126,6 +139,18 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       reviewerModel: (thread.reviewerModel as PipelineExecutorModel) || 'codex',
       verifierModel: (thread.verifierModel as PipelineExecutorModel) || 'claude',
       executorModel: (thread.executorModel as PipelineExecutorModel) || 'claude',
+      plannerModelIdOverride: project?.plannerModelIdOverride ?? null,
+      reviewerModelIdOverride: project?.reviewerModelIdOverride ?? null,
+      executorModelIdOverride: project?.executorModelIdOverride ?? null,
+      verifierModelIdOverride: project?.verifierModelIdOverride ?? null,
+      plannerReasoningEffort:
+        project?.plannerReasoningEffortOverride ?? settings.plannerReasoningEffort,
+      reviewerReasoningEffort:
+        project?.reviewerReasoningEffortOverride ?? settings.reviewerReasoningEffort,
+      executorReasoningEffort:
+        project?.executorReasoningEffortOverride ?? settings.executorReasoningEffort,
+      verifierReasoningEffort:
+        project?.verifierReasoningEffortOverride ?? settings.verifierReasoningEffort,
       baseBranch: thread.baseBranch ?? '',
       forkPointSha: thread.forkPointSha ?? '',
       activeProcessId: null,
@@ -440,10 +465,22 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       phase === 'plan' || phase === 'review'
         ? context.projectPath
         : (context.worktreePath ?? context.projectPath);
-    const modelHint =
-      agent === context.executorModel && context.executorModelOverride
-        ? context.executorModelOverride
-        : undefined;
+    const modelHint = (() => {
+      if (agent === context.executorModel && context.executorModelOverride) {
+        return context.executorModelOverride;
+      }
+      switch (phase) {
+        case 'plan':
+        case 'revision':
+          return context.plannerModelIdOverride;
+        case 'review':
+          return context.reviewerModelIdOverride;
+        case 'execute':
+          return context.executorModelIdOverride;
+        case 'verify':
+          return context.verifierModelIdOverride;
+      }
+    })();
 
     // Inject plannerMaxTurns for Claude-driven analysis phases.
     // execute has no --max-turns limit; review is always 1 (structural).
@@ -459,7 +496,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       projectPath: context.projectPath,
       signal: context.abort.signal,
       phaseHints: mergedHints,
-      modelHint,
+      modelHint: modelHint ?? undefined,
       threadId: context.threadId,
       onTerminalEvent: (event) =>
         deps.emitter.emit({ type: 'terminal:event', threadId: context.threadId, event }),
@@ -574,7 +611,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     void (async () => {
       try {
         const response = await runProviderPhase(context, 'plan', planPrompt, {
-          reasoningEffort: deps.settings.get().plannerReasoningEffort,
+          reasoningEffort: context.plannerReasoningEffort,
         });
 
         if (context.cancelled) return;
@@ -664,7 +701,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     void (async () => {
       try {
         const response = await runProviderPhase(context, 'review', reviewPromptText, {
-          reasoningEffort: deps.settings.get().reviewerReasoningEffort,
+          reasoningEffort: context.reviewerReasoningEffort,
         });
 
         if (context.cancelled) return;
@@ -779,7 +816,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     void (async () => {
       try {
         const response = await runProviderPhase(context, 'revision', revisionPrompt, {
-          reasoningEffort: deps.settings.get().plannerReasoningEffort,
+          reasoningEffort: context.plannerReasoningEffort,
         });
 
         if (context.cancelled) return;
@@ -1091,7 +1128,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     void (async () => {
       try {
         const response = await runProviderPhase(context, 'verify', verificationPrompt, {
-          reasoningEffort: deps.settings.get().verifierReasoningEffort,
+          reasoningEffort: context.verifierReasoningEffort,
         });
 
         if (context.cancelled) return;
@@ -1365,6 +1402,14 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       plannerModel?: PipelineExecutorModel;
       reviewerModel?: PipelineExecutorModel;
       verifierModel?: PipelineExecutorModel;
+      plannerModelIdOverride?: string | null;
+      reviewerModelIdOverride?: string | null;
+      executorModelIdOverride?: string | null;
+      verifierModelIdOverride?: string | null;
+      plannerReasoningEffort?: PipelineContext['plannerReasoningEffort'];
+      reviewerReasoningEffort?: PipelineContext['reviewerReasoningEffort'];
+      executorReasoningEffort?: PipelineContext['executorReasoningEffort'];
+      verifierReasoningEffort?: PipelineContext['verifierReasoningEffort'];
     },
   ) {
     const executorModelOverride = options?.executorModelOverride ?? null;
@@ -1422,6 +1467,18 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       reviewerModel: options?.reviewerModel ?? (deps.settings.get().reviewerModel as PipelineExecutorModel),
       verifierModel: options?.verifierModel ?? (deps.settings.get().verifierModel as PipelineExecutorModel),
       executorModel,
+      plannerModelIdOverride: options?.plannerModelIdOverride ?? null,
+      reviewerModelIdOverride: options?.reviewerModelIdOverride ?? null,
+      executorModelIdOverride: options?.executorModelIdOverride ?? null,
+      verifierModelIdOverride: options?.verifierModelIdOverride ?? null,
+      plannerReasoningEffort:
+        options?.plannerReasoningEffort ?? deps.settings.get().plannerReasoningEffort,
+      reviewerReasoningEffort:
+        options?.reviewerReasoningEffort ?? deps.settings.get().reviewerReasoningEffort,
+      executorReasoningEffort:
+        options?.executorReasoningEffort ?? deps.settings.get().executorReasoningEffort,
+      verifierReasoningEffort:
+        options?.verifierReasoningEffort ?? deps.settings.get().verifierReasoningEffort,
       executorModelOverride,
       baseBranch,
       forkPointSha,

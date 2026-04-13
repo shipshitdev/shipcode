@@ -10,7 +10,11 @@ const STICKY_KINDS: NotificationKind[] = [
   'verification_exhausted',
   'ci_blocked',
 ];
-const AUTO_DISMISS_MS = 8_000;
+
+const AUTO_DISMISS_MS: Partial<Record<NotificationKind, number>> = {
+  failed: 4_000,
+  completed: 3_000,
+};
 
 const KIND_TONE: Record<NotificationKind, string> = {
   awaiting_approval: 'border-amber-500/40 bg-amber-500/10',
@@ -30,12 +34,13 @@ function ToastRow({
   onDismiss: () => void;
 }) {
   const sticky = STICKY_KINDS.includes(notification.kind);
+  const dismissAfterMs = AUTO_DISMISS_MS[notification.kind] ?? 5_000;
 
   useEffect(() => {
     if (sticky) return;
-    const id = setTimeout(onDismiss, AUTO_DISMISS_MS);
+    const id = setTimeout(onDismiss, dismissAfterMs);
     return () => clearTimeout(id);
-  }, [sticky, onDismiss]);
+  }, [dismissAfterMs, sticky, onDismiss]);
 
   return (
     <div
@@ -46,7 +51,7 @@ function ToastRow({
       <Button
         variant="ghost"
         onClick={onClick}
-        className="h-auto flex-1 justify-start whitespace-normal px-0 py-0 text-left font-normal"
+        className="h-auto flex-1 justify-start whitespace-normal bg-transparent px-0 py-0 text-left font-normal hover:bg-transparent focus-visible:ring-0"
       >
         <div className="flex flex-col items-start gap-0.5">
           <div className="text-[12px] font-semibold text-primary">{notification.title}</div>
