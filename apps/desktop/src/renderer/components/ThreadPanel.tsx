@@ -43,7 +43,7 @@ export function ThreadPanel() {
   useEffect(() => {
     if (!activeProjectId) return;
     refreshIssues.mutate(activeProjectId);
-  }, [activeProjectId]);
+  }, [activeProjectId, refreshIssues]);
 
   useEffect(() => {
     if (!archiveFeedback || archiveFeedback.tone === 'pending') return;
@@ -55,7 +55,7 @@ export function ThreadPanel() {
   // the narrow `project:get` channel rather than scanning the full list.
   const { data: project } = useQuery<Project | null>({
     queryKey: ['project', activeProjectId],
-    queryFn: () => window.shipcode.invoke('project:get', { projectId: activeProjectId! }),
+    queryFn: () => window.shipcode.invoke('project:get', { projectId: activeProjectId ?? '' }),
     enabled: !!activeProjectId,
     staleTime: 30_000,
   });
@@ -67,7 +67,7 @@ export function ThreadPanel() {
 
   const { data: threads = [] } = useQuery<Thread[]>({
     queryKey: ['threads', activeProjectId],
-    queryFn: () => window.shipcode.invoke('thread:list', { projectId: activeProjectId! }),
+    queryFn: () => window.shipcode.invoke('thread:list', { projectId: activeProjectId ?? '' }),
     enabled: !!activeProjectId,
     staleTime: 5_000,
   });
@@ -75,7 +75,8 @@ export function ThreadPanel() {
   // Local git branches (normalized) — source for the toolbar dropdown.
   const { data: branches = [] } = useQuery<string[]>({
     queryKey: ['git-branches', activeProjectId],
-    queryFn: () => window.shipcode.invoke('git:list-branches', { projectId: activeProjectId! }),
+    queryFn: () =>
+      window.shipcode.invoke('git:list-branches', { projectId: activeProjectId ?? '' }),
     enabled: !!activeProjectId,
     staleTime: 60_000,
   });
@@ -191,7 +192,7 @@ export function ThreadPanel() {
         onRefreshBranches={() => {
           setIsRefreshingBranches(true);
           window.shipcode
-            .invoke('git:list-branches', { projectId: activeProjectId!, fetch: true })
+            .invoke('git:list-branches', { projectId: activeProjectId ?? '', fetch: true })
             .then((fresh) => {
               queryClient.setQueryData(['git-branches', activeProjectId], fresh);
             })
@@ -217,7 +218,7 @@ export function ThreadPanel() {
           );
           window.shipcode
             .invoke('project:set-default-branch', {
-              projectId: activeProjectId!,
+              projectId: activeProjectId ?? '',
               branch,
             })
             .catch((err) => {

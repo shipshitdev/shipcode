@@ -36,7 +36,7 @@ import type {
   ThreadQueries,
   VerificationQueries,
 } from '@shipcode/db';
-import type { PhaseSkillKey, ShipCodePlan } from '@shipcode/shared';
+import type { AppSettings, PhaseSkillKey, ShipCodePlan } from '@shipcode/shared';
 import {
   clampError,
   deriveGithubIssueUrl,
@@ -455,7 +455,7 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     'plan:update',
-    (_event, { planId, structured }: { planId: string; structured: any }) => {
+    (_event, { planId, structured }: { planId: string; structured: ShipCodePlan }) => {
       queries.plans.updateStructured(planId, structured);
     },
   );
@@ -504,7 +504,7 @@ export function registerIpcHandlers(
     return queries.settings.get();
   });
 
-  ipcMain.handle('settings:set', (_event, patch: any) => {
+  ipcMain.handle('settings:set', (_event, patch: Partial<AppSettings>) => {
     queries.settings.set(patch);
   });
 
@@ -974,7 +974,7 @@ export function registerIpcHandlers(
 
       // Cancel any active pipeline for this issue's thread
       const threads = queries.threads.list(projectId);
-      const thread = threads.find((t: any) => t.githubIssueNumber === issueNumber);
+      const thread = threads.find((t) => t.githubIssueNumber === issueNumber);
       if (thread && thread.status !== 'idle' && thread.status !== 'completed') {
         pipeline.cancel(thread.id);
         queries.threads.updateStatus(thread.id, 'idle');
@@ -1123,7 +1123,9 @@ export function registerIpcHandlers(
       }
 
       queries.projects.updateDefaultBranch(projectId, branch);
-      return enrichProjectPath(queries.projects.getById(projectId))!;
+      const updated = enrichProjectPath(queries.projects.getById(projectId));
+      if (!updated) throw new Error(`Project ${projectId} not found after default branch update`);
+      return updated;
     },
   );
 
@@ -1146,7 +1148,9 @@ export function registerIpcHandlers(
       }
 
       queries.projects.updateGithubProjectUrl(projectId, result.value);
-      return enrichProjectPath(queries.projects.getById(projectId))!;
+      const updated = enrichProjectPath(queries.projects.getById(projectId));
+      if (!updated) throw new Error(`Project ${projectId} not found after GitHub URL update`);
+      return updated;
     },
   );
 
@@ -1179,7 +1183,9 @@ export function registerIpcHandlers(
       if (!project) throw new Error(`Project ${projectId} not found`);
 
       queries.projects.updateModelOverrides(projectId, overrides);
-      return enrichProjectPath(queries.projects.getById(projectId))!;
+      const updated = enrichProjectPath(queries.projects.getById(projectId));
+      if (!updated) throw new Error(`Project ${projectId} not found after model override update`);
+      return updated;
     },
   );
 
@@ -1235,7 +1241,8 @@ export function registerIpcHandlers(
       if (!latestPlan?.structured && latestPlan) {
         queries.plans.updateStructured(latestPlan.id, structured);
       }
-      queries.plans.updateStatus(latestPlan!.id, 'approved');
+      if (!latestPlan) throw new Error('No plan available to approve');
+      queries.plans.updateStatus(latestPlan.id, 'approved');
 
       // Rehydrate in-memory pipeline context from DB if lost (e.g. app restart).
       // Fetch issue title from cache for worktree branch naming.

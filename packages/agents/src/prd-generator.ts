@@ -166,7 +166,7 @@ function runClaudeWithStdin(prompt: string, cwd: string, timeoutMs: number): Pro
  * appear as standalone lines.
  */
 export function extractPrd(text: string): GeneratedPrd {
-  const openTag = '```' + PRD_FENCE_TAG;
+  const openTag = `\`\`\`${PRD_FENCE_TAG}`;
   const lines = text.split('\n');
   let collecting = false;
   const captured: string[] = [];

@@ -456,7 +456,9 @@ export function ProjectSidebar() {
         ))}
       </div>
       {/* Drag handle for resizing */}
-      <div
+      <button
+        type="button"
+        aria-label="Resize project sidebar"
         className="absolute top-0 right-0 bottom-0 w-1 cursor-col-resize hover:bg-accent/20 active:bg-accent/30 transition-colors"
         onMouseDown={handleResizeMouseDown}
       />

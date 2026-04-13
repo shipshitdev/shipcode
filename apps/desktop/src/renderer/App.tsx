@@ -200,7 +200,9 @@ export function App() {
                 maxWidth: ISSUE_DETAIL_MAX_WIDTH,
               }}
             >
-              <div
+              <button
+                type="button"
+                aria-label="Resize issue detail panel"
                 className="absolute inset-y-0 left-0 z-10 w-1 -translate-x-1/2 cursor-col-resize transition-colors hover:bg-accent/20 active:bg-accent/30"
                 onMouseDown={handleIssueDetailResizeMouseDown}
               />

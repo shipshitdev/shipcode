@@ -43,7 +43,7 @@ export function OnboardingWizard({ onComplete }: Props) {
     authCheck.mutate(undefined, {
       onSuccess: (data) => setAuthResult(data),
     });
-  }, []);
+  }, [authCheck]);
 
   const aiAuthCount = [authResult?.claude.authenticated, authResult?.codex.authenticated].filter(
     Boolean,

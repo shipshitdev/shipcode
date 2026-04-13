@@ -134,7 +134,7 @@ export async function executeViaOpenRouter(
       };
     }
 
-    let response;
+    let response: Awaited<ReturnType<typeof deps.client.chat>>;
     try {
       // Non-streaming for the tool-call loop. Streaming is optional for
       // long plan/review phases but tool calls are emitted as a single

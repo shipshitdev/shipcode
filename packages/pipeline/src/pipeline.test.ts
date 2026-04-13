@@ -152,7 +152,9 @@ function createMockDeps() {
     spawn: vi.fn(() => ({ id: `proc-${++spawnCount}` })),
     kill: vi.fn(),
     on: vi.fn((event: string, handler: Function) => {
-      (listeners[event] ??= []).push(handler);
+      const eventListeners = listeners[event] ?? [];
+      eventListeners.push(handler);
+      listeners[event] = eventListeners;
     }),
     removeListener: vi.fn((event: string, handler: Function) => {
       listeners[event] = (listeners[event] ?? []).filter((h) => h !== handler);
@@ -168,7 +170,9 @@ function createMockDeps() {
   const trigger = async (event: string, ...args: any[]) => {
     // Copy the array to avoid mutation during iteration when handlers remove themselves
     const handlers = [...(listeners[event] ?? [])];
-    handlers.forEach((h) => h(...args));
+    handlers.forEach((h) => {
+      h(...args);
+    });
     // Let provider.generate() promise + completion IIFE settle
     await new Promise((r) => setImmediate(r));
     await new Promise((r) => setImmediate(r));

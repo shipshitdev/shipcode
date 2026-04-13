@@ -348,8 +348,8 @@ export class OpenRouterClient {
 
         // Process complete lines; SSE frames are line-delimited by \n\n
         // but we read line-by-line and use blank-line as frame terminator.
-        let newlineIdx: number;
-        while ((newlineIdx = lineBuffer.indexOf('\n')) !== -1) {
+        let newlineIdx = lineBuffer.indexOf('\n');
+        while (newlineIdx !== -1) {
           const line = lineBuffer.slice(0, newlineIdx).replace(/\r$/, '');
           lineBuffer = lineBuffer.slice(newlineIdx + 1);
 
@@ -423,6 +423,7 @@ export class OpenRouterClient {
               toolCallsById.set(idx, existing);
             }
           }
+          newlineIdx = lineBuffer.indexOf('\n');
         }
       }
 

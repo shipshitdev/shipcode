@@ -84,6 +84,7 @@ export function SkillsView() {
   // doesn't keep showing a stale per-project override view from the prior
   // project.
   useEffect(() => {
+    void activeProjectId;
     setScope(SCOPE_GLOBAL);
   }, [activeProjectId]);
 
@@ -270,10 +271,10 @@ export function SkillsView() {
                 their place. Edit them to fix, or click Reset to discard.
               </p>
               <ul className="flex flex-col gap-1">
-                {quarantinedRows.map((row, idx) =>
+                {quarantinedRows.map((row) =>
                   row ? (
                     <li
-                      key={`${row.phase}-${row.projectId ?? 'global'}-${idx}`}
+                      key={`${row.phase}-${row.projectId ?? 'global'}-${row.statusReason ?? 'quarantined'}`}
                       className="text-[11px]"
                     >
                       <span className="font-medium text-primary">

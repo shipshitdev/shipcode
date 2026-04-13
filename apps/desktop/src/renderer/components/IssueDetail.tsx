@@ -181,6 +181,10 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   });
 
   useEffect(() => {
+    if (activeIssue?.id) {
+      setPhaseModelValidation({});
+      return;
+    }
     setPhaseModelValidation({});
   }, [activeIssue?.id]);
 
@@ -226,6 +230,10 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
   // Reset raw output toggle when switching threads so stale expanded state doesn't bleed across.
   useEffect(() => {
+    if (activeThreadId) {
+      setShowRawOutput(false);
+      return;
+    }
     setShowRawOutput(false);
   }, [activeThreadId]);
 

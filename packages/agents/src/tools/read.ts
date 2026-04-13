@@ -59,7 +59,7 @@ export const readTool: Tool<ReadInput> = {
     // Check file size first. If it's huge and the caller didn't pass
     // a limit, we still read but truncate; if they did pass a limit we
     // honor it and don't truncate further.
-    let stat;
+    let stat: Awaited<ReturnType<typeof fs.stat>>;
     try {
       stat = await fs.stat(absPath);
     } catch (err) {

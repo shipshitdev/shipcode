@@ -1,4 +1,6 @@
+import type { ActivityQueries, NotificationsQueries, SettingsQueries } from '@shipcode/db';
 import type { NotificationRecord, Thread } from '@shipcode/shared';
+import type { BrowserWindow } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { setBadgeMock, notificationShowMock, notificationOnMock, notificationIsSupportedMock } =
@@ -12,8 +14,6 @@ const { setBadgeMock, notificationShowMock, notificationOnMock, notificationIsSu
 vi.mock('electron', () => {
   class NotificationMock {
     static isSupported = notificationIsSupportedMock;
-
-    constructor(_options: unknown) {}
 
     on(event: string, handler: () => void) {
       notificationOnMock(event, handler);
@@ -100,7 +100,7 @@ describe('NotificationService', () => {
     webContents: {
       send: webContentsSendMock,
     },
-  } as any;
+  } as unknown as BrowserWindow;
 
   const notifications = {
     create: vi.fn(),
@@ -109,15 +109,15 @@ describe('NotificationService', () => {
     dismissByThread: vi.fn(),
     dismiss: vi.fn(),
     dismissAll: vi.fn(),
-  } as any;
+  } as unknown as NotificationsQueries;
 
   const settings = {
     get: vi.fn(),
-  } as any;
+  } as unknown as SettingsQueries;
 
   const activity = {
     create: vi.fn(),
-  } as any;
+  } as unknown as ActivityQueries;
 
   beforeEach(() => {
     vi.clearAllMocks();

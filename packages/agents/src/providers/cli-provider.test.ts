@@ -197,7 +197,9 @@ function createMockProcessManager() {
     }),
     kill: vi.fn(),
     on: vi.fn((event: string, handler: (..._args: any[]) => void) => {
-      (listeners[event] ??= []).push(handler);
+      const eventListeners = listeners[event] ?? [];
+      eventListeners.push(handler);
+      listeners[event] = eventListeners;
     }),
     removeListener: vi.fn((event: string, handler: (..._args: any[]) => void) => {
       listeners[event] = (listeners[event] ?? []).filter((h) => h !== handler);

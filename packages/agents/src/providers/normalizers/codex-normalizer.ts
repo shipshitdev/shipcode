@@ -75,12 +75,15 @@ export class CodexNormalizer {
   feed(chunk: string): void {
     this.lineBuffer += chunk;
 
-    let newlineIdx: number;
-    while ((newlineIdx = this.lineBuffer.indexOf('\n')) !== -1) {
+    let newlineIdx = this.lineBuffer.indexOf('\n');
+    while (newlineIdx !== -1) {
       const line = this.lineBuffer.slice(0, newlineIdx).trim();
       this.lineBuffer = this.lineBuffer.slice(newlineIdx + 1);
 
-      if (!line) continue;
+      if (!line) {
+        newlineIdx = this.lineBuffer.indexOf('\n');
+        continue;
+      }
 
       let event: Record<string, unknown>;
       try {
@@ -89,10 +92,12 @@ export class CodexNormalizer {
         if (!this.fenceSuppressed) {
           this.onEvent({ kind: 'raw', content: line });
         }
+        newlineIdx = this.lineBuffer.indexOf('\n');
         continue;
       }
 
       this.processEvent(event);
+      newlineIdx = this.lineBuffer.indexOf('\n');
     }
   }
 

@@ -191,7 +191,7 @@ as a string (newlines escaped as \\n, quotes as \\").
  * Uses line-by-line parsing to avoid false-matching on embedded backtick sequences.
  */
 function extractContextFiles(text: string): Record<string, string> {
-  const openTag = '```' + CONTEXT_FENCE_TAG;
+  const openTag = `\`\`\`${CONTEXT_FENCE_TAG}`;
   const lines = text.split('\n');
   let collecting = false;
   const captured: string[] = [];

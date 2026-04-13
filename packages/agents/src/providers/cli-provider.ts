@@ -107,7 +107,6 @@ function claudeThinkingTokens(effort: 'low' | 'medium' | 'high' | undefined): nu
       return null;
     case 'medium':
       return 8000;
-    case 'high':
     default:
       return 32000;
   }

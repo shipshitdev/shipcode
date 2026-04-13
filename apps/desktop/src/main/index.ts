@@ -1,8 +1,17 @@
 // Suppress ExperimentalWarning from node:sqlite (RC module in Node v24).
 // This runs before require('@shipcode/db') in CJS output (vite builds main as CJS).
 const _origEmit = process.emit.bind(process);
-process.emit = ((event: string, ...args: any[]) => {
-  if (event === 'warning' && args[0]?.name === 'ExperimentalWarning') return false;
+process.emit = ((event: string | symbol, ...args: unknown[]) => {
+  const warning = args[0];
+  if (
+    event === 'warning' &&
+    typeof warning === 'object' &&
+    warning !== null &&
+    'name' in warning &&
+    warning.name === 'ExperimentalWarning'
+  ) {
+    return false;
+  }
   return _origEmit(event, ...args);
 }) as typeof process.emit;
 
@@ -64,6 +73,16 @@ let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
 let pipeline: ReturnType<typeof createPipeline> | null = null;
 let confirmQuit = false;
+
+function requireMainWindow(): BrowserWindow {
+  if (!mainWindow) throw new Error('Main window not initialized');
+  return mainWindow;
+}
+
+function requirePipeline(): ReturnType<typeof createPipeline> {
+  if (!pipeline) throw new Error('Pipeline not initialized');
+  return pipeline;
+}
 
 function resolveIssuePhaseModels(
   settings: ReturnType<SettingsQueries['get']>,
@@ -182,13 +201,14 @@ function createWindow() {
     providers,
     skills: queries.skills,
   };
-  pipeline = createPipeline(pipelineDeps as any);
+  pipeline = createPipeline(pipelineDeps as Parameters<typeof createPipeline>[0]);
+  const activePipeline = requirePipeline();
 
   // Queue promotion: start the next queued issue when a pipeline slot opens.
   onPipelineTerminal = () => {
     try {
       const settings = queries.settings.get();
-      const activeCount = pipeline!.listActive().length;
+      const activeCount = activePipeline.listActive().length;
       if (activeCount >= settings.maxConcurrentPipelines) return;
 
       const next = queries.githubIssues.getNextQueued();
@@ -207,7 +227,7 @@ function createWindow() {
         executorModel: effectiveExecutorModel,
       });
       queries.githubIssues.linkThread(next.id, thread.id);
-      const win = mainWindow!;
+      const win = requireMainWindow();
       if (!win.isDestroyed()) {
         win.webContents.send('github:issues-updated', {
           projectId: next.projectId,
@@ -217,7 +237,7 @@ function createWindow() {
 
       log.info(`[queue] auto-promoting #${next.issueNumber} "${next.title}" (thread ${thread.id})`);
 
-      pipeline!
+      activePipeline
         .startFromGitHubIssue(
           thread.id,
           project.path,
@@ -258,18 +278,25 @@ function createWindow() {
   setTimeout(() => {
     const settings = queries.settings.get();
     for (let i = 0; i < settings.maxConcurrentPipelines; i++) {
-      onPipelineTerminal!();
+      onPipelineTerminal?.();
     }
   }, 0);
 
   // Register IPC handlers
-  registerIpcHandlers(ipcMain, mainWindow, queries, processManager, pipeline!, notificationService);
+  registerIpcHandlers(
+    ipcMain,
+    requireMainWindow(),
+    queries,
+    processManager,
+    activePipeline,
+    notificationService,
+  );
 
   // Watchdog: reset threads stuck in active phases (handles renderer refresh + crash scenarios).
   // HEARTBEAT_TIMEOUT_MS = 120s. Fires every 30s; skips threads that are live in activePipelines.
   const watchdogTimer = setInterval(() => {
     try {
-      const activeIds = new Set(pipeline!.listActive().map((s) => s.threadId));
+      const activeIds = new Set(activePipeline.listActive().map((s) => s.threadId));
       for (const thread of queries.threads.getStuck(HEARTBEAT_TIMEOUT_MS)) {
         if (activeIds.has(thread.id)) continue;
         const errorMsg = 'Pipeline timed out — process was likely interrupted by an app refresh.';
@@ -318,7 +345,7 @@ function createWindow() {
 
     event.preventDefault();
     const names = active.map((p) => `• ${p.threadId}`).join('\n');
-    const { response } = await dialog.showMessageBox(mainWindow!, {
+    const { response } = await dialog.showMessageBox(requireMainWindow(), {
       type: 'warning',
       title: 'Pipelines still running',
       message: `${active.length} pipeline${active.length !== 1 ? 's are' : ' is'} still running`,
@@ -424,7 +451,7 @@ app.on('before-quit', async (event) => {
 
   event.preventDefault();
   const names = active.map((p) => `• ${p.threadId}`).join('\n');
-  const { response } = await dialog.showMessageBox(mainWindow!, {
+  const { response } = await dialog.showMessageBox(requireMainWindow(), {
     type: 'warning',
     title: 'Pipelines still running',
     message: `${active.length} pipeline${active.length !== 1 ? 's are' : ' is'} still running`,
