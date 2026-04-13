@@ -157,6 +157,29 @@ async function syncLinkedPullRequestFeedback(
   }
 }
 
+async function attachIssueToConfiguredProjectBoard(
+  project: import('@shipcode/shared').Project,
+  ghCli: GhCli,
+  issueNumber: number,
+  issueUrl: string | null,
+  source: string,
+): Promise<string | null> {
+  const parsed = parseGithubProjectUrl(project.githubProjectUrl);
+  if (!parsed || !issueUrl) return null;
+
+  try {
+    await ghCli.addIssueToProject({
+      projectNumber: parsed.number,
+      owner: parsed.owner,
+      issueUrl,
+    });
+    return null;
+  } catch (err) {
+    log.warn(`[${source}] project attach failed for #${issueNumber}:`, err);
+    return clampError(err);
+  }
+}
+
 export function registerIpcHandlers(
   ipcMain: IpcMain,
   mainWindow: BrowserWindow,
@@ -467,6 +490,14 @@ export function registerIpcHandlers(
         queries.githubIssues.markReopenedOnOpen(rec.id);
         queries.githubIssues.clearArchivedAt(rec.id);
       }
+
+      await attachIssueToConfiguredProjectBoard(
+        project,
+        ghCli,
+        issue.number,
+        issue.url,
+        'github:refresh-issues',
+      );
     }
 
     const cachedBeforePrSync = queries.githubIssues.list(projectId);
@@ -631,19 +662,15 @@ export function registerIpcHandlers(
       // attach the new issue to that board. Failures never block issue
       // creation — the issue is already on GitHub; we surface the failure
       // via `projectAttachWarning` so the modal can show an inline note.
-      const parsed = parseGithubProjectUrl(project.githubProjectUrl);
       let projectAttachWarning: string | null = null;
-      if (parsed && issue.url) {
-        try {
-          await ghCli.addIssueToProject({
-            projectNumber: parsed.number,
-            owner: parsed.owner,
-            issueUrl: issue.url,
-          });
-        } catch (err) {
-          projectAttachWarning = clampError(err);
-          log.warn('[github:create-issue] project attach failed:', err);
-        }
+      if (parseGithubProjectUrl(project.githubProjectUrl) && issue.url) {
+        projectAttachWarning = await attachIssueToConfiguredProjectBoard(
+          project,
+          ghCli,
+          issue.number,
+          issue.url,
+          'github:create-issue',
+        );
       }
 
       const record = queries.githubIssues.getByNumber(projectId, issue.number);
@@ -797,20 +824,15 @@ export function registerIpcHandlers(
       // `github:create-issue` uses (see :363-376). Failure is logged but
       // never blocks the pipeline start — the board is a display surface,
       // not a runtime dependency.
-      const parsed = parseGithubProjectUrl(project.githubProjectUrl);
       const issueUrl = deriveGithubIssueUrl(project.gitRemote, issue.issueNumber);
-      if (parsed && issueUrl) {
-        try {
-          const ghCliForAttach = new GhCli(project.path);
-          await ghCliForAttach.addIssueToProject({
-            projectNumber: parsed.number,
-            owner: parsed.owner,
-            issueUrl,
-          });
-        } catch (err) {
-          log.warn(`[github:start-issue] project attach failed for #${issue.issueNumber}:`, err);
-        }
-      }
+      const ghCliForAttach = new GhCli(project.path);
+      await attachIssueToConfiguredProjectBoard(
+        project,
+        ghCliForAttach,
+        issue.issueNumber,
+        issueUrl,
+        'github:start-issue',
+      );
 
       // Start pipeline — pass existing threadId, not projectId
       const phaseModels = resolveProjectPhaseModels(settings, project);
