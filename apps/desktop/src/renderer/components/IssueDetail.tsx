@@ -91,15 +91,16 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   });
 
   // Fetch plan history
-  const { data: planHistory = [] } = useQuery<PlanRecord[]>({
+  const { data: planHistory } = useQuery<PlanRecord[]>({
     queryKey: ['plan-history', activeThreadId],
     queryFn: () => window.shipcode.invoke('plan:list', { threadId: activeThreadId }),
     enabled: !!activeThreadId,
     refetchInterval: activeThreadId ? 2000 : false,
   });
+  const isThreadPlanHistoryLoading = !!activeThreadId && planHistory === undefined;
   const normalizedThreadPlanHistory = Array.isArray(planHistory) ? planHistory : [];
 
-  const { data: issuePlanHistory = [] } = useQuery<PlanRecord[]>({
+  const { data: issuePlanHistory } = useQuery<PlanRecord[]>({
     queryKey: ['issue-plan-history', activeProjectId, activeIssue?.issueNumber],
     queryFn: () => {
       if (!activeProjectId || !activeIssue) {
@@ -113,11 +114,14 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     enabled: !!activeProjectId && !!activeIssue,
     refetchInterval: activeThreadId ? 2000 : false,
   });
+  const isIssuePlanHistoryLoading =
+    !!activeProjectId && !!activeIssue && issuePlanHistory === undefined;
   const normalizedIssuePlanHistory = Array.isArray(issuePlanHistory) ? issuePlanHistory : [];
   const normalizedPlanHistory =
     normalizedIssuePlanHistory.length > 0
       ? normalizedIssuePlanHistory
       : normalizedThreadPlanHistory;
+  const isPlanHistoryLoading = isThreadPlanHistoryLoading || isIssuePlanHistoryLoading;
   const { data: issueActivity = [] } = useQuery<ActivityEntry[]>({
     queryKey: ['issue-activity', activeProjectId, activeIssue?.issueNumber],
     queryFn: () => {
@@ -846,6 +850,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       normalizedPlanHistory={normalizedPlanHistory}
       normalizedReviewsByPlanId={normalizedReviewsByPlanId}
       normalizedThreadPlanHistory={normalizedThreadPlanHistory}
+      isPlanHistoryLoading={isPlanHistoryLoading}
       phaseModelValidation={phaseModelValidation}
       phaseSelectValues={phaseSelectValues}
       planHistoryCollapsed={planHistoryCollapsed}

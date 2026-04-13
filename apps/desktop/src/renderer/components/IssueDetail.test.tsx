@@ -187,6 +187,12 @@ describe('IssueDetail', () => {
 
     renderWithProviders();
 
+    const prdTab = screen.getByRole('tab', { name: 'PRD' });
+    fireEvent.mouseDown(prdTab, { button: 0 });
+    fireEvent.click(prdTab);
+    await waitFor(() => {
+      expect(prdTab).toHaveAttribute('data-state', 'active');
+    });
     expect(screen.getByText('Spec body')).toBeInTheDocument();
     expect(screen.getByText('first item')).toBeInTheDocument();
     expect(screen.getByText('Start pipeline')).toBeInTheDocument();
@@ -603,22 +609,24 @@ describe('IssueDetail', () => {
     expect(screen.getByRole('tab', { name: 'Issue History' })).toBeInTheDocument();
   });
 
-  it('PRD tab is active by default and shows PRD content', async () => {
+  it('Plan History tab is active by default', async () => {
     invokeMock.mockResolvedValue([]);
 
     renderWithProviders();
 
-    const prdTab = screen.getByRole('tab', { name: 'PRD' });
-    expect(prdTab).toHaveAttribute('data-state', 'active');
-    expect(screen.getByText('Spec body')).toBeInTheDocument();
+    const historyTab = screen.getByRole('tab', { name: /Plan History/ });
+    expect(historyTab).toHaveAttribute('data-state', 'active');
   });
 
-  it('Pipeline tab starts inactive while PRD starts active', async () => {
+  it('Pipeline tab starts inactive while Plan History starts active', async () => {
     invokeMock.mockResolvedValue([]);
 
     renderWithProviders();
 
-    expect(screen.getByRole('tab', { name: 'PRD' })).toHaveAttribute('data-state', 'active');
+    expect(screen.getByRole('tab', { name: /Plan History/ })).toHaveAttribute(
+      'data-state',
+      'active',
+    );
     expect(screen.getByRole('tab', { name: 'Pipeline' })).toHaveAttribute('data-state', 'inactive');
   });
 

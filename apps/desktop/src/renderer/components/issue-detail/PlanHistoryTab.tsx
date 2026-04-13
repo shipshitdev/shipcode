@@ -24,6 +24,7 @@ export function PlanHistoryTab({
   activeThreadId,
   effectiveExpanded,
   expanded,
+  isPlanHistoryLoading,
   normalizedPlanHistory,
   normalizedReviewsByPlanId,
   normalizedThreadPlanHistory,
@@ -38,6 +39,7 @@ export function PlanHistoryTab({
   activeThreadId: string | null;
   effectiveExpanded: string | null | undefined;
   expanded: boolean;
+  isPlanHistoryLoading: boolean;
   normalizedPlanHistory: PlanRecord[];
   normalizedReviewsByPlanId: Record<string, ReviewRecord>;
   normalizedThreadPlanHistory: PlanRecord[];
@@ -228,7 +230,17 @@ export function PlanHistoryTab({
         </div>
       ) : null}
 
-      {activeThreadId && normalizedThreadPlanHistory.length === 0 && threadPhase !== 'failed' ? (
+      {isPlanHistoryLoading && normalizedPlanHistory.length === 0 ? (
+        <div className="mb-5">
+          <p className="py-4 text-center text-[13px] text-muted">Loading plan history…</p>
+        </div>
+      ) : null}
+
+      {activeThreadId &&
+      !isPlanHistoryLoading &&
+      normalizedThreadPlanHistory.length === 0 &&
+      normalizedPlanHistory.length === 0 &&
+      threadPhase !== 'failed' ? (
         expanded ? (
           <PlanWaiting threadId={activeThreadId} />
         ) : (

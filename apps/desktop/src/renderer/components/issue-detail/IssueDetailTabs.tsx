@@ -33,6 +33,7 @@ interface IssueDetailTabsProps {
   normalizedPlanHistory: PlanRecord[];
   normalizedReviewsByPlanId: Record<string, ReviewRecord>;
   normalizedThreadPlanHistory: PlanRecord[];
+  isPlanHistoryLoading: boolean;
   phaseModelValidation: Partial<Record<PhaseKey, OpenRouterModelValidation | null>>;
   phaseSelectValues: Record<PhaseKey, string>;
   planHistoryCollapsed: boolean;
@@ -73,6 +74,7 @@ export function IssueDetailTabs({
   normalizedPlanHistory,
   normalizedReviewsByPlanId,
   normalizedThreadPlanHistory,
+  isPlanHistoryLoading,
   phaseModelValidation,
   phaseSelectValues,
   planHistoryCollapsed,
@@ -95,7 +97,7 @@ export function IssueDetailTabs({
   onStabilizePr,
 }: IssueDetailTabsProps) {
   return (
-    <Tabs defaultValue="prd" className="flex min-h-0 flex-col">
+    <Tabs defaultValue="history" className="flex min-h-0 flex-col">
       <TabsList className={cn('shrink-0', expanded ? 'mb-5' : 'px-4')}>
         <TabsTrigger value="prd">PRD</TabsTrigger>
         <TabsTrigger value="history">
@@ -126,6 +128,7 @@ export function IssueDetailTabs({
           activeThreadId={activeThreadId}
           effectiveExpanded={effectiveExpanded}
           expanded={expanded}
+          isPlanHistoryLoading={isPlanHistoryLoading}
           normalizedPlanHistory={normalizedPlanHistory}
           normalizedReviewsByPlanId={normalizedReviewsByPlanId}
           normalizedThreadPlanHistory={normalizedThreadPlanHistory}
