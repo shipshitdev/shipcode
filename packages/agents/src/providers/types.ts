@@ -18,9 +18,9 @@
  *   translates it into `ProcessManager.kill()`; the OpenRouter provider
  *   passes it to `fetch(..., { signal })` so streams abort cleanly.
  *
- * - Tier 1 supports PLAN / REVIEW / REVISION / VERIFY through the
- *   OpenRouter provider. EXECUTE is Tier 2 and currently throws
- *   `not_found` for the OpenRouter provider.
+ * - OpenRouter now supports all five phases. PLAN / REVIEW / REVISION /
+ *   VERIFY run as HTTP chat completions; EXECUTE runs through the
+ *   in-process tool-call harness.
  */
 
 import type { AgentType } from '@shipcode/shared';

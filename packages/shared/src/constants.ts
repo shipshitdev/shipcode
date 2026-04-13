@@ -118,7 +118,7 @@ export const OPENROUTER_BACKOFF_MAX_MS = 30_000;
 export const OPENROUTER_MAX_HTTP_RETRIES = 5;
 export const OPENROUTER_REQUEST_TIMEOUT_MS = 120_000;
 
-// === Tier 2: Tool-call execute harness ===
+// === OpenRouter execute harness ===
 
 /** Hard cap on agent-loop iterations per execute run. */
 export const MAX_TOOL_CALL_ITERATIONS = 30;

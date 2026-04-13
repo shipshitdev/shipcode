@@ -116,16 +116,6 @@ const PHASE_PROVIDER_OPTIONS: Record<
   verifier: ['claude', 'codex', 'openrouter'],
 };
 
-function getUnsupportedProviderReason(
-  phase: 'planner' | 'reviewer' | 'executor' | 'verifier',
-  provider: ExecutorModel,
-): string | null {
-  if (phase === 'executor' && provider === 'openrouter') {
-    return 'OpenRouter execute is not supported yet';
-  }
-  return null;
-}
-
 function getModelOptions(provider: ExecutorModel) {
   if (provider === 'claude') return CLAUDE_MODELS;
   if (provider === 'codex') return CODEX_MODELS;
@@ -923,38 +913,23 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
                       const selectedSelection = currentPhaseSelections[phase];
                       const selectedModelId =
                         selectedSelection.provider === providerOption ? selectedSelection.modelId : null;
-                      const unsupportedReason = getUnsupportedProviderReason(phase, providerOption);
-
                       return (
                         <SelectGroup key={providerOption}>
                           <SelectLabel>{PROVIDER_DISPLAY[providerOption]}</SelectLabel>
-                          <SelectItem
-                            value={encodePhaseOption(providerOption, null)}
-                            disabled={!!unsupportedReason}
-                          >
+                          <SelectItem value={encodePhaseOption(providerOption, null)}>
                             {PROVIDER_DISPLAY[providerOption]} default
-                            {unsupportedReason ? ' (execute unsupported)' : ''}
                           </SelectItem>
                           {selectedModelId &&
                             !getModelOptions(providerOption).some(
                               (option) => option.value === selectedModelId,
                             ) && (
-                              <SelectItem
-                                value={encodePhaseOption(providerOption, selectedModelId)}
-                                disabled={!!unsupportedReason}
-                              >
+                              <SelectItem value={encodePhaseOption(providerOption, selectedModelId)}>
                                 {selectedModelId}
-                                {unsupportedReason ? ' (execute unsupported)' : ''}
                               </SelectItem>
                             )}
                           {getModelOptions(providerOption).map((option) => (
-                            <SelectItem
-                              key={option.value}
-                              value={encodePhaseOption(providerOption, option.value)}
-                              disabled={!!unsupportedReason}
-                            >
+                            <SelectItem key={option.value} value={encodePhaseOption(providerOption, option.value)}>
                               {option.label}
-                              {unsupportedReason ? ' (execute unsupported)' : ''}
                             </SelectItem>
                           ))}
                           {providerOption !==
@@ -982,13 +957,10 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
                   </div>
                 )}
 
-                {(currentPhaseSelections[phase].provider === 'openrouter' &&
-                  integrationStatus?.openrouter.authStatus !== 'valid') ||
-                (currentPhaseSelections[phase].provider === 'openrouter' && phase === 'executor') ? (
+                {currentPhaseSelections[phase].provider === 'openrouter' &&
+                integrationStatus?.openrouter.authStatus !== 'valid' ? (
                   <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-300">
-                    {phase === 'executor'
-                      ? 'OpenRouter execute is not supported yet.'
-                      : integrationStatus?.openrouter.message ?? 'OpenRouter is not ready.'}
+                    {integrationStatus?.openrouter.message ?? 'OpenRouter is not ready.'}
                   </div>
                 ) : null}
 

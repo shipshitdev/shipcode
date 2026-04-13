@@ -14,7 +14,7 @@ function makeProvider(id: AgentProvider['id'], phases: ProviderPhase[]): AgentPr
 describe('createProviderRegistry', () => {
   const claude = makeProvider('claude-cli', ['plan', 'review', 'revision', 'verify', 'execute']);
   const codex = makeProvider('codex-cli', ['plan', 'review', 'revision', 'verify', 'execute']);
-  const openrouter = makeProvider('openrouter', ['plan', 'review', 'revision', 'verify']);
+  const openrouter = makeProvider('openrouter', ['plan', 'review', 'revision', 'verify', 'execute']);
   const registry = createProviderRegistry({ claude, codex, openrouter });
 
   it('dispatches claude agent to claude-cli provider', () => {
@@ -33,11 +33,7 @@ describe('createProviderRegistry', () => {
   it('dispatches openrouter agent to openrouter provider', () => {
     expect(registry.for('openrouter', 'plan')).toBe(openrouter);
     expect(registry.for('openrouter', 'verify')).toBe(openrouter);
-  });
-
-  it('throws if a provider does not support the requested phase', () => {
-    // openrouter does not support execute in Tier 1
-    expect(() => registry.for('openrouter', 'execute')).toThrow(/does not support phase 'execute'/);
+    expect(registry.for('openrouter', 'execute')).toBe(openrouter);
   });
 
   it('throws for gh agent (not an LLM)', () => {

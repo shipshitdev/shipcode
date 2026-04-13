@@ -11,7 +11,7 @@ ShipCode ships with a first-class [OpenRouter](https://openrouter.ai) integratio
    export OPENROUTER_API_KEY=sk-or-v1-...
    ```
 
-3. Flip on `openrouterEnabled` in the desktop **Settings → Models** panel (or set it directly in the `settings` row of your local SQLite DB).
+3. Flip on `openrouterEnabled` in the desktop **Settings → Pipeline** panel (or set it directly in the `settings` row of your local SQLite DB).
 
 The `shipcode onboard` command also validates the key and prints a warning if it's missing, invalid, unreachable, or pointed at a deprecated model.
 
@@ -44,13 +44,13 @@ Each pipeline phase can point at a different OpenRouter model. The fields live o
 | `openrouterDefaultFreeModel` | Free-tier fallback used by `agent:openrouter/free` | set at onboarding |
 | `openrouterExplicitFallback` | Final fallback when a routed model errors out | set at onboarding |
 
-Only the **executor** model is editable from the desktop Settings panel today. Planner, reviewer, and verifier overrides can be set at onboarding or by directly updating the `settings` row in your local SQLite DB. A full Settings UI for these is on the roadmap.
+All four phase defaults are editable from the desktop Settings panel, and project/issue overrides can replace them when needed.
 
 ## Tiers
 
 - **Tier 1 — Provider abstraction.** Adds `openrouter` as a valid `AgentType`; CLI + desktop both recognize it.
-- **Tier 2 — HTTP-backed plan/review/verify.** Planner, reviewer, and verifier phases can talk to OpenRouter directly over HTTP without spawning a local CLI subprocess.
-- **Tier 3 — In-process execute harness + `openrouter/auto`.** The execute phase runs a tool-call loop inside the ShipCode process (no child CLI) and can use the `openrouter/auto` meta-router with per-phase telemetry.
+- **Tier 2 — HTTP-backed planning/review.** Planner, reviewer, revision, and verifier phases talk to OpenRouter directly over HTTP without spawning a local CLI subprocess.
+- **Tier 3 — In-process execute harness + routed models.** The execute phase runs a tool-call loop inside the ShipCode process (no child CLI) and can use routed or free-tier OpenRouter models with per-phase telemetry.
 
 All three tiers shipped in [PR #9](https://github.com/shipshitdev/shipcode/pull/9) (merged 2026-04-10).
 

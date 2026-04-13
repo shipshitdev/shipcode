@@ -126,16 +126,6 @@ const PHASE_META: Array<{
   { key: 'verifier', label: 'Verifier', validProviders: ['claude', 'codex', 'openrouter'] },
 ];
 
-function getUnsupportedProviderReason(
-  phase: PhaseKey,
-  provider: ExecutorModel,
-): string | null {
-  if (phase === 'executor' && provider === 'openrouter') {
-    return 'OpenRouter execute is not supported yet';
-  }
-  return null;
-}
-
 function getModelOptions(
   provider: ExecutorModel,
 ): ReadonlyArray<{ value: string; label: string }> {
@@ -198,10 +188,9 @@ function ProjectPhaseSettingsRow({
   const knownModelValues = new Set<string>(modelOptions.map((option) => option.value));
   const providerWarning =
     effectiveProvider === 'openrouter'
-      ? getUnsupportedProviderReason(phase, effectiveProvider) ??
-        (integrationStatus?.openrouter.authStatus !== 'valid'
-          ? integrationStatus?.openrouter.message ?? 'OpenRouter is not ready'
-          : null)
+      ? integrationStatus?.openrouter.authStatus !== 'valid'
+        ? integrationStatus?.openrouter.message ?? 'OpenRouter is not ready'
+        : null
       : null;
   const validationMessage =
     modelValidation[phase] && modelValidation[phase]?.status !== 'valid'
@@ -237,15 +226,8 @@ function ProjectPhaseSettingsRow({
             <SelectContent>
               <SelectItem value={INHERIT_VALUE}>Inherit</SelectItem>
               {validProviders.map((provider) => (
-                <SelectItem
-                  key={provider}
-                  value={provider}
-                  disabled={!!getUnsupportedProviderReason(phase, provider)}
-                >
+                <SelectItem key={provider} value={provider}>
                   {PROVIDER_LABELS[provider]}
-                  {getUnsupportedProviderReason(phase, provider)
-                    ? ' (execute unsupported)'
-                    : ''}
                 </SelectItem>
               ))}
             </SelectContent>

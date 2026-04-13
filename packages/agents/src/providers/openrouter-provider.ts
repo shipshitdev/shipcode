@@ -1,16 +1,16 @@
 /**
  * OpenRouter provider implementation.
  *
- * Tier 1: supports PLAN / REVIEW / REVISION / VERIFY. The existing
+ * Supports PLAN / REVIEW / REVISION / VERIFY / EXECUTE. The existing
  * prompt builders in `packages/agents/src/prompts/*` already emit
  * fenced structured blocks (```shipcode-plan, ```shipcode-review,
  * ```shipcode-verification) that the StreamParser knows how to extract.
  * We reuse them as-is and feed the assistant's concatenated text output
  * into the parser at the pipeline level.
  *
- * EXECUTE is Tier 2. For now this provider returns a `not_found`
- * ProviderError so the pipeline's phase-completion logic treats it as
- * a configuration failure rather than silently succeeding.
+ * The execute phase runs through the tool-call harness in
+ * `openrouter-execute.ts`, so OpenRouter can mutate the worktree
+ * without spawning a local CLI subprocess.
  *
  * Model resolution order:
  *   1. req.modelHint (per-call override from model-router label)
@@ -56,7 +56,7 @@ export interface OpenRouterProviderDeps {
 }
 
 export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentProvider {
-  // Tier 2: all five phases. Execute goes through the tool-call harness
+  // All five phases are supported. Execute goes through the tool-call harness
   // in openrouter-execute.ts; the other four go through plain chat.
   const supports = new Set<ProviderPhase>(['plan', 'review', 'revision', 'verify', 'execute']);
 

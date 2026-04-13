@@ -752,13 +752,13 @@ export function SettingsPanel() {
                 onModelChange={(v) => updateSettings.mutate({ executorModel: v as AppSettings['executorModel'] })}
                 onOpenrouterModelChange={(v) => updateSettings.mutate({ openrouterExecutorModel: v })}
                 onReasoningEffortChange={(v) => updateSettings.mutate({ executorReasoningEffort: v })}
-                disabledProviders={{ openrouter: 'execute unsupported' }}
                 modelCheck={
                   integrationStatus?.openrouter.modelChecks.find((check) => check.key === 'executor') ?? null
                 }
                 warningMessage={
-                  settings.executorModel === 'openrouter'
-                    ? 'OpenRouter execute is not supported yet.'
+                  settings.executorModel === 'openrouter' &&
+                  integrationStatus?.openrouter.authStatus !== 'valid'
+                    ? integrationStatus?.openrouter.message ?? 'OpenRouter is not ready.'
                     : null
                 }
               />
