@@ -17,6 +17,7 @@ import {
 import {
   Button,
   Input,
+  Keycap,
   Label,
   Modal,
   ModalFooter,
@@ -30,6 +31,12 @@ import {
   TabsList,
   TabsTrigger,
 } from '@shipcode/ui';
+import {
+  formatModelInheritanceLabel,
+  getModelOptions,
+  InheritValueDisplay,
+  PROVIDER_DISPLAY,
+} from './model-provider-options';
 import { useAppStore } from '../stores/app-store';
 
 const INHERIT_VALUE = '__inherit__';
@@ -38,6 +45,7 @@ const PHASES = ['planner', 'reviewer', 'executor', 'verifier'] as const;
 
 type ProjectTab = (typeof PROJECT_TABS)[number];
 type PhaseKey = (typeof PHASES)[number];
+type ContextGeneratorCli = 'claude' | 'codex';
 type ProjectOverrideState = Pick<
   Project,
   | 'plannerModelOverride'
@@ -90,29 +98,12 @@ const EFFORT_OVERRIDE_KEYS = {
   verifier: 'verifierReasoningEffortOverride',
 } as const;
 
-const PROVIDER_LABELS: Record<ExecutorModel, string> = {
-  claude: 'Anthropic',
-  codex: 'OpenAI',
-  openrouter: 'OpenRouter',
-};
-
-const CLAUDE_MODELS = [
-  { value: 'claude-sonnet-4-6', label: 'Sonnet 4.6' },
-  { value: 'claude-opus-4-6', label: 'Opus 4.6' },
-  { value: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
-] as const;
-
-const CODEX_MODELS = [
-  { value: 'gpt-5.4', label: 'GPT-5.4' },
-  { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' },
-] as const;
-
-const OPENROUTER_MODELS = [
-  { value: 'openrouter/auto', label: 'Auto (paid)' },
-  { value: 'openrouter/free', label: 'Auto (free)' },
-  { value: 'anthropic/claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
-  { value: 'qwen/qwen3.6-plus', label: 'Qwen 3.6 Plus' },
-  { value: 'qwen/qwen3-coder:free', label: 'Qwen 3 Coder Free' },
+const CONTEXT_GENERATOR_OPTIONS: Array<{
+  value: ContextGeneratorCli;
+  label: string;
+}> = [
+  { value: 'claude', label: 'Claude CLI' },
+  { value: 'codex', label: 'Codex CLI' },
 ] as const;
 
 const PHASE_META: Array<{
@@ -125,14 +116,6 @@ const PHASE_META: Array<{
   { key: 'executor', label: 'Executor', validProviders: ['claude', 'codex', 'openrouter'] },
   { key: 'verifier', label: 'Verifier', validProviders: ['claude', 'codex', 'openrouter'] },
 ];
-
-function getModelOptions(
-  provider: ExecutorModel,
-): ReadonlyArray<{ value: string; label: string }> {
-  if (provider === 'claude') return CLAUDE_MODELS;
-  if (provider === 'codex') return CODEX_MODELS;
-  return OPENROUTER_MODELS;
-}
 
 function buildProjectDraft(project: Project | null | undefined, overrides: ProjectOverrideState): Project | null {
   if (!project) return null;
@@ -147,7 +130,7 @@ function formatInheritedSummary(
   const provider = resolvePhaseModel(settings, projectDraft, phase);
   const model = resolvePhaseModelId(settings, projectDraft, phase);
   const effort = resolvePhaseReasoningEffort(settings, projectDraft, phase);
-  return `${PROVIDER_LABELS[provider]}${model ? ` / ${model}` : ''} / ${effort}`;
+  return `${PROVIDER_DISPLAY[provider]}${model ? ` / ${model}` : ''} / ${effort}`;
 }
 
 function ProjectPhaseSettingsRow({
@@ -186,6 +169,12 @@ function ProjectPhaseSettingsRow({
   const effectiveProvider = resolvePhaseModel(settings, projectDraft, phase);
   const modelOptions = getModelOptions(effectiveProvider);
   const knownModelValues = new Set<string>(modelOptions.map((option) => option.value));
+  const inheritedModelId = resolvePhaseModelId(settings, projectDraft, phase);
+  const inheritedModelLabel = formatModelInheritanceLabel(
+    effectiveProvider,
+    inheritedModelId,
+    modelOptions,
+  );
   const providerWarning =
     effectiveProvider === 'openrouter'
       ? integrationStatus?.openrouter.authStatus !== 'valid'
@@ -221,13 +210,19 @@ function ProjectPhaseSettingsRow({
             }}
           >
             <SelectTrigger>
-              <SelectValue />
+              <SelectValue>
+                {providerOverride === null ? (
+                  <InheritValueDisplay detail={PROVIDER_DISPLAY[effectiveProvider]} />
+                ) : undefined}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={INHERIT_VALUE}>Inherit</SelectItem>
+              <SelectItem value={INHERIT_VALUE}>
+                Inherit ({PROVIDER_DISPLAY[effectiveProvider]})
+              </SelectItem>
               {validProviders.map((provider) => (
                 <SelectItem key={provider} value={provider}>
-                  {PROVIDER_LABELS[provider]}
+                  {PROVIDER_DISPLAY[provider]}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -247,10 +242,14 @@ function ProjectPhaseSettingsRow({
             }}
           >
             <SelectTrigger>
-              <SelectValue />
+              <SelectValue>
+                {modelIdOverride === null ? (
+                  <InheritValueDisplay detail={inheritedModelLabel} />
+                ) : undefined}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={INHERIT_VALUE}>Inherit</SelectItem>
+              <SelectItem value={INHERIT_VALUE}>Inherit ({inheritedModelLabel})</SelectItem>
               {modelIdOverride && !knownModelValues.has(modelIdOverride) && (
                 <SelectItem value={modelIdOverride}>{modelIdOverride}</SelectItem>
               )}
@@ -275,10 +274,18 @@ function ProjectPhaseSettingsRow({
             }}
           >
             <SelectTrigger>
-              <SelectValue />
+              <SelectValue>
+                {effortOverride === null ? (
+                  <InheritValueDisplay
+                    detail={resolvePhaseReasoningEffort(settings, projectDraft, phase)}
+                  />
+                ) : undefined}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={INHERIT_VALUE}>Inherit</SelectItem>
+              <SelectItem value={INHERIT_VALUE}>
+                Inherit ({resolvePhaseReasoningEffort(settings, projectDraft, phase)})
+              </SelectItem>
               <SelectItem value="low">low</SelectItem>
               <SelectItem value="medium">medium</SelectItem>
               <SelectItem value="high">high</SelectItem>
@@ -342,6 +349,7 @@ export function ProjectSettingsModal() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [overrides, setOverrides] = useState<ProjectOverrideState>(EMPTY_OVERRIDES);
   const [contextGenerating, setContextGenerating] = useState(false);
+  const [contextGeneratorCli, setContextGeneratorCli] = useState<ContextGeneratorCli>('claude');
   const [contextError, setContextError] = useState<string | null>(null);
   const [syncResult, setSyncResult] = useState<{
     attached: number;
@@ -398,6 +406,7 @@ export function ProjectSettingsModal() {
     setSyncResult(null);
     setSyncError(null);
     setContextGenerating(false);
+    setContextGeneratorCli('claude');
     setContextError(null);
     setRelinkError(null);
     setModelValidation({});
@@ -516,7 +525,7 @@ export function ProjectSettingsModal() {
     try {
       const result = await window.shipcode.invoke<{ success: boolean; error?: string }>(
         'context:generate',
-        { projectId: projectSettingsModalProjectId },
+        { projectId: projectSettingsModalProjectId, cli: contextGeneratorCli },
       );
       if (!result.success) setContextError(result.error ?? 'Generation failed');
       refetchContext();
@@ -530,13 +539,26 @@ export function ProjectSettingsModal() {
   const inputMatchesSaved = urlInput === (project?.githubProjectUrl ?? '');
   const hasSavedUrl = !!project?.githubProjectUrl;
   const canSync = hasSavedUrl && inputMatchesSaved && !syncMutation.isPending && !saveMutation.isPending;
+  const modalBusy = saveMutation.isPending || contextGenerating;
+  const contextCliUnavailableReason =
+    contextGeneratorCli === 'claude'
+      ? !integrationStatus?.system.claude.available
+        ? 'CLI missing'
+        : !integrationStatus.system.claude.authenticated
+          ? 'Not authenticated'
+          : null
+      : !integrationStatus?.system.codex.available
+        ? 'CLI missing'
+        : !integrationStatus.system.codex.authenticated
+          ? 'Not authenticated'
+          : null;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
+    if (e.key === 'Escape' && !modalBusy) {
       e.preventDefault();
       closeProjectSettingsModal();
     }
-    if (e.metaKey && e.key === 'Enter') {
+    if (e.metaKey && e.key === 'Enter' && !contextGenerating) {
       e.preventDefault();
       handleSave();
     }
@@ -545,7 +567,9 @@ export function ProjectSettingsModal() {
   return (
     <Modal
       open={projectSettingsModalOpen}
-      onClose={closeProjectSettingsModal}
+      onClose={() => {
+        if (!modalBusy) closeProjectSettingsModal();
+      }}
       title="Project Settings"
       className="max-w-[720px]"
       onKeyDown={handleKeyDown}
@@ -743,16 +767,57 @@ export function ProjectSettingsModal() {
                     },
                   )}
                 </div>
-                <div className="mt-1">
+                <div className="mt-1 flex items-end gap-2">
+                  <div className="flex min-w-[180px] flex-col gap-1.5">
+                    <Label className="text-[11px] text-secondary">Generator CLI</Label>
+                    <Select
+                      value={contextGeneratorCli}
+                      onValueChange={(value) => setContextGeneratorCli(value as ContextGeneratorCli)}
+                      disabled={contextGenerating}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CONTEXT_GENERATOR_OPTIONS.map((option) => {
+                          const disabledReason =
+                            option.value === 'claude'
+                              ? !integrationStatus?.system.claude.available
+                                ? 'CLI missing'
+                                : !integrationStatus.system.claude.authenticated
+                                  ? 'Not authenticated'
+                                  : null
+                              : !integrationStatus?.system.codex.available
+                                ? 'CLI missing'
+                                : !integrationStatus.system.codex.authenticated
+                                  ? 'Not authenticated'
+                                  : null;
+                          return (
+                            <SelectItem
+                              key={option.value}
+                              value={option.value}
+                              disabled={!!disabledReason}
+                            >
+                              {option.label}
+                              {disabledReason ? ` (${disabledReason})` : ''}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <Button
                     variant="secondary"
                     size="sm"
                     onClick={handleGenerateContext}
-                    disabled={contextGenerating}
+                    disabled={contextGenerating || !!contextCliUnavailableReason}
                   >
                     {contextGenerating ? 'Generating…' : 'Generate Context'}
                   </Button>
                 </div>
+                <p className="text-[11px] text-muted">
+                  Generated files are saved to <span className="font-mono">.agents/context/</span> inside this repo.
+                </p>
                 {contextError && (
                   <div className="rounded-md border border-danger/30 bg-danger/10 px-2.5 py-2 text-[11px] text-danger">
                     <span className="line-clamp-2">{contextError}</span>
@@ -771,16 +836,16 @@ export function ProjectSettingsModal() {
       )}
 
       <ModalFooter>
-        <span className="mr-auto text-[11px] text-muted">⌘↩ to save</span>
         <Button
           variant="secondary"
           onClick={closeProjectSettingsModal}
-          disabled={saveMutation.isPending}
+          disabled={modalBusy}
         >
           Cancel
         </Button>
-        <Button onClick={handleSave} disabled={saveMutation.isPending || (touched && !validation.ok)}>
-          {saveMutation.isPending ? 'Saving…' : 'Save'}
+        <Button onClick={handleSave} disabled={modalBusy || (touched && !validation.ok)}>
+          <span>{saveMutation.isPending ? 'Saving…' : 'Save'}</span>
+          <Keycap>⌘↩</Keycap>
         </Button>
       </ModalFooter>
     </Modal>

@@ -20,6 +20,7 @@ import {
 import {
   DEFAULT_SETTINGS,
   type AppSettings,
+  type ExecutorModel,
   type GitHubIssueCacheRecord,
   type IntegrationStatus,
   type OpenRouterModelCheck,
@@ -27,8 +28,6 @@ import {
 } from '@shipcode/shared';
 import { useAppStore } from '../stores/app-store';
 import { SHORTCUTS, type ShortcutCategory, type ShortcutDef } from '../data/shortcuts';
-
-type ExecutorModel = 'claude' | 'codex' | 'openrouter';
 
 function StatusPill({
   tone,

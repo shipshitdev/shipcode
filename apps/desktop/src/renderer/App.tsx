@@ -1,6 +1,7 @@
 import type { AppSettings, Project } from '@shipcode/shared';
 import { CURRENT_ONBOARDING_VERSION } from '@shipcode/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useRef } from 'react';
 import { ActivityView } from './components/ActivityView';
 import { CostsView } from './components/CostsView';
 import { CommandPalette } from './components/CommandPalette';
@@ -27,6 +28,9 @@ import { useAppStore } from './stores/app-store';
 
 type ProjectWithPathState = Project & { pathExists?: boolean };
 
+const ISSUE_DETAIL_MIN_WIDTH = 380;
+const ISSUE_DETAIL_MAX_WIDTH = 760;
+
 export function App() {
   useGlobalKeyboard();
   useIpc();
@@ -39,7 +43,41 @@ export function App() {
     activeIssue,
     issueDetailExpanded,
     issueDetailCollapsed,
+    issueDetailWidth,
+    setIssueDetailWidth,
   } = useAppStore();
+  const issueDetailDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  const handleIssueDetailResizeMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      issueDetailDragRef.current = { startX: e.clientX, startWidth: issueDetailWidth };
+      const onMove = (event: MouseEvent) => {
+        if (!issueDetailDragRef.current) return;
+        const delta = event.clientX - issueDetailDragRef.current.startX;
+        const nextWidth = Math.min(
+          ISSUE_DETAIL_MAX_WIDTH,
+          Math.max(
+            ISSUE_DETAIL_MIN_WIDTH,
+            issueDetailDragRef.current.startWidth - delta,
+          ),
+        );
+        setIssueDetailWidth(nextWidth);
+      };
+      const onUp = () => {
+        issueDetailDragRef.current = null;
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    },
+    [issueDetailWidth, setIssueDetailWidth],
+  );
 
   const { data: settings } = useQuery<AppSettings>({
     queryKey: ['settings'],
@@ -106,6 +144,7 @@ export function App() {
     viewMode === 'project' &&
     !!activeProjectId &&
     activeProject?.pathExists === false;
+  const hideSidebarForReader = !!activeIssue && issueDetailExpanded && !settingsVisible;
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
@@ -113,7 +152,7 @@ export function App() {
       <HealthBanner />
       <ProjectPathBanner project={activeProject ?? null} />
       <div className="flex flex-1 overflow-hidden">
-        {settingsVisible ? <SettingsSidebar /> : <ProjectSidebar />}
+        {!hideSidebarForReader && (settingsVisible ? <SettingsSidebar /> : <ProjectSidebar />)}
         {/* Content: left column (views + terminal) | right panel (issue detail, full-height) */}
         <div className="flex flex-1 overflow-hidden min-h-0">
           {/* Left column — main views stacked above terminal */}
@@ -154,7 +193,18 @@ export function App() {
           </div>
           {/* Right panel — full height, spans over the terminal */}
           {activeIssue && !issueDetailExpanded && !issueDetailCollapsed && (
-            <div className="w-[420px] shrink-0 border-l border-border overflow-hidden">
+            <div
+              className="relative shrink-0 border-l border-border overflow-hidden"
+              style={{
+                width: issueDetailWidth,
+                minWidth: ISSUE_DETAIL_MIN_WIDTH,
+                maxWidth: ISSUE_DETAIL_MAX_WIDTH,
+              }}
+            >
+              <div
+                className="absolute inset-y-0 left-0 z-10 w-1 -translate-x-1/2 cursor-col-resize transition-colors hover:bg-accent/20 active:bg-accent/30"
+                onMouseDown={handleIssueDetailResizeMouseDown}
+              />
               <IssueDetail expanded={false} />
             </div>
           )}

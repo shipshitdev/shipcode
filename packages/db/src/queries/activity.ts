@@ -85,4 +85,19 @@ export class ActivityQueries {
       .all(threadId, limit) as any[];
     return rows.map(mapRow);
   }
+
+  listByIssue(projectId: string, issueNumber: number, limit = 200): ActivityEntry[] {
+    const rows = this.db
+      .prepare(
+        `SELECT a.*
+           FROM activity_log a
+           INNER JOIN threads t ON t.id = a.thread_id
+          WHERE t.project_id = ?
+            AND t.github_issue_number = ?
+          ORDER BY a.created_at DESC
+          LIMIT ?`,
+      )
+      .all(projectId, issueNumber, limit) as any[];
+    return rows.map(mapRow);
+  }
 }

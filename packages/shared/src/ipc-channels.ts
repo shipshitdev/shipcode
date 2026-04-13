@@ -77,6 +77,7 @@ export interface IpcInvokeChannels {
   };
 
   'pipeline:start': { args: { threadId: string }; result: void };
+  'pipeline:retry': { args: { threadId: string }; result: void };
   'pipeline:approve': { args: { threadId: string }; result: void };
   'pipeline:reject': { args: { threadId: string; feedback: string }; result: void };
   'pipeline:stabilize-pr': { args: { threadId: string }; result: void };
@@ -84,6 +85,10 @@ export interface IpcInvokeChannels {
   'pipeline:skip-review': { args: { threadId: string }; result: void };
 
   'plan:get': { args: { threadId: string }; result: PlanRecord | null };
+  'plan:list-for-issue': {
+    args: { projectId: string; issueNumber: number };
+    result: PlanRecord[];
+  };
   'plan:update': { args: { planId: string; structured: ShipCodePlan }; result: void };
 
   'review:get': { args: { planId: string }; result: ReviewRecord | null };
@@ -206,13 +211,20 @@ export interface IpcInvokeChannels {
 
   // Repo context files (Phase 2)
   'context:list': { args: { projectId: string }; result: ContextFileInfo[] };
-  'context:generate': { args: { projectId: string }; result: { success: boolean; error?: string } };
+  'context:generate': {
+    args: { projectId: string; cli: 'claude' | 'codex' };
+    result: { success: boolean; error?: string };
+  };
   'context:read': { args: { projectId: string; name: string }; result: { content: string | null } };
 
   // Mission Control dashboard
   'dashboard:get-stats': { args: void; result: DashboardStats };
   'dashboard:get-activity': {
     args: { limit?: number; offset?: number; projectId?: string };
+    result: ActivityEntry[];
+  };
+  'activity:list-for-issue': {
+    args: { projectId: string; issueNumber: number; limit?: number };
     result: ActivityEntry[];
   };
   'dashboard:count-activity': { args: { projectId?: string }; result: number };

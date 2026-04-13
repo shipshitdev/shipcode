@@ -133,4 +133,36 @@ describe('ActivityQueries', () => {
     expect(mine).toHaveLength(1);
     expect(mine[0].title).toBe('Mine');
   });
+
+  it('listByIssue() returns entries across all threads for the same issue', () => {
+    const secondThread = threads.create(projectId, 'second', 'Second');
+    const otherIssueThread = threads.create(projectId, 'third', 'Third');
+
+    threads.setGithubIssue(threadId, 42, 'owner/repo');
+    threads.setGithubIssue(secondThread.id, 42, 'owner/repo');
+    threads.setGithubIssue(otherIssueThread.id, 43, 'owner/repo');
+
+    activity.create({ threadId, projectId, kind: 'phase_change', actor: 'system', title: 'Run 1 started' });
+    activity.create({
+      threadId: secondThread.id,
+      projectId,
+      kind: 'phase_change',
+      actor: 'system',
+      title: 'Run 2 started',
+    });
+    db.prepare(`UPDATE activity_log SET created_at = datetime('now', '-1 hour') WHERE title = ?`).run(
+      'Run 1 started',
+    );
+    activity.create({
+      threadId: otherIssueThread.id,
+      projectId,
+      kind: 'phase_change',
+      actor: 'system',
+      title: 'Other issue started',
+    });
+
+    const entries = activity.listByIssue(projectId, 42);
+    expect(entries).toHaveLength(2);
+    expect(entries.map((entry) => entry.title)).toEqual(['Run 2 started', 'Run 1 started']);
+  });
 });

@@ -424,9 +424,14 @@ describe('IssueDetail', () => {
     });
 
     renderWithProviders();
+    const historyTab = screen.getByRole('tab', { name: /Plan History/ });
+    fireEvent.mouseDown(historyTab, { button: 0 });
+    fireEvent.click(historyTab);
+    await waitFor(() => {
+      expect(historyTab).toHaveAttribute('data-state', 'active');
+    });
 
-    expect(await screen.findByText('AI reviewing')).toBeInTheDocument();
-    expect(screen.getByText('Superseded')).toBeInTheDocument();
+    expect(await screen.findByText('Superseded')).toBeInTheDocument();
     expect(screen.queryByText('pending_review')).not.toBeInTheDocument();
   });
 
@@ -449,9 +454,14 @@ describe('IssueDetail', () => {
     });
 
     renderWithProviders();
+    const historyTab = screen.getByRole('tab', { name: /Plan History/ });
+    fireEvent.mouseDown(historyTab, { button: 0 });
+    fireEvent.click(historyTab);
+    await waitFor(() => {
+      expect(historyTab).toHaveAttribute('data-state', 'active');
+    });
 
-    expect(await screen.findByText('AI requested changes')).toBeInTheDocument();
-    expect(screen.getByText('Changes requested')).toBeInTheDocument();
+    expect(await screen.findByText('Changes requested')).toBeInTheDocument();
     expect(screen.queryByText('request_changes')).not.toBeInTheDocument();
   });
 
@@ -552,11 +562,11 @@ describe('IssueDetail', () => {
 
     renderWithProviders();
 
-    const agentsTab = screen.getByRole('tab', { name: 'Agents' });
-    fireEvent.mouseDown(agentsTab, { button: 0 });
-    fireEvent.click(agentsTab);
+    const pipelineTab = screen.getByRole('tab', { name: 'Pipeline' });
+    fireEvent.mouseDown(pipelineTab, { button: 0 });
+    fireEvent.click(pipelineTab);
     await waitFor(() => {
-      expect(agentsTab).toHaveAttribute('data-state', 'active');
+      expect(pipelineTab).toHaveAttribute('data-state', 'active');
     });
 
     const plannerTrigger = (await screen.findAllByRole('combobox'))[0];
@@ -581,32 +591,34 @@ describe('IssueDetail', () => {
     });
   });
 
-  it('renders Plan and Agents tab triggers', async () => {
+  it('renders the shared issue detail tab triggers', async () => {
     invokeMock.mockResolvedValue([]);
 
     renderWithProviders();
 
-    expect(screen.getByRole('tab', { name: 'Plan' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Agents' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'PRD' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Plan History' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Pipeline' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Issue History' })).toBeInTheDocument();
   });
 
-  it('Plan tab is active by default and shows PRD content', async () => {
+  it('PRD tab is active by default and shows PRD content', async () => {
     invokeMock.mockResolvedValue([]);
 
     renderWithProviders();
 
-    const planTab = screen.getByRole('tab', { name: 'Plan' });
-    expect(planTab).toHaveAttribute('data-state', 'active');
+    const prdTab = screen.getByRole('tab', { name: 'PRD' });
+    expect(prdTab).toHaveAttribute('data-state', 'active');
     expect(screen.getByText('Spec body')).toBeInTheDocument();
   });
 
-  it('Agents tab starts inactive and Plan tab starts active', async () => {
+  it('Pipeline tab starts inactive while PRD starts active', async () => {
     invokeMock.mockResolvedValue([]);
 
     renderWithProviders();
 
-    expect(screen.getByRole('tab', { name: 'Plan' })).toHaveAttribute('data-state', 'active');
-    expect(screen.getByRole('tab', { name: 'Agents' })).toHaveAttribute('data-state', 'inactive');
+    expect(screen.getByRole('tab', { name: 'PRD' })).toHaveAttribute('data-state', 'active');
+    expect(screen.getByRole('tab', { name: 'Pipeline' })).toHaveAttribute('data-state', 'inactive');
   });
 
   it('pipeline start card is above the tab bar when pipeline not started', async () => {
@@ -615,9 +627,9 @@ describe('IssueDetail', () => {
     renderWithProviders();
 
     const startButton = screen.getByRole('button', { name: 'Start pipeline' });
-    const planTab = screen.getByRole('tab', { name: 'Plan' });
+    const prdTab = screen.getByRole('tab', { name: 'PRD' });
     // Start button should appear before the tab list in the DOM
-    expect(startButton.compareDocumentPosition(planTab)).toBe(
+    expect(startButton.compareDocumentPosition(prdTab)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
   });

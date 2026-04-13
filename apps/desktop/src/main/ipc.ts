@@ -445,6 +445,13 @@ export function registerIpcHandlers(
   });
 
   ipcMain.handle(
+    'plan:list-for-issue',
+    (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
+      return queries.plans.listByIssue(projectId, issueNumber);
+    },
+  );
+
+  ipcMain.handle(
     'plan:update',
     (_event, { planId, structured }: { planId: string; structured: any }) => {
       queries.plans.updateStructured(planId, structured);
@@ -921,6 +928,7 @@ export function registerIpcHandlers(
         ...phaseModels,
         executorModel: effectiveExecutorModel,
       });
+      queries.plans.supersedeAllForIssue(projectId, issueNumber, thread.id);
 
       log.info(
         `[pipeline] starting issue #${issue.issueNumber} "${issue.title}" (thread ${thread.id}, executor: ${effectiveExecutorModel})`,
@@ -1309,6 +1317,53 @@ export function registerIpcHandlers(
     pipeline.cancel(threadId);
   });
 
+  ipcMain.handle('pipeline:retry', async (_event, { threadId }: { threadId: string }) => {
+    if (pipeline.listActive().some((summary) => summary.threadId === threadId)) {
+      throw new Error('Stop the active pipeline before retrying');
+    }
+
+    const thread = queries.threads.getById(threadId);
+    if (!thread) throw new Error(`Thread ${threadId} not found`);
+
+    const project = queries.projects.getById(thread.projectId);
+    if (!project) throw new Error(`Project ${thread.projectId} not found`);
+
+    const settings = queries.settings.get();
+    const issue = thread.githubIssueNumber
+      ? queries.githubIssues.getByNumber(project.id, thread.githubIssueNumber)
+      : null;
+
+    if (issue) {
+      const phaseModels = resolveIssuePhaseModels(settings, project, issue);
+      queries.threads.setPhaseModels(threadId, {
+        ...phaseModels,
+        executorModel: resolveExecutorModelForIssue(settings, project, issue),
+      });
+    } else {
+      queries.threads.setPhaseModels(threadId, resolveProjectPhaseModels(settings, project));
+    }
+
+    pipeline.rehydrateContext(threadId, project.path, issue?.title);
+
+    const latestPlan = queries.plans.getLatest(threadId);
+    const structured = latestPlan?.structured ?? tryParsePlan(latestPlan?.rawOutput ?? '');
+    if (structured) {
+      if (!latestPlan?.structured && latestPlan) {
+        queries.plans.updateStructured(latestPlan.id, structured);
+      }
+      if (thread.worktreePath) {
+        await pipeline.startExecution(threadId, structured);
+      } else {
+        if (latestPlan) queries.plans.updateStatus(latestPlan.id, 'pending_review');
+        await pipeline.startReview(threadId, structured);
+      }
+      return;
+    }
+
+    queries.plans.supersedeAll(threadId);
+    await pipeline.startPlanGeneration(threadId, thread.prompt, project.path, thread.worktreePath);
+  });
+
   ipcMain.handle('pipeline:skip-review', async (_event, { threadId }: { threadId: string }) => {
     queries.threads.updateStatus(threadId, 'awaiting_approval');
     mainWindow.webContents.send('pipeline:phase', { threadId, phase: 'awaiting_approval' });
@@ -1343,6 +1398,16 @@ export function registerIpcHandlers(
       { limit, offset, projectId }: { limit?: number; offset?: number; projectId?: string } = {},
     ) => {
       return queries.activity.listRecent(limit ?? 50, projectId, offset ?? 0);
+    },
+  );
+
+  ipcMain.handle(
+    'activity:list-for-issue',
+    (
+      _event,
+      { projectId, issueNumber, limit }: { projectId: string; issueNumber: number; limit?: number },
+    ) => {
+      return queries.activity.listByIssue(projectId, issueNumber, limit ?? 200);
     },
   );
 
@@ -1600,11 +1665,11 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     'context:generate',
-    async (_event, { projectId }: { projectId: string }) => {
+    async (_event, { projectId, cli }: { projectId: string; cli: 'claude' | 'codex' }) => {
       const project = queries.projects.getById(projectId);
       if (!project) throw new Error(`Project ${projectId} not found`);
       try {
-        const result = await generateContextFiles(project.path);
+        const result = await generateContextFiles(project.path, cli);
         return { success: result.success, error: result.error };
       } catch (err) {
         log.error('[context:generate]', err);
