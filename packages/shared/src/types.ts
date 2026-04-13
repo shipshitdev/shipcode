@@ -283,6 +283,8 @@ export interface AppSettings {
   openrouterExplicitFallback: string;
   testCommand: string | null;
   testingContext: string | null;
+  /** Max concurrent pipeline runs. New starts queue when limit is reached. */
+  maxConcurrentPipelines: number;
 }
 
 export interface NotificationEventToggles {

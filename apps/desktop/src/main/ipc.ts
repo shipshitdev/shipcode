@@ -363,6 +363,7 @@ export function registerIpcHandlers(
       // are rare but would leave GitHub closed and board still showing the
       // issue. Log the inconsistency and surface it so the user can refresh.
       try {
+        queries.githubIssues.updatePipelineStatus(issue.id, 'completed');
         queries.githubIssues.archiveIssues([issue.id]);
       } catch (err) {
         log.error('[github:archive-issue] DB archive failed after GitHub close:', err);
@@ -374,6 +375,31 @@ export function registerIpcHandlers(
       const cached = queries.githubIssues.list(projectId);
       mainWindow.webContents.send('github:issues-updated', { projectId, issues: cached });
       return { archivedCount: 1 };
+    },
+  );
+
+  // Close issue on GitHub + mark completed locally, without hiding from the board.
+  // Used by "Mark as done" on failed tasks — issue moves to DONE column.
+  ipcMain.handle(
+    'github:close-issue',
+    async (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+
+      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
+      if (!issue) throw new Error(`Issue #${issueNumber} not found in project ${projectId}`);
+
+      const ghCli = new GhCli(project.path);
+      await ghCli.closeIssue(issueNumber);
+
+      ghCli
+        .archiveProjectItems(issueNumber)
+        .catch((err) => log.warn('[github:close-issue] project board archive failed:', err));
+
+      queries.githubIssues.updatePipelineStatus(issue.id, 'completed');
+
+      const cached = queries.githubIssues.list(projectId);
+      mainWindow.webContents.send('github:issues-updated', { projectId, issues: cached });
     },
   );
 
@@ -583,6 +609,21 @@ export function registerIpcHandlers(
         if (thread && !['failed', 'completed', 'idle'].includes(thread.status)) {
           throw new Error(`Issue #${issueNumber} already has active thread`);
         }
+      }
+
+      // Concurrency gate: queue the issue if the limit is reached.
+      const settings = queries.settings.get();
+      const activeCount = pipeline.listActive().length;
+      if (activeCount >= settings.maxConcurrentPipelines) {
+        queries.githubIssues.updatePipelineStatus(issue.id, 'queued');
+        mainWindow.webContents.send('github:issues-updated', {
+          projectId,
+          issues: queries.githubIssues.list(projectId),
+        });
+        log.info(
+          `[pipeline] queued issue #${issue.issueNumber} (${activeCount}/${settings.maxConcurrentPipelines} slots used)`,
+        );
+        return;
       }
 
       // Update status and create thread (single source of thread creation)

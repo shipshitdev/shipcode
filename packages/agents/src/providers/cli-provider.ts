@@ -211,7 +211,7 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
       return {
         rawOutput: StreamParser.stripSystemEvents(result.rawOutput),
         exitCode: result.exitCode,
-        resolvedModel: 'claude',
+        resolvedModel: parser.extractModel() ?? 'claude',
         ...(usage
           ? {
               tokensUsed: { prompt: usage.inputTokens, completion: usage.outputTokens },

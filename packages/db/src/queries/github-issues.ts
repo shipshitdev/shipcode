@@ -171,6 +171,15 @@ export class GitHubIssueQueries {
     return rows.map((r) => this.toRecord(r));
   }
 
+  getNextQueued(): GitHubIssueCacheRecord | null {
+    const row = this.db
+      .prepare(
+        "SELECT * FROM github_issue_cache WHERE pipeline_status = 'queued' AND archived_at IS NULL ORDER BY last_phase_update ASC LIMIT 1",
+      )
+      .get() as any | undefined;
+    return row ? this.toRecord(row) : null;
+  }
+
   getOrphanedClaims(): GitHubIssueCacheRecord[] {
     const rows = this.db
       .prepare(

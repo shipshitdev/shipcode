@@ -61,6 +61,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   openrouterExplicitFallback: 'qwen/qwen3.6-plus',
   testCommand: null,
   testingContext: null,
+  maxConcurrentPipelines: 3,
 };
 
 export const CURRENT_ONBOARDING_VERSION = 1;

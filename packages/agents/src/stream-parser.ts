@@ -235,6 +235,28 @@ export class StreamParser {
   }
 
   /**
+   * Extract the real model name from Claude CLI stream-json output.
+   * Each `{"type":"assistant","message":{"model":"..."},...}` line carries the
+   * actual model ID (e.g. "claude-sonnet-4-6"). Returns the first match, or
+   * null when the output is not stream-json or no assistant line is present.
+   */
+  extractModel(): string | null {
+    for (const line of this.buffer.split('\n')) {
+      const trimmed = this.stripAnsi(line).trim();
+      if (!trimmed) continue;
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed.type === 'assistant' && typeof parsed.message?.model === 'string') {
+          return parsed.message.model as string;
+        }
+      } catch {
+        continue;
+      }
+    }
+    return null;
+  }
+
+  /**
    * Strip Claude CLI system/hook event lines from raw output before storage.
    * These are NDJSON lines with `"type":"system"` or `"type":"rate_limit_event"`
    * emitted by hooks running inside the subprocess — not LLM output.
