@@ -17,7 +17,7 @@ const issues: GitHubIssueCacheRecord[] = [
     issueNumber: 201,
     title: 'Support OpenRouter as a pipeline executor',
     body: 'Add OpenRouter as a first-class execution path without breaking verification.',
-    labels: ['p0', 'agent:openrouter'],
+    labels: ['p0'],
     assignee: 'shipcode',
     state: 'open',
     pipelineStatus: 'planning',
@@ -398,33 +398,24 @@ const threads: Thread[] = [
 
 export function ProductMockup() {
   return (
-    <div className="mx-auto w-full max-w-[1500px] overflow-hidden rounded-[28px] border border-white/10 bg-[#0f1013] shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_30px_90px_rgba(0,0,0,0.55)]">
-      <div className="border-b border-white/8 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_40%),linear-gradient(180deg,#121318_0%,#0d0e12_100%)] px-2 py-2">
-        <div className="h-[780px] overflow-hidden rounded-[22px] border border-white/8 bg-primary">
-          <KanbanBoard
-            issues={issues}
-            threads={threads}
-            onIssueClick={() => {}}
-            onRefresh={() => {}}
-            projectName="ShipCode Dashboard"
-            baseBranch="develop"
-            branches={['develop', 'main', 'feature/homepage-kanban']}
-            onBaseBranchChange={() => {}}
-            onRefreshBranches={() => {}}
-            repoUrl="https://github.com/shipshitdev/shipcode"
-            projectsUrl="https://github.com/shipshitdev/shipcode/projects"
-            onOpenExternal={() => {}}
-            selectedIssueNumber={198}
-          />
-        </div>
+    <div className="mx-auto w-full max-w-[1500px]">
+      <div className="h-[640px] overflow-hidden bg-primary">
+        <KanbanBoard
+          issues={issues}
+          threads={threads}
+          onIssueClick={() => {}}
+          onRefresh={() => {}}
+          projectName="ShipCode Dashboard"
+          baseBranch="develop"
+          branches={['develop', 'main', 'feature/homepage-kanban']}
+          onBaseBranchChange={() => {}}
+          onRefreshBranches={() => {}}
+          repoUrl="https://github.com/shipshitdev/shipcode"
+          projectsUrl="https://github.com/shipshitdev/shipcode/projects"
+          onOpenExternal={() => {}}
+          selectedIssueNumber={198}
+        />
       </div>
-      <div
-        className="mx-auto -mt-px h-28 w-[98%] scale-y-[-1] rounded-b-3xl opacity-[0.05]"
-        style={{
-          background: 'linear-gradient(180deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0) 72%)',
-          maskImage: 'linear-gradient(180deg, black 0%, transparent 70%)',
-        }}
-      />
     </div>
   );
 }

@@ -156,7 +156,7 @@ export function DraggableCard({
           <Archive size={14} />
         </Button>
       )}
-      <div className="mb-0.5 flex items-center justify-between">
+      <div className="mb-0.5 flex items-center justify-between text-left">
         <span className="font-mono text-[11px] text-secondary">#{issue.issueNumber}</span>
         {showPhaseElapsed && (
           <span className="flex items-center gap-1.5">
@@ -167,10 +167,10 @@ export function DraggableCard({
           </span>
         )}
       </div>
-      <div className="line-clamp-2 text-xs font-medium leading-snug text-primary">
+      <div className="line-clamp-2 text-left text-xs font-medium leading-snug text-primary">
         {issue.title}
       </div>
-      <div className="mt-1 flex flex-wrap items-center gap-1">
+      <div className="mt-1 flex flex-wrap items-center gap-1 text-left">
         {phaseChip && isActive && (
           <Badge
             variant="default"

@@ -6,7 +6,7 @@ describe('web home page', () => {
   it('renders the main marketing headline and primary CTAs', () => {
     const html = renderToStaticMarkup(<Home />);
 
-    expect(html).toContain('GitHub issues to merged code.');
+    expect(html).toContain('Issues in. PRs out.');
     expect(html).toContain('View on GitHub');
     expect(html).toContain('Read the docs');
   });
