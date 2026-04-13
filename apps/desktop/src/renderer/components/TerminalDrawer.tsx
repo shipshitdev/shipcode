@@ -1,8 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Terminal } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
-import { WebLinksAddon } from '@xterm/addon-web-links';
-import '@xterm/xterm/css/xterm.css';
+import type { GitHubIssueCacheRecord } from '@shipcode/shared';
+import { ERROR_PATTERNS } from '@shipcode/shared';
 import {
   Button,
   ChevronDown,
@@ -15,16 +12,39 @@ import {
   Minimize2,
   X,
 } from '@shipcode/ui';
+import { FitAddon } from '@xterm/addon-fit';
+import { WebLinksAddon } from '@xterm/addon-web-links';
+import { Terminal } from '@xterm/xterm';
+import '@xterm/xterm/css/xterm.css';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
-import type { GitHubIssueCacheRecord } from '@shipcode/shared';
 
 const MIN_HEIGHT = 120;
 const DEFAULT_HEIGHT = 250;
 
-const AGENT_ACTIVE_STATUSES = new Set(['planning', 'reviewing', 'revising', 'executing', 'testing', 'verifying', 'shipping']);
+const AGENT_ACTIVE_STATUSES = new Set([
+  'planning',
+  'reviewing',
+  'revising',
+  'executing',
+  'testing',
+  'verifying',
+  'shipping',
+]);
 
 // Braille spinner frames for animated status indicator
-const SPINNER_FRAMES = ['\u280B', '\u2819', '\u2839', '\u2838', '\u283C', '\u2834', '\u2826', '\u2827', '\u2807', '\u280F'];
+const SPINNER_FRAMES = [
+  '\u280B',
+  '\u2819',
+  '\u2839',
+  '\u2838',
+  '\u283C',
+  '\u2834',
+  '\u2826',
+  '\u2827',
+  '\u2807',
+  '\u280F',
+];
 const SPINNER_INTERVAL_MS = 80;
 
 // Map pipeline phase to a human-readable label for the spinner
@@ -56,7 +76,9 @@ function renderTerminalEvent(event: import('@shipcode/agents').TerminalEvent): s
     case 'thinking': {
       // Dim italic with left-border blockquote for reasoning/thinking
       const lines = event.content.split('\n');
-      const quoted = lines.map((line) => `\x1b[2;35m\u2502\x1b[0m \x1b[2;3m${line}\x1b[0m`).join('\n');
+      const quoted = lines
+        .map((line) => `\x1b[2;35m\u2502\x1b[0m \x1b[2;3m${line}\x1b[0m`)
+        .join('\n');
       return quoted;
     }
     case 'tool_start':
@@ -84,8 +106,12 @@ function renderTerminalEvent(event: import('@shipcode/agents').TerminalEvent): s
     case 'lifecycle':
       // Already contains ANSI codes from useIpc formatting
       return event.message;
-    case 'raw':
-      return event.content;
+    case 'raw': {
+      const isRateLimited = ERROR_PATTERNS.some(
+        ({ pattern, type }) => type === 'rate_limited' && pattern.test(event.content),
+      );
+      return isRateLimited ? `\x1b[31m${event.content}\x1b[0m` : event.content;
+    }
     case 'error':
       return `\x1b[31m${event.message}\x1b[0m`;
     case 'done': {
@@ -113,7 +139,9 @@ export function TerminalDrawer() {
   const { toggleTerminal } = useAppStore();
   const terminalThreadId = useAppStore((s) => s.terminalThreadId);
   const canonicalStream = useAppStore((s) =>
-    s.terminalThreadId ? (s.canonicalTerminalStream[s.terminalThreadId] ?? EMPTY_STREAM) : EMPTY_STREAM,
+    s.terminalThreadId
+      ? (s.canonicalTerminalStream[s.terminalThreadId] ?? EMPTY_STREAM)
+      : EMPTY_STREAM,
   );
   const activeIssue = useAppStore((s) => s.activeIssue);
   const pipelinePhase = useAppStore((s) => s.pipelinePhase);
@@ -154,7 +182,10 @@ export function TerminalDrawer() {
   const spinnerLabelRef = useRef('Thinking');
   const lastKindRef = useRef<string | null>(null);
   // Action banner (single clickable link rendered as React, not xterm text)
-  const [actionBanner, setActionBanner] = useState<{ label: string; action: 'open-issue-detail' } | null>(null);
+  const [actionBanner, setActionBanner] = useState<{
+    label: string;
+    action: 'open-issue-detail';
+  } | null>(null);
   const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Resize state
   const [height, setHeight] = useState(DEFAULT_HEIGHT);
@@ -162,24 +193,27 @@ export function TerminalDrawer() {
   const prevHeightRef = useRef(DEFAULT_HEIGHT);
   const dragStartRef = useRef<{ y: number; h: number } | null>(null);
 
-  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    dragStartRef.current = { y: e.clientY, h: height };
-    const onMove = (ev: MouseEvent) => {
-      if (!dragStartRef.current) return;
-      const delta = dragStartRef.current.y - ev.clientY;
-      setHeight(Math.max(MIN_HEIGHT, dragStartRef.current.h + delta));
-      fitRef.current?.fit();
-    };
-    const onUp = () => {
-      dragStartRef.current = null;
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-      fitRef.current?.fit();
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-  }, [height]);
+  const handleResizeMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      dragStartRef.current = { y: e.clientY, h: height };
+      const onMove = (ev: MouseEvent) => {
+        if (!dragStartRef.current) return;
+        const delta = dragStartRef.current.y - ev.clientY;
+        setHeight(Math.max(MIN_HEIGHT, dragStartRef.current.h + delta));
+        fitRef.current?.fit();
+      };
+      const onUp = () => {
+        dragStartRef.current = null;
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+        fitRef.current?.fit();
+      };
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    },
+    [height],
+  );
 
   const toggleMaximize = useCallback(() => {
     if (isMaximized) {
@@ -298,7 +332,9 @@ export function TerminalDrawer() {
     spinnerTimerRef.current = setInterval(() => {
       if (!termRef.current) return;
       frame = (frame + 1) % SPINNER_FRAMES.length;
-      termRef.current.write(`\r\x1b[K\x1b[2;36m${SPINNER_FRAMES[frame]} ${spinnerLabelRef.current}...\x1b[0m`);
+      termRef.current.write(
+        `\r\x1b[K\x1b[2;36m${SPINNER_FRAMES[frame]} ${spinnerLabelRef.current}...\x1b[0m`,
+      );
     }, SPINNER_INTERVAL_MS);
   }, []);
 
@@ -353,20 +389,24 @@ export function TerminalDrawer() {
       // Determine spinner behavior based on event kind
       switch (event.kind) {
         case 'lifecycle': {
-          // Extract phase from lifecycle message and start spinner
+          // Only active pipeline phases get a spinner. Terminal states like
+          // failed/completed/idle should render the phase line and stop there.
           const phaseMatch = /phase: \x1b\[36m(\w+)/.exec(event.message);
           if (phaseMatch) {
             const phase = phaseMatch[1];
-            const label = PHASE_LABELS[phase] ?? 'Working';
             // Blank line before phase transitions for visual separation
             if (lastKindRef.current && !LIFECYCLE_KINDS.has(lastKindRef.current)) {
               term.write('\r\n');
             }
-            // Write the lifecycle line first, then start spinner on next line
+            // Write the lifecycle line first. Restart the spinner only for
+            // phases that actually represent ongoing agent work.
             const normalized = event.message.replace(/\r?\n/g, '\r\n');
             term.write(normalized + '\r\n');
             lastKindRef.current = event.kind;
-            startSpinner(label);
+            stopSpinner();
+            if (AGENT_ACTIVE_STATUSES.has(phase)) {
+              startSpinner(PHASE_LABELS[phase] ?? 'Working');
+            }
             continue;
           }
           // Non-phase lifecycle events (process start/exit, model resolved)
@@ -509,13 +549,17 @@ export function TerminalDrawer() {
           {pipelinePhase !== 'idle' && (
             <>
               <span className="text-muted text-xs shrink-0">·</span>
-              <span className="text-xs text-accent font-medium shrink-0 capitalize">{pipelinePhase}</span>
+              <span className="text-xs text-accent font-medium shrink-0 capitalize">
+                {pipelinePhase}
+              </span>
             </>
           )}
           {currentModel && pipelinePhase !== 'idle' && (
             <>
               <span className="text-muted text-xs shrink-0">·</span>
-              <span className="text-xs font-mono text-muted shrink-0 truncate max-w-[180px]">{currentModel}</span>
+              <span className="text-xs font-mono text-muted shrink-0 truncate max-w-[180px]">
+                {currentModel}
+              </span>
             </>
           )}
           {startedAtRef.current && canonicalStream.length > 0 && (
