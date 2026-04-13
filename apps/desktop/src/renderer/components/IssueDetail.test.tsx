@@ -25,7 +25,14 @@ const makeIssue = (overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
   claimedBy: null,
   lastPhaseUpdate: null,
   lastStatusLabel: null,
+  plannerModelOverride: null,
+  reviewerModelOverride: null,
   executorModelOverride: null,
+  verifierModelOverride: null,
+  plannerModelIdOverride: null,
+  reviewerModelIdOverride: null,
+  executorModelIdOverride: null,
+  verifierModelIdOverride: null,
   linkedPrNumber: null,
   linkedPrUrl: null,
   linkedPrIsDraft: false,
@@ -351,7 +358,7 @@ describe('IssueDetail', () => {
     expect(confirmButton).toBeInTheDocument();
   });
 
-  it('sets an executor override from the issue detail panel', async () => {
+  it('sets a planner codex override from the issue detail panel', async () => {
     const thread = makeThread({ status: 'failed' });
 
     useAppStore.setState({
@@ -359,7 +366,7 @@ describe('IssueDetail', () => {
       activeIssue: makeIssue({
         threadId: thread.id,
         pipelineStatus: 'failed',
-        executorModelOverride: null,
+        plannerModelOverride: null,
       }),
       pipelinePhase: 'failed',
     });
@@ -441,7 +448,8 @@ describe('IssueDetail', () => {
           testingContext: null,
           maxConcurrentPipelines: 1,
         };
-      if (channel === 'github:set-executor-override') return undefined;
+      if (channel === 'github:set-phase-model-override') return undefined;
+      if (channel === 'github:set-phase-model-id-override') return undefined;
       return args ?? [];
     });
 
@@ -454,15 +462,24 @@ describe('IssueDetail', () => {
       expect(agentsTab).toHaveAttribute('data-state', 'active');
     });
 
-    const executorTrigger = await screen.findByText(/Inherit \(/i);
-    fireEvent.click(executorTrigger);
-    fireEvent.click(await screen.findByText('openrouter'));
+    const plannerTrigger = (await screen.findAllByRole('combobox'))[0];
+    fireEvent.click(plannerTrigger);
+    fireEvent.click(await screen.findByText('GPT-5.4'));
 
     await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith('github:set-executor-override', {
+      expect(invokeMock).toHaveBeenCalledWith('github:set-phase-model-override', {
         projectId: 'project-1',
         issueNumber: 42,
-        model: 'openrouter',
+        phase: 'planner',
+        model: 'codex',
+      });
+    });
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('github:set-phase-model-id-override', {
+        projectId: 'project-1',
+        issueNumber: 42,
+        phase: 'planner',
+        modelId: 'gpt-5.4',
       });
     });
   });

@@ -360,6 +360,44 @@ export interface SystemHealth {
   gh: CliHealth;
 }
 
+export type OpenRouterAuthStatus =
+  | 'disabled'
+  | 'missing_key'
+  | 'valid'
+  | 'invalid_key'
+  | 'unreachable';
+
+export type OpenRouterModelStatus = 'not_configured' | 'valid' | 'invalid' | 'unverified';
+
+export interface OpenRouterModelCheck {
+  key: string;
+  label: string;
+  modelId: string | null;
+  status: OpenRouterModelStatus;
+  message: string | null;
+}
+
+export interface OpenRouterHealth {
+  enabled: boolean;
+  keyPresent: boolean;
+  authStatus: OpenRouterAuthStatus;
+  message: string | null;
+  label: string | null;
+  modelChecks: OpenRouterModelCheck[];
+}
+
+export interface IntegrationStatus {
+  system: SystemHealth;
+  ghAuth: GhAuthStatus;
+  openrouter: OpenRouterHealth;
+}
+
+export interface OpenRouterModelValidation {
+  modelId: string;
+  status: 'valid' | 'invalid' | 'unverified';
+  message: string | null;
+}
+
 // === File Change Events ===
 
 export interface FileChange {
@@ -411,10 +449,16 @@ export interface GitHubIssueCacheRecord {
   claimedBy: string | null;
   lastPhaseUpdate: string | null;
   lastStatusLabel: string | null;
-  // Nullable per-issue executor override. Null means "inherit the executor
-  // from project/global settings". Existing rows are backfilled during the
-  // migration so previous explicit selections stay explicit.
+  // Nullable per-issue phase provider overrides. Null means "inherit from
+  // project/global settings".
+  plannerModelOverride: ExecutorModel | null;
+  reviewerModelOverride: ExecutorModel | null;
   executorModelOverride: ExecutorModel | null;
+  verifierModelOverride: ExecutorModel | null;
+  plannerModelIdOverride: string | null;
+  reviewerModelIdOverride: string | null;
+  executorModelIdOverride: string | null;
+  verifierModelIdOverride: string | null;
   linkedPrNumber: number | null;
   linkedPrUrl: string | null;
   linkedPrIsDraft: boolean;
@@ -543,17 +587,20 @@ export interface CostSummary {
   avgCostPerTask: number;
   avgTokensPerTask: number;
   byProject: ProjectCostSummary[];
-  recentByTask: Array<{
-    threadId: string;
-    projectId: string;
-    title: string;
-    projectName: string;
-    phase: PipelinePhase;
-    costUsd: number;
-    tokensPrompt: number;
-    tokensCompletion: number;
-    updatedAt: string;
-  }>;
+}
+
+export interface CostTaskSummary {
+  threadId: string;
+  projectId: string;
+  title: string;
+  projectName: string;
+  phase: PipelinePhase;
+  provider: ExecutorModel;
+  model: string | null;
+  costUsd: number;
+  tokensPrompt: number;
+  tokensCompletion: number;
+  updatedAt: string;
 }
 
 export type ActivityKind =

@@ -3,7 +3,16 @@ import { access } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import type { CliHealth, GhAuthStatus, SystemHealth } from '@shipcode/shared';
+import type {
+  AppSettings,
+  CliHealth,
+  GhAuthStatus,
+  IntegrationStatus,
+  OpenRouterHealth,
+  OpenRouterModelCheck,
+  OpenRouterModelValidation,
+  SystemHealth,
+} from '@shipcode/shared';
 import { OPENROUTER_API_BASE } from '@shipcode/shared';
 
 const execAsync = promisify(exec);
@@ -56,6 +65,19 @@ async function fileExists(path: string): Promise<boolean> {
   }
 }
 
+async function readEnvVar(name: string): Promise<string | null> {
+  try {
+    const result = await execAsync(`printenv ${name}`, { timeout: 5_000 });
+    const value = result.stdout.trim();
+    if (value) return value;
+  } catch {
+    // Fall through to process.env fallback below.
+  }
+
+  const fallback = process.env[name]?.trim();
+  return fallback ? fallback : null;
+}
+
 export async function checkClaudeAuth(): Promise<boolean> {
   try {
     // Try `claude auth status` first (supported in newer CLI versions)
@@ -73,13 +95,8 @@ export async function checkClaudeAuth(): Promise<boolean> {
 
 export async function checkCodexAuth(): Promise<boolean> {
   // Check for OPENAI_API_KEY via shell spawn (Electron Dock launch doesn't inherit shell env)
-  try {
-    const result = await execAsync('printenv OPENAI_API_KEY', { timeout: 5_000 });
-    if (result.stdout.trim()) {
-      return true;
-    }
-  } catch {
-    // Env var not set — try config file
+  if (await readEnvVar('OPENAI_API_KEY')) {
+    return true;
   }
 
   // Check for Codex auth config file
@@ -185,6 +202,151 @@ export async function checkOpenRouterAuth(
   return { ok: true, label };
 }
 
+async function fetchOpenRouterCatalog(apiKey: string): Promise<Set<string> | null> {
+  try {
+    const modelsRes = await fetch(`${OPENROUTER_API_BASE}/models`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!modelsRes.ok) return null;
+    const body = (await modelsRes.json()) as { data?: Array<{ id: string }> };
+    return new Set((body.data ?? []).map((model) => model.id));
+  } catch {
+    return null;
+  }
+}
+
+function buildOpenRouterModelChecks(
+  settings: AppSettings,
+  catalog: Set<string> | null,
+  message: string | null,
+): OpenRouterModelCheck[] {
+  const configured: Array<{ key: string; label: string; modelId: string | null }> = [
+    { key: 'default_paid', label: 'Default paid model', modelId: settings.openrouterDefaultPaidModel },
+    { key: 'default_free', label: 'Default free model', modelId: settings.openrouterDefaultFreeModel },
+    { key: 'explicit_fallback', label: 'Explicit fallback', modelId: settings.openrouterExplicitFallback },
+    { key: 'planner', label: 'Planner default', modelId: settings.openrouterPlannerModel },
+    { key: 'reviewer', label: 'Reviewer default', modelId: settings.openrouterReviewerModel },
+    { key: 'executor', label: 'Executor default', modelId: settings.openrouterExecutorModel },
+    { key: 'verifier', label: 'Verifier default', modelId: settings.openrouterVerifierModel },
+  ];
+
+  return configured.map(({ key, label, modelId }) => {
+    if (!modelId) {
+      return { key, label, modelId: null, status: 'not_configured', message: null };
+    }
+    if (!catalog) {
+      return { key, label, modelId, status: 'unverified', message };
+    }
+    return {
+      key,
+      label,
+      modelId,
+      status: catalog.has(modelId) ? 'valid' : 'invalid',
+      message: catalog.has(modelId) ? null : `Model '${modelId}' is not available on OpenRouter`,
+    };
+  });
+}
+
+export async function checkOpenRouterHealth(settings: AppSettings): Promise<OpenRouterHealth> {
+  const apiKey = await readEnvVar('OPENROUTER_API_KEY');
+  const keyPresent = !!apiKey;
+
+  if (!settings.openrouterEnabled) {
+    return {
+      enabled: false,
+      keyPresent,
+      authStatus: 'disabled',
+      message: 'OpenRouter is disabled in Settings > Pipeline',
+      label: null,
+      modelChecks: buildOpenRouterModelChecks(
+        settings,
+        null,
+        'Enable OpenRouter to verify configured model slugs',
+      ),
+    };
+  }
+
+  if (!apiKey) {
+    return {
+      enabled: true,
+      keyPresent: false,
+      authStatus: 'missing_key',
+      message: 'OPENROUTER_API_KEY is not set',
+      label: null,
+      modelChecks: buildOpenRouterModelChecks(
+        settings,
+        null,
+        'Set OPENROUTER_API_KEY to verify configured model slugs',
+      ),
+    };
+  }
+
+  const auth = await checkOpenRouterAuth(apiKey);
+  if (!auth.ok) {
+    const authStatus = auth.reason === 'invalid_key' ? 'invalid_key' : auth.reason === 'unreachable' ? 'unreachable' : 'missing_key';
+    return {
+      enabled: true,
+      keyPresent: true,
+      authStatus,
+      message: auth.message,
+      label: null,
+      modelChecks: buildOpenRouterModelChecks(settings, null, auth.message),
+    };
+  }
+
+  const catalog = await fetchOpenRouterCatalog(apiKey);
+  return {
+    enabled: true,
+    keyPresent: true,
+    authStatus: 'valid',
+    message: catalog ? null : 'Authenticated, but OpenRouter model catalog could not be fetched',
+    label: auth.label ?? null,
+    modelChecks: buildOpenRouterModelChecks(
+      settings,
+      catalog,
+      'Authenticated, but model catalog could not be fetched',
+    ),
+  };
+}
+
+export async function validateOpenRouterModel(
+  settings: AppSettings,
+  modelId: string,
+): Promise<OpenRouterModelValidation> {
+  const trimmed = modelId.trim();
+  if (!trimmed) {
+    return { modelId: trimmed, status: 'unverified', message: 'Model slug is required' };
+  }
+
+  const health = await checkOpenRouterHealth(settings);
+  if (health.authStatus !== 'valid') {
+    return {
+      modelId: trimmed,
+      status: 'unverified',
+      message: health.message ?? 'OpenRouter is not ready; model slug was not verified',
+    };
+  }
+
+  const catalog = await fetchOpenRouterCatalog((await readEnvVar('OPENROUTER_API_KEY')) as string);
+  if (!catalog) {
+    return {
+      modelId: trimmed,
+      status: 'unverified',
+      message: 'OpenRouter model catalog could not be fetched',
+    };
+  }
+
+  return catalog.has(trimmed)
+    ? { modelId: trimmed, status: 'valid', message: null }
+    : {
+        modelId: trimmed,
+        status: 'invalid',
+        message: `Model '${trimmed}' is not available on OpenRouter`,
+      };
+}
+
 async function getGhVersion(): Promise<string | null> {
   try {
     const { stdout } = await execAsync('gh --version', { timeout: 5_000 });
@@ -274,4 +436,14 @@ export async function checkSystemHealthWithAuth(): Promise<SystemHealth> {
     claude: { ...health.claude, authenticated: health.claude.available && claudeAuth },
     codex: { ...health.codex, authenticated: health.codex.available && codexAuth },
   };
+}
+
+export async function checkIntegrationStatus(settings: AppSettings): Promise<IntegrationStatus> {
+  const [system, ghAuth, openrouter] = await Promise.all([
+    checkSystemHealthWithAuth(),
+    checkGhAuth(),
+    checkOpenRouterHealth(settings),
+  ]);
+
+  return { system, ghAuth, openrouter };
 }

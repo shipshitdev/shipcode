@@ -2,8 +2,6 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import log from 'electron-log/renderer';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  PRD_BLAST_RADII,
-  PRD_ESTIMATED_COMPLEXITIES,
   PRD_REQUIRED_HEADINGS,
   buildPrdMetadataLabels,
   bodyHasRequiredPrdSections,
@@ -20,12 +18,6 @@ import {
   Label,
   Button,
   Checkbox,
-  Sparkles,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
 } from '@shipcode/ui';
 
 /**
@@ -227,48 +219,6 @@ export function CreateIssueModal() {
       onKeyDown={handleKeyDown}
     >
         <div className="flex flex-col gap-3">
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs text-secondary">Complexity</Label>
-              <Select
-                value={estimatedComplexity}
-                onValueChange={(value: string) =>
-                  setEstimatedComplexity(value as PrdEstimatedComplexity)
-                }
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PRD_ESTIMATED_COMPLEXITIES.map((value) => (
-                    <SelectItem key={value} value={value} className="text-xs">
-                      {value}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs text-secondary">Blast Radius</Label>
-              <Select
-                value={blastRadius}
-                onValueChange={(value: string) => setBlastRadius(value as PrdBlastRadius)}
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PRD_BLAST_RADII.map((value) => (
-                    <SelectItem key={value} value={value} className="text-xs">
-                      {value}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
           <div className="flex flex-col gap-1">
             <Label htmlFor="issue-body" className="text-xs text-secondary">
               What do you want to build?
@@ -281,7 +231,7 @@ export function CreateIssueModal() {
               placeholder={
                 mode === 'create' ? 'Describe what you want to build…' : 'PRD markdown...'
               }
-              rows={22}
+              rows={mode === 'create' ? 10 : 14}
               className={
                 mode === 'edit' && editBodyValid
                   ? 'font-mono text-xs'
@@ -307,61 +257,55 @@ export function CreateIssueModal() {
           )}
         </div>
 
-        <ModalFooter className="items-center border-t border-border px-6 pt-4">
-          <div className="ml-auto flex items-center gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={closeCreateIssueModal}
+      <ModalFooter className="items-center border-t border-border px-6 pt-4">
+        {mode === 'create' && (
+          <Label
+            htmlFor="submit-another"
+            className="mr-auto flex cursor-pointer items-center gap-2 rounded-md border border-border bg-tertiary/40 px-3 py-2 text-[13px] font-medium text-secondary transition-colors hover:bg-hover hover:text-primary"
+          >
+            <Checkbox
+              id="submit-another"
+              checked={submitAnother}
+              onCheckedChange={(checked) => setSubmitAnother(checked === true)}
               disabled={submitting || enhancing}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handleEnhance}
-              disabled={enhancing || submitting || bodyIsEmpty}
-              title="Let AI structure your idea into a full PRD using this repo's writing-prds skill"
-            >
-              <Sparkles size={14} />
-              {enhancing
-                ? mode === 'edit'
-                  ? 'Rewriting…'
-                  : 'Writing PRD…'
-                : mode === 'edit'
-                  ? 'Rewrite with AI'
-                  : 'Draft PRD'}
-            </Button>
-            <div className="flex items-center gap-2 rounded-md border border-border bg-tertiary/40 p-1">
-              {mode === 'create' && (
-                <Label
-                  htmlFor="submit-another"
-                  className="flex cursor-pointer items-center gap-2 rounded-[6px] px-2 py-1 text-[11px] font-medium text-secondary transition-colors hover:bg-hover hover:text-primary"
-                >
-                  <Checkbox
-                    id="submit-another"
-                    checked={submitAnother}
-                    onCheckedChange={(checked) => setSubmitAnother(checked === true)}
-                    disabled={submitting || enhancing}
-                  />
-                  Submit another
-                </Label>
-              )}
-              <Button
-                size="sm"
-                onClick={handleSubmit}
-                disabled={submitDisabled}
-                aria-label={mode === 'edit' ? 'Save PRD' : undefined}
-              >
-                <span>{submitLabel}</span>
-                <span className="rounded-sm border border-black/10 bg-black/10 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-accent-foreground/80">
-                  ⌘↩
-                </span>
-              </Button>
-            </div>
-          </div>
-        </ModalFooter>
+            />
+            Submit another
+          </Label>
+        )}
+        <Button
+          variant="secondary"
+          onClick={closeCreateIssueModal}
+          disabled={submitting || enhancing}
+        >
+          Cancel
+        </Button>
+        <Button
+          variant="secondary"
+          onClick={handleEnhance}
+          disabled={enhancing || submitting || bodyIsEmpty}
+          title="Let AI structure your idea into a full PRD using this repo's writing-prds skill"
+        >
+          {enhancing
+            ? mode === 'edit'
+              ? 'Rewriting…'
+              : 'Writing PRD…'
+            : mode === 'edit'
+              ? 'Rewrite with AI'
+              : 'Write PRD'}
+        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={handleSubmit}
+            disabled={submitDisabled}
+            aria-label={mode === 'edit' ? 'Save PRD' : undefined}
+          >
+            <span>{submitLabel}</span>
+            <span className="rounded-sm border border-black/10 bg-black/10 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-accent-foreground/80">
+              ⌘↩
+            </span>
+          </Button>
+        </div>
+      </ModalFooter>
     </Modal>
   );
 }

@@ -139,6 +139,48 @@ describe('buildCodexArgs', () => {
       '--json',
     ]);
   });
+
+  it('plan phase uses read-only sandbox', () => {
+    expect(buildCodexArgs(req({ phase: 'plan' }))).toEqual([
+      '-a',
+      'never',
+      '-c',
+      'model_reasoning_effort=high',
+      'exec',
+      'PROMPT',
+      '--sandbox',
+      'read-only',
+      '--json',
+    ]);
+  });
+
+  it('revision phase uses read-only sandbox', () => {
+    expect(buildCodexArgs(req({ phase: 'revision' }))).toEqual([
+      '-a',
+      'never',
+      '-c',
+      'model_reasoning_effort=high',
+      'exec',
+      'PROMPT',
+      '--sandbox',
+      'read-only',
+      '--json',
+    ]);
+  });
+
+  it('verify phase uses read-only sandbox', () => {
+    expect(buildCodexArgs(req({ phase: 'verify' }))).toEqual([
+      '-a',
+      'never',
+      '-c',
+      'model_reasoning_effort=high',
+      'exec',
+      'PROMPT',
+      '--sandbox',
+      'read-only',
+      '--json',
+    ]);
+  });
 });
 
 // ─── Provider integration with ProcessManager ─────────────────────────
@@ -303,13 +345,13 @@ describe('createCodexCliProvider', () => {
     await promise;
   });
 
-  it('codex provider does not support plan phase via registry', () => {
+  it('codex provider supports all non-gh pipeline phases', () => {
     const { pm } = createMockProcessManager();
     const provider = createCodexCliProvider(pm);
+    expect(provider.supports.has('plan')).toBe(true);
     expect(provider.supports.has('review')).toBe(true);
+    expect(provider.supports.has('revision')).toBe(true);
+    expect(provider.supports.has('verify')).toBe(true);
     expect(provider.supports.has('execute')).toBe(true);
-    expect(provider.supports.has('plan')).toBe(false);
-    expect(provider.supports.has('revision')).toBe(false);
-    expect(provider.supports.has('verify')).toBe(false);
   });
 });

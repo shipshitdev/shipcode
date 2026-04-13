@@ -53,8 +53,8 @@ import { NotificationService } from './notification-service';
 import {
   HEARTBEAT_TIMEOUT_MS,
   resolveExecutorModelForIssue,
-  resolvePhaseModel,
-  resolvePhaseModelId,
+  resolvePhaseModelForIssue,
+  resolvePhaseModelIdForIssue,
   resolvePhaseReasoningEffort,
 } from '@shipcode/shared';
 
@@ -63,19 +63,20 @@ let processManager: ProcessManager | null = null;
 let pipeline: ReturnType<typeof createPipeline> | null = null;
 let confirmQuit = false;
 
-function resolveProjectPhaseModels(
+function resolveIssuePhaseModels(
   settings: ReturnType<SettingsQueries['get']>,
   project: ReturnType<ProjectQueries['getById']>,
+  issue: import('@shipcode/shared').GitHubIssueCacheRecord,
 ) {
   return {
-    plannerModel: resolvePhaseModel(settings, project, 'planner'),
-    reviewerModel: resolvePhaseModel(settings, project, 'reviewer'),
-    verifierModel: resolvePhaseModel(settings, project, 'verifier'),
-    executorModel: resolvePhaseModel(settings, project, 'executor'),
-    plannerModelId: resolvePhaseModelId(settings, project, 'planner'),
-    reviewerModelId: resolvePhaseModelId(settings, project, 'reviewer'),
-    verifierModelId: resolvePhaseModelId(settings, project, 'verifier'),
-    executorModelId: resolvePhaseModelId(settings, project, 'executor'),
+    plannerModel: resolvePhaseModelForIssue(settings, project, issue, 'planner'),
+    reviewerModel: resolvePhaseModelForIssue(settings, project, issue, 'reviewer'),
+    verifierModel: resolvePhaseModelForIssue(settings, project, issue, 'verifier'),
+    executorModel: resolvePhaseModelForIssue(settings, project, issue, 'executor'),
+    plannerModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'planner'),
+    reviewerModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'reviewer'),
+    verifierModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'verifier'),
+    executorModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'executor'),
     plannerReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'planner'),
     reviewerReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'reviewer'),
     verifierReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'verifier'),
@@ -193,7 +194,7 @@ function createWindow() {
 
       const project = queries.projects.getById(next.projectId);
       if (!project) return;
-      const phaseModels = resolveProjectPhaseModels(settings, project);
+      const phaseModels = resolveIssuePhaseModels(settings, project, next);
       const effectiveExecutorModel = resolveExecutorModelForIssue(settings, project, next);
 
       queries.githubIssues.updatePipelineStatus(next.id, 'planning');

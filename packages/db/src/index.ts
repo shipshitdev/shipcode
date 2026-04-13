@@ -16,6 +16,8 @@ import {
   migrateV13,
   migrateV14,
   migrateV15,
+  migrateV16,
+  migrateV17,
 } from './schema';
 
 export { transaction } from './utils';
@@ -61,6 +63,8 @@ export function getDatabase(dataDir: string): DatabaseSync {
   migrateV13(db);
   migrateV14(db);
   migrateV15(db);
+  migrateV16(db);
+  migrateV17(db);
   return db;
 }
 

@@ -29,16 +29,20 @@ import {
   parseGithubProjectUrl,
   deriveGithubIssueUrl,
   resolveExecutorModelForIssue,
+  resolvePhaseModelForIssue,
+  resolvePhaseModelIdForIssue,
   resolvePhaseModelId,
   resolvePhaseModel,
   resolvePhaseReasoningEffort,
 } from '@shipcode/shared';
 import {
+  checkIntegrationStatus,
   checkSystemHealthWithAuth,
   checkGhAuth,
   GhCli,
   enhancePrdDraft,
   validateSkill,
+  validateOpenRouterModel,
   DEFAULT_SKILLS,
   PHASE_SKILL_KEYS,
   StreamParser,
@@ -99,6 +103,27 @@ function resolveProjectPhaseModels(
     reviewerModelId: resolvePhaseModelId(settings, project, 'reviewer'),
     verifierModelId: resolvePhaseModelId(settings, project, 'verifier'),
     executorModelId: resolvePhaseModelId(settings, project, 'executor'),
+    plannerReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'planner'),
+    reviewerReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'reviewer'),
+    verifierReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'verifier'),
+    executorReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'executor'),
+  };
+}
+
+function resolveIssuePhaseModels(
+  settings: ReturnType<SettingsQueries['get']>,
+  project: import('@shipcode/shared').Project,
+  issue: import('@shipcode/shared').GitHubIssueCacheRecord,
+) {
+  return {
+    plannerModel: resolvePhaseModelForIssue(settings, project, issue, 'planner'),
+    reviewerModel: resolvePhaseModelForIssue(settings, project, issue, 'reviewer'),
+    verifierModel: resolvePhaseModelForIssue(settings, project, issue, 'verifier'),
+    executorModel: resolvePhaseModelForIssue(settings, project, issue, 'executor'),
+    plannerModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'planner'),
+    reviewerModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'reviewer'),
+    verifierModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'verifier'),
+    executorModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'executor'),
     plannerReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'planner'),
     reviewerReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'reviewer'),
     verifierReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'verifier'),
@@ -271,12 +296,17 @@ export function registerIpcHandlers(
   );
 
   ipcMain.handle('project:remove', async (_event, { projectId }: { projectId: string }) => {
+    const project = queries.projects.getById(projectId);
+    const ignoreAttentionOnly = project ? !fs.existsSync(project.path) : false;
+
     // Fast pre-check: bail early without running slow worktree cleanup if the
     // project clearly has active work. The final safety guarantee comes from
     // `removeIfIdle()`'s atomic DELETE below.
-    if (queries.projects.hasLiveWork(projectId)) {
+    if (queries.projects.hasLiveWork(projectId, { ignoreAttentionOnly })) {
       throw new Error(
-        'Cannot remove a project with active work. Stop running pipelines and dismiss notifications first.',
+        ignoreAttentionOnly
+          ? 'Cannot remove this missing project while a pipeline is still active. Stop running pipelines first.'
+          : 'Cannot remove a project with active work. Stop running pipelines and dismiss notifications first.',
       );
     }
 
@@ -284,7 +314,6 @@ export function registerIpcHandlers(
     // silently swallowed cleanup failures and deleted the project row anyway,
     // leaving orphaned worktrees on disk with no registry entry to recover
     // them. Now we collect real failures and throw before any DB mutation.
-    const project = queries.projects.getById(projectId);
     if (project) {
       const appSettings = queries.settings.get();
       const worktreeManager = new WorktreeManager(project.path, {
@@ -309,10 +338,12 @@ export function registerIpcHandlers(
 
     // Atomic final DELETE: refuses to remove the row if live work appeared
     // during the (slow) worktree cleanup phase.
-    const removed = queries.projects.removeIfIdle(projectId);
+    const removed = queries.projects.removeIfIdle(projectId, { ignoreAttentionOnly });
     if (!removed) {
       throw new Error(
-        'New work appeared during cleanup. Project not removed. Retry after stopping pipelines.',
+        ignoreAttentionOnly
+          ? 'A pipeline became active during cleanup. Project not removed. Retry after it stops.'
+          : 'New work appeared during cleanup. Project not removed. Retry after stopping pipelines.',
       );
     }
   });
@@ -325,10 +356,14 @@ export function registerIpcHandlers(
   );
 
   ipcMain.handle('project:archive', (_event, { projectId }: { projectId: string }) => {
-    const archived = queries.projects.archiveIfIdle(projectId);
+    const project = queries.projects.getById(projectId);
+    const ignoreAttentionOnly = project ? !fs.existsSync(project.path) : false;
+    const archived = queries.projects.archiveIfIdle(projectId, { ignoreAttentionOnly });
     if (!archived) {
       throw new Error(
-        'Cannot archive a project with active work. Stop running pipelines and dismiss notifications first.',
+        ignoreAttentionOnly
+          ? 'Cannot archive this missing project while a pipeline is still active. Stop running pipelines first.'
+          : 'Cannot archive a project with active work. Stop running pipelines and dismiss notifications first.',
       );
     }
   });
@@ -467,6 +502,14 @@ export function registerIpcHandlers(
   // === Health check ===
   ipcMain.handle('health:check', async () => {
     return checkSystemHealthWithAuth();
+  });
+
+  ipcMain.handle('integrations:check', async () => {
+    return checkIntegrationStatus(queries.settings.get());
+  });
+
+  ipcMain.handle('integrations:validate-openrouter-model', async (_event, { modelId }: { modelId: string }) => {
+    return validateOpenRouterModel(queries.settings.get(), modelId);
   });
 
   // === Dialog handlers ===
@@ -872,7 +915,7 @@ export function registerIpcHandlers(
       );
 
       // Start pipeline — pass existing threadId, not projectId
-      const phaseModels = resolveProjectPhaseModels(settings, project);
+      const phaseModels = resolveIssuePhaseModels(settings, project, issue);
       const effectiveExecutorModel = resolveExecutorModelForIssue(settings, project, issue);
       queries.threads.setPhaseModels(thread.id, {
         ...phaseModels,
@@ -937,22 +980,28 @@ export function registerIpcHandlers(
   );
 
   ipcMain.handle(
-    'github:set-executor-override',
+    'github:set-phase-model-override',
     (
       _event,
       {
         projectId,
         issueNumber,
+        phase,
         model,
-      }: { projectId: string; issueNumber: number; model: ExecutorModel },
+      }: {
+        projectId: string;
+        issueNumber: number;
+        phase: 'planner' | 'reviewer' | 'executor' | 'verifier';
+        model: ExecutorModel;
+      },
     ) => {
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
       if (model !== 'claude' && model !== 'codex' && model !== 'openrouter') {
-        throw new Error(`Invalid executor model: ${model}`);
+        throw new Error(`Invalid ${phase} model: ${model}`);
       }
 
-      queries.githubIssues.updateExecutorModelOverride(issue.id, model);
+      queries.githubIssues.updatePhaseModelOverride(issue.id, phase, model);
       const allIssues = queries.githubIssues.list(projectId);
       mainWindow.webContents.send('github:issues-updated', { projectId, issues: allIssues });
       return queries.githubIssues.getByNumber(projectId, issueNumber);
@@ -960,12 +1009,63 @@ export function registerIpcHandlers(
   );
 
   ipcMain.handle(
-    'github:clear-executor-override',
-    (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
+    'github:clear-phase-model-override',
+    (
+      _event,
+      {
+        projectId,
+        issueNumber,
+        phase,
+      }: { projectId: string; issueNumber: number; phase: 'planner' | 'reviewer' | 'executor' | 'verifier' },
+    ) => {
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
 
-      queries.githubIssues.updateExecutorModelOverride(issue.id, null);
+      queries.githubIssues.updatePhaseModelOverride(issue.id, phase, null);
+      const allIssues = queries.githubIssues.list(projectId);
+      mainWindow.webContents.send('github:issues-updated', { projectId, issues: allIssues });
+      return queries.githubIssues.getByNumber(projectId, issueNumber);
+    },
+  );
+
+  ipcMain.handle(
+    'github:set-phase-model-id-override',
+    (
+      _event,
+      {
+        projectId,
+        issueNumber,
+        phase,
+        modelId,
+      }: {
+        projectId: string;
+        issueNumber: number;
+        phase: 'planner' | 'reviewer' | 'executor' | 'verifier';
+        modelId: string;
+      },
+    ) => {
+      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
+      if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
+      queries.githubIssues.updatePhaseModelIdOverride(issue.id, phase, modelId.trim() || null);
+      const allIssues = queries.githubIssues.list(projectId);
+      mainWindow.webContents.send('github:issues-updated', { projectId, issues: allIssues });
+      return queries.githubIssues.getByNumber(projectId, issueNumber);
+    },
+  );
+
+  ipcMain.handle(
+    'github:clear-phase-model-id-override',
+    (
+      _event,
+      {
+        projectId,
+        issueNumber,
+        phase,
+      }: { projectId: string; issueNumber: number; phase: 'planner' | 'reviewer' | 'executor' | 'verifier' },
+    ) => {
+      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
+      if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
+      queries.githubIssues.updatePhaseModelIdOverride(issue.id, phase, null);
       const allIssues = queries.githubIssues.list(projectId);
       mainWindow.webContents.send('github:issues-updated', { projectId, issues: allIssues });
       return queries.githubIssues.getByNumber(projectId, issueNumber);
@@ -1268,6 +1368,20 @@ export function registerIpcHandlers(
   ipcMain.handle('costs:get-summary', () => {
     return queries.costs.getSummary();
   });
+
+  ipcMain.handle(
+    'costs:list-tasks',
+    (_event, { limit, offset, projectId }: { limit?: number; offset?: number; projectId?: string } = {}) => {
+      return queries.costs.listTasks(limit ?? 20, offset ?? 0, projectId ?? null);
+    },
+  );
+
+  ipcMain.handle(
+    'costs:count-tasks',
+    (_event, { projectId }: { projectId?: string } = {}) => {
+      return queries.costs.countTasks(projectId ?? null);
+    },
+  );
 
   // === Skills (per-phase prompt overrides) ===
   // The /skills page is the user's editing surface for the five phase prompts

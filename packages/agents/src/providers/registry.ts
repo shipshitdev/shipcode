@@ -9,7 +9,7 @@
  *
  * Tier 1 rules:
  * - agent 'claude' → claude-cli provider (all phases)
- * - agent 'codex'  → codex-cli provider (review + execute)
+ * - agent 'codex'  → codex-cli provider (all phases)
  * - agent 'openrouter' → openrouter provider (plan/review/revision/verify only)
  * - agent 'gh' is not an LLM agent and is not handled here
  *

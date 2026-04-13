@@ -13,6 +13,8 @@ import type {
   GhAuthStatus,
   GitHubIssueCacheRecord,
   GitState,
+  IntegrationStatus,
+  OpenRouterModelValidation,
   PipelineCheckpoint,
   PlanRecord,
   PlanReview,
@@ -97,6 +99,11 @@ export interface IpcInvokeChannels {
   'settings:set': { args: Partial<AppSettings>; result: void };
 
   'health:check': { args: void; result: SystemHealth };
+  'integrations:check': { args: void; result: IntegrationStatus };
+  'integrations:validate-openrouter-model': {
+    args: { modelId: string };
+    result: OpenRouterModelValidation;
+  };
 
   'dialog:open-directory': { args: void; result: string | null };
 
@@ -138,12 +145,42 @@ export interface IpcInvokeChannels {
   };
   'github:list-archived': { args: void; result: GitHubIssueCacheRecord[] };
   'github:unarchive-issue': { args: { issueId: string }; result: void };
-  'github:set-executor-override': {
-    args: { projectId: string; issueNumber: number; model: GitHubIssueCacheRecord['executorModelOverride'] };
+  'github:set-phase-model-override': {
+    args: {
+      projectId: string;
+      issueNumber: number;
+      phase: 'planner' | 'reviewer' | 'executor' | 'verifier';
+      model:
+        | GitHubIssueCacheRecord['plannerModelOverride']
+        | GitHubIssueCacheRecord['reviewerModelOverride']
+        | GitHubIssueCacheRecord['executorModelOverride']
+        | GitHubIssueCacheRecord['verifierModelOverride'];
+    };
     result: GitHubIssueCacheRecord | null;
   };
-  'github:clear-executor-override': {
-    args: { projectId: string; issueNumber: number };
+  'github:clear-phase-model-override': {
+    args: {
+      projectId: string;
+      issueNumber: number;
+      phase: 'planner' | 'reviewer' | 'executor' | 'verifier';
+    };
+    result: GitHubIssueCacheRecord | null;
+  };
+  'github:set-phase-model-id-override': {
+    args: {
+      projectId: string;
+      issueNumber: number;
+      phase: 'planner' | 'reviewer' | 'executor' | 'verifier';
+      modelId: string;
+    };
+    result: GitHubIssueCacheRecord | null;
+  };
+  'github:clear-phase-model-id-override': {
+    args: {
+      projectId: string;
+      issueNumber: number;
+      phase: 'planner' | 'reviewer' | 'executor' | 'verifier';
+    };
     result: GitHubIssueCacheRecord | null;
   };
 

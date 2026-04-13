@@ -44,7 +44,14 @@ export class GitHubIssueQueries {
       | 'claimedBy'
       | 'lastPhaseUpdate'
       | 'lastStatusLabel'
+      | 'plannerModelOverride'
+      | 'reviewerModelOverride'
       | 'executorModelOverride'
+      | 'verifierModelOverride'
+      | 'plannerModelIdOverride'
+      | 'reviewerModelIdOverride'
+      | 'executorModelIdOverride'
+      | 'verifierModelIdOverride'
       | 'linkedPrNumber'
       | 'linkedPrUrl'
       | 'linkedPrIsDraft'
@@ -211,10 +218,36 @@ export class GitHubIssueQueries {
       .run(label, id);
   }
 
-  updateExecutorModelOverride(id: string, model: ExecutorModel | null): void {
-    this.db
-      .prepare('UPDATE github_issue_cache SET executor_model_override = ? WHERE id = ?')
-      .run(model, id);
+  updatePhaseModelOverride(
+    id: string,
+    phase: 'planner' | 'reviewer' | 'executor' | 'verifier',
+    model: ExecutorModel | null,
+  ): void {
+    const column =
+      phase === 'planner'
+        ? 'planner_model_override'
+        : phase === 'reviewer'
+          ? 'reviewer_model_override'
+          : phase === 'executor'
+            ? 'executor_model_override'
+            : 'verifier_model_override';
+    this.db.prepare(`UPDATE github_issue_cache SET ${column} = ? WHERE id = ?`).run(model, id);
+  }
+
+  updatePhaseModelIdOverride(
+    id: string,
+    phase: 'planner' | 'reviewer' | 'executor' | 'verifier',
+    modelId: string | null,
+  ): void {
+    const column =
+      phase === 'planner'
+        ? 'planner_model_id_override'
+        : phase === 'reviewer'
+          ? 'reviewer_model_id_override'
+          : phase === 'executor'
+            ? 'executor_model_id_override'
+            : 'verifier_model_id_override';
+    this.db.prepare(`UPDATE github_issue_cache SET ${column} = ? WHERE id = ?`).run(modelId, id);
   }
 
   updatePullRequestFeedback(
@@ -316,6 +349,22 @@ export class GitHubIssueQueries {
       claimedBy: row.claimed_by,
       lastPhaseUpdate: toIsoUtc(row.last_phase_update),
       lastStatusLabel: row.last_status_label ?? null,
+      plannerModelOverride:
+        row.planner_model_override === 'codex'
+          ? 'codex'
+          : row.planner_model_override === 'openrouter'
+            ? 'openrouter'
+            : row.planner_model_override === 'claude'
+              ? 'claude'
+              : null,
+      reviewerModelOverride:
+        row.reviewer_model_override === 'codex'
+          ? 'codex'
+          : row.reviewer_model_override === 'openrouter'
+            ? 'openrouter'
+            : row.reviewer_model_override === 'claude'
+              ? 'claude'
+              : null,
       executorModelOverride:
         overrideRaw === 'codex'
           ? 'codex'
@@ -324,6 +373,18 @@ export class GitHubIssueQueries {
             : overrideRaw === 'claude'
               ? 'claude'
               : null,
+      verifierModelOverride:
+        row.verifier_model_override === 'codex'
+          ? 'codex'
+          : row.verifier_model_override === 'openrouter'
+            ? 'openrouter'
+            : row.verifier_model_override === 'claude'
+              ? 'claude'
+              : null,
+      plannerModelIdOverride: row.planner_model_id_override ?? null,
+      reviewerModelIdOverride: row.reviewer_model_id_override ?? null,
+      executorModelIdOverride: row.executor_model_id_override ?? null,
+      verifierModelIdOverride: row.verifier_model_id_override ?? null,
       linkedPrNumber: row.linked_pr_number ?? null,
       linkedPrUrl: row.linked_pr_url ?? null,
       linkedPrIsDraft: !!row.linked_pr_is_draft,

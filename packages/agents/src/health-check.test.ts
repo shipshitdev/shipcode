@@ -17,9 +17,17 @@ import {
   checkGhAuth,
   parseGhProjectScope,
   checkOpenRouterAuth,
+  checkOpenRouterHealth,
+  checkIntegrationStatus,
   checkSystemHealth,
   checkSystemHealthWithAuth,
+  validateOpenRouterModel,
 } from './health-check';
+import { DEFAULT_SETTINGS, type AppSettings } from '@shipcode/shared';
+
+function settings(overrides: Partial<AppSettings> = {}): AppSettings {
+  return { ...DEFAULT_SETTINGS, ...overrides };
+}
 
 // Helper: make mockExec resolve with given stdout/stderr
 function execSucceeds(stdout = '', stderr = '') {
@@ -433,5 +441,140 @@ describe('checkOpenRouterAuth', () => {
 
     const res = await checkOpenRouterAuth('k', 'openrouter/auto');
     expect(res.ok).toBe(true);
+  });
+});
+
+describe('checkOpenRouterHealth', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('returns disabled health when OpenRouter is turned off', async () => {
+    execFails('not set');
+    const result = await checkOpenRouterHealth(settings({ openrouterEnabled: false }));
+    expect(result.enabled).toBe(false);
+    expect(result.authStatus).toBe('disabled');
+  });
+
+  it('verifies configured model slugs when auth succeeds', async () => {
+    execRouted({
+      'printenv OPENROUTER_API_KEY': { stdout: 'or-key\n' },
+    });
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: { label: 'shipcode-dev' } }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ data: [{ id: 'openrouter/auto' }, { id: 'anthropic/claude-sonnet-4-6' }] }),
+          { status: 200 },
+        ),
+      );
+
+    const result = await checkOpenRouterHealth(
+      settings({
+        openrouterEnabled: true,
+        openrouterPlannerModel: 'anthropic/claude-sonnet-4-6',
+      }),
+    );
+    expect(result.authStatus).toBe('valid');
+    expect(result.label).toBe('shipcode-dev');
+    expect(result.modelChecks.find((check: { key: string }) => check.key === 'planner')?.status).toBe(
+      'valid',
+    );
+  });
+});
+
+describe('validateOpenRouterModel', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('returns unverified when OpenRouter auth is not ready', async () => {
+    execFails('not set');
+    const result = await validateOpenRouterModel(settings({ openrouterEnabled: true }), 'openrouter/auto');
+    expect(result.status).toBe('unverified');
+  });
+
+  it('returns invalid when the model slug is not in the catalog', async () => {
+    execRouted({
+      'printenv OPENROUTER_API_KEY': { stdout: 'or-key\n' },
+    });
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: { label: 'shipcode-dev' } }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: [{ id: 'openrouter/auto' }] }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: [{ id: 'openrouter/auto' }] }), { status: 200 }),
+      );
+
+    const result = await validateOpenRouterModel(
+      settings({ openrouterEnabled: true }),
+      'anthropic/claude-sonnet-4-6',
+    );
+    expect(result.status).toBe('invalid');
+  });
+});
+
+describe('checkIntegrationStatus', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('returns combined CLI, GitHub, and OpenRouter integration data', async () => {
+    execRouted({
+      'which claude': { stdout: '/usr/local/bin/claude\n' },
+      'which codex': { stdout: '/usr/local/bin/codex\n' },
+      'which git': { stdout: '/usr/bin/git\n' },
+      'which gh': { stdout: '/usr/local/bin/gh\n' },
+      'claude --version': { stdout: 'claude 1.0.0' },
+      'codex --version': { stdout: 'codex 0.1.0' },
+      'git --version': { stdout: 'git version 2.43.0' },
+      'gh --version': { stdout: 'gh version 2.40.1' },
+      'claude auth status': { stdout: 'Authenticated' },
+      'printenv OPENAI_API_KEY': { stdout: 'sk-key\n' },
+      'printenv OPENROUTER_API_KEY': { stdout: 'or-key\n' },
+      'gh auth status': {
+        stdout:
+          "github.com\n  ✓ Logged in to github.com account decod3r (keyring)\n  - Token scopes: 'gist', 'read:org', 'repo', 'workflow', 'project'\n",
+      },
+    });
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: { label: 'shipcode-dev' } }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: [{ id: 'openrouter/auto' }] }), { status: 200 }),
+      );
+
+    const result = await checkIntegrationStatus(settings({ openrouterEnabled: true }));
+    expect(result.system.claude.authenticated).toBe(true);
+    expect(result.system.codex.authenticated).toBe(true);
+    expect(result.ghAuth.authenticated).toBe(true);
+    expect(result.openrouter.authStatus).toBe('valid');
   });
 });

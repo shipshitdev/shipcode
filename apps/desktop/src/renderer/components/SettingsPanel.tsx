@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   StatusMappingEditor,
@@ -17,11 +17,41 @@ import {
   TabsTrigger,
   Textarea,
 } from '@shipcode/ui';
-import { DEFAULT_SETTINGS, type AppSettings, type GitHubIssueCacheRecord, type Project } from '@shipcode/shared';
+import {
+  DEFAULT_SETTINGS,
+  type AppSettings,
+  type GitHubIssueCacheRecord,
+  type IntegrationStatus,
+  type OpenRouterModelCheck,
+  type Project,
+} from '@shipcode/shared';
 import { useAppStore } from '../stores/app-store';
 import { SHORTCUTS, type ShortcutCategory, type ShortcutDef } from '../data/shortcuts';
 
 type ExecutorModel = 'claude' | 'codex' | 'openrouter';
+
+function StatusPill({
+  tone,
+  children,
+}: {
+  tone: 'success' | 'warning' | 'danger' | 'neutral';
+  children: ReactNode;
+}) {
+  const toneClass =
+    tone === 'success'
+      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+      : tone === 'warning'
+        ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+        : tone === 'danger'
+          ? 'border-red-500/30 bg-red-500/10 text-red-300'
+          : 'border-border bg-tertiary text-secondary';
+
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] ${toneClass}`}>
+      {children}
+    </span>
+  );
+}
 
 function PhaseModelRow({
   label,
@@ -33,6 +63,9 @@ function PhaseModelRow({
   onModelChange,
   onOpenrouterModelChange,
   onReasoningEffortChange,
+  disabledProviders,
+  warningMessage,
+  modelCheck,
 }: {
   label: string;
   htmlFor: string;
@@ -43,7 +76,15 @@ function PhaseModelRow({
   onModelChange: (v: string) => void;
   onOpenrouterModelChange: (v: string | null) => void;
   onReasoningEffortChange: (v: 'low' | 'medium' | 'high') => void;
+  disabledProviders?: Partial<Record<ExecutorModel, string>>;
+  warningMessage?: string | null;
+  modelCheck?: OpenRouterModelCheck | null;
 }) {
+  const modelCheckMessage =
+    modelValue === 'openrouter' && modelCheck?.status !== 'not_configured'
+      ? modelCheck?.message
+      : null;
+
   return (
     <>
       <SettingsRow label={label} htmlFor={htmlFor}>
@@ -52,9 +93,21 @@ function PhaseModelRow({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {validProviders.includes('claude') && <SelectItem value="claude">Claude</SelectItem>}
-            {validProviders.includes('codex') && <SelectItem value="codex">Codex</SelectItem>}
-            {validProviders.includes('openrouter') && <SelectItem value="openrouter">OpenRouter</SelectItem>}
+            {validProviders.includes('claude') && (
+              <SelectItem value="claude" disabled={!!disabledProviders?.claude}>
+                Anthropic{disabledProviders?.claude ? ` (${disabledProviders.claude})` : ''}
+              </SelectItem>
+            )}
+            {validProviders.includes('codex') && (
+              <SelectItem value="codex" disabled={!!disabledProviders?.codex}>
+                OpenAI{disabledProviders?.codex ? ` (${disabledProviders.codex})` : ''}
+              </SelectItem>
+            )}
+            {validProviders.includes('openrouter') && (
+              <SelectItem value="openrouter" disabled={!!disabledProviders?.openrouter}>
+                OpenRouter{disabledProviders?.openrouter ? ` (${disabledProviders.openrouter})` : ''}
+              </SelectItem>
+            )}
           </SelectContent>
         </Select>
       </SettingsRow>
@@ -90,6 +143,22 @@ function PhaseModelRow({
           </SelectContent>
         </Select>
       </SettingsRow>
+      {warningMessage && (
+        <div className="mb-3 rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-300">
+          {warningMessage}
+        </div>
+      )}
+      {modelCheckMessage && (
+        <div
+          className={`mb-3 rounded-md border px-3 py-2 text-[11px] ${
+            modelCheck?.status === 'invalid'
+              ? 'border-red-500/20 bg-red-500/10 text-red-300'
+              : 'border-amber-500/20 bg-amber-500/10 text-amber-300'
+          }`}
+        >
+          {modelCheckMessage}
+        </div>
+      )}
     </>
   );
 }
@@ -108,6 +177,7 @@ export function SettingsPanel() {
     mutationFn: (patch: Partial<AppSettings>) => window.shipcode.invoke('settings:set', patch),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] });
+      queryClient.invalidateQueries({ queryKey: ['integrations'] });
     },
   });
 
@@ -139,6 +209,17 @@ export function SettingsPanel() {
       queryClient.invalidateQueries({ queryKey: ['issues-archived'] });
       queryClient.invalidateQueries({ queryKey: ['github-issues'] });
     },
+  });
+
+  const {
+    data: integrationStatus,
+    refetch: refetchIntegrations,
+    isFetching: integrationsFetching,
+  } = useQuery<IntegrationStatus>({
+    queryKey: ['integrations'],
+    queryFn: () => window.shipcode.invoke('integrations:check'),
+    enabled: settingsSection === 'integrations' || settingsSection === 'pipeline',
+    staleTime: 30_000,
   });
 
   if (!settings) return null;
@@ -213,6 +294,172 @@ export function SettingsPanel() {
                 </Button>
               </SettingsRow>
             </section>
+          </>
+        )}
+
+        {settingsSection === 'integrations' && (
+          <>
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div>
+                <h3>Integrations</h3>
+                <p className="mt-1 text-xs text-secondary">
+                  CLI and provider readiness. API keys remain env-managed for now.
+                </p>
+              </div>
+              <Button variant="secondary" onClick={() => refetchIntegrations()} disabled={integrationsFetching}>
+                {integrationsFetching ? 'Checking…' : 'Re-check'}
+              </Button>
+            </div>
+
+            {!integrationStatus ? (
+              <div className="text-[13px] text-muted">Loading integration status…</div>
+            ) : (
+              <>
+                <section className="mb-8">
+                  <h4 className="mb-3 text-secondary">CLI Integrations</h4>
+                  <div className="space-y-2">
+                    {[
+                      { key: 'claude', label: 'Claude CLI' },
+                      { key: 'codex', label: 'Codex CLI' },
+                      { key: 'gh', label: 'GitHub CLI' },
+                    ].map(({ key, label }) => {
+                      const cli =
+                        key === 'claude'
+                          ? integrationStatus.system.claude
+                          : key === 'codex'
+                            ? integrationStatus.system.codex
+                            : integrationStatus.system.gh;
+                      const ghScope =
+                        key === 'gh'
+                          ? integrationStatus.ghAuth.hasProjectScope === true
+                            ? 'project scope granted'
+                            : integrationStatus.ghAuth.hasProjectScope === false
+                              ? 'project scope missing'
+                              : null
+                          : null;
+
+                      return (
+                        <div
+                          key={key}
+                          className="rounded-md border border-border bg-secondary/40 p-3"
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="min-w-[110px] text-[13px] font-medium text-primary">
+                              {label}
+                            </div>
+                            {!cli.available ? (
+                              <StatusPill tone="danger">Not installed</StatusPill>
+                            ) : key === 'gh' ? (
+                              integrationStatus.ghAuth.authenticated ? (
+                                <StatusPill tone="success">Authenticated</StatusPill>
+                              ) : (
+                                <StatusPill tone="warning">Not authenticated</StatusPill>
+                              )
+                            ) : cli.authenticated ? (
+                              <StatusPill tone="success">Authenticated</StatusPill>
+                            ) : (
+                              <StatusPill tone="warning">Not authenticated</StatusPill>
+                            )}
+                            {ghScope && (
+                              <StatusPill tone={integrationStatus.ghAuth.hasProjectScope ? 'success' : 'warning'}>
+                                {ghScope}
+                              </StatusPill>
+                            )}
+                          </div>
+                          <div className="mt-2 space-y-1 text-[12px] text-secondary">
+                            {cli.version ? <div>Version: <code>{cli.version}</code></div> : null}
+                            {cli.path ? <div>Path: <code>{cli.path}</code></div> : null}
+                            {key === 'gh' && integrationStatus.ghAuth.username ? (
+                              <div>Account: <code>@{integrationStatus.ghAuth.username}</code></div>
+                            ) : null}
+                            {cli.error ? <div className="text-red-300">{cli.error}</div> : null}
+                            {key === 'gh' && integrationStatus.ghAuth.hasProjectScope === false ? (
+                              <div className="text-amber-300">
+                                Run <code>gh auth refresh -s project</code> to attach issues to project boards.
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                <section className="mb-8">
+                  <h4 className="mb-3 text-secondary">API Keys</h4>
+                  <div className="rounded-md border border-border bg-secondary/40 p-3 text-[12px] text-secondary">
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <span className="text-[13px] font-medium text-primary">OpenRouter</span>
+                      <StatusPill tone={integrationStatus.openrouter.enabled ? 'neutral' : 'warning'}>
+                        {integrationStatus.openrouter.enabled ? 'Enabled in settings' : 'Disabled in settings'}
+                      </StatusPill>
+                      <StatusPill tone={integrationStatus.openrouter.keyPresent ? 'success' : 'warning'}>
+                        {integrationStatus.openrouter.keyPresent ? 'OPENROUTER_API_KEY detected' : 'OPENROUTER_API_KEY missing'}
+                      </StatusPill>
+                      <StatusPill
+                        tone={
+                          integrationStatus.openrouter.authStatus === 'valid'
+                            ? 'success'
+                            : integrationStatus.openrouter.authStatus === 'disabled'
+                              ? 'neutral'
+                              : 'warning'
+                        }
+                      >
+                        {integrationStatus.openrouter.authStatus}
+                      </StatusPill>
+                    </div>
+                    <div className="space-y-1">
+                      <div>
+                        ShipCode currently reads <code>OPENROUTER_API_KEY</code> from the environment exposed to the desktop app.
+                      </div>
+                      {integrationStatus.openrouter.label ? (
+                        <div>Key label: <code>{integrationStatus.openrouter.label}</code></div>
+                      ) : null}
+                      {integrationStatus.openrouter.message ? (
+                        <div className="text-amber-300">{integrationStatus.openrouter.message}</div>
+                      ) : null}
+                    </div>
+                  </div>
+                </section>
+
+                <section className="mb-8">
+                  <h4 className="mb-3 text-secondary">OpenRouter Models</h4>
+                  <div className="space-y-2">
+                    {integrationStatus.openrouter.modelChecks.map((check) => (
+                      <div
+                        key={check.key}
+                        className="rounded-md border border-border bg-secondary/40 p-3"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="min-w-[140px] text-[13px] font-medium text-primary">
+                            {check.label}
+                          </div>
+                          <StatusPill
+                            tone={
+                              check.status === 'valid'
+                                ? 'success'
+                                : check.status === 'invalid'
+                                  ? 'danger'
+                                  : check.status === 'unverified'
+                                    ? 'warning'
+                                    : 'neutral'
+                            }
+                          >
+                            {check.status}
+                          </StatusPill>
+                        </div>
+                        <div className="mt-2 space-y-1 text-[12px] text-secondary">
+                          <div>
+                            Model: <code>{check.modelId ?? '(not configured)'}</code>
+                          </div>
+                          {check.message ? <div className="text-amber-300">{check.message}</div> : null}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </>
+            )}
           </>
         )}
 
@@ -461,10 +708,19 @@ export function SettingsPanel() {
                 modelValue={settings.plannerModel}
                 openrouterModelValue={settings.openrouterPlannerModel}
                 reasoningEffortValue={settings.plannerReasoningEffort}
-                validProviders={['claude', 'openrouter']}
+                validProviders={['claude', 'codex', 'openrouter']}
                 onModelChange={(v) => updateSettings.mutate({ plannerModel: v as AppSettings['plannerModel'] })}
                 onOpenrouterModelChange={(v) => updateSettings.mutate({ openrouterPlannerModel: v })}
                 onReasoningEffortChange={(v) => updateSettings.mutate({ plannerReasoningEffort: v })}
+                modelCheck={
+                  integrationStatus?.openrouter.modelChecks.find((check) => check.key === 'planner') ?? null
+                }
+                warningMessage={
+                  settings.plannerModel === 'openrouter' &&
+                  integrationStatus?.openrouter.authStatus !== 'valid'
+                    ? integrationStatus?.openrouter.message ?? 'OpenRouter is not ready.'
+                    : null
+                }
               />
               <PhaseModelRow
                 label="Reviewer model"
@@ -476,6 +732,15 @@ export function SettingsPanel() {
                 onModelChange={(v) => updateSettings.mutate({ reviewerModel: v as AppSettings['reviewerModel'] })}
                 onOpenrouterModelChange={(v) => updateSettings.mutate({ openrouterReviewerModel: v })}
                 onReasoningEffortChange={(v) => updateSettings.mutate({ reviewerReasoningEffort: v })}
+                modelCheck={
+                  integrationStatus?.openrouter.modelChecks.find((check) => check.key === 'reviewer') ?? null
+                }
+                warningMessage={
+                  settings.reviewerModel === 'openrouter' &&
+                  integrationStatus?.openrouter.authStatus !== 'valid'
+                    ? integrationStatus?.openrouter.message ?? 'OpenRouter is not ready.'
+                    : null
+                }
               />
               <PhaseModelRow
                 label="Executor model"
@@ -487,6 +752,15 @@ export function SettingsPanel() {
                 onModelChange={(v) => updateSettings.mutate({ executorModel: v as AppSettings['executorModel'] })}
                 onOpenrouterModelChange={(v) => updateSettings.mutate({ openrouterExecutorModel: v })}
                 onReasoningEffortChange={(v) => updateSettings.mutate({ executorReasoningEffort: v })}
+                disabledProviders={{ openrouter: 'execute unsupported' }}
+                modelCheck={
+                  integrationStatus?.openrouter.modelChecks.find((check) => check.key === 'executor') ?? null
+                }
+                warningMessage={
+                  settings.executorModel === 'openrouter'
+                    ? 'OpenRouter execute is not supported yet.'
+                    : null
+                }
               />
               <PhaseModelRow
                 label="Verifier model"
@@ -494,10 +768,19 @@ export function SettingsPanel() {
                 modelValue={settings.verifierModel}
                 openrouterModelValue={settings.openrouterVerifierModel}
                 reasoningEffortValue={settings.verifierReasoningEffort}
-                validProviders={['claude', 'openrouter']}
+                validProviders={['claude', 'codex', 'openrouter']}
                 onModelChange={(v) => updateSettings.mutate({ verifierModel: v as AppSettings['verifierModel'] })}
                 onOpenrouterModelChange={(v) => updateSettings.mutate({ openrouterVerifierModel: v })}
                 onReasoningEffortChange={(v) => updateSettings.mutate({ verifierReasoningEffort: v })}
+                modelCheck={
+                  integrationStatus?.openrouter.modelChecks.find((check) => check.key === 'verifier') ?? null
+                }
+                warningMessage={
+                  settings.verifierModel === 'openrouter' &&
+                  integrationStatus?.openrouter.authStatus !== 'valid'
+                    ? integrationStatus?.openrouter.message ?? 'OpenRouter is not ready.'
+                    : null
+                }
               />
               <SettingsRow
                 label="Test command"

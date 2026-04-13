@@ -248,7 +248,7 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
 export function createCodexCliProvider(processManager: ProcessManager): AgentProvider {
   return {
     id: 'codex-cli',
-    supports: new Set<ProviderPhase>(['review', 'execute']),
+    supports: new Set<ProviderPhase>(['plan', 'review', 'revision', 'verify', 'execute']),
     async generate(req: ProviderRequest): Promise<ProviderResponse> {
       const args = buildCodexArgs(req);
       const result = await runCli(processManager, 'codex', args, req.cwd, req.signal, req.threadId);

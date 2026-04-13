@@ -251,6 +251,19 @@ describe('ProjectQueries', () => {
     expect(projects.archiveIfIdle(p.id)).toBe(false);
   });
 
+  it('archiveIfIdle() can ignore stale notifications during missing-repo cleanup', () => {
+    const p = projects.add('/tmp/notif-missing');
+    db.prepare(
+      "INSERT INTO threads (id, project_id, title, prompt, status) VALUES ('t-notif-missing', ?, 'title', 'prompt', 'completed')",
+    ).run(p.id);
+    db.prepare(
+      "INSERT INTO notifications (id, thread_id, project_id, kind, title, body) VALUES ('n-missing', 't-notif-missing', ?, 'test', 'title', 'body')",
+    ).run(p.id);
+    expect(projects.hasLiveWork(p.id)).toBe(true);
+    expect(projects.hasLiveWork(p.id, { ignoreAttentionOnly: true })).toBe(false);
+    expect(projects.archiveIfIdle(p.id, { ignoreAttentionOnly: true })).toBe(true);
+  });
+
   it('archiveIfIdle() is blocked by a claimed github_issue_cache row (orphaned-claim case)', () => {
     const p = projects.add('/tmp/claimed');
     db.prepare(
@@ -262,6 +275,18 @@ describe('ProjectQueries', () => {
     expect(projects.removeIfIdle(p.id)).toBe(false);
   });
 
+  it('removeIfIdle() can ignore stale claimed issues during missing-repo cleanup', () => {
+    const p = projects.add('/tmp/claimed-missing');
+    db.prepare(
+      `INSERT INTO github_issue_cache (id, project_id, issue_number, title, claimed_at, claimed_by)
+       VALUES ('i-missing', ?, 1, 'title', datetime('now'), 'bot')`,
+    ).run(p.id);
+    expect(projects.hasLiveWork(p.id)).toBe(true);
+    expect(projects.hasLiveWork(p.id, { ignoreAttentionOnly: true })).toBe(false);
+    expect(projects.removeIfIdle(p.id, { ignoreAttentionOnly: true })).toBe(true);
+    expect(projects.getById(p.id)).toBeNull();
+  });
+
   it('removeIfIdle() returns false when live work appears', () => {
     const p = projects.add('/tmp/race');
     db.prepare(
@@ -269,6 +294,16 @@ describe('ProjectQueries', () => {
     ).run(p.id);
     expect(projects.removeIfIdle(p.id)).toBe(false);
     expect(projects.getById(p.id)).not.toBeNull();
+  });
+
+  it('ignoreAttentionOnly still blocks active thread work', () => {
+    const p = projects.add('/tmp/busy-missing');
+    db.prepare(
+      "INSERT INTO threads (id, project_id, title, prompt, status) VALUES ('t-busy', ?, 'title', 'prompt', 'executing')",
+    ).run(p.id);
+    expect(projects.hasLiveWork(p.id, { ignoreAttentionOnly: true })).toBe(true);
+    expect(projects.archiveIfIdle(p.id, { ignoreAttentionOnly: true })).toBe(false);
+    expect(projects.removeIfIdle(p.id, { ignoreAttentionOnly: true })).toBe(false);
   });
 
   // === auto-unarchive triggers ===

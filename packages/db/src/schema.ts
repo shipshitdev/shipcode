@@ -585,3 +585,50 @@ export function migrateV15(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (15)`);
   });
 }
+
+export function migrateV16(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 16) return;
+
+  transaction(db, () => {
+    const issueColumns = [
+      'ALTER TABLE github_issue_cache ADD COLUMN planner_model_override TEXT',
+      'ALTER TABLE github_issue_cache ADD COLUMN reviewer_model_override TEXT',
+      'ALTER TABLE github_issue_cache ADD COLUMN verifier_model_override TEXT',
+    ];
+
+    for (const sql of issueColumns) {
+      try {
+        db.exec(sql);
+      } catch {}
+    }
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (16)`);
+  });
+}
+
+export function migrateV17(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 17) return;
+
+  transaction(db, () => {
+    const issueColumns = [
+      'ALTER TABLE github_issue_cache ADD COLUMN planner_model_id_override TEXT',
+      'ALTER TABLE github_issue_cache ADD COLUMN reviewer_model_id_override TEXT',
+      'ALTER TABLE github_issue_cache ADD COLUMN executor_model_id_override TEXT',
+      'ALTER TABLE github_issue_cache ADD COLUMN verifier_model_id_override TEXT',
+    ];
+
+    for (const sql of issueColumns) {
+      try {
+        db.exec(sql);
+      } catch {}
+    }
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (17)`);
+  });
+}

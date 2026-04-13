@@ -2,8 +2,10 @@ import type {
   ActivePipelineSummary,
   AppSettings,
   ExecutorModel,
+  IntegrationStatus,
   PipelineCheckpoint,
   NotificationRecord,
+  OpenRouterModelValidation,
   PipelinePhase,
   PlanRecord,
   Project,
@@ -15,7 +17,7 @@ import type {
 import {
   deriveGithubIssueUrl,
   resolveExecutorModelForIssue,
-  resolvePhaseModel,
+  resolvePhaseModelForIssue,
   shipCodePlanSchema,
 } from '@shipcode/shared';
 import {
@@ -28,6 +30,7 @@ import {
   ChevronRight,
   ChevronUp,
   Copy,
+  Input,
   Modal,
   ModalFooter,
   ExternalLink,
@@ -42,7 +45,10 @@ import {
   ReviewViewer,
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
   Tabs,
@@ -79,6 +85,65 @@ const PIPELINE_PREVIEW_PHASES = [
 ] as const;
 
 const INHERIT_EXECUTOR_VALUE = '__inherit__';
+const PROVIDER_DISPLAY: Record<ExecutorModel, string> = {
+  claude: 'Anthropic',
+  codex: 'OpenAI',
+  openrouter: 'OpenRouter',
+};
+const CLAUDE_MODELS = [
+  { value: 'claude-sonnet-4-6', label: 'Sonnet 4.6' },
+  { value: 'claude-opus-4-6', label: 'Opus 4.6' },
+  { value: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
+] as const;
+const CODEX_MODELS = [
+  { value: 'gpt-5.4', label: 'GPT-5.4' },
+  { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' },
+] as const;
+const OPENROUTER_MODELS = [
+  { value: 'openrouter/auto', label: 'Auto (paid)' },
+  { value: 'openrouter/free', label: 'Auto (free)' },
+  { value: 'anthropic/claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
+  { value: 'qwen/qwen3.6-plus', label: 'Qwen 3.6 Plus' },
+  { value: 'qwen/qwen3-coder:free', label: 'Qwen 3 Coder Free' },
+] as const;
+const PHASE_PROVIDER_OPTIONS: Record<
+  'planner' | 'reviewer' | 'executor' | 'verifier',
+  ExecutorModel[]
+> = {
+  planner: ['claude', 'codex', 'openrouter'],
+  reviewer: ['claude', 'codex', 'openrouter'],
+  executor: ['claude', 'codex', 'openrouter'],
+  verifier: ['claude', 'codex', 'openrouter'],
+};
+
+function getUnsupportedProviderReason(
+  phase: 'planner' | 'reviewer' | 'executor' | 'verifier',
+  provider: ExecutorModel,
+): string | null {
+  if (phase === 'executor' && provider === 'openrouter') {
+    return 'OpenRouter execute is not supported yet';
+  }
+  return null;
+}
+
+function getModelOptions(provider: ExecutorModel) {
+  if (provider === 'claude') return CLAUDE_MODELS;
+  if (provider === 'codex') return CODEX_MODELS;
+  return OPENROUTER_MODELS;
+}
+
+function encodePhaseOption(provider: ExecutorModel, modelId: string | null) {
+  return `${provider}::${modelId ?? '__default__'}`;
+}
+
+function decodePhaseOption(value: string): { provider: ExecutorModel; modelId: string | null } {
+  const [providerRaw, modelIdRaw] = value.split('::');
+  const provider =
+    providerRaw === 'claude' || providerRaw === 'codex' || providerRaw === 'openrouter'
+      ? providerRaw
+      : 'claude';
+  return { provider, modelId: modelIdRaw === '__default__' ? null : modelIdRaw };
+}
 
 // `deriveGithubIssueUrl` + related helpers live in `@shipcode/shared/github-url`
 // so the Kanban toolbar, IssueDetail, and any future consumer share one parser.
@@ -216,6 +281,11 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const [planHistoryCollapsed, setPlanHistoryCollapsed] = useState(false);
   const [showRawOutput, setShowRawOutput] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
+  const [phaseModelValidation, setPhaseModelValidation] = useState<
+    Partial<
+      Record<'planner' | 'reviewer' | 'executor' | 'verifier', OpenRouterModelValidation | null>
+    >
+  >({});
 
   function safeErrorMessage(raw: string): string {
     const trimmed = raw.trim();
@@ -279,6 +349,12 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     queryFn: () => window.shipcode.invoke('settings:get'),
   });
 
+  const { data: integrationStatus } = useQuery<IntegrationStatus>({
+    queryKey: ['integrations'],
+    queryFn: () => window.shipcode.invoke('integrations:check'),
+    staleTime: 30_000,
+  });
+
   const { data: checkpoints = [] } = useQuery<PipelineCheckpoint[]>({
     queryKey: ['checkpoints', activeThreadId],
     queryFn: () => window.shipcode.invoke('checkpoint:list', { threadId: activeThreadId }),
@@ -292,6 +368,10 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     queryFn: () => window.shipcode.invoke('verification:get', { threadId: activeThreadId }),
     enabled: !!activeThreadId && thread?.status === 'failed',
   });
+
+  useEffect(() => {
+    setPhaseModelValidation({});
+  }, [activeIssue?.id]);
 
   // Pick the right raw output based on which phase failed
   const failingPhaseOutput = (() => {
@@ -484,22 +564,78 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
   const phaseIsActive = ACTIVE_PHASES.includes(threadPhase as PipelinePhase);
 
-  const handleExecutorChange = async (
-    model: ExecutorModel | typeof INHERIT_EXECUTOR_VALUE,
+  const handlePhaseAgentChange = async (
+    phase: 'planner' | 'reviewer' | 'executor' | 'verifier',
+    value: string,
   ) => {
-    if (!activeProjectId) return;
-    if (model === INHERIT_EXECUTOR_VALUE) {
-      await window.shipcode.invoke('github:clear-executor-override', {
+    if (!activeProjectId || !activeIssue) return;
+    if (value === INHERIT_EXECUTOR_VALUE) {
+      await window.shipcode.invoke('github:clear-phase-model-override', {
         projectId: activeProjectId,
-        issueNumber: activeIssue!.issueNumber,
+        issueNumber: activeIssue.issueNumber,
+        phase,
+      });
+      await window.shipcode.invoke('github:clear-phase-model-id-override', {
+        projectId: activeProjectId,
+        issueNumber: activeIssue.issueNumber,
+        phase,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['github-issues', activeProjectId] });
+      return;
+    }
+
+    const { provider, modelId } = decodePhaseOption(value);
+    await window.shipcode.invoke('github:set-phase-model-override', {
+      projectId: activeProjectId,
+      issueNumber: activeIssue.issueNumber,
+      phase,
+      model: provider,
+    });
+    if (modelId === null) {
+      await window.shipcode.invoke('github:clear-phase-model-id-override', {
+        projectId: activeProjectId,
+        issueNumber: activeIssue.issueNumber,
+        phase,
       });
     } else {
-      await window.shipcode.invoke('github:set-executor-override', {
+      await window.shipcode.invoke('github:set-phase-model-id-override', {
         projectId: activeProjectId,
-        issueNumber: activeIssue!.issueNumber,
-        model,
+        issueNumber: activeIssue.issueNumber,
+        phase,
+        modelId,
       });
     }
+    await queryClient.invalidateQueries({ queryKey: ['github-issues', activeProjectId] });
+  };
+
+  const handlePhaseOpenRouterSlugBlur = async (
+    phase: 'planner' | 'reviewer' | 'executor' | 'verifier',
+    rawValue: string,
+  ) => {
+    if (!activeProjectId || !activeIssue) return;
+    const modelId = rawValue.trim() || null;
+    if (!modelId) {
+      await window.shipcode.invoke('github:clear-phase-model-id-override', {
+        projectId: activeProjectId,
+        issueNumber: activeIssue.issueNumber,
+        phase,
+      });
+      setPhaseModelValidation((current) => ({ ...current, [phase]: null }));
+      await queryClient.invalidateQueries({ queryKey: ['github-issues', activeProjectId] });
+      return;
+    }
+
+    const validation = await window.shipcode.invoke<OpenRouterModelValidation>(
+      'integrations:validate-openrouter-model',
+      { modelId },
+    );
+    await window.shipcode.invoke('github:set-phase-model-id-override', {
+      projectId: activeProjectId,
+      issueNumber: activeIssue.issueNumber,
+      phase,
+      modelId,
+    });
+    setPhaseModelValidation((current) => ({ ...current, [phase]: validation }));
     await queryClient.invalidateQueries({ queryKey: ['github-issues', activeProjectId] });
   };
 
@@ -533,23 +669,74 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   // the user will kick off a new run (failed/completed).
   const EXECUTOR_EDITABLE_STATUSES = new Set(['todo', 'queued', 'failed', 'completed']);
   const executorEditable = EXECUTOR_EDITABLE_STATUSES.has(activeIssue?.pipelineStatus ?? 'todo');
-  const effectivePlannerModel =
-    thread?.plannerResolvedModel ??
-    thread?.plannerModel ??
-    (settings ? resolvePhaseModel(settings, activeProject, 'planner') : 'claude');
-  const effectiveReviewerModel =
-    thread?.reviewerResolvedModel ??
-    thread?.reviewerModel ??
-    (settings ? resolvePhaseModel(settings, activeProject, 'reviewer') : 'codex');
-  const effectiveExecutorModel =
-    thread?.executorResolvedModel ??
-    thread?.executorModel ??
-    (settings ? resolveExecutorModelForIssue(settings, activeProject, activeIssue) : 'claude');
-  const effectiveVerifierModel =
-    thread?.verifierResolvedModel ??
-    thread?.verifierModel ??
-    (settings ? resolvePhaseModel(settings, activeProject, 'verifier') : 'claude');
-  const executorSelectValue = activeIssue.executorModelOverride ?? INHERIT_EXECUTOR_VALUE;
+  const effectivePhaseProviders = {
+    planner: settings
+      ? resolvePhaseModelForIssue(settings, activeProject, activeIssue, 'planner')
+      : 'claude',
+    reviewer: settings
+      ? resolvePhaseModelForIssue(settings, activeProject, activeIssue, 'reviewer')
+      : 'codex',
+    executor: settings
+      ? resolveExecutorModelForIssue(settings, activeProject, activeIssue)
+      : 'claude',
+    verifier: settings
+      ? resolvePhaseModelForIssue(settings, activeProject, activeIssue, 'verifier')
+      : 'claude',
+  } as const;
+  const effectivePhaseResolvedModels = {
+    planner: thread?.plannerResolvedModel ?? effectivePhaseProviders.planner,
+    reviewer: thread?.reviewerResolvedModel ?? effectivePhaseProviders.reviewer,
+    executor: thread?.executorResolvedModel ?? effectivePhaseProviders.executor,
+    verifier: thread?.verifierResolvedModel ?? effectivePhaseProviders.verifier,
+  } as const;
+  const phaseSelectValues = {
+    planner:
+      activeIssue.plannerModelOverride || activeIssue.plannerModelIdOverride
+        ? encodePhaseOption(
+            activeIssue.plannerModelOverride ?? effectivePhaseProviders.planner,
+            activeIssue.plannerModelIdOverride,
+          )
+        : INHERIT_EXECUTOR_VALUE,
+    reviewer:
+      activeIssue.reviewerModelOverride || activeIssue.reviewerModelIdOverride
+        ? encodePhaseOption(
+            activeIssue.reviewerModelOverride ?? effectivePhaseProviders.reviewer,
+            activeIssue.reviewerModelIdOverride,
+          )
+        : INHERIT_EXECUTOR_VALUE,
+    executor:
+      activeIssue.executorModelOverride || activeIssue.executorModelIdOverride
+        ? encodePhaseOption(
+            activeIssue.executorModelOverride ?? effectivePhaseProviders.executor,
+            activeIssue.executorModelIdOverride,
+          )
+        : INHERIT_EXECUTOR_VALUE,
+    verifier:
+      activeIssue.verifierModelOverride || activeIssue.verifierModelIdOverride
+        ? encodePhaseOption(
+            activeIssue.verifierModelOverride ?? effectivePhaseProviders.verifier,
+            activeIssue.verifierModelIdOverride,
+          )
+        : INHERIT_EXECUTOR_VALUE,
+  } as const;
+  const currentPhaseSelections = {
+    planner:
+      phaseSelectValues.planner === INHERIT_EXECUTOR_VALUE
+        ? { provider: effectivePhaseProviders.planner, modelId: null as string | null }
+        : decodePhaseOption(phaseSelectValues.planner),
+    reviewer:
+      phaseSelectValues.reviewer === INHERIT_EXECUTOR_VALUE
+        ? { provider: effectivePhaseProviders.reviewer, modelId: null as string | null }
+        : decodePhaseOption(phaseSelectValues.reviewer),
+    executor:
+      phaseSelectValues.executor === INHERIT_EXECUTOR_VALUE
+        ? { provider: effectivePhaseProviders.executor, modelId: null as string | null }
+        : decodePhaseOption(phaseSelectValues.executor),
+    verifier:
+      phaseSelectValues.verifier === INHERIT_EXECUTOR_VALUE
+        ? { provider: effectivePhaseProviders.verifier, modelId: null as string | null }
+        : decodePhaseOption(phaseSelectValues.verifier),
+  } as const;
 
   const statusColor = (status: string) => {
     switch (status) {
@@ -688,40 +875,132 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-secondary">Agents</h4>
       <div className="grid grid-cols-2 gap-2">
         {[
-          { role: 'Planner', model: effectivePlannerModel, editable: false },
-          { role: 'Reviewer', model: effectiveReviewerModel, editable: false },
-          { role: 'Executor', model: effectiveExecutorModel, editable: executorEditable },
-          { role: 'Verifier', model: effectiveVerifierModel, editable: false },
-        ].map(({ role, model, editable }) => (
+          {
+            role: 'Planner',
+            phase: 'planner' as const,
+            displayModel: effectivePhaseResolvedModels.planner,
+            editable: executorEditable,
+          },
+          {
+            role: 'Reviewer',
+            phase: 'reviewer' as const,
+            displayModel: effectivePhaseResolvedModels.reviewer,
+            editable: executorEditable,
+          },
+          {
+            role: 'Executor',
+            phase: 'executor' as const,
+            displayModel: effectivePhaseResolvedModels.executor,
+            editable: executorEditable,
+          },
+          {
+            role: 'Verifier',
+            phase: 'verifier' as const,
+            displayModel: effectivePhaseResolvedModels.verifier,
+            editable: executorEditable,
+          },
+        ].map(({ role, phase, displayModel, editable }) => (
           <div
             key={role}
-            className="flex flex-col gap-1 rounded-md border border-border bg-secondary p-2"
+            className="flex flex-col gap-2 rounded-md border border-border bg-secondary p-2"
           >
             <span className="text-[10px] font-medium uppercase tracking-wide text-muted">
               {role}
             </span>
             {editable ? (
-              <Select
-                value={executorSelectValue}
-                onValueChange={(v: string) =>
-                  handleExecutorChange(v as ExecutorModel | typeof INHERIT_EXECUTOR_VALUE)
-                }
-              >
-                <SelectTrigger className="h-6 w-full text-[11px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={INHERIT_EXECUTOR_VALUE}>
-                    Inherit ({MODEL_DISPLAY[effectiveExecutorModel] ?? effectiveExecutorModel})
-                  </SelectItem>
-                  <SelectItem value="claude">{MODEL_DISPLAY.claude}</SelectItem>
-                  <SelectItem value="codex">{MODEL_DISPLAY.codex}</SelectItem>
-                  <SelectItem value="openrouter">{MODEL_DISPLAY.openrouter}</SelectItem>
-                </SelectContent>
-              </Select>
+              <>
+                <Select
+                  value={phaseSelectValues[phase]}
+                  onValueChange={(v: string) => handlePhaseAgentChange(phase, v)}
+                >
+                  <SelectTrigger className="h-6 w-full text-[11px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={INHERIT_EXECUTOR_VALUE}>Inherit project default</SelectItem>
+                    <SelectSeparator />
+                    {PHASE_PROVIDER_OPTIONS[phase].map((providerOption) => {
+                      const selectedSelection = currentPhaseSelections[phase];
+                      const selectedModelId =
+                        selectedSelection.provider === providerOption ? selectedSelection.modelId : null;
+                      const unsupportedReason = getUnsupportedProviderReason(phase, providerOption);
+
+                      return (
+                        <SelectGroup key={providerOption}>
+                          <SelectLabel>{PROVIDER_DISPLAY[providerOption]}</SelectLabel>
+                          <SelectItem
+                            value={encodePhaseOption(providerOption, null)}
+                            disabled={!!unsupportedReason}
+                          >
+                            {PROVIDER_DISPLAY[providerOption]} default
+                            {unsupportedReason ? ' (execute unsupported)' : ''}
+                          </SelectItem>
+                          {selectedModelId &&
+                            !getModelOptions(providerOption).some(
+                              (option) => option.value === selectedModelId,
+                            ) && (
+                              <SelectItem
+                                value={encodePhaseOption(providerOption, selectedModelId)}
+                                disabled={!!unsupportedReason}
+                              >
+                                {selectedModelId}
+                                {unsupportedReason ? ' (execute unsupported)' : ''}
+                              </SelectItem>
+                            )}
+                          {getModelOptions(providerOption).map((option) => (
+                            <SelectItem
+                              key={option.value}
+                              value={encodePhaseOption(providerOption, option.value)}
+                              disabled={!!unsupportedReason}
+                            >
+                              {option.label}
+                              {unsupportedReason ? ' (execute unsupported)' : ''}
+                            </SelectItem>
+                          ))}
+                          {providerOption !==
+                            PHASE_PROVIDER_OPTIONS[phase][PHASE_PROVIDER_OPTIONS[phase].length - 1] && (
+                            <SelectSeparator />
+                          )}
+                        </SelectGroup>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+
+                {currentPhaseSelections[phase].provider === 'openrouter' && phase !== 'executor' && (
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] uppercase tracking-wide text-muted">
+                      Custom OpenRouter slug
+                    </span>
+                    <Input
+                      key={`${phase}-${currentPhaseSelections[phase].modelId ?? ''}`}
+                      className="h-7 text-[11px]"
+                      placeholder="e.g. anthropic/claude-sonnet-4-6"
+                      defaultValue={currentPhaseSelections[phase].modelId ?? ''}
+                      onBlur={(e) => handlePhaseOpenRouterSlugBlur(phase, e.target.value)}
+                    />
+                  </div>
+                )}
+
+                {(currentPhaseSelections[phase].provider === 'openrouter' &&
+                  integrationStatus?.openrouter.authStatus !== 'valid') ||
+                (currentPhaseSelections[phase].provider === 'openrouter' && phase === 'executor') ? (
+                  <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-300">
+                    {phase === 'executor'
+                      ? 'OpenRouter execute is not supported yet.'
+                      : integrationStatus?.openrouter.message ?? 'OpenRouter is not ready.'}
+                  </div>
+                ) : null}
+
+                {phaseModelValidation[phase] && phaseModelValidation[phase]?.status !== 'valid' ? (
+                  <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-300">
+                    {phaseModelValidation[phase]?.message}
+                  </div>
+                ) : null}
+              </>
             ) : (
               <Badge variant="default" className="w-fit font-mono normal-case tracking-normal">
-                {MODEL_DISPLAY[model] ?? model}
+                {MODEL_DISPLAY[displayModel] ?? displayModel}
               </Badge>
             )}
           </div>

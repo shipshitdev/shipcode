@@ -13,7 +13,7 @@ function makeProvider(id: AgentProvider['id'], phases: ProviderPhase[]): AgentPr
 
 describe('createProviderRegistry', () => {
   const claude = makeProvider('claude-cli', ['plan', 'review', 'revision', 'verify', 'execute']);
-  const codex = makeProvider('codex-cli', ['review', 'execute']);
+  const codex = makeProvider('codex-cli', ['plan', 'review', 'revision', 'verify', 'execute']);
   const openrouter = makeProvider('openrouter', ['plan', 'review', 'revision', 'verify']);
   const registry = createProviderRegistry({ claude, codex, openrouter });
 
@@ -23,7 +23,10 @@ describe('createProviderRegistry', () => {
   });
 
   it('dispatches codex agent to codex-cli provider', () => {
+    expect(registry.for('codex', 'plan')).toBe(codex);
     expect(registry.for('codex', 'review')).toBe(codex);
+    expect(registry.for('codex', 'revision')).toBe(codex);
+    expect(registry.for('codex', 'verify')).toBe(codex);
     expect(registry.for('codex', 'execute')).toBe(codex);
   });
 
@@ -33,8 +36,6 @@ describe('createProviderRegistry', () => {
   });
 
   it('throws if a provider does not support the requested phase', () => {
-    // codex-cli does not support plan
-    expect(() => registry.for('codex', 'plan')).toThrow(/does not support phase 'plan'/);
     // openrouter does not support execute in Tier 1
     expect(() => registry.for('openrouter', 'execute')).toThrow(/does not support phase 'execute'/);
   });

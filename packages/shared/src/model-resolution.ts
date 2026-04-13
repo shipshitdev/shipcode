@@ -24,7 +24,17 @@ type ProjectModelOverrides = Pick<
   | 'verifierReasoningEffortOverride'
 >;
 
-type IssueExecutorOverride = Pick<GitHubIssueCacheRecord, 'executorModelOverride'>;
+type IssuePhaseOverrides = Pick<
+  GitHubIssueCacheRecord,
+  | 'plannerModelOverride'
+  | 'reviewerModelOverride'
+  | 'executorModelOverride'
+  | 'verifierModelOverride'
+  | 'plannerModelIdOverride'
+  | 'reviewerModelIdOverride'
+  | 'executorModelIdOverride'
+  | 'verifierModelIdOverride'
+>;
 
 function asExecutorModel(value: string | null | undefined): ExecutorModel | null {
   if (value === 'claude' || value === 'codex' || value === 'openrouter') return value;
@@ -60,9 +70,27 @@ export function resolvePhaseModel(
 export function resolveExecutorModelForIssue(
   settings: AppSettings,
   project: ProjectModelOverrides | null | undefined,
-  issue: IssueExecutorOverride | null | undefined,
+  issue: IssuePhaseOverrides | null | undefined,
 ): ExecutorModel {
-  return asExecutorModel(issue?.executorModelOverride) ?? resolvePhaseModel(settings, project, 'executor');
+  return resolvePhaseModelForIssue(settings, project, issue, 'executor');
+}
+
+export function resolvePhaseModelForIssue(
+  settings: AppSettings,
+  project: ProjectModelOverrides | null | undefined,
+  issue: IssuePhaseOverrides | null | undefined,
+  phase: ResolvedPhaseModel,
+): ExecutorModel {
+  const issueOverride =
+    phase === 'planner'
+      ? issue?.plannerModelOverride
+      : phase === 'reviewer'
+        ? issue?.reviewerModelOverride
+        : phase === 'executor'
+          ? issue?.executorModelOverride
+          : issue?.verifierModelOverride;
+
+  return asExecutorModel(issueOverride) ?? resolvePhaseModel(settings, project, phase);
 }
 
 export function resolvePhaseReasoningEffort(
@@ -120,6 +148,24 @@ export function resolvePhaseModelId(
     case 'verifier':
       return settings.openrouterVerifierModel;
   }
+}
+
+export function resolvePhaseModelIdForIssue(
+  settings: AppSettings,
+  project: ProjectModelOverrides | null | undefined,
+  issue: IssuePhaseOverrides | null | undefined,
+  phase: ResolvedPhaseModel,
+): string | null {
+  const issueOverride =
+    phase === 'planner'
+      ? issue?.plannerModelIdOverride
+      : phase === 'reviewer'
+        ? issue?.reviewerModelIdOverride
+        : phase === 'executor'
+          ? issue?.executorModelIdOverride
+          : issue?.verifierModelIdOverride;
+  if (issueOverride) return issueOverride;
+  return resolvePhaseModelId(settings, project, phase);
 }
 
 export function getIssueCardPhase(status: GitHubIssueCacheRecord['pipelineStatus']): ResolvedPhaseModel | null {

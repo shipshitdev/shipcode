@@ -6,6 +6,8 @@ import {
   type ContextFileInfo,
   type AppSettings,
   type ExecutorModel,
+  type IntegrationStatus,
+  type OpenRouterModelValidation,
   type Project,
   resolvePhaseModel,
   resolvePhaseModelId,
@@ -89,8 +91,8 @@ const EFFORT_OVERRIDE_KEYS = {
 } as const;
 
 const PROVIDER_LABELS: Record<ExecutorModel, string> = {
-  claude: 'Claude',
-  codex: 'Codex',
+  claude: 'Anthropic',
+  codex: 'OpenAI',
   openrouter: 'OpenRouter',
 };
 
@@ -118,11 +120,21 @@ const PHASE_META: Array<{
   label: string;
   validProviders: ExecutorModel[];
 }> = [
-  { key: 'planner', label: 'Planner', validProviders: ['claude', 'openrouter'] },
+  { key: 'planner', label: 'Planner', validProviders: ['claude', 'codex', 'openrouter'] },
   { key: 'reviewer', label: 'Reviewer', validProviders: ['claude', 'codex', 'openrouter'] },
   { key: 'executor', label: 'Executor', validProviders: ['claude', 'codex', 'openrouter'] },
-  { key: 'verifier', label: 'Verifier', validProviders: ['claude', 'openrouter'] },
+  { key: 'verifier', label: 'Verifier', validProviders: ['claude', 'codex', 'openrouter'] },
 ];
+
+function getUnsupportedProviderReason(
+  phase: PhaseKey,
+  provider: ExecutorModel,
+): string | null {
+  if (phase === 'executor' && provider === 'openrouter') {
+    return 'OpenRouter execute is not supported yet';
+  }
+  return null;
+}
 
 function getModelOptions(
   provider: ExecutorModel,
@@ -156,6 +168,9 @@ function ProjectPhaseSettingsRow({
   projectDraft,
   overrides,
   setOverrides,
+  integrationStatus,
+  modelValidation,
+  setModelValidation,
 }: {
   phase: PhaseKey;
   label: string;
@@ -164,6 +179,11 @@ function ProjectPhaseSettingsRow({
   projectDraft: Project;
   overrides: ProjectOverrideState;
   setOverrides: Dispatch<SetStateAction<ProjectOverrideState>>;
+  integrationStatus: IntegrationStatus | undefined;
+  modelValidation: Partial<Record<PhaseKey, OpenRouterModelValidation | null>>;
+  setModelValidation: Dispatch<
+    SetStateAction<Partial<Record<PhaseKey, OpenRouterModelValidation | null>>>
+  >;
 }) {
   const providerKey = PROVIDER_OVERRIDE_KEYS[phase];
   const modelIdKey = MODEL_ID_OVERRIDE_KEYS[phase];
@@ -176,6 +196,17 @@ function ProjectPhaseSettingsRow({
   const effectiveProvider = resolvePhaseModel(settings, projectDraft, phase);
   const modelOptions = getModelOptions(effectiveProvider);
   const knownModelValues = new Set<string>(modelOptions.map((option) => option.value));
+  const providerWarning =
+    effectiveProvider === 'openrouter'
+      ? getUnsupportedProviderReason(phase, effectiveProvider) ??
+        (integrationStatus?.openrouter.authStatus !== 'valid'
+          ? integrationStatus?.openrouter.message ?? 'OpenRouter is not ready'
+          : null)
+      : null;
+  const validationMessage =
+    modelValidation[phase] && modelValidation[phase]?.status !== 'valid'
+      ? modelValidation[phase]?.message
+      : null;
 
   return (
     <div className="rounded-md border border-border bg-secondary/50 p-3">
@@ -197,6 +228,7 @@ function ProjectPhaseSettingsRow({
                 [providerKey]: next === INHERIT_VALUE ? null : (next as ExecutorModel),
                 [modelIdKey]: null,
               }));
+              setModelValidation((current) => ({ ...current, [phase]: null }));
             }}
           >
             <SelectTrigger>
@@ -205,8 +237,15 @@ function ProjectPhaseSettingsRow({
             <SelectContent>
               <SelectItem value={INHERIT_VALUE}>Inherit</SelectItem>
               {validProviders.map((provider) => (
-                <SelectItem key={provider} value={provider}>
+                <SelectItem
+                  key={provider}
+                  value={provider}
+                  disabled={!!getUnsupportedProviderReason(phase, provider)}
+                >
                   {PROVIDER_LABELS[provider]}
+                  {getUnsupportedProviderReason(phase, provider)
+                    ? ' (execute unsupported)'
+                    : ''}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -222,6 +261,7 @@ function ProjectPhaseSettingsRow({
                 ...current,
                 [modelIdKey]: next === INHERIT_VALUE ? null : next,
               }));
+              setModelValidation((current) => ({ ...current, [phase]: null }));
             }}
           >
             <SelectTrigger>
@@ -264,6 +304,44 @@ function ProjectPhaseSettingsRow({
           </Select>
         </div>
       </div>
+
+      {effectiveProvider === 'openrouter' && phase !== 'executor' && (
+        <div className="mt-3 flex flex-col gap-1.5">
+          <Label className="text-[11px] text-secondary">Custom OpenRouter model slug</Label>
+          <Input
+            key={`${phase}-${modelIdOverride ?? ''}`}
+            placeholder="e.g. anthropic/claude-sonnet-4-6"
+            defaultValue={modelIdOverride ?? ''}
+            onBlur={async (e) => {
+              const next = e.target.value.trim() || null;
+              setOverrides((current) => ({ ...current, [modelIdKey]: next }));
+              if (!next) {
+                setModelValidation((current) => ({ ...current, [phase]: null }));
+                return;
+              }
+              const validation = await window.shipcode.invoke<OpenRouterModelValidation>(
+                'integrations:validate-openrouter-model',
+                { modelId: next },
+              );
+              setModelValidation((current) => ({ ...current, [phase]: validation }));
+            }}
+          />
+          <p className="text-[11px] text-muted">
+            Enter a slug directly to override the curated presets for this project.
+          </p>
+        </div>
+      )}
+
+      {providerWarning && (
+        <div className="mt-3 rounded-md border border-amber-500/20 bg-amber-500/10 px-2.5 py-2 text-[11px] text-amber-300">
+          {providerWarning}
+        </div>
+      )}
+      {validationMessage && (
+        <div className="mt-2 rounded-md border border-amber-500/20 bg-amber-500/10 px-2.5 py-2 text-[11px] text-amber-300">
+          {validationMessage}
+        </div>
+      )}
     </div>
   );
 }
@@ -291,6 +369,9 @@ export function ProjectSettingsModal() {
   } | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [relinkError, setRelinkError] = useState<string | null>(null);
+  const [modelValidation, setModelValidation] = useState<
+    Partial<Record<PhaseKey, OpenRouterModelValidation | null>>
+  >({});
 
   const { data: project } = useQuery<Project | null>({
     queryKey: ['project', projectSettingsModalProjectId],
@@ -303,6 +384,13 @@ export function ProjectSettingsModal() {
     queryKey: ['settings'],
     queryFn: () => window.shipcode.invoke('settings:get'),
     enabled: projectSettingsModalOpen,
+  });
+
+  const { data: integrationStatus } = useQuery<IntegrationStatus>({
+    queryKey: ['integrations'],
+    queryFn: () => window.shipcode.invoke('integrations:check'),
+    enabled: projectSettingsModalOpen,
+    staleTime: 30_000,
   });
 
   useEffect(() => {
@@ -330,6 +418,7 @@ export function ProjectSettingsModal() {
     setContextGenerating(false);
     setContextError(null);
     setRelinkError(null);
+    setModelValidation({});
   }, [projectSettingsModalOpen, project?.id, project?.updatedAt]);
 
   const validation = useMemo(() => validateGithubProjectUrl(urlInput), [urlInput]);
@@ -636,6 +725,9 @@ export function ProjectSettingsModal() {
                   projectDraft={projectDraft}
                   overrides={overrides}
                   setOverrides={setOverrides}
+                  integrationStatus={integrationStatus}
+                  modelValidation={modelValidation}
+                  setModelValidation={setModelValidation}
                 />
               ))}
             </TabsContent>

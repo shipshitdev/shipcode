@@ -109,9 +109,16 @@ describe('GitHubIssueQueries', () => {
     expect(issues.getByNumber(projectId, 1)!.pipelineStatus).toBe('planning');
   });
 
-  it('defaults executorModelOverride to null', () => {
+  it('defaults phase model overrides to null', () => {
     const record = issues.upsert(makeIssue());
+    expect(record.plannerModelOverride).toBeNull();
+    expect(record.reviewerModelOverride).toBeNull();
     expect(record.executorModelOverride).toBeNull();
+    expect(record.verifierModelOverride).toBeNull();
+    expect(record.plannerModelIdOverride).toBeNull();
+    expect(record.reviewerModelIdOverride).toBeNull();
+    expect(record.executorModelIdOverride).toBeNull();
+    expect(record.verifierModelIdOverride).toBeNull();
     expect(record.linkedPrNumber).toBeNull();
     expect(record.linkedPrUrl).toBeNull();
     expect(record.linkedPrIsDraft).toBe(false);
@@ -122,14 +129,52 @@ describe('GitHubIssueQueries', () => {
     expect(record.prLastSyncAt).toBeNull();
   });
 
-  it('updateExecutorModelOverride() persists a value and can clear it', () => {
+  it('updatePhaseModelOverride() persists values and can clear them', () => {
     const record = issues.upsert(makeIssue());
 
-    issues.updateExecutorModelOverride(record.id, 'openrouter');
+    issues.updatePhaseModelOverride(record.id, 'planner', 'openrouter');
+    issues.updatePhaseModelOverride(record.id, 'reviewer', 'claude');
+    issues.updatePhaseModelOverride(record.id, 'executor', 'openrouter');
+    issues.updatePhaseModelOverride(record.id, 'verifier', 'claude');
+    expect(issues.getByNumber(projectId, 1)!.plannerModelOverride).toBe('openrouter');
+    expect(issues.getByNumber(projectId, 1)!.reviewerModelOverride).toBe('claude');
     expect(issues.getByNumber(projectId, 1)!.executorModelOverride).toBe('openrouter');
+    expect(issues.getByNumber(projectId, 1)!.verifierModelOverride).toBe('claude');
 
-    issues.updateExecutorModelOverride(record.id, null);
+    issues.updatePhaseModelOverride(record.id, 'planner', null);
+    issues.updatePhaseModelOverride(record.id, 'reviewer', null);
+    issues.updatePhaseModelOverride(record.id, 'executor', null);
+    issues.updatePhaseModelOverride(record.id, 'verifier', null);
+    expect(issues.getByNumber(projectId, 1)!.plannerModelOverride).toBeNull();
+    expect(issues.getByNumber(projectId, 1)!.reviewerModelOverride).toBeNull();
     expect(issues.getByNumber(projectId, 1)!.executorModelOverride).toBeNull();
+    expect(issues.getByNumber(projectId, 1)!.verifierModelOverride).toBeNull();
+  });
+
+  it('updatePhaseModelIdOverride() persists values and can clear them', () => {
+    const record = issues.upsert(makeIssue());
+
+    issues.updatePhaseModelIdOverride(record.id, 'planner', 'claude-opus-4-6');
+    issues.updatePhaseModelIdOverride(record.id, 'reviewer', 'gpt-5.4-mini');
+    issues.updatePhaseModelIdOverride(record.id, 'executor', 'gpt-5.4');
+    issues.updatePhaseModelIdOverride(record.id, 'verifier', 'anthropic/claude-sonnet-4-6');
+
+    expect(issues.getByNumber(projectId, 1)!.plannerModelIdOverride).toBe('claude-opus-4-6');
+    expect(issues.getByNumber(projectId, 1)!.reviewerModelIdOverride).toBe('gpt-5.4-mini');
+    expect(issues.getByNumber(projectId, 1)!.executorModelIdOverride).toBe('gpt-5.4');
+    expect(issues.getByNumber(projectId, 1)!.verifierModelIdOverride).toBe(
+      'anthropic/claude-sonnet-4-6',
+    );
+
+    issues.updatePhaseModelIdOverride(record.id, 'planner', null);
+    issues.updatePhaseModelIdOverride(record.id, 'reviewer', null);
+    issues.updatePhaseModelIdOverride(record.id, 'executor', null);
+    issues.updatePhaseModelIdOverride(record.id, 'verifier', null);
+
+    expect(issues.getByNumber(projectId, 1)!.plannerModelIdOverride).toBeNull();
+    expect(issues.getByNumber(projectId, 1)!.reviewerModelIdOverride).toBeNull();
+    expect(issues.getByNumber(projectId, 1)!.executorModelIdOverride).toBeNull();
+    expect(issues.getByNumber(projectId, 1)!.verifierModelIdOverride).toBeNull();
   });
 
   it('updatePullRequestFeedback() persists linked PR metadata and blocker summaries', () => {

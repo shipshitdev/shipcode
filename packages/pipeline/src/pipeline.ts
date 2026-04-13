@@ -20,6 +20,8 @@ import {
   PIPELINE_MAX_RETRIES,
   MAX_VERIFICATION_RETRIES,
   MAX_TEST_RETRIES,
+  resolvePhaseModelForIssue,
+  resolvePhaseModelIdForIssue,
 } from '@shipcode/shared';
 import type { Pipeline, PipelineContext, PipelineDeps, PipelineExecutorModel } from './types';
 
@@ -124,6 +126,10 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     if (!thread) return;
     const project = deps.projects.getById(thread.projectId);
     const settings = deps.settings.get();
+    const issue =
+      thread.githubIssueNumber !== null
+        ? deps.githubIssues.getByNumber(thread.projectId, thread.githubIssueNumber)
+        : null;
 
     ensureContext(threadId, {
       projectPath,
@@ -135,14 +141,30 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       githubIssueNumber: thread.githubIssueNumber ?? null,
       githubIssueTitle: issueTitle ?? null,
       githubRepo: thread.githubRepo ?? null,
-      plannerModel: (thread.plannerModel as PipelineExecutorModel) || 'claude',
-      reviewerModel: (thread.reviewerModel as PipelineExecutorModel) || 'codex',
-      verifierModel: (thread.verifierModel as PipelineExecutorModel) || 'claude',
-      executorModel: (thread.executorModel as PipelineExecutorModel) || 'claude',
-      plannerModelIdOverride: project?.plannerModelIdOverride ?? null,
-      reviewerModelIdOverride: project?.reviewerModelIdOverride ?? null,
-      executorModelIdOverride: project?.executorModelIdOverride ?? null,
-      verifierModelIdOverride: project?.verifierModelIdOverride ?? null,
+      plannerModel:
+        issue && project
+          ? resolvePhaseModelForIssue(settings, project, issue, 'planner')
+          : (thread.plannerModel as PipelineExecutorModel) || 'claude',
+      reviewerModel:
+        issue && project
+          ? resolvePhaseModelForIssue(settings, project, issue, 'reviewer')
+          : (thread.reviewerModel as PipelineExecutorModel) || 'codex',
+      verifierModel:
+        issue && project
+          ? resolvePhaseModelForIssue(settings, project, issue, 'verifier')
+          : (thread.verifierModel as PipelineExecutorModel) || 'claude',
+      executorModel:
+        issue && project
+          ? resolvePhaseModelForIssue(settings, project, issue, 'executor')
+          : (thread.executorModel as PipelineExecutorModel) || 'claude',
+      plannerModelIdOverride:
+        issue && project ? resolvePhaseModelIdForIssue(settings, project, issue, 'planner') : project?.plannerModelIdOverride ?? null,
+      reviewerModelIdOverride:
+        issue && project ? resolvePhaseModelIdForIssue(settings, project, issue, 'reviewer') : project?.reviewerModelIdOverride ?? null,
+      executorModelIdOverride:
+        issue && project ? resolvePhaseModelIdForIssue(settings, project, issue, 'executor') : project?.executorModelIdOverride ?? null,
+      verifierModelIdOverride:
+        issue && project ? resolvePhaseModelIdForIssue(settings, project, issue, 'verifier') : project?.verifierModelIdOverride ?? null,
       plannerReasoningEffort:
         project?.plannerReasoningEffortOverride ?? settings.plannerReasoningEffort,
       reviewerReasoningEffort:
@@ -1438,13 +1460,12 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       }).trim();
     } catch {}
 
-    // updateAutonomousFields still stores the narrow string — cast safely
-    // since openrouter is not yet persisted to the threads row in Tier 1.
-    // Tier 3 will widen the DB column.
+    // Persist the executor choice exactly as resolved so pipeline state,
+    // settings UI, and cost attribution stay aligned.
     deps.threads.updateAutonomousFields(threadId, {
       autonomous: true,
       reviewRound: 0,
-      executorModel: executorModel as 'claude' | 'codex',
+      executorModel,
       baseBranch,
       forkPointSha,
     });

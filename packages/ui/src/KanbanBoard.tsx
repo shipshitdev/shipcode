@@ -23,7 +23,7 @@ import {
   getIssueCardPhase,
   phaseToProgress,
   resolveExecutorModelForIssue,
-  resolvePhaseModel,
+  resolvePhaseModelForIssue,
   resolvePhaseReasoningEffort,
 } from '@shipcode/shared';
 import {
@@ -81,6 +81,8 @@ interface KanbanBoardProps {
   onBaseBranchChange?: (branch: string) => void;
   /** Invoked when the user clicks the refresh button inside the branch dropdown. */
   onRefreshBranches?: () => void;
+  /** Whether the branch refresh action is currently in flight. */
+  refreshingBranches?: boolean;
   /** Issue number currently open in the side panel — highlights the card. */
   selectedIssueNumber?: number;
   /** Project name shown as the toolbar heading (replaces the generic "GitHub Issues"). */
@@ -102,6 +104,7 @@ interface KanbanBoardProps {
 }
 
 type ColumnKey = 'todo' | 'agent' | 'human' | 'done';
+type BoardSortOrder = 'priority' | 'id-desc' | 'id-asc' | 'title';
 
 type PhaseSection = {
   key: string;
@@ -203,20 +206,18 @@ function resolveIssuePhaseChip(
     phase === 'planner'
       ? thread?.plannerResolvedModel ??
         thread?.plannerModel ??
-        (settings ? resolvePhaseModel(settings, project, 'planner') : 'claude')
+        (settings ? resolvePhaseModelForIssue(settings, project, issue, 'planner') : 'claude')
       : phase === 'reviewer'
         ? thread?.reviewerResolvedModel ??
           thread?.reviewerModel ??
-          (settings ? resolvePhaseModel(settings, project, 'reviewer') : 'codex')
+          (settings ? resolvePhaseModelForIssue(settings, project, issue, 'reviewer') : 'codex')
         : phase === 'executor'
           ? thread?.executorResolvedModel ??
             thread?.executorModel ??
-            (settings
-              ? resolveExecutorModelForIssue(settings, project, issue)
-              : issue.executorModelOverride ?? project?.executorModelOverride ?? 'claude')
+            (settings ? resolveExecutorModelForIssue(settings, project, issue) : 'claude')
           : thread?.verifierResolvedModel ??
             thread?.verifierModel ??
-            (settings ? resolvePhaseModel(settings, project, 'verifier') : 'claude');
+            (settings ? resolvePhaseModelForIssue(settings, project, issue, 'verifier') : 'claude');
 
   return {
     phase,
@@ -427,7 +428,7 @@ function DraggableCard({
         {issue.title}
       </div>
       <div className="flex flex-wrap gap-1 mt-1 items-center">
-        {phaseChip && (
+        {phaseChip && isActive && (
           <Badge
             variant="default"
             className="px-1.5 py-px font-medium normal-case tracking-normal text-[10px]"
@@ -810,6 +811,83 @@ const LIST_COLUMN_DROP_ID: Partial<Record<ColumnKey, string>> = {
   agent: 'agent:planning', // todo|failed → agent:planning (start/rerun)
 };
 
+const BOARD_SORT_LABELS: Record<BoardSortOrder, string> = {
+  priority: 'Priority',
+  'id-desc': 'Newest ID',
+  'id-asc': 'Oldest ID',
+  title: 'Title',
+};
+
+function getIssuePriorityRank(issue: GitHubIssueCacheRecord): number {
+  const labels = issue.labels.map((label) => label.toLowerCase());
+
+  if (
+    labels.some(
+      (label) =>
+        label === 'p0' ||
+        label === 'priority:p0' ||
+        label === 'priority/critical' ||
+        label === 'priority:critical' ||
+        label === 'priority/highest' ||
+        label === 'priority:urgent' ||
+        label === 'priority:high',
+    )
+  ) {
+    return 0;
+  }
+  if (
+    labels.some(
+      (label) =>
+        label === 'p1' ||
+        label === 'priority:p1' ||
+        label === 'priority/medium' ||
+        label === 'priority:medium',
+    )
+  ) {
+    return 1;
+  }
+  if (
+    labels.some(
+      (label) =>
+        label === 'p2' ||
+        label === 'priority:p2' ||
+        label === 'priority/low' ||
+        label === 'priority:low',
+    )
+  ) {
+    return 2;
+  }
+  if (labels.some((label) => label === 'p3' || label === 'priority:p3')) {
+    return 3;
+  }
+
+  return 99;
+}
+
+function compareIssues(a: GitHubIssueCacheRecord, b: GitHubIssueCacheRecord, order: BoardSortOrder): number {
+  if (order === 'title') {
+    const byTitle = a.title.localeCompare(b.title);
+    if (byTitle !== 0) return byTitle;
+    return b.issueNumber - a.issueNumber;
+  }
+
+  if (order === 'id-asc') {
+    return a.issueNumber - b.issueNumber;
+  }
+
+  if (order === 'id-desc') {
+    return b.issueNumber - a.issueNumber;
+  }
+
+  const byPriority = getIssuePriorityRank(a) - getIssuePriorityRank(b);
+  if (byPriority !== 0) return byPriority;
+
+  const byIssueNumber = b.issueNumber - a.issueNumber;
+  if (byIssueNumber !== 0) return byIssueNumber;
+
+  return a.title.localeCompare(b.title);
+}
+
 type RowTone = 'default' | 'agent' | 'danger' | 'warning';
 
 function rowToneFor(status: IssuePipelineStatus): RowTone {
@@ -1137,6 +1215,7 @@ export function KanbanBoard({
   branches,
   onBaseBranchChange,
   onRefreshBranches,
+  refreshingBranches = false,
   selectedIssueNumber,
   projectName,
   repoUrl,
@@ -1154,6 +1233,7 @@ export function KanbanBoard({
   const [activeId, setActiveId] = useState<string | null>(null);
   const activeIssue = issues.find((i) => i.id === activeId);
   const [view, setView] = useState<'kanban' | 'list'>('kanban');
+  const [sortOrder, setSortOrder] = useState<BoardSortOrder>('priority');
   const [refreshing, setRefreshing] = useState(false);
   const [showRefreshToast, setShowRefreshToast] = useState(false);
   const [rerunningId, setRerunningId] = useState<string | null>(null);
@@ -1175,6 +1255,10 @@ export function KanbanBoard({
         ]),
       ),
     [issues, project, settings, threadById],
+  );
+  const sortedIssues = useMemo(
+    () => [...issues].sort((a, b) => compareIssues(a, b, sortOrder)),
+    [issues, sortOrder],
   );
 
   const handleRerun = useCallback(
@@ -1338,16 +1422,31 @@ export function KanbanBoard({
                   size="icon-sm"
                   className="rounded-none border-l border-border"
                   title="Refresh branches"
+                  disabled={refreshingBranches}
                   onClick={(e) => {
                     e.stopPropagation();
                     onRefreshBranches();
                   }}
                 >
-                  <RefreshCw size={14} />
+                  <RefreshCw size={14} className={refreshingBranches ? 'animate-spin' : ''} />
                 </Button>
               )}
             </div>
           )}
+          <div className="flex items-center border border-border rounded-md overflow-hidden min-w-0 max-w-[140px] shrink-0">
+            <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as BoardSortOrder)}>
+              <SelectTrigger className="h-7 gap-1 rounded-none border-0 bg-transparent px-2 text-xs text-secondary hover:text-primary">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.keys(BOARD_SORT_LABELS) as BoardSortOrder[]).map((key) => (
+                  <SelectItem key={key} value={key} className="text-xs">
+                    {BOARD_SORT_LABELS[key]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="flex items-center border border-border rounded-md overflow-hidden shrink-0">
             <Button
               variant="ghost"
@@ -1391,7 +1490,7 @@ export function KanbanBoard({
       >
         {view === 'list' && (
           <IssueListView
-            issues={issues}
+            issues={sortedIssues}
             selectedIssueNumber={selectedIssueNumber}
             activeId={activeId}
             onIssueClick={onIssueClick}
@@ -1407,7 +1506,7 @@ export function KanbanBoard({
                   <StackedColumn
                     key={col.key}
                     column={col}
-                    issues={issues}
+                    issues={sortedIssues}
                     onIssueClick={onIssueClick}
                     onRerun={handleRerun}
                     onCancel={onCancel}
@@ -1417,7 +1516,7 @@ export function KanbanBoard({
                   />
                 );
               }
-              const columnIssues = issues.filter((i) => col.statuses.includes(i.pipelineStatus));
+              const columnIssues = sortedIssues.filter((i) => col.statuses.includes(i.pipelineStatus));
               return (
                 <DroppableColumn
                   key={col.key}

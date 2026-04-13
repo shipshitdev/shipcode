@@ -11,6 +11,12 @@ import {
   migrateV9,
   migrateV10,
   migrateV11,
+  migrateV12,
+  migrateV13,
+  migrateV14,
+  migrateV15,
+  migrateV16,
+  migrateV17,
 } from './schema';
 
 export function createTestDb(): DatabaseSync {
@@ -26,5 +32,11 @@ export function createTestDb(): DatabaseSync {
   migrateV9(db);
   migrateV10(db);
   migrateV11(db);
+  migrateV12(db);
+  migrateV13(db);
+  migrateV14(db);
+  migrateV15(db);
+  migrateV16(db);
+  migrateV17(db);
   return db;
 }

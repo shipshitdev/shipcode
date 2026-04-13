@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import type { CostSummary, GitHubIssueCacheRecord, PipelinePhase } from '@shipcode/shared';
+import type { CostSummary, CostTaskSummary, GitHubIssueCacheRecord, PipelinePhase } from '@shipcode/shared';
 import {
   Button,
   Card,
   CardContent,
+  CardFooter,
   Loader2,
+  Pagination,
   Table,
   TableBody,
   TableCell,
@@ -13,6 +15,7 @@ import {
   TableHeader,
   TableRow,
   cn,
+  modelDisplay,
 } from '@shipcode/ui';
 import { useAppStore } from '../stores/app-store';
 
@@ -37,6 +40,30 @@ function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${Math.round(n / 1_000)}k`;
   return String(n);
+}
+
+function formatProvider(provider: string): string {
+  return provider;
+}
+
+function formatModelDescription(model: string | null, provider: string): string {
+  const value = model ?? provider;
+  switch (value) {
+    case 'anthropic/claude-sonnet-4-6':
+      return 'Claude Sonnet 4.6';
+    case 'anthropic/claude-opus-4-6':
+      return 'Claude Opus 4.6';
+    case 'openai/gpt-5-codex':
+      return 'GPT-5 Codex';
+    case 'qwen/qwen3.6-plus':
+      return 'Qwen 3.6 Plus';
+    case 'qwen/qwen3-coder:free':
+      return 'Qwen 3 Coder Free';
+    case 'openrouter/auto':
+      return 'Auto (paid)';
+    default:
+      return modelDisplay(value);
+  }
 }
 
 // See OverviewView for why all 6 agent phases share one color.
@@ -64,6 +91,10 @@ export function CostsView() {
   // best-effort estimates for Claude/Codex CLI runs priced from published rates.
   const [displayMode, setDisplayMode] = useState<DisplayMode>('tokens');
   const [navigatingThreadId, setNavigatingThreadId] = useState<string | null>(null);
+  const [tasksPage, setTasksPage] = useState(1);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [projectPage, setProjectPage] = useState(1);
+  const PAGE_SIZE = 8;
 
   // Click-through from the Top Tasks table: switch project, fetch its issues,
   // and open the IssueDetail sidebar for the matching threadId. The previous
@@ -90,6 +121,44 @@ export function CostsView() {
     queryFn: () => window.shipcode.invoke<CostSummary>('costs:get-summary'),
     refetchInterval: 30_000,
   });
+
+  const { data: tasks = [] } = useQuery<CostTaskSummary[]>({
+    queryKey: ['costs-tasks', tasksPage],
+    queryFn: () =>
+      window.shipcode.invoke<CostTaskSummary[]>('costs:list-tasks', {
+        limit: PAGE_SIZE,
+        offset: (tasksPage - 1) * PAGE_SIZE,
+      }),
+    refetchInterval: 30_000,
+  });
+
+  const { data: tasksTotal = 0 } = useQuery<number>({
+    queryKey: ['costs-tasks-count'],
+    queryFn: () => window.shipcode.invoke<number>('costs:count-tasks'),
+    refetchInterval: 30_000,
+  });
+
+  const { data: projectTasks = [] } = useQuery<CostTaskSummary[]>({
+    queryKey: ['costs-project-tasks', selectedProjectId, projectPage],
+    queryFn: () =>
+      window.shipcode.invoke<CostTaskSummary[]>('costs:list-tasks', {
+        projectId: selectedProjectId!,
+        limit: PAGE_SIZE,
+        offset: (projectPage - 1) * PAGE_SIZE,
+      }),
+    refetchInterval: 30_000,
+    enabled: !!selectedProjectId,
+  });
+
+  const { data: projectTasksTotal = 0 } = useQuery<number>({
+    queryKey: ['costs-project-tasks-count', selectedProjectId],
+    queryFn: () => window.shipcode.invoke<number>('costs:count-tasks', { projectId: selectedProjectId! }),
+    refetchInterval: 30_000,
+    enabled: !!selectedProjectId,
+  });
+
+  const tasksTotalPages = Math.max(1, Math.ceil(tasksTotal / PAGE_SIZE));
+  const projectTasksTotalPages = Math.max(1, Math.ceil(projectTasksTotal / PAGE_SIZE));
 
   function displayValue(costUsd: number, tokens: number): string {
     if (displayMode === 'tokens') return formatTokens(tokens);
@@ -197,7 +266,19 @@ export function CostsView() {
                         </TableHeader>
                         <TableBody>
                           {data.byProject.map((p) => (
-                            <TableRow key={p.projectId}>
+                            <TableRow
+                              key={p.projectId}
+                              className={cn(
+                                'cursor-pointer hover:bg-hover',
+                                selectedProjectId === p.projectId && 'bg-hover',
+                              )}
+                              onClick={() => {
+                                setSelectedProjectId((current) =>
+                                  current === p.projectId ? null : p.projectId,
+                                );
+                                setProjectPage(1);
+                              }}
+                            >
                               <TableCell className="font-medium text-primary">
                                 {p.projectName}
                               </TableCell>
@@ -219,12 +300,87 @@ export function CostsView() {
                 )}
               </section>
 
+              {selectedProjectId && (
+                <section>
+                  <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                    {data.byProject.find((p) => p.projectId === selectedProjectId)?.projectName ?? 'Project'} Cost Details
+                  </h2>
+                  <Card>
+                    <CardContent className="p-0">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Task</TableHead>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Phase</TableHead>
+                            <TableHead>Provider</TableHead>
+                            <TableHead>Model</TableHead>
+                            <TableHead className="text-right">Tokens</TableHead>
+                            <TableHead className="text-right">Cost</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {projectTasks.map((t) => (
+                            <TableRow
+                              key={`${selectedProjectId}-${t.threadId}`}
+                              className={cn(
+                                'cursor-pointer hover:bg-hover',
+                                navigatingThreadId === t.threadId && 'opacity-60',
+                              )}
+                              onClick={() => goToTask(t.projectId, t.threadId)}
+                            >
+                              <TableCell>
+                                <div className="font-medium text-primary truncate max-w-[260px]">
+                                  {t.title}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-[11px] text-muted whitespace-nowrap">
+                                {t.updatedAt ? formatDateTime(t.updatedAt) : '—'}
+                              </TableCell>
+                              <TableCell>
+                                <span
+                                  className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${PHASE_COLOR[t.phase] ?? PHASE_COLOR.idle}`}
+                                >
+                                  {t.phase.replace(/_/g, ' ')}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-[11px] text-muted whitespace-nowrap">
+                                {formatProvider(t.provider)}
+                              </TableCell>
+                              <TableCell className="text-[11px] text-primary whitespace-nowrap">
+                                {formatModelDescription(t.model, t.provider)}
+                              </TableCell>
+                              <TableCell className="text-right font-mono text-xs text-primary">
+                                {formatTokens(t.tokensPrompt + t.tokensCompletion)}
+                              </TableCell>
+                              <TableCell className="text-right font-mono text-xs text-primary">
+                                {formatCost(t.costUsd)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                    {projectTasksTotalPages > 1 && (
+                      <CardFooter className="pt-0 pb-4 px-5">
+                        <Pagination
+                          page={projectPage}
+                          totalPages={projectTasksTotalPages}
+                          onPageChange={setProjectPage}
+                          className="w-full"
+                        />
+                      </CardFooter>
+                    )}
+                  </Card>
+                </section>
+              )}
+
               {/* Top tasks by cost */}
               <section>
                 <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
                   Top Tasks by Cost
                 </h2>
-                {data.recentByTask.length === 0 ? (
+                {tasks.length === 0 ? (
                   <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-xs text-muted">
                     No tasks yet.
                   </div>
@@ -235,15 +391,16 @@ export function CostsView() {
                         <TableHeader>
                           <TableRow>
                             <TableHead>Task</TableHead>
-                            <TableHead>Phase</TableHead>
                             <TableHead>Date</TableHead>
-                            <TableHead className="text-right">
-                              {displayMode === '$' ? 'Cost' : 'Tokens'}
-                            </TableHead>
+                            <TableHead>Phase</TableHead>
+                            <TableHead>Provider</TableHead>
+                            <TableHead>Model</TableHead>
+                            <TableHead className="text-right">Tokens</TableHead>
+                            <TableHead className="text-right">Cost</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {data.recentByTask.map((t) => (
+                          {tasks.map((t) => (
                             <TableRow
                               key={t.threadId}
                               className={cn(
@@ -258,6 +415,9 @@ export function CostsView() {
                                 </div>
                                 <div className="text-[11px] text-muted">{t.projectName}</div>
                               </TableCell>
+                              <TableCell className="text-[11px] text-muted whitespace-nowrap">
+                                {t.updatedAt ? formatDateTime(t.updatedAt) : '—'}
+                              </TableCell>
                               <TableCell>
                                 <span
                                   className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${PHASE_COLOR[t.phase] ?? PHASE_COLOR.idle}`}
@@ -266,16 +426,32 @@ export function CostsView() {
                                 </span>
                               </TableCell>
                               <TableCell className="text-[11px] text-muted whitespace-nowrap">
-                                {t.updatedAt ? formatDateTime(t.updatedAt) : '—'}
+                                {formatProvider(t.provider)}
+                              </TableCell>
+                              <TableCell className="text-[11px] text-primary whitespace-nowrap">
+                                {formatModelDescription(t.model, t.provider)}
                               </TableCell>
                               <TableCell className="text-right font-mono text-xs text-primary">
-                                {displayValue(t.costUsd, t.tokensPrompt + t.tokensCompletion)}
+                                {formatTokens(t.tokensPrompt + t.tokensCompletion)}
+                              </TableCell>
+                              <TableCell className="text-right font-mono text-xs text-primary">
+                                {formatCost(t.costUsd)}
                               </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
                       </Table>
                     </CardContent>
+                    {tasksTotalPages > 1 && (
+                      <CardFooter className="pt-0 pb-4 px-5">
+                        <Pagination
+                          page={tasksPage}
+                          totalPages={tasksTotalPages}
+                          onPageChange={setTasksPage}
+                          className="w-full"
+                        />
+                      </CardFooter>
+                    )}
                   </Card>
                 )}
               </section>

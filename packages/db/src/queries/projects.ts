@@ -3,6 +3,15 @@ import { nanoid } from 'nanoid';
 import { ISO_NOW_SQL, toIsoUtc, type Project } from '@shipcode/shared';
 import path from 'node:path';
 
+interface ProjectIdleGuardOptions {
+  /**
+   * Missing-repo cleanup escape hatch: still block genuinely running work
+   * (non-terminal threads), but ignore stale attention records that only exist
+   * to drive inbox badges / claimed-issue ownership.
+   */
+  ignoreAttentionOnly?: boolean;
+}
+
 export class ProjectQueries {
   constructor(private db: DatabaseSync) {}
 
@@ -87,14 +96,10 @@ export class ProjectQueries {
    * a separate hasLiveWork() check and an unconditional DELETE. Returns true
    * iff the project row was actually removed.
    */
-  removeIfIdle(id: string): boolean {
-    const stmt = this.db.prepare(`
-      DELETE FROM projects
-      WHERE id = ?
-        AND NOT EXISTS (
-          SELECT 1 FROM threads
-          WHERE project_id = ? AND status NOT IN ('completed','failed','idle')
-        )
+  removeIfIdle(id: string, options: ProjectIdleGuardOptions = {}): boolean {
+    const attentionOnlyGuards = options.ignoreAttentionOnly
+      ? ''
+      : `
         AND NOT EXISTS (
           SELECT 1 FROM notifications
           WHERE project_id = ? AND dismissed_at IS NULL
@@ -103,8 +108,17 @@ export class ProjectQueries {
           SELECT 1 FROM github_issue_cache
           WHERE project_id = ? AND claimed_at IS NOT NULL
         )
+      `;
+    const stmt = this.db.prepare(`
+      DELETE FROM projects
+      WHERE id = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM threads
+          WHERE project_id = ? AND status NOT IN ('completed','failed','idle')
+        )
+        ${attentionOnlyGuards}
     `);
-    const result = stmt.run(id, id, id, id);
+    const result = options.ignoreAttentionOnly ? stmt.run(id, id) : stmt.run(id, id, id, id);
     return (result.changes ?? 0) > 0;
   }
 
@@ -118,15 +132,10 @@ export class ProjectQueries {
    * subqueries, so there is no TOCTOU between the guard read and the mutation.
    * Returns true iff the project was archived.
    */
-  archiveIfIdle(id: string): boolean {
-    const stmt = this.db.prepare(`
-      UPDATE projects
-      SET archived = 1, pinned = 0
-      WHERE id = ?
-        AND NOT EXISTS (
-          SELECT 1 FROM threads
-          WHERE project_id = ? AND status NOT IN ('completed','failed','idle')
-        )
+  archiveIfIdle(id: string, options: ProjectIdleGuardOptions = {}): boolean {
+    const attentionOnlyGuards = options.ignoreAttentionOnly
+      ? ''
+      : `
         AND NOT EXISTS (
           SELECT 1 FROM notifications
           WHERE project_id = ? AND dismissed_at IS NULL
@@ -135,8 +144,18 @@ export class ProjectQueries {
           SELECT 1 FROM github_issue_cache
           WHERE project_id = ? AND claimed_at IS NOT NULL
         )
+      `;
+    const stmt = this.db.prepare(`
+      UPDATE projects
+      SET archived = 1, pinned = 0
+      WHERE id = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM threads
+          WHERE project_id = ? AND status NOT IN ('completed','failed','idle')
+        )
+        ${attentionOnlyGuards}
     `);
-    const result = stmt.run(id, id, id, id);
+    const result = options.ignoreAttentionOnly ? stmt.run(id, id) : stmt.run(id, id, id, id);
     return (result.changes ?? 0) > 0;
   }
 
@@ -149,13 +168,14 @@ export class ProjectQueries {
    * worktree cleanup) if the project is clearly active. The final safety
    * guarantee comes from removeIfIdle's atomic DELETE.
    */
-  hasLiveWork(id: string): boolean {
+  hasLiveWork(id: string, options: ProjectIdleGuardOptions = {}): boolean {
     const liveThread = this.db
       .prepare(
         `SELECT 1 FROM threads WHERE project_id = ? AND status NOT IN ('completed','failed','idle') LIMIT 1`,
       )
       .get(id);
     if (liveThread) return true;
+    if (options.ignoreAttentionOnly) return false;
     const liveNotif = this.db
       .prepare(`SELECT 1 FROM notifications WHERE project_id = ? AND dismissed_at IS NULL LIMIT 1`)
       .get(id);

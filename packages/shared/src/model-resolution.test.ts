@@ -4,6 +4,8 @@ import { DEFAULT_SETTINGS } from './constants';
 import {
   getIssueCardPhase,
   resolveExecutorModelForIssue,
+  resolvePhaseModelIdForIssue,
+  resolvePhaseModelForIssue,
   resolvePhaseModelId,
   resolvePhaseModel,
   resolvePhaseReasoningEffort,
@@ -53,7 +55,14 @@ function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
     claimedBy: null,
     lastPhaseUpdate: null,
     lastStatusLabel: null,
+    plannerModelOverride: null,
+    reviewerModelOverride: null,
     executorModelOverride: null,
+    verifierModelOverride: null,
+    plannerModelIdOverride: null,
+    reviewerModelIdOverride: null,
+    executorModelIdOverride: null,
+    verifierModelIdOverride: null,
     linkedPrNumber: null,
     linkedPrUrl: null,
     linkedPrIsDraft: false,
@@ -103,11 +112,37 @@ describe('model-resolution', () => {
     expect(resolvePhaseModel(settings, project, 'verifier')).toBe('claude');
   });
 
-  it('lets issue executor override shadow project and global defaults', () => {
+  it('lets issue phase overrides shadow project and global defaults', () => {
     const project = makeProject({ executorModelOverride: 'codex' });
-    const issue = makeIssue({ executorModelOverride: 'openrouter' });
+    const issue = makeIssue({
+      plannerModelOverride: 'openrouter',
+      reviewerModelOverride: 'claude',
+      executorModelOverride: 'openrouter',
+      verifierModelOverride: 'claude',
+    });
 
+    expect(resolvePhaseModelForIssue(settings, project, issue, 'planner')).toBe('openrouter');
+    expect(resolvePhaseModelForIssue(settings, project, issue, 'reviewer')).toBe('claude');
     expect(resolveExecutorModelForIssue(settings, project, issue)).toBe('openrouter');
+    expect(resolvePhaseModelForIssue(settings, project, issue, 'verifier')).toBe('claude');
+  });
+
+  it('lets issue model IDs shadow project and provider defaults', () => {
+    const project = makeProject({ executorModelIdOverride: 'gpt-5.4' });
+    const issue = makeIssue({
+      plannerModelIdOverride: 'claude-opus-4-6',
+      reviewerModelIdOverride: 'gpt-5.4-mini',
+      executorModelIdOverride: 'gpt-5.4',
+      verifierModelIdOverride: 'anthropic/claude-sonnet-4-6',
+      verifierModelOverride: 'openrouter',
+    });
+
+    expect(resolvePhaseModelIdForIssue(settings, project, issue, 'planner')).toBe('claude-opus-4-6');
+    expect(resolvePhaseModelIdForIssue(settings, project, issue, 'reviewer')).toBe('gpt-5.4-mini');
+    expect(resolvePhaseModelIdForIssue(settings, project, issue, 'executor')).toBe('gpt-5.4');
+    expect(resolvePhaseModelIdForIssue(settings, project, issue, 'verifier')).toBe(
+      'anthropic/claude-sonnet-4-6',
+    );
   });
 
   it('maps issue statuses to the current card phase', () => {

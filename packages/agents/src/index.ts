@@ -12,7 +12,10 @@ export {
   checkCodexAuth,
   checkGhAuth,
   checkOpenRouterAuth,
+  checkOpenRouterHealth,
+  checkIntegrationStatus,
   parseGhProjectScope,
+  validateOpenRouterModel,
 } from './health-check';
 export type { OpenRouterAuthStatus } from './health-check';
 export { buildPlanPrompt, buildRevisionPrompt } from './prompts/plan-prompt';

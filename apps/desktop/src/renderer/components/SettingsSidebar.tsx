@@ -20,6 +20,11 @@ const SECTIONS: { key: SettingsSection; label: string; icon: ReactNode }[] = [
     icon: <Settings size={14} />,
   },
   {
+    key: 'integrations',
+    label: 'Integrations',
+    icon: <Settings size={14} />,
+  },
+  {
     key: 'github',
     label: 'GitHub',
     icon: <Folder size={14} />,

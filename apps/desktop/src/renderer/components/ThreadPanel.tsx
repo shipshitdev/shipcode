@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
 import { useAppStore } from '../stores/app-store';
-import { KanbanBoard, Modal, ModalFooter, Button } from '@shipcode/ui';
+import { KanbanBoard, Modal, ModalFooter, Button, RefreshCw } from '@shipcode/ui';
 import {
   type AppSettings,
   githubRepoUrl,
@@ -16,6 +16,11 @@ import {
 export function ThreadPanel() {
   const queryClient = useQueryClient();
   const { activeProjectId, selectIssue, openCreateIssueModal, activeIssue } = useAppStore();
+  const [isRefreshingBranches, setIsRefreshingBranches] = useState(false);
+  const [archiveFeedback, setArchiveFeedback] = useState<{
+    tone: 'pending' | 'success' | 'error';
+    message: string;
+  } | null>(null);
 
   const { data: issues = [] } = useQuery<GitHubIssueCacheRecord[]>({
     queryKey: ['github-issues', activeProjectId],
@@ -39,6 +44,12 @@ export function ThreadPanel() {
     if (!activeProjectId) return;
     refreshIssues.mutate(activeProjectId);
   }, [activeProjectId]);
+
+  useEffect(() => {
+    if (!archiveFeedback || archiveFeedback.tone === 'pending') return;
+    const id = setTimeout(() => setArchiveFeedback(null), 5000);
+    return () => clearTimeout(id);
+  }, [archiveFeedback]);
 
   // The per-project base branch drives the Kanban toolbar Select. Read via
   // the narrow `project:get` channel rather than scanning the full list.
@@ -81,28 +92,63 @@ export function ThreadPanel() {
     | null
   >(null);
 
+  const archiveIssuesOptimistic = (ids: string[]) => {
+    queryClient.setQueryData<GitHubIssueCacheRecord[]>(queryKey, (prev) =>
+      prev ? prev.filter((issue) => !ids.includes(issue.id)) : prev,
+    );
+  };
+
   const handleArchiveConfirm = () => {
     if (!archiveConfirm || !activeProjectId) return;
     const confirm = archiveConfirm;
     setArchiveConfirm(null);
 
     if (confirm.type === 'one') {
+      archiveIssuesOptimistic([confirm.issue.id]);
+      setArchiveFeedback({
+        tone: 'pending',
+        message: `Archiving issue #${confirm.issue.issueNumber} on GitHub…`,
+      });
       window.shipcode
         .invoke('github:archive-issue', {
           projectId: activeProjectId,
           issueNumber: confirm.issue.issueNumber,
         })
-        .then(() => refreshIssues.mutate(activeProjectId))
+        .then(() => {
+          setArchiveFeedback({
+            tone: 'success',
+            message:
+              `Issue #${confirm.issue.issueNumber} archived. GitHub Projects can take 1-2 minutes to reflect it.`,
+          });
+          refreshIssues.mutate(activeProjectId);
+        })
         .catch((err) => {
+          setArchiveFeedback({
+            tone: 'error',
+            message: `Failed to archive issue #${confirm.issue.issueNumber}.`,
+          });
           refreshIssues.mutate(activeProjectId);
           log.error('[threadpanel] archive-issue failed', { err });
           window.alert(`Failed to archive issue: ${err?.message ?? err}`);
         });
     } else {
+      const doneIssues = issues.filter((issue) => issue.pipelineStatus === 'completed');
+      archiveIssuesOptimistic(doneIssues.map((issue) => issue.id));
+      setArchiveFeedback({
+        tone: 'pending',
+        message: `Archiving ${doneIssues.length} done issue${doneIssues.length === 1 ? '' : 's'} on GitHub…`,
+      });
       window.shipcode
         .invoke('github:archive-all-done', { projectId: activeProjectId })
         .then((result) => {
           const { archivedCount, failedCount } = result as { archivedCount: number; failedCount: number };
+          setArchiveFeedback({
+            tone: failedCount > 0 ? 'error' : 'success',
+            message:
+              failedCount > 0
+                ? `Archived ${archivedCount} issues. ${failedCount} still need GitHub cleanup or retry.`
+                : `Archived ${archivedCount} issues. GitHub Projects can take 1-2 minutes to reflect it.`,
+          });
           refreshIssues.mutate(activeProjectId);
           if (failedCount > 0) {
             window.alert(
@@ -111,6 +157,10 @@ export function ThreadPanel() {
           }
         })
         .catch((err) => {
+          setArchiveFeedback({
+            tone: 'error',
+            message: 'Failed to archive done issues.',
+          });
           refreshIssues.mutate(activeProjectId);
           log.error('[threadpanel] archive-all-done failed', { err });
           window.alert(`Failed to archive done issues: ${err?.message ?? err}`);
@@ -128,7 +178,7 @@ export function ThreadPanel() {
   const projectsUrl = githubProjectsUrl(project?.gitRemote, project?.githubProjectUrl);
 
   return (
-    <div className="flex flex-1 min-w-0 flex-col bg-primary">
+    <div className="relative flex flex-1 min-w-0 flex-col bg-primary">
       <KanbanBoard
         issues={issues}
         onIssueClick={(issue) => selectIssue(issue)}
@@ -137,13 +187,16 @@ export function ThreadPanel() {
         onNewIssue={() => openCreateIssueModal()}
         baseBranch={project?.defaultBranch}
         branches={branches}
+        refreshingBranches={isRefreshingBranches}
         onRefreshBranches={() => {
+          setIsRefreshingBranches(true);
           window.shipcode
             .invoke('git:list-branches', { projectId: activeProjectId!, fetch: true })
             .then((fresh) => {
               queryClient.setQueryData(['git-branches', activeProjectId], fresh);
             })
-            .catch((err) => log.error('[threadpanel] refresh branches failed', err));
+            .catch((err) => log.error('[threadpanel] refresh branches failed', err))
+            .finally(() => setIsRefreshingBranches(false));
         }}
         projectName={project?.name}
         project={project}
@@ -258,6 +311,25 @@ export function ThreadPanel() {
           </Button>
         </ModalFooter>
       </Modal>
+      {archiveFeedback && (
+        <div className="absolute bottom-4 left-1/2 z-50 -translate-x-1/2 animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div
+            className={
+              archiveFeedback.tone === 'error'
+                ? 'flex items-center gap-2 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 shadow-lg text-xs text-danger'
+                : archiveFeedback.tone === 'pending'
+                  ? 'flex items-center gap-2 rounded-lg border border-border bg-elevated px-3 py-2 shadow-lg text-xs text-secondary'
+                  : 'flex items-center gap-2 rounded-lg border border-agent/30 bg-agent/10 px-3 py-2 shadow-lg text-xs text-agent'
+            }
+          >
+            <RefreshCw
+              size={12}
+              className={archiveFeedback.tone === 'pending' ? 'animate-spin text-muted' : ''}
+            />
+            {archiveFeedback.message}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

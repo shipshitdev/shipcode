@@ -23,6 +23,7 @@ const AGENT_ACTIVE_STATUSES = new Set<IssuePipelineStatus>([
 export type ViewMode = 'overview' | 'project' | 'activity' | 'inbox' | 'costs' | 'skills';
 export type SettingsSection =
   | 'general'
+  | 'integrations'
   | 'github'
   | 'notifications'
   | 'pipeline'
