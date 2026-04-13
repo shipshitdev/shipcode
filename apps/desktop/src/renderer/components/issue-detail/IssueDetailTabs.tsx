@@ -13,11 +13,11 @@ import { IssueHistoryTab } from './IssueHistoryTab';
 import { PipelineTab } from './PipelineTab';
 import { PlanHistoryTab } from './PlanHistoryTab';
 import { PrdTab } from './PrdTab';
-import type { PhaseKey, PhaseSelection, PlanRunGroup } from './tab-types';
+import type { IssueDetailTab, PhaseKey, PhaseSelection, PlanRunGroup } from './tab-types';
 
 interface IssueDetailTabsProps {
   activeIssue: GitHubIssueCacheRecord;
-  activeTab: 'prd' | 'history' | 'pipeline' | 'activity';
+  activeTab: IssueDetailTab;
   activeThreadId: string | null;
   checkpoints: PipelineCheckpoint[];
   currentPhaseSelections: Record<PhaseKey, PhaseSelection>;
@@ -46,7 +46,7 @@ interface IssueDetailTabsProps {
   thread: Thread | null | undefined;
   threadPhase: PipelinePhase | 'idle';
   onEditPrd: () => void;
-  onActiveTabChange: (tab: 'prd' | 'history' | 'pipeline' | 'activity') => void;
+  onActiveTabChange: (tab: IssueDetailTab) => void;
   onFullScreenPlan: (planId: string | null) => void;
   onPhaseAgentChange: (phase: PhaseKey, value: string) => void;
   onPhaseOpenRouterSlugBlur: (phase: PhaseKey, rawValue: string) => void;
@@ -103,9 +103,7 @@ export function IssueDetailTabs({
   return (
     <Tabs
       value={activeTab}
-      onValueChange={(value) =>
-        onActiveTabChange(value as 'prd' | 'history' | 'pipeline' | 'activity')
-      }
+      onValueChange={(value) => onActiveTabChange(value as IssueDetailTab)}
       className="flex min-h-0 flex-col"
     >
       <TabsList className={cn('shrink-0', expanded ? 'mb-5' : 'px-4')}>

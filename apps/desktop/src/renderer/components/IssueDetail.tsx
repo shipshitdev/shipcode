@@ -39,9 +39,9 @@ import { ACTIVE_PHASES, decodePhaseOption, encodePhaseOption } from './issue-det
 import { IssueDetailActions } from './issue-detail/IssueDetailActions';
 import { IssueDetailDialogs } from './issue-detail/IssueDetailDialogs';
 import { IssueDetailTabs } from './issue-detail/IssueDetailTabs';
+import type { IssueDetailTab } from './issue-detail/tab-types';
 
 const INHERIT_EXECUTOR_VALUE = '__inherit__';
-type IssueDetailTab = 'prd' | 'history' | 'pipeline' | 'activity';
 
 export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const queryClient = useQueryClient();
