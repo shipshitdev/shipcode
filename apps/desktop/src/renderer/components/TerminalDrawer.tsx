@@ -1,5 +1,4 @@
 import type { GitHubIssueCacheRecord } from '@shipcode/shared';
-import { ERROR_PATTERNS } from '@shipcode/shared';
 import {
   Button,
   ChevronDown,
@@ -18,122 +17,18 @@ import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
-
-const MIN_HEIGHT = 120;
-const DEFAULT_HEIGHT = 250;
-
-const AGENT_ACTIVE_STATUSES = new Set([
-  'planning',
-  'reviewing',
-  'revising',
-  'executing',
-  'testing',
-  'verifying',
-  'shipping',
-]);
-
-// Braille spinner frames for animated status indicator
-const SPINNER_FRAMES = [
-  '\u280B',
-  '\u2819',
-  '\u2839',
-  '\u2838',
-  '\u283C',
-  '\u2834',
-  '\u2826',
-  '\u2827',
-  '\u2807',
-  '\u280F',
-];
-const SPINNER_INTERVAL_MS = 80;
-
-// Map pipeline phase to a human-readable label for the spinner
-const PHASE_LABELS: Record<string, string> = {
-  planning: 'Thinking',
-  reviewing: 'Reviewing',
-  revising: 'Thinking',
-  executing: 'Working',
-  testing: 'Running tests',
-  verifying: 'Verifying',
-  shipping: 'Shipping',
-};
-
-/**
- * Render a canonical TerminalEvent into an ANSI-formatted string for xterm.
- */
-function renderTerminalEvent(event: import('@shipcode/agents').TerminalEvent): string | null {
-  switch (event.kind) {
-    case 'action':
-      // Rendered as React overlay, not xterm text
-      return null;
-    case 'text': {
-      // Render agent text with a left-border blockquote style
-      // so it visually separates from tool calls and commands
-      const lines = event.content.split('\n');
-      const quoted = lines.map((line) => `\x1b[36m\u2502\x1b[0m ${line}`).join('\n');
-      return quoted;
-    }
-    case 'thinking': {
-      // Dim italic with left-border blockquote for reasoning/thinking
-      const lines = event.content.split('\n');
-      const quoted = lines
-        .map((line) => `\x1b[2;35m\u2502\x1b[0m \x1b[2;3m${line}\x1b[0m`)
-        .join('\n');
-      return quoted;
-    }
-    case 'tool_start':
-      return `\x1b[2m\u2192 ${event.summary}\x1b[0m`;
-    case 'tool_end':
-      if (event.exitCode !== undefined && event.exitCode !== 0) {
-        return `\x1b[31m[exit ${event.exitCode}]\x1b[0m`;
-      }
-      if (event.durationMs !== undefined) {
-        return `\x1b[2m(${(event.durationMs / 1000).toFixed(1)}s)\x1b[0m`;
-      }
-      return null;
-    case 'turn_start':
-      return `\x1b[2m\u2500\u2500 Turn ${event.turn} \u2500\u2500\x1b[0m`;
-    case 'turn_end': {
-      const parts: string[] = [];
-      if (event.tokensUsed) {
-        parts.push(`${event.tokensUsed.prompt}+${event.tokensUsed.completion} tok`);
-      }
-      if (event.costUsd && event.costUsd > 0) {
-        parts.push(`$${event.costUsd.toFixed(4)}`);
-      }
-      return parts.length > 0 ? `\x1b[2m${parts.join(' \u00b7 ')}\x1b[0m` : null;
-    }
-    case 'lifecycle':
-      // Already contains ANSI codes from useIpc formatting
-      return event.message;
-    case 'raw': {
-      const isRateLimited = ERROR_PATTERNS.some(
-        ({ pattern, type }) => type === 'rate_limited' && pattern.test(event.content),
-      );
-      return isRateLimited ? `\x1b[31m${event.content}\x1b[0m` : event.content;
-    }
-    case 'error':
-      return `\x1b[31m${event.message}\x1b[0m`;
-    case 'done': {
-      const parts: string[] = [];
-      if (event.totalTokens) {
-        parts.push(`${event.totalTokens.prompt}+${event.totalTokens.completion} tok`);
-      }
-      if (event.totalCostUsd && event.totalCostUsd > 0) {
-        parts.push(`~$${event.totalCostUsd.toFixed(4)}`);
-      }
-      return parts.length > 0 ? `\x1b[2m[done: ${parts.join(' \u00b7 ')}]\x1b[0m` : null;
-    }
-    default:
-      return null;
-  }
-}
-
-const EMPTY_STREAM: never[] = [];
-
-// Event kind groups for inserting blank lines at group boundaries in the terminal.
-const LIFECYCLE_KINDS = new Set(['lifecycle']);
-const CONTENT_KINDS = new Set(['text', 'thinking', 'raw']);
+import {
+  AGENT_ACTIVE_STATUSES,
+  CONTENT_KINDS,
+  DEFAULT_HEIGHT,
+  EMPTY_STREAM,
+  LIFECYCLE_KINDS,
+  MIN_HEIGHT,
+  PHASE_LABELS,
+  SPINNER_FRAMES,
+  SPINNER_INTERVAL_MS,
+} from './terminal-drawer/constants';
+import { renderTerminalEvent } from './terminal-drawer/render-terminal-event';
 
 export function TerminalDrawer() {
   const { toggleTerminal } = useAppStore();
@@ -282,44 +177,6 @@ export function TerminalDrawer() {
     };
   }, []);
 
-  // Clear terminal when the focused terminal thread changes
-  useEffect(() => {
-    const term = termRef.current;
-    if (!term) return;
-    if (terminalThreadId !== prevThreadIdRef.current) {
-      stopSpinner();
-      term.reset();
-      canonicalWrittenRef.current = 0;
-      startedAtRef.current = null;
-      lastKindRef.current = null;
-      setActionBanner(null);
-      if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
-      prevThreadIdRef.current = terminalThreadId;
-      // If the stream is empty but a pipeline is actively running on this thread,
-      // start the xterm spinner immediately so the terminal isn't blank.
-      // This covers the case where the app hot-reloaded mid-pipeline and the
-      // historical pipeline:phase event was never re-received.
-      const nextIssue = githubIssues.find((i) => i.threadId === terminalThreadId);
-      const nextStream = terminalThreadId
-        ? (useAppStore.getState().canonicalTerminalStream[terminalThreadId] ?? [])
-        : [];
-      const isActivePipeline =
-        Boolean(nextIssue) &&
-        (AGENT_ACTIVE_STATUSES.has(nextIssue!.pipelineStatus) ||
-          nextIssue!.pipelineStatus === 'queued');
-      if (nextStream.length === 0 && isActivePipeline) {
-        const label = PHASE_LABELS[nextIssue!.pipelineStatus] ?? 'Working';
-        // Defer past xterm reset so the spinner writes to a clean terminal.
-        // Guard with canonicalWrittenRef check — if events arrived between
-        // the reset and this timeout, the spinner was already started by the
-        // event rendering effect and we should not double-start it.
-        setTimeout(() => {
-          if (canonicalWrittenRef.current === 0) startSpinner(label);
-        }, 0);
-      }
-    }
-  }, [terminalThreadId]);
-
   // Spinner helpers — animate a braille spinner on the current line
   const startSpinner = useCallback((label: string) => {
     const term = termRef.current;
@@ -348,6 +205,44 @@ export function TerminalDrawer() {
     // Clear the spinner line
     termRef.current?.write('\r\x1b[K');
   }, []);
+
+  // Clear terminal when the focused terminal thread changes
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
+    if (terminalThreadId !== prevThreadIdRef.current) {
+      stopSpinner();
+      term.reset();
+      canonicalWrittenRef.current = 0;
+      startedAtRef.current = null;
+      lastKindRef.current = null;
+      setActionBanner(null);
+      if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
+      prevThreadIdRef.current = terminalThreadId;
+      // If the stream is empty but a pipeline is actively running on this thread,
+      // start the xterm spinner immediately so the terminal isn't blank.
+      // This covers the case where the app hot-reloaded mid-pipeline and the
+      // historical pipeline:phase event was never re-received.
+      const nextIssue = githubIssues.find((i) => i.threadId === terminalThreadId);
+      const nextStream = terminalThreadId
+        ? (useAppStore.getState().canonicalTerminalStream[terminalThreadId] ?? [])
+        : [];
+      const nextIssueStatus = nextIssue?.pipelineStatus;
+      const isActivePipeline =
+        nextIssueStatus != null &&
+        (AGENT_ACTIVE_STATUSES.has(nextIssueStatus) || nextIssueStatus === 'queued');
+      if (nextStream.length === 0 && isActivePipeline) {
+        const label = nextIssueStatus ? (PHASE_LABELS[nextIssueStatus] ?? 'Working') : 'Working';
+        // Defer past xterm reset so the spinner writes to a clean terminal.
+        // Guard with canonicalWrittenRef check — if events arrived between
+        // the reset and this timeout, the spinner was already started by the
+        // event rendering effect and we should not double-start it.
+        setTimeout(() => {
+          if (canonicalWrittenRef.current === 0) startSpinner(label);
+        }, 0);
+      }
+    }
+  }, [githubIssues, startSpinner, stopSpinner, terminalThreadId]);
 
   // Clean up spinner on unmount
   useEffect(() => {
@@ -391,7 +286,8 @@ export function TerminalDrawer() {
         case 'lifecycle': {
           // Only active pipeline phases get a spinner. Terminal states like
           // failed/completed/idle should render the phase line and stop there.
-          const phaseMatch = /phase: \x1b\[36m(\w+)/.exec(event.message);
+          const phaseMessage = event.message.replaceAll('\x1b[36m', '').replaceAll('\x1b[0m', '');
+          const phaseMatch = /phase: (\w+)/.exec(phaseMessage);
           if (phaseMatch) {
             const phase = phaseMatch[1];
             // Blank line before phase transitions for visual separation
@@ -401,7 +297,7 @@ export function TerminalDrawer() {
             // Write the lifecycle line first. Restart the spinner only for
             // phases that actually represent ongoing agent work.
             const normalized = event.message.replace(/\r?\n/g, '\r\n');
-            term.write(normalized + '\r\n');
+            term.write(`${normalized}\r\n`);
             lastKindRef.current = event.kind;
             stopSpinner();
             if (AGENT_ACTIVE_STATUSES.has(phase)) {
@@ -461,7 +357,7 @@ export function TerminalDrawer() {
       if (text === null) continue;
       // Normalize line endings for xterm
       const normalized = text.replace(/\r?\n/g, '\r\n');
-      term.write(normalized.endsWith('\r\n') ? normalized : normalized + '\r\n');
+      term.write(normalized.endsWith('\r\n') ? normalized : `${normalized}\r\n`);
       lastKindRef.current = event.kind;
 
       // After certain events, start/restart spinner
@@ -486,7 +382,9 @@ export function TerminalDrawer() {
     >
       {/* Drag-to-resize handle */}
       {!isMaximized && (
-        <div
+        <button
+          type="button"
+          aria-label="Resize terminal drawer"
           className="h-1 cursor-ns-resize hover:bg-accent/30 transition-colors shrink-0"
           onMouseDown={handleResizeMouseDown}
         />

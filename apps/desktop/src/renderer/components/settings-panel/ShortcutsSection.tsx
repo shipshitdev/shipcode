@@ -3,7 +3,9 @@ import { SHORTCUTS, type ShortcutCategory, type ShortcutDef } from '../../data/s
 export function ShortcutsSection() {
   const byCategory = SHORTCUTS.reduce<Record<ShortcutCategory, ShortcutDef[]>>(
     (acc, shortcut) => {
-      (acc[shortcut.category] ??= []).push(shortcut);
+      const items = acc[shortcut.category] ?? [];
+      items.push(shortcut);
+      acc[shortcut.category] = items;
       return acc;
     },
     {} as Record<ShortcutCategory, ShortcutDef[]>,

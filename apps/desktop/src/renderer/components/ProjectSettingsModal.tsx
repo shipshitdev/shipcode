@@ -61,7 +61,7 @@ export function ProjectSettingsModal() {
   const { data: project } = useQuery<Project | null>({
     queryKey: ['project', projectSettingsModalProjectId],
     queryFn: () =>
-      window.shipcode.invoke('project:get', { projectId: projectSettingsModalProjectId! }),
+      window.shipcode.invoke('project:get', { projectId: projectSettingsModalProjectId ?? '' }),
     enabled: !!projectSettingsModalProjectId && projectSettingsModalOpen,
   });
 
@@ -105,7 +105,22 @@ export function ProjectSettingsModal() {
     setContextError(null);
     setRelinkError(null);
     setModelValidation({});
-  }, [projectSettingsModalOpen, project?.id, project?.updatedAt]);
+  }, [
+    projectSettingsModalOpen,
+    project?.executorModelIdOverride,
+    project?.executorModelOverride,
+    project?.executorReasoningEffortOverride,
+    project?.githubProjectUrl,
+    project?.plannerModelIdOverride,
+    project?.plannerModelOverride,
+    project?.plannerReasoningEffortOverride,
+    project?.reviewerModelIdOverride,
+    project?.reviewerModelOverride,
+    project?.reviewerReasoningEffortOverride,
+    project?.verifierModelIdOverride,
+    project?.verifierModelOverride,
+    project?.verifierReasoningEffortOverride,
+  ]);
 
   const validation = useMemo(() => validateGithubProjectUrl(urlInput), [urlInput]);
   const showInlineError = touched && !validation.ok;
