@@ -82,7 +82,7 @@ interface AppState {
   // Command palette & modals
   commandPaletteOpen: boolean;
   createIssueModalOpen: boolean;
-  editingPrd: { issueNumber: number; body: string } | null;
+  editingPrd: { issueNumber: number; body: string; labels: string[] } | null;
   projectSettingsModalOpen: boolean;
   projectSettingsModalProjectId: string | null;
 
@@ -123,7 +123,7 @@ interface AppState {
   toggleIssueDetail: () => void;
   toggleCommandPalette: () => void;
   openCreateIssueModal: () => void;
-  openEditPrdModal: (issueNumber: number, body: string) => void;
+  openEditPrdModal: (issueNumber: number, body: string, labels: string[]) => void;
   closeCreateIssueModal: () => void;
   openProjectSettingsModal: (projectId: string) => void;
   closeProjectSettingsModal: () => void;
@@ -323,10 +323,10 @@ export const useAppStore = create<AppState>((set) => ({
   toggleCommandPalette: () => set((s) => ({ commandPaletteOpen: !s.commandPaletteOpen })),
   openCreateIssueModal: () =>
     set({ createIssueModalOpen: true, editingPrd: null, commandPaletteOpen: false }),
-  openEditPrdModal: (issueNumber, body) =>
+  openEditPrdModal: (issueNumber, body, labels) =>
     set({
       createIssueModalOpen: true,
-      editingPrd: { issueNumber, body },
+      editingPrd: { issueNumber, body, labels },
       commandPaletteOpen: false,
     }),
   closeCreateIssueModal: () => set({ createIssueModalOpen: false, editingPrd: null }),

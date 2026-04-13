@@ -88,7 +88,7 @@ export interface IpcInvokeChannels {
     result: GitHubIssueCacheRecord;
   };
   'github:edit-issue-body': {
-    args: { projectId: string; issueNumber: number; body: string };
+    args: { projectId: string; issueNumber: number; title: string; body: string; labels?: string[] };
     result: GitHubIssueCacheRecord | null;
   };
   'github:sync-to-project-board': {

@@ -534,13 +534,25 @@ export function registerIpcHandlers(
     'github:edit-issue-body',
     async (
       _event,
-      { projectId, issueNumber, body }: { projectId: string; issueNumber: number; body: string },
+      {
+        projectId,
+        issueNumber,
+        title,
+        body,
+        labels,
+      }: {
+        projectId: string;
+        issueNumber: number;
+        title: string;
+        body: string;
+        labels?: string[];
+      },
     ) => {
       const project = queries.projects.getById(projectId);
       if (!project) throw new Error(`Project ${projectId} not found`);
 
       const ghCli = new GhCli(project.path);
-      await ghCli.editIssueBody(issueNumber, body);
+      await ghCli.editIssue({ issueNumber, title, body, labels });
 
       // Re-fetch canonical state from GitHub after the edit so the cache reflects
       // whatever GitHub actually stored (GitHub may trim whitespace, etc.).

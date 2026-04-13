@@ -1,6 +1,11 @@
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { GitHubIssue, GitHubStatusLabel } from '@shipcode/shared';
+import {
+  PRD_MANAGED_DISCRETE_LABELS,
+  PRD_MANAGED_LABEL_PREFIXES,
+  type GitHubIssue,
+  type GitHubStatusLabel,
+} from '@shipcode/shared';
 
 const execFileAsync = promisify(execFile);
 
@@ -21,6 +26,77 @@ function isAlreadyOnBoardError(stderr: string): boolean {
 
 export class GhCli {
   constructor(private cwd: string) {}
+
+  private async listRepoLabels(): Promise<string[]> {
+    const { stdout } = await execFileAsync(
+      'gh',
+      ['label', 'list', '--limit', '200', '--json', 'name'],
+      { cwd: this.cwd },
+    );
+
+    const raw = JSON.parse(stdout) as Array<{ name?: string }>;
+    return raw.map((label) => label.name).filter((name): name is string => !!name);
+  }
+
+  private async filterExistingLabels(labels: string[]): Promise<string[]> {
+    if (labels.length === 0) return [];
+    try {
+      const available = new Set(await this.listRepoLabels());
+      return labels.filter((label) => available.has(label));
+    } catch {
+      return [];
+    }
+  }
+
+  private isManagedPrdLabel(label: string): boolean {
+    return (
+      PRD_MANAGED_DISCRETE_LABELS.includes(
+        label as (typeof PRD_MANAGED_DISCRETE_LABELS)[number],
+      ) ||
+      PRD_MANAGED_LABEL_PREFIXES.some((prefix: string) => label.startsWith(prefix))
+    );
+  }
+
+  private async syncIssueLabels(issueNumber: number, labels: string[]): Promise<void> {
+    const next = await this.filterExistingLabels(labels);
+    let current: string[] = [];
+
+    try {
+      const issue = await this.getIssue(issueNumber);
+      current = issue.labels;
+    } catch {
+      current = [];
+    }
+
+    const toRemove = current.filter(
+      (label) => this.isManagedPrdLabel(label) && !next.includes(label),
+    );
+    const toAdd = next.filter((label) => !current.includes(label));
+
+    for (const label of toRemove) {
+      try {
+        await execFileAsync(
+          'gh',
+          ['issue', 'edit', String(issueNumber), '--remove-label', label],
+          { cwd: this.cwd },
+        );
+      } catch {
+        // Removal is best-effort.
+      }
+    }
+
+    for (const label of toAdd) {
+      try {
+        await execFileAsync(
+          'gh',
+          ['issue', 'edit', String(issueNumber), '--add-label', label],
+          { cwd: this.cwd },
+        );
+      } catch {
+        // Addition is best-effort.
+      }
+    }
+  }
 
   async listIssues(label: string): Promise<GitHubIssue[]> {
     const { stdout } = await execFileAsync(
@@ -124,7 +200,8 @@ export class GhCli {
     // Body is piped via stdin (`--body-file -`) to avoid argv length limits
     // and shell-escaping issues for multi-KB PRDs.
     const args = ['issue', 'create', '--title', options.title, '--body-file', '-'];
-    if (options.labels?.length) args.push('--label', options.labels.join(','));
+    const labels = await this.filterExistingLabels(options.labels ?? []);
+    if (labels.length) args.push('--label', labels.join(','));
 
     const stdout = await this.spawnWithStdin('gh', args, options.body);
     // gh issue create outputs the issue URL, e.g. https://github.com/owner/repo/issues/42
@@ -182,6 +259,20 @@ export class GhCli {
       ['issue', 'edit', String(issueNumber), '--body-file', '-'],
       body,
     );
+  }
+
+  async editIssue(options: {
+    issueNumber: number;
+    title: string;
+    body: string;
+    labels?: string[];
+  }): Promise<void> {
+    await this.spawnWithStdin(
+      'gh',
+      ['issue', 'edit', String(options.issueNumber), '--title', options.title, '--body-file', '-'],
+      options.body,
+    );
+    await this.syncIssueLabels(options.issueNumber, options.labels ?? []);
   }
 
   /**

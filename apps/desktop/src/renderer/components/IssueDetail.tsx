@@ -466,7 +466,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
   const handleEditPrd = () => {
     if (!activeIssue) return;
-    openEditPrdModal(activeIssue.issueNumber, activeIssue.body ?? '');
+    openEditPrdModal(activeIssue.issueNumber, activeIssue.body ?? '', activeIssue.labels);
   };
 
   const githubIssueUrl = activeIssue

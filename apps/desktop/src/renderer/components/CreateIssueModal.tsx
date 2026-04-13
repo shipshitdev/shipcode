@@ -2,9 +2,15 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import log from 'electron-log/renderer';
 import { useQueryClient } from '@tanstack/react-query';
 import {
+  PRD_BLAST_RADII,
+  PRD_ESTIMATED_COMPLEXITIES,
   PRD_REQUIRED_HEADINGS,
+  buildPrdMetadataLabels,
   bodyHasRequiredPrdSections,
+  readPrdIssueMetadata,
   type GitHubIssueCacheRecord,
+  type PrdBlastRadius,
+  type PrdEstimatedComplexity,
 } from '@shipcode/shared';
 import { useAppStore } from '../stores/app-store';
 import {
@@ -15,6 +21,11 @@ import {
   Button,
   Checkbox,
   Sparkles,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@shipcode/ui';
 
 /**
@@ -48,6 +59,8 @@ export function CreateIssueModal() {
   const { createIssueModalOpen, closeCreateIssueModal, activeProjectId, editingPrd, selectIssue } =
     useAppStore();
   const [body, setBody] = useState('');
+  const [estimatedComplexity, setEstimatedComplexity] = useState<PrdEstimatedComplexity>('medium');
+  const [blastRadius, setBlastRadius] = useState<PrdBlastRadius>('contained');
   const [enhancing, setEnhancing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,10 +72,15 @@ export function CreateIssueModal() {
   useEffect(() => {
     if (!createIssueModalOpen) return;
     if (mode === 'edit' && editingPrd) {
-      setBody(editingPrd.body);
+      const metadata = readPrdIssueMetadata(editingPrd.body ?? '', editingPrd.labels);
+      setBody(metadata.cleanBody);
+      setEstimatedComplexity(metadata.estimatedComplexity);
+      setBlastRadius(metadata.blastRadius);
       setError(null);
     } else {
       setBody('');
+      setEstimatedComplexity('medium');
+      setBlastRadius('contained');
       setError(null);
     }
     setTimeout(() => bodyRef.current?.focus(), 50);
@@ -76,6 +94,10 @@ export function CreateIssueModal() {
   );
   const clampedError = useMemo(() => (error ? clampError(error) : null), [error]);
   const derivedTitle = useMemo(() => deriveTitleFromBody(body), [body]);
+  const metadataLabels = useMemo(
+    () => ['enhancement', ...buildPrdMetadataLabels({ estimatedComplexity, blastRadius })],
+    [estimatedComplexity, blastRadius],
+  );
 
   if (!activeProjectId) return null;
 
@@ -88,7 +110,10 @@ export function CreateIssueModal() {
         projectId: activeProjectId,
         draftBody: body,
       });
-      setBody(result.body);
+      const metadata = readPrdIssueMetadata(result.body);
+      setBody(metadata.cleanBody);
+      setEstimatedComplexity(metadata.estimatedComplexity);
+      setBlastRadius(metadata.blastRadius);
     } catch (err) {
       log.error('[CreateIssueModal] enhance failed', err);
       setError(clampError(err));
@@ -111,7 +136,9 @@ export function CreateIssueModal() {
         await window.shipcode.invoke('github:edit-issue-body', {
           projectId: activeProjectId,
           issueNumber: editingPrd.issueNumber,
+          title: derivedTitle,
           body,
+          labels: metadataLabels,
         });
         await queryClient.invalidateQueries({ queryKey: ['github-issues'] });
       } else {
@@ -122,6 +149,7 @@ export function CreateIssueModal() {
           projectId: activeProjectId,
           title: derivedTitle,
           body,
+          labels: metadataLabels,
         });
         await queryClient.invalidateQueries({ queryKey: ['github-issues'] });
         // Kick off the pipeline immediately and open the issue detail
@@ -199,6 +227,48 @@ export function CreateIssueModal() {
       onKeyDown={handleKeyDown}
     >
         <div className="flex flex-col gap-3">
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs text-secondary">Complexity</Label>
+              <Select
+                value={estimatedComplexity}
+                onValueChange={(value: string) =>
+                  setEstimatedComplexity(value as PrdEstimatedComplexity)
+                }
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PRD_ESTIMATED_COMPLEXITIES.map((value) => (
+                    <SelectItem key={value} value={value} className="text-xs">
+                      {value}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs text-secondary">Blast Radius</Label>
+              <Select
+                value={blastRadius}
+                onValueChange={(value: string) => setBlastRadius(value as PrdBlastRadius)}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PRD_BLAST_RADII.map((value) => (
+                    <SelectItem key={value} value={value} className="text-xs">
+                      {value}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
           <div className="flex flex-col gap-1">
             <Label htmlFor="issue-body" className="text-xs text-secondary">
               What do you want to build?
