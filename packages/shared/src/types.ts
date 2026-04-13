@@ -136,6 +136,20 @@ export interface Thread {
   totalCostUsd: number;
 }
 
+export type PipelineCheckpointPhase = 'executing' | 'verifying' | 'shipping';
+
+export interface PipelineCheckpoint {
+  id: string;
+  threadId: string;
+  projectId: string | null;
+  phase: PipelineCheckpointPhase;
+  reason: string;
+  label: string;
+  branch: string | null;
+  commitSha: string;
+  createdAt: string;
+}
+
 // === Pipeline Types ===
 
 export type PipelinePhase =
@@ -313,6 +327,7 @@ export interface NotificationEventToggles {
   failed: boolean;
   completed: boolean;
   verificationExhausted: boolean;
+  ciBlocked: boolean;
 }
 
 export interface StatusLabelMapping {
@@ -355,6 +370,23 @@ export interface GitHubIssue {
   url: string;
 }
 
+export interface GitHubPrCheckSummary {
+  name: string;
+  status: 'pending' | 'success' | 'failed';
+  conclusion: string | null;
+  detailsUrl: string | null;
+  workflowName: string | null;
+}
+
+export interface GitHubPrReviewCommentSummary {
+  author: string | null;
+  body: string;
+  url: string;
+  createdAt: string;
+  path: string | null;
+  line: number | null;
+}
+
 export interface GitHubIssueCacheRecord {
   id: string;
   projectId: string;
@@ -374,6 +406,14 @@ export interface GitHubIssueCacheRecord {
   // from project/global settings". Existing rows are backfilled during the
   // migration so previous explicit selections stay explicit.
   executorModelOverride: ExecutorModel | null;
+  linkedPrNumber: number | null;
+  linkedPrUrl: string | null;
+  linkedPrIsDraft: boolean;
+  ciBlocked: boolean;
+  failingChecks: GitHubPrCheckSummary[];
+  unresolvedReviewComments: GitHubPrReviewCommentSummary[];
+  unresolvedReviewCommentCount: number;
+  prLastSyncAt: string | null;
   fetchedAt: string;
 }
 
@@ -559,7 +599,8 @@ export type NotificationKind =
   | 'awaiting_approval'
   | 'failed'
   | 'completed'
-  | 'verification_exhausted';
+  | 'verification_exhausted'
+  | 'ci_blocked';
 
 export interface NotificationRecord {
   id: string;

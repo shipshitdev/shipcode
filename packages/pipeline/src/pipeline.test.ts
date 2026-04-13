@@ -249,6 +249,11 @@ function createMockDeps() {
       githubIssues: {
         getByNumber: vi.fn(() => null),
         updatePipelineStatus: vi.fn(),
+        updatePullRequestFeedback: vi.fn(),
+      },
+      checkpoints: {
+        getLatest: vi.fn(() => null),
+        create: vi.fn(),
       },
       settings,
       providers,
@@ -276,6 +281,12 @@ describe('createPipeline', () => {
   beforeEach(() => {
     mock = createMockDeps();
     mockExecSync.mockReset();
+    mockExecSync.mockImplementation((cmd: string) => {
+      if (cmd === 'git rev-parse --abbrev-ref HEAD') return 'feat/test-branch';
+      if (cmd === 'git rev-parse HEAD') return 'abc123';
+      if (cmd === 'git status --porcelain') return '';
+      return '';
+    });
   });
 
   afterEach(() => {
@@ -1111,16 +1122,24 @@ describe('createPipeline', () => {
       expect(pipeline.getContext('t1')).toBeUndefined();
     });
 
-    it('PR created + number extracted → stores via setGithubPr, emits completed', async () => {
+    it('creates a draft PR when none exists and stores the relation', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
       pipeline.getContext('t1')!.githubIssueNumber = 42;
+      pipeline.getContext('t1')!.projectId = 'project-1';
       // baseBranch is a hard prerequisite for PR creation (invariant
       // added alongside the per-project base-branch selector).
       pipeline.getContext('t1')!.baseBranch = 'main';
+      (mock.deps.githubIssues.getByNumber as any).mockReturnValue({
+        id: 'issue-1',
+        ciBlocked: false,
+        failingChecks: [],
+        unresolvedReviewComments: [],
+      });
 
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.startsWith('git rev-parse')) return 'feat/branch';
+        if (cmd.startsWith('gh pr list')) return '[]';
         if (cmd.startsWith('gh pr create')) return 'https://github.com/org/repo/pull/99\n';
         if (cmd.startsWith('gh issue comment')) return '';
         return '';
@@ -1129,24 +1148,51 @@ describe('createPipeline', () => {
       await pipeline.startShipping('t1');
 
       expect(mock.deps.threads.setGithubPr).toHaveBeenCalledWith('t1', 99);
+      expect(mock.deps.githubIssues.updatePullRequestFeedback).toHaveBeenCalledWith('issue-1', {
+        linkedPrNumber: 99,
+        linkedPrUrl: 'https://github.com/org/repo/pull/99',
+        linkedPrIsDraft: true,
+        ciBlocked: false,
+        failingChecks: [],
+        unresolvedReviewComments: [],
+      });
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'completed');
     });
 
-    it('PR URL missing number → still completes (M6 silent skip)', async () => {
+    it('updates an existing PR instead of creating a duplicate', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
       pipeline.getContext('t1')!.githubIssueNumber = 42;
+      pipeline.getContext('t1')!.projectId = 'project-1';
       pipeline.getContext('t1')!.baseBranch = 'main';
+      (mock.deps.githubIssues.getByNumber as any).mockReturnValue({
+        id: 'issue-1',
+        ciBlocked: true,
+        failingChecks: [{ name: 'check', status: 'failed', conclusion: 'failure' }],
+        unresolvedReviewComments: [{ body: 'Fix it', url: 'https://github.com/comment' }],
+      });
 
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.startsWith('git rev-parse')) return 'feat/branch';
-        if (cmd.startsWith('gh pr create')) return 'some output without a pr url';
+        if (cmd.startsWith('gh pr list'))
+          return JSON.stringify([
+            { number: 88, url: 'https://github.com/org/repo/pull/88', isDraft: false },
+          ]);
+        if (cmd.startsWith('gh pr edit')) return '';
         return '';
       });
 
       await pipeline.startShipping('t1');
 
-      expect(mock.deps.threads.setGithubPr).not.toHaveBeenCalled();
+      expect(mock.deps.threads.setGithubPr).toHaveBeenCalledWith('t1', 88);
+      expect(mock.deps.githubIssues.updatePullRequestFeedback).toHaveBeenCalledWith('issue-1', {
+        linkedPrNumber: 88,
+        linkedPrUrl: 'https://github.com/org/repo/pull/88',
+        linkedPrIsDraft: false,
+        ciBlocked: true,
+        failingChecks: [{ name: 'check', status: 'failed', conclusion: 'failure' }],
+        unresolvedReviewComments: [{ body: 'Fix it', url: 'https://github.com/comment' }],
+      });
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'completed');
     });
 

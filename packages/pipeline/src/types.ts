@@ -6,6 +6,7 @@ import type {
 } from '@shipcode/agents';
 import type { PhaseSkillKey } from '@shipcode/shared';
 import type {
+  CheckpointQueries,
   ThreadQueries,
   PlanQueries,
   ReviewQueries,
@@ -16,6 +17,8 @@ import type {
 } from '@shipcode/db';
 import type {
   AgentType,
+  GitHubPrCheckSummary,
+  GitHubPrReviewCommentSummary,
   ShipCodePlan,
   PipelinePhase,
   PlanReview,
@@ -128,6 +131,11 @@ export interface PipelineContext {
    * calls abort() in addition to killing any active process.
    */
   abort: AbortController;
+  /**
+   * Optional follow-up inputs from a linked draft PR. When set, the next
+   * execute pass appends them to the prompt and then clears the field.
+   */
+  stabilizationFeedback: string | null;
 }
 
 export interface ActivePipelineSummary {
@@ -146,6 +154,7 @@ export interface PipelineDeps {
   reviews: ReviewQueries;
   verifications: VerificationQueries;
   githubIssues: GitHubIssueQueries;
+  checkpoints: CheckpointQueries;
   settings: SettingsQueries;
   providers: ProviderRegistry;
   /** Per-phase prompt skill overrides (project + global). The pipeline passes
@@ -166,6 +175,15 @@ export interface Pipeline {
   startVerification: (threadId: string) => Promise<void>;
   startCommitAndPush: (threadId: string) => Promise<void>;
   startShipping: (threadId: string) => Promise<void>;
+  startStabilization: (
+    threadId: string,
+    inputs: {
+      prNumber: number;
+      prUrl: string | null;
+      failingChecks: GitHubPrCheckSummary[];
+      unresolvedReviewComments: GitHubPrReviewCommentSummary[];
+    },
+  ) => Promise<void>;
   /**
    * Re-create in-memory PipelineContext from persisted Thread state.
    * Called before startExecution/startPlanGeneration when the user

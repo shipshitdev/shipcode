@@ -4,6 +4,8 @@ import {
   PRD_MANAGED_DISCRETE_LABELS,
   PRD_MANAGED_LABEL_PREFIXES,
   type GitHubIssue,
+  type GitHubPrCheckSummary,
+  type GitHubPrReviewCommentSummary,
   type GitHubStatusLabel,
 } from '@shipcode/shared';
 
@@ -24,8 +26,31 @@ function isAlreadyOnBoardError(stderr: string): boolean {
   );
 }
 
+export interface PullRequestFeedback {
+  number: number;
+  url: string;
+  isDraft: boolean;
+  ciBlocked: boolean;
+  failingChecks: GitHubPrCheckSummary[];
+  unresolvedReviewComments: GitHubPrReviewCommentSummary[];
+  unresolvedReviewCommentCount: number;
+}
+
 export class GhCli {
   constructor(private cwd: string) {}
+
+  private async getRepoCoordinates(): Promise<{ owner: string; repo: string }> {
+    const { stdout } = await execFileAsync('gh', ['repo', 'view', '--json', 'owner,name'], {
+      cwd: this.cwd,
+    });
+    const parsed = JSON.parse(stdout) as { owner?: { login?: string }; name?: string };
+    const owner = parsed.owner?.login?.trim();
+    const repo = parsed.name?.trim();
+    if (!owner || !repo) {
+      throw new Error('Failed to resolve repository owner/name via gh repo view');
+    }
+    return { owner, repo };
+  }
 
   private async listRepoLabels(): Promise<string[]> {
     const { stdout } = await execFileAsync(
@@ -330,6 +355,264 @@ export class GhCli {
     return parseInt(match[1], 10);
   }
 
+  async findPullRequestByHead(
+    head: string,
+  ): Promise<Pick<PullRequestFeedback, 'number' | 'url' | 'isDraft'> | null> {
+    const { stdout } = await execFileAsync(
+      'gh',
+      ['pr', 'list', '--state', 'all', '--head', head, '--json', 'number,url,isDraft', '--limit', '1'],
+      { cwd: this.cwd },
+    );
+    const rows = JSON.parse(stdout) as Array<{ number: number; url: string; isDraft: boolean }>;
+    const found = rows[0];
+    return found
+      ? { number: found.number, url: found.url, isDraft: !!found.isDraft }
+      : null;
+  }
+
+  async updatePullRequest(options: { prNumber: number; title: string; body: string }): Promise<void> {
+    await this.spawnWithStdin(
+      'gh',
+      [
+        'pr',
+        'edit',
+        String(options.prNumber),
+        '--title',
+        options.title,
+        '--body-file',
+        '-',
+      ],
+      options.body,
+    );
+  }
+
+  async setIssueLabelPresence(issueNumber: number, label: string, present: boolean): Promise<void> {
+    let current: string[] = [];
+    try {
+      current = (await this.getIssue(issueNumber)).labels;
+    } catch {
+      current = [];
+    }
+
+    if (present && current.includes(label)) return;
+    if (!present && !current.includes(label)) return;
+
+    try {
+      await execFileAsync(
+        'gh',
+        ['issue', 'edit', String(issueNumber), present ? '--add-label' : '--remove-label', label],
+        { cwd: this.cwd },
+      );
+    } catch {
+      // Best-effort marker sync; local cache still reflects the blocker state.
+    }
+  }
+
+  async getPullRequestFeedback(prNumber: number): Promise<PullRequestFeedback> {
+    const { owner, repo } = await this.getRepoCoordinates();
+    const query = `
+      query($owner:String!, $repo:String!, $number:Int!) {
+        repository(owner:$owner, name:$repo) {
+          pullRequest(number:$number) {
+            number
+            url
+            isDraft
+            commits(last:1) {
+              nodes {
+                commit {
+                  statusCheckRollup {
+                    contexts(first:50) {
+                      nodes {
+                        __typename
+                        ... on CheckRun {
+                          name
+                          conclusion
+                          status
+                          detailsUrl
+                          checkSuite {
+                            workflowRun {
+                              workflow {
+                                name
+                              }
+                            }
+                          }
+                        }
+                        ... on StatusContext {
+                          context
+                          state
+                          targetUrl
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            reviewThreads(first:50) {
+              nodes {
+                isResolved
+                isOutdated
+                comments(first:20) {
+                  nodes {
+                    body
+                    url
+                    createdAt
+                    path
+                    line
+                    author {
+                      login
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    const { stdout } = await execFileAsync(
+      'gh',
+      [
+        'api',
+        'graphql',
+        '-f',
+        `query=${query}`,
+        '-F',
+        `owner=${owner}`,
+        '-F',
+        `repo=${repo}`,
+        '-F',
+        `number=${prNumber}`,
+      ],
+      { cwd: this.cwd },
+    );
+
+    const parsed = JSON.parse(stdout) as {
+      data?: {
+        repository?: {
+          pullRequest?: {
+            number: number;
+            url: string;
+            isDraft: boolean;
+            commits?: {
+              nodes?: Array<{
+                commit?: {
+                  statusCheckRollup?: {
+                    contexts?: {
+                      nodes?: Array<
+                        | {
+                            __typename: 'CheckRun';
+                            name?: string;
+                            conclusion?: string | null;
+                            status?: string | null;
+                            detailsUrl?: string | null;
+                            checkSuite?: { workflowRun?: { workflow?: { name?: string | null } | null } | null } | null;
+                          }
+                        | {
+                            __typename: 'StatusContext';
+                            context?: string;
+                            state?: string | null;
+                            targetUrl?: string | null;
+                          }
+                      >;
+                    } | null;
+                  } | null;
+                } | null;
+              }>;
+            } | null;
+            reviewThreads?: {
+              nodes?: Array<{
+                isResolved?: boolean;
+                isOutdated?: boolean;
+                comments?: {
+                  nodes?: Array<{
+                    body?: string;
+                    url?: string;
+                    createdAt?: string;
+                    path?: string | null;
+                    line?: number | null;
+                    author?: { login?: string | null } | null;
+                  }>;
+                } | null;
+              }>;
+            } | null;
+          } | null;
+        } | null;
+      };
+    };
+
+    const pr = parsed.data?.repository?.pullRequest;
+    if (!pr) {
+      throw new Error(`Pull request #${prNumber} not found`);
+    }
+
+    const failingChecks: GitHubPrCheckSummary[] = [];
+    const contexts =
+      pr.commits?.nodes?.[0]?.commit?.statusCheckRollup?.contexts?.nodes ?? [];
+
+    for (const node of contexts) {
+      if (!node) continue;
+      if (node.__typename === 'CheckRun') {
+        const status = (node.status ?? '').toUpperCase();
+        const conclusion = (node.conclusion ?? '').toUpperCase();
+        const summary: GitHubPrCheckSummary = {
+          name: node.name ?? 'check',
+          status:
+            status !== 'COMPLETED'
+              ? 'pending'
+              : conclusion === 'SUCCESS' || conclusion === 'NEUTRAL' || conclusion === 'SKIPPED'
+                ? 'success'
+                : 'failed',
+          conclusion: node.conclusion?.toLowerCase() ?? null,
+          detailsUrl: node.detailsUrl ?? null,
+          workflowName: node.checkSuite?.workflowRun?.workflow?.name ?? null,
+        };
+        if (summary.status === 'failed') failingChecks.push(summary);
+        continue;
+      }
+
+      const state = (node.state ?? '').toUpperCase();
+      const summary: GitHubPrCheckSummary = {
+        name: node.context ?? 'status',
+        status: state === 'SUCCESS' ? 'success' : state === 'PENDING' ? 'pending' : 'failed',
+        conclusion: node.state?.toLowerCase() ?? null,
+        detailsUrl: node.targetUrl ?? null,
+        workflowName: null,
+      };
+      if (summary.status === 'failed') failingChecks.push(summary);
+    }
+
+    const unresolvedThreads = (pr.reviewThreads?.nodes ?? []).filter(
+      (thread) => !thread?.isResolved && !thread?.isOutdated,
+    );
+    const unresolvedReviewComments: GitHubPrReviewCommentSummary[] = unresolvedThreads
+      .map((thread) => {
+        const comments = thread.comments?.nodes ?? [];
+        const comment = comments[comments.length - 1];
+        if (!comment?.url || !comment.body || !comment.createdAt) return null;
+        return {
+          author: comment.author?.login ?? null,
+          body: comment.body,
+          url: comment.url,
+          createdAt: comment.createdAt,
+          path: comment.path ?? null,
+          line: comment.line ?? null,
+        } satisfies GitHubPrReviewCommentSummary;
+      })
+      .filter((comment): comment is GitHubPrReviewCommentSummary => !!comment);
+
+    return {
+      number: pr.number,
+      url: pr.url,
+      isDraft: !!pr.isDraft,
+      ciBlocked: failingChecks.length > 0,
+      failingChecks,
+      unresolvedReviewComments,
+      unresolvedReviewCommentCount: unresolvedThreads.length,
+    };
+  }
+
   async addIssueComment(issueNumber: number, body: string): Promise<void> {
     await execFileAsync('gh', ['issue', 'comment', String(issueNumber), '--body', body], {
       cwd: this.cwd,
@@ -353,12 +636,7 @@ export class GhCli {
    */
   async archiveProjectItems(issueNumber: number): Promise<void> {
     // Step 1: get owner/repo from the local git remote
-    const { stdout: repoOut } = await execFileAsync(
-      'gh',
-      ['repo', 'view', '--json', 'owner,name'],
-      { cwd: this.cwd },
-    );
-    const { owner, name: repo } = JSON.parse(repoOut) as { owner: { login: string }; name: string };
+    const { owner, repo } = await this.getRepoCoordinates();
 
     // Step 2: fetch all project items for this issue
     const itemQuery = `
@@ -374,7 +652,7 @@ export class GhCli {
     `;
     const { stdout: itemOut } = await execFileAsync(
       'gh',
-      ['api', 'graphql', '-f', `query=${itemQuery}`, '-F', `owner=${owner.login}`, '-F', `repo=${repo}`, '-F', `number=${issueNumber}`],
+      ['api', 'graphql', '-f', `query=${itemQuery}`, '-F', `owner=${owner}`, '-F', `repo=${repo}`, '-F', `number=${issueNumber}`],
       { cwd: this.cwd },
     );
     const itemData = JSON.parse(itemOut) as {

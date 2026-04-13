@@ -10,6 +10,7 @@ import {
   GitHubIssueQueries,
   SettingsQueries,
   SkillsQueries,
+  CheckpointQueries,
 } from '@shipcode/db';
 import {
   ProcessManager,
@@ -46,6 +47,7 @@ export async function runCommand(issueNumber: string) {
   const githubIssues = new GitHubIssueQueries(db);
   const settings = new SettingsQueries(db);
   const skills = new SkillsQueries(db);
+  const checkpoints = new CheckpointQueries(db);
 
   // Find or create project
   let project = projects.list().find((p) => p.path === cwd);
@@ -81,7 +83,7 @@ export async function runCommand(issueNumber: string) {
     }),
   });
 
-  const pipeline = createPipeline({
+  const pipelineDeps = {
     emitter,
     processManager,
     threads,
@@ -89,10 +91,12 @@ export async function runCommand(issueNumber: string) {
     reviews,
     verifications,
     githubIssues,
+    checkpoints,
     settings,
     providers,
     skills,
-  });
+  };
+  const pipeline = createPipeline(pipelineDeps as any);
 
   await pipeline.startFromGitHubIssue(
     project.id,

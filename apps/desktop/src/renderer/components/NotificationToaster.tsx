@@ -5,13 +5,18 @@ import { Button, X } from '@shipcode/ui';
 import { useAppStore } from '../stores/app-store';
 import notifySoundUrl from '../assets/notify.wav?url';
 
-const STICKY_KINDS: NotificationKind[] = ['awaiting_approval', 'verification_exhausted'];
+const STICKY_KINDS: NotificationKind[] = [
+  'awaiting_approval',
+  'verification_exhausted',
+  'ci_blocked',
+];
 const AUTO_DISMISS_MS = 8_000;
 
 const KIND_TONE: Record<NotificationKind, string> = {
   awaiting_approval: 'border-amber-500/40 bg-amber-500/10',
   failed: 'border-danger/40 bg-danger/10',
   verification_exhausted: 'border-danger/40 bg-danger/10',
+  ci_blocked: 'border-danger/40 bg-danger/10',
   completed: 'border-success/40 bg-success/10',
 };
 

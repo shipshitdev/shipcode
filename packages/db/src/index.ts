@@ -13,6 +13,8 @@ import {
   migrateV10,
   migrateV11,
   migrateV12,
+  migrateV13,
+  migrateV14,
 } from './schema';
 
 export { transaction } from './utils';
@@ -24,6 +26,7 @@ export { DiffQueries } from './queries/diffs';
 export { SettingsQueries } from './queries/settings';
 export { VerificationQueries } from './queries/verifications';
 export { GitHubIssueQueries } from './queries/github-issues';
+export { CheckpointQueries } from './queries/checkpoints';
 export { ActivityQueries } from './queries/activity';
 export { NotificationsQueries } from './queries/notifications';
 export { DashboardQueries } from './queries/dashboard';
@@ -54,6 +57,8 @@ export function getDatabase(dataDir: string): DatabaseSync {
   migrateV10(db);
   migrateV11(db);
   migrateV12(db);
+  migrateV13(db);
+  migrateV14(db);
   return db;
 }
 

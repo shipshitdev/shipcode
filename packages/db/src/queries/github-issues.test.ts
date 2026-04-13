@@ -112,6 +112,14 @@ describe('GitHubIssueQueries', () => {
   it('defaults executorModelOverride to null', () => {
     const record = issues.upsert(makeIssue());
     expect(record.executorModelOverride).toBeNull();
+    expect(record.linkedPrNumber).toBeNull();
+    expect(record.linkedPrUrl).toBeNull();
+    expect(record.linkedPrIsDraft).toBe(false);
+    expect(record.ciBlocked).toBe(false);
+    expect(record.failingChecks).toEqual([]);
+    expect(record.unresolvedReviewComments).toEqual([]);
+    expect(record.unresolvedReviewCommentCount).toBe(0);
+    expect(record.prLastSyncAt).toBeNull();
   });
 
   it('updateExecutorModelOverride() persists a value and can clear it', () => {
@@ -122,6 +130,56 @@ describe('GitHubIssueQueries', () => {
 
     issues.updateExecutorModelOverride(record.id, null);
     expect(issues.getByNumber(projectId, 1)!.executorModelOverride).toBeNull();
+  });
+
+  it('updatePullRequestFeedback() persists linked PR metadata and blocker summaries', () => {
+    const record = issues.upsert(makeIssue());
+
+    issues.updatePullRequestFeedback(record.id, {
+      linkedPrNumber: 77,
+      linkedPrUrl: 'https://github.com/shipshitdev/shipcode/pull/77',
+      linkedPrIsDraft: true,
+      ciBlocked: true,
+      failingChecks: [
+        {
+          name: 'check',
+          status: 'failed',
+          conclusion: 'failure',
+          detailsUrl: 'https://github.com/example/check',
+          workflowName: 'CI',
+        },
+      ],
+      unresolvedReviewComments: [
+        {
+          author: 'chatgpt-codex-connector',
+          body: 'Please fix this edge case.',
+          url: 'https://github.com/example/comment',
+          createdAt: new Date().toISOString(),
+          path: 'packages/pipeline/src/pipeline.ts',
+          line: 42,
+        },
+      ],
+    });
+
+    const updated = issues.getByNumber(projectId, 1)!;
+    expect(updated.linkedPrNumber).toBe(77);
+    expect(updated.linkedPrUrl).toBe('https://github.com/shipshitdev/shipcode/pull/77');
+    expect(updated.linkedPrIsDraft).toBe(true);
+    expect(updated.ciBlocked).toBe(true);
+    expect(updated.failingChecks).toHaveLength(1);
+    expect(updated.unresolvedReviewComments).toHaveLength(1);
+    expect(updated.unresolvedReviewCommentCount).toBe(1);
+    expect(updated.prLastSyncAt).toBeTruthy();
+  });
+
+  it('setCachedLabelPresence() adds and removes a local GitHub marker label', () => {
+    const record = issues.upsert(makeIssue({ labels: ['agent:claude'] }));
+
+    issues.setCachedLabelPresence(record.id, 'blocked:ci', true);
+    expect(issues.getByNumber(projectId, 1)?.labels).toContain('blocked:ci');
+
+    issues.setCachedLabelPresence(record.id, 'blocked:ci', false);
+    expect(issues.getByNumber(projectId, 1)?.labels).not.toContain('blocked:ci');
   });
 
   it('linkThread() sets the thread_id', () => {

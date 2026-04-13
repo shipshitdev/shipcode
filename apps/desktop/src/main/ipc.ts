@@ -9,6 +9,7 @@ import type {
   SettingsQueries,
   VerificationQueries,
   GitHubIssueQueries,
+  CheckpointQueries,
   ActivityQueries,
   NotificationsQueries,
   DashboardQueries,
@@ -60,6 +61,7 @@ interface Queries {
   settings: SettingsQueries;
   verifications: VerificationQueries;
   githubIssues: GitHubIssueQueries;
+  checkpoints: CheckpointQueries;
   activity: ActivityQueries;
   notifications: NotificationsQueries;
   dashboard: DashboardQueries;
@@ -103,6 +105,56 @@ function tryParsePlan(rawOutput: string): ShipCodePlan | null {
   parser.feed(rawOutput);
   const result = parser.extractPlan();
   return result.success ? result.data : null;
+}
+
+async function syncLinkedPullRequestFeedback(
+  project: import('@shipcode/shared').Project,
+  issue: import('@shipcode/shared').GitHubIssueCacheRecord,
+  queries: Queries,
+  notificationService: NotificationService,
+): Promise<void> {
+  const thread = issue.threadId ? queries.threads.getById(issue.threadId) : null;
+  const ghCli = new GhCli(project.path);
+
+  if (!thread?.githubPrNumber) {
+    if (
+      issue.linkedPrNumber !== null ||
+      issue.ciBlocked ||
+      issue.unresolvedReviewCommentCount > 0
+    ) {
+      queries.githubIssues.updatePullRequestFeedback(issue.id, {
+        linkedPrNumber: null,
+        linkedPrUrl: null,
+        linkedPrIsDraft: false,
+        ciBlocked: false,
+        failingChecks: [],
+        unresolvedReviewComments: [],
+      });
+      queries.githubIssues.setCachedLabelPresence(issue.id, 'blocked:ci', false);
+      await ghCli.setIssueLabelPresence(issue.issueNumber, 'blocked:ci', false);
+    }
+    return;
+  }
+
+  const feedback = await ghCli.getPullRequestFeedback(thread.githubPrNumber);
+  queries.githubIssues.updatePullRequestFeedback(issue.id, {
+    linkedPrNumber: feedback.number,
+    linkedPrUrl: feedback.url,
+    linkedPrIsDraft: feedback.isDraft,
+    ciBlocked: feedback.ciBlocked,
+    failingChecks: feedback.failingChecks,
+    unresolvedReviewComments: feedback.unresolvedReviewComments,
+  });
+
+  if (feedback.ciBlocked !== issue.ciBlocked) {
+    queries.githubIssues.setCachedLabelPresence(issue.id, 'blocked:ci', feedback.ciBlocked);
+    await ghCli.setIssueLabelPresence(issue.issueNumber, 'blocked:ci', feedback.ciBlocked);
+    if (feedback.ciBlocked) {
+      notificationService.fire('ci_blocked', thread);
+    }
+  } else if (feedback.ciBlocked) {
+    queries.githubIssues.setCachedLabelPresence(issue.id, 'blocked:ci', true);
+  }
 }
 
 export function registerIpcHandlers(
@@ -238,6 +290,52 @@ export function registerIpcHandlers(
     return queries.threads.getById(threadId);
   });
 
+  ipcMain.handle('checkpoint:list', (_event, { threadId }: { threadId: string }) => {
+    return queries.checkpoints.list(threadId);
+  });
+
+  ipcMain.handle(
+    'checkpoint:restore',
+    async (_event, { threadId, checkpointId }: { threadId: string; checkpointId: string }) => {
+      const checkpoint = queries.checkpoints.getById(checkpointId);
+      if (!checkpoint || checkpoint.threadId !== threadId) {
+        throw new Error('Checkpoint not found');
+      }
+
+      const thread = queries.threads.getById(threadId);
+      if (!thread?.worktreePath) {
+        throw new Error('Thread has no active worktree to restore');
+      }
+
+      if (pipeline.listActive().some((entry) => entry.threadId === threadId)) {
+        throw new Error('Stop the active pipeline before restoring a checkpoint');
+      }
+
+      await execAsync(`git reset --hard ${checkpoint.commitSha}`, {
+        cwd: thread.worktreePath,
+        timeout: 15_000,
+      });
+      await execAsync('git clean -fd', {
+        cwd: thread.worktreePath,
+        timeout: 15_000,
+      });
+
+      queries.threads.updateStatus(threadId, 'idle');
+
+      const issue = queries.githubIssues.getByThreadId(threadId);
+      if (issue) {
+        queries.githubIssues.updatePipelineStatus(issue.id, 'todo');
+        mainWindow.webContents.send('github:issues-updated', {
+          projectId: issue.projectId,
+          issues: queries.githubIssues.list(issue.projectId),
+        });
+      }
+
+      mainWindow.webContents.send('pipeline:phase', { threadId, phase: 'idle' });
+      return { restored: true as const, checkpoint };
+    },
+  );
+
   // === Plan handlers ===
   ipcMain.handle('plan:get', (_event, { threadId }: { threadId: string }) => {
     return queries.plans.getLatest(threadId);
@@ -368,6 +466,18 @@ export function registerIpcHandlers(
       } else if (rec.state === 'open') {
         queries.githubIssues.markReopenedOnOpen(rec.id);
         queries.githubIssues.clearArchivedAt(rec.id);
+      }
+    }
+
+    const cachedBeforePrSync = queries.githubIssues.list(projectId);
+    for (const issue of cachedBeforePrSync) {
+      try {
+        await syncLinkedPullRequestFeedback(project, issue, queries, notificationService);
+      } catch (err) {
+        log.warn(
+          `[github:refresh-issues] PR feedback sync failed for #${issue.issueNumber}:`,
+          err,
+        );
       }
     }
 
@@ -968,6 +1078,45 @@ export function registerIpcHandlers(
       );
     },
   );
+
+  ipcMain.handle('pipeline:stabilize-pr', async (_event, { threadId }: { threadId: string }) => {
+    if (pipeline.listActive().some((summary) => summary.threadId === threadId)) {
+      throw new Error('Stop the active pipeline before starting a stabilization pass');
+    }
+
+    const thread = queries.threads.getById(threadId);
+    if (!thread) throw new Error(`Thread ${threadId} not found`);
+
+    const project = queries.projects.getById(thread.projectId);
+    if (!project) throw new Error(`Project ${thread.projectId} not found`);
+
+    const issue = thread.githubIssueNumber
+      ? queries.githubIssues.getByNumber(project.id, thread.githubIssueNumber)
+      : null;
+    if (!issue?.linkedPrNumber) {
+      throw new Error('No linked pull request found for this task');
+    }
+    if (!issue.ciBlocked && issue.unresolvedReviewCommentCount === 0) {
+      throw new Error('The linked pull request has no unresolved CI or review blockers');
+    }
+
+    const latestPlan = queries.plans.getLatest(threadId);
+    const structured = latestPlan?.structured ?? tryParsePlan(latestPlan?.rawOutput ?? '');
+    if (!structured) {
+      throw new Error('No approved plan found for stabilization');
+    }
+    if (!latestPlan?.structured && latestPlan) {
+      queries.plans.updateStructured(latestPlan.id, structured);
+    }
+
+    pipeline.rehydrateContext(threadId, project.path, issue.title);
+    await pipeline.startStabilization(threadId, {
+      prNumber: issue.linkedPrNumber,
+      prUrl: issue.linkedPrUrl,
+      failingChecks: issue.failingChecks,
+      unresolvedReviewComments: issue.unresolvedReviewComments,
+    });
+  });
 
   ipcMain.handle('pipeline:cancel', (_event, { threadId }: { threadId: string }) => {
     pipeline.cancel(threadId);

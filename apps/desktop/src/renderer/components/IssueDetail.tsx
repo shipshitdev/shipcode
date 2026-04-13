@@ -2,6 +2,7 @@ import type {
   ActivePipelineSummary,
   AppSettings,
   ExecutorModel,
+  PipelineCheckpoint,
   NotificationRecord,
   PipelinePhase,
   PlanRecord,
@@ -278,6 +279,13 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     queryFn: () => window.shipcode.invoke('settings:get'),
   });
 
+  const { data: checkpoints = [] } = useQuery<PipelineCheckpoint[]>({
+    queryKey: ['checkpoints', activeThreadId],
+    queryFn: () => window.shipcode.invoke('checkpoint:list', { threadId: activeThreadId }),
+    enabled: !!activeThreadId,
+    refetchInterval: activeThreadId ? 2000 : false,
+  });
+
   // Fetch latest verification for the thread
   const { data: latestVerification } = useQuery<VerificationRecord | null>({
     queryKey: ['verification', activeThreadId],
@@ -386,6 +394,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       queryClient.invalidateQueries({ queryKey: ['github-issues', activeProjectId] }),
       queryClient.invalidateQueries({ queryKey: ['thread', activeThreadId] }),
       queryClient.invalidateQueries({ queryKey: ['plan-history', activeThreadId] }),
+      queryClient.invalidateQueries({ queryKey: ['checkpoints', activeThreadId] }),
     ]);
   };
 
@@ -577,6 +586,35 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       });
   };
 
+  const handleRestoreCheckpoint = async (checkpoint: PipelineCheckpoint) => {
+    if (!activeThreadId) return;
+    const confirmed = window.confirm(
+      `Restore checkpoint "${checkpoint.label}"?\n\nThis will hard-reset the worktree to ${checkpoint.commitSha.slice(0, 12)} and remove untracked files in that worktree.`,
+    );
+    if (!confirmed) return;
+    setIsSubmitting(true);
+    try {
+      await window.shipcode.invoke('checkpoint:restore', {
+        threadId: activeThreadId,
+        checkpointId: checkpoint.id,
+      });
+      await refreshIssueState();
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleStabilizePr = async () => {
+    if (!activeThreadId) return;
+    setIsSubmitting(true);
+    try {
+      await window.shipcode.invoke('pipeline:stabilize-pr', { threadId: activeThreadId });
+      await refreshIssueState();
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const headerButtons = (
     <div className="absolute right-3 top-3 flex items-center gap-0.5">
       {activeIssue.pipelineStatus === 'completed' && (
@@ -631,6 +669,17 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
             {l}
           </Badge>
         ))}
+      {activeIssue.ciBlocked && (
+        <Badge variant="danger" className="text-[10px] uppercase">
+          CI blocked
+        </Badge>
+      )}
+      {activeIssue.unresolvedReviewCommentCount > 0 && (
+        <Badge variant="warning" className="text-[10px]">
+          {activeIssue.unresolvedReviewCommentCount} review
+          {activeIssue.unresolvedReviewCommentCount === 1 ? '' : 's'}
+        </Badge>
+      )}
     </div>
   );
 
@@ -681,6 +730,14 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     </div>
   );
 
+  const linkedPrUrl =
+    activeIssue.linkedPrUrl ??
+    (thread?.githubPrNumber && thread.githubRepo
+      ? `https://github.com/${thread.githubRepo}/pull/${thread.githubPrNumber}`
+      : null);
+  const hasPrFeedbackBlockers =
+    activeIssue.ciBlocked || activeIssue.unresolvedReviewCommentCount > 0;
+
   const pipelineSection = thread ? (
     <div className="mb-5">
       <div className="mb-2 flex items-center justify-between">
@@ -702,18 +759,35 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
             </span>
           </div>
         )}
-        {thread.githubPrNumber && thread.githubRepo && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              window.shipcode.invoke('shell:open-external', {
-                url: `https://github.com/${thread.githubRepo}/pull/${thread.githubPrNumber}`,
-              })
-            }
-          >
-            #{thread.githubPrNumber} Open PR
-          </Button>
+        {activeIssue.linkedPrNumber && linkedPrUrl && (
+          <div className="flex flex-col gap-1 rounded-md border border-border bg-secondary p-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] font-medium uppercase tracking-wide text-muted">
+                Pull Request
+              </span>
+              <Badge variant={activeIssue.linkedPrIsDraft ? 'warning' : 'success'} className="text-[10px]">
+                {activeIssue.linkedPrIsDraft ? 'Draft' : 'Ready'}
+              </Badge>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="truncate font-mono text-[11px] text-primary">
+                #{activeIssue.linkedPrNumber}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="text-muted"
+                onClick={() =>
+                  window.shipcode.invoke('shell:open-external', {
+                    url: linkedPrUrl,
+                  })
+                }
+                title="Open pull request on GitHub"
+              >
+                <ExternalLink size={12} />
+              </Button>
+            </div>
+          </div>
         )}
         <div className="flex flex-col gap-1 rounded-md border border-border bg-secondary p-2">
           <span className="text-[10px] font-medium uppercase tracking-wide text-muted">Cost</span>
@@ -736,6 +810,146 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       </div>
     </div>
   ) : null;
+
+  const prFeedbackSection = activeIssue.linkedPrNumber ? (
+    <div className="mb-5">
+      <div className="mb-2 flex items-center justify-between">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">
+          PR Feedback
+        </h4>
+        {activeIssue.prLastSyncAt && (
+          <span className="text-[10px] text-muted">
+            {new Date(activeIssue.prLastSyncAt).toLocaleString()}
+          </span>
+        )}
+      </div>
+      <div className="space-y-2">
+        <div className="flex flex-wrap gap-1.5">
+          <Badge variant={activeIssue.ciBlocked ? 'danger' : 'success'} className="text-[10px]">
+            {activeIssue.ciBlocked
+              ? `${activeIssue.failingChecks.length} failing check${activeIssue.failingChecks.length === 1 ? '' : 's'}`
+              : 'CI clear'}
+          </Badge>
+          <Badge
+            variant={activeIssue.unresolvedReviewCommentCount > 0 ? 'warning' : 'default'}
+            className="text-[10px]"
+          >
+            {activeIssue.unresolvedReviewCommentCount} unresolved review
+            {activeIssue.unresolvedReviewCommentCount === 1 ? '' : 's'}
+          </Badge>
+        </div>
+        {activeIssue.failingChecks.length > 0 && (
+          <div className="space-y-2">
+            {activeIssue.failingChecks.map((check) => (
+              <div
+                key={`${check.workflowName ?? 'workflow'}:${check.name}`}
+                className="rounded-md border border-danger/20 bg-danger/5 p-2"
+              >
+                <div className="text-[12px] font-medium text-primary">
+                  {[check.workflowName, check.name].filter(Boolean).join(' / ')}
+                </div>
+                <div className="mt-1 flex items-center gap-2 text-[11px] text-muted">
+                  <span>{check.conclusion ?? check.status}</span>
+                  {check.detailsUrl && (
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      className="h-5 px-1.5 text-[10px]"
+                      onClick={() =>
+                        window.shipcode.invoke('shell:open-external', { url: check.detailsUrl! })
+                      }
+                    >
+                      Open
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {activeIssue.unresolvedReviewComments.length > 0 && (
+          <div className="space-y-2">
+            {activeIssue.unresolvedReviewComments.map((comment) => (
+              <div
+                key={comment.url}
+                className="rounded-md border border-warning/20 bg-warning/5 p-2"
+              >
+                <div className="text-[11px] text-muted">
+                  {[comment.author, comment.path, comment.line ? `:${comment.line}` : null]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </div>
+                <div className="mt-1 text-[12px] text-primary whitespace-pre-wrap break-words">
+                  {comment.body}
+                </div>
+                <div className="mt-2">
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    className="h-5 px-1.5 text-[10px]"
+                    onClick={() =>
+                      window.shipcode.invoke('shell:open-external', { url: comment.url })
+                    }
+                  >
+                    Open Comment
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {hasPrFeedbackBlockers && activeThreadId && (
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleStabilizePr}
+              disabled={isSubmitting || phaseIsActive}
+            >
+              {isSubmitting ? 'Starting…' : 'Run stabilization pass'}
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  ) : null;
+
+  const checkpointSection =
+    thread && checkpoints.length > 0 ? (
+      <div className="mb-5">
+        <div className="mb-2 flex items-center justify-between">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">
+            Checkpoints
+          </h4>
+          <span className="text-[11px] text-muted">{checkpoints.length}</span>
+        </div>
+        <div className="space-y-2">
+          {checkpoints.map((checkpoint) => (
+            <div
+              key={checkpoint.id}
+              className="flex items-center justify-between gap-3 rounded-md border border-border bg-secondary p-2"
+            >
+              <div className="min-w-0">
+                <div className="text-[12px] font-medium text-primary">{checkpoint.label}</div>
+                <div className="truncate text-[11px] text-muted">
+                  {checkpoint.branch ? `${checkpoint.branch} · ` : ''}
+                  {checkpoint.commitSha.slice(0, 12)} ·{' '}
+                  {new Date(checkpoint.createdAt).toLocaleString()}
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="xs"
+                onClick={() => handleRestoreCheckpoint(checkpoint)}
+                disabled={isSubmitting || phaseIsActive}
+              >
+                Restore
+              </Button>
+            </div>
+          ))}
+        </div>
+      </div>
+    ) : null;
 
   const approvalSection = hasApprovalDecision ? (
     <div className="mb-5 rounded-md border border-border bg-secondary p-3">
@@ -1187,6 +1401,8 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
           {agentsSection}
           {pipelineSection}
+          {prFeedbackSection}
+          {checkpointSection}
         </div>
         {planFullScreenDialog}
       </div>
@@ -1312,6 +1528,8 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         <TabsContent value="agents" className="p-4">
           {agentsSection}
           {pipelineSection}
+          {prFeedbackSection}
+          {checkpointSection}
         </TabsContent>
       </Tabs>
 

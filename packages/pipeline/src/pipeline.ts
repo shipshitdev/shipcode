@@ -92,6 +92,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       repoSetupContract: seed.repoSetupContract ?? null,
       repoSetupLoaded: seed.repoSetupLoaded ?? false,
       abort: seed.abort ?? new AbortController(),
+      stabilizationFeedback: seed.stabilizationFeedback ?? null,
     };
     activePipelines.set(threadId, context);
     return context;
@@ -130,6 +131,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       activeProcessId: null,
       cancelled: false,
       verifiedSha: null,
+      stabilizationFeedback: null,
     });
   }
 
@@ -328,6 +330,65 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     if (bits.length === 0) return '';
 
     return `\n\n<!-- auto-injected: repo setup contract -->\nNote: This repo defines a setup contract in \`.shipcode/setup.json\`.\n${bits.join('\n')}`;
+  }
+
+  function formatStabilizationFeedback(inputs: {
+    prNumber: number;
+    prUrl: string | null;
+    failingChecks: Array<{
+      name: string;
+      conclusion: string | null;
+      detailsUrl: string | null;
+      workflowName: string | null;
+    }>;
+    unresolvedReviewComments: Array<{
+      author: string | null;
+      body: string;
+      url: string;
+      path: string | null;
+      line: number | null;
+    }>;
+  }): string {
+    const lines = [
+      '',
+      '',
+      '<stabilization_feedback>',
+      `Continue work on linked draft PR #${inputs.prNumber}. Resolve the remaining GitHub feedback without expanding scope.`,
+    ];
+
+    if (inputs.prUrl) {
+      lines.push(`PR URL: ${inputs.prUrl}`);
+    }
+
+    if (inputs.failingChecks.length > 0) {
+      lines.push('', 'Failing checks:');
+      for (const check of inputs.failingChecks.slice(0, 10)) {
+        const summary = [check.workflowName, check.name].filter(Boolean).join(' / ');
+        const detail = [check.conclusion, check.detailsUrl].filter(Boolean).join(' — ');
+        lines.push(`- ${summary}${detail ? ` — ${detail}` : ''}`);
+      }
+    }
+
+    if (inputs.unresolvedReviewComments.length > 0) {
+      lines.push('', 'Unresolved review comments:');
+      for (const comment of inputs.unresolvedReviewComments.slice(0, 10)) {
+        const location = [comment.path, comment.line ? `:${comment.line}` : null]
+          .filter(Boolean)
+          .join('');
+        const header = [comment.author, location].filter(Boolean).join(' — ');
+        const body =
+          comment.body.length > 600 ? `${comment.body.slice(0, 600).trimEnd()}…` : comment.body;
+        lines.push(`- ${header || 'Review comment'}: ${body.replace(/\s+/g, ' ')}${comment.url ? ` (${comment.url})` : ''}`);
+      }
+    }
+
+    lines.push(
+      '',
+      'Apply the minimal follow-up changes, rerun the required verification, and leave the branch ready for another push.',
+      '</stabilization_feedback>',
+    );
+
+    return lines.join('\n');
   }
 
   /**
@@ -801,17 +862,61 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       return;
     }
 
+    try {
+      const cwd = context.worktreePath ?? context.projectPath;
+      const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+        cwd,
+        encoding: 'utf-8',
+      }).trim();
+      const commitSha = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd,
+        encoding: 'utf-8',
+      }).trim();
+      const latest = deps.checkpoints.getLatest(threadId);
+      const retryOrdinal =
+        1 + context.reviewRound + context.testRetries + context.verificationRetries;
+      const reason = retryOrdinal > 1 ? 'before_retry' : 'before_execute';
+      const label =
+        retryOrdinal > 1
+          ? `Before execute retry ${retryOrdinal}`
+          : 'Before execute attempt 1';
+
+      if (
+        !latest ||
+        latest.commitSha !== commitSha ||
+        latest.phase !== 'executing' ||
+        latest.reason !== reason
+      ) {
+        deps.checkpoints.create({
+          threadId,
+          projectId: context.projectId,
+          phase: 'executing',
+          reason,
+          label,
+          branch,
+          commitSha,
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      emitPhase(threadId, 'failed', `Checkpoint creation failed: ${message}`);
+      activePipelines.delete(threadId);
+      return;
+    }
+
     const skill = skillCallSite(context);
     const testFeedback =
       context.testOutput && context.testRetries > 0
         ? `\n\n<previous_test_failure>\nTests failed on the previous attempt. Fix these issues before finishing:\n\n${context.testOutput}\n</previous_test_failure>`
         : '';
     context.testOutput = null;
+    const stabilizationFeedback = context.stabilizationFeedback ?? '';
+    context.stabilizationFeedback = null;
     const basePrompt = buildExecutionPrompt(plan, skill.context, skill.deps, {
       contextFiles: context.repoContext ?? undefined,
       testingContext: getTestingContext(context),
     });
-    const executionPrompt = basePrompt + testFeedback;
+    const executionPrompt = basePrompt + testFeedback + stabilizationFeedback;
 
     void (async () => {
       try {
@@ -1101,13 +1206,10 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     const cwd = context.worktreePath ?? context.projectPath;
 
     try {
-      // Get branch name
       const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
         cwd,
         encoding: 'utf-8',
       }).trim();
-
-      // Build PR body
       const latestPlan = deps.plans.getLatest(threadId);
       const plan = latestPlan?.structured;
       const title = plan?.objective ?? `ShipCode: Issue #${context.githubIssueNumber}`;
@@ -1121,47 +1223,94 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         `*Autonomous implementation by ShipCode*`,
       ].join('\n');
 
-      // Create PR
       if (!context.baseBranch) {
         throw new Error(`Thread ${threadId}: missing baseBranch at PR creation`);
       }
-      const prOutput = execFileSync(
+
+      const existingPrJson = execFileSync(
         'gh',
-        [
-          'pr',
-          'create',
-          '--title',
-          title,
-          '--body',
-          body,
-          '--head',
-          branch,
-          '--base',
-          context.baseBranch,
-        ],
+        ['pr', 'list', '--state', 'all', '--head', branch, '--json', 'number,url,isDraft', '--limit', '1'],
         { cwd, encoding: 'utf-8' },
       );
+      const existingPr = (JSON.parse(existingPrJson) as Array<{
+        number: number;
+        url: string;
+        isDraft: boolean;
+      }>)[0];
 
-      // Extract PR number from URL
-      const prMatch = prOutput.match(/\/pull\/(\d+)/);
-      if (prMatch) {
-        const prNumber = parseInt(prMatch[1], 10);
+      let prNumber: number | null = null;
+      let prUrl: string | null = null;
+      let prIsDraft = true;
+      let created = false;
+
+      if (existingPr) {
+        prNumber = existingPr.number;
+        prUrl = existingPr.url;
+        prIsDraft = !!existingPr.isDraft;
+        execFileSync(
+          'gh',
+          ['pr', 'edit', String(existingPr.number), '--title', title, '--body', body],
+          { cwd, encoding: 'utf-8' },
+        );
+      } else {
+        const prOutput = execFileSync(
+          'gh',
+          [
+            'pr',
+            'create',
+            '--draft',
+            '--title',
+            title,
+            '--body',
+            body,
+            '--head',
+            branch,
+            '--base',
+            context.baseBranch,
+          ],
+          { cwd, encoding: 'utf-8' },
+        );
+        const prMatch = prOutput.match(/\/pull\/(\d+)/);
+        if (!prMatch) {
+          throw new Error(`Failed to parse pull request number from: ${prOutput}`);
+        }
+        prNumber = parseInt(prMatch[1], 10);
+        prUrl = prOutput.trim();
+        created = true;
+      }
+
+      if (prNumber) {
         deps.threads.setGithubPr(threadId, prNumber);
 
-        // Comment on issue
-        try {
-          execFileSync(
-            'gh',
-            [
-              'issue',
-              'comment',
-              String(context.githubIssueNumber),
-              '--body',
-              'PR #' + prNumber + ' created by ShipCode.',
-            ],
-            { cwd, encoding: 'utf-8' },
-          );
-        } catch {}
+        if (context.projectId && context.githubIssueNumber) {
+          const issue = deps.githubIssues.getByNumber(context.projectId, context.githubIssueNumber);
+          if (issue) {
+            deps.githubIssues.updatePullRequestFeedback(issue.id, {
+              linkedPrNumber: prNumber,
+              linkedPrUrl: prUrl,
+              linkedPrIsDraft: prIsDraft,
+              ciBlocked: issue.ciBlocked,
+              failingChecks: issue.failingChecks,
+              unresolvedReviewComments: issue.unresolvedReviewComments,
+            });
+          }
+        }
+
+        if (created) {
+          try {
+            execFileSync(
+              'gh',
+              [
+                'issue',
+                'comment',
+                String(context.githubIssueNumber),
+                '--body',
+                `Draft PR #${prNumber} opened by ShipCode.`,
+              ],
+              { cwd, encoding: 'utf-8' },
+            );
+          } catch {}
+        }
       }
 
       emitPhase(threadId, 'completed');
@@ -1169,6 +1318,40 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       emitPhase(threadId, 'failed');
     }
     activePipelines.delete(threadId);
+  }
+
+  async function startStabilization(
+    threadId: string,
+    inputs: {
+      prNumber: number;
+      prUrl: string | null;
+      failingChecks: Array<{
+        name: string;
+        conclusion: string | null;
+        detailsUrl: string | null;
+        workflowName: string | null;
+      }>;
+      unresolvedReviewComments: Array<{
+        author: string | null;
+        body: string;
+        url: string;
+        path: string | null;
+        line: number | null;
+      }>;
+    },
+  ) {
+    const context = activePipelines.get(threadId);
+    if (!context) return;
+
+    const latestPlan = deps.plans.getLatest(threadId);
+    if (!latestPlan?.structured) {
+      throw new Error(`Thread ${threadId}: missing approved plan for stabilization`);
+    }
+
+    context.cancelled = false;
+    context.stabilizationFeedback = formatStabilizationFeedback(inputs);
+    context.verifiedSha = null;
+    await startExecution(threadId, latestPlan.structured);
   }
 
   async function startFromGitHubIssue(
@@ -1288,6 +1471,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     startVerification,
     startCommitAndPush,
     startShipping,
+    startStabilization,
     startFromGitHubIssue,
     initializeContext: ensureContext,
     cancel,

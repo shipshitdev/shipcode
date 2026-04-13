@@ -331,6 +331,21 @@ export function SettingsPanel() {
                   disabled={!settings.notificationsEnabled}
                 />
               </SettingsRow>
+              <SettingsRow label="CI blocked" htmlFor="notify-ci-blocked">
+                <Switch
+                  id="notify-ci-blocked"
+                  checked={settings.notificationEvents.ciBlocked}
+                  onCheckedChange={(checked: boolean) =>
+                    updateSettings.mutate({
+                      notificationEvents: {
+                        ...settings.notificationEvents,
+                        ciBlocked: !!checked,
+                      },
+                    })
+                  }
+                  disabled={!settings.notificationsEnabled}
+                />
+              </SettingsRow>
               <SettingsRow label="Pipeline completed" htmlFor="notify-completed">
                 <Switch
                   id="notify-completed"

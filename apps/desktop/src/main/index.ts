@@ -32,6 +32,7 @@ import {
   SettingsQueries,
   VerificationQueries,
   GitHubIssueQueries,
+  CheckpointQueries,
   ActivityQueries,
   NotificationsQueries,
   DashboardQueries,
@@ -109,6 +110,7 @@ function createWindow() {
     settings: new SettingsQueries(db),
     verifications: new VerificationQueries(db),
     githubIssues: new GitHubIssueQueries(db),
+    checkpoints: new CheckpointQueries(db),
     activity: new ActivityQueries(db),
     notifications: new NotificationsQueries(db),
     dashboard: new DashboardQueries(db),
@@ -149,7 +151,7 @@ function createWindow() {
     }),
   });
 
-  pipeline = createPipeline({
+  const pipelineDeps = {
     emitter,
     processManager,
     threads: queries.threads,
@@ -157,10 +159,12 @@ function createWindow() {
     reviews: queries.reviews,
     verifications: queries.verifications,
     githubIssues: queries.githubIssues,
+    checkpoints: queries.checkpoints,
     settings: queries.settings,
     providers,
     skills: queries.skills,
-  });
+  };
+  pipeline = createPipeline(pipelineDeps as any);
 
   // Queue promotion: start the next queued issue when a pipeline slot opens.
   onPipelineTerminal = () => {

@@ -4,6 +4,7 @@ export const ATTENTION_REQUIRED_NOTIFICATION_KINDS: NotificationKind[] = [
   'awaiting_approval',
   'failed',
   'verification_exhausted',
+  'ci_blocked',
 ];
 
 export function isAttentionRequiredNotificationKind(kind: NotificationKind): boolean {

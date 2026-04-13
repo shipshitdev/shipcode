@@ -13,6 +13,7 @@ import type {
   GhAuthStatus,
   GitHubIssueCacheRecord,
   GitState,
+  PipelineCheckpoint,
   PlanRecord,
   PlanReview,
   PipelinePhase,
@@ -58,10 +59,16 @@ export interface IpcInvokeChannels {
   'thread:list': { args: { projectId: string }; result: Thread[] };
   'thread:create': { args: { projectId: string; prompt: string }; result: Thread };
   'thread:get': { args: { threadId: string }; result: Thread | null };
+  'checkpoint:list': { args: { threadId: string }; result: PipelineCheckpoint[] };
+  'checkpoint:restore': {
+    args: { threadId: string; checkpointId: string };
+    result: { restored: true; checkpoint: PipelineCheckpoint };
+  };
 
   'pipeline:start': { args: { threadId: string }; result: void };
   'pipeline:approve': { args: { threadId: string }; result: void };
   'pipeline:reject': { args: { threadId: string; feedback: string }; result: void };
+  'pipeline:stabilize-pr': { args: { threadId: string }; result: void };
   'pipeline:cancel': { args: { threadId: string }; result: void };
   'pipeline:skip-review': { args: { threadId: string }; result: void };
 

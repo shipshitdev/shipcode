@@ -139,6 +139,14 @@ export function migrateV2(db: DatabaseSync): void {
         claimed_by TEXT,
         last_phase_update TEXT,
         executor_model_override TEXT,
+        linked_pr_number INTEGER,
+        linked_pr_url TEXT,
+        linked_pr_is_draft INTEGER NOT NULL DEFAULT 0,
+        ci_blocked INTEGER NOT NULL DEFAULT 0,
+        failing_checks TEXT NOT NULL DEFAULT '[]',
+        unresolved_review_comments TEXT NOT NULL DEFAULT '[]',
+        unresolved_review_comment_count INTEGER NOT NULL DEFAULT 0,
+        pr_last_sync_at TEXT,
         fetched_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
         UNIQUE(project_id, issue_number)
       );
@@ -483,5 +491,61 @@ export function migrateV12(db: DatabaseSync): void {
     `);
 
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (12)`);
+  });
+}
+
+export function migrateV13(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 13) return;
+
+  transaction(db, () => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS pipeline_checkpoints (
+        id TEXT PRIMARY KEY,
+        thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+        project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
+        phase TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        label TEXT NOT NULL,
+        branch TEXT,
+        commit_sha TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_pipeline_checkpoints_thread
+        ON pipeline_checkpoints(thread_id, created_at DESC);
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (13)`);
+  });
+}
+
+export function migrateV14(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 14) return;
+
+  transaction(db, () => {
+    const alterColumns = [
+      'ALTER TABLE github_issue_cache ADD COLUMN linked_pr_number INTEGER',
+      'ALTER TABLE github_issue_cache ADD COLUMN linked_pr_url TEXT',
+      'ALTER TABLE github_issue_cache ADD COLUMN linked_pr_is_draft INTEGER NOT NULL DEFAULT 0',
+      'ALTER TABLE github_issue_cache ADD COLUMN ci_blocked INTEGER NOT NULL DEFAULT 0',
+      "ALTER TABLE github_issue_cache ADD COLUMN failing_checks TEXT NOT NULL DEFAULT '[]'",
+      "ALTER TABLE github_issue_cache ADD COLUMN unresolved_review_comments TEXT NOT NULL DEFAULT '[]'",
+      'ALTER TABLE github_issue_cache ADD COLUMN unresolved_review_comment_count INTEGER NOT NULL DEFAULT 0',
+      'ALTER TABLE github_issue_cache ADD COLUMN pr_last_sync_at TEXT',
+    ];
+
+    for (const sql of alterColumns) {
+      try {
+        db.exec(sql);
+      } catch {}
+    }
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (14)`);
   });
 }

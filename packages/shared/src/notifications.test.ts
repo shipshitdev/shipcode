@@ -28,10 +28,12 @@ describe('notifications helpers', () => {
       'awaiting_approval',
       'failed',
       'verification_exhausted',
+      'ci_blocked',
     ]);
     expect(isAttentionRequiredNotificationKind('awaiting_approval')).toBe(true);
     expect(isAttentionRequiredNotificationKind('failed')).toBe(true);
     expect(isAttentionRequiredNotificationKind('verification_exhausted')).toBe(true);
+    expect(isAttentionRequiredNotificationKind('ci_blocked')).toBe(true);
     expect(isAttentionRequiredNotificationKind('completed')).toBe(false);
   });
 
@@ -41,12 +43,14 @@ describe('notifications helpers', () => {
       makeNotification({ id: 'n2', kind: 'completed' }),
       makeNotification({ id: 'n3', kind: 'failed' }),
       makeNotification({ id: 'n4', kind: 'verification_exhausted' }),
+      makeNotification({ id: 'n5', kind: 'ci_blocked' }),
     ];
 
     expect(filterAttentionRequiredNotifications(notifications).map((n) => n.id)).toEqual([
       'n1',
       'n3',
       'n4',
+      'n5',
     ]);
   });
 });

@@ -44,6 +44,7 @@ const KIND_BADGE_VARIANT: Record<NotificationKind, BadgeVariant> = {
   failed: 'danger',
   completed: 'success',
   verification_exhausted: 'warning',
+  ci_blocked: 'danger',
 };
 
 const KIND_LABEL: Record<NotificationKind, string> = {
@@ -51,6 +52,7 @@ const KIND_LABEL: Record<NotificationKind, string> = {
   failed: 'Failed',
   completed: 'Completed',
   verification_exhausted: 'Retries exhausted',
+  ci_blocked: 'CI blocked',
 };
 
 export function InboxView() {

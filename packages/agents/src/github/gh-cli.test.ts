@@ -355,6 +355,197 @@ describe('GhCli', () => {
     });
   });
 
+  describe('findPullRequestByHead', () => {
+    it('returns the first matching PR for a branch head', async () => {
+      success(JSON.stringify([{ number: 14, url: 'https://github.com/o/r/pull/14', isDraft: true }]));
+
+      const pr = await gh.findPullRequestByHead('feat/branch');
+
+      expect(pr).toEqual({
+        number: 14,
+        url: 'https://github.com/o/r/pull/14',
+        isDraft: true,
+      });
+      expect(mockExecFileAsync).toHaveBeenCalledWith(
+        'gh',
+        ['pr', 'list', '--state', 'all', '--head', 'feat/branch', '--json', 'number,url,isDraft', '--limit', '1'],
+        { cwd: '/test/repo' },
+      );
+    });
+
+    it('returns null when there is no matching PR', async () => {
+      success('[]');
+      await expect(gh.findPullRequestByHead('missing')).resolves.toBeNull();
+    });
+  });
+
+  describe('updatePullRequest', () => {
+    it('pipes the PR body through stdin', async () => {
+      const fake = createFakeProc();
+      mockSpawn.mockReturnValueOnce(fake.proc);
+
+      const promise = gh.updatePullRequest({
+        prNumber: 9,
+        title: 'Updated title',
+        body: 'New body',
+      });
+
+      fake.complete(0);
+      await promise;
+
+      expect(mockSpawn).toHaveBeenCalledWith(
+        'gh',
+        ['pr', 'edit', '9', '--title', 'Updated title', '--body-file', '-'],
+        { cwd: '/test/repo', stdio: ['pipe', 'pipe', 'pipe'] },
+      );
+      expect(fake.stdinWrites).toEqual(['New body']);
+    });
+  });
+
+  describe('setIssueLabelPresence', () => {
+    it('adds the label when missing', async () => {
+      success(
+        JSON.stringify({
+          number: 42,
+          title: 'Issue',
+          body: '',
+          labels: [],
+          assignees: [],
+          state: 'OPEN',
+          url: 'https://github.com/o/r/issues/42',
+        }),
+      );
+      success('');
+
+      await gh.setIssueLabelPresence(42, 'blocked:ci', true);
+
+      expect(mockExecFileAsync).toHaveBeenLastCalledWith(
+        'gh',
+        ['issue', 'edit', '42', '--add-label', 'blocked:ci'],
+        { cwd: '/test/repo' },
+      );
+    });
+
+    it('removes the label when present', async () => {
+      success(
+        JSON.stringify({
+          number: 42,
+          title: 'Issue',
+          body: '',
+          labels: [{ name: 'blocked:ci' }],
+          assignees: [],
+          state: 'OPEN',
+          url: 'https://github.com/o/r/issues/42',
+        }),
+      );
+      success('');
+
+      await gh.setIssueLabelPresence(42, 'blocked:ci', false);
+
+      expect(mockExecFileAsync).toHaveBeenLastCalledWith(
+        'gh',
+        ['issue', 'edit', '42', '--remove-label', 'blocked:ci'],
+        { cwd: '/test/repo' },
+      );
+    });
+  });
+
+  describe('getPullRequestFeedback', () => {
+    it('maps failing checks and unresolved review threads', async () => {
+      success(JSON.stringify({ owner: { login: 'shipshitdev' }, name: 'shipcode' }));
+      success(
+        JSON.stringify({
+          data: {
+            repository: {
+              pullRequest: {
+                number: 40,
+                url: 'https://github.com/shipshitdev/shipcode/pull/40',
+                isDraft: true,
+                commits: {
+                  nodes: [
+                    {
+                      commit: {
+                        statusCheckRollup: {
+                          contexts: {
+                            nodes: [
+                              {
+                                __typename: 'CheckRun',
+                                name: 'check',
+                                conclusion: 'FAILURE',
+                                status: 'COMPLETED',
+                                detailsUrl: 'https://github.com/check',
+                                checkSuite: { workflowRun: { workflow: { name: 'CI' } } },
+                              },
+                              {
+                                __typename: 'StatusContext',
+                                context: 'CodeRabbit',
+                                state: 'SUCCESS',
+                                targetUrl: null,
+                              },
+                            ],
+                          },
+                        },
+                      },
+                    },
+                  ],
+                },
+                reviewThreads: {
+                  nodes: [
+                    {
+                      isResolved: false,
+                      isOutdated: false,
+                      comments: {
+                        nodes: [
+                          {
+                            body: 'Please fix this.',
+                            url: 'https://github.com/comment',
+                            createdAt: '2026-04-13T00:00:00Z',
+                            path: 'apps/desktop/src/main/ipc.ts',
+                            line: 123,
+                            author: { login: 'chatgpt-codex-connector' },
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        }),
+      );
+
+      const feedback = await gh.getPullRequestFeedback(40);
+
+      expect(feedback).toEqual({
+        number: 40,
+        url: 'https://github.com/shipshitdev/shipcode/pull/40',
+        isDraft: true,
+        ciBlocked: true,
+        failingChecks: [
+          {
+            name: 'check',
+            status: 'failed',
+            conclusion: 'failure',
+            detailsUrl: 'https://github.com/check',
+            workflowName: 'CI',
+          },
+        ],
+        unresolvedReviewComments: [
+          {
+            author: 'chatgpt-codex-connector',
+            body: 'Please fix this.',
+            url: 'https://github.com/comment',
+            createdAt: '2026-04-13T00:00:00Z',
+            path: 'apps/desktop/src/main/ipc.ts',
+            line: 123,
+          },
+        ],
+        unresolvedReviewCommentCount: 1,
+      });
+    });
+  });
+
   describe('addIssueToProject', () => {
     it('shells `gh project item-add` with the right args and returns added=true', async () => {
       success('');

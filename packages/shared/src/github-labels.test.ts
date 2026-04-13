@@ -37,6 +37,7 @@ describe('SHIPCODE_DEFAULT_LABELS', () => {
       'blast:cross-package',
       'blast:cross-app',
       'blast:infra',
+      'blocked:ci',
     ]);
   });
 });

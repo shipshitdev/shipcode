@@ -20,6 +20,8 @@ function kindToEventFlag(
       return 'completed';
     case 'verification_exhausted':
       return 'verificationExhausted';
+    case 'ci_blocked':
+      return 'ciBlocked';
   }
 }
 
@@ -39,6 +41,11 @@ function buildCopy(kind: NotificationKind, thread: Thread): { title: string; bod
       return {
         title: 'Verification failed',
         body: `${label} hit the retry limit and needs a human`,
+      };
+    case 'ci_blocked':
+      return {
+        title: 'CI blocked',
+        body: `${label} has failing pull request checks`,
       };
   }
 }

@@ -88,6 +88,11 @@ export const SHIPCODE_METADATA_LABELS: readonly GitHubLabelDefinition[] = [
     color: 'cf222e',
     description: 'Changes touch infrastructure or platform concerns.',
   },
+  {
+    name: 'blocked:ci',
+    color: 'cf222e',
+    description: 'Linked PR has failing CI checks and needs follow-up.',
+  },
 ] as const;
 
 const STATUS_LABEL_DEFINITIONS: Record<string, GitHubLabelDefinition> = {

@@ -137,6 +137,7 @@ describe('NotificationService', () => {
         failed: true,
         completed: true,
         verificationExhausted: true,
+        ciBlocked: true,
       },
     });
   });

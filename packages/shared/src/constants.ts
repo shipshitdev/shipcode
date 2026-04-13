@@ -19,6 +19,7 @@ export const DEFAULT_NOTIFICATION_EVENTS = {
   failed: true,
   completed: true,
   verificationExhausted: true,
+  ciBlocked: true,
 } as const;
 
 export const DEFAULT_SETTINGS: AppSettings = {

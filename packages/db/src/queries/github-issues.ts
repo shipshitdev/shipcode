@@ -5,6 +5,8 @@ import {
   toIsoUtc,
   type ExecutorModel,
   type GitHubIssueCacheRecord,
+  type GitHubPrCheckSummary,
+  type GitHubPrReviewCommentSummary,
   type IssuePipelineStatus,
 } from '@shipcode/shared';
 
@@ -43,6 +45,14 @@ export class GitHubIssueQueries {
       | 'lastPhaseUpdate'
       | 'lastStatusLabel'
       | 'executorModelOverride'
+      | 'linkedPrNumber'
+      | 'linkedPrUrl'
+      | 'linkedPrIsDraft'
+      | 'ciBlocked'
+      | 'failingChecks'
+      | 'unresolvedReviewComments'
+      | 'unresolvedReviewCommentCount'
+      | 'prLastSyncAt'
       | 'fetchedAt'
     >,
   ): GitHubIssueCacheRecord {
@@ -207,6 +217,57 @@ export class GitHubIssueQueries {
       .run(model, id);
   }
 
+  updatePullRequestFeedback(
+    id: string,
+    input: {
+      linkedPrNumber: number | null;
+      linkedPrUrl: string | null;
+      linkedPrIsDraft: boolean;
+      ciBlocked: boolean;
+      failingChecks: GitHubPrCheckSummary[];
+      unresolvedReviewComments: GitHubPrReviewCommentSummary[];
+    },
+  ): void {
+    this.db
+      .prepare(
+        `UPDATE github_issue_cache
+           SET linked_pr_number = ?,
+               linked_pr_url = ?,
+               linked_pr_is_draft = ?,
+               ci_blocked = ?,
+               failing_checks = ?,
+               unresolved_review_comments = ?,
+               unresolved_review_comment_count = ?,
+               pr_last_sync_at = ${ISO_NOW_SQL}
+         WHERE id = ?`,
+      )
+      .run(
+        input.linkedPrNumber,
+        input.linkedPrUrl,
+        input.linkedPrIsDraft ? 1 : 0,
+        input.ciBlocked ? 1 : 0,
+        JSON.stringify(input.failingChecks),
+        JSON.stringify(input.unresolvedReviewComments),
+        input.unresolvedReviewComments.length,
+        id,
+      );
+  }
+
+  setCachedLabelPresence(id: string, label: string, present: boolean): void {
+    const row = this.db.prepare('SELECT labels FROM github_issue_cache WHERE id = ?').get(id) as
+      | { labels: string }
+      | undefined;
+    if (!row) return;
+
+    const current = new Set<string>(JSON.parse(row.labels || '[]'));
+    if (present) current.add(label);
+    else current.delete(label);
+
+    this.db
+      .prepare('UPDATE github_issue_cache SET labels = ? WHERE id = ?')
+      .run(JSON.stringify(Array.from(current)), id);
+  }
+
   archiveIssues(ids: string[]): void {
     if (ids.length === 0) return;
     const placeholders = ids.map(() => '?').join(', ');
@@ -263,6 +324,14 @@ export class GitHubIssueQueries {
             : overrideRaw === 'claude'
               ? 'claude'
               : null,
+      linkedPrNumber: row.linked_pr_number ?? null,
+      linkedPrUrl: row.linked_pr_url ?? null,
+      linkedPrIsDraft: !!row.linked_pr_is_draft,
+      ciBlocked: !!row.ci_blocked,
+      failingChecks: JSON.parse(row.failing_checks || '[]'),
+      unresolvedReviewComments: JSON.parse(row.unresolved_review_comments || '[]'),
+      unresolvedReviewCommentCount: row.unresolved_review_comment_count ?? 0,
+      prLastSyncAt: toIsoUtc(row.pr_last_sync_at),
       fetchedAt: toIsoUtc(row.fetched_at) ?? row.fetched_at,
     };
   }

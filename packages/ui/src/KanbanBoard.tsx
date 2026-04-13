@@ -280,6 +280,26 @@ function PhaseElapsed({ since }: { since: number }) {
   return <span className="font-mono tabular-nums text-[10px] text-muted">{label}</span>;
 }
 
+function IssueExternalBlockers({ issue }: { issue: GitHubIssueCacheRecord }) {
+  if (!issue.ciBlocked && issue.unresolvedReviewCommentCount === 0) return null;
+
+  return (
+    <>
+      {issue.ciBlocked && (
+        <Badge variant="danger" className="text-[10px] px-1.5 py-px font-medium">
+          CI blocked
+        </Badge>
+      )}
+      {issue.unresolvedReviewCommentCount > 0 && (
+        <Badge variant="warning" className="text-[10px] px-1.5 py-px font-medium">
+          {issue.unresolvedReviewCommentCount} review
+          {issue.unresolvedReviewCommentCount === 1 ? '' : 's'}
+        </Badge>
+      )}
+    </>
+  );
+}
+
 function DraggableCard({
   issue,
   phaseChip,
@@ -426,6 +446,7 @@ function DraggableCard({
               {l}
             </Badge>
           ))}
+        <IssueExternalBlockers issue={issue} />
         {isTodo && onStartPipeline ? (
           <span className="relative inline-flex items-center">
             <span className="group-hover:opacity-0 transition-opacity pointer-events-none">
@@ -880,6 +901,9 @@ function DraggableListRow({
       )}
       <span className="font-mono text-xs text-secondary shrink-0">#{issue.issueNumber}</span>
       <span className="flex-1 truncate">{issue.title}</span>
+      <span className="shrink-0 flex items-center gap-1">
+        <IssueExternalBlockers issue={issue} />
+      </span>
       <span className="shrink-0 text-secondary text-xs flex items-center gap-1">
         <User size={11} className="text-muted" />
         {issue.assignee ?? '—'}
