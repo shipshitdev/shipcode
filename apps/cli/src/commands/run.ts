@@ -29,7 +29,7 @@ export async function runCommand(issueNumber: string) {
   if (!requireOnboarding()) return;
 
   const num = parseInt(issueNumber, 10);
-  if (isNaN(num)) {
+  if (Number.isNaN(num)) {
     console.error('Invalid issue number:', issueNumber);
     process.exit(1);
   }
@@ -96,7 +96,7 @@ export async function runCommand(issueNumber: string) {
     providers,
     skills,
   };
-  const pipeline = createPipeline(pipelineDeps as any);
+  const pipeline = createPipeline(pipelineDeps as Parameters<typeof createPipeline>[0]);
 
   await pipeline.startFromGitHubIssue(
     project.id,

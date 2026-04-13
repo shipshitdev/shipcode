@@ -74,7 +74,7 @@ describe('projectSlug', () => {
     const long = 'a'.repeat(200);
     const slug = projectSlug(`/home/alice/${long}`);
     const [base] = slug.split(/-[0-9a-f]{6}$/);
-    expect(base!.length).toBeLessThanOrEqual(48);
+    expect(base?.length).toBeLessThanOrEqual(48);
   });
 });
 

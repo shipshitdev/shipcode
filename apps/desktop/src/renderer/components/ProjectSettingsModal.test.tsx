@@ -178,6 +178,6 @@ describe('ProjectSettingsModal', () => {
     expect(screen.getByRole('tab', { name: 'General' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Models' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Context' })).toBeInTheDocument();
-    expect(screen.getByDisplayValue(project.githubProjectUrl!)).toBeInTheDocument();
+    expect(screen.getByDisplayValue(project.githubProjectUrl ?? '')).toBeInTheDocument();
   });
 });

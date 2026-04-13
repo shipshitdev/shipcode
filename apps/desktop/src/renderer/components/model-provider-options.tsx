@@ -45,7 +45,7 @@ export function formatProviderSelectionLabel(
 }
 
 export function formatModelInheritanceLabel(
-  provider: ExecutorModel,
+  _provider: ExecutorModel,
   modelId: string | null,
   modelOptions: ReadonlyArray<{ value: string; label: string }>,
 ): string {

@@ -29,6 +29,8 @@ function settings(overrides: Partial<AppSettings> = {}): AppSettings {
   return { ...DEFAULT_SETTINGS, ...overrides };
 }
 
+type ExecCallback = (error: Error | null, result?: { stdout?: string; stderr?: string }) => void;
+
 // Helper: make mockExec resolve with given stdout/stderr
 function execSucceeds(stdout = '', stderr = '') {
   mockExec.mockImplementation((_cmd: string, opts: unknown, cb?: unknown) => {
@@ -36,7 +38,7 @@ function execSucceeds(stdout = '', stderr = '') {
       cb = opts;
       opts = {};
     }
-    (cb as Function)(null, { stdout, stderr });
+    (cb as ExecCallback)(null, { stdout, stderr });
   });
 }
 
@@ -47,7 +49,7 @@ function execFails(message = 'command failed') {
       cb = opts;
       opts = {};
     }
-    (cb as Function)(new Error(message));
+    (cb as ExecCallback)(new Error(message));
   });
 }
 
@@ -61,9 +63,9 @@ function execRouted(routes: Record<string, { stdout?: string; stderr?: string } 
     for (const [prefix, result] of Object.entries(routes)) {
       if (cmd.startsWith(prefix) || cmd.includes(prefix)) {
         if (result instanceof Error) {
-          (cb as Function)(result);
+          (cb as ExecCallback)(result);
         } else {
-          (cb as Function)(null, {
+          (cb as ExecCallback)(null, {
             stdout: result.stdout ?? '',
             stderr: result.stderr ?? '',
           });
@@ -71,7 +73,7 @@ function execRouted(routes: Record<string, { stdout?: string; stderr?: string } 
         return;
       }
     }
-    (cb as Function)(new Error(`unmatched command: ${cmd}`));
+    (cb as ExecCallback)(new Error(`unmatched command: ${cmd}`));
   });
 }
 
@@ -264,13 +266,13 @@ describe('checkSystemHealth', () => {
       }
       // git and gh are available, claude and codex are not
       if (cmd.includes('which git') || cmd.includes('which gh')) {
-        (cb as Function)(null, { stdout: '/usr/bin/tool', stderr: '' });
+        (cb as ExecCallback)(null, { stdout: '/usr/bin/tool', stderr: '' });
       } else if (cmd.includes('which claude') || cmd.includes('which codex')) {
-        (cb as Function)(new Error('not found'));
+        (cb as ExecCallback)(new Error('not found'));
       } else if (cmd.startsWith('git') || cmd.startsWith('gh')) {
-        (cb as Function)(null, { stdout: 'version info', stderr: '' });
+        (cb as ExecCallback)(null, { stdout: 'version info', stderr: '' });
       } else {
-        (cb as Function)(new Error('not found'));
+        (cb as ExecCallback)(new Error('not found'));
       }
     });
 
@@ -294,13 +296,13 @@ describe('checkSystemHealthWithAuth', () => {
         opts = {};
       }
       if (cmd.includes('which')) {
-        (cb as Function)(null, { stdout: '/usr/local/bin/tool', stderr: '' });
+        (cb as ExecCallback)(null, { stdout: '/usr/local/bin/tool', stderr: '' });
       } else if (cmd.includes('claude auth status')) {
-        (cb as Function)(null, { stdout: 'Authenticated', stderr: '' });
+        (cb as ExecCallback)(null, { stdout: 'Authenticated', stderr: '' });
       } else if (cmd.includes('printenv OPENAI_API_KEY')) {
-        (cb as Function)(null, { stdout: 'sk-key', stderr: '' });
+        (cb as ExecCallback)(null, { stdout: 'sk-key', stderr: '' });
       } else {
-        (cb as Function)(null, { stdout: 'version 1.0', stderr: '' });
+        (cb as ExecCallback)(null, { stdout: 'version 1.0', stderr: '' });
       }
     });
 
@@ -318,13 +320,13 @@ describe('checkSystemHealthWithAuth', () => {
         opts = {};
       }
       if (cmd.includes('which')) {
-        (cb as Function)(null, { stdout: '/usr/local/bin/tool', stderr: '' });
+        (cb as ExecCallback)(null, { stdout: '/usr/local/bin/tool', stderr: '' });
       } else if (cmd.includes('claude auth status')) {
-        (cb as Function)(new Error('not authenticated'));
+        (cb as ExecCallback)(new Error('not authenticated'));
       } else if (cmd.includes('printenv OPENAI_API_KEY')) {
-        (cb as Function)(new Error('not set'));
+        (cb as ExecCallback)(new Error('not set'));
       } else {
-        (cb as Function)(null, { stdout: 'version 1.0', stderr: '' });
+        (cb as ExecCallback)(null, { stdout: 'version 1.0', stderr: '' });
       }
     });
     // File checks also fail

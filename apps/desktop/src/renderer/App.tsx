@@ -83,7 +83,12 @@ export function App() {
 
   const { data: activeProject } = useQuery<ProjectWithPathState | null>({
     queryKey: ['project', activeProjectId],
-    queryFn: () => window.shipcode.invoke('project:get', { projectId: activeProjectId! }),
+    queryFn: () => {
+      if (!activeProjectId) {
+        throw new Error('Missing active project id');
+      }
+      return window.shipcode.invoke('project:get', { projectId: activeProjectId });
+    },
     enabled: !!activeProjectId,
   });
 

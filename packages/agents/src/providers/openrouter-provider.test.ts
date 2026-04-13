@@ -206,7 +206,7 @@ describe('createOpenRouterProvider', () => {
       dependencies: [],
     });
     const stub = makeStubClient({
-      content: '```shipcode-plan\n' + planJson + '\n```',
+      content: `\`\`\`shipcode-plan\n${planJson}\n\`\`\``,
     });
     const provider = createOpenRouterProvider({
       getApiKey: () => 'k',

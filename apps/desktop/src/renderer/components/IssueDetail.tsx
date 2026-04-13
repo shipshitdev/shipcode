@@ -101,11 +101,15 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
   const { data: issuePlanHistory = [] } = useQuery<PlanRecord[]>({
     queryKey: ['issue-plan-history', activeProjectId, activeIssue?.issueNumber],
-    queryFn: () =>
-      window.shipcode.invoke('plan:list-for-issue', {
-        projectId: activeProjectId!,
-        issueNumber: activeIssue!.issueNumber,
-      }),
+    queryFn: () => {
+      if (!activeProjectId || !activeIssue) {
+        throw new Error('Missing issue context for plan history');
+      }
+      return window.shipcode.invoke('plan:list-for-issue', {
+        projectId: activeProjectId,
+        issueNumber: activeIssue.issueNumber,
+      });
+    },
     enabled: !!activeProjectId && !!activeIssue,
     refetchInterval: activeThreadId ? 2000 : false,
   });
@@ -116,12 +120,16 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       : normalizedThreadPlanHistory;
   const { data: issueActivity = [] } = useQuery<ActivityEntry[]>({
     queryKey: ['issue-activity', activeProjectId, activeIssue?.issueNumber],
-    queryFn: () =>
-      window.shipcode.invoke('activity:list-for-issue', {
-        projectId: activeProjectId!,
-        issueNumber: activeIssue!.issueNumber,
+    queryFn: () => {
+      if (!activeProjectId || !activeIssue) {
+        throw new Error('Missing issue context for activity');
+      }
+      return window.shipcode.invoke('activity:list-for-issue', {
+        projectId: activeProjectId,
+        issueNumber: activeIssue.issueNumber,
         limit: 200,
-      }),
+      });
+    },
     enabled: !!activeProjectId && !!activeIssue,
     refetchInterval: activeThreadId ? 2000 : false,
   });

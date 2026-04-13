@@ -110,7 +110,7 @@ export class CodexNormalizer {
       this.onEvent({
         kind: 'tool_start',
         name: 'Bash',
-        summary: `$ ${cmd.length > 60 ? cmd.slice(0, 60) + '...' : cmd}`,
+        summary: `$ ${cmd.length > 60 ? `${cmd.slice(0, 60)}...` : cmd}`,
       });
       return;
     }

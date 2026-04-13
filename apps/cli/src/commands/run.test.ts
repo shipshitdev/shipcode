@@ -78,7 +78,7 @@ import { runCommand } from './run';
 describe('runCommand', () => {
   const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
   const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-  const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code?: string | number | null) => {
+  const _exitSpy = vi.spyOn(process, 'exit').mockImplementation((code?: string | number | null) => {
     throw new Error(`process.exit:${code ?? ''}`);
   }) as unknown as ReturnType<typeof vi.spyOn>;
 

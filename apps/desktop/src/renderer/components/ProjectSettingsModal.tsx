@@ -205,10 +205,14 @@ export function ProjectSettingsModal() {
 
   const { data: contextFiles, refetch: refetchContext } = useQuery<ContextFileInfo[]>({
     queryKey: ['context-files', projectSettingsModalProjectId],
-    queryFn: () =>
-      window.shipcode.invoke<ContextFileInfo[]>('context:list', {
-        projectId: projectSettingsModalProjectId!,
-      }),
+    queryFn: () => {
+      if (!projectSettingsModalProjectId) {
+        throw new Error('Missing project id for context files');
+      }
+      return window.shipcode.invoke<ContextFileInfo[]>('context:list', {
+        projectId: projectSettingsModalProjectId,
+      });
+    },
     enabled: !!projectSettingsModalProjectId && projectSettingsModalOpen,
   });
 

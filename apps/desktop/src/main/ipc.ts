@@ -382,7 +382,7 @@ export function registerIpcHandlers(
   ipcMain.handle(
     'thread:create',
     (_event, { projectId, prompt }: { projectId: string; prompt: string }) => {
-      const title = prompt.length > 60 ? prompt.substring(0, 60) + '...' : prompt;
+      const title = prompt.length > 60 ? `${prompt.substring(0, 60)}...` : prompt;
       return queries.threads.create(projectId, prompt, title);
     },
   );

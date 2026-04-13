@@ -1,4 +1,4 @@
-import { execFileSync, execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import type { AgentState, AgentType } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
@@ -85,12 +85,6 @@ export interface ManagedProcess {
   cwd: string;
   exitCode: number | null;
   threadId?: string;
-}
-
-interface ProcessManagerEvents {
-  output: (processId: string, data: string) => void;
-  stateChange: (processId: string, type: AgentType, state: AgentState) => void;
-  exit: (processId: string, exitCode: number) => void;
 }
 
 export class ProcessManager extends EventEmitter {

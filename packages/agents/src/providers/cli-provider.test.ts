@@ -185,7 +185,8 @@ describe('buildCodexArgs', () => {
  * return a microtask flush so generate() can resolve cleanly.
  */
 function createMockProcessManager() {
-  const listeners: Record<string, Array<(..._args: any[]) => void>> = {};
+  type MockListener = (...args: unknown[]) => void;
+  const listeners: Record<string, MockListener[]> = {};
   let spawnCount = 0;
   const spawnCalls: Array<{ command: string; args: string[]; cwd: string }> = [];
 
@@ -196,17 +197,17 @@ function createMockProcessManager() {
       return { id: `proc-${spawnCount}` };
     }),
     kill: vi.fn(),
-    on: vi.fn((event: string, handler: (..._args: any[]) => void) => {
+    on: vi.fn((event: string, handler: MockListener) => {
       const eventListeners = listeners[event] ?? [];
       eventListeners.push(handler);
       listeners[event] = eventListeners;
     }),
-    removeListener: vi.fn((event: string, handler: (..._args: any[]) => void) => {
+    removeListener: vi.fn((event: string, handler: MockListener) => {
       listeners[event] = (listeners[event] ?? []).filter((h) => h !== handler);
     }),
   } as unknown as ProcessManager;
 
-  async function trigger(event: string, ...args: any[]) {
+  async function trigger(event: string, ...args: unknown[]) {
     const handlers = [...(listeners[event] ?? [])];
     for (const h of handlers) h(...args);
     // Flush microtasks so generate()'s promise chain settles

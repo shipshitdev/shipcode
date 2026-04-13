@@ -10,8 +10,6 @@ export function useIpc() {
     setPlan,
     setReview,
     setPipelinePhase,
-    setVerification,
-    setGithubIssues,
     appendAgentOutput,
     touchLastActivity,
     addNotification,
@@ -22,12 +20,36 @@ export function useIpc() {
     setCurrentModel,
   } = useAppStore();
 
+  type PhasePayload = { phase: PipelinePhase; threadId: string };
+  type PlanParsedPayload = { threadId: string; plan: unknown };
+  type ReviewParsedPayload = { threadId: string; review: unknown };
+  type VerificationParsedPayload = { threadId: string; verification: VerificationRecord };
+  type IssuesUpdatedPayload = { projectId?: string; issues: GitHubIssueCacheRecord[] };
+  type TerminalEventPayload = { threadId?: string; event?: unknown };
+  type AgentOutputPayload = { processId: string; chunk: string; threadId?: string };
+  type AgentStatePayload = {
+    processId?: string;
+    state: 'running' | 'exited' | string;
+    threadId?: string;
+    type?: string;
+  };
+  type ModelResolvedPayload = {
+    requestedModel?: string;
+    resolvedModel?: string;
+    tokensUsed?: { prompt: number; completion: number };
+    costUsd?: number;
+    threadId?: string;
+  };
+  type DashboardInvalidatePayload = { kinds?: string[] } | null;
+  type FocusThreadPayload = { projectId?: string; threadId: string };
+
   useEffect(() => {
     const unsubscribers: (() => void)[] = [];
 
     // Listen for pipeline phase changes (scoped by threadId)
     unsubscribers.push(
-      window.shipcode.on('pipeline:phase', (data: any) => {
+      window.shipcode.on('pipeline:phase', (...args: unknown[]) => {
+        const data = args[0] as PhasePayload;
         const store = useAppStore.getState();
         // Auto-open terminal and focus thread when a pipeline starts running,
         // even if the user is viewing a different thread.
@@ -94,7 +116,8 @@ export function useIpc() {
 
     // Listen for parsed plans (scoped by threadId)
     unsubscribers.push(
-      window.shipcode.on('plan:parsed', (data: any) => {
+      window.shipcode.on('plan:parsed', (...args: unknown[]) => {
+        const data = args[0] as PlanParsedPayload;
         if (data.threadId === useAppStore.getState().activeThreadId) {
           setPlan(data.plan);
         }
@@ -103,7 +126,8 @@ export function useIpc() {
 
     // Listen for parsed reviews (scoped by threadId)
     unsubscribers.push(
-      window.shipcode.on('review:parsed', (data: any) => {
+      window.shipcode.on('review:parsed', (...args: unknown[]) => {
+        const data = args[0] as ReviewParsedPayload;
         if (data.threadId === useAppStore.getState().activeThreadId) {
           setReview(data.review);
         }
@@ -112,7 +136,8 @@ export function useIpc() {
 
     // Listen for parsed verifications
     unsubscribers.push(
-      window.shipcode.on('verification:parsed', (data: any) => {
+      window.shipcode.on('verification:parsed', (...args: unknown[]) => {
+        const data = args[0] as VerificationParsedPayload;
         const store = useAppStore.getState();
         if (store.activeThreadId === data.threadId) {
           store.setVerification(data.verification);
@@ -122,7 +147,8 @@ export function useIpc() {
 
     // Listen for GitHub issues updates
     unsubscribers.push(
-      window.shipcode.on('github:issues-updated', (data: any) => {
+      window.shipcode.on('github:issues-updated', (...args: unknown[]) => {
+        const data = args[0] as IssuesUpdatedPayload;
         const store = useAppStore.getState();
         store.setGithubIssues(data.issues);
         // Directly set React Query cache — data comes from DB so no refetch needed.
@@ -131,8 +157,7 @@ export function useIpc() {
         }
 
         if (store.activeIssue) {
-          const refreshed =
-            data.issues.find((issue: any) => issue.id === store.activeIssue?.id) ?? null;
+          const refreshed = data.issues.find((issue) => issue.id === store.activeIssue?.id) ?? null;
           useAppStore.setState((state) => ({
             activeIssue: refreshed,
             activeThreadId: refreshed?.threadId ?? state.activeThreadId,
@@ -143,7 +168,8 @@ export function useIpc() {
 
     // Listen for canonical terminal events (normalized from all providers)
     unsubscribers.push(
-      window.shipcode.on('terminal:event', (data: any) => {
+      window.shipcode.on('terminal:event', (...args: unknown[]) => {
+        const data = args[0] as TerminalEventPayload;
         if (data.threadId && data.event) {
           useAppStore.getState().appendCanonicalEvent(data.threadId, data.event);
         }
@@ -152,7 +178,8 @@ export function useIpc() {
 
     // Listen for agent output
     unsubscribers.push(
-      window.shipcode.on('agent:output', (data: any) => {
+      window.shipcode.on('agent:output', (...args: unknown[]) => {
+        const data = args[0] as AgentOutputPayload;
         // Eagerly populate processToThread from authoritative threadId — covers
         // spawn-failure output that arrives before any 'running' state event.
         if (data.threadId && data.processId) mapProcessToThread(data.processId, data.threadId);
@@ -163,7 +190,8 @@ export function useIpc() {
 
     // Log agent process lifecycle events to the terminal (colored by agent type)
     unsubscribers.push(
-      window.shipcode.on('agent:state', (data: any) => {
+      window.shipcode.on('agent:state', (...args: unknown[]) => {
+        const data = args[0] as AgentStatePayload;
         if (data.state !== 'running' && data.state !== 'exited') return;
         const store = useAppStore.getState();
         const ts = new Date().toLocaleTimeString('en-US', {
@@ -202,7 +230,8 @@ export function useIpc() {
 
     // Log model resolution events and update the header model display
     unsubscribers.push(
-      window.shipcode.on('pipeline:model-resolved', (data: any) => {
+      window.shipcode.on('pipeline:model-resolved', (...args: unknown[]) => {
+        const data = args[0] as ModelResolvedPayload;
         const store = useAppStore.getState();
         const isOpenRouter = String(data.requestedModel ?? '').startsWith('openrouter');
         const isCodex = data.requestedModel === 'codex';
@@ -253,7 +282,8 @@ export function useIpc() {
 
     // === Mission Control: dashboard invalidation ===
     unsubscribers.push(
-      window.shipcode.on('dashboard:invalidate', (data: any) => {
+      window.shipcode.on('dashboard:invalidate', (...args: unknown[]) => {
+        const data = (args[0] as DashboardInvalidatePayload) ?? null;
         const kinds: string[] = data?.kinds ?? ['stats', 'activity', 'running', 'recent'];
         for (const kind of kinds) {
           queryClient.invalidateQueries({ queryKey: ['dashboard', kind] });
@@ -278,7 +308,8 @@ export function useIpc() {
     );
 
     unsubscribers.push(
-      window.shipcode.on('notification:focus-thread', (data: any) => {
+      window.shipcode.on('notification:focus-thread', (...args: unknown[]) => {
+        const data = args[0] as FocusThreadPayload;
         const store = useAppStore.getState();
         if (data.projectId) {
           store.selectProject(data.projectId);
