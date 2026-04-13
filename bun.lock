@@ -103,6 +103,7 @@
       "name": "@shipcode/web",
       "version": "0.0.1",
       "dependencies": {
+        "@shipcode/shared": "workspace:*",
         "@shipcode/ui": "workspace:*",
         "lucide-react": "1.8.0",
         "next": "16.2.3",

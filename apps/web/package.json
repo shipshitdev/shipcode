@@ -11,6 +11,7 @@
     "clean": "rm -rf .next out"
   },
   "dependencies": {
+    "@shipcode/shared": "workspace:*",
     "@shipcode/ui": "workspace:*",
     "next": "16.2.3",
     "react": "19.2.5",

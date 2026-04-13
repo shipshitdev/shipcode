@@ -15,6 +15,7 @@ interface DroppableColumnProps {
   label: string;
   issues: GitHubIssueCacheRecord[];
   droppable: boolean;
+  readOnly?: boolean;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
   onStartPipeline?: (issue: GitHubIssueCacheRecord) => void;
   selectedIssueNumber?: number;
@@ -29,6 +30,7 @@ export function DroppableColumn({
   label,
   issues,
   droppable,
+  readOnly = false,
   onIssueClick,
   onStartPipeline,
   selectedIssueNumber,
@@ -36,7 +38,7 @@ export function DroppableColumn({
   onArchiveIssue,
   issuePhaseChipById,
 }: DroppableColumnProps) {
-  const { setNodeRef, isOver } = useDroppable({ id, disabled: !droppable });
+  const { setNodeRef, isOver } = useDroppable({ id, disabled: !droppable || readOnly });
 
   return (
     <div
@@ -83,6 +85,7 @@ export function DroppableColumn({
             onStartPipeline={onStartPipeline}
             isSelected={issue.issueNumber === selectedIssueNumber}
             onArchiveIssue={onArchiveIssue}
+            readOnly={readOnly}
           />
         ))}
       </div>
@@ -94,6 +97,7 @@ interface SectionBlockProps {
   columnKey: ColumnKey;
   section: PhaseSection;
   issues: GitHubIssueCacheRecord[];
+  readOnly?: boolean;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
   onCancel?: (issue: GitHubIssueCacheRecord) => void;
@@ -106,6 +110,7 @@ function SectionBlock({
   columnKey,
   section,
   issues,
+  readOnly = false,
   onIssueClick,
   onRerun,
   onCancel,
@@ -115,7 +120,7 @@ function SectionBlock({
 }: SectionBlockProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: `${columnKey}:${section.key}`,
-    disabled: !section.droppable,
+    disabled: !section.droppable || readOnly,
   });
   const count = issues.length;
   const empty = count === 0;
@@ -174,11 +179,12 @@ function SectionBlock({
               onCancel={onCancel}
               isSelected={issue.issueNumber === selectedIssueNumber}
               isRerunning={issue.id === rerunningId}
+              readOnly={readOnly}
             />
           ))}
         </div>
       )}
-      {empty && section.droppable && (
+      {empty && section.droppable && !readOnly && (
         <div
           ref={setNodeRef}
           className={cn(
@@ -194,6 +200,7 @@ function SectionBlock({
 interface StackedColumnProps {
   column: BoardColumn;
   issues: GitHubIssueCacheRecord[];
+  readOnly?: boolean;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
   onCancel?: (issue: GitHubIssueCacheRecord) => void;
@@ -205,6 +212,7 @@ interface StackedColumnProps {
 export function StackedColumn({
   column,
   issues,
+  readOnly = false,
   onIssueClick,
   onRerun,
   onCancel,
@@ -232,6 +240,7 @@ export function StackedColumn({
             columnKey={column.key}
             section={section}
             issues={columnIssues.filter((issue) => section.statuses.includes(issue.pipelineStatus))}
+            readOnly={readOnly}
             onIssueClick={onIssueClick}
             onRerun={onRerun}
             onCancel={onCancel}

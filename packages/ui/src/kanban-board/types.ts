@@ -12,6 +12,7 @@ export interface KanbanBoardProps {
   project?: Project | null;
   settings?: AppSettings | null;
   threads?: Thread[];
+  readOnly?: boolean;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
   onRefresh: () => void;
   onNewIssue?: () => void;

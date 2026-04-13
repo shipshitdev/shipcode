@@ -21,6 +21,7 @@ export function KanbanBoard({
   project,
   settings,
   threads = [],
+  readOnly = false,
   onIssueClick,
   onRefresh,
   onNewIssue,
@@ -181,8 +182,8 @@ export function KanbanBoard({
       />
       <DndContext
         collisionDetection={customCollisionDetection}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
+        onDragStart={readOnly ? undefined : handleDragStart}
+        onDragEnd={readOnly ? undefined : handleDragEnd}
       >
         {view === 'list' && (
           <IssueListView
@@ -209,6 +210,7 @@ export function KanbanBoard({
                     rerunningId={rerunningId}
                     selectedIssueNumber={selectedIssueNumber}
                     issuePhaseChipById={issuePhaseChipById}
+                    readOnly={readOnly}
                   />
                 );
               }
@@ -229,14 +231,17 @@ export function KanbanBoard({
                   onArchiveAllDone={col.key === 'done' ? onArchiveAllDone : undefined}
                   onArchiveIssue={col.key === 'done' ? onArchiveIssue : undefined}
                   issuePhaseChipById={issuePhaseChipById}
+                  readOnly={readOnly}
                 />
               );
             })}
           </div>
         )}
-        <DragOverlay dropAnimation={null}>
-          {activeIssue ? <DragOverlayCard issue={activeIssue} /> : null}
-        </DragOverlay>
+        {!readOnly && (
+          <DragOverlay dropAnimation={null}>
+            {activeIssue ? <DragOverlayCard issue={activeIssue} /> : null}
+          </DragOverlay>
+        )}
       </DndContext>
 
       {showRefreshToast && (

@@ -49,6 +49,7 @@ export function IssueExternalBlockers({ issue }: { issue: GitHubIssueCacheRecord
 interface DraggableCardProps {
   issue: GitHubIssueCacheRecord;
   phaseChip?: IssuePhaseChip | null;
+  readOnly?: boolean;
   onClick: () => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
   onCancel?: (issue: GitHubIssueCacheRecord) => void;
@@ -61,6 +62,7 @@ interface DraggableCardProps {
 export function DraggableCard({
   issue,
   phaseChip,
+  readOnly = false,
   onClick,
   onRerun,
   onCancel,
@@ -69,7 +71,7 @@ export function DraggableCard({
   isSelected,
   isRerunning,
 }: DraggableCardProps) {
-  const draggable = DRAGGABLE_STATUSES.includes(issue.pipelineStatus);
+  const draggable = !readOnly && DRAGGABLE_STATUSES.includes(issue.pipelineStatus);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: issue.id,
     data: issue,
@@ -184,14 +186,16 @@ export function DraggableCard({
           </Badge>
         )}
         {issue.labels
-          .filter((label) => label.startsWith('agent:'))
+          .filter((label) => !readOnly && label.startsWith('agent:'))
           .map((label) => (
             <Badge key={label} variant="accent" className="px-1.5 py-px text-[10px] font-medium">
               {label}
             </Badge>
           ))}
         <IssueExternalBlockers issue={issue} />
-        {isTodo && onStartPipeline ? (
+        {readOnly ? (
+          <PhaseChip status={issue.pipelineStatus} />
+        ) : isTodo && onStartPipeline ? (
           <span className="relative inline-flex items-center">
             <span className="pointer-events-none transition-opacity group-hover:opacity-0">
               <PhaseChip status={issue.pipelineStatus} />
@@ -252,29 +256,31 @@ export function DraggableCard({
         ) : (
           <PhaseChip status={issue.pipelineStatus} />
         )}
-        <div className="ml-auto flex items-center gap-1.5">
-          <Button
-            variant="ghost"
-            className={cn(
-              'h-5 px-1.5 text-[10px] font-medium opacity-0 transition-all group-hover:opacity-100',
-              isFailed
-                ? 'text-danger/60 hover:bg-danger/10 hover:text-danger'
-                : isAwaiting
-                  ? 'text-warning/60 hover:bg-warning/10 hover:text-warning'
-                  : isActive
-                    ? 'text-agent/60 hover:bg-agent/10 hover:text-agent'
-                    : 'text-muted hover:bg-border/20 hover:text-primary',
-            )}
-            title="Open issue detail"
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.stopPropagation();
-              onClick();
-            }}
-          >
-            View
-          </Button>
-        </div>
+        {!readOnly && (
+          <div className="ml-auto flex items-center gap-1.5">
+            <Button
+              variant="ghost"
+              className={cn(
+                'h-5 px-1.5 text-[10px] font-medium opacity-0 transition-all group-hover:opacity-100',
+                isFailed
+                  ? 'text-danger/60 hover:bg-danger/10 hover:text-danger'
+                  : isAwaiting
+                    ? 'text-warning/60 hover:bg-warning/10 hover:text-warning'
+                    : isActive
+                      ? 'text-agent/60 hover:bg-agent/10 hover:text-agent'
+                      : 'text-muted hover:bg-border/20 hover:text-primary',
+              )}
+              title="Open issue detail"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                onClick();
+              }}
+            >
+              View
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

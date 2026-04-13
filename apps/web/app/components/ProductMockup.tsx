@@ -145,7 +145,7 @@ const issues: GitHubIssueCacheRecord[] = [
     linkedPrNumber: 241,
     linkedPrUrl: 'https://github.com/shipshitdev/shipcode/pull/241',
     linkedPrIsDraft: true,
-    ciBlocked: true,
+    ciBlocked: false,
     failingChecks: [
       {
         name: 'typecheck',
@@ -398,11 +398,12 @@ const threads: Thread[] = [
 
 export function ProductMockup() {
   return (
-    <div className="mx-auto w-full max-w-[1500px]">
+    <div className="mx-auto w-full max-w-[1500px] overflow-hidden rounded-[24px] border border-white/8 bg-primary shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
       <div className="h-[640px] overflow-hidden bg-primary">
         <KanbanBoard
           issues={issues}
           threads={threads}
+          readOnly
           onIssueClick={() => {}}
           onRefresh={() => {}}
           projectName="ShipCode Dashboard"
