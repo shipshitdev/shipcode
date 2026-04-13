@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import type { ShipCodePlan } from '@shipcode/shared';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from '../test-helpers';
 import { PlanQueries } from './plans';
@@ -106,7 +107,18 @@ describe('PlanQueries', () => {
 
   it('updateStructured() stores JSON', () => {
     const p = plans.create(threadId, 'raw', null, 1);
-    const structured = { title: 'Plan', steps: [] };
+    const structured: ShipCodePlan = {
+      id: 'plan-structured',
+      threadId,
+      version: 1,
+      objective: 'Test plan objective',
+      files: [],
+      steps: [],
+      acceptanceCriteria: [],
+      outOfScope: [],
+      estimatedComplexity: 'low',
+      dependencies: [],
+    };
     plans.updateStructured(p.id, structured);
     const updated = plans.getById(p.id);
     expect(updated).toBeTruthy();

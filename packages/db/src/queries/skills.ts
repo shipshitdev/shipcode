@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { ISO_NOW_SQL, type PhaseSkillKey, toIsoUtc } from '@shipcode/shared';
+import { asRow, asRows } from '../utils';
 
 export type { PhaseSkillKey };
 
@@ -53,8 +54,8 @@ export class SkillsQueries {
            AND phase = ?
          LIMIT 1`,
       )
-      .get(projectId, phase) as SkillDbRow | undefined;
-    return row ? mapRow(row) : null;
+      .get(projectId, phase);
+    return row ? mapRow(asRow<SkillDbRow>(row)) : null;
   }
 
   /**
@@ -129,10 +130,8 @@ export class SkillsQueries {
    * chain) and to surface the quarantine banner.
    */
   listAll(): SkillRow[] {
-    const rows = this.db
-      .prepare(`SELECT * FROM skills ORDER BY phase, project_id`)
-      .all() as SkillDbRow[];
-    return rows.map(mapRow);
+    const rows = this.db.prepare(`SELECT * FROM skills ORDER BY phase, project_id`).all();
+    return asRows<SkillDbRow>(rows).map(mapRow);
   }
 
   /**
@@ -142,7 +141,7 @@ export class SkillsQueries {
   listQuarantined(): SkillRow[] {
     const rows = this.db
       .prepare(`SELECT * FROM skills WHERE status = 'quarantined' ORDER BY phase, project_id`)
-      .all() as SkillDbRow[];
-    return rows.map(mapRow);
+      .all();
+    return asRows<SkillDbRow>(rows).map(mapRow);
   }
 }

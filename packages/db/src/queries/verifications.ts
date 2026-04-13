@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { toIsoUtc, type VerificationRecord, type VerificationResult } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
+import { asRow, asRows } from '../utils';
 
 interface VerificationRow {
   id: string;
@@ -19,15 +20,15 @@ export class VerificationQueries {
   getByThreadId(threadId: string): VerificationRecord[] {
     const rows = this.db
       .prepare('SELECT * FROM verifications WHERE thread_id = ? ORDER BY created_at ASC')
-      .all(threadId) as VerificationRow[];
-    return rows.map((r) => this.toRecord(r));
+      .all(threadId);
+    return asRows<VerificationRow>(rows).map((r) => this.toRecord(r));
   }
 
   getLatest(threadId: string): VerificationRecord | null {
     const row = this.db
       .prepare('SELECT * FROM verifications WHERE thread_id = ? ORDER BY created_at DESC LIMIT 1')
-      .get(threadId) as VerificationRow | undefined;
-    return row ? this.toRecord(row) : null;
+      .get(threadId);
+    return row ? this.toRecord(asRow<VerificationRow>(row)) : null;
   }
 
   create(

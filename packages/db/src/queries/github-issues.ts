@@ -9,6 +9,7 @@ import {
   toIsoUtc,
 } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
+import { asRow, asRows } from '../utils';
 
 interface GitHubIssueCacheRow {
   id: string;
@@ -53,22 +54,22 @@ export class GitHubIssueQueries {
       .prepare(
         'SELECT * FROM github_issue_cache WHERE project_id = ? AND archived_at IS NULL ORDER BY fetched_at DESC',
       )
-      .all(projectId) as GitHubIssueCacheRow[];
-    return rows.map((r) => this.toRecord(r));
+      .all(projectId);
+    return asRows<GitHubIssueCacheRow>(rows).map((r) => this.toRecord(r));
   }
 
   getByNumber(projectId: string, issueNumber: number): GitHubIssueCacheRecord | null {
     const row = this.db
       .prepare('SELECT * FROM github_issue_cache WHERE project_id = ? AND issue_number = ?')
-      .get(projectId, issueNumber) as GitHubIssueCacheRow | undefined;
-    return row ? this.toRecord(row) : null;
+      .get(projectId, issueNumber);
+    return row ? this.toRecord(asRow<GitHubIssueCacheRow>(row)) : null;
   }
 
   getByThreadId(threadId: string): GitHubIssueCacheRecord | null {
     const row = this.db
       .prepare('SELECT * FROM github_issue_cache WHERE thread_id = ?')
-      .get(threadId) as GitHubIssueCacheRow | undefined;
-    return row ? this.toRecord(row) : null;
+      .get(threadId);
+    return row ? this.toRecord(asRow<GitHubIssueCacheRow>(row)) : null;
   }
 
   upsert(
@@ -224,8 +225,8 @@ export class GitHubIssueQueries {
       .prepare(
         `SELECT * FROM github_issue_cache WHERE claimed_at IS NOT NULL AND last_phase_update IS NOT NULL AND last_phase_update < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-' || ? || ' seconds')`,
       )
-      .all(thresholdSec) as GitHubIssueCacheRow[];
-    return rows.map((r) => this.toRecord(r));
+      .all(thresholdSec);
+    return asRows<GitHubIssueCacheRow>(rows).map((r) => this.toRecord(r));
   }
 
   getRequeued(projectId: string): GitHubIssueCacheRecord[] {
@@ -233,8 +234,8 @@ export class GitHubIssueQueries {
       .prepare(
         "SELECT * FROM github_issue_cache WHERE project_id = ? AND pipeline_status = 'queued' AND claimed_at IS NULL ORDER BY fetched_at ASC",
       )
-      .all(projectId) as GitHubIssueCacheRow[];
-    return rows.map((r) => this.toRecord(r));
+      .all(projectId);
+    return asRows<GitHubIssueCacheRow>(rows).map((r) => this.toRecord(r));
   }
 
   getNextQueued(): GitHubIssueCacheRecord | null {
@@ -242,8 +243,8 @@ export class GitHubIssueQueries {
       .prepare(
         "SELECT * FROM github_issue_cache WHERE pipeline_status = 'queued' AND archived_at IS NULL ORDER BY last_phase_update ASC LIMIT 1",
       )
-      .get() as GitHubIssueCacheRow | undefined;
-    return row ? this.toRecord(row) : null;
+      .get();
+    return row ? this.toRecord(asRow<GitHubIssueCacheRow>(row)) : null;
   }
 
   getOrphanedClaims(): GitHubIssueCacheRecord[] {
@@ -251,8 +252,8 @@ export class GitHubIssueQueries {
       .prepare(
         `SELECT * FROM github_issue_cache WHERE claimed_at IS NOT NULL AND thread_id IS NULL AND claimed_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-5 minutes')`,
       )
-      .all() as GitHubIssueCacheRow[];
-    return rows.map((r) => this.toRecord(r));
+      .all();
+    return asRows<GitHubIssueCacheRow>(rows).map((r) => this.toRecord(r));
   }
 
   refreshHeartbeat(id: string): void {
@@ -369,8 +370,8 @@ export class GitHubIssueQueries {
       .prepare(
         'SELECT * FROM github_issue_cache WHERE archived_at IS NOT NULL ORDER BY archived_at DESC',
       )
-      .all() as GitHubIssueCacheRow[];
-    return rows.map((r) => this.toRecord(r));
+      .all();
+    return asRows<GitHubIssueCacheRow>(rows).map((r) => this.toRecord(r));
   }
 
   listCompleted(projectId: string): GitHubIssueCacheRecord[] {
@@ -378,13 +379,11 @@ export class GitHubIssueQueries {
       .prepare(
         "SELECT * FROM github_issue_cache WHERE project_id = ? AND pipeline_status = 'completed' AND archived_at IS NULL ORDER BY fetched_at DESC",
       )
-      .all(projectId) as GitHubIssueCacheRow[];
-    return rows.map((r) => this.toRecord(r));
+      .all(projectId);
+    return asRows<GitHubIssueCacheRow>(rows).map((r) => this.toRecord(r));
   }
 
   private toRecord(row: GitHubIssueCacheRow): GitHubIssueCacheRecord {
-    const overrideRaw =
-      row.executor_model_override === undefined ? row.executor_model : row.executor_model_override;
     return {
       id: row.id,
       projectId: row.project_id,
@@ -417,11 +416,11 @@ export class GitHubIssueQueries {
               ? 'claude'
               : null,
       executorModelOverride:
-        overrideRaw === 'codex'
+        row.executor_model_override === 'codex'
           ? 'codex'
-          : overrideRaw === 'openrouter'
+          : row.executor_model_override === 'openrouter'
             ? 'openrouter'
-            : overrideRaw === 'claude'
+            : row.executor_model_override === 'claude'
               ? 'claude'
               : null,
       verifierModelOverride:

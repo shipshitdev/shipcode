@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { type PlanReview, type ReviewRecord, toIsoUtc } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
+import { asRow } from '../utils';
 
 interface ReviewRow {
   id: string;
@@ -18,8 +19,8 @@ export class ReviewQueries {
   getByPlanId(planId: string): ReviewRecord | null {
     const row = this.db
       .prepare('SELECT * FROM reviews WHERE plan_id = ? ORDER BY created_at DESC LIMIT 1')
-      .get(planId) as ReviewRow | undefined;
-    return row ? mapReview(row) : null;
+      .get(planId);
+    return row ? mapReview(asRow<ReviewRow>(row)) : null;
   }
 
   listByPlanIds(planIds: string[]): Record<string, ReviewRecord> {

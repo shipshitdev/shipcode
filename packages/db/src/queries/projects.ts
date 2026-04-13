@@ -1,7 +1,8 @@
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
-import { ISO_NOW_SQL, type Project, toIsoUtc } from '@shipcode/shared';
+import { type AgentType, ISO_NOW_SQL, type Project, toIsoUtc } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
+import { asRow, asRows } from '../utils';
 
 interface ProjectIdleGuardOptions {
   /**
@@ -18,10 +19,10 @@ interface ProjectRow {
   path: string;
   git_remote: string | null;
   github_project_url: string | null;
-  planner_model_override: string | null;
-  reviewer_model_override: string | null;
-  executor_model_override: string | null;
-  verifier_model_override: string | null;
+  planner_model_override: AgentType | null;
+  reviewer_model_override: AgentType | null;
+  executor_model_override: AgentType | null;
+  verifier_model_override: AgentType | null;
   planner_model_id_override: string | null;
   reviewer_model_id_override: string | null;
   executor_model_id_override: string | null;
@@ -48,10 +49,8 @@ export class ProjectQueries {
    * The sidebar uses `listVisible()` instead.
    */
   list(): Project[] {
-    const rows = this.db
-      .prepare('SELECT * FROM projects ORDER BY updated_at DESC')
-      .all() as ProjectRow[];
-    return rows.map(mapProject);
+    const rows = this.db.prepare('SELECT * FROM projects ORDER BY updated_at DESC').all();
+    return asRows<ProjectRow>(rows).map(mapProject);
   }
 
   /**
@@ -60,8 +59,8 @@ export class ProjectQueries {
   listVisible(): Project[] {
     const rows = this.db
       .prepare('SELECT * FROM projects WHERE archived = 0 ORDER BY updated_at DESC')
-      .all() as ProjectRow[];
-    return rows.map(mapProject);
+      .all();
+    return asRows<ProjectRow>(rows).map(mapProject);
   }
 
   /**
@@ -70,22 +69,18 @@ export class ProjectQueries {
   listArchived(): Project[] {
     const rows = this.db
       .prepare('SELECT * FROM projects WHERE archived = 1 ORDER BY name ASC')
-      .all() as ProjectRow[];
-    return rows.map(mapProject);
+      .all();
+    return asRows<ProjectRow>(rows).map(mapProject);
   }
 
   getById(id: string): Project | null {
-    const row = this.db.prepare('SELECT * FROM projects WHERE id = ?').get(id) as
-      | ProjectRow
-      | undefined;
-    return row ? mapProject(row) : null;
+    const row = this.db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
+    return row ? mapProject(asRow<ProjectRow>(row)) : null;
   }
 
   getByPath(projectPath: string): Project | null {
-    const row = this.db.prepare('SELECT * FROM projects WHERE path = ? LIMIT 1').get(projectPath) as
-      | ProjectRow
-      | undefined;
-    return row ? mapProject(row) : null;
+    const row = this.db.prepare('SELECT * FROM projects WHERE path = ? LIMIT 1').get(projectPath);
+    return row ? mapProject(asRow<ProjectRow>(row)) : null;
   }
 
   /**

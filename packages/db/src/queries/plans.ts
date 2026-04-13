@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { type PlanRecord, type PlanStatus, type ShipCodePlan, toIsoUtc } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
+import { asRow, asRows } from '../utils';
 
 interface PlanRow {
   id: string;
@@ -25,8 +26,8 @@ export class PlanQueries {
   list(threadId: string): PlanRecord[] {
     const rows = this.db
       .prepare('SELECT * FROM plans WHERE thread_id = ? ORDER BY version DESC')
-      .all(threadId) as PlanRow[];
-    return rows.map(mapPlan);
+      .all(threadId);
+    return asRows<PlanRow>(rows).map(mapPlan);
   }
 
   listByIssue(projectId: string, issueNumber: number): PlanRecord[] {
@@ -39,20 +40,20 @@ export class PlanQueries {
             AND t.github_issue_number = ?
           ORDER BY p.created_at DESC, t.created_at DESC, p.version DESC, p.id DESC`,
       )
-      .all(projectId, issueNumber) as PlanRow[];
-    return rows.map(mapPlan);
+      .all(projectId, issueNumber);
+    return asRows<PlanRow>(rows).map(mapPlan);
   }
 
   getLatest(threadId: string): PlanRecord | null {
     const row = this.db
       .prepare('SELECT * FROM plans WHERE thread_id = ? ORDER BY version DESC LIMIT 1')
-      .get(threadId) as PlanRow | undefined;
-    return row ? mapPlan(row) : null;
+      .get(threadId);
+    return row ? mapPlan(asRow<PlanRow>(row)) : null;
   }
 
   getById(id: string): PlanRecord | null {
-    const row = this.db.prepare('SELECT * FROM plans WHERE id = ?').get(id) as PlanRow | undefined;
-    return row ? mapPlan(row) : null;
+    const row = this.db.prepare('SELECT * FROM plans WHERE id = ?').get(id);
+    return row ? mapPlan(asRow<PlanRow>(row)) : null;
   }
 
   create(

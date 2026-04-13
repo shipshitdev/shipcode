@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import type { VerificationResult } from '@shipcode/shared';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from '../test-helpers';
 import { PlanQueries } from './plans';
@@ -37,7 +38,14 @@ describe('VerificationQueries', () => {
   });
 
   it('create() with structured uses its result', () => {
-    const structured = { result: 'passed', details: 'all tests pass' } as const;
+    const structured: VerificationResult = {
+      threadId,
+      planId,
+      result: 'passed',
+      summary: 'all tests pass',
+      criteriaResults: [],
+      issues: [],
+    };
     const v = verifications.create(threadId, planId, 'output', structured);
     expect(v.result).toBe('passed');
     expect(v.structured).toEqual(structured);

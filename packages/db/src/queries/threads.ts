@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { ISO_NOW_SQL, type Thread, type ThreadStatus, toIsoUtc } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
+import { asRow, asRows } from '../utils';
 
 interface ThreadRow {
   id: string;
@@ -42,15 +43,13 @@ export class ThreadQueries {
   list(projectId: string): Thread[] {
     const rows = this.db
       .prepare('SELECT * FROM threads WHERE project_id = ? ORDER BY updated_at DESC')
-      .all(projectId) as ThreadRow[];
-    return rows.map(mapThread);
+      .all(projectId);
+    return asRows<ThreadRow>(rows).map(mapThread);
   }
 
   getById(id: string): Thread | null {
-    const row = this.db.prepare('SELECT * FROM threads WHERE id = ?').get(id) as
-      | ThreadRow
-      | undefined;
-    return row ? mapThread(row) : null;
+    const row = this.db.prepare('SELECT * FROM threads WHERE id = ?').get(id);
+    return row ? mapThread(asRow<ThreadRow>(row)) : null;
   }
 
   create(projectId: string, prompt: string, title: string): Thread {
@@ -243,11 +242,13 @@ export class ThreadQueries {
   }
 
   getOrphaned(): Thread[] {
-    return this.db
-      .prepare(
-        "SELECT * FROM threads WHERE status IN ('planning', 'reviewing', 'revising', 'executing', 'testing', 'verifying', 'shipping')",
-      )
-      .all() as ThreadRow[];
+    return asRows<ThreadRow>(
+      this.db
+        .prepare(
+          "SELECT * FROM threads WHERE status IN ('planning', 'reviewing', 'revising', 'executing', 'testing', 'verifying', 'shipping')",
+        )
+        .all(),
+    ).map(mapThread);
   }
 
   getStuck(thresholdMs: number): Thread[] {
@@ -258,8 +259,8 @@ export class ThreadQueries {
          WHERE status IN ('planning', 'reviewing', 'revising', 'executing', 'testing', 'verifying', 'shipping')
            AND updated_at <= datetime('now', '-' || ? || ' seconds')`,
       )
-      .all(thresholdSec) as ThreadRow[];
-    return rows.map(mapThread);
+      .all(thresholdSec);
+    return asRows<ThreadRow>(rows).map(mapThread);
   }
 }
 
@@ -272,8 +273,8 @@ function mapThread(row: ThreadRow): Thread {
     status: row.status as ThreadStatus,
     worktreeBranch: row.worktree_branch,
     worktreePath: row.worktree_path,
-    plannerModel: row.planner_model,
-    reviewerModel: row.reviewer_model,
+    plannerModel: row.planner_model ?? 'claude',
+    reviewerModel: row.reviewer_model ?? 'claude',
     verifierModel: row.verifier_model ?? 'claude',
     executorModel: row.executor_model ?? 'claude',
     reviewRound: row.review_round ?? 0,

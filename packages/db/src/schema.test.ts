@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { migrate, migrateV2, migrateV3 } from './schema';
+import { asRow } from './utils';
 
 interface ThreadV2Row {
   github_issue_number: number;
@@ -62,9 +63,10 @@ describe('migrateV2', () => {
     ).run();
     const row = db
       .prepare('SELECT github_issue_number, autonomous FROM threads WHERE id = ?')
-      .get('t1') as ThreadV2Row;
-    expect(row.github_issue_number).toBe(42);
-    expect(row.autonomous).toBe(1);
+      .get('t1');
+    const typedRow = asRow<ThreadV2Row>(row);
+    expect(typedRow.github_issue_number).toBe(42);
+    expect(typedRow.autonomous).toBe(1);
   });
 
   it('is idempotent', () => {
@@ -95,10 +97,8 @@ describe('migrateV3', () => {
 
     migrateV3(db);
 
-    const row = db
-      .prepare('SELECT pipeline_status FROM github_issue_cache WHERE id = ?')
-      .get('i1') as GitHubIssueCacheV3Row;
-    expect(row.pipeline_status).toBe('todo');
+    const row = db.prepare('SELECT pipeline_status FROM github_issue_cache WHERE id = ?').get('i1');
+    expect(asRow<GitHubIssueCacheV3Row>(row).pipeline_status).toBe('todo');
   });
 
   it('is idempotent', () => {

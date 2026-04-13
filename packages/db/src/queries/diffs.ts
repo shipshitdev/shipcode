@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { type DiffRecord, toIsoUtc } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
+import { asRows } from '../utils';
 
 interface DiffRow {
   id: string;
@@ -19,8 +20,8 @@ export class DiffQueries {
   list(threadId: string): DiffRecord[] {
     const rows = this.db
       .prepare('SELECT * FROM diffs WHERE thread_id = ? ORDER BY created_at ASC')
-      .all(threadId) as DiffRow[];
-    return rows.map(mapDiff);
+      .all(threadId);
+    return asRows<DiffRow>(rows).map(mapDiff);
   }
 
   create(

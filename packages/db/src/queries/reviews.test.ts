@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import type { PlanReview } from '@shipcode/shared';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from '../test-helpers';
 import { PlanQueries } from './plans';
@@ -27,13 +28,16 @@ describe('ReviewQueries', () => {
   });
 
   it('create() with structured uses its decision/confidence', () => {
-    const structured = {
-      decision: 'approved',
+    const structured: PlanReview = {
+      planId,
+      decision: 'approve',
       confidence: 'high',
-      feedback: 'looks good',
-    } as const;
+      summary: 'looks good',
+      findings: [],
+      suggestedChanges: [],
+    };
     const r = reviews.create(planId, 'raw review', structured);
-    expect(r.decision).toBe('approved');
+    expect(r.decision).toBe('approve');
     expect(r.confidence).toBe('high');
     expect(r.structured).toEqual(structured);
   });

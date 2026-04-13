@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { toIsoUtc } from '@shipcode/shared';
 import type { PipelineCheckpoint, PipelineCheckpointPhase } from '@shipcode/shared/source';
 import { nanoid } from 'nanoid';
+import { asRow, asRows } from '../utils';
 
 interface PipelineCheckpointRow {
   id: string;
@@ -39,15 +40,13 @@ export class CheckpointQueries {
          WHERE thread_id = ?
          ORDER BY created_at DESC, rowid DESC`,
       )
-      .all(threadId) as PipelineCheckpointRow[];
-    return rows.map(mapRow);
+      .all(threadId);
+    return asRows<PipelineCheckpointRow>(rows).map(mapRow);
   }
 
   getById(id: string): PipelineCheckpoint | null {
-    const row = this.db.prepare('SELECT * FROM pipeline_checkpoints WHERE id = ?').get(id) as
-      | PipelineCheckpointRow
-      | undefined;
-    return row ? mapRow(row) : null;
+    const row = this.db.prepare('SELECT * FROM pipeline_checkpoints WHERE id = ?').get(id);
+    return row ? mapRow(asRow<PipelineCheckpointRow>(row)) : null;
   }
 
   getLatest(threadId: string): PipelineCheckpoint | null {
@@ -58,8 +57,8 @@ export class CheckpointQueries {
          ORDER BY created_at DESC, rowid DESC
          LIMIT 1`,
       )
-      .get(threadId) as PipelineCheckpointRow | undefined;
-    return row ? mapRow(row) : null;
+      .get(threadId);
+    return row ? mapRow(asRow<PipelineCheckpointRow>(row)) : null;
   }
 
   create(input: {

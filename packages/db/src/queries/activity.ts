@@ -6,6 +6,7 @@ import {
   toIsoUtc,
 } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
+import { asRow, asRows } from '../utils';
 
 interface ActivityRow {
   id: string;
@@ -64,22 +65,24 @@ export class ActivityQueries {
         entry.metadata ? JSON.stringify(entry.metadata) : null,
       );
 
-    const row = this.db.prepare('SELECT * FROM activity_log WHERE id = ?').get(id) as ActivityRow;
+    const row = asRow<ActivityRow>(
+      this.db.prepare('SELECT * FROM activity_log WHERE id = ?').get(id),
+    );
     return mapRow(row);
   }
 
   listRecent(limit = 50, projectId?: string, offset = 0): ActivityEntry[] {
     const rows = projectId
-      ? (this.db
+      ? this.db
           .prepare(
             'SELECT * FROM activity_log WHERE project_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?',
           )
-          .all(projectId, limit, offset) as ActivityRow[])
-      : (this.db
+          .all(projectId, limit, offset)
+      : this.db
           .prepare('SELECT * FROM activity_log ORDER BY created_at DESC LIMIT ? OFFSET ?')
-          .all(limit, offset) as ActivityRow[]);
+          .all(limit, offset);
 
-    return rows.map(mapRow);
+    return asRows<ActivityRow>(rows).map(mapRow);
   }
 
   countRecent(projectId?: string): number {
@@ -94,8 +97,8 @@ export class ActivityQueries {
   listByThread(threadId: string, limit = 100): ActivityEntry[] {
     const rows = this.db
       .prepare('SELECT * FROM activity_log WHERE thread_id = ? ORDER BY created_at DESC LIMIT ?')
-      .all(threadId, limit) as ActivityRow[];
-    return rows.map(mapRow);
+      .all(threadId, limit);
+    return asRows<ActivityRow>(rows).map(mapRow);
   }
 
   listByIssue(projectId: string, issueNumber: number, limit = 200): ActivityEntry[] {
@@ -109,7 +112,7 @@ export class ActivityQueries {
           ORDER BY a.created_at DESC
           LIMIT ?`,
       )
-      .all(projectId, issueNumber, limit) as ActivityRow[];
-    return rows.map(mapRow);
+      .all(projectId, issueNumber, limit);
+    return asRows<ActivityRow>(rows).map(mapRow);
   }
 }

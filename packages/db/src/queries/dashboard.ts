@@ -5,6 +5,7 @@ import {
   type RecentTask,
   toIsoUtc,
 } from '@shipcode/shared';
+import { asRows } from '../utils';
 
 // Phases that represent active work (agent running or waiting on action).
 const ACTIVE_PHASES: PipelinePhase[] = [
@@ -161,9 +162,9 @@ export class DashboardQueries {
        ORDER BY t.updated_at DESC
        LIMIT ? OFFSET ?`,
       )
-      .all(limit, offset) as RecentTaskRow[];
+      .all(limit, offset);
 
-    return rows.map((row) => ({
+    return asRows<RecentTaskRow>(rows).map((row) => ({
       threadId: row.thread_id,
       projectId: row.project_id,
       projectName: row.project_name,
