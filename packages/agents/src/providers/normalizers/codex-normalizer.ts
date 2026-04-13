@@ -119,11 +119,10 @@ export class CodexNormalizer {
       return;
     }
 
-    // Command execution completed → tool_end (only on failure)
+    // Command execution completed → tool_end
     if (event.type === 'item.completed' && item?.type === 'command_execution') {
       const code = item.exit_code as number | null;
-      // Only emit tool_end for non-zero exits — exit 0 is noise
-      if (code !== null && code !== 0) {
+      if (code !== null) {
         this.onEvent({
           kind: 'tool_end',
           name: 'Bash',

@@ -84,9 +84,15 @@ export function formatPlanComment(plan: ShipCodePlan): string {
     // Find and replace the Steps section
     const stepsStart = body.indexOf('## Steps');
     const acceptanceStart = body.indexOf('## Acceptance Criteria');
-    if (stepsStart !== -1 && acceptanceStart !== -1) {
+    const outOfScopeStart = body.indexOf('<details>\n<summary>Out of Scope</summary>');
+    const dependenciesStart = body.indexOf('<details>\n<summary>Dependencies</summary>');
+    const fallbackSectionStart = [acceptanceStart, outOfScopeStart, dependenciesStart]
+      .filter((index) => index !== -1)
+      .sort((a, b) => a - b)[0];
+    const stepsEnd = fallbackSectionStart ?? body.length;
+    if (stepsStart !== -1 && stepsEnd > stepsStart) {
       const beforeSteps = body.substring(0, stepsStart);
-      const afterSteps = body.substring(acceptanceStart);
+      const afterSteps = body.substring(stepsEnd);
       const truncatedSteps = `## Steps\n\n_(Truncated — ${plan.steps.length} steps. View full plan in ShipCode UI.)_\n\n`;
       body = beforeSteps + truncatedSteps + afterSteps;
     }

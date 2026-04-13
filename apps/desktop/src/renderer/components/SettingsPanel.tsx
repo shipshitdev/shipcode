@@ -468,7 +468,7 @@ export function SettingsPanel() {
                 modelValue={settings.executorModel}
                 openrouterModelValue={settings.openrouterExecutorModel}
                 reasoningEffortValue={settings.executorReasoningEffort}
-                validProviders={['claude', 'codex']}
+                validProviders={['claude', 'codex', 'openrouter']}
                 onModelChange={(v) => updateSettings.mutate({ executorModel: v as AppSettings['executorModel'] })}
                 onOpenrouterModelChange={(v) => updateSettings.mutate({ openrouterExecutorModel: v })}
                 onReasoningEffortChange={(v) => updateSettings.mutate({ executorReasoningEffort: v })}
