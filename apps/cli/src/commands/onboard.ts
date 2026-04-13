@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import { exec } from 'node:child_process';
+import { exec, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { getDatabase, ProjectQueries } from '@shipcode/db';
 import {
@@ -10,9 +10,33 @@ import {
   parseGhProjectScope,
 } from '@shipcode/agents';
 import { GitService } from '@shipcode/git';
-import { DEFAULT_STATUS_LABEL_MAPPINGS } from '@shipcode/shared';
+import { SHIPCODE_DEFAULT_LABELS, type GitHubLabelDefinition } from '@shipcode/shared';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+
+async function listGithubLabelNames(cwd: string): Promise<string[]> {
+  const { stdout } = await execAsync('gh label list --json name -q ".[].name"', {
+    cwd,
+    timeout: 10_000,
+  });
+  return stdout
+    .trim()
+    .split('\n')
+    .map((label) => label.trim())
+    .filter(Boolean);
+}
+
+async function createGithubLabel(
+  cwd: string,
+  label: { name: string; color: string; description: string },
+): Promise<void> {
+  await execFileAsync(
+    'gh',
+    ['label', 'create', label.name, '--color', label.color, '--description', label.description],
+    { cwd, timeout: 10_000 },
+  );
+}
 
 export async function onboardCommand() {
   const cwd = process.cwd();
@@ -133,19 +157,36 @@ export async function onboardCommand() {
 
   // 6. Label verification
   console.log('\nChecking GitHub labels...');
-  const expectedLabels = [...new Set(Object.values(DEFAULT_STATUS_LABEL_MAPPINGS).filter(Boolean))];
   try {
-    const { stdout } = await execAsync('gh label list --json name -q ".[].name"', {
-      cwd,
-      timeout: 10_000,
-    });
-    const existingLabels = stdout.trim().split('\n').filter(Boolean);
-    const missing = expectedLabels.filter((l) => !existingLabels.includes(l));
+    const existingLabels = await listGithubLabelNames(cwd);
+    const missing = SHIPCODE_DEFAULT_LABELS.filter(
+      (label: GitHubLabelDefinition) => !existingLabels.includes(label.name),
+    );
     if (missing.length > 0) {
-      console.log(`  ⚠ Missing labels: ${missing.join(', ')}`);
-      console.log('    Create them manually or they will be skipped during pipeline runs');
+      const created: string[] = [];
+      const failed: string[] = [];
+
+      for (const label of missing) {
+        try {
+          await createGithubLabel(cwd, label);
+          created.push(label.name);
+        } catch (err) {
+          const message = err instanceof Error ? err.message.split('\n')[0] : 'unknown error';
+          failed.push(`${label.name} (${message})`);
+        }
+      }
+
+      if (created.length > 0) {
+        console.log(`  ✓ Created labels: ${created.join(', ')}`);
+      }
+      if (failed.length > 0) {
+        console.log(`  ⚠ Failed to create labels: ${failed.join(', ')}`);
+      }
+      if (existingLabels.length > 0) {
+        console.log(`  ✓ Existing labels kept: ${existingLabels.length}`);
+      }
     } else {
-      console.log('  ✓ All status labels present');
+      console.log('  ✓ All ShipCode labels present');
     }
   } catch {
     console.log('  ⚠ Could not check labels');

@@ -14,3 +14,4 @@ export * from './pipeline-utils';
 export * from './model-resolution';
 export * from './notifications';
 export * from './prd-issue-metadata';
+export * from './github-labels';
