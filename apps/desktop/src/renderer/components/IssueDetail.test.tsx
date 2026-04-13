@@ -2,6 +2,7 @@ import {
   deriveGithubIssueUrl,
   type GitHubIssueCacheRecord,
   type PlanRecord,
+  type ReviewRecord,
   type Thread,
 } from '@shipcode/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -117,6 +118,17 @@ const makePlan = (overrides: Partial<PlanRecord> = {}): PlanRecord => ({
   ...overrides,
 });
 
+const makeReview = (overrides: Partial<ReviewRecord> = {}): ReviewRecord => ({
+  id: 'review-1',
+  planId: 'plan-1',
+  decision: 'request_changes',
+  confidence: 'high',
+  rawOutput: '',
+  structured: null,
+  createdAt: new Date().toISOString(),
+  ...overrides,
+});
+
 function renderWithProviders() {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -195,6 +207,37 @@ describe('IssueDetail', () => {
         projectId: 'project-1',
         issueNumber: 42,
       });
+    });
+  });
+
+  it('retries a failed threaded issue through pipeline:retry instead of starting a new issue run', async () => {
+    const thread = makeThread({ status: 'failed' });
+
+    useAppStore.setState({
+      activeThreadId: thread.id,
+      activeIssue: makeIssue({ threadId: thread.id, pipelineStatus: 'failed' }),
+      pipelinePhase: 'failed',
+    });
+
+    invokeMock.mockImplementation(async (channel, args) => {
+      if (channel === 'thread:get') return thread;
+      if (channel === 'plan:list') return [];
+      if (channel === 'review:list-by-plans') return {};
+      if (channel === 'pipeline:retry') return undefined;
+      if (channel === 'github:list-issues') return [makeIssue({ threadId: thread.id, pipelineStatus: 'failed' })];
+      if (channel === 'thread:list') return [thread];
+      return args ?? null;
+    });
+
+    renderWithProviders();
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('pipeline:retry', { threadId: thread.id });
+    });
+    expect(invokeMock).not.toHaveBeenCalledWith('github:start-issue', {
+      projectId: 'project-1',
+      issueNumber: 42,
     });
   });
 
@@ -356,6 +399,60 @@ describe('IssueDetail', () => {
     // and the Confirm button is visible when defaulting to 'approve'
     const confirmButton = await screen.findByRole('button', { name: 'Confirm' });
     expect(confirmButton).toBeInTheDocument();
+  });
+
+  it('renders plan history with human-readable labels instead of raw status enums', async () => {
+    const thread = makeThread({ status: 'reviewing' });
+    const latestPlan = makePlan();
+    const oldPlan = makePlan({
+      id: 'plan-0',
+      version: 0,
+      status: 'superseded',
+    });
+
+    useAppStore.setState({
+      activeThreadId: thread.id,
+      activeIssue: makeIssue({ threadId: thread.id, pipelineStatus: 'reviewing' }),
+      pipelinePhase: 'reviewing',
+    });
+
+    invokeMock.mockImplementation(async (channel, args) => {
+      if (channel === 'thread:get') return thread;
+      if (channel === 'plan:list') return [latestPlan, oldPlan];
+      if (channel === 'review:list-by-plans') return {};
+      return args ?? null;
+    });
+
+    renderWithProviders();
+
+    expect(await screen.findByText('AI reviewing')).toBeInTheDocument();
+    expect(screen.getByText('Superseded')).toBeInTheDocument();
+    expect(screen.queryByText('pending_review')).not.toBeInTheDocument();
+  });
+
+  it('renders reviewer feedback labels without leaking raw decision enums', async () => {
+    const thread = makeThread({ status: 'awaiting_approval' });
+    const plan = makePlan({ status: 'rejected' });
+    const review = makeReview({ planId: plan.id, decision: 'request_changes' });
+
+    useAppStore.setState({
+      activeThreadId: thread.id,
+      activeIssue: makeIssue({ threadId: thread.id, pipelineStatus: 'reviewing' }),
+      pipelinePhase: 'awaiting_approval',
+    });
+
+    invokeMock.mockImplementation(async (channel, args) => {
+      if (channel === 'thread:get') return thread;
+      if (channel === 'plan:list') return [plan];
+      if (channel === 'review:list-by-plans') return { [plan.id]: review };
+      return args ?? null;
+    });
+
+    renderWithProviders();
+
+    expect(await screen.findByText('AI requested changes')).toBeInTheDocument();
+    expect(screen.getByText('Changes requested')).toBeInTheDocument();
+    expect(screen.queryByText('request_changes')).not.toBeInTheDocument();
   });
 
   it('sets a planner codex override from the issue detail panel', async () => {

@@ -48,4 +48,30 @@ describe('CodexNormalizer', () => {
 
     expect(events).toEqual([{ kind: 'text', content: 'hello' }]);
   });
+
+  it('suppresses structured fences even when the opening tag is split across deltas', () => {
+    const events = normalize([
+      JSON.stringify({
+        type: 'item.delta',
+        item_id: 'msg-1',
+        delta: { type: 'text_delta', text: 'Before fence\n```ship' },
+      }),
+      JSON.stringify({
+        type: 'item.delta',
+        item_id: 'msg-1',
+        delta: { type: 'text_delta', text: 'code-plan\n{"id":"p1"}' },
+      }),
+      JSON.stringify({
+        type: 'item.delta',
+        item_id: 'msg-1',
+        delta: { type: 'text_delta', text: '\n```\nAfter fence' },
+      }),
+    ]);
+
+    expect(events).toEqual([
+      { kind: 'text', content: 'Before fence\n' },
+      { kind: 'action', label: 'Plan drafted', action: 'open-issue-detail' },
+      { kind: 'text', content: '\nAfter fence' },
+    ]);
+  });
 });

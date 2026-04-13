@@ -500,6 +500,7 @@ describe('createPipeline', () => {
       await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_APPROVE_JSON));
       await mock.trigger('exit', 'proc-2', 0);
 
+      expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'approved');
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'executing');
     });
 
@@ -526,6 +527,7 @@ describe('createPipeline', () => {
       await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_REQUEST_CHANGES_JSON));
       await mock.trigger('exit', 'proc-2', 0);
 
+      expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'rejected');
       expect(mock.deps.threads.incrementReviewRound).toHaveBeenCalledWith('t1');
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'revising');
     });
@@ -544,7 +546,7 @@ describe('createPipeline', () => {
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'executing');
     });
 
-    it('request_changes + autonomous + round >= MAX_REVIEW_ROUNDS + has critical → emits failed', async () => {
+    it('request_changes + autonomous + round >= MAX_REVIEW_ROUNDS + has critical → awaiting_approval', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
       pipeline.getContext('t1')!.autonomous = true;
@@ -555,7 +557,7 @@ describe('createPipeline', () => {
       await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_REQUEST_CHANGES_CRITICAL_JSON));
       await mock.trigger('exit', 'proc-2', 0);
 
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed');
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'awaiting_approval');
     });
 
     it('reject → emits failed', async () => {
@@ -567,6 +569,7 @@ describe('createPipeline', () => {
       await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_REJECT_JSON));
       await mock.trigger('exit', 'proc-2', 0);
 
+      expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'rejected');
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed');
       expect(pipeline.getContext('t1')).toBeUndefined();
     });

@@ -13,11 +13,46 @@
 import type { TerminalEvent } from '../../terminal-events';
 
 const FENCE_ACTIONS: Record<string, { label: string; action: 'open-issue-detail' }> = {
-  'shipcode-plan': { label: 'Plan ready', action: 'open-issue-detail' },
-  'shipcode-review': { label: 'Review ready', action: 'open-issue-detail' },
+  'shipcode-plan': { label: 'Plan drafted', action: 'open-issue-detail' },
+  'shipcode-review': { label: 'AI review complete', action: 'open-issue-detail' },
   'shipcode-verification': { label: 'Verification complete', action: 'open-issue-detail' },
 };
-const FENCE_RE = new RegExp('```(' + Object.keys(FENCE_ACTIONS).join('|') + ')');
+type FenceTag = keyof typeof FENCE_ACTIONS;
+
+const OPENING_FENCES = (Object.keys(FENCE_ACTIONS) as FenceTag[]).map((tag) => ({
+  marker: `\`\`\`${tag}`,
+  tag,
+}));
+
+function findOpeningFence(text: string): { index: number; length: number; tag: FenceTag } | null {
+  let match: { index: number; length: number; tag: FenceTag } | null = null;
+
+  for (const { marker, tag } of OPENING_FENCES) {
+    const index = text.indexOf(marker);
+    if (index !== -1 && (!match || index < match.index)) {
+      match = { index, length: marker.length, tag };
+    }
+  }
+
+  return match;
+}
+
+function getDeferredFencePrefix(text: string): string {
+  let longest = '';
+
+  for (const { marker } of OPENING_FENCES) {
+    const maxLength = Math.min(marker.length - 1, text.length);
+    for (let length = maxLength; length > longest.length; length--) {
+      const suffix = text.slice(-length);
+      if (marker.startsWith(suffix)) {
+        longest = suffix;
+        break;
+      }
+    }
+  }
+
+  return longest;
+}
 
 function formatToolCall(name: string, input: Record<string, unknown>): string {
   switch (name) {
@@ -45,6 +80,8 @@ function formatToolCall(name: string, input: Record<string, unknown>): string {
 export class ClaudeNormalizer {
   private lineBuffer = '';
   private fenceSuppressed = false;
+  private deferredFencePrefix = '';
+  private suppressedFenceCarry = '';
   private readonly onEvent: (event: TerminalEvent) => void;
 
   constructor(onEvent: (event: TerminalEvent) => void) {
@@ -87,6 +124,7 @@ export class ClaudeNormalizer {
 
     // Result line → done event
     if (event.type === 'result') {
+      this.flushDeferredFencePrefix();
       const usage = event.usage as
         | { input_tokens?: number; output_tokens?: number }
         | undefined;
@@ -112,19 +150,7 @@ export class ClaudeNormalizer {
           continue;
         }
         if (c.type === 'text' && typeof c.text === 'string') {
-          // Check for fenced block
-          const fenceMatch = FENCE_RE.exec(c.text);
-          if (fenceMatch) {
-            const tag = fenceMatch[1];
-            this.fenceSuppressed = true;
-            const act = FENCE_ACTIONS[tag];
-            this.onEvent({ kind: 'action', label: act.label, action: act.action });
-            continue;
-          }
-
-          if (!this.fenceSuppressed) {
-            this.onEvent({ kind: 'text', content: c.text });
-          }
+          this.emitTextFragment(c.text);
         } else if (c.type === 'tool_use') {
           const name = c.name as string;
           const input = (c.input ?? {}) as Record<string, unknown>;
@@ -136,5 +162,62 @@ export class ClaudeNormalizer {
         }
       }
     }
+  }
+
+  private flushDeferredFencePrefix(): void {
+    if (!this.fenceSuppressed && this.deferredFencePrefix) {
+      this.onEvent({ kind: 'text', content: this.deferredFencePrefix });
+      this.deferredFencePrefix = '';
+    }
+  }
+
+  private emitTextFragment(fragment: string): void {
+    let remaining = this.deferredFencePrefix + fragment;
+    this.deferredFencePrefix = '';
+
+    while (remaining) {
+      if (this.fenceSuppressed) {
+        remaining = this.consumeSuppressedFragment(remaining);
+        continue;
+      }
+
+      const openingFence = findOpeningFence(remaining);
+      if (!openingFence) {
+        const deferredPrefix = getDeferredFencePrefix(remaining);
+        const visibleText = deferredPrefix
+          ? remaining.slice(0, -deferredPrefix.length)
+          : remaining;
+        if (visibleText) {
+          this.onEvent({ kind: 'text', content: visibleText });
+        }
+        this.deferredFencePrefix = deferredPrefix;
+        return;
+      }
+
+      const visibleText = remaining.slice(0, openingFence.index);
+      if (visibleText) {
+        this.onEvent({ kind: 'text', content: visibleText });
+      }
+
+      this.fenceSuppressed = true;
+      this.suppressedFenceCarry = '';
+      const action = FENCE_ACTIONS[openingFence.tag];
+      this.onEvent({ kind: 'action', label: action.label, action: action.action });
+      remaining = remaining.slice(openingFence.index + openingFence.length);
+    }
+  }
+
+  private consumeSuppressedFragment(fragment: string): string {
+    const combined = this.suppressedFenceCarry + fragment;
+    const closingFenceIndex = combined.indexOf('```');
+
+    if (closingFenceIndex === -1) {
+      this.suppressedFenceCarry = combined.slice(-2);
+      return '';
+    }
+
+    this.fenceSuppressed = false;
+    this.suppressedFenceCarry = '';
+    return combined.slice(closingFenceIndex + 3);
   }
 }

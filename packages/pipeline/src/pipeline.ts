@@ -744,6 +744,10 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
         if (result.success && result.data && latestPlan) {
           deps.reviews.create(latestPlan.id, result.raw, result.data);
+          deps.plans.updateStatus(
+            latestPlan.id,
+            result.data.decision === 'approve' ? 'approved' : 'rejected',
+          );
           deps.emitter.emit({ type: 'review:parsed', threadId, review: result.data });
 
           if (result.data.decision === 'approve') {
@@ -774,20 +778,23 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
               startRevision(threadId, latestPlan!.structured!, feedback);
             } else {
               // Rounds exhausted.
-              // In approval mode or for non-autonomous threads, always surface to human.
-              if (deps.settings.get().requireApproval || !context.autonomous) {
+              const hasCriticalOrMajor = result.data.findings.some(
+                (f: { severity: string }) => f.severity === 'critical' || f.severity === 'major',
+              );
+              // In approval mode, for non-autonomous threads, or when the reviewer
+              // still sees major blockers after exhausting the revise loop, stop
+              // and surface the latest plan/review to a human instead of marking
+              // the run failed. This preserves the successful review artifact and
+              // lets Retry resume from review/execute instead of re-planning.
+              if (
+                deps.settings.get().requireApproval ||
+                !context.autonomous ||
+                hasCriticalOrMajor
+              ) {
                 void postPlanComment(context, latestPlan!.structured!);
                 emitPhase(threadId, 'awaiting_approval');
               } else {
-                const hasCriticalOrMajor = result.data.findings.some(
-                  (f: { severity: string }) => f.severity === 'critical' || f.severity === 'major',
-                );
-                if (hasCriticalOrMajor) {
-                  emitPhase(threadId, 'failed');
-                  activePipelines.delete(threadId);
-                } else {
-                  startExecution(threadId, latestPlan!.structured!);
-                }
+                startExecution(threadId, latestPlan!.structured!);
               }
             }
           } else {

@@ -15,15 +15,52 @@
 import type { TerminalEvent } from '../../terminal-events';
 
 const FENCE_ACTIONS: Record<string, { label: string; action: 'open-issue-detail' }> = {
-  'shipcode-plan': { label: 'Plan ready', action: 'open-issue-detail' },
-  'shipcode-review': { label: 'Review ready', action: 'open-issue-detail' },
+  'shipcode-plan': { label: 'Plan drafted', action: 'open-issue-detail' },
+  'shipcode-review': { label: 'AI review complete', action: 'open-issue-detail' },
   'shipcode-verification': { label: 'Verification complete', action: 'open-issue-detail' },
 };
-const FENCE_RE = new RegExp('```(' + Object.keys(FENCE_ACTIONS).join('|') + ')');
+type FenceTag = keyof typeof FENCE_ACTIONS;
+
+const OPENING_FENCES = (Object.keys(FENCE_ACTIONS) as FenceTag[]).map((tag) => ({
+  marker: `\`\`\`${tag}`,
+  tag,
+}));
+
+function findOpeningFence(text: string): { index: number; length: number; tag: FenceTag } | null {
+  let match: { index: number; length: number; tag: FenceTag } | null = null;
+
+  for (const { marker, tag } of OPENING_FENCES) {
+    const index = text.indexOf(marker);
+    if (index !== -1 && (!match || index < match.index)) {
+      match = { index, length: marker.length, tag };
+    }
+  }
+
+  return match;
+}
+
+function getDeferredFencePrefix(text: string): string {
+  let longest = '';
+
+  for (const { marker } of OPENING_FENCES) {
+    const maxLength = Math.min(marker.length - 1, text.length);
+    for (let length = maxLength; length > longest.length; length--) {
+      const suffix = text.slice(-length);
+      if (marker.startsWith(suffix)) {
+        longest = suffix;
+        break;
+      }
+    }
+  }
+
+  return longest;
+}
 
 export class CodexNormalizer {
   private lineBuffer = '';
   private fenceSuppressed = false;
+  private deferredFencePrefix = '';
+  private suppressedFenceCarry = '';
   /** Track item IDs that received delta events (for dedup). */
   private deltaItemIds = new Set<string>();
   private readonly onEvent: (event: TerminalEvent) => void;
@@ -81,19 +118,7 @@ export class CodexNormalizer {
         const itemId = event.item_id as string | undefined;
         if (itemId) this.deltaItemIds.add(itemId);
 
-        // Check for fenced block
-        const fenceMatch = FENCE_RE.exec(delta.text);
-        if (fenceMatch) {
-          const tag = fenceMatch[1];
-          this.fenceSuppressed = true;
-          const act = FENCE_ACTIONS[tag];
-          this.onEvent({ kind: 'action', label: act.label, action: act.action });
-          return;
-        }
-
-        if (!this.fenceSuppressed) {
-          this.onEvent({ kind: 'text', content: delta.text });
-        }
+        this.emitTextFragment(delta.text);
       }
       return;
     }
@@ -113,9 +138,7 @@ export class CodexNormalizer {
       if (itemId && this.deltaItemIds.has(itemId)) return; // Already streamed via deltas
 
       const text = item.text as string | undefined;
-      if (text && !this.fenceSuppressed) {
-        this.onEvent({ kind: 'text', content: text });
-      }
+      if (text) this.emitTextFragment(text);
       return;
     }
 
@@ -134,6 +157,7 @@ export class CodexNormalizer {
 
     // Response completed → done with usage
     if (event.type === 'response.completed') {
+      this.flushDeferredFencePrefix();
       const response = event.response as Record<string, unknown> | undefined;
       const usage = response?.usage as
         | { input_tokens?: number; completion_tokens?: number }
@@ -145,5 +169,62 @@ export class CodexNormalizer {
           : undefined,
       });
     }
+  }
+
+  private flushDeferredFencePrefix(): void {
+    if (!this.fenceSuppressed && this.deferredFencePrefix) {
+      this.onEvent({ kind: 'text', content: this.deferredFencePrefix });
+      this.deferredFencePrefix = '';
+    }
+  }
+
+  private emitTextFragment(fragment: string): void {
+    let remaining = this.deferredFencePrefix + fragment;
+    this.deferredFencePrefix = '';
+
+    while (remaining) {
+      if (this.fenceSuppressed) {
+        remaining = this.consumeSuppressedFragment(remaining);
+        continue;
+      }
+
+      const openingFence = findOpeningFence(remaining);
+      if (!openingFence) {
+        const deferredPrefix = getDeferredFencePrefix(remaining);
+        const visibleText = deferredPrefix
+          ? remaining.slice(0, -deferredPrefix.length)
+          : remaining;
+        if (visibleText) {
+          this.onEvent({ kind: 'text', content: visibleText });
+        }
+        this.deferredFencePrefix = deferredPrefix;
+        return;
+      }
+
+      const visibleText = remaining.slice(0, openingFence.index);
+      if (visibleText) {
+        this.onEvent({ kind: 'text', content: visibleText });
+      }
+
+      this.fenceSuppressed = true;
+      this.suppressedFenceCarry = '';
+      const action = FENCE_ACTIONS[openingFence.tag];
+      this.onEvent({ kind: 'action', label: action.label, action: action.action });
+      remaining = remaining.slice(openingFence.index + openingFence.length);
+    }
+  }
+
+  private consumeSuppressedFragment(fragment: string): string {
+    const combined = this.suppressedFenceCarry + fragment;
+    const closingFenceIndex = combined.indexOf('```');
+
+    if (closingFenceIndex === -1) {
+      this.suppressedFenceCarry = combined.slice(-2);
+      return '';
+    }
+
+    this.fenceSuppressed = false;
+    this.suppressedFenceCarry = '';
+    return combined.slice(closingFenceIndex + 3);
   }
 }

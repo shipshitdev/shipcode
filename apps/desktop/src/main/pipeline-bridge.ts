@@ -34,7 +34,7 @@ const PHASE_ACTIVITY: Partial<
   awaiting_approval: {
     kind: 'phase_change',
     title: (t) => `${t.title} — awaiting approval`,
-    subtitle: 'Needs human review',
+    subtitle: 'Needs your approval',
   },
   executing: {
     kind: 'phase_change',
@@ -128,7 +128,7 @@ export function createElectronEmitter(
         projectId: thread.projectId,
         kind: 'plan_parsed',
         actor: 'claude',
-        title: `${thread.title} — plan ready`,
+        title: `${thread.title} — plan drafted`,
         subtitle: event.plan.objective ?? null,
         metadata: null,
       });
@@ -136,13 +136,19 @@ export function createElectronEmitter(
     }
 
     if (event.type === 'review:parsed') {
+      const subtitle =
+        event.review.decision === 'approve'
+          ? 'AI approved the plan'
+          : event.review.decision === 'request_changes'
+            ? 'Revision requested by reviewer'
+            : 'AI rejected the plan';
       deps.activity.create({
         threadId: thread.id,
         projectId: thread.projectId,
         kind: 'review_parsed',
         actor: 'codex',
-        title: `${thread.title} — review: ${event.review.decision}`,
-        subtitle: event.review.summary ?? null,
+        title: `${thread.title} — AI review complete`,
+        subtitle,
         metadata: { decision: event.review.decision },
       });
       return;

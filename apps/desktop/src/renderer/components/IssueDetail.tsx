@@ -17,6 +17,8 @@ import type {
 import {
   deriveGithubIssueUrl,
   resolveExecutorModelForIssue,
+  resolvePhaseModel,
+  resolvePhaseModelId,
   resolvePhaseModelForIssue,
   shipCodePlanSchema,
 } from '@shipcode/shared';
@@ -39,7 +41,7 @@ import {
   Minimize2,
   MODEL_DISPLAY,
   Pencil,
-  PipelineStatus,
+  PhaseChip,
   PlanViewer,
   RefreshCw,
   ReviewViewer,
@@ -120,6 +122,90 @@ function getModelOptions(provider: ExecutorModel) {
   if (provider === 'claude') return CLAUDE_MODELS;
   if (provider === 'codex') return CODEX_MODELS;
   return OPENROUTER_MODELS;
+}
+
+function formatProviderSelectionLabel(
+  provider: ExecutorModel,
+  modelId: string | null,
+): string {
+  const providerLabel = PROVIDER_DISPLAY[provider];
+  const modelLabel = modelId
+    ? getModelOptions(provider).find((option) => option.value === modelId)?.label ?? modelId
+    : `${providerLabel} default`;
+  return `${providerLabel} / ${modelLabel}`;
+}
+
+type PlanStatusBadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info' | 'accent';
+
+function getPlanStatusPresentation(plan: PlanRecord, review?: ReviewRecord): {
+  label: string;
+  color: string;
+} {
+  switch (plan.status) {
+    case 'approved':
+      return {
+        label: 'AI approved',
+        color: 'var(--success)',
+      };
+    case 'rejected':
+      if (review?.decision === 'request_changes') {
+        return {
+          label: 'AI requested changes',
+          color: 'var(--accent)',
+        };
+      }
+      return {
+        label: 'AI rejected',
+        color: 'var(--danger)',
+      };
+    case 'superseded':
+      return {
+        label: 'Superseded',
+        color: 'var(--text-muted)',
+      };
+    case 'pending_review':
+      return {
+        label: 'AI reviewing',
+        color: 'var(--accent)',
+      };
+    default:
+      return {
+        label: 'Plan drafted',
+        color: 'var(--accent)',
+      };
+  }
+}
+
+function getReviewDecisionPresentation(
+  review: ReviewRecord,
+  threadPhase: PipelinePhase | 'idle',
+): {
+  label: string;
+  badgeVariant: PlanStatusBadgeVariant;
+} {
+  if (review.decision === 'approve') {
+    return { label: 'Approved', badgeVariant: 'success' };
+  }
+  if (review.decision === 'request_changes') {
+    return {
+      label: 'Changes requested',
+      badgeVariant: threadPhase === 'awaiting_approval' ? 'warning' : 'accent',
+    };
+  }
+  return {
+    label: 'Rejected',
+    badgeVariant: threadPhase === 'awaiting_approval' ? 'warning' : 'danger',
+  };
+}
+
+function InheritValueDisplay({ detail }: { detail: string }) {
+  return (
+    <span className="flex min-w-0 items-center gap-1 truncate">
+      <span className="text-muted">Inherit</span>
+      <span className="text-muted">·</span>
+      <span className="truncate text-primary">{detail}</span>
+    </span>
+  );
 }
 
 function encodePhaseOption(provider: ExecutorModel, modelId: string | null) {
@@ -500,10 +586,14 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     if (!activeProjectId || !activeIssue) return;
     setIsSubmitting(true);
     try {
-      await window.shipcode.invoke('github:start-issue', {
-        projectId: activeProjectId,
-        issueNumber: activeIssue.issueNumber,
-      });
+      if (activeThreadId) {
+        await window.shipcode.invoke('pipeline:retry', { threadId: activeThreadId });
+      } else {
+        await window.shipcode.invoke('github:start-issue', {
+          projectId: activeProjectId,
+          issueNumber: activeIssue.issueNumber,
+        });
+      }
       await refreshIssueState();
     } finally {
       setIsSubmitting(false);
@@ -673,6 +763,32 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       ? resolvePhaseModelForIssue(settings, activeProject, activeIssue, 'verifier')
       : 'claude',
   } as const;
+  const projectDefaultPhaseSelections = {
+    planner: settings && activeProject
+      ? {
+          provider: resolvePhaseModel(settings, activeProject, 'planner'),
+          modelId: resolvePhaseModelId(settings, activeProject, 'planner'),
+        }
+      : { provider: 'claude' as ExecutorModel, modelId: null as string | null },
+    reviewer: settings && activeProject
+      ? {
+          provider: resolvePhaseModel(settings, activeProject, 'reviewer'),
+          modelId: resolvePhaseModelId(settings, activeProject, 'reviewer'),
+        }
+      : { provider: 'claude' as ExecutorModel, modelId: null as string | null },
+    executor: settings && activeProject
+      ? {
+          provider: resolvePhaseModel(settings, activeProject, 'executor'),
+          modelId: resolvePhaseModelId(settings, activeProject, 'executor'),
+        }
+      : { provider: 'claude' as ExecutorModel, modelId: null as string | null },
+    verifier: settings && activeProject
+      ? {
+          provider: resolvePhaseModel(settings, activeProject, 'verifier'),
+          modelId: resolvePhaseModelId(settings, activeProject, 'verifier'),
+        }
+      : { provider: 'claude' as ExecutorModel, modelId: null as string | null },
+  } as const;
   const effectivePhaseResolvedModels = {
     planner: thread?.plannerResolvedModel ?? effectivePhaseProviders.planner,
     reviewer: thread?.reviewerResolvedModel ?? effectivePhaseProviders.reviewer,
@@ -727,21 +843,6 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         ? { provider: effectivePhaseProviders.verifier, modelId: null as string | null }
         : decodePhaseOption(phaseSelectValues.verifier),
   } as const;
-
-  const statusColor = (status: string) => {
-    switch (status) {
-      case 'approved':
-        return 'var(--success)';
-      case 'superseded':
-        return 'var(--text-muted)';
-      case 'rejected':
-        return 'var(--danger)';
-      case 'pending_review':
-        return 'var(--warning)';
-      default:
-        return 'var(--accent)';
-    }
-  };
 
   // ─── Shared render sections ──────────────────────────────────────────────
 
@@ -826,14 +927,20 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     </div>
   );
 
+  const headerStatus = activeThreadId && threadPhase !== 'idle' ? threadPhase : activeIssue.pipelineStatus;
+  const headerStatusAnimated =
+    ACTIVE_PHASES.includes(threadPhase as PipelinePhase) || threadPhase === 'awaiting_approval';
+
   const issueBadges = (
     <div className="flex flex-wrap gap-1.5">
-      <Badge
-        variant={getStatusBadgeVariant(activeIssue.pipelineStatus)}
-        className="text-[11px] uppercase font-semibold"
-      >
-        {activeIssue.pipelineStatus}
-      </Badge>
+      <PhaseChip
+        status={headerStatus}
+        className={cn(
+          'text-[11px] font-semibold',
+          headerStatusAnimated &&
+            'relative pl-4 before:absolute before:left-1.5 before:top-1/2 before:h-1.5 before:w-1.5 before:-translate-y-1/2 before:rounded-full before:bg-current before:animate-pulse',
+        )}
+      />
       {activeIssue.assignee && (
         <Badge variant="default" className="text-[11px]">
           {activeIssue.assignee}
@@ -904,10 +1011,24 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
                   onValueChange={(v: string) => handlePhaseAgentChange(phase, v)}
                 >
                   <SelectTrigger className="h-6 w-full text-[11px]">
-                    <SelectValue />
+                    <SelectValue>
+                      {phaseSelectValues[phase] === INHERIT_EXECUTOR_VALUE ? (
+                        <InheritValueDisplay
+                          detail={`project default (${formatProviderSelectionLabel(
+                            projectDefaultPhaseSelections[phase].provider,
+                            projectDefaultPhaseSelections[phase].modelId,
+                          )})`}
+                        />
+                      ) : undefined}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={INHERIT_EXECUTOR_VALUE}>Inherit project default</SelectItem>
+                    <SelectItem value={INHERIT_EXECUTOR_VALUE}>
+                      {`Inherit project default (${formatProviderSelectionLabel(
+                        projectDefaultPhaseSelections[phase].provider,
+                        projectDefaultPhaseSelections[phase].modelId,
+                      )})`}
+                    </SelectItem>
                     <SelectSeparator />
                     {PHASE_PROVIDER_OPTIONS[phase].map((providerOption) => {
                       const selectedSelection = currentPhaseSelections[phase];
@@ -1299,30 +1420,42 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
           {normalizedPlanHistory.map((plan) => {
             const isExpanded = effectiveExpanded === plan.id;
             const review = normalizedReviewsByPlanId[plan.id];
+            const statusPresentation = getPlanStatusPresentation(plan, review);
+            const reviewPresentation = review
+              ? getReviewDecisionPresentation(review, threadPhase)
+              : null;
+            const isSuperseded = plan.status === 'superseded';
 
             return (
               <div
                 key={plan.id}
-                className={`rounded-md border ${isExpanded ? 'border-border' : 'border-transparent'}`}
+                className={cn(
+                  'rounded-md border transition-opacity',
+                  isExpanded ? 'border-border' : 'border-transparent',
+                  isSuperseded && !isExpanded && 'opacity-60',
+                )}
               >
                 <div className="flex items-center">
                   <Button
                     variant="ghost"
-                    className="h-auto min-w-0 flex-1 justify-start gap-2 rounded-md px-3 py-2 text-left text-[13px] font-normal text-primary"
+                    className={cn(
+                      'h-auto min-w-0 flex-1 justify-start gap-2 rounded-md px-3 py-2 text-left text-[13px] font-normal',
+                      isSuperseded ? 'text-secondary' : 'text-primary',
+                    )}
                     onClick={() => setExpandedPlanId(isExpanded ? null : plan.id)}
                   >
                     <span className="font-mono text-xs font-semibold text-muted">
                       v{plan.version}
                     </span>
-                    <span className="text-xs" style={{ color: statusColor(plan.status) }}>
-                      {plan.status}
+                    <span className="text-xs" style={{ color: statusPresentation.color }}>
+                      {statusPresentation.label}
                     </span>
-                    {review && plan.status !== 'superseded' && (
+                    {review && plan.status !== 'superseded' && reviewPresentation && (
                       <Badge
-                        variant={review.decision === 'approve' ? 'success' : 'warning'}
+                        variant={reviewPresentation.badgeVariant}
                         className="text-[10px]"
                       >
-                        {review.decision}
+                        {reviewPresentation.label}
                       </Badge>
                     )}
                     <span className="ml-auto text-[11px] text-muted">
@@ -1576,14 +1709,9 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
                 </Button>
               )}
             </div>
-            <h1 className="my-1 pr-16 text-xl font-semibold">{activeIssue.title}</h1>
             {issueBadges}
+            <h1 className="my-1 pr-16 text-xl font-semibold">{activeIssue.title}</h1>
           </div>
-          {activeThreadId && threadPhase !== 'idle' && (
-            <div className="shrink-0">
-              <PipelineStatus currentPhase={threadPhase} />
-            </div>
-          )}
           {approvalSection && (
             <div className="shrink-0 border-b border-border px-6 py-4">{approvalSection}</div>
           )}
@@ -1681,17 +1809,11 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
             </Button>
           )}
         </div>
-        <h3 className="my-1 pr-16 text-[15px] font-semibold">{activeIssue.title}</h3>
         {issueBadges}
+        <h3 className="my-1 pr-16 text-[15px] font-semibold">{activeIssue.title}</h3>
       </div>
 
       {/* Phase stepper — shown once pipeline has started */}
-      {activeThreadId && threadPhase !== 'idle' && (
-        <div className="shrink-0">
-          <PipelineStatus currentPhase={threadPhase} />
-        </div>
-      )}
-
       {/* Primary CTAs — above tabs, always visible */}
       {pipelineStartCardInner && (
         <div className="shrink-0 p-4 pb-0">{pipelineStartCardInner}</div>
