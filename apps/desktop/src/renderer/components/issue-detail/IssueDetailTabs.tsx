@@ -17,6 +17,7 @@ import type { PhaseKey, PhaseSelection, PlanRunGroup } from './tab-types';
 
 interface IssueDetailTabsProps {
   activeIssue: GitHubIssueCacheRecord;
+  activeTab: 'prd' | 'history' | 'pipeline' | 'activity';
   activeThreadId: string | null;
   checkpoints: PipelineCheckpoint[];
   currentPhaseSelections: Record<PhaseKey, PhaseSelection>;
@@ -45,6 +46,7 @@ interface IssueDetailTabsProps {
   thread: Thread | null | undefined;
   threadPhase: PipelinePhase | 'idle';
   onEditPrd: () => void;
+  onActiveTabChange: (tab: 'prd' | 'history' | 'pipeline' | 'activity') => void;
   onFullScreenPlan: (planId: string | null) => void;
   onPhaseAgentChange: (phase: PhaseKey, value: string) => void;
   onPhaseOpenRouterSlugBlur: (phase: PhaseKey, rawValue: string) => void;
@@ -58,6 +60,7 @@ interface IssueDetailTabsProps {
 
 export function IssueDetailTabs({
   activeIssue,
+  activeTab,
   activeThreadId,
   checkpoints,
   currentPhaseSelections,
@@ -86,6 +89,7 @@ export function IssueDetailTabs({
   thread,
   threadPhase,
   onEditPrd,
+  onActiveTabChange,
   onFullScreenPlan,
   onPhaseAgentChange,
   onPhaseOpenRouterSlugBlur,
@@ -97,7 +101,13 @@ export function IssueDetailTabs({
   onStabilizePr,
 }: IssueDetailTabsProps) {
   return (
-    <Tabs defaultValue="history" className="flex min-h-0 flex-col">
+    <Tabs
+      value={activeTab}
+      onValueChange={(value) =>
+        onActiveTabChange(value as 'prd' | 'history' | 'pipeline' | 'activity')
+      }
+      className="flex min-h-0 flex-col"
+    >
       <TabsList className={cn('shrink-0', expanded ? 'mb-5' : 'px-4')}>
         <TabsTrigger value="prd">PRD</TabsTrigger>
         <TabsTrigger value="history">

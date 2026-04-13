@@ -41,6 +41,7 @@ import { IssueDetailDialogs } from './issue-detail/IssueDetailDialogs';
 import { IssueDetailTabs } from './issue-detail/IssueDetailTabs';
 
 const INHERIT_EXECUTOR_VALUE = '__inherit__';
+type IssueDetailTab = 'prd' | 'history' | 'pipeline' | 'activity';
 
 export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const queryClient = useQueryClient();
@@ -67,6 +68,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const [planHistoryCollapsed, setPlanHistoryCollapsed] = useState(false);
   const [showRawOutput, setShowRawOutput] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
+  const [activeTab, setActiveTab] = useState<IssueDetailTab>('prd');
   const [phaseModelValidation, setPhaseModelValidation] = useState<
     Partial<
       Record<'planner' | 'reviewer' | 'executor' | 'verifier', OpenRouterModelValidation | null>
@@ -81,21 +83,34 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   });
   const activeProject =
     (Array.isArray(projects) ? projects : []).find((p) => p.id === activeProjectId) ?? null;
+  const shouldPollThread =
+    !!activeThreadId &&
+    (ACTIVE_PHASES.includes(pipelinePhase as PipelinePhase) ||
+      pipelinePhase === 'awaiting_approval' ||
+      ACTIVE_PHASES.includes(activeIssue?.pipelineStatus as PipelinePhase));
 
   // Fetch thread data if issue is linked
   const { data: thread } = useQuery<Thread | null>({
     queryKey: ['thread', activeThreadId],
     queryFn: () => window.shipcode.invoke('thread:get', { threadId: activeThreadId }),
     enabled: !!activeThreadId,
-    refetchInterval: activeThreadId ? 2000 : false,
+    refetchInterval: shouldPollThread ? 2000 : false,
   });
+  const currentPipelinePhase = thread?.status ?? pipelinePhase;
+  const shouldPollLiveThread =
+    !!activeThreadId &&
+    (ACTIVE_PHASES.includes(currentPipelinePhase as PipelinePhase) ||
+      currentPipelinePhase === 'awaiting_approval');
+  const shouldLoadHistoryTab = activeTab === 'history';
+  const shouldLoadActivityTab = activeTab === 'activity';
+  const shouldLoadPipelineTab = activeTab === 'pipeline';
 
   // Fetch plan history
   const { data: planHistory } = useQuery<PlanRecord[]>({
     queryKey: ['plan-history', activeThreadId],
     queryFn: () => window.shipcode.invoke('plan:list', { threadId: activeThreadId }),
     enabled: !!activeThreadId,
-    refetchInterval: activeThreadId ? 2000 : false,
+    refetchInterval: shouldPollLiveThread ? 2000 : false,
   });
   const isThreadPlanHistoryLoading = !!activeThreadId && planHistory === undefined;
   const normalizedThreadPlanHistory = Array.isArray(planHistory) ? planHistory : [];
@@ -111,8 +126,8 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         issueNumber: activeIssue.issueNumber,
       });
     },
-    enabled: !!activeProjectId && !!activeIssue,
-    refetchInterval: activeThreadId ? 2000 : false,
+    enabled: !!activeProjectId && !!activeIssue && shouldLoadHistoryTab,
+    refetchInterval: shouldPollLiveThread && shouldLoadHistoryTab ? 2000 : false,
   });
   const isIssuePlanHistoryLoading =
     !!activeProjectId && !!activeIssue && issuePlanHistory === undefined;
@@ -134,8 +149,8 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         limit: 200,
       });
     },
-    enabled: !!activeProjectId && !!activeIssue,
-    refetchInterval: activeThreadId ? 2000 : false,
+    enabled: !!activeProjectId && !!activeIssue && shouldLoadActivityTab,
+    refetchInterval: shouldPollLiveThread && shouldLoadActivityTab ? 5000 : false,
   });
   const normalizedIssueActivity = Array.isArray(issueActivity) ? issueActivity : [];
   const planRunGroups = useMemo(() => {
@@ -162,7 +177,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     queryKey: ['reviews-by-plans', planIds.join(',')],
     queryFn: () => window.shipcode.invoke('review:list-by-plans', { planIds }),
     enabled: planIds.length > 0,
-    refetchInterval: activeThreadId ? 2000 : false,
+    refetchInterval: shouldPollLiveThread ? 2000 : false,
   });
   const normalizedReviewsByPlanId =
     reviewsByPlanId && typeof reviewsByPlanId === 'object' ? reviewsByPlanId : {};
@@ -181,8 +196,8 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const { data: checkpoints = [] } = useQuery<PipelineCheckpoint[]>({
     queryKey: ['checkpoints', activeThreadId],
     queryFn: () => window.shipcode.invoke('checkpoint:list', { threadId: activeThreadId }),
-    enabled: !!activeThreadId,
-    refetchInterval: activeThreadId ? 2000 : false,
+    enabled: !!activeThreadId && shouldLoadPipelineTab,
+    refetchInterval: shouldPollLiveThread && shouldLoadPipelineTab ? 2000 : false,
   });
 
   // Fetch latest verification for the thread
@@ -296,7 +311,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     () => normalizedThreadPlanHistory[0] ?? null,
     [normalizedThreadPlanHistory],
   );
-  const threadPhase = thread?.status ?? pipelinePhase;
+  const threadPhase = currentPipelinePhase;
   const canStartPipeline =
     !activeThreadId && !!activeProjectId && activeIssue?.pipelineStatus !== 'completed';
   const canRerun = !!activeIssue && activeIssue.pipelineStatus === 'failed' && !!activeProjectId;
@@ -834,6 +849,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const detailTabs = (
     <IssueDetailTabs
       activeIssue={activeIssue}
+      activeTab={activeTab}
       activeThreadId={activeThreadId}
       checkpoints={checkpoints}
       currentPhaseSelections={currentPhaseSelections}
@@ -862,6 +878,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       thread={thread}
       threadPhase={threadPhase}
       onEditPrd={handleEditPrd}
+      onActiveTabChange={setActiveTab}
       onFullScreenPlan={setFullScreenPlanId}
       onPhaseAgentChange={(phase, value) => {
         void handlePhaseAgentChange(phase, value);
