@@ -1,6 +1,7 @@
 import type { Project } from '@shipcode/shared';
 import { Button, PanelLeftClose, PanelLeftOpen, Settings, Terminal, X } from '@shipcode/ui';
 import { useQuery } from '@tanstack/react-query';
+import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 
 export function Titlebar() {
@@ -14,14 +15,17 @@ export function Titlebar() {
     toggleTerminal,
   } = useAppStore();
 
-  const { data: projects = [] } = useQuery<Project[]>({
-    queryKey: ['projects'],
-    queryFn: () => window.shipcode.invoke('project:list'),
+  const { data: activeProject } = useQuery<Project | null>({
+    queryKey: ['project', activeProjectId],
+    queryFn: () => {
+      if (!activeProjectId) {
+        throw new Error('Missing active project id');
+      }
+      return window.shipcode.invoke('project:get', { projectId: activeProjectId });
+    },
+    enabled: !!activeProjectId,
+    staleTime: STABLE_APP_STATE_STALE_TIME,
   });
-
-  const activeProject = activeProjectId
-    ? (projects.find((p) => p.id === activeProjectId) ?? null)
-    : null;
 
   // Live-running count intentionally NOT shown here — the sidebar
   // Mission Control entry already carries a pulsing "N live" badge, and

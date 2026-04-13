@@ -209,6 +209,47 @@ export function registerPipelineHandlers({
     });
   });
 
+  ipcMain.handle(
+    'dashboard:get-overview',
+    (
+      _event,
+      {
+        activityLimit,
+        activityOffset,
+        recentLimit,
+        recentOffset,
+      }: {
+        activityLimit?: number;
+        activityOffset?: number;
+        recentLimit?: number;
+        recentOffset?: number;
+      } = {},
+    ) => {
+      const running = pipeline.listActive().map((summary) => {
+        const thread = queries.threads.getById(summary.threadId);
+        const project = thread ? queries.projects.getById(thread.projectId) : null;
+        return {
+          threadId: summary.threadId,
+          projectId: thread?.projectId ?? '',
+          projectName: project?.name ?? 'Unknown project',
+          threadTitle: thread?.title ?? summary.threadId,
+          phase: summary.phase,
+          startedAt: summary.startedAt,
+          activeProcessId: summary.activeProcessId,
+        };
+      });
+
+      return {
+        stats: queries.dashboard.getStats(),
+        running,
+        activity: queries.activity.listRecent(activityLimit ?? 50, undefined, activityOffset ?? 0),
+        activityTotal: queries.activity.countRecent(),
+        recent: queries.dashboard.getRecentTasks(recentLimit ?? 20, recentOffset ?? 0),
+        recentTotal: queries.dashboard.countRecentTasks(),
+      };
+    },
+  );
+
   ipcMain.handle('dashboard:get-stats', () => {
     return queries.dashboard.getStats();
   });

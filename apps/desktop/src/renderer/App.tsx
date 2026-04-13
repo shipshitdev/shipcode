@@ -24,6 +24,7 @@ import { ThreadPanel } from './components/ThreadPanel';
 import { Titlebar } from './components/Titlebar';
 import { useGlobalKeyboard } from './hooks/useGlobalKeyboard';
 import { useIpc } from './hooks/useIpc';
+import { STABLE_APP_STATE_STALE_TIME } from './query-stale-times';
 import { useAppStore } from './stores/app-store';
 
 type ProjectWithPathState = Project & { pathExists?: boolean };
@@ -79,6 +80,7 @@ export function App() {
   const { data: settings } = useQuery<AppSettings>({
     queryKey: ['settings'],
     queryFn: () => window.shipcode.invoke('settings:get'),
+    staleTime: STABLE_APP_STATE_STALE_TIME,
   });
 
   const { data: activeProject } = useQuery<ProjectWithPathState | null>({
@@ -90,6 +92,7 @@ export function App() {
       return window.shipcode.invoke('project:get', { projectId: activeProjectId });
     },
     enabled: !!activeProjectId,
+    staleTime: STABLE_APP_STATE_STALE_TIME,
   });
 
   if (settings && (settings.onboardingVersion ?? 0) < CURRENT_ONBOARDING_VERSION) {
@@ -108,6 +111,7 @@ export function App() {
             const projects = await queryClient.fetchQuery<Project[]>({
               queryKey: ['projects-visible'],
               queryFn: () => window.shipcode.invoke('project:list-visible'),
+              staleTime: STABLE_APP_STATE_STALE_TIME,
             });
             if (projects && projects.length > 0) {
               useAppStore.getState().selectProject(projects[0].id);

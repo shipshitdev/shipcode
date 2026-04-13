@@ -32,6 +32,7 @@ import {
 } from '@shipcode/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { NOTIFICATIONS_STALE_TIME, STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 
 const SIDEBAR_MIN = 180;
@@ -66,11 +67,13 @@ export function ProjectSidebar() {
   const { data: projects = [] } = useQuery<ProjectWithPathState[]>({
     queryKey: ['projects-visible'],
     queryFn: () => window.shipcode.invoke('project:list-visible'),
+    staleTime: STABLE_APP_STATE_STALE_TIME,
   });
 
   const { data: settings } = useQuery<AppSettings>({
     queryKey: ['settings'],
     queryFn: () => window.shipcode.invoke<AppSettings>('settings:get'),
+    staleTime: STABLE_APP_STATE_STALE_TIME,
   });
   const sortOrder: SortOrder = settings?.projectSortOrder ?? 'recent';
 
@@ -82,6 +85,7 @@ export function ProjectSidebar() {
   const { data: notifs = [] } = useQuery<NotificationRecord[]>({
     queryKey: ['notifications'],
     queryFn: () => window.shipcode.invoke<NotificationRecord[]>('notification:list'),
+    staleTime: NOTIFICATIONS_STALE_TIME,
   });
 
   // Shared invalidation across every project query key. Titlebar/IssueDetail
@@ -163,6 +167,7 @@ export function ProjectSidebar() {
       queryClient.invalidateQueries({ queryKey: ['github-issues', project.id] });
       queryClient.invalidateQueries({ queryKey: ['threads', project.id] });
       queryClient.invalidateQueries({ queryKey: ['git-branches', project.id] });
+      queryClient.invalidateQueries({ queryKey: ['thread-panel-data', project.id] });
       window.shipcode
         .invoke('github:refresh-issues', { projectId: project.id, force: true })
         .catch(() => {});

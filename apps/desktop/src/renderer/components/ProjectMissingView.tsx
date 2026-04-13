@@ -28,6 +28,7 @@ export function ProjectMissingView({ project }: { project: ProjectWithPathState 
       queryClient.invalidateQueries({ queryKey: ['github-issues', project.id] });
       queryClient.invalidateQueries({ queryKey: ['threads', project.id] });
       queryClient.invalidateQueries({ queryKey: ['git-branches', project.id] });
+      queryClient.invalidateQueries({ queryKey: ['thread-panel-data', project.id] });
       window.shipcode
         .invoke('github:refresh-issues', { projectId: updated.id, force: true })
         .catch(() => {});

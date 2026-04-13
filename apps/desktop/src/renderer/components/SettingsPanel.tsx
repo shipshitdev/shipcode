@@ -6,6 +6,7 @@ import type {
 } from '@shipcode/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 import { ArchivedSettingsSection } from './settings-panel/ArchivedSettingsSection';
 import { GeneralSettingsSection } from './settings-panel/GeneralSettingsSection';
@@ -23,6 +24,7 @@ export function SettingsPanel() {
   const { data: settings } = useQuery<AppSettings>({
     queryKey: ['settings'],
     queryFn: () => window.shipcode.invoke('settings:get'),
+    staleTime: STABLE_APP_STATE_STALE_TIME,
   });
 
   const updateSettings = useMutation({

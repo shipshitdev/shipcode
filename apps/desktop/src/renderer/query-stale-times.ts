@@ -1,0 +1,2 @@
+export const STABLE_APP_STATE_STALE_TIME = 5 * 60_000;
+export const NOTIFICATIONS_STALE_TIME = 60_000;

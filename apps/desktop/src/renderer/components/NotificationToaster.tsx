@@ -3,6 +3,7 @@ import { Button, X } from '@shipcode/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 import notifySoundUrl from '../assets/notify.wav?url';
+import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 
 const STICKY_KINDS: NotificationKind[] = [
@@ -81,6 +82,8 @@ export function NotificationToaster() {
   const { data: settings } = useQuery<AppSettings>({
     queryKey: ['settings'],
     queryFn: () => window.shipcode.invoke<AppSettings>('settings:get'),
+    enabled: notifications.length > 0,
+    staleTime: STABLE_APP_STATE_STALE_TIME,
   });
 
   const lastSeenIdsRef = useRef<Set<string>>(new Set());

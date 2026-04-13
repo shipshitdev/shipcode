@@ -1,12 +1,13 @@
 import type { AppSettings, GhAuthStatus, SystemHealth } from '@shipcode/shared';
 import { Alert, AlertDescription, Button } from '@shipcode/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 
 export function HealthBanner() {
   const queryClient = useQueryClient();
   const { systemHealth, setSystemHealth } = useAppStore();
+  const [canRunAuthCheck, setCanRunAuthCheck] = useState(false);
 
   const { data } = useQuery<SystemHealth>({
     queryKey: ['health'],
@@ -22,6 +23,7 @@ export function HealthBanner() {
   const { data: authData } = useQuery<SystemHealth & { ghAuth: GhAuthStatus }>({
     queryKey: ['onboarding-auth'],
     queryFn: () => window.shipcode.invoke('onboarding:check-auth'),
+    enabled: canRunAuthCheck && !!data?.gh.available,
     staleTime: 5 * 60_000,
     refetchInterval: 5 * 60_000,
     refetchIntervalInBackground: false,
@@ -38,6 +40,11 @@ export function HealthBanner() {
   useEffect(() => {
     if (data) setSystemHealth(data);
   }, [data, setSystemHealth]);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => setCanRunAuthCheck(true), 2_000);
+    return () => window.clearTimeout(id);
+  }, []);
 
   if (!systemHealth) return null;
 

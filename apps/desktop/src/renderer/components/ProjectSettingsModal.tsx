@@ -20,6 +20,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
 import { useEffect, useMemo, useState } from 'react';
+import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 import { ProjectSettingsContextTab } from './project-settings-modal/ProjectSettingsContextTab';
 import { ProjectSettingsGeneralTab } from './project-settings-modal/ProjectSettingsGeneralTab';
@@ -63,12 +64,14 @@ export function ProjectSettingsModal() {
     queryFn: () =>
       window.shipcode.invoke('project:get', { projectId: projectSettingsModalProjectId ?? '' }),
     enabled: !!projectSettingsModalProjectId && projectSettingsModalOpen,
+    staleTime: STABLE_APP_STATE_STALE_TIME,
   });
 
   const { data: settings } = useQuery<AppSettings>({
     queryKey: ['settings'],
     queryFn: () => window.shipcode.invoke('settings:get'),
     enabled: projectSettingsModalOpen,
+    staleTime: STABLE_APP_STATE_STALE_TIME,
   });
 
   const { data: integrationStatus } = useQuery<IntegrationStatus>({
@@ -195,6 +198,9 @@ export function ProjectSettingsModal() {
       queryClient.invalidateQueries({ queryKey: ['github-issues', projectSettingsModalProjectId] });
       queryClient.invalidateQueries({ queryKey: ['threads', projectSettingsModalProjectId] });
       queryClient.invalidateQueries({ queryKey: ['git-branches', projectSettingsModalProjectId] });
+      queryClient.invalidateQueries({
+        queryKey: ['thread-panel-data', projectSettingsModalProjectId],
+      });
       window.shipcode
         .invoke('github:refresh-issues', { projectId: updated.id, force: true })
         .catch(() => {});

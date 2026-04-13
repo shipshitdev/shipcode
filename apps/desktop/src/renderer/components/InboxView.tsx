@@ -22,6 +22,7 @@ import {
 } from '@shipcode/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
+import { NOTIFICATIONS_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 
 type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info' | 'accent';
@@ -73,6 +74,7 @@ export function InboxView() {
   } = useQuery<NotificationRecord[]>({
     queryKey: ['notifications'],
     queryFn: () => window.shipcode.invoke<NotificationRecord[]>('notification:list'),
+    staleTime: NOTIFICATIONS_STALE_TIME,
   });
 
   const active = filterAttentionRequiredNotifications(

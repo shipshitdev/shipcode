@@ -570,6 +570,22 @@ export interface DashboardStats {
   failedLast7d: number;
 }
 
+export interface DashboardOverview {
+  stats: DashboardStats;
+  running: ActivePipelineSummary[];
+  activity: ActivityEntry[];
+  activityTotal: number;
+  recent: RecentTask[];
+  recentTotal: number;
+}
+
+export interface ThreadPanelData {
+  project: Project | null;
+  settings: AppSettings;
+  threads: Thread[];
+  branches: string[];
+}
+
 export interface ProjectCostSummary {
   projectId: string;
   projectName: string;

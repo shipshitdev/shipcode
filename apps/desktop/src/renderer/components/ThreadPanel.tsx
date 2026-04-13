@@ -6,6 +6,7 @@ import {
   type IssuePipelineStatus,
   type Project,
   type Thread,
+  type ThreadPanelData,
 } from '@shipcode/shared';
 import { Button, KanbanBoard, Modal, ModalFooter, RefreshCw } from '@shipcode/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -49,35 +50,19 @@ export function ThreadPanel() {
     return () => clearTimeout(id);
   }, [archiveFeedback]);
 
-  // The per-project base branch drives the Kanban toolbar Select. Read via
-  // the narrow `project:get` channel rather than scanning the full list.
-  const { data: project } = useQuery<Project | null>({
-    queryKey: ['project', activeProjectId],
-    queryFn: () => window.shipcode.invoke('project:get', { projectId: activeProjectId ?? '' }),
-    enabled: !!activeProjectId,
-    staleTime: 30_000,
-  });
-
-  const { data: settings } = useQuery<AppSettings>({
-    queryKey: ['settings'],
-    queryFn: () => window.shipcode.invoke('settings:get'),
-  });
-
-  const { data: threads = [] } = useQuery<Thread[]>({
-    queryKey: ['threads', activeProjectId],
-    queryFn: () => window.shipcode.invoke('thread:list', { projectId: activeProjectId ?? '' }),
+  const { data: panelData } = useQuery<ThreadPanelData>({
+    queryKey: ['thread-panel-data', activeProjectId],
+    queryFn: () =>
+      window.shipcode.invoke<ThreadPanelData>('thread-panel:get-data', {
+        projectId: activeProjectId ?? '',
+      }),
     enabled: !!activeProjectId,
     staleTime: 5_000,
   });
-
-  // Local git branches (normalized) — source for the toolbar dropdown.
-  const { data: branches = [] } = useQuery<string[]>({
-    queryKey: ['git-branches', activeProjectId],
-    queryFn: () =>
-      window.shipcode.invoke('git:list-branches', { projectId: activeProjectId ?? '' }),
-    enabled: !!activeProjectId,
-    staleTime: 60_000,
-  });
+  const project: Project | null = panelData?.project ?? null;
+  const settings: AppSettings | undefined = panelData?.settings;
+  const threads: Thread[] = panelData?.threads ?? [];
+  const branches: string[] = panelData?.branches ?? [];
 
   // Optimistically flip a single issue's pipelineStatus in the local cache so
   // the card jumps to its new column instantly on drop, instead of waiting
@@ -190,9 +175,16 @@ export function ThreadPanel() {
         onRefreshBranches={() => {
           setIsRefreshingBranches(true);
           window.shipcode
-            .invoke('git:list-branches', { projectId: activeProjectId ?? '', fetch: true })
+            .invoke<string[]>('git:list-branches', {
+              projectId: activeProjectId ?? '',
+              fetch: true,
+            })
             .then((fresh) => {
               queryClient.setQueryData(['git-branches', activeProjectId], fresh);
+              queryClient.setQueryData<ThreadPanelData | undefined>(
+                ['thread-panel-data', activeProjectId],
+                (prev) => (prev ? { ...prev, branches: fresh } : prev),
+              );
             })
             .catch((err) => log.error('[threadpanel] refresh branches failed', err))
             .finally(() => setIsRefreshingBranches(false));
@@ -214,6 +206,13 @@ export function ThreadPanel() {
           queryClient.setQueryData<Project | null>(['project', activeProjectId], (prev) =>
             prev ? { ...prev, defaultBranch: branch } : prev,
           );
+          queryClient.setQueryData<ThreadPanelData | undefined>(
+            ['thread-panel-data', activeProjectId],
+            (prev) =>
+              prev?.project
+                ? { ...prev, project: { ...prev.project, defaultBranch: branch } }
+                : prev,
+          );
           window.shipcode
             .invoke('project:set-default-branch', {
               projectId: activeProjectId ?? '',
@@ -221,6 +220,7 @@ export function ThreadPanel() {
             })
             .catch((err) => {
               queryClient.invalidateQueries({ queryKey: ['project', activeProjectId] });
+              queryClient.invalidateQueries({ queryKey: ['thread-panel-data', activeProjectId] });
               log.error('[threadpanel] set-default-branch failed', err);
               window.alert(`Failed to set base branch: ${err?.message ?? err}`);
             });

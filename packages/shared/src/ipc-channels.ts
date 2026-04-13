@@ -5,6 +5,7 @@ import type {
   AppSettings,
   ContextFileInfo,
   CostSummary,
+  DashboardOverview,
   DashboardStats,
   DiffRecord,
   FileChange,
@@ -24,6 +25,7 @@ import type {
   ShipCodePlan,
   SystemHealth,
   Thread,
+  ThreadPanelData,
   VerificationRecord,
   VerificationResult,
 } from './types';
@@ -68,6 +70,7 @@ export interface IpcInvokeChannels {
   };
 
   'thread:list': { args: { projectId: string }; result: Thread[] };
+  'thread-panel:get-data': { args: { projectId: string }; result: ThreadPanelData };
   'thread:create': { args: { projectId: string; prompt: string }; result: Thread };
   'thread:get': { args: { threadId: string }; result: Thread | null };
   'checkpoint:list': { args: { threadId: string }; result: PipelineCheckpoint[] };
@@ -224,6 +227,15 @@ export interface IpcInvokeChannels {
   'context:read': { args: { projectId: string; name: string }; result: { content: string | null } };
 
   // Mission Control dashboard
+  'dashboard:get-overview': {
+    args: {
+      activityLimit?: number;
+      activityOffset?: number;
+      recentLimit?: number;
+      recentOffset?: number;
+    };
+    result: DashboardOverview;
+  };
   'dashboard:get-stats': { args: undefined; result: DashboardStats };
   'dashboard:get-activity': {
     args: { limit?: number; offset?: number; projectId?: string };

@@ -33,6 +33,7 @@ import {
 } from '@shipcode/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 import { ACTIVE_PHASES, decodePhaseOption, encodePhaseOption } from './issue-detail/helpers';
 import { IssueDetailActions } from './issue-detail/IssueDetailActions';
@@ -41,6 +42,7 @@ import { IssueDetailTabs } from './issue-detail/IssueDetailTabs';
 import type { IssueDetailTab } from './issue-detail/tab-types';
 
 const INHERIT_EXECUTOR_VALUE = '__inherit__';
+const PLAN_MUTATING_PHASES: PipelinePhase[] = ['planning', 'reviewing', 'revising'];
 
 export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const queryClient = useQueryClient();
@@ -77,12 +79,17 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const [approveError, setApproveError] = useState<string | null>(null);
 
   // Shared cache with ProjectSidebar / Titlebar — no extra request.
-  const { data: projects } = useQuery<Project[]>({
-    queryKey: ['projects'],
-    queryFn: () => window.shipcode.invoke('project:list'),
+  const { data: activeProject } = useQuery<Project | null>({
+    queryKey: ['project', activeProjectId],
+    queryFn: () => {
+      if (!activeProjectId) {
+        throw new Error('Missing active project id');
+      }
+      return window.shipcode.invoke('project:get', { projectId: activeProjectId });
+    },
+    enabled: !!activeProjectId,
+    staleTime: STABLE_APP_STATE_STALE_TIME,
   });
-  const activeProject =
-    (Array.isArray(projects) ? projects : []).find((p) => p.id === activeProjectId) ?? null;
   const shouldPollThread =
     !!activeThreadId &&
     (ACTIVE_PHASES.includes(pipelinePhase as PipelinePhase) ||
@@ -101,6 +108,8 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     !!activeThreadId &&
     (ACTIVE_PHASES.includes(currentPipelinePhase as PipelinePhase) ||
       currentPipelinePhase === 'awaiting_approval');
+  const shouldPollPlanData =
+    !!activeThreadId && PLAN_MUTATING_PHASES.includes(currentPipelinePhase as PipelinePhase);
   const shouldLoadHistoryTab = activeTab === 'history';
   const shouldLoadActivityTab = activeTab === 'activity';
   const shouldLoadPipelineTab = activeTab === 'pipeline';
@@ -110,7 +119,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     queryKey: ['plan-history', activeThreadId],
     queryFn: () => window.shipcode.invoke('plan:list', { threadId: activeThreadId }),
     enabled: !!activeThreadId,
-    refetchInterval: shouldPollLiveThread ? 5000 : false,
+    refetchInterval: shouldPollPlanData ? 5000 : false,
   });
   const isThreadPlanHistoryLoading = !!activeThreadId && planHistory === undefined;
   const normalizedThreadPlanHistory = Array.isArray(planHistory) ? planHistory : [];
@@ -127,7 +136,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       });
     },
     enabled: !!activeProjectId && !!activeIssue && shouldLoadHistoryTab,
-    refetchInterval: shouldPollLiveThread && shouldLoadHistoryTab ? 5000 : false,
+    refetchInterval: shouldPollPlanData && shouldLoadHistoryTab ? 5000 : false,
   });
   const isIssuePlanHistoryLoading =
     !!activeProjectId && !!activeIssue && issuePlanHistory === undefined;
@@ -179,7 +188,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     queryKey: ['reviews-by-plans', planIds.join(',')],
     queryFn: () => window.shipcode.invoke('review:list-by-plans', { planIds }),
     enabled: planIds.length > 0,
-    refetchInterval: shouldPollLiveThread ? 5000 : false,
+    refetchInterval: shouldPollPlanData && shouldLoadHistoryTab ? 5000 : false,
   });
   const normalizedReviewsByPlanId =
     reviewsByPlanId && typeof reviewsByPlanId === 'object' ? reviewsByPlanId : {};
@@ -187,11 +196,13 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const { data: settings } = useQuery<AppSettings | null>({
     queryKey: ['settings'],
     queryFn: () => window.shipcode.invoke('settings:get'),
+    staleTime: STABLE_APP_STATE_STALE_TIME,
   });
 
   const { data: integrationStatus } = useQuery<IntegrationStatus>({
     queryKey: ['integrations'],
     queryFn: () => window.shipcode.invoke('integrations:check'),
+    enabled: shouldLoadPipelineTab,
     staleTime: 30_000,
   });
 
@@ -288,7 +299,12 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     let cancelled = false;
     void (async () => {
       try {
-        const list = await window.shipcode.invoke<NotificationRecord[]>('notification:list');
+        const list =
+          queryClient.getQueryData<NotificationRecord[]>(['notifications']) ??
+          (await queryClient.fetchQuery<NotificationRecord[]>({
+            queryKey: ['notifications'],
+            queryFn: () => window.shipcode.invoke<NotificationRecord[]>('notification:list'),
+          }));
         if (cancelled) return;
         // Only auto-dismiss informational kinds. 'awaiting_approval' requires
         // explicit user action (approve/reject) so we leave it in the inbox.
@@ -305,7 +321,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, [activeThreadId]);
+  }, [activeThreadId, queryClient]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -341,6 +357,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     if (!activeProjectId) return;
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['threads', activeProjectId] }),
+      queryClient.invalidateQueries({ queryKey: ['thread-panel-data', activeProjectId] }),
       queryClient.invalidateQueries({ queryKey: ['github-issues', activeProjectId] }),
       queryClient.invalidateQueries({ queryKey: ['thread', activeThreadId] }),
       queryClient.invalidateQueries({ queryKey: ['plan-history', activeThreadId] }),

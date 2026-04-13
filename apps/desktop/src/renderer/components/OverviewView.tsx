@@ -1,6 +1,7 @@
 import type {
   ActivePipelineSummary,
   ActivityEntry,
+  DashboardOverview,
   DashboardStats,
   GitHubIssueCacheRecord,
   RecentTask,
@@ -130,47 +131,26 @@ export function OverviewView() {
   const openActivity = useAppStore((s) => s.openActivity);
   const openInbox = useAppStore((s) => s.openInbox);
 
-  const { data: stats } = useQuery<DashboardStats>({
-    queryKey: ['dashboard', 'stats'],
-    queryFn: () => window.shipcode.invoke<DashboardStats>('dashboard:get-stats'),
-  });
-
-  const { data: running = [] } = useQuery<ActivePipelineSummary[]>({
-    queryKey: ['dashboard', 'running'],
-    queryFn: () => window.shipcode.invoke<ActivePipelineSummary[]>('pipeline:list-active'),
-  });
-
   const PAGE_SIZE = 5;
   const [activityPage, setActivityPage] = useState(1);
   const [tasksPage, setTasksPage] = useState(1);
 
-  const { data: activity = [] } = useQuery<ActivityEntry[]>({
-    queryKey: ['dashboard', 'activity', activityPage],
+  const { data: overview } = useQuery<DashboardOverview>({
+    queryKey: ['dashboard', 'overview', activityPage, tasksPage],
     queryFn: () =>
-      window.shipcode.invoke<ActivityEntry[]>('dashboard:get-activity', {
-        limit: PAGE_SIZE,
-        offset: (activityPage - 1) * PAGE_SIZE,
+      window.shipcode.invoke<DashboardOverview>('dashboard:get-overview', {
+        activityLimit: PAGE_SIZE,
+        activityOffset: (activityPage - 1) * PAGE_SIZE,
+        recentLimit: PAGE_SIZE,
+        recentOffset: (tasksPage - 1) * PAGE_SIZE,
       }),
   });
-
-  const { data: activityTotal = 0 } = useQuery<number>({
-    queryKey: ['dashboard', 'activity-count'],
-    queryFn: () => window.shipcode.invoke<number>('dashboard:count-activity'),
-  });
-
-  const { data: recent = [] } = useQuery<RecentTask[]>({
-    queryKey: ['dashboard', 'recent', tasksPage],
-    queryFn: () =>
-      window.shipcode.invoke<RecentTask[]>('dashboard:get-recent-tasks', {
-        limit: PAGE_SIZE,
-        offset: (tasksPage - 1) * PAGE_SIZE,
-      }),
-  });
-
-  const { data: recentTotal = 0 } = useQuery<number>({
-    queryKey: ['dashboard', 'recent-count'],
-    queryFn: () => window.shipcode.invoke<number>('dashboard:count-recent-tasks'),
-  });
+  const stats: DashboardStats | undefined = overview?.stats;
+  const running: ActivePipelineSummary[] = overview?.running ?? [];
+  const activity: ActivityEntry[] = overview?.activity ?? [];
+  const activityTotal = overview?.activityTotal ?? 0;
+  const recent: RecentTask[] = overview?.recent ?? [];
+  const recentTotal = overview?.recentTotal ?? 0;
 
   const activityTotalPages = Math.max(1, Math.ceil(activityTotal / PAGE_SIZE));
   const tasksTotalPages = Math.max(1, Math.ceil(recentTotal / PAGE_SIZE));

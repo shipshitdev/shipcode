@@ -150,6 +150,22 @@ export function registerProjectHandlers({
     return queries.threads.list(projectId);
   });
 
+  ipcMain.handle('thread-panel:get-data', async (_event, { projectId }: { projectId: string }) => {
+    const project = enrichProjectPath(queries.projects.getById(projectId));
+    if (!project) {
+      throw new Error(`Project ${projectId} not found`);
+    }
+
+    const git = new GitService(project.path);
+
+    return {
+      project,
+      settings: queries.settings.get(),
+      threads: queries.threads.list(projectId),
+      branches: await git.listBranches(project.defaultBranch),
+    };
+  });
+
   ipcMain.handle(
     'thread:create',
     (_event, { projectId, prompt }: { projectId: string; prompt: string }) => {
