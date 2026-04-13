@@ -19,6 +19,21 @@ The modal lives at [`apps/desktop/src/renderer/components/ProjectSettingsModal.t
 | Field | DB column | Purpose |
 |-------|-----------|---------|
 | GitHub Projects v2 URL | `projects.github_project_url` | Override for the Kanban header `board` button — points it at a real Projects v2 board instead of the repo's `/projects` tab |
+| Planner model override | `projects.planner_model_override` | Optional project-local planner override. `null` inherits the global Settings value |
+| Reviewer model override | `projects.reviewer_model_override` | Optional project-local reviewer override. `null` inherits the global Settings value |
+| Executor model override | `projects.executor_model_override` | Optional project-local executor override. `null` inherits the global Settings value unless an issue-level executor override exists |
+| Verifier model override | `projects.verifier_model_override` | Optional project-local verifier override. `null` inherits the global Settings value |
+
+## Model override hierarchy
+
+Project Settings sits between the global Settings panel and the issue-level executor override.
+
+- Planner / Reviewer / Verifier: `global settings -> project override`
+- Executor: `global settings -> project override -> issue override`
+
+`Inherit` means the project stores `null` for that phase and falls back to the global Settings default.
+
+Issue-level overrides remain executor-only. They live in Issue Detail / Kanban because executor choice is the only phase that routinely needs issue-by-issue variation.
 
 ## Why the GitHub Projects v2 override exists
 

@@ -49,12 +49,24 @@ import { registerIpcHandlers } from './ipc';
 import { createPipeline } from '@shipcode/pipeline';
 import { createElectronEmitter } from './pipeline-bridge';
 import { NotificationService } from './notification-service';
-import { HEARTBEAT_TIMEOUT_MS } from '@shipcode/shared';
+import { HEARTBEAT_TIMEOUT_MS, resolveExecutorModelForIssue, resolvePhaseModel } from '@shipcode/shared';
 
 let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
 let pipeline: ReturnType<typeof createPipeline> | null = null;
 let confirmQuit = false;
+
+function resolveProjectPhaseModels(
+  settings: ReturnType<SettingsQueries['get']>,
+  project: ReturnType<ProjectQueries['getById']>,
+) {
+  return {
+    plannerModel: resolvePhaseModel(settings, project, 'planner'),
+    reviewerModel: resolvePhaseModel(settings, project, 'reviewer'),
+    verifierModel: resolvePhaseModel(settings, project, 'verifier'),
+    executorModel: resolvePhaseModel(settings, project, 'executor'),
+  };
+}
 
 const DIST = path.join(__dirname, '..');
 const RENDERER_URL = process.env.VITE_DEV_SERVER_URL;
@@ -162,10 +174,16 @@ function createWindow() {
 
       const project = queries.projects.getById(next.projectId);
       if (!project) return;
+      const phaseModels = resolveProjectPhaseModels(settings, project);
+      const effectiveExecutorModel = resolveExecutorModelForIssue(settings, project, next);
 
       queries.githubIssues.updatePipelineStatus(next.id, 'planning');
       const thread = queries.threads.create(next.projectId, next.body ?? next.title, next.title);
       queries.threads.setGithubIssue(thread.id, next.issueNumber, project.gitRemote);
+      queries.threads.setPhaseModels(thread.id, {
+        ...phaseModels,
+        executorModel: effectiveExecutorModel,
+      });
       queries.githubIssues.linkThread(next.id, thread.id);
       const win = mainWindow!;
       if (!win.isDestroyed()) {
@@ -184,8 +202,13 @@ function createWindow() {
           thread.id,
           project.path,
           { number: next.issueNumber, title: next.title, body: next.body, labels: next.labels },
-          next.executorModel,
-          { baseBranch: project.defaultBranch },
+          effectiveExecutorModel,
+          {
+            baseBranch: project.defaultBranch,
+            plannerModel: phaseModels.plannerModel,
+            reviewerModel: phaseModels.reviewerModel,
+            verifierModel: phaseModels.verifierModel,
+          },
         )
         .catch((err) => {
           queries.githubIssues.updatePipelineStatus(next.id, 'queued');

@@ -54,6 +54,7 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     plannerModel: 'claude',
     reviewerModel: 'claude',
     executorModel: 'claude',
+    verifierModel: 'claude',
     reviewRound: 0,
     verificationStatus: null,
     verificationRetries: 0,

@@ -95,6 +95,43 @@ describe('ProjectQueries', () => {
     expect(fromList.githubProjectUrl).toBe('https://github.com/users/alice/projects/7');
   });
 
+  it('new projects default model overrides to null', () => {
+    const p = projects.add('/tmp/project-overrides-default');
+    expect(p.plannerModelOverride).toBeNull();
+    expect(p.reviewerModelOverride).toBeNull();
+    expect(p.executorModelOverride).toBeNull();
+    expect(p.verifierModelOverride).toBeNull();
+  });
+
+  it('updateModelOverrides() persists values and clears back to null', () => {
+    const p = projects.add('/tmp/project-overrides-set');
+    projects.updateModelOverrides(p.id, {
+      plannerModelOverride: 'openrouter',
+      reviewerModelOverride: 'claude',
+      executorModelOverride: 'codex',
+      verifierModelOverride: 'claude',
+    });
+
+    let updated = projects.getById(p.id)!;
+    expect(updated.plannerModelOverride).toBe('openrouter');
+    expect(updated.reviewerModelOverride).toBe('claude');
+    expect(updated.executorModelOverride).toBe('codex');
+    expect(updated.verifierModelOverride).toBe('claude');
+
+    projects.updateModelOverrides(p.id, {
+      plannerModelOverride: null,
+      reviewerModelOverride: null,
+      executorModelOverride: null,
+      verifierModelOverride: null,
+    });
+
+    updated = projects.getById(p.id)!;
+    expect(updated.plannerModelOverride).toBeNull();
+    expect(updated.reviewerModelOverride).toBeNull();
+    expect(updated.executorModelOverride).toBeNull();
+    expect(updated.verifierModelOverride).toBeNull();
+  });
+
   it('add() is idempotent: re-adding same path returns existing row', () => {
     const first = projects.add('/tmp/same');
     const second = projects.add('/tmp/same');

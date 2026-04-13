@@ -32,11 +32,18 @@ All settings persist in the local SQLite DB under the single `settings` row. The
 | Setting | Default | Purpose |
 |---------|---------|---------|
 | `executorModel` | `claude` | Default executor when no `agent:*` label is present (claude / codex / openrouter) |
-| `plannerModel` | `claude` | Planner model — **editable at onboarding only** |
-| `reviewerModel` | `codex` | Reviewer model — **editable at onboarding only** |
-| `verifierModel` | `claude` | Verifier model — **editable at onboarding only** |
+| `plannerModel` | `claude` | Global default planner model |
+| `reviewerModel` | `codex` | Global default reviewer model |
+| `verifierModel` | `claude` | Global default verifier model |
 
-Only the executor is editable from this panel today. Planner, reviewer, and verifier are set during `shipcode onboard` (or the desktop onboarding wizard) and can be changed afterward by editing the `settings` row in the local SQLite DB. A full Models section is on the roadmap.
+All four phase models are editable here. These are the **global defaults** that new projects inherit unless they opt into a project-level override.
+
+Override precedence:
+
+- Planner / Reviewer / Verifier: `global settings -> project override`
+- Executor: `global settings -> project override -> issue override`
+
+Reasoning effort remains global-only in this release. The Kanban cards display the effective phase model plus the global reasoning effort for that phase, but only Settings changes the effort value.
 
 OpenRouter-specific toggles (`openrouterEnabled`, tier defaults, per-phase overrides) are documented on the [OpenRouter page](/openrouter).
 
@@ -63,7 +70,12 @@ Keyboard shortcut reference — not yet remappable. See the page itself for the 
 
 ## Per-project settings
 
-Some settings are per-project rather than global — most notably the [`githubProjectUrl` override](/desktop/project-settings) for the Kanban `board` quick-link.
+Some settings are per-project rather than global:
+
+- `githubProjectUrl` override for the Kanban `board` quick-link
+- Per-project planner / reviewer / executor / verifier model overrides
+
+Issue-level overrides are narrower by design: only the executor can be overridden from Issue Detail / Kanban, and that override applies to the next run of that issue only.
 
 ## Related
 

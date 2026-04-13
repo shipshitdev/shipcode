@@ -14,7 +14,13 @@ The Kanban board is the main view inside a project. Each column corresponds to a
 | Completed | `completed` | Pipeline finished, PR opened, issue linked |
 | Failed | `failed` | Pipeline errored out — check the terminal drawer or Inbox |
 
-Planning / Reviewing / Executing / Verifying columns each break down further into sub-sections labeled with the agent and model currently handling that phase (e.g. `Claude · Opus 4.6`, `Codex · high reasoning`, `OpenRouter · auto`).
+The board still groups work by phase, but the model choice is now shown on each card instead of in the column header. That matters because model selection is hierarchical:
+
+- Global Settings provide the default for every phase
+- Project Settings can override planner / reviewer / executor / verifier per project
+- Issue Detail can override the executor per issue
+
+Each active card shows a compact chip with the effective model and the global reasoning effort for that card's current phase.
 
 ## Drag to launch
 
@@ -24,7 +30,7 @@ The Kanban component lives in [`packages/ui/src/KanbanBoard.tsx`](https://github
 
 ## List view
 
-Click the toggle in the Kanban header to switch to a flat list view. The list mirrors the same column structure as Planning / Reviewing / Executing / Verifying sub-sections, with agent/model labels on each active row. Use list view when you have more than a handful of concurrent runs and want a denser layout.
+Click the toggle in the Kanban header to switch to a flat list view. The list mirrors the same column structure as Planning / Reviewing / Executing / Verifying sub-sections. Use list view when you have more than a handful of concurrent runs and want a denser layout.
 
 ## Card actions
 
@@ -35,6 +41,8 @@ Click a card to open the Issue Detail overlay, which shows:
 - Review rounds and reviewer verdicts
 - The diff (once the executor has produced one)
 - Cost + token totals for the thread
+- Effective planner / reviewer / executor / verifier models for the next run
+- Executor override control with an `Inherit` reset back to project/global defaults
 
 ## Header quick-links
 

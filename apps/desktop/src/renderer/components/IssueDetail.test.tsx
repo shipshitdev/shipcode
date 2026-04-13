@@ -25,7 +25,7 @@ const makeIssue = (overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
   claimedBy: null,
   lastPhaseUpdate: null,
   lastStatusLabel: null,
-  executorModel: 'claude',
+  executorModelOverride: null,
   fetchedAt: new Date().toISOString(),
   ...overrides,
 });
@@ -42,6 +42,7 @@ const makeThread = (overrides: Partial<Thread> = {}): Thread => {
     plannerModel: 'claude',
     reviewerModel: 'codex',
     executorModel: 'claude',
+    verifierModel: 'claude',
     reviewRound: 0,
     verificationStatus: null,
     verificationRetries: 0,
@@ -124,6 +125,10 @@ describe('IssueDetail', () => {
   beforeEach(() => {
     cleanup();
     invokeMock.mockReset();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: vi.fn(),
+    });
     window.shipcode.invoke = invokeMock as unknown as typeof window.shipcode.invoke;
     window.shipcode.on = vi.fn(() => () => {}) as unknown as typeof window.shipcode.on;
 
@@ -190,6 +195,70 @@ describe('IssueDetail', () => {
 
     invokeMock.mockImplementation(async (channel, args) => {
       if (channel === 'thread:get') return thread;
+      if (channel === 'project:get')
+        return {
+          id: 'project-1',
+          name: 'Project',
+          path: '/tmp/project',
+          gitRemote: 'git@github.com:shipshitdev/shipcode.git',
+          githubProjectUrl: null,
+          plannerModelOverride: null,
+          reviewerModelOverride: null,
+          executorModelOverride: 'codex',
+          verifierModelOverride: null,
+          defaultBranch: 'main',
+          pinned: false,
+          archived: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+      if (channel === 'settings:get')
+        return {
+          theme: 'system',
+          defaultWorktreeEnabled: true,
+          terminalScrollback: 10000,
+          plannerModel: 'claude',
+          reviewerModel: 'codex',
+          verifierModel: 'claude',
+          executorModel: 'claude',
+          githubPollingEnabled: false,
+          githubPollingIntervalMs: 30000,
+          githubBotUsername: '',
+          autoPickupEnabled: false,
+          statusLabelMappings: {},
+          onboardingVersion: 1,
+          projectSortOrder: 'recent',
+          worktreeRoot: null,
+          worktreeBranchFormat: 'ship/{id}-{slug}',
+          plannerMaxTurns: 3,
+          maxReviewRounds: 2,
+          requireApproval: false,
+          plannerReasoningEffort: 'high',
+          reviewerReasoningEffort: 'high',
+          executorReasoningEffort: 'high',
+          verifierReasoningEffort: 'high',
+          notificationsEnabled: true,
+          notificationOsEnabled: true,
+          notificationBadgeEnabled: true,
+          notificationSoundEnabled: false,
+          notificationEvents: {
+            awaitingApproval: true,
+            failed: true,
+            completed: true,
+            verificationExhausted: true,
+          },
+          openrouterEnabled: false,
+          openrouterPlannerModel: null,
+          openrouterReviewerModel: null,
+          openrouterVerifierModel: null,
+          openrouterExecutorModel: null,
+          openrouterDefaultPaidModel: 'openrouter/auto',
+          openrouterDefaultFreeModel: 'openrouter/free',
+          openrouterExplicitFallback: 'openrouter/auto',
+          testCommand: null,
+          testingContext: null,
+          maxConcurrentPipelines: 1,
+        };
       if (channel === 'plan:list') return [plan];
       if (channel === 'review:list-by-plans') return {};
       if (channel === 'pipeline:approve') return undefined;
@@ -263,6 +332,113 @@ describe('IssueDetail', () => {
     // and the Confirm button is visible when defaulting to 'approve'
     const confirmButton = await screen.findByRole('button', { name: 'Confirm' });
     expect(confirmButton).toBeInTheDocument();
+  });
+
+  it('sets an executor override from the issue detail panel', async () => {
+    const thread = makeThread({ status: 'failed' });
+
+    useAppStore.setState({
+      activeThreadId: thread.id,
+      activeIssue: makeIssue({
+        threadId: thread.id,
+        pipelineStatus: 'failed',
+        executorModelOverride: null,
+      }),
+      pipelinePhase: 'failed',
+    });
+
+    invokeMock.mockImplementation(async (channel, args) => {
+      if (channel === 'thread:get') return thread;
+      if (channel === 'project:list')
+        return [
+          {
+            id: 'project-1',
+            name: 'Project',
+            path: '/tmp/project',
+            gitRemote: 'git@github.com:shipshitdev/shipcode.git',
+            githubProjectUrl: null,
+            plannerModelOverride: null,
+            reviewerModelOverride: null,
+            executorModelOverride: 'codex',
+            verifierModelOverride: null,
+            defaultBranch: 'main',
+            pinned: false,
+            archived: false,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        ];
+      if (channel === 'settings:get')
+        return {
+          theme: 'system',
+          defaultWorktreeEnabled: true,
+          terminalScrollback: 10000,
+          plannerModel: 'claude',
+          reviewerModel: 'codex',
+          verifierModel: 'claude',
+          executorModel: 'claude',
+          githubPollingEnabled: false,
+          githubPollingIntervalMs: 30000,
+          githubBotUsername: '',
+          autoPickupEnabled: false,
+          statusLabelMappings: {},
+          onboardingVersion: 1,
+          projectSortOrder: 'recent',
+          worktreeRoot: null,
+          worktreeBranchFormat: 'ship/{id}-{slug}',
+          plannerMaxTurns: 3,
+          maxReviewRounds: 2,
+          requireApproval: false,
+          plannerReasoningEffort: 'high',
+          reviewerReasoningEffort: 'high',
+          executorReasoningEffort: 'high',
+          verifierReasoningEffort: 'high',
+          notificationsEnabled: true,
+          notificationOsEnabled: true,
+          notificationBadgeEnabled: true,
+          notificationSoundEnabled: false,
+          notificationEvents: {
+            awaitingApproval: true,
+            failed: true,
+            completed: true,
+            verificationExhausted: true,
+          },
+          openrouterEnabled: false,
+          openrouterPlannerModel: null,
+          openrouterReviewerModel: null,
+          openrouterVerifierModel: null,
+          openrouterExecutorModel: null,
+          openrouterDefaultPaidModel: 'openrouter/auto',
+          openrouterDefaultFreeModel: 'openrouter/free',
+          openrouterExplicitFallback: 'openrouter/auto',
+          testCommand: null,
+          testingContext: null,
+          maxConcurrentPipelines: 1,
+        };
+      if (channel === 'github:set-executor-override') return undefined;
+      return args ?? [];
+    });
+
+    renderWithProviders();
+
+    const agentsTab = screen.getByRole('tab', { name: 'Agents' });
+    fireEvent.mouseDown(agentsTab, { button: 0 });
+    fireEvent.click(agentsTab);
+    await waitFor(() => {
+      expect(agentsTab).toHaveAttribute('data-state', 'active');
+    });
+
+    const executorTrigger = await screen.findByText(/Inherit \(/i);
+    fireEvent.click(executorTrigger);
+    fireEvent.click(await screen.findByText('openrouter'));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('github:set-executor-override', {
+        projectId: 'project-1',
+        issueNumber: 42,
+        model: 'openrouter',
+      });
+    });
   });
 
   it('renders Plan and Agents tab triggers', async () => {

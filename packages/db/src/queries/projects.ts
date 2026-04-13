@@ -195,6 +195,34 @@ export class ProjectQueries {
       )
       .run(url, id);
   }
+
+  updateModelOverrides(
+    id: string,
+    overrides: {
+      plannerModelOverride: string | null;
+      reviewerModelOverride: string | null;
+      executorModelOverride: string | null;
+      verifierModelOverride: string | null;
+    },
+  ): void {
+    this.db
+      .prepare(
+        `UPDATE projects
+           SET planner_model_override = ?,
+               reviewer_model_override = ?,
+               executor_model_override = ?,
+               verifier_model_override = ?,
+               updated_at = ${ISO_NOW_SQL}
+         WHERE id = ?`,
+      )
+      .run(
+        overrides.plannerModelOverride,
+        overrides.reviewerModelOverride,
+        overrides.executorModelOverride,
+        overrides.verifierModelOverride,
+        id,
+      );
+  }
 }
 
 function mapProject(row: any): Project {
@@ -204,6 +232,10 @@ function mapProject(row: any): Project {
     path: row.path,
     gitRemote: row.git_remote,
     githubProjectUrl: row.github_project_url ?? null,
+    plannerModelOverride: row.planner_model_override ?? null,
+    reviewerModelOverride: row.reviewer_model_override ?? null,
+    executorModelOverride: row.executor_model_override ?? null,
+    verifierModelOverride: row.verifier_model_override ?? null,
     defaultBranch: row.default_branch,
     pinned: row.pinned === 1,
     archived: row.archived === 1,

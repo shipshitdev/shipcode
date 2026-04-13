@@ -8,6 +8,11 @@ export function migrate(db: DatabaseSync): void {
       name TEXT NOT NULL,
       path TEXT NOT NULL UNIQUE,
       git_remote TEXT,
+      github_project_url TEXT,
+      planner_model_override TEXT,
+      reviewer_model_override TEXT,
+      executor_model_override TEXT,
+      verifier_model_override TEXT,
       default_branch TEXT NOT NULL DEFAULT 'main',
       created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
       updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
@@ -23,6 +28,8 @@ export function migrate(db: DatabaseSync): void {
       worktree_path TEXT,
       planner_model TEXT NOT NULL DEFAULT 'claude',
       reviewer_model TEXT NOT NULL DEFAULT 'codex',
+      verifier_model TEXT NOT NULL DEFAULT 'claude',
+      executor_model TEXT NOT NULL DEFAULT 'claude',
       created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
       updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
     );
@@ -131,6 +138,7 @@ export function migrateV2(db: DatabaseSync): void {
         claimed_at TEXT,
         claimed_by TEXT,
         last_phase_update TEXT,
+        executor_model_override TEXT,
         fetched_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
         UNIQUE(project_id, issue_number)
       );
@@ -437,5 +445,43 @@ export function migrateV11(db: DatabaseSync): void {
     } catch {}
 
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (11)`);
+  });
+}
+
+export function migrateV12(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 12) return;
+
+  transaction(db, () => {
+    const projectColumns = [
+      'ALTER TABLE projects ADD COLUMN planner_model_override TEXT',
+      'ALTER TABLE projects ADD COLUMN reviewer_model_override TEXT',
+      'ALTER TABLE projects ADD COLUMN executor_model_override TEXT',
+      'ALTER TABLE projects ADD COLUMN verifier_model_override TEXT',
+    ];
+    for (const sql of projectColumns) {
+      try {
+        db.exec(sql);
+      } catch {}
+    }
+
+    try {
+      db.exec('ALTER TABLE threads ADD COLUMN verifier_model TEXT DEFAULT \'claude\'');
+    } catch {}
+
+    try {
+      db.exec('ALTER TABLE github_issue_cache ADD COLUMN executor_model_override TEXT');
+    } catch {}
+
+    db.exec(`
+      UPDATE github_issue_cache
+      SET executor_model_override = executor_model
+      WHERE executor_model_override IS NULL
+        AND executor_model IS NOT NULL
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (12)`);
   });
 }

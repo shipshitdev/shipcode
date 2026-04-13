@@ -71,8 +71,12 @@ export interface Project {
    * and can span multiple repos, so we can't derive this from `gitRemote` alone.
    * When null, the Kanban header falls back to `${repoBase}/projects` (the
    * repo's Projects tab that lists linked boards).
-   */
+  */
   githubProjectUrl: string | null;
+  plannerModelOverride: AgentType | null;
+  reviewerModelOverride: AgentType | null;
+  executorModelOverride: AgentType | null;
+  verifierModelOverride: AgentType | null;
   defaultBranch: string;
   pinned: boolean;
   archived: boolean;
@@ -105,6 +109,7 @@ export interface Thread {
   worktreePath: string | null;
   plannerModel: string;
   reviewerModel: string;
+  verifierModel: string;
   executorModel: string;
   reviewRound: number;
   verificationStatus: string | null;
@@ -365,12 +370,10 @@ export interface GitHubIssueCacheRecord {
   claimedBy: string | null;
   lastPhaseUpdate: string | null;
   lastStatusLabel: string | null;
-  // Per-issue executor choice. Widened to the full ExecutorModel union
-  // in Tier 1 so issue-level selection can opt into the OpenRouter HTTP
-  // provider the same way the `agent:openrouter/auto` GitHub label can
-  // at queue time. The DB column is plain TEXT (v4 migration), so
-  // writing this wider value is safe on existing rows.
-  executorModel: ExecutorModel;
+  // Nullable per-issue executor override. Null means "inherit the executor
+  // from project/global settings". Existing rows are backfilled during the
+  // migration so previous explicit selections stay explicit.
+  executorModelOverride: ExecutorModel | null;
   fetchedAt: string;
 }
 

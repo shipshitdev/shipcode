@@ -4,6 +4,7 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import {
   type Project,
   type ContextFileInfo,
+  type ExecutorModel,
   validateGithubProjectUrl,
   clampError,
 } from '@shipcode/shared';
@@ -13,8 +14,54 @@ import {
   ModalFooter,
   Input,
   Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@shipcode/ui';
 import { useAppStore } from '../stores/app-store';
+
+const INHERIT_VALUE = '__inherit__';
+
+function ProjectModelOverrideRow({
+  label,
+  value,
+  onChange,
+  validProviders,
+}: {
+  label: string;
+  value: Project['plannerModelOverride'];
+  onChange: (value: Project['plannerModelOverride']) => void;
+  validProviders: ExecutorModel[];
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-secondary p-2">
+      <div>
+        <div className="text-[12px] font-medium text-primary">{label}</div>
+        <div className="text-[11px] text-muted">Leave on inherit to use the global default.</div>
+      </div>
+      <Select
+        value={value ?? INHERIT_VALUE}
+        onValueChange={(next) =>
+          onChange(next === INHERIT_VALUE ? null : (next as Project['plannerModelOverride']))
+        }
+      >
+        <SelectTrigger className="w-[160px]">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={INHERIT_VALUE}>Inherit</SelectItem>
+          {validProviders.includes('claude') && <SelectItem value="claude">Claude</SelectItem>}
+          {validProviders.includes('codex') && <SelectItem value="codex">Codex</SelectItem>}
+          {validProviders.includes('openrouter') && (
+            <SelectItem value="openrouter">OpenRouter</SelectItem>
+          )}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
 
 /**
  * Per-project settings modal. V1 only edits the GitHub Projects v2 URL
@@ -40,6 +87,14 @@ export function ProjectSettingsModal() {
   const [urlInput, setUrlInput] = useState('');
   const [touched, setTouched] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [plannerModelOverride, setPlannerModelOverride] =
+    useState<Project['plannerModelOverride']>(null);
+  const [reviewerModelOverride, setReviewerModelOverride] =
+    useState<Project['reviewerModelOverride']>(null);
+  const [executorModelOverride, setExecutorModelOverride] =
+    useState<Project['executorModelOverride']>(null);
+  const [verifierModelOverride, setVerifierModelOverride] =
+    useState<Project['verifierModelOverride']>(null);
   const [contextGenerating, setContextGenerating] = useState(false);
   const [contextError, setContextError] = useState<string | null>(null);
   const [syncResult, setSyncResult] = useState<{
@@ -54,6 +109,10 @@ export function ProjectSettingsModal() {
   useEffect(() => {
     if (!projectSettingsModalOpen) return;
     setUrlInput(project?.githubProjectUrl ?? '');
+    setPlannerModelOverride(project?.plannerModelOverride ?? null);
+    setReviewerModelOverride(project?.reviewerModelOverride ?? null);
+    setExecutorModelOverride(project?.executorModelOverride ?? null);
+    setVerifierModelOverride(project?.verifierModelOverride ?? null);
     setTouched(false);
     setSubmitError(null);
     setSyncResult(null);
@@ -68,9 +127,18 @@ export function ProjectSettingsModal() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!projectSettingsModalProjectId) return null;
-      return window.shipcode.invoke<Project>('project:set-github-project-url', {
+      await window.shipcode.invoke<Project>('project:set-github-project-url', {
         projectId: projectSettingsModalProjectId,
         url: validation.ok ? validation.value : null,
+      });
+      return window.shipcode.invoke<Project>('project:set-model-overrides', {
+        projectId: projectSettingsModalProjectId,
+        overrides: {
+          plannerModelOverride,
+          reviewerModelOverride,
+          executorModelOverride,
+          verifierModelOverride,
+        },
       });
     },
     onSuccess: () => {
@@ -276,6 +344,34 @@ export function ProjectSettingsModal() {
                   </div>
                 )}
               </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label className="text-xs text-secondary">Model Overrides</Label>
+              <ProjectModelOverrideRow
+                label="Planner"
+                value={plannerModelOverride}
+                onChange={setPlannerModelOverride}
+                validProviders={['claude', 'codex', 'openrouter']}
+              />
+              <ProjectModelOverrideRow
+                label="Reviewer"
+                value={reviewerModelOverride}
+                onChange={setReviewerModelOverride}
+                validProviders={['claude', 'codex', 'openrouter']}
+              />
+              <ProjectModelOverrideRow
+                label="Executor"
+                value={executorModelOverride}
+                onChange={setExecutorModelOverride}
+                validProviders={['claude', 'codex', 'openrouter']}
+              />
+              <ProjectModelOverrideRow
+                label="Verifier"
+                value={verifierModelOverride}
+                onChange={setVerifierModelOverride}
+                validProviders={['claude', 'codex', 'openrouter']}
+              />
             </div>
 
             <div className="flex flex-col gap-2 border-t border-border pt-4">

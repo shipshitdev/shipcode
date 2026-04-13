@@ -4,11 +4,13 @@ import log from 'electron-log/renderer';
 import { useAppStore } from '../stores/app-store';
 import { KanbanBoard, Modal, ModalFooter, Button } from '@shipcode/ui';
 import {
+  type AppSettings,
   githubRepoUrl,
   githubProjectsUrl,
   type GitHubIssueCacheRecord,
   type IssuePipelineStatus,
   type Project,
+  type Thread,
 } from '@shipcode/shared';
 
 export function ThreadPanel() {
@@ -45,6 +47,18 @@ export function ThreadPanel() {
     queryFn: () => window.shipcode.invoke('project:get', { projectId: activeProjectId! }),
     enabled: !!activeProjectId,
     staleTime: 30_000,
+  });
+
+  const { data: settings } = useQuery<AppSettings>({
+    queryKey: ['settings'],
+    queryFn: () => window.shipcode.invoke('settings:get'),
+  });
+
+  const { data: threads = [] } = useQuery<Thread[]>({
+    queryKey: ['threads', activeProjectId],
+    queryFn: () => window.shipcode.invoke('thread:list', { projectId: activeProjectId! }),
+    enabled: !!activeProjectId,
+    staleTime: 5_000,
   });
 
   // Local git branches (normalized) — source for the toolbar dropdown.
@@ -130,6 +144,9 @@ export function ThreadPanel() {
             .catch((err) => log.error('[threadpanel] refresh branches failed', err));
         }}
         projectName={project?.name}
+        project={project}
+        settings={settings}
+        threads={threads}
         repoUrl={repoUrl}
         projectsUrl={projectsUrl}
         onOpenExternal={(url) =>

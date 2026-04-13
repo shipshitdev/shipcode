@@ -77,6 +77,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       githubIssueNumber: seed.githubIssueNumber ?? null,
       githubIssueTitle: seed.githubIssueTitle ?? null,
       githubRepo: seed.githubRepo ?? null,
+      plannerModel: seed.plannerModel ?? (deps.settings.get().plannerModel as PipelineExecutorModel),
+      reviewerModel: seed.reviewerModel ?? (deps.settings.get().reviewerModel as PipelineExecutorModel),
+      verifierModel: seed.verifierModel ?? (deps.settings.get().verifierModel as PipelineExecutorModel),
       executorModel: seed.executorModel ?? 'claude',
       executorModelOverride: seed.executorModelOverride ?? null,
       baseBranch: seed.baseBranch ?? '',
@@ -118,6 +121,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       githubIssueNumber: thread.githubIssueNumber ?? null,
       githubIssueTitle: issueTitle ?? null,
       githubRepo: thread.githubRepo ?? null,
+      plannerModel: (thread.plannerModel as PipelineExecutorModel) || 'claude',
+      reviewerModel: (thread.reviewerModel as PipelineExecutorModel) || 'codex',
+      verifierModel: (thread.verifierModel as PipelineExecutorModel) || 'claude',
       executorModel: (thread.executorModel as PipelineExecutorModel) || 'claude',
       baseBranch: thread.baseBranch ?? '',
       forkPointSha: thread.forkPointSha ?? '',
@@ -334,20 +340,19 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     context: PipelineContext,
     phase: ProviderPhase,
   ): PipelineExecutorModel {
-    const settings = deps.settings.get();
     switch (phase) {
       case 'plan':
       case 'revision':
-        return settings.plannerModel as PipelineExecutorModel;
+        return context.plannerModel;
       case 'review':
-        return settings.reviewerModel as PipelineExecutorModel;
+        return context.reviewerModel;
       case 'verify':
-        return settings.verifierModel as PipelineExecutorModel;
+        return context.verifierModel;
       case 'execute':
         if (context.executorModelOverride)
           return context.executorModelOverride as PipelineExecutorModel;
         if (context.executorModel) return context.executorModel;
-        return settings.executorModel as PipelineExecutorModel;
+        return 'claude';
     }
   }
 
@@ -1171,7 +1176,13 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     projectPath: string,
     issue: { number: number; title: string; body: string | null; labels: string[] },
     executorModel: PipelineExecutorModel,
-    options?: { baseBranch?: string; executorModelOverride?: string | null },
+    options?: {
+      baseBranch?: string;
+      executorModelOverride?: string | null;
+      plannerModel?: PipelineExecutorModel;
+      reviewerModel?: PipelineExecutorModel;
+      verifierModel?: PipelineExecutorModel;
+    },
   ) {
     const executorModelOverride = options?.executorModelOverride ?? null;
 
@@ -1224,6 +1235,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       githubIssueNumber: issue.number,
       githubIssueTitle: issue.title,
       githubRepo: null,
+      plannerModel: options?.plannerModel ?? (deps.settings.get().plannerModel as PipelineExecutorModel),
+      reviewerModel: options?.reviewerModel ?? (deps.settings.get().reviewerModel as PipelineExecutorModel),
+      verifierModel: options?.verifierModel ?? (deps.settings.get().verifierModel as PipelineExecutorModel),
       executorModel,
       executorModelOverride,
       baseBranch,

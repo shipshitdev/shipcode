@@ -109,6 +109,21 @@ describe('GitHubIssueQueries', () => {
     expect(issues.getByNumber(projectId, 1)!.pipelineStatus).toBe('planning');
   });
 
+  it('defaults executorModelOverride to null', () => {
+    const record = issues.upsert(makeIssue());
+    expect(record.executorModelOverride).toBeNull();
+  });
+
+  it('updateExecutorModelOverride() persists a value and can clear it', () => {
+    const record = issues.upsert(makeIssue());
+
+    issues.updateExecutorModelOverride(record.id, 'openrouter');
+    expect(issues.getByNumber(projectId, 1)!.executorModelOverride).toBe('openrouter');
+
+    issues.updateExecutorModelOverride(record.id, null);
+    expect(issues.getByNumber(projectId, 1)!.executorModelOverride).toBeNull();
+  });
+
   it('linkThread() sets the thread_id', () => {
     const record = issues.upsert(makeIssue());
     const threads = new ThreadQueries(db);

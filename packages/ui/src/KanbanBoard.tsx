@@ -11,8 +11,21 @@ import {
   useDraggable,
   useDroppable,
 } from '@dnd-kit/core';
-import type { GitHubIssueCacheRecord, IssuePipelineStatus } from '@shipcode/shared';
-import { phaseToProgress } from '@shipcode/shared';
+import type {
+  AppSettings,
+  GitHubIssueCacheRecord,
+  IssuePipelineStatus,
+  Project,
+  ResolvedPhaseModel,
+  Thread,
+} from '@shipcode/shared';
+import {
+  getIssueCardPhase,
+  phaseToProgress,
+  resolveExecutorModelForIssue,
+  resolvePhaseModel,
+  resolvePhaseReasoningEffort,
+} from '@shipcode/shared';
 import {
   Archive,
   ChevronDown,
@@ -23,7 +36,7 @@ import {
   RefreshCw,
   User,
 } from 'lucide-react';
-import { type ReactNode, useCallback, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { MODEL_DISPLAY } from './lib/model-display';
 import { cn } from './lib/utils';
 import { PhaseChip } from './PhaseChip';
@@ -50,6 +63,9 @@ function dragOverlayBorderClass(status: IssuePipelineStatus): string {
 
 interface KanbanBoardProps {
   issues: GitHubIssueCacheRecord[];
+  project?: Project | null;
+  settings?: AppSettings | null;
+  threads?: Thread[];
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
   onRefresh: () => void;
   onNewIssue?: () => void;
@@ -92,12 +108,6 @@ type PhaseSection = {
   label: string;
   statuses: IssuePipelineStatus[];
   droppable: boolean;
-  /**
-   * Agent assigned to this phase. 'executor' is resolved per-issue from
-   * `issue.executorModel`; everything else is hardcoded to match
-   * packages/pipeline/src/pipeline.ts.
-   */
-  agent: 'claude' | 'codex' | 'executor';
 };
 
 type BoardColumn = {
@@ -125,35 +135,30 @@ const COLUMNS: BoardColumn[] = [
         label: 'Queued',
         statuses: ['queued'],
         droppable: false,
-        agent: 'claude',
       },
       {
         key: 'planning',
         label: 'Planning',
         statuses: ['planning'],
         droppable: true,
-        agent: 'claude',
       },
       {
         key: 'reviewing',
         label: 'Reviewing',
         statuses: ['reviewing', 'revising'],
         droppable: false,
-        agent: 'codex',
       },
       {
         key: 'executing',
         label: 'Executing',
         statuses: ['executing'],
         droppable: false,
-        agent: 'executor',
       },
       {
         key: 'verifying',
         label: 'Verifying',
         statuses: ['verifying', 'shipping'],
         droppable: false,
-        agent: 'claude',
       },
     ],
   },
@@ -167,9 +172,8 @@ const COLUMNS: BoardColumn[] = [
         label: 'Awaiting Approval',
         statuses: ['awaiting_approval'],
         droppable: false,
-        agent: 'claude',
       },
-      { key: 'failed', label: 'Failed', statuses: ['failed'], droppable: false, agent: 'claude' },
+      { key: 'failed', label: 'Failed', statuses: ['failed'], droppable: false },
     ],
   },
   {
@@ -179,6 +183,47 @@ const COLUMNS: BoardColumn[] = [
     statuses: ['completed'],
   },
 ];
+
+type IssuePhaseChip = {
+  phase: ResolvedPhaseModel;
+  model: string;
+  effort: string | null;
+};
+
+function resolveIssuePhaseChip(
+  issue: GitHubIssueCacheRecord,
+  settings: AppSettings | null | undefined,
+  project: Project | null | undefined,
+  thread: Thread | null | undefined,
+): IssuePhaseChip | null {
+  const phase = getIssueCardPhase(issue.pipelineStatus);
+  if (!phase) return null;
+
+  const model =
+    phase === 'planner'
+      ? thread?.plannerResolvedModel ??
+        thread?.plannerModel ??
+        (settings ? resolvePhaseModel(settings, project, 'planner') : 'claude')
+      : phase === 'reviewer'
+        ? thread?.reviewerResolvedModel ??
+          thread?.reviewerModel ??
+          (settings ? resolvePhaseModel(settings, project, 'reviewer') : 'codex')
+        : phase === 'executor'
+          ? thread?.executorResolvedModel ??
+            thread?.executorModel ??
+            (settings
+              ? resolveExecutorModelForIssue(settings, project, issue)
+              : issue.executorModelOverride ?? project?.executorModelOverride ?? 'claude')
+          : thread?.verifierResolvedModel ??
+            thread?.verifierModel ??
+            (settings ? resolvePhaseModel(settings, project, 'verifier') : 'claude');
+
+  return {
+    phase,
+    model,
+    effort: settings ? resolvePhaseReasoningEffort(settings, phase) : null,
+  };
+}
 
 // Column header dot colors — matches GitHub Projects board defaults.
 const COLUMN_DOT_CLASS: Record<ColumnKey, string> = {
@@ -237,6 +282,7 @@ function PhaseElapsed({ since }: { since: number }) {
 
 function DraggableCard({
   issue,
+  phaseChip,
   onClick,
   onRerun,
   onCancel,
@@ -246,6 +292,7 @@ function DraggableCard({
   isRerunning,
 }: {
   issue: GitHubIssueCacheRecord;
+  phaseChip?: IssuePhaseChip | null;
   onClick: () => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
   onCancel?: (issue: GitHubIssueCacheRecord) => void;
@@ -360,6 +407,18 @@ function DraggableCard({
         {issue.title}
       </div>
       <div className="flex flex-wrap gap-1 mt-1 items-center">
+        {phaseChip && (
+          <Badge
+            variant="default"
+            className="px-1.5 py-px font-medium normal-case tracking-normal text-[10px]"
+            title={`${phaseChip.phase} model ${phaseChip.model}${
+              phaseChip.effort ? ` (${phaseChip.effort})` : ''
+            }`}
+          >
+            {MODEL_DISPLAY[phaseChip.model] ?? phaseChip.model}
+            {phaseChip.effort ? ` · ${phaseChip.effort}` : ''}
+          </Badge>
+        )}
         {issue.labels
           .filter((l) => l.startsWith('agent:'))
           .map((l) => (
@@ -467,6 +526,7 @@ function DroppableColumn({
   selectedIssueNumber,
   onArchiveAllDone,
   onArchiveIssue,
+  issuePhaseChipById,
 }: {
   id: string;
   columnKey: ColumnKey;
@@ -478,6 +538,7 @@ function DroppableColumn({
   selectedIssueNumber?: number;
   onArchiveAllDone?: () => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
+  issuePhaseChipById: Map<string, IssuePhaseChip | null>;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id, disabled: !droppable });
 
@@ -521,6 +582,7 @@ function DroppableColumn({
           <DraggableCard
             key={issue.id}
             issue={issue}
+            phaseChip={issuePhaseChipById.get(issue.id) ?? null}
             onClick={() => onIssueClick(issue)}
             onStartPipeline={onStartPipeline}
             isSelected={issue.issueNumber === selectedIssueNumber}
@@ -541,6 +603,7 @@ function SectionBlock({
   onCancel,
   selectedIssueNumber,
   rerunningId,
+  issuePhaseChipById,
 }: {
   columnKey: ColumnKey;
   section: PhaseSection;
@@ -550,6 +613,7 @@ function SectionBlock({
   onCancel?: (issue: GitHubIssueCacheRecord) => void;
   selectedIssueNumber?: number;
   rerunningId?: string | null;
+  issuePhaseChipById: Map<string, IssuePhaseChip | null>;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `${columnKey}:${section.key}`,
@@ -557,13 +621,6 @@ function SectionBlock({
   });
   const count = issues.length;
   const empty = count === 0;
-  // Only the Agent Loop column shows agent badges. Human/Failed/Done skip them.
-  // Queued section doesn't have an active agent.
-  const showAgent = columnKey === 'agent' && section.key !== 'queued';
-  // For the executor row, resolve per-issue from the first card; when empty, default.
-  const agentLabel =
-    section.agent === 'executor' ? (issues[0]?.executorModel ?? 'claude') : section.agent;
-
   // Tone highlights non-empty sections so they pull the eye.
   // Stays null when the section is empty to avoid false alarms.
   const tone: 'danger' | 'warning' | 'agent' | null =
@@ -587,14 +644,7 @@ function SectionBlock({
           tone === 'warning' && 'text-warning',
         )}
       >
-        <span className="flex items-center gap-1.5">
-          <span>{section.label}</span>
-          {showAgent && (
-            <span className="font-mono normal-case text-[9px] font-normal text-muted">
-              · {MODEL_DISPLAY[agentLabel] ?? agentLabel}
-            </span>
-          )}
-        </span>
+        <span>{section.label}</span>
         <span
           className={cn(
             // Always reserve a 1px border so the pill size doesn't shift when the
@@ -624,6 +674,7 @@ function SectionBlock({
             <DraggableCard
               key={issue.id}
               issue={issue}
+              phaseChip={issuePhaseChipById.get(issue.id) ?? null}
               onClick={() => onIssueClick(issue)}
               onRerun={onRerun}
               onCancel={onCancel}
@@ -654,6 +705,7 @@ function StackedColumn({
   onCancel,
   selectedIssueNumber,
   rerunningId,
+  issuePhaseChipById,
 }: {
   column: BoardColumn;
   issues: GitHubIssueCacheRecord[];
@@ -662,6 +714,7 @@ function StackedColumn({
   onCancel?: (issue: GitHubIssueCacheRecord) => void;
   selectedIssueNumber?: number;
   rerunningId?: string | null;
+  issuePhaseChipById: Map<string, IssuePhaseChip | null>;
 }) {
   const columnIssues = issues.filter((i) => column.statuses.includes(i.pipelineStatus));
 
@@ -692,6 +745,7 @@ function StackedColumn({
               onCancel={onCancel}
               selectedIssueNumber={selectedIssueNumber}
               rerunningId={rerunningId}
+              issuePhaseChipById={issuePhaseChipById}
             />
           );
         })}
@@ -854,7 +908,6 @@ interface ListSectionBlockProps {
   columnKey: ColumnKey;
   section: PhaseSection;
   issues: GitHubIssueCacheRecord[];
-  allIssues: GitHubIssueCacheRecord[];
   selectedIssueNumber?: number;
   activeId: string | null;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
@@ -864,22 +917,12 @@ function ListSectionBlock({
   columnKey,
   section,
   issues,
-  allIssues,
   selectedIssueNumber,
   activeId,
   onIssueClick,
 }: ListSectionBlockProps) {
   const count = issues.length;
   const empty = count === 0;
-  const showAgent = columnKey === 'agent';
-  // Resolve executor per-issue; when the section is empty, fall back to any
-  // active thread's executor so the header still reads correctly, then default.
-  const agentLabel =
-    section.agent === 'executor'
-      ? (issues[0]?.executorModel ??
-        allIssues.find((i) => i.pipelineStatus === 'executing')?.executorModel ??
-        'claude')
-      : section.agent;
 
   const tone: 'danger' | 'warning' | 'agent' | null =
     section.key === 'failed' && !empty
@@ -903,11 +946,6 @@ function ListSectionBlock({
         )}
       >
         <span>{section.label}</span>
-        {showAgent && (
-          <span className="font-mono normal-case text-[9px] font-normal text-muted">
-            · {MODEL_DISPLAY[agentLabel] ?? agentLabel}
-          </span>
-        )}
         <span
           className={cn(
             'ml-1 text-[10px] bg-tertiary min-w-[18px] text-center px-1.5 py-px rounded-full font-medium border border-transparent',
@@ -1025,7 +1063,6 @@ function IssueListView({
                         issues={columnIssues.filter((i) =>
                           section.statuses.includes(i.pipelineStatus),
                         )}
-                        allIssues={issues}
                         selectedIssueNumber={selectedIssueNumber}
                         activeId={activeId}
                         onIssueClick={onIssueClick}
@@ -1062,6 +1099,9 @@ function IssueListView({
 
 export function KanbanBoard({
   issues,
+  project,
+  settings,
+  threads = [],
   onIssueClick,
   onRefresh,
   onNewIssue,
@@ -1093,6 +1133,25 @@ export function KanbanBoard({
   const [refreshing, setRefreshing] = useState(false);
   const [showRefreshToast, setShowRefreshToast] = useState(false);
   const [rerunningId, setRerunningId] = useState<string | null>(null);
+  const threadById = useMemo(
+    () => new Map(threads.map((thread) => [thread.id, thread])),
+    [threads],
+  );
+  const issuePhaseChipById = useMemo(
+    () =>
+      new Map(
+        issues.map((issue) => [
+          issue.id,
+          resolveIssuePhaseChip(
+            issue,
+            settings,
+            project,
+            issue.threadId ? threadById.get(issue.threadId) : null,
+          ),
+        ]),
+      ),
+    [issues, project, settings, threadById],
+  );
 
   const handleRerun = useCallback(
     (issue: GitHubIssueCacheRecord) => {
@@ -1330,6 +1389,7 @@ export function KanbanBoard({
                     onCancel={onCancel}
                     rerunningId={rerunningId}
                     selectedIssueNumber={selectedIssueNumber}
+                    issuePhaseChipById={issuePhaseChipById}
                   />
                 );
               }
@@ -1347,6 +1407,7 @@ export function KanbanBoard({
                   onStartPipeline={col.key === 'todo' ? onStartPipeline : undefined}
                   onArchiveAllDone={col.key === 'done' ? onArchiveAllDone : undefined}
                   onArchiveIssue={col.key === 'done' ? onArchiveIssue : undefined}
+                  issuePhaseChipById={issuePhaseChipById}
                 />
               );
             })}

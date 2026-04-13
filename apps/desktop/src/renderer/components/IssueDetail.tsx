@@ -1,5 +1,7 @@
 import type {
   ActivePipelineSummary,
+  AppSettings,
+  ExecutorModel,
   NotificationRecord,
   PipelinePhase,
   PlanRecord,
@@ -9,7 +11,12 @@ import type {
   Thread,
   VerificationRecord,
 } from '@shipcode/shared';
-import { deriveGithubIssueUrl, shipCodePlanSchema } from '@shipcode/shared';
+import {
+  deriveGithubIssueUrl,
+  resolveExecutorModelForIssue,
+  resolvePhaseModel,
+  shipCodePlanSchema,
+} from '@shipcode/shared';
 import {
   Archive,
   Badge,
@@ -69,6 +76,8 @@ const PIPELINE_PREVIEW_PHASES = [
   { id: 'verify', label: 'Verify' },
   { id: 'ship', label: 'Ship' },
 ] as const;
+
+const INHERIT_EXECUTOR_VALUE = '__inherit__';
 
 // `deriveGithubIssueUrl` + related helpers live in `@shipcode/shared/github-url`
 // so the Kanban toolbar, IssueDetail, and any future consumer share one parser.
@@ -251,14 +260,22 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     enabled: !!activeThreadId,
     refetchInterval: activeThreadId ? 2000 : false,
   });
+  const normalizedPlanHistory = Array.isArray(planHistory) ? planHistory : [];
 
   // Fetch reviews for all plans
-  const planIds = planHistory.map((p) => p.id);
+  const planIds = normalizedPlanHistory.map((p) => p.id);
   const { data: reviewsByPlanId = {} } = useQuery<Record<string, ReviewRecord>>({
     queryKey: ['reviews-by-plans', planIds.join(',')],
     queryFn: () => window.shipcode.invoke('review:list-by-plans', { planIds }),
     enabled: planIds.length > 0,
     refetchInterval: activeThreadId ? 2000 : false,
+  });
+  const normalizedReviewsByPlanId =
+    reviewsByPlanId && typeof reviewsByPlanId === 'object' ? reviewsByPlanId : {};
+
+  const { data: settings } = useQuery<AppSettings | null>({
+    queryKey: ['settings'],
+    queryFn: () => window.shipcode.invoke('settings:get'),
   });
 
   // Fetch latest verification for the thread
@@ -270,18 +287,20 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
   // Pick the right raw output based on which phase failed
   const failingPhaseOutput = (() => {
-    if (!thread || thread.status !== 'failed') return planHistory[0]?.rawOutput ?? null;
+    if (!thread || thread.status !== 'failed') return normalizedPlanHistory[0]?.rawOutput ?? null;
     // Verification failure — show verification output
     if (latestVerification?.rawOutput) return latestVerification.rawOutput;
     // Review failure — show review output for the latest plan
-    const latestReview = planHistory[0]?.id ? reviewsByPlanId[planHistory[0].id] : null;
+    const latestReview = normalizedPlanHistory[0]?.id
+      ? normalizedReviewsByPlanId[normalizedPlanHistory[0].id]
+      : null;
     if (latestReview?.rawOutput) return latestReview.rawOutput;
     // Fall back to plan output
-    return planHistory[0]?.rawOutput ?? null;
+    return normalizedPlanHistory[0]?.rawOutput ?? null;
   })();
 
   // Auto-expand latest plan
-  const latestPlanId = planHistory[0]?.id ?? null;
+  const latestPlanId = normalizedPlanHistory[0]?.id ?? null;
 
   // When a new plan version arrives, auto-follow the new latest — but only
   // when the user was in auto mode or was already tracking the previous
@@ -345,7 +364,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   }, [selectIssue, expanded, toggleIssueDetailExpanded]);
 
   const effectiveExpanded = expandedPlanId === undefined ? latestPlanId : expandedPlanId;
-  const latestPlan = useMemo(() => planHistory[0] ?? null, [planHistory]);
+  const latestPlan = useMemo(() => normalizedPlanHistory[0] ?? null, [normalizedPlanHistory]);
   const threadPhase = thread?.status ?? pipelinePhase;
   const canStartPipeline =
     !activeThreadId && !!activeProjectId && activeIssue?.pipelineStatus !== 'completed';
@@ -353,8 +372,10 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const hasApprovalDecision =
     !!activeThreadId && threadPhase === 'awaiting_approval' && !!latestPlan;
   const canApprove = hasApprovalDecision && !!(latestPlan?.structured || latestPlan?.rawOutput);
-  const fullScreenPlan = planHistory.find((p) => p.id === fullScreenPlanId) ?? null;
-  const fullScreenReview = fullScreenPlan ? reviewsByPlanId[fullScreenPlan.id] : undefined;
+  const fullScreenPlan = normalizedPlanHistory.find((p) => p.id === fullScreenPlanId) ?? null;
+  const fullScreenReview = fullScreenPlan
+    ? normalizedReviewsByPlanId[fullScreenPlan.id]
+    : undefined;
 
   if (!activeIssue) return null;
 
@@ -454,13 +475,22 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
   const phaseIsActive = ACTIVE_PHASES.includes(threadPhase as PipelinePhase);
 
-  const handleExecutorChange = async (model: 'claude' | 'codex' | 'openrouter') => {
+  const handleExecutorChange = async (
+    model: ExecutorModel | typeof INHERIT_EXECUTOR_VALUE,
+  ) => {
     if (!activeProjectId) return;
-    await window.shipcode.invoke('github:set-executor', {
-      projectId: activeProjectId,
-      issueNumber: activeIssue!.issueNumber,
-      model,
-    });
+    if (model === INHERIT_EXECUTOR_VALUE) {
+      await window.shipcode.invoke('github:clear-executor-override', {
+        projectId: activeProjectId,
+        issueNumber: activeIssue!.issueNumber,
+      });
+    } else {
+      await window.shipcode.invoke('github:set-executor-override', {
+        projectId: activeProjectId,
+        issueNumber: activeIssue!.issueNumber,
+        model,
+      });
+    }
     await queryClient.invalidateQueries({ queryKey: ['github-issues', activeProjectId] });
   };
 
@@ -494,6 +524,23 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   // the user will kick off a new run (failed/completed).
   const EXECUTOR_EDITABLE_STATUSES = new Set(['todo', 'queued', 'failed', 'completed']);
   const executorEditable = EXECUTOR_EDITABLE_STATUSES.has(activeIssue?.pipelineStatus ?? 'todo');
+  const effectivePlannerModel =
+    thread?.plannerResolvedModel ??
+    thread?.plannerModel ??
+    (settings ? resolvePhaseModel(settings, activeProject, 'planner') : 'claude');
+  const effectiveReviewerModel =
+    thread?.reviewerResolvedModel ??
+    thread?.reviewerModel ??
+    (settings ? resolvePhaseModel(settings, activeProject, 'reviewer') : 'codex');
+  const effectiveExecutorModel =
+    thread?.executorResolvedModel ??
+    thread?.executorModel ??
+    (settings ? resolveExecutorModelForIssue(settings, activeProject, activeIssue) : 'claude');
+  const effectiveVerifierModel =
+    thread?.verifierResolvedModel ??
+    thread?.verifierModel ??
+    (settings ? resolvePhaseModel(settings, activeProject, 'verifier') : 'claude');
+  const executorSelectValue = activeIssue.executorModelOverride ?? INHERIT_EXECUTOR_VALUE;
 
   const statusColor = (status: string) => {
     switch (status) {
@@ -592,10 +639,10 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-secondary">Agents</h4>
       <div className="grid grid-cols-2 gap-2">
         {[
-          { role: 'Planner', model: thread?.plannerResolvedModel ?? 'claude', editable: false },
-          { role: 'Reviewer', model: thread?.reviewerResolvedModel ?? 'codex', editable: false },
-          { role: 'Executor', model: activeIssue.executorModel, editable: executorEditable },
-          { role: 'Verifier', model: thread?.verifierResolvedModel ?? 'claude', editable: false },
+          { role: 'Planner', model: effectivePlannerModel, editable: false },
+          { role: 'Reviewer', model: effectiveReviewerModel, editable: false },
+          { role: 'Executor', model: effectiveExecutorModel, editable: executorEditable },
+          { role: 'Verifier', model: effectiveVerifierModel, editable: false },
         ].map(({ role, model, editable }) => (
           <div
             key={role}
@@ -606,15 +653,18 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
             </span>
             {editable ? (
               <Select
-                value={activeIssue.executorModel}
+                value={executorSelectValue}
                 onValueChange={(v: string) =>
-                  handleExecutorChange(v as 'claude' | 'codex' | 'openrouter')
+                  handleExecutorChange(v as ExecutorModel | typeof INHERIT_EXECUTOR_VALUE)
                 }
               >
                 <SelectTrigger className="h-6 w-full text-[11px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value={INHERIT_EXECUTOR_VALUE}>
+                    Inherit ({MODEL_DISPLAY[effectiveExecutorModel] ?? effectiveExecutorModel})
+                  </SelectItem>
                   <SelectItem value="claude">{MODEL_DISPLAY.claude}</SelectItem>
                   <SelectItem value="codex">{MODEL_DISPLAY.codex}</SelectItem>
                   <SelectItem value="openrouter">{MODEL_DISPLAY.openrouter}</SelectItem>
@@ -759,11 +809,12 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   ) : null;
 
   const planHistorySection =
-    planHistory.length > 0 ? (
+    normalizedPlanHistory.length > 0 ? (
       <div className="mb-5">
         <div className="mb-2 flex w-full items-center justify-between">
           <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">
-            Plan History ({planHistory.length} version{planHistory.length !== 1 ? 's' : ''})
+            Plan History ({normalizedPlanHistory.length} version
+            {normalizedPlanHistory.length !== 1 ? 's' : ''})
           </h4>
           <Button
             variant="ghost"
@@ -780,9 +831,9 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
           </Button>
         </div>
         {!planHistoryCollapsed && <div className="flex flex-col gap-1">
-          {planHistory.map((plan) => {
+          {normalizedPlanHistory.map((plan) => {
             const isExpanded = effectiveExpanded === plan.id;
-            const review = reviewsByPlanId[plan.id];
+            const review = normalizedReviewsByPlanId[plan.id];
 
             return (
               <div
@@ -1118,7 +1169,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
             {planHistorySection}
 
             {/* Thread exists but no plans yet — only while not failed */}
-            {activeThreadId && planHistory.length === 0 && threadPhase !== 'failed' && (
+            {activeThreadId && normalizedPlanHistory.length === 0 && threadPhase !== 'failed' && (
               <PlanWaiting threadId={activeThreadId} />
             )}
           </div>
@@ -1249,7 +1300,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
           {planHistorySection}
 
           {/* Thread exists but no plans yet — only while not failed */}
-          {activeThreadId && planHistory.length === 0 && threadPhase !== 'failed' && (
+          {activeThreadId && normalizedPlanHistory.length === 0 && threadPhase !== 'failed' && (
             <div className="mb-5">
               <p className="py-4 text-center text-[13px] text-muted">
                 Pipeline is running — waiting for plan generation...

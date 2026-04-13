@@ -17,7 +17,7 @@ const makeIssue = (overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
   claimedBy: null,
   lastPhaseUpdate: null,
   lastStatusLabel: null,
-  executorModel: 'claude',
+  executorModelOverride: null,
   fetchedAt: new Date().toISOString(),
   ...overrides,
 });

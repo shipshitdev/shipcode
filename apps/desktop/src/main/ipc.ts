@@ -27,6 +27,8 @@ import {
   clampError,
   parseGithubProjectUrl,
   deriveGithubIssueUrl,
+  resolveExecutorModelForIssue,
+  resolvePhaseModel,
 } from '@shipcode/shared';
 import {
   checkSystemHealthWithAuth,
@@ -78,6 +80,18 @@ function enrichProjectPaths(projects: import('@shipcode/shared').Project[]) {
     ...project,
     pathExists: fs.existsSync(project.path),
   }));
+}
+
+function resolveProjectPhaseModels(
+  settings: ReturnType<SettingsQueries['get']>,
+  project: import('@shipcode/shared').Project,
+) {
+  return {
+    plannerModel: resolvePhaseModel(settings, project, 'planner'),
+    reviewerModel: resolvePhaseModel(settings, project, 'reviewer'),
+    verifierModel: resolvePhaseModel(settings, project, 'verifier'),
+    executorModel: resolvePhaseModel(settings, project, 'executor'),
+  };
 }
 
 /** Try to extract a validated ShipCodePlan from raw pipeline output.
@@ -689,16 +703,28 @@ export function registerIpcHandlers(
       }
 
       // Start pipeline — pass existing threadId, not projectId
+      const phaseModels = resolveProjectPhaseModels(settings, project);
+      const effectiveExecutorModel = resolveExecutorModelForIssue(settings, project, issue);
+      queries.threads.setPhaseModels(thread.id, {
+        ...phaseModels,
+        executorModel: effectiveExecutorModel,
+      });
+
       log.info(
-        `[pipeline] starting issue #${issue.issueNumber} "${issue.title}" (thread ${thread.id}, executor: ${issue.executorModel})`,
+        `[pipeline] starting issue #${issue.issueNumber} "${issue.title}" (thread ${thread.id}, executor: ${effectiveExecutorModel})`,
       );
       try {
         await pipeline.startFromGitHubIssue(
           thread.id,
           project.path,
           { number: issue.issueNumber, title: issue.title, body: issue.body, labels: issue.labels },
-          issue.executorModel,
-          { baseBranch: project.defaultBranch },
+          effectiveExecutorModel,
+          {
+            baseBranch: project.defaultBranch,
+            plannerModel: phaseModels.plannerModel,
+            reviewerModel: phaseModels.reviewerModel,
+            verifierModel: phaseModels.verifierModel,
+          },
         );
       } catch (err) {
         // Rollback
@@ -734,7 +760,7 @@ export function registerIpcHandlers(
   );
 
   ipcMain.handle(
-    'github:set-executor',
+    'github:set-executor-override',
     (
       _event,
       {
@@ -745,15 +771,24 @@ export function registerIpcHandlers(
     ) => {
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
-      // Widened from claude|codex only after Tier 1 added the OpenRouter
-      // HTTP provider. Keep the explicit runtime whitelist so unknown
-      // values still fail loud — we don't want the renderer to smuggle
-      // arbitrary strings past the type system.
       if (model !== 'claude' && model !== 'codex' && model !== 'openrouter') {
         throw new Error(`Invalid executor model: ${model}`);
       }
 
-      queries.githubIssues.updateExecutorModel(issue.id, model);
+      queries.githubIssues.updateExecutorModelOverride(issue.id, model);
+      const allIssues = queries.githubIssues.list(projectId);
+      mainWindow.webContents.send('github:issues-updated', { projectId, issues: allIssues });
+      return queries.githubIssues.getByNumber(projectId, issueNumber);
+    },
+  );
+
+  ipcMain.handle(
+    'github:clear-executor-override',
+    (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
+      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
+      if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
+
+      queries.githubIssues.updateExecutorModelOverride(issue.id, null);
       const allIssues = queries.githubIssues.list(projectId);
       mainWindow.webContents.send('github:issues-updated', { projectId, issues: allIssues });
       return queries.githubIssues.getByNumber(projectId, issueNumber);
@@ -820,6 +855,31 @@ export function registerIpcHandlers(
     },
   );
 
+  ipcMain.handle(
+    'project:set-model-overrides',
+    async (
+      _event,
+      {
+        projectId,
+        overrides,
+      }: {
+        projectId: string;
+        overrides: {
+          plannerModelOverride: import('@shipcode/shared').Project['plannerModelOverride'];
+          reviewerModelOverride: import('@shipcode/shared').Project['reviewerModelOverride'];
+          executorModelOverride: import('@shipcode/shared').Project['executorModelOverride'];
+          verifierModelOverride: import('@shipcode/shared').Project['verifierModelOverride'];
+        };
+      },
+    ) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+
+      queries.projects.updateModelOverrides(projectId, overrides);
+      return enrichProjectPath(queries.projects.getById(projectId))!;
+    },
+  );
+
   // === Verification handlers ===
   ipcMain.handle('verification:get', (_event, { threadId }: { threadId: string }) => {
     return queries.verifications.getLatest(threadId);
@@ -832,12 +892,19 @@ export function registerIpcHandlers(
 
     const project = queries.projects.getById(thread.projectId);
     if (!project) throw new Error(`Project ${thread.projectId} not found`);
+    const settings = queries.settings.get();
+    const phaseModels = resolveProjectPhaseModels(settings, project);
+    queries.threads.setPhaseModels(threadId, phaseModels);
 
     // Worktree is created lazily in startExecution; baseBranch must be seeded
     // here so startExecution can resolve which branch to fork from.
     pipeline.initializeContext(threadId, {
       projectPath: project.path,
       worktreePath: null,
+      plannerModel: phaseModels.plannerModel,
+      reviewerModel: phaseModels.reviewerModel,
+      verifierModel: phaseModels.verifierModel,
+      executorModel: phaseModels.executorModel,
       baseBranch: project.defaultBranch,
     });
 

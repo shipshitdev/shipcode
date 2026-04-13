@@ -117,6 +117,34 @@ export class ThreadQueries {
       .run(prNumber, id);
   }
 
+  setPhaseModels(
+    id: string,
+    fields: {
+      plannerModel: string;
+      reviewerModel: string;
+      verifierModel: string;
+      executorModel: string;
+    },
+  ): void {
+    this.db
+      .prepare(
+        `UPDATE threads
+           SET planner_model = ?,
+               reviewer_model = ?,
+               verifier_model = ?,
+               executor_model = ?,
+               updated_at = ${ISO_NOW_SQL}
+         WHERE id = ?`,
+      )
+      .run(
+        fields.plannerModel,
+        fields.reviewerModel,
+        fields.verifierModel,
+        fields.executorModel,
+        id,
+      );
+  }
+
   /**
    * Persist what model actually served a given phase. For
    * openrouter/auto runs this captures whatever the meta-router
@@ -206,6 +234,7 @@ function mapThread(row: any): Thread {
     worktreePath: row.worktree_path,
     plannerModel: row.planner_model,
     reviewerModel: row.reviewer_model,
+    verifierModel: row.verifier_model ?? 'claude',
     executorModel: row.executor_model ?? 'claude',
     reviewRound: row.review_round ?? 0,
     verificationStatus: row.verification_status ?? null,

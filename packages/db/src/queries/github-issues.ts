@@ -42,7 +42,7 @@ export class GitHubIssueQueries {
       | 'claimedBy'
       | 'lastPhaseUpdate'
       | 'lastStatusLabel'
-      | 'executorModel'
+      | 'executorModelOverride'
       | 'fetchedAt'
     >,
   ): GitHubIssueCacheRecord {
@@ -201,8 +201,10 @@ export class GitHubIssueQueries {
       .run(label, id);
   }
 
-  updateExecutorModel(id: string, model: ExecutorModel): void {
-    this.db.prepare('UPDATE github_issue_cache SET executor_model = ? WHERE id = ?').run(model, id);
+  updateExecutorModelOverride(id: string, model: ExecutorModel | null): void {
+    this.db
+      .prepare('UPDATE github_issue_cache SET executor_model_override = ? WHERE id = ?')
+      .run(model, id);
   }
 
   archiveIssues(ids: string[]): void {
@@ -236,6 +238,8 @@ export class GitHubIssueQueries {
   }
 
   private toRecord(row: any): GitHubIssueCacheRecord {
+    const overrideRaw =
+      row.executor_model_override === undefined ? row.executor_model : row.executor_model_override;
     return {
       id: row.id,
       projectId: row.project_id,
@@ -251,12 +255,14 @@ export class GitHubIssueQueries {
       claimedBy: row.claimed_by,
       lastPhaseUpdate: toIsoUtc(row.last_phase_update),
       lastStatusLabel: row.last_status_label ?? null,
-      executorModel:
-        row.executor_model === 'codex'
+      executorModelOverride:
+        overrideRaw === 'codex'
           ? 'codex'
-          : row.executor_model === 'openrouter'
+          : overrideRaw === 'openrouter'
             ? 'openrouter'
-            : 'claude',
+            : overrideRaw === 'claude'
+              ? 'claude'
+              : null,
       fetchedAt: toIsoUtc(row.fetched_at) ?? row.fetched_at,
     };
   }

@@ -42,6 +42,18 @@ export interface IpcInvokeChannels {
     args: { projectId: string; url: string | null };
     result: Project;
   };
+  'project:set-model-overrides': {
+    args: {
+      projectId: string;
+      overrides: {
+        plannerModelOverride: Project['plannerModelOverride'];
+        reviewerModelOverride: Project['reviewerModelOverride'];
+        executorModelOverride: Project['executorModelOverride'];
+        verifierModelOverride: Project['verifierModelOverride'];
+      };
+    };
+    result: Project;
+  };
 
   'thread:list': { args: { projectId: string }; result: Thread[] };
   'thread:create': { args: { projectId: string; prompt: string }; result: Thread };
@@ -110,6 +122,14 @@ export interface IpcInvokeChannels {
   };
   'github:list-archived': { args: void; result: GitHubIssueCacheRecord[] };
   'github:unarchive-issue': { args: { issueId: string }; result: void };
+  'github:set-executor-override': {
+    args: { projectId: string; issueNumber: number; model: GitHubIssueCacheRecord['executorModelOverride'] };
+    result: GitHubIssueCacheRecord | null;
+  };
+  'github:clear-executor-override': {
+    args: { projectId: string; issueNumber: number };
+    result: GitHubIssueCacheRecord | null;
+  };
 
   // Plans & Reviews (backfill)
   'plan:list': { args: { threadId: string }; result: PlanRecord[] };

@@ -99,6 +99,9 @@ export interface PipelineContext {
   githubIssueNumber: number | null;
   githubIssueTitle: string | null;
   githubRepo: string | null;
+  plannerModel: PipelineExecutorModel;
+  reviewerModel: PipelineExecutorModel;
+  verifierModel: PipelineExecutorModel;
   executorModel: PipelineExecutorModel;
   /** Optional per-run model slug override (e.g. 'openrouter/auto'). */
   executorModelOverride: string | null;
@@ -175,7 +178,13 @@ export interface Pipeline {
     projectPath: string,
     issue: { number: number; title: string; body: string | null; labels: string[] },
     executorModel: PipelineExecutorModel,
-    options?: { baseBranch?: string; executorModelOverride?: string | null },
+    options?: {
+      baseBranch?: string;
+      executorModelOverride?: string | null;
+      plannerModel?: PipelineExecutorModel;
+      reviewerModel?: PipelineExecutorModel;
+      verifierModel?: PipelineExecutorModel;
+    },
   ) => Promise<void>;
   initializeContext: (
     threadId: string,
