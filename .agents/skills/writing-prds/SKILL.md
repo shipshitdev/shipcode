@@ -40,6 +40,27 @@ Rules:
 - **`status: draft`** for PRDs that are still being elicited. The kanban should not offer "Start pipeline" on a draft. GitHub itself stays `open` — `status` here is a shipcode concept, not a GitHub state.
 - **No `created` / `updated` / `github_issue` / `github_repo` fields** — GitHub tracks creation and edit history natively, and the issue IS the canonical location so there's nothing to cross-reference.
 
+## Issue Title Style
+
+The GitHub issue title is what the board shows most of the time. Keep it short.
+
+- Prefer **4-7 words** when possible.
+- Prefer an **imperative verb + object** shape: `Add pipeline checkpoints`, `Track CI blockers on issues`, `Expose model selectors in SettingsPanel`.
+- Put the detail in the `description` frontmatter and body, not in the title.
+- Avoid titles chained together with `and` / `while` / `during` unless the feature is truly one inseparable unit.
+- Avoid titles that restate the full implementation loop. The title names the work item; the PRD explains it.
+- Keep `name` aligned with the final issue title's slugified form. If you shorten the title, shorten `name` too.
+
+Bad:
+
+- `Open draft PR during execution and ingest PR feedback into stabilization loop`
+- `Treat CI failures as blocker state on GitHub issue tasks`
+
+Better:
+
+- `Add draft PR feedback loop`
+- `Track CI blockers on issues`
+
 ## Required Sections
 
 Every shipcode PRD must have these sections, in this order. Missing sections fail quality gate.
@@ -145,13 +166,15 @@ If any gate fails, keep `status: draft` and do not offer "Start pipeline" in the
 
 4. **Kebab-case the slug.** If the proposed name has spaces, camelCase, or punctuation, kebab-case it: `"Notification Center"` → `notification-center`. This slug goes in the frontmatter `name` field.
 
-5. **Draft the PRD body** using the template above, in a scratch buffer. Fill every required section. If you can't fill a section, ask the user — don't hallucinate requirements.
+5. **Compress the issue title before writing the body.** Default to a short imperative title, then derive the frontmatter `name` from that final title. Put nuance in `description`, not the title.
 
-6. **Run the quality gates** against the draft. If any fail, set frontmatter `status: draft` and tell the user which gates failed. If they all pass, `status: backlog`.
+6. **Draft the PRD body** using the template above, in a scratch buffer. Fill every required section. If you can't fill a section, ask the user — don't hallucinate requirements.
 
-7. **Create the GitHub issue.** Preferred: use the desktop app's Create PRD modal (which calls the `github:create-issue` IPC handler — the handler wraps `gh issue create` and upserts the cache). Alternative for CLI contexts: `gh issue create --title "<Human Readable Title>" --body-file -` with the PRD markdown piped on stdin.
+7. **Run the quality gates** against the draft. If any fail, set frontmatter `status: draft` and tell the user which gates failed. If they all pass, `status: backlog`.
 
-8. **Confirm the outcome** to the user with the issue URL. Suggest next step: "Ready to hand this to the planner? Click Start pipeline in the kanban, or say: plan issue #N".
+8. **Create the GitHub issue.** Preferred: use the desktop app's Create PRD modal (which calls the `github:create-issue` IPC handler — the handler wraps `gh issue create` and upserts the cache). Alternative for CLI contexts: `gh issue create --title "<Human Readable Title>" --body-file -` with the PRD markdown piped on stdin.
+
+9. **Confirm the outcome** to the user with the issue URL. Suggest next step: "Ready to hand this to the planner? Click Start pipeline in the kanban, or say: plan issue #N".
 
 ### When the user says "plan the X PRD"
 
