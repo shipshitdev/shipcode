@@ -237,42 +237,60 @@ export function CreateIssueModal() {
           )}
         </div>
 
-        <ModalFooter>
-          <span className="mr-auto text-[11px] text-muted">⌘↩ to submit</span>
-          <Button
-            variant="secondary"
-            onClick={closeCreateIssueModal}
-            disabled={submitting || enhancing}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleEnhance}
-            disabled={enhancing || submitting || bodyIsEmpty}
-            title="Let AI structure your idea into a full PRD using this repo's writing-prds skill"
-          >
-            <Sparkles size={14} />
-            {enhancing
-              ? mode === 'edit' ? 'Rewriting…' : 'Writing PRD…'
-              : mode === 'edit' ? 'Rewrite with AI' : 'Write PRD'}
-          </Button>
-          {mode === 'create' && (
-            <label className="flex items-center gap-1.5 text-[11px] text-muted cursor-pointer select-none">
-              <Checkbox
-                checked={submitAnother}
-                onChange={(e) => setSubmitAnother(e.target.checked)}
-              />
-              Submit another
-            </label>
-          )}
-          <Button
-            onClick={handleSubmit}
-            disabled={submitDisabled}
-            aria-label={mode === 'edit' ? 'Save PRD' : undefined}
-          >
-            {submitLabel}
-          </Button>
+        <ModalFooter className="items-center border-t border-border px-6 pt-4">
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={closeCreateIssueModal}
+              disabled={submitting || enhancing}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleEnhance}
+              disabled={enhancing || submitting || bodyIsEmpty}
+              title="Let AI structure your idea into a full PRD using this repo's writing-prds skill"
+            >
+              <Sparkles size={14} />
+              {enhancing
+                ? mode === 'edit'
+                  ? 'Rewriting…'
+                  : 'Writing PRD…'
+                : mode === 'edit'
+                  ? 'Rewrite with AI'
+                  : 'Draft PRD'}
+            </Button>
+            <div className="flex items-center gap-2 rounded-md border border-border bg-tertiary/40 p-1">
+              {mode === 'create' && (
+                <Label
+                  htmlFor="submit-another"
+                  className="flex cursor-pointer items-center gap-2 rounded-[6px] px-2 py-1 text-[11px] font-medium text-secondary transition-colors hover:bg-hover hover:text-primary"
+                >
+                  <Checkbox
+                    id="submit-another"
+                    checked={submitAnother}
+                    onCheckedChange={(checked) => setSubmitAnother(checked === true)}
+                    disabled={submitting || enhancing}
+                  />
+                  Submit another
+                </Label>
+              )}
+              <Button
+                size="sm"
+                onClick={handleSubmit}
+                disabled={submitDisabled}
+                aria-label={mode === 'edit' ? 'Save PRD' : undefined}
+              >
+                <span>{submitLabel}</span>
+                <span className="rounded-sm border border-black/10 bg-black/10 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-accent-foreground/80">
+                  ⌘↩
+                </span>
+              </Button>
+            </div>
+          </div>
         </ModalFooter>
     </Modal>
   );
