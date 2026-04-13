@@ -1539,18 +1539,18 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       <Modal
         open={showArchiveConfirm}
         onClose={() => setShowArchiveConfirm(false)}
-        title={`Close issue #${activeIssue.issueNumber}?`}
+        title={`Archive issue #${activeIssue.issueNumber}?`}
         className="max-w-sm"
       >
-        <p className="text-sm text-secondary">
-          This will close the issue on GitHub and remove it from the board.
-        </p>
+        <div className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+          Warning: this closes the GitHub issue and archives its GitHub Project card. Archived items disappear from the Done column.
+        </div>
         <ModalFooter>
           <Button variant="ghost" size="sm" onClick={() => setShowArchiveConfirm(false)}>
             Cancel
           </Button>
-          <Button size="sm" onClick={handleArchiveConfirmed}>
-            Close issue
+          <Button variant="destructive" size="sm" onClick={handleArchiveConfirmed}>
+            Archive
           </Button>
         </ModalFooter>
       </Modal>

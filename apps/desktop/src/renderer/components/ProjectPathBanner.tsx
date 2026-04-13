@@ -18,7 +18,7 @@ export function ProjectPathBanner({ project }: { project: ProjectWithPathState |
       <AlertDescription className="text-xs text-warning">
         <span className="font-medium">{project.name}</span> points to a folder that no longer
         exists: <span className="font-mono">{project.path}</span>. Issue refresh, branch reads,
-        and pipeline runs will fail until the project is re-added from its new location.
+        and pipeline runs will fail until you relink the project to the moved repository folder.
       </AlertDescription>
     </Alert>
   );

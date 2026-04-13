@@ -150,6 +150,26 @@ export function ProjectSidebar() {
     },
   });
 
+  const relinkProject = useMutation({
+    mutationFn: async (projectId: string) => {
+      const path = await window.shipcode.invoke<string | null>('dialog:open-directory');
+      if (!path) return null;
+      return window.shipcode.invoke<Project>('project:relink-path', { projectId, path });
+    },
+    onSuccess: (project) => {
+      if (!project) return;
+      invalidateProjects();
+      queryClient.invalidateQueries({ queryKey: ['project', project.id] });
+      queryClient.invalidateQueries({ queryKey: ['github-issues', project.id] });
+      queryClient.invalidateQueries({ queryKey: ['threads', project.id] });
+      queryClient.invalidateQueries({ queryKey: ['git-branches', project.id] });
+      window.shipcode.invoke('github:refresh-issues', { projectId: project.id }).catch(() => {});
+    },
+    onError: (error: Error) => {
+      window.alert(error.message || 'Failed to relink project folder');
+    },
+  });
+
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
 
@@ -351,7 +371,7 @@ export function ProjectSidebar() {
               <span className="flex-1 truncate text-primary">{project.name}</span>
               {project.pathExists === false && (
                 <Badge variant="warning" className="shrink-0 text-[10px]">
-                  Moved
+                  Missing
                 </Badge>
               )}
               {(stats?.agentsRunningByProject?.[project.id] ?? 0) > 0 && (
@@ -380,6 +400,11 @@ export function ProjectSidebar() {
                 <DropdownMenuItem onSelect={() => openProjectSettingsModal(project.id)}>
                   <Settings size={12} /> Settings
                 </DropdownMenuItem>
+                {project.pathExists === false && (
+                  <DropdownMenuItem onSelect={() => relinkProject.mutate(project.id)}>
+                    <Wrench size={12} /> Relink folder…
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   onSelect={() =>
                     pinProject.mutate({ projectId: project.id, pinned: !project.pinned })

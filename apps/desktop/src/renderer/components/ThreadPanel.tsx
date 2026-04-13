@@ -105,7 +105,9 @@ export function ThreadPanel() {
           const { archivedCount, failedCount } = result as { archivedCount: number; failedCount: number };
           refreshIssues.mutate(activeProjectId);
           if (failedCount > 0) {
-            window.alert(`Archived ${archivedCount} issues. ${failedCount} could not be closed on GitHub.`);
+            window.alert(
+              `Archived ${archivedCount} issues. ${failedCount} could not be fully archived on GitHub and may still be visible in Done.`,
+            );
           }
         })
         .catch((err) => {
@@ -239,20 +241,20 @@ export function ThreadPanel() {
         onClose={() => setArchiveConfirm(null)}
         title={
           archiveConfirm?.type === 'one'
-            ? `Close issue #${archiveConfirm.issue.issueNumber}?`
-            : `Close ${archiveConfirm?.count ?? 0} done issue${(archiveConfirm?.count ?? 0) !== 1 ? 's' : ''}?`
+            ? `Archive issue #${archiveConfirm.issue.issueNumber}?`
+            : `Archive ${archiveConfirm?.count ?? 0} done issue${(archiveConfirm?.count ?? 0) !== 1 ? 's' : ''}?`
         }
         className="max-w-sm"
       >
-        <p className="text-sm text-secondary">
-          This will close the issue on GitHub and remove it from the board.
-        </p>
+        <div className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+          Warning: this closes the GitHub issue and archives its GitHub Project card. Archived items disappear from the Done column.
+        </div>
         <ModalFooter>
           <Button variant="ghost" size="sm" onClick={() => setArchiveConfirm(null)}>
             Cancel
           </Button>
-          <Button size="sm" onClick={handleArchiveConfirm}>
-            Close issue
+          <Button variant="destructive" size="sm" onClick={handleArchiveConfirm}>
+            Archive
           </Button>
         </ModalFooter>
       </Modal>

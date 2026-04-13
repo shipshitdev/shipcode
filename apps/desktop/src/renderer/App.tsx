@@ -13,6 +13,7 @@ import { NotificationToaster } from './components/NotificationToaster';
 import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
 import { ProjectSettingsModal } from './components/ProjectSettingsModal';
 import { ProjectPathBanner } from './components/ProjectPathBanner';
+import { ProjectMissingView } from './components/ProjectMissingView';
 import { ProjectSidebar } from './components/ProjectSidebar';
 import { SettingsPanel } from './components/SettingsPanel';
 import { SettingsSidebar } from './components/SettingsSidebar';
@@ -100,6 +101,11 @@ export function App() {
     );
   }
   const showOverview = viewMode === 'overview' || !activeProjectId;
+  const showMissingProject =
+    !settingsVisible &&
+    viewMode === 'project' &&
+    !!activeProjectId &&
+    activeProject?.pathExists === false;
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
@@ -131,6 +137,8 @@ export function App() {
                   <InboxView />
                 ) : showOverview ? (
                   <OverviewView />
+                ) : showMissingProject && activeProject ? (
+                  <ProjectMissingView project={activeProject} />
                 ) : (
                   <ThreadPanel />
                 )}
