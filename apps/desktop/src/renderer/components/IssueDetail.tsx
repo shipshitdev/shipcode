@@ -472,20 +472,22 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
   // Pick the right raw output based on which phase failed
   const failingPhaseOutput = (() => {
-    if (!thread || thread.status !== 'failed') return normalizedPlanHistory[0]?.rawOutput ?? null;
+    if (!thread || thread.status !== 'failed')
+      return normalizedThreadPlanHistory[0]?.rawOutput ?? null;
     // Verification failure — show verification output
     if (latestVerification?.rawOutput) return latestVerification.rawOutput;
     // Review failure — show review output for the latest plan
-    const latestReview = normalizedPlanHistory[0]?.id
-      ? normalizedReviewsByPlanId[normalizedPlanHistory[0].id]
+    const latestReview = normalizedThreadPlanHistory[0]?.id
+      ? normalizedReviewsByPlanId[normalizedThreadPlanHistory[0].id]
       : null;
     if (latestReview?.rawOutput) return latestReview.rawOutput;
     // Fall back to plan output
-    return normalizedPlanHistory[0]?.rawOutput ?? null;
+    return normalizedThreadPlanHistory[0]?.rawOutput ?? null;
   })();
 
   // Auto-expand latest plan
   const latestPlanId = normalizedPlanHistory[0]?.id ?? null;
+  const planRunCount = new Set(normalizedPlanHistory.map((plan) => plan.threadId)).size;
 
   // When a new plan version arrives, auto-follow the new latest — but only
   // when the user was in auto mode or was already tracking the previous
@@ -549,7 +551,10 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   }, [selectIssue, expanded, toggleIssueDetailExpanded]);
 
   const effectiveExpanded = expandedPlanId === undefined ? latestPlanId : expandedPlanId;
-  const latestPlan = useMemo(() => normalizedPlanHistory[0] ?? null, [normalizedPlanHistory]);
+  const latestPlan = useMemo(
+    () => normalizedThreadPlanHistory[0] ?? null,
+    [normalizedThreadPlanHistory],
+  );
   const threadPhase = thread?.status ?? pipelinePhase;
   const canStartPipeline =
     !activeThreadId && !!activeProjectId && activeIssue?.pipelineStatus !== 'completed';
@@ -571,6 +576,9 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       queryClient.invalidateQueries({ queryKey: ['github-issues', activeProjectId] }),
       queryClient.invalidateQueries({ queryKey: ['thread', activeThreadId] }),
       queryClient.invalidateQueries({ queryKey: ['plan-history', activeThreadId] }),
+      queryClient.invalidateQueries({
+        queryKey: ['issue-plan-history', activeProjectId, activeIssue?.issueNumber],
+      }),
       queryClient.invalidateQueries({ queryKey: ['checkpoints', activeThreadId] }),
     ]);
   };
@@ -963,59 +971,60 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     />
   );
 
+  const issueStatusBadge = canStartPipeline ? (
+    <span className="group relative inline-flex items-center">
+      <span className="pointer-events-none transition-opacity group-hover:opacity-0">
+        {issueStatusChip}
+      </span>
+      <Button
+        variant="ghost"
+        size="xs"
+        className="absolute inset-0 h-auto rounded px-1.5 py-0.5 text-[10px] font-medium text-agent/70 opacity-0 transition-opacity hover:bg-agent/10 hover:text-agent group-hover:opacity-100"
+        title="Start planning"
+        onClick={handleStartPipeline}
+        disabled={isSubmitting}
+      >
+        {isSubmitting ? 'START…' : 'PLAN'}
+      </Button>
+    </span>
+  ) : phaseIsActive ? (
+    <span className="group relative inline-flex items-center">
+      <span className="pointer-events-none transition-opacity group-hover:opacity-0">
+        {issueStatusChip}
+      </span>
+      <Button
+        variant="ghost"
+        size="xs"
+        className="absolute inset-0 h-auto rounded px-1.5 py-0.5 text-[10px] font-medium text-danger/70 opacity-0 transition-opacity hover:bg-danger/10 hover:text-danger group-hover:opacity-100"
+        title="Cancel pipeline"
+        onClick={handleCancel}
+        disabled={isSubmitting}
+      >
+        {isSubmitting ? 'STOP…' : 'CANCEL'}
+      </Button>
+    </span>
+  ) : canRerun ? (
+    <span className="group relative inline-flex items-center">
+      <span className="pointer-events-none transition-opacity group-hover:opacity-0">
+        {issueStatusChip}
+      </span>
+      <Button
+        variant="ghost"
+        size="xs"
+        className="absolute inset-0 h-auto rounded px-1.5 py-0.5 text-[10px] font-medium text-danger/70 opacity-0 transition-opacity hover:bg-danger/10 hover:text-danger group-hover:opacity-100"
+        title="Retry pipeline"
+        onClick={handleRerun}
+        disabled={isSubmitting}
+      >
+        {isSubmitting ? 'START…' : 'RETRY'}
+      </Button>
+    </span>
+  ) : (
+    issueStatusChip
+  );
+
   const issueBadges = (
     <div className="flex flex-wrap gap-1.5">
-      {canStartPipeline ? (
-        <span className="group relative inline-flex items-center">
-          <span className="pointer-events-none transition-opacity group-hover:opacity-0">
-            {issueStatusChip}
-          </span>
-          <Button
-            variant="ghost"
-            size="xs"
-            className="absolute inset-0 h-auto rounded px-1.5 py-0.5 text-[10px] font-medium text-agent/70 opacity-0 transition-opacity hover:bg-agent/10 hover:text-agent group-hover:opacity-100"
-            title="Start planning"
-            onClick={handleStartPipeline}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? 'START…' : 'PLAN'}
-          </Button>
-        </span>
-      ) : phaseIsActive ? (
-        <span className="group relative inline-flex items-center">
-          <span className="pointer-events-none transition-opacity group-hover:opacity-0">
-            {issueStatusChip}
-          </span>
-          <Button
-            variant="ghost"
-            size="xs"
-            className="absolute inset-0 h-auto rounded px-1.5 py-0.5 text-[10px] font-medium text-danger/70 opacity-0 transition-opacity hover:bg-danger/10 hover:text-danger group-hover:opacity-100"
-            title="Cancel pipeline"
-            onClick={handleCancel}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? 'STOP…' : 'CANCEL'}
-          </Button>
-        </span>
-      ) : canRerun ? (
-        <span className="group relative inline-flex items-center">
-          <span className="pointer-events-none transition-opacity group-hover:opacity-0">
-            {issueStatusChip}
-          </span>
-          <Button
-            variant="ghost"
-            size="xs"
-            className="absolute inset-0 h-auto rounded px-1.5 py-0.5 text-[10px] font-medium text-danger/70 opacity-0 transition-opacity hover:bg-danger/10 hover:text-danger group-hover:opacity-100"
-            title="Retry pipeline"
-            onClick={handleRerun}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? 'START…' : 'RETRY'}
-          </Button>
-        </span>
-      ) : (
-        issueStatusChip
-      )}
       {activeIssue.assignee && (
         <Badge variant="default" className="text-[11px]">
           {activeIssue.assignee}
@@ -1470,7 +1479,8 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         <div className="mb-2 flex w-full items-center justify-between">
           <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">
             Plan History ({normalizedPlanHistory.length} version
-            {normalizedPlanHistory.length !== 1 ? 's' : ''})
+            {normalizedPlanHistory.length !== 1 ? 's' : ''}
+            {planRunCount > 1 ? ` across ${planRunCount} runs` : ''})
           </h4>
           <Button
             variant="ghost"
@@ -1785,8 +1795,11 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
                 </Button>
               )}
             </div>
+            <div className="my-1 flex flex-wrap items-center gap-2 pr-16">
+              <h1 className="text-xl font-semibold">{activeIssue.title}</h1>
+              {issueStatusBadge}
+            </div>
             {issueBadges}
-            <h1 className="my-1 pr-16 text-xl font-semibold">{activeIssue.title}</h1>
           </div>
           {approvalSection && (
             <div className="shrink-0 border-b border-border px-6 py-4">{approvalSection}</div>
@@ -1838,7 +1851,9 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
             {planHistorySection}
 
             {/* Thread exists but no plans yet — only while not failed */}
-            {activeThreadId && normalizedPlanHistory.length === 0 && threadPhase !== 'failed' && (
+            {activeThreadId &&
+              normalizedThreadPlanHistory.length === 0 &&
+              threadPhase !== 'failed' && (
               <PlanWaiting threadId={activeThreadId} />
             )}
           </div>
@@ -1885,8 +1900,11 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
             </Button>
           )}
         </div>
+        <div className="my-1 flex flex-wrap items-center gap-2 pr-16">
+          <h3 className="text-[15px] font-semibold">{activeIssue.title}</h3>
+          {issueStatusBadge}
+        </div>
         {issueBadges}
-        <h3 className="my-1 pr-16 text-[15px] font-semibold">{activeIssue.title}</h3>
       </div>
 
       {/* Phase stepper — shown once pipeline has started */}
@@ -1965,7 +1983,9 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
           {planHistorySection}
 
           {/* Thread exists but no plans yet — only while not failed */}
-          {activeThreadId && normalizedPlanHistory.length === 0 && threadPhase !== 'failed' && (
+          {activeThreadId &&
+            normalizedThreadPlanHistory.length === 0 &&
+            threadPhase !== 'failed' && (
             <div className="mb-5">
               <p className="py-4 text-center text-[13px] text-muted">
                 Pipeline is running — waiting for plan generation...
