@@ -77,7 +77,9 @@ describe('CostsQueries', () => {
 
     const summary = costs.getSummary();
     expect(summary.byProject).toHaveLength(2);
-    const proj1 = summary.byProject.find((p) => p.projectId === projectId)!;
+    const proj1 = summary.byProject.find((p) => p.projectId === projectId);
+    expect(proj1).toBeDefined();
+    if (!proj1) throw new Error('Expected project summary');
     expect(proj1.totalCostUsd).toBeCloseTo(0.1);
     expect(proj1.taskCount).toBe(1);
   });

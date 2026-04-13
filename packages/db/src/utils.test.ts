@@ -3,6 +3,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from './test-helpers';
 import { transaction } from './utils';
 
+interface SettingsRow {
+  value: string;
+}
+
 describe('transaction', () => {
   let db: DatabaseSync;
 
@@ -19,7 +23,7 @@ describe('transaction', () => {
       db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('foo', 'bar');
     });
 
-    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('foo') as any;
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('foo') as SettingsRow;
     expect(row.value).toBe('bar');
   });
 
@@ -48,7 +52,7 @@ describe('transaction', () => {
       expect(result).toBe(42);
     });
 
-    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('nested') as any;
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('nested') as SettingsRow;
     expect(row.value).toBe('val');
   });
 });

@@ -1,0 +1,398 @@
+import { exec } from 'node:child_process';
+import fs from 'node:fs';
+import { promisify } from 'node:util';
+import {
+  checkIntegrationStatus,
+  checkSystemHealthWithAuth,
+  validateOpenRouterModel,
+} from '@shipcode/agents';
+import { GitService, WorktreeManager } from '@shipcode/git';
+import type { AppSettings, ShipCodePlan } from '@shipcode/shared';
+import { clampError, validateGithubProjectUrl } from '@shipcode/shared';
+import { dialog, shell } from 'electron';
+import log from '../logger.service';
+import { isSafeExternalUrl } from '../security';
+import { enrichProjectPath, enrichProjectPaths } from './helpers';
+import type { IpcHandlerDeps } from './types';
+
+const execAsync = promisify(exec);
+
+export function registerProjectHandlers({
+  ipcMain,
+  mainWindow,
+  queries,
+  pipeline,
+}: IpcHandlerDeps): void {
+  ipcMain.handle('project:list', () => {
+    return enrichProjectPaths(queries.projects.list());
+  });
+
+  ipcMain.handle('project:list-visible', () => {
+    return enrichProjectPaths(queries.projects.listVisible());
+  });
+
+  ipcMain.handle('project:list-archived', () => {
+    return enrichProjectPaths(queries.projects.listArchived());
+  });
+
+  ipcMain.handle('project:add', async (_event, { path: projectPath }: { path: string }) => {
+    const project = queries.projects.add(projectPath);
+
+    try {
+      const git = new GitService(projectPath);
+      const remote = await git.getRemoteUrl();
+      const branch = await git.getDefaultBranch();
+      queries.projects.updateGitInfo(project.id, remote, branch);
+      return enrichProjectPath({ ...project, gitRemote: remote, defaultBranch: branch });
+    } catch {
+      return enrichProjectPath(project);
+    }
+  });
+
+  ipcMain.handle(
+    'project:relink-path',
+    async (_event, { projectId, path: projectPath }: { projectId: string; path: string }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+      if (!fs.existsSync(projectPath)) {
+        throw new Error(`Selected folder does not exist: ${projectPath}`);
+      }
+
+      const existing = queries.projects.getByPath(projectPath);
+      if (existing && existing.id !== projectId) {
+        throw new Error(`Another project already points to ${projectPath}`);
+      }
+
+      queries.projects.updatePath(projectId, projectPath);
+
+      try {
+        const git = new GitService(projectPath);
+        const remote = await git.getRemoteUrl();
+        const branch = await git.getDefaultBranch();
+        queries.projects.updateGitInfo(projectId, remote, branch);
+      } catch {
+        // Preserve the new path even if git metadata refresh fails.
+      }
+
+      return enrichProjectPath(queries.projects.getById(projectId));
+    },
+  );
+
+  ipcMain.handle('project:remove', async (_event, { projectId }: { projectId: string }) => {
+    const project = queries.projects.getById(projectId);
+    const ignoreAttentionOnly = project ? !fs.existsSync(project.path) : false;
+
+    if (queries.projects.hasLiveWork(projectId, { ignoreAttentionOnly })) {
+      throw new Error(
+        ignoreAttentionOnly
+          ? 'Cannot remove this missing project while a pipeline is still active. Stop running pipelines first.'
+          : 'Cannot remove a project with active work. Stop running pipelines and dismiss notifications first.',
+      );
+    }
+
+    if (project) {
+      const appSettings = queries.settings.get();
+      const worktreeManager = new WorktreeManager(project.path, {
+        worktreeRoot: appSettings.worktreeRoot,
+      });
+      const threads = queries.threads.list(projectId);
+      const failures: string[] = [];
+      for (const thread of threads) {
+        if (thread.worktreePath && thread.worktreeBranch) {
+          const result = await worktreeManager.remove(thread.worktreePath, thread.worktreeBranch);
+          if (result.error) {
+            failures.push(`${thread.worktreePath}: ${result.error}`);
+          }
+        }
+      }
+      if (failures.length > 0) {
+        throw new Error(
+          `Failed to clean up ${failures.length} worktree(s). Project not removed:\n${failures.join('\n')}`,
+        );
+      }
+    }
+
+    const removed = queries.projects.removeIfIdle(projectId, { ignoreAttentionOnly });
+    if (!removed) {
+      throw new Error(
+        ignoreAttentionOnly
+          ? 'A pipeline became active during cleanup. Project not removed. Retry after it stops.'
+          : 'New work appeared during cleanup. Project not removed. Retry after stopping pipelines.',
+      );
+    }
+  });
+
+  ipcMain.handle(
+    'project:pin',
+    (_event, { projectId, pinned }: { projectId: string; pinned: boolean }) => {
+      queries.projects.pin(projectId, pinned);
+    },
+  );
+
+  ipcMain.handle('project:archive', async (_event, { projectId }: { projectId: string }) => {
+    const project = queries.projects.getById(projectId);
+    const ignoreAttentionOnly = project ? !fs.existsSync(project.path) : false;
+    const archived = queries.projects.archiveIfIdle(projectId, { ignoreAttentionOnly });
+    if (!archived) {
+      throw new Error(
+        ignoreAttentionOnly
+          ? 'Cannot archive this missing project while a pipeline is still active. Stop running pipelines first.'
+          : 'Cannot archive a project with active work. Stop running pipelines and dismiss notifications first.',
+      );
+    }
+  });
+
+  ipcMain.handle('project:unarchive', (_event, { projectId }: { projectId: string }) => {
+    queries.projects.unarchive(projectId);
+  });
+
+  ipcMain.handle('thread:list', (_event, { projectId }: { projectId: string }) => {
+    return queries.threads.list(projectId);
+  });
+
+  ipcMain.handle(
+    'thread:create',
+    (_event, { projectId, prompt }: { projectId: string; prompt: string }) => {
+      const title = prompt.length > 60 ? `${prompt.substring(0, 60)}...` : prompt;
+      return queries.threads.create(projectId, prompt, title);
+    },
+  );
+
+  ipcMain.handle('thread:get', (_event, { threadId }: { threadId: string }) => {
+    return queries.threads.getById(threadId);
+  });
+
+  ipcMain.handle('checkpoint:list', (_event, { threadId }: { threadId: string }) => {
+    return queries.checkpoints.list(threadId);
+  });
+
+  ipcMain.handle(
+    'checkpoint:restore',
+    async (_event, { threadId, checkpointId }: { threadId: string; checkpointId: string }) => {
+      const checkpoint = queries.checkpoints.getById(checkpointId);
+      if (!checkpoint || checkpoint.threadId !== threadId) {
+        throw new Error('Checkpoint not found');
+      }
+
+      const thread = queries.threads.getById(threadId);
+      if (!thread?.worktreePath) {
+        throw new Error('Thread has no active worktree to restore');
+      }
+
+      if (pipeline.listActive().some((entry) => entry.threadId === threadId)) {
+        throw new Error('Stop the active pipeline before restoring a checkpoint');
+      }
+
+      await execAsync(`git reset --hard ${checkpoint.commitSha}`, {
+        cwd: thread.worktreePath,
+        timeout: 15_000,
+      });
+      await execAsync('git clean -fd', {
+        cwd: thread.worktreePath,
+        timeout: 15_000,
+      });
+
+      queries.threads.updateStatus(threadId, 'idle');
+
+      const issue = queries.githubIssues.getByThreadId(threadId);
+      if (issue) {
+        queries.githubIssues.updatePipelineStatus(issue.id, 'todo');
+        mainWindow.webContents.send('github:issues-updated', {
+          projectId: issue.projectId,
+          issues: queries.githubIssues.list(issue.projectId),
+        });
+      }
+
+      mainWindow.webContents.send('pipeline:phase', { threadId, phase: 'idle' });
+      return { restored: true as const, checkpoint };
+    },
+  );
+
+  ipcMain.handle('plan:get', (_event, { threadId }: { threadId: string }) => {
+    return queries.plans.getLatest(threadId);
+  });
+
+  ipcMain.handle('plan:list', (_event, { threadId }: { threadId: string }) => {
+    return queries.plans.list(threadId);
+  });
+
+  ipcMain.handle(
+    'plan:list-for-issue',
+    (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
+      return queries.plans.listByIssue(projectId, issueNumber);
+    },
+  );
+
+  ipcMain.handle(
+    'plan:update',
+    (_event, { planId, structured }: { planId: string; structured: ShipCodePlan }) => {
+      queries.plans.updateStructured(planId, structured);
+    },
+  );
+
+  ipcMain.handle('review:get', (_event, { planId }: { planId: string }) => {
+    return queries.reviews.getByPlanId(planId);
+  });
+
+  ipcMain.handle('review:list-by-plans', (_event, { planIds }: { planIds: string[] }) => {
+    return queries.reviews.listByPlanIds(planIds);
+  });
+
+  ipcMain.handle('diff:list', (_event, { threadId }: { threadId: string }) => {
+    return queries.diffs.list(threadId);
+  });
+
+  ipcMain.handle('git:status', async (_event, { projectId }: { projectId: string }) => {
+    const project = queries.projects.getById(projectId);
+    if (!project) throw new Error(`Project ${projectId} not found`);
+    const git = new GitService(project.path);
+    return git.getStatus();
+  });
+
+  ipcMain.handle(
+    'git:commit',
+    async (_event, { projectId, message }: { projectId: string; message: string }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+      const git = new GitService(project.path);
+      return git.commit(message);
+    },
+  );
+
+  ipcMain.handle('git:push', async (_event, { projectId }: { projectId: string }) => {
+    const project = queries.projects.getById(projectId);
+    if (!project) throw new Error(`Project ${projectId} not found`);
+    const git = new GitService(project.path);
+    return git.push();
+  });
+
+  ipcMain.handle('settings:get', () => {
+    return queries.settings.get();
+  });
+
+  ipcMain.handle('settings:set', (_event, patch: Partial<AppSettings>) => {
+    queries.settings.set(patch);
+  });
+
+  ipcMain.handle('health:check', async () => {
+    return checkSystemHealthWithAuth();
+  });
+
+  ipcMain.handle('integrations:check', async () => {
+    return checkIntegrationStatus(queries.settings.get());
+  });
+
+  ipcMain.handle(
+    'integrations:validate-openrouter-model',
+    async (_event, { modelId }: { modelId: string }) => {
+      return validateOpenRouterModel(queries.settings.get(), modelId);
+    },
+  );
+
+  ipcMain.handle('dialog:open-directory', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openDirectory'],
+    });
+    return result.canceled ? null : (result.filePaths[0] ?? null);
+  });
+
+  ipcMain.handle('shell:open-external', async (_event, { url }: { url: string }) => {
+    const validated = isSafeExternalUrl(url);
+    if (!validated.ok) return;
+    await shell.openExternal(validated.href);
+  });
+
+  ipcMain.handle('project:get', (_event, { projectId }: { projectId: string }) => {
+    return enrichProjectPath(queries.projects.getById(projectId));
+  });
+
+  ipcMain.handle(
+    'git:list-branches',
+    async (_event, { projectId, fetch }: { projectId: string; fetch?: boolean }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+      const git = new GitService(project.path);
+      if (fetch) {
+        await git.fetch();
+      }
+      return git.listBranches(project.defaultBranch);
+    },
+  );
+
+  ipcMain.handle(
+    'project:set-default-branch',
+    async (_event, { projectId, branch }: { projectId: string; branch: string }) => {
+      if (!branch || typeof branch !== 'string') throw new Error('branch is required');
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+
+      const git = new GitService(project.path);
+      const branches = await git.listBranches(project.defaultBranch);
+      if (!branches.includes(branch)) {
+        throw new Error(`Branch '${branch}' not found in project ${project.name}`);
+      }
+
+      queries.projects.updateDefaultBranch(projectId, branch);
+      const updated = enrichProjectPath(queries.projects.getById(projectId));
+      if (!updated) throw new Error(`Project ${projectId} not found after default branch update`);
+      return updated;
+    },
+  );
+
+  ipcMain.handle(
+    'project:set-github-project-url',
+    async (_event, { projectId, url }: { projectId: string; url: string | null }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+
+      const result = validateGithubProjectUrl(url);
+      if (!result.ok) {
+        log.warn('[ipc] project:set-github-project-url rejected', {
+          projectId,
+          reason: result.reason,
+        });
+        throw new Error(clampError(result.reason));
+      }
+
+      queries.projects.updateGithubProjectUrl(projectId, result.value);
+      const updated = enrichProjectPath(queries.projects.getById(projectId));
+      if (!updated) throw new Error(`Project ${projectId} not found after GitHub URL update`);
+      return updated;
+    },
+  );
+
+  ipcMain.handle(
+    'project:set-model-overrides',
+    async (
+      _event,
+      {
+        projectId,
+        overrides,
+      }: {
+        projectId: string;
+        overrides: {
+          plannerModelOverride: import('@shipcode/shared').Project['plannerModelOverride'];
+          reviewerModelOverride: import('@shipcode/shared').Project['reviewerModelOverride'];
+          executorModelOverride: import('@shipcode/shared').Project['executorModelOverride'];
+          verifierModelOverride: import('@shipcode/shared').Project['verifierModelOverride'];
+          plannerModelIdOverride: import('@shipcode/shared').Project['plannerModelIdOverride'];
+          reviewerModelIdOverride: import('@shipcode/shared').Project['reviewerModelIdOverride'];
+          executorModelIdOverride: import('@shipcode/shared').Project['executorModelIdOverride'];
+          verifierModelIdOverride: import('@shipcode/shared').Project['verifierModelIdOverride'];
+          plannerReasoningEffortOverride: import('@shipcode/shared').Project['plannerReasoningEffortOverride'];
+          reviewerReasoningEffortOverride: import('@shipcode/shared').Project['reviewerReasoningEffortOverride'];
+          executorReasoningEffortOverride: import('@shipcode/shared').Project['executorReasoningEffortOverride'];
+          verifierReasoningEffortOverride: import('@shipcode/shared').Project['verifierReasoningEffortOverride'];
+        };
+      },
+    ) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+
+      queries.projects.updateModelOverrides(projectId, overrides);
+      const updated = enrichProjectPath(queries.projects.getById(projectId));
+      if (!updated) throw new Error(`Project ${projectId} not found after model override update`);
+      return updated;
+    },
+  );
+}

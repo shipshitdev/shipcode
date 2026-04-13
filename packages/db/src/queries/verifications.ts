@@ -2,20 +2,31 @@ import type { DatabaseSync } from 'node:sqlite';
 import { toIsoUtc, type VerificationRecord, type VerificationResult } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
 
+interface VerificationRow {
+  id: string;
+  thread_id: string;
+  plan_id: string;
+  raw_output: string;
+  structured: string | null;
+  result: VerificationRecord['result'];
+  retry_count: number;
+  created_at: string;
+}
+
 export class VerificationQueries {
   constructor(private db: DatabaseSync) {}
 
   getByThreadId(threadId: string): VerificationRecord[] {
     const rows = this.db
       .prepare('SELECT * FROM verifications WHERE thread_id = ? ORDER BY created_at ASC')
-      .all(threadId) as any[];
+      .all(threadId) as VerificationRow[];
     return rows.map((r) => this.toRecord(r));
   }
 
   getLatest(threadId: string): VerificationRecord | null {
     const row = this.db
       .prepare('SELECT * FROM verifications WHERE thread_id = ? ORDER BY created_at DESC LIMIT 1')
-      .get(threadId) as any | undefined;
+      .get(threadId) as VerificationRow | undefined;
     return row ? this.toRecord(row) : null;
   }
 
@@ -41,10 +52,14 @@ export class VerificationQueries {
         result,
         retryCount,
       );
-    return this.getLatest(threadId)!;
+    const verification = this.getLatest(threadId);
+    if (!verification) {
+      throw new Error(`Failed to load verification after insert for thread ${threadId}`);
+    }
+    return verification;
   }
 
-  private toRecord(row: any): VerificationRecord {
+  private toRecord(row: VerificationRow): VerificationRecord {
     return {
       id: row.id,
       threadId: row.thread_id,

@@ -2,18 +2,54 @@ import type { DatabaseSync } from 'node:sqlite';
 import { ISO_NOW_SQL, type Thread, type ThreadStatus, toIsoUtc } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
 
+interface ThreadRow {
+  id: string;
+  project_id: string;
+  title: string;
+  prompt: string;
+  status: ThreadStatus;
+  worktree_branch: string | null;
+  worktree_path: string | null;
+  planner_model: string | null;
+  reviewer_model: string | null;
+  verifier_model: string | null;
+  executor_model: string | null;
+  review_round: number | null;
+  verification_status: string | null;
+  verification_retries: number | null;
+  autonomous: number | null;
+  base_branch: string | null;
+  fork_point_sha: string | null;
+  github_issue_number: number | null;
+  github_pr_number: number | null;
+  github_repo: string | null;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+  planner_resolved_model: string | null;
+  reviewer_resolved_model: string | null;
+  revisor_resolved_model: string | null;
+  executor_resolved_model: string | null;
+  verifier_resolved_model: string | null;
+  total_tokens_prompt: number | null;
+  total_tokens_completion: number | null;
+  total_cost_usd: number | null;
+}
+
 export class ThreadQueries {
   constructor(private db: DatabaseSync) {}
 
   list(projectId: string): Thread[] {
     const rows = this.db
       .prepare('SELECT * FROM threads WHERE project_id = ? ORDER BY updated_at DESC')
-      .all(projectId) as any[];
+      .all(projectId) as ThreadRow[];
     return rows.map(mapThread);
   }
 
   getById(id: string): Thread | null {
-    const row = this.db.prepare('SELECT * FROM threads WHERE id = ?').get(id) as any;
+    const row = this.db.prepare('SELECT * FROM threads WHERE id = ?').get(id) as
+      | ThreadRow
+      | undefined;
     return row ? mapThread(row) : null;
   }
 
@@ -28,7 +64,11 @@ export class ThreadQueries {
       )
       .run(id, projectId, title, prompt, now, now);
 
-    return this.getById(id)!;
+    const thread = this.getById(id);
+    if (!thread) {
+      throw new Error(`Failed to load thread after insert: ${id}`);
+    }
+    return thread;
   }
 
   updateStatus(id: string, status: ThreadStatus, lastError?: string): void {
@@ -202,12 +242,12 @@ export class ThreadQueries {
     return !!row;
   }
 
-  getOrphaned(): any[] {
+  getOrphaned(): Thread[] {
     return this.db
       .prepare(
         "SELECT * FROM threads WHERE status IN ('planning', 'reviewing', 'revising', 'executing', 'testing', 'verifying', 'shipping')",
       )
-      .all();
+      .all() as ThreadRow[];
   }
 
   getStuck(thresholdMs: number): Thread[] {
@@ -218,12 +258,12 @@ export class ThreadQueries {
          WHERE status IN ('planning', 'reviewing', 'revising', 'executing', 'testing', 'verifying', 'shipping')
            AND updated_at <= datetime('now', '-' || ? || ' seconds')`,
       )
-      .all(thresholdSec) as any[];
+      .all(thresholdSec) as ThreadRow[];
     return rows.map(mapThread);
   }
 }
 
-function mapThread(row: any): Thread {
+function mapThread(row: ThreadRow): Thread {
   return {
     id: row.id,
     projectId: row.project_id,

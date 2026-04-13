@@ -65,7 +65,7 @@ export function githubProjectsUrl(
   remote: string | null | undefined,
   override?: string | null,
 ): string | null {
-  if (override && override.trim()) return override.trim();
+  if (override?.trim()) return override.trim();
   const base = githubRepoUrl(remote);
   return base ? `${base}/projects` : null;
 }

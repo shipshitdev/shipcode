@@ -130,7 +130,7 @@ function globToRegex(pattern: string): RegExp {
           .slice(i + 1, end)
           .split(',')
           .map(escapeRegex);
-        re += '(?:' + alts.join('|') + ')';
+        re += `(?:${alts.join('|')})`;
         i = end + 1;
       }
     } else if (c === '[') {
@@ -147,7 +147,7 @@ function globToRegex(pattern: string): RegExp {
       i++;
     }
   }
-  return new RegExp('^' + re + '$');
+  return new RegExp(`^${re}$`);
 }
 
 function escapeRegex(s: string): string {

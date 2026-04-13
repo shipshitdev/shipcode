@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { AgentProvider, ProcessManager } from '@shipcode/agents';
@@ -15,7 +15,7 @@ import {
 } from '@shipcode/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPipeline } from './pipeline';
-import type { PipelineDeps } from './types';
+import type { PipelineContext, PipelineDeps, PipelineEvent } from './types';
 
 vi.mock('@shipcode/git', () => {
   class WorktreeManager {
@@ -132,31 +132,42 @@ function makeTempProject() {
 }
 
 function planBlock(json: string = PLAN_JSON) {
-  return '```shipcode-plan\n' + json + '\n```';
+  return `\`\`\`shipcode-plan\n${json}\n\`\`\``;
 }
 
 function reviewBlock(json: string) {
-  return '```shipcode-review\n' + json + '\n```';
+  return `\`\`\`shipcode-review\n${json}\n\`\`\``;
 }
 
 function verificationBlock(json: string) {
-  return '```shipcode-verification\n' + json + '\n```';
+  return `\`\`\`shipcode-verification\n${json}\n\`\`\``;
+}
+
+function requireContext(
+  pipeline: ReturnType<typeof createPipeline>,
+  threadId: string = 't1',
+): PipelineContext {
+  const context = pipeline.getContext(threadId);
+  if (!context) {
+    throw new Error(`Expected pipeline context for ${threadId}`);
+  }
+  return context;
 }
 
 function createMockDeps() {
-  const emittedEvents: any[] = [];
-  const listeners: Record<string, Function[]> = {};
+  const emittedEvents: PipelineEvent[] = [];
+  const listeners: Record<string, Array<(...args: unknown[]) => void>> = {};
   let spawnCount = 0;
 
   const processManager = {
     spawn: vi.fn(() => ({ id: `proc-${++spawnCount}` })),
     kill: vi.fn(),
-    on: vi.fn((event: string, handler: Function) => {
+    on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
       const eventListeners = listeners[event] ?? [];
       eventListeners.push(handler);
       listeners[event] = eventListeners;
     }),
-    removeListener: vi.fn((event: string, handler: Function) => {
+    removeListener: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
       listeners[event] = (listeners[event] ?? []).filter((h) => h !== handler);
     }),
   } as unknown as ProcessManager;
@@ -167,7 +178,7 @@ function createMockDeps() {
    * a microtask hop — callers should `await` trigger to ensure the
    * phase completion logic runs before assertions.
    */
-  const trigger = async (event: string, ...args: any[]) => {
+  const trigger = async (event: string, ...args: unknown[]) => {
     // Copy the array to avoid mutation during iteration when handlers remove themselves
     const handlers = [...(listeners[event] ?? [])];
     handlers.forEach((h) => {
@@ -213,7 +224,7 @@ function createMockDeps() {
 
   return {
     deps: {
-      emitter: { emit: vi.fn((e: any) => emittedEvents.push(e)) },
+      emitter: { emit: vi.fn((event: PipelineEvent) => emittedEvents.push(event)) },
       processManager,
       threads: {
         updateStatus: vi.fn(),
@@ -231,7 +242,7 @@ function createMockDeps() {
       },
       plans: {
         getMaxVersion: vi.fn(() => 0),
-        create: vi.fn((_tid: string, raw: string, structured: any, v: number) => ({
+        create: vi.fn((_tid: string, raw: string, structured: unknown, v: number) => ({
           id: 'plan-1',
           threadId: _tid,
           version: v,
@@ -345,7 +356,7 @@ describe('createPipeline', () => {
     });
 
     it('syncs linked GitHub issue status when phases change', async () => {
-      (mock.deps.githubIssues.getByNumber as any).mockReturnValue({ id: 'issue-1' });
+      vi.mocked(mock.deps.githubIssues.getByNumber).mockReturnValue({ id: 'issue-1' });
 
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
@@ -365,7 +376,7 @@ describe('createPipeline', () => {
     });
 
     it('passes awaiting_approval through to the linked GitHub issue status', async () => {
-      (mock.deps.githubIssues.getByNumber as any).mockReturnValue({ id: 'issue-1' });
+      vi.mocked(mock.deps.githubIssues.getByNumber).mockReturnValue({ id: 'issue-1' });
 
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
@@ -397,16 +408,14 @@ describe('createPipeline', () => {
     it('exit 0 + valid plan + autonomous → calls startReview (spawns codex)', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
-      // Patch context to autonomous
-      const ctx = pipeline.getContext('t1')!;
-      ctx.autonomous = true;
+      requireContext(pipeline).autonomous = true;
 
       await mock.trigger('output', 'proc-1', planBlock());
       await mock.trigger('exit', 'proc-1', 0);
 
       // startReview was called → spawns a codex process
       expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(2);
-      const secondCall = (mock.deps.processManager.spawn as any).mock.calls[1];
+      const secondCall = vi.mocked(mock.deps.processManager.spawn).mock.calls[1];
       expect(secondCall[1]).toBe('codex');
     });
 
@@ -454,15 +463,15 @@ describe('createPipeline', () => {
 
       // First failure: retryCount becomes 1
       await mock.trigger('exit', 'proc-1', 1);
-      expect(pipeline.getContext('t1')!.retryCount).toBe(1);
+      expect(pipeline.getContext('t1')?.retryCount).toBe(1);
 
       // Second failure: retryCount becomes 2
       await mock.trigger('exit', 'proc-2', 1);
-      expect(pipeline.getContext('t1')!.retryCount).toBe(2);
+      expect(pipeline.getContext('t1')?.retryCount).toBe(2);
 
       // Third failure: retryCount becomes 3
       await mock.trigger('exit', 'proc-3', 1);
-      expect(pipeline.getContext('t1')!.retryCount).toBe(3);
+      expect(pipeline.getContext('t1')?.retryCount).toBe(3);
 
       // Fourth failure: exhausted → should emit failed
       await mock.trigger('exit', 'proc-4', 1);
@@ -487,12 +496,12 @@ describe('createPipeline', () => {
     it('autonomous spawns codex with -c model_reasoning_effort=<default>', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
-      pipeline.getContext('t1')!.autonomous = true;
+      requireContext(pipeline).autonomous = true;
 
       await pipeline.startReview('t1', JSON.parse(PLAN_JSON));
 
       // proc-1 from startPlanGeneration, proc-2 from startReview
-      const reviewCall = (mock.deps.processManager.spawn as any).mock.calls[1];
+      const reviewCall = vi.mocked(mock.deps.processManager.spawn).mock.calls[1];
       expect(reviewCall[1]).toBe('codex');
       // codex v0.120.0: -c <key>=<value> before `exec`, not --reasoning-effort after.
       // The default is 'low' (cost-conscious); read from DEFAULT_SETTINGS so this test
@@ -506,7 +515,7 @@ describe('createPipeline', () => {
     it('approve + autonomous → calls startExecution (emits executing)', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
-      pipeline.getContext('t1')!.autonomous = true;
+      requireContext(pipeline).autonomous = true;
 
       await pipeline.startReview('t1', JSON.parse(PLAN_JSON));
 
@@ -533,8 +542,9 @@ describe('createPipeline', () => {
     it('request_changes + autonomous + round < MAX_REVIEW_ROUNDS → emits revising', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
-      pipeline.getContext('t1')!.autonomous = true;
-      pipeline.getContext('t1')!.reviewRound = 0;
+      const context = requireContext(pipeline);
+      context.autonomous = true;
+      context.reviewRound = 0;
 
       await pipeline.startReview('t1', JSON.parse(PLAN_JSON));
 
@@ -549,8 +559,9 @@ describe('createPipeline', () => {
     it('request_changes + autonomous + round >= MAX_REVIEW_ROUNDS + no critical → starts execution', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
-      pipeline.getContext('t1')!.autonomous = true;
-      pipeline.getContext('t1')!.reviewRound = MAX_REVIEW_ROUNDS;
+      const context = requireContext(pipeline);
+      context.autonomous = true;
+      context.reviewRound = MAX_REVIEW_ROUNDS;
 
       await pipeline.startReview('t1', JSON.parse(PLAN_JSON));
 
@@ -563,8 +574,9 @@ describe('createPipeline', () => {
     it('request_changes + autonomous + round >= MAX_REVIEW_ROUNDS + has critical → awaiting_approval', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
-      pipeline.getContext('t1')!.autonomous = true;
-      pipeline.getContext('t1')!.reviewRound = MAX_REVIEW_ROUNDS;
+      const context = requireContext(pipeline);
+      context.autonomous = true;
+      context.reviewRound = MAX_REVIEW_ROUNDS;
 
       await pipeline.startReview('t1', JSON.parse(PLAN_JSON));
 
@@ -614,14 +626,15 @@ describe('createPipeline', () => {
     });
 
     it('request_changes + requireApproval + rounds exhausted + has critical → awaiting_approval', async () => {
-      (mock.deps.settings.get as any).mockReturnValue({
+      vi.mocked(mock.deps.settings.get).mockReturnValue({
         ...DEFAULT_SETTINGS,
         requireApproval: true,
       });
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
-      pipeline.getContext('t1')!.autonomous = true;
-      pipeline.getContext('t1')!.reviewRound = MAX_REVIEW_ROUNDS;
+      const context = requireContext(pipeline);
+      context.autonomous = true;
+      context.reviewRound = MAX_REVIEW_ROUNDS;
 
       await pipeline.startReview('t1', JSON.parse(PLAN_JSON));
       await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_REQUEST_CHANGES_CRITICAL_JSON));
@@ -634,7 +647,7 @@ describe('createPipeline', () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
       // autonomous stays false (default)
-      pipeline.getContext('t1')!.reviewRound = MAX_REVIEW_ROUNDS;
+      requireContext(pipeline).reviewRound = MAX_REVIEW_ROUNDS;
 
       await pipeline.startReview('t1', JSON.parse(PLAN_JSON));
       await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_REQUEST_CHANGES_CRITICAL_JSON));
@@ -709,8 +722,9 @@ describe('createPipeline', () => {
 
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
-      pipeline.getContext('t1')!.autonomous = true;
-      pipeline.getContext('t1')!.forkPointSha = 'abc123';
+      const context = requireContext(pipeline);
+      context.autonomous = true;
+      context.forkPointSha = 'abc123';
 
       await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
 
@@ -752,7 +766,7 @@ describe('createPipeline', () => {
       const threadId = 't-rehydrate';
 
       // Override getById to return a full thread matching the rehydrate target
-      (mock.deps.threads.getById as any).mockImplementation((id: string) => {
+      vi.mocked(mock.deps.threads.getById).mockImplementation((id: string) => {
         if (id === threadId) {
           return {
             id: threadId,
@@ -869,7 +883,7 @@ describe('createPipeline', () => {
     it('no structured plan → emits failed', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
-      (mock.deps.plans.getLatest as any).mockReturnValue({ id: 'plan-1', structured: null });
+      vi.mocked(mock.deps.plans.getLatest).mockReturnValue({ id: 'plan-1', structured: null });
 
       await pipeline.startVerification('t1');
 
@@ -880,7 +894,7 @@ describe('createPipeline', () => {
     it('no diff → creates verification, emits failed', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
-      pipeline.getContext('t1')!.forkPointSha = 'abc123';
+      requireContext(pipeline).forkPointSha = 'abc123';
 
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.startsWith('git diff')) return '';
@@ -901,8 +915,9 @@ describe('createPipeline', () => {
     it('dirty worktree is auto-committed before verification, then retries on verifier failure', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
-      pipeline.getContext('t1')!.forkPointSha = 'abc123';
-      pipeline.getContext('t1')!.verificationRetries = 0;
+      const context = requireContext(pipeline);
+      context.forkPointSha = 'abc123';
+      context.verificationRetries = 0;
 
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.startsWith('git diff')) return 'some diff';
@@ -928,14 +943,15 @@ describe('createPipeline', () => {
 
       expect(mock.deps.verifications.create).toHaveBeenCalled();
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'executing');
-      expect(pipeline.getContext('t1')!.verificationRetries).toBe(1);
+      expect(pipeline.getContext('t1')?.verificationRetries).toBe(1);
     });
 
     it('dirty worktree is auto-committed before verification, then fails when retries are exhausted', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
-      pipeline.getContext('t1')!.forkPointSha = 'abc123';
-      pipeline.getContext('t1')!.verificationRetries = MAX_VERIFICATION_RETRIES;
+      const context = requireContext(pipeline);
+      context.forkPointSha = 'abc123';
+      context.verificationRetries = MAX_VERIFICATION_RETRIES;
 
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.startsWith('git diff')) return 'some diff';
@@ -966,7 +982,7 @@ describe('createPipeline', () => {
     it('verification passed → calls startCommitAndPush', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
-      pipeline.getContext('t1')!.forkPointSha = 'abc123';
+      requireContext(pipeline).forkPointSha = 'abc123';
 
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.startsWith('git diff')) return 'some diff';
@@ -999,8 +1015,9 @@ describe('createPipeline', () => {
     it('verification failed + retries left → starts execution', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
-      pipeline.getContext('t1')!.forkPointSha = 'abc123';
-      pipeline.getContext('t1')!.verificationRetries = 0;
+      const context = requireContext(pipeline);
+      context.forkPointSha = 'abc123';
+      context.verificationRetries = 0;
 
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.startsWith('git diff')) return 'some diff';
@@ -1017,14 +1034,15 @@ describe('createPipeline', () => {
       await flush();
 
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'executing');
-      expect(pipeline.getContext('t1')!.verificationRetries).toBe(1);
+      expect(pipeline.getContext('t1')?.verificationRetries).toBe(1);
     });
 
     it('verification failed + no retries → emits failed', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
-      pipeline.getContext('t1')!.forkPointSha = 'abc123';
-      pipeline.getContext('t1')!.verificationRetries = MAX_VERIFICATION_RETRIES;
+      const context = requireContext(pipeline);
+      context.forkPointSha = 'abc123';
+      context.verificationRetries = MAX_VERIFICATION_RETRIES;
 
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.startsWith('git diff')) return 'some diff';
@@ -1082,7 +1100,7 @@ describe('createPipeline', () => {
     it('no commits ahead → emits failed', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
-      pipeline.getContext('t1')!.forkPointSha = 'abc123';
+      requireContext(pipeline).forkPointSha = 'abc123';
 
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.startsWith('git status')) return '';
@@ -1099,7 +1117,7 @@ describe('createPipeline', () => {
     it('push succeeds → calls startShipping', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
-      pipeline.getContext('t1')!.forkPointSha = 'abc123';
+      requireContext(pipeline).forkPointSha = 'abc123';
 
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.startsWith('git status')) return '';
@@ -1119,7 +1137,7 @@ describe('createPipeline', () => {
     it('push fails twice → emits failed', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
-      pipeline.getContext('t1')!.forkPointSha = 'abc123';
+      requireContext(pipeline).forkPointSha = 'abc123';
 
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.startsWith('git status')) return '';
@@ -1162,12 +1180,13 @@ describe('createPipeline', () => {
     it('creates a draft PR when none exists and stores the relation', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
-      pipeline.getContext('t1')!.githubIssueNumber = 42;
-      pipeline.getContext('t1')!.projectId = 'project-1';
+      const context = requireContext(pipeline);
+      context.githubIssueNumber = 42;
+      context.projectId = 'project-1';
       // baseBranch is a hard prerequisite for PR creation (invariant
       // added alongside the per-project base-branch selector).
-      pipeline.getContext('t1')!.baseBranch = 'main';
-      (mock.deps.githubIssues.getByNumber as any).mockReturnValue({
+      context.baseBranch = 'main';
+      vi.mocked(mock.deps.githubIssues.getByNumber).mockReturnValue({
         id: 'issue-1',
         ciBlocked: false,
         failingChecks: [],
@@ -1199,10 +1218,11 @@ describe('createPipeline', () => {
     it('updates an existing PR instead of creating a duplicate', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
-      pipeline.getContext('t1')!.githubIssueNumber = 42;
-      pipeline.getContext('t1')!.projectId = 'project-1';
-      pipeline.getContext('t1')!.baseBranch = 'main';
-      (mock.deps.githubIssues.getByNumber as any).mockReturnValue({
+      const context = requireContext(pipeline);
+      context.githubIssueNumber = 42;
+      context.projectId = 'project-1';
+      context.baseBranch = 'main';
+      vi.mocked(mock.deps.githubIssues.getByNumber).mockReturnValue({
         id: 'issue-1',
         ciBlocked: true,
         failingChecks: [{ name: 'check', status: 'failed', conclusion: 'failure' }],
@@ -1236,7 +1256,7 @@ describe('createPipeline', () => {
     it('PR creation fails → emits failed', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
-      pipeline.getContext('t1')!.githubIssueNumber = 42;
+      requireContext(pipeline).githubIssueNumber = 42;
 
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.startsWith('git rev-parse')) throw new Error('git failed');
@@ -1287,12 +1307,12 @@ describe('createPipeline', () => {
 
       const ctx = pipeline.getContext('t1');
       expect(ctx).toBeDefined();
-      expect(ctx!.autonomous).toBe(true);
-      expect(ctx!.githubIssueNumber).toBe(7);
-      expect(ctx!.githubIssueTitle).toBe('Bug');
-      expect(ctx!.baseBranch).toBe('develop');
-      expect(ctx!.forkPointSha).toBe('forksha');
-      expect(ctx!.executorModel).toBe('codex');
+      expect(ctx?.autonomous).toBe(true);
+      expect(ctx?.githubIssueNumber).toBe(7);
+      expect(ctx?.githubIssueTitle).toBe('Bug');
+      expect(ctx?.baseBranch).toBe('develop');
+      expect(ctx?.forkPointSha).toBe('forksha');
+      expect(ctx?.executorModel).toBe('codex');
     });
 
     it('defaults baseBranch to main on failure', async () => {
@@ -1341,9 +1361,9 @@ describe('createPipeline', () => {
 
       const ctx = pipeline.getContext('t1');
       expect(ctx).toBeDefined();
-      expect(ctx!.threadId).toBe('t1');
-      expect(ctx!.projectPath).toBe('/proj');
-      expect(ctx!.worktreePath).toBe('/worktree');
+      expect(ctx?.threadId).toBe('t1');
+      expect(ctx?.projectPath).toBe('/proj');
+      expect(ctx?.worktreePath).toBe('/worktree');
     });
 
     it('returns undefined for missing pipeline', () => {
@@ -1358,7 +1378,7 @@ describe('createPipeline', () => {
     it('emits pipeline:model-resolved + persists when provider reports resolvedModel', async () => {
       // Swap the openrouter provider with a scripted one that returns
       // a fake resolvedModel + usage, and point plannerModel at it.
-      const openrouterProvider: any = {
+      const openrouterProvider: AgentProvider = {
         id: 'openrouter',
         supports: new Set(['plan', 'review', 'revision', 'verify', 'execute']),
         generate: vi.fn(async () => ({
@@ -1371,12 +1391,12 @@ describe('createPipeline', () => {
         healthCheck: vi.fn(async () => ({ ok: true })),
       };
       const registry = createProviderRegistry({
-        claude: (mock.deps as any).providers.for('claude', 'plan'),
-        codex: (mock.deps as any).providers.for('codex', 'review'),
+        claude: mock.deps.providers.for('claude', 'plan'),
+        codex: mock.deps.providers.for('codex', 'review'),
         openrouter: openrouterProvider,
       });
       const deps = { ...mock.deps, providers: registry };
-      (deps.settings.get as any).mockReturnValue({
+      vi.mocked(deps.settings.get).mockReturnValue({
         ...DEFAULT_SETTINGS,
         plannerModel: 'openrouter',
       });
@@ -1388,7 +1408,8 @@ describe('createPipeline', () => {
 
       // The emitted events should include pipeline:model-resolved with the full payload
       const resolvedEvent = mock.emittedEvents.find(
-        (e: any) => e.type === 'pipeline:model-resolved',
+        (event): event is Extract<PipelineEvent, { type: 'pipeline:model-resolved' }> =>
+          event.type === 'pipeline:model-resolved',
       );
       expect(resolvedEvent).toBeDefined();
       expect(resolvedEvent).toMatchObject({
@@ -1413,19 +1434,19 @@ describe('createPipeline', () => {
       // Baseline claude-cli provider returns `resolvedModel: 'claude'`
       // so we get an event — verify the opposite by stubbing a
       // provider that returns no resolvedModel at all.
-      const silentProvider: any = {
+      const silentProvider: AgentProvider = {
         id: 'openrouter',
         supports: new Set(['plan', 'review', 'revision', 'verify', 'execute']),
         generate: vi.fn(async () => ({ rawOutput: planBlock(), exitCode: 0 })),
         healthCheck: vi.fn(async () => ({ ok: true })),
       };
       const registry = createProviderRegistry({
-        claude: (mock.deps as any).providers.for('claude', 'plan'),
-        codex: (mock.deps as any).providers.for('codex', 'review'),
+        claude: mock.deps.providers.for('claude', 'plan'),
+        codex: mock.deps.providers.for('codex', 'review'),
         openrouter: silentProvider,
       });
       const deps = { ...mock.deps, providers: registry };
-      (deps.settings.get as any).mockReturnValue({
+      vi.mocked(deps.settings.get).mockReturnValue({
         ...DEFAULT_SETTINGS,
         plannerModel: 'openrouter',
       });
@@ -1436,7 +1457,8 @@ describe('createPipeline', () => {
       await new Promise((r) => setImmediate(r));
 
       const resolvedEvent = mock.emittedEvents.find(
-        (e: any) => e.type === 'pipeline:model-resolved',
+        (event): event is Extract<PipelineEvent, { type: 'pipeline:model-resolved' }> =>
+          event.type === 'pipeline:model-resolved',
       );
       expect(resolvedEvent).toBeUndefined();
       expect(mock.deps.threads.setResolvedModel).not.toHaveBeenCalled();
@@ -1454,7 +1476,8 @@ describe('createPipeline', () => {
       await mock.trigger('exit', 'proc-1', 0);
 
       const resolvedEvents = mock.emittedEvents.filter(
-        (e: any) => e.type === 'pipeline:model-resolved',
+        (event): event is Extract<PipelineEvent, { type: 'pipeline:model-resolved' }> =>
+          event.type === 'pipeline:model-resolved',
       );
       expect(resolvedEvents.length).toBeGreaterThan(0);
       expect(resolvedEvents[0]).toMatchObject({
@@ -1462,11 +1485,11 @@ describe('createPipeline', () => {
         resolvedModel: 'claude',
       });
       // No tokensUsed/costUsd because the CLI provider doesn't report them
-      expect((resolvedEvents[0] as any).tokensUsed).toBeUndefined();
+      expect(resolvedEvents[0].tokensUsed).toBeUndefined();
     });
 
     it('skips addTokenUsage when provider reports resolvedModel but no tokensUsed', async () => {
-      const partialProvider: any = {
+      const partialProvider: AgentProvider = {
         id: 'openrouter',
         supports: new Set(['plan', 'review', 'revision', 'verify', 'execute']),
         generate: vi.fn(async () => ({
@@ -1478,12 +1501,12 @@ describe('createPipeline', () => {
         healthCheck: vi.fn(async () => ({ ok: true })),
       };
       const registry = createProviderRegistry({
-        claude: (mock.deps as any).providers.for('claude', 'plan'),
-        codex: (mock.deps as any).providers.for('codex', 'review'),
+        claude: mock.deps.providers.for('claude', 'plan'),
+        codex: mock.deps.providers.for('codex', 'review'),
         openrouter: partialProvider,
       });
       const deps = { ...mock.deps, providers: registry };
-      (deps.settings.get as any).mockReturnValue({
+      vi.mocked(deps.settings.get).mockReturnValue({
         ...DEFAULT_SETTINGS,
         plannerModel: 'openrouter',
       });
@@ -1495,10 +1518,11 @@ describe('createPipeline', () => {
 
       // Still emits the event (with resolvedModel only)
       const resolvedEvent = mock.emittedEvents.find(
-        (e: any) => e.type === 'pipeline:model-resolved',
+        (event): event is Extract<PipelineEvent, { type: 'pipeline:model-resolved' }> =>
+          event.type === 'pipeline:model-resolved',
       );
       expect(resolvedEvent).toBeDefined();
-      expect((resolvedEvent as any).tokensUsed).toBeUndefined();
+      expect(resolvedEvent?.tokensUsed).toBeUndefined();
 
       // Still persists resolvedModel
       expect(mock.deps.threads.setResolvedModel).toHaveBeenCalledWith(

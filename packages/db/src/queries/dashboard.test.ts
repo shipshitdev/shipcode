@@ -44,8 +44,8 @@ describe('DashboardQueries', () => {
 
     const stats = dashboard.getStats();
     expect(stats.agentsRunning).toBe(2);
-    expect(stats.runningByPhase['planning']).toBe(1);
-    expect(stats.runningByPhase['executing']).toBe(1);
+    expect(stats.runningByPhase.planning).toBe(1);
+    expect(stats.runningByPhase.executing).toBe(1);
   });
 
   it('getStats().tasksBlocked and pendingApprovals count awaiting_approval threads', () => {

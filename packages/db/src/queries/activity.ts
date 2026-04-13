@@ -7,7 +7,19 @@ import {
 } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
 
-function mapRow(row: any): ActivityEntry {
+interface ActivityRow {
+  id: string;
+  thread_id: string | null;
+  project_id: string | null;
+  kind: ActivityKind;
+  actor: ActivityActor;
+  title: string;
+  subtitle: string | null;
+  metadata: string | null;
+  created_at: string;
+}
+
+function mapRow(row: ActivityRow): ActivityEntry {
   return {
     id: row.id,
     threadId: row.thread_id,
@@ -52,7 +64,7 @@ export class ActivityQueries {
         entry.metadata ? JSON.stringify(entry.metadata) : null,
       );
 
-    const row = this.db.prepare('SELECT * FROM activity_log WHERE id = ?').get(id) as any;
+    const row = this.db.prepare('SELECT * FROM activity_log WHERE id = ?').get(id) as ActivityRow;
     return mapRow(row);
   }
 
@@ -62,10 +74,10 @@ export class ActivityQueries {
           .prepare(
             'SELECT * FROM activity_log WHERE project_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?',
           )
-          .all(projectId, limit, offset) as any[])
+          .all(projectId, limit, offset) as ActivityRow[])
       : (this.db
           .prepare('SELECT * FROM activity_log ORDER BY created_at DESC LIMIT ? OFFSET ?')
-          .all(limit, offset) as any[]);
+          .all(limit, offset) as ActivityRow[]);
 
     return rows.map(mapRow);
   }
@@ -82,7 +94,7 @@ export class ActivityQueries {
   listByThread(threadId: string, limit = 100): ActivityEntry[] {
     const rows = this.db
       .prepare('SELECT * FROM activity_log WHERE thread_id = ? ORDER BY created_at DESC LIMIT ?')
-      .all(threadId, limit) as any[];
+      .all(threadId, limit) as ActivityRow[];
     return rows.map(mapRow);
   }
 
@@ -97,7 +109,7 @@ export class ActivityQueries {
           ORDER BY a.created_at DESC
           LIMIT ?`,
       )
-      .all(projectId, issueNumber, limit) as any[];
+      .all(projectId, issueNumber, limit) as ActivityRow[];
     return rows.map(mapRow);
   }
 }

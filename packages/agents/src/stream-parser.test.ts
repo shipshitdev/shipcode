@@ -104,8 +104,8 @@ describe('StreamParser', () => {
       const result = parser.extractPlan();
       expect(result.success).toBe(true);
       expect(result.data).toBeTruthy();
-      expect(result.data!.objective).toBe('Test objective');
-      expect(result.data!.id).toBe('plan-1');
+      expect(result.data?.objective).toBe('Test objective');
+      expect(result.data?.id).toBe('plan-1');
     });
 
     it('extracts plan when fenced block is surrounded by other text', () => {
@@ -114,7 +114,7 @@ describe('StreamParser', () => {
       parser.feed('\nSome trailing text');
       const result = parser.extractPlan();
       expect(result.success).toBe(true);
-      expect(result.data!.objective).toBe('Test objective');
+      expect(result.data?.objective).toBe('Test objective');
     });
 
     it('falls back to raw JSON extraction when no fence is present (flat)', () => {
@@ -130,7 +130,7 @@ describe('StreamParser', () => {
       parser.feed(`Here is the plan: ${json}`);
       const result = parser.extractPlan();
       expect(result.success).toBe(true);
-      expect(result.data!.objective).toBe('Test objective');
+      expect(result.data?.objective).toBe('Test objective');
     });
 
     it('returns failure when no plan is found at all', () => {
@@ -184,8 +184,8 @@ describe('StreamParser', () => {
       const result = parser.extractReview();
       expect(result.success).toBe(true);
       expect(result.data).toBeTruthy();
-      expect(result.data!.decision).toBe('approve');
-      expect(result.data!.planId).toBe('plan-1');
+      expect(result.data?.decision).toBe('approve');
+      expect(result.data?.planId).toBe('plan-1');
     });
 
     it('returns failure when no review block is found', () => {
@@ -202,7 +202,7 @@ describe('StreamParser', () => {
       parser.feed(`Review output: ${JSON.stringify(flatReview)}`);
       const result = parser.extractReview();
       expect(result.success).toBe(true);
-      expect(result.data!.summary).toBe('Looks good');
+      expect(result.data?.summary).toBe('Looks good');
     });
   });
 
@@ -212,8 +212,8 @@ describe('StreamParser', () => {
       const result = parser.extractVerification();
       expect(result.success).toBe(true);
       expect(result.data).toBeTruthy();
-      expect(result.data!.result).toBe('passed');
-      expect(result.data!.threadId).toBe('thread-1');
+      expect(result.data?.result).toBe('passed');
+      expect(result.data?.threadId).toBe('thread-1');
     });
 
     it('returns failure when no verification block is found', () => {
@@ -234,7 +234,7 @@ describe('StreamParser', () => {
       parser.feed(`Result: ${JSON.stringify(flatVerification)}`);
       const result = parser.extractVerification();
       expect(result.success).toBe(true);
-      expect(result.data!.summary).toBe('All good');
+      expect(result.data?.summary).toBe('All good');
     });
   });
 
@@ -243,59 +243,59 @@ describe('StreamParser', () => {
       parser.feed('Error: ENOENT: no such file or directory');
       const err = parser.detectError();
       expect(err).not.toBeNull();
-      expect(err!.type).toBe('binary_missing');
-      expect(err!.match).toBe('ENOENT');
+      expect(err?.type).toBe('binary_missing');
+      expect(err?.match).toBe('ENOENT');
     });
 
     it('detects rate limit as rate_limited (case insensitive)', () => {
       parser.feed('You have exceeded the Rate Limit for this API');
       const err = parser.detectError();
       expect(err).not.toBeNull();
-      expect(err!.type).toBe('rate_limited');
+      expect(err?.type).toBe('rate_limited');
     });
 
     it('detects authentication failed as auth_failed (case insensitive)', () => {
       parser.feed('Authentication has failed for user');
       const err = parser.detectError();
       expect(err).not.toBeNull();
-      expect(err!.type).toBe('auth_failed');
+      expect(err?.type).toBe('auth_failed');
     });
 
     it('detects API key as api_key_issue (case insensitive)', () => {
       parser.feed('Invalid API Key provided');
       const err = parser.detectError();
       expect(err).not.toBeNull();
-      expect(err!.type).toBe('api_key_issue');
+      expect(err?.type).toBe('api_key_issue');
     });
 
     it('detects SIGTERM as process_killed', () => {
       parser.feed('Process received SIGTERM');
       const err = parser.detectError();
       expect(err).not.toBeNull();
-      expect(err!.type).toBe('process_killed');
-      expect(err!.match).toBe('SIGTERM');
+      expect(err?.type).toBe('process_killed');
+      expect(err?.match).toBe('SIGTERM');
     });
 
     it('detects SIGKILL as process_killed', () => {
       parser.feed('Process received SIGKILL');
       const err = parser.detectError();
       expect(err).not.toBeNull();
-      expect(err!.type).toBe('process_killed');
-      expect(err!.match).toBe('SIGKILL');
+      expect(err?.type).toBe('process_killed');
+      expect(err?.match).toBe('SIGKILL');
     });
 
     it('detects out of memory as oom (case insensitive)', () => {
       parser.feed('Fatal: Out Of Memory error occurred');
       const err = parser.detectError();
       expect(err).not.toBeNull();
-      expect(err!.type).toBe('oom');
+      expect(err?.type).toBe('oom');
     });
 
     it('detects timeout as timeout (case insensitive)', () => {
       parser.feed('Request Timeout after 30s');
       const err = parser.detectError();
       expect(err).not.toBeNull();
-      expect(err!.type).toBe('timeout');
+      expect(err?.type).toBe('timeout');
     });
 
     it('returns null when no error pattern matches', () => {
@@ -308,21 +308,21 @@ describe('StreamParser', () => {
       parser.feed('\x1b[31mENOENT\x1b[0m: file not found');
       const err = parser.detectError();
       expect(err).not.toBeNull();
-      expect(err!.type).toBe('binary_missing');
+      expect(err?.type).toBe('binary_missing');
     });
 
     it('detects rate limit through ANSI escape codes', () => {
       parser.feed('\x1b[1;33mRate Limit\x1b[0m exceeded');
       const err = parser.detectError();
       expect(err).not.toBeNull();
-      expect(err!.type).toBe('rate_limited');
+      expect(err?.type).toBe('rate_limited');
     });
 
     it('returns the first matching pattern when multiple match', () => {
       parser.feed('ENOENT and also a timeout happened');
       const err = parser.detectError();
       expect(err).not.toBeNull();
-      expect(err!.type).toBe('binary_missing');
+      expect(err?.type).toBe('binary_missing');
     });
   });
 });

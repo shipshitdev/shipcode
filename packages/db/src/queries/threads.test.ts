@@ -50,18 +50,22 @@ describe('ThreadQueries', () => {
   it('updateStatus() changes the status', () => {
     const t = threads.create(projectId, 'a', 'A');
     threads.updateStatus(t.id, 'planning');
-    expect(threads.getById(t.id)!.status).toBe('planning');
+    expect(threads.getById(t.id)?.status).toBe('planning');
   });
 
   it('setWorktree() and clearWorktree()', () => {
     const t = threads.create(projectId, 'a', 'A');
     threads.setWorktree(t.id, 'feat/branch', '/tmp/wt');
-    let updated = threads.getById(t.id)!;
+    let updated = threads.getById(t.id);
+    expect(updated).toBeTruthy();
+    if (!updated) throw new Error('Expected worktree thread');
     expect(updated.worktreeBranch).toBe('feat/branch');
     expect(updated.worktreePath).toBe('/tmp/wt');
 
     threads.clearWorktree(t.id);
-    updated = threads.getById(t.id)!;
+    updated = threads.getById(t.id);
+    expect(updated).toBeTruthy();
+    if (!updated) throw new Error('Expected cleared worktree thread');
     expect(updated.worktreeBranch).toBeNull();
     expect(updated.worktreePath).toBeNull();
   });
@@ -75,7 +79,9 @@ describe('ThreadQueries', () => {
       baseBranch: 'main',
       forkPointSha: 'abc123',
     });
-    const updated = threads.getById(t.id)!;
+    const updated = threads.getById(t.id);
+    expect(updated).toBeTruthy();
+    if (!updated) throw new Error('Expected autonomous thread');
     expect(updated.autonomous).toBe(true);
     expect(updated.reviewRound).toBe(2);
     expect(updated.executorModel).toBe('gpt-4');
@@ -85,22 +91,26 @@ describe('ThreadQueries', () => {
 
   it('incrementReviewRound() increments by 1', () => {
     const t = threads.create(projectId, 'a', 'A');
-    expect(threads.getById(t.id)!.reviewRound).toBe(0);
+    expect(threads.getById(t.id)?.reviewRound).toBe(0);
     threads.incrementReviewRound(t.id);
-    expect(threads.getById(t.id)!.reviewRound).toBe(1);
+    expect(threads.getById(t.id)?.reviewRound).toBe(1);
     threads.incrementReviewRound(t.id);
-    expect(threads.getById(t.id)!.reviewRound).toBe(2);
+    expect(threads.getById(t.id)?.reviewRound).toBe(2);
   });
 
   it('setGithubIssue() and setGithubPr()', () => {
     const t = threads.create(projectId, 'a', 'A');
     threads.setGithubIssue(t.id, 42, 'owner/repo');
-    let updated = threads.getById(t.id)!;
+    let updated = threads.getById(t.id);
+    expect(updated).toBeTruthy();
+    if (!updated) throw new Error('Expected GitHub issue thread');
     expect(updated.githubIssueNumber).toBe(42);
     expect(updated.githubRepo).toBe('owner/repo');
 
     threads.setGithubPr(t.id, 99);
-    updated = threads.getById(t.id)!;
+    updated = threads.getById(t.id);
+    expect(updated).toBeTruthy();
+    if (!updated) throw new Error('Expected GitHub PR thread');
     expect(updated.githubPrNumber).toBe(99);
   });
 
@@ -142,7 +152,9 @@ describe('ThreadQueries', () => {
       threads.setResolvedModel(t.id, 'execute', 'qwen/qwen3-coder:free');
       threads.setResolvedModel(t.id, 'verify', 'anthropic/claude-sonnet-4-6');
 
-      const updated = threads.getById(t.id)!;
+      const updated = threads.getById(t.id);
+      expect(updated).toBeTruthy();
+      if (!updated) throw new Error('Expected resolved model thread');
       expect(updated.plannerResolvedModel).toBe('anthropic/claude-sonnet-4-6');
       expect(updated.reviewerResolvedModel).toBe('openai/gpt-5-codex');
       expect(updated.revisorResolvedModel).toBe('anthropic/claude-opus-4-6');
@@ -156,7 +168,9 @@ describe('ThreadQueries', () => {
       threads.setResolvedModel(t.id, 'plan', 'model-A');
       threads.setResolvedModel(t.id, 'verify', 'model-B');
 
-      const updated = threads.getById(t.id)!;
+      const updated = threads.getById(t.id);
+      expect(updated).toBeTruthy();
+      if (!updated) throw new Error('Expected selectively updated thread');
       expect(updated.plannerResolvedModel).toBe('model-A');
       expect(updated.verifierResolvedModel).toBe('model-B');
       // Untouched columns stay null
@@ -169,14 +183,18 @@ describe('ThreadQueries', () => {
       const t = threads.create(projectId, 'a', 'A');
 
       threads.addTokenUsage(t.id, 100, 50, 0.0012);
-      let updated = threads.getById(t.id)!;
+      let updated = threads.getById(t.id);
+      expect(updated).toBeTruthy();
+      if (!updated) throw new Error('Expected token usage thread');
       expect(updated.totalTokensPrompt).toBe(100);
       expect(updated.totalTokensCompletion).toBe(50);
       expect(updated.totalCostUsd).toBeCloseTo(0.0012, 6);
 
       // Second call accumulates on top
       threads.addTokenUsage(t.id, 200, 75, 0.0034);
-      updated = threads.getById(t.id)!;
+      updated = threads.getById(t.id);
+      expect(updated).toBeTruthy();
+      if (!updated) throw new Error('Expected accumulated token usage thread');
       expect(updated.totalTokensPrompt).toBe(300);
       expect(updated.totalTokensCompletion).toBe(125);
       expect(updated.totalCostUsd).toBeCloseTo(0.0046, 6);
@@ -185,7 +203,9 @@ describe('ThreadQueries', () => {
     it('addTokenUsage() accepts zero cost without error', () => {
       const t = threads.create(projectId, 'a', 'A');
       threads.addTokenUsage(t.id, 10, 5, 0);
-      const updated = threads.getById(t.id)!;
+      const updated = threads.getById(t.id);
+      expect(updated).toBeTruthy();
+      if (!updated) throw new Error('Expected zero-cost token usage thread');
       expect(updated.totalCostUsd).toBe(0);
     });
   });

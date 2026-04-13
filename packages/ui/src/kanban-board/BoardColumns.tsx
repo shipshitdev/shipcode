@@ -1,0 +1,246 @@
+'use client';
+
+import { useDroppable } from '@dnd-kit/core';
+import type { GitHubIssueCacheRecord } from '@shipcode/shared';
+import { Archive } from 'lucide-react';
+import { cn } from '../lib/utils';
+import { Button } from '../primitives/button';
+import { COLUMN_DOT_CLASS } from './constants';
+import { DraggableCard } from './IssueCardParts';
+import type { BoardColumn, ColumnKey, IssuePhaseChip, PhaseSection } from './types';
+
+interface DroppableColumnProps {
+  id: string;
+  columnKey: ColumnKey;
+  label: string;
+  issues: GitHubIssueCacheRecord[];
+  droppable: boolean;
+  onIssueClick: (issue: GitHubIssueCacheRecord) => void;
+  onStartPipeline?: (issue: GitHubIssueCacheRecord) => void;
+  selectedIssueNumber?: number;
+  onArchiveAllDone?: () => void;
+  onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
+  issuePhaseChipById: Map<string, IssuePhaseChip | null>;
+}
+
+export function DroppableColumn({
+  id,
+  columnKey,
+  label,
+  issues,
+  droppable,
+  onIssueClick,
+  onStartPipeline,
+  selectedIssueNumber,
+  onArchiveAllDone,
+  onArchiveIssue,
+  issuePhaseChipById,
+}: DroppableColumnProps) {
+  const { setNodeRef, isOver } = useDroppable({ id, disabled: !droppable });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'flex max-w-[220px] min-w-[140px] flex-1 flex-col overflow-hidden rounded-md border border-border/40 bg-secondary transition-colors',
+        isOver && droppable && 'bg-tertiary ring-2 ring-accent',
+      )}
+    >
+      <div className="flex shrink-0 items-center justify-between border-b border-border px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-primary">
+        <span className="flex items-center gap-1.5">
+          <span className={cn('h-2 w-2 shrink-0 rounded-full', COLUMN_DOT_CLASS[columnKey])} />
+          {label}
+        </span>
+        <div className="flex items-center gap-1">
+          {onArchiveAllDone && issues.length > 0 && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="text-muted/60 hover:bg-muted/10 hover:text-muted"
+              title="Archive all done issues"
+              onClick={onArchiveAllDone}
+            >
+              <Archive size={12} />
+            </Button>
+          )}
+          <span className="min-w-[18px] rounded-full bg-tertiary px-1.5 py-px text-center text-[10px] font-medium text-muted">
+            {issues.length}
+          </span>
+        </div>
+      </div>
+      <div
+        className={cn(
+          'flex min-h-[60px] flex-1 flex-col gap-1 overflow-y-auto p-1.5',
+          columnKey === 'done' && 'opacity-60',
+        )}
+      >
+        {issues.map((issue) => (
+          <DraggableCard
+            key={issue.id}
+            issue={issue}
+            phaseChip={issuePhaseChipById.get(issue.id) ?? null}
+            onClick={() => onIssueClick(issue)}
+            onStartPipeline={onStartPipeline}
+            isSelected={issue.issueNumber === selectedIssueNumber}
+            onArchiveIssue={onArchiveIssue}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+interface SectionBlockProps {
+  columnKey: ColumnKey;
+  section: PhaseSection;
+  issues: GitHubIssueCacheRecord[];
+  onIssueClick: (issue: GitHubIssueCacheRecord) => void;
+  onRerun?: (issue: GitHubIssueCacheRecord) => void;
+  onCancel?: (issue: GitHubIssueCacheRecord) => void;
+  selectedIssueNumber?: number;
+  rerunningId?: string | null;
+  issuePhaseChipById: Map<string, IssuePhaseChip | null>;
+}
+
+function SectionBlock({
+  columnKey,
+  section,
+  issues,
+  onIssueClick,
+  onRerun,
+  onCancel,
+  selectedIssueNumber,
+  rerunningId,
+  issuePhaseChipById,
+}: SectionBlockProps) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `${columnKey}:${section.key}`,
+    disabled: !section.droppable,
+  });
+  const count = issues.length;
+  const empty = count === 0;
+  const tone: 'danger' | 'warning' | 'agent' | null =
+    section.key === 'failed' && !empty
+      ? 'danger'
+      : section.key === 'awaiting' && !empty
+        ? 'warning'
+        : columnKey === 'agent' && !empty
+          ? 'agent'
+          : null;
+
+  return (
+    <div className="border-t border-border first:border-t-0">
+      <div
+        className={cn(
+          'flex items-center justify-between px-2 py-1 text-[10px] font-semibold uppercase tracking-wide',
+          empty && 'text-muted opacity-50',
+          !empty && !tone && 'text-secondary',
+          tone === 'agent' && 'text-agent',
+          tone === 'danger' && 'text-danger',
+          tone === 'warning' && 'text-warning',
+        )}
+      >
+        <span>{section.label}</span>
+        <span
+          className={cn(
+            'min-w-[18px] rounded-full border border-transparent bg-tertiary px-1.5 py-px text-center text-[10px] font-medium',
+            empty && 'text-muted/70',
+            !empty && !tone && 'text-muted',
+            tone === 'agent' && 'border-agent/25 bg-agent/15 text-agent',
+            tone === 'danger' && 'border-danger/25 bg-danger/15 text-danger',
+            tone === 'warning' && 'border-warning/25 bg-warning/15 text-warning',
+          )}
+        >
+          {count}
+        </span>
+      </div>
+      {!empty && (
+        <div
+          ref={section.droppable ? setNodeRef : undefined}
+          className={cn(
+            'flex flex-col gap-1 p-1.5 pt-0',
+            section.droppable &&
+              isOver &&
+              'rounded-md border border-dashed border-accent bg-tertiary',
+          )}
+        >
+          {issues.map((issue) => (
+            <DraggableCard
+              key={issue.id}
+              issue={issue}
+              phaseChip={issuePhaseChipById.get(issue.id) ?? null}
+              onClick={() => onIssueClick(issue)}
+              onRerun={onRerun}
+              onCancel={onCancel}
+              isSelected={issue.issueNumber === selectedIssueNumber}
+              isRerunning={issue.id === rerunningId}
+            />
+          ))}
+        </div>
+      )}
+      {empty && section.droppable && (
+        <div
+          ref={setNodeRef}
+          className={cn(
+            'mx-1.5 mb-1.5 min-h-[36px] rounded border border-dashed',
+            isOver ? 'border-accent bg-tertiary' : 'border-border/50',
+          )}
+        />
+      )}
+    </div>
+  );
+}
+
+interface StackedColumnProps {
+  column: BoardColumn;
+  issues: GitHubIssueCacheRecord[];
+  onIssueClick: (issue: GitHubIssueCacheRecord) => void;
+  onRerun?: (issue: GitHubIssueCacheRecord) => void;
+  onCancel?: (issue: GitHubIssueCacheRecord) => void;
+  selectedIssueNumber?: number;
+  rerunningId?: string | null;
+  issuePhaseChipById: Map<string, IssuePhaseChip | null>;
+}
+
+export function StackedColumn({
+  column,
+  issues,
+  onIssueClick,
+  onRerun,
+  onCancel,
+  selectedIssueNumber,
+  rerunningId,
+  issuePhaseChipById,
+}: StackedColumnProps) {
+  const columnIssues = issues.filter((issue) => column.statuses.includes(issue.pipelineStatus));
+
+  return (
+    <div className="flex min-w-[180px] max-w-[280px] flex-[1.3] flex-col overflow-hidden rounded-md border border-border/40 bg-secondary">
+      <div className="flex shrink-0 items-center justify-between border-b border-border px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-primary">
+        <span className="flex items-center gap-1.5">
+          <span className={cn('h-2 w-2 shrink-0 rounded-full', COLUMN_DOT_CLASS[column.key])} />
+          {column.label}
+        </span>
+        <span className="min-w-[18px] rounded-full bg-tertiary px-1.5 py-px text-center text-[10px] font-medium text-muted">
+          {columnIssues.length}
+        </span>
+      </div>
+      <div className="min-h-[60px] flex-1 overflow-y-auto">
+        {(column.sections ?? []).map((section) => (
+          <SectionBlock
+            key={section.key}
+            columnKey={column.key}
+            section={section}
+            issues={columnIssues.filter((issue) => section.statuses.includes(issue.pipelineStatus))}
+            onIssueClick={onIssueClick}
+            onRerun={onRerun}
+            onCancel={onCancel}
+            selectedIssueNumber={selectedIssueNumber}
+            rerunningId={rerunningId}
+            issuePhaseChipById={issuePhaseChipById}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}

@@ -2,13 +2,23 @@ import type { DatabaseSync } from 'node:sqlite';
 import { type PlanReview, type ReviewRecord, toIsoUtc } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
 
+interface ReviewRow {
+  id: string;
+  plan_id: string;
+  decision: ReviewRecord['decision'];
+  confidence: ReviewRecord['confidence'];
+  raw_output: string;
+  structured: string | null;
+  created_at: string;
+}
+
 export class ReviewQueries {
   constructor(private db: DatabaseSync) {}
 
   getByPlanId(planId: string): ReviewRecord | null {
     const row = this.db
       .prepare('SELECT * FROM reviews WHERE plan_id = ? ORDER BY created_at DESC LIMIT 1')
-      .get(planId) as any;
+      .get(planId) as ReviewRow | undefined;
     return row ? mapReview(row) : null;
   }
 
@@ -40,7 +50,7 @@ export class ReviewQueries {
   }
 }
 
-function mapReview(row: any): ReviewRecord {
+function mapReview(row: ReviewRow): ReviewRecord {
   return {
     id: row.id,
     planId: row.plan_id,

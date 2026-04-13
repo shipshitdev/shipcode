@@ -64,7 +64,9 @@ describe('ProjectQueries', () => {
   it('updateGitInfo() updates git_remote and default_branch', () => {
     const p = projects.add('/tmp/a');
     projects.updateGitInfo(p.id, 'git@github.com:foo/bar.git', 'develop');
-    const updated = projects.getById(p.id)!;
+    const updated = projects.getById(p.id);
+    expect(updated).toBeTruthy();
+    if (!updated) throw new Error('Expected updated project');
     expect(updated.gitRemote).toBe('git@github.com:foo/bar.git');
     expect(updated.defaultBranch).toBe('develop');
   });
@@ -77,7 +79,9 @@ describe('ProjectQueries', () => {
   it('updateGithubProjectUrl() persists a value', () => {
     const p = projects.add('/tmp/gp-set');
     projects.updateGithubProjectUrl(p.id, 'https://github.com/orgs/acme/projects/3');
-    const updated = projects.getById(p.id)!;
+    const updated = projects.getById(p.id);
+    expect(updated).toBeTruthy();
+    if (!updated) throw new Error('Expected updated project URL');
     expect(updated.githubProjectUrl).toBe('https://github.com/orgs/acme/projects/3');
   });
 
@@ -85,13 +89,15 @@ describe('ProjectQueries', () => {
     const p = projects.add('/tmp/gp-clear');
     projects.updateGithubProjectUrl(p.id, 'https://github.com/orgs/acme/projects/3');
     projects.updateGithubProjectUrl(p.id, null);
-    expect(projects.getById(p.id)!.githubProjectUrl).toBeNull();
+    expect(projects.getById(p.id)?.githubProjectUrl).toBeNull();
   });
 
   it('updateGithubProjectUrl() round-trips through list()', () => {
     const p = projects.add('/tmp/gp-list');
     projects.updateGithubProjectUrl(p.id, 'https://github.com/users/alice/projects/7');
-    const fromList = projects.list().find((x) => x.id === p.id)!;
+    const fromList = projects.list().find((x) => x.id === p.id);
+    expect(fromList).toBeTruthy();
+    if (!fromList) throw new Error('Expected project from list');
     expect(fromList.githubProjectUrl).toBe('https://github.com/users/alice/projects/7');
   });
 
@@ -128,7 +134,9 @@ describe('ProjectQueries', () => {
       verifierReasoningEffortOverride: 'medium',
     });
 
-    let updated = projects.getById(p.id)!;
+    let updated = projects.getById(p.id);
+    expect(updated).toBeTruthy();
+    if (!updated) throw new Error('Expected updated project overrides');
     expect(updated.plannerModelOverride).toBe('openrouter');
     expect(updated.reviewerModelOverride).toBe('claude');
     expect(updated.executorModelOverride).toBe('codex');
@@ -157,7 +165,9 @@ describe('ProjectQueries', () => {
       verifierReasoningEffortOverride: null,
     });
 
-    updated = projects.getById(p.id)!;
+    updated = projects.getById(p.id);
+    expect(updated).toBeTruthy();
+    if (!updated) throw new Error('Expected cleared project overrides');
     expect(updated.plannerModelOverride).toBeNull();
     expect(updated.reviewerModelOverride).toBeNull();
     expect(updated.executorModelOverride).toBeNull();
@@ -182,7 +192,7 @@ describe('ProjectQueries', () => {
   it('add() restores an archived project when re-adding its path', () => {
     const p = projects.add('/tmp/old');
     expect(projects.archiveIfIdle(p.id)).toBe(true);
-    expect(projects.getById(p.id)!.archived).toBe(true);
+    expect(projects.getById(p.id)?.archived).toBe(true);
 
     const restored = projects.add('/tmp/old');
     expect(restored.id).toBe(p.id);
@@ -212,7 +222,7 @@ describe('ProjectQueries', () => {
     const p = projects.add('/tmp/quiet');
     expect(projects.hasLiveWork(p.id)).toBe(false);
     expect(projects.archiveIfIdle(p.id)).toBe(true);
-    expect(projects.getById(p.id)!.archived).toBe(true);
+    expect(projects.getById(p.id)?.archived).toBe(true);
   });
 
   it('archiveIfIdle() is blocked by a thread in an active status', () => {
@@ -222,7 +232,7 @@ describe('ProjectQueries', () => {
     ).run(p.id);
     expect(projects.hasLiveWork(p.id)).toBe(true);
     expect(projects.archiveIfIdle(p.id)).toBe(false);
-    expect(projects.getById(p.id)!.archived).toBe(false);
+    expect(projects.getById(p.id)?.archived).toBe(false);
   });
 
   it('completed threads do NOT block archive/remove', () => {
@@ -311,11 +321,11 @@ describe('ProjectQueries', () => {
   it('trigger: inserting a new thread on an archived project unarchives it', () => {
     const p = projects.add('/tmp/trigger-thread');
     projects.archiveIfIdle(p.id);
-    expect(projects.getById(p.id)!.archived).toBe(true);
+    expect(projects.getById(p.id)?.archived).toBe(true);
     db.prepare(
       "INSERT INTO threads (id, project_id, title, prompt) VALUES ('t1', ?, 'title', 'prompt')",
     ).run(p.id);
-    expect(projects.getById(p.id)!.archived).toBe(false);
+    expect(projects.getById(p.id)?.archived).toBe(false);
   });
 
   it('trigger: inserting a new notification on an archived project unarchives it', () => {
@@ -327,21 +337,21 @@ describe('ProjectQueries', () => {
       "INSERT INTO threads (id, project_id, title, prompt, status) VALUES ('t-notif', ?, 'title', 'prompt', 'completed')",
     ).run(p.id);
     projects.archiveIfIdle(p.id);
-    expect(projects.getById(p.id)!.archived).toBe(true);
+    expect(projects.getById(p.id)?.archived).toBe(true);
     db.prepare(
       "INSERT INTO notifications (id, thread_id, project_id, kind, title, body) VALUES ('n1', 't-notif', ?, 'test', 'title', 'body')",
     ).run(p.id);
-    expect(projects.getById(p.id)!.archived).toBe(false);
+    expect(projects.getById(p.id)?.archived).toBe(false);
   });
 
   it('trigger: inserting a new github_issue_cache row on an archived project unarchives it', () => {
     const p = projects.add('/tmp/trigger-issue');
     projects.archiveIfIdle(p.id);
-    expect(projects.getById(p.id)!.archived).toBe(true);
+    expect(projects.getById(p.id)?.archived).toBe(true);
     db.prepare(
       `INSERT INTO github_issue_cache (id, project_id, issue_number, title) VALUES ('i1', ?, 1, 'title')`,
     ).run(p.id);
-    expect(projects.getById(p.id)!.archived).toBe(false);
+    expect(projects.getById(p.id)?.archived).toBe(false);
   });
 
   it('trigger: updating claimed_at on a cached issue unarchives the project', () => {
@@ -352,10 +362,10 @@ describe('ProjectQueries', () => {
     ).run(p.id);
     // Now archive the project (the insert already fired the trigger — re-archive)
     projects.archiveIfIdle(p.id);
-    expect(projects.getById(p.id)!.archived).toBe(true);
+    expect(projects.getById(p.id)?.archived).toBe(true);
     // Transition claimed_at NULL → non-NULL
     db.prepare(`UPDATE github_issue_cache SET claimed_at = datetime('now') WHERE id = 'i1'`).run();
-    expect(projects.getById(p.id)!.archived).toBe(false);
+    expect(projects.getById(p.id)?.archived).toBe(false);
   });
 
   it('trigger: metadata updates on a cached issue do NOT unarchive', () => {
@@ -364,10 +374,10 @@ describe('ProjectQueries', () => {
       `INSERT INTO github_issue_cache (id, project_id, issue_number, title) VALUES ('i1', ?, 1, 'title')`,
     ).run(p.id);
     projects.archiveIfIdle(p.id);
-    expect(projects.getById(p.id)!.archived).toBe(true);
+    expect(projects.getById(p.id)?.archived).toBe(true);
     // Update only title — claimed_at stays NULL
     db.prepare(`UPDATE github_issue_cache SET title = 'new title' WHERE id = 'i1'`).run();
-    expect(projects.getById(p.id)!.archived).toBe(true);
+    expect(projects.getById(p.id)?.archived).toBe(true);
   });
 
   // === pin ===
@@ -376,17 +386,19 @@ describe('ProjectQueries', () => {
     const p = projects.add('/tmp/pin');
     expect(p.pinned).toBe(false);
     projects.pin(p.id, true);
-    expect(projects.getById(p.id)!.pinned).toBe(true);
+    expect(projects.getById(p.id)?.pinned).toBe(true);
     projects.pin(p.id, false);
-    expect(projects.getById(p.id)!.pinned).toBe(false);
+    expect(projects.getById(p.id)?.pinned).toBe(false);
   });
 
   it('archiveIfIdle() clears pinned state as a side effect', () => {
     const p = projects.add('/tmp/pin-then-archive');
     projects.pin(p.id, true);
-    expect(projects.getById(p.id)!.pinned).toBe(true);
+    expect(projects.getById(p.id)?.pinned).toBe(true);
     expect(projects.archiveIfIdle(p.id)).toBe(true);
-    const after = projects.getById(p.id)!;
+    const after = projects.getById(p.id);
+    expect(after).toBeTruthy();
+    if (!after) throw new Error('Expected archived project');
     expect(after.archived).toBe(true);
     expect(after.pinned).toBe(false);
   });

@@ -1,21 +1,21 @@
 export function Footer() {
   return (
-    <footer className="border-t border-border py-8 px-6">
-      <div className="max-w-6xl mx-auto flex flex-col items-center gap-4 text-muted text-sm">
+    <footer className="px-6 py-8">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 border-t border-white/8 pt-6 text-sm text-muted">
+        <span>© 2026 shipshit.dev</span>
         <div className="flex items-center gap-6">
           <a
             href="https://github.com/shipshitdev/shipcode"
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:text-secondary transition-colors"
+            className="transition-colors hover:text-secondary"
           >
             GitHub
           </a>
-          <a href="/docs" className="hover:text-secondary transition-colors">
+          <a href="/docs" className="transition-colors hover:text-secondary">
             Docs
           </a>
         </div>
-        <p>Built by shipshit.dev</p>
       </div>
     </footer>
   );

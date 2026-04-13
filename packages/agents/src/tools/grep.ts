@@ -99,7 +99,7 @@ async function runRipgrep(input: GrepInput, rootAbs: string): Promise<ToolResult
     });
     const lines = stdout.split('\n').filter(Boolean).slice(0, MAX_MATCHES);
     const cappedLines = lines.map((line) =>
-      line.length > MAX_LINE_LENGTH ? line.slice(0, MAX_LINE_LENGTH) + '…' : line,
+      line.length > MAX_LINE_LENGTH ? `${line.slice(0, MAX_LINE_LENGTH)}…` : line,
     );
     const truncated = lines.length >= MAX_MATCHES;
     return {
@@ -165,7 +165,7 @@ async function runJsGrep(input: GrepInput, rootAbs: string, ctx: ToolContext): P
               const rel = path.relative(rootAbs, full);
               const line =
                 lines[i].length > MAX_LINE_LENGTH
-                  ? lines[i].slice(0, MAX_LINE_LENGTH) + '…'
+                  ? `${lines[i].slice(0, MAX_LINE_LENGTH)}…`
                   : lines[i];
               matches.push(`${rel}:${i + 1}:${line}`);
             }
@@ -194,7 +194,7 @@ function simpleIncludeMatch(filename: string, include: string): boolean {
   // Very small subset: "*.ts", "*.{ts,tsx}", exact name.
   if (include.startsWith('*.{') && include.endsWith('}')) {
     const exts = include.slice(3, -1).split(',');
-    return exts.some((ext) => filename.endsWith('.' + ext));
+    return exts.some((ext) => filename.endsWith(`.${ext}`));
   }
   if (include.startsWith('*.')) {
     return filename.endsWith(include.slice(1));

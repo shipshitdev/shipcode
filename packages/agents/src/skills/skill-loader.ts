@@ -200,8 +200,9 @@ export function interpolateSkill(content: string, slots: SkillSlot[]): string {
 
   const result = content.replace(/\{\{([A-Z][A-Z0-9_]*)\}\}/g, (_, key: string) => {
     referenced.add(key);
-    if (slotMap.has(key)) {
-      return slotMap.get(key)!;
+    const slotValue = slotMap.get(key);
+    if (slotValue !== undefined) {
+      return slotValue;
     }
     if (isProd) {
       return `[unknown slot: ${key}]`;

@@ -5,7 +5,7 @@ import { type SimpleGit, type StatusResult, simpleGit } from 'simple-git';
 export class GitService {
   private git: SimpleGit;
 
-  constructor(private projectPath: string) {
+  constructor(projectPath: string) {
     this.git = simpleGit(projectPath);
   }
 

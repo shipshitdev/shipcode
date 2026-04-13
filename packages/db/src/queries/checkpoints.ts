@@ -3,7 +3,19 @@ import { toIsoUtc } from '@shipcode/shared';
 import type { PipelineCheckpoint, PipelineCheckpointPhase } from '@shipcode/shared/source';
 import { nanoid } from 'nanoid';
 
-function mapRow(row: any): PipelineCheckpoint {
+interface PipelineCheckpointRow {
+  id: string;
+  thread_id: string;
+  project_id: string | null;
+  phase: PipelineCheckpointPhase;
+  reason: string;
+  label: string;
+  branch: string | null;
+  commit_sha: string;
+  created_at: string;
+}
+
+function mapRow(row: PipelineCheckpointRow): PipelineCheckpoint {
   return {
     id: row.id,
     threadId: row.thread_id,
@@ -27,12 +39,14 @@ export class CheckpointQueries {
          WHERE thread_id = ?
          ORDER BY created_at DESC, rowid DESC`,
       )
-      .all(threadId) as any[];
+      .all(threadId) as PipelineCheckpointRow[];
     return rows.map(mapRow);
   }
 
   getById(id: string): PipelineCheckpoint | null {
-    const row = this.db.prepare('SELECT * FROM pipeline_checkpoints WHERE id = ?').get(id) as any;
+    const row = this.db.prepare('SELECT * FROM pipeline_checkpoints WHERE id = ?').get(id) as
+      | PipelineCheckpointRow
+      | undefined;
     return row ? mapRow(row) : null;
   }
 
@@ -44,7 +58,7 @@ export class CheckpointQueries {
          ORDER BY created_at DESC, rowid DESC
          LIMIT 1`,
       )
-      .get(threadId) as any;
+      .get(threadId) as PipelineCheckpointRow | undefined;
     return row ? mapRow(row) : null;
   }
 
@@ -81,6 +95,10 @@ export class CheckpointQueries {
         input.branch,
         input.commitSha,
       );
-    return this.getById(id)!;
+    const checkpoint = this.getById(id);
+    if (!checkpoint) {
+      throw new Error(`Failed to load checkpoint after insert: ${id}`);
+    }
+    return checkpoint;
   }
 }

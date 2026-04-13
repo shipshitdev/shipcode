@@ -7,7 +7,18 @@ import {
 } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
 
-function mapRow(row: any): NotificationRecord {
+interface NotificationRow {
+  id: string;
+  thread_id: string;
+  project_id: string | null;
+  kind: NotificationKind;
+  title: string;
+  body: string;
+  created_at: string;
+  dismissed_at: string | null;
+}
+
+function mapRow(row: NotificationRow): NotificationRecord {
   return {
     id: row.id,
     threadId: row.thread_id,
@@ -40,14 +51,16 @@ export class NotificationsQueries {
       )
       .run(id, input.threadId, input.projectId, input.kind, input.title, input.body);
 
-    const row = this.db.prepare('SELECT * FROM notifications WHERE id = ?').get(id) as any;
+    const row = this.db
+      .prepare('SELECT * FROM notifications WHERE id = ?')
+      .get(id) as NotificationRow;
     return mapRow(row);
   }
 
   listActive(): NotificationRecord[] {
     const rows = this.db
       .prepare('SELECT * FROM notifications WHERE dismissed_at IS NULL ORDER BY created_at DESC')
-      .all() as any[];
+      .all() as NotificationRow[];
     return rows.map(mapRow);
   }
 
@@ -56,7 +69,7 @@ export class NotificationsQueries {
       .prepare(
         'SELECT * FROM notifications WHERE thread_id = ? AND dismissed_at IS NULL ORDER BY created_at DESC',
       )
-      .all(threadId) as any[];
+      .all(threadId) as NotificationRow[];
     return rows.map(mapRow);
   }
 

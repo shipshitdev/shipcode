@@ -2,6 +2,15 @@ import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { migrate, migrateV2, migrateV3 } from './schema';
 
+interface ThreadV2Row {
+  github_issue_number: number;
+  autonomous: number;
+}
+
+interface GitHubIssueCacheV3Row {
+  pipeline_status: string;
+}
+
 function tableExists(db: DatabaseSync, name: string): boolean {
   const row = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(name);
   return !!row;
@@ -53,7 +62,7 @@ describe('migrateV2', () => {
     ).run();
     const row = db
       .prepare('SELECT github_issue_number, autonomous FROM threads WHERE id = ?')
-      .get('t1') as any;
+      .get('t1') as ThreadV2Row;
     expect(row.github_issue_number).toBe(42);
     expect(row.autonomous).toBe(1);
   });
@@ -88,7 +97,7 @@ describe('migrateV3', () => {
 
     const row = db
       .prepare('SELECT pipeline_status FROM github_issue_cache WHERE id = ?')
-      .get('i1') as any;
+      .get('i1') as GitHubIssueCacheV3Row;
     expect(row.pipeline_status).toBe('todo');
   });
 

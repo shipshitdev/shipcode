@@ -12,6 +12,31 @@ interface ProjectIdleGuardOptions {
   ignoreAttentionOnly?: boolean;
 }
 
+interface ProjectRow {
+  id: string;
+  name: string;
+  path: string;
+  git_remote: string | null;
+  github_project_url: string | null;
+  planner_model_override: string | null;
+  reviewer_model_override: string | null;
+  executor_model_override: string | null;
+  verifier_model_override: string | null;
+  planner_model_id_override: string | null;
+  reviewer_model_id_override: string | null;
+  executor_model_id_override: string | null;
+  verifier_model_id_override: string | null;
+  planner_reasoning_effort_override: Project['plannerReasoningEffortOverride'];
+  reviewer_reasoning_effort_override: Project['reviewerReasoningEffortOverride'];
+  executor_reasoning_effort_override: Project['executorReasoningEffortOverride'];
+  verifier_reasoning_effort_override: Project['verifierReasoningEffortOverride'];
+  default_branch: string;
+  pinned: number;
+  archived: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export class ProjectQueries {
   constructor(private db: DatabaseSync) {}
 
@@ -23,7 +48,9 @@ export class ProjectQueries {
    * The sidebar uses `listVisible()` instead.
    */
   list(): Project[] {
-    const rows = this.db.prepare('SELECT * FROM projects ORDER BY updated_at DESC').all() as any[];
+    const rows = this.db
+      .prepare('SELECT * FROM projects ORDER BY updated_at DESC')
+      .all() as ProjectRow[];
     return rows.map(mapProject);
   }
 
@@ -33,7 +60,7 @@ export class ProjectQueries {
   listVisible(): Project[] {
     const rows = this.db
       .prepare('SELECT * FROM projects WHERE archived = 0 ORDER BY updated_at DESC')
-      .all() as any[];
+      .all() as ProjectRow[];
     return rows.map(mapProject);
   }
 
@@ -43,19 +70,21 @@ export class ProjectQueries {
   listArchived(): Project[] {
     const rows = this.db
       .prepare('SELECT * FROM projects WHERE archived = 1 ORDER BY name ASC')
-      .all() as any[];
+      .all() as ProjectRow[];
     return rows.map(mapProject);
   }
 
   getById(id: string): Project | null {
-    const row = this.db.prepare('SELECT * FROM projects WHERE id = ?').get(id) as any;
+    const row = this.db.prepare('SELECT * FROM projects WHERE id = ?').get(id) as
+      | ProjectRow
+      | undefined;
     return row ? mapProject(row) : null;
   }
 
   getByPath(projectPath: string): Project | null {
-    const row = this.db
-      .prepare('SELECT * FROM projects WHERE path = ? LIMIT 1')
-      .get(projectPath) as any;
+    const row = this.db.prepare('SELECT * FROM projects WHERE path = ? LIMIT 1').get(projectPath) as
+      | ProjectRow
+      | undefined;
     return row ? mapProject(row) : null;
   }
 
@@ -70,7 +99,11 @@ export class ProjectQueries {
       this.db
         .prepare(`UPDATE projects SET archived = 0, updated_at = ${ISO_NOW_SQL} WHERE id = ?`)
         .run(existing.id);
-      return this.getById(existing.id)!;
+      const restored = this.getById(existing.id);
+      if (!restored) {
+        throw new Error(`Failed to load restored project: ${existing.id}`);
+      }
+      return restored;
     }
 
     const id = nanoid();
@@ -83,7 +116,11 @@ export class ProjectQueries {
       )
       .run(id, name, projectPath, now, now);
 
-    return this.getById(id)!;
+    const created = this.getById(id);
+    if (!created) {
+      throw new Error(`Failed to load project after insert: ${id}`);
+    }
+    return created;
   }
 
   remove(id: string): void {
@@ -276,7 +313,7 @@ export class ProjectQueries {
   }
 }
 
-function mapProject(row: any): Project {
+function mapProject(row: ProjectRow): Project {
   return {
     id: row.id,
     name: row.name,

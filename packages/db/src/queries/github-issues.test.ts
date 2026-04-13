@@ -97,7 +97,9 @@ describe('GitHubIssueQueries', () => {
 
     issues.releaseClaim(record.id);
 
-    const updated = issues.getByNumber(projectId, 1)!;
+    const updated = issues.getByNumber(projectId, 1);
+    expect(updated).toBeTruthy();
+    if (!updated) throw new Error('Expected updated issue');
     expect(updated.claimedAt).toBeNull();
     expect(updated.claimedBy).toBeNull();
     expect(updated.pipelineStatus).toBe('queued');
@@ -106,7 +108,7 @@ describe('GitHubIssueQueries', () => {
   it('updatePipelineStatus() changes the status', () => {
     const record = issues.upsert(makeIssue());
     issues.updatePipelineStatus(record.id, 'planning');
-    expect(issues.getByNumber(projectId, 1)!.pipelineStatus).toBe('planning');
+    expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('planning');
   });
 
   it('defaults phase model overrides to null', () => {
@@ -136,19 +138,19 @@ describe('GitHubIssueQueries', () => {
     issues.updatePhaseModelOverride(record.id, 'reviewer', 'claude');
     issues.updatePhaseModelOverride(record.id, 'executor', 'openrouter');
     issues.updatePhaseModelOverride(record.id, 'verifier', 'claude');
-    expect(issues.getByNumber(projectId, 1)!.plannerModelOverride).toBe('openrouter');
-    expect(issues.getByNumber(projectId, 1)!.reviewerModelOverride).toBe('claude');
-    expect(issues.getByNumber(projectId, 1)!.executorModelOverride).toBe('openrouter');
-    expect(issues.getByNumber(projectId, 1)!.verifierModelOverride).toBe('claude');
+    expect(issues.getByNumber(projectId, 1)?.plannerModelOverride).toBe('openrouter');
+    expect(issues.getByNumber(projectId, 1)?.reviewerModelOverride).toBe('claude');
+    expect(issues.getByNumber(projectId, 1)?.executorModelOverride).toBe('openrouter');
+    expect(issues.getByNumber(projectId, 1)?.verifierModelOverride).toBe('claude');
 
     issues.updatePhaseModelOverride(record.id, 'planner', null);
     issues.updatePhaseModelOverride(record.id, 'reviewer', null);
     issues.updatePhaseModelOverride(record.id, 'executor', null);
     issues.updatePhaseModelOverride(record.id, 'verifier', null);
-    expect(issues.getByNumber(projectId, 1)!.plannerModelOverride).toBeNull();
-    expect(issues.getByNumber(projectId, 1)!.reviewerModelOverride).toBeNull();
-    expect(issues.getByNumber(projectId, 1)!.executorModelOverride).toBeNull();
-    expect(issues.getByNumber(projectId, 1)!.verifierModelOverride).toBeNull();
+    expect(issues.getByNumber(projectId, 1)?.plannerModelOverride).toBeNull();
+    expect(issues.getByNumber(projectId, 1)?.reviewerModelOverride).toBeNull();
+    expect(issues.getByNumber(projectId, 1)?.executorModelOverride).toBeNull();
+    expect(issues.getByNumber(projectId, 1)?.verifierModelOverride).toBeNull();
   });
 
   it('updatePhaseModelIdOverride() persists values and can clear them', () => {
@@ -159,10 +161,10 @@ describe('GitHubIssueQueries', () => {
     issues.updatePhaseModelIdOverride(record.id, 'executor', 'gpt-5.4');
     issues.updatePhaseModelIdOverride(record.id, 'verifier', 'anthropic/claude-sonnet-4-6');
 
-    expect(issues.getByNumber(projectId, 1)!.plannerModelIdOverride).toBe('claude-opus-4-6');
-    expect(issues.getByNumber(projectId, 1)!.reviewerModelIdOverride).toBe('gpt-5.4-mini');
-    expect(issues.getByNumber(projectId, 1)!.executorModelIdOverride).toBe('gpt-5.4');
-    expect(issues.getByNumber(projectId, 1)!.verifierModelIdOverride).toBe(
+    expect(issues.getByNumber(projectId, 1)?.plannerModelIdOverride).toBe('claude-opus-4-6');
+    expect(issues.getByNumber(projectId, 1)?.reviewerModelIdOverride).toBe('gpt-5.4-mini');
+    expect(issues.getByNumber(projectId, 1)?.executorModelIdOverride).toBe('gpt-5.4');
+    expect(issues.getByNumber(projectId, 1)?.verifierModelIdOverride).toBe(
       'anthropic/claude-sonnet-4-6',
     );
 
@@ -171,10 +173,10 @@ describe('GitHubIssueQueries', () => {
     issues.updatePhaseModelIdOverride(record.id, 'executor', null);
     issues.updatePhaseModelIdOverride(record.id, 'verifier', null);
 
-    expect(issues.getByNumber(projectId, 1)!.plannerModelIdOverride).toBeNull();
-    expect(issues.getByNumber(projectId, 1)!.reviewerModelIdOverride).toBeNull();
-    expect(issues.getByNumber(projectId, 1)!.executorModelIdOverride).toBeNull();
-    expect(issues.getByNumber(projectId, 1)!.verifierModelIdOverride).toBeNull();
+    expect(issues.getByNumber(projectId, 1)?.plannerModelIdOverride).toBeNull();
+    expect(issues.getByNumber(projectId, 1)?.reviewerModelIdOverride).toBeNull();
+    expect(issues.getByNumber(projectId, 1)?.executorModelIdOverride).toBeNull();
+    expect(issues.getByNumber(projectId, 1)?.verifierModelIdOverride).toBeNull();
   });
 
   it('updatePullRequestFeedback() persists linked PR metadata and blocker summaries', () => {
@@ -206,7 +208,9 @@ describe('GitHubIssueQueries', () => {
       ],
     });
 
-    const updated = issues.getByNumber(projectId, 1)!;
+    const updated = issues.getByNumber(projectId, 1);
+    expect(updated).toBeTruthy();
+    if (!updated) throw new Error('Expected linked PR metadata');
     expect(updated.linkedPrNumber).toBe(77);
     expect(updated.linkedPrUrl).toBe('https://github.com/shipshitdev/shipcode/pull/77');
     expect(updated.linkedPrIsDraft).toBe(true);
@@ -232,7 +236,7 @@ describe('GitHubIssueQueries', () => {
     const threads = new ThreadQueries(db);
     const thread = threads.create(projectId, 'prompt', 'title');
     issues.linkThread(record.id, thread.id);
-    expect(issues.getByNumber(projectId, 1)!.threadId).toBe(thread.id);
+    expect(issues.getByNumber(projectId, 1)?.threadId).toBe(thread.id);
   });
 
   it('getRequeued() returns unclaimed queued records', () => {
@@ -378,7 +382,7 @@ describe('GitHubIssueQueries', () => {
       expect(issues.list(projectId)).toHaveLength(0);
       const found = issues.getByNumber(projectId, 1);
       expect(found).not.toBeNull();
-      expect(found!.id).toBe(r.id);
+      expect(found?.id).toBe(r.id);
     });
 
     it('archiveIssues() is a no-op for empty array', () => {

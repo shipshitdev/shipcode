@@ -14,7 +14,18 @@ export interface SkillRow {
   updatedAt: string;
 }
 
-function mapRow(row: any): SkillRow {
+interface SkillDbRow {
+  project_id: string | null;
+  phase: PhaseSkillKey;
+  content: string;
+  base_version: string;
+  schema_version: number;
+  status: 'ok' | 'quarantined';
+  status_reason: string | null;
+  updated_at: string;
+}
+
+function mapRow(row: SkillDbRow): SkillRow {
   return {
     projectId: row.project_id,
     phase: row.phase as PhaseSkillKey,
@@ -42,7 +53,7 @@ export class SkillsQueries {
            AND phase = ?
          LIMIT 1`,
       )
-      .get(projectId, phase) as any;
+      .get(projectId, phase) as SkillDbRow | undefined;
     return row ? mapRow(row) : null;
   }
 
@@ -118,7 +129,9 @@ export class SkillsQueries {
    * chain) and to surface the quarantine banner.
    */
   listAll(): SkillRow[] {
-    const rows = this.db.prepare(`SELECT * FROM skills ORDER BY phase, project_id`).all() as any[];
+    const rows = this.db
+      .prepare(`SELECT * FROM skills ORDER BY phase, project_id`)
+      .all() as SkillDbRow[];
     return rows.map(mapRow);
   }
 
@@ -129,7 +142,7 @@ export class SkillsQueries {
   listQuarantined(): SkillRow[] {
     const rows = this.db
       .prepare(`SELECT * FROM skills WHERE status = 'quarantined' ORDER BY phase, project_id`)
-      .all() as any[];
+      .all() as SkillDbRow[];
     return rows.map(mapRow);
   }
 }

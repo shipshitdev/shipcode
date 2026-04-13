@@ -3,18 +3,20 @@ import { describe, expect, it } from 'vitest';
 import Home from './page';
 
 describe('web home page', () => {
-  it('renders the main marketing headline and install CTA', () => {
+  it('renders the main marketing headline and primary CTAs', () => {
     const html = renderToStaticMarkup(<Home />);
 
-    expect(html).toContain('Make Planning Great Again');
-    expect(html).toContain('npx @shipshitdev/shipcode');
-    expect(html).toContain('Copy');
+    expect(html).toContain('ShipCode is the fastest way to turn GitHub issues into merged code.');
+    expect(html).toContain('View on GitHub');
+    expect(html).toContain('Read the docs');
   });
 
-  it('renders the current cross-model positioning copy', () => {
+  it('renders the current issue-to-pr positioning copy', () => {
     const html = renderToStaticMarkup(<Home />);
 
-    expect(html).toContain('Then it executes — with Claude, Codex, or any OpenRouter model.');
-    expect(html).toContain('Route plan, review, execute, and verify');
+    expect(html).toContain(
+      'Plan with Opus, review with Codex, execute in an isolated worktree, and keep verifying until the pull request is ready to land.',
+    );
+    expect(html).toContain('Planning. Review loops. Worktrees. Verifier retries.');
   });
 });

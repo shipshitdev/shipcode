@@ -31,6 +31,10 @@ function readNullable(raw: string | undefined): string | null {
 
 const REASONING_EFFORTS = ['low', 'medium', 'high'] as const;
 
+function isReasoningEffort(value: unknown): value is AppSettings['plannerReasoningEffort'] {
+  return typeof value === 'string' && (REASONING_EFFORTS as readonly string[]).includes(value);
+}
+
 export class SettingsQueries {
   constructor(private db: DatabaseSync) {}
 
@@ -82,16 +86,16 @@ export class SettingsQueries {
       plannerMaxTurns: clampInt(stored.plannerMaxTurns, 1, 20, DEFAULT_SETTINGS.plannerMaxTurns),
       maxReviewRounds: clampInt(stored.maxReviewRounds, 1, 5, DEFAULT_SETTINGS.maxReviewRounds),
       requireApproval: parseBool(stored.requireApproval, DEFAULT_SETTINGS.requireApproval),
-      plannerReasoningEffort: REASONING_EFFORTS.includes(stored.plannerReasoningEffort as any)
+      plannerReasoningEffort: isReasoningEffort(stored.plannerReasoningEffort)
         ? (stored.plannerReasoningEffort as AppSettings['plannerReasoningEffort'])
         : DEFAULT_SETTINGS.plannerReasoningEffort,
-      reviewerReasoningEffort: REASONING_EFFORTS.includes(stored.reviewerReasoningEffort as any)
+      reviewerReasoningEffort: isReasoningEffort(stored.reviewerReasoningEffort)
         ? (stored.reviewerReasoningEffort as AppSettings['reviewerReasoningEffort'])
         : DEFAULT_SETTINGS.reviewerReasoningEffort,
-      executorReasoningEffort: REASONING_EFFORTS.includes(stored.executorReasoningEffort as any)
+      executorReasoningEffort: isReasoningEffort(stored.executorReasoningEffort)
         ? (stored.executorReasoningEffort as AppSettings['executorReasoningEffort'])
         : DEFAULT_SETTINGS.executorReasoningEffort,
-      verifierReasoningEffort: REASONING_EFFORTS.includes(stored.verifierReasoningEffort as any)
+      verifierReasoningEffort: isReasoningEffort(stored.verifierReasoningEffort)
         ? (stored.verifierReasoningEffort as AppSettings['verifierReasoningEffort'])
         : DEFAULT_SETTINGS.verifierReasoningEffort,
       notificationsEnabled: parseBool(
@@ -160,8 +164,7 @@ export class SettingsQueries {
       'verifierReasoningEffort',
     ] as const) {
       if (key in patch && patch[key] != null) {
-        if (!REASONING_EFFORTS.includes(patch[key] as any))
-          throw new Error(`${key} must be low|medium|high`);
+        if (!isReasoningEffort(patch[key])) throw new Error(`${key} must be low|medium|high`);
       }
     }
     if ('worktreeBranchFormat' in patch && patch.worktreeBranchFormat != null) {

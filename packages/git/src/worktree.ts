@@ -162,7 +162,7 @@ export class WorktreeManager {
         const isCollision = /already exists|is already checked out/i.test(msg);
         if (!isCollision || attempt >= MAX_RETRIES) throw err;
         // Bump suffix and retry
-        const nextN = branch.match(/-(\d+)$/) ? Number(branch.match(/-(\d+)$/)![1]) + 1 : 2;
+        const nextN = branch.match(/-(\d+)$/) ? Number(branch.match(/-(\d+)$/)?.[1]) + 1 : 2;
         const rawBranch =
           typeof idOrNumber === 'number'
             ? this.formatIssueBranch(idOrNumber, titleOrBase ?? '')

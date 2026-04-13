@@ -37,7 +37,7 @@ describe('VerificationQueries', () => {
   });
 
   it('create() with structured uses its result', () => {
-    const structured = { result: 'passed', details: 'all tests pass' } as any;
+    const structured = { result: 'passed', details: 'all tests pass' } as const;
     const v = verifications.create(threadId, planId, 'output', structured);
     expect(v.result).toBe('passed');
     expect(v.structured).toEqual(structured);
@@ -61,7 +61,9 @@ describe('VerificationQueries', () => {
       v1.id,
     );
     verifications.create(threadId, planId, 'second', null);
-    const latest = verifications.getLatest(threadId)!;
+    const latest = verifications.getLatest(threadId);
+    expect(latest).toBeTruthy();
+    if (!latest) throw new Error('Expected latest verification');
     expect(latest.rawOutput).toBe('second');
   });
 });

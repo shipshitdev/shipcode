@@ -31,15 +31,15 @@ import type {
 // === Request-Response Channels (invoke/handle) ===
 
 export interface IpcInvokeChannels {
-  'project:list': { args: void; result: Project[] };
-  'project:list-visible': { args: void; result: Project[] };
-  'project:list-archived': { args: void; result: Project[] };
+  'project:list': { args: undefined; result: Project[] };
+  'project:list-visible': { args: undefined; result: Project[] };
+  'project:list-archived': { args: undefined; result: Project[] };
   'project:get': { args: { projectId: string }; result: Project | null };
   'project:add': { args: { path: string }; result: Project };
-  'project:remove': { args: { projectId: string }; result: void };
-  'project:pin': { args: { projectId: string; pinned: boolean }; result: void };
-  'project:archive': { args: { projectId: string }; result: void };
-  'project:unarchive': { args: { projectId: string }; result: void };
+  'project:remove': { args: { projectId: string }; result: undefined };
+  'project:pin': { args: { projectId: string; pinned: boolean }; result: undefined };
+  'project:archive': { args: { projectId: string }; result: undefined };
+  'project:unarchive': { args: { projectId: string }; result: undefined };
   'project:relink-path': { args: { projectId: string; path: string }; result: Project };
   'project:set-default-branch': { args: { projectId: string; branch: string }; result: Project };
   'project:set-github-project-url': {
@@ -76,20 +76,20 @@ export interface IpcInvokeChannels {
     result: { restored: true; checkpoint: PipelineCheckpoint };
   };
 
-  'pipeline:start': { args: { threadId: string }; result: void };
-  'pipeline:retry': { args: { threadId: string }; result: void };
-  'pipeline:approve': { args: { threadId: string }; result: void };
-  'pipeline:reject': { args: { threadId: string; feedback: string }; result: void };
-  'pipeline:stabilize-pr': { args: { threadId: string }; result: void };
-  'pipeline:cancel': { args: { threadId: string }; result: void };
-  'pipeline:skip-review': { args: { threadId: string }; result: void };
+  'pipeline:start': { args: { threadId: string }; result: undefined };
+  'pipeline:retry': { args: { threadId: string }; result: undefined };
+  'pipeline:approve': { args: { threadId: string }; result: undefined };
+  'pipeline:reject': { args: { threadId: string; feedback: string }; result: undefined };
+  'pipeline:stabilize-pr': { args: { threadId: string }; result: undefined };
+  'pipeline:cancel': { args: { threadId: string }; result: undefined };
+  'pipeline:skip-review': { args: { threadId: string }; result: undefined };
 
   'plan:get': { args: { threadId: string }; result: PlanRecord | null };
   'plan:list-for-issue': {
     args: { projectId: string; issueNumber: number };
     result: PlanRecord[];
   };
-  'plan:update': { args: { planId: string; structured: ShipCodePlan }; result: void };
+  'plan:update': { args: { planId: string; structured: ShipCodePlan }; result: undefined };
 
   'review:get': { args: { planId: string }; result: ReviewRecord | null };
 
@@ -97,28 +97,28 @@ export interface IpcInvokeChannels {
 
   'git:status': { args: { projectId: string }; result: GitState };
   'git:commit': { args: { projectId: string; message: string }; result: string };
-  'git:push': { args: { projectId: string }; result: void };
+  'git:push': { args: { projectId: string }; result: undefined };
   'git:list-branches': { args: { projectId: string; fetch?: boolean }; result: string[] };
 
-  'settings:get': { args: void; result: AppSettings };
-  'settings:set': { args: Partial<AppSettings>; result: void };
+  'settings:get': { args: undefined; result: AppSettings };
+  'settings:set': { args: Partial<AppSettings>; result: undefined };
 
-  'health:check': { args: void; result: SystemHealth };
-  'integrations:check': { args: void; result: IntegrationStatus };
+  'health:check': { args: undefined; result: SystemHealth };
+  'integrations:check': { args: undefined; result: IntegrationStatus };
   'integrations:validate-openrouter-model': {
     args: { modelId: string };
     result: OpenRouterModelValidation;
   };
 
-  'dialog:open-directory': { args: void; result: string | null };
+  'dialog:open-directory': { args: undefined; result: string | null };
 
-  'shell:open-external': { args: { url: string }; result: void };
+  'shell:open-external': { args: { url: string }; result: undefined };
 
   // GitHub
   'github:list-issues': { args: { projectId: string }; result: GitHubIssueCacheRecord[] };
   'github:refresh-issues': { args: { projectId: string }; result: GitHubIssueCacheRecord[] };
-  'github:start-issue': { args: { projectId: string; issueNumber: number }; result: void };
-  'github:retry-issue': { args: { projectId: string; issueNumber: number }; result: void };
+  'github:start-issue': { args: { projectId: string; issueNumber: number }; result: undefined };
+  'github:retry-issue': { args: { projectId: string; issueNumber: number }; result: undefined };
   'github:get-issue': {
     args: { issueNumber: number; projectId: string };
     result: GitHubIssueCacheRecord | null;
@@ -154,8 +154,8 @@ export interface IpcInvokeChannels {
     args: { projectId: string };
     result: { archivedCount: number; failedCount: number };
   };
-  'github:list-archived': { args: void; result: GitHubIssueCacheRecord[] };
-  'github:unarchive-issue': { args: { issueId: string }; result: void };
+  'github:list-archived': { args: undefined; result: GitHubIssueCacheRecord[] };
+  'github:unarchive-issue': { args: { issueId: string }; result: undefined };
   'github:set-phase-model-override': {
     args: {
       projectId: string;
@@ -203,11 +203,11 @@ export interface IpcInvokeChannels {
   'verification:get': { args: { threadId: string }; result: VerificationRecord | null };
 
   // Pipeline extensions
-  'pipeline:start-autonomous': { args: { threadId: string }; result: void };
+  'pipeline:start-autonomous': { args: { threadId: string }; result: undefined };
 
   // Onboarding
-  'onboarding:check-auth': { args: void; result: SystemHealth & { ghAuth: GhAuthStatus } };
-  'onboarding:list-repos': { args: void; result: string[] };
+  'onboarding:check-auth': { args: undefined; result: SystemHealth & { ghAuth: GhAuthStatus } };
+  'onboarding:list-repos': { args: undefined; result: string[] };
 
   // AI-assisted PRD enhancement (in-place refinement of a draft PRD body)
   'ai:enhance-prd': {
@@ -224,7 +224,7 @@ export interface IpcInvokeChannels {
   'context:read': { args: { projectId: string; name: string }; result: { content: string | null } };
 
   // Mission Control dashboard
-  'dashboard:get-stats': { args: void; result: DashboardStats };
+  'dashboard:get-stats': { args: undefined; result: DashboardStats };
   'dashboard:get-activity': {
     args: { limit?: number; offset?: number; projectId?: string };
     result: ActivityEntry[];
@@ -235,18 +235,18 @@ export interface IpcInvokeChannels {
   };
   'dashboard:count-activity': { args: { projectId?: string }; result: number };
   'dashboard:get-recent-tasks': { args: { limit?: number; offset?: number }; result: RecentTask[] };
-  'dashboard:count-recent-tasks': { args: void; result: number };
+  'dashboard:count-recent-tasks': { args: undefined; result: number };
 
   // Cost tracking
-  'costs:get-summary': { args: void; result: CostSummary };
+  'costs:get-summary': { args: undefined; result: CostSummary };
 
   // Active pipelines listing (for Running Agents panel)
-  'pipeline:list-active': { args: void; result: ActivePipelineSummary[] };
+  'pipeline:list-active': { args: undefined; result: ActivePipelineSummary[] };
 
   // Notifications
-  'notification:list': { args: void; result: NotificationRecord[] };
-  'notification:dismiss': { args: { id: string }; result: void };
-  'notification:dismiss-all': { args: void; result: void };
+  'notification:list': { args: undefined; result: NotificationRecord[] };
+  'notification:dismiss': { args: { id: string }; result: undefined };
+  'notification:dismiss-all': { args: undefined; result: undefined };
 
   // Phase prompt skills (the /skills page). Args/results are typed loosely
   // here as `unknown` because the concrete types live in @shipcode/agents
@@ -260,7 +260,7 @@ export interface IpcInvokeChannels {
     result: unknown;
   };
   'skills:reset': { args: { projectId: string | null; phase: string }; result: unknown };
-  'skills:list-quarantined': { args: void; result: unknown };
+  'skills:list-quarantined': { args: undefined; result: unknown };
 }
 
 // === Streaming Channels (send/on) ===

@@ -6,7 +6,7 @@ const mockSpawn = vi.hoisted(() => vi.fn());
 vi.mock('node:child_process', async () => {
   const { promisify } = await import('node:util');
   const fn = vi.fn();
-  (fn as any)[promisify.custom] = mockExecFileAsync;
+  Object.assign(fn, { [promisify.custom]: mockExecFileAsync });
   return { execFile: fn, spawn: mockSpawn };
 });
 

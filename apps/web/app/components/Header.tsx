@@ -13,23 +13,29 @@ export function Header() {
 
   return (
     <header
-      className={`sticky top-0 z-50 transition-colors duration-200 ${
-        scrolled ? 'backdrop-blur-lg bg-primary/80' : 'bg-transparent'
+      className={`sticky top-0 z-50 transition-all duration-300 ${
+        scrolled ? 'bg-primary/70 backdrop-blur-xl' : 'bg-transparent'
       }`}
     >
-      <nav className="max-w-6xl mx-auto flex items-center justify-between px-6 py-4">
-        <a href="/" className="text-xl font-bold text-primary">
+      <nav className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
+        <a
+          href="/"
+          className="flex items-center gap-3 text-sm font-medium tracking-[0.18em] text-primary uppercase"
+        >
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-xs">
+            SC
+          </span>
           ShipCode
         </a>
-        <div className="flex items-center gap-6">
-          <a href="/docs" className="text-secondary hover:text-primary transition-colors">
+        <div className="flex items-center gap-6 text-sm">
+          <a href="/docs" className="text-secondary transition-colors hover:text-primary">
             Docs
           </a>
           <a
             href="https://github.com/shipshitdev/shipcode"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-secondary hover:text-primary transition-colors"
+            className="text-secondary transition-colors hover:text-primary"
           >
             GitHub
           </a>

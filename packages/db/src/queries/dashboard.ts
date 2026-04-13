@@ -32,6 +32,16 @@ const AGENT_RUNNING_PHASES: PipelinePhase[] = [
 // Phases where the user is blocked waiting for input / failure recovery.
 const BLOCKED_PHASES: PipelinePhase[] = ['awaiting_approval'];
 
+interface RecentTaskRow {
+  thread_id: string;
+  project_id: string;
+  title: string;
+  phase: PipelinePhase;
+  github_issue_number: number | null;
+  updated_at: string;
+  project_name: string;
+}
+
 function placeholders(n: number): string {
   return Array(n).fill('?').join(',');
 }
@@ -147,11 +157,11 @@ export class DashboardQueries {
          p.name as project_name
        FROM threads t
        INNER JOIN projects p ON p.id = t.project_id
-       WHERE t.status != 'idle'
+      WHERE t.status != 'idle'
        ORDER BY t.updated_at DESC
        LIMIT ? OFFSET ?`,
       )
-      .all(limit, offset) as any[];
+      .all(limit, offset) as RecentTaskRow[];
 
     return rows.map((row) => ({
       threadId: row.thread_id,

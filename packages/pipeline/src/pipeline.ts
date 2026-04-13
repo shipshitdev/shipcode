@@ -798,6 +798,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         const latestPlan = deps.plans.getLatest(threadId);
 
         if (result.success && result.data && latestPlan) {
+          const latestStructuredPlan = latestPlan.structured;
           deps.reviews.create(latestPlan.id, result.raw, result.data);
           deps.plans.updateStatus(
             latestPlan.id,
@@ -809,10 +810,10 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
             // Codex satisfied — proceed to execution or hand off to human.
             // Only auto-execute for autonomous threads with approval disabled.
             if (deps.settings.get().requireApproval || !context.autonomous) {
-              void postPlanComment(context, latestPlan!.structured!);
+              void postPlanComment(context, latestStructuredPlan);
               emitPhase(threadId, 'awaiting_approval');
             } else {
-              startExecution(threadId, latestPlan!.structured!);
+              startExecution(threadId, latestStructuredPlan);
             }
           } else if (result.data.decision === 'request_changes') {
             if (context.reviewRound < deps.settings.get().maxReviewRounds) {
@@ -830,7 +831,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
                       `[${f.severity}] ${f.description}${f.suggestion ? ` — ${f.suggestion}` : ''}`,
                   )
                   .join('\n');
-              startRevision(threadId, latestPlan!.structured!, feedback);
+              startRevision(threadId, latestStructuredPlan, feedback);
             } else {
               // Rounds exhausted.
               const hasCriticalOrMajor = result.data.findings.some(
@@ -846,10 +847,10 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
                 !context.autonomous ||
                 hasCriticalOrMajor
               ) {
-                void postPlanComment(context, latestPlan!.structured!);
+                void postPlanComment(context, latestStructuredPlan);
                 emitPhase(threadId, 'awaiting_approval');
               } else {
-                startExecution(threadId, latestPlan!.structured!);
+                startExecution(threadId, latestStructuredPlan);
               }
             }
           } else {
@@ -1298,7 +1299,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       }
 
       // Verify there are commits ahead of base
-      const ahead = execFileSync('git', ['log', context.forkPointSha + '..HEAD', '--oneline'], {
+      const ahead = execFileSync('git', ['log', `${context.forkPointSha}..HEAD`, '--oneline'], {
         cwd,
         encoding: 'utf-8',
       });

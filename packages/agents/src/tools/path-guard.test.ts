@@ -33,7 +33,7 @@ describe('assertPathInWorktree', () => {
     it('accepts a relative path inside the worktree', async () => {
       const resolved = await assertPathInWorktree('inside.txt', wt, { mustExist: true });
       expect(resolved).toContain('inside.txt');
-      expect(resolved).toMatch(new RegExp('^' + (await fs.realpath(wt))));
+      expect(resolved).toMatch(new RegExp(`^${await fs.realpath(wt)}`));
     });
 
     it('accepts a nested relative path', async () => {

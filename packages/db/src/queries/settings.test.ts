@@ -87,7 +87,7 @@ describe('SettingsQueries', () => {
     settings.set({ defaultWorktreeEnabled: false });
     const row = db
       .prepare("SELECT value FROM settings WHERE key = 'defaultWorktreeEnabled'")
-      .get() as any;
+      .get() as { value: string };
     expect(row.value).toBe('false');
   });
 
@@ -96,7 +96,7 @@ describe('SettingsQueries', () => {
     settings.set({ statusLabelMappings: mappings });
     const row = db
       .prepare("SELECT value FROM settings WHERE key = 'statusLabelMappings'")
-      .get() as any;
+      .get() as { value: string };
     expect(JSON.parse(row.value)).toEqual(mappings);
   });
 

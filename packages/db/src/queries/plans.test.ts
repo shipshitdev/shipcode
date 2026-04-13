@@ -50,7 +50,7 @@ describe('PlanQueries', () => {
   it('getLatest() returns highest version plan', () => {
     plans.create(threadId, 'v1', null, 1);
     const p2 = plans.create(threadId, 'v2', null, 2);
-    expect(plans.getLatest(threadId)!.id).toBe(p2.id);
+    expect(plans.getLatest(threadId)?.id).toBe(p2.id);
   });
 
   it('list() returns plans ordered by version DESC', () => {
@@ -101,14 +101,16 @@ describe('PlanQueries', () => {
   it('updateStatus() changes plan status', () => {
     const p = plans.create(threadId, 'raw', null, 1);
     plans.updateStatus(p.id, 'approved');
-    expect(plans.getById(p.id)!.status).toBe('approved');
+    expect(plans.getById(p.id)?.status).toBe('approved');
   });
 
   it('updateStructured() stores JSON', () => {
     const p = plans.create(threadId, 'raw', null, 1);
-    const structured = { title: 'Plan', steps: [] } as any;
+    const structured = { title: 'Plan', steps: [] };
     plans.updateStructured(p.id, structured);
-    const updated = plans.getById(p.id)!;
+    const updated = plans.getById(p.id);
+    expect(updated).toBeTruthy();
+    if (!updated) throw new Error('Expected updated plan');
     expect(updated.structured).toEqual(structured);
   });
 
@@ -119,8 +121,8 @@ describe('PlanQueries', () => {
 
     plans.supersedeAll(threadId);
 
-    expect(plans.getById(p1.id)!.status).toBe('superseded');
-    expect(plans.getById(p2.id)!.status).toBe('superseded');
+    expect(plans.getById(p1.id)?.status).toBe('superseded');
+    expect(plans.getById(p2.id)?.status).toBe('superseded');
   });
 
   it('supersedeAllForIssue() supersedes plans on older runs for the same issue', () => {
@@ -145,8 +147,8 @@ describe('PlanQueries', () => {
 
     plans.supersedeAllForIssue(projectId, 38, currentThread.id);
 
-    expect(plans.getById(olderPlan.id)!.status).toBe('superseded');
-    expect(plans.getById(currentPlan.id)!.status).toBe('pending_review');
-    expect(plans.getById(otherIssuePlan.id)!.status).toBe('pending_review');
+    expect(plans.getById(olderPlan.id)?.status).toBe('superseded');
+    expect(plans.getById(currentPlan.id)?.status).toBe('pending_review');
+    expect(plans.getById(otherIssuePlan.id)?.status).toBe('pending_review');
   });
 });

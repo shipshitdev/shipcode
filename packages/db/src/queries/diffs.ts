@@ -2,13 +2,24 @@ import type { DatabaseSync } from 'node:sqlite';
 import { type DiffRecord, toIsoUtc } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
 
+interface DiffRow {
+  id: string;
+  thread_id: string;
+  file_path: string;
+  action: DiffRecord['action'];
+  diff_content: string | null;
+  before_hash: string | null;
+  after_hash: string | null;
+  created_at: string;
+}
+
 export class DiffQueries {
   constructor(private db: DatabaseSync) {}
 
   list(threadId: string): DiffRecord[] {
     const rows = this.db
       .prepare('SELECT * FROM diffs WHERE thread_id = ? ORDER BY created_at ASC')
-      .all(threadId) as any[];
+      .all(threadId) as DiffRow[];
     return rows.map(mapDiff);
   }
 
@@ -32,7 +43,7 @@ export class DiffQueries {
       id,
       threadId,
       filePath,
-      action: action as any,
+      action: action as DiffRecord['action'],
       diffContent,
       beforeHash: null,
       afterHash: null,
@@ -41,7 +52,7 @@ export class DiffQueries {
   }
 }
 
-function mapDiff(row: any): DiffRecord {
+function mapDiff(row: DiffRow): DiffRecord {
   return {
     id: row.id,
     threadId: row.thread_id,

@@ -27,7 +27,11 @@ describe('ReviewQueries', () => {
   });
 
   it('create() with structured uses its decision/confidence', () => {
-    const structured = { decision: 'approved', confidence: 'high', feedback: 'looks good' } as any;
+    const structured = {
+      decision: 'approved',
+      confidence: 'high',
+      feedback: 'looks good',
+    } as const;
     const r = reviews.create(planId, 'raw review', structured);
     expect(r.decision).toBe('approved');
     expect(r.confidence).toBe('high');
@@ -50,7 +54,9 @@ describe('ReviewQueries', () => {
       first.id,
     );
     const second = reviews.create(planId, 'second', null);
-    const found = reviews.getByPlanId(planId)!;
+    const found = reviews.getByPlanId(planId);
+    expect(found).toBeTruthy();
+    if (!found) throw new Error('Expected latest review');
     expect(found.id).toBe(second.id);
   });
 

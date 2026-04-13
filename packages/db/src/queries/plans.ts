@@ -2,6 +2,16 @@ import type { DatabaseSync } from 'node:sqlite';
 import { type PlanRecord, type PlanStatus, type ShipCodePlan, toIsoUtc } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
 
+interface PlanRow {
+  id: string;
+  thread_id: string;
+  version: number;
+  raw_output: string;
+  structured: string | null;
+  status: PlanStatus;
+  created_at: string;
+}
+
 export class PlanQueries {
   constructor(private db: DatabaseSync) {}
 
@@ -15,7 +25,7 @@ export class PlanQueries {
   list(threadId: string): PlanRecord[] {
     const rows = this.db
       .prepare('SELECT * FROM plans WHERE thread_id = ? ORDER BY version DESC')
-      .all(threadId) as any[];
+      .all(threadId) as PlanRow[];
     return rows.map(mapPlan);
   }
 
@@ -29,19 +39,19 @@ export class PlanQueries {
             AND t.github_issue_number = ?
           ORDER BY p.created_at DESC, t.created_at DESC, p.version DESC, p.id DESC`,
       )
-      .all(projectId, issueNumber) as any[];
+      .all(projectId, issueNumber) as PlanRow[];
     return rows.map(mapPlan);
   }
 
   getLatest(threadId: string): PlanRecord | null {
     const row = this.db
       .prepare('SELECT * FROM plans WHERE thread_id = ? ORDER BY version DESC LIMIT 1')
-      .get(threadId) as any;
+      .get(threadId) as PlanRow | undefined;
     return row ? mapPlan(row) : null;
   }
 
   getById(id: string): PlanRecord | null {
-    const row = this.db.prepare('SELECT * FROM plans WHERE id = ?').get(id) as any;
+    const row = this.db.prepare('SELECT * FROM plans WHERE id = ?').get(id) as PlanRow | undefined;
     return row ? mapPlan(row) : null;
   }
 
@@ -62,7 +72,11 @@ export class PlanQueries {
       )
       .run(id, threadId, version, rawOutput, structuredJson, now);
 
-    return this.getById(id)!;
+    const plan = this.getById(id);
+    if (!plan) {
+      throw new Error(`Failed to load plan after insert: ${id}`);
+    }
+    return plan;
   }
 
   updateStatus(id: string, status: PlanStatus): void {
@@ -101,7 +115,7 @@ export class PlanQueries {
   }
 }
 
-function mapPlan(row: any): PlanRecord {
+function mapPlan(row: PlanRow): PlanRecord {
   return {
     id: row.id,
     threadId: row.thread_id,
