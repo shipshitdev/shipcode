@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { LogoMark } from './LogoMark';
 
 export function Header() {
   const [scrolled, setScrolled] = useState(false);
@@ -22,9 +23,7 @@ export function Header() {
           href="/"
           className="flex items-center gap-3 text-sm font-medium tracking-[0.18em] text-primary uppercase"
         >
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-xs">
-            SC
-          </span>
+          <LogoMark className="h-8 w-8 shrink-0" />
           ShipCode
         </a>
         <div className="flex items-center gap-6 text-sm">

@@ -1,3 +1,4 @@
+import { InstallCommand } from './InstallCommand';
 import { ProductMockup } from './ProductMockup';
 
 export function Hero() {
@@ -7,7 +8,7 @@ export function Hero() {
         <div className="animate-fade-in-up">
           <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-medium tracking-[0.18em] text-secondary uppercase">
             ShipCode
-            <span className="text-muted">Issue to PR</span>
+            <span className="text-muted">GitHub pipeline</span>
           </div>
           <h1 className="mx-auto mt-8 max-w-5xl text-5xl font-semibold tracking-[-0.05em] text-primary md:text-7xl">
             Issues in. PRs out.
@@ -39,6 +40,7 @@ export function Hero() {
               Read the docs
             </a>
           </div>
+          <InstallCommand compact />
           <p className="text-sm text-muted">Planning. Review loops. Worktrees. Verifier retries.</p>
         </div>
 
