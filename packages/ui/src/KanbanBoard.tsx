@@ -310,24 +310,26 @@ function DraggableCard({
         onClick();
       }}
     >
-      {issue.pipelineStatus !== 'todo' && issue.pipelineStatus !== 'queued' && issue.pipelineStatus !== 'failed' && (
-        <div className="absolute bottom-0 left-0 right-0 h-[3px] rounded-b-md overflow-hidden bg-agent/15">
-          <div
-            className={cn(
-              'absolute h-full transition-[width] duration-700',
-              issue.pipelineStatus === 'completed'
-                ? 'bg-success'
-                : issue.pipelineStatus === 'awaiting_approval'
-                  ? 'bg-warning'
-                  : 'bg-agent',
+      {issue.pipelineStatus !== 'todo' &&
+        issue.pipelineStatus !== 'queued' &&
+        issue.pipelineStatus !== 'failed' && (
+          <div className="absolute bottom-0 left-0 right-0 h-[3px] rounded-b-md overflow-hidden bg-agent/15">
+            <div
+              className={cn(
+                'absolute h-full transition-[width] duration-700',
+                issue.pipelineStatus === 'completed'
+                  ? 'bg-success'
+                  : issue.pipelineStatus === 'awaiting_approval'
+                    ? 'bg-warning'
+                    : 'bg-agent',
+              )}
+              style={{ width: `${phaseToProgress(issue.pipelineStatus)}%` }}
+            />
+            {isActive && (
+              <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-slide-progress" />
             )}
-            style={{ width: `${phaseToProgress(issue.pipelineStatus)}%` }}
-          />
-          {isActive && (
-            <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-slide-progress" />
-          )}
-        </div>
-      )}
+          </div>
+        )}
       {issue.pipelineStatus === 'completed' && onArchiveIssue && (
         <Button
           variant="ghost"

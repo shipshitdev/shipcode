@@ -12,6 +12,7 @@
     "./primitives/*": "./src/primitives/*.tsx"
   },
   "scripts": {
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "biome check src/",
     "clean": "rm -rf dist"

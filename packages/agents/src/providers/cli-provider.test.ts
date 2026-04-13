@@ -1,5 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { _internals, createClaudeCliProvider, createCodexCliProvider } from './cli-provider';
+import {
+  _internals,
+  createClaudeCliProvider,
+  createCodexCliProvider,
+} from './cli-provider';
 import type { ProviderRequest } from './types';
 import type { ProcessManager } from '../process-manager';
 
@@ -81,6 +85,8 @@ describe('buildClaudeArgs', () => {
       'PROMPT',
       '--allowedTools',
       'Edit,Write,Bash,Glob,Grep,Read',
+      '--max-thinking-tokens',
+      '32000',
       '--dangerously-skip-permissions',
     ]);
   });
@@ -104,7 +110,9 @@ describe('buildCodexArgs', () => {
   });
 
   it('review phase (autonomous) sets reasoning effort via -c model_reasoning_effort', () => {
-    const args = buildCodexArgs(req({ phase: 'review', phaseHints: { reasoningEffort: 'high' } }));
+    const args = buildCodexArgs(
+      req({ phase: 'review', phaseHints: { reasoningEffort: 'high' } }),
+    );
     expect(args).toEqual([
       '-a',
       'never',
@@ -143,21 +151,28 @@ describe('buildCodexArgs', () => {
 function createMockProcessManager() {
   const listeners: Record<string, Array<(..._args: any[]) => void>> = {};
   let spawnCount = 0;
-  const spawnCalls: Array<{ command: string; args: string[]; cwd: string }> = [];
+  const spawnCalls: Array<{ command: string; args: string[]; cwd: string }> =
+    [];
 
   const pm = {
-    spawn: vi.fn((_type: string, command: string, args: string[], cwd: string) => {
-      spawnCount++;
-      spawnCalls.push({ command, args, cwd });
-      return { id: `proc-${spawnCount}` };
-    }),
+    spawn: vi.fn(
+      (_type: string, command: string, args: string[], cwd: string) => {
+        spawnCount++;
+        spawnCalls.push({ command, args, cwd });
+        return { id: `proc-${spawnCount}` };
+      },
+    ),
     kill: vi.fn(),
     on: vi.fn((event: string, handler: (..._args: any[]) => void) => {
       (listeners[event] ??= []).push(handler);
     }),
-    removeListener: vi.fn((event: string, handler: (..._args: any[]) => void) => {
-      listeners[event] = (listeners[event] ?? []).filter((h) => h !== handler);
-    }),
+    removeListener: vi.fn(
+      (event: string, handler: (..._args: any[]) => void) => {
+        listeners[event] = (listeners[event] ?? []).filter(
+          (h) => h !== handler,
+        );
+      },
+    ),
   } as unknown as ProcessManager;
 
   async function trigger(event: string, ...args: any[]) {
@@ -213,7 +228,9 @@ describe('createClaudeCliProvider', () => {
     const provider = createClaudeCliProvider(pm);
     const abort = new AbortController();
 
-    const promise = provider.generate(req({ phase: 'plan', signal: abort.signal }));
+    const promise = provider.generate(
+      req({ phase: 'plan', signal: abort.signal }),
+    );
     await new Promise((r) => setImmediate(r));
 
     abort.abort();
@@ -235,7 +252,9 @@ describe('createClaudeCliProvider', () => {
     const abort = new AbortController();
     abort.abort();
 
-    const result = await provider.generate(req({ phase: 'plan', signal: abort.signal }));
+    const result = await provider.generate(
+      req({ phase: 'plan', signal: abort.signal }),
+    );
     expect(result.exitCode).toBe(130);
     expect(pm.spawn).not.toHaveBeenCalled();
   });

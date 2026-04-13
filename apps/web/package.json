@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "biome check app/",
     "clean": "rm -rf .next out"

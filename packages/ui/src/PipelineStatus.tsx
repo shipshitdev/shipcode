@@ -73,7 +73,9 @@ export function PipelineStatus({ currentPhase, onPhaseClick }: PipelineStatusPro
               )}
             </Button>
             {index < PHASES.length - 1 && (
-              <span className={cn('w-4 h-0.5 shrink-0 bg-text-muted', isCompleted && 'bg-success')} />
+              <span
+                className={cn('w-4 h-0.5 shrink-0 bg-text-muted', isCompleted && 'bg-success')}
+              />
             )}
           </div>
         );

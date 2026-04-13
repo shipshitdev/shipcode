@@ -777,7 +777,7 @@ describe('createPipeline', () => {
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed');
     });
 
-    it('dirty worktree + retries left → starts execution retry', async () => {
+    it('dirty worktree is auto-committed before verification, then retries on verifier failure', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
       pipeline.getContext('t1')!.forkPointSha = 'abc123';
@@ -786,17 +786,31 @@ describe('createPipeline', () => {
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.startsWith('git diff')) return 'some diff';
         if (cmd.startsWith('git status')) return 'M dirty.ts';
+        if (cmd.startsWith('git rev-parse')) return 'headsha123';
         return '';
       });
 
       await pipeline.startVerification('t1');
 
+      expect(mockExecSync).toHaveBeenCalledWith(
+        expect.stringContaining('git add -A'),
+        expect.any(Object),
+      );
+      expect(mockExecSync).toHaveBeenCalledWith(
+        expect.stringContaining('git commit --no-verify'),
+        expect.any(Object),
+      );
+
+      await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_FAILED_JSON));
+      await mock.trigger('exit', 'proc-2', 0);
+      await flush();
+
       expect(mock.deps.verifications.create).toHaveBeenCalled();
-      // Should have started execution (spawned another process)
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'executing');
+      expect(pipeline.getContext('t1')!.verificationRetries).toBe(1);
     });
 
-    it('dirty worktree + no retries → emits failed', async () => {
+    it('dirty worktree is auto-committed before verification, then fails when retries are exhausted', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
       pipeline.getContext('t1')!.forkPointSha = 'abc123';
@@ -805,11 +819,25 @@ describe('createPipeline', () => {
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.startsWith('git diff')) return 'some diff';
         if (cmd.startsWith('git status')) return 'M dirty.ts';
+        if (cmd.startsWith('git rev-parse')) return 'headsha123';
         return '';
       });
 
       await pipeline.startVerification('t1');
 
+      expect(mockExecSync).toHaveBeenCalledWith(
+        expect.stringContaining('git add -A'),
+        expect.any(Object),
+      );
+      expect(mockExecSync).toHaveBeenCalledWith(
+        expect.stringContaining('git commit --no-verify'),
+        expect.any(Object),
+      );
+
+      await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_FAILED_JSON));
+      await mock.trigger('exit', 'proc-2', 0);
+
+      expect(mock.deps.verifications.create).toHaveBeenCalled();
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed');
       expect(pipeline.getContext('t1')).toBeUndefined();
     });

@@ -15,6 +15,7 @@
   "scripts": {
     "build": "next build",
     "dev": "sh -c 'next dev -p \"${PORT:-3101}\"'",
+    "test": "vitest run",
     "start": "next start"
   },
   "version": "0.0.1"
