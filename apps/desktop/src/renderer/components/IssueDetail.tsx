@@ -24,11 +24,10 @@ import {
   Archive,
   Badge,
   Button,
-  ChevronLeft,
   cn,
   ExternalLink,
-  Maximize2,
-  Minimize2,
+  PanelLeftClose,
+  PanelLeftOpen,
   PhaseChip,
   X,
 } from '@shipcode/ui';
@@ -57,6 +56,8 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   // undefined = untouched (auto-expand latest); null = user explicitly collapsed
   const [expandedPlanId, setExpandedPlanId] = useState<string | null | undefined>(undefined);
   const prevLatestPlanIdRef = useRef<string | null>(null);
+  const prevIssueSelectionKeyRef = useRef<string | null>(null);
+  const prevHasPlanHistoryRef = useRef<boolean | null>(null);
   const [fullScreenPlanId, setFullScreenPlanId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState('');
   const [pendingAction, setPendingAction] = useState<'approve' | 'request_changes' | 'cancel'>(
@@ -64,7 +65,6 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRefreshingFromGithub, setIsRefreshingFromGithub] = useState(false);
-  const [prdCollapsed, setPrdCollapsed] = useState(false);
   const [planHistoryCollapsed, setPlanHistoryCollapsed] = useState(false);
   const [showRawOutput, setShowRawOutput] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
@@ -94,7 +94,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     queryKey: ['thread', activeThreadId],
     queryFn: () => window.shipcode.invoke('thread:get', { threadId: activeThreadId }),
     enabled: !!activeThreadId,
-    refetchInterval: shouldPollThread ? 2000 : false,
+    refetchInterval: shouldPollThread ? 5000 : false,
   });
   const currentPipelinePhase = thread?.status ?? pipelinePhase;
   const shouldPollLiveThread =
@@ -110,7 +110,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     queryKey: ['plan-history', activeThreadId],
     queryFn: () => window.shipcode.invoke('plan:list', { threadId: activeThreadId }),
     enabled: !!activeThreadId,
-    refetchInterval: shouldPollLiveThread ? 2000 : false,
+    refetchInterval: shouldPollLiveThread ? 5000 : false,
   });
   const isThreadPlanHistoryLoading = !!activeThreadId && planHistory === undefined;
   const normalizedThreadPlanHistory = Array.isArray(planHistory) ? planHistory : [];
@@ -127,7 +127,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       });
     },
     enabled: !!activeProjectId && !!activeIssue && shouldLoadHistoryTab,
-    refetchInterval: shouldPollLiveThread && shouldLoadHistoryTab ? 2000 : false,
+    refetchInterval: shouldPollLiveThread && shouldLoadHistoryTab ? 5000 : false,
   });
   const isIssuePlanHistoryLoading =
     !!activeProjectId && !!activeIssue && issuePlanHistory === undefined;
@@ -136,6 +136,8 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     normalizedIssuePlanHistory.length > 0
       ? normalizedIssuePlanHistory
       : normalizedThreadPlanHistory;
+  const hasPlanHistory = normalizedPlanHistory.length > 0;
+  const issueSelectionKey = `${activeIssue?.id ?? ''}:${activeThreadId ?? ''}`;
   const isPlanHistoryLoading = isThreadPlanHistoryLoading || isIssuePlanHistoryLoading;
   const { data: issueActivity = [] } = useQuery<ActivityEntry[]>({
     queryKey: ['issue-activity', activeProjectId, activeIssue?.issueNumber],
@@ -150,7 +152,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       });
     },
     enabled: !!activeProjectId && !!activeIssue && shouldLoadActivityTab,
-    refetchInterval: shouldPollLiveThread && shouldLoadActivityTab ? 5000 : false,
+    refetchInterval: shouldPollLiveThread && shouldLoadActivityTab ? 10_000 : false,
   });
   const normalizedIssueActivity = Array.isArray(issueActivity) ? issueActivity : [];
   const planRunGroups = useMemo(() => {
@@ -177,7 +179,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     queryKey: ['reviews-by-plans', planIds.join(',')],
     queryFn: () => window.shipcode.invoke('review:list-by-plans', { planIds }),
     enabled: planIds.length > 0,
-    refetchInterval: shouldPollLiveThread ? 2000 : false,
+    refetchInterval: shouldPollLiveThread ? 5000 : false,
   });
   const normalizedReviewsByPlanId =
     reviewsByPlanId && typeof reviewsByPlanId === 'object' ? reviewsByPlanId : {};
@@ -197,7 +199,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     queryKey: ['checkpoints', activeThreadId],
     queryFn: () => window.shipcode.invoke('checkpoint:list', { threadId: activeThreadId }),
     enabled: !!activeThreadId && shouldLoadPipelineTab,
-    refetchInterval: shouldPollLiveThread && shouldLoadPipelineTab ? 2000 : false,
+    refetchInterval: shouldPollLiveThread && shouldLoadPipelineTab ? 5000 : false,
   });
 
   // Fetch latest verification for the thread
@@ -263,6 +265,20 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     }
     setShowRawOutput(false);
   }, [activeThreadId]);
+
+  useEffect(() => {
+    const nextDefaultTab: IssueDetailTab = hasPlanHistory ? 'history' : 'prd';
+    if (prevIssueSelectionKeyRef.current !== issueSelectionKey) {
+      prevIssueSelectionKeyRef.current = issueSelectionKey;
+      prevHasPlanHistoryRef.current = hasPlanHistory;
+      setActiveTab(nextDefaultTab);
+      return;
+    }
+    if (prevHasPlanHistoryRef.current !== hasPlanHistory) {
+      prevHasPlanHistoryRef.current = hasPlanHistory;
+      setActiveTab(nextDefaultTab);
+    }
+  }, [hasPlanHistory, issueSelectionKey]);
 
   // Dismiss any pending notifications for this thread when the user opens it.
   // Catches the "fired before navigation" case; useIpc.ts handles the
@@ -521,7 +537,10 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     if (!activeProjectId) return;
     setIsRefreshingFromGithub(true);
     try {
-      await window.shipcode.invoke('github:refresh-issues', { projectId: activeProjectId });
+      await window.shipcode.invoke('github:refresh-issues', {
+        projectId: activeProjectId,
+        force: true,
+      });
       await queryClient.invalidateQueries({ queryKey: ['github-issues', activeProjectId] });
     } finally {
       setIsRefreshingFromGithub(false);
@@ -699,16 +718,18 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         size="icon-xs"
         className="text-muted"
         onClick={toggleIssueDetailExpanded}
-        title={expanded ? 'Collapse to panel' : 'Expand to full page'}
+        title={expanded ? 'Collapse to sidebar' : 'Expand detail'}
+        aria-label={expanded ? 'Collapse to sidebar' : 'Expand detail'}
       >
-        {expanded ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+        {expanded ? <PanelLeftClose size={13} /> : <PanelLeftOpen size={13} />}
       </Button>
       <Button
         variant="ghost"
         size="icon-xs"
         className="text-muted"
         onClick={() => selectIssue(null)}
-        title="Close"
+        title="Close issue detail"
+        aria-label="Close issue detail"
       >
         <X size={15} strokeWidth={2.25} />
       </Button>
@@ -867,12 +888,12 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       normalizedReviewsByPlanId={normalizedReviewsByPlanId}
       normalizedThreadPlanHistory={normalizedThreadPlanHistory}
       isPlanHistoryLoading={isPlanHistoryLoading}
+      hasPlanHistory={hasPlanHistory}
       phaseModelValidation={phaseModelValidation}
       phaseSelectValues={phaseSelectValues}
       planHistoryCollapsed={planHistoryCollapsed}
       planRunCount={planRunCount}
       planRunGroups={planRunGroups}
-      prdCollapsed={prdCollapsed}
       projectDefaultPhaseSelections={projectDefaultPhaseSelections}
       runNumberByThreadId={runNumberByThreadId}
       thread={thread}
@@ -888,7 +909,6 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       }}
       onPlanExpandedChange={setExpandedPlanId}
       onPlanHistoryCollapsedChange={setPlanHistoryCollapsed}
-      onPrdCollapsedChange={setPrdCollapsed}
       onRefreshFromGithub={() => {
         void handleRefreshFromGithub();
       }}
@@ -928,48 +948,49 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           {/* Header */}
           <div className="relative shrink-0 border-b border-border p-4">
-            {headerButtons}
-            <Button
-              variant="ghost"
-              size="xs"
-              onClick={toggleIssueDetailExpanded}
-              className="mb-2 h-auto gap-1 px-0 text-xs font-normal text-muted hover:bg-transparent"
-            >
-              <ChevronLeft size={12} />
-              Back to board
-            </Button>
-            <div className="flex items-center gap-2 pr-16">
-              <span className="font-mono text-xs text-muted">#{activeIssue.issueNumber}</span>
-              {githubIssueUrl && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleOpenOnGithub}
-                  className="h-6 gap-1 text-[11px]"
-                  title="Open this issue on github.com"
-                >
-                  View on GitHub <ExternalLink size={12} />
-                </Button>
-              )}
+            <div className="mx-auto w-full max-w-5xl">
+              {headerButtons}
+              <div className="flex items-center gap-2 pr-16">
+                <span className="font-mono text-xs text-muted">#{activeIssue.issueNumber}</span>
+                {githubIssueUrl && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleOpenOnGithub}
+                    className="h-6 gap-1 text-[11px]"
+                    title="Open this issue on github.com"
+                  >
+                    View on GitHub <ExternalLink size={12} />
+                  </Button>
+                )}
+              </div>
+              <div className="my-1 flex flex-wrap items-center gap-2 pr-16">
+                {issueStatusBadge}
+                <h1 className="text-xl font-semibold">{activeIssue.title}</h1>
+              </div>
+              {issueBadges}
             </div>
-            <div className="my-1 flex flex-wrap items-center gap-2 pr-16">
-              {issueStatusBadge}
-              <h1 className="text-xl font-semibold">{activeIssue.title}</h1>
-            </div>
-            {issueBadges}
           </div>
           {pipelineStartCard && (
-            <div className="shrink-0 border-b border-border px-6 py-4">{pipelineStartCard}</div>
+            <div className="shrink-0 border-b border-border px-6 py-4">
+              <div className="mx-auto w-full max-w-5xl">{pipelineStartCard}</div>
+            </div>
           )}
           {rerunSection && (
-            <div className="shrink-0 border-b border-border px-6 py-4">{rerunSection}</div>
+            <div className="shrink-0 border-b border-border px-6 py-4">
+              <div className="mx-auto w-full max-w-5xl">{rerunSection}</div>
+            </div>
           )}
           {approvalSection && (
-            <div className="shrink-0 border-b border-border px-6 py-4">{approvalSection}</div>
+            <div className="shrink-0 border-b border-border px-6 py-4">
+              <div className="mx-auto w-full max-w-5xl">{approvalSection}</div>
+            </div>
           )}
 
           {/* Scrollable content */}
-          <div className="flex-1 overflow-y-auto p-6">{detailTabs}</div>
+          <div className="flex-1 overflow-y-auto p-6">
+            <div className="mx-auto flex w-full max-w-5xl min-h-full flex-col">{detailTabs}</div>
+          </div>
         </div>
         {detailDialogs}
       </div>

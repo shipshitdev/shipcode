@@ -71,7 +71,6 @@ export function ActivityView() {
     queryKey: ['activity', { limit: 200 }],
     queryFn: () =>
       window.shipcode.invoke<ActivityEntry[]>('dashboard:get-activity', { limit: 200 }),
-    refetchInterval: 10_000,
   });
 
   useEffect(() => {

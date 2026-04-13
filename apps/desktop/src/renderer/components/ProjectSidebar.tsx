@@ -31,7 +31,7 @@ import {
   Wrench,
 } from '@shipcode/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 
 const SIDEBAR_MIN = 180;
@@ -77,13 +77,11 @@ export function ProjectSidebar() {
   const { data: stats } = useQuery<DashboardStats>({
     queryKey: ['dashboard', 'stats'],
     queryFn: () => window.shipcode.invoke<DashboardStats>('dashboard:get-stats'),
-    refetchInterval: 5000,
   });
 
   const { data: notifs = [] } = useQuery<NotificationRecord[]>({
     queryKey: ['notifications'],
     queryFn: () => window.shipcode.invoke<NotificationRecord[]>('notification:list'),
-    refetchInterval: 5000,
   });
 
   // Shared invalidation across every project query key. Titlebar/IssueDetail
@@ -105,7 +103,9 @@ export function ProjectSidebar() {
       if (project) {
         invalidateProjects();
         selectProject(project.id);
-        window.shipcode.invoke('github:refresh-issues', { projectId: project.id }).catch(() => {});
+        window.shipcode
+          .invoke('github:refresh-issues', { projectId: project.id, force: true })
+          .catch(() => {});
       }
     },
   });
@@ -163,7 +163,9 @@ export function ProjectSidebar() {
       queryClient.invalidateQueries({ queryKey: ['github-issues', project.id] });
       queryClient.invalidateQueries({ queryKey: ['threads', project.id] });
       queryClient.invalidateQueries({ queryKey: ['git-branches', project.id] });
-      window.shipcode.invoke('github:refresh-issues', { projectId: project.id }).catch(() => {});
+      window.shipcode
+        .invoke('github:refresh-issues', { projectId: project.id, force: true })
+        .catch(() => {});
     },
     onError: (error: Error) => {
       window.alert(error.message || 'Failed to relink project folder');
@@ -172,6 +174,19 @@ export function ProjectSidebar() {
 
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
+
+  useEffect(() => {
+    const unsubFire = window.shipcode.on('notification:fire', () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    });
+    const unsubDismiss = window.shipcode.on('notification:dismiss', () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    });
+    return () => {
+      unsubFire();
+      unsubDismiss();
+    };
+  }, [queryClient]);
 
   const handleResizeMouseDown = useCallback(
     (e: React.MouseEvent) => {

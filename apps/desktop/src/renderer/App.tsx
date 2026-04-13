@@ -102,7 +102,7 @@ export function App() {
             queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
             useAppStore.getState().selectProject(newProjectId);
             window.shipcode
-              .invoke('github:refresh-issues', { projectId: newProjectId })
+              .invoke('github:refresh-issues', { projectId: newProjectId, force: true })
               .catch(() => {});
           } else {
             const projects = await queryClient.fetchQuery<Project[]>({

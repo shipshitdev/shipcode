@@ -28,7 +28,9 @@ export function ProjectMissingView({ project }: { project: ProjectWithPathState 
       queryClient.invalidateQueries({ queryKey: ['github-issues', project.id] });
       queryClient.invalidateQueries({ queryKey: ['threads', project.id] });
       queryClient.invalidateQueries({ queryKey: ['git-branches', project.id] });
-      window.shipcode.invoke('github:refresh-issues', { projectId: updated.id }).catch(() => {});
+      window.shipcode
+        .invoke('github:refresh-issues', { projectId: updated.id, force: true })
+        .catch(() => {});
     },
     onError: (err: unknown) => {
       log.error('[ProjectMissingView] relink failed', err);

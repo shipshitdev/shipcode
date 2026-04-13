@@ -1,13 +1,13 @@
 import fs from 'node:fs';
 import { GhCli } from '@shipcode/agents';
-import type { ExecutorModel } from '@shipcode/shared';
+import type { ExecutorModel, GitHubIssueCacheRecord } from '@shipcode/shared';
 import {
   clampError,
   deriveGithubIssueUrl,
   parseGithubProjectUrl,
   resolveExecutorModelForIssue,
 } from '@shipcode/shared';
-import log from '../logger.service';
+import log, { logEvent } from '../logger.service';
 import {
   attachIssueToConfiguredProjectBoard,
   resolveIssuePhaseModels,
@@ -15,6 +15,10 @@ import {
   syncLinkedPullRequestFeedback,
 } from './helpers';
 import type { IpcHandlerDeps } from './types';
+
+const ISSUE_REFRESH_TTL_MS = 5 * 60_000;
+const PR_FEEDBACK_SYNC_TTL_MS = 60_000;
+const refreshIssuesInFlight = new Map<string, Promise<GitHubIssueCacheRecord[]>>();
 
 export function registerGitHubHandlers({
   ipcMain,
@@ -34,57 +38,121 @@ export function registerGitHubHandlers({
     return queries.githubIssues.list(projectId);
   });
 
-  ipcMain.handle('github:refresh-issues', async (_event, { projectId }: { projectId: string }) => {
-    const project = queries.projects.getById(projectId);
-    if (!project) throw new Error(`Project ${projectId} not found`);
-    if (!fs.existsSync(project.path)) {
-      throw new Error(
-        `Project path no longer exists: ${project.path}. Re-add the repository from a valid path.`,
-      );
-    }
+  ipcMain.handle(
+    'github:refresh-issues',
+    async (_event, { projectId, force = false }: { projectId: string; force?: boolean }) => {
+      const cached = queries.githubIssues.list(projectId);
+      const latestFetchedAt = cached.reduce<string | null>((latest, issue) => {
+        if (!latest) return issue.fetchedAt;
+        return new Date(issue.fetchedAt).getTime() > new Date(latest).getTime()
+          ? issue.fetchedAt
+          : latest;
+      }, null);
+      const cacheAgeMs = latestFetchedAt ? Date.now() - new Date(latestFetchedAt).getTime() : null;
 
-    const ghCli = new GhCli(project.path);
-    const issues = await ghCli.listAllIssues();
-
-    for (const issue of issues) {
-      const record = queries.githubIssues.upsert({
-        projectId,
-        issueNumber: issue.number,
-        title: issue.title,
-        body: issue.body,
-        labels: issue.labels,
-        assignee: issue.assignee,
-        state: issue.state,
-      });
-      if (record.state === 'closed') {
-        queries.githubIssues.markCompletedOnClose(record.id);
-      } else if (record.state === 'open') {
-        queries.githubIssues.markReopenedOnOpen(record.id);
-        queries.githubIssues.clearArchivedAt(record.id);
+      if (!force && cached.length > 0 && cacheAgeMs !== null && cacheAgeMs < ISSUE_REFRESH_TTL_MS) {
+        logEvent('github:refresh-issues:cache-hit', {
+          projectId,
+          issueCount: cached.length,
+          cacheAgeMs,
+        });
+        return cached;
       }
 
-      await attachIssueToConfiguredProjectBoard(
-        project,
-        ghCli,
-        issue.number,
-        issue.url,
-        'github:refresh-issues',
-      );
-    }
+      const inFlight = refreshIssuesInFlight.get(projectId);
+      if (inFlight) {
+        logEvent('github:refresh-issues:deduped', { projectId, force, issueCount: cached.length });
+        return inFlight;
+      }
 
-    const cachedBeforePrSync = queries.githubIssues.list(projectId);
-    for (const issue of cachedBeforePrSync) {
+      const refreshPromise = (async () => {
+        const startedAt = Date.now();
+        const project = queries.projects.getById(projectId);
+        if (!project) throw new Error(`Project ${projectId} not found`);
+        if (!fs.existsSync(project.path)) {
+          throw new Error(
+            `Project path no longer exists: ${project.path}. Re-add the repository from a valid path.`,
+          );
+        }
+
+        const ghCli = new GhCli(project.path);
+        const issues = await ghCli.listAllIssues();
+        logEvent('github:refresh-issues:listAllIssues', {
+          projectId,
+          issueCount: issues.length,
+          elapsedMs: Date.now() - startedAt,
+        });
+
+        for (const issue of issues) {
+          const existingIssue = queries.githubIssues.getByNumber(projectId, issue.number);
+          const record = queries.githubIssues.upsert({
+            projectId,
+            issueNumber: issue.number,
+            title: issue.title,
+            body: issue.body,
+            labels: issue.labels,
+            assignee: issue.assignee,
+            state: issue.state,
+          });
+          if (record.state === 'closed') {
+            queries.githubIssues.markCompletedOnClose(record.id);
+          } else if (record.state === 'open') {
+            queries.githubIssues.markReopenedOnOpen(record.id);
+            queries.githubIssues.clearArchivedAt(record.id);
+          }
+
+          if (!existingIssue) {
+            await attachIssueToConfiguredProjectBoard(
+              project,
+              ghCli,
+              issue.number,
+              issue.url,
+              'github:refresh-issues',
+            );
+          }
+        }
+
+        const cachedAfterIssueSync = queries.githubIssues.list(projectId);
+        for (const issue of cachedAfterIssueSync) {
+          if (!issue.threadId) continue;
+          if (
+            !force &&
+            issue.prLastSyncAt &&
+            Date.now() - new Date(issue.prLastSyncAt).getTime() < PR_FEEDBACK_SYNC_TTL_MS
+          ) {
+            continue;
+          }
+          try {
+            await syncLinkedPullRequestFeedback(project, issue, queries, notificationService);
+          } catch (err) {
+            log.warn(
+              `[github:refresh-issues] PR feedback sync failed for #${issue.issueNumber}:`,
+              err,
+            );
+          }
+        }
+
+        const refreshed = queries.githubIssues.list(projectId);
+        logEvent('github:refresh-issues:done', {
+          projectId,
+          issueCount: refreshed.length,
+          elapsedMs: Date.now() - startedAt,
+          force,
+        });
+        mainWindow.webContents.send('github:issues-updated', { projectId, issues: refreshed });
+        return refreshed;
+      })();
+
+      refreshIssuesInFlight.set(projectId, refreshPromise);
       try {
-        await syncLinkedPullRequestFeedback(project, issue, queries, notificationService);
-      } catch (err) {
-        log.warn(`[github:refresh-issues] PR feedback sync failed for #${issue.issueNumber}:`, err);
+        return await refreshPromise;
+      } finally {
+        if (refreshIssuesInFlight.get(projectId) === refreshPromise) {
+          refreshIssuesInFlight.delete(projectId);
+        }
       }
-    }
-
-    const cached = queries.githubIssues.list(projectId);
-    mainWindow.webContents.send('github:issues-updated', { projectId, issues: cached });
-    return cached;
-  });
+    },
+  );
 
   ipcMain.handle(
     'github:archive-issue',

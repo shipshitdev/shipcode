@@ -10,7 +10,6 @@ export function PlanWaiting({ threadId }: { threadId: string }) {
   const { data: running = [] } = useQuery<ActivePipelineSummary[]>({
     queryKey: ['dashboard', 'running'],
     queryFn: () => window.shipcode.invoke<ActivePipelineSummary[]>('pipeline:list-active'),
-    refetchInterval: 2000,
   });
 
   useEffect(() => {

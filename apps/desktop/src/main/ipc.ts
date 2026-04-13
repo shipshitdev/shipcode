@@ -7,7 +7,7 @@ import { registerProjectHandlers } from './ipc/register-project-handlers';
 import { registerSkillsHandlers } from './ipc/register-skills-handlers';
 import { registerSupportHandlers } from './ipc/register-support-handlers';
 import type { Queries } from './ipc/types';
-import log from './logger.service';
+import log, { logEvent } from './logger.service';
 import type { NotificationService } from './notification-service';
 
 export function registerIpcHandlers(
@@ -26,13 +26,48 @@ export function registerIpcHandlers(
   }
 
   const deps = {
-    ipcMain,
+    ipcMain: (() => {
+      const wrapped = Object.create(ipcMain) as IpcMain;
+      wrapped.handle = ((channel, listener) =>
+        ipcMain.handle(channel, async (event, ...args) => {
+          const startedAt = Date.now();
+          try {
+            const result = await listener(event, ...args);
+            const elapsedMs = Date.now() - startedAt;
+            logEvent('ipc:handle', {
+              channel,
+              ok: true,
+              elapsedMs,
+            });
+            if (elapsedMs >= 150) {
+              log.info(`[ipc] ${channel} completed in ${elapsedMs}ms`);
+            }
+            return result;
+          } catch (error) {
+            const elapsedMs = Date.now() - startedAt;
+            const message = error instanceof Error ? error.message : String(error);
+            logEvent('ipc:handle', {
+              channel,
+              ok: false,
+              elapsedMs,
+              error: message,
+            });
+            throw error;
+          }
+        })) as IpcMain['handle'];
+      return wrapped;
+    })(),
     mainWindow,
     queries,
     processManager,
     pipeline,
     notificationService,
   } as const;
+
+  ipcMain.on('diagnostics:renderer-ipc', (_event, payload: unknown) => {
+    if (!payload || typeof payload !== 'object') return;
+    logEvent('ipc:renderer', payload as Record<string, unknown>);
+  });
 
   registerProjectHandlers(deps);
   registerGitHubHandlers(deps);

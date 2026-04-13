@@ -73,6 +73,7 @@ export function CommandPalette() {
                   runAction(async () => {
                     await window.shipcode.invoke('github:refresh-issues', {
                       projectId: activeProjectId,
+                      force: true,
                     });
                     queryClient.invalidateQueries({ queryKey: ['github-issues'] });
                   })

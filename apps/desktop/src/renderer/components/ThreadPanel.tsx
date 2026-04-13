@@ -31,7 +31,10 @@ export function ThreadPanel() {
 
   const refreshIssues = useMutation({
     mutationFn: (projectId: string) =>
-      window.shipcode.invoke<GitHubIssueCacheRecord[]>('github:refresh-issues', { projectId }),
+      window.shipcode.invoke<GitHubIssueCacheRecord[]>('github:refresh-issues', {
+        projectId,
+        force: true,
+      }),
     onSuccess: (freshIssues, projectId) => {
       queryClient.setQueryData(['github-issues', projectId], freshIssues);
     },
@@ -39,11 +42,6 @@ export function ThreadPanel() {
       log.error('[threadpanel] refresh-issues failed', { err });
     },
   });
-
-  useEffect(() => {
-    if (!activeProjectId) return;
-    refreshIssues.mutate(activeProjectId);
-  }, [activeProjectId, refreshIssues]);
 
   useEffect(() => {
     if (!archiveFeedback || archiveFeedback.tone === 'pending') return;

@@ -35,12 +35,12 @@ interface IssueDetailTabsProps {
   normalizedReviewsByPlanId: Record<string, ReviewRecord>;
   normalizedThreadPlanHistory: PlanRecord[];
   isPlanHistoryLoading: boolean;
+  hasPlanHistory: boolean;
   phaseModelValidation: Partial<Record<PhaseKey, OpenRouterModelValidation | null>>;
   phaseSelectValues: Record<PhaseKey, string>;
   planHistoryCollapsed: boolean;
   planRunCount: number;
   planRunGroups: PlanRunGroup[];
-  prdCollapsed: boolean;
   projectDefaultPhaseSelections: Record<PhaseKey, PhaseSelection>;
   runNumberByThreadId: Record<string, number>;
   thread: Thread | null | undefined;
@@ -52,7 +52,6 @@ interface IssueDetailTabsProps {
   onPhaseOpenRouterSlugBlur: (phase: PhaseKey, rawValue: string) => void;
   onPlanExpandedChange: (planId: string | null | undefined) => void;
   onPlanHistoryCollapsedChange: (collapsed: boolean) => void;
-  onPrdCollapsedChange: (collapsed: boolean) => void;
   onRefreshFromGithub: () => void;
   onRestoreCheckpoint: (checkpoint: PipelineCheckpoint) => void;
   onStabilizePr: () => void;
@@ -78,12 +77,12 @@ export function IssueDetailTabs({
   normalizedReviewsByPlanId,
   normalizedThreadPlanHistory,
   isPlanHistoryLoading,
+  hasPlanHistory,
   phaseModelValidation,
   phaseSelectValues,
   planHistoryCollapsed,
   planRunCount,
   planRunGroups,
-  prdCollapsed,
   projectDefaultPhaseSelections,
   runNumberByThreadId,
   thread,
@@ -95,11 +94,36 @@ export function IssueDetailTabs({
   onPhaseOpenRouterSlugBlur,
   onPlanExpandedChange,
   onPlanHistoryCollapsedChange,
-  onPrdCollapsedChange,
   onRefreshFromGithub,
   onRestoreCheckpoint,
   onStabilizePr,
 }: IssueDetailTabsProps) {
+  const orderedTabs: Array<{ value: IssueDetailTab; label: string }> = hasPlanHistory
+    ? [
+        {
+          value: 'history',
+          label: `Plan History${normalizedPlanHistory.length > 0 ? ` (${normalizedPlanHistory.length})` : ''}`,
+        },
+        { value: 'prd', label: 'PRD' },
+        { value: 'pipeline', label: 'Pipeline' },
+        {
+          value: 'activity',
+          label: `Issue History${normalizedIssueActivity.length > 0 ? ` (${normalizedIssueActivity.length})` : ''}`,
+        },
+      ]
+    : [
+        { value: 'prd', label: 'PRD' },
+        {
+          value: 'history',
+          label: `Plan History${normalizedPlanHistory.length > 0 ? ` (${normalizedPlanHistory.length})` : ''}`,
+        },
+        { value: 'pipeline', label: 'Pipeline' },
+        {
+          value: 'activity',
+          label: `Issue History${normalizedIssueActivity.length > 0 ? ` (${normalizedIssueActivity.length})` : ''}`,
+        },
+      ];
+
   return (
     <Tabs
       value={activeTab}
@@ -107,26 +131,19 @@ export function IssueDetailTabs({
       className="flex min-h-0 flex-col"
     >
       <TabsList className={cn('shrink-0', expanded ? 'mb-5' : 'px-4')}>
-        <TabsTrigger value="prd">PRD</TabsTrigger>
-        <TabsTrigger value="history">
-          Plan History
-          {normalizedPlanHistory.length > 0 ? ` (${normalizedPlanHistory.length})` : ''}
-        </TabsTrigger>
-        <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
-        <TabsTrigger value="activity">
-          Issue History
-          {normalizedIssueActivity.length > 0 ? ` (${normalizedIssueActivity.length})` : ''}
-        </TabsTrigger>
+        {orderedTabs.map((tab) => (
+          <TabsTrigger key={tab.value} value={tab.value}>
+            {tab.label}
+          </TabsTrigger>
+        ))}
       </TabsList>
 
       <TabsContent value="prd" className={cn('mt-0', !expanded && 'p-4')}>
         <PrdTab
           activeIssue={activeIssue}
           expanded={expanded}
-          prdCollapsed={prdCollapsed}
           isRefreshingFromGithub={isRefreshingFromGithub}
           onEditPrd={onEditPrd}
-          onPrdCollapsedChange={onPrdCollapsedChange}
           onRefreshFromGithub={onRefreshFromGithub}
         />
       </TabsContent>

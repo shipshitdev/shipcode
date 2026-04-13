@@ -129,7 +129,7 @@ const makeReview = (overrides: Partial<ReviewRecord> = {}): ReviewRecord => ({
   ...overrides,
 });
 
-function renderWithProviders() {
+function renderWithProviders(props?: { expanded?: boolean }) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -141,7 +141,7 @@ function renderWithProviders() {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <IssueDetail />
+      <IssueDetail expanded={props?.expanded} />
     </QueryClientProvider>,
   );
 }
@@ -442,7 +442,7 @@ describe('IssueDetail', () => {
     expect(screen.queryByText('pending_review')).not.toBeInTheDocument();
   });
 
-  it('defers issue-wide history fetch until the plan history tab is opened', async () => {
+  it('loads issue-wide history eagerly so default-tab selection can use it', async () => {
     const thread = makeThread({ status: 'reviewing' });
     const plan = makePlan();
 
@@ -460,16 +460,6 @@ describe('IssueDetail', () => {
     });
 
     renderWithProviders();
-
-    expect(screen.getByRole('tab', { name: 'PRD' })).toHaveAttribute('data-state', 'active');
-    expect(invokeMock).not.toHaveBeenCalledWith('plan:list-for-issue', {
-      projectId: 'project-1',
-      issueNumber: 42,
-    });
-
-    const historyTab = screen.getByRole('tab', { name: /Plan History/ });
-    fireEvent.mouseDown(historyTab, { button: 0 });
-    fireEvent.click(historyTab);
 
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith('plan:list-for-issue', {
@@ -646,7 +636,7 @@ describe('IssueDetail', () => {
     expect(screen.getByRole('tab', { name: 'Issue History' })).toBeInTheDocument();
   });
 
-  it('PRD tab is active by default', async () => {
+  it('PRD tab is active by default when no plan history exists', async () => {
     invokeMock.mockResolvedValue([]);
 
     renderWithProviders();
@@ -655,13 +645,35 @@ describe('IssueDetail', () => {
     expect(prdTab).toHaveAttribute('data-state', 'active');
   });
 
-  it('Pipeline tab starts inactive while PRD starts active', async () => {
-    invokeMock.mockResolvedValue([]);
+  it('Plan History is first and active by default when history exists', async () => {
+    const thread = makeThread({ status: 'reviewing' });
+    const plan = makePlan();
+
+    useAppStore.setState({
+      activeThreadId: thread.id,
+      activeIssue: makeIssue({ threadId: thread.id, pipelineStatus: 'reviewing' }),
+      pipelinePhase: 'reviewing',
+    });
+
+    invokeMock.mockImplementation(async (channel, args) => {
+      if (channel === 'thread:get') return thread;
+      if (channel === 'plan:list') return [plan];
+      if (channel === 'plan:list-for-issue') return [plan];
+      if (channel === 'review:list-by-plans') return {};
+      return args ?? [];
+    });
 
     renderWithProviders();
 
-    expect(screen.getByRole('tab', { name: 'PRD' })).toHaveAttribute('data-state', 'active');
-    expect(screen.getByRole('tab', { name: 'Pipeline' })).toHaveAttribute('data-state', 'inactive');
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /Plan History/ })).toHaveAttribute(
+        'data-state',
+        'active',
+      );
+    });
+
+    const tabLabels = screen.getAllByRole('tab').map((tab) => tab.textContent?.trim());
+    expect(tabLabels).toEqual(['Plan History (1)', 'PRD', 'Pipeline', 'Issue History']);
   });
 
   it('pipeline start card is above the tab bar when pipeline not started', async () => {
@@ -673,6 +685,29 @@ describe('IssueDetail', () => {
     const prdTab = screen.getByRole('tab', { name: 'PRD' });
     // Start button should appear before the tab list in the DOM
     expect(startButton.compareDocumentPosition(prdTab)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it('uses panel toggle icons and distinct close behavior', async () => {
+    invokeMock.mockResolvedValue([]);
+
+    renderWithProviders();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand detail' }));
+    expect(useAppStore.getState().issueDetailExpanded).toBe(true);
+    expect(useAppStore.getState().activeIssue?.id).toBe('issue-1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close issue detail' }));
+    expect(useAppStore.getState().activeIssue).toBeNull();
+  });
+
+  it('expanded layout removes Back to board and uses collapse-to-sidebar control', async () => {
+    invokeMock.mockResolvedValue([]);
+
+    renderWithProviders({ expanded: true });
+
+    expect(screen.queryByText('Back to board')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Collapse to sidebar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Close issue detail' })).toBeInTheDocument();
   });
 });
 

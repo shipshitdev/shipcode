@@ -195,7 +195,9 @@ export function ProjectSettingsModal() {
       queryClient.invalidateQueries({ queryKey: ['github-issues', projectSettingsModalProjectId] });
       queryClient.invalidateQueries({ queryKey: ['threads', projectSettingsModalProjectId] });
       queryClient.invalidateQueries({ queryKey: ['git-branches', projectSettingsModalProjectId] });
-      window.shipcode.invoke('github:refresh-issues', { projectId: updated.id }).catch(() => {});
+      window.shipcode
+        .invoke('github:refresh-issues', { projectId: updated.id, force: true })
+        .catch(() => {});
     },
     onError: (err: unknown) => {
       log.error('[ProjectSettingsModal] relink failed', err);

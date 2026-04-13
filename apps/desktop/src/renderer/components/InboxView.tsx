@@ -73,7 +73,6 @@ export function InboxView() {
   } = useQuery<NotificationRecord[]>({
     queryKey: ['notifications'],
     queryFn: () => window.shipcode.invoke<NotificationRecord[]>('notification:list'),
-    refetchInterval: 5000,
   });
 
   const active = filterAttentionRequiredNotifications(
@@ -104,10 +103,16 @@ export function InboxView() {
   });
 
   useEffect(() => {
-    const unsub = window.shipcode.on('notification:fire', () => {
+    const unsubFire = window.shipcode.on('notification:fire', () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
     });
-    return () => unsub();
+    const unsubDismiss = window.shipcode.on('notification:dismiss', () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    });
+    return () => {
+      unsubFire();
+      unsubDismiss();
+    };
   }, [queryClient]);
 
   // Switch project, fetch its issues, locate the one linked to the notification's

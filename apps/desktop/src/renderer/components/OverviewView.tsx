@@ -133,13 +133,11 @@ export function OverviewView() {
   const { data: stats } = useQuery<DashboardStats>({
     queryKey: ['dashboard', 'stats'],
     queryFn: () => window.shipcode.invoke<DashboardStats>('dashboard:get-stats'),
-    refetchInterval: 5000,
   });
 
   const { data: running = [] } = useQuery<ActivePipelineSummary[]>({
     queryKey: ['dashboard', 'running'],
     queryFn: () => window.shipcode.invoke<ActivePipelineSummary[]>('pipeline:list-active'),
-    refetchInterval: 2000,
   });
 
   const PAGE_SIZE = 5;
@@ -153,13 +151,11 @@ export function OverviewView() {
         limit: PAGE_SIZE,
         offset: (activityPage - 1) * PAGE_SIZE,
       }),
-    refetchInterval: 5000,
   });
 
   const { data: activityTotal = 0 } = useQuery<number>({
     queryKey: ['dashboard', 'activity-count'],
     queryFn: () => window.shipcode.invoke<number>('dashboard:count-activity'),
-    refetchInterval: 10_000,
   });
 
   const { data: recent = [] } = useQuery<RecentTask[]>({
@@ -169,13 +165,11 @@ export function OverviewView() {
         limit: PAGE_SIZE,
         offset: (tasksPage - 1) * PAGE_SIZE,
       }),
-    refetchInterval: 5000,
   });
 
   const { data: recentTotal = 0 } = useQuery<number>({
     queryKey: ['dashboard', 'recent-count'],
     queryFn: () => window.shipcode.invoke<number>('dashboard:count-recent-tasks'),
-    refetchInterval: 10_000,
   });
 
   const activityTotalPages = Math.max(1, Math.ceil(activityTotal / PAGE_SIZE));
