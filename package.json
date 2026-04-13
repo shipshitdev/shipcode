@@ -8,10 +8,13 @@
   ],
   "scripts": {
     "postinstall": "sh scripts/fix-node-pty-permissions.sh",
+    "hooks:setup": "sh scripts/setup-git-hooks.sh",
     "dev": "turbo run dev",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
+    "lint:fix": "bunx biome check --write .",
+    "lint:staged": "sh scripts/lint-staged-biome.sh",
     "test": "turbo run test",
     "clean": "turbo run clean",
     "dev:desktop": "turbo run dev --filter=@shipcode/desktop",
