@@ -19,6 +19,20 @@ export class PlanQueries {
     return rows.map(mapPlan);
   }
 
+  listByIssue(projectId: string, issueNumber: number): PlanRecord[] {
+    const rows = this.db
+      .prepare(
+        `SELECT p.*
+           FROM plans p
+           INNER JOIN threads t ON t.id = p.thread_id
+          WHERE t.project_id = ?
+            AND t.github_issue_number = ?
+          ORDER BY p.created_at DESC, t.created_at DESC, p.version DESC, p.id DESC`,
+      )
+      .all(projectId, issueNumber) as any[];
+    return rows.map(mapPlan);
+  }
+
   getLatest(threadId: string): PlanRecord | null {
     const row = this.db
       .prepare('SELECT * FROM plans WHERE thread_id = ? ORDER BY version DESC LIMIT 1')
@@ -67,6 +81,23 @@ export class PlanQueries {
         "UPDATE plans SET status = 'superseded' WHERE thread_id = ? AND status != 'superseded'",
       )
       .run(threadId);
+  }
+
+  supersedeAllForIssue(projectId: string, issueNumber: number, excludeThreadId?: string): void {
+    this.db
+      .prepare(
+        `UPDATE plans
+            SET status = 'superseded'
+          WHERE status != 'superseded'
+            AND thread_id IN (
+              SELECT id
+                FROM threads
+               WHERE project_id = ?
+                 AND github_issue_number = ?
+                 AND (? IS NULL OR id != ?)
+            )`,
+      )
+      .run(projectId, issueNumber, excludeThreadId ?? null, excludeThreadId ?? null);
   }
 }
 

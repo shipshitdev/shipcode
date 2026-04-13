@@ -18,6 +18,7 @@ import {
   Label,
   Button,
   Checkbox,
+  Keycap,
 } from '@shipcode/ui';
 
 /**
@@ -300,9 +301,7 @@ export function CreateIssueModal() {
             aria-label={mode === 'edit' ? 'Save PRD' : undefined}
           >
             <span>{submitLabel}</span>
-            <span className="rounded-sm border border-black/10 bg-black/10 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-accent-foreground/80">
-              ⌘↩
-            </span>
+            <Keycap>⌘↩</Keycap>
           </Button>
         </div>
       </ModalFooter>

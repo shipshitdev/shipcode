@@ -62,6 +62,36 @@ describe('PlanQueries', () => {
     expect(list[1].version).toBe(1);
   });
 
+  it('listByIssue() returns plans across all threads for the same GitHub issue', () => {
+    const projects = new ProjectQueries(db);
+    const threads = new ThreadQueries(db);
+    const projectId = projects.add('/tmp/test-issue-history').id;
+    const firstThread = threads.create(projectId, 'prompt 1', 'title 1');
+    const secondThread = threads.create(projectId, 'prompt 2', 'title 2');
+    const otherThread = threads.create(projectId, 'prompt 3', 'title 3');
+
+    threads.setGithubIssue(firstThread.id, 38, 'owner/repo');
+    threads.setGithubIssue(secondThread.id, 38, 'owner/repo');
+    threads.setGithubIssue(otherThread.id, 39, 'owner/repo');
+
+    const firstPlan = plans.create(firstThread.id, 'v1', null, 1);
+    const secondPlan = plans.create(secondThread.id, 'v2', null, 1);
+    plans.create(otherThread.id, 'other issue', null, 1);
+
+    db.prepare('UPDATE plans SET created_at = ? WHERE id = ?').run(
+      '2026-04-13T18:03:54.505Z',
+      firstPlan.id,
+    );
+    db.prepare('UPDATE plans SET created_at = ? WHERE id = ?').run(
+      '2026-04-13T18:12:36.879Z',
+      secondPlan.id,
+    );
+
+    const list = plans.listByIssue(projectId, 38);
+    expect(list).toHaveLength(2);
+    expect(list.map((plan) => plan.id)).toEqual([secondPlan.id, firstPlan.id]);
+  });
+
   it('getById() returns plan or null', () => {
     const p = plans.create(threadId, 'raw', null, 1);
     expect(plans.getById(p.id)).toMatchObject({ id: p.id });
@@ -91,5 +121,32 @@ describe('PlanQueries', () => {
 
     expect(plans.getById(p1.id)!.status).toBe('superseded');
     expect(plans.getById(p2.id)!.status).toBe('superseded');
+  });
+
+  it('supersedeAllForIssue() supersedes plans on older runs for the same issue', () => {
+    const projects = new ProjectQueries(db);
+    const threads = new ThreadQueries(db);
+    const projectId = projects.add('/tmp/test-issue-supersede').id;
+    const olderThread = threads.create(projectId, 'prompt 1', 'title 1');
+    const currentThread = threads.create(projectId, 'prompt 2', 'title 2');
+    const otherIssueThread = threads.create(projectId, 'prompt 3', 'title 3');
+
+    threads.setGithubIssue(olderThread.id, 38, 'owner/repo');
+    threads.setGithubIssue(currentThread.id, 38, 'owner/repo');
+    threads.setGithubIssue(otherIssueThread.id, 39, 'owner/repo');
+
+    const olderPlan = plans.create(olderThread.id, 'old run', null, 1);
+    const currentPlan = plans.create(currentThread.id, 'current run', null, 1);
+    const otherIssuePlan = plans.create(otherIssueThread.id, 'other issue', null, 1);
+
+    plans.updateStatus(olderPlan.id, 'pending_review');
+    plans.updateStatus(currentPlan.id, 'pending_review');
+    plans.updateStatus(otherIssuePlan.id, 'pending_review');
+
+    plans.supersedeAllForIssue(projectId, 38, currentThread.id);
+
+    expect(plans.getById(olderPlan.id)!.status).toBe('superseded');
+    expect(plans.getById(currentPlan.id)!.status).toBe('pending_review');
+    expect(plans.getById(otherIssuePlan.id)!.status).toBe('pending_review');
   });
 });

@@ -94,6 +94,7 @@ export {
   DropdownMenuTrigger,
 } from './primitives/dropdown-menu';
 export { Input } from './primitives/input';
+export { Keycap } from './primitives/keycap';
 export { Label } from './primitives/label';
 export { Modal, ModalFooter } from './primitives/modal';
 export type { PaginationProps } from './primitives/pagination';

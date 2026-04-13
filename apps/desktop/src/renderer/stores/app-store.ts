@@ -44,6 +44,7 @@ interface AppState {
   settingsSection: SettingsSection;
   issueDetailExpanded: boolean;
   issueDetailCollapsed: boolean;
+  issueDetailWidth: number;
 
   // Live data
   currentPlan: ShipCodePlan | null;
@@ -122,6 +123,7 @@ interface AppState {
   clearNotifications: () => void;
   toggleIssueDetailExpanded: () => void;
   toggleIssueDetail: () => void;
+  setIssueDetailWidth: (width: number) => void;
   toggleCommandPalette: () => void;
   openCreateIssueModal: () => void;
   openEditPrdModal: (issueNumber: number, body: string, labels: string[]) => void;
@@ -141,6 +143,7 @@ export const useAppStore = create<AppState>((set) => ({
   settingsSection: 'general' as SettingsSection,
   issueDetailExpanded: false,
   issueDetailCollapsed: false,
+  issueDetailWidth: 480,
   currentPlan: null,
   currentReview: null,
   pipelinePhase: 'idle',
@@ -321,6 +324,7 @@ export const useAppStore = create<AppState>((set) => ({
   clearNotifications: () => set({ notifications: [] }),
   toggleIssueDetailExpanded: () => set((s) => ({ issueDetailExpanded: !s.issueDetailExpanded })),
   toggleIssueDetail: () => set((s) => ({ issueDetailCollapsed: !s.issueDetailCollapsed })),
+  setIssueDetailWidth: (width) => set({ issueDetailWidth: width }),
   toggleCommandPalette: () => set((s) => ({ commandPaletteOpen: !s.commandPaletteOpen })),
   openCreateIssueModal: () =>
     set({ createIssueModalOpen: true, editingPrd: null, commandPaletteOpen: false }),

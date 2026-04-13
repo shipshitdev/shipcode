@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdirSync, statSync } from 'node:fs';
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ContextFileInfo } from '@shipcode/shared';
 
@@ -12,6 +12,8 @@ const CONTEXT_FILE_NAMES = [
   'ARCHITECTURE.md',
   'CONSTRAINTS.md',
 ] as const;
+
+type ContextGeneratorCli = 'claude' | 'codex';
 
 export interface ContextGenerateResult {
   success: boolean;
@@ -64,7 +66,10 @@ export function readContextFile(projectPath: string, name: string): string | nul
  * The prompt is piped via stdin — never passed as argv — to avoid
  * Claude CLI's argparser rejecting YAML frontmatter (`---`) as a flag.
  */
-export async function generateContextFiles(projectPath: string): Promise<ContextGenerateResult> {
+export async function generateContextFiles(
+  projectPath: string,
+  cli: ContextGeneratorCli = 'claude',
+): Promise<ContextGenerateResult> {
   const readSource = (filename: string): string | null => {
     try {
       return readFileSync(join(projectPath, filename), 'utf8');
@@ -81,7 +86,7 @@ export async function generateContextFiles(projectPath: string): Promise<Context
 
   let stdout: string;
   try {
-    stdout = await runClaudeWithStdin(prompt, projectPath, 180_000);
+    stdout = await runContextCliWithStdin(cli, prompt, projectPath, 180_000);
   } catch (err) {
     return {
       success: false,
@@ -232,25 +237,42 @@ function extractContextFiles(text: string): Record<string, string> {
 }
 
 /**
- * Spawn `claude -p` and pipe the prompt through stdin.
- * Copied verbatim from `prd-generator.ts` — argv piping is deliberate.
+ * Spawn the selected context-generator CLI and pipe the prompt through stdin.
+ * Claude requires stdin to avoid argparser issues with frontmatter. Codex
+ * supports stdin via `exec -`, which keeps the prompt path symmetric.
  */
-function runClaudeWithStdin(prompt: string, cwd: string, timeoutMs: number): Promise<string> {
+function runContextCliWithStdin(
+  cli: ContextGeneratorCli,
+  prompt: string,
+  cwd: string,
+  timeoutMs: number,
+): Promise<string> {
   return new Promise((resolve, reject) => {
-    const proc = spawn(
-      'claude',
-      [
-        '-p',
-        '--output-format',
-        'json',
-        '--max-turns',
-        '1',
-        '--dangerously-skip-permissions',
-        '--disallowedTools',
-        'Edit,Write,Bash,NotebookEdit',
-      ],
-      { cwd, stdio: ['pipe', 'pipe', 'pipe'] },
-    );
+    const command = cli;
+    const label = cli === 'claude' ? 'Claude CLI' : 'Codex CLI';
+    const args =
+      cli === 'claude'
+        ? [
+            '-p',
+            '--output-format',
+            'json',
+            '--max-turns',
+            '1',
+            '--dangerously-skip-permissions',
+            '--disallowedTools',
+            'Edit,Write,Bash,NotebookEdit',
+          ]
+        : [
+            '-a',
+            'never',
+            '-c',
+            'model_reasoning_effort=high',
+            'exec',
+            '-',
+            '--sandbox',
+            'read-only',
+          ];
+    const proc = spawn(command, args, { cwd, stdio: ['pipe', 'pipe', 'pipe'] });
 
     let stdout = '';
     let stderr = '';
@@ -263,12 +285,12 @@ function runClaudeWithStdin(prompt: string, cwd: string, timeoutMs: number): Pro
 
     const timer = setTimeout(() => {
       proc.kill('SIGTERM');
-      reject(new Error(`Claude CLI timed out after ${timeoutMs}ms`));
+      reject(new Error(`${label} timed out after ${timeoutMs}ms`));
     }, timeoutMs);
 
     proc.on('error', (err) => {
       clearTimeout(timer);
-      reject(new Error(`Claude CLI spawn failed: ${err.message.split('\n')[0].slice(0, 200)}`));
+      reject(new Error(`${label} spawn failed: ${err.message.split('\n')[0].slice(0, 200)}`));
     });
 
     proc.on('close', (code) => {
@@ -278,7 +300,7 @@ function runClaudeWithStdin(prompt: string, cwd: string, timeoutMs: number): Pro
         return;
       }
       const tidy = stderr.split('\n').slice(0, 3).join(' ').trim().slice(0, 300) || 'no stderr';
-      reject(new Error(`Claude CLI exited ${code}: ${tidy}`));
+      reject(new Error(`${label} exited ${code}: ${tidy}`));
     });
 
     proc.stdin.write(prompt);

@@ -807,12 +807,16 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
           if (latestPlan) {
             deps.reviews.create(latestPlan.id, parser.getRawOutput(), null);
           }
-          emitPhase(threadId, 'failed');
+          emitPhase(threadId, 'failed', 'Review output could not be parsed.');
           activePipelines.delete(threadId);
         }
-      } catch {
+      } catch (error) {
         if (!context.cancelled) {
-          emitPhase(threadId, 'failed');
+          emitPhase(
+            threadId,
+            'failed',
+            `Review error: ${error instanceof Error ? error.message : String(error)}`,
+          );
           activePipelines.delete(threadId);
         }
       }
@@ -864,13 +868,17 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         } else {
           deps.plans.supersedeAll(threadId);
           deps.plans.create(threadId, result.raw, null, plan.version + 1);
-          emitPhase(threadId, 'failed');
+          emitPhase(threadId, 'failed', 'Revision output could not be parsed.');
           activePipelines.delete(threadId);
         }
-      } catch {
+      } catch (error) {
         if (!context.cancelled) {
           deps.plans.supersedeAll(threadId);
-          emitPhase(threadId, 'failed');
+          emitPhase(
+            threadId,
+            'failed',
+            `Revision error: ${error instanceof Error ? error.message : String(error)}`,
+          );
           activePipelines.delete(threadId);
         }
       }

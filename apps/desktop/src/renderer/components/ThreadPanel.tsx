@@ -245,11 +245,13 @@ export function ThreadPanel() {
         }}
         onRetry={(issue) => {
           setPipelineStatusOptimistic(issue.id, 'todo');
-          window.shipcode
-            .invoke('github:retry-issue', {
-              projectId: activeProjectId,
-              issueNumber: issue.issueNumber,
-            })
+          const request = issue.threadId
+            ? window.shipcode.invoke('pipeline:retry', { threadId: issue.threadId })
+            : window.shipcode.invoke('github:retry-issue', {
+                projectId: activeProjectId,
+                issueNumber: issue.issueNumber,
+              });
+          request
             .then(() => activeProjectId && refreshIssues.mutate(activeProjectId))
             .catch((err) => {
               if (activeProjectId) refreshIssues.mutate(activeProjectId);

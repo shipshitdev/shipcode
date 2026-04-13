@@ -215,6 +215,7 @@ export function ProjectSidebar() {
 
   return (
     <aside
+      data-project-sidebar
       className="relative flex flex-col border-r border-border bg-primary"
       style={{ width: sidebarWidth, minWidth: SIDEBAR_MIN, maxWidth: SIDEBAR_MAX }}
     >
@@ -338,7 +339,7 @@ export function ProjectSidebar() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2 py-1">
+      <div className="flex-1 overflow-y-auto px-2 py-1" data-project-list>
         {sortedProjects.map((project) => (
           <div key={project.id} className="relative group">
             <Button
@@ -396,7 +397,15 @@ export function ProjectSidebar() {
                   <MoreHorizontal size={14} />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent
+                align="end"
+                onInteractOutside={(e) => {
+                  const target = e.target as Element | null;
+                  if (target?.closest('[data-project-list]')) {
+                    e.preventDefault();
+                  }
+                }}
+              >
                 <DropdownMenuItem onSelect={() => openProjectSettingsModal(project.id)}>
                   <Settings size={12} /> Settings
                 </DropdownMenuItem>
