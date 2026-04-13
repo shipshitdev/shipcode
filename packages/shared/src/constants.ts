@@ -95,6 +95,7 @@ export const ERROR_PATTERNS = [
 export type ErrorType = (typeof ERROR_PATTERNS)[number]['type'];
 
 export const WORKTREE_DIR = '.shipcode/worktrees';
+export const REPO_SETUP_CONTRACT_FILE = '.shipcode/setup.json';
 
 export const DEFAULT_WORKTREE_ROOT = '~/.shipcode/worktrees';
 

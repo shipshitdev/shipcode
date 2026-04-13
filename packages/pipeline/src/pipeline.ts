@@ -1,4 +1,6 @@
 import { execFileSync, spawn } from 'node:child_process';
+import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import { dirname, resolve, sep } from 'node:path';
 import {
   StreamParser,
   buildPlanPrompt,
@@ -7,6 +9,7 @@ import {
   buildVerificationPrompt,
   buildExecutionPrompt,
   loadRepoContext,
+  loadRepoSetupContract,
   formatPlanComment,
   GhCli,
 } from '@shipcode/agents';
@@ -83,6 +86,8 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       verifiedSha: seed.verifiedSha ?? null,
       startedAt: seed.startedAt ?? Date.now(),
       repoContext: seed.repoContext ?? null,
+      repoSetupContract: seed.repoSetupContract ?? null,
+      repoSetupLoaded: seed.repoSetupLoaded ?? false,
       abort: seed.abort ?? new AbortController(),
     };
     activePipelines.set(threadId, context);
@@ -141,6 +146,182 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       context: { projectId: context.projectId },
       deps: { skills: deps.skills, onFallback },
     };
+  }
+
+  function emitTerminalRaw(threadId: string, content: string) {
+    deps.emitter.emit({ type: 'pipeline:output', threadId, chunk: content });
+    deps.emitter.emit({ type: 'terminal:event', threadId, event: { kind: 'raw', content } });
+  }
+
+  function emitTerminalLifecycle(threadId: string, message: string) {
+    deps.emitter.emit({
+      type: 'terminal:event',
+      threadId,
+      event: { kind: 'lifecycle', message },
+    });
+  }
+
+  function ensurePathInsideRoot(root: string, targetPath: string, label: string): string {
+    const resolvedRoot = resolve(root);
+    const resolvedTarget = resolve(targetPath);
+    if (resolvedTarget === resolvedRoot || resolvedTarget.startsWith(resolvedRoot + sep)) {
+      return resolvedTarget;
+    }
+    throw new Error(`${label} escapes the project root`);
+  }
+
+  function ensureRepoSetupContract(context: PipelineContext) {
+    if (context.repoSetupLoaded) return context.repoSetupContract;
+    context.repoSetupContract = loadRepoSetupContract(context.projectPath);
+    context.repoSetupLoaded = true;
+    return context.repoSetupContract;
+  }
+
+  async function runShellCommand(
+    threadId: string,
+    cwd: string,
+    command: string,
+    signal: AbortSignal,
+  ): Promise<{ exitCode: number; output: string }> {
+    return await new Promise((resolvePromise, rejectPromise) => {
+      const chunks: string[] = [];
+      const child = spawn(command, { cwd, shell: true, signal });
+
+      const onData = (chunk: Buffer) => {
+        const text = chunk.toString();
+        chunks.push(text);
+        emitTerminalRaw(threadId, text);
+      };
+
+      child.stdout?.on('data', onData);
+      child.stderr?.on('data', onData);
+      child.on('error', rejectPromise);
+      child.on('close', (code) => {
+        resolvePromise({ exitCode: code ?? 1, output: chunks.join('') });
+      });
+    });
+  }
+
+  async function prepareWorktree(
+    context: PipelineContext,
+    stage: 'execute' | 'verify',
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
+    const loaded = ensureRepoSetupContract(context);
+    if (!loaded || !context.worktreePath) return { ok: true };
+
+    const { contract, path: contractPath } = loaded;
+    const shouldRunSetup =
+      stage === 'execute' || (stage === 'verify' && contract.setupBeforeVerify);
+    if (!shouldRunSetup && contract.envFiles.length === 0) return { ok: true };
+
+    emitTerminalLifecycle(
+      context.threadId,
+      `[setup] Using repo setup contract ${contractPath}\r\n`,
+    );
+
+    for (const envFile of contract.envFiles) {
+      try {
+        const sourcePath = ensurePathInsideRoot(
+          context.projectPath,
+          resolve(context.projectPath, envFile.source),
+          `env file source "${envFile.source}"`,
+        );
+        const targetRelative = envFile.target ?? envFile.source;
+        const targetPath = ensurePathInsideRoot(
+          context.worktreePath,
+          resolve(context.worktreePath, targetRelative),
+          `env file target "${targetRelative}"`,
+        );
+
+        if (!existsSync(sourcePath)) {
+          if (envFile.required) {
+            return { ok: false, error: `required env file missing: ${envFile.source}` };
+          }
+          emitTerminalLifecycle(
+            context.threadId,
+            `[setup] Optional env file missing, skipping ${envFile.source}\r\n`,
+          );
+          continue;
+        }
+
+        mkdirSync(dirname(targetPath), { recursive: true });
+        copyFileSync(sourcePath, targetPath);
+        emitTerminalLifecycle(
+          context.threadId,
+          `[setup] Copied ${envFile.source} -> ${targetRelative}\r\n`,
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { ok: false, error: message };
+      }
+    }
+
+    if (!shouldRunSetup) return { ok: true };
+
+    for (const command of contract.setupCommands) {
+      emitTerminalLifecycle(context.threadId, `[setup] $ ${command}\r\n`);
+      try {
+        const result = await runShellCommand(
+          context.threadId,
+          context.worktreePath,
+          command,
+          context.abort.signal,
+        );
+        if (result.exitCode !== 0) {
+          const snippet = result.output.trim().split('\n').slice(-3).join(' ').slice(0, 300);
+          return {
+            ok: false,
+            error: `command failed (${result.exitCode}): ${command}${snippet ? ` — ${snippet}` : ''}`,
+          };
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { ok: false, error: `command error: ${command} — ${message}` };
+      }
+    }
+
+    return { ok: true };
+  }
+
+  function getTestingContext(context: PipelineContext): string | null {
+    const loaded = ensureRepoSetupContract(context);
+    return loaded?.contract.testingContext ?? deps.settings.get().testingContext;
+  }
+
+  function getVerifyCommands(context: PipelineContext): string[] {
+    const loaded = ensureRepoSetupContract(context);
+    if (loaded && loaded.contract.verifyCommands.length > 0) {
+      return loaded.contract.verifyCommands;
+    }
+    const testCmd = deps.settings.get().testCommand?.trim();
+    return testCmd ? [testCmd] : [];
+  }
+
+  function buildRepoSetupPlannerNote(context: PipelineContext): string {
+    const loaded = ensureRepoSetupContract(context);
+    if (!loaded) return '';
+
+    const bits: string[] = [];
+    if (loaded.contract.setupCommands.length > 0) {
+      bits.push(`Setup commands: ${loaded.contract.setupCommands.map((cmd) => `\`${cmd}\``).join(', ')}`);
+    }
+    if (loaded.contract.verifyCommands.length > 0) {
+      bits.push(
+        `Verification commands: ${loaded.contract.verifyCommands
+          .map((cmd) => `\`${cmd}\``)
+          .join(', ')}`,
+      );
+    }
+    if (loaded.contract.envFiles.length > 0) {
+      bits.push(
+        `Env files propagated into the worktree: ${loaded.contract.envFiles
+          .map((file) => `\`${file.source}\`${file.required ? '' : ' (optional)'}`)
+          .join(', ')}`,
+      );
+    }
+    if (bits.length === 0) return '';
+
+    return `\n\n<!-- auto-injected: repo setup contract -->\nNote: This repo defines a setup contract in \`.shipcode/setup.json\`.\n${bits.join('\n')}`;
   }
 
   /**
@@ -298,13 +479,28 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     if (context.repoContext === null) {
       context.repoContext = loadRepoContext(projectPath);
     }
+    try {
+      ensureRepoSetupContract(context);
+    } catch (error) {
+      emitPhase(threadId, 'failed', error instanceof Error ? error.message : String(error));
+      activePipelines.delete(threadId);
+      return;
+    }
 
     emitPhase(threadId, 'planning');
 
     const skill = skillCallSite(context);
-    const planPrompt = buildPlanPrompt(prompt, threadId, skill.context, skill.deps, {
-      contextFiles: context.repoContext ?? undefined,
-    }, deps.settings.get().testCommand);
+    const planPrompt =
+      buildPlanPrompt(
+        prompt,
+        threadId,
+        skill.context,
+        skill.deps,
+        {
+          contextFiles: context.repoContext ?? undefined,
+        },
+        getVerifyCommands(context).join(' && ') || null,
+      ) + buildRepoSetupPlannerNote(context);
 
     // Fire-and-forget: kick off the provider call and let completion run
     // in the background. Callers (CLI, desktop IPC, tests) rely on phase
@@ -498,14 +694,21 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     emitPhase(threadId, 'revising');
 
     const skill = skillCallSite(context);
-    const revisionPrompt = buildRevisionPrompt(
-      plan,
-      reviewFeedback,
-      threadId,
-      skill.context,
-      skill.deps,
-      deps.settings.get().testCommand,
-    );
+    let revisionPrompt: string;
+    try {
+      revisionPrompt = buildRevisionPrompt(
+        plan,
+        reviewFeedback,
+        threadId,
+        skill.context,
+        skill.deps,
+        getVerifyCommands(context).join(' && ') || null,
+      );
+    } catch (error) {
+      emitPhase(threadId, 'failed', error instanceof Error ? error.message : String(error));
+      activePipelines.delete(threadId);
+      return;
+    }
 
     void (async () => {
       try {
@@ -546,6 +749,17 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     const context = activePipelines.get(threadId);
     if (!context) return;
 
+    if (context.repoContext === null) {
+      context.repoContext = loadRepoContext(context.projectPath);
+    }
+    try {
+      ensureRepoSetupContract(context);
+    } catch (error) {
+      emitPhase(threadId, 'failed', error instanceof Error ? error.message : String(error));
+      activePipelines.delete(threadId);
+      return;
+    }
+
     // Create the worktree now — this is the first phase that writes to the repo.
     // context.baseBranch is always set before we reach here: startFromGitHubIssue
     // resolves it via git symbolic-ref, and pipeline:start seeds it via initializeContext.
@@ -575,8 +789,14 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
     emitPhase(threadId, 'executing');
 
+    const preparation = await prepareWorktree(context, 'execute');
+    if (!preparation.ok) {
+      emitPhase(threadId, 'failed', `Setup failed: ${preparation.error}`);
+      activePipelines.delete(threadId);
+      return;
+    }
+
     const skill = skillCallSite(context);
-    const settings = deps.settings.get();
     const testFeedback =
       context.testOutput && context.testRetries > 0
         ? `\n\n<previous_test_failure>\nTests failed on the previous attempt. Fix these issues before finishing:\n\n${context.testOutput}\n</previous_test_failure>`
@@ -584,7 +804,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     context.testOutput = null;
     const basePrompt = buildExecutionPrompt(plan, skill.context, skill.deps, {
       contextFiles: context.repoContext ?? undefined,
-      testingContext: settings.testingContext,
+      testingContext: getTestingContext(context),
     });
     const executionPrompt = basePrompt + testFeedback;
 
@@ -628,8 +848,16 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     const context = activePipelines.get(threadId);
     if (!context) return;
 
-    const testCmd = deps.settings.get().testCommand?.trim();
-    if (!testCmd) {
+    try {
+      ensureRepoSetupContract(context);
+    } catch (error) {
+      emitPhase(threadId, 'failed', error instanceof Error ? error.message : String(error));
+      activePipelines.delete(threadId);
+      return;
+    }
+
+    const verifyCommands = getVerifyCommands(context);
+    if (verifyCommands.length === 0) {
       startVerification(threadId);
       return;
     }
@@ -637,49 +865,28 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     emitPhase(threadId, 'testing');
 
     const cwd = context.worktreePath ?? context.projectPath;
-    const chunks: string[] = [];
-    const TEST_TIMEOUT_MS = 5 * 60 * 1000;
+    const preparation = await prepareWorktree(context, 'verify');
+    if (!preparation.ok) {
+      emitPhase(threadId, 'failed', `Verification preflight failed: ${preparation.error}`);
+      activePipelines.delete(threadId);
+      return;
+    }
 
-    await new Promise<void>((resolve) => {
-      const child = spawn(testCmd, { cwd, shell: true, signal: context.abort.signal });
-
-      const killTimer = setTimeout(() => {
-        child.kill('SIGTERM');
-        if (!context.cancelled) {
-          emitPhase(threadId, 'failed', 'Test command timed out after 5 minutes.');
-          activePipelines.delete(threadId);
-        }
-        resolve();
-      }, TEST_TIMEOUT_MS);
-
-      const onData = (chunk: Buffer) => {
-        const text = chunk.toString();
-        chunks.push(text);
-        deps.emitter.emit({ type: 'pipeline:output', threadId, chunk: text });
-        deps.emitter.emit({
-          type: 'terminal:event',
-          threadId,
-          event: { kind: 'raw', content: text },
-        });
-      };
-
-      child.stdout?.on('data', onData);
-      child.stderr?.on('data', onData);
-
-      child.on('close', (code) => {
-        clearTimeout(killTimer);
-        context.testOutput = chunks.join('').slice(-16384);
-
-        if (code === 0) {
-          startVerification(threadId);
-        } else {
+    const outputs: string[] = [];
+    for (const command of verifyCommands) {
+      emitTerminalLifecycle(threadId, `[verify] $ ${command}\r\n`);
+      try {
+        const result = await runShellCommand(threadId, cwd, command, context.abort.signal);
+        outputs.push(result.output);
+        context.testOutput = outputs.join('\n').slice(-16384);
+        if (result.exitCode !== 0) {
           if (context.testRetries < MAX_TEST_RETRIES) {
             context.testRetries++;
             const latestPlan = deps.plans.getLatest(threadId);
             if (latestPlan?.structured) {
               startExecution(threadId, latestPlan.structured);
             } else {
-              emitPhase(threadId, 'failed', 'Tests failed — plan unavailable for re-execution.');
+              emitPhase(threadId, 'failed', 'Verification commands failed — plan unavailable for re-execution.');
               activePipelines.delete(threadId);
             }
           } else {
@@ -691,23 +898,21 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
             emitPhase(
               threadId,
               'failed',
-              `Tests failed after ${context.testRetries + 1} attempt(s). See terminal output.`,
+              `Verification commands failed after ${context.testRetries + 1} attempt(s). See terminal output.`,
             );
             activePipelines.delete(threadId);
           }
+          return;
         }
-        resolve();
-      });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        emitPhase(threadId, 'failed', `Verification command error: ${message}`);
+        activePipelines.delete(threadId);
+        return;
+      }
+    }
 
-      child.on('error', (err) => {
-        clearTimeout(killTimer);
-        if (!context.cancelled) {
-          emitPhase(threadId, 'failed', `Test command error: ${err.message}`);
-          activePipelines.delete(threadId);
-        }
-        resolve();
-      });
-    });
+    startVerification(threadId);
   }
 
   async function startVerification(threadId: string) {

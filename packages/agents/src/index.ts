@@ -42,6 +42,8 @@ export type {
 export { buildPRBody } from './prompts/shipping-prompt';
 export { formatPlanComment } from './prompts/plan-comment';
 export { loadRepoContext } from './context-loader';
+export { loadRepoSetupContract } from './repo-setup-contract';
+export type { LoadedRepoSetupContract } from './repo-setup-contract';
 export { generateContextFiles, listContextFiles, readContextFile } from './context-generator';
 export type { ContextGenerateResult } from './context-generator';
 export { GhCli } from './github/gh-cli';

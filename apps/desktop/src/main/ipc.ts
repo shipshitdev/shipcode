@@ -65,6 +65,21 @@ interface Queries {
   skills: SkillsQueries;
 }
 
+function enrichProjectPath(project: import('@shipcode/shared').Project | null) {
+  if (!project) return null;
+  return {
+    ...project,
+    pathExists: fs.existsSync(project.path),
+  };
+}
+
+function enrichProjectPaths(projects: import('@shipcode/shared').Project[]) {
+  return projects.map((project) => ({
+    ...project,
+    pathExists: fs.existsSync(project.path),
+  }));
+}
+
 /** Try to extract a validated ShipCodePlan from raw pipeline output.
  *  Reuses StreamParser which already handles stream-json / codex unwrapping
  *  and fenced-block extraction with JSON fallback. */
@@ -99,15 +114,15 @@ export function registerIpcHandlers(
   // IssueDetail, and ThreadPanel continue to use `project:list` so they can
   // resolve archived projects that are still navigable via deep links.
   ipcMain.handle('project:list', () => {
-    return queries.projects.list();
+    return enrichProjectPaths(queries.projects.list());
   });
 
   ipcMain.handle('project:list-visible', () => {
-    return queries.projects.listVisible();
+    return enrichProjectPaths(queries.projects.listVisible());
   });
 
   ipcMain.handle('project:list-archived', () => {
-    return queries.projects.listArchived();
+    return enrichProjectPaths(queries.projects.listArchived());
   });
 
   ipcMain.handle('project:add', async (_event, { path: projectPath }: { path: string }) => {
@@ -119,9 +134,9 @@ export function registerIpcHandlers(
       const remote = await git.getRemoteUrl();
       const branch = await git.getDefaultBranch();
       queries.projects.updateGitInfo(project.id, remote, branch);
-      return { ...project, gitRemote: remote, defaultBranch: branch };
+      return enrichProjectPath({ ...project, gitRemote: remote, defaultBranch: branch });
     } catch {
-      return project;
+      return enrichProjectPath(project);
     }
   });
 
@@ -311,6 +326,11 @@ export function registerIpcHandlers(
   ipcMain.handle('github:refresh-issues', async (_event, { projectId }: { projectId: string }) => {
     const project = queries.projects.getById(projectId);
     if (!project) throw new Error(`Project ${projectId} not found`);
+    if (!fs.existsSync(project.path)) {
+      throw new Error(
+        `Project path no longer exists: ${project.path}. The folder was likely moved. Re-add the repository from its new location.`,
+      );
+    }
 
     const ghCli = new GhCli(project.path);
     const issues = await ghCli.listAllIssues();
@@ -731,7 +751,7 @@ export function registerIpcHandlers(
   // === Project + base-branch handlers ===
 
   ipcMain.handle('project:get', (_event, { projectId }: { projectId: string }) => {
-    return queries.projects.getById(projectId);
+    return enrichProjectPath(queries.projects.getById(projectId));
   });
 
   ipcMain.handle('git:list-branches', async (_event, { projectId, fetch }: { projectId: string; fetch?: boolean }) => {
@@ -761,7 +781,7 @@ export function registerIpcHandlers(
       }
 
       queries.projects.updateDefaultBranch(projectId, branch);
-      return queries.projects.getById(projectId)!;
+      return enrichProjectPath(queries.projects.getById(projectId))!;
     },
   );
 
@@ -784,7 +804,7 @@ export function registerIpcHandlers(
       }
 
       queries.projects.updateGithubProjectUrl(projectId, result.value);
-      return queries.projects.getById(projectId)!;
+      return enrichProjectPath(queries.projects.getById(projectId))!;
     },
   );
 

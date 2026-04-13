@@ -28,6 +28,7 @@ import {
   Settings,
   Trash2,
   Wrench,
+  Badge,
 } from '@shipcode/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useRef, useState } from 'react';
@@ -38,6 +39,7 @@ const SIDEBAR_MAX = 256;
 const SIDEBAR_DEFAULT = SIDEBAR_MAX;
 
 type SortOrder = AppSettings['projectSortOrder'];
+type ProjectWithPathState = Project & { pathExists?: boolean };
 
 const SORT_LABELS: Record<SortOrder, string> = {
   recent: 'Recently used',
@@ -61,7 +63,7 @@ export function ProjectSidebar() {
   } = useAppStore();
   const queryClient = useQueryClient();
 
-  const { data: projects = [] } = useQuery<Project[]>({
+  const { data: projects = [] } = useQuery<ProjectWithPathState[]>({
     queryKey: ['projects-visible'],
     queryFn: () => window.shipcode.invoke('project:list-visible'),
   });
@@ -323,18 +325,35 @@ export function ProjectSidebar() {
               variant="ghost"
               className={cn(
                 'h-auto w-full justify-start gap-2 pl-3 pr-8 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
+                project.pathExists === false && 'opacity-50',
                 viewMode === 'project' &&
                   activeProjectId === project.id &&
                   'bg-tertiary text-primary font-medium',
               )}
               onClick={() => selectProject(project.id)}
+              title={
+                project.pathExists === false
+                  ? `Project folder missing: ${project.path}`
+                  : project.path
+              }
             >
               {project.pinned ? (
                 <Pin size={12} className="shrink-0 text-accent fill-accent" />
               ) : (
-                <Folder size={14} className="shrink-0 text-secondary" />
+                <Folder
+                  size={14}
+                  className={cn(
+                    'shrink-0 text-secondary',
+                    project.pathExists === false && 'text-warning',
+                  )}
+                />
               )}
               <span className="flex-1 truncate text-primary">{project.name}</span>
+              {project.pathExists === false && (
+                <Badge variant="warning" className="shrink-0 text-[10px]">
+                  Moved
+                </Badge>
+              )}
               {(stats?.agentsRunningByProject?.[project.id] ?? 0) > 0 && (
                 <span className="inline-flex items-center gap-1 shrink-0 rounded-full border border-agent/30 bg-agent/10 px-1.5 py-0.5 text-[10px] font-medium text-agent">
                   <span className="relative flex h-1.5 w-1.5 items-center justify-center">

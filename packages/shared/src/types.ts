@@ -63,6 +63,7 @@ export interface Project {
   id: string;
   name: string;
   path: string;
+  pathExists?: boolean;
   gitRemote: string | null;
   /**
    * Optional override for the Kanban `board` quick-link. GitHub Projects v2
@@ -285,6 +286,21 @@ export interface AppSettings {
   testingContext: string | null;
   /** Max concurrent pipeline runs. New starts queue when limit is reached. */
   maxConcurrentPipelines: number;
+}
+
+export interface RepoSetupEnvFile {
+  source: string;
+  target?: string;
+  required: boolean;
+}
+
+export interface RepoSetupContract {
+  version: 1;
+  setupCommands: string[];
+  verifyCommands: string[];
+  envFiles: RepoSetupEnvFile[];
+  setupBeforeVerify: boolean;
+  testingContext: string | null;
 }
 
 export interface NotificationEventToggles {

@@ -66,3 +66,18 @@ export const verificationResultSchema = z.object({
   criteriaResults: z.array(criteriaCheckSchema),
   issues: z.array(verificationIssueSchema),
 });
+
+export const repoSetupEnvFileSchema = z.object({
+  source: z.string().min(1),
+  target: z.string().min(1).optional(),
+  required: z.boolean().default(true),
+});
+
+export const repoSetupContractSchema = z.object({
+  version: z.literal(1).default(1),
+  setupCommands: z.array(z.string().min(1)).default([]),
+  verifyCommands: z.array(z.string().min(1)).default([]),
+  envFiles: z.array(repoSetupEnvFileSchema).default([]),
+  setupBeforeVerify: z.boolean().default(false),
+  testingContext: z.string().min(1).nullable().optional().default(null),
+});

@@ -23,3 +23,33 @@ ShipCode can sync pipeline status to GitHub issue labels. Configure the mapping 
 | Executing | `status:in-progress` |
 | Completed | `status:done` |
 | Failed | `status:failed` |
+
+## Repo Setup Contract
+
+Repos can declare fresh-worktree setup in `.shipcode/setup.json`. This file is read directly from the repo, so desktop and CLI use the same contract.
+
+```json
+{
+  "version": 1,
+  "envFiles": [
+    { "source": ".env.local", "required": true }
+  ],
+  "setupCommands": [
+    "bun install --frozen-lockfile"
+  ],
+  "verifyCommands": [
+    "bun run typecheck",
+    "bun run test"
+  ],
+  "setupBeforeVerify": false,
+  "testingContext": "Tests use Vitest and live next to source files as *.test.ts."
+}
+```
+
+- `envFiles`: copied from the repo root into the worktree before execution. Use `target` to write to a different relative path inside the worktree.
+- `setupCommands`: run inside the worktree before the execute phase starts.
+- `verifyCommands`: run inside the worktree after execute and before the verifier model runs.
+- `setupBeforeVerify`: when `true`, reruns `setupCommands` before `verifyCommands`.
+- `testingContext`: repo-owned testing guidance injected into the execute prompt.
+
+If the file is missing, ShipCode falls back to the existing per-install settings (`testCommand`, `testingContext`) and current behavior.

@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import type { ProcessManager, AgentProvider } from '@shipcode/agents';
 import {
   createClaudeCliProvider,
@@ -116,6 +119,17 @@ const VERIFICATION_FAILED_JSON = JSON.stringify({
 
 /** Flush the microtask queue so async handlers (await import) settle */
 const flush = () => new Promise((r) => setTimeout(r, 10));
+const tempDirs: string[] = [];
+
+function makeTempProject() {
+  const dir = path.join(
+    os.tmpdir(),
+    `shipcode-pipeline-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  );
+  mkdirSync(path.join(dir, '.shipcode'), { recursive: true });
+  tempDirs.push(dir);
+  return dir;
+}
 
 function planBlock(json: string = PLAN_JSON) {
   return '```shipcode-plan\n' + json + '\n```';
@@ -266,6 +280,9 @@ describe('createPipeline', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    for (const dir of tempDirs.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   // ─── startPlanGeneration ───────────────────────────────────────────
@@ -732,6 +749,62 @@ describe('createPipeline', () => {
       expect(mock.emittedEvents).toContainEqual(
         expect.objectContaining({ type: 'pipeline:phase', threadId, phase: 'executing' }),
       );
+    });
+
+    it('copies declared env files into the worktree before execute starts', async () => {
+      const projectDir = makeTempProject();
+      const worktreeDir = path.join(projectDir, 'worktree');
+      mkdirSync(worktreeDir, { recursive: true });
+      writeFileSync(
+        path.join(projectDir, '.shipcode', 'setup.json'),
+        JSON.stringify({
+          envFiles: [{ source: '.env.local' }],
+          setupCommands: ['printf setup > .setup-ran'],
+        }),
+      );
+      writeFileSync(path.join(projectDir, '.env.local'), 'TOKEN=abc\n');
+
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', {
+        projectPath: projectDir,
+        worktreePath: worktreeDir,
+        baseBranch: 'main',
+      });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+      await flush();
+
+      expect(readFileSync(path.join(worktreeDir, '.env.local'), 'utf-8')).toBe('TOKEN=abc\n');
+      expect(readFileSync(path.join(worktreeDir, '.setup-ran'), 'utf-8')).toBe('setup');
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'executing');
+    });
+
+    it('fails fast when a required env file declared by the repo contract is missing', async () => {
+      const projectDir = makeTempProject();
+      const worktreeDir = path.join(projectDir, 'worktree');
+      mkdirSync(worktreeDir, { recursive: true });
+      writeFileSync(
+        path.join(projectDir, '.shipcode', 'setup.json'),
+        JSON.stringify({
+          envFiles: [{ source: '.env.local', required: true }],
+        }),
+      );
+
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', {
+        projectPath: projectDir,
+        worktreePath: worktreeDir,
+        baseBranch: 'main',
+      });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith(
+        't1',
+        'failed',
+        expect.stringContaining('Setup failed: required env file missing: .env.local'),
+      );
+      expect(mock.deps.processManager.spawn).not.toHaveBeenCalled();
     });
   });
 

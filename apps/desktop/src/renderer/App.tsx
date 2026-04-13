@@ -12,6 +12,7 @@ import { IssueDetail } from './components/IssueDetail';
 import { NotificationToaster } from './components/NotificationToaster';
 import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
 import { ProjectSettingsModal } from './components/ProjectSettingsModal';
+import { ProjectPathBanner } from './components/ProjectPathBanner';
 import { ProjectSidebar } from './components/ProjectSidebar';
 import { SettingsPanel } from './components/SettingsPanel';
 import { SettingsSidebar } from './components/SettingsSidebar';
@@ -22,6 +23,8 @@ import { Titlebar } from './components/Titlebar';
 import { useGlobalKeyboard } from './hooks/useGlobalKeyboard';
 import { useIpc } from './hooks/useIpc';
 import { useAppStore } from './stores/app-store';
+
+type ProjectWithPathState = Project & { pathExists?: boolean };
 
 export function App() {
   useGlobalKeyboard();
@@ -40,6 +43,12 @@ export function App() {
   const { data: settings } = useQuery<AppSettings>({
     queryKey: ['settings'],
     queryFn: () => window.shipcode.invoke('settings:get'),
+  });
+
+  const { data: activeProject } = useQuery<ProjectWithPathState | null>({
+    queryKey: ['project', activeProjectId],
+    queryFn: () => window.shipcode.invoke('project:get', { projectId: activeProjectId! }),
+    enabled: !!activeProjectId,
   });
 
   if (settings && (settings.onboardingVersion ?? 0) < CURRENT_ONBOARDING_VERSION) {
@@ -96,6 +105,7 @@ export function App() {
     <div className="flex h-screen flex-col overflow-hidden">
       <Titlebar />
       <HealthBanner />
+      <ProjectPathBanner project={activeProject ?? null} />
       <div className="flex flex-1 overflow-hidden">
         {settingsVisible ? <SettingsSidebar /> : <ProjectSidebar />}
         {/* Content: left column (views + terminal) | right panel (issue detail, full-height) */}

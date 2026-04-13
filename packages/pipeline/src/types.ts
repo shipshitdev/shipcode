@@ -1,4 +1,9 @@
-import type { ProcessManager, ProviderRegistry, TerminalEvent } from '@shipcode/agents';
+import type {
+  ProcessManager,
+  ProviderRegistry,
+  TerminalEvent,
+  LoadedRepoSetupContract,
+} from '@shipcode/agents';
 import type { PhaseSkillKey } from '@shipcode/shared';
 import type {
   ThreadQueries,
@@ -108,6 +113,12 @@ export interface PipelineContext {
    * Read once from `<projectPath>/.agents/context/` at pipeline start.
    */
   repoContext: string | null;
+  /**
+   * Optional repo-owned setup contract loaded from `.shipcode/setup.json`.
+   * `repoSetupLoaded` distinguishes "no file exists" from "not read yet".
+   */
+  repoSetupContract: LoadedRepoSetupContract | null;
+  repoSetupLoaded: boolean;
   /**
    * Per-run AbortController. Providers honor `abort.signal` to cancel
    * in-flight work (subprocess kill OR HTTP abort). cancel(threadId)

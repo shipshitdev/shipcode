@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
 import { useAppStore } from '../stores/app-store';
 import { KanbanBoard, Modal, ModalFooter, Button } from '@shipcode/ui';
@@ -15,12 +15,28 @@ export function ThreadPanel() {
   const queryClient = useQueryClient();
   const { activeProjectId, selectIssue, openCreateIssueModal, activeIssue } = useAppStore();
 
-  const { data: issues = [], refetch: refetchIssues } = useQuery<GitHubIssueCacheRecord[]>({
+  const { data: issues = [] } = useQuery<GitHubIssueCacheRecord[]>({
     queryKey: ['github-issues', activeProjectId],
-    queryFn: () => window.shipcode.invoke('github:refresh-issues', { projectId: activeProjectId }),
+    queryFn: () => window.shipcode.invoke('github:list-issues', { projectId: activeProjectId }),
     enabled: !!activeProjectId,
-    staleTime: 30_000,
+    staleTime: 5_000,
   });
+
+  const refreshIssues = useMutation({
+    mutationFn: (projectId: string) =>
+      window.shipcode.invoke<GitHubIssueCacheRecord[]>('github:refresh-issues', { projectId }),
+    onSuccess: (freshIssues, projectId) => {
+      queryClient.setQueryData(['github-issues', projectId], freshIssues);
+    },
+    onError: (err) => {
+      log.error('[threadpanel] refresh-issues failed', { err });
+    },
+  });
+
+  useEffect(() => {
+    if (!activeProjectId) return;
+    refreshIssues.mutate(activeProjectId);
+  }, [activeProjectId]);
 
   // The per-project base branch drives the Kanban toolbar Select. Read via
   // the narrow `project:get` channel rather than scanning the full list.
@@ -62,9 +78,9 @@ export function ThreadPanel() {
           projectId: activeProjectId,
           issueNumber: confirm.issue.issueNumber,
         })
-        .then(() => refetchIssues())
+        .then(() => refreshIssues.mutate(activeProjectId))
         .catch((err) => {
-          refetchIssues();
+          refreshIssues.mutate(activeProjectId);
           log.error('[threadpanel] archive-issue failed', { err });
           window.alert(`Failed to archive issue: ${err?.message ?? err}`);
         });
@@ -73,13 +89,13 @@ export function ThreadPanel() {
         .invoke('github:archive-all-done', { projectId: activeProjectId })
         .then((result) => {
           const { archivedCount, failedCount } = result as { archivedCount: number; failedCount: number };
-          refetchIssues();
+          refreshIssues.mutate(activeProjectId);
           if (failedCount > 0) {
             window.alert(`Archived ${archivedCount} issues. ${failedCount} could not be closed on GitHub.`);
           }
         })
         .catch((err) => {
-          refetchIssues();
+          refreshIssues.mutate(activeProjectId);
           log.error('[threadpanel] archive-all-done failed', { err });
           window.alert(`Failed to archive done issues: ${err?.message ?? err}`);
         });
@@ -101,7 +117,7 @@ export function ThreadPanel() {
         issues={issues}
         onIssueClick={(issue) => selectIssue(issue)}
         selectedIssueNumber={activeIssue?.issueNumber}
-        onRefresh={() => refetchIssues()}
+        onRefresh={() => activeProjectId && refreshIssues.mutate(activeProjectId)}
         onNewIssue={() => openCreateIssueModal()}
         baseBranch={project?.defaultBranch}
         branches={branches}
@@ -145,9 +161,9 @@ export function ThreadPanel() {
               projectId: activeProjectId,
               issueNumber: issue.issueNumber,
             })
-            .then(() => refetchIssues())
+            .then(() => activeProjectId && refreshIssues.mutate(activeProjectId))
             .catch((err) => {
-              refetchIssues();
+              if (activeProjectId) refreshIssues.mutate(activeProjectId);
               log.error('[threadpanel] start-issue failed', {
                 issueNumber: issue.issueNumber,
                 err,
@@ -162,9 +178,9 @@ export function ThreadPanel() {
               projectId: activeProjectId,
               issueNumber: issue.issueNumber,
             })
-            .then(() => refetchIssues())
+            .then(() => activeProjectId && refreshIssues.mutate(activeProjectId))
             .catch((err) => {
-              refetchIssues();
+              if (activeProjectId) refreshIssues.mutate(activeProjectId);
               log.error('[threadpanel] retry-issue failed', {
                 issueNumber: issue.issueNumber,
                 err,
@@ -184,9 +200,9 @@ export function ThreadPanel() {
               projectId: activeProjectId,
               issueNumber: issue.issueNumber,
             })
-            .then(() => refetchIssues())
+            .then(() => activeProjectId && refreshIssues.mutate(activeProjectId))
             .catch((err) => {
-              refetchIssues();
+              if (activeProjectId) refreshIssues.mutate(activeProjectId);
               log.error('[threadpanel] rerun failed', { issueNumber: issue.issueNumber, err });
               window.alert(`Failed to re-run issue #${issue.issueNumber}: ${err?.message ?? err}`);
             });
@@ -195,7 +211,7 @@ export function ThreadPanel() {
           if (!issue.threadId) return;
           window.shipcode
             .invoke('pipeline:cancel', { threadId: issue.threadId })
-            .then(() => refetchIssues())
+            .then(() => activeProjectId && refreshIssues.mutate(activeProjectId))
             .catch((err) => {
               log.error('[threadpanel] cancel failed', { issueNumber: issue.issueNumber, err });
             });
