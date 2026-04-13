@@ -1,4 +1,5 @@
 import type { IssuePipelineStatus, PipelinePhase } from '@shipcode/shared';
+import { cn } from './lib/utils';
 
 const AGENT_PHASE_CLASSES = 'bg-agent/10 text-agent border-agent/25';
 
@@ -20,14 +21,24 @@ const PHASE_COLOR: Record<string, string> = {
 
 const FALLBACK = 'bg-tertiary text-muted border-border';
 
-export function PhaseChip({ status }: { status: IssuePipelineStatus | PipelinePhase }) {
+export function PhaseChip({
+  status,
+  label,
+  className,
+}: {
+  status: IssuePipelineStatus | PipelinePhase;
+  label?: string;
+  className?: string;
+}) {
   return (
     <span
-      className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
-        PHASE_COLOR[status] ?? FALLBACK
-      }`}
+      className={cn(
+        'inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide',
+        PHASE_COLOR[status] ?? FALLBACK,
+        className,
+      )}
     >
-      {status.replace(/_/g, ' ')}
+      {(label ?? status).replace(/_/g, ' ')}
     </span>
   );
 }

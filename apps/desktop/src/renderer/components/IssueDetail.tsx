@@ -139,39 +139,46 @@ type PlanStatusBadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'in
 
 function getPlanStatusPresentation(plan: PlanRecord, review?: ReviewRecord): {
   label: string;
-  color: string;
+  phaseStatus: PipelinePhase | 'idle';
+  usePhaseChip: boolean;
 } {
   switch (plan.status) {
     case 'approved':
       return {
         label: 'AI approved',
-        color: 'var(--success)',
+        phaseStatus: 'completed',
+        usePhaseChip: true,
       };
     case 'rejected':
       if (review?.decision === 'request_changes') {
         return {
           label: 'AI requested changes',
-          color: 'var(--accent)',
+          phaseStatus: 'revising',
+          usePhaseChip: true,
         };
       }
       return {
         label: 'AI rejected',
-        color: 'var(--danger)',
+        phaseStatus: 'failed',
+        usePhaseChip: true,
       };
     case 'superseded':
       return {
         label: 'Superseded',
-        color: 'var(--text-muted)',
+        phaseStatus: 'idle',
+        usePhaseChip: false,
       };
     case 'pending_review':
       return {
         label: 'AI reviewing',
-        color: 'var(--accent)',
+        phaseStatus: 'reviewing',
+        usePhaseChip: true,
       };
     default:
       return {
         label: 'Plan drafted',
-        color: 'var(--accent)',
+        phaseStatus: 'planning',
+        usePhaseChip: true,
       };
   }
 }
@@ -407,7 +414,21 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     enabled: !!activeThreadId,
     refetchInterval: activeThreadId ? 2000 : false,
   });
-  const normalizedPlanHistory = Array.isArray(planHistory) ? planHistory : [];
+  const normalizedThreadPlanHistory = Array.isArray(planHistory) ? planHistory : [];
+
+  const { data: issuePlanHistory = [] } = useQuery<PlanRecord[]>({
+    queryKey: ['issue-plan-history', activeProjectId, activeIssue?.issueNumber],
+    queryFn: () =>
+      window.shipcode.invoke('plan:list-for-issue', {
+        projectId: activeProjectId!,
+        issueNumber: activeIssue!.issueNumber,
+      }),
+    enabled: !!activeProjectId && !!activeIssue,
+    refetchInterval: activeThreadId ? 2000 : false,
+  });
+  const normalizedIssuePlanHistory = Array.isArray(issuePlanHistory) ? issuePlanHistory : [];
+  const normalizedPlanHistory =
+    normalizedIssuePlanHistory.length > 0 ? normalizedIssuePlanHistory : normalizedThreadPlanHistory;
 
   // Fetch reviews for all plans
   const planIds = normalizedPlanHistory.map((p) => p.id);
@@ -931,16 +952,70 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const headerStatusAnimated =
     ACTIVE_PHASES.includes(threadPhase as PipelinePhase) || threadPhase === 'awaiting_approval';
 
+  const issueStatusChip = (
+    <PhaseChip
+      status={headerStatus}
+      className={cn(
+        'text-[11px] font-semibold',
+        headerStatusAnimated &&
+          'relative pl-4 before:absolute before:left-1.5 before:top-1/2 before:h-1.5 before:w-1.5 before:-translate-y-1/2 before:rounded-full before:bg-current before:animate-pulse',
+      )}
+    />
+  );
+
   const issueBadges = (
     <div className="flex flex-wrap gap-1.5">
-      <PhaseChip
-        status={headerStatus}
-        className={cn(
-          'text-[11px] font-semibold',
-          headerStatusAnimated &&
-            'relative pl-4 before:absolute before:left-1.5 before:top-1/2 before:h-1.5 before:w-1.5 before:-translate-y-1/2 before:rounded-full before:bg-current before:animate-pulse',
-        )}
-      />
+      {canStartPipeline ? (
+        <span className="group relative inline-flex items-center">
+          <span className="pointer-events-none transition-opacity group-hover:opacity-0">
+            {issueStatusChip}
+          </span>
+          <Button
+            variant="ghost"
+            size="xs"
+            className="absolute inset-0 h-auto rounded px-1.5 py-0.5 text-[10px] font-medium text-agent/70 opacity-0 transition-opacity hover:bg-agent/10 hover:text-agent group-hover:opacity-100"
+            title="Start planning"
+            onClick={handleStartPipeline}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? 'START…' : 'PLAN'}
+          </Button>
+        </span>
+      ) : phaseIsActive ? (
+        <span className="group relative inline-flex items-center">
+          <span className="pointer-events-none transition-opacity group-hover:opacity-0">
+            {issueStatusChip}
+          </span>
+          <Button
+            variant="ghost"
+            size="xs"
+            className="absolute inset-0 h-auto rounded px-1.5 py-0.5 text-[10px] font-medium text-danger/70 opacity-0 transition-opacity hover:bg-danger/10 hover:text-danger group-hover:opacity-100"
+            title="Cancel pipeline"
+            onClick={handleCancel}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? 'STOP…' : 'CANCEL'}
+          </Button>
+        </span>
+      ) : canRerun ? (
+        <span className="group relative inline-flex items-center">
+          <span className="pointer-events-none transition-opacity group-hover:opacity-0">
+            {issueStatusChip}
+          </span>
+          <Button
+            variant="ghost"
+            size="xs"
+            className="absolute inset-0 h-auto rounded px-1.5 py-0.5 text-[10px] font-medium text-danger/70 opacity-0 transition-opacity hover:bg-danger/10 hover:text-danger group-hover:opacity-100"
+            title="Retry pipeline"
+            onClick={handleRerun}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? 'START…' : 'RETRY'}
+          </Button>
+        </span>
+      ) : (
+        issueStatusChip
+      )}
       {activeIssue.assignee && (
         <Badge variant="default" className="text-[11px]">
           {activeIssue.assignee}
@@ -1114,11 +1189,6 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     <div className="mb-5">
       <div className="mb-2 flex items-center justify-between">
         <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">Pipeline</h4>
-        {phaseIsActive && (
-          <Button variant="destructive" size="xs" onClick={handleCancel} disabled={isSubmitting}>
-            Stop
-          </Button>
-        )}
       </div>
       <div className="grid grid-cols-2 gap-2">
         {thread.worktreeBranch && (
@@ -1447,9 +1517,15 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
                     <span className="font-mono text-xs font-semibold text-muted">
                       v{plan.version}
                     </span>
-                    <span className="text-xs" style={{ color: statusPresentation.color }}>
-                      {statusPresentation.label}
-                    </span>
+                    {statusPresentation.usePhaseChip ? (
+                      <PhaseChip
+                        status={statusPresentation.phaseStatus}
+                        label={statusPresentation.label}
+                        className="text-[10px]"
+                      />
+                    ) : (
+                      <span className="text-xs text-muted">{statusPresentation.label}</span>
+                    )}
                     {review && plan.status !== 'superseded' && reviewPresentation && (
                       <Badge
                         variant={reviewPresentation.badgeVariant}
