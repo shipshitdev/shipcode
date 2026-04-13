@@ -384,6 +384,25 @@ export function SettingsPanel() {
                 />
               </SettingsRow>
               <SettingsRow
+                label="Max concurrent pipelines"
+                htmlFor="max-concurrent-pipelines"
+                description="How many pipelines can run at once. Extras are queued."
+              >
+                <Input
+                  id="max-concurrent-pipelines"
+                  type="number"
+                  className="w-[80px]"
+                  value={settings.maxConcurrentPipelines}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    if (val >= 1 && val <= 10) updateSettings.mutate({ maxConcurrentPipelines: val });
+                  }}
+                  min={1}
+                  max={10}
+                  step={1}
+                />
+              </SettingsRow>
+              <SettingsRow
                 label="Review rounds"
                 htmlFor="max-review-rounds"
                 description="How many review→revise cycles before execution or approval."

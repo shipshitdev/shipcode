@@ -113,13 +113,20 @@ const COLUMNS: BoardColumn[] = [
     key: 'todo',
     label: 'Todo',
     droppable: true, // failed→todo retry lands here
-    statuses: ['todo', 'queued'],
+    statuses: ['todo'],
   },
   {
     key: 'agent',
     label: 'Agent Loop',
-    statuses: ['planning', 'reviewing', 'revising', 'executing', 'verifying', 'shipping'],
+    statuses: ['queued', 'planning', 'reviewing', 'revising', 'executing', 'verifying', 'shipping'],
     sections: [
+      {
+        key: 'queued',
+        label: 'Queued',
+        statuses: ['queued'],
+        droppable: false,
+        agent: 'claude',
+      },
       {
         key: 'planning',
         label: 'Planning',
@@ -257,7 +264,7 @@ function DraggableCard({
   const isFailed = issue.pipelineStatus === 'failed';
   const isAwaiting = issue.pipelineStatus === 'awaiting_approval';
   const isActive = ACTIVE_STATUSES.includes(issue.pipelineStatus);
-  const isQueued = issue.pipelineStatus === 'queued' || issue.pipelineStatus === 'todo';
+  const isTodo = issue.pipelineStatus === 'todo';
   const showPhaseElapsed =
     PHASE_ELAPSED_STATUSES.includes(issue.pipelineStatus) && !!issue.lastPhaseUpdate;
   const phaseSince =
@@ -358,7 +365,7 @@ function DraggableCard({
               {l}
             </Badge>
           ))}
-        {isQueued && onStartPipeline ? (
+        {isTodo && onStartPipeline ? (
           <span className="relative inline-flex items-center">
             <span className="group-hover:opacity-0 transition-opacity pointer-events-none">
               <PhaseChip status={issue.pipelineStatus} />
@@ -549,7 +556,8 @@ function SectionBlock({
   const count = issues.length;
   const empty = count === 0;
   // Only the Agent Loop column shows agent badges. Human/Failed/Done skip them.
-  const showAgent = columnKey === 'agent';
+  // Queued section doesn't have an active agent.
+  const showAgent = columnKey === 'agent' && section.key !== 'queued';
   // For the executor row, resolve per-issue from the first card; when empty, default.
   const agentLabel =
     section.agent === 'executor' ? (issues[0]?.executorModel ?? 'claude') : section.agent;
@@ -1145,6 +1153,16 @@ export function KanbanBoard({
       sourceColumn === 'human' &&
       dropId === 'todo' &&
       (issue.pipelineStatus === 'failed' || issue.pipelineStatus === 'awaiting_approval') &&
+      onRetry
+    ) {
+      onRetry(issue);
+      return;
+    }
+    // 4. agent (queued) → todo (dequeue)
+    if (
+      sourceColumn === 'agent' &&
+      dropId === 'todo' &&
+      issue.pipelineStatus === 'queued' &&
       onRetry
     ) {
       onRetry(issue);

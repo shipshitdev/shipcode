@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
 import { useAppStore } from '../stores/app-store';
-import { KanbanBoard, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, Button } from '@shipcode/ui';
+import { KanbanBoard, Modal, ModalFooter, Button } from '@shipcode/ui';
 import {
   githubRepoUrl,
   githubProjectsUrl,
@@ -201,28 +201,28 @@ export function ThreadPanel() {
             });
         }}
       />
-      <Dialog open={archiveConfirm !== null} onOpenChange={(open) => { if (!open) setArchiveConfirm(null); }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>
-              {archiveConfirm?.type === 'one'
-                ? `Archive issue #${archiveConfirm.issue.issueNumber}?`
-                : `Archive ${archiveConfirm?.count ?? 0} done issue${(archiveConfirm?.count ?? 0) !== 1 ? 's' : ''}?`}
-            </DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-secondary">
-            This will close the issue on GitHub and remove it from the board.
-          </p>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setArchiveConfirm(null)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleArchiveConfirm}>
-              Archive
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <Modal
+        open={archiveConfirm !== null}
+        onClose={() => setArchiveConfirm(null)}
+        title={
+          archiveConfirm?.type === 'one'
+            ? `Close issue #${archiveConfirm.issue.issueNumber}?`
+            : `Close ${archiveConfirm?.count ?? 0} done issue${(archiveConfirm?.count ?? 0) !== 1 ? 's' : ''}?`
+        }
+        className="max-w-sm"
+      >
+        <p className="text-sm text-secondary">
+          This will close the issue on GitHub and remove it from the board.
+        </p>
+        <ModalFooter>
+          <Button variant="ghost" size="sm" onClick={() => setArchiveConfirm(null)}>
+            Cancel
+          </Button>
+          <Button size="sm" onClick={handleArchiveConfirm}>
+            Close issue
+          </Button>
+        </ModalFooter>
+      </Modal>
     </div>
   );
 }

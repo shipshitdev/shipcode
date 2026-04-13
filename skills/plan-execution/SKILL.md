@@ -36,7 +36,7 @@ For each step in the plan:
 Throughout execution:
 - Stay inside the worktree directory. Do not edit files outside the planned `files` list without strong justification.
 - Do not introduce new dependencies unless the plan explicitly calls for them.
-- Do not commit. The pipeline will commit once verification passes.
+- Commit your changes when all steps are complete. Use `git add -A && git commit -m "<concise summary of what was done>"`. Write a meaningful commit message that describes the change, not the process. Do not skip hooks.
 - Do not skip hooks, do not bypass validation, do not weaken type safety to make code compile.
 - If you encounter a real blocker (missing file, broken dep, bad assumption in the plan), surface it clearly and stop — do not paper over it.
 </execution_method>

@@ -17,7 +17,7 @@ process.on('unhandledRejection', (reason) => {
   log.error('[main] unhandled rejection:', reason);
 });
 
-import { app, BrowserWindow, ipcMain, Menu, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron';
 app.setName('ShipCode');
 import path from 'node:path';
 import fs from 'node:fs';
@@ -53,6 +53,8 @@ import { HEARTBEAT_TIMEOUT_MS } from '@shipcode/shared';
 
 let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
+let pipeline: ReturnType<typeof createPipeline> | null = null;
+let confirmQuit = false;
 
 const DIST = path.join(__dirname, '..');
 const RENDERER_URL = process.env.VITE_DEV_SERVER_URL;
@@ -112,11 +114,14 @@ function createWindow() {
     queries.activity,
   );
 
-  // Initialize pipeline state machine
+  // Initialize pipeline state machine.
+  // onPipelineTerminal is set after pipeline is created (late-binding).
+  let onPipelineTerminal: (() => void) | undefined;
   const emitter = createElectronEmitter(mainWindow, {
     activity: queries.activity,
     threads: queries.threads,
     notifications: notificationService,
+    onPipelineTerminal: () => onPipelineTerminal?.(),
   });
 
   // Provider registry — claude/codex CLIs + OpenRouter HTTP provider.
@@ -132,7 +137,7 @@ function createWindow() {
     }),
   });
 
-  const pipeline = createPipeline({
+  pipeline = createPipeline({
     emitter,
     processManager,
     threads: queries.threads,
@@ -145,14 +150,75 @@ function createWindow() {
     skills: queries.skills,
   });
 
+  // Queue promotion: start the next queued issue when a pipeline slot opens.
+  onPipelineTerminal = () => {
+    try {
+      const settings = queries.settings.get();
+      const activeCount = pipeline!.listActive().length;
+      if (activeCount >= settings.maxConcurrentPipelines) return;
+
+      const next = queries.githubIssues.getNextQueued();
+      if (!next) return;
+
+      const project = queries.projects.getById(next.projectId);
+      if (!project) return;
+
+      queries.githubIssues.updatePipelineStatus(next.id, 'planning');
+      const thread = queries.threads.create(next.projectId, next.body ?? next.title, next.title);
+      queries.threads.setGithubIssue(thread.id, next.issueNumber, project.gitRemote);
+      queries.githubIssues.linkThread(next.id, thread.id);
+      const win = mainWindow!;
+      if (!win.isDestroyed()) {
+        win.webContents.send('github:issues-updated', {
+          projectId: next.projectId,
+          issues: queries.githubIssues.list(next.projectId),
+        });
+      }
+
+      log.info(
+        `[queue] auto-promoting #${next.issueNumber} "${next.title}" (thread ${thread.id})`,
+      );
+
+      pipeline!
+        .startFromGitHubIssue(
+          thread.id,
+          project.path,
+          { number: next.issueNumber, title: next.title, body: next.body, labels: next.labels },
+          next.executorModel,
+          { baseBranch: project.defaultBranch },
+        )
+        .catch((err) => {
+          queries.githubIssues.updatePipelineStatus(next.id, 'queued');
+          queries.threads.updateStatus(thread.id, 'failed');
+          if (!win.isDestroyed()) {
+            win.webContents.send('github:issues-updated', {
+              projectId: next.projectId,
+              issues: queries.githubIssues.list(next.projectId),
+            });
+          }
+          log.error('[queue] auto-promote failed:', err);
+        });
+    } catch (err) {
+      log.error('[queue] promotion error:', err);
+    }
+  };
+
+  // Startup: promote any queued items from a previous session.
+  setTimeout(() => {
+    const settings = queries.settings.get();
+    for (let i = 0; i < settings.maxConcurrentPipelines; i++) {
+      onPipelineTerminal!();
+    }
+  }, 0);
+
   // Register IPC handlers
-  registerIpcHandlers(ipcMain, mainWindow, queries, processManager, pipeline, notificationService);
+  registerIpcHandlers(ipcMain, mainWindow, queries, processManager, pipeline!, notificationService);
 
   // Watchdog: reset threads stuck in active phases (handles renderer refresh + crash scenarios).
   // HEARTBEAT_TIMEOUT_MS = 120s. Fires every 30s; skips threads that are live in activePipelines.
   const watchdogTimer = setInterval(() => {
     try {
-      const activeIds = new Set(pipeline.listActive().map((s) => s.threadId));
+      const activeIds = new Set(pipeline!.listActive().map((s) => s.threadId));
       for (const thread of queries.threads.getStuck(HEARTBEAT_TIMEOUT_MS)) {
         if (activeIds.has(thread.id)) continue;
         const errorMsg = 'Pipeline timed out — process was likely interrupted by an app refresh.';
@@ -193,6 +259,29 @@ function createWindow() {
   } else {
     mainWindow.loadFile(RENDERER_HTML);
   }
+
+  mainWindow.on('close', async (event) => {
+    if (confirmQuit) return;
+    const active = pipeline?.listActive() ?? [];
+    if (active.length === 0) return;
+
+    event.preventDefault();
+    const names = active.map((p) => `• ${p.threadId}`).join('\n');
+    const { response } = await dialog.showMessageBox(mainWindow!, {
+      type: 'warning',
+      title: 'Pipelines still running',
+      message: `${active.length} pipeline${active.length !== 1 ? 's are' : ' is'} still running`,
+      detail: `${names}\n\nQuitting will cancel their progress.`,
+      buttons: ['Cancel & Quit', 'Keep Running'],
+      defaultId: 1,
+      cancelId: 1,
+    });
+
+    if (response === 0) {
+      confirmQuit = true;
+      mainWindow?.close();
+    }
+  });
 
   mainWindow.on('closed', () => {
     clearInterval(watchdogTimer);
@@ -269,8 +358,35 @@ app.on('window-all-closed', () => {
 
 // Kill all agent subprocesses before the Electron main process exits (Cmd+Q,
 // force-quit, etc.) so claude/codex don't keep running as orphans.
-app.on('before-quit', () => {
-  processManager?.killAll();
+// If pipelines are running and the quit has not been confirmed, show a dialog first.
+app.on('before-quit', async (event) => {
+  if (confirmQuit) {
+    processManager?.killAll();
+    return;
+  }
+
+  const active = pipeline?.listActive() ?? [];
+  if (active.length === 0) {
+    processManager?.killAll();
+    return;
+  }
+
+  event.preventDefault();
+  const names = active.map((p) => `• ${p.threadId}`).join('\n');
+  const { response } = await dialog.showMessageBox(mainWindow!, {
+    type: 'warning',
+    title: 'Pipelines still running',
+    message: `${active.length} pipeline${active.length !== 1 ? 's are' : ' is'} still running`,
+    detail: `${names}\n\nQuitting will cancel their progress.`,
+    buttons: ['Cancel & Quit', 'Keep Running'],
+    defaultId: 1,
+    cancelId: 1,
+  });
+
+  if (response === 0) {
+    confirmQuit = true;
+    app.quit(); // re-triggers before-quit; confirmQuit=true lets it pass through
+  }
 });
 
 app.on('activate', () => {

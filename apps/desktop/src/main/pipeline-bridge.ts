@@ -9,6 +9,7 @@ interface EmitterDeps {
   activity: ActivityQueries;
   threads: ThreadQueries;
   notifications: NotificationService;
+  onPipelineTerminal?: () => void;
 }
 
 // Phase transitions that map to human-visible activity entries.
@@ -224,7 +225,19 @@ export function createElectronEmitter(
         }
       }
 
-      // 5. Tell the renderer to refresh dashboard queries.
+      // 5. Promote next queued issue if a pipeline slot opened up.
+      if (
+        event.type === 'pipeline:phase' &&
+        (event.phase === 'completed' || event.phase === 'failed' || event.phase === 'idle')
+      ) {
+        try {
+          deps.onPipelineTerminal?.();
+        } catch (err) {
+          log.error('[pipeline-bridge] queue promotion error:', err);
+        }
+      }
+
+      // 6. Tell the renderer to refresh dashboard queries.
       invalidateDashboard();
     },
   };

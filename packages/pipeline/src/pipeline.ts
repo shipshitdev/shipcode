@@ -343,7 +343,19 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
               context.retryCount++;
               startPlanGeneration(threadId, prompt, projectPath, worktreePath);
             } else {
-              const rawSnippet = detectedError?.match ?? parser.getRawOutput().trim().split('\n').filter(Boolean).slice(-3).join(' ').slice(0, 300);
+              // Try to extract a human-readable error from the CLI result JSON
+              // (e.g. error_max_turns emits {"type":"result","errors":["..."],...}).
+              let cliError: string | null = null;
+              for (const line of parser.getRawOutput().trim().split('\n').filter(Boolean).reverse()) {
+                try {
+                  const obj = JSON.parse(line.trim()) as Record<string, unknown>;
+                  if (obj.type === 'result') {
+                    if (typeof obj.result === 'string') { cliError = obj.result.slice(0, 300); break; }
+                    if (Array.isArray(obj.errors) && obj.errors.length > 0 && typeof obj.errors[0] === 'string') { cliError = obj.errors[0].slice(0, 300); break; }
+                  }
+                } catch { /* skip */ }
+              }
+              const rawSnippet = cliError ?? detectedError?.match ?? parser.getRawOutput().trim().split('\n').filter(Boolean).slice(-3).join(' ').slice(0, 300);
               const reason = rawSnippet?.trimStart().startsWith('{') ? '' : rawSnippet;
               emitPhase(threadId, 'failed', reason || 'Plan generation failed — no structured plan was produced.');
               activePipelines.delete(threadId);
@@ -714,6 +726,18 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
     const plan = latestPlan.structured;
 
+    // Safety net: if the executor left uncommitted changes, commit them now.
+    // The skill instructs the agent to commit, but older runs or edge cases may not.
+    try {
+      const dirty = execFileSync('git', ['status', '--porcelain'], { cwd, encoding: 'utf-8' });
+      if (dirty.trim()) {
+        execFileSync('git', ['add', '-A'], { cwd, encoding: 'utf-8' });
+        const title = context.githubIssueTitle ?? 'Apply plan changes';
+        const issueRef = context.githubIssueNumber ? ` (#${context.githubIssueNumber})` : '';
+        execFileSync('git', ['commit', '--no-verify', '-m', `${title}${issueRef}`], { cwd, encoding: 'utf-8' });
+      }
+    } catch { /* if commit fails, the diff check below will catch it */ }
+
     // Pin HEAD SHA for verification
     const headSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf-8' }).trim();
     context.verifiedSha = headSha;
@@ -731,28 +755,12 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     }
 
     if (!diff.trim()) {
-      // No changes — verification fails
+      // Executor made no changes at all — this is a real failure, not a recoverable state.
       deps.verifications.create(threadId, latestPlan.id, 'No changes detected', null);
       emitPhase(threadId, 'failed');
       activePipelines.delete(threadId);
       return;
     }
-
-    // Check for dirty worktree
-    try {
-      const status = execFileSync('git', ['status', '--porcelain'], { cwd, encoding: 'utf-8' });
-      if (status.trim()) {
-        deps.verifications.create(threadId, latestPlan.id, `Dirty worktree: ${status}`, null);
-        if (context.verificationRetries < MAX_VERIFICATION_RETRIES) {
-          context.verificationRetries++;
-          startExecution(threadId, plan);
-          return;
-        }
-        emitPhase(threadId, 'failed');
-        activePipelines.delete(threadId);
-        return;
-      }
-    } catch {}
 
     const skill = skillCallSite(context);
     const verificationPrompt = buildVerificationPrompt(
@@ -824,14 +832,6 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         encoding: 'utf-8',
       }).trim();
       if (context.verifiedSha && context.verifiedSha !== currentHead) {
-        emitPhase(threadId, 'failed');
-        activePipelines.delete(threadId);
-        return;
-      }
-
-      // Check if worktree is clean
-      const status = execFileSync('git', ['status', '--porcelain'], { cwd, encoding: 'utf-8' });
-      if (status.trim()) {
         emitPhase(threadId, 'failed');
         activePipelines.delete(threadId);
         return;

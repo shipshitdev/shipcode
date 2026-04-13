@@ -215,6 +215,13 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         const obj = JSON.parse(line.trim()) as Record<string, unknown>;
         if (obj.type === 'result' && typeof obj.result === 'string') return (obj.result as string).slice(0, 280);
         if (typeof obj.error === 'string') return (obj.error as string).slice(0, 280);
+        if (
+          obj.type === 'result' &&
+          Array.isArray(obj.errors) &&
+          obj.errors.length > 0 &&
+          typeof obj.errors[0] === 'string'
+        )
+          return (obj.errors[0] as string).slice(0, 280);
       } catch { /* skip */ }
     }
     return 'Pipeline failed — see devtools console for full trace.';
@@ -290,6 +297,11 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     prevLatestPlanIdRef.current = latestPlanId;
   }, [latestPlanId]);
 
+  // Reset raw output toggle when switching threads so stale expanded state doesn't bleed across.
+  useEffect(() => {
+    setShowRawOutput(false);
+  }, [activeThreadId]);
+
   // Dismiss any pending notifications for this thread when the user opens it.
   // Catches the "fired before navigation" case; useIpc.ts handles the
   // "fired while already viewing" case.
@@ -361,6 +373,20 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     setIsSubmitting(true);
     try {
       await window.shipcode.invoke('github:start-issue', {
+        projectId: activeProjectId,
+        issueNumber: activeIssue.issueNumber,
+      });
+      await refreshIssueState();
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleMarkAsDone = async () => {
+    if (!activeProjectId || !activeIssue) return;
+    setIsSubmitting(true);
+    try {
+      await window.shipcode.invoke('github:close-issue', {
         projectId: activeProjectId,
         issueNumber: activeIssue.issueNumber,
       });
@@ -566,10 +592,10 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-secondary">Agents</h4>
       <div className="grid grid-cols-2 gap-2">
         {[
-          { role: 'Planner', model: 'claude' as const, editable: false },
-          { role: 'Reviewer', model: 'codex' as const, editable: false },
+          { role: 'Planner', model: thread?.plannerResolvedModel ?? 'claude', editable: false },
+          { role: 'Reviewer', model: thread?.reviewerResolvedModel ?? 'codex', editable: false },
           { role: 'Executor', model: activeIssue.executorModel, editable: executorEditable },
-          { role: 'Verifier', model: 'claude' as const, editable: false },
+          { role: 'Verifier', model: thread?.verifierResolvedModel ?? 'claude', editable: false },
         ].map(({ role, model, editable }) => (
           <div
             key={role}
@@ -928,20 +954,31 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
           )}
           {showRawOutput && failingPhaseOutput && (
             <pre className="mt-2 max-h-[200px] overflow-y-auto text-[11px] text-danger/70 whitespace-pre-wrap break-words border-t border-danger/20 pt-2">
-              {planHistory[0].rawOutput}
+              {failingPhaseOutput}
             </pre>
           )}
         </div>
       )}
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={handleRerun}
-        disabled={isSubmitting}
-        className="w-full border-danger/40 text-danger hover:bg-danger/10 hover:border-danger"
-      >
-        {isSubmitting ? 'Starting...' : 'Retry'}
-      </Button>
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={handleRerun}
+          disabled={isSubmitting}
+          className="flex-1 border-danger/40 text-danger hover:bg-danger/10 hover:border-danger"
+        >
+          {isSubmitting ? 'Starting...' : 'Retry'}
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={handleMarkAsDone}
+          disabled={isSubmitting}
+          className="flex-1 border-border text-muted hover:bg-secondary hover:text-primary"
+        >
+          Mark As Done
+        </Button>
+      </div>
     </div>
   ) : null;
 
@@ -1233,7 +1270,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       <Modal
         open={showArchiveConfirm}
         onClose={() => setShowArchiveConfirm(false)}
-        title={`Archive issue #${activeIssue.issueNumber}?`}
+        title={`Close issue #${activeIssue.issueNumber}?`}
         className="max-w-sm"
       >
         <p className="text-sm text-secondary">
@@ -1244,7 +1281,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
             Cancel
           </Button>
           <Button size="sm" onClick={handleArchiveConfirmed}>
-            Archive
+            Close issue
           </Button>
         </ModalFooter>
       </Modal>

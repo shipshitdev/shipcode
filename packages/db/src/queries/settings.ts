@@ -127,6 +127,7 @@ export class SettingsQueries {
         stored.openrouterExplicitFallback ?? DEFAULT_SETTINGS.openrouterExplicitFallback,
       testCommand: readNullable(stored.testCommand) ?? null,
       testingContext: readNullable(stored.testingContext) ?? null,
+      maxConcurrentPipelines: clampInt(stored.maxConcurrentPipelines, 1, 10, DEFAULT_SETTINGS.maxConcurrentPipelines),
     };
   }
 
@@ -142,6 +143,10 @@ export class SettingsQueries {
     if ('plannerMaxTurns' in patch && patch.plannerMaxTurns != null) {
       const n = Number(patch.plannerMaxTurns);
       if (!Number.isFinite(n) || n < 1 || n > 20) throw new Error('plannerMaxTurns must be 1–20');
+    }
+    if ('maxConcurrentPipelines' in patch && patch.maxConcurrentPipelines != null) {
+      const n = Number(patch.maxConcurrentPipelines);
+      if (!Number.isFinite(n) || n < 1 || n > 10) throw new Error('maxConcurrentPipelines must be 1–10');
     }
     for (const key of ['plannerReasoningEffort', 'reviewerReasoningEffort', 'executorReasoningEffort', 'verifierReasoningEffort'] as const) {
       if (key in patch && patch[key] != null) {

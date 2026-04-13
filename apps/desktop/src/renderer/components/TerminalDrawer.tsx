@@ -153,8 +153,9 @@ export function TerminalDrawer() {
   const spinnerActiveRef = useRef(false);
   const spinnerLabelRef = useRef('Thinking');
   const lastKindRef = useRef<string | null>(null);
-  // Action banners (clickable links rendered as React, not xterm text)
-  const [actionBanners, setActionBanners] = useState<Array<{ label: string; action: 'open-issue-detail' }>>([]);
+  // Action banner (single clickable link rendered as React, not xterm text)
+  const [actionBanner, setActionBanner] = useState<{ label: string; action: 'open-issue-detail' } | null>(null);
+  const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Resize state
   const [height, setHeight] = useState(DEFAULT_HEIGHT);
   const [isMaximized, setIsMaximized] = useState(false);
@@ -243,6 +244,7 @@ export function TerminalDrawer() {
       term.dispose();
       termRef.current = null;
       fitRef.current = null;
+      if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
     };
   }, []);
 
@@ -256,7 +258,8 @@ export function TerminalDrawer() {
       canonicalWrittenRef.current = 0;
       startedAtRef.current = null;
       lastKindRef.current = null;
-      setActionBanners([]);
+      setActionBanner(null);
+      if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
       prevThreadIdRef.current = terminalThreadId;
       // If the stream is empty but a pipeline is actively running on this thread,
       // start the xterm spinner immediately so the terminal isn't blank.
@@ -340,7 +343,9 @@ export function TerminalDrawer() {
       // Action events → clickable React banner, not xterm text
       if (event.kind === 'action') {
         stopSpinner();
-        setActionBanners((prev) => [...prev, { label: event.label, action: event.action }]);
+        if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
+        setActionBanner({ label: event.label, action: event.action });
+        bannerTimerRef.current = setTimeout(() => setActionBanner(null), 8_000);
         lastKindRef.current = event.kind;
         continue;
       }
@@ -543,24 +548,41 @@ export function TerminalDrawer() {
       </div>
       <div className="relative flex-1 overflow-hidden min-h-0">
         <div ref={containerRef} className="absolute inset-0" />
-        {/* Action banners — clickable links rendered over the terminal */}
-        {actionBanners.length > 0 && (
-          <div className="absolute bottom-0 left-0 right-0 z-10 flex flex-col gap-1 p-2">
-            {actionBanners.map((banner, i) => (
-              <button
-                key={i}
-                type="button"
-                className="flex items-center gap-2 px-3 py-1.5 rounded text-xs font-medium bg-accent/10 text-accent hover:bg-accent/20 transition-colors cursor-pointer text-left border border-accent/20"
+        {/* Action banner — clickable toast rendered over the terminal */}
+        {actionBanner && (
+          <div className="absolute bottom-0 left-0 right-0 z-10 p-3">
+            <div className="group flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 shadow-lg backdrop-blur-sm">
+              <Button
+                variant="ghost"
                 onClick={() => {
-                  if (banner.action === 'open-issue-detail' && pinnedIssue) {
+                  if (actionBanner.action === 'open-issue-detail' && pinnedIssue) {
                     selectIssue(pinnedIssue);
                   }
                 }}
+                className="h-auto flex-1 justify-start whitespace-normal px-0 py-0 text-left font-normal hover:bg-transparent"
               >
-                <span>{banner.label}</span>
-                <span className="text-accent/60">-- click to open Issue Detail</span>
-              </button>
-            ))}
+                <div className="flex flex-col items-start gap-0.5">
+                  <div className="text-[12px] font-semibold text-primary">{actionBanner.label}</div>
+                  <div className="text-[11px] text-secondary">
+                    {pinnedIssue
+                      ? `#${pinnedIssue.issueNumber} ${pinnedIssue.title} -- click to open`
+                      : 'Click to open Issue Detail'}
+                  </div>
+                </div>
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => {
+                  setActionBanner(null);
+                  if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
+                }}
+                className="text-muted hover:bg-transparent hover:text-primary"
+                title="Dismiss"
+              >
+                <X size={14} />
+              </Button>
+            </div>
           </div>
         )}
       </div>
