@@ -78,6 +78,14 @@ export function SettingsPanel() {
   if (!settings) return null;
 
   const update = (patch: Partial<AppSettings>) => updateSettings.mutate(patch);
+  const testChat = async (provider: 'discord' | 'telegram') => {
+    const result = await window.shipcode.invoke<{ ok: boolean; message: string }>(
+      'integrations:test-chat',
+      { provider },
+    );
+    queryClient.invalidateQueries({ queryKey: ['integrations'] });
+    return result.message;
+  };
 
   return (
     <div className="flex-1 overflow-y-auto bg-primary p-8">
@@ -109,6 +117,7 @@ export function SettingsPanel() {
             onRefetch={() => {
               void refetchIntegrations();
             }}
+            onTestChat={testChat}
           />
         )}
         {settingsSection === 'github' && (

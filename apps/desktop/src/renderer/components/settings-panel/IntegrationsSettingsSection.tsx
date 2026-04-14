@@ -14,6 +14,7 @@ import {
   TabsTrigger,
   Terminal,
 } from '@shipcode/ui';
+import { useState } from 'react';
 import { StatusPill } from './StatusPill';
 
 export function IntegrationsSettingsSection({
@@ -22,13 +23,16 @@ export function IntegrationsSettingsSection({
   settings,
   onUpdate,
   onRefetch,
+  onTestChat,
 }: {
   integrationStatus: IntegrationStatus | undefined;
   integrationsFetching: boolean;
   settings: AppSettings;
   onUpdate: (patch: Partial<AppSettings>) => void;
   onRefetch: () => void;
+  onTestChat: (provider: 'discord' | 'telegram') => Promise<string>;
 }) {
+  const [testResult, setTestResult] = useState<string | null>(null);
   const getOpenRouterModelPresentation = (
     check: NonNullable<IntegrationStatus>['openrouter']['modelChecks'][number],
   ) => {
@@ -266,6 +270,167 @@ export function IntegrationsSettingsSection({
                     <div className="text-amber-300">{integrationStatus.openrouter.message}</div>
                   ) : null}
                 </div>
+              </div>
+            </section>
+
+            <section>
+              <h4 className="mb-3 text-secondary">Chat Alerts</h4>
+              <div className="space-y-4">
+                <div className="rounded-md border border-border bg-secondary/40 p-3 text-[12px] text-secondary">
+                  <div className="mb-3 text-[13px] font-medium text-primary">
+                    Chat event defaults
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-2">
+                    {[
+                      ['awaitingApproval', 'Awaiting approval'],
+                      ['failed', 'Pipeline failed'],
+                      ['ciBlocked', 'CI blocked'],
+                      ['verificationExhausted', 'Verification exhausted'],
+                      ['completed', 'Pipeline completed'],
+                    ].map(([key, label]) => (
+                      <label key={key} className="flex items-center justify-between gap-3">
+                        <span>{label}</span>
+                        <input
+                          type="checkbox"
+                          checked={
+                            settings.chatNotificationEvents[
+                              key as keyof AppSettings['chatNotificationEvents']
+                            ]
+                          }
+                          onChange={(e) =>
+                            onUpdate({
+                              chatNotificationEvents: {
+                                ...settings.chatNotificationEvents,
+                                [key]: e.target.checked,
+                              },
+                            })
+                          }
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-md border border-border bg-secondary/40 p-3 text-[12px] text-secondary">
+                  <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+                    <span className="text-[13px] font-medium text-primary">Discord</span>
+                    <div className="ml-auto flex flex-wrap justify-end gap-2">
+                      <StatusPill
+                        tone={
+                          integrationStatus.discord.validationStatus === 'valid'
+                            ? 'success'
+                            : integrationStatus.discord.validationStatus === 'invalid'
+                              ? 'danger'
+                              : 'warning'
+                        }
+                      >
+                        {integrationStatus.discord.validationStatus}
+                      </StatusPill>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="flex items-center justify-between gap-3">
+                      <span>Enable Discord chat alerts</span>
+                      <input
+                        type="checkbox"
+                        checked={settings.discordEnabled}
+                        onChange={(e) => onUpdate({ discordEnabled: e.target.checked })}
+                      />
+                    </label>
+                    <input
+                      className="w-full rounded-md border border-border bg-primary px-3 py-2 text-primary"
+                      value={settings.discordWebhookUrl ?? ''}
+                      onChange={(e) => onUpdate({ discordWebhookUrl: e.target.value || null })}
+                      placeholder="https://discord.com/api/webhooks/..."
+                      spellCheck={false}
+                    />
+                    {integrationStatus.discord.message ? (
+                      <div className="text-amber-300">{integrationStatus.discord.message}</div>
+                    ) : null}
+                    {integrationStatus.discord.lastDeliveryStatus?.lastError ? (
+                      <div className="text-amber-300">
+                        Last delivery: {integrationStatus.discord.lastDeliveryStatus.lastError}
+                      </div>
+                    ) : integrationStatus.discord.lastDeliveryStatus?.lastSuccessAt ? (
+                      <div>
+                        Last delivery succeeded at{' '}
+                        <code>{integrationStatus.discord.lastDeliveryStatus.lastSuccessAt}</code>
+                      </div>
+                    ) : null}
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => void onTestChat('discord').then(setTestResult)}
+                    >
+                      Send test message
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="rounded-md border border-border bg-secondary/40 p-3 text-[12px] text-secondary">
+                  <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+                    <span className="text-[13px] font-medium text-primary">Telegram</span>
+                    <div className="ml-auto flex flex-wrap justify-end gap-2">
+                      <StatusPill
+                        tone={
+                          integrationStatus.telegram.validationStatus === 'valid'
+                            ? 'success'
+                            : integrationStatus.telegram.validationStatus === 'invalid'
+                              ? 'danger'
+                              : 'warning'
+                        }
+                      >
+                        {integrationStatus.telegram.validationStatus}
+                      </StatusPill>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="flex items-center justify-between gap-3">
+                      <span>Enable Telegram chat alerts</span>
+                      <input
+                        type="checkbox"
+                        checked={settings.telegramEnabled}
+                        onChange={(e) => onUpdate({ telegramEnabled: e.target.checked })}
+                      />
+                    </label>
+                    <input
+                      className="w-full rounded-md border border-border bg-primary px-3 py-2 text-primary"
+                      value={settings.telegramBotToken ?? ''}
+                      onChange={(e) => onUpdate({ telegramBotToken: e.target.value || null })}
+                      placeholder="Bot token"
+                      spellCheck={false}
+                    />
+                    <input
+                      className="w-full rounded-md border border-border bg-primary px-3 py-2 text-primary"
+                      value={settings.telegramDefaultChatId ?? ''}
+                      onChange={(e) => onUpdate({ telegramDefaultChatId: e.target.value || null })}
+                      placeholder="Default chat ID"
+                      spellCheck={false}
+                    />
+                    {integrationStatus.telegram.message ? (
+                      <div className="text-amber-300">{integrationStatus.telegram.message}</div>
+                    ) : null}
+                    {integrationStatus.telegram.lastDeliveryStatus?.lastError ? (
+                      <div className="text-amber-300">
+                        Last delivery: {integrationStatus.telegram.lastDeliveryStatus.lastError}
+                      </div>
+                    ) : integrationStatus.telegram.lastDeliveryStatus?.lastSuccessAt ? (
+                      <div>
+                        Last delivery succeeded at{' '}
+                        <code>{integrationStatus.telegram.lastDeliveryStatus.lastSuccessAt}</code>
+                      </div>
+                    ) : null}
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => void onTestChat('telegram').then(setTestResult)}
+                    >
+                      Send test message
+                    </Button>
+                  </div>
+                </div>
+
+                {testResult ? <div className="text-[12px] text-secondary">{testResult}</div> : null}
               </div>
             </section>
 

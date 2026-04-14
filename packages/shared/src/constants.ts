@@ -22,6 +22,14 @@ export const DEFAULT_NOTIFICATION_EVENTS = {
   ciBlocked: true,
 } as const;
 
+export const DEFAULT_CHAT_NOTIFICATION_EVENTS = {
+  awaitingApproval: true,
+  failed: true,
+  completed: false,
+  verificationExhausted: true,
+  ciBlocked: true,
+} as const;
+
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
   fontStyle: 'dm-sans',
@@ -54,6 +62,14 @@ export const DEFAULT_SETTINGS: AppSettings = {
   notificationBadgeEnabled: true,
   notificationSoundEnabled: true,
   notificationEvents: { ...DEFAULT_NOTIFICATION_EVENTS },
+  discordEnabled: false,
+  discordWebhookUrl: null,
+  discordLastDeliveryStatus: null,
+  telegramEnabled: false,
+  telegramBotToken: null,
+  telegramDefaultChatId: null,
+  telegramLastDeliveryStatus: null,
+  chatNotificationEvents: { ...DEFAULT_CHAT_NOTIFICATION_EVENTS },
   // OpenRouter defaults. Provider readiness is inferred from OPENROUTER_API_KEY.
   openrouterPlannerModel: null,
   openrouterReviewerModel: null,

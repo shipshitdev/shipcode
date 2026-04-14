@@ -21,6 +21,10 @@ export function migrate(db: DatabaseSync): void {
       reviewer_reasoning_effort_override TEXT,
       executor_reasoning_effort_override TEXT,
       verifier_reasoning_effort_override TEXT,
+      discord_routing TEXT NOT NULL DEFAULT 'inherit',
+      discord_webhook_url_override TEXT,
+      telegram_routing TEXT NOT NULL DEFAULT 'inherit',
+      telegram_chat_id_override TEXT,
       default_branch TEXT NOT NULL DEFAULT 'main',
       created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
       updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
@@ -676,5 +680,29 @@ export function migrateV19(db: DatabaseSync): void {
     `);
 
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (19)`);
+  });
+}
+
+export function migrateV20(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 20) return;
+
+  transaction(db, () => {
+    const projectColumns = [
+      "ALTER TABLE projects ADD COLUMN discord_routing TEXT NOT NULL DEFAULT 'inherit'",
+      'ALTER TABLE projects ADD COLUMN discord_webhook_url_override TEXT',
+      "ALTER TABLE projects ADD COLUMN telegram_routing TEXT NOT NULL DEFAULT 'inherit'",
+      'ALTER TABLE projects ADD COLUMN telegram_chat_id_override TEXT',
+    ];
+
+    for (const sql of projectColumns) {
+      try {
+        db.exec(sql);
+      } catch {}
+    }
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (20)`);
   });
 }

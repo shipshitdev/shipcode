@@ -67,6 +67,7 @@ import {
   resolvePhaseModelIdForIssue,
   resolvePhaseReasoningEffort,
 } from '@shipcode/shared';
+import { ChatNotificationService } from './chat-notification-service';
 import { registerIpcHandlers } from './ipc';
 import { transitionThreadPhase } from './ipc/helpers';
 import { NotificationService } from './notification-service';
@@ -206,6 +207,7 @@ function createWindow() {
     queries.settings,
     queries.activity,
   );
+  const chatNotificationService = new ChatNotificationService(queries.settings, queries.projects);
 
   // Initialize pipeline state machine.
   // onPipelineTerminal is set after pipeline is created (late-binding).
@@ -215,6 +217,7 @@ function createWindow() {
     terminalEvents: queries.terminalEvents,
     threads: queries.threads,
     notifications: notificationService,
+    chatNotifications: chatNotificationService,
     onPipelineTerminal: () => onPipelineTerminal?.(),
   });
 
@@ -332,6 +335,7 @@ function createWindow() {
     activePipeline,
     emitter,
     notificationService,
+    chatNotificationService,
   );
 
   // Watchdog: reset threads stuck in active phases (handles renderer refresh + crash scenarios).

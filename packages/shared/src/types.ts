@@ -64,6 +64,9 @@ export interface Project {
   name: string;
   path: string;
   pathExists?: boolean;
+  setupStatus?: ProjectSetupStatus;
+  setupPath?: string;
+  setupError?: string | null;
   gitRemote: string | null;
   /**
    * Optional override for the Kanban `board` quick-link. GitHub Projects v2
@@ -85,6 +88,10 @@ export interface Project {
   reviewerReasoningEffortOverride: ReasoningEffort | null;
   executorReasoningEffortOverride: ReasoningEffort | null;
   verifierReasoningEffortOverride: ReasoningEffort | null;
+  discordRouting: ProjectNotificationRoutingMode;
+  discordWebhookUrlOverride: string | null;
+  telegramRouting: ProjectNotificationRoutingMode;
+  telegramChatIdOverride: string | null;
   defaultBranch: string;
   pinned: boolean;
   archived: boolean;
@@ -338,6 +345,14 @@ export interface AppSettings {
   notificationBadgeEnabled: boolean;
   notificationSoundEnabled: boolean;
   notificationEvents: NotificationEventToggles;
+  discordEnabled: boolean;
+  discordWebhookUrl: string | null;
+  discordLastDeliveryStatus: IntegrationDeliveryStatus | null;
+  telegramEnabled: boolean;
+  telegramBotToken: string | null;
+  telegramDefaultChatId: string | null;
+  telegramLastDeliveryStatus: IntegrationDeliveryStatus | null;
+  chatNotificationEvents: ChatNotificationEventToggles;
   // OpenRouter integration (Tier 1+). Presence of OPENROUTER_API_KEY enables
   // provider readiness. Individual phase models are optional overrides; when
   // null, the resolver falls back to the default paid/free selections below.
@@ -369,12 +384,61 @@ export interface RepoSetupContract {
   testingContext: string | null;
 }
 
+export type ProjectSetupStatus = 'configured' | 'missing' | 'invalid';
+
+export type DetectedProjectKind = 'bun' | 'npm' | 'pnpm' | 'yarn' | 'xcode' | 'swiftpm' | 'unknown';
+
+export interface DetectedProjectProfile {
+  kind: DetectedProjectKind;
+  label: string;
+  recommended: boolean;
+  evidence: string[];
+}
+
+export interface ProjectSetupInspection {
+  status: ProjectSetupStatus;
+  path: string;
+  contract: RepoSetupContract | null;
+  error: string | null;
+}
+
+export interface ProjectSetupDraft {
+  inspection: ProjectSetupInspection;
+  profiles: DetectedProjectProfile[];
+  suggestedContract: RepoSetupContract;
+}
+
 export interface NotificationEventToggles {
   awaitingApproval: boolean;
   failed: boolean;
   completed: boolean;
   verificationExhausted: boolean;
   ciBlocked: boolean;
+}
+
+export interface ChatNotificationEventToggles {
+  awaitingApproval: boolean;
+  failed: boolean;
+  completed: boolean;
+  verificationExhausted: boolean;
+  ciBlocked: boolean;
+}
+
+export type ProjectNotificationRoutingMode = 'inherit' | 'disabled' | 'custom';
+
+export interface ProjectNotificationRouting {
+  discordRouting: ProjectNotificationRoutingMode;
+  discordWebhookUrlOverride: string | null;
+  telegramRouting: ProjectNotificationRoutingMode;
+  telegramChatIdOverride: string | null;
+}
+
+export interface IntegrationDeliveryStatus {
+  provider: 'discord' | 'telegram';
+  destination: string | null;
+  lastAttemptAt: string | null;
+  lastSuccessAt: string | null;
+  lastError: string | null;
 }
 
 export interface StatusLabelMapping {
@@ -437,10 +501,36 @@ export interface OpenRouterHealth {
   modelChecks: OpenRouterModelCheck[];
 }
 
+export type ChatIntegrationValidationStatus = 'missing' | 'valid' | 'invalid';
+
+export interface DiscordIntegrationSettings {
+  enabled: boolean;
+  webhookUrl: string | null;
+  lastDeliveryStatus: IntegrationDeliveryStatus | null;
+}
+
+export interface TelegramIntegrationSettings {
+  enabled: boolean;
+  botToken: string | null;
+  defaultChatId: string | null;
+  lastDeliveryStatus: IntegrationDeliveryStatus | null;
+}
+
+export interface ChatIntegrationHealth {
+  enabled: boolean;
+  configured: boolean;
+  destinationConfigured: boolean;
+  validationStatus: ChatIntegrationValidationStatus;
+  message: string | null;
+  lastDeliveryStatus: IntegrationDeliveryStatus | null;
+}
+
 export interface IntegrationStatus {
   system: SystemHealth;
   ghAuth: GhAuthStatus;
   openrouter: OpenRouterHealth;
+  discord: ChatIntegrationHealth;
+  telegram: ChatIntegrationHealth;
   desktopApps: DesktopAppHealthMap;
 }
 

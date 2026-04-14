@@ -18,6 +18,7 @@ import type {
 } from '@shipcode/db';
 import type { Pipeline, PipelineEmitter } from '@shipcode/pipeline';
 import type { BrowserWindow, IpcMain } from 'electron';
+import type { ChatNotificationService } from '../chat-notification-service';
 import type { NotificationService } from '../notification-service';
 
 export interface Queries {
@@ -46,4 +47,5 @@ export interface IpcHandlerDeps {
   pipeline: Pipeline;
   emitter: PipelineEmitter;
   notificationService: NotificationService;
+  chatNotificationService: ChatNotificationService;
 }

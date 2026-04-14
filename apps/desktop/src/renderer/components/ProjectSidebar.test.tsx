@@ -47,6 +47,10 @@ const project: Project = {
   reviewerReasoningEffortOverride: null,
   executorReasoningEffortOverride: null,
   verifierReasoningEffortOverride: null,
+  discordRouting: 'inherit',
+  discordWebhookUrlOverride: null,
+  telegramRouting: 'inherit',
+  telegramChatIdOverride: null,
   defaultBranch: 'main',
   pinned: false,
   archived: false,
@@ -100,6 +104,22 @@ const integrations: IntegrationStatus = {
     message: 'OPENROUTER_API_KEY is not set',
     label: null,
     modelChecks: [],
+  },
+  discord: {
+    enabled: false,
+    configured: false,
+    destinationConfigured: false,
+    validationStatus: 'missing',
+    message: 'Discord webhook URL is not configured',
+    lastDeliveryStatus: null,
+  },
+  telegram: {
+    enabled: false,
+    configured: false,
+    destinationConfigured: false,
+    validationStatus: 'missing',
+    message: 'Telegram bot token is not configured',
+    lastDeliveryStatus: null,
   },
   desktopApps: {
     cursor: {
@@ -169,7 +189,6 @@ describe('ProjectSidebar', () => {
         return {
           agentsRunning: 0,
           agentsRunningByProject: {},
-          inboxCount: 0,
         } satisfies Partial<DashboardStats>;
       if (channel === 'notification:list') return [] satisfies NotificationRecord[];
       if (channel === 'integrations:check') return integrations;
@@ -190,7 +209,6 @@ describe('ProjectSidebar', () => {
         return {
           agentsRunning: 0,
           agentsRunningByProject: {},
-          inboxCount: 0,
         } satisfies Partial<DashboardStats>;
       if (channel === 'notification:list') return [] satisfies NotificationRecord[];
       if (channel === 'integrations:check') return integrations;
@@ -217,7 +235,6 @@ describe('ProjectSidebar', () => {
         return {
           agentsRunning: 0,
           agentsRunningByProject: {},
-          inboxCount: 0,
         } satisfies Partial<DashboardStats>;
       if (channel === 'notification:list') return [] satisfies NotificationRecord[];
       if (channel === 'integrations:check') return integrations;

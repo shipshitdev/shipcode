@@ -1,6 +1,7 @@
 import type { ProcessManager } from '@shipcode/agents';
 import type { Pipeline, PipelineEmitter } from '@shipcode/pipeline';
 import type { BrowserWindow, IpcMain } from 'electron';
+import type { ChatNotificationService } from './chat-notification-service';
 import { transitionThreadPhase } from './ipc/helpers';
 import { registerGitHubHandlers } from './ipc/register-github-handlers';
 import { registerPipelineHandlers } from './ipc/register-pipeline-handlers';
@@ -19,6 +20,7 @@ export function registerIpcHandlers(
   pipeline: Pipeline,
   emitter: PipelineEmitter,
   notificationService: NotificationService,
+  chatNotificationService: ChatNotificationService,
 ): void {
   for (const thread of queries.threads.getOrphaned()) {
     transitionThreadPhase(mainWindow, queries, emitter, {
@@ -67,6 +69,7 @@ export function registerIpcHandlers(
     pipeline,
     emitter,
     notificationService,
+    chatNotificationService,
   } as const;
 
   ipcMain.on('diagnostics:renderer-ipc', (_event, payload: unknown) => {

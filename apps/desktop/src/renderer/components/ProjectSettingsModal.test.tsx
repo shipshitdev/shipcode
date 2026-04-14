@@ -55,6 +55,10 @@ describe('ProjectSettingsModal', () => {
     reviewerReasoningEffortOverride: null,
     executorReasoningEffortOverride: null,
     verifierReasoningEffortOverride: null,
+    discordRouting: 'inherit',
+    discordWebhookUrlOverride: null,
+    telegramRouting: 'inherit',
+    telegramChatIdOverride: null,
     defaultBranch: 'main',
     pinned: false,
     archived: false,
@@ -137,6 +141,22 @@ describe('ProjectSettingsModal', () => {
           message: null,
         },
       ],
+    },
+    discord: {
+      enabled: false,
+      configured: false,
+      destinationConfigured: false,
+      validationStatus: 'missing',
+      message: 'Discord webhook URL is not configured',
+      lastDeliveryStatus: null,
+    },
+    telegram: {
+      enabled: false,
+      configured: false,
+      destinationConfigured: false,
+      validationStatus: 'missing',
+      message: 'Telegram bot token is not configured',
+      lastDeliveryStatus: null,
     },
     desktopApps: {
       cursor: {

@@ -115,6 +115,10 @@ describe('ProjectQueries', () => {
     expect(p.reviewerReasoningEffortOverride).toBeNull();
     expect(p.executorReasoningEffortOverride).toBeNull();
     expect(p.verifierReasoningEffortOverride).toBeNull();
+    expect(p.discordRouting).toBe('inherit');
+    expect(p.discordWebhookUrlOverride).toBeNull();
+    expect(p.telegramRouting).toBe('inherit');
+    expect(p.telegramChatIdOverride).toBeNull();
   });
 
   it('updateModelOverrides() persists values and clears back to null', () => {
@@ -180,6 +184,35 @@ describe('ProjectQueries', () => {
     expect(updated.reviewerReasoningEffortOverride).toBeNull();
     expect(updated.executorReasoningEffortOverride).toBeNull();
     expect(updated.verifierReasoningEffortOverride).toBeNull();
+  });
+
+  it('updateNotificationRouting() persists values and clears back to inherit/null', () => {
+    const p = projects.add('/tmp/project-routing-set');
+    projects.updateNotificationRouting(p.id, {
+      discordRouting: 'custom',
+      discordWebhookUrlOverride: 'https://discord.com/api/webhooks/123/abc',
+      telegramRouting: 'custom',
+      telegramChatIdOverride: '-1001234567890',
+    });
+
+    let updated = projects.getById(p.id);
+    expect(updated?.discordRouting).toBe('custom');
+    expect(updated?.discordWebhookUrlOverride).toBe('https://discord.com/api/webhooks/123/abc');
+    expect(updated?.telegramRouting).toBe('custom');
+    expect(updated?.telegramChatIdOverride).toBe('-1001234567890');
+
+    projects.updateNotificationRouting(p.id, {
+      discordRouting: 'inherit',
+      discordWebhookUrlOverride: null,
+      telegramRouting: 'disabled',
+      telegramChatIdOverride: null,
+    });
+
+    updated = projects.getById(p.id);
+    expect(updated?.discordRouting).toBe('inherit');
+    expect(updated?.discordWebhookUrlOverride).toBeNull();
+    expect(updated?.telegramRouting).toBe('disabled');
+    expect(updated?.telegramChatIdOverride).toBeNull();
   });
 
   it('add() is idempotent: re-adding same path returns existing row', () => {

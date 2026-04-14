@@ -136,6 +136,22 @@ describe('SettingsPanel', () => {
           },
         ],
       },
+      discord: {
+        enabled: false,
+        configured: false,
+        destinationConfigured: false,
+        validationStatus: 'missing',
+        message: 'Discord webhook URL is not configured',
+        lastDeliveryStatus: null,
+      },
+      telegram: {
+        enabled: false,
+        configured: false,
+        destinationConfigured: false,
+        validationStatus: 'missing',
+        message: 'Telegram bot token is not configured',
+        lastDeliveryStatus: null,
+      },
       desktopApps: makeDesktopApps(),
     };
 
@@ -235,6 +251,22 @@ describe('SettingsPanel', () => {
           },
         ],
       },
+      discord: {
+        enabled: false,
+        configured: false,
+        destinationConfigured: false,
+        validationStatus: 'missing',
+        message: 'Discord webhook URL is not configured',
+        lastDeliveryStatus: null,
+      },
+      telegram: {
+        enabled: false,
+        configured: false,
+        destinationConfigured: false,
+        validationStatus: 'missing',
+        message: 'Telegram bot token is not configured',
+        lastDeliveryStatus: null,
+      },
       desktopApps: makeDesktopApps(),
     };
 
@@ -316,6 +348,22 @@ describe('SettingsPanel', () => {
         message: null,
         label: 'shipcode-dev',
         modelChecks: [],
+      },
+      discord: {
+        enabled: false,
+        configured: false,
+        destinationConfigured: false,
+        validationStatus: 'missing',
+        message: 'Discord webhook URL is not configured',
+        lastDeliveryStatus: null,
+      },
+      telegram: {
+        enabled: false,
+        configured: false,
+        destinationConfigured: false,
+        validationStatus: 'missing',
+        message: 'Telegram bot token is not configured',
+        lastDeliveryStatus: null,
       },
       desktopApps: makeDesktopApps(),
     };

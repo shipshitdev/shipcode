@@ -16,11 +16,12 @@ export function getRetryAction(
     return 'review';
   }
 
-  if (latestVerification?.planId === latestPlan?.id) {
-    if (latestVerification.result === 'failed') {
+  const verification = latestVerification;
+  if (verification && verification.planId === latestPlan?.id) {
+    if (verification.result === 'failed') {
       return 'verify';
     }
-    if (latestVerification.result === 'passed') {
+    if (verification.result === 'passed') {
       return 'commit_and_push';
     }
   }

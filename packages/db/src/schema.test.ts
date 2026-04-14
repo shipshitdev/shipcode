@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { migrate, migrateV2, migrateV3, migrateV18 } from './schema';
+import { migrate, migrateV2, migrateV3, migrateV18, migrateV20 } from './schema';
 import { asRow } from './utils';
 
 interface ThreadV2Row {
@@ -147,5 +147,34 @@ describe('migrateV18', () => {
 
     expect(rewritten.status).toBe('awaiting_approval');
     expect(untouched.status).toBe('rejected');
+  });
+});
+
+describe('migrateV20', () => {
+  let db: DatabaseSync;
+
+  beforeEach(() => {
+    db = new DatabaseSync(':memory:');
+    migrate(db);
+    migrateV2(db);
+    migrateV3(db);
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('adds project chat routing columns', () => {
+    migrateV20(db);
+
+    db.prepare(
+      "INSERT INTO projects (id, name, path, discord_routing, telegram_routing) VALUES ('p1', 'test', '/tmp/test', 'custom', 'disabled')",
+    ).run();
+    const row = db
+      .prepare('SELECT discord_routing, telegram_routing FROM projects WHERE id = ?')
+      .get('p1') as { discord_routing: string; telegram_routing: string };
+
+    expect(row.discord_routing).toBe('custom');
+    expect(row.telegram_routing).toBe('disabled');
   });
 });

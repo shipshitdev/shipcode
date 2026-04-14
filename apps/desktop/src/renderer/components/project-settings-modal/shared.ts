@@ -29,6 +29,10 @@ export type ProjectOverrideState = Pick<
   | 'reviewerReasoningEffortOverride'
   | 'executorReasoningEffortOverride'
   | 'verifierReasoningEffortOverride'
+  | 'discordRouting'
+  | 'discordWebhookUrlOverride'
+  | 'telegramRouting'
+  | 'telegramChatIdOverride'
 >;
 
 export const EMPTY_OVERRIDES: ProjectOverrideState = {
@@ -44,6 +48,10 @@ export const EMPTY_OVERRIDES: ProjectOverrideState = {
   reviewerReasoningEffortOverride: null,
   executorReasoningEffortOverride: null,
   verifierReasoningEffortOverride: null,
+  discordRouting: 'inherit',
+  discordWebhookUrlOverride: null,
+  telegramRouting: 'inherit',
+  telegramChatIdOverride: null,
 };
 
 export const PROVIDER_OVERRIDE_KEYS = {

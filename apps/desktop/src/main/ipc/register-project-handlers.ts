@@ -7,6 +7,11 @@ import {
   checkSystemHealthWithAuth,
   validateOpenRouterModel,
 } from '@shipcode/agents';
+import {
+  detectProjectSetup,
+  inspectProjectSetup,
+  writeProjectSetup,
+} from '@shipcode/agents/source';
 import { GitService, WorktreeManager } from '@shipcode/git';
 import type {
   AppSettings,
@@ -83,6 +88,7 @@ export function registerProjectHandlers({
   mainWindow,
   queries,
   pipeline,
+  chatNotificationService,
 }: IpcHandlerDeps): void {
   ipcMain.handle('project:list', () => {
     return enrichProjectPaths(queries.projects.list());
@@ -109,6 +115,43 @@ export function registerProjectHandlers({
       return enrichProjectPath(project);
     }
   });
+
+  ipcMain.handle(
+    'project:detect-setup',
+    async (_event, { projectId, path: projectPath }: { projectId?: string; path?: string }) => {
+      const resolvedPath =
+        projectPath ?? (projectId ? queries.projects.getById(projectId)?.path : null) ?? null;
+      if (!resolvedPath) {
+        throw new Error('Project path not found for setup detection');
+      }
+      return detectProjectSetup(resolvedPath);
+    },
+  );
+
+  ipcMain.handle('project:get-setup', async (_event, { projectId }: { projectId: string }) => {
+    const project = queries.projects.getById(projectId);
+    if (!project) throw new Error(`Project ${projectId} not found`);
+    return detectProjectSetup(project.path);
+  });
+
+  ipcMain.handle(
+    'project:save-setup',
+    async (
+      _event,
+      {
+        projectId,
+        contract,
+      }: {
+        projectId: string;
+        contract: import('@shipcode/shared').RepoSetupContract;
+      },
+    ) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+      const saved = writeProjectSetup(project.path, contract);
+      return inspectProjectSetup(project.path) ?? saved;
+    },
+  );
 
   ipcMain.handle(
     'project:relink-path',
@@ -420,6 +463,16 @@ export function registerProjectHandlers({
   );
 
   ipcMain.handle(
+    'integrations:test-chat',
+    async (
+      _event,
+      { provider, projectId }: { provider: 'discord' | 'telegram'; projectId?: string | null },
+    ) => {
+      return chatNotificationService.sendTest(provider, projectId ?? null);
+    },
+  );
+
+  ipcMain.handle(
     'project:set-default-branch',
     async (_event, { projectId, branch }: { projectId: string; branch: string }) => {
       if (!branch || typeof branch !== 'string') throw new Error('branch is required');
@@ -457,6 +510,35 @@ export function registerProjectHandlers({
       queries.projects.updateGithubProjectUrl(projectId, result.value);
       const updated = enrichProjectPath(queries.projects.getById(projectId));
       if (!updated) throw new Error(`Project ${projectId} not found after GitHub URL update`);
+      return updated;
+    },
+  );
+
+  ipcMain.handle(
+    'project:set-notification-routing',
+    async (
+      _event,
+      {
+        projectId,
+        routing,
+      }: {
+        projectId: string;
+        routing: {
+          discordRouting: import('@shipcode/shared').Project['discordRouting'];
+          discordWebhookUrlOverride: import('@shipcode/shared').Project['discordWebhookUrlOverride'];
+          telegramRouting: import('@shipcode/shared').Project['telegramRouting'];
+          telegramChatIdOverride: import('@shipcode/shared').Project['telegramChatIdOverride'];
+        };
+      },
+    ) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+
+      queries.projects.updateNotificationRouting(projectId, routing);
+      const updated = enrichProjectPath(queries.projects.getById(projectId));
+      if (!updated) {
+        throw new Error(`Project ${projectId} not found after notification routing update`);
+      }
       return updated;
     },
   );

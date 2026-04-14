@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { DEFAULT_SKILLS, GhCli, StreamParser } from '@shipcode/agents';
+import { inspectProjectSetup } from '@shipcode/agents/source';
 import type { PipelineEmitter } from '@shipcode/pipeline';
 import type { ShipCodePlan } from '@shipcode/shared';
 import {
@@ -14,23 +15,34 @@ import {
   resolvePhaseReasoningEffort,
 } from '@shipcode/shared';
 import type { BrowserWindow } from 'electron';
+import type { ChatNotificationService } from '../chat-notification-service';
 import log from '../logger.service';
 import type { NotificationService } from '../notification-service';
 import type { Queries } from './types';
 
 export function enrichProjectPath(project: import('@shipcode/shared').Project | null) {
   if (!project) return null;
+  const setup = inspectProjectSetup(project.path);
   return {
     ...project,
     pathExists: fs.existsSync(project.path),
+    setupStatus: setup.status,
+    setupPath: setup.path,
+    setupError: setup.error,
   };
 }
 
 export function enrichProjectPaths(projects: import('@shipcode/shared').Project[]) {
-  return projects.map((project) => ({
-    ...project,
-    pathExists: fs.existsSync(project.path),
-  }));
+  return projects.map((project) => {
+    const setup = inspectProjectSetup(project.path);
+    return {
+      ...project,
+      pathExists: fs.existsSync(project.path),
+      setupStatus: setup.status,
+      setupPath: setup.path,
+      setupError: setup.error,
+    };
+  });
 }
 
 export function resolveProjectPhaseModels(
@@ -87,6 +99,7 @@ export async function syncLinkedPullRequestFeedback(
   issue: import('@shipcode/shared').GitHubIssueCacheRecord,
   queries: Queries,
   notificationService: NotificationService,
+  chatNotificationService: ChatNotificationService,
 ): Promise<void> {
   const thread = issue.threadId ? queries.threads.getById(issue.threadId) : null;
   const ghCli = new GhCli(project.path);
@@ -126,6 +139,7 @@ export async function syncLinkedPullRequestFeedback(
     await ghCli.setIssueLabelPresence(issue.issueNumber, 'blocked:ci', feedback.ciBlocked);
     if (feedback.ciBlocked) {
       notificationService.fire('ci_blocked', thread);
+      chatNotificationService.fire('ci_blocked', thread);
     }
   } else if (feedback.ciBlocked) {
     queries.githubIssues.setCachedLabelPresence(issue.id, 'blocked:ci', true);

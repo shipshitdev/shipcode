@@ -575,6 +575,8 @@ describe('checkIntegrationStatus', () => {
     expect(result.system.codex.authenticated).toBe(true);
     expect(result.ghAuth.authenticated).toBe(true);
     expect(result.openrouter.authStatus).toBe('valid');
+    expect(result.discord.validationStatus).toBe('missing');
+    expect(result.telegram.validationStatus).toBe('missing');
     expect(result.desktopApps.finder.available).toBe(true);
     expect(result.desktopApps.cursor.available).toBe(false);
   });

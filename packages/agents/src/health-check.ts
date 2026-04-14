@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import type {
   AppSettings,
+  ChatIntegrationHealth,
   CliHealth,
   DesktopAppHealth,
   DesktopAppHealthMap,
@@ -145,6 +146,47 @@ async function readEnvVar(name: string): Promise<string | null> {
 
   const fallback = process.env[name]?.trim();
   return fallback ? fallback : null;
+}
+
+const DISCORD_WEBHOOK_RE = /^https:\/\/(?:discord(?:app)?\.com)\/api\/webhooks\/[^/\s]+\/[^/\s]+$/i;
+const TELEGRAM_TOKEN_RE = /^\d+:[A-Za-z0-9_-]{20,}$/;
+
+function checkDiscordHealth(settings: AppSettings): ChatIntegrationHealth {
+  const webhookUrl = settings.discordWebhookUrl?.trim() ?? null;
+  const hasWebhook = !!webhookUrl;
+  const valid = webhookUrl ? DISCORD_WEBHOOK_RE.test(webhookUrl) : false;
+  return {
+    enabled: settings.discordEnabled,
+    configured: hasWebhook,
+    destinationConfigured: hasWebhook,
+    validationStatus: !hasWebhook ? 'missing' : valid ? 'valid' : 'invalid',
+    message: !hasWebhook
+      ? 'Discord webhook URL is not configured'
+      : valid
+        ? null
+        : 'Discord webhook URL is invalid',
+    lastDeliveryStatus: settings.discordLastDeliveryStatus,
+  };
+}
+
+function checkTelegramHealth(settings: AppSettings): ChatIntegrationHealth {
+  const token = settings.telegramBotToken?.trim() ?? null;
+  const chatId = settings.telegramDefaultChatId?.trim() ?? null;
+  const tokenValid = token ? TELEGRAM_TOKEN_RE.test(token) : false;
+  return {
+    enabled: settings.telegramEnabled,
+    configured: !!token && !!chatId,
+    destinationConfigured: !!chatId,
+    validationStatus: !token || !chatId ? 'missing' : tokenValid ? 'valid' : 'invalid',
+    message: !token
+      ? 'Telegram bot token is not configured'
+      : !chatId
+        ? 'Telegram default chat ID is not configured'
+        : tokenValid
+          ? null
+          : 'Telegram bot token is invalid',
+    lastDeliveryStatus: settings.telegramLastDeliveryStatus,
+  };
 }
 
 export async function checkClaudeAuth(): Promise<boolean> {
@@ -515,5 +557,12 @@ export async function checkIntegrationStatus(settings: AppSettings): Promise<Int
     checkDesktopApps(),
   ]);
 
-  return { system, ghAuth, openrouter, desktopApps };
+  return {
+    system,
+    ghAuth,
+    openrouter,
+    discord: checkDiscordHealth(settings),
+    telegram: checkTelegramHealth(settings),
+    desktopApps,
+  };
 }

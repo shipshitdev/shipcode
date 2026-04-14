@@ -21,7 +21,10 @@ import type {
   PlanReview,
   Project,
   ProjectOpenTarget,
+  ProjectSetupDraft,
+  ProjectSetupInspection,
   RecentTask,
+  RepoSetupContract,
   ReviewRecord,
   ShipCodePlan,
   SystemHealth,
@@ -40,6 +43,18 @@ export interface IpcInvokeChannels {
   'project:list-archived': { args: undefined; result: Project[] };
   'project:get': { args: { projectId: string }; result: Project | null };
   'project:add': { args: { path: string }; result: Project };
+  'project:detect-setup': {
+    args: { projectId?: string; path?: string };
+    result: ProjectSetupDraft;
+  };
+  'project:get-setup': {
+    args: { projectId: string };
+    result: ProjectSetupDraft;
+  };
+  'project:save-setup': {
+    args: { projectId: string; contract: RepoSetupContract };
+    result: ProjectSetupInspection;
+  };
   'project:remove': { args: { projectId: string }; result: undefined };
   'project:pin': { args: { projectId: string; pinned: boolean }; result: undefined };
   'project:archive': { args: { projectId: string }; result: undefined };
@@ -70,6 +85,18 @@ export interface IpcInvokeChannels {
         reviewerReasoningEffortOverride: Project['reviewerReasoningEffortOverride'];
         executorReasoningEffortOverride: Project['executorReasoningEffortOverride'];
         verifierReasoningEffortOverride: Project['verifierReasoningEffortOverride'];
+      };
+    };
+    result: Project;
+  };
+  'project:set-notification-routing': {
+    args: {
+      projectId: string;
+      routing: {
+        discordRouting: Project['discordRouting'];
+        discordWebhookUrlOverride: Project['discordWebhookUrlOverride'];
+        telegramRouting: Project['telegramRouting'];
+        telegramChatIdOverride: Project['telegramChatIdOverride'];
       };
     };
     result: Project;
@@ -117,6 +144,10 @@ export interface IpcInvokeChannels {
   'integrations:validate-openrouter-model': {
     args: { modelId: string };
     result: OpenRouterModelValidation;
+  };
+  'integrations:test-chat': {
+    args: { provider: 'discord' | 'telegram'; projectId?: string | null };
+    result: { ok: boolean; message: string };
   };
 
   'dialog:open-directory': { args: undefined; result: string | null };

@@ -1,6 +1,12 @@
 import type { DatabaseSync } from 'node:sqlite';
-import type { AppSettings, NotificationEventToggles } from '@shipcode/shared';
+import type {
+  AppSettings,
+  ChatNotificationEventToggles,
+  IntegrationDeliveryStatus,
+  NotificationEventToggles,
+} from '@shipcode/shared';
 import {
+  DEFAULT_CHAT_NOTIFICATION_EVENTS,
   DEFAULT_NOTIFICATION_EVENTS,
   DEFAULT_SETTINGS,
   DEFAULT_STATUS_LABEL_MAPPINGS,
@@ -21,6 +27,25 @@ function parseNotificationEvents(raw: string | undefined): NotificationEventTogg
     return { ...DEFAULT_NOTIFICATION_EVENTS, ...parsed };
   } catch {
     return { ...DEFAULT_NOTIFICATION_EVENTS };
+  }
+}
+
+function parseChatNotificationEvents(raw: string | undefined): ChatNotificationEventToggles {
+  if (!raw) return { ...DEFAULT_CHAT_NOTIFICATION_EVENTS };
+  try {
+    const parsed = JSON.parse(raw) as Partial<ChatNotificationEventToggles>;
+    return { ...DEFAULT_CHAT_NOTIFICATION_EVENTS, ...parsed };
+  } catch {
+    return { ...DEFAULT_CHAT_NOTIFICATION_EVENTS };
+  }
+}
+
+function parseDeliveryStatus(raw: string | undefined): IntegrationDeliveryStatus | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as IntegrationDeliveryStatus;
+  } catch {
+    return null;
   }
 }
 
@@ -132,6 +157,14 @@ export class SettingsQueries {
         DEFAULT_SETTINGS.notificationSoundEnabled,
       ),
       notificationEvents: parseNotificationEvents(stored.notificationEvents),
+      discordEnabled: parseBool(stored.discordEnabled, DEFAULT_SETTINGS.discordEnabled),
+      discordWebhookUrl: readNullable(stored.discordWebhookUrl),
+      discordLastDeliveryStatus: parseDeliveryStatus(stored.discordLastDeliveryStatus),
+      telegramEnabled: parseBool(stored.telegramEnabled, DEFAULT_SETTINGS.telegramEnabled),
+      telegramBotToken: readNullable(stored.telegramBotToken),
+      telegramDefaultChatId: readNullable(stored.telegramDefaultChatId),
+      telegramLastDeliveryStatus: parseDeliveryStatus(stored.telegramLastDeliveryStatus),
+      chatNotificationEvents: parseChatNotificationEvents(stored.chatNotificationEvents),
       verifierModel:
         (stored.verifierModel as AppSettings['verifierModel']) ?? DEFAULT_SETTINGS.verifierModel,
       openrouterPlannerModel: readNullable(stored.openrouterPlannerModel),

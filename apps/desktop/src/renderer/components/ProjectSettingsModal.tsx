@@ -5,6 +5,7 @@ import {
   type IntegrationStatus,
   type OpenRouterModelValidation,
   type Project,
+  type ProjectSetupDraft,
   validateGithubProjectUrl,
 } from '@shipcode/shared';
 import {
@@ -36,8 +37,12 @@ import {
 
 export function ProjectSettingsModal() {
   const queryClient = useQueryClient();
-  const { projectSettingsModalOpen, projectSettingsModalProjectId, closeProjectSettingsModal } =
-    useAppStore();
+  const {
+    projectSettingsModalOpen,
+    projectSettingsModalProjectId,
+    closeProjectSettingsModal,
+    openProjectSetupModal,
+  } = useAppStore();
 
   const [activeTab, setActiveTab] = useState<ProjectTab>('general');
   const [urlInput, setUrlInput] = useState('');
@@ -81,6 +86,16 @@ export function ProjectSettingsModal() {
     staleTime: 30_000,
   });
 
+  const { data: projectSetup } = useQuery<ProjectSetupDraft>({
+    queryKey: ['project-setup', projectSettingsModalProjectId],
+    queryFn: () =>
+      window.shipcode.invoke('project:get-setup', {
+        projectId: projectSettingsModalProjectId ?? '',
+      }),
+    enabled: !!projectSettingsModalProjectId && projectSettingsModalOpen,
+    staleTime: 0,
+  });
+
   useEffect(() => {
     if (!projectSettingsModalOpen) return;
     setActiveTab('general');
@@ -98,6 +113,10 @@ export function ProjectSettingsModal() {
       reviewerReasoningEffortOverride: project?.reviewerReasoningEffortOverride ?? null,
       executorReasoningEffortOverride: project?.executorReasoningEffortOverride ?? null,
       verifierReasoningEffortOverride: project?.verifierReasoningEffortOverride ?? null,
+      discordRouting: project?.discordRouting ?? 'inherit',
+      discordWebhookUrlOverride: project?.discordWebhookUrlOverride ?? null,
+      telegramRouting: project?.telegramRouting ?? 'inherit',
+      telegramChatIdOverride: project?.telegramChatIdOverride ?? null,
     });
     setTouched(false);
     setSubmitError(null);
@@ -113,6 +132,8 @@ export function ProjectSettingsModal() {
     project?.executorModelIdOverride,
     project?.executorModelOverride,
     project?.executorReasoningEffortOverride,
+    project?.discordRouting,
+    project?.discordWebhookUrlOverride,
     project?.githubProjectUrl,
     project?.plannerModelIdOverride,
     project?.plannerModelOverride,
@@ -123,6 +144,8 @@ export function ProjectSettingsModal() {
     project?.verifierModelIdOverride,
     project?.verifierModelOverride,
     project?.verifierReasoningEffortOverride,
+    project?.telegramRouting,
+    project?.telegramChatIdOverride,
   ]);
 
   const validation = useMemo(() => validateGithubProjectUrl(urlInput), [urlInput]);
@@ -135,6 +158,15 @@ export function ProjectSettingsModal() {
       await window.shipcode.invoke<Project>('project:set-github-project-url', {
         projectId: projectSettingsModalProjectId,
         url: validation.ok ? validation.value : null,
+      });
+      await window.shipcode.invoke<Project>('project:set-notification-routing', {
+        projectId: projectSettingsModalProjectId,
+        routing: {
+          discordRouting: overrides.discordRouting,
+          discordWebhookUrlOverride: overrides.discordWebhookUrlOverride,
+          telegramRouting: overrides.telegramRouting,
+          telegramChatIdOverride: overrides.telegramChatIdOverride,
+        },
       });
       return window.shipcode.invoke<Project>('project:set-model-overrides', {
         projectId: projectSettingsModalProjectId,
@@ -354,6 +386,33 @@ export function ProjectSettingsModal() {
                 hasSavedUrl={hasSavedUrl}
                 inputMatchesSaved={inputMatchesSaved}
                 onSync={handleSync}
+                setupInspection={projectSetup?.inspection ?? null}
+                discordRouting={overrides.discordRouting}
+                discordWebhookUrlOverride={overrides.discordWebhookUrlOverride ?? ''}
+                telegramRouting={overrides.telegramRouting}
+                telegramChatIdOverride={overrides.telegramChatIdOverride ?? ''}
+                onDiscordRoutingChange={(value) =>
+                  setOverrides((current) => ({ ...current, discordRouting: value }))
+                }
+                onDiscordWebhookChange={(value) =>
+                  setOverrides((current) => ({
+                    ...current,
+                    discordWebhookUrlOverride: value || null,
+                  }))
+                }
+                onTelegramRoutingChange={(value) =>
+                  setOverrides((current) => ({ ...current, telegramRouting: value }))
+                }
+                onTelegramChatIdChange={(value) =>
+                  setOverrides((current) => ({
+                    ...current,
+                    telegramChatIdOverride: value || null,
+                  }))
+                }
+                onConfigureSetup={() => {
+                  closeProjectSettingsModal();
+                  openProjectSetupModal(project.id);
+                }}
               />
             </TabsContent>
 

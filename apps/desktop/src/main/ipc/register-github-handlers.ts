@@ -28,6 +28,7 @@ export function registerGitHubHandlers({
   pipeline,
   emitter,
   notificationService,
+  chatNotificationService,
 }: IpcHandlerDeps): void {
   ipcMain.handle(
     'github:get-issue',
@@ -125,7 +126,13 @@ export function registerGitHubHandlers({
             continue;
           }
           try {
-            await syncLinkedPullRequestFeedback(project, issue, queries, notificationService);
+            await syncLinkedPullRequestFeedback(
+              project,
+              issue,
+              queries,
+              notificationService,
+              chatNotificationService,
+            );
           } catch (err) {
             log.warn(
               `[github:refresh-issues] PR feedback sync failed for #${issue.issueNumber}:`,

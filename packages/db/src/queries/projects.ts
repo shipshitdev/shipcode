@@ -31,6 +31,10 @@ interface ProjectRow {
   reviewer_reasoning_effort_override: Project['reviewerReasoningEffortOverride'];
   executor_reasoning_effort_override: Project['executorReasoningEffortOverride'];
   verifier_reasoning_effort_override: Project['verifierReasoningEffortOverride'];
+  discord_routing: Project['discordRouting'];
+  discord_webhook_url_override: string | null;
+  telegram_routing: Project['telegramRouting'];
+  telegram_chat_id_override: string | null;
   default_branch: string;
   pinned: number;
   archived: number;
@@ -306,6 +310,29 @@ export class ProjectQueries {
         id,
       );
   }
+
+  updateNotificationRouting(
+    id: string,
+    routing: import('@shipcode/shared').ProjectNotificationRouting,
+  ) {
+    this.db
+      .prepare(
+        `UPDATE projects
+           SET discord_routing = ?,
+               discord_webhook_url_override = ?,
+               telegram_routing = ?,
+               telegram_chat_id_override = ?,
+               updated_at = ${ISO_NOW_SQL}
+         WHERE id = ?`,
+      )
+      .run(
+        routing.discordRouting,
+        routing.discordWebhookUrlOverride,
+        routing.telegramRouting,
+        routing.telegramChatIdOverride,
+        id,
+      );
+  }
 }
 
 function mapProject(row: ProjectRow): Project {
@@ -327,6 +354,10 @@ function mapProject(row: ProjectRow): Project {
     reviewerReasoningEffortOverride: row.reviewer_reasoning_effort_override ?? null,
     executorReasoningEffortOverride: row.executor_reasoning_effort_override ?? null,
     verifierReasoningEffortOverride: row.verifier_reasoning_effort_override ?? null,
+    discordRouting: row.discord_routing ?? 'inherit',
+    discordWebhookUrlOverride: row.discord_webhook_url_override ?? null,
+    telegramRouting: row.telegram_routing ?? 'inherit',
+    telegramChatIdOverride: row.telegram_chat_id_override ?? null,
     defaultBranch: row.default_branch,
     pinned: row.pinned === 1,
     archived: row.archived === 1,

@@ -2,6 +2,7 @@ import type { ActivityQueries, TerminalEventQueries, ThreadQueries } from '@ship
 import type { PipelineEmitter, PipelineEvent } from '@shipcode/pipeline';
 import type { ActivityKind, PipelinePhase, Thread } from '@shipcode/shared';
 import type { BrowserWindow } from 'electron';
+import type { ChatNotificationService } from './chat-notification-service';
 import log, { logEvent } from './logger.service';
 import type { NotificationService } from './notification-service';
 
@@ -10,6 +11,7 @@ interface EmitterDeps {
   terminalEvents: TerminalEventQueries;
   threads: ThreadQueries;
   notifications: NotificationService;
+  chatNotifications: ChatNotificationService;
   onPipelineTerminal?: () => void;
 }
 
@@ -358,6 +360,7 @@ export function createElectronEmitter(
         try {
           deps.notifications.markVerificationExhausted(event.threadId);
           deps.notifications.fire('verification_exhausted', thread);
+          deps.chatNotifications.fire('verification_exhausted', thread);
         } catch (err) {
           log.error('[pipeline-bridge] notification error:', err);
         }
@@ -372,10 +375,13 @@ export function createElectronEmitter(
 
           if (event.phase === 'awaiting_approval') {
             deps.notifications.fire('awaiting_approval', thread);
+            deps.chatNotifications.fire('awaiting_approval', thread);
           } else if (event.phase === 'failed') {
             deps.notifications.fire('failed', thread);
+            deps.chatNotifications.fire('failed', thread);
           } else if (event.phase === 'completed') {
             deps.notifications.fire('completed', thread);
+            deps.chatNotifications.fire('completed', thread);
           }
         } catch (err) {
           log.error('[pipeline-bridge] notification error:', err);

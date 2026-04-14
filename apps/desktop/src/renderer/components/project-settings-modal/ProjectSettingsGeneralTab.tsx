@@ -1,5 +1,18 @@
-import type { Project } from '@shipcode/shared';
-import { Button, Input, Label } from '@shipcode/ui';
+import type {
+  Project,
+  ProjectNotificationRoutingMode,
+  ProjectSetupInspection,
+} from '@shipcode/shared';
+import {
+  Button,
+  Input,
+  Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@shipcode/ui';
 
 export function ProjectSettingsGeneralTab({
   project,
@@ -19,6 +32,16 @@ export function ProjectSettingsGeneralTab({
   hasSavedUrl,
   inputMatchesSaved,
   onSync,
+  setupInspection,
+  onConfigureSetup,
+  discordRouting,
+  discordWebhookUrlOverride,
+  telegramRouting,
+  telegramChatIdOverride,
+  onDiscordRoutingChange,
+  onDiscordWebhookChange,
+  onTelegramRoutingChange,
+  onTelegramChatIdChange,
 }: {
   project: Project;
   urlInput: string;
@@ -37,6 +60,16 @@ export function ProjectSettingsGeneralTab({
   hasSavedUrl: boolean;
   inputMatchesSaved: boolean;
   onSync: () => void;
+  setupInspection: ProjectSetupInspection | null;
+  onConfigureSetup: () => void;
+  discordRouting: ProjectNotificationRoutingMode;
+  discordWebhookUrlOverride: string;
+  telegramRouting: ProjectNotificationRoutingMode;
+  telegramChatIdOverride: string;
+  onDiscordRoutingChange: (value: ProjectNotificationRoutingMode) => void;
+  onDiscordWebhookChange: (value: string) => void;
+  onTelegramRoutingChange: (value: ProjectNotificationRoutingMode) => void;
+  onTelegramChatIdChange: (value: string) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -108,6 +141,98 @@ export function ProjectSettingsGeneralTab({
         {showInlineError && !validationOk ? (
           <p className="text-[11px] text-danger">{validationReason}</p>
         ) : null}
+      </div>
+
+      <div className="rounded-md border border-border bg-secondary/30 p-3">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div>
+            <div className="text-[12px] font-medium text-primary">Project setup</div>
+            <div className="text-[11px] text-muted">
+              Repo-owned worktree bootstrap and verification commands stored in{' '}
+              <span className="font-mono">.shipcode/setup.json</span>.
+            </div>
+          </div>
+          <Button variant="secondary" size="sm" onClick={onConfigureSetup}>
+            Configure setup...
+          </Button>
+        </div>
+        <div className="text-[11px] text-secondary">
+          Status:{' '}
+          <span className="font-medium">
+            {setupInspection?.status === 'configured'
+              ? 'Configured'
+              : setupInspection?.status === 'invalid'
+                ? 'Invalid'
+                : 'Missing'}
+          </span>
+        </div>
+        <div className="mt-1 font-mono text-[11px] text-secondary break-all">
+          {setupInspection?.path ?? `${project.path}/.shipcode/setup.json`}
+        </div>
+        {setupInspection?.error ? (
+          <div className="mt-2 rounded-md border border-danger/30 bg-danger/10 px-2.5 py-2 text-[11px] text-danger">
+            {setupInspection.error}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="rounded-md border border-border bg-secondary/30 p-3">
+        <div className="mb-2 text-[12px] font-medium text-primary">Chat routing overrides</div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label className="text-xs text-secondary">Discord routing</Label>
+            <Select
+              value={discordRouting}
+              onValueChange={(value) =>
+                onDiscordRoutingChange(value as ProjectNotificationRoutingMode)
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="inherit">Inherit global default</SelectItem>
+                <SelectItem value="disabled">Disable for this project</SelectItem>
+                <SelectItem value="custom">Use custom webhook</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input
+              value={discordWebhookUrlOverride}
+              onChange={(e) => onDiscordWebhookChange(e.target.value)}
+              placeholder="https://discord.com/api/webhooks/..."
+              disabled={discordRouting !== 'custom'}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs text-secondary">Telegram routing</Label>
+            <Select
+              value={telegramRouting}
+              onValueChange={(value) =>
+                onTelegramRoutingChange(value as ProjectNotificationRoutingMode)
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="inherit">Inherit global default</SelectItem>
+                <SelectItem value="disabled">Disable for this project</SelectItem>
+                <SelectItem value="custom">Use custom chat ID</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input
+              value={telegramChatIdOverride}
+              onChange={(e) => onTelegramChatIdChange(e.target.value)}
+              placeholder="-1001234567890"
+              disabled={telegramRouting !== 'custom'}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </div>
+        </div>
       </div>
 
       <div className="rounded-md border border-border bg-secondary/30 p-3">
