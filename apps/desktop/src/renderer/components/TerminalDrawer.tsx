@@ -1,4 +1,5 @@
 import { TerminalDrawerActionBanner } from './terminal-drawer/TerminalDrawerActionBanner';
+import { TerminalDrawerEmptyState } from './terminal-drawer/TerminalDrawerEmptyState';
 import { TerminalDrawerHeader } from './terminal-drawer/TerminalDrawerHeader';
 import { useTerminalDrawer } from './terminal-drawer/useTerminalDrawer';
 
@@ -17,6 +18,7 @@ export function TerminalDrawer() {
     pipelinePhase,
     resolvedHeight,
     runningTabs,
+    showEmptyState,
     startedAt,
     terminalThreadId,
     toggleMaximize,
@@ -50,6 +52,7 @@ export function TerminalDrawer() {
       />
       <div className="relative flex-1 overflow-hidden min-h-0">
         <div ref={containerRef} className="absolute inset-0" />
+        {showEmptyState && <TerminalDrawerEmptyState />}
         {actionBanner && (
           <TerminalDrawerActionBanner
             actionBanner={actionBanner}

@@ -222,9 +222,6 @@ export const useAppStore = create<AppState>((set) => ({
       currentVerification: null,
       pipelinePhase: 'idle',
       viewMode: 'project',
-      terminalThreadId: null,
-      terminalEventsByThread: {},
-      processToThread: {},
       githubIssues: [],
     }),
   selectThread: (id) =>

@@ -66,12 +66,12 @@ export function useTerminalDrawer() {
     terminalThreadId != null
       ? (scopedIssues.find((issue) => issue.threadId === terminalThreadId) ?? null)
       : null;
-  const fallbackIssue =
-    (activeIssue?.projectId === activeProjectId && activeIssue.threadId
+  const activeIssueMatch =
+    activeIssue?.projectId === activeProjectId && activeIssue.threadId
       ? (scopedIssues.find((issue) => issue.threadId === activeIssue.threadId) ?? null)
-      : null) ??
-    runningTabs.find((issue) => issue.threadId) ??
-    null;
+      : null;
+  const fallbackIssue =
+    activeIssueMatch || runningTabs.find((issue) => issue.threadId != null) || null;
   const displayIssue = explicitIssue ?? fallbackIssue;
   const visibleTerminalThreadId = displayIssue?.threadId ?? null;
   const canonicalStream = useAppStore((s) =>

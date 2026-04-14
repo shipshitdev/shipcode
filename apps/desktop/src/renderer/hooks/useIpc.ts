@@ -1,4 +1,13 @@
-import type { GitHubIssueCacheRecord, NotificationRecord } from '@shipcode/shared';
+import type { TerminalEvent } from '@shipcode/agents';
+import type {
+  GitHubIssueCacheRecord,
+  NotificationRecord,
+  PipelinePhase,
+  PlanReview,
+  ShipCodePlan,
+  Thread,
+  VerificationResult,
+} from '@shipcode/shared';
 import { modelDisplay } from '@shipcode/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect } from 'react';
@@ -15,7 +24,6 @@ export function useIpc() {
     addNotification,
     removeNotification,
     logTerminalEventForThread,
-    setTerminalThread,
     mapProcessToThread,
     setCurrentModel,
   } = useAppStore();
@@ -23,7 +31,7 @@ export function useIpc() {
   type PhasePayload = { phase: PipelinePhase; threadId: string };
   type PlanParsedPayload = { threadId: string; plan: unknown };
   type ReviewParsedPayload = { threadId: string; review: unknown };
-  type VerificationParsedPayload = { threadId: string; verification: VerificationRecord };
+  type VerificationParsedPayload = { threadId: string; verification: VerificationResult };
   type IssuesUpdatedPayload = { projectId?: string; issues: GitHubIssueCacheRecord[] };
   type TerminalEventPayload = { threadId?: string; event?: unknown };
   type AgentOutputPayload = { processId: string; chunk: string; threadId?: string };
@@ -51,11 +59,36 @@ export function useIpc() {
       window.shipcode.on('pipeline:phase', (...args: unknown[]) => {
         const data = args[0] as PhasePayload;
         const store = useAppStore.getState();
+        const selectedProjectId = store.activeProjectId;
+        const maybeSelectedProjectThread =
+          store.activeIssue?.threadId === data.threadId ||
+          store.githubIssues.some((issue) => issue.threadId === data.threadId);
+        const focusThreadIfSelectedProject = () => {
+          if (selectedProjectId == null) return;
+          if (maybeSelectedProjectThread) {
+            const latest = useAppStore.getState();
+            if (latest.activeProjectId !== selectedProjectId) return;
+            if (data.phase === 'planning') latest.openTerminal();
+            if (data.phase !== 'idle') latest.setTerminalThread(data.threadId);
+            return;
+          }
+          void window.shipcode
+            .invoke<Thread | null>('thread:get', { threadId: data.threadId })
+            .then((thread) => {
+              const latest = useAppStore.getState();
+              if (latest.activeProjectId !== selectedProjectId) return;
+              if (thread?.projectId !== selectedProjectId) return;
+              if (data.phase === 'planning') latest.openTerminal();
+              if (data.phase !== 'idle') latest.setTerminalThread(data.threadId);
+            })
+            .catch(() => {
+              // Best-effort focus only.
+            });
+        };
         // Auto-open terminal and focus thread when a pipeline starts running,
         // even if the user is viewing a different thread.
         if (data.phase === 'planning') {
-          store.openTerminal();
-          setTerminalThread(data.threadId);
+          focusThreadIfSelectedProject();
         }
         // Update pipeline phase for the active issue's header display
         if (data.threadId === store.activeThreadId) {
@@ -74,7 +107,9 @@ export function useIpc() {
           store.logTerminalEvent(phaseLine);
           logTerminalEventForThread(data.threadId, phaseLine);
           store.appendCanonicalEvent(data.threadId, { kind: 'lifecycle', message: phaseLine });
-          if (data.phase !== 'idle') setTerminalThread(data.threadId);
+          if (data.phase !== 'idle' && data.phase !== 'planning') {
+            focusThreadIfSelectedProject();
+          }
         }
 
         // Directly patch the issue's pipelineStatus in the React Query cache —
@@ -119,7 +154,7 @@ export function useIpc() {
       window.shipcode.on('plan:parsed', (...args: unknown[]) => {
         const data = args[0] as PlanParsedPayload;
         if (data.threadId === useAppStore.getState().activeThreadId) {
-          setPlan(data.plan);
+          setPlan(data.plan as ShipCodePlan | null);
         }
       }),
     );
@@ -129,7 +164,7 @@ export function useIpc() {
       window.shipcode.on('review:parsed', (...args: unknown[]) => {
         const data = args[0] as ReviewParsedPayload;
         if (data.threadId === useAppStore.getState().activeThreadId) {
-          setReview(data.review);
+          setReview(data.review as PlanReview | null);
         }
       }),
     );
@@ -150,13 +185,15 @@ export function useIpc() {
       window.shipcode.on('github:issues-updated', (...args: unknown[]) => {
         const data = args[0] as IssuesUpdatedPayload;
         const store = useAppStore.getState();
-        store.setGithubIssues(data.issues);
+        if (data.projectId === store.activeProjectId) {
+          store.setGithubIssues(data.issues);
+        }
         // Directly set React Query cache — data comes from DB so no refetch needed.
         if (data.projectId) {
           queryClient.setQueryData(['github-issues', data.projectId], data.issues);
         }
 
-        if (store.activeIssue) {
+        if (data.projectId === store.activeProjectId && store.activeIssue) {
           const refreshed = data.issues.find((issue) => issue.id === store.activeIssue?.id) ?? null;
           useAppStore.setState((state) => ({
             activeIssue: refreshed,
@@ -171,7 +208,7 @@ export function useIpc() {
       window.shipcode.on('terminal:event', (...args: unknown[]) => {
         const data = args[0] as TerminalEventPayload;
         if (data.threadId && data.event) {
-          useAppStore.getState().appendCanonicalEvent(data.threadId, data.event);
+          useAppStore.getState().appendCanonicalEvent(data.threadId, data.event as TerminalEvent);
         }
       }),
     );
@@ -235,14 +272,17 @@ export function useIpc() {
         const store = useAppStore.getState();
         const isOpenRouter = String(data.requestedModel ?? '').startsWith('openrouter');
         const isCodex = data.requestedModel === 'codex';
+        const requestedOrResolved = data.requestedModel ?? data.resolvedModel ?? null;
         // For claude/codex CLIs the resolvedModel is just 'claude'/'codex' — use the
         // friendly display name instead. For OpenRouter use the actual resolved model
         // (e.g. 'anthropic/claude-sonnet-4-6') since it carries the real model name.
         const displayName = isOpenRouter
-          ? data.resolvedModel
-          : modelDisplay(data.requestedModel ?? data.resolvedModel);
+          ? (data.resolvedModel ?? null)
+          : requestedOrResolved
+            ? modelDisplay(requestedOrResolved)
+            : null;
         const tid = data.threadId ?? store.terminalThreadId;
-        if (tid) setCurrentModel(tid, displayName);
+        if (tid && displayName) setCurrentModel(tid, displayName);
         const ts = new Date().toLocaleTimeString('en-US', {
           hour12: false,
           hour: '2-digit',
@@ -295,13 +335,6 @@ export function useIpc() {
     unsubscribers.push(
       window.shipcode.on('notification:fire', (...args: unknown[]) => {
         const record = args[0] as NotificationRecord;
-        const store = useAppStore.getState();
-        // If the user is already viewing this thread in project view,
-        // silently dismiss the notification rather than showing a toast.
-        if (store.viewMode === 'project' && record.threadId === store.activeThreadId) {
-          window.shipcode.invoke('notification:dismiss', { id: record.id }).catch(() => {});
-          return;
-        }
         addNotification(record);
         queryClient.invalidateQueries({ queryKey: ['notifications'] });
       }),
@@ -319,8 +352,6 @@ export function useIpc() {
       }),
     );
 
-    // Drop dismissed notifications from the in-memory toaster stack so the
-    // "auto-dismiss after view" path stays in sync with the DB.
     unsubscribers.push(
       window.shipcode.on('notification:dismiss', (...args: unknown[]) => {
         const data = args[0] as { id: string } | undefined;
@@ -340,7 +371,6 @@ export function useIpc() {
     addNotification,
     removeNotification,
     logTerminalEventForThread,
-    setTerminalThread,
     mapProcessToThread,
     setCurrentModel,
     queryClient,
