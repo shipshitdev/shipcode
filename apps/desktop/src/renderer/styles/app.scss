@@ -39,6 +39,8 @@
 	/* Done / completed — purple to match the GitHub Projects "Done" column
 	 * dot. Applied to the Done column header dot and completed-card indicators. */
 	--done: #a855f7;
+
+	color-scheme: dark;
 }
 
 /* Shimmer sweep for active pipeline progress bars */
@@ -47,9 +49,45 @@
 	100% { transform: translateX(500%); }
 }
 
-/* Placeholder — not wired up yet; structure is ready for a future pass. */
 [data-theme="light"] {
-	/* TBD */
+	--bg-primary: #f6f4ef;
+	--bg-secondary: #efeae1;
+	--bg-tertiary: #e6dfd3;
+	--bg-elevated: #fbfaf7;
+	--bg-hover: #ddd3c2;
+
+	--border: rgba(28, 25, 23, 0.10);
+	--border-strong: rgba(28, 25, 23, 0.18);
+
+	--text-primary: #18181b;
+	--text-secondary: #57534e;
+	--text-muted: #8a8175;
+
+	--accent: #111827;
+	--accent-foreground: #fafaf9;
+	--accent-hover: #1f2937;
+
+	--success: #0f9f6e;
+	--warning: #d97706;
+	--danger: #dc2626;
+	--info: #2563eb;
+	--agent: #0284c7;
+	--done: #7c3aed;
+
+	color-scheme: light;
+}
+
+:root,
+[data-font-style="dm-sans"] {
+	--app-font-sans: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+
+[data-font-style="system"] {
+	--app-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", sans-serif;
+}
+
+[data-font-style="serif"] {
+	--app-font-sans: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
 }
 
 /* ---------------------------------------------------------------------------
@@ -73,7 +111,7 @@
 	--color-agent: var(--agent);
 	--color-done: var(--done);
 
-	--font-sans: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+	--font-sans: var(--app-font-sans);
 	--font-mono: "SF Mono", SFMono-Regular, Consolas, Menlo, monospace;
 
 	--radius-sm: 4px;

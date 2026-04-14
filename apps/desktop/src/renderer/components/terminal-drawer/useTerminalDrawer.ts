@@ -18,24 +18,80 @@ import {
 } from './constants';
 import { renderTerminalEvent } from './render-terminal-event';
 
+function readCssColor(name: string, fallback: string): string {
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value || fallback;
+}
+
+function buildTerminalTheme() {
+  return {
+    background: readCssColor('--bg-secondary', '#0c0d10'),
+    foreground: readCssColor('--text-secondary', '#b4b4bc'),
+    cursor: readCssColor('--text-primary', '#f4f4f5'),
+    selectionBackground:
+      readCssColor('--data-terminal-selection', '') ||
+      (document.documentElement.dataset.theme === 'light'
+        ? 'rgba(17, 24, 39, 0.14)'
+        : 'rgba(244, 244, 245, 0.20)'),
+    black: readCssColor('--bg-elevated', '#1a1c21'),
+    red: '#ef4444',
+    green: '#10b981',
+    yellow: '#f59e0b',
+    blue: '#3b82f6',
+    magenta: '#a855f7',
+    cyan: '#06b6d4',
+    white: readCssColor('--text-primary', '#f4f4f5'),
+    brightBlack: readCssColor('--text-muted', '#6b6b78'),
+    brightRed: '#f87171',
+    brightGreen: '#34d399',
+    brightYellow: '#fbbf24',
+    brightBlue: '#60a5fa',
+    brightMagenta: '#c084fc',
+    brightCyan: '#22d3ee',
+    brightWhite: readCssColor('--accent', '#fafafa'),
+  };
+}
+
 export function useTerminalDrawer() {
   const { toggleTerminal } = useAppStore();
+  const activeProjectId = useAppStore((s) => s.activeProjectId);
   const terminalThreadId = useAppStore((s) => s.terminalThreadId);
+  const githubIssues = useAppStore((s) => s.githubIssues);
+  const activeIssue = useAppStore((s) => s.activeIssue);
+  const scopedIssues = githubIssues.filter((issue) => issue.projectId === activeProjectId);
+  const runningTabs = scopedIssues.filter((issue) =>
+    AGENT_ACTIVE_STATUSES.has(issue.pipelineStatus),
+  );
+  const explicitIssue =
+    terminalThreadId != null
+      ? (scopedIssues.find((issue) => issue.threadId === terminalThreadId) ?? null)
+      : null;
+  const fallbackIssue =
+    (activeIssue?.projectId === activeProjectId && activeIssue.threadId
+      ? (scopedIssues.find((issue) => issue.threadId === activeIssue.threadId) ?? null)
+      : null) ??
+    runningTabs.find((issue) => issue.threadId) ??
+    null;
+  const displayIssue = explicitIssue ?? fallbackIssue;
+  const visibleTerminalThreadId = displayIssue?.threadId ?? null;
   const canonicalStream = useAppStore((s) =>
-    s.terminalThreadId
-      ? (s.canonicalTerminalStream[s.terminalThreadId] ?? EMPTY_STREAM)
+    visibleTerminalThreadId
+      ? (s.canonicalTerminalStream[visibleTerminalThreadId] ?? EMPTY_STREAM)
       : EMPTY_STREAM,
   );
-  const activeIssue = useAppStore((s) => s.activeIssue);
-  const pipelinePhase = useAppStore((s) => s.pipelinePhase);
-  const currentModel = useAppStore(
-    (s) => (s.terminalThreadId ? s.currentModels[s.terminalThreadId] : null) ?? null,
+  const activeThreadId = useAppStore((s) => s.activeThreadId);
+  const pipelinePhase = useAppStore((s) =>
+    displayIssue == null
+      ? 'idle'
+      : displayIssue.threadId === activeThreadId
+        ? s.pipelinePhase
+        : (displayIssue.pipelineStatus as typeof s.pipelinePhase),
   );
-  const githubIssues = useAppStore((s) => s.githubIssues);
+  const currentModel = useAppStore(
+    (s) => (visibleTerminalThreadId ? s.currentModels[visibleTerminalThreadId] : null) ?? null,
+  );
   const setTerminalThread = useAppStore((s) => s.setTerminalThread);
   const selectIssue = useAppStore((s) => s.selectIssue);
-
-  const [pinnedIssue, setPinnedIssue] = useState<GitHubIssueCacheRecord | null>(null);
   const [actionBanner, setActionBanner] = useState<{
     label: string;
     action: 'open-issue-detail';
@@ -56,20 +112,6 @@ export function useTerminalDrawer() {
   const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevHeightRef = useRef(DEFAULT_HEIGHT);
   const dragStartRef = useRef<{ y: number; h: number } | null>(null);
-
-  useEffect(() => {
-    if (activeIssue) setPinnedIssue(activeIssue);
-  }, [activeIssue]);
-
-  useEffect(() => {
-    if (!terminalThreadId) return;
-    const found = githubIssues.find((issue) => issue.threadId === terminalThreadId);
-    if (found) setPinnedIssue(found);
-  }, [terminalThreadId, githubIssues]);
-
-  const runningTabs = githubIssues.filter((issue) =>
-    AGENT_ACTIVE_STATUSES.has(issue.pipelineStatus),
-  );
 
   const handleResizeMouseDown = useCallback(
     (event: React.MouseEvent) => {
@@ -111,28 +153,7 @@ export function useTerminalDrawer() {
     if (!containerRef.current) return;
 
     const term = new Terminal({
-      theme: {
-        background: '#0c0d10',
-        foreground: '#b4b4bc',
-        cursor: '#f4f4f5',
-        selectionBackground: 'rgba(244, 244, 245, 0.2)',
-        black: '#1a1b1e',
-        red: '#f38ba8',
-        green: '#a6e3a1',
-        yellow: '#f9e2af',
-        blue: '#89b4fa',
-        magenta: '#cba6f7',
-        cyan: '#89dceb',
-        white: '#cdd6f4',
-        brightBlack: '#585b70',
-        brightRed: '#f38ba8',
-        brightGreen: '#a6e3a1',
-        brightYellow: '#f9e2af',
-        brightBlue: '#89b4fa',
-        brightMagenta: '#cba6f7',
-        brightCyan: '#89dceb',
-        brightWhite: '#ffffff',
-      },
+      theme: buildTerminalTheme(),
       fontFamily: '"SF Mono", SFMono-Regular, Consolas, Menlo, monospace',
       fontSize: 12,
       lineHeight: 1.5,
@@ -159,6 +180,27 @@ export function useTerminalDrawer() {
       fitRef.current = null;
       if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
     };
+  }, []);
+
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
+
+    const root = document.documentElement;
+    const applyTheme = () => {
+      term.options.theme = buildTerminalTheme();
+      term.refresh(0, term.rows - 1);
+    };
+
+    applyTheme();
+
+    const observer = new MutationObserver(applyTheme);
+    observer.observe(root, {
+      attributes: true,
+      attributeFilter: ['data-theme', 'data-font-style'],
+    });
+
+    return () => observer.disconnect();
   }, []);
 
   const startSpinner = useCallback((label: string) => {
@@ -193,7 +235,7 @@ export function useTerminalDrawer() {
     const term = termRef.current;
     if (!term) return;
 
-    if (terminalThreadId !== prevThreadIdRef.current) {
+    if (visibleTerminalThreadId !== prevThreadIdRef.current) {
       stopSpinner();
       term.reset();
       canonicalWrittenRef.current = 0;
@@ -201,11 +243,11 @@ export function useTerminalDrawer() {
       lastKindRef.current = null;
       setActionBanner(null);
       if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
-      prevThreadIdRef.current = terminalThreadId;
+      prevThreadIdRef.current = visibleTerminalThreadId;
 
-      const nextIssue = githubIssues.find((issue) => issue.threadId === terminalThreadId);
-      const nextStream = terminalThreadId
-        ? (useAppStore.getState().canonicalTerminalStream[terminalThreadId] ?? [])
+      const nextIssue = scopedIssues.find((issue) => issue.threadId === visibleTerminalThreadId);
+      const nextStream = visibleTerminalThreadId
+        ? (useAppStore.getState().canonicalTerminalStream[visibleTerminalThreadId] ?? [])
         : [];
       const nextIssueStatus = nextIssue?.pipelineStatus;
       const isActivePipeline =
@@ -219,7 +261,7 @@ export function useTerminalDrawer() {
         }, 0);
       }
     }
-  }, [githubIssues, startSpinner, stopSpinner, terminalThreadId]);
+  }, [scopedIssues, startSpinner, stopSpinner, visibleTerminalThreadId]);
 
   useEffect(() => {
     return () => {
@@ -337,10 +379,10 @@ export function useTerminalDrawer() {
   );
 
   const handleActionBannerClick = useCallback(() => {
-    if (actionBanner?.action === 'open-issue-detail' && pinnedIssue) {
-      selectIssue(pinnedIssue);
+    if (actionBanner?.action === 'open-issue-detail' && displayIssue) {
+      selectIssue(displayIssue);
     }
-  }, [actionBanner?.action, pinnedIssue, selectIssue]);
+  }, [actionBanner?.action, displayIssue, selectIssue]);
 
   const dismissActionBanner = useCallback(() => {
     setActionBanner(null);
@@ -352,7 +394,7 @@ export function useTerminalDrawer() {
     canonicalStream,
     containerRef,
     currentModel,
-    displayIssue: pinnedIssue,
+    displayIssue,
     dismissActionBanner,
     handleActionBannerClick,
     handleResizeMouseDown,
@@ -361,8 +403,9 @@ export function useTerminalDrawer() {
     pipelinePhase,
     resolvedHeight: isMaximized ? undefined : height,
     runningTabs,
+    showEmptyState: displayIssue === null,
     startedAt: startedAtRef.current,
-    terminalThreadId,
+    terminalThreadId: visibleTerminalThreadId,
     toggleMaximize,
     toggleTerminal,
   };

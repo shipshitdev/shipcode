@@ -1,5 +1,14 @@
 import { type AppSettings, DEFAULT_SETTINGS } from '@shipcode/shared';
-import { Button, Input, SettingsRow } from '@shipcode/ui';
+import {
+  Button,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  SettingsRow,
+} from '@shipcode/ui';
 
 export function GeneralSettingsSection({
   settings,
@@ -15,6 +24,48 @@ export function GeneralSettingsSection({
   return (
     <>
       <h3 className="mb-5">General</h3>
+
+      <section className="mb-8">
+        <h4 className="mb-3 text-secondary">Appearance</h4>
+        <SettingsRow
+          label="Theme"
+          htmlFor="theme"
+          description="Follow the system appearance or force ShipCode into light or dark mode."
+        >
+          <Select
+            value={settings.theme}
+            onValueChange={(value) => onUpdate({ theme: value as AppSettings['theme'] })}
+          >
+            <SelectTrigger id="theme" className="w-[180px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="system">System</SelectItem>
+              <SelectItem value="dark">Dark</SelectItem>
+              <SelectItem value="light">Light</SelectItem>
+            </SelectContent>
+          </Select>
+        </SettingsRow>
+        <SettingsRow
+          label="Font style"
+          htmlFor="font-style"
+          description="Switch the main app typeface without affecting code or terminal monospace text."
+        >
+          <Select
+            value={settings.fontStyle}
+            onValueChange={(value) => onUpdate({ fontStyle: value as AppSettings['fontStyle'] })}
+          >
+            <SelectTrigger id="font-style" className="w-[180px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="dm-sans">DM Sans</SelectItem>
+              <SelectItem value="system">System UI</SelectItem>
+              <SelectItem value="serif">Editorial Serif</SelectItem>
+            </SelectContent>
+          </Select>
+        </SettingsRow>
+      </section>
 
       <section className="mb-8">
         <h4 className="mb-3 text-secondary">Worktree Location</h4>

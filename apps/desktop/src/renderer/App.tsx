@@ -1,7 +1,7 @@
 import type { AppSettings, Project } from '@shipcode/shared';
 import { CURRENT_ONBOARDING_VERSION } from '@shipcode/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { ActivityView } from './components/ActivityView';
 import { CommandPalette } from './components/CommandPalette';
 import { CostsView } from './components/CostsView';
@@ -94,6 +94,27 @@ export function App() {
     enabled: !!activeProjectId,
     staleTime: STABLE_APP_STATE_STALE_TIME,
   });
+
+  useEffect(() => {
+    if (!settings) return;
+
+    const root = document.documentElement;
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const applyTheme = () => {
+      const resolvedTheme =
+        settings.theme === 'system' ? (media.matches ? 'dark' : 'light') : settings.theme;
+      root.dataset.theme = resolvedTheme;
+    };
+
+    root.dataset.fontStyle = settings.fontStyle;
+    applyTheme();
+
+    if (settings.theme !== 'system') return;
+
+    const handleChange = () => applyTheme();
+    media.addEventListener('change', handleChange);
+    return () => media.removeEventListener('change', handleChange);
+  }, [settings]);
 
   if (settings && (settings.onboardingVersion ?? 0) < CURRENT_ONBOARDING_VERSION) {
     return (
