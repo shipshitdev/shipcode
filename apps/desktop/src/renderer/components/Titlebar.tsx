@@ -1,5 +1,5 @@
 import type { Project } from '@shipcode/shared';
-import { Button, PanelLeftClose, PanelLeftOpen, Settings, Terminal, X } from '@shipcode/ui';
+import { Button, cn, PanelLeftClose, PanelLeftOpen, Settings, Terminal, X } from '@shipcode/ui';
 import { useQuery } from '@tanstack/react-query';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
@@ -57,23 +57,35 @@ export function Titlebar() {
         )}
       </div>
       <div className="flex items-center gap-2">
+        {!settingsVisible && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className={cn(
+              'app-region-no-drag hover:bg-elevated',
+              terminalVisible && 'bg-elevated text-primary',
+            )}
+            onClick={toggleTerminal}
+            title={terminalVisible ? 'Hide terminal' : 'Show terminal'}
+          >
+            <Terminal size={14} className={terminalVisible ? 'text-primary' : 'text-secondary'} />
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="icon-sm"
-          className="app-region-no-drag hover:bg-elevated"
-          onClick={toggleTerminal}
-          title={terminalVisible ? 'Hide terminal' : 'Show terminal'}
-        >
-          <Terminal size={14} className={terminalVisible ? 'text-primary' : 'text-secondary'} />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="app-region-no-drag hover:bg-elevated"
+          className={cn(
+            'app-region-no-drag hover:bg-elevated',
+            settingsVisible && 'bg-elevated text-primary',
+          )}
           onClick={toggleSettings}
           title="Toggle Settings"
         >
-          {settingsVisible ? <X size={14} /> : <Settings size={14} />}
+          {settingsVisible ? (
+            <X size={14} className="text-primary" />
+          ) : (
+            <Settings size={14} className="text-secondary" />
+          )}
         </Button>
       </div>
     </div>

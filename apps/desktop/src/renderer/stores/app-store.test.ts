@@ -52,6 +52,41 @@ describe('app-store', () => {
     });
   });
 
+  describe('toggleSettings', () => {
+    it('closes the terminal and issue detail sidebar when opening settings', () => {
+      useAppStore.setState({
+        settingsVisible: false,
+        terminalVisible: true,
+        issueDetailCollapsed: false,
+      });
+
+      useAppStore.getState().toggleSettings();
+
+      const state = useAppStore.getState();
+      expect(state.settingsVisible).toBe(true);
+      expect(state.terminalVisible).toBe(false);
+      expect(state.issueDetailCollapsed).toBe(true);
+      expect(state.settingsSection).toBe('general');
+    });
+
+    it('does not reopen the terminal or issue detail sidebar when closing settings', () => {
+      useAppStore.setState({
+        settingsVisible: true,
+        terminalVisible: false,
+        issueDetailCollapsed: true,
+        settingsSection: 'pipeline',
+      });
+
+      useAppStore.getState().toggleSettings();
+
+      const state = useAppStore.getState();
+      expect(state.settingsVisible).toBe(false);
+      expect(state.terminalVisible).toBe(false);
+      expect(state.issueDetailCollapsed).toBe(true);
+      expect(state.settingsSection).toBe('general');
+    });
+  });
+
   describe('selectProject', () => {
     it('clears activeIssue when switching to a different project', () => {
       // Sanity check: we start with an active issue

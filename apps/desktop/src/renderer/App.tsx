@@ -107,6 +107,7 @@ export function App() {
     };
 
     root.dataset.fontStyle = settings.fontStyle;
+    root.dataset.fontSize = String(settings.fontSize);
     applyTheme();
 
     if (settings.theme !== 'system') return;
@@ -190,7 +191,9 @@ export function App() {
               {/* Main view — hidden when issue detail is expanded full-screen */}
               <div
                 className={
-                  activeIssue && issueDetailExpanded ? 'hidden' : 'flex flex-1 overflow-hidden'
+                  activeIssue && issueDetailExpanded
+                    ? 'hidden'
+                    : 'flex flex-1 overflow-hidden bg-primary'
                 }
               >
                 {settingsVisible ? (

@@ -253,10 +253,15 @@ export const useAppStore = create<AppState>((set) => ({
   toggleTerminal: () => set((s) => ({ terminalVisible: !s.terminalVisible })),
   openTerminal: () => set({ terminalVisible: true }),
   toggleSettings: () =>
-    set((s) => ({
-      settingsVisible: !s.settingsVisible,
-      settingsSection: 'general' as SettingsSection,
-    })),
+    set((s) => {
+      const nextSettingsVisible = !s.settingsVisible;
+      return {
+        settingsVisible: nextSettingsVisible,
+        settingsSection: 'general' as SettingsSection,
+        terminalVisible: nextSettingsVisible ? false : s.terminalVisible,
+        issueDetailCollapsed: nextSettingsVisible ? true : s.issueDetailCollapsed,
+      };
+    }),
   setSettingsSection: (section) => set({ settingsSection: section }),
   setPlan: (plan) => set({ currentPlan: plan }),
   setReview: (review) => set({ currentReview: review }),

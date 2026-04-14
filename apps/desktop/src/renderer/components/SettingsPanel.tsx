@@ -80,7 +80,7 @@ export function SettingsPanel() {
   const update = (patch: Partial<AppSettings>) => updateSettings.mutate(patch);
 
   return (
-    <div className="flex-1 overflow-y-auto p-8">
+    <div className="flex-1 overflow-y-auto bg-primary p-8">
       <div className="max-w-2xl">
         {settingsSection === 'general' && (
           <GeneralSettingsSection

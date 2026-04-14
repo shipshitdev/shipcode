@@ -194,9 +194,9 @@ export function SkillsView() {
   }
 
   return (
-    <div className="flex flex-1 overflow-hidden">
+    <div className="flex flex-1 overflow-hidden bg-primary">
       {/* Left: phase list */}
-      <aside className="w-[260px] shrink-0 border-r border-border overflow-y-auto">
+      <aside className="w-[260px] shrink-0 overflow-y-auto border-r border-border bg-primary">
         <div className="p-4">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-muted mb-2">
             Pipeline Skills
@@ -259,7 +259,7 @@ export function SkillsView() {
       </aside>
 
       {/* Right: editor */}
-      <section className="flex-1 overflow-y-auto">
+      <section className="flex-1 overflow-y-auto bg-primary">
         <div className="p-8 max-w-5xl">
           {quarantinedRows.length > 0 && (
             <div className="mb-6 rounded border border-red-500/40 bg-red-500/5 p-4">
