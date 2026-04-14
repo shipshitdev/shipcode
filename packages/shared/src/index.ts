@@ -4,6 +4,7 @@ export * from './ipc-channels';
 export * from './constants';
 export * from './worktree-path';
 export * from './tokens';
+export * from './format-token-count';
 export * from './prd-template';
 export * from './branches';
 export * from './github-url';
