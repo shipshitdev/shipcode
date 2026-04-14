@@ -161,7 +161,7 @@ describe('ProjectSidebar', () => {
     cleanup();
   });
 
-  it('opens the project folder with the default target from the dedicated sidebar action', async () => {
+  it('does not render a dedicated open-folder button beside the project row', async () => {
     invokeMock.mockImplementation(async (channel) => {
       if (channel === 'projects-visible' || channel === 'project:list-visible') return [project];
       if (channel === 'settings:get') return DEFAULT_SETTINGS;
@@ -179,17 +179,10 @@ describe('ProjectSidebar', () => {
 
     renderWithProviders();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Open ShipCode folder' }));
-
-    await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith('project:open-path', {
-        projectId: project.id,
-        target: 'default',
-      });
-    });
+    expect(screen.queryByRole('button', { name: 'Open ShipCode folder' })).not.toBeInTheDocument();
   });
 
-  it('shows explicit opener targets in the project actions menu', async () => {
+  it('shows explicit opener targets in the project actions menu and marks the default target', async () => {
     invokeMock.mockImplementation(async (channel) => {
       if (channel === 'projects-visible' || channel === 'project:list-visible') return [project];
       if (channel === 'settings:get') return DEFAULT_SETTINGS;
@@ -213,5 +206,35 @@ describe('ProjectSidebar', () => {
     expect(screen.getByText('Open in Terminal')).toBeInTheDocument();
     expect(screen.getByText('Open in Ghostty')).toBeInTheDocument();
     expect(screen.getByText('Open in Visual Studio Code')).toBeInTheDocument();
+    expect(screen.getByText('Default')).toBeInTheDocument();
+  });
+
+  it('opens the selected target from the project actions menu', async () => {
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'projects-visible' || channel === 'project:list-visible') return [project];
+      if (channel === 'settings:get') return DEFAULT_SETTINGS;
+      if (channel === 'dashboard:get-stats')
+        return {
+          agentsRunning: 0,
+          agentsRunningByProject: {},
+          inboxCount: 0,
+        } satisfies Partial<DashboardStats>;
+      if (channel === 'notification:list') return [] satisfies NotificationRecord[];
+      if (channel === 'integrations:check') return integrations;
+      if (channel === 'project:open-path') return undefined;
+      return [];
+    });
+
+    renderWithProviders();
+
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'More actions for ShipCode' }));
+    fireEvent.click(await screen.findByText('Open in Finder'));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('project:open-path', {
+        projectId: project.id,
+        target: 'finder',
+      });
+    });
   });
 });

@@ -20,7 +20,6 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  ExternalLink,
   Folder,
   Inbox,
   LayoutGrid,
@@ -29,6 +28,7 @@ import {
   PinOff,
   Plus,
   Settings,
+  Sparkles,
   Trash2,
   Wrench,
 } from '@shipcode/ui';
@@ -326,7 +326,7 @@ export function ProjectSidebar() {
           )}
           onClick={() => openSkills()}
         >
-          <Wrench size={14} className="shrink-0 text-secondary" />
+          <Sparkles size={14} className="shrink-0 text-secondary" />
           <span className="flex-1 truncate">Skills</span>
         </Button>
 
@@ -430,20 +430,6 @@ export function ProjectSidebar() {
               )}
             </Button>
 
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="absolute right-8 top-1/2 -translate-y-1/2 text-muted opacity-0 group-hover:opacity-100 focus:opacity-100"
-              aria-label={`Open ${project.name} folder`}
-              disabled={project.pathExists === false}
-              onClick={(event) => {
-                event.stopPropagation();
-                openProjectPath.mutate({ projectId: project.id, target: 'default' });
-              }}
-            >
-              <ExternalLink size={14} />
-            </Button>
-
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -457,6 +443,8 @@ export function ProjectSidebar() {
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="end"
+                collisionPadding={{ top: 44, right: 8, bottom: 8, left: 8 }}
+                className="min-w-[220px]"
                 onInteractOutside={(e) => {
                   const target = e.target as Element | null;
                   if (target?.closest('[data-project-list]')) {
@@ -466,13 +454,20 @@ export function ProjectSidebar() {
               >
                 {(['cursor', 'finder', 'terminal', 'ghostty', 'vscode'] as const).map((target) => {
                   const app = integrations?.desktopApps?.[target];
+                  const isDefaultTarget = (settings?.projectOpenTarget ?? 'cursor') === target;
                   return (
                     <DropdownMenuItem
                       key={target}
                       disabled={!app?.available || project.pathExists === false}
                       onSelect={() => openProjectPath.mutate({ projectId: project.id, target })}
                     >
-                      <ExternalLink size={12} /> Open in {app?.label ?? target}
+                      <span className="flex h-3.5 w-3.5 items-center justify-center">
+                        {isDefaultTarget ? <Check size={12} /> : null}
+                      </span>
+                      <span className="flex-1 truncate">Open in {app?.label ?? target}</span>
+                      {isDefaultTarget ? (
+                        <span className="text-[11px] text-muted">Default</span>
+                      ) : null}
                     </DropdownMenuItem>
                   );
                 })}
