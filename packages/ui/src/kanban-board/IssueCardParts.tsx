@@ -105,8 +105,8 @@ export function DraggableCard({
             : '',
         issue.pipelineStatus === 'completed' &&
           (isSelected
-            ? 'border-done/65 bg-done/[0.09]'
-            : 'border-done/35 bg-done/[0.045] hover:border-done/55 hover:bg-done/[0.06]'),
+            ? 'border-done/65 bg-done/[0.09] opacity-85'
+            : 'border-done/35 bg-done/[0.045] opacity-70 hover:border-done/55 hover:bg-done/[0.06] hover:opacity-80'),
         isFailed &&
           (isSelected
             ? 'border-danger bg-danger/[0.07]'

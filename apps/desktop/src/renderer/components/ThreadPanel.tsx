@@ -16,7 +16,8 @@ import { useAppStore } from '../stores/app-store';
 
 export function ThreadPanel() {
   const queryClient = useQueryClient();
-  const { activeProjectId, selectIssue, openCreateIssueModal, activeIssue } = useAppStore();
+  const { activeProjectId, selectIssue, openCreateIssueModal, activeIssue, setGithubIssues } =
+    useAppStore();
   const [isRefreshingBranches, setIsRefreshingBranches] = useState(false);
   const [archiveFeedback, setArchiveFeedback] = useState<{
     tone: 'pending' | 'success' | 'error';
@@ -29,6 +30,10 @@ export function ThreadPanel() {
     enabled: !!activeProjectId,
     staleTime: 5_000,
   });
+
+  useEffect(() => {
+    setGithubIssues(issues);
+  }, [issues, setGithubIssues]);
 
   const refreshIssues = useMutation({
     mutationFn: (projectId: string) =>
@@ -270,6 +275,26 @@ export function ThreadPanel() {
         onArchiveAllDone={() => {
           const doneCount = issues.filter((i) => i.pipelineStatus === 'completed').length;
           setArchiveConfirm({ type: 'all', count: doneCount });
+        }}
+        onMarkDone={(issue) => {
+          if (!activeProjectId) return;
+          setPipelineStatusOptimistic(issue.id, 'completed');
+          window.shipcode
+            .invoke('github:close-issue', {
+              projectId: activeProjectId,
+              issueNumber: issue.issueNumber,
+            })
+            .then(() => activeProjectId && refreshIssues.mutate(activeProjectId))
+            .catch((err) => {
+              if (activeProjectId) refreshIssues.mutate(activeProjectId);
+              log.error('[threadpanel] close-issue failed', {
+                issueNumber: issue.issueNumber,
+                err,
+              });
+              window.alert(
+                `Failed to mark issue #${issue.issueNumber} as done: ${err?.message ?? err}`,
+              );
+            });
         }}
         onRerun={(issue) => {
           setPipelineStatusOptimistic(issue.id, 'planning');

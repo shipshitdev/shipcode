@@ -28,6 +28,7 @@ export function KanbanBoard({
   onStartPipeline,
   onRetry,
   onRerun,
+  onMarkDone,
   onCancel,
   baseBranch,
   branches,
@@ -155,6 +156,11 @@ export function KanbanBoard({
       onRetry
     ) {
       onRetry(issue);
+      return;
+    }
+    // 5. any manually draggable card → done (explicitly complete issue)
+    if (dropId === 'done' && onMarkDone) {
+      onMarkDone(issue);
       return;
     }
     // All other drops: no-op (snap back)

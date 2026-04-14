@@ -41,6 +41,7 @@ export function DroppableColumn({
   issuePhaseChipById,
 }: DroppableColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id, disabled: !droppable || readOnly });
+  const hasIssues = issues.length > 0;
 
   return (
     <div
@@ -67,7 +68,14 @@ export function DroppableColumn({
               <Archive size={12} />
             </Button>
           )}
-          <span className="min-w-[18px] rounded-full bg-tertiary px-1.5 py-px text-center text-[10px] font-medium text-muted">
+          <span
+            className={cn(
+              'min-w-[18px] rounded-full border border-transparent bg-tertiary px-1.5 py-px text-center text-[10px] font-medium',
+              !hasIssues && 'text-muted/70',
+              hasIssues && columnKey === 'done' && 'border-done/25 bg-done/15 text-done',
+              hasIssues && columnKey !== 'done' && 'text-muted',
+            )}
+          >
             {issues.length}
           </span>
         </div>
@@ -224,6 +232,7 @@ export function StackedColumn({
   issuePhaseChipById,
 }: StackedColumnProps) {
   const columnIssues = issues.filter((issue) => column.statuses.includes(issue.pipelineStatus));
+  const hasIssues = columnIssues.length > 0;
 
   return (
     <div className="flex min-w-[180px] max-w-[280px] flex-[1.3] flex-col overflow-hidden rounded-md border border-border/40 bg-secondary">
@@ -232,7 +241,14 @@ export function StackedColumn({
           <span className={cn('h-2 w-2 shrink-0 rounded-full', COLUMN_DOT_CLASS[column.key])} />
           {column.label}
         </span>
-        <span className="min-w-[18px] rounded-full bg-tertiary px-1.5 py-px text-center text-[10px] font-medium text-muted">
+        <span
+          className={cn(
+            'min-w-[18px] rounded-full border border-transparent bg-tertiary px-1.5 py-px text-center text-[10px] font-medium',
+            !hasIssues && 'text-muted/70',
+            hasIssues && column.key === 'done' && 'border-done/25 bg-done/15 text-done',
+            hasIssues && column.key !== 'done' && 'text-muted',
+          )}
+        >
           {columnIssues.length}
         </span>
       </div>

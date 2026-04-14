@@ -19,6 +19,7 @@ export interface KanbanBoardProps {
   onStartPipeline?: (issue: GitHubIssueCacheRecord) => void;
   onRetry?: (issue: GitHubIssueCacheRecord) => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
+  onMarkDone?: (issue: GitHubIssueCacheRecord) => void;
   onCancel?: (issue: GitHubIssueCacheRecord) => void;
   baseBranch?: string;
   branches?: string[];
