@@ -9,6 +9,7 @@ const PHASES: { key: PipelinePhase; label: string }[] = [
   { key: 'revising', label: 'Revise' },
   { key: 'awaiting_approval', label: 'Approve' },
   { key: 'executing', label: 'Execute' },
+  { key: 'testing', label: 'Test' },
   { key: 'verifying', label: 'Verify' },
   { key: 'shipping', label: 'Ship' },
   { key: 'completed', label: 'Done' },

@@ -153,6 +153,7 @@ describe('model-resolution', () => {
     expect(getIssueCardPhase('reviewing')).toBe('reviewer');
     expect(getIssueCardPhase('awaiting_approval')).toBe('executor');
     expect(getIssueCardPhase('executing')).toBe('executor');
+    expect(getIssueCardPhase('testing')).toBe('executor');
     expect(getIssueCardPhase('verifying')).toBe('verifier');
     expect(getIssueCardPhase('failed')).toBeNull();
     expect(getIssueCardPhase('completed')).toBeNull();

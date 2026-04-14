@@ -11,7 +11,16 @@ export const COLUMNS: BoardColumn[] = [
   {
     key: 'agent',
     label: 'Agent Loop',
-    statuses: ['queued', 'planning', 'reviewing', 'revising', 'executing', 'verifying', 'shipping'],
+    statuses: [
+      'queued',
+      'planning',
+      'reviewing',
+      'revising',
+      'executing',
+      'testing',
+      'verifying',
+      'shipping',
+    ],
     sections: [
       {
         key: 'queued',
@@ -35,6 +44,12 @@ export const COLUMNS: BoardColumn[] = [
         key: 'executing',
         label: 'Executing',
         statuses: ['executing'],
+        droppable: false,
+      },
+      {
+        key: 'testing',
+        label: 'Testing',
+        statuses: ['testing'],
         droppable: false,
       },
       {
@@ -91,6 +106,7 @@ export const ACTIVE_STATUSES: IssuePipelineStatus[] = [
   'reviewing',
   'revising',
   'executing',
+  'testing',
   'verifying',
   'shipping',
 ];
@@ -101,6 +117,7 @@ export const PHASE_ELAPSED_STATUSES: IssuePipelineStatus[] = [
   'revising',
   'awaiting_approval',
   'executing',
+  'testing',
   'verifying',
   'shipping',
 ];
