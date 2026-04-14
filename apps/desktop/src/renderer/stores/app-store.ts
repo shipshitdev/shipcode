@@ -88,6 +88,8 @@ interface AppState {
   editingPrd: { issueNumber: number; body: string; labels: string[] } | null;
   projectSettingsModalOpen: boolean;
   projectSettingsModalProjectId: string | null;
+  projectSetupModalOpen: boolean;
+  projectSetupModalProjectId: string | null;
 
   // Actions
   setViewMode: (mode: ViewMode) => void;
@@ -136,6 +138,8 @@ interface AppState {
   closeCreateIssueModal: () => void;
   openProjectSettingsModal: (projectId: string) => void;
   closeProjectSettingsModal: () => void;
+  openProjectSetupModal: (projectId: string) => void;
+  closeProjectSetupModal: () => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -168,6 +172,8 @@ export const useAppStore = create<AppState>((set) => ({
   editingPrd: null,
   projectSettingsModalOpen: false,
   projectSettingsModalProjectId: null,
+  projectSetupModalOpen: false,
+  projectSetupModalProjectId: null,
   currentModels: {},
   canonicalTerminalStream: {},
 
@@ -371,4 +377,12 @@ export const useAppStore = create<AppState>((set) => ({
     }),
   closeProjectSettingsModal: () =>
     set({ projectSettingsModalOpen: false, projectSettingsModalProjectId: null }),
+  openProjectSetupModal: (projectId) =>
+    set({
+      projectSetupModalOpen: true,
+      projectSetupModalProjectId: projectId,
+      commandPaletteOpen: false,
+    }),
+  closeProjectSetupModal: () =>
+    set({ projectSetupModalOpen: false, projectSetupModalProjectId: null }),
 }));

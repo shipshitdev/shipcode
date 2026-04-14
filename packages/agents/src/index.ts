@@ -22,6 +22,11 @@ export type { EnhancePrdOptions, GeneratedPrd } from './prd-generator';
 export { buildPrdPrompt, enhancePrdDraft, extractPrd } from './prd-generator';
 export type { ManagedProcess } from './process-manager';
 export { ProcessManager } from './process-manager';
+export {
+  detectProjectSetup,
+  inspectProjectSetup,
+  writeProjectSetup,
+} from './project-setup';
 export type {
   ExecutePromptContext,
   ExecutePromptDeps,

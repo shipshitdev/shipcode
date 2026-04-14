@@ -62,6 +62,7 @@ export function ProjectSidebar() {
     openCosts,
     openSkills,
     openProjectSettingsModal,
+    openProjectSetupModal,
     sidebarCollapsed,
   } = useAppStore();
   const queryClient = useQueryClient();
@@ -115,6 +116,7 @@ export function ProjectSidebar() {
       if (project) {
         invalidateProjects();
         selectProject(project.id);
+        openProjectSetupModal(project.id);
         window.shipcode
           .invoke('github:refresh-issues', { projectId: project.id, force: true })
           .catch(() => {});
@@ -419,6 +421,16 @@ export function ProjectSidebar() {
                   Missing
                 </Badge>
               )}
+              {project.pathExists !== false && project.setupStatus === 'missing' && (
+                <Badge variant="default" className="shrink-0 text-[10px]">
+                  Setup
+                </Badge>
+              )}
+              {project.pathExists !== false && project.setupStatus === 'invalid' && (
+                <Badge variant="warning" className="shrink-0 text-[10px]">
+                  Setup!
+                </Badge>
+              )}
               {(stats?.agentsRunningByProject?.[project.id] ?? 0) > 0 && (
                 <span className="inline-flex items-center gap-1 shrink-0 rounded-full border border-agent/30 bg-agent/10 px-1.5 py-0.5 text-[10px] font-medium text-agent">
                   <span className="relative flex h-1.5 w-1.5 items-center justify-center">
@@ -474,6 +486,9 @@ export function ProjectSidebar() {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onSelect={() => openProjectSettingsModal(project.id)}>
                   <Settings size={12} /> Settings
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => openProjectSetupModal(project.id)}>
+                  <Wrench size={12} /> Configure setup...
                 </DropdownMenuItem>
                 {project.pathExists === false && (
                   <DropdownMenuItem onSelect={() => relinkProject.mutate(project.id)}>

@@ -31,6 +31,7 @@ export function CommandPalette() {
     openInbox,
     openCosts,
     selectProject,
+    openProjectSetupModal,
   } = useAppStore();
 
   const addProject = useMutation({
@@ -45,6 +46,7 @@ export function CommandPalette() {
         queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
         queryClient.invalidateQueries({ queryKey: ['projects-archived'] });
         selectProject(project.id);
+        openProjectSetupModal(project.id);
       }
     },
   });

@@ -15,6 +15,7 @@ import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
 import { ProjectMissingView } from './components/ProjectMissingView';
 import { ProjectPathBanner } from './components/ProjectPathBanner';
 import { ProjectSettingsModal } from './components/ProjectSettingsModal';
+import { ProjectSetupModal } from './components/ProjectSetupModal';
 import { ProjectSidebar } from './components/ProjectSidebar';
 import { SettingsPanel } from './components/SettingsPanel';
 import { SettingsSidebar } from './components/SettingsSidebar';
@@ -126,6 +127,7 @@ export function App() {
           if (newProjectId) {
             queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
             useAppStore.getState().selectProject(newProjectId);
+            useAppStore.getState().openProjectSetupModal(newProjectId);
             window.shipcode
               .invoke('github:refresh-issues', { projectId: newProjectId, force: true })
               .catch(() => {});
@@ -247,6 +249,7 @@ export function App() {
       <CommandPalette />
       <CreateIssueModal />
       <ProjectSettingsModal />
+      <ProjectSetupModal />
       <NotificationToaster />
     </div>
   );
