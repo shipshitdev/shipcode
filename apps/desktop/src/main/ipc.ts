@@ -1,6 +1,7 @@
 import type { ProcessManager } from '@shipcode/agents';
-import type { Pipeline } from '@shipcode/pipeline';
+import type { Pipeline, PipelineEmitter } from '@shipcode/pipeline';
 import type { BrowserWindow, IpcMain } from 'electron';
+import { transitionThreadPhase } from './ipc/helpers';
 import { registerGitHubHandlers } from './ipc/register-github-handlers';
 import { registerPipelineHandlers } from './ipc/register-pipeline-handlers';
 import { registerProjectHandlers } from './ipc/register-project-handlers';
@@ -16,12 +17,15 @@ export function registerIpcHandlers(
   queries: Queries,
   processManager: ProcessManager,
   pipeline: Pipeline,
+  emitter: PipelineEmitter,
   notificationService: NotificationService,
 ): void {
   for (const thread of queries.threads.getOrphaned()) {
-    queries.threads.updateStatus(thread.id, 'failed');
-    const issue = queries.githubIssues.getByThreadId(thread.id);
-    if (issue) queries.githubIssues.updatePipelineStatus(issue.id, 'failed');
+    transitionThreadPhase(mainWindow, queries, emitter, {
+      threadId: thread.id,
+      phase: 'failed',
+      errorMessage: thread.lastError,
+    });
     log.info(`[startup] reset orphaned thread ${thread.id} → failed`);
   }
 
@@ -61,6 +65,7 @@ export function registerIpcHandlers(
     queries,
     processManager,
     pipeline,
+    emitter,
     notificationService,
   } as const;
 

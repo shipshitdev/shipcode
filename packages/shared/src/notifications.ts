@@ -3,6 +3,7 @@ import type { NotificationKind, NotificationRecord } from './types';
 export const ATTENTION_REQUIRED_NOTIFICATION_KINDS: NotificationKind[] = [
   'awaiting_approval',
   'failed',
+  'completed',
   'verification_exhausted',
   'ci_blocked',
 ];

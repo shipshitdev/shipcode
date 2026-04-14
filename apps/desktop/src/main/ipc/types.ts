@@ -15,7 +15,7 @@ import type {
   ThreadQueries,
   VerificationQueries,
 } from '@shipcode/db';
-import type { Pipeline } from '@shipcode/pipeline';
+import type { Pipeline, PipelineEmitter } from '@shipcode/pipeline';
 import type { BrowserWindow, IpcMain } from 'electron';
 import type { NotificationService } from '../notification-service';
 
@@ -42,5 +42,6 @@ export interface IpcHandlerDeps {
   queries: Queries;
   processManager: ProcessManager;
   pipeline: Pipeline;
+  emitter: PipelineEmitter;
   notificationService: NotificationService;
 }

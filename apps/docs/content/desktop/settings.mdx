@@ -53,11 +53,11 @@ OpenRouter-specific toggles (`openrouterEnabled`, tier defaults, per-phase overr
 |---------|---------|---------|
 | `notificationsEnabled` | true | Master switch |
 | `notificationOsEnabled` | true | Fire native OS notifications |
-| `notificationBadgeEnabled` | true | Show an unread count badge for action-required Inbox items on the app icon |
+| `notificationBadgeEnabled` | true | Show an unread count badge for Inbox items on the app icon |
 | `notificationSoundEnabled` | false | Play a sound on events |
 | `notificationEvents.awaitingApproval` | on | Fire when a thread enters `awaiting_approval` |
 | `notificationEvents.failed` | on | Fire when any phase fails |
-| `notificationEvents.completed` | on | Fire when a PR is opened (informational only; does not badge Inbox) |
+| `notificationEvents.completed` | on | Fire when a PR is opened; the item stays in Inbox until dismissed |
 | `notificationEvents.verificationExhausted` | on | Fire when the verifier runs out of retries |
 
 ### Archived Projects

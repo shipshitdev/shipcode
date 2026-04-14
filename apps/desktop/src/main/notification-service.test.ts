@@ -102,7 +102,7 @@ describe('NotificationService', () => {
     },
   } as unknown as BrowserWindow;
 
-  const notifications = {
+  const notificationQueries = {
     create: vi.fn(),
     listActive: vi.fn(),
     listByThread: vi.fn(),
@@ -111,17 +111,17 @@ describe('NotificationService', () => {
     dismissAll: vi.fn(),
   } as unknown as NotificationsQueries;
 
-  const settings = {
+  const settingsQueries = {
     get: vi.fn(),
   } as unknown as SettingsQueries;
 
-  const activity = {
+  const activityQueries = {
     create: vi.fn(),
   } as unknown as ActivityQueries;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    settings.get.mockReturnValue({
+    (settingsQueries.get as ReturnType<typeof vi.fn>).mockReturnValue({
       notificationsEnabled: true,
       notificationOsEnabled: true,
       notificationBadgeEnabled: true,
@@ -136,35 +136,45 @@ describe('NotificationService', () => {
     });
   });
 
-  it('refreshBadge ignores completed notifications', () => {
-    notifications.listActive.mockReturnValue([
+  it('refreshBadge counts completed notifications', () => {
+    (notificationQueries.listActive as ReturnType<typeof vi.fn>).mockReturnValue([
       makeNotificationRecord({ id: 'completed-1', kind: 'completed' }),
       makeNotificationRecord({ id: 'failed-1', kind: 'failed' }),
       makeNotificationRecord({ id: 'awaiting-1', kind: 'awaiting_approval' }),
     ]);
 
-    const service = new NotificationService(mainWindow, notifications, settings, activity);
+    const service = new NotificationService(
+      mainWindow,
+      notificationQueries,
+      settingsQueries,
+      activityQueries,
+    );
     service.refreshBadge();
 
-    expect(setBadgeMock).toHaveBeenCalledWith('2');
+    expect(setBadgeMock).toHaveBeenCalledWith('3');
   });
 
   it('fires completed notifications as informational toasts and activity entries', () => {
     const thread = makeThread();
     const record = makeNotificationRecord();
-    notifications.create.mockReturnValue(record);
+    (notificationQueries.create as ReturnType<typeof vi.fn>).mockReturnValue(record);
 
-    const service = new NotificationService(mainWindow, notifications, settings, activity);
+    const service = new NotificationService(
+      mainWindow,
+      notificationQueries,
+      settingsQueries,
+      activityQueries,
+    );
     service.fire('completed', thread);
 
-    expect(notifications.create).toHaveBeenCalledWith({
+    expect(notificationQueries.create).toHaveBeenCalledWith({
       threadId: thread.id,
       projectId: thread.projectId,
       kind: 'completed',
       title: 'Ready to ship',
       body: 'Test thread completed — PR is ready',
     });
-    expect(activity.create).toHaveBeenCalledWith(
+    expect(activityQueries.create).toHaveBeenCalledWith(
       expect.objectContaining({
         threadId: thread.id,
         projectId: thread.projectId,

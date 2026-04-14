@@ -10,9 +10,11 @@ By default, the Inbox surfaces threads in these states:
 
 - `awaiting_approval` — pipeline paused after review, waiting for human sign-off (only when `requireApproval` is enabled in Settings)
 - `failed` — any phase errored out
+- `completed` — PR opened and ready for you to review/read
 - Verification-exhausted — verifier hit `maxReviewRounds` without passing
+- `ci_blocked` — linked PR checks are failing
 
-Completed and in-progress threads are deliberately filtered out — those live in Mission Control or the per-project Kanban.
+Items remain in the Inbox badge queue until you explicitly dismiss them.
 
 ## Row layout
 
@@ -39,4 +41,4 @@ Use the filter controls at the top to narrow by:
 ## Related
 
 - [Mission Control](/desktop/mission-control) — broader dashboard across all activity
-- [Settings → Notifications](/desktop/settings) — toggle OS + badge notifications for the same events that populate the Inbox; completion notifications still fire as success toasts/activity, but they do not enter the Inbox badge queue
+- [Settings → Notifications](/desktop/settings) — toggle OS + badge notifications for the same events that populate the Inbox

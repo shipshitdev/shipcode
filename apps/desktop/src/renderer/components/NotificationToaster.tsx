@@ -28,10 +28,12 @@ const KIND_TONE: Record<NotificationKind, string> = {
 function ToastRow({
   notification,
   onClick,
+  onHide,
   onDismiss,
 }: {
   notification: NotificationRecord;
   onClick: () => void;
+  onHide: () => void;
   onDismiss: () => void;
 }) {
   const sticky = STICKY_KINDS.includes(notification.kind);
@@ -39,9 +41,9 @@ function ToastRow({
 
   useEffect(() => {
     if (sticky) return;
-    const id = setTimeout(onDismiss, dismissAfterMs);
+    const id = setTimeout(onHide, dismissAfterMs);
     return () => clearTimeout(id);
-  }, [dismissAfterMs, sticky, onDismiss]);
+  }, [dismissAfterMs, sticky, onHide]);
 
   return (
     <div
@@ -111,8 +113,11 @@ export function NotificationToaster() {
     if (notification.projectId) selectProject(notification.projectId);
     selectThread(notification.threadId);
     setViewMode('project');
-    window.shipcode.invoke('notification:dismiss', { id: notification.id }).catch(() => {});
     removeNotification(notification.id);
+  };
+
+  const handleHide = (id: string) => {
+    removeNotification(id);
   };
 
   const handleDismiss = (id: string) => {
@@ -129,6 +134,7 @@ export function NotificationToaster() {
           <ToastRow
             notification={n}
             onClick={() => handleClick(n)}
+            onHide={() => handleHide(n.id)}
             onDismiss={() => handleDismiss(n.id)}
           />
         </div>

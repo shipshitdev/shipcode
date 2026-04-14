@@ -13,6 +13,7 @@ import {
   resolveIssuePhaseModels,
   sendGithubIssuesUpdated,
   syncLinkedPullRequestFeedback,
+  transitionThreadPhase,
 } from './helpers';
 import type { IpcHandlerDeps } from './types';
 
@@ -25,6 +26,7 @@ export function registerGitHubHandlers({
   mainWindow,
   queries,
   pipeline,
+  emitter,
   notificationService,
 }: IpcHandlerDeps): void {
   ipcMain.handle(
@@ -459,9 +461,11 @@ export function registerGitHubHandlers({
           },
         );
       } catch (err) {
-        queries.githubIssues.updatePipelineStatus(issue.id, 'todo');
-        queries.threads.updateStatus(thread.id, 'failed');
-        sendGithubIssuesUpdated(mainWindow, queries, projectId);
+        transitionThreadPhase(mainWindow, queries, emitter, {
+          threadId: thread.id,
+          phase: 'failed',
+          errorMessage: clampError(err),
+        });
         throw err;
       }
     },
