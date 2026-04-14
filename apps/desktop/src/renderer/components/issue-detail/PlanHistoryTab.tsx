@@ -125,6 +125,11 @@ export function PlanHistoryTab({
                         ? getReviewDecisionPresentation(review, threadPhase)
                         : null;
                       const isSuperseded = plan.status === 'superseded';
+                      const showReviewBadge =
+                        !!review &&
+                        plan.status !== 'superseded' &&
+                        plan.status !== 'awaiting_approval' &&
+                        !!reviewPresentation;
 
                       return (
                         <div
@@ -167,7 +172,7 @@ export function PlanHistoryTab({
                                     {statusPresentation.label}
                                   </span>
                                 )}
-                                {review && plan.status !== 'superseded' && reviewPresentation ? (
+                                {showReviewBadge ? (
                                   <Badge
                                     variant={reviewPresentation.badgeVariant}
                                     className="text-[10px]"

@@ -59,6 +59,12 @@ export function getPlanStatusPresentation(
         phaseStatus: 'completed',
         usePhaseChip: true,
       };
+    case 'awaiting_approval':
+      return {
+        label: 'Awaiting approval',
+        phaseStatus: 'reviewing',
+        usePhaseChip: true,
+      };
     case 'rejected':
       if (review?.decision === 'request_changes') {
         return {

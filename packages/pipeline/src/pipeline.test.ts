@@ -653,6 +653,7 @@ describe('createPipeline', () => {
       await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_APPROVE_JSON));
       await mock.trigger('exit', 'proc-2', 0);
 
+      expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'awaiting_approval');
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'awaiting_approval');
     });
 
@@ -700,6 +701,7 @@ describe('createPipeline', () => {
       await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_REQUEST_CHANGES_CRITICAL_JSON));
       await mock.trigger('exit', 'proc-2', 0);
 
+      expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'awaiting_approval');
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'awaiting_approval');
     });
 
@@ -757,6 +759,7 @@ describe('createPipeline', () => {
       await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_REQUEST_CHANGES_CRITICAL_JSON));
       await mock.trigger('exit', 'proc-2', 0);
 
+      expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'awaiting_approval');
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'awaiting_approval');
     });
 
@@ -770,6 +773,7 @@ describe('createPipeline', () => {
       await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_REQUEST_CHANGES_CRITICAL_JSON));
       await mock.trigger('exit', 'proc-2', 0);
 
+      expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'awaiting_approval');
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'awaiting_approval');
     });
   });

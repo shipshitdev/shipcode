@@ -220,6 +220,7 @@ export function createPlanningPhaseHandlers({
 
           if (result.data.decision === 'approve') {
             if (deps.settings.get().requireApproval || !context.autonomous) {
+              deps.plans.updateStatus(latestPlan.id, 'awaiting_approval');
               void postPlanComment(context, latestStructuredPlan);
               emitPhase(threadId, 'awaiting_approval');
             } else {
@@ -249,6 +250,7 @@ export function createPlanningPhaseHandlers({
                 !context.autonomous ||
                 hasCriticalOrMajor
               ) {
+                deps.plans.updateStatus(latestPlan.id, 'awaiting_approval');
                 void postPlanComment(context, latestStructuredPlan);
                 emitPhase(threadId, 'awaiting_approval');
               } else {

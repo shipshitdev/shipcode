@@ -632,3 +632,25 @@ export function migrateV17(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (17)`);
   });
 }
+
+export function migrateV18(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 18) return;
+
+  transaction(db, () => {
+    db.exec(`
+      UPDATE plans
+         SET status = 'awaiting_approval'
+       WHERE status = 'rejected'
+         AND thread_id IN (
+           SELECT id
+             FROM threads
+            WHERE status = 'awaiting_approval'
+         )
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (18)`);
+  });
+}

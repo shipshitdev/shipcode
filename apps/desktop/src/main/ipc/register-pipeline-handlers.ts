@@ -1,6 +1,12 @@
 import type { ActivePipelineSummary } from '@shipcode/shared';
 import { resolveExecutorModelForIssue } from '@shipcode/shared';
-import { resolveIssuePhaseModels, resolveProjectPhaseModels, tryParsePlan } from './helpers';
+import {
+  resolveIssuePhaseModels,
+  resolveProjectPhaseModels,
+  transitionThreadPhase,
+  tryParsePlan,
+} from './helpers';
+import { getRetryAction } from './retry-phase';
 import type { IpcHandlerDeps } from './types';
 
 export function registerPipelineHandlers({
@@ -8,6 +14,8 @@ export function registerPipelineHandlers({
   mainWindow,
   queries,
   pipeline,
+  emitter,
+  notificationService,
 }: IpcHandlerDeps): void {
   ipcMain.handle('verification:get', (_event, { threadId }: { threadId: string }) => {
     return queries.verifications.getLatest(threadId);
@@ -66,9 +74,15 @@ export function registerPipelineHandlers({
         pipeline.rehydrateContext(threadId, project.path, issue?.title);
       }
 
+      notificationService.dismissByThread(threadId);
       await pipeline.startExecution(threadId, structured);
     } else {
-      mainWindow.webContents.send('pipeline:phase', { threadId, phase: 'failed' });
+      notificationService.dismissByThread(threadId);
+      transitionThreadPhase(mainWindow, queries, emitter, {
+        threadId,
+        phase: 'failed',
+        errorMessage: 'No plan available to approve',
+      });
     }
   });
 
@@ -88,6 +102,7 @@ export function registerPipelineHandlers({
 
       queries.plans.supersedeAll(threadId);
       const revisedPrompt = `${thread.prompt}\n\nFeedback from review:\n${feedback}`;
+      notificationService.dismissByThread(threadId);
       await pipeline.startPlanGeneration(
         threadId,
         revisedPrompt,
@@ -174,11 +189,25 @@ export function registerPipelineHandlers({
       if (!latestPlan?.structured && latestPlan) {
         queries.plans.updateStructured(latestPlan.id, structured);
       }
-      if (thread.worktreePath) {
-        await pipeline.startExecution(threadId, structured);
-      } else {
+      const latestVerification = queries.verifications.getLatest(threadId);
+      const retryAction = getRetryAction(thread, latestPlan, latestVerification);
+      if (retryAction === 'review') {
         if (latestPlan) queries.plans.updateStatus(latestPlan.id, 'pending_review');
         await pipeline.startReview(threadId, structured);
+      } else if (retryAction === 'execute') {
+        await pipeline.startExecution(threadId, structured);
+      } else if (retryAction === 'verify') {
+        await pipeline.startVerification(threadId);
+      } else if (retryAction === 'commit_and_push') {
+        await pipeline.startCommitAndPush(threadId);
+      } else {
+        queries.plans.supersedeAll(threadId);
+        await pipeline.startPlanGeneration(
+          threadId,
+          thread.prompt,
+          project.path,
+          thread.worktreePath,
+        );
       }
       return;
     }
@@ -188,8 +217,14 @@ export function registerPipelineHandlers({
   });
 
   ipcMain.handle('pipeline:skip-review', async (_event, { threadId }: { threadId: string }) => {
-    queries.threads.updateStatus(threadId, 'awaiting_approval');
-    mainWindow.webContents.send('pipeline:phase', { threadId, phase: 'awaiting_approval' });
+    const latestPlan = queries.plans.getLatest(threadId);
+    if (latestPlan) {
+      queries.plans.updateStatus(latestPlan.id, 'awaiting_approval');
+    }
+    transitionThreadPhase(mainWindow, queries, emitter, {
+      threadId,
+      phase: 'awaiting_approval',
+    });
   });
 
   ipcMain.handle('pipeline:list-active', (): ActivePipelineSummary[] => {

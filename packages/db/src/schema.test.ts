@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { migrate, migrateV2, migrateV3 } from './schema';
+import { migrate, migrateV2, migrateV3, migrateV18 } from './schema';
 import { asRow } from './utils';
 
 interface ThreadV2Row {
@@ -104,5 +104,48 @@ describe('migrateV3', () => {
   it('is idempotent', () => {
     migrateV3(db);
     expect(() => migrateV3(db)).not.toThrow();
+  });
+});
+
+describe('migrateV18', () => {
+  let db: DatabaseSync;
+
+  beforeEach(() => {
+    db = new DatabaseSync(':memory:');
+    migrate(db);
+    migrateV2(db);
+    migrateV3(db);
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('rewrites rejected plans to awaiting_approval when the owning thread is awaiting approval', () => {
+    db.prepare("INSERT INTO projects (id, name, path) VALUES ('p1', 'test', '/tmp/test')").run();
+    db.prepare(
+      "INSERT INTO threads (id, project_id, title, prompt, status) VALUES ('t1', 'p1', 'title', 'prompt', 'awaiting_approval')",
+    ).run();
+    db.prepare(
+      "INSERT INTO threads (id, project_id, title, prompt, status) VALUES ('t2', 'p1', 'title 2', 'prompt', 'failed')",
+    ).run();
+    db.prepare(
+      "INSERT INTO plans (id, thread_id, version, raw_output, status) VALUES ('plan-1', 't1', 1, 'raw', 'rejected')",
+    ).run();
+    db.prepare(
+      "INSERT INTO plans (id, thread_id, version, raw_output, status) VALUES ('plan-2', 't2', 1, 'raw', 'rejected')",
+    ).run();
+
+    migrateV18(db);
+
+    const rewritten = db.prepare('SELECT status FROM plans WHERE id = ?').get('plan-1') as {
+      status: string;
+    };
+    const untouched = db.prepare('SELECT status FROM plans WHERE id = ?').get('plan-2') as {
+      status: string;
+    };
+
+    expect(rewritten.status).toBe('awaiting_approval');
+    expect(untouched.status).toBe('rejected');
   });
 });

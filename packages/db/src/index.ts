@@ -18,6 +18,7 @@ import {
   migrateV15,
   migrateV16,
   migrateV17,
+  migrateV18,
 } from './schema';
 
 export { ActivityQueries } from './queries/activity';
@@ -65,6 +66,7 @@ export function getDatabase(dataDir: string): DatabaseSync {
   migrateV15(db);
   migrateV16(db);
   migrateV17(db);
+  migrateV18(db);
   return db;
 }
 
