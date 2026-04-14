@@ -24,7 +24,6 @@ import {
   Badge,
   Button,
   cn,
-  ExternalLink,
   PanelLeftClose,
   PanelLeftOpen,
   PhaseChip,
@@ -797,6 +796,41 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     (thread?.githubPrNumber && thread.githubRepo
       ? `https://github.com/${thread.githubRepo}/pull/${thread.githubPrNumber}`
       : null);
+  const issueIdentityLinks = (
+    <div className="flex flex-wrap items-center gap-1.5 pr-16">
+      {githubIssueUrl ? (
+        <Button
+          variant="ghost"
+          size="xs"
+          onClick={handleOpenOnGithub}
+          className="h-5 px-1.5 font-mono text-[11px] text-muted hover:bg-secondary hover:text-primary"
+          title="Open this issue on GitHub"
+        >
+          #{activeIssue.issueNumber}
+        </Button>
+      ) : (
+        <span className="font-mono text-xs text-muted">#{activeIssue.issueNumber}</span>
+      )}
+      {activeIssue.linkedPrNumber &&
+        (linkedPrUrl ? (
+          <Button
+            variant="ghost"
+            size="xs"
+            className="h-5 gap-1 px-1.5 text-[10px] font-medium text-done hover:bg-done/10 hover:text-done"
+            onClick={() => {
+              void handleOpenPullRequest();
+            }}
+            title="Open pull request on GitHub"
+          >
+            PR #{activeIssue.linkedPrNumber}
+          </Button>
+        ) : (
+          <Badge variant="done" className="text-[10px]">
+            PR #{activeIssue.linkedPrNumber}
+          </Badge>
+        ))}
+    </div>
+  );
   const issueBadges = (
     <div className="flex flex-wrap gap-1.5">
       {activeIssue.assignee && (
@@ -809,23 +843,6 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
           <Badge variant={activeIssue.linkedPrIsDraft ? 'warning' : 'done'} className="text-[10px]">
             {activeIssue.linkedPrIsDraft ? 'Draft PR' : 'Ready PR'}
           </Badge>
-          {linkedPrUrl ? (
-            <Button
-              variant="ghost"
-              size="xs"
-              className="h-5 gap-1 px-1.5 text-[10px] font-medium text-done hover:bg-done/10 hover:text-done"
-              onClick={() => {
-                void handleOpenPullRequest();
-              }}
-              title="Open pull request on GitHub"
-            >
-              PR #{activeIssue.linkedPrNumber} <ExternalLink size={11} />
-            </Button>
-          ) : (
-            <Badge variant="done" className="text-[10px]">
-              PR #{activeIssue.linkedPrNumber}
-            </Badge>
-          )}
         </>
       )}
       {activeIssue.labels
@@ -962,20 +979,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
           <div className="relative shrink-0 border-b border-border p-4">
             <div className="mx-auto w-full max-w-5xl">
               {headerButtons}
-              <div className="flex items-center gap-2 pr-16">
-                <span className="font-mono text-xs text-muted">#{activeIssue.issueNumber}</span>
-                {githubIssueUrl && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleOpenOnGithub}
-                    className="h-6 gap-1 text-[11px]"
-                    title="Open this issue on github.com"
-                  >
-                    View on GitHub <ExternalLink size={12} />
-                  </Button>
-                )}
-              </div>
+              {issueIdentityLinks}
               <div className="my-1 flex flex-wrap items-center gap-2 pr-16">
                 {issueStatusBadge}
                 <h1 className="text-xl font-semibold">{activeIssue.title}</h1>
@@ -1016,20 +1020,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       {/* Header */}
       <div className="relative shrink-0 border-b border-border p-4">
         {headerButtons}
-        <div className="flex items-center gap-2 pr-16">
-          <span className="font-mono text-xs text-muted">#{activeIssue.issueNumber}</span>
-          {githubIssueUrl && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleOpenOnGithub}
-              className="h-6 gap-1 text-[11px]"
-              title="Open this issue on github.com"
-            >
-              View on GitHub <ExternalLink size={12} />
-            </Button>
-          )}
-        </div>
+        {issueIdentityLinks}
         <div className="my-1 flex flex-wrap items-center gap-2 pr-16">
           {issueStatusBadge}
           <h3 className="text-[15px] font-semibold">{activeIssue.title}</h3>

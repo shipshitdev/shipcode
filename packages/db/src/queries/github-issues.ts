@@ -182,7 +182,9 @@ export class GitHubIssueQueries {
    * Symmetric partner to `markCompletedOnClose`: when a GH issue is reopened,
    * walk the local `pipeline_status` back from `'completed'` to `'todo'` so
    * the user can re-run the pipeline. Leaves any non-completed status
-   * untouched (the pipeline might have advanced independently).
+   * untouched (the pipeline might have advanced independently), and preserves
+   * `'completed'` when ShipCode already has a linked PR or a completed thread
+   * for this issue.
    *
    * Returns `true` iff a row was updated.
    */
@@ -192,7 +194,14 @@ export class GitHubIssueQueries {
         `UPDATE github_issue_cache
            SET pipeline_status = 'todo', last_phase_update = NULL
          WHERE id = ?
-           AND pipeline_status = 'completed'`,
+           AND pipeline_status = 'completed'
+           AND linked_pr_number IS NULL
+           AND NOT EXISTS (
+             SELECT 1
+             FROM threads
+             WHERE threads.id = github_issue_cache.thread_id
+               AND threads.status = 'completed'
+           )`,
       )
       .run(id);
     return Number(result.changes) > 0;

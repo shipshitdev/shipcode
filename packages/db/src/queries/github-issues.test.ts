@@ -349,6 +349,34 @@ describe('GitHubIssueQueries', () => {
       expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('todo');
     });
 
+    it('markReopenedOnOpen() preserves completed when a linked PR exists', () => {
+      const record = issues.upsert(makeIssue());
+      issues.updatePipelineStatus(record.id, 'completed');
+      issues.updatePullRequestFeedback(record.id, {
+        linkedPrNumber: 49,
+        linkedPrUrl: 'https://github.com/shipshitdev/shipcode/pull/49',
+        linkedPrIsDraft: true,
+        ciBlocked: false,
+        failingChecks: [],
+        unresolvedReviewComments: [],
+      });
+
+      expect(issues.markReopenedOnOpen(record.id)).toBe(false);
+      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('completed');
+    });
+
+    it('markReopenedOnOpen() preserves completed when the linked thread already completed', () => {
+      const record = issues.upsert(makeIssue());
+      const threads = new ThreadQueries(db);
+      const thread = threads.create(projectId, 'prompt', 'title');
+      threads.updateStatus(thread.id, 'completed');
+      issues.linkThread(record.id, thread.id);
+      issues.updatePipelineStatus(record.id, 'completed');
+
+      expect(issues.markReopenedOnOpen(record.id)).toBe(false);
+      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('completed');
+    });
+
     it('markReopenedOnOpen() is a no-op on non-completed source states', () => {
       const record = issues.upsert(makeIssue());
       // Default is 'queued'

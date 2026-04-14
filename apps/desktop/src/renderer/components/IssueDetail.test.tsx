@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import {
   deriveGithubIssueUrl,
   type GitHubIssueCacheRecord,
@@ -129,6 +131,31 @@ const makeReview = (overrides: Partial<ReviewRecord> = {}): ReviewRecord => ({
   ...overrides,
 });
 
+const makeProject = () => ({
+  id: 'project-1',
+  name: 'Project',
+  path: '/tmp/project',
+  gitRemote: 'https://github.com/acme/repo.git',
+  githubProjectUrl: null,
+  plannerModelOverride: null,
+  reviewerModelOverride: null,
+  executorModelOverride: 'codex',
+  verifierModelOverride: null,
+  plannerModelIdOverride: null,
+  reviewerModelIdOverride: null,
+  executorModelIdOverride: null,
+  verifierModelIdOverride: null,
+  plannerReasoningEffortOverride: null,
+  reviewerReasoningEffortOverride: null,
+  executorReasoningEffortOverride: null,
+  verifierReasoningEffortOverride: null,
+  defaultBranch: 'main',
+  pinned: false,
+  archived: false,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+});
+
 function renderWithProviders(props?: { expanded?: boolean }) {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -200,6 +227,7 @@ describe('IssueDetail', () => {
 
   it('renders linked PR controls in the issue header and opens the PR URL', async () => {
     invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'project:get') return makeProject();
       if (channel === 'shell:open-external') return undefined;
       return [];
     });
@@ -223,6 +251,36 @@ describe('IssueDetail', () => {
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith('shell:open-external', {
         url: 'https://github.com/acme/repo/pull/17',
+      });
+    });
+  });
+
+  it('makes the issue id clickable, removes the standalone GitHub button, and hides start CTA for completed PR work', async () => {
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'project:get') return makeProject();
+      if (channel === 'shell:open-external') return undefined;
+      return [];
+    });
+
+    useAppStore.setState({
+      activeIssue: makeIssue({
+        pipelineStatus: 'completed',
+        linkedPrNumber: 17,
+        linkedPrUrl: 'https://github.com/acme/repo/pull/17',
+        linkedPrIsDraft: true,
+      }),
+    });
+
+    renderWithProviders();
+
+    expect(screen.queryByText('View on GitHub')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start pipeline' })).not.toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole('button', { name: '#42' }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('shell:open-external', {
+        url: deriveGithubIssueUrl('https://github.com/acme/repo.git', 42),
       });
     });
   });

@@ -5,6 +5,7 @@ import type { GitHubIssueCacheRecord } from '@shipcode/shared';
 import { Archive, ChevronDown, ChevronRight, User } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { cn } from '../lib/utils';
+import { Badge } from '../primitives/badge';
 import { Button } from '../primitives/button';
 import {
   ACTIVE_STATUSES,
@@ -96,23 +97,30 @@ function DraggableListRow({
           )}
         />
       )}
-      <span className="shrink-0 font-mono text-xs text-secondary">#{issue.issueNumber}</span>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <span className="font-mono text-xs text-secondary">#{issue.issueNumber}</span>
+        {issue.linkedPrNumber &&
+          (issue.linkedPrUrl && onOpenPullRequest ? (
+            <Button
+              variant="ghost"
+              size="xs"
+              className="h-5 shrink-0 px-1.5 text-[10px] font-medium text-done hover:bg-done/10 hover:text-done"
+              title="Open pull request on GitHub"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenPullRequest(issue.linkedPrUrl as string);
+              }}
+            >
+              PR #{issue.linkedPrNumber}
+            </Button>
+          ) : (
+            <Badge variant="done" className="px-1.5 py-px text-[10px] font-medium">
+              PR #{issue.linkedPrNumber}
+            </Badge>
+          ))}
+      </div>
       <span className="flex-1 truncate">{issue.title}</span>
-      {issue.linkedPrNumber && issue.linkedPrUrl && onOpenPullRequest ? (
-        <Button
-          variant="ghost"
-          size="xs"
-          className="h-5 shrink-0 px-1.5 text-[10px] font-medium text-done hover:bg-done/10 hover:text-done"
-          title="Open pull request on GitHub"
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => {
-            event.stopPropagation();
-            onOpenPullRequest(issue.linkedPrUrl as string);
-          }}
-        >
-          PR #{issue.linkedPrNumber}
-        </Button>
-      ) : null}
       <span className="flex shrink-0 items-center gap-1">
         <IssueExternalBlockers issue={issue} />
       </span>

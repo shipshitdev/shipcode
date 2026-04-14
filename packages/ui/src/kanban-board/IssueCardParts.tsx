@@ -169,8 +169,32 @@ export function DraggableCard({
           <Archive size={14} />
         </Button>
       )}
-      <div className="mb-0.5 flex items-center justify-between text-left">
-        <span className="font-mono text-[11px] text-secondary">#{issue.issueNumber}</span>
+      <div className="mb-0.5 flex items-center justify-between gap-2 text-left">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="shrink-0 font-mono text-[11px] text-secondary">
+            #{issue.issueNumber}
+          </span>
+          {linkedPrLabel &&
+            (issue.linkedPrUrl && onOpenPullRequest ? (
+              <Button
+                variant="ghost"
+                size="xs"
+                className="h-5 shrink-0 px-1.5 text-[10px] font-medium text-done hover:bg-done/10 hover:text-done"
+                title="Open pull request on GitHub"
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onOpenPullRequest(issue.linkedPrUrl as string);
+                }}
+              >
+                {linkedPrLabel}
+              </Button>
+            ) : (
+              <Badge variant="done" className="px-1.5 py-px text-[10px] font-medium">
+                {linkedPrLabel}
+              </Badge>
+            ))}
+        </div>
         {showPhaseElapsed && (
           <span className="flex items-center gap-1.5">
             <span className="font-mono tabular-nums text-[10px] text-muted">
@@ -266,21 +290,6 @@ export function DraggableCard({
           </span>
         ) : (
           <PhaseChip status={issue.pipelineStatus} />
-        )}
-        {linkedPrLabel && issue.linkedPrUrl && onOpenPullRequest && (
-          <Button
-            variant="ghost"
-            size="xs"
-            className="h-5 px-1.5 text-[10px] font-medium text-done hover:bg-done/10 hover:text-done"
-            title="Open pull request on GitHub"
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.stopPropagation();
-              onOpenPullRequest(issue.linkedPrUrl as string);
-            }}
-          >
-            {linkedPrLabel}
-          </Button>
         )}
         {!readOnly && (
           <div className="ml-auto flex items-center gap-1.5">
