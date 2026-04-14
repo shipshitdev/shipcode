@@ -155,6 +155,19 @@ export function createPlanningPhaseHandlers({
           handlers.startReview(threadId, result.data);
         } else {
           deps.plans.create(threadId, result.raw, null, nextVersion);
+          deps.emitter.emit({
+            type: 'pipeline:approval-gate',
+            threadId,
+            outcome: 'awaiting_approval',
+            reviewDecision: 'parse_failure',
+            planVersion: nextVersion,
+            requireApproval: deps.settings.get().requireApproval,
+            autonomous: context.autonomous,
+            reviewRound: context.reviewRound,
+            maxReviewRounds: deps.settings.get().maxReviewRounds,
+            hasCriticalOrMajor: false,
+            reasons: ['parseFailure'],
+          });
           emitPhase(threadId, 'awaiting_approval');
         }
       } catch (error) {
@@ -219,15 +232,49 @@ export function createPlanningPhaseHandlers({
           deps.emitter.emit({ type: 'review:parsed', threadId, review: result.data });
 
           if (result.data.decision === 'approve') {
-            if (deps.settings.get().requireApproval || !context.autonomous) {
+            const requireApproval = deps.settings.get().requireApproval;
+            const reasons: Array<'requireApproval' | 'nonAutonomous' | 'reviewApproved'> = [
+              'reviewApproved',
+            ];
+            if (requireApproval) reasons.push('requireApproval');
+            if (!context.autonomous) reasons.push('nonAutonomous');
+
+            if (requireApproval || !context.autonomous) {
+              deps.emitter.emit({
+                type: 'pipeline:approval-gate',
+                threadId,
+                outcome: 'awaiting_approval',
+                reviewDecision: 'approve',
+                planVersion: latestPlan.version,
+                requireApproval,
+                autonomous: context.autonomous,
+                reviewRound: context.reviewRound,
+                maxReviewRounds: deps.settings.get().maxReviewRounds,
+                hasCriticalOrMajor: false,
+                reasons,
+              });
               deps.plans.updateStatus(latestPlan.id, 'awaiting_approval');
               void postPlanComment(context, latestStructuredPlan);
               emitPhase(threadId, 'awaiting_approval');
             } else {
+              deps.emitter.emit({
+                type: 'pipeline:approval-gate',
+                threadId,
+                outcome: 'auto_execute',
+                reviewDecision: 'approve',
+                planVersion: latestPlan.version,
+                requireApproval,
+                autonomous: context.autonomous,
+                reviewRound: context.reviewRound,
+                maxReviewRounds: deps.settings.get().maxReviewRounds,
+                hasCriticalOrMajor: false,
+                reasons,
+              });
               handlers.startExecution(threadId, latestStructuredPlan);
             }
           } else if (result.data.decision === 'request_changes') {
-            if (context.reviewRound < deps.settings.get().maxReviewRounds) {
+            const maxReviewRounds = deps.settings.get().maxReviewRounds;
+            if (context.reviewRound < maxReviewRounds) {
               context.reviewRound++;
               deps.threads.incrementReviewRound(threadId);
               const feedback =
@@ -245,15 +292,45 @@ export function createPlanningPhaseHandlers({
                 (finding: { severity: string }) =>
                   finding.severity === 'critical' || finding.severity === 'major',
               );
-              if (
-                deps.settings.get().requireApproval ||
-                !context.autonomous ||
-                hasCriticalOrMajor
-              ) {
+              const requireApproval = deps.settings.get().requireApproval;
+              const reasons: Array<
+                'requireApproval' | 'nonAutonomous' | 'criticalFindings' | 'reviewRoundsExhausted'
+              > = ['reviewRoundsExhausted'];
+              if (requireApproval) reasons.push('requireApproval');
+              if (!context.autonomous) reasons.push('nonAutonomous');
+              if (hasCriticalOrMajor) reasons.push('criticalFindings');
+
+              if (requireApproval || !context.autonomous || hasCriticalOrMajor) {
+                deps.emitter.emit({
+                  type: 'pipeline:approval-gate',
+                  threadId,
+                  outcome: 'awaiting_approval',
+                  reviewDecision: 'request_changes',
+                  planVersion: latestPlan.version,
+                  requireApproval,
+                  autonomous: context.autonomous,
+                  reviewRound: context.reviewRound,
+                  maxReviewRounds,
+                  hasCriticalOrMajor,
+                  reasons,
+                });
                 deps.plans.updateStatus(latestPlan.id, 'awaiting_approval');
                 void postPlanComment(context, latestStructuredPlan);
                 emitPhase(threadId, 'awaiting_approval');
               } else {
+                deps.emitter.emit({
+                  type: 'pipeline:approval-gate',
+                  threadId,
+                  outcome: 'auto_execute',
+                  reviewDecision: 'request_changes',
+                  planVersion: latestPlan.version,
+                  requireApproval,
+                  autonomous: context.autonomous,
+                  reviewRound: context.reviewRound,
+                  maxReviewRounds,
+                  hasCriticalOrMajor,
+                  reasons,
+                });
                 handlers.startExecution(threadId, latestStructuredPlan);
               }
             }

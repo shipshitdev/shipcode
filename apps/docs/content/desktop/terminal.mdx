@@ -31,6 +31,25 @@ This makes it easy to scan a long run and see which agent was responsible for wh
 
 The drawer header shows a live cost estimate for the active thread, updated as tokens stream in. This is the same number that ends up in the [Costs view](/desktop/costs), just realtime instead of aggregated.
 
+## Structured event log
+
+The Terminal drawer is the best place to watch live subprocess output, but it is not the only debugging artifact.
+
+ShipCode also writes a structured event log at:
+
+```text
+apps/desktop/logs/events.log
+```
+
+Use `events.log` when you need to reconstruct pipeline behavior after the fact. It records:
+
+- Pipeline start source (`github:start-issue`, `pipeline:start`, retry, approve)
+- Phase transitions
+- Parsed review / verification summaries
+- Approval-gate decisions, including why the runtime chose `awaiting_approval` or auto-execution
+
+For user-reported pipeline bugs, ask for `events.log` plus the thread ID or GitHub issue number.
+
 ## Keyboard
 
 - `Cmd/Ctrl + ~` — toggle drawer visibility

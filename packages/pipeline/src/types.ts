@@ -34,6 +34,37 @@ export type PipelineExecutorModel = Exclude<AgentType, 'gh'>;
 // Typed event contract -- both desktop and CLI adapters must handle these
 export type PipelineEvent =
   | { type: 'pipeline:phase'; threadId: string; phase: PipelinePhase }
+  | {
+      type: 'pipeline:start-context';
+      threadId: string;
+      source: 'github:start-issue' | 'pipeline:start' | 'pipeline:retry' | 'pipeline:approve';
+      projectPath: string;
+      githubIssueNumber: number | null;
+      autonomous: boolean;
+      requireApproval: boolean;
+      reviewRound: number;
+    }
+  | {
+      type: 'pipeline:approval-gate';
+      threadId: string;
+      outcome: 'awaiting_approval' | 'auto_execute';
+      reviewDecision: 'approve' | 'request_changes' | 'parse_failure';
+      planVersion: number | null;
+      requireApproval: boolean;
+      autonomous: boolean;
+      reviewRound: number;
+      maxReviewRounds: number;
+      hasCriticalOrMajor: boolean;
+      reasons: (
+        | 'requireApproval'
+        | 'nonAutonomous'
+        | 'criticalFindings'
+        | 'reviewApproved'
+        | 'reviewRoundsExhausted'
+        | 'parseFailure'
+        | 'manualSkipReview'
+      )[];
+    }
   | { type: 'pipeline:verification-exhausted'; threadId: string; retries: number }
   | {
       /**

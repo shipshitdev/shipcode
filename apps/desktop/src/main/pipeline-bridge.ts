@@ -2,7 +2,7 @@ import type { ActivityQueries, ThreadQueries } from '@shipcode/db';
 import type { PipelineEmitter, PipelineEvent } from '@shipcode/pipeline';
 import type { ActivityKind, PipelinePhase, Thread } from '@shipcode/shared';
 import type { BrowserWindow } from 'electron';
-import log from './logger.service';
+import log, { logEvent } from './logger.service';
 import type { NotificationService } from './notification-service';
 
 interface EmitterDeps {
@@ -68,6 +68,63 @@ export function createElectronEmitter(
   mainWindow: BrowserWindow,
   deps: EmitterDeps,
 ): PipelineEmitter {
+  function writeEventLog(event: PipelineEvent) {
+    switch (event.type) {
+      case 'pipeline:phase':
+        logEvent('pipeline:phase', {
+          threadId: event.threadId,
+          phase: event.phase,
+        });
+        return;
+      case 'pipeline:start-context':
+        logEvent('pipeline:start-context', event);
+        return;
+      case 'pipeline:approval-gate':
+        logEvent('pipeline:approval-gate', event);
+        return;
+      case 'pipeline:verification-exhausted':
+        logEvent('pipeline:verification-exhausted', event);
+        return;
+      case 'pipeline:model-resolved':
+        logEvent('pipeline:model-resolved', event);
+        return;
+      case 'plan:parsed':
+        logEvent('plan:parsed', {
+          threadId: event.threadId,
+          objective: event.plan.objective ?? null,
+          stepCount: event.plan.steps.length,
+          fileCount: event.plan.files.length,
+        });
+        return;
+      case 'review:parsed':
+        logEvent('review:parsed', {
+          threadId: event.threadId,
+          decision: event.review.decision,
+          confidence: event.review.confidence,
+          findingCount: event.review.findings.length,
+        });
+        return;
+      case 'verification:parsed':
+        logEvent('verification:parsed', {
+          threadId: event.threadId,
+          result: event.verification.result,
+          summary: event.verification.summary ?? null,
+        });
+        return;
+      case 'skill:fallback':
+        logEvent('skill:fallback', event);
+        return;
+      case 'terminal:event':
+        logEvent('terminal:event', {
+          threadId: event.threadId,
+          kind: event.event.kind,
+        });
+        return;
+      case 'pipeline:output':
+        return;
+    }
+  }
+
   function invalidateDashboard() {
     if (mainWindow.isDestroyed()) return;
     mainWindow.webContents.send('dashboard:invalidate', {
@@ -192,6 +249,12 @@ export function createElectronEmitter(
 
       // Resolve thread once per event for shared logging/notifications.
       const thread = deps.threads.getById(event.threadId) ?? null;
+
+      try {
+        writeEventLog(event);
+      } catch (err) {
+        log.error('[pipeline-bridge] event log write failed:', err);
+      }
 
       // 2. Persist to activity_log.
       try {

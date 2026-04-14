@@ -121,6 +121,17 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       verifiedSha: null,
     });
 
+    deps.emitter.emit({
+      type: 'pipeline:start-context',
+      threadId,
+      source: 'github:start-issue',
+      projectPath,
+      githubIssueNumber: issue.number,
+      autonomous: true,
+      requireApproval: deps.settings.get().requireApproval,
+      reviewRound: 0,
+    });
+
     const prompt = `GitHub Issue #${issue.number}: ${issue.title}\n\n${issue.body ?? ''}`;
     await handlers.startPlanGeneration(threadId, prompt, projectPath, null);
   }

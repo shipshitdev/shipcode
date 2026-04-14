@@ -19,7 +19,7 @@ All settings persist in the local SQLite DB under the single `settings` row. The
 
 | Setting | Default | Purpose |
 |---------|---------|---------|
-| `requireApproval` | false | Pause the pipeline at `awaiting_approval` after review for human sign-off |
+| `requireApproval` | false | Global approval gate. When on, the pipeline pauses at `awaiting_approval` after review for human sign-off. When off, GitHub issue runs execute automatically unless another runtime safety branch stops them |
 | `maxReviewRounds` | 2 | How many review → revise cycles before falling through (1–5) |
 | `plannerMaxTurns` | 12 | `--max-turns` cap on the planner and verifier Claude CLI runs (1–20). Execute and review are unaffected |
 | `reviewerReasoningEffort` | `high` | Codex reasoning effort for the review phase (low / medium / high) |
@@ -76,6 +76,26 @@ Some settings are per-project rather than global:
 - Per-project planner / reviewer / executor / verifier model overrides
 
 Issue-level overrides are narrower by design: only the executor can be overridden from Issue Detail / Kanban, and that override applies to the next run of that issue only.
+
+## Approval behavior
+
+`requireApproval` is a **global** setting today.
+
+- It is not configurable per project
+- It is not configurable per issue
+- Mentioning "human approval" inside an issue body or PRD does **not** change runtime behavior by itself
+
+Approval decisions are made by the pipeline runtime, not by prompt text. For GitHub issue runs, the engine starts in autonomous mode and the global setting decides whether review should pause before execution.
+
+## Troubleshooting logs
+
+ShipCode writes a structured local event log at:
+
+```text
+apps/desktop/logs/events.log
+```
+
+This file records pipeline starts, phase transitions, review outcomes, and approval-gate decisions. If a run behaves unexpectedly, ask the user to send `events.log` together with the thread or issue number.
 
 ## Related
 

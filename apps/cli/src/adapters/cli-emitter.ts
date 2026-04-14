@@ -8,6 +8,16 @@ export function createCliEmitter(): PipelineEmitter {
         case 'pipeline:phase':
           console.log(`[${timestamp}] Phase: ${event.phase}`);
           break;
+        case 'pipeline:start-context':
+          console.log(
+            `[${timestamp}] Start: ${event.source} autonomous=${event.autonomous ? 'yes' : 'no'} requireApproval=${event.requireApproval ? 'yes' : 'no'}`,
+          );
+          break;
+        case 'pipeline:approval-gate':
+          console.log(
+            `[${timestamp}] Approval gate: ${event.outcome} after ${event.reviewDecision} (${event.reasons.join(', ')})`,
+          );
+          break;
         case 'pipeline:verification-exhausted':
           console.log(`[${timestamp}] Verification exhausted after ${event.retries} retries`);
           break;
@@ -46,6 +56,12 @@ export function createCliEmitter(): PipelineEmitter {
           break;
         case 'verification:parsed':
           console.log(`[${timestamp}] Verification: ${event.verification.result}`);
+          break;
+        case 'skill:fallback':
+          console.log(`[${timestamp}] Skill fallback: ${event.phase} (${event.reason})`);
+          break;
+        case 'terminal:event':
+        case 'pipeline:output':
           break;
       }
     },
