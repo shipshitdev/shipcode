@@ -4,7 +4,8 @@ import {
   Button,
   ChevronLeft,
   cn,
-  Folder,
+  FolderGit,
+  Globe,
   Keyboard,
   Settings,
   Workflow,
@@ -22,12 +23,12 @@ const SECTIONS: { key: SettingsSection; label: string; icon: ReactNode }[] = [
   {
     key: 'integrations',
     label: 'Integrations',
-    icon: <Settings size={14} />,
+    icon: <Globe size={14} />,
   },
   {
     key: 'github',
     label: 'GitHub',
-    icon: <Folder size={14} />,
+    icon: <FolderGit size={14} />,
   },
   {
     key: 'notifications',
