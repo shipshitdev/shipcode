@@ -12,6 +12,7 @@ import type {
   ReviewQueries,
   SettingsQueries,
   SkillsQueries,
+  TerminalEventQueries,
   ThreadQueries,
   VerificationQueries,
 } from '@shipcode/db';
@@ -34,6 +35,7 @@ export interface Queries {
   dashboard: DashboardQueries;
   costs: CostsQueries;
   skills: SkillsQueries;
+  terminalEvents: TerminalEventQueries;
 }
 
 export interface IpcHandlerDeps {

@@ -19,6 +19,7 @@ import {
   migrateV16,
   migrateV17,
   migrateV18,
+  migrateV19,
 } from './schema';
 
 export { ActivityQueries } from './queries/activity';
@@ -34,6 +35,7 @@ export { ReviewQueries } from './queries/reviews';
 export { SettingsQueries } from './queries/settings';
 export type { SkillRow } from './queries/skills';
 export { SkillsQueries } from './queries/skills';
+export { TerminalEventQueries } from './queries/terminal-events';
 export { ThreadQueries } from './queries/threads';
 export { VerificationQueries } from './queries/verifications';
 export { transaction } from './utils';
@@ -67,6 +69,7 @@ export function getDatabase(dataDir: string): DatabaseSync {
   migrateV16(db);
   migrateV17(db);
   migrateV18(db);
+  migrateV19(db);
   return db;
 }
 

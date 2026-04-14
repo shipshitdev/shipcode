@@ -144,6 +144,37 @@ export interface Thread {
   totalCostUsd: number;
 }
 
+// === Terminal Types ===
+
+export type CanonicalTerminalEvent =
+  | { kind: 'text'; content: string }
+  | { kind: 'thinking'; content: string }
+  | { kind: 'tool_start'; name: string; summary: string }
+  | { kind: 'tool_end'; name: string; durationMs?: number; exitCode?: number }
+  | { kind: 'turn_start'; turn: number }
+  | {
+      kind: 'turn_end';
+      turn: number;
+      tokensUsed?: { prompt: number; completion: number };
+      costUsd?: number;
+    }
+  | { kind: 'lifecycle'; message: string }
+  | { kind: 'raw'; content: string }
+  | { kind: 'error'; message: string }
+  | { kind: 'action'; label: string; action: 'open-issue-detail' }
+  | {
+      kind: 'done';
+      totalTokens?: { prompt: number; completion: number };
+      totalCostUsd?: number;
+    };
+
+export interface TerminalEventRecord {
+  id: string;
+  threadId: string;
+  event: CanonicalTerminalEvent;
+  createdAt: string;
+}
+
 export type PipelineCheckpointPhase = 'executing' | 'verifying' | 'shipping';
 
 export interface PipelineCheckpoint {
@@ -264,6 +295,7 @@ export interface GitState {
 export interface AppSettings {
   theme: 'light' | 'dark' | 'system';
   fontStyle: 'dm-sans' | 'system' | 'serif';
+  fontSize: 12 | 13 | 14 | 15;
   defaultWorktreeEnabled: boolean;
   terminalScrollback: number;
   projectOpenTarget: ProjectOpenTarget;

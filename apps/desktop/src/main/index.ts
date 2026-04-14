@@ -54,6 +54,7 @@ import {
   ReviewQueries,
   SettingsQueries,
   SkillsQueries,
+  TerminalEventQueries,
   ThreadQueries,
   VerificationQueries,
 } from '@shipcode/db';
@@ -193,6 +194,7 @@ function createWindow() {
     dashboard: new DashboardQueries(db),
     costs: new CostsQueries(db),
     skills: new SkillsQueries(db),
+    terminalEvents: new TerminalEventQueries(db),
   };
 
   // Notification service — reads settings, writes notifications + activity,
@@ -210,6 +212,7 @@ function createWindow() {
   let onPipelineTerminal: (() => void) | undefined;
   const emitter = createElectronEmitter(mainWindow, {
     activity: queries.activity,
+    terminalEvents: queries.terminalEvents,
     threads: queries.threads,
     notifications: notificationService,
     onPipelineTerminal: () => onPipelineTerminal?.(),

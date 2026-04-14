@@ -20,6 +20,7 @@ describe('SettingsQueries', () => {
     const s = settings.get();
     expect(s.theme).toBe('system');
     expect(s.fontStyle).toBe('dm-sans');
+    expect(s.fontSize).toBe(13);
     expect(s.defaultWorktreeEnabled).toBe(true);
     expect(s.terminalScrollback).toBe(10000);
     expect(s.plannerModel).toBe('claude');
@@ -82,12 +83,14 @@ describe('SettingsQueries', () => {
     settings.set({
       theme: 'dark',
       fontStyle: 'system',
+      fontSize: 15,
       terminalScrollback: 5000,
       projectOpenTarget: 'finder',
     });
     const s = settings.get();
     expect(s.theme).toBe('dark');
     expect(s.fontStyle).toBe('system');
+    expect(s.fontSize).toBe(15);
     expect(s.terminalScrollback).toBe(5000);
     expect(s.projectOpenTarget).toBe('finder');
   });
@@ -113,6 +116,7 @@ describe('SettingsQueries', () => {
     settings.set({
       theme: 'light',
       fontStyle: 'serif',
+      fontSize: 12,
       defaultWorktreeEnabled: false,
       terminalScrollback: 20000,
       githubPollingEnabled: true,
@@ -125,6 +129,7 @@ describe('SettingsQueries', () => {
     const s = settings.get();
     expect(s.theme).toBe('light');
     expect(s.fontStyle).toBe('serif');
+    expect(s.fontSize).toBe(12);
     expect(s.defaultWorktreeEnabled).toBe(false);
     expect(typeof s.defaultWorktreeEnabled).toBe('boolean');
     expect(s.terminalScrollback).toBe(20000);
@@ -144,5 +149,9 @@ describe('SettingsQueries', () => {
     expect(() => settings.set({ projectOpenTarget: 'zed' as unknown as 'cursor' })).toThrow(
       /projectOpenTarget/,
     );
+  });
+
+  it('rejects invalid font sizes', () => {
+    expect(() => settings.set({ fontSize: 16 as 12 })).toThrow(/fontSize/);
   });
 });

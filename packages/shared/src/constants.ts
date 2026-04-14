@@ -25,6 +25,7 @@ export const DEFAULT_NOTIFICATION_EVENTS = {
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
   fontStyle: 'dm-sans',
+  fontSize: 13,
   defaultWorktreeEnabled: true,
   terminalScrollback: 10_000,
   projectOpenTarget: 'cursor',

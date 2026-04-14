@@ -1,5 +1,5 @@
-import type { TerminalEvent } from '@shipcode/agents';
 import type {
+  CanonicalTerminalEvent,
   GitHubIssueCacheRecord,
   IssuePipelineStatus,
   NotificationRecord,
@@ -7,6 +7,7 @@ import type {
   PlanReview,
   ShipCodePlan,
   SystemHealth,
+  TerminalEventRecord,
   VerificationResult,
 } from '@shipcode/shared';
 import { create } from 'zustand';
@@ -76,7 +77,7 @@ interface AppState {
   currentModels: Record<string, string>;
 
   // Canonical terminal event stream (normalized across all providers)
-  canonicalTerminalStream: Record<string, TerminalEvent[]>;
+  canonicalTerminalStream: Record<string, TerminalEventRecord[]>;
 
   // Notifications (in-app toaster + history)
   notifications: NotificationRecord[];
@@ -117,7 +118,12 @@ interface AppState {
   logTerminalEventForThread: (threadId: string, line: string) => void;
   touchLastActivity: (threadId: string) => void;
   setCurrentModel: (threadId: string, model: string) => void;
-  appendCanonicalEvent: (threadId: string, event: TerminalEvent) => void;
+  appendCanonicalEvent: (
+    threadId: string,
+    event: CanonicalTerminalEvent,
+    meta?: Pick<TerminalEventRecord, 'id' | 'createdAt'>,
+  ) => void;
+  hydrateCanonicalEvents: (threadId: string, events: TerminalEventRecord[]) => void;
   addNotification: (notification: NotificationRecord) => void;
   removeNotification: (id: string) => void;
   clearNotifications: () => void;
@@ -307,11 +313,31 @@ export const useAppStore = create<AppState>((set) => ({
       const next = prev.length >= 200 ? [...prev.slice(-199), line] : [...prev, line];
       return { terminalEventsByThread: { ...s.terminalEventsByThread, [threadId]: next } };
     }),
-  appendCanonicalEvent: (threadId, event) =>
+  appendCanonicalEvent: (threadId, event, meta) =>
     set((s) => {
       const prev = s.canonicalTerminalStream[threadId] ?? [];
-      const next = prev.length >= 2000 ? [...prev.slice(-1999), event] : [...prev, event];
-      return { canonicalTerminalStream: { ...s.canonicalTerminalStream, [threadId]: next } };
+      const record: TerminalEventRecord = {
+        id: meta?.id ?? `${threadId}:${Date.now()}:${prev.length}`,
+        threadId,
+        event,
+        createdAt: meta?.createdAt ?? new Date().toISOString(),
+      };
+      const merged = [...prev, record];
+      const deduped = Array.from(new Map(merged.map((entry) => [entry.id, entry])).values());
+      const trimmed = deduped.length >= 2000 ? deduped.slice(-2000) : deduped;
+      return { canonicalTerminalStream: { ...s.canonicalTerminalStream, [threadId]: trimmed } };
+    }),
+  hydrateCanonicalEvents: (threadId, events) =>
+    set((s) => {
+      const prev = s.canonicalTerminalStream[threadId] ?? [];
+      const merged = [...prev, ...events].sort((a, b) =>
+        a.createdAt === b.createdAt
+          ? a.id.localeCompare(b.id)
+          : a.createdAt.localeCompare(b.createdAt),
+      );
+      const deduped = Array.from(new Map(merged.map((entry) => [entry.id, entry])).values());
+      const trimmed = deduped.length >= 2000 ? deduped.slice(-2000) : deduped;
+      return { canonicalTerminalStream: { ...s.canonicalTerminalStream, [threadId]: trimmed } };
     }),
   touchLastActivity: (threadId) =>
     set((s) => ({ lastActivityByThread: { ...s.lastActivityByThread, [threadId]: Date.now() } })),

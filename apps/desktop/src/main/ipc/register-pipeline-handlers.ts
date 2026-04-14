@@ -22,6 +22,53 @@ export function registerPipelineHandlers({
     return queries.verifications.getLatest(threadId);
   });
 
+  ipcMain.handle(
+    'terminal:list',
+    (_event, { threadId, limit }: { threadId: string; limit?: number }) => {
+      const persisted = queries.terminalEvents.listByThread(threadId, limit);
+      if (persisted.length > 0) return persisted;
+
+      const fallback: import('@shipcode/shared').TerminalEventRecord[] = [];
+      const latestPlan = queries.plans.getLatest(threadId);
+      if (latestPlan?.rawOutput) {
+        fallback.push({
+          id: `fallback-plan-${latestPlan.id}`,
+          threadId,
+          createdAt: latestPlan.createdAt,
+          event: { kind: 'raw', content: latestPlan.rawOutput },
+        });
+      }
+
+      const latestReview = latestPlan ? queries.reviews.getByPlanId(latestPlan.id) : null;
+      if (latestReview?.rawOutput) {
+        fallback.push({
+          id: `fallback-review-${latestReview.id}`,
+          threadId,
+          createdAt: latestReview.createdAt,
+          event: { kind: 'raw', content: latestReview.rawOutput },
+        });
+      }
+
+      const latestVerification = queries.verifications.getLatest(threadId);
+      if (latestVerification?.rawOutput) {
+        fallback.push({
+          id: `fallback-verification-${latestVerification.id}`,
+          threadId,
+          createdAt: latestVerification.createdAt,
+          event: { kind: 'raw', content: latestVerification.rawOutput },
+        });
+      }
+
+      return fallback
+        .sort((a, b) =>
+          a.createdAt === b.createdAt
+            ? a.id.localeCompare(b.id)
+            : a.createdAt.localeCompare(b.createdAt),
+        )
+        .slice(-(limit ?? fallback.length));
+    },
+  );
+
   ipcMain.handle('pipeline:start', async (_event, { threadId }: { threadId: string }) => {
     const thread = queries.threads.getById(threadId);
     if (!thread) throw new Error(`Thread ${threadId} not found`);

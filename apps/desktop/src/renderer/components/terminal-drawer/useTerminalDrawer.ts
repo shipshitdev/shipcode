@@ -1,4 +1,4 @@
-import type { GitHubIssueCacheRecord } from '@shipcode/shared';
+import type { GitHubIssueCacheRecord, TerminalEventRecord } from '@shipcode/shared';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { Terminal } from '@xterm/xterm';
@@ -62,13 +62,16 @@ export function useTerminalDrawer() {
   const runningTabs = scopedIssues.filter((issue) =>
     AGENT_ACTIVE_STATUSES.has(issue.pipelineStatus),
   );
+  const scopedActiveIssue = activeIssue?.projectId === activeProjectId ? activeIssue : null;
   const explicitIssue =
     terminalThreadId != null
-      ? (scopedIssues.find((issue) => issue.threadId === terminalThreadId) ?? null)
+      ? (scopedIssues.find((issue) => issue.threadId === terminalThreadId) ??
+        (scopedActiveIssue?.threadId === terminalThreadId ? scopedActiveIssue : null))
       : null;
   const activeIssueMatch =
-    activeIssue?.projectId === activeProjectId && activeIssue.threadId
-      ? (scopedIssues.find((issue) => issue.threadId === activeIssue.threadId) ?? null)
+    scopedActiveIssue?.threadId != null
+      ? (scopedIssues.find((issue) => issue.threadId === scopedActiveIssue.threadId) ??
+        scopedActiveIssue)
       : null;
   const fallbackIssue =
     activeIssueMatch || runningTabs.find((issue) => issue.threadId != null) || null;
@@ -90,6 +93,7 @@ export function useTerminalDrawer() {
   const currentModel = useAppStore(
     (s) => (visibleTerminalThreadId ? s.currentModels[visibleTerminalThreadId] : null) ?? null,
   );
+  const hydrateCanonicalEvents = useAppStore((s) => s.hydrateCanonicalEvents);
   const setTerminalThread = useAppStore((s) => s.setTerminalThread);
   const selectIssue = useAppStore((s) => s.selectIssue);
   const [actionBanner, setActionBanner] = useState<{
@@ -264,6 +268,29 @@ export function useTerminalDrawer() {
   }, [scopedIssues, startSpinner, stopSpinner, visibleTerminalThreadId]);
 
   useEffect(() => {
+    if (!visibleTerminalThreadId) return;
+    if (canonicalStream.length > 0) return;
+
+    let cancelled = false;
+    void window.shipcode
+      .invoke<TerminalEventRecord[]>('terminal:list', {
+        threadId: visibleTerminalThreadId,
+        limit: 2000,
+      })
+      .then((events) => {
+        if (cancelled || !Array.isArray(events) || events.length === 0) return;
+        hydrateCanonicalEvents(visibleTerminalThreadId, events);
+      })
+      .catch(() => {
+        // Best-effort hydration only.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canonicalStream.length, hydrateCanonicalEvents, visibleTerminalThreadId]);
+
+  useEffect(() => {
     return () => {
       if (spinnerTimerRef.current) clearInterval(spinnerTimerRef.current);
     };
@@ -277,7 +304,7 @@ export function useTerminalDrawer() {
     if (newEvents.length === 0) return;
 
     if (canonicalWrittenRef.current === 0 && newEvents.length > 0 && !startedAtRef.current) {
-      startedAtRef.current = new Date().toLocaleTimeString('en-US', {
+      startedAtRef.current = new Date(newEvents[0].createdAt).toLocaleTimeString('en-US', {
         hour12: false,
         hour: '2-digit',
         minute: '2-digit',
@@ -285,7 +312,8 @@ export function useTerminalDrawer() {
       });
     }
 
-    for (const event of newEvents) {
+    for (const entry of newEvents) {
+      const event = entry.event;
       if (event.kind === 'action') {
         stopSpinner();
         if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);

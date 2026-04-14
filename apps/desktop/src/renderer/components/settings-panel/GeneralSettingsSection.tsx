@@ -65,6 +65,28 @@ export function GeneralSettingsSection({
             </SelectContent>
           </Select>
         </SettingsRow>
+        <SettingsRow
+          label="Font size"
+          htmlFor="font-size"
+          description="Adjust the base UI text size across the desktop app."
+        >
+          <Select
+            value={String(settings.fontSize)}
+            onValueChange={(value) =>
+              onUpdate({ fontSize: Number(value) as AppSettings['fontSize'] })
+            }
+          >
+            <SelectTrigger id="font-size" className="w-[180px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="12">Small</SelectItem>
+              <SelectItem value="13">Default</SelectItem>
+              <SelectItem value="14">Large</SelectItem>
+              <SelectItem value="15">Extra large</SelectItem>
+            </SelectContent>
+          </Select>
+        </SettingsRow>
       </section>
 
       <section className="mb-8">

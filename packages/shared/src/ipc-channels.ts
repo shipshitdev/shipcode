@@ -25,6 +25,7 @@ import type {
   ReviewRecord,
   ShipCodePlan,
   SystemHealth,
+  TerminalEventRecord,
   Thread,
   ThreadPanelData,
   VerificationRecord,
@@ -209,6 +210,7 @@ export interface IpcInvokeChannels {
 
   // Verification
   'verification:get': { args: { threadId: string }; result: VerificationRecord | null };
+  'terminal:list': { args: { threadId: string; limit?: number }; result: TerminalEventRecord[] };
 
   // Pipeline extensions
   'pipeline:start-autonomous': { args: { threadId: string }; result: undefined };

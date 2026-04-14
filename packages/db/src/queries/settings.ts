@@ -31,6 +31,7 @@ function readNullable(raw: string | undefined): string | null {
 
 const REASONING_EFFORTS = ['low', 'medium', 'high'] as const;
 const PROJECT_OPEN_TARGETS = ['cursor', 'finder', 'terminal', 'ghostty', 'vscode'] as const;
+const FONT_SIZES = [12, 13, 14, 15] as const;
 
 function isReasoningEffort(value: unknown): value is AppSettings['plannerReasoningEffort'] {
   return typeof value === 'string' && (REASONING_EFFORTS as readonly string[]).includes(value);
@@ -38,6 +39,10 @@ function isReasoningEffort(value: unknown): value is AppSettings['plannerReasoni
 
 function isProjectOpenTarget(value: unknown): value is AppSettings['projectOpenTarget'] {
   return typeof value === 'string' && (PROJECT_OPEN_TARGETS as readonly string[]).includes(value);
+}
+
+function isFontSize(value: unknown): value is AppSettings['fontSize'] {
+  return typeof value === 'number' && (FONT_SIZES as readonly number[]).includes(value);
 }
 
 export class SettingsQueries {
@@ -56,6 +61,9 @@ export class SettingsQueries {
     return {
       theme: (stored.theme as AppSettings['theme']) ?? DEFAULT_SETTINGS.theme,
       fontStyle: (stored.fontStyle as AppSettings['fontStyle']) ?? DEFAULT_SETTINGS.fontStyle,
+      fontSize: isFontSize(stored.fontSize ? parseInt(stored.fontSize, 10) : Number.NaN)
+        ? (parseInt(stored.fontSize!, 10) as AppSettings['fontSize'])
+        : DEFAULT_SETTINGS.fontSize,
       defaultWorktreeEnabled: parseBool(
         stored.defaultWorktreeEnabled,
         DEFAULT_SETTINGS.defaultWorktreeEnabled,
@@ -178,6 +186,11 @@ export class SettingsQueries {
     if ('projectOpenTarget' in patch && patch.projectOpenTarget != null) {
       if (!isProjectOpenTarget(patch.projectOpenTarget)) {
         throw new Error('projectOpenTarget must be cursor|finder|terminal|ghostty|vscode');
+      }
+    }
+    if ('fontSize' in patch && patch.fontSize != null) {
+      if (!isFontSize(patch.fontSize)) {
+        throw new Error('fontSize must be one of 12|13|14|15');
       }
     }
     if ('worktreeBranchFormat' in patch && patch.worktreeBranchFormat != null) {

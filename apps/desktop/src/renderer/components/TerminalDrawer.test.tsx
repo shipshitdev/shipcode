@@ -1,6 +1,6 @@
 import type { GitHubIssueCacheRecord } from '@shipcode/shared';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '../stores/app-store';
 import { TerminalDrawer } from './TerminalDrawer';
@@ -64,14 +64,20 @@ const makeIssue = (overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
 });
 
 describe('TerminalDrawer', () => {
+  const originalResizeObserver = globalThis.ResizeObserver;
+
   beforeEach(() => {
     class MockResizeObserver {
       observe() {}
       disconnect() {}
     }
-    vi.stubGlobal('ResizeObserver', MockResizeObserver);
+    Object.defineProperty(globalThis, 'ResizeObserver', {
+      configurable: true,
+      writable: true,
+      value: MockResizeObserver,
+    });
     (window as typeof window & { shipcode: typeof window.shipcode }).shipcode = {
-      invoke: vi.fn() as unknown as typeof window.shipcode.invoke,
+      invoke: vi.fn(async () => null) as unknown as typeof window.shipcode.invoke,
       on: vi.fn(() => () => {}) as unknown as typeof window.shipcode.on,
     };
 
@@ -90,7 +96,15 @@ describe('TerminalDrawer', () => {
 
   afterEach(() => {
     cleanup();
-    vi.unstubAllGlobals();
+    if (originalResizeObserver) {
+      Object.defineProperty(globalThis, 'ResizeObserver', {
+        configurable: true,
+        writable: true,
+        value: originalResizeObserver,
+      });
+      return;
+    }
+    Reflect.deleteProperty(globalThis, 'ResizeObserver');
   });
 
   it('shows an empty state when the visible terminal thread belongs to another project', () => {
@@ -98,7 +112,14 @@ describe('TerminalDrawer', () => {
       activeProjectId: 'project-2',
       terminalThreadId: 'thread-1',
       canonicalTerminalStream: {
-        'thread-1': [{ kind: 'text', content: 'foreign output' }],
+        'thread-1': [
+          {
+            id: 'event-1',
+            threadId: 'thread-1',
+            event: { kind: 'text', content: 'foreign output' },
+            createdAt: new Date().toISOString(),
+          },
+        ],
       },
       currentModels: { 'thread-1': 'gpt-5.4' },
     });
@@ -134,6 +155,73 @@ describe('TerminalDrawer', () => {
 
     expect(screen.getByText('Current project task')).toBeInTheDocument();
     expect(screen.queryByText('Foreign project task')).not.toBeInTheDocument();
+  });
+
+  it('uses the selected issue when the issue store has not been hydrated yet', () => {
+    useAppStore.setState({
+      activeProjectId: 'project-1',
+      activeIssue: makeIssue({
+        pipelineStatus: 'failed',
+        title: 'Selected but not yet hydrated',
+        threadId: 'thread-1',
+      }),
+      terminalThreadId: 'thread-1',
+      githubIssues: [],
+      canonicalTerminalStream: {
+        'thread-1': [
+          {
+            id: 'event-1',
+            threadId: 'thread-1',
+            event: { kind: 'text', content: 'historical output' },
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      },
+    });
+
+    render(<TerminalDrawer />);
+
+    expect(screen.getByText('Selected but not yet hydrated')).toBeInTheDocument();
+    expect(screen.queryByText('No issue selected for this project')).not.toBeInTheDocument();
+  });
+
+  it('hydrates persisted terminal history for the selected thread', async () => {
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'terminal:list') {
+        return [
+          {
+            id: 'persisted-1',
+            threadId: 'thread-1',
+            event: { kind: 'text', content: 'persisted output' },
+            createdAt: new Date().toISOString(),
+          },
+        ];
+      }
+      return null;
+    });
+
+    (window as typeof window & { shipcode: typeof window.shipcode }).shipcode = {
+      invoke: invoke as unknown as typeof window.shipcode.invoke,
+      on: vi.fn(() => () => {}) as unknown as typeof window.shipcode.on,
+    };
+
+    useAppStore.setState({
+      activeProjectId: 'project-1',
+      activeIssue: makeIssue({
+        pipelineStatus: 'failed',
+        title: 'Hydrated issue',
+        threadId: 'thread-1',
+      }),
+      terminalThreadId: 'thread-1',
+      githubIssues: [],
+      canonicalTerminalStream: {},
+    });
+
+    render(<TerminalDrawer />);
+
+    await waitFor(() => {
+      expect(useAppStore.getState().canonicalTerminalStream['thread-1']).toHaveLength(1);
+    });
   });
 
   it('filters the terminal dropdown to running issues in the selected project only', async () => {

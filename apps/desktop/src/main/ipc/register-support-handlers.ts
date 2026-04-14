@@ -137,9 +137,10 @@ export function registerSupportHandlers({
   const normalizers = new Map<string, ClaudeNormalizer | CodexNormalizer>();
 
   function emitTerminalEvent(threadId: string, event: TerminalEvent) {
+    const record = queries.terminalEvents.create(threadId, event);
     if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
     try {
-      mainWindow.webContents.send('terminal:event', { threadId, event });
+      mainWindow.webContents.send('terminal:event', record);
     } catch {
       // webContents destroyed between check and send
     }
@@ -196,6 +197,22 @@ export function registerSupportHandlers({
       });
     } catch {
       // webContents destroyed between check and send
+    }
+
+    if ((state === 'running' || state === 'exited') && proc?.threadId) {
+      const ts = new Date().toLocaleTimeString('en-US', {
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      });
+      const agentColor =
+        type === 'claude' ? '\x1b[36m' : type === 'codex' ? '\x1b[33m' : '\x1b[35m';
+      const exitColor = state === 'exited' ? '\x1b[2m' : '';
+      emitTerminalEvent(proc.threadId, {
+        kind: 'lifecycle',
+        message: `\x1b[2m[${ts}]\x1b[0m ${exitColor}${agentColor}${type}\x1b[0m${exitColor} process ${state === 'running' ? 'started' : 'exited'}\x1b[0m`,
+      });
     }
   });
 }

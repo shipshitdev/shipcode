@@ -1,4 +1,4 @@
-import type { ActivityQueries, ThreadQueries } from '@shipcode/db';
+import type { ActivityQueries, TerminalEventQueries, ThreadQueries } from '@shipcode/db';
 import type { PipelineEmitter, PipelineEvent } from '@shipcode/pipeline';
 import type { ActivityKind, PipelinePhase, Thread } from '@shipcode/shared';
 import type { BrowserWindow } from 'electron';
@@ -7,9 +7,19 @@ import type { NotificationService } from './notification-service';
 
 interface EmitterDeps {
   activity: ActivityQueries;
+  terminalEvents: TerminalEventQueries;
   threads: ThreadQueries;
   notifications: NotificationService;
   onPipelineTerminal?: () => void;
+}
+
+function formatClock(isoLike: string): string {
+  return new Date(isoLike).toLocaleTimeString('en-US', {
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
 }
 
 // Phase transitions that map to human-visible activity entries.
@@ -68,6 +78,21 @@ export function createElectronEmitter(
   mainWindow: BrowserWindow,
   deps: EmitterDeps,
 ): PipelineEmitter {
+  function emitCanonicalTerminalEvent(
+    threadId: string,
+    event: import('@shipcode/shared').CanonicalTerminalEvent,
+  ) {
+    const record = deps.terminalEvents.create(threadId, event);
+    if (!mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+      try {
+        mainWindow.webContents.send('terminal:event', record);
+      } catch {
+        /* destroyed between check and send */
+      }
+    }
+    return record;
+  }
+
   function writeEventLog(event: PipelineEvent) {
     switch (event.type) {
       case 'pipeline:phase':
@@ -242,6 +267,20 @@ export function createElectronEmitter(
         return;
       }
 
+      if (event.type === 'terminal:event') {
+        try {
+          writeEventLog(event);
+        } catch (err) {
+          log.error('[pipeline-bridge] event log write failed:', err);
+        }
+        try {
+          emitCanonicalTerminalEvent(event.threadId, event.event);
+        } catch (err) {
+          log.error('[pipeline-bridge] terminal event write failed:', err);
+        }
+        return;
+      }
+
       // 1. Forward to renderer (always — preserves existing behaviour).
       if (!mainWindow.isDestroyed()) {
         mainWindow.webContents.send(event.type, event);
@@ -254,6 +293,53 @@ export function createElectronEmitter(
         writeEventLog(event);
       } catch (err) {
         log.error('[pipeline-bridge] event log write failed:', err);
+      }
+
+      if (event.type === 'pipeline:phase') {
+        try {
+          const record = emitCanonicalTerminalEvent(event.threadId, {
+            kind: 'lifecycle',
+            message: `\x1b[2m[${formatClock(new Date().toISOString())}]\x1b[0m phase: \x1b[36m${event.phase}\x1b[0m`,
+          });
+          if (event.phase === 'planning') {
+            logEvent('terminal:phase-persisted', {
+              threadId: event.threadId,
+              createdAt: record.createdAt,
+            });
+          }
+        } catch (err) {
+          log.error('[pipeline-bridge] phase terminal write failed:', err);
+        }
+      }
+
+      if (event.type === 'pipeline:model-resolved') {
+        try {
+          const isOpenRouter = String(event.requestedModel ?? '').startsWith('openrouter');
+          const isCodex = event.requestedModel === 'codex';
+          const displayName = isOpenRouter
+            ? (event.resolvedModel ?? null)
+            : (event.requestedModel ?? event.resolvedModel ?? null);
+          if (displayName) {
+            const tokenStr =
+              event.tokensUsed != null
+                ? ` \x1b[2m(${event.tokensUsed.prompt}+${event.tokensUsed.completion} tok)\x1b[0m`
+                : '';
+            let costStr = '';
+            if (event.costUsd && event.costUsd > 0) {
+              costStr = ` \x1b[2m${isOpenRouter ? '$' : '~$'}${event.costUsd.toFixed(4)}\x1b[0m`;
+            } else if (isCodex && event.tokensUsed) {
+              const estimated =
+                (event.tokensUsed.prompt * 62.5 + event.tokensUsed.completion * 375) / 1_000_000;
+              costStr = ` \x1b[2m~$${estimated.toFixed(4)}\x1b[0m`;
+            }
+            emitCanonicalTerminalEvent(event.threadId, {
+              kind: 'lifecycle',
+              message: `\x1b[2m[${formatClock(new Date().toISOString())}]\x1b[0m \x1b[35mmodel:\x1b[0m ${displayName}${tokenStr}${costStr}`,
+            });
+          }
+        } catch (err) {
+          log.error('[pipeline-bridge] model terminal write failed:', err);
+        }
       }
 
       // 2. Persist to activity_log.
