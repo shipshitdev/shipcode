@@ -2,6 +2,7 @@ import {
   type AppSettings,
   type DashboardStats,
   filterAttentionRequiredNotifications,
+  type IntegrationStatus,
   type NotificationRecord,
   type Project,
 } from '@shipcode/shared';
@@ -19,6 +20,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  ExternalLink,
   Folder,
   Inbox,
   LayoutGrid,
@@ -76,6 +78,12 @@ export function ProjectSidebar() {
     staleTime: STABLE_APP_STATE_STALE_TIME,
   });
   const sortOrder: SortOrder = settings?.projectSortOrder ?? 'recent';
+
+  const { data: integrations } = useQuery<IntegrationStatus>({
+    queryKey: ['integrations'],
+    queryFn: () => window.shipcode.invoke('integrations:check'),
+    staleTime: 30_000,
+  });
 
   const { data: stats } = useQuery<DashboardStats>({
     queryKey: ['dashboard', 'stats'],
@@ -174,6 +182,19 @@ export function ProjectSidebar() {
     },
     onError: (error: Error) => {
       window.alert(error.message || 'Failed to relink project folder');
+    },
+  });
+
+  const openProjectPath = useMutation({
+    mutationFn: ({
+      projectId,
+      target,
+    }: {
+      projectId: string;
+      target: 'default' | AppSettings['projectOpenTarget'];
+    }) => window.shipcode.invoke('project:open-path', { projectId, target }),
+    onError: (error: Error) => {
+      window.alert(error.message || 'Failed to open project folder');
     },
   });
 
@@ -409,6 +430,20 @@ export function ProjectSidebar() {
               )}
             </Button>
 
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="absolute right-8 top-1/2 -translate-y-1/2 text-muted opacity-0 group-hover:opacity-100 focus:opacity-100"
+              aria-label={`Open ${project.name} folder`}
+              disabled={project.pathExists === false}
+              onClick={(event) => {
+                event.stopPropagation();
+                openProjectPath.mutate({ projectId: project.id, target: 'default' });
+              }}
+            >
+              <ExternalLink size={14} />
+            </Button>
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -429,6 +464,19 @@ export function ProjectSidebar() {
                   }
                 }}
               >
+                {(['cursor', 'finder', 'terminal', 'ghostty', 'vscode'] as const).map((target) => {
+                  const app = integrations?.desktopApps?.[target];
+                  return (
+                    <DropdownMenuItem
+                      key={target}
+                      disabled={!app?.available || project.pathExists === false}
+                      onSelect={() => openProjectPath.mutate({ projectId: project.id, target })}
+                    >
+                      <ExternalLink size={12} /> Open in {app?.label ?? target}
+                    </DropdownMenuItem>
+                  );
+                })}
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onSelect={() => openProjectSettingsModal(project.id)}>
                   <Settings size={12} /> Settings
                 </DropdownMenuItem>

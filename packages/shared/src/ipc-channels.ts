@@ -20,6 +20,7 @@ import type {
   PlanRecord,
   PlanReview,
   Project,
+  ProjectOpenTarget,
   RecentTask,
   ReviewRecord,
   ShipCodePlan,
@@ -47,6 +48,10 @@ export interface IpcInvokeChannels {
   'project:set-github-project-url': {
     args: { projectId: string; url: string | null };
     result: Project;
+  };
+  'project:open-path': {
+    args: { projectId: string; target: ProjectOpenTarget | 'default' };
+    result: undefined;
   };
   'project:set-model-overrides': {
     args: {

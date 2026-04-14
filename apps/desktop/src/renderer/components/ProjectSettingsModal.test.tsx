@@ -138,6 +138,43 @@ describe('ProjectSettingsModal', () => {
         },
       ],
     },
+    desktopApps: {
+      cursor: {
+        key: 'cursor',
+        label: 'Cursor',
+        available: true,
+        path: '/Applications/Cursor.app',
+        error: null,
+      },
+      finder: {
+        key: 'finder',
+        label: 'Finder',
+        available: true,
+        path: '/System/Library/CoreServices/Finder.app',
+        error: null,
+      },
+      terminal: {
+        key: 'terminal',
+        label: 'Terminal',
+        available: true,
+        path: '/System/Applications/Utilities/Terminal.app',
+        error: null,
+      },
+      ghostty: {
+        key: 'ghostty',
+        label: 'Ghostty',
+        available: false,
+        path: null,
+        error: 'Ghostty is not installed',
+      },
+      vscode: {
+        key: 'vscode',
+        label: 'Visual Studio Code',
+        available: true,
+        path: '/Applications/Visual Studio Code.app',
+        error: null,
+      },
+    },
   };
 
   const contextFiles: ContextFileInfo[] = [

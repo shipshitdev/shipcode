@@ -104,6 +104,8 @@ export function SettingsPanel() {
           <IntegrationsSettingsSection
             integrationStatus={integrationStatus}
             integrationsFetching={integrationsFetching}
+            settings={settings}
+            onUpdate={update}
             onRefetch={() => {
               void refetchIntegrations();
             }}

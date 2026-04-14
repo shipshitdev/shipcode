@@ -2,12 +2,18 @@ import { exec } from 'node:child_process';
 import fs from 'node:fs';
 import { promisify } from 'node:util';
 import {
+  checkDesktopApps,
   checkIntegrationStatus,
   checkSystemHealthWithAuth,
   validateOpenRouterModel,
 } from '@shipcode/agents';
 import { GitService, WorktreeManager } from '@shipcode/git';
-import type { AppSettings, ShipCodePlan } from '@shipcode/shared';
+import type {
+  AppSettings,
+  DesktopAppHealthMap,
+  ProjectOpenTarget,
+  ShipCodePlan,
+} from '@shipcode/shared';
 import { clampError, validateGithubProjectUrl } from '@shipcode/shared';
 import { dialog, shell } from 'electron';
 import log from '../logger.service';
@@ -16,6 +22,61 @@ import { enrichProjectPath, enrichProjectPaths } from './helpers';
 import type { IpcHandlerDeps } from './types';
 
 const execAsync = promisify(exec);
+const PROJECT_OPEN_TARGET_ORDER: ProjectOpenTarget[] = [
+  'cursor',
+  'finder',
+  'terminal',
+  'ghostty',
+  'vscode',
+];
+
+const PROJECT_OPEN_APP_NAMES: Record<ProjectOpenTarget, string> = {
+  cursor: 'Cursor',
+  finder: 'Finder',
+  terminal: 'Terminal',
+  ghostty: 'Ghostty',
+  vscode: 'Visual Studio Code',
+};
+
+function resolveProjectOpenTarget(
+  settings: AppSettings,
+  desktopApps: DesktopAppHealthMap,
+  requested: ProjectOpenTarget | 'default',
+): ProjectOpenTarget {
+  if (requested !== 'default') {
+    return requested;
+  }
+
+  if (desktopApps[settings.projectOpenTarget].available) {
+    return settings.projectOpenTarget;
+  }
+
+  const fallback = PROJECT_OPEN_TARGET_ORDER.find((target) => desktopApps[target].available);
+  if (!fallback) {
+    throw new Error('No supported project opener app is available');
+  }
+  return fallback;
+}
+
+async function openProjectPath(projectPath: string, target: ProjectOpenTarget): Promise<void> {
+  if (process.platform !== 'darwin') {
+    throw new Error('Project opener actions are currently supported on macOS only');
+  }
+
+  if (target === 'finder') {
+    const openError = await shell.openPath(projectPath);
+    if (openError) throw new Error(openError);
+    return;
+  }
+
+  const appName = PROJECT_OPEN_APP_NAMES[target];
+  await execAsync(
+    `open -a "${appName.replace(/"/g, '\\"')}" "${projectPath.replace(/"/g, '\\"')}"`,
+    {
+      timeout: 10_000,
+    },
+  );
+}
 
 export function registerProjectHandlers({
   ipcMain,
@@ -321,6 +382,29 @@ export function registerProjectHandlers({
   ipcMain.handle('project:get', (_event, { projectId }: { projectId: string }) => {
     return enrichProjectPath(queries.projects.getById(projectId));
   });
+
+  ipcMain.handle(
+    'project:open-path',
+    async (
+      _event,
+      { projectId, target }: { projectId: string; target: ProjectOpenTarget | 'default' },
+    ) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+      if (!fs.existsSync(project.path)) {
+        throw new Error(`Project folder does not exist: ${project.path}`);
+      }
+
+      const desktopApps = await checkDesktopApps();
+      const resolvedTarget = resolveProjectOpenTarget(queries.settings.get(), desktopApps, target);
+      const app = desktopApps[resolvedTarget];
+      if (!app.available) {
+        throw new Error(app.error ?? `${app.label} is not available`);
+      }
+
+      await openProjectPath(project.path, resolvedTarget);
+    },
+  );
 
   ipcMain.handle(
     'git:list-branches',

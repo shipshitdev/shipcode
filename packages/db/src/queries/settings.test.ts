@@ -19,6 +19,7 @@ describe('SettingsQueries', () => {
   it('get() returns defaults when db is empty', () => {
     const s = settings.get();
     expect(s.theme).toBe('system');
+    expect(s.fontStyle).toBe('dm-sans');
     expect(s.defaultWorktreeEnabled).toBe(true);
     expect(s.terminalScrollback).toBe(10000);
     expect(s.plannerModel).toBe('claude');
@@ -29,6 +30,7 @@ describe('SettingsQueries', () => {
     expect(s.autoPickupEnabled).toBe(false);
     expect(s.onboardingVersion).toBe(0);
     expect(s.worktreeRoot).toBeNull();
+    expect(s.projectOpenTarget).toBe('cursor');
   });
 
   describe('worktreeRoot', () => {
@@ -77,10 +79,17 @@ describe('SettingsQueries', () => {
   });
 
   it('set() persists values', () => {
-    settings.set({ theme: 'dark', terminalScrollback: 5000 });
+    settings.set({
+      theme: 'dark',
+      fontStyle: 'system',
+      terminalScrollback: 5000,
+      projectOpenTarget: 'finder',
+    });
     const s = settings.get();
     expect(s.theme).toBe('dark');
+    expect(s.fontStyle).toBe('system');
     expect(s.terminalScrollback).toBe(5000);
+    expect(s.projectOpenTarget).toBe('finder');
   });
 
   it('set() serializes booleans as string true/false', () => {
@@ -103,6 +112,7 @@ describe('SettingsQueries', () => {
   it('round-trip: set then get returns correct types', () => {
     settings.set({
       theme: 'light',
+      fontStyle: 'serif',
       defaultWorktreeEnabled: false,
       terminalScrollback: 20000,
       githubPollingEnabled: true,
@@ -110,9 +120,11 @@ describe('SettingsQueries', () => {
       githubBotUsername: 'bot',
       autoPickupEnabled: true,
       onboardingVersion: 3,
+      projectOpenTarget: 'vscode',
     });
     const s = settings.get();
     expect(s.theme).toBe('light');
+    expect(s.fontStyle).toBe('serif');
     expect(s.defaultWorktreeEnabled).toBe(false);
     expect(typeof s.defaultWorktreeEnabled).toBe('boolean');
     expect(s.terminalScrollback).toBe(20000);
@@ -125,5 +137,12 @@ describe('SettingsQueries', () => {
     expect(s.autoPickupEnabled).toBe(true);
     expect(s.onboardingVersion).toBe(3);
     expect(typeof s.onboardingVersion).toBe('number');
+    expect(s.projectOpenTarget).toBe('vscode');
+  });
+
+  it('rejects invalid project opener values', () => {
+    expect(() => settings.set({ projectOpenTarget: 'zed' as unknown as 'cursor' })).toThrow(
+      /projectOpenTarget/,
+    );
   });
 });

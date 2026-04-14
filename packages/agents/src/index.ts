@@ -8,6 +8,7 @@ export type { OpenRouterAuthStatus } from './health-check';
 export {
   checkClaudeAuth,
   checkCodexAuth,
+  checkDesktopApps,
   checkGhAuth,
   checkIntegrationStatus,
   checkOpenRouterAuth,

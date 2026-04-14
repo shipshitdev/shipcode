@@ -1,5 +1,6 @@
 import type { ActivePipelineSummary } from '@shipcode/shared';
 import { resolveExecutorModelForIssue } from '@shipcode/shared';
+import { logEvent } from '../logger.service';
 import {
   resolveIssuePhaseModels,
   resolveProjectPhaseModels,
@@ -48,6 +49,15 @@ export function registerPipelineHandlers({
       verifierReasoningEffort: phaseModels.verifierReasoningEffort,
       baseBranch: project.defaultBranch,
     });
+    logEvent('pipeline:start-context', {
+      threadId,
+      source: 'pipeline:start',
+      projectPath: project.path,
+      githubIssueNumber: thread.githubIssueNumber ?? null,
+      autonomous: false,
+      requireApproval: settings.requireApproval,
+      reviewRound: thread.reviewRound,
+    });
 
     queries.plans.supersedeAll(threadId);
     await pipeline.startPlanGeneration(threadId, thread.prompt, project.path, null);
@@ -72,6 +82,15 @@ export function registerPipelineHandlers({
           ? queries.githubIssues.getByNumber(project.id, thread.githubIssueNumber)
           : null;
         pipeline.rehydrateContext(threadId, project.path, issue?.title);
+        logEvent('pipeline:start-context', {
+          threadId,
+          source: 'pipeline:approve',
+          projectPath: project.path,
+          githubIssueNumber: thread.githubIssueNumber ?? null,
+          autonomous: thread.autonomous,
+          requireApproval: queries.settings.get().requireApproval,
+          reviewRound: thread.reviewRound,
+        });
       }
 
       notificationService.dismissByThread(threadId);
@@ -182,6 +201,15 @@ export function registerPipelineHandlers({
     }
 
     pipeline.rehydrateContext(threadId, project.path, issue?.title);
+    logEvent('pipeline:start-context', {
+      threadId,
+      source: 'pipeline:retry',
+      projectPath: project.path,
+      githubIssueNumber: thread.githubIssueNumber ?? null,
+      autonomous: thread.autonomous,
+      requireApproval: settings.requireApproval,
+      reviewRound: thread.reviewRound,
+    });
 
     const latestPlan = queries.plans.getLatest(threadId);
     const structured = latestPlan?.structured ?? tryParsePlan(latestPlan?.rawOutput ?? '');
@@ -217,10 +245,23 @@ export function registerPipelineHandlers({
   });
 
   ipcMain.handle('pipeline:skip-review', async (_event, { threadId }: { threadId: string }) => {
+    const thread = queries.threads.getById(threadId);
     const latestPlan = queries.plans.getLatest(threadId);
     if (latestPlan) {
       queries.plans.updateStatus(latestPlan.id, 'awaiting_approval');
     }
+    logEvent('pipeline:approval-gate', {
+      threadId,
+      outcome: 'awaiting_approval',
+      reviewDecision: 'approve',
+      planVersion: latestPlan?.version ?? null,
+      requireApproval: queries.settings.get().requireApproval,
+      autonomous: thread?.autonomous ?? false,
+      reviewRound: thread?.reviewRound ?? 0,
+      maxReviewRounds: queries.settings.get().maxReviewRounds,
+      hasCriticalOrMajor: false,
+      reasons: ['manualSkipReview'],
+    });
     transitionThreadPhase(mainWindow, queries, emitter, {
       threadId,
       phase: 'awaiting_approval',
