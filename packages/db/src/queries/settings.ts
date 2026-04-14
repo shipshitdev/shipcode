@@ -30,9 +30,14 @@ function readNullable(raw: string | undefined): string | null {
 }
 
 const REASONING_EFFORTS = ['low', 'medium', 'high'] as const;
+const PROJECT_OPEN_TARGETS = ['cursor', 'finder', 'terminal', 'ghostty', 'vscode'] as const;
 
 function isReasoningEffort(value: unknown): value is AppSettings['plannerReasoningEffort'] {
   return typeof value === 'string' && (REASONING_EFFORTS as readonly string[]).includes(value);
+}
+
+function isProjectOpenTarget(value: unknown): value is AppSettings['projectOpenTarget'] {
+  return typeof value === 'string' && (PROJECT_OPEN_TARGETS as readonly string[]).includes(value);
 }
 
 export class SettingsQueries {
@@ -50,6 +55,7 @@ export class SettingsQueries {
 
     return {
       theme: (stored.theme as AppSettings['theme']) ?? DEFAULT_SETTINGS.theme,
+      fontStyle: (stored.fontStyle as AppSettings['fontStyle']) ?? DEFAULT_SETTINGS.fontStyle,
       defaultWorktreeEnabled: parseBool(
         stored.defaultWorktreeEnabled,
         DEFAULT_SETTINGS.defaultWorktreeEnabled,
@@ -57,6 +63,9 @@ export class SettingsQueries {
       terminalScrollback: stored.terminalScrollback
         ? parseInt(stored.terminalScrollback, 10)
         : DEFAULT_SETTINGS.terminalScrollback,
+      projectOpenTarget: isProjectOpenTarget(stored.projectOpenTarget)
+        ? stored.projectOpenTarget
+        : DEFAULT_SETTINGS.projectOpenTarget,
       plannerModel:
         (stored.plannerModel as AppSettings['plannerModel']) ?? DEFAULT_SETTINGS.plannerModel,
       reviewerModel:
@@ -117,7 +126,6 @@ export class SettingsQueries {
       notificationEvents: parseNotificationEvents(stored.notificationEvents),
       verifierModel:
         (stored.verifierModel as AppSettings['verifierModel']) ?? DEFAULT_SETTINGS.verifierModel,
-      openrouterEnabled: parseBool(stored.openrouterEnabled, DEFAULT_SETTINGS.openrouterEnabled),
       openrouterPlannerModel: readNullable(stored.openrouterPlannerModel),
       openrouterReviewerModel: readNullable(stored.openrouterReviewerModel),
       openrouterVerifierModel: readNullable(stored.openrouterVerifierModel),
@@ -165,6 +173,11 @@ export class SettingsQueries {
     ] as const) {
       if (key in patch && patch[key] != null) {
         if (!isReasoningEffort(patch[key])) throw new Error(`${key} must be low|medium|high`);
+      }
+    }
+    if ('projectOpenTarget' in patch && patch.projectOpenTarget != null) {
+      if (!isProjectOpenTarget(patch.projectOpenTarget)) {
+        throw new Error('projectOpenTarget must be cursor|finder|terminal|ghostty|vscode');
       }
     }
     if ('worktreeBranchFormat' in patch && patch.worktreeBranchFormat != null) {

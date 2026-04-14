@@ -150,6 +150,7 @@ export function compareIssues(
 export function rowToneFor(status: IssuePipelineStatus): RowTone {
   if (status === 'failed') return 'danger';
   if (status === 'awaiting_approval') return 'warning';
+  if (status === 'completed') return 'done';
   if (ACTIVE_STATUSES.includes(status)) return 'agent';
   return 'default';
 }

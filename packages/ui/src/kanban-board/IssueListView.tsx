@@ -23,6 +23,7 @@ interface DraggableListRowProps {
   selectedIssueNumber?: number;
   activeId: string | null;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
+  onOpenPullRequest?: (url: string) => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
 }
 
@@ -31,6 +32,7 @@ function DraggableListRow({
   selectedIssueNumber,
   activeId,
   onIssueClick,
+  onOpenPullRequest,
   onArchiveIssue,
 }: DraggableListRowProps) {
   const isDraggable = DRAGGABLE_STATUSES.includes(issue.pipelineStatus);
@@ -54,6 +56,10 @@ function DraggableListRow({
           (isSelected
             ? 'border-transparent bg-accent/10 text-primary'
             : 'border-transparent text-primary hover:bg-secondary'),
+        tone === 'done' &&
+          (isSelected
+            ? 'border-done bg-done/[0.09] text-primary'
+            : 'border-done/55 bg-done/[0.045] text-primary hover:bg-done/[0.06]'),
         tone === 'agent' &&
           (isSelected
             ? 'border-agent bg-agent/[0.08] text-primary'
@@ -67,7 +73,6 @@ function DraggableListRow({
             ? 'border-warning bg-warning/[0.08] text-primary'
             : 'border-warning/60 bg-warning/[0.03] text-primary hover:bg-warning/[0.06]'),
         isDragging && 'opacity-40',
-        !isDragging && issue.pipelineStatus === 'completed' && 'opacity-60',
         isDraggable ? 'cursor-grab' : 'cursor-pointer',
         activeId && activeId !== issue.id && 'pointer-events-none',
       )}
@@ -83,6 +88,7 @@ function DraggableListRow({
         <span
           className={cn(
             'h-2 w-2 shrink-0 rounded-full',
+            tone === 'done' && 'bg-done',
             tone === 'danger' && 'bg-danger',
             tone === 'warning' && 'bg-warning',
             tone === 'default' &&
@@ -92,6 +98,21 @@ function DraggableListRow({
       )}
       <span className="shrink-0 font-mono text-xs text-secondary">#{issue.issueNumber}</span>
       <span className="flex-1 truncate">{issue.title}</span>
+      {issue.linkedPrNumber && issue.linkedPrUrl && onOpenPullRequest ? (
+        <Button
+          variant="ghost"
+          size="xs"
+          className="h-5 shrink-0 px-1.5 text-[10px] font-medium text-done hover:bg-done/10 hover:text-done"
+          title="Open pull request on GitHub"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenPullRequest(issue.linkedPrUrl as string);
+          }}
+        >
+          PR #{issue.linkedPrNumber}
+        </Button>
+      ) : null}
       <span className="flex shrink-0 items-center gap-1">
         <IssueExternalBlockers issue={issue} />
       </span>
@@ -126,6 +147,7 @@ interface ListSectionBlockProps {
   selectedIssueNumber?: number;
   activeId: string | null;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
+  onOpenPullRequest?: (url: string) => void;
 }
 
 function ListSectionBlock({
@@ -135,6 +157,7 @@ function ListSectionBlock({
   selectedIssueNumber,
   activeId,
   onIssueClick,
+  onOpenPullRequest,
 }: ListSectionBlockProps) {
   const count = issues.length;
   const empty = count === 0;
@@ -182,6 +205,7 @@ function ListSectionBlock({
               selectedIssueNumber={selectedIssueNumber}
               activeId={activeId}
               onIssueClick={onIssueClick}
+              onOpenPullRequest={onOpenPullRequest}
             />
           ))}
         </div>
@@ -216,6 +240,7 @@ interface IssueListViewProps {
   selectedIssueNumber?: number;
   activeId: string | null;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
+  onOpenPullRequest?: (url: string) => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
   onArchiveAllDone?: () => void;
 }
@@ -225,6 +250,7 @@ export function IssueListView({
   selectedIssueNumber,
   activeId,
   onIssueClick,
+  onOpenPullRequest,
   onArchiveIssue,
   onArchiveAllDone,
 }: IssueListViewProps) {
@@ -289,6 +315,7 @@ export function IssueListView({
                         selectedIssueNumber={selectedIssueNumber}
                         activeId={activeId}
                         onIssueClick={onIssueClick}
+                        onOpenPullRequest={onOpenPullRequest}
                       />
                     ))}
                   </div>
@@ -301,6 +328,7 @@ export function IssueListView({
                         selectedIssueNumber={selectedIssueNumber}
                         activeId={activeId}
                         onIssueClick={onIssueClick}
+                        onOpenPullRequest={onOpenPullRequest}
                         onArchiveIssue={column.key === 'done' ? onArchiveIssue : undefined}
                       />
                     ))}

@@ -59,6 +59,7 @@ import {
 } from '@shipcode/db';
 import { createPipeline } from '@shipcode/pipeline';
 import {
+  clampError,
   HEARTBEAT_TIMEOUT_MS,
   resolveExecutorModelForIssue,
   resolvePhaseModelForIssue,
@@ -66,6 +67,7 @@ import {
   resolvePhaseReasoningEffort,
 } from '@shipcode/shared';
 import { registerIpcHandlers } from './ipc';
+import { transitionThreadPhase } from './ipc/helpers';
 import { NotificationService } from './notification-service';
 import { createElectronEmitter } from './pipeline-bridge';
 
@@ -73,6 +75,44 @@ let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
 let pipeline: ReturnType<typeof createPipeline> | null = null;
 let confirmQuit = false;
+
+function loadLocalEnvFiles() {
+  const desktopRoot = path.resolve(__dirname, '..', '..');
+  const repoRoot = path.resolve(desktopRoot, '..', '..');
+  const candidates = [
+    path.join(repoRoot, '.env'),
+    path.join(repoRoot, '.env.local'),
+    path.join(desktopRoot, '.env'),
+    path.join(desktopRoot, '.env.local'),
+  ];
+
+  for (const filePath of candidates) {
+    if (!fs.existsSync(filePath)) continue;
+    const raw = fs.readFileSync(filePath, 'utf8');
+
+    for (const line of raw.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+
+      const normalized = trimmed.startsWith('export ') ? trimmed.slice(7).trim() : trimmed;
+      const eqIndex = normalized.indexOf('=');
+      if (eqIndex <= 0) continue;
+
+      const key = normalized.slice(0, eqIndex).trim();
+      if (!key || process.env[key] !== undefined) continue;
+
+      let value = normalized.slice(eqIndex + 1).trim();
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+
+      process.env[key] = value;
+    }
+  }
+}
 
 function requireMainWindow(): BrowserWindow {
   if (!mainWindow) throw new Error('Main window not initialized');
@@ -106,6 +146,7 @@ function resolveIssuePhaseModels(
 }
 
 const DIST = path.join(__dirname, '..');
+loadLocalEnvFiles();
 const RENDERER_URL = process.env.VITE_DEV_SERVER_URL;
 const RENDERER_HTML = path.join(DIST, 'index.html');
 
@@ -259,14 +300,11 @@ function createWindow() {
           },
         )
         .catch((err) => {
-          queries.githubIssues.updatePipelineStatus(next.id, 'queued');
-          queries.threads.updateStatus(thread.id, 'failed');
-          if (!win.isDestroyed()) {
-            win.webContents.send('github:issues-updated', {
-              projectId: next.projectId,
-              issues: queries.githubIssues.list(next.projectId),
-            });
-          }
+          transitionThreadPhase(win, queries, emitter, {
+            threadId: thread.id,
+            phase: 'failed',
+            errorMessage: clampError(err),
+          });
           log.error('[queue] auto-promote failed:', err);
         });
     } catch (err) {
@@ -289,6 +327,7 @@ function createWindow() {
     queries,
     processManager,
     activePipeline,
+    emitter,
     notificationService,
   );
 
@@ -300,10 +339,11 @@ function createWindow() {
       for (const thread of queries.threads.getStuck(HEARTBEAT_TIMEOUT_MS)) {
         if (activeIds.has(thread.id)) continue;
         const errorMsg = 'Pipeline timed out — process was likely interrupted by an app refresh.';
-        queries.threads.updateStatus(thread.id, 'failed', errorMsg);
-        const issue = queries.githubIssues.getByThreadId(thread.id);
-        if (issue) queries.githubIssues.updatePipelineStatus(issue.id, 'failed');
-        emitter.emit({ type: 'pipeline:phase', threadId: thread.id, phase: 'failed' });
+        transitionThreadPhase(requireMainWindow(), queries, emitter, {
+          threadId: thread.id,
+          phase: 'failed',
+          errorMessage: errorMsg,
+        });
         log.info(`[watchdog] reset stuck thread ${thread.id} → failed`);
       }
     } catch (err) {

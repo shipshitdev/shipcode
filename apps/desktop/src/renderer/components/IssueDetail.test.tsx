@@ -198,6 +198,35 @@ describe('IssueDetail', () => {
     expect(screen.getByText('Start pipeline')).toBeInTheDocument();
   });
 
+  it('renders linked PR controls in the issue header and opens the PR URL', async () => {
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'shell:open-external') return undefined;
+      return [];
+    });
+
+    useAppStore.setState({
+      activeIssue: makeIssue({
+        pipelineStatus: 'completed',
+        linkedPrNumber: 17,
+        linkedPrUrl: 'https://github.com/acme/repo/pull/17',
+        linkedPrIsDraft: true,
+      }),
+    });
+
+    renderWithProviders();
+
+    const prButton = await screen.findByRole('button', { name: /PR #17/i });
+    expect(screen.getByText('Draft PR')).toBeInTheDocument();
+
+    fireEvent.click(prButton);
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('shell:open-external', {
+        url: 'https://github.com/acme/repo/pull/17',
+      });
+    });
+  });
+
   it('starts pipeline from an unclaimed issue', async () => {
     invokeMock.mockImplementation(async (channel) => {
       if (channel === 'github:start-issue') return undefined;
@@ -321,7 +350,6 @@ describe('IssueDetail', () => {
             verificationExhausted: true,
             ciBlocked: true,
           },
-          openrouterEnabled: false,
           openrouterPlannerModel: null,
           openrouterReviewerModel: null,
           openrouterVerifierModel: null,
@@ -471,7 +499,7 @@ describe('IssueDetail', () => {
 
   it('renders reviewer feedback labels without leaking raw decision enums', async () => {
     const thread = makeThread({ status: 'awaiting_approval' });
-    const plan = makePlan({ status: 'rejected' });
+    const plan = makePlan({ status: 'awaiting_approval' });
     const review = makeReview({ planId: plan.id, decision: 'request_changes' });
 
     useAppStore.setState({
@@ -495,7 +523,8 @@ describe('IssueDetail', () => {
       expect(historyTab).toHaveAttribute('data-state', 'active');
     });
 
-    expect(await screen.findByText('Changes requested')).toBeInTheDocument();
+    expect(await screen.findByText('Awaiting approval')).toBeInTheDocument();
+    expect(screen.queryByText('Changes requested')).not.toBeInTheDocument();
     expect(screen.queryByText('request_changes')).not.toBeInTheDocument();
   });
 
@@ -577,7 +606,6 @@ describe('IssueDetail', () => {
             verificationExhausted: true,
             ciBlocked: true,
           },
-          openrouterEnabled: false,
           openrouterPlannerModel: null,
           openrouterReviewerModel: null,
           openrouterVerifierModel: null,
@@ -708,6 +736,30 @@ describe('IssueDetail', () => {
     expect(screen.queryByText('Back to board')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Collapse to sidebar' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Close issue detail' })).toBeInTheDocument();
+  });
+
+  it('does not auto-dismiss notifications when opening a thread', async () => {
+    const thread = makeThread({ status: 'failed' });
+
+    useAppStore.setState({
+      activeThreadId: thread.id,
+      activeIssue: makeIssue({ threadId: thread.id, pipelineStatus: 'failed' }),
+      pipelinePhase: 'failed',
+    });
+
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'thread:get') return thread;
+      if (channel === 'plan:list') return [];
+      if (channel === 'review:list-by-plans') return {};
+      return [];
+    });
+
+    renderWithProviders();
+
+    await screen.findByText('Issue title');
+    await waitFor(() => {
+      expect(invokeMock).not.toHaveBeenCalledWith('notification:dismiss', expect.anything());
+    });
   });
 });
 

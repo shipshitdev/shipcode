@@ -3,7 +3,6 @@ import type {
   AppSettings,
   ExecutorModel,
   IntegrationStatus,
-  NotificationRecord,
   OpenRouterModelValidation,
   PipelineCheckpoint,
   PipelinePhase,
@@ -291,38 +290,6 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     }
   }, [hasPlanHistory, issueSelectionKey]);
 
-  // Dismiss any pending notifications for this thread when the user opens it.
-  // Catches the "fired before navigation" case; useIpc.ts handles the
-  // "fired while already viewing" case.
-  useEffect(() => {
-    if (!activeThreadId) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const list =
-          queryClient.getQueryData<NotificationRecord[]>(['notifications']) ??
-          (await queryClient.fetchQuery<NotificationRecord[]>({
-            queryKey: ['notifications'],
-            queryFn: () => window.shipcode.invoke<NotificationRecord[]>('notification:list'),
-          }));
-        if (cancelled) return;
-        // Only auto-dismiss informational kinds. 'awaiting_approval' requires
-        // explicit user action (approve/reject) so we leave it in the inbox.
-        const matching = list.filter(
-          (n) => n.threadId === activeThreadId && n.kind !== 'awaiting_approval',
-        );
-        for (const n of matching) {
-          await window.shipcode.invoke('notification:dismiss', { id: n.id });
-        }
-      } catch {
-        // Best-effort.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [activeThreadId, queryClient]);
-
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -548,6 +515,10 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const handleOpenOnGithub = async () => {
     if (!githubIssueUrl) return;
     await window.shipcode.invoke('shell:open-external', { url: githubIssueUrl });
+  };
+  const handleOpenPullRequest = async () => {
+    if (!linkedPrUrl) return;
+    await window.shipcode.invoke('shell:open-external', { url: linkedPrUrl });
   };
 
   const handleRefreshFromGithub = async () => {
@@ -821,12 +792,41 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     issueStatusChip
   );
 
+  const linkedPrUrl =
+    activeIssue.linkedPrUrl ??
+    (thread?.githubPrNumber && thread.githubRepo
+      ? `https://github.com/${thread.githubRepo}/pull/${thread.githubPrNumber}`
+      : null);
   const issueBadges = (
     <div className="flex flex-wrap gap-1.5">
       {activeIssue.assignee && (
         <Badge variant="default" className="text-[11px]">
           {activeIssue.assignee}
         </Badge>
+      )}
+      {activeIssue.linkedPrNumber && (
+        <>
+          <Badge variant={activeIssue.linkedPrIsDraft ? 'warning' : 'done'} className="text-[10px]">
+            {activeIssue.linkedPrIsDraft ? 'Draft PR' : 'Ready PR'}
+          </Badge>
+          {linkedPrUrl ? (
+            <Button
+              variant="ghost"
+              size="xs"
+              className="h-5 gap-1 px-1.5 text-[10px] font-medium text-done hover:bg-done/10 hover:text-done"
+              onClick={() => {
+                void handleOpenPullRequest();
+              }}
+              title="Open pull request on GitHub"
+            >
+              PR #{activeIssue.linkedPrNumber} <ExternalLink size={11} />
+            </Button>
+          ) : (
+            <Badge variant="done" className="text-[10px]">
+              PR #{activeIssue.linkedPrNumber}
+            </Badge>
+          )}
+        </>
       )}
       {activeIssue.labels
         .filter((l) => l.startsWith('agent:'))
@@ -848,11 +848,6 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       )}
     </div>
   );
-  const linkedPrUrl =
-    activeIssue.linkedPrUrl ??
-    (thread?.githubPrNumber && thread.githubRepo
-      ? `https://github.com/${thread.githubRepo}/pull/${thread.githubPrNumber}`
-      : null);
   const hasPrFeedbackBlockers =
     activeIssue.ciBlocked || activeIssue.unresolvedReviewCommentCount > 0;
   const fullScreenPlan = normalizedPlanHistory.find((plan) => plan.id === fullScreenPlanId) ?? null;

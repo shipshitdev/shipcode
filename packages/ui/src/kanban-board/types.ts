@@ -30,13 +30,14 @@ export interface KanbanBoardProps {
   repoUrl?: string | null;
   projectsUrl?: string | null;
   onOpenExternal?: (url: string) => void;
+  onOpenPullRequest?: (url: string) => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
   onArchiveAllDone?: () => void;
 }
 
 export type ColumnKey = 'todo' | 'agent' | 'human' | 'done';
 export type BoardSortOrder = 'priority' | 'id-desc' | 'id-asc' | 'title';
-export type RowTone = 'default' | 'agent' | 'danger' | 'warning';
+export type RowTone = 'default' | 'done' | 'agent' | 'danger' | 'warning';
 
 export type PhaseSection = {
   key: string;

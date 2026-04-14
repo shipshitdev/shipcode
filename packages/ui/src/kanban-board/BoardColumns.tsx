@@ -18,6 +18,7 @@ interface DroppableColumnProps {
   readOnly?: boolean;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
   onStartPipeline?: (issue: GitHubIssueCacheRecord) => void;
+  onOpenPullRequest?: (url: string) => void;
   selectedIssueNumber?: number;
   onArchiveAllDone?: () => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
@@ -33,6 +34,7 @@ export function DroppableColumn({
   readOnly = false,
   onIssueClick,
   onStartPipeline,
+  onOpenPullRequest,
   selectedIssueNumber,
   onArchiveAllDone,
   onArchiveIssue,
@@ -70,12 +72,7 @@ export function DroppableColumn({
           </span>
         </div>
       </div>
-      <div
-        className={cn(
-          'flex min-h-[60px] flex-1 flex-col gap-1 overflow-y-auto p-1.5',
-          columnKey === 'done' && 'opacity-60',
-        )}
-      >
+      <div className="flex min-h-[60px] flex-1 flex-col gap-1 overflow-y-auto p-1.5">
         {issues.map((issue) => (
           <DraggableCard
             key={issue.id}
@@ -83,6 +80,7 @@ export function DroppableColumn({
             phaseChip={issuePhaseChipById.get(issue.id) ?? null}
             onClick={() => onIssueClick(issue)}
             onStartPipeline={onStartPipeline}
+            onOpenPullRequest={onOpenPullRequest}
             isSelected={issue.issueNumber === selectedIssueNumber}
             onArchiveIssue={onArchiveIssue}
             readOnly={readOnly}
@@ -101,6 +99,7 @@ interface SectionBlockProps {
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
   onCancel?: (issue: GitHubIssueCacheRecord) => void;
+  onOpenPullRequest?: (url: string) => void;
   selectedIssueNumber?: number;
   rerunningId?: string | null;
   issuePhaseChipById: Map<string, IssuePhaseChip | null>;
@@ -114,6 +113,7 @@ function SectionBlock({
   onIssueClick,
   onRerun,
   onCancel,
+  onOpenPullRequest,
   selectedIssueNumber,
   rerunningId,
   issuePhaseChipById,
@@ -177,6 +177,7 @@ function SectionBlock({
               onClick={() => onIssueClick(issue)}
               onRerun={onRerun}
               onCancel={onCancel}
+              onOpenPullRequest={onOpenPullRequest}
               isSelected={issue.issueNumber === selectedIssueNumber}
               isRerunning={issue.id === rerunningId}
               readOnly={readOnly}
@@ -204,6 +205,7 @@ interface StackedColumnProps {
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
   onCancel?: (issue: GitHubIssueCacheRecord) => void;
+  onOpenPullRequest?: (url: string) => void;
   selectedIssueNumber?: number;
   rerunningId?: string | null;
   issuePhaseChipById: Map<string, IssuePhaseChip | null>;
@@ -216,6 +218,7 @@ export function StackedColumn({
   onIssueClick,
   onRerun,
   onCancel,
+  onOpenPullRequest,
   selectedIssueNumber,
   rerunningId,
   issuePhaseChipById,
@@ -244,6 +247,7 @@ export function StackedColumn({
             onIssueClick={onIssueClick}
             onRerun={onRerun}
             onCancel={onCancel}
+            onOpenPullRequest={onOpenPullRequest}
             selectedIssueNumber={selectedIssueNumber}
             rerunningId={rerunningId}
             issuePhaseChipById={issuePhaseChipById}

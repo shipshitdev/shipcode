@@ -24,8 +24,10 @@ export const DEFAULT_NOTIFICATION_EVENTS = {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
+  fontStyle: 'dm-sans',
   defaultWorktreeEnabled: true,
   terminalScrollback: 10_000,
+  projectOpenTarget: 'cursor',
   plannerModel: 'claude',
   reviewerModel: 'codex',
   verifierModel: 'claude',
@@ -51,8 +53,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   notificationBadgeEnabled: true,
   notificationSoundEnabled: true,
   notificationEvents: { ...DEFAULT_NOTIFICATION_EVENTS },
-  // OpenRouter — all disabled/null by default so existing deployments are unaffected.
-  openrouterEnabled: false,
+  // OpenRouter defaults. Provider readiness is inferred from OPENROUTER_API_KEY.
   openrouterPlannerModel: null,
   openrouterReviewerModel: null,
   openrouterVerifierModel: null,

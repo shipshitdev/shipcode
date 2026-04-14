@@ -15,7 +15,7 @@ export {
   DollarSign,
   ExternalLink,
   Folder,
-  Github,
+  FolderGit,
   Globe,
   Inbox,
   Keyboard,

@@ -54,6 +54,7 @@ interface DraggableCardProps {
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
   onCancel?: (issue: GitHubIssueCacheRecord) => void;
   onStartPipeline?: (issue: GitHubIssueCacheRecord) => void;
+  onOpenPullRequest?: (url: string) => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
   isSelected?: boolean;
   isRerunning?: boolean;
@@ -67,6 +68,7 @@ export function DraggableCard({
   onRerun,
   onCancel,
   onStartPipeline,
+  onOpenPullRequest,
   onArchiveIssue,
   isSelected,
   isRerunning,
@@ -86,6 +88,7 @@ export function DraggableCard({
     PHASE_ELAPSED_STATUSES.includes(issue.pipelineStatus) && !!issue.lastPhaseUpdate;
   const phaseSince =
     showPhaseElapsed && issue.lastPhaseUpdate ? new Date(issue.lastPhaseUpdate).getTime() : 0;
+  const linkedPrLabel = issue.linkedPrNumber ? `PR #${issue.linkedPrNumber}` : null;
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: dnd-kit's useDraggable provides keyboard accessibility via listeners/attributes spread below
@@ -100,6 +103,10 @@ export function DraggableCard({
           : !isSelected && !isActive
             ? 'border-border/50 hover:border-border-strong'
             : '',
+        issue.pipelineStatus === 'completed' &&
+          (isSelected
+            ? 'border-done/65 bg-done/[0.09]'
+            : 'border-done/35 bg-done/[0.045] hover:border-done/55 hover:bg-done/[0.06]'),
         isFailed &&
           (isSelected
             ? 'border-danger bg-danger/[0.07]'
@@ -114,7 +121,6 @@ export function DraggableCard({
             ? 'border-agent/70 bg-agent/[0.06]'
             : 'border-agent/40 bg-agent/[0.03] hover:border-agent/60'),
         isDragging && 'opacity-50',
-        !isDragging && issue.pipelineStatus === 'completed' && 'opacity-60',
       )}
       {...listeners}
       {...attributes}
@@ -126,12 +132,17 @@ export function DraggableCard({
       {issue.pipelineStatus !== 'todo' &&
         issue.pipelineStatus !== 'queued' &&
         issue.pipelineStatus !== 'failed' && (
-          <div className="absolute bottom-0 left-0 right-0 h-[3px] overflow-hidden rounded-b-md bg-agent/15">
+          <div
+            className={cn(
+              'absolute bottom-0 left-0 right-0 h-[3px] overflow-hidden rounded-b-md',
+              issue.pipelineStatus === 'completed' ? 'bg-done/15' : 'bg-agent/15',
+            )}
+          >
             <div
               className={cn(
                 'absolute h-full transition-[width] duration-700',
                 issue.pipelineStatus === 'completed'
-                  ? 'bg-success'
+                  ? 'bg-done'
                   : issue.pipelineStatus === 'awaiting_approval'
                     ? 'bg-warning'
                     : 'bg-agent',
@@ -255,6 +266,21 @@ export function DraggableCard({
           </span>
         ) : (
           <PhaseChip status={issue.pipelineStatus} />
+        )}
+        {linkedPrLabel && issue.linkedPrUrl && onOpenPullRequest && (
+          <Button
+            variant="ghost"
+            size="xs"
+            className="h-5 px-1.5 text-[10px] font-medium text-done hover:bg-done/10 hover:text-done"
+            title="Open pull request on GitHub"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpenPullRequest(issue.linkedPrUrl as string);
+            }}
+          >
+            {linkedPrLabel}
+          </Button>
         )}
         {!readOnly && (
           <div className="ml-auto flex items-center gap-1.5">

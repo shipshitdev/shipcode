@@ -1,7 +1,12 @@
-import type { IntegrationStatus } from '@shipcode/shared';
+import type { AppSettings, IntegrationStatus, ProjectOpenTarget } from '@shipcode/shared';
 import {
   Button,
-  Github,
+  FolderGit,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Sparkles,
   Tabs,
   TabsContent,
@@ -14,10 +19,14 @@ import { StatusPill } from './StatusPill';
 export function IntegrationsSettingsSection({
   integrationStatus,
   integrationsFetching,
+  settings,
+  onUpdate,
   onRefetch,
 }: {
   integrationStatus: IntegrationStatus | undefined;
   integrationsFetching: boolean;
+  settings: AppSettings;
+  onUpdate: (patch: Partial<AppSettings>) => void;
   onRefetch: () => void;
 }) {
   const getOpenRouterModelPresentation = (
@@ -26,8 +35,7 @@ export function IntegrationsSettingsSection({
     const disabled =
       check.status === 'unverified' &&
       integrationStatus?.openrouter &&
-      (integrationStatus.openrouter.authStatus === 'disabled' ||
-        integrationStatus.openrouter.authStatus === 'missing_key');
+      integrationStatus.openrouter.authStatus === 'missing_key';
 
     return {
       tone:
@@ -43,6 +51,13 @@ export function IntegrationsSettingsSection({
   };
 
   const getCliVersionLine = (version: string | null) => version?.split('\n')[0]?.trim() ?? null;
+  const projectOpenTargets: ProjectOpenTarget[] = [
+    'cursor',
+    'finder',
+    'terminal',
+    'ghostty',
+    'vscode',
+  ];
 
   return (
     <>
@@ -68,6 +83,69 @@ export function IntegrationsSettingsSection({
           </TabsList>
 
           <TabsContent value="cli" className="mt-0 space-y-2">
+            <section className="mb-6 rounded-md border border-border bg-secondary/40 p-3">
+              <div className="mb-3">
+                <div className="text-[13px] font-medium text-primary">Project opener</div>
+                <div className="text-[11px] text-muted">
+                  Choose the default app ShipCode uses when you open a project folder from the
+                  sidebar.
+                </div>
+              </div>
+
+              <div className="mb-4 flex max-w-[260px] flex-col gap-1.5">
+                <label htmlFor="project-open-target" className="text-[11px] text-secondary">
+                  Default app
+                </label>
+                <Select
+                  value={settings.projectOpenTarget}
+                  onValueChange={(value) =>
+                    onUpdate({ projectOpenTarget: value as AppSettings['projectOpenTarget'] })
+                  }
+                >
+                  <SelectTrigger id="project-open-target">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projectOpenTargets.map((target) => {
+                      const app = integrationStatus.desktopApps[target];
+                      return (
+                        <SelectItem key={target} value={target} disabled={!app.available}>
+                          {app.label}
+                          {!app.available ? ' (Unavailable)' : ''}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                {projectOpenTargets.map((target) => {
+                  const app = integrationStatus.desktopApps[target];
+                  return (
+                    <div key={target} className="rounded-md border border-border bg-primary/40 p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-[140px] text-[13px] font-medium text-primary">
+                          {app.label}
+                        </div>
+                        <StatusPill tone={app.available ? 'success' : 'neutral'}>
+                          {app.available ? 'Available' : 'Unavailable'}
+                        </StatusPill>
+                      </div>
+                      <div className="mt-2 space-y-1 text-[12px] text-secondary">
+                        {app.path ? (
+                          <div>
+                            Path: <code>{app.path}</code>
+                          </div>
+                        ) : null}
+                        {app.error ? <div className="text-amber-300">{app.error}</div> : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
             {[
               { key: 'claude', label: 'Claude CLI' },
               { key: 'codex', label: 'Codex CLI' },
@@ -88,7 +166,7 @@ export function IntegrationsSettingsSection({
                       : null
                   : null;
               const versionLine = getCliVersionLine(cli.version);
-              const Icon = key === 'claude' ? Sparkles : key === 'codex' ? Terminal : Github;
+              const Icon = key === 'claude' ? Sparkles : key === 'codex' ? Terminal : FolderGit;
 
               return (
                 <div key={key} className="rounded-md border border-border bg-secondary/40 p-3">
@@ -155,31 +233,24 @@ export function IntegrationsSettingsSection({
             <section>
               <h4 className="mb-3 text-secondary">API Keys</h4>
               <div className="rounded-md border border-border bg-secondary/40 p-3 text-[12px] text-secondary">
-                <div className="mb-2 flex flex-wrap items-center gap-2">
+                <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
                   <span className="text-[13px] font-medium text-primary">OpenRouter</span>
-                  <StatusPill tone={integrationStatus.openrouter.enabled ? 'neutral' : 'warning'}>
-                    {integrationStatus.openrouter.enabled
-                      ? 'Enabled in settings'
-                      : 'Disabled in settings'}
-                  </StatusPill>
-                  <StatusPill
-                    tone={integrationStatus.openrouter.keyPresent ? 'success' : 'warning'}
-                  >
-                    {integrationStatus.openrouter.keyPresent
-                      ? 'OPENROUTER_API_KEY detected'
-                      : 'OPENROUTER_API_KEY missing'}
-                  </StatusPill>
-                  <StatusPill
-                    tone={
-                      integrationStatus.openrouter.authStatus === 'valid'
-                        ? 'success'
-                        : integrationStatus.openrouter.authStatus === 'disabled'
-                          ? 'neutral'
-                          : 'warning'
-                    }
-                  >
-                    {integrationStatus.openrouter.authStatus}
-                  </StatusPill>
+                  <div className="ml-auto flex flex-wrap justify-end gap-2">
+                    <StatusPill
+                      tone={integrationStatus.openrouter.keyPresent ? 'success' : 'warning'}
+                    >
+                      {integrationStatus.openrouter.keyPresent
+                        ? 'OPENROUTER_API_KEY detected'
+                        : 'OPENROUTER_API_KEY missing'}
+                    </StatusPill>
+                    <StatusPill
+                      tone={
+                        integrationStatus.openrouter.authStatus === 'valid' ? 'success' : 'warning'
+                      }
+                    >
+                      {integrationStatus.openrouter.authStatus}
+                    </StatusPill>
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <div>
@@ -208,11 +279,13 @@ export function IntegrationsSettingsSection({
                       key={check.key}
                       className="rounded-md border border-border bg-secondary/40 p-3"
                     >
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
                         <div className="min-w-[140px] text-[13px] font-medium text-primary">
                           {check.label}
                         </div>
-                        <StatusPill tone={presentation.tone}>{presentation.label}</StatusPill>
+                        <div className="ml-auto flex flex-wrap justify-end gap-2">
+                          <StatusPill tone={presentation.tone}>{presentation.label}</StatusPill>
+                        </div>
                       </div>
                       <div className="mt-2 space-y-1 text-[12px] text-secondary">
                         <div>

@@ -39,6 +39,7 @@ export function KanbanBoard({
   repoUrl,
   projectsUrl,
   onOpenExternal,
+  onOpenPullRequest,
   onArchiveIssue,
   onArchiveAllDone,
 }: KanbanBoardProps) {
@@ -191,6 +192,7 @@ export function KanbanBoard({
             selectedIssueNumber={selectedIssueNumber}
             activeId={activeId}
             onIssueClick={onIssueClick}
+            onOpenPullRequest={onOpenPullRequest}
             onArchiveIssue={onArchiveIssue}
             onArchiveAllDone={onArchiveAllDone}
           />
@@ -207,6 +209,7 @@ export function KanbanBoard({
                     onIssueClick={onIssueClick}
                     onRerun={handleRerun}
                     onCancel={onCancel}
+                    onOpenPullRequest={onOpenPullRequest}
                     rerunningId={rerunningId}
                     selectedIssueNumber={selectedIssueNumber}
                     issuePhaseChipById={issuePhaseChipById}
@@ -228,6 +231,7 @@ export function KanbanBoard({
                   onIssueClick={onIssueClick}
                   selectedIssueNumber={selectedIssueNumber}
                   onStartPipeline={col.key === 'todo' ? onStartPipeline : undefined}
+                  onOpenPullRequest={onOpenPullRequest}
                   onArchiveAllDone={col.key === 'done' ? onArchiveAllDone : undefined}
                   onArchiveIssue={col.key === 'done' ? onArchiveIssue : undefined}
                   issuePhaseChipById={issuePhaseChipById}

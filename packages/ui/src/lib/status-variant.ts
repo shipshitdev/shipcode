@@ -1,6 +1,6 @@
 import type { IssuePipelineStatus, ThreadStatus } from '@shipcode/shared';
 
-export type StatusBadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'accent';
+export type StatusBadgeVariant = 'default' | 'done' | 'success' | 'warning' | 'danger' | 'accent';
 
 // Accepts both status unions — the only diff between them is:
 //   IssuePipelineStatus: 'todo' | 'queued'  (→ default)
@@ -12,7 +12,7 @@ export function getStatusBadgeVariant(
 ): StatusBadgeVariant {
   switch (status) {
     case 'completed':
-      return 'success';
+      return 'done';
     case 'failed':
       return 'danger';
     case 'awaiting_approval':

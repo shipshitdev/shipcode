@@ -200,6 +200,11 @@ export function ThreadPanel() {
             log.error('[threadpanel] open-external failed', { url, err });
           })
         }
+        onOpenPullRequest={(url) =>
+          window.shipcode.invoke('shell:open-external', { url }).catch((err) => {
+            log.error('[threadpanel] open-pull-request failed', { url, err });
+          })
+        }
         onBaseBranchChange={(branch) => {
           // Optimistic cache update so the toolbar reflects the new branch
           // on the same frame as the click, without waiting for IPC.

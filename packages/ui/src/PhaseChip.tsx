@@ -12,7 +12,7 @@ const PHASE_COLOR: Record<string, string> = {
   verifying: AGENT_PHASE_CLASSES,
   shipping: AGENT_PHASE_CLASSES,
   awaiting_approval: 'bg-warning/15 text-warning border-warning/30',
-  completed: 'bg-success/15 text-success border-success/30',
+  completed: 'bg-done/12 text-done border-done/25',
   failed: 'bg-danger/15 text-danger border-danger/30',
   todo: 'bg-tertiary text-muted border-border',
   queued: 'bg-tertiary text-muted border-border',

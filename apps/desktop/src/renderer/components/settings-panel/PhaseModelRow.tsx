@@ -8,6 +8,7 @@ import {
   SelectValue,
   SettingsRow,
 } from '@shipcode/ui';
+import { getModelOptions, PROVIDER_DISPLAY } from '../model-provider-options';
 
 export function PhaseModelRow({
   label,
@@ -40,6 +41,9 @@ export function PhaseModelRow({
     modelValue === 'openrouter' && modelCheck?.status !== 'not_configured'
       ? modelCheck?.message
       : null;
+  const openrouterModelOptions = getModelOptions('openrouter');
+  const knownOpenRouterValues = new Set(openrouterModelOptions.map((option) => option.value));
+  const openrouterSelection = openrouterModelValue ?? '__default__';
 
   return (
     <>
@@ -69,17 +73,54 @@ export function PhaseModelRow({
         </Select>
       </SettingsRow>
       {modelValue === 'openrouter' && (
+        <SettingsRow label="OpenRouter model" htmlFor={`${htmlFor}-or-model`}>
+          <Select
+            value={openrouterSelection}
+            onValueChange={(value) =>
+              onOpenrouterModelChange(value === '__default__' ? null : value)
+            }
+          >
+            <SelectTrigger id={`${htmlFor}-or-model`} className="w-[220px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__default__">
+                Default paid model ({PROVIDER_DISPLAY.openrouter})
+              </SelectItem>
+              {openrouterModelValue && !knownOpenRouterValues.has(openrouterModelValue) ? (
+                <SelectItem value={openrouterModelValue}>{openrouterModelValue}</SelectItem>
+              ) : null}
+              {openrouterModelOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </SettingsRow>
+      )}
+      {modelValue === 'openrouter' && (
         <SettingsRow
-          label="OpenRouter model ID"
-          htmlFor={`${htmlFor}-or-model`}
-          description="Leave blank to use the default paid model."
+          label="Custom OpenRouter slug"
+          htmlFor={`${htmlFor}-or-custom`}
+          description="Optional raw slug override when the preset list is not enough."
         >
           <Input
-            id={`${htmlFor}-or-model`}
+            id={`${htmlFor}-or-custom`}
             placeholder="e.g. anthropic/claude-sonnet-4-6"
-            defaultValue={openrouterModelValue ?? ''}
+            defaultValue={
+              openrouterModelValue && !knownOpenRouterValues.has(openrouterModelValue)
+                ? openrouterModelValue
+                : ''
+            }
             onBlur={(event) => {
-              const value = event.target.value.trim() || null;
+              const value = event.target.value.trim();
+              if (!value) {
+                if (openrouterModelValue && !knownOpenRouterValues.has(openrouterModelValue)) {
+                  onOpenrouterModelChange(null);
+                }
+                return;
+              }
               onOpenrouterModelChange(value);
             }}
           />

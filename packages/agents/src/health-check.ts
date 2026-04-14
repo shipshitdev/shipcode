@@ -6,16 +6,26 @@ import { promisify } from 'node:util';
 import type {
   AppSettings,
   CliHealth,
+  DesktopAppHealth,
+  DesktopAppHealthMap,
   GhAuthStatus,
   IntegrationStatus,
   OpenRouterHealth,
   OpenRouterModelCheck,
   OpenRouterModelValidation,
+  ProjectOpenTarget,
   SystemHealth,
 } from '@shipcode/shared';
 import { OPENROUTER_API_BASE } from '@shipcode/shared';
 
 const execAsync = promisify(exec);
+const DESKTOP_APP_LABELS: Record<ProjectOpenTarget, string> = {
+  cursor: 'Cursor',
+  finder: 'Finder',
+  terminal: 'Terminal',
+  ghostty: 'Ghostty',
+  vscode: 'Visual Studio Code',
+};
 
 async function checkCli(command: string, versionFlag: string = '--version'): Promise<CliHealth> {
   try {
@@ -54,6 +64,65 @@ async function checkCli(command: string, versionFlag: string = '--version'): Pro
       authenticated: false,
     };
   }
+}
+
+function unavailableDesktopApp(key: ProjectOpenTarget, error: string): DesktopAppHealth {
+  return {
+    key,
+    label: DESKTOP_APP_LABELS[key],
+    available: false,
+    path: null,
+    error,
+  };
+}
+
+async function checkDesktopAppByName(
+  key: ProjectOpenTarget,
+  appName: string,
+): Promise<DesktopAppHealth> {
+  if (process.platform !== 'darwin') {
+    return unavailableDesktopApp(key, 'Desktop app detection is currently macOS-only');
+  }
+
+  if (key === 'finder') {
+    return {
+      key,
+      label: DESKTOP_APP_LABELS[key],
+      available: true,
+      path: '/System/Library/CoreServices/Finder.app',
+      error: null,
+    };
+  }
+
+  const escapedName = appName.replace(/"/g, '\\"');
+  try {
+    const { stdout } = await execAsync(
+      `osascript -e 'POSIX path of (path to application "${escapedName}")'`,
+      { timeout: 5_000 },
+    );
+    const path = stdout.trim();
+    return {
+      key,
+      label: DESKTOP_APP_LABELS[key],
+      available: !!path,
+      path: path || null,
+      error: path ? null : `${appName} is not installed`,
+    };
+  } catch {
+    return unavailableDesktopApp(key, `${appName} is not installed`);
+  }
+}
+
+export async function checkDesktopApps(): Promise<DesktopAppHealthMap> {
+  const [cursor, finder, terminal, ghostty, vscode] = await Promise.all([
+    checkDesktopAppByName('cursor', 'Cursor'),
+    checkDesktopAppByName('finder', 'Finder'),
+    checkDesktopAppByName('terminal', 'Terminal'),
+    checkDesktopAppByName('ghostty', 'Ghostty'),
+    checkDesktopAppByName('vscode', 'Visual Studio Code'),
+  ]);
+
+  return { cursor, finder, terminal, ghostty, vscode };
 }
 
 async function fileExists(path: string): Promise<boolean> {
@@ -265,24 +334,9 @@ export async function checkOpenRouterHealth(settings: AppSettings): Promise<Open
   const apiKey = await readEnvVar('OPENROUTER_API_KEY');
   const keyPresent = !!apiKey;
 
-  if (!settings.openrouterEnabled) {
-    return {
-      enabled: false,
-      keyPresent,
-      authStatus: 'disabled',
-      message: 'OpenRouter is disabled in Settings > Pipeline',
-      label: null,
-      modelChecks: buildOpenRouterModelChecks(
-        settings,
-        null,
-        'Enable OpenRouter to verify configured model slugs',
-      ),
-    };
-  }
-
   if (!apiKey) {
     return {
-      enabled: true,
+      enabled: false,
       keyPresent: false,
       authStatus: 'missing_key',
       message: 'OPENROUTER_API_KEY is not set',
@@ -454,11 +508,12 @@ export async function checkSystemHealthWithAuth(): Promise<SystemHealth> {
 }
 
 export async function checkIntegrationStatus(settings: AppSettings): Promise<IntegrationStatus> {
-  const [system, ghAuth, openrouter] = await Promise.all([
+  const [system, ghAuth, openrouter, desktopApps] = await Promise.all([
     checkSystemHealthWithAuth(),
     checkGhAuth(),
     checkOpenRouterHealth(settings),
+    checkDesktopApps(),
   ]);
 
-  return { system, ghAuth, openrouter };
+  return { system, ghAuth, openrouter, desktopApps };
 }

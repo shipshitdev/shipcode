@@ -205,7 +205,13 @@ export interface AgentProcess {
 
 // === Plan DB Record ===
 
-export type PlanStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 'superseded';
+export type PlanStatus =
+  | 'draft'
+  | 'pending_review'
+  | 'awaiting_approval'
+  | 'approved'
+  | 'rejected'
+  | 'superseded';
 
 export interface PlanRecord {
   id: string;
@@ -257,8 +263,10 @@ export interface GitState {
 
 export interface AppSettings {
   theme: 'light' | 'dark' | 'system';
+  fontStyle: 'dm-sans' | 'system' | 'serif';
   defaultWorktreeEnabled: boolean;
   terminalScrollback: number;
+  projectOpenTarget: ProjectOpenTarget;
   plannerModel: AgentType;
   reviewerModel: AgentType;
   verifierModel: AgentType;
@@ -298,11 +306,9 @@ export interface AppSettings {
   notificationBadgeEnabled: boolean;
   notificationSoundEnabled: boolean;
   notificationEvents: NotificationEventToggles;
-  // OpenRouter integration (Tier 1+). All off by default; set openrouterEnabled=true
-  // plus provide OPENROUTER_API_KEY in env to activate. Individual phase models are
-  // optional overrides; when null, the resolver falls back to the tier defaults
-  // (openrouterDefaultPaidModel / openrouterDefaultFreeModel).
-  openrouterEnabled: boolean;
+  // OpenRouter integration (Tier 1+). Presence of OPENROUTER_API_KEY enables
+  // provider readiness. Individual phase models are optional overrides; when
+  // null, the resolver falls back to the default paid/free selections below.
   openrouterPlannerModel: string | null;
   openrouterReviewerModel: string | null;
   openrouterVerifierModel: string | null;
@@ -353,6 +359,24 @@ export interface CliHealth {
   authenticated: boolean;
 }
 
+export type ProjectOpenTarget = 'cursor' | 'finder' | 'terminal' | 'ghostty' | 'vscode';
+
+export interface DesktopAppHealth {
+  key: ProjectOpenTarget;
+  label: string;
+  available: boolean;
+  path: string | null;
+  error: string | null;
+}
+
+export interface DesktopAppHealthMap {
+  cursor: DesktopAppHealth;
+  finder: DesktopAppHealth;
+  terminal: DesktopAppHealth;
+  ghostty: DesktopAppHealth;
+  vscode: DesktopAppHealth;
+}
+
 export interface SystemHealth {
   claude: CliHealth;
   codex: CliHealth;
@@ -360,12 +384,7 @@ export interface SystemHealth {
   gh: CliHealth;
 }
 
-export type OpenRouterAuthStatus =
-  | 'disabled'
-  | 'missing_key'
-  | 'valid'
-  | 'invalid_key'
-  | 'unreachable';
+export type OpenRouterAuthStatus = 'missing_key' | 'valid' | 'invalid_key' | 'unreachable';
 
 export type OpenRouterModelStatus = 'not_configured' | 'valid' | 'invalid' | 'unverified';
 
@@ -390,6 +409,7 @@ export interface IntegrationStatus {
   system: SystemHealth;
   ghAuth: GhAuthStatus;
   openrouter: OpenRouterHealth;
+  desktopApps: DesktopAppHealthMap;
 }
 
 export interface OpenRouterModelValidation {

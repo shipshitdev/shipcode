@@ -15,6 +15,7 @@ import { type AppSettings, DEFAULT_SETTINGS } from '@shipcode/shared';
 import {
   checkClaudeAuth,
   checkCodexAuth,
+  checkDesktopApps,
   checkGhAuth,
   checkIntegrationStatus,
   checkOpenRouterAuth,
@@ -456,11 +457,11 @@ describe('checkOpenRouterHealth', () => {
     vi.unstubAllGlobals();
   });
 
-  it('returns disabled health when OpenRouter is turned off', async () => {
+  it('returns missing_key health when no API key is available', async () => {
     execFails('not set');
-    const result = await checkOpenRouterHealth(settings({ openrouterEnabled: false }));
+    const result = await checkOpenRouterHealth(settings());
     expect(result.enabled).toBe(false);
-    expect(result.authStatus).toBe('disabled');
+    expect(result.authStatus).toBe('missing_key');
   });
 
   it('verifies configured model slugs when auth succeeds', async () => {
@@ -482,7 +483,6 @@ describe('checkOpenRouterHealth', () => {
 
     const result = await checkOpenRouterHealth(
       settings({
-        openrouterEnabled: true,
         openrouterPlannerModel: 'anthropic/claude-sonnet-4-6',
       }),
     );
@@ -508,10 +508,7 @@ describe('validateOpenRouterModel', () => {
 
   it('returns unverified when OpenRouter auth is not ready', async () => {
     execFails('not set');
-    const result = await validateOpenRouterModel(
-      settings({ openrouterEnabled: true }),
-      'openrouter/auto',
-    );
+    const result = await validateOpenRouterModel(settings(), 'openrouter/auto');
     expect(result.status).toBe('unverified');
   });
 
@@ -530,10 +527,7 @@ describe('validateOpenRouterModel', () => {
         new Response(JSON.stringify({ data: [{ id: 'openrouter/auto' }] }), { status: 200 }),
       );
 
-    const result = await validateOpenRouterModel(
-      settings({ openrouterEnabled: true }),
-      'anthropic/claude-sonnet-4-6',
-    );
+    const result = await validateOpenRouterModel(settings(), 'anthropic/claude-sonnet-4-6');
     expect(result.status).toBe('invalid');
   });
 });
@@ -576,10 +570,36 @@ describe('checkIntegrationStatus', () => {
         new Response(JSON.stringify({ data: [{ id: 'openrouter/auto' }] }), { status: 200 }),
       );
 
-    const result = await checkIntegrationStatus(settings({ openrouterEnabled: true }));
+    const result = await checkIntegrationStatus(settings());
     expect(result.system.claude.authenticated).toBe(true);
     expect(result.system.codex.authenticated).toBe(true);
     expect(result.ghAuth.authenticated).toBe(true);
     expect(result.openrouter.authStatus).toBe('valid');
+    expect(result.desktopApps.finder.available).toBe(true);
+    expect(result.desktopApps.cursor.available).toBe(false);
+  });
+});
+
+describe('checkDesktopApps', () => {
+  it('detects installed desktop apps via AppleScript and treats Finder as available on macOS', async () => {
+    execRouted({
+      'POSIX path of (path to application "Cursor")': {
+        stdout: '/Applications/Cursor.app/\n',
+      },
+      'POSIX path of (path to application "Terminal")': {
+        stdout: '/System/Applications/Utilities/Terminal.app/\n',
+      },
+      'POSIX path of (path to application "Ghostty")': new Error('not found'),
+      'POSIX path of (path to application "Visual Studio Code")': {
+        stdout: '/Applications/Visual Studio Code.app/\n',
+      },
+    });
+
+    const result = await checkDesktopApps();
+    expect(result.finder.available).toBe(true);
+    expect(result.cursor.available).toBe(true);
+    expect(result.terminal.available).toBe(true);
+    expect(result.ghostty.available).toBe(false);
+    expect(result.vscode.available).toBe(true);
   });
 });
