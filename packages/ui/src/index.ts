@@ -1,4 +1,6 @@
 // Icons — re-exported from lucide-react so apps import via @shipcode/ui
+
+export { sanitizeResolvedModel } from '@shipcode/shared';
 export {
   Activity,
   Archive,
