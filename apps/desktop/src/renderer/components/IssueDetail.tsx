@@ -839,11 +839,9 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         </Badge>
       )}
       {activeIssue.linkedPrNumber && (
-        <>
-          <Badge variant={activeIssue.linkedPrIsDraft ? 'warning' : 'done'} className="text-[10px]">
-            {activeIssue.linkedPrIsDraft ? 'Draft PR' : 'Ready PR'}
-          </Badge>
-        </>
+        <Badge variant={activeIssue.linkedPrIsDraft ? 'warning' : 'done'} className="text-[10px]">
+          {activeIssue.linkedPrIsDraft ? 'Draft PR' : 'Ready PR'}
+        </Badge>
       )}
       {activeIssue.labels
         .filter((l) => l.startsWith('agent:'))

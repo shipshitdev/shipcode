@@ -24,6 +24,10 @@ function formatClock(isoLike: string): string {
   });
 }
 
+function formatTimestampPrefix(isoLike: string): string {
+  return `\x1b[90m[${formatClock(isoLike)}]\x1b[0m`;
+}
+
 // Phase transitions that map to human-visible activity entries.
 const PHASE_ACTIVITY: Partial<
   Record<PipelinePhase, { kind: ActivityKind; title: (t: Thread) => string; subtitle?: string }>
@@ -301,7 +305,7 @@ export function createElectronEmitter(
         try {
           const record = emitCanonicalTerminalEvent(event.threadId, {
             kind: 'lifecycle',
-            message: `\x1b[2m[${formatClock(new Date().toISOString())}]\x1b[0m phase: \x1b[36m${event.phase}\x1b[0m`,
+            message: `${formatTimestampPrefix(new Date().toISOString())} phase: \x1b[36m${event.phase}\x1b[0m`,
           });
           if (event.phase === 'planning') {
             logEvent('terminal:phase-persisted', {
@@ -336,7 +340,7 @@ export function createElectronEmitter(
             }
             emitCanonicalTerminalEvent(event.threadId, {
               kind: 'lifecycle',
-              message: `\x1b[2m[${formatClock(new Date().toISOString())}]\x1b[0m \x1b[35mmodel:\x1b[0m ${displayName}${tokenStr}${costStr}`,
+              message: `${formatTimestampPrefix(new Date().toISOString())} \x1b[35mmodel:\x1b[0m ${displayName}${tokenStr}${costStr}`,
             });
           }
         } catch (err) {
