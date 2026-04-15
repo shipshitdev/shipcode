@@ -18,6 +18,7 @@ import {
   resolvePhaseModel,
   resolvePhaseModelForIssue,
   resolvePhaseModelId,
+  sanitizeResolvedModel,
 } from '@shipcode/shared';
 import {
   Archive,
@@ -311,7 +312,10 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   );
   const threadPhase = currentPipelinePhase;
   const canStartPipeline =
-    !activeThreadId && !!activeProjectId && activeIssue?.pipelineStatus !== 'completed';
+    !activeThreadId &&
+    !!activeProjectId &&
+    activeIssue?.pipelineStatus !== 'completed' &&
+    activeIssue?.pipelineStatus !== 'done';
   const canRerun = !!activeIssue && activeIssue.pipelineStatus === 'failed' && !!activeProjectId;
   const hasApprovalDecision =
     !!activeThreadId && threadPhase === 'awaiting_approval' && !!latestPlan;
@@ -536,8 +540,8 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
   // Executor is locked in once the pipeline is mid-loop. It's editable
   // before the run starts (todo/queued) and after terminal states where
-  // the user will kick off a new run (failed/completed).
-  const EXECUTOR_EDITABLE_STATUSES = new Set(['todo', 'queued', 'failed', 'completed']);
+  // the user will kick off a new run (failed/completed/done).
+  const EXECUTOR_EDITABLE_STATUSES = new Set(['todo', 'queued', 'failed', 'completed', 'done']);
   const executorEditable = EXECUTOR_EDITABLE_STATUSES.has(activeIssue?.pipelineStatus ?? 'todo');
   const effectivePhaseProviders = {
     planner: settings
@@ -584,10 +588,13 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         : { provider: 'claude' as ExecutorModel, modelId: null as string | null },
   } as const;
   const effectivePhaseResolvedModels = {
-    planner: thread?.plannerResolvedModel ?? effectivePhaseProviders.planner,
-    reviewer: thread?.reviewerResolvedModel ?? effectivePhaseProviders.reviewer,
-    executor: thread?.executorResolvedModel ?? effectivePhaseProviders.executor,
-    verifier: thread?.verifierResolvedModel ?? effectivePhaseProviders.verifier,
+    planner: sanitizeResolvedModel(thread?.plannerResolvedModel) ?? effectivePhaseProviders.planner,
+    reviewer:
+      sanitizeResolvedModel(thread?.reviewerResolvedModel) ?? effectivePhaseProviders.reviewer,
+    executor:
+      sanitizeResolvedModel(thread?.executorResolvedModel) ?? effectivePhaseProviders.executor,
+    verifier:
+      sanitizeResolvedModel(thread?.verifierResolvedModel) ?? effectivePhaseProviders.verifier,
   } as const;
   const phaseSelectValues = {
     planner:
@@ -689,7 +696,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
   const headerButtons = (
     <div className="absolute right-3 top-3 flex items-center gap-0.5">
-      {activeIssue.pipelineStatus === 'completed' && (
+      {(activeIssue.pipelineStatus === 'completed' || activeIssue.pipelineStatus === 'done') && (
         <Button
           variant="ghost"
           size="icon-xs"

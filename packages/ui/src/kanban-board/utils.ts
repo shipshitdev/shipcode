@@ -11,6 +11,7 @@ import {
   resolveExecutorModelForIssue,
   resolvePhaseModelForIssue,
   resolvePhaseReasoningEffort,
+  sanitizeResolvedModel,
 } from '@shipcode/shared';
 import { ACTIVE_STATUSES } from './constants';
 import type { BoardSortOrder, IssuePhaseChip, RowTone } from './types';
@@ -32,18 +33,18 @@ export function resolveIssuePhaseChip(
 
   const model =
     phase === 'planner'
-      ? (thread?.plannerResolvedModel ??
+      ? (sanitizeResolvedModel(thread?.plannerResolvedModel) ??
         thread?.plannerModel ??
         (settings ? resolvePhaseModelForIssue(settings, project, issue, 'planner') : 'claude'))
       : phase === 'reviewer'
-        ? (thread?.reviewerResolvedModel ??
+        ? (sanitizeResolvedModel(thread?.reviewerResolvedModel) ??
           thread?.reviewerModel ??
           (settings ? resolvePhaseModelForIssue(settings, project, issue, 'reviewer') : 'codex'))
         : phase === 'executor'
-          ? (thread?.executorResolvedModel ??
+          ? (sanitizeResolvedModel(thread?.executorResolvedModel) ??
             thread?.executorModel ??
             (settings ? resolveExecutorModelForIssue(settings, project, issue) : 'claude'))
-          : (thread?.verifierResolvedModel ??
+          : (sanitizeResolvedModel(thread?.verifierResolvedModel) ??
             thread?.verifierModel ??
             (settings
               ? resolvePhaseModelForIssue(settings, project, issue, 'verifier')
@@ -150,7 +151,8 @@ export function compareIssues(
 export function rowToneFor(status: IssuePipelineStatus): RowTone {
   if (status === 'failed') return 'danger';
   if (status === 'awaiting_approval') return 'warning';
-  if (status === 'completed') return 'done';
+  if (status === 'completed') return 'success';
+  if (status === 'done') return 'done';
   if (ACTIVE_STATUSES.includes(status)) return 'agent';
   return 'default';
 }
