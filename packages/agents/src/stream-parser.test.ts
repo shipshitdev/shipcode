@@ -325,4 +325,20 @@ describe('StreamParser', () => {
       expect(err?.type).toBe('binary_missing');
     });
   });
+
+  describe('extractModel', () => {
+    it('extracts the assistant model from Claude NDJSON output', () => {
+      parser.feed(
+        `${JSON.stringify({ type: 'assistant', message: { model: 'claude-sonnet-4-6' } })}\n`,
+      );
+
+      expect(parser.extractModel()).toBe('claude-sonnet-4-6');
+    });
+
+    it('drops synthetic placeholder model identifiers', () => {
+      parser.feed(`${JSON.stringify({ type: 'assistant', message: { model: '<synthetic>' } })}\n`);
+
+      expect(parser.extractModel()).toBeNull();
+    });
+  });
 });

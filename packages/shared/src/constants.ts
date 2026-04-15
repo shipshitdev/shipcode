@@ -11,6 +11,7 @@ export const DEFAULT_STATUS_LABEL_MAPPINGS: Record<string, string> = {
   verifying: 'status:in-progress',
   shipping: 'status:in-progress',
   completed: 'status:done',
+  done: 'status:done',
   failed: 'status:failed',
 };
 

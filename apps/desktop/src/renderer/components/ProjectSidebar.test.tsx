@@ -28,6 +28,13 @@ function renderWithProviders() {
   );
 }
 
+async function openProjectOpenerSubmenu() {
+  fireEvent.pointerDown(await screen.findByRole('button', { name: 'More actions for ShipCode' }));
+  const openInTrigger = await screen.findByText('Open in');
+  openInTrigger.focus();
+  fireEvent.keyDown(openInTrigger, { key: 'ArrowRight' });
+}
+
 const project: Project = {
   id: 'project-1',
   name: 'ShipCode',
@@ -201,7 +208,7 @@ describe('ProjectSidebar', () => {
     expect(screen.queryByRole('button', { name: 'Open ShipCode folder' })).not.toBeInTheDocument();
   });
 
-  it('shows explicit opener targets in the project actions menu and marks the default target', async () => {
+  it('shows available opener targets inside a nested project actions submenu and marks the default target', async () => {
     invokeMock.mockImplementation(async (channel) => {
       if (channel === 'projects-visible' || channel === 'project:list-visible') return [project];
       if (channel === 'settings:get') return DEFAULT_SETTINGS;
@@ -217,13 +224,13 @@ describe('ProjectSidebar', () => {
 
     renderWithProviders();
 
-    fireEvent.pointerDown(await screen.findByRole('button', { name: 'More actions for ShipCode' }));
+    await openProjectOpenerSubmenu();
 
-    expect(await screen.findByText('Open in Cursor')).toBeInTheDocument();
-    expect(screen.getByText('Open in Finder')).toBeInTheDocument();
-    expect(screen.getByText('Open in Terminal')).toBeInTheDocument();
-    expect(screen.getByText('Open in Ghostty')).toBeInTheDocument();
-    expect(screen.getByText('Open in Visual Studio Code')).toBeInTheDocument();
+    expect(await screen.findByText('Cursor')).toBeInTheDocument();
+    expect(screen.getByText('Finder')).toBeInTheDocument();
+    expect(screen.getByText('Terminal')).toBeInTheDocument();
+    expect(screen.getByText('Visual Studio Code')).toBeInTheDocument();
+    expect(screen.queryByText('Ghostty')).not.toBeInTheDocument();
     expect(screen.getByText('Default')).toBeInTheDocument();
   });
 
@@ -244,8 +251,8 @@ describe('ProjectSidebar', () => {
 
     renderWithProviders();
 
-    fireEvent.pointerDown(await screen.findByRole('button', { name: 'More actions for ShipCode' }));
-    fireEvent.click(await screen.findByText('Open in Finder'));
+    await openProjectOpenerSubmenu();
+    fireEvent.click(await screen.findByText('Finder'));
 
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith('project:open-path', {

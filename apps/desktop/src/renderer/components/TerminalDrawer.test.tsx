@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '../stores/app-store';
 import { TerminalDrawer } from './TerminalDrawer';
 
+const fitSpy = vi.fn();
+
 vi.mock('@xterm/xterm', () => ({
   Terminal: class MockTerminal {
     options: Record<string, unknown> = {};
@@ -20,7 +22,9 @@ vi.mock('@xterm/xterm', () => ({
 
 vi.mock('@xterm/addon-fit', () => ({
   FitAddon: class MockFitAddon {
-    fit() {}
+    fit() {
+      fitSpy();
+    }
   },
 }));
 
@@ -67,6 +71,7 @@ describe('TerminalDrawer', () => {
   const originalResizeObserver = globalThis.ResizeObserver;
 
   beforeEach(() => {
+    fitSpy.mockClear();
     class MockResizeObserver {
       observe() {}
       disconnect() {}
@@ -222,6 +227,7 @@ describe('TerminalDrawer', () => {
     await waitFor(() => {
       expect(useAppStore.getState().canonicalTerminalStream['thread-1']).toHaveLength(1);
     });
+    expect(fitSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 
   it('filters the terminal dropdown to running issues in the selected project only', async () => {

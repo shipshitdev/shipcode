@@ -624,6 +624,7 @@ export type IssuePipelineStatus =
   | 'verifying'
   | 'shipping'
   | 'completed'
+  | 'done'
   | 'failed';
 
 // === Verification Types ===

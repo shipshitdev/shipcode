@@ -186,6 +186,7 @@ export function getIssueCardPhase(
     case 'verifying':
       return 'verifier';
     case 'completed':
+    case 'done':
     case 'failed':
       return null;
     case 'shipping':

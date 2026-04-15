@@ -155,46 +155,12 @@ export class GitHubIssueQueries {
       .run(status, id);
   }
 
-  /**
-   * When a GH issue flips to `state = 'closed'` externally (via the web UI,
-   * `gh issue close`, or a Projects v2 workflow), move the local
-   * `pipeline_status` to `'completed'` — but only from terminal or
-   * not-yet-started source states. In-flight statuses
-   * (planning/reviewing/revising/executing/verifying/shipping) are left alone
-   * so the pipeline writer never races with this flip. The SQL guard makes
-   * the operation race-safe without locks.
-   *
-   * Returns `true` iff a row was updated.
-   */
-  markCompletedOnClose(id: string): boolean {
-    const result = this.db
-      .prepare(
-        `UPDATE github_issue_cache
-           SET pipeline_status = 'completed', last_phase_update = ${ISO_NOW_SQL}
-         WHERE id = ?
-           AND pipeline_status IN ('todo','queued','awaiting_approval','failed')`,
-      )
-      .run(id);
-    return Number(result.changes) > 0;
-  }
-
-  /**
-   * Symmetric partner to `markCompletedOnClose`: when a GH issue is reopened,
-   * walk the local `pipeline_status` back from `'completed'` to `'todo'` so
-   * the user can re-run the pipeline. Leaves any non-completed status
-   * untouched (the pipeline might have advanced independently), and preserves
-   * `'completed'` when ShipCode already has a linked PR or a completed thread
-   * for this issue.
-   *
-   * Returns `true` iff a row was updated.
-   */
-  markReopenedOnOpen(id: string): boolean {
+  resetToTodo(id: string): boolean {
     const result = this.db
       .prepare(
         `UPDATE github_issue_cache
            SET pipeline_status = 'todo', last_phase_update = NULL
          WHERE id = ?
-           AND pipeline_status = 'completed'
            AND linked_pr_number IS NULL
            AND NOT EXISTS (
              SELECT 1
@@ -202,6 +168,91 @@ export class GitHubIssueQueries {
              WHERE threads.id = github_issue_cache.thread_id
                AND threads.status = 'completed'
            )`,
+      )
+      .run(id);
+    return Number(result.changes) > 0;
+  }
+
+  reconcileCompletedFromEvidence(id: string): boolean {
+    const result = this.db
+      .prepare(
+        `UPDATE github_issue_cache
+           SET pipeline_status = 'completed', last_phase_update = ${ISO_NOW_SQL}
+         WHERE id = ?
+           AND state = 'open'
+           AND pipeline_status IN ('todo','queued','awaiting_approval','failed','done')
+           AND (
+             linked_pr_number IS NOT NULL
+             OR EXISTS (
+               SELECT 1
+               FROM threads
+               WHERE threads.id = github_issue_cache.thread_id
+                 AND threads.status = 'completed'
+             )
+           )`,
+      )
+      .run(id);
+    return Number(result.changes) > 0;
+  }
+
+  /**
+   * When a GH issue flips to `state = 'closed'` externally (via the web UI,
+   * `gh issue close`, or a Projects v2 workflow), move the local
+   * `pipeline_status` to `'done'` — but only from terminal or
+   * not-yet-started source states. In-flight statuses
+   * (planning/reviewing/revising/executing/verifying/shipping) are left alone
+   * so the pipeline writer never races with this flip. The SQL guard makes
+   * the operation race-safe without locks.
+   *
+   * Returns `true` iff a row was updated.
+   */
+  markDoneOnClose(id: string): boolean {
+    const result = this.db
+      .prepare(
+        `UPDATE github_issue_cache
+           SET pipeline_status = 'done', last_phase_update = ${ISO_NOW_SQL}
+         WHERE id = ?
+           AND pipeline_status IN ('todo','queued','awaiting_approval','failed','completed')`,
+      )
+      .run(id);
+    return Number(result.changes) > 0;
+  }
+
+  /**
+   * When a GH issue is reopened, restore it to `'completed'` if ShipCode still
+   * has completion evidence (linked PR or completed thread); otherwise walk it
+   * back to `'todo'` so the user can re-run the pipeline.
+   *
+   * Returns `true` iff a row was updated.
+   */
+  markReopenedOnOpen(id: string): boolean {
+    const result = this.db
+      .prepare(
+        `UPDATE github_issue_cache
+           SET pipeline_status = CASE
+                 WHEN linked_pr_number IS NOT NULL
+                   OR EXISTS (
+                     SELECT 1
+                     FROM threads
+                     WHERE threads.id = github_issue_cache.thread_id
+                       AND threads.status = 'completed'
+                   )
+                 THEN 'completed'
+                 ELSE 'todo'
+               END,
+               last_phase_update = CASE
+                 WHEN linked_pr_number IS NOT NULL
+                   OR EXISTS (
+                     SELECT 1
+                     FROM threads
+                     WHERE threads.id = github_issue_cache.thread_id
+                       AND threads.status = 'completed'
+                   )
+                 THEN ${ISO_NOW_SQL}
+                 ELSE NULL
+               END
+         WHERE id = ?
+           AND pipeline_status IN ('completed','done')`,
       )
       .run(id);
     return Number(result.changes) > 0;
@@ -386,7 +437,7 @@ export class GitHubIssueQueries {
   listCompleted(projectId: string): GitHubIssueCacheRecord[] {
     const rows = this.db
       .prepare(
-        "SELECT * FROM github_issue_cache WHERE project_id = ? AND pipeline_status = 'completed' AND archived_at IS NULL ORDER BY fetched_at DESC",
+        "SELECT * FROM github_issue_cache WHERE project_id = ? AND pipeline_status IN ('completed','done') AND archived_at IS NULL ORDER BY fetched_at DESC",
       )
       .all(projectId);
     return asRows<GitHubIssueCacheRow>(rows).map((r) => this.toRecord(r));

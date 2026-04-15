@@ -242,6 +242,7 @@ export function useTerminalDrawer() {
     if (visibleTerminalThreadId !== prevThreadIdRef.current) {
       stopSpinner();
       term.reset();
+      fitRef.current?.fit();
       canonicalWrittenRef.current = 0;
       startedAtRef.current = null;
       lastKindRef.current = null;
@@ -304,6 +305,10 @@ export function useTerminalDrawer() {
     if (newEvents.length === 0) return;
 
     if (canonicalWrittenRef.current === 0 && newEvents.length > 0 && !startedAtRef.current) {
+      // xterm wraps against its current column count, not CSS. Re-fit before
+      // replaying the first batch so hydrated history wraps for the drawer's
+      // current width instead of whatever size the terminal last used.
+      fitRef.current?.fit();
       startedAtRef.current = new Date(newEvents[0].createdAt).toLocaleTimeString('en-US', {
         hour12: false,
         hour: '2-digit',

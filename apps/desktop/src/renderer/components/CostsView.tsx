@@ -4,6 +4,7 @@ import type {
   GitHubIssueCacheRecord,
   PipelinePhase,
 } from '@shipcode/shared';
+import { sanitizeResolvedModel } from '@shipcode/shared';
 import {
   Button,
   Card,
@@ -52,7 +53,7 @@ function formatProvider(provider: string): string {
 }
 
 function formatModelDescription(model: string | null, provider: string): string {
-  const value = model ?? provider;
+  const value = sanitizeResolvedModel(model) ?? provider;
   switch (value) {
     case 'anthropic/claude-sonnet-4-6':
       return 'Claude Sonnet 4.6';

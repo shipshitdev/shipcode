@@ -76,7 +76,58 @@ import { createElectronEmitter } from './pipeline-bridge';
 let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
 let pipeline: ReturnType<typeof createPipeline> | null = null;
+let threadQueries: ThreadQueries | null = null;
 let confirmQuit = false;
+let quitConfirmationInFlight = false;
+
+function formatActivePipelineNames(
+  active: Array<{ threadId: string }>,
+  threads: ThreadQueries | null,
+): string {
+  return active
+    .map((pipelineSummary) => {
+      const thread = threads?.getById(pipelineSummary.threadId);
+      return `• ${thread?.title ?? pipelineSummary.threadId}`;
+    })
+    .join('\n');
+}
+
+function restoreMainWindowAfterQuitCancel(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  if (!mainWindow.isVisible()) mainWindow.show();
+  mainWindow.focus();
+}
+
+async function confirmQuitForActivePipelines(threads: ThreadQueries | null): Promise<boolean> {
+  if (quitConfirmationInFlight) return false;
+
+  const active = pipeline?.listActive() ?? [];
+  if (active.length === 0) return true;
+
+  quitConfirmationInFlight = true;
+  try {
+    const names = formatActivePipelineNames(active, threads);
+    const { response } = await dialog.showMessageBox(requireMainWindow(), {
+      type: 'warning',
+      title: 'Pipelines still running',
+      message: `${active.length} pipeline${active.length !== 1 ? 's are' : ' is'} still running`,
+      detail: `${names}\n\nQuitting will cancel their progress.`,
+      buttons: ['Cancel & Quit', 'Keep Running'],
+      defaultId: 1,
+      cancelId: 1,
+    });
+
+    if (response !== 0) {
+      restoreMainWindowAfterQuitCancel();
+      return false;
+    }
+
+    return true;
+  } finally {
+    quitConfirmationInFlight = false;
+  }
+}
 
 function loadLocalEnvFiles() {
   const desktopRoot = path.resolve(__dirname, '..', '..');
@@ -197,6 +248,7 @@ function createWindow() {
     skills: new SkillsQueries(db),
     terminalEvents: new TerminalEventQueries(db),
   };
+  threadQueries = queries.threads;
 
   // Notification service — reads settings, writes notifications + activity,
   // emits OS notifications and dock badges. Must be constructed before the
@@ -391,18 +443,7 @@ function createWindow() {
     if (active.length === 0) return;
 
     event.preventDefault();
-    const names = active.map((p) => `• ${p.threadId}`).join('\n');
-    const { response } = await dialog.showMessageBox(requireMainWindow(), {
-      type: 'warning',
-      title: 'Pipelines still running',
-      message: `${active.length} pipeline${active.length !== 1 ? 's are' : ' is'} still running`,
-      detail: `${names}\n\nQuitting will cancel their progress.`,
-      buttons: ['Cancel & Quit', 'Keep Running'],
-      defaultId: 1,
-      cancelId: 1,
-    });
-
-    if (response === 0) {
+    if (await confirmQuitForActivePipelines(queries.threads)) {
       confirmQuit = true;
       mainWindow?.close();
     }
@@ -497,18 +538,7 @@ app.on('before-quit', async (event) => {
   }
 
   event.preventDefault();
-  const names = active.map((p) => `• ${p.threadId}`).join('\n');
-  const { response } = await dialog.showMessageBox(requireMainWindow(), {
-    type: 'warning',
-    title: 'Pipelines still running',
-    message: `${active.length} pipeline${active.length !== 1 ? 's are' : ' is'} still running`,
-    detail: `${names}\n\nQuitting will cancel their progress.`,
-    buttons: ['Cancel & Quit', 'Keep Running'],
-    defaultId: 1,
-    cancelId: 1,
-  });
-
-  if (response === 0) {
+  if (await confirmQuitForActivePipelines(threadQueries)) {
     confirmQuit = true;
     app.quit(); // re-triggers before-quit; confirmQuit=true lets it pass through
   }

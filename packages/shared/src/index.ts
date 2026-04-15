@@ -4,6 +4,7 @@ export * from './errors';
 export * from './github-labels';
 export * from './github-url';
 export * from './ipc-channels';
+export * from './model-identifiers';
 export * from './model-resolution';
 export * from './notifications';
 export * from './pipeline-utils';

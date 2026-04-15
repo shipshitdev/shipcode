@@ -14,6 +14,9 @@ import log from 'electron-log/renderer';
 import { useEffect, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 
+const EMPTY_ISSUES: GitHubIssueCacheRecord[] = [];
+const DONE_PIPELINE_STATUSES: IssuePipelineStatus[] = ['completed', 'done'];
+
 export function ThreadPanel() {
   const queryClient = useQueryClient();
   const { activeProjectId, selectIssue, openCreateIssueModal, activeIssue, setGithubIssues } =
@@ -24,16 +27,18 @@ export function ThreadPanel() {
     message: string;
   } | null>(null);
 
-  const { data: issues = [] } = useQuery<GitHubIssueCacheRecord[]>({
+  const { data: issuesData } = useQuery<GitHubIssueCacheRecord[]>({
     queryKey: ['github-issues', activeProjectId],
     queryFn: () => window.shipcode.invoke('github:list-issues', { projectId: activeProjectId }),
     enabled: !!activeProjectId,
     staleTime: 5_000,
   });
+  const issues = issuesData ?? EMPTY_ISSUES;
 
   useEffect(() => {
-    setGithubIssues(issues);
-  }, [issues, setGithubIssues]);
+    if (issuesData === undefined) return;
+    setGithubIssues(issuesData);
+  }, [issuesData, setGithubIssues]);
 
   const refreshIssues = useMutation({
     mutationFn: (projectId: string) =>
@@ -118,7 +123,9 @@ export function ThreadPanel() {
           window.alert(`Failed to archive issue: ${err?.message ?? err}`);
         });
     } else {
-      const doneIssues = issues.filter((issue) => issue.pipelineStatus === 'completed');
+      const doneIssues = issues.filter((issue) =>
+        DONE_PIPELINE_STATUSES.includes(issue.pipelineStatus),
+      );
       archiveIssuesOptimistic(doneIssues.map((issue) => issue.id));
       setArchiveFeedback({
         tone: 'pending',
@@ -273,12 +280,14 @@ export function ThreadPanel() {
         }}
         onArchiveIssue={(issue) => setArchiveConfirm({ type: 'one', issue })}
         onArchiveAllDone={() => {
-          const doneCount = issues.filter((i) => i.pipelineStatus === 'completed').length;
+          const doneCount = issues.filter((i) =>
+            DONE_PIPELINE_STATUSES.includes(i.pipelineStatus),
+          ).length;
           setArchiveConfirm({ type: 'all', count: doneCount });
         }}
         onMarkDone={(issue) => {
           if (!activeProjectId) return;
-          setPipelineStatusOptimistic(issue.id, 'completed');
+          setPipelineStatusOptimistic(issue.id, 'done');
           window.shipcode
             .invoke('github:close-issue', {
               projectId: activeProjectId,

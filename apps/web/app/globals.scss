@@ -1,5 +1,5 @@
 /* Token source of truth: packages/shared/src/tokens.ts */
-@import url("tailwindcss");
+@use "tailwindcss";
 @source "../../../packages/ui/src/**/*.{ts,tsx}";
 
 :root {

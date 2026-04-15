@@ -12,6 +12,8 @@ export function getStatusBadgeVariant(
 ): StatusBadgeVariant {
   switch (status) {
     case 'completed':
+      return 'success';
+    case 'done':
       return 'done';
     case 'failed':
       return 'danger';

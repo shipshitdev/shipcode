@@ -1,6 +1,7 @@
-import type { GitHubIssueCacheRecord } from '@shipcode/shared';
+import type { AppSettings, GitHubIssueCacheRecord, Project, Thread } from '@shipcode/shared';
+import { DEFAULT_SETTINGS } from '@shipcode/shared';
 import { describe, expect, it } from 'vitest';
-import { compareIssues } from './utils';
+import { compareIssues, resolveIssuePhaseChip } from './utils';
 
 function makeIssue(
   issueNumber: number,
@@ -42,6 +43,87 @@ function makeIssue(
   };
 }
 
+function makeProject(overrides: Partial<Project> = {}): Project {
+  return {
+    id: 'project-1',
+    name: 'shipcode',
+    path: '/tmp/shipcode',
+    gitRemote: 'git@github.com:shipshitdev/shipcode.git',
+    githubProjectUrl: null,
+    plannerModelOverride: null,
+    reviewerModelOverride: null,
+    executorModelOverride: null,
+    verifierModelOverride: null,
+    plannerModelIdOverride: null,
+    reviewerModelIdOverride: null,
+    executorModelIdOverride: null,
+    verifierModelIdOverride: null,
+    plannerReasoningEffortOverride: null,
+    reviewerReasoningEffortOverride: null,
+    executorReasoningEffortOverride: null,
+    verifierReasoningEffortOverride: null,
+    discordRouting: 'inherit',
+    discordWebhookUrlOverride: null,
+    telegramRouting: 'inherit',
+    telegramChatIdOverride: null,
+    defaultBranch: 'main',
+    pinned: false,
+    archived: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
+function makeThread(overrides: Partial<Thread> = {}): Thread {
+  return {
+    id: 'thread-1',
+    projectId: 'project-1',
+    title: 'Test thread',
+    prompt: 'Prompt',
+    status: 'planning',
+    worktreeBranch: null,
+    worktreePath: null,
+    plannerModel: 'claude',
+    reviewerModel: 'codex',
+    verifierModel: 'claude',
+    executorModel: 'claude',
+    reviewRound: 0,
+    verificationStatus: null,
+    verificationRetries: 0,
+    autonomous: true,
+    baseBranch: 'main',
+    forkPointSha: null,
+    githubIssueNumber: 42,
+    githubPrNumber: null,
+    githubRepo: null,
+    lastError: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    plannerResolvedModel: null,
+    reviewerResolvedModel: null,
+    revisorResolvedModel: null,
+    executorResolvedModel: null,
+    verifierResolvedModel: null,
+    totalTokensPrompt: 0,
+    totalTokensCompletion: 0,
+    totalCostUsd: 0,
+    ...overrides,
+  };
+}
+
+const SETTINGS: AppSettings = {
+  ...DEFAULT_SETTINGS,
+  plannerModel: 'claude',
+  reviewerModel: 'codex',
+  executorModel: 'claude',
+  verifierModel: 'claude',
+  plannerReasoningEffort: 'high',
+  reviewerReasoningEffort: 'medium',
+  executorReasoningEffort: 'high',
+  verifierReasoningEffort: 'medium',
+};
+
 describe('compareIssues', () => {
   it('sorts priority mode by label rank before issue number', () => {
     const issues = [
@@ -73,5 +155,35 @@ describe('compareIssues', () => {
     expect(
       [...issues].sort((a, b) => compareIssues(a, b, 'id-desc')).map((issue) => issue.issueNumber),
     ).toEqual([30, 20, 10]);
+  });
+});
+
+describe('resolveIssuePhaseChip', () => {
+  it('falls back when a resolved model contains the synthetic placeholder', () => {
+    const issue = makeIssue(42, 'Planning issue');
+    issue.pipelineStatus = 'planning';
+
+    const chip = resolveIssuePhaseChip(
+      issue,
+      SETTINGS,
+      makeProject(),
+      makeThread({ plannerResolvedModel: '<synthetic>', plannerModel: 'claude' }),
+    );
+
+    expect(chip).toMatchObject({ phase: 'planner', model: 'claude', effort: 'high' });
+  });
+
+  it('keeps real resolved models when they are concrete', () => {
+    const issue = makeIssue(43, 'Planning issue');
+    issue.pipelineStatus = 'planning';
+
+    const chip = resolveIssuePhaseChip(
+      issue,
+      SETTINGS,
+      makeProject(),
+      makeThread({ plannerResolvedModel: 'claude-sonnet-4-6' }),
+    );
+
+    expect(chip).toMatchObject({ phase: 'planner', model: 'claude-sonnet-4-6' });
   });
 });

@@ -13,14 +13,20 @@ import {
   Badge,
   Button,
   Check,
+  Code2,
   cn,
   DollarSign,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
   Folder,
+  FolderOpen,
+  Ghost,
   Inbox,
   LayoutGrid,
   MoreHorizontal,
@@ -29,10 +35,12 @@ import {
   Plus,
   Settings,
   Sparkles,
+  Terminal,
   Trash2,
   Wrench,
 } from '@shipcode/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { ComponentType } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { NOTIFICATIONS_STALE_TIME, STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
@@ -48,6 +56,24 @@ const SORT_LABELS: Record<SortOrder, string> = {
   recent: 'Recently used',
   alpha: 'Alphabetical',
   added: 'Date added',
+};
+
+const PROJECT_OPEN_TARGETS: AppSettings['projectOpenTarget'][] = [
+  'cursor',
+  'finder',
+  'terminal',
+  'ghostty',
+  'vscode',
+];
+
+type AppIcon = ComponentType<{ size?: number; className?: string }>;
+
+const PROJECT_OPEN_TARGET_ICONS: Record<AppSettings['projectOpenTarget'], AppIcon> = {
+  cursor: Sparkles,
+  finder: FolderOpen,
+  terminal: Terminal,
+  ghostty: Ghost,
+  vscode: Code2,
 };
 
 export function ProjectSidebar() {
@@ -464,25 +490,50 @@ export function ProjectSidebar() {
                   }
                 }}
               >
-                {(['cursor', 'finder', 'terminal', 'ghostty', 'vscode'] as const).map((target) => {
-                  const app = integrations?.desktopApps?.[target];
-                  const isDefaultTarget = (settings?.projectOpenTarget ?? 'cursor') === target;
-                  return (
-                    <DropdownMenuItem
-                      key={target}
-                      disabled={!app?.available || project.pathExists === false}
-                      onSelect={() => openProjectPath.mutate({ projectId: project.id, target })}
-                    >
-                      <span className="flex h-3.5 w-3.5 items-center justify-center">
-                        {isDefaultTarget ? <Check size={12} /> : null}
-                      </span>
-                      <span className="flex-1 truncate">Open in {app?.label ?? target}</span>
-                      {isDefaultTarget ? (
-                        <span className="text-[11px] text-muted">Default</span>
-                      ) : null}
-                    </DropdownMenuItem>
+                {(() => {
+                  const availableTargets = PROJECT_OPEN_TARGETS.filter(
+                    (target) => integrations?.desktopApps?.[target]?.available,
                   );
-                })}
+
+                  if (availableTargets.length === 0) return null;
+
+                  return (
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger disabled={project.pathExists === false}>
+                        <FolderOpen size={12} />
+                        <span className="truncate">Open in</span>
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent className="min-w-[240px]">
+                        {availableTargets.map((target) => {
+                          const app = integrations?.desktopApps?.[target];
+                          if (!app) return null;
+
+                          const isDefaultTarget =
+                            (settings?.projectOpenTarget ?? 'cursor') === target;
+                          const Icon = PROJECT_OPEN_TARGET_ICONS[target];
+
+                          return (
+                            <DropdownMenuItem
+                              key={target}
+                              onSelect={() =>
+                                openProjectPath.mutate({ projectId: project.id, target })
+                              }
+                            >
+                              <span className="flex h-3.5 w-3.5 items-center justify-center">
+                                {isDefaultTarget ? <Check size={12} /> : null}
+                              </span>
+                              <Icon size={12} className="shrink-0 text-secondary" />
+                              <span className="flex-1 truncate">{app.label}</span>
+                              {isDefaultTarget ? (
+                                <span className="text-[11px] text-muted">Default</span>
+                              ) : null}
+                            </DropdownMenuItem>
+                          );
+                        })}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                  );
+                })()}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onSelect={() => openProjectSettingsModal(project.id)}>
                   <Settings size={12} /> Settings

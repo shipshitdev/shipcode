@@ -4,6 +4,7 @@ import {
   PLAN_FENCE_TAG,
   planReviewSchema,
   REVIEW_FENCE_TAG,
+  sanitizeResolvedModel,
   shipCodePlanSchema,
   VERIFICATION_FENCE_TAG,
   verificationResultSchema,
@@ -243,7 +244,7 @@ export class StreamParser {
       try {
         const parsed = JSON.parse(trimmed);
         if (parsed.type === 'assistant' && typeof parsed.message?.model === 'string') {
-          return parsed.message.model as string;
+          return sanitizeResolvedModel(parsed.message.model as string);
         }
       } catch {}
     }

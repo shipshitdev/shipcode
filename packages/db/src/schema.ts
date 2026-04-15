@@ -706,3 +706,39 @@ export function migrateV20(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (20)`);
   });
 }
+
+export function migrateV21(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 21) return;
+
+  transaction(db, () => {
+    db.exec(`
+      UPDATE github_issue_cache
+         SET pipeline_status = 'done',
+             last_phase_update = COALESCE(last_phase_update, ${ISO_NOW_SQL})
+       WHERE state = 'closed'
+         AND pipeline_status = 'completed'
+    `);
+
+    db.exec(`
+      UPDATE github_issue_cache
+         SET pipeline_status = 'completed',
+             last_phase_update = COALESCE(last_phase_update, ${ISO_NOW_SQL})
+       WHERE state = 'open'
+         AND pipeline_status IN ('todo', 'queued', 'awaiting_approval', 'failed')
+         AND (
+           linked_pr_number IS NOT NULL
+           OR EXISTS (
+             SELECT 1
+             FROM threads
+             WHERE threads.id = github_issue_cache.thread_id
+               AND threads.status = 'completed'
+           )
+         )
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (21)`);
+  });
+}

@@ -83,7 +83,21 @@ export const COLUMNS: BoardColumn[] = [
     key: 'done',
     label: 'Done',
     droppable: false,
-    statuses: ['completed'],
+    statuses: ['completed', 'done'],
+    sections: [
+      {
+        key: 'completed',
+        label: 'Completed',
+        statuses: ['completed'],
+        droppable: false,
+      },
+      {
+        key: 'done',
+        label: 'Done',
+        statuses: ['done'],
+        droppable: true,
+      },
+    ],
   },
 ];
 
@@ -97,6 +111,7 @@ export const COLUMN_DOT_CLASS: Record<ColumnKey, string> = {
 export const DRAGGABLE_STATUSES: IssuePipelineStatus[] = [
   'todo',
   'queued',
+  'completed',
   'failed',
   'awaiting_approval',
 ];
@@ -132,6 +147,7 @@ export const LIST_COLUMN_LABEL: Record<ColumnKey, string> = {
 export const LIST_COLUMN_DROP_ID: Partial<Record<ColumnKey, string>> = {
   todo: 'todo',
   agent: 'agent:planning',
+  done: 'done:done',
 };
 
 export const BOARD_SORT_LABELS: Record<BoardSortOrder, string> = {

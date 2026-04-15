@@ -18,7 +18,8 @@ export function phaseToProgress(phase: PipelinePhase | IssuePipelineStatus): num
     testing: 82,
     verifying: 90,
     shipping: 96,
-    completed: 100,
+    completed: 92,
+    done: 100,
     failed: 0,
   };
   return MAP[phase] ?? 0;

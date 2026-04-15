@@ -3,7 +3,8 @@ import { getStatusBadgeVariant } from './status-variant';
 
 describe('getStatusBadgeVariant', () => {
   it.each([
-    ['completed', 'done'],
+    ['completed', 'success'],
+    ['done', 'done'],
     ['failed', 'danger'],
     ['awaiting_approval', 'warning'],
     ['planning', 'accent'],
