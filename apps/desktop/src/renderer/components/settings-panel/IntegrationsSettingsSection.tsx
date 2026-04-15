@@ -62,6 +62,69 @@ export function IntegrationsSettingsSection({
     'ghostty',
     'vscode',
   ];
+  const projectOpenerSection = (
+    <section className="mb-6 rounded-md border border-border bg-secondary/40 p-3">
+      <div className="mb-3">
+        <div className="text-[13px] font-medium text-primary">Project opener</div>
+        <div className="text-[11px] text-muted">
+          Choose the default app ShipCode uses when you open a project folder from the sidebar.
+        </div>
+      </div>
+
+      <div className="mb-4 flex max-w-[260px] flex-col gap-1.5">
+        <label htmlFor="project-open-target" className="text-[11px] text-secondary">
+          Default app
+        </label>
+        <Select
+          value={settings.projectOpenTarget}
+          onValueChange={(value) =>
+            onUpdate({ projectOpenTarget: value as AppSettings['projectOpenTarget'] })
+          }
+        >
+          <SelectTrigger id="project-open-target">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {projectOpenTargets.map((target) => {
+              const app = integrationStatus.desktopApps[target];
+              return (
+                <SelectItem key={target} value={target} disabled={!app.available}>
+                  {app.label}
+                  {!app.available ? ' (Unavailable)' : ''}
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        {projectOpenTargets.map((target) => {
+          const app = integrationStatus.desktopApps[target];
+          return (
+            <div key={target} className="rounded-md border border-border bg-primary/40 p-3">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-[140px] text-[13px] font-medium text-primary">
+                  {app.label}
+                </div>
+                <StatusPill tone={app.available ? 'success' : 'neutral'}>
+                  {app.available ? 'Available' : 'Unavailable'}
+                </StatusPill>
+              </div>
+              <div className="mt-2 space-y-1 text-[12px] text-secondary">
+                {app.path ? (
+                  <div>
+                    Path: <code>{app.path}</code>
+                  </div>
+                ) : null}
+                {app.error ? <div className="text-amber-300">{app.error}</div> : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
 
   return (
     <>
@@ -84,72 +147,10 @@ export function IntegrationsSettingsSection({
           <TabsList className="mb-5">
             <TabsTrigger value="cli">CLI</TabsTrigger>
             <TabsTrigger value="api-keys">API Keys</TabsTrigger>
+            <TabsTrigger value="ide">IDE</TabsTrigger>
           </TabsList>
 
           <TabsContent value="cli" className="mt-0 space-y-2">
-            <section className="mb-6 rounded-md border border-border bg-secondary/40 p-3">
-              <div className="mb-3">
-                <div className="text-[13px] font-medium text-primary">Project opener</div>
-                <div className="text-[11px] text-muted">
-                  Choose the default app ShipCode uses when you open a project folder from the
-                  sidebar.
-                </div>
-              </div>
-
-              <div className="mb-4 flex max-w-[260px] flex-col gap-1.5">
-                <label htmlFor="project-open-target" className="text-[11px] text-secondary">
-                  Default app
-                </label>
-                <Select
-                  value={settings.projectOpenTarget}
-                  onValueChange={(value) =>
-                    onUpdate({ projectOpenTarget: value as AppSettings['projectOpenTarget'] })
-                  }
-                >
-                  <SelectTrigger id="project-open-target">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {projectOpenTargets.map((target) => {
-                      const app = integrationStatus.desktopApps[target];
-                      return (
-                        <SelectItem key={target} value={target} disabled={!app.available}>
-                          {app.label}
-                          {!app.available ? ' (Unavailable)' : ''}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                {projectOpenTargets.map((target) => {
-                  const app = integrationStatus.desktopApps[target];
-                  return (
-                    <div key={target} className="rounded-md border border-border bg-primary/40 p-3">
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div className="min-w-[140px] text-[13px] font-medium text-primary">
-                          {app.label}
-                        </div>
-                        <StatusPill tone={app.available ? 'success' : 'neutral'}>
-                          {app.available ? 'Available' : 'Unavailable'}
-                        </StatusPill>
-                      </div>
-                      <div className="mt-2 space-y-1 text-[12px] text-secondary">
-                        {app.path ? (
-                          <div>
-                            Path: <code>{app.path}</code>
-                          </div>
-                        ) : null}
-                        {app.error ? <div className="text-amber-300">{app.error}</div> : null}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-
             {[
               { key: 'claude', label: 'Claude CLI' },
               { key: 'codex', label: 'Codex CLI' },
@@ -465,6 +466,10 @@ export function IntegrationsSettingsSection({
                 })}
               </div>
             </section>
+          </TabsContent>
+
+          <TabsContent value="ide" className="mt-0">
+            {projectOpenerSection}
           </TabsContent>
         </Tabs>
       )}

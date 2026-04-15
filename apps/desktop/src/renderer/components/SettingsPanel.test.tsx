@@ -169,7 +169,7 @@ describe('SettingsPanel', () => {
     expect(screen.getByText('GitHub CLI')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'CLI' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'API Keys' })).toBeInTheDocument();
-    expect(screen.getByText('Project opener')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'IDE' })).toBeInTheDocument();
   });
 
   it('renders the pipeline section shell', async () => {
@@ -375,6 +375,10 @@ describe('SettingsPanel', () => {
     });
 
     renderWithProviders();
+
+    const ideTab = await screen.findByRole('tab', { name: 'IDE' });
+    fireEvent.mouseDown(ideTab, { button: 0 });
+    fireEvent.click(ideTab);
 
     expect(await screen.findByText('Project opener')).toBeInTheDocument();
     expect(screen.getByLabelText('Default app')).toBeInTheDocument();
