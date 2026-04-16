@@ -54,6 +54,32 @@ export class DashboardQueries {
       runningByPhase[row.status as PipelinePhase] = row.n;
     }
 
+    const agentsRunningByProjectRows = this.db
+      .prepare(
+        `SELECT project_id, COUNT(*) as n FROM threads
+       WHERE status IN (${placeholders(AGENT_RUNNING_PHASES.length)})
+       GROUP BY project_id`,
+      )
+      .all(...AGENT_RUNNING_PHASES) as Array<{ project_id: string; n: number }>;
+
+    const agentsRunningByProject: Record<string, number> = {};
+    for (const row of agentsRunningByProjectRows) {
+      agentsRunningByProject[row.project_id] = row.n;
+    }
+
+    const pendingApprovalsByProjectRows = this.db
+      .prepare(
+        `SELECT project_id, COUNT(*) as n FROM threads
+       WHERE status = 'awaiting_approval'
+       GROUP BY project_id`,
+      )
+      .all() as Array<{ project_id: string; n: number }>;
+
+    const pendingApprovalsByProject: Record<string, number> = {};
+    for (const row of pendingApprovalsByProjectRows) {
+      pendingApprovalsByProject[row.project_id] = row.n;
+    }
+
     // Tasks in progress = any active phase (including awaiting_approval).
     const tasksInProgressRow = this.db
       .prepare(
@@ -104,6 +130,8 @@ export class DashboardQueries {
     return {
       agentsRunning: agentsRunningRow.n,
       runningByPhase,
+      agentsRunningByProject,
+      pendingApprovalsByProject,
       tasksInProgress: tasksInProgressRow.n,
       tasksOpen: tasksOpenRow.n,
       tasksBlocked: blockedRow.n,

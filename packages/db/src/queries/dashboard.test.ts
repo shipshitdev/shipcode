@@ -58,6 +58,38 @@ describe('DashboardQueries', () => {
     expect(stats.tasksInProgress).toBe(1); // awaiting_approval is still "in progress"
   });
 
+  it('getStats().pendingApprovalsByProject counts awaiting_approval threads per project', () => {
+    const projectA = projects.add('/tmp/project-a').id;
+    const projectB = projects.add('/tmp/project-b').id;
+    const projectC = projects.add('/tmp/project-c').id;
+
+    const aApprovalOne = threads.create(projectA, 'approval 1', 'Approval 1');
+    const aApprovalTwo = threads.create(projectA, 'approval 2', 'Approval 2');
+    const aRunning = threads.create(projectA, 'running a', 'Running A');
+    const bApproval = threads.create(projectB, 'approval b', 'Approval B');
+    const bRunning = threads.create(projectB, 'running b', 'Running B');
+    const cRunning = threads.create(projectC, 'running c', 'Running C');
+
+    db.prepare(`UPDATE threads SET status = 'awaiting_approval' WHERE id IN (?, ?, ?)`).run(
+      aApprovalOne.id,
+      aApprovalTwo.id,
+      bApproval.id,
+    );
+    db.prepare(`UPDATE threads SET status = 'planning' WHERE id = ?`).run(aRunning.id);
+    db.prepare(`UPDATE threads SET status = 'executing' WHERE id = ?`).run(bRunning.id);
+    db.prepare(`UPDATE threads SET status = 'reviewing' WHERE id = ?`).run(cRunning.id);
+
+    const stats = dashboard.getStats();
+    expect(stats.pendingApprovalsByProject[projectA]).toBe(2);
+    expect(stats.pendingApprovalsByProject[projectB]).toBe(1);
+    expect(stats.pendingApprovalsByProject[projectC] ?? 0).toBe(0);
+    expect(stats.agentsRunningByProject[projectA]).toBe(1);
+    expect(stats.agentsRunningByProject[projectB]).toBe(1);
+    expect(stats.agentsRunningByProject[projectC]).toBe(1);
+    expect(stats.agentsRunning).toBe(3);
+    expect(stats.pendingApprovals).toBe(3);
+  });
+
   it('getStats().shippedLast7d counts completed threads updated recently', () => {
     const t = threads.create(projectId, 'done', 'Done');
     db.prepare(`UPDATE threads SET status = 'completed' WHERE id = ?`).run(t.id);

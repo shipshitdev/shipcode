@@ -5,6 +5,7 @@ import {
   ArrowUpDown,
   Button,
   Check,
+  Badge,
   cn,
   DollarSign,
   DropdownMenu,
@@ -142,6 +143,8 @@ export function ProjectSidebar() {
   }
 
   const liveCount = stats?.agentsRunning ?? 0;
+  const runningByProject = stats?.agentsRunningByProject ?? {};
+  const approvalsByProject = stats?.pendingApprovalsByProject ?? {};
   const inboxCount = notifs.filter((n) => n.dismissedAt === null).length;
 
   // Pinned projects always float to top; within each group, apply the selected sort order.
@@ -276,78 +279,101 @@ export function ProjectSidebar() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 py-1">
-        {sortedProjects.map((project) => (
-          <div key={project.id} className="relative group">
-            <Button
-              variant="ghost"
-              className={cn(
-                'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
-                viewMode === 'project' &&
-                  activeProjectId === project.id &&
-                  'bg-tertiary text-primary font-medium',
-              )}
-              onClick={() => selectProject(project.id)}
-            >
-              {project.pinned ? (
-                <Pin size={12} className="shrink-0 text-accent fill-accent" />
-              ) : (
-                <Folder size={14} className="shrink-0 text-secondary" />
-              )}
-              <span className="flex-1 truncate text-primary">{project.name}</span>
-            </Button>
+        {sortedProjects.map((project) => {
+          const live = runningByProject[project.id] ?? 0;
+          const approvals = approvalsByProject[project.id] ?? 0;
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted opacity-0 group-hover:opacity-100 focus:opacity-100"
-                  aria-label={`More actions for ${project.name}`}
-                >
-                  <MoreHorizontal size={14} />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => openProjectSettingsModal(project.id)}>
-                  <Settings size={12} /> Settings
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={() =>
-                    pinProject.mutate({ projectId: project.id, pinned: !project.pinned })
-                  }
-                >
-                  {project.pinned ? (
-                    <>
-                      <PinOff size={12} /> Unpin
-                    </>
-                  ) : (
-                    <>
-                      <Pin size={12} /> Pin to top
-                    </>
-                  )}
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => archiveProject.mutate(project.id)}>
-                  <Archive size={12} /> Archive
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onSelect={() => {
-                    if (
-                      window.confirm(
-                        `Remove "${project.name}" from ShipCode? This does not delete the repository on disk.`,
-                      )
-                    ) {
-                      removeProject.mutate(project.id);
+          return (
+            <div key={project.id} className="relative group">
+              <Button
+                variant="ghost"
+                className={cn(
+                  'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
+                  viewMode === 'project' &&
+                    activeProjectId === project.id &&
+                    'bg-tertiary text-primary font-medium',
+                )}
+                onClick={() => selectProject(project.id)}
+              >
+                {project.pinned ? (
+                  <Pin size={12} className="shrink-0 text-accent fill-accent" />
+                ) : (
+                  <Folder size={14} className="shrink-0 text-secondary" />
+                )}
+                <span className="flex-1 truncate text-primary">{project.name}</span>
+                {(approvals > 0 || live > 0) && (
+                  <div className="flex shrink-0 items-center gap-1">
+                    {approvals > 0 && (
+                      <Badge variant="warning" className="!normal-case !tracking-normal px-1.5">
+                        {approvals === 1 ? '1 approval' : `${approvals} approvals`}
+                      </Badge>
+                    )}
+                    {live > 0 && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-agent/30 bg-agent/10 px-1.5 py-0.5 text-[10px] font-medium text-agent">
+                        <span className="relative flex h-1.5 w-1.5 items-center justify-center">
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-agent opacity-60" />
+                          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-agent" />
+                        </span>
+                        {live} live
+                      </span>
+                    )}
+                  </div>
+                )}
+              </Button>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted opacity-0 group-hover:opacity-100 focus:opacity-100"
+                    aria-label={`More actions for ${project.name}`}
+                  >
+                    <MoreHorizontal size={14} />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => openProjectSettingsModal(project.id)}>
+                    <Settings size={12} /> Settings
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() =>
+                      pinProject.mutate({ projectId: project.id, pinned: !project.pinned })
                     }
-                  }}
-                  className="text-danger"
-                >
-                  <Trash2 size={12} /> Remove
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        ))}
+                  >
+                    {project.pinned ? (
+                      <>
+                        <PinOff size={12} /> Unpin
+                      </>
+                    ) : (
+                      <>
+                        <Pin size={12} /> Pin to top
+                      </>
+                    )}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => archiveProject.mutate(project.id)}>
+                    <Archive size={12} /> Archive
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      if (
+                        window.confirm(
+                          `Remove "${project.name}" from ShipCode? This does not delete the repository on disk.`,
+                        )
+                      ) {
+                        removeProject.mutate(project.id);
+                      }
+                    }}
+                    className="text-danger"
+                  >
+                    <Trash2 size={12} /> Remove
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          );
+        })}
       </div>
     </aside>
   );
