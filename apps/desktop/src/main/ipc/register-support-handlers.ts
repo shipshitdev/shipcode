@@ -74,6 +74,7 @@ export function registerSupportHandlers({
     async (_event, { projectId, draftBody }: { projectId: string; draftBody: string }) => {
       const project = queries.projects.getById(projectId);
       if (!project) throw new Error(`Project ${projectId} not found`);
+      const settings = queries.settings.get();
 
       const skillPath = path.join(project.path, '.agents', 'skills', 'writing-prds', 'SKILL.md');
       let skillContent: string;
@@ -92,6 +93,12 @@ export function registerSupportHandlers({
           draftBody: draftBody ?? '',
           skillContent,
           cwd: project.path,
+          cli: settings.prdRewriteCli,
+          modelId:
+            settings.prdRewriteCli === 'claude'
+              ? settings.prdRewriteClaudeModel
+              : settings.prdRewriteCodexModel,
+          reasoningEffort: settings.prdRewriteReasoningEffort,
         });
       } catch (err) {
         log.error('[ai:enhance-prd]', err);

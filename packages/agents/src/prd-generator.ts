@@ -1,5 +1,10 @@
 import { spawn } from 'node:child_process';
+import type { ContextGeneratorCli, ReasoningEffort } from '@shipcode/shared';
 import { extractCliFailureMessage } from './cli-error';
+import {
+  mapReasoningEffortToClaudeThinkingTokens,
+  mapReasoningEffortToCodex,
+} from './providers/reasoning';
 
 const PRD_FENCE_TAG = 'shipcode-prd';
 
@@ -14,6 +19,12 @@ export interface EnhancePrdOptions {
   skillContent: string;
   /** Working directory (usually the project path). */
   cwd: string;
+  /** Which CLI to use for PRD enhancement. Defaults to Claude. */
+  cli?: ContextGeneratorCli;
+  /** Optional explicit model selection for the selected CLI. */
+  modelId?: string | null;
+  /** Reasoning effort / thinking budget for the selected CLI. */
+  reasoningEffort?: ReasoningEffort;
   /** Request timeout in ms. Defaults to 3 minutes. */
   timeoutMs?: number;
 }
@@ -72,14 +83,22 @@ Example envelope:
 }
 
 /**
- * Run Claude CLI one-shot with the prompt piped via stdin and return a parsed
- * PRD body. Throws with a short, prompt-free error on failure.
+ * Run the selected CLI one-shot with the prompt piped via stdin and return a
+ * parsed PRD body. Throws with a short, prompt-free error on failure.
  */
 export async function enhancePrdDraft(opts: EnhancePrdOptions): Promise<GeneratedPrd> {
   const prompt = buildPrdPrompt(opts.draftBody, opts.skillContent);
   const timeout = opts.timeoutMs ?? 180_000;
+  const cli = opts.cli ?? 'claude';
 
-  const stdout = await runClaudeWithStdin(prompt, opts.cwd, timeout);
+  const stdout = await runPrdCliWithStdin(
+    cli,
+    prompt,
+    opts.cwd,
+    timeout,
+    opts.modelId,
+    opts.reasoningEffort,
+  );
 
   // `claude -p --output-format json` returns an envelope
   // `{ session_id, result, ... }`. Unwrap to `result`, with a raw-stdout
@@ -98,29 +117,56 @@ export async function enhancePrdDraft(opts: EnhancePrdOptions): Promise<Generate
 }
 
 /**
- * Spawn `claude -p` with no prompt argv and pipe the prompt through stdin.
+ * Spawn the selected CLI with no prompt argv and pipe the prompt through stdin.
  *
  * Argv piping is deliberate: the prompt starts with YAML frontmatter (`---`)
  * which Claude CLI's argparser would reject as an unknown flag if passed as an
- * argument. See `packages/agents/src/github/gh-cli.ts:117` for the same
- * pattern used by `gh issue create --body-file -`.
+ * argument. Codex supports stdin via `exec -`, so both paths stay symmetric.
+ * See `packages/agents/src/github/gh-cli.ts:117` for the same stdin pattern
+ * used by `gh issue create --body-file -`.
  */
-function runClaudeWithStdin(prompt: string, cwd: string, timeoutMs: number): Promise<string> {
+function runPrdCliWithStdin(
+  cli: ContextGeneratorCli,
+  prompt: string,
+  cwd: string,
+  timeoutMs: number,
+  modelId?: string | null,
+  reasoningEffort?: ReasoningEffort,
+): Promise<string> {
   return new Promise((resolve, reject) => {
-    const proc = spawn(
-      'claude',
-      [
-        '-p',
-        '--output-format',
-        'json',
-        '--max-turns',
-        '1',
-        '--dangerously-skip-permissions',
-        '--disallowedTools',
-        'Edit,Write,Bash,NotebookEdit',
-      ],
-      { cwd, stdio: ['pipe', 'pipe', 'pipe'] },
-    );
+    const command = cli;
+    const label = cli === 'claude' ? 'Claude CLI' : 'Codex CLI';
+    const args =
+      cli === 'claude'
+        ? [
+            '-p',
+            ...(modelId ? ['--model', modelId] : []),
+            '--output-format',
+            'json',
+            '--max-turns',
+            '1',
+            ...(() => {
+              const thinkingTokens = mapReasoningEffortToClaudeThinkingTokens(reasoningEffort);
+              return thinkingTokens === null
+                ? []
+                : (['--max-thinking-tokens', String(thinkingTokens)] as string[]);
+            })(),
+            '--dangerously-skip-permissions',
+            '--disallowedTools',
+            'Edit,Write,Bash,NotebookEdit',
+          ]
+        : [
+            '-a',
+            'never',
+            ...(modelId ? ['-m', modelId] : []),
+            '-c',
+            `model_reasoning_effort=${mapReasoningEffortToCodex(reasoningEffort)}`,
+            'exec',
+            '-',
+            '--sandbox',
+            'read-only',
+          ];
+    const proc = spawn(command, args, { cwd, stdio: ['pipe', 'pipe', 'pipe'] });
 
     let stdout = '';
     let stderr = '';
@@ -133,13 +179,13 @@ function runClaudeWithStdin(prompt: string, cwd: string, timeoutMs: number): Pro
 
     const timer = setTimeout(() => {
       proc.kill('SIGTERM');
-      reject(new Error(`Claude CLI timed out after ${timeoutMs}ms`));
+      reject(new Error(`${label} timed out after ${timeoutMs}ms`));
     }, timeoutMs);
 
     proc.on('error', (err) => {
       clearTimeout(timer);
       // ENOENT etc — surface a short message, never echo the prompt.
-      reject(new Error(`Claude CLI spawn failed: ${err.message.split('\n')[0].slice(0, 200)}`));
+      reject(new Error(`${label} spawn failed: ${err.message.split('\n')[0].slice(0, 200)}`));
     });
 
     proc.on('close', (code) => {
@@ -149,7 +195,7 @@ function runClaudeWithStdin(prompt: string, cwd: string, timeoutMs: number): Pro
         return;
       }
       const tidy = extractCliFailureMessage(stdout, stderr);
-      reject(new Error(`Claude CLI exited ${code}: ${tidy}`));
+      reject(new Error(`${label} exited ${code}: ${tidy}`));
     });
 
     proc.stdin.write(prompt);

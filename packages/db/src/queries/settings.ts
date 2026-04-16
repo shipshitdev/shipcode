@@ -54,9 +54,10 @@ function readNullable(raw: string | undefined): string | null {
   return raw;
 }
 
-const REASONING_EFFORTS = ['low', 'medium', 'high'] as const;
+const REASONING_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'] as const;
 const PROJECT_OPEN_TARGETS = ['cursor', 'finder', 'terminal', 'ghostty', 'vscode'] as const;
 const FONT_SIZES = [12, 13, 14, 15] as const;
+const CONTEXT_GENERATOR_CLIS = ['claude', 'codex'] as const;
 
 function isReasoningEffort(value: unknown): value is AppSettings['plannerReasoningEffort'] {
   return typeof value === 'string' && (REASONING_EFFORTS as readonly string[]).includes(value);
@@ -68,6 +69,10 @@ function isProjectOpenTarget(value: unknown): value is AppSettings['projectOpenT
 
 function isFontSize(value: unknown): value is AppSettings['fontSize'] {
   return typeof value === 'number' && (FONT_SIZES as readonly number[]).includes(value);
+}
+
+function isContextGeneratorCli(value: unknown): value is AppSettings['prdRewriteCli'] {
+  return typeof value === 'string' && (CONTEXT_GENERATOR_CLIS as readonly string[]).includes(value);
 }
 
 export class SettingsQueries {
@@ -105,6 +110,16 @@ export class SettingsQueries {
         (stored.reviewerModel as AppSettings['reviewerModel']) ?? DEFAULT_SETTINGS.reviewerModel,
       executorModel:
         (stored.executorModel as AppSettings['executorModel']) ?? DEFAULT_SETTINGS.executorModel,
+      prdRewriteCli: isContextGeneratorCli(stored.prdRewriteCli)
+        ? stored.prdRewriteCli
+        : DEFAULT_SETTINGS.prdRewriteCli,
+      prdRewriteClaudeModel:
+        readNullable(stored.prdRewriteClaudeModel) ?? DEFAULT_SETTINGS.prdRewriteClaudeModel,
+      prdRewriteCodexModel:
+        readNullable(stored.prdRewriteCodexModel) ?? DEFAULT_SETTINGS.prdRewriteCodexModel,
+      prdRewriteReasoningEffort: isReasoningEffort(stored.prdRewriteReasoningEffort)
+        ? (stored.prdRewriteReasoningEffort as AppSettings['prdRewriteReasoningEffort'])
+        : DEFAULT_SETTINGS.prdRewriteReasoningEffort,
       githubPollingEnabled: parseBool(
         stored.githubPollingEnabled,
         DEFAULT_SETTINGS.githubPollingEnabled,
@@ -211,9 +226,12 @@ export class SettingsQueries {
       'reviewerReasoningEffort',
       'executorReasoningEffort',
       'verifierReasoningEffort',
+      'prdRewriteReasoningEffort',
     ] as const) {
       if (key in patch && patch[key] != null) {
-        if (!isReasoningEffort(patch[key])) throw new Error(`${key} must be low|medium|high`);
+        if (!isReasoningEffort(patch[key])) {
+          throw new Error(`${key} must be none|minimal|low|medium|high|xhigh`);
+        }
       }
     }
     if ('projectOpenTarget' in patch && patch.projectOpenTarget != null) {
@@ -224,6 +242,11 @@ export class SettingsQueries {
     if ('fontSize' in patch && patch.fontSize != null) {
       if (!isFontSize(patch.fontSize)) {
         throw new Error('fontSize must be one of 12|13|14|15');
+      }
+    }
+    if ('prdRewriteCli' in patch && patch.prdRewriteCli != null) {
+      if (!isContextGeneratorCli(patch.prdRewriteCli)) {
+        throw new Error('prdRewriteCli must be claude|codex');
       }
     }
     if ('worktreeBranchFormat' in patch && patch.worktreeBranchFormat != null) {

@@ -25,6 +25,10 @@ describe('SettingsQueries', () => {
     expect(s.terminalScrollback).toBe(10000);
     expect(s.plannerModel).toBe('claude');
     expect(s.reviewerModel).toBe('codex');
+    expect(s.prdRewriteCli).toBe('claude');
+    expect(s.prdRewriteClaudeModel).toBe('claude-sonnet-4-6');
+    expect(s.prdRewriteCodexModel).toBe('gpt-5.4-mini');
+    expect(s.prdRewriteReasoningEffort).toBe('low');
     expect(s.githubPollingEnabled).toBe(false);
     expect(s.githubPollingIntervalMs).toBe(30000);
     expect(s.githubBotUsername).toBe('');
@@ -86,6 +90,10 @@ describe('SettingsQueries', () => {
       fontSize: 15,
       terminalScrollback: 5000,
       projectOpenTarget: 'finder',
+      prdRewriteCli: 'codex',
+      prdRewriteClaudeModel: 'claude-opus-4-6',
+      prdRewriteCodexModel: 'gpt-5.4',
+      prdRewriteReasoningEffort: 'medium',
     });
     const s = settings.get();
     expect(s.theme).toBe('dark');
@@ -93,6 +101,10 @@ describe('SettingsQueries', () => {
     expect(s.fontSize).toBe(15);
     expect(s.terminalScrollback).toBe(5000);
     expect(s.projectOpenTarget).toBe('finder');
+    expect(s.prdRewriteCli).toBe('codex');
+    expect(s.prdRewriteClaudeModel).toBe('claude-opus-4-6');
+    expect(s.prdRewriteCodexModel).toBe('gpt-5.4');
+    expect(s.prdRewriteReasoningEffort).toBe('medium');
   });
 
   it('set() serializes booleans as string true/false', () => {
@@ -153,5 +165,26 @@ describe('SettingsQueries', () => {
 
   it('rejects invalid font sizes', () => {
     expect(() => settings.set({ fontSize: 16 as 12 })).toThrow(/fontSize/);
+  });
+
+  it('rejects invalid PRD rewrite CLI values', () => {
+    expect(() => settings.set({ prdRewriteCli: 'openrouter' as unknown as 'claude' })).toThrow(
+      /prdRewriteCli/,
+    );
+  });
+
+  it('accepts the expanded reasoning-effort values', () => {
+    settings.set({
+      plannerReasoningEffort: 'none',
+      reviewerReasoningEffort: 'minimal',
+      executorReasoningEffort: 'xhigh',
+      verifierReasoningEffort: 'low',
+    });
+
+    const s = settings.get();
+    expect(s.plannerReasoningEffort).toBe('none');
+    expect(s.reviewerReasoningEffort).toBe('minimal');
+    expect(s.executorReasoningEffort).toBe('xhigh');
+    expect(s.verifierReasoningEffort).toBe('low');
   });
 });

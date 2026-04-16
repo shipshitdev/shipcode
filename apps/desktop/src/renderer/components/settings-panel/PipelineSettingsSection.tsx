@@ -1,4 +1,10 @@
-import type { AppSettings, IntegrationStatus } from '@shipcode/shared';
+import {
+  type AppSettings,
+  type ExecutorModel,
+  getSupportedReasoningEfforts,
+  type IntegrationStatus,
+  resolveProviderReasoningEffort,
+} from '@shipcode/shared';
 import {
   Input,
   Select,
@@ -28,6 +34,21 @@ export function PipelineSettingsSection({
   onUpdate: (patch: Partial<AppSettings>) => void;
 }) {
   const openrouterModelOptions = getModelOptions('openrouter');
+  const prdRewriteProvider = settings.prdRewriteCli as Extract<ExecutorModel, 'claude' | 'codex'>;
+  const prdRewriteModelOptions = getModelOptions(prdRewriteProvider);
+  const prdRewriteModelValue =
+    prdRewriteProvider === 'claude'
+      ? settings.prdRewriteClaudeModel
+      : settings.prdRewriteCodexModel;
+  const prdRewriteEffortResolution = resolveProviderReasoningEffort(
+    prdRewriteProvider,
+    settings.prdRewriteReasoningEffort,
+  );
+  const prdRewriteSupportedEfforts = getSupportedReasoningEfforts(prdRewriteProvider);
+  const normalizeEffort = (
+    provider: ExecutorModel,
+    effort: AppSettings['plannerReasoningEffort'],
+  ) => resolveProviderReasoningEffort(provider, effort).effective;
 
   return (
     <>
@@ -116,6 +137,102 @@ export function PipelineSettingsSection({
 
         <TabsContent value="models" className="mt-0">
           <section className="mb-8">
+            <SettingsRow
+              label="PRD rewrite CLI"
+              description="Which CLI powers `Rewrite with AI` in the PRD editor."
+            >
+              <Select
+                value={settings.prdRewriteCli}
+                onValueChange={(value) => {
+                  const nextCli = value as AppSettings['prdRewriteCli'];
+                  onUpdate({
+                    prdRewriteCli: nextCli,
+                    prdRewriteReasoningEffort: resolveProviderReasoningEffort(
+                      nextCli as Extract<ExecutorModel, 'claude' | 'codex'>,
+                      settings.prdRewriteReasoningEffort,
+                    ).effective as AppSettings['prdRewriteReasoningEffort'],
+                  });
+                }}
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="claude">Claude CLI</SelectItem>
+                  <SelectItem value="codex">Codex CLI</SelectItem>
+                </SelectContent>
+              </Select>
+            </SettingsRow>
+            <SettingsRow
+              label="PRD rewrite model"
+              description="Preferred model for PRD rewrites on the selected CLI."
+            >
+              <Select
+                value={prdRewriteModelValue ?? '__default__'}
+                onValueChange={(value) =>
+                  onUpdate(
+                    prdRewriteProvider === 'claude'
+                      ? {
+                          prdRewriteClaudeModel: value === '__default__' ? null : value,
+                        }
+                      : {
+                          prdRewriteCodexModel: value === '__default__' ? null : value,
+                        },
+                  )
+                }
+              >
+                <SelectTrigger className="w-[220px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__default__">
+                    {prdRewriteProvider === 'claude' ? 'Claude default' : 'Codex default'}
+                  </SelectItem>
+                  {prdRewriteModelOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </SettingsRow>
+            <SettingsRow
+              label={
+                prdRewriteProvider === 'claude' ? 'PRD thinking budget' : 'PRD reasoning effort'
+              }
+              description="Reasoning setting for PRD rewrites."
+            >
+              <Select
+                value={settings.prdRewriteReasoningEffort}
+                onValueChange={(value) =>
+                  onUpdate({
+                    prdRewriteReasoningEffort: value as AppSettings['prdRewriteReasoningEffort'],
+                  })
+                }
+              >
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {!prdRewriteEffortResolution.exact && (
+                    <SelectItem value={settings.prdRewriteReasoningEffort}>
+                      {`${settings.prdRewriteReasoningEffort} (maps to ${prdRewriteEffortResolution.effective})`}
+                    </SelectItem>
+                  )}
+                  {prdRewriteSupportedEfforts.map((effort) => (
+                    <SelectItem key={effort} value={effort}>
+                      {effort}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </SettingsRow>
+            {!prdRewriteEffortResolution.exact && (
+              <div className="mb-3 rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-300">
+                {prdRewriteEffortResolution.message}
+              </div>
+            )}
+
             <div className="mb-5 rounded-md border border-border bg-secondary/40 p-3">
               <div className="mb-3">
                 <div className="text-[13px] font-medium text-primary">OpenRouter Defaults</div>
@@ -207,7 +324,13 @@ export function PipelineSettingsSection({
               reasoningEffortValue={settings.plannerReasoningEffort}
               validProviders={['claude', 'codex', 'openrouter']}
               onModelChange={(value) =>
-                onUpdate({ plannerModel: value as AppSettings['plannerModel'] })
+                onUpdate({
+                  plannerModel: value as AppSettings['plannerModel'],
+                  plannerReasoningEffort: normalizeEffort(
+                    value as ExecutorModel,
+                    settings.plannerReasoningEffort,
+                  ),
+                })
               }
               onOpenrouterModelChange={(value) => onUpdate({ openrouterPlannerModel: value })}
               onReasoningEffortChange={(value) => onUpdate({ plannerReasoningEffort: value })}
@@ -231,7 +354,13 @@ export function PipelineSettingsSection({
               reasoningEffortValue={settings.reviewerReasoningEffort}
               validProviders={['claude', 'codex', 'openrouter']}
               onModelChange={(value) =>
-                onUpdate({ reviewerModel: value as AppSettings['reviewerModel'] })
+                onUpdate({
+                  reviewerModel: value as AppSettings['reviewerModel'],
+                  reviewerReasoningEffort: normalizeEffort(
+                    value as ExecutorModel,
+                    settings.reviewerReasoningEffort,
+                  ),
+                })
               }
               onOpenrouterModelChange={(value) => onUpdate({ openrouterReviewerModel: value })}
               onReasoningEffortChange={(value) => onUpdate({ reviewerReasoningEffort: value })}
@@ -255,7 +384,13 @@ export function PipelineSettingsSection({
               reasoningEffortValue={settings.executorReasoningEffort}
               validProviders={['claude', 'codex', 'openrouter']}
               onModelChange={(value) =>
-                onUpdate({ executorModel: value as AppSettings['executorModel'] })
+                onUpdate({
+                  executorModel: value as AppSettings['executorModel'],
+                  executorReasoningEffort: normalizeEffort(
+                    value as ExecutorModel,
+                    settings.executorReasoningEffort,
+                  ),
+                })
               }
               onOpenrouterModelChange={(value) => onUpdate({ openrouterExecutorModel: value })}
               onReasoningEffortChange={(value) => onUpdate({ executorReasoningEffort: value })}
@@ -279,7 +414,13 @@ export function PipelineSettingsSection({
               reasoningEffortValue={settings.verifierReasoningEffort}
               validProviders={['claude', 'codex', 'openrouter']}
               onModelChange={(value) =>
-                onUpdate({ verifierModel: value as AppSettings['verifierModel'] })
+                onUpdate({
+                  verifierModel: value as AppSettings['verifierModel'],
+                  verifierReasoningEffort: normalizeEffort(
+                    value as ExecutorModel,
+                    settings.verifierReasoningEffort,
+                  ),
+                })
               }
               onOpenrouterModelChange={(value) => onUpdate({ openrouterVerifierModel: value })}
               onReasoningEffortChange={(value) => onUpdate({ verifierReasoningEffort: value })}

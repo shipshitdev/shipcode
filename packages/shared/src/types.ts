@@ -301,6 +301,9 @@ export interface AppSettings {
   verifierModel: AgentType;
   executorModel: AgentType;
   prdRewriteCli: ContextGeneratorCli;
+  prdRewriteClaudeModel: string | null;
+  prdRewriteCodexModel: string | null;
+  prdRewriteReasoningEffort: ReasoningEffort;
   githubPollingEnabled: boolean;
   githubPollingIntervalMs: number;
   githubBotUsername: string;
