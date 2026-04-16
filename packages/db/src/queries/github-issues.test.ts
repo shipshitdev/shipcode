@@ -49,7 +49,7 @@ describe('GitHubIssueQueries', () => {
     expect(record.issueNumber).toBe(1);
     expect(record.title).toBe('Test Issue');
     expect(record.labels).toEqual(['bug']);
-    expect(record.pipelineStatus).toBe('queued');
+    expect(record.pipelineStatus).toBe('todo');
   });
 
   it('upsert() updates existing record by projectId+issueNumber', () => {
@@ -247,9 +247,9 @@ describe('GitHubIssueQueries', () => {
     issues.tryClaim(r1.id, 'inst');
     issues.releaseClaim(r1.id);
 
-    // r2 is also queued+unclaimed by default
     const requeued = issues.getRequeued(projectId);
-    expect(requeued.length).toBe(2);
+    expect(requeued.length).toBe(1);
+    expect(requeued[0]?.id).toBe(r1.id);
   });
 
   it('getOrphanedClaims() returns claimed records with no thread_id and old claim', () => {
@@ -292,9 +292,9 @@ describe('GitHubIssueQueries', () => {
   });
 
   describe('close/reopen sync', () => {
-    it('markDoneOnClose() flips queued → done (default source status)', () => {
+    it('markDoneOnClose() flips todo → done (default source status)', () => {
       const record = issues.upsert(makeIssue());
-      expect(record.pipelineStatus).toBe('queued');
+      expect(record.pipelineStatus).toBe('todo');
       const changed = issues.markDoneOnClose(record.id);
       expect(changed).toBe(true);
       expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('done');

@@ -711,21 +711,21 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         variant="ghost"
         size="icon-xs"
         className="text-muted"
-        onClick={toggleIssueDetailExpanded}
-        title={expanded ? 'Collapse to sidebar' : 'Expand detail'}
-        aria-label={expanded ? 'Collapse to sidebar' : 'Expand detail'}
-      >
-        {expanded ? <PanelLeftClose size={13} /> : <PanelLeftOpen size={13} />}
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        className="text-muted"
         onClick={() => selectIssue(null)}
         title="Close issue detail"
         aria-label="Close issue detail"
       >
         <X size={15} strokeWidth={2.25} />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        className="text-muted"
+        onClick={toggleIssueDetailExpanded}
+        title={expanded ? 'Collapse to sidebar' : 'Expand detail'}
+        aria-label={expanded ? 'Collapse to sidebar' : 'Expand detail'}
+      >
+        {expanded ? <PanelLeftClose size={13} /> : <PanelLeftOpen size={13} />}
       </Button>
     </div>
   );

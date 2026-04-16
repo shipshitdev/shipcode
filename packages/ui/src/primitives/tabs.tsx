@@ -19,7 +19,7 @@ function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPr
   return (
     <TabsPrimitive.Trigger
       className={cn(
-        'relative px-3 py-2 text-[12px] font-medium text-muted transition-colors hover:text-secondary',
+        'relative cursor-pointer px-3 py-2 text-[12px] font-medium text-muted transition-colors hover:text-secondary disabled:cursor-not-allowed disabled:opacity-50',
         'data-[state=active]:text-primary',
         'after:absolute after:inset-x-0 after:bottom-[-1px] after:h-[2px] after:bg-transparent',
         'data-[state=active]:after:bg-accent',

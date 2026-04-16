@@ -73,26 +73,23 @@ export function IssueDetailActions({
         before any code is written.
       </p>
 
-      <div className="mb-5">
-        <div className="relative">
-          <div
-            aria-hidden="true"
-            className="absolute left-[9px] right-[9px] top-[9px] h-px bg-border"
-          />
-          <ol className="relative grid grid-cols-5 gap-1">
-            {PIPELINE_PREVIEW_PHASES.map((phase, index) => (
-              <li key={phase.id} className="flex min-w-0 flex-col items-center gap-1.5">
-                <span className="relative flex h-[18px] w-[18px] items-center justify-center rounded-full border border-border bg-tertiary font-mono text-[9px] font-medium text-muted">
-                  {index + 1}
-                </span>
-                <span className="w-full truncate text-center text-[9px] font-semibold uppercase tracking-normal text-muted">
-                  {phase.label}
-                </span>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </div>
+      <ol className="mb-5 flex items-center gap-2 overflow-x-auto pb-1 whitespace-nowrap">
+        {PIPELINE_PREVIEW_PHASES.map((phase, index) => (
+          <li key={phase.id} className="inline-flex shrink-0 items-center gap-2 text-muted">
+            <span className="flex h-4 w-4 items-center justify-center rounded-full border border-border bg-tertiary font-mono text-[8px] font-medium">
+              {index + 1}
+            </span>
+            <span className="text-[9px] font-semibold uppercase tracking-[0.08em]">
+              {phase.label}
+            </span>
+            {index < PIPELINE_PREVIEW_PHASES.length - 1 ? (
+              <span aria-hidden="true" className="text-border">
+                /
+              </span>
+            ) : null}
+          </li>
+        ))}
+      </ol>
 
       <div className="flex items-center gap-3">
         <Button size="sm" onClick={onStartPipeline} disabled={isSubmitting}>

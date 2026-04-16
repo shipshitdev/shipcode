@@ -160,7 +160,7 @@ export function migrateV2(db: DatabaseSync): void {
         labels TEXT NOT NULL DEFAULT '[]',
         assignee TEXT,
         state TEXT NOT NULL DEFAULT 'open',
-        pipeline_status TEXT NOT NULL DEFAULT 'queued',
+        pipeline_status TEXT NOT NULL DEFAULT 'todo',
         thread_id TEXT REFERENCES threads(id),
         claimed_at TEXT,
         claimed_by TEXT,
@@ -710,5 +710,25 @@ export function migrateV21(db: DatabaseSync): void {
     `);
 
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (21)`);
+  });
+}
+
+export function migrateV22(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 22) return;
+
+  transaction(db, () => {
+    db.exec(`
+      UPDATE github_issue_cache
+         SET pipeline_status = 'todo',
+             last_phase_update = NULL
+       WHERE pipeline_status = 'queued'
+         AND claimed_at IS NULL
+         AND thread_id IS NULL
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (22)`);
   });
 }

@@ -1,6 +1,14 @@
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { migrate, migrateV2, migrateV3, migrateV18, migrateV20, migrateV21 } from './schema';
+import {
+  migrate,
+  migrateV2,
+  migrateV3,
+  migrateV18,
+  migrateV20,
+  migrateV21,
+  migrateV22,
+} from './schema';
 import { asRow } from './utils';
 
 interface ThreadV2Row {
@@ -221,5 +229,45 @@ describe('migrateV21', () => {
 
     expect(openRow.pipeline_status).toBe('completed');
     expect(closedRow.pipeline_status).toBe('done');
+  });
+});
+
+describe('migrateV22', () => {
+  let db: DatabaseSync;
+
+  beforeEach(() => {
+    db = new DatabaseSync(':memory:');
+    migrate(db);
+    migrateV2(db);
+    migrateV3(db);
+    migrateV20(db);
+    migrateV21(db);
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('reclassifies orphaned queued issues back to todo', () => {
+    db.prepare("INSERT INTO projects (id, name, path) VALUES ('p1', 'test', '/tmp/test')").run();
+    db.prepare(
+      "INSERT INTO github_issue_cache (id, project_id, issue_number, title, labels, state, pipeline_status) VALUES ('queued-issue', 'p1', 1, 'Issue', '[]', 'open', 'queued')",
+    ).run();
+    db.prepare(
+      "INSERT INTO github_issue_cache (id, project_id, issue_number, title, labels, state, pipeline_status, claimed_at, claimed_by) VALUES ('claimed-issue', 'p1', 2, 'Claimed', '[]', 'open', 'queued', datetime('now'), 'worker-1')",
+    ).run();
+
+    migrateV22(db);
+
+    const queuedRow = db
+      .prepare('SELECT pipeline_status, last_phase_update FROM github_issue_cache WHERE id = ?')
+      .get('queued-issue') as { pipeline_status: string; last_phase_update: string | null };
+    const claimedRow = db
+      .prepare('SELECT pipeline_status FROM github_issue_cache WHERE id = ?')
+      .get('claimed-issue') as { pipeline_status: string };
+
+    expect(queuedRow.pipeline_status).toBe('todo');
+    expect(queuedRow.last_phase_update).toBeNull();
+    expect(claimedRow.pipeline_status).toBe('queued');
   });
 });

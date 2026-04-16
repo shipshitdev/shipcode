@@ -7,9 +7,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
-  MoreHorizontal,
   PhaseChip,
   Plus,
   X,
@@ -43,13 +41,10 @@ export function TerminalDrawerHeader({
   return (
     <div className="flex items-center justify-between border-b border-border bg-primary/75 px-3 py-1.5 shrink-0 gap-3 min-w-0">
       <div className="flex items-center gap-3 min-w-0 overflow-hidden">
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="shrink-0">
           <span className="rounded-md bg-tertiary px-3 py-1 text-[11px] font-medium text-primary">
             Terminal
           </span>
-          <span className="px-2 py-1 text-[11px] font-medium text-secondary">Problems</span>
-          <span className="px-2 py-1 text-[11px] font-medium text-secondary">Output</span>
-          <span className="px-2 py-1 text-[11px] font-medium text-secondary">Debug Console</span>
         </div>
 
         <div className="flex items-center gap-2 min-w-0 overflow-hidden border-l border-border pl-3">
@@ -134,27 +129,6 @@ export function TerminalDrawerHeader({
             ) : (
               <DropdownMenuItem disabled>No running terminal issues</DropdownMenuItem>
             )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="text-muted hover:bg-hover/70 hover:text-primary"
-              aria-label="Terminal actions"
-              title="Terminal actions"
-            >
-              <MoreHorizontal size={14} />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" side="top">
-            <DropdownMenuItem onSelect={onToggleMaximize}>
-              {isMaximized ? 'Collapse terminal' : 'Expand terminal'}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={onToggleTerminal}>Close terminal</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 
