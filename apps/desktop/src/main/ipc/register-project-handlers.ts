@@ -2,6 +2,7 @@ import { exec } from 'node:child_process';
 import fs from 'node:fs';
 import { promisify } from 'node:util';
 import {
+  checkCliProviderUsage,
   checkDesktopApps,
   checkIntegrationStatus,
   checkSystemHealthWithAuth,
@@ -396,6 +397,10 @@ export function registerProjectHandlers({
 
   ipcMain.handle('health:check', async () => {
     return checkSystemHealthWithAuth();
+  });
+
+  ipcMain.handle('provider-usage:check', async () => {
+    return checkCliProviderUsage();
   });
 
   ipcMain.handle('integrations:check', async () => {

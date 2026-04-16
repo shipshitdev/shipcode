@@ -218,7 +218,7 @@ export type AgentType = 'claude' | 'codex' | 'gh' | 'openrouter';
  *  - GitHub label values are already strings (`agent:claude`, etc).
  */
 export type ExecutorModel = 'claude' | 'codex' | 'openrouter';
-export type ReasoningEffort = 'low' | 'medium' | 'high';
+export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
 export type ContextGeneratorCli = 'claude' | 'codex';
 
 export type AgentState = 'starting' | 'running' | 'idle' | 'errored' | 'exited';
@@ -300,6 +300,7 @@ export interface AppSettings {
   reviewerModel: AgentType;
   verifierModel: AgentType;
   executorModel: AgentType;
+  prdRewriteCli: ContextGeneratorCli;
   githubPollingEnabled: boolean;
   githubPollingIntervalMs: number;
   githubBotUsername: string;
@@ -322,9 +323,9 @@ export interface AppSettings {
   // When false (default), it proceeds directly to execution.
   requireApproval: boolean;
   // Per-phase reasoning effort. Applied as:
-  //   Claude: --max-thinking-tokens (high=32000, medium=8000, low=omit)
-  //   Codex:  -c model_reasoning_effort=<value> (v0.120.0+)
-  //   OpenRouter: reasoning: { effort } in the chat request
+  //   Claude: mapped to a supported thinking-token budget
+  //   Codex:  mapped to supported low|medium|high levels
+  //   OpenRouter: passed through as reasoning: { effort }
   plannerReasoningEffort: ReasoningEffort;
   reviewerReasoningEffort: ReasoningEffort;
   executorReasoningEffort: ReasoningEffort;
@@ -442,6 +443,49 @@ export interface CliHealth {
   path: string | null;
   error: string | null;
   authenticated: boolean;
+}
+
+export type CliProviderUsageProvider = 'claude' | 'codex';
+export type CliProviderUsageState = 'unknown' | 'ready' | 'warning' | 'blocked';
+export type CliProviderUsageWindowKey = 'session' | 'weekly' | 'model';
+
+export interface CliProviderUsageWindow {
+  key: CliProviderUsageWindowKey;
+  label: string;
+  usedPercent: number | null;
+  leftPercent: number | null;
+  resetsAt: string | null;
+  resetDescription: string | null;
+}
+
+export interface CliProviderUsageStatus {
+  provider: CliProviderUsageProvider;
+  available: boolean;
+  stale: boolean;
+  state: CliProviderUsageState;
+  source: string | null;
+  version: string | null;
+  accountEmail: string | null;
+  loginMethod: string | null;
+  updatedAt: string | null;
+  checkedAt: string;
+  message: string | null;
+  creditsRemaining: number | null;
+  windows: CliProviderUsageWindow[];
+}
+
+export interface CliProviderUsageMap {
+  claude: CliProviderUsageStatus;
+  codex: CliProviderUsageStatus;
+}
+
+export interface WritingPrdsSkillInfo {
+  projectId: string;
+  projectPath: string;
+  absolutePath: string;
+  exists: boolean;
+  usingFallback: boolean;
+  openTargetPath: string;
 }
 
 export type ProjectOpenTarget = 'cursor' | 'finder' | 'terminal' | 'ghostty' | 'vscode';

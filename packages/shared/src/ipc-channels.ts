@@ -3,6 +3,7 @@ import type {
   ActivityEntry,
   AgentState,
   AppSettings,
+  CliProviderUsageMap,
   ContextFileInfo,
   ContextGeneratorCli,
   CostSummary,
@@ -36,6 +37,7 @@ import type {
   ThreadPanelData,
   VerificationRecord,
   VerificationResult,
+  WritingPrdsSkillInfo,
 } from './types';
 
 // === Request-Response Channels (invoke/handle) ===
@@ -143,6 +145,7 @@ export interface IpcInvokeChannels {
   'settings:set': { args: Partial<AppSettings>; result: undefined };
 
   'health:check': { args: undefined; result: SystemHealth };
+  'provider-usage:check': { args: undefined; result: CliProviderUsageMap };
   'integrations:check': { args: undefined; result: IntegrationStatus };
   'integrations:validate-openrouter-model': {
     args: { modelId: string };
@@ -315,6 +318,11 @@ export interface IpcInvokeChannels {
   };
   'skills:reset': { args: { projectId: string | null; phase: string }; result: unknown };
   'skills:list-quarantined': { args: undefined; result: unknown };
+  'skills:get-writing-prds-info': {
+    args: { projectId: string };
+    result: WritingPrdsSkillInfo;
+  };
+  'skills:open-writing-prds': { args: { projectId: string }; result: undefined };
 }
 
 // === Streaming Channels (send/on) ===

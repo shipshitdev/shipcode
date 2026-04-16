@@ -1,19 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // vi.hoisted runs before vi.mock factories, making these available inside them
-const { mockExec, mockAccess, mockHomedir } = vi.hoisted(() => ({
+const { mockExec, mockAccess, mockHomedir, mockMkdir, mockPtySpawn } = vi.hoisted(() => ({
   mockExec: vi.fn(),
   mockAccess: vi.fn(),
   mockHomedir: vi.fn(() => '/mock/home'),
+  mockMkdir: vi.fn(),
+  mockPtySpawn: vi.fn(),
 }));
 
 vi.mock('node:child_process', () => ({ exec: mockExec }));
-vi.mock('node:fs/promises', () => ({ access: mockAccess }));
+vi.mock('node:fs/promises', () => ({ access: mockAccess, mkdir: mockMkdir }));
 vi.mock('node:os', () => ({ homedir: mockHomedir }));
+vi.mock('node-pty', () => ({ spawn: mockPtySpawn }));
 
 import { type AppSettings, DEFAULT_SETTINGS } from '@shipcode/shared';
 import {
   checkClaudeAuth,
+  checkCliProviderUsage,
   checkCodexAuth,
   checkDesktopApps,
   checkGhAuth,
@@ -22,6 +26,9 @@ import {
   checkOpenRouterHealth,
   checkSystemHealth,
   checkSystemHealthWithAuth,
+  parseClaudeAuthStatusOutput,
+  parseClaudeUsageText,
+  parseCodexStatusText,
   parseGhProjectScope,
   validateOpenRouterModel,
 } from './health-check';
@@ -81,7 +88,37 @@ function execRouted(routes: Record<string, { stdout?: string; stderr?: string } 
 beforeEach(() => {
   vi.clearAllMocks();
   mockAccess.mockRejectedValue(new Error('ENOENT'));
+  mockMkdir.mockResolvedValue(undefined);
 });
+
+function createMockPty(text: string) {
+  let onData: ((chunk: string) => void) | null = null;
+  let onExit: ((event: { exitCode: number }) => void) | null = null;
+  let killed = false;
+
+  const flush = () => {
+    queueMicrotask(() => {
+      if (!killed) onData?.(text);
+      onExit?.({ exitCode: 0 });
+    });
+  };
+
+  return {
+    write: vi.fn(() => {
+      flush();
+    }),
+    kill: vi.fn(() => {
+      killed = true;
+      onExit?.({ exitCode: 0 });
+    }),
+    onData: vi.fn((handler: (chunk: string) => void) => {
+      onData = handler;
+    }),
+    onExit: vi.fn((handler: (event: { exitCode: number }) => void) => {
+      onExit = handler;
+    }),
+  };
+}
 
 // ---------------------------------------------------------------------------
 // checkClaudeAuth
@@ -350,6 +387,132 @@ describe('checkSystemHealthWithAuth', () => {
     expect(result.claude.authenticated).toBe(false);
     expect(result.codex.available).toBe(false);
     expect(result.codex.authenticated).toBe(false);
+  });
+});
+
+describe('parseClaudeAuthStatusOutput', () => {
+  it('extracts email and subscription tier from claude auth status json', () => {
+    expect(
+      parseClaudeAuthStatusOutput(
+        JSON.stringify({
+          loggedIn: true,
+          email: 'vincent@shipshit.dev',
+          subscriptionType: 'max',
+          authMethod: 'claude.ai',
+        }),
+      ),
+    ).toEqual({
+      accountEmail: 'vincent@shipshit.dev',
+      loginMethod: 'max',
+    });
+  });
+});
+
+describe('parseClaudeUsageText', () => {
+  it('maps session, weekly, and model quotas from claude usage text', () => {
+    const status = parseClaudeUsageText(
+      `
+      Current session
+      99% left
+      Resets in 4h 49m
+
+      Current week (all models)
+      0% left
+      Resets in 11h 53m
+
+      Current week (Sonnet)
+      46% left
+      Resets in 19h 53m
+      `,
+      '2026-04-16T16:10:00.000Z',
+      { accountEmail: 'vincent@shipshit.dev', loginMethod: 'max' },
+      '1.0.88',
+    );
+
+    expect(status.accountEmail).toBe('vincent@shipshit.dev');
+    expect(status.loginMethod).toBe('max');
+    expect(status.state).toBe('ready');
+    expect(status.windows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'session', leftPercent: 99 }),
+        expect.objectContaining({ key: 'weekly', leftPercent: 0 }),
+        expect.objectContaining({ key: 'model', label: 'Sonnet', leftPercent: 46 }),
+      ]),
+    );
+  });
+});
+
+describe('parseCodexStatusText', () => {
+  it('maps codex status text into session and weekly windows', () => {
+    const status = parseCodexStatusText(
+      `
+      Credits: 54.72
+      5h limit 98% left resets 10:55 PM
+      Weekly limit 35% left resets in 48m
+      `,
+      '2026-04-16T16:10:00.000Z',
+      '0.121.0',
+    );
+
+    expect(status.provider).toBe('codex');
+    expect(status.available).toBe(true);
+    expect(status.creditsRemaining).toBe(54.72);
+    expect(status.windows).toEqual([
+      expect.objectContaining({ key: 'session', label: 'Session', leftPercent: 98 }),
+      expect.objectContaining({ key: 'weekly', label: 'Weekly', leftPercent: 35 }),
+    ]);
+  });
+});
+
+describe('checkCliProviderUsage', () => {
+  it('returns parsed direct CLI usage when both providers respond', async () => {
+    execRouted({
+      'which claude': { stdout: '/usr/local/bin/claude\n' },
+      'which codex': { stdout: '/usr/local/bin/codex\n' },
+      'claude --version': { stdout: '1.0.88\n' },
+      'codex --version': { stdout: '0.121.0\n' },
+      'claude auth status': {
+        stdout: JSON.stringify({
+          loggedIn: true,
+          email: 'vincent@shipshit.dev',
+          subscriptionType: 'max',
+        }),
+      },
+    });
+    mockPtySpawn.mockImplementation((command: string) => {
+      if (command.includes('claude')) {
+        return createMockPty(`
+          Current session
+          99% left
+          Resets in 4h 49m
+
+          Current week (all models)
+          0% left
+          Resets in 11h 53m
+
+          Current week (Sonnet)
+          46% left
+          Resets in 19h 53m
+        `);
+      }
+      return createMockPty(`
+        Credits: 54.72
+        5h limit 98% left resets in 4h 49m
+        Weekly limit 35% left resets in 48m
+      `);
+    });
+
+    const result = await checkCliProviderUsage();
+    expect(result.claude.accountEmail).toBe('vincent@shipshit.dev');
+    expect(result.claude.windows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'model', label: 'Sonnet', leftPercent: 46 }),
+      ]),
+    );
+    expect(result.codex.creditsRemaining).toBe(54.72);
+    expect(result.codex.windows).toEqual(
+      expect.arrayContaining([expect.objectContaining({ key: 'session', leftPercent: 98 })]),
+    );
   });
 });
 

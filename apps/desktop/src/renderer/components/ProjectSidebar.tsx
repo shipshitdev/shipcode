@@ -1,7 +1,9 @@
 import {
   type AppSettings,
+  type CliProviderUsageMap,
   type DashboardStats,
   filterAttentionRequiredNotifications,
+  getProjectProviderWarnings,
   type IntegrationStatus,
   type NotificationRecord,
   type Project,
@@ -110,6 +112,14 @@ export function ProjectSidebar() {
     queryKey: ['integrations'],
     queryFn: () => window.shipcode.invoke('integrations:check'),
     staleTime: 30_000,
+  });
+
+  const { data: providerUsage } = useQuery<CliProviderUsageMap>({
+    queryKey: ['provider-usage'],
+    queryFn: () => window.shipcode.invoke<CliProviderUsageMap>('provider-usage:check'),
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: true,
   });
 
   const { data: stats } = useQuery<DashboardStats>({
@@ -414,173 +424,214 @@ export function ProjectSidebar() {
       <div className="flex-1 overflow-y-auto px-2 py-1" data-project-list>
         {sortedProjects.map((project) => (
           <div key={project.id} className="relative group">
-            <Button
-              variant="ghost"
-              className={cn(
-                'h-auto w-full justify-start gap-2 pl-3 pr-8 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
-                project.pathExists === false && 'opacity-50',
-                viewMode === 'project' &&
-                  activeProjectId === project.id &&
-                  'bg-tertiary text-primary font-medium',
-              )}
-              onClick={() => selectProject(project.id)}
-              title={
-                project.pathExists === false
-                  ? `Project folder missing: ${project.path}`
-                  : project.path
-              }
-            >
-              {project.pinned ? (
-                <Pin size={12} className="shrink-0 text-accent fill-accent" />
-              ) : (
-                <Folder
-                  size={14}
-                  className={cn(
-                    'shrink-0 text-secondary',
-                    project.pathExists === false && 'text-warning',
-                  )}
-                />
-              )}
-              <span className="flex-1 truncate text-primary">{project.name}</span>
-              {project.pathExists === false && (
-                <Badge variant="warning" className="shrink-0 text-[10px]">
-                  Missing
-                </Badge>
-              )}
-              {project.pathExists !== false && project.setupStatus === 'missing' && (
-                <Badge variant="default" className="shrink-0 text-[10px]">
-                  Setup
-                </Badge>
-              )}
-              {project.pathExists !== false && project.setupStatus === 'invalid' && (
-                <Badge variant="warning" className="shrink-0 text-[10px]">
-                  Setup!
-                </Badge>
-              )}
-              {(stats?.agentsRunningByProject?.[project.id] ?? 0) > 0 && (
-                <span className="inline-flex items-center gap-1 shrink-0 rounded-full border border-agent/30 bg-agent/10 px-1.5 py-0.5 text-[10px] font-medium text-agent">
-                  <span className="relative flex h-1.5 w-1.5 items-center justify-center">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-agent opacity-60" />
-                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-agent" />
-                  </span>
-                  {stats?.agentsRunningByProject[project.id]} live
-                </span>
-              )}
-            </Button>
+            {(() => {
+              const projectWarnings =
+                settings && integrations?.system && providerUsage
+                  ? getProjectProviderWarnings(
+                      settings,
+                      project,
+                      integrations.system,
+                      providerUsage,
+                    )
+                  : [];
+              const hasBlockedWarning = projectWarnings.some(
+                (warning) => warning.severity === 'blocked',
+              );
+              const warningBadgeLabel =
+                projectWarnings.length === 0 ? null : hasBlockedWarning ? 'Blocked' : 'Low';
+              const warningTitle =
+                projectWarnings.length === 0
+                  ? undefined
+                  : projectWarnings.map((warning) => warning.message).join(' · ');
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted opacity-0 group-hover:opacity-100 focus:opacity-100"
-                  aria-label={`More actions for ${project.name}`}
-                >
-                  <MoreHorizontal size={14} />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="end"
-                collisionPadding={{ top: 44, right: 8, bottom: 8, left: 8 }}
-                className="min-w-[220px]"
-                onInteractOutside={(e) => {
-                  const target = e.target as Element | null;
-                  if (target?.closest('[data-project-list]')) {
-                    e.preventDefault();
-                  }
-                }}
-              >
-                {(() => {
-                  const availableTargets = PROJECT_OPEN_TARGETS.filter(
-                    (target) => integrations?.desktopApps?.[target]?.available,
-                  );
-
-                  if (availableTargets.length === 0) return null;
-
-                  return (
-                    <DropdownMenuSub>
-                      <DropdownMenuSubTrigger disabled={project.pathExists === false}>
-                        <FolderOpen size={12} />
-                        <span className="truncate">Open in</span>
-                      </DropdownMenuSubTrigger>
-                      <DropdownMenuSubContent className="min-w-[240px]">
-                        {availableTargets.map((target) => {
-                          const app = integrations?.desktopApps?.[target];
-                          if (!app) return null;
-
-                          const isDefaultTarget =
-                            (settings?.projectOpenTarget ?? 'cursor') === target;
-                          const Icon = PROJECT_OPEN_TARGET_ICONS[target];
-
-                          return (
-                            <DropdownMenuItem
-                              key={target}
-                              onSelect={() =>
-                                openProjectPath.mutate({ projectId: project.id, target })
-                              }
-                            >
-                              <span className="flex h-3.5 w-3.5 items-center justify-center">
-                                {isDefaultTarget ? <Check size={12} /> : null}
-                              </span>
-                              <Icon size={12} className="shrink-0 text-secondary" />
-                              <span className="flex-1 truncate">{app.label}</span>
-                              {isDefaultTarget ? (
-                                <span className="text-[11px] text-muted">Default</span>
-                              ) : null}
-                            </DropdownMenuItem>
-                          );
-                        })}
-                      </DropdownMenuSubContent>
-                    </DropdownMenuSub>
-                  );
-                })()}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => openProjectSettingsModal(project.id)}>
-                  <Settings size={12} /> Settings
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => openProjectSetupModal(project.id)}>
-                  <Wrench size={12} /> Configure setup...
-                </DropdownMenuItem>
-                {project.pathExists === false && (
-                  <DropdownMenuItem onSelect={() => relinkProject.mutate(project.id)}>
-                    <Wrench size={12} /> Relink folder…
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem
-                  onSelect={() =>
-                    pinProject.mutate({ projectId: project.id, pinned: !project.pinned })
-                  }
-                >
-                  {project.pinned ? (
-                    <>
-                      <PinOff size={12} /> Unpin
-                    </>
-                  ) : (
-                    <>
-                      <Pin size={12} /> Pin to top
-                    </>
-                  )}
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => archiveProject.mutate(project.id)}>
-                  <Archive size={12} /> Archive
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onSelect={() => {
-                    if (
-                      window.confirm(
-                        `Remove "${project.name}" from ShipCode? This does not delete the repository on disk.`,
-                      )
-                    ) {
-                      removeProject.mutate(project.id);
+              return (
+                <>
+                  <Button
+                    variant="ghost"
+                    className={cn(
+                      'h-auto w-full justify-start gap-2 pl-3 pr-8 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
+                      project.pathExists === false && 'opacity-50',
+                      viewMode === 'project' &&
+                        activeProjectId === project.id &&
+                        'bg-tertiary text-primary font-medium',
+                    )}
+                    onClick={() => selectProject(project.id)}
+                    title={
+                      project.pathExists === false
+                        ? `Project folder missing: ${project.path}`
+                        : project.path
                     }
-                  }}
-                  className="text-danger"
-                >
-                  <Trash2 size={12} /> Remove
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  >
+                    {project.pinned ? (
+                      <Pin size={12} className="shrink-0 text-accent fill-accent" />
+                    ) : (
+                      <Folder
+                        size={14}
+                        className={cn(
+                          'shrink-0 text-secondary',
+                          project.pathExists === false && 'text-warning',
+                        )}
+                      />
+                    )}
+                    <span className="flex-1 truncate text-primary">{project.name}</span>
+                    {project.pathExists === false && (
+                      <Badge variant="warning" className="shrink-0 text-[10px]">
+                        Missing
+                      </Badge>
+                    )}
+                    {project.pathExists !== false && project.setupStatus === 'missing' && (
+                      <Badge variant="default" className="shrink-0 text-[10px]">
+                        Setup
+                      </Badge>
+                    )}
+                    {project.pathExists !== false && project.setupStatus === 'invalid' && (
+                      <Badge variant="warning" className="shrink-0 text-[10px]">
+                        Setup!
+                      </Badge>
+                    )}
+                    {warningBadgeLabel ? (
+                      <Badge
+                        variant="warning"
+                        className={cn(
+                          'shrink-0 text-[10px]',
+                          hasBlockedWarning && 'border-danger/30 bg-danger/10 text-danger',
+                        )}
+                        title={warningTitle}
+                      >
+                        {warningBadgeLabel}
+                      </Badge>
+                    ) : null}
+                    {(stats?.agentsRunningByProject?.[project.id] ?? 0) > 0 && (
+                      <span className="inline-flex items-center gap-1 shrink-0 rounded-full border border-agent/30 bg-agent/10 px-1.5 py-0.5 text-[10px] font-medium text-agent">
+                        <span className="relative flex h-1.5 w-1.5 items-center justify-center">
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-agent opacity-60" />
+                          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-agent" />
+                        </span>
+                        {stats?.agentsRunningByProject[project.id]} live
+                      </span>
+                    )}
+                  </Button>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className={cn(
+                          'absolute right-1.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 focus:opacity-100',
+                          warningBadgeLabel ? 'text-warning' : 'text-muted',
+                        )}
+                        aria-label={`More actions for ${project.name}`}
+                        title={warningTitle}
+                      >
+                        <MoreHorizontal size={14} />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="end"
+                      collisionPadding={{ top: 44, right: 8, bottom: 8, left: 8 }}
+                      className="min-w-[220px]"
+                      onInteractOutside={(e) => {
+                        const target = e.target as Element | null;
+                        if (target?.closest('[data-project-list]')) {
+                          e.preventDefault();
+                        }
+                      }}
+                    >
+                      {(() => {
+                        const availableTargets = PROJECT_OPEN_TARGETS.filter(
+                          (target) => integrations?.desktopApps?.[target]?.available,
+                        );
+
+                        if (availableTargets.length === 0) return null;
+
+                        return (
+                          <DropdownMenuSub>
+                            <DropdownMenuSubTrigger disabled={project.pathExists === false}>
+                              <FolderOpen size={12} />
+                              <span className="truncate">Open in</span>
+                            </DropdownMenuSubTrigger>
+                            <DropdownMenuSubContent className="min-w-[240px]">
+                              {availableTargets.map((target) => {
+                                const app = integrations?.desktopApps?.[target];
+                                if (!app) return null;
+
+                                const isDefaultTarget =
+                                  (settings?.projectOpenTarget ?? 'cursor') === target;
+                                const Icon = PROJECT_OPEN_TARGET_ICONS[target];
+
+                                return (
+                                  <DropdownMenuItem
+                                    key={target}
+                                    onSelect={() =>
+                                      openProjectPath.mutate({ projectId: project.id, target })
+                                    }
+                                  >
+                                    <span className="flex h-3.5 w-3.5 items-center justify-center">
+                                      {isDefaultTarget ? <Check size={12} /> : null}
+                                    </span>
+                                    <Icon size={12} className="shrink-0 text-secondary" />
+                                    <span className="flex-1 truncate">{app.label}</span>
+                                    {isDefaultTarget ? (
+                                      <span className="text-[11px] text-muted">Default</span>
+                                    ) : null}
+                                  </DropdownMenuItem>
+                                );
+                              })}
+                            </DropdownMenuSubContent>
+                          </DropdownMenuSub>
+                        );
+                      })()}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onSelect={() => openProjectSettingsModal(project.id)}>
+                        <Settings size={12} /> Settings
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => openProjectSetupModal(project.id)}>
+                        <Wrench size={12} /> Configure setup...
+                      </DropdownMenuItem>
+                      {project.pathExists === false && (
+                        <DropdownMenuItem onSelect={() => relinkProject.mutate(project.id)}>
+                          <Wrench size={12} /> Relink folder…
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem
+                        onSelect={() =>
+                          pinProject.mutate({ projectId: project.id, pinned: !project.pinned })
+                        }
+                      >
+                        {project.pinned ? (
+                          <>
+                            <PinOff size={12} /> Unpin
+                          </>
+                        ) : (
+                          <>
+                            <Pin size={12} /> Pin to top
+                          </>
+                        )}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => archiveProject.mutate(project.id)}>
+                        <Archive size={12} /> Archive
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onSelect={() => {
+                          if (
+                            window.confirm(
+                              `Remove "${project.name}" from ShipCode? This does not delete the repository on disk.`,
+                            )
+                          ) {
+                            removeProject.mutate(project.id);
+                          }
+                        }}
+                        className="text-danger"
+                      >
+                        <Trash2 size={12} /> Remove
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </>
+              );
+            })()}
           </div>
         ))}
       </div>

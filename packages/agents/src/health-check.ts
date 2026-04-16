@@ -1,5 +1,5 @@
 import { exec } from 'node:child_process';
-import { access } from 'node:fs/promises';
+import { access, mkdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -7,6 +7,11 @@ import type {
   AppSettings,
   ChatIntegrationHealth,
   CliHealth,
+  CliProviderUsageMap,
+  CliProviderUsageProvider,
+  CliProviderUsageState,
+  CliProviderUsageStatus,
+  CliProviderUsageWindow,
   DesktopAppHealth,
   DesktopAppHealthMap,
   GhAuthStatus,
@@ -18,8 +23,12 @@ import type {
   SystemHealth,
 } from '@shipcode/shared';
 import { OPENROUTER_API_BASE } from '@shipcode/shared';
+import * as pty from 'node-pty';
 
 const execAsync = promisify(exec);
+const CLI_USAGE_TIMEOUT_MS = 20_000;
+const CLI_USAGE_OUTPUT_TAIL = 8_192;
+const providerUsageCache = new Map<CliProviderUsageProvider, CliProviderUsageStatus>();
 const DESKTOP_APP_LABELS: Record<ProjectOpenTarget, string> = {
   cursor: 'Cursor',
   finder: 'Finder',
@@ -148,6 +157,589 @@ async function readEnvVar(name: string): Promise<string | null> {
   return fallback ? fallback : null;
 }
 
+function summarizeExecFailure(error: unknown): string {
+  if (!(error instanceof Error)) return 'usage data unavailable';
+  const message = error.message.trim();
+  if (!message) return 'usage data unavailable';
+  return message.split('\n')[0]?.slice(0, 200) ?? 'usage data unavailable';
+}
+
+function emptyProviderUsage(
+  provider: CliProviderUsageProvider,
+  checkedAt: string,
+  message: string,
+  stale = false,
+): CliProviderUsageStatus {
+  return {
+    provider,
+    available: false,
+    stale,
+    state: 'unknown',
+    source: null,
+    version: null,
+    accountEmail: null,
+    loginMethod: null,
+    updatedAt: null,
+    checkedAt,
+    message,
+    creditsRemaining: null,
+    windows: [],
+  };
+}
+
+interface PtyProbeOptions {
+  command: string;
+  args: string[];
+  cwd: string;
+  timeoutMs: number;
+  cols?: number;
+  rows?: number;
+  initialInput?: string;
+  initialDelayMs?: number;
+  idleTimeoutMs?: number | null;
+  periodicEnterMs?: number | null;
+  settleAfterStopMs?: number;
+  stopOnSubstrings?: string[];
+  sendOnSubstrings?: Record<string, string>;
+}
+
+interface ClaudeAuthDetails {
+  accountEmail: string | null;
+  loginMethod: string | null;
+}
+
+function stripAnsiCodes(text: string): string {
+  const csiSource = String.raw`\\u001B\\[[0-?]*[ -/]*[@-~]`.replace(/\\\\/g, '\\');
+  const oscSource = String.raw`\\u001B\\][^\\u0007]*(?:\\u0007|\\u001B\\\\)`.replace(/\\\\/g, '\\');
+  const csiPattern = new RegExp(csiSource, 'g');
+  const oscPattern = new RegExp(oscSource, 'g');
+  return text.replace(csiPattern, '').replace(oscPattern, '').replace(/\r/g, '');
+}
+
+function normalizeForSearch(text: string): string {
+  return stripAnsiCodes(text).toLowerCase().replace(/\s+/g, '');
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function parseNumericText(raw: string): number | null {
+  let text = raw.trim().replace(/[\u00A0\u202F\s]/g, '');
+  if (!text) return null;
+
+  const hasComma = text.includes(',');
+  const hasDot = text.includes('.');
+  if (hasComma && hasDot) {
+    if (text.lastIndexOf(',') > text.lastIndexOf('.')) {
+      text = text.replace(/\./g, '').replace(/,/g, '.');
+    } else {
+      text = text.replace(/,/g, '');
+    }
+  } else if (hasComma) {
+    if (/^\d{1,3}(,\d{3})+$/.test(text)) {
+      text = text.replace(/,/g, '');
+    } else {
+      text = text.replace(/,/g, '.');
+    }
+  } else if (hasDot && /^\d{1,3}(\.\d{3})+$/.test(text)) {
+    text = text.replace(/\./g, '');
+  }
+
+  const parsed = Number(text);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function firstNumber(pattern: RegExp, text: string): number | null {
+  const match = pattern.exec(text);
+  return match?.[1] ? parseNumericText(match[1]) : null;
+}
+
+function firstLineMatching(pattern: RegExp, text: string): string | null {
+  const match = pattern.exec(text);
+  return match?.[0] ?? null;
+}
+
+function percentLeftFromLine(line: string | null): number | null {
+  if (!line) return null;
+  const match = /([0-9]{1,3})%\s+left/i.exec(line);
+  if (!match) return null;
+  const value = Number.parseInt(match[1], 10);
+  return Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : null;
+}
+
+function resetStringFromLine(line: string | null): string | null {
+  if (!line) return null;
+  const match = /resets?\s+(.+)/i.exec(line);
+  return match?.[1]?.trim() || null;
+}
+
+function toWindow(
+  key: CliProviderUsageWindow['key'],
+  fallbackLabel: string,
+  leftPercent: number | null,
+  resetDescription: string | null = null,
+): CliProviderUsageWindow | null {
+  if (leftPercent == null && !resetDescription) return null;
+  const safeLeft = leftPercent == null ? null : Math.max(0, Math.min(100, Math.trunc(leftPercent)));
+  return {
+    key,
+    label: fallbackLabel,
+    usedPercent: safeLeft == null ? null : Math.max(0, Math.min(100, 100 - safeLeft)),
+    leftPercent: safeLeft,
+    resetsAt: null,
+    resetDescription,
+  };
+}
+
+function extractClaudePercent(compactText: string, labels: string[]): number | null {
+  for (const label of labels.map((entry) => entry.toLowerCase().replace(/\s+/g, ''))) {
+    const index = compactText.lastIndexOf(label);
+    if (index === -1) continue;
+    const slice = compactText.slice(index + label.length, index + label.length + 160);
+    const match = /([0-9]{1,3})%left/.exec(slice);
+    if (!match) continue;
+    const value = Number.parseInt(match[1], 10);
+    if (Number.isFinite(value)) return Math.max(0, Math.min(100, value));
+  }
+  return null;
+}
+
+function extractClaudeReset(collapsedText: string, labels: string[]): string | null {
+  for (const label of labels) {
+    const labelPattern = label
+      .trim()
+      .split(/\s+/)
+      .map((part) => escapeRegex(part))
+      .join('\\s*');
+    const regex = new RegExp(
+      `${labelPattern}[\\s\\S]{0,120}?resets?\\s+(.{1,40}?)(?=\\s+(?:Current\\s+|Failed\\s+to\\s+load|$))`,
+      'i',
+    );
+    const match = regex.exec(collapsedText);
+    if (match?.[1]?.trim()) return match[1].trim();
+  }
+  return null;
+}
+
+function extractClaudePercentsInOrder(compactText: string): number[] {
+  return [...compactText.matchAll(/([0-9]{1,3})%left/g)]
+    .map((match) => Number.parseInt(match[1], 10))
+    .filter((value) => Number.isFinite(value))
+    .map((value) => Math.max(0, Math.min(100, value)));
+}
+
+export function parseClaudeAuthStatusOutput(stdout: string): ClaudeAuthDetails {
+  try {
+    const parsed = JSON.parse(stdout) as {
+      email?: unknown;
+      subscriptionType?: unknown;
+      authMethod?: unknown;
+    };
+    return {
+      accountEmail: typeof parsed.email === 'string' && parsed.email.trim() ? parsed.email : null,
+      loginMethod:
+        typeof parsed.subscriptionType === 'string' && parsed.subscriptionType.trim()
+          ? parsed.subscriptionType
+          : typeof parsed.authMethod === 'string' && parsed.authMethod.trim()
+            ? parsed.authMethod
+            : null,
+    };
+  } catch {
+    return { accountEmail: null, loginMethod: null };
+  }
+}
+
+async function readClaudeAuthDetails(): Promise<ClaudeAuthDetails> {
+  try {
+    const result = await execAsync('claude auth status', { timeout: 5_000 });
+    const stdout = `${result.stdout}${result.stderr}`.trim();
+    return parseClaudeAuthStatusOutput(stdout);
+  } catch {
+    return { accountEmail: null, loginMethod: null };
+  }
+}
+
+async function ensureProbeDir(provider: CliProviderUsageProvider): Promise<string> {
+  const dir = join(homedir(), '.shipcode', 'provider-probes', provider);
+  await mkdir(dir, { recursive: true });
+  return dir;
+}
+
+async function runPtyProbe(options: PtyProbeOptions): Promise<string> {
+  const {
+    command,
+    args,
+    cwd,
+    timeoutMs,
+    cols = 160,
+    rows = 50,
+    initialInput = '',
+    initialDelayMs = 400,
+    idleTimeoutMs = 3_000,
+    periodicEnterMs = null,
+    settleAfterStopMs = 250,
+    stopOnSubstrings = [],
+    sendOnSubstrings = {},
+  } = options;
+
+  return new Promise((resolve, reject) => {
+    let proc: pty.IPty;
+    try {
+      proc = pty.spawn(command, args, {
+        name: 'xterm-256color',
+        cols,
+        rows,
+        cwd,
+        env: process.env,
+      });
+    } catch (error) {
+      reject(error);
+      return;
+    }
+
+    let settled = false;
+    let output = '';
+    let lastOutputAt = Date.now();
+    let lastEnterAt = Date.now();
+    let stopDetectedAt: number | null = null;
+    const triggeredSends = new Set<string>();
+    const normalizedStopNeedles = stopOnSubstrings.map((value) => normalizeForSearch(value));
+    const normalizedSendNeedles = Object.entries(sendOnSubstrings).map(([needle, keys]) => ({
+      needle: normalizeForSearch(needle),
+      keys,
+    }));
+
+    const cleanup = () => {
+      clearTimeout(initialTimer);
+      clearTimeout(timeoutTimer);
+      clearInterval(tickTimer);
+    };
+
+    const finish = (text: string) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(text);
+    };
+
+    const fail = (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error);
+    };
+
+    const maybeStop = () => {
+      if (stopDetectedAt == null) return;
+      if (Date.now() - stopDetectedAt >= settleAfterStopMs) {
+        try {
+          proc.kill();
+        } catch {
+          // Ignore best-effort PTY shutdown failures.
+        }
+        finish(output);
+      }
+    };
+
+    const initialTimer = setTimeout(() => {
+      if (!initialInput) return;
+      try {
+        proc.write(initialInput);
+      } catch {
+        // Ignore write races on early exit.
+      }
+    }, initialDelayMs);
+
+    const timeoutTimer = setTimeout(() => {
+      try {
+        proc.kill();
+      } catch {
+        // Ignore best-effort PTY shutdown failures.
+      }
+      if (output.trim()) {
+        finish(output);
+        return;
+      }
+      fail(new Error(`${command} usage probe timed out`));
+    }, timeoutMs);
+
+    const tickTimer = setInterval(() => {
+      if (periodicEnterMs != null && Date.now() - lastEnterAt >= periodicEnterMs) {
+        try {
+          proc.write('\r');
+        } catch {
+          // Ignore write races on exit.
+        }
+        lastEnterAt = Date.now();
+      }
+
+      if (idleTimeoutMs != null && output && Date.now() - lastOutputAt >= idleTimeoutMs) {
+        try {
+          proc.kill();
+        } catch {
+          // Ignore best-effort PTY shutdown failures.
+        }
+        finish(output);
+        return;
+      }
+
+      maybeStop();
+    }, 50);
+
+    proc.onData((data) => {
+      output += data;
+      lastOutputAt = Date.now();
+      const normalizedTail = normalizeForSearch(output.slice(-CLI_USAGE_OUTPUT_TAIL));
+
+      for (const item of normalizedSendNeedles) {
+        if (triggeredSends.has(item.needle) || !normalizedTail.includes(item.needle)) continue;
+        triggeredSends.add(item.needle);
+        try {
+          proc.write(item.keys);
+        } catch {
+          // Ignore write races on exit.
+        }
+      }
+
+      if (
+        stopDetectedAt == null &&
+        normalizedStopNeedles.some((needle) => normalizedTail.includes(needle))
+      ) {
+        stopDetectedAt = Date.now();
+      }
+    });
+
+    proc.onExit(() => {
+      finish(output);
+    });
+  });
+}
+
+function deriveUsageState(
+  provider: CliProviderUsageProvider,
+  windows: CliProviderUsageWindow[],
+  creditsRemaining: number | null,
+): CliProviderUsageState {
+  const session = windows.find((window) => window.key === 'session') ?? null;
+  const weekly = windows.find((window) => window.key === 'weekly') ?? null;
+  const model = windows.find((window) => window.key === 'model') ?? null;
+
+  if (session?.leftPercent != null && session.leftPercent <= 0) return 'blocked';
+  if (provider === 'codex') {
+    if (weekly?.leftPercent != null && weekly.leftPercent <= 0 && (creditsRemaining ?? 0) <= 0) {
+      return 'blocked';
+    }
+  } else if (model?.leftPercent != null) {
+    if (model.leftPercent <= 0) return 'blocked';
+    if (model.leftPercent <= 15) return 'warning';
+    return 'ready';
+  } else if (weekly?.leftPercent != null && weekly.leftPercent <= 0) {
+    return 'blocked';
+  }
+
+  const relevant = windows.filter((window) => window.leftPercent != null);
+  if (relevant.some((window) => (window.leftPercent ?? 101) <= 15)) return 'warning';
+  return relevant.length > 0 ? 'ready' : 'unknown';
+}
+
+export function parseCodexStatusText(
+  stdout: string,
+  checkedAt = new Date().toISOString(),
+  version: string | null = null,
+): CliProviderUsageStatus {
+  const clean = stripAnsiCodes(stdout);
+  const creditsRemaining = firstNumber(/Credits:\s*([0-9][0-9., ]*)/i, clean);
+  const sessionLine = firstLineMatching(/5h limit[^\n]*/i, clean);
+  const weeklyLine = firstLineMatching(/Weekly limit[^\n]*/i, clean);
+  const windows = [
+    toWindow(
+      'session',
+      'Session',
+      percentLeftFromLine(sessionLine),
+      resetStringFromLine(sessionLine),
+    ),
+    toWindow('weekly', 'Weekly', percentLeftFromLine(weeklyLine), resetStringFromLine(weeklyLine)),
+  ].filter((window): window is CliProviderUsageWindow => window !== null);
+
+  return {
+    provider: 'codex',
+    available: windows.length > 0 || creditsRemaining != null,
+    stale: false,
+    state: deriveUsageState('codex', windows, creditsRemaining),
+    source: 'cli',
+    version,
+    accountEmail: null,
+    loginMethod: null,
+    updatedAt: checkedAt,
+    checkedAt,
+    message:
+      windows.length > 0 || creditsRemaining != null ? null : 'Codex CLI returned no quota data',
+    creditsRemaining,
+    windows,
+  };
+}
+
+export function parseClaudeUsageText(
+  stdout: string,
+  checkedAt = new Date().toISOString(),
+  auth: ClaudeAuthDetails = { accountEmail: null, loginMethod: null },
+  version: string | null = null,
+): CliProviderUsageStatus {
+  const clean = stripAnsiCodes(stdout);
+  const collapsed = clean.replace(/\s+/g, ' ').trim();
+  const compact = normalizeForSearch(clean);
+  const sessionLabel = ['Current session'];
+  const weeklyLabel = ['Current week (all models)', 'Current week'];
+  const modelLabels = [
+    'Current week (Opus)',
+    'Current week (Sonnet only)',
+    'Current week (Sonnet)',
+  ];
+
+  let sessionPercent = extractClaudePercent(compact, sessionLabel);
+  let weeklyPercent = extractClaudePercent(compact, weeklyLabel);
+  let modelPercent = extractClaudePercent(compact, modelLabels);
+
+  const hasWeeklyLabel = weeklyLabel.some((label) => compact.includes(normalizeForSearch(label)));
+  const hasModelLabel = modelLabels.some((label) => compact.includes(normalizeForSearch(label)));
+  if (
+    sessionPercent == null ||
+    (hasWeeklyLabel && weeklyPercent == null) ||
+    (hasModelLabel && modelPercent == null)
+  ) {
+    const ordered = extractClaudePercentsInOrder(compact);
+    if (sessionPercent == null && ordered[0] != null) sessionPercent = ordered[0];
+    if (hasWeeklyLabel && weeklyPercent == null && ordered[1] != null) weeklyPercent = ordered[1];
+    if (hasModelLabel && modelPercent == null && ordered[2] != null) modelPercent = ordered[2];
+  }
+
+  const modelLabel = compact.includes(normalizeForSearch('Current week (Sonnet'))
+    ? 'Sonnet'
+    : compact.includes(normalizeForSearch('Current week (Haiku'))
+      ? 'Haiku'
+      : 'Opus';
+  const windows = [
+    toWindow('session', 'Session', sessionPercent, extractClaudeReset(collapsed, sessionLabel)),
+    toWindow('weekly', 'Weekly', weeklyPercent, extractClaudeReset(collapsed, weeklyLabel)),
+    toWindow('model', modelLabel, modelPercent, extractClaudeReset(collapsed, modelLabels)),
+  ].filter((window): window is CliProviderUsageWindow => window !== null);
+
+  const loadFailure = /failed\s*to\s*load\s*usage\s*data/i.test(clean);
+  return {
+    provider: 'claude',
+    available: windows.length > 0,
+    stale: false,
+    state: deriveUsageState('claude', windows, null),
+    source: 'cli',
+    version,
+    accountEmail: auth.accountEmail,
+    loginMethod: auth.loginMethod,
+    updatedAt: checkedAt,
+    checkedAt,
+    message:
+      windows.length > 0
+        ? null
+        : loadFailure
+          ? 'Claude CLI failed to load usage data'
+          : 'Claude CLI returned no quota data',
+    creditsRemaining: null,
+    windows,
+  };
+}
+
+async function probeClaudeUsage(
+  version: string | null,
+  binaryPath: string,
+): Promise<CliProviderUsageStatus> {
+  const checkedAt = new Date().toISOString();
+  const [cwd, auth] = await Promise.all([ensureProbeDir('claude'), readClaudeAuthDetails()]);
+  const stdout = await runPtyProbe({
+    command: binaryPath,
+    args: ['--allowed-tools', ''],
+    cwd,
+    timeoutMs: CLI_USAGE_TIMEOUT_MS,
+    rows: 50,
+    cols: 160,
+    initialInput: '/usage\r',
+    initialDelayMs: 2_000,
+    idleTimeoutMs: null,
+    periodicEnterMs: 800,
+    settleAfterStopMs: 2_000,
+    stopOnSubstrings: [
+      'Current session',
+      'Current week (all models)',
+      'Current week (Opus)',
+      'Current week (Sonnet only)',
+      'Current week (Sonnet)',
+      'Failed to load usage data',
+    ],
+    sendOnSubstrings: {
+      'Quick safety check:': '\r',
+      'Yes, I trust this folder': '\r',
+      'Do you trust the files in this folder?': 'y\r',
+      'Ready to code here?': '\r',
+      'Press Enter to continue': '\r',
+      'Show plan usage limits': '\r',
+      'Show plan': '\r',
+    },
+  });
+  return parseClaudeUsageText(stdout, checkedAt, auth, version);
+}
+
+async function probeCodexUsage(
+  version: string | null,
+  binaryPath: string,
+): Promise<CliProviderUsageStatus> {
+  const checkedAt = new Date().toISOString();
+  const cwd = await ensureProbeDir('codex');
+  const stdout = await runPtyProbe({
+    command: binaryPath,
+    args: ['-s', 'read-only', '-a', 'untrusted'],
+    cwd,
+    timeoutMs: Math.min(CLI_USAGE_TIMEOUT_MS, 12_000),
+    rows: 70,
+    cols: 220,
+    initialInput: '/status\n',
+    initialDelayMs: 400,
+    idleTimeoutMs: 2_500,
+  });
+  return parseCodexStatusText(stdout, checkedAt, version);
+}
+
+async function checkProviderUsage(
+  provider: CliProviderUsageProvider,
+): Promise<CliProviderUsageStatus> {
+  const checkedAt = new Date().toISOString();
+  try {
+    const cli = await checkCli(provider, '--version');
+    if (!cli.available || !cli.path) {
+      return emptyProviderUsage(provider, checkedAt, `${provider} CLI not found in PATH`);
+    }
+
+    const parsed =
+      provider === 'claude'
+        ? await probeClaudeUsage(cli.version, cli.path)
+        : await probeCodexUsage(cli.version, cli.path);
+    providerUsageCache.set(provider, parsed);
+    return parsed;
+  } catch (error) {
+    const cached = providerUsageCache.get(provider);
+    if (cached) {
+      return {
+        ...cached,
+        stale: true,
+        checkedAt,
+        message: cached.message ?? `Using cached ${provider} usage data`,
+      };
+    }
+    return emptyProviderUsage(
+      provider,
+      checkedAt,
+      `${provider === 'claude' ? 'Claude' : 'Codex'} CLI usage unavailable: ${summarizeExecFailure(error)}`,
+    );
+  }
+}
 const DISCORD_WEBHOOK_RE = /^https:\/\/(?:discord(?:app)?\.com)\/api\/webhooks\/[^/\s]+\/[^/\s]+$/i;
 const TELEGRAM_TOKEN_RE = /^\d+:[A-Za-z0-9_-]{20,}$/;
 
@@ -374,7 +966,6 @@ function buildOpenRouterModelChecks(
 
 export async function checkOpenRouterHealth(settings: AppSettings): Promise<OpenRouterHealth> {
   const apiKey = await readEnvVar('OPENROUTER_API_KEY');
-  const keyPresent = !!apiKey;
 
   if (!apiKey) {
     return {
@@ -547,6 +1138,14 @@ export async function checkSystemHealthWithAuth(): Promise<SystemHealth> {
     claude: { ...health.claude, authenticated: health.claude.available && claudeAuth },
     codex: { ...health.codex, authenticated: health.codex.available && codexAuth },
   };
+}
+
+export async function checkCliProviderUsage(): Promise<CliProviderUsageMap> {
+  const [claude, codex] = await Promise.all([
+    checkProviderUsage('claude'),
+    checkProviderUsage('codex'),
+  ]);
+  return { claude, codex };
 }
 
 export async function checkIntegrationStatus(settings: AppSettings): Promise<IntegrationStatus> {
