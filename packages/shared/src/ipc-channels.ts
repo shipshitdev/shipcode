@@ -4,6 +4,7 @@ import type {
   AgentState,
   AppSettings,
   ContextFileInfo,
+  ContextGeneratorCli,
   CostSummary,
   DashboardOverview,
   DashboardStats,
@@ -14,8 +15,10 @@ import type {
   GitState,
   IntegrationStatus,
   NotificationRecord,
+  OnboardingRepo,
   OpenRouterModelValidation,
   PipelineCheckpoint,
+  PipelineModelResolvedEvent,
   PipelinePhase,
   PlanRecord,
   PlanReview,
@@ -159,6 +162,7 @@ export interface IpcInvokeChannels {
   'github:refresh-issues': { args: { projectId: string }; result: GitHubIssueCacheRecord[] };
   'github:start-issue': { args: { projectId: string; issueNumber: number }; result: undefined };
   'github:retry-issue': { args: { projectId: string; issueNumber: number }; result: undefined };
+  'github:mark-done': { args: { projectId: string; issueNumber: number }; result: undefined };
   'github:get-issue': {
     args: { issueNumber: number; projectId: string };
     result: GitHubIssueCacheRecord | null;
@@ -248,7 +252,7 @@ export interface IpcInvokeChannels {
 
   // Onboarding
   'onboarding:check-auth': { args: undefined; result: SystemHealth & { ghAuth: GhAuthStatus } };
-  'onboarding:list-repos': { args: undefined; result: string[] };
+  'onboarding:list-repos': { args: undefined; result: OnboardingRepo[] };
 
   // AI-assisted PRD enhancement (in-place refinement of a draft PRD body)
   'ai:enhance-prd': {
@@ -259,7 +263,7 @@ export interface IpcInvokeChannels {
   // Repo context files (Phase 2)
   'context:list': { args: { projectId: string }; result: ContextFileInfo[] };
   'context:generate': {
-    args: { projectId: string; cli: 'claude' | 'codex' };
+    args: { projectId: string; cli: ContextGeneratorCli };
     result: { success: boolean; error?: string };
   };
   'context:read': { args: { projectId: string; name: string }; result: { content: string | null } };
@@ -319,11 +323,13 @@ export interface IpcStreamChannels {
   'agent:output': { processId: string; chunk: string; threadId?: string };
   'agent:state': { processId: string; type: string; state: AgentState; threadId?: string };
   'pipeline:phase': { threadId: string; phase: PipelinePhase };
+  'pipeline:model-resolved': PipelineModelResolvedEvent;
   'pipeline:verification-exhausted': { threadId: string; retries: number };
   'plan:parsed': { threadId: string; plan: ShipCodePlan };
   'review:parsed': { threadId: string; review: PlanReview };
   'files:changed': { projectId: string; changes: FileChange[] };
   'verification:parsed': { threadId: string; verification: VerificationResult };
+  'terminal:event': TerminalEventRecord;
   'github:issues-updated': { projectId: string; issues: GitHubIssueCacheRecord[] };
   'github:issue-status': { projectId: string; issueNumber: number; status: string };
   'notification:fire': NotificationRecord;
@@ -331,4 +337,25 @@ export interface IpcStreamChannels {
   'notification:focus-thread': { threadId: string; projectId: string | null };
   'activity:appended': ActivityEntry;
   'dashboard:invalidate': { kinds: Array<'stats' | 'activity' | 'running' | 'recent'> };
+}
+
+export type IpcInvokeChannel = keyof IpcInvokeChannels;
+export type IpcStreamChannel = keyof IpcStreamChannels;
+export type InvokeArgs<C extends IpcInvokeChannel> = [IpcInvokeChannels[C]['args']] extends [
+  undefined,
+]
+  ? []
+  : [IpcInvokeChannels[C]['args']];
+
+export interface ShipCodeAPI {
+  invoke<C extends IpcInvokeChannel>(
+    channel: C,
+    ...args: InvokeArgs<C>
+  ): Promise<IpcInvokeChannels[C]['result']>;
+  invoke<T = unknown>(channel: string, args?: unknown): Promise<T>;
+  on<C extends IpcStreamChannel>(
+    channel: C,
+    callback: (payload: IpcStreamChannels[C]) => void,
+  ): () => void;
+  on(channel: string, callback: (...args: unknown[]) => void): () => void;
 }

@@ -38,7 +38,7 @@ export interface KanbanBoardProps {
 
 export type ColumnKey = 'todo' | 'agent' | 'human' | 'done';
 export type BoardSortOrder = 'priority' | 'id-desc' | 'id-asc' | 'title';
-export type RowTone = 'default' | 'done' | 'agent' | 'danger' | 'warning';
+export type RowTone = 'default' | 'success' | 'done' | 'agent' | 'danger' | 'warning';
 
 export type PhaseSection = {
   key: string;

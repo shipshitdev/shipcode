@@ -1,3 +1,4 @@
+import type { ShipCodeAPI } from '@shipcode/shared';
 import { contextBridge, ipcRenderer } from 'electron';
 
 const IS_DEV = process.env.NODE_ENV !== 'production';
@@ -60,53 +61,50 @@ if (IS_DEV) {
   }, IPC_SUMMARY_INTERVAL_MS);
 }
 
-const api = {
-  // Request-response (invoke)
-  invoke: <T>(channel: string, args?: unknown): Promise<T> => {
-    const startedAt = performance.now();
-    return ipcRenderer.invoke(channel, args).then(
-      (result) => {
-        const elapsedMs = performance.now() - startedAt;
-        if (IS_DEV) {
-          recordIpcMetric(channel, elapsedMs, false);
-          ipcRenderer.send('diagnostics:renderer-ipc', {
-            channel,
-            ok: true,
-            elapsedMs: Number(elapsedMs.toFixed(1)),
-            ...summarizeArgs(args),
-          });
-          if (elapsedMs >= SLOW_IPC_THRESHOLD_MS) {
-            console.debug(`[shipcode][ipc] ${channel} ${elapsedMs.toFixed(1)}ms`, args);
-          }
+const invoke: ShipCodeAPI['invoke'] = ((channel: string, args?: unknown) => {
+  const startedAt = performance.now();
+  return ipcRenderer.invoke(channel, args).then(
+    (result) => {
+      const elapsedMs = performance.now() - startedAt;
+      if (IS_DEV) {
+        recordIpcMetric(channel, elapsedMs, false);
+        ipcRenderer.send('diagnostics:renderer-ipc', {
+          channel,
+          ok: true,
+          elapsedMs: Number(elapsedMs.toFixed(1)),
+          ...summarizeArgs(args),
+        });
+        if (elapsedMs >= SLOW_IPC_THRESHOLD_MS) {
+          console.debug(`[shipcode][ipc] ${channel} ${elapsedMs.toFixed(1)}ms`, args);
         }
-        return result;
-      },
-      (error) => {
-        const elapsedMs = performance.now() - startedAt;
-        if (IS_DEV) {
-          recordIpcMetric(channel, elapsedMs, true);
-          ipcRenderer.send('diagnostics:renderer-ipc', {
-            channel,
-            ok: false,
-            elapsedMs: Number(elapsedMs.toFixed(1)),
-            error: error instanceof Error ? error.message : String(error),
-            ...summarizeArgs(args),
-          });
-          console.warn(`[shipcode][ipc] ${channel} failed after ${elapsedMs.toFixed(1)}ms`, error);
-        }
-        throw error;
-      },
-    );
-  },
+      }
+      return result;
+    },
+    (error) => {
+      const elapsedMs = performance.now() - startedAt;
+      if (IS_DEV) {
+        recordIpcMetric(channel, elapsedMs, true);
+        ipcRenderer.send('diagnostics:renderer-ipc', {
+          channel,
+          ok: false,
+          elapsedMs: Number(elapsedMs.toFixed(1)),
+          error: error instanceof Error ? error.message : String(error),
+          ...summarizeArgs(args),
+        });
+        console.warn(`[shipcode][ipc] ${channel} failed after ${elapsedMs.toFixed(1)}ms`, error);
+      }
+      throw error;
+    },
+  );
+}) as ShipCodeAPI['invoke'];
 
-  // Streaming (on/off)
-  on: (channel: string, callback: (...args: unknown[]) => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, ...args: unknown[]) => callback(...args);
-    ipcRenderer.on(channel, handler);
-    return () => {
-      ipcRenderer.removeListener(channel, handler);
-    };
-  },
-};
+const on: ShipCodeAPI['on'] = ((channel: string, callback: (...args: unknown[]) => void) => {
+  const handler = (_event: Electron.IpcRendererEvent, ...args: unknown[]) => callback(...args);
+  ipcRenderer.on(channel, handler);
+  return () => {
+    ipcRenderer.removeListener(channel, handler);
+  };
+}) as ShipCodeAPI['on'];
 
+const api: ShipCodeAPI = { invoke, on };
 contextBridge.exposeInMainWorld('shipcode', api);

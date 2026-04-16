@@ -36,6 +36,7 @@ function DraggableListRow({
   onOpenPullRequest,
   onArchiveIssue,
 }: DraggableListRowProps) {
+  const isDoneState = issue.pipelineStatus === 'completed' || issue.pipelineStatus === 'done';
   const isDraggable = DRAGGABLE_STATUSES.includes(issue.pipelineStatus);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: issue.id,
@@ -57,6 +58,10 @@ function DraggableListRow({
           (isSelected
             ? 'border-transparent bg-accent/10 text-primary'
             : 'border-transparent text-primary hover:bg-secondary'),
+        tone === 'success' &&
+          (isSelected
+            ? 'border-success bg-success/[0.08] text-primary'
+            : 'border-success/60 bg-success/[0.035] text-primary hover:bg-success/[0.055]'),
         tone === 'done' &&
           (isSelected
             ? 'border-done bg-done/[0.09] text-primary'
@@ -89,11 +94,11 @@ function DraggableListRow({
         <span
           className={cn(
             'h-2 w-2 shrink-0 rounded-full',
+            tone === 'success' && 'bg-success',
             tone === 'done' && 'bg-done',
             tone === 'danger' && 'bg-danger',
             tone === 'warning' && 'bg-warning',
-            tone === 'default' &&
-              (issue.pipelineStatus === 'completed' ? 'bg-done' : 'bg-text-muted'),
+            tone === 'default' && (issue.pipelineStatus === 'done' ? 'bg-done' : 'bg-text-muted'),
           )}
         />
       )}
@@ -129,7 +134,7 @@ function DraggableListRow({
         {issue.assignee ?? '—'}
       </span>
       <span className="shrink-0 text-xs text-muted">{formatDate(issue.fetchedAt)}</span>
-      {issue.pipelineStatus === 'completed' && onArchiveIssue && (
+      {isDoneState && onArchiveIssue && (
         <Button
           variant="ghost"
           size="icon-xs"
@@ -156,6 +161,7 @@ interface ListSectionBlockProps {
   activeId: string | null;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
   onOpenPullRequest?: (url: string) => void;
+  onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
 }
 
 function ListSectionBlock({
@@ -166,6 +172,7 @@ function ListSectionBlock({
   activeId,
   onIssueClick,
   onOpenPullRequest,
+  onArchiveIssue,
 }: ListSectionBlockProps) {
   const count = issues.length;
   const empty = count === 0;
@@ -214,6 +221,7 @@ function ListSectionBlock({
               activeId={activeId}
               onIssueClick={onIssueClick}
               onOpenPullRequest={onOpenPullRequest}
+              onArchiveIssue={columnKey === 'done' ? onArchiveIssue : undefined}
             />
           ))}
         </div>
@@ -324,6 +332,7 @@ export function IssueListView({
                         activeId={activeId}
                         onIssueClick={onIssueClick}
                         onOpenPullRequest={onOpenPullRequest}
+                        onArchiveIssue={onArchiveIssue}
                       />
                     ))}
                   </div>

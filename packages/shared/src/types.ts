@@ -101,7 +101,7 @@ export interface Project {
 
 // === Thread Types ===
 
-export type ThreadStatus =
+export type PipelinePhase =
   | 'idle'
   | 'planning'
   | 'reviewing'
@@ -113,6 +113,8 @@ export type ThreadStatus =
   | 'shipping'
   | 'completed'
   | 'failed';
+
+export type ThreadStatus = PipelinePhase;
 
 export interface Thread {
   id: string;
@@ -198,19 +200,6 @@ export interface PipelineCheckpoint {
 
 // === Pipeline Types ===
 
-export type PipelinePhase =
-  | 'idle'
-  | 'planning'
-  | 'reviewing'
-  | 'revising'
-  | 'awaiting_approval'
-  | 'executing'
-  | 'testing'
-  | 'verifying'
-  | 'shipping'
-  | 'completed'
-  | 'failed';
-
 export type AgentType = 'claude' | 'codex' | 'gh' | 'openrouter';
 
 /**
@@ -230,6 +219,7 @@ export type AgentType = 'claude' | 'codex' | 'gh' | 'openrouter';
  */
 export type ExecutorModel = 'claude' | 'codex' | 'openrouter';
 export type ReasoningEffort = 'low' | 'medium' | 'high';
+export type ContextGeneratorCli = 'claude' | 'codex';
 
 export type AgentState = 'starting' | 'running' | 'idle' | 'errored' | 'exited';
 
@@ -408,6 +398,11 @@ export interface ProjectSetupDraft {
   suggestedContract: RepoSetupContract;
 }
 
+export interface OnboardingRepo {
+  name: string;
+  private: boolean;
+}
+
 export interface NotificationEventToggles {
   awaitingApproval: boolean;
   failed: boolean;
@@ -416,13 +411,7 @@ export interface NotificationEventToggles {
   ciBlocked: boolean;
 }
 
-export interface ChatNotificationEventToggles {
-  awaitingApproval: boolean;
-  failed: boolean;
-  completed: boolean;
-  verificationExhausted: boolean;
-  ciBlocked: boolean;
-}
+export type ChatNotificationEventToggles = NotificationEventToggles;
 
 export type ProjectNotificationRoutingMode = 'inherit' | 'disabled' | 'custom';
 
@@ -659,6 +648,15 @@ export interface VerificationRecord {
   result: 'passed' | 'failed';
   retryCount: number;
   createdAt: string;
+}
+
+export interface PipelineModelResolvedEvent {
+  threadId: string;
+  phase: 'plan' | 'review' | 'revision' | 'execute' | 'verify';
+  requestedModel: string;
+  resolvedModel: string;
+  tokensUsed?: { prompt: number; completion: number };
+  costUsd?: number;
 }
 
 // === GitHub Status Labels ===

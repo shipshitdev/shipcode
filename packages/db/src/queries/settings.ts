@@ -1,7 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type {
   AppSettings,
-  ChatNotificationEventToggles,
   IntegrationDeliveryStatus,
   NotificationEventToggles,
 } from '@shipcode/shared';
@@ -20,24 +19,25 @@ function parseBool(raw: string | undefined, fallback: boolean): boolean {
   return fallback;
 }
 
-function parseNotificationEvents(raw: string | undefined): NotificationEventToggles {
-  if (!raw) return { ...DEFAULT_NOTIFICATION_EVENTS };
+function parseEventToggles<T extends NotificationEventToggles>(
+  raw: string | undefined,
+  defaults: T,
+): T {
+  if (!raw) return { ...defaults };
   try {
-    const parsed = JSON.parse(raw) as Partial<NotificationEventToggles>;
-    return { ...DEFAULT_NOTIFICATION_EVENTS, ...parsed };
+    const parsed = JSON.parse(raw) as Partial<T>;
+    return { ...defaults, ...parsed };
   } catch {
-    return { ...DEFAULT_NOTIFICATION_EVENTS };
+    return { ...defaults };
   }
 }
 
-function parseChatNotificationEvents(raw: string | undefined): ChatNotificationEventToggles {
-  if (!raw) return { ...DEFAULT_CHAT_NOTIFICATION_EVENTS };
-  try {
-    const parsed = JSON.parse(raw) as Partial<ChatNotificationEventToggles>;
-    return { ...DEFAULT_CHAT_NOTIFICATION_EVENTS, ...parsed };
-  } catch {
-    return { ...DEFAULT_CHAT_NOTIFICATION_EVENTS };
-  }
+function parseNotificationEvents(raw: string | undefined): NotificationEventToggles {
+  return parseEventToggles(raw, DEFAULT_NOTIFICATION_EVENTS);
+}
+
+function parseChatNotificationEvents(raw: string | undefined): NotificationEventToggles {
+  return parseEventToggles(raw, DEFAULT_CHAT_NOTIFICATION_EVENTS);
 }
 
 function parseDeliveryStatus(raw: string | undefined): IntegrationDeliveryStatus | null {

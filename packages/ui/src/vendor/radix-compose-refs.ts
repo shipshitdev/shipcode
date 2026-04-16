@@ -3,7 +3,9 @@ import * as React from 'react';
 type PossibleRef<T> = React.Ref<T> | undefined;
 const NULL_REF = Symbol('null-ref');
 const CALLBACK = Symbol('callback');
-const composeRefsCache = new Map<unknown, unknown>();
+type ComposeRefsCallback = (node: unknown | null) => void;
+type ComposeRefsCacheNode = Map<unknown, ComposeRefsCacheNode | ComposeRefsCallback>;
+const composeRefsCache: ComposeRefsCacheNode = new Map();
 
 function setRef<T>(ref: PossibleRef<T>, value: T | null) {
   if (typeof ref === 'function') {
@@ -16,13 +18,13 @@ function setRef<T>(ref: PossibleRef<T>, value: T | null) {
 }
 
 export function composeRefs<T>(...refs: PossibleRef<T>[]) {
-  let cacheNode = composeRefsCache;
+  let cacheNode: ComposeRefsCacheNode = composeRefsCache;
 
   for (const ref of refs) {
     const key = ref ?? NULL_REF;
     let next = cacheNode.get(key);
     if (!(next instanceof Map)) {
-      next = new Map<unknown, unknown>();
+      next = new Map();
       cacheNode.set(key, next);
     }
     cacheNode = next;
@@ -33,14 +35,14 @@ export function composeRefs<T>(...refs: PossibleRef<T>[]) {
     return cached as (node: T | null) => void;
   }
 
-  const composedRef = (node: T | null) => {
+  const composedRef: ComposeRefsCallback = (node) => {
     refs.forEach((ref) => {
-      setRef(ref, node);
+      setRef(ref, node as T | null);
     });
   };
 
   cacheNode.set(CALLBACK, composedRef);
-  return composedRef;
+  return composedRef as (node: T | null) => void;
 }
 
 export function useComposedRefs<T>(...refs: PossibleRef<T>[]) {

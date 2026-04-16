@@ -22,10 +22,8 @@ export function createCliEmitter(): PipelineEmitter {
           console.log(`[${timestamp}] Verification exhausted after ${event.retries} retries`);
           break;
         case 'pipeline:model-resolved': {
-          // Build tokens and cost as independent segments. A provider
-          // can theoretically report cost without tokens (unusual but
-          // possible) — the previous nested check dropped the cost in
-          // that case. CodeRabbit flagged this on the initial Tier 3.
+          // Build tokens and cost as independent segments so cost still
+          // renders when a provider reports it without token totals.
           const parts: string[] = [];
           if (event.tokensUsed) {
             parts.push(`${event.tokensUsed.prompt}+${event.tokensUsed.completion} tok`);

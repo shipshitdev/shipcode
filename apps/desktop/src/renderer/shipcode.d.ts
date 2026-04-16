@@ -1,12 +1,7 @@
-interface ShipCodeAPI {
-  invoke: <T>(channel: string, args?: unknown) => Promise<T>;
-  on: (channel: string, callback: (...args: unknown[]) => void) => () => void;
-}
+import type { ShipCodeAPI } from '@shipcode/shared';
 
 declare global {
   interface Window {
     shipcode: ShipCodeAPI;
   }
 }
-
-export {};

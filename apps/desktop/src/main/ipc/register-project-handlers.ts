@@ -5,13 +5,11 @@ import {
   checkDesktopApps,
   checkIntegrationStatus,
   checkSystemHealthWithAuth,
-  validateOpenRouterModel,
-} from '@shipcode/agents';
-import {
   detectProjectSetup,
   inspectProjectSetup,
+  validateOpenRouterModel,
   writeProjectSetup,
-} from '@shipcode/agents/source';
+} from '@shipcode/agents';
 import { GitService, WorktreeManager } from '@shipcode/git';
 import type {
   AppSettings,
@@ -316,7 +314,9 @@ export function registerProjectHandlers({
 
       const issue = queries.githubIssues.getByThreadId(threadId);
       if (issue) {
-        queries.githubIssues.updatePipelineStatus(issue.id, 'todo');
+        if (!queries.githubIssues.resetToTodo(issue.id)) {
+          queries.githubIssues.reconcileCompletedFromEvidence(issue.id);
+        }
         mainWindow.webContents.send('github:issues-updated', {
           projectId: issue.projectId,
           issues: queries.githubIssues.list(issue.projectId),

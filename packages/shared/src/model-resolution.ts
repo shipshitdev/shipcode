@@ -2,11 +2,25 @@ import type {
   AppSettings,
   ExecutorModel,
   GitHubIssueCacheRecord,
+  IssuePipelineStatus,
   Project,
   ReasoningEffort,
 } from './types';
 
-export type ResolvedPhaseModel = 'planner' | 'reviewer' | 'executor' | 'verifier';
+export const RESOLVED_PHASE_MODELS = ['planner', 'reviewer', 'executor', 'verifier'] as const;
+export type ResolvedPhaseModel = (typeof RESOLVED_PHASE_MODELS)[number];
+
+type PhaseSettingsModelKey = 'plannerModel' | 'reviewerModel' | 'executorModel' | 'verifierModel';
+type PhaseSettingsModelIdKey =
+  | 'openrouterPlannerModel'
+  | 'openrouterReviewerModel'
+  | 'openrouterExecutorModel'
+  | 'openrouterVerifierModel';
+type PhaseSettingsReasoningKey =
+  | 'plannerReasoningEffort'
+  | 'reviewerReasoningEffort'
+  | 'executorReasoningEffort'
+  | 'verifierReasoningEffort';
 
 type ProjectModelOverrides = Pick<
   Project,
@@ -36,6 +50,120 @@ type IssuePhaseOverrides = Pick<
   | 'verifierModelIdOverride'
 >;
 
+export interface ResolvedPhaseDescriptor {
+  key: ResolvedPhaseModel;
+  label: string;
+  validProviders: readonly ExecutorModel[];
+  settingsModelKey: PhaseSettingsModelKey;
+  settingsModelIdKey: PhaseSettingsModelIdKey;
+  settingsReasoningEffortKey: PhaseSettingsReasoningKey;
+  projectModelOverrideKey: keyof Pick<
+    Project,
+    | 'plannerModelOverride'
+    | 'reviewerModelOverride'
+    | 'executorModelOverride'
+    | 'verifierModelOverride'
+  >;
+  projectModelIdOverrideKey: keyof Pick<
+    Project,
+    | 'plannerModelIdOverride'
+    | 'reviewerModelIdOverride'
+    | 'executorModelIdOverride'
+    | 'verifierModelIdOverride'
+  >;
+  projectReasoningEffortOverrideKey: keyof Pick<
+    Project,
+    | 'plannerReasoningEffortOverride'
+    | 'reviewerReasoningEffortOverride'
+    | 'executorReasoningEffortOverride'
+    | 'verifierReasoningEffortOverride'
+  >;
+  issueModelOverrideKey: keyof Pick<
+    GitHubIssueCacheRecord,
+    | 'plannerModelOverride'
+    | 'reviewerModelOverride'
+    | 'executorModelOverride'
+    | 'verifierModelOverride'
+  >;
+  issueModelIdOverrideKey: keyof Pick<
+    GitHubIssueCacheRecord,
+    | 'plannerModelIdOverride'
+    | 'reviewerModelIdOverride'
+    | 'executorModelIdOverride'
+    | 'verifierModelIdOverride'
+  >;
+  issueStatuses: readonly IssuePipelineStatus[];
+}
+
+const VALID_PHASE_PROVIDERS = [
+  'claude',
+  'codex',
+  'openrouter',
+] as const satisfies readonly ExecutorModel[];
+
+export const PHASE_DESCRIPTORS: readonly ResolvedPhaseDescriptor[] = [
+  {
+    key: 'planner',
+    label: 'Planner',
+    validProviders: VALID_PHASE_PROVIDERS,
+    settingsModelKey: 'plannerModel',
+    settingsModelIdKey: 'openrouterPlannerModel',
+    settingsReasoningEffortKey: 'plannerReasoningEffort',
+    projectModelOverrideKey: 'plannerModelOverride',
+    projectModelIdOverrideKey: 'plannerModelIdOverride',
+    projectReasoningEffortOverrideKey: 'plannerReasoningEffortOverride',
+    issueModelOverrideKey: 'plannerModelOverride',
+    issueModelIdOverrideKey: 'plannerModelIdOverride',
+    issueStatuses: ['todo', 'queued', 'planning', 'revising', 'awaiting_approval'],
+  },
+  {
+    key: 'reviewer',
+    label: 'Reviewer',
+    validProviders: VALID_PHASE_PROVIDERS,
+    settingsModelKey: 'reviewerModel',
+    settingsModelIdKey: 'openrouterReviewerModel',
+    settingsReasoningEffortKey: 'reviewerReasoningEffort',
+    projectModelOverrideKey: 'reviewerModelOverride',
+    projectModelIdOverrideKey: 'reviewerModelIdOverride',
+    projectReasoningEffortOverrideKey: 'reviewerReasoningEffortOverride',
+    issueModelOverrideKey: 'reviewerModelOverride',
+    issueModelIdOverrideKey: 'reviewerModelIdOverride',
+    issueStatuses: ['reviewing'],
+  },
+  {
+    key: 'executor',
+    label: 'Executor',
+    validProviders: VALID_PHASE_PROVIDERS,
+    settingsModelKey: 'executorModel',
+    settingsModelIdKey: 'openrouterExecutorModel',
+    settingsReasoningEffortKey: 'executorReasoningEffort',
+    projectModelOverrideKey: 'executorModelOverride',
+    projectModelIdOverrideKey: 'executorModelIdOverride',
+    projectReasoningEffortOverrideKey: 'executorReasoningEffortOverride',
+    issueModelOverrideKey: 'executorModelOverride',
+    issueModelIdOverrideKey: 'executorModelIdOverride',
+    issueStatuses: ['executing', 'testing'],
+  },
+  {
+    key: 'verifier',
+    label: 'Verifier',
+    validProviders: VALID_PHASE_PROVIDERS,
+    settingsModelKey: 'verifierModel',
+    settingsModelIdKey: 'openrouterVerifierModel',
+    settingsReasoningEffortKey: 'verifierReasoningEffort',
+    projectModelOverrideKey: 'verifierModelOverride',
+    projectModelIdOverrideKey: 'verifierModelIdOverride',
+    projectReasoningEffortOverrideKey: 'verifierReasoningEffortOverride',
+    issueModelOverrideKey: 'verifierModelOverride',
+    issueModelIdOverrideKey: 'verifierModelIdOverride',
+    issueStatuses: ['verifying', 'shipping'],
+  },
+] as const;
+
+export function getPhaseDescriptor(phase: ResolvedPhaseModel): ResolvedPhaseDescriptor {
+  return PHASE_DESCRIPTORS.find((descriptor) => descriptor.key === phase) ?? PHASE_DESCRIPTORS[0];
+}
+
 function asExecutorModel(value: string | null | undefined): ExecutorModel | null {
   if (value === 'claude' || value === 'codex' || value === 'openrouter') return value;
   return null;
@@ -46,23 +174,9 @@ export function resolvePhaseModel(
   project: ProjectModelOverrides | null | undefined,
   phase: ResolvedPhaseModel,
 ): ExecutorModel {
-  const projectOverride =
-    phase === 'planner'
-      ? project?.plannerModelOverride
-      : phase === 'reviewer'
-        ? project?.reviewerModelOverride
-        : phase === 'executor'
-          ? project?.executorModelOverride
-          : project?.verifierModelOverride;
-
-  const globalValue =
-    phase === 'planner'
-      ? settings.plannerModel
-      : phase === 'reviewer'
-        ? settings.reviewerModel
-        : phase === 'executor'
-          ? settings.executorModel
-          : settings.verifierModel;
+  const descriptor = getPhaseDescriptor(phase);
+  const projectOverride = project?.[descriptor.projectModelOverrideKey];
+  const globalValue = settings[descriptor.settingsModelKey];
 
   return asExecutorModel(projectOverride) ?? asExecutorModel(globalValue) ?? 'claude';
 }
@@ -81,14 +195,8 @@ export function resolvePhaseModelForIssue(
   issue: IssuePhaseOverrides | null | undefined,
   phase: ResolvedPhaseModel,
 ): ExecutorModel {
-  const issueOverride =
-    phase === 'planner'
-      ? issue?.plannerModelOverride
-      : phase === 'reviewer'
-        ? issue?.reviewerModelOverride
-        : phase === 'executor'
-          ? issue?.executorModelOverride
-          : issue?.verifierModelOverride;
+  const descriptor = getPhaseDescriptor(phase);
+  const issueOverride = issue?.[descriptor.issueModelOverrideKey];
 
   return asExecutorModel(issueOverride) ?? resolvePhaseModel(settings, project, phase);
 }
@@ -98,26 +206,10 @@ export function resolvePhaseReasoningEffort(
   project: ProjectModelOverrides | null | undefined,
   phase: ResolvedPhaseModel,
 ): ReasoningEffort {
-  const projectOverride =
-    phase === 'planner'
-      ? project?.plannerReasoningEffortOverride
-      : phase === 'reviewer'
-        ? project?.reviewerReasoningEffortOverride
-        : phase === 'executor'
-          ? project?.executorReasoningEffortOverride
-          : project?.verifierReasoningEffortOverride;
+  const descriptor = getPhaseDescriptor(phase);
+  const projectOverride = project?.[descriptor.projectReasoningEffortOverrideKey];
   if (projectOverride) return projectOverride;
-
-  switch (phase) {
-    case 'planner':
-      return settings.plannerReasoningEffort;
-    case 'reviewer':
-      return settings.reviewerReasoningEffort;
-    case 'executor':
-      return settings.executorReasoningEffort;
-    case 'verifier':
-      return settings.verifierReasoningEffort;
-  }
+  return settings[descriptor.settingsReasoningEffortKey];
 }
 
 export function resolvePhaseModelId(
@@ -125,29 +217,13 @@ export function resolvePhaseModelId(
   project: ProjectModelOverrides | null | undefined,
   phase: ResolvedPhaseModel,
 ): string | null {
-  const projectOverride =
-    phase === 'planner'
-      ? project?.plannerModelIdOverride
-      : phase === 'reviewer'
-        ? project?.reviewerModelIdOverride
-        : phase === 'executor'
-          ? project?.executorModelIdOverride
-          : project?.verifierModelIdOverride;
+  const descriptor = getPhaseDescriptor(phase);
+  const projectOverride = project?.[descriptor.projectModelIdOverrideKey];
   if (projectOverride) return projectOverride;
 
   const resolvedProvider = resolvePhaseModel(settings, project, phase);
   if (resolvedProvider !== 'openrouter') return null;
-
-  switch (phase) {
-    case 'planner':
-      return settings.openrouterPlannerModel;
-    case 'reviewer':
-      return settings.openrouterReviewerModel;
-    case 'executor':
-      return settings.openrouterExecutorModel;
-    case 'verifier':
-      return settings.openrouterVerifierModel;
-  }
+  return settings[descriptor.settingsModelIdKey];
 }
 
 export function resolvePhaseModelIdForIssue(
@@ -156,14 +232,8 @@ export function resolvePhaseModelIdForIssue(
   issue: IssuePhaseOverrides | null | undefined,
   phase: ResolvedPhaseModel,
 ): string | null {
-  const issueOverride =
-    phase === 'planner'
-      ? issue?.plannerModelIdOverride
-      : phase === 'reviewer'
-        ? issue?.reviewerModelIdOverride
-        : phase === 'executor'
-          ? issue?.executorModelIdOverride
-          : issue?.verifierModelIdOverride;
+  const descriptor = getPhaseDescriptor(phase);
+  const issueOverride = issue?.[descriptor.issueModelIdOverrideKey];
   if (issueOverride) return issueOverride;
   return resolvePhaseModelId(settings, project, phase);
 }
@@ -171,25 +241,7 @@ export function resolvePhaseModelIdForIssue(
 export function getIssueCardPhase(
   status: GitHubIssueCacheRecord['pipelineStatus'],
 ): ResolvedPhaseModel | null {
-  switch (status) {
-    case 'todo':
-    case 'queued':
-    case 'planning':
-    case 'revising':
-      return 'planner';
-    case 'reviewing':
-      return 'reviewer';
-    case 'awaiting_approval':
-    case 'executing':
-    case 'testing':
-      return 'executor';
-    case 'verifying':
-      return 'verifier';
-    case 'completed':
-    case 'done':
-    case 'failed':
-      return null;
-    case 'shipping':
-      return 'verifier';
-  }
+  return (
+    PHASE_DESCRIPTORS.find((descriptor) => descriptor.issueStatuses.includes(status))?.key ?? null
+  );
 }

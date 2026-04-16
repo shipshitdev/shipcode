@@ -19,6 +19,7 @@ const PIPELINE_STATUSES = [
   { key: 'verifying', label: 'Verifying' },
   { key: 'shipping', label: 'Shipping' },
   { key: 'completed', label: 'Completed' },
+  { key: 'done', label: 'Done' },
   { key: 'failed', label: 'Failed' },
 ];
 
@@ -49,6 +50,7 @@ export function StatusMappingEditor({ mappings, onSave }: StatusMappingEditorPro
       verifying: 'status:in-progress',
       shipping: 'status:in-progress',
       completed: 'status:done',
+      done: 'status:done',
       failed: 'status:failed',
     });
   }

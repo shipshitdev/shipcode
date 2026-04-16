@@ -2,9 +2,7 @@ import type { Project } from '@shipcode/shared';
 import { Alert, AlertDescription } from '@shipcode/ui';
 import { useAppStore } from '../stores/app-store';
 
-type ProjectWithPathState = Project & { pathExists?: boolean };
-
-export function ProjectPathBanner({ project }: { project: ProjectWithPathState | null }) {
+export function ProjectPathBanner({ project }: { project: Project | null }) {
   const { settingsVisible } = useAppStore();
 
   if (settingsVisible || !project || project.pathExists !== false) return null;

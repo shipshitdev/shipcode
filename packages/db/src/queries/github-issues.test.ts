@@ -292,64 +292,81 @@ describe('GitHubIssueQueries', () => {
   });
 
   describe('close/reopen sync', () => {
-    it('markCompletedOnClose() flips queued → completed (default source status)', () => {
+    it('markDoneOnClose() flips queued → done (default source status)', () => {
       const record = issues.upsert(makeIssue());
       expect(record.pipelineStatus).toBe('queued');
-      const changed = issues.markCompletedOnClose(record.id);
+      const changed = issues.markDoneOnClose(record.id);
       expect(changed).toBe(true);
-      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('completed');
+      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('done');
     });
 
-    it('markCompletedOnClose() flips todo → completed', () => {
+    it('markDoneOnClose() flips completed → done', () => {
       const record = issues.upsert(makeIssue());
-      issues.updatePipelineStatus(record.id, 'todo');
-      expect(issues.markCompletedOnClose(record.id)).toBe(true);
-      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('completed');
+      issues.updatePipelineStatus(record.id, 'completed');
+      expect(issues.markDoneOnClose(record.id)).toBe(true);
+      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('done');
     });
 
-    it('markCompletedOnClose() flips awaiting_approval → completed', () => {
-      const record = issues.upsert(makeIssue());
-      issues.updatePipelineStatus(record.id, 'awaiting_approval');
-      expect(issues.markCompletedOnClose(record.id)).toBe(true);
-      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('completed');
-    });
-
-    it('markCompletedOnClose() flips failed → completed', () => {
-      const record = issues.upsert(makeIssue());
-      issues.updatePipelineStatus(record.id, 'failed');
-      expect(issues.markCompletedOnClose(record.id)).toBe(true);
-      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('completed');
-    });
-
-    it('markCompletedOnClose() does NOT flip executing (in-flight guard)', () => {
+    it('markDoneOnClose() does NOT flip executing (in-flight guard)', () => {
       const record = issues.upsert(makeIssue());
       issues.updatePipelineStatus(record.id, 'executing');
-      expect(issues.markCompletedOnClose(record.id)).toBe(false);
+      expect(issues.markDoneOnClose(record.id)).toBe(false);
       expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('executing');
     });
 
-    it('markCompletedOnClose() does NOT flip planning (in-flight guard)', () => {
+    it('reconcileCompletedFromEvidence() repairs todo → completed when a linked PR exists', () => {
       const record = issues.upsert(makeIssue());
-      issues.updatePipelineStatus(record.id, 'planning');
-      expect(issues.markCompletedOnClose(record.id)).toBe(false);
-      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('planning');
-    });
+      issues.updatePipelineStatus(record.id, 'todo');
+      issues.updatePullRequestFeedback(record.id, {
+        linkedPrNumber: 49,
+        linkedPrUrl: 'https://github.com/shipshitdev/shipcode/pull/49',
+        linkedPrIsDraft: true,
+        ciBlocked: false,
+        failingChecks: [],
+        unresolvedReviewComments: [],
+      });
 
-    it('markCompletedOnClose() is idempotent on already-completed rows', () => {
-      const record = issues.upsert(makeIssue());
-      issues.updatePipelineStatus(record.id, 'completed');
-      expect(issues.markCompletedOnClose(record.id)).toBe(false);
+      expect(issues.reconcileCompletedFromEvidence(record.id)).toBe(true);
       expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('completed');
     });
 
-    it('markReopenedOnOpen() flips completed → todo', () => {
+    it('reconcileCompletedFromEvidence() repairs todo → completed when a linked thread already completed', () => {
       const record = issues.upsert(makeIssue());
-      issues.updatePipelineStatus(record.id, 'completed');
+      const threads = new ThreadQueries(db);
+      const thread = threads.create(projectId, 'prompt', 'title');
+      threads.updateStatus(thread.id, 'completed');
+      issues.linkThread(record.id, thread.id);
+      issues.updatePipelineStatus(record.id, 'todo');
+
+      expect(issues.reconcileCompletedFromEvidence(record.id)).toBe(true);
+      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('completed');
+    });
+
+    it('markReopenedOnOpen() flips done → todo when there is no completion evidence', () => {
+      const record = issues.upsert(makeIssue());
+      issues.updatePipelineStatus(record.id, 'done');
+
       expect(issues.markReopenedOnOpen(record.id)).toBe(true);
       expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('todo');
     });
 
-    it('markReopenedOnOpen() preserves completed when a linked PR exists', () => {
+    it('markReopenedOnOpen() flips done → completed when a linked PR still exists', () => {
+      const record = issues.upsert(makeIssue());
+      issues.updatePipelineStatus(record.id, 'done');
+      issues.updatePullRequestFeedback(record.id, {
+        linkedPrNumber: 49,
+        linkedPrUrl: 'https://github.com/shipshitdev/shipcode/pull/49',
+        linkedPrIsDraft: true,
+        ciBlocked: false,
+        failingChecks: [],
+        unresolvedReviewComments: [],
+      });
+
+      expect(issues.markReopenedOnOpen(record.id)).toBe(true);
+      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('completed');
+    });
+
+    it('resetToTodo() refuses to clear a row that still has completion evidence', () => {
       const record = issues.upsert(makeIssue());
       issues.updatePipelineStatus(record.id, 'completed');
       issues.updatePullRequestFeedback(record.id, {
@@ -361,35 +378,8 @@ describe('GitHubIssueQueries', () => {
         unresolvedReviewComments: [],
       });
 
-      expect(issues.markReopenedOnOpen(record.id)).toBe(false);
+      expect(issues.resetToTodo(record.id)).toBe(false);
       expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('completed');
-    });
-
-    it('markReopenedOnOpen() preserves completed when the linked thread already completed', () => {
-      const record = issues.upsert(makeIssue());
-      const threads = new ThreadQueries(db);
-      const thread = threads.create(projectId, 'prompt', 'title');
-      threads.updateStatus(thread.id, 'completed');
-      issues.linkThread(record.id, thread.id);
-      issues.updatePipelineStatus(record.id, 'completed');
-
-      expect(issues.markReopenedOnOpen(record.id)).toBe(false);
-      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('completed');
-    });
-
-    it('markReopenedOnOpen() is a no-op on non-completed source states', () => {
-      const record = issues.upsert(makeIssue());
-      // Default is 'queued'
-      expect(issues.markReopenedOnOpen(record.id)).toBe(false);
-      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('queued');
-
-      issues.updatePipelineStatus(record.id, 'executing');
-      expect(issues.markReopenedOnOpen(record.id)).toBe(false);
-      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('executing');
-
-      issues.updatePipelineStatus(record.id, 'failed');
-      expect(issues.markReopenedOnOpen(record.id)).toBe(false);
-      expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('failed');
     });
   });
 
@@ -450,14 +440,14 @@ describe('GitHubIssueQueries', () => {
       expect(visible[0].id).toBe(r2.id);
     });
 
-    it('listCompleted() excludes archived and non-completed rows', () => {
+    it('listCompleted() returns both completed and done rows while excluding archived ones', () => {
       const r1 = issues.upsert(makeIssue({ issueNumber: 1 }));
       const r2 = issues.upsert(makeIssue({ issueNumber: 2 }));
       issues.upsert(makeIssue({ issueNumber: 3 }));
       issues.updatePipelineStatus(r1.id, 'completed');
-      issues.updatePipelineStatus(r2.id, 'completed');
+      issues.updatePipelineStatus(r2.id, 'done');
       // issue #3 stays queued
-      issues.archiveIssues([r2.id]); // archive one completed
+      issues.archiveIssues([r2.id]); // archive one terminal row
       const completed = issues.listCompleted(projectId);
       expect(completed).toHaveLength(1);
       expect(completed[0].id).toBe(r1.id);
@@ -465,7 +455,7 @@ describe('GitHubIssueQueries', () => {
 
     it('clearArchivedAt() during reopen re-exposes the issue', () => {
       const r = issues.upsert(makeIssue({ issueNumber: 1 }));
-      issues.updatePipelineStatus(r.id, 'completed');
+      issues.updatePipelineStatus(r.id, 'done');
       issues.archiveIssues([r.id]);
       expect(issues.list(projectId)).toHaveLength(0);
       // Simulate refresh: reopen + clear archive

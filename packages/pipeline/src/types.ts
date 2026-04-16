@@ -16,7 +16,7 @@ import type {
   VerificationQueries,
 } from '@shipcode/db';
 import type {
-  AgentType,
+  ExecutorModel,
   GitHubPrCheckSummary,
   GitHubPrReviewCommentSummary,
   PhaseSkillKey,
@@ -27,9 +27,8 @@ import type {
   VerificationResult,
 } from '@shipcode/shared';
 
-// Models that can drive a pipeline phase. Excludes 'gh' which is a
-// data-plane CLI, not an LLM executor.
-export type PipelineExecutorModel = Exclude<AgentType, 'gh'>;
+// Temporary alias while pipeline adopts the shared executor-model type directly.
+export type PipelineExecutorModel = ExecutorModel;
 
 // Typed event contract -- both desktop and CLI adapters must handle these
 export type PipelineEvent =

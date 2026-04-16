@@ -65,12 +65,8 @@ export class GhCli {
 
   private async filterExistingLabels(labels: string[]): Promise<string[]> {
     if (labels.length === 0) return [];
-    try {
-      const available = new Set(await this.listRepoLabels());
-      return labels.filter((label) => available.has(label));
-    } catch {
-      return [];
-    }
+    const available = new Set(await this.listRepoLabels());
+    return labels.filter((label) => available.has(label));
   }
 
   private isManagedPrdLabel(label: string): boolean {

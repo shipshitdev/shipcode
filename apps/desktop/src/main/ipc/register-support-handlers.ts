@@ -13,6 +13,7 @@ import {
   listContextFiles,
   readContextFile,
 } from '@shipcode/agents';
+import type { ContextGeneratorCli } from '@shipcode/shared';
 import log, { logProcessOutput } from '../logger.service';
 import type { IpcHandlerDeps } from './types';
 
@@ -59,8 +60,12 @@ export function registerSupportHandlers({
         repos.push({ name, private: line.slice(lastColon + 1) === 'true' });
       }
       return repos.sort((a, b) => a.name.localeCompare(b.name));
-    } catch {
-      return [];
+    } catch (err) {
+      const short =
+        err instanceof Error
+          ? err.message.split('\n')[0].slice(0, 300)
+          : 'Repository lookup failed';
+      throw new Error(short);
     }
   });
 
@@ -82,15 +87,10 @@ export function registerSupportHandlers({
           'Success Criteria, Out of Scope, Dependencies, Verification Plan, Risks & Open Questions.';
       }
 
-      const settings = queries.settings.get();
-      const plannerModel: 'claude' | 'codex' =
-        settings.plannerModel === 'codex' ? 'codex' : 'claude';
-
       try {
         return await enhancePrdDraft({
           draftBody: draftBody ?? '',
           skillContent,
-          plannerModel,
           cwd: project.path,
         });
       } catch (err) {
@@ -110,7 +110,7 @@ export function registerSupportHandlers({
 
   ipcMain.handle(
     'context:generate',
-    async (_event, { projectId, cli }: { projectId: string; cli: 'claude' | 'codex' }) => {
+    async (_event, { projectId, cli }: { projectId: string; cli: ContextGeneratorCli }) => {
       const project = queries.projects.getById(projectId);
       if (!project) throw new Error(`Project ${projectId} not found`);
       try {

@@ -11,12 +11,18 @@ export interface EnhancePrdOptions {
   draftBody: string;
   /** Contents of `.agents/skills/writing-prds/SKILL.md` from the target repo, or a fallback. */
   skillContent: string;
-  /** Which CLI to drive. Codex currently falls back to Claude. */
-  plannerModel: 'claude' | 'codex';
   /** Working directory (usually the project path). */
   cwd: string;
   /** Request timeout in ms. Defaults to 3 minutes. */
   timeoutMs?: number;
+}
+
+function isCliResultEnvelope(value: unknown): value is { result: string } {
+  return (
+    value != null &&
+    typeof value === 'object' &&
+    typeof (value as { result?: unknown }).result === 'string'
+  );
 }
 
 /**
@@ -72,11 +78,6 @@ export async function enhancePrdDraft(opts: EnhancePrdOptions): Promise<Generate
   const prompt = buildPrdPrompt(opts.draftBody, opts.skillContent);
   const timeout = opts.timeoutMs ?? 180_000;
 
-  // Codex CLI one-shot invocation is not yet implemented — fall back to
-  // Claude. The user's planner-model preference is respected elsewhere; PRD
-  // enhancement is Claude-only for now.
-  void opts.plannerModel;
-
   const stdout = await runClaudeWithStdin(prompt, opts.cwd, timeout);
 
   // `claude -p --output-format json` returns an envelope
@@ -84,8 +85,8 @@ export async function enhancePrdDraft(opts: EnhancePrdOptions): Promise<Generate
   // fallback for older CLI versions that already return plain text.
   let text = stdout;
   try {
-    const envelope = JSON.parse(stdout) as Record<string, unknown>;
-    if (envelope && typeof envelope.result === 'string') {
+    const envelope = JSON.parse(stdout) as unknown;
+    if (isCliResultEnvelope(envelope)) {
       text = envelope.result;
     }
   } catch {

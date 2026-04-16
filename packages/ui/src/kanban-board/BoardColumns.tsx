@@ -108,6 +108,7 @@ interface SectionBlockProps {
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
   onCancel?: (issue: GitHubIssueCacheRecord) => void;
   onOpenPullRequest?: (url: string) => void;
+  onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
   selectedIssueNumber?: number;
   rerunningId?: string | null;
   issuePhaseChipById: Map<string, IssuePhaseChip | null>;
@@ -122,6 +123,7 @@ function SectionBlock({
   onRerun,
   onCancel,
   onOpenPullRequest,
+  onArchiveIssue,
   selectedIssueNumber,
   rerunningId,
   issuePhaseChipById,
@@ -188,6 +190,7 @@ function SectionBlock({
               onOpenPullRequest={onOpenPullRequest}
               isSelected={issue.issueNumber === selectedIssueNumber}
               isRerunning={issue.id === rerunningId}
+              onArchiveIssue={columnKey === 'done' ? onArchiveIssue : undefined}
               readOnly={readOnly}
             />
           ))}
@@ -214,6 +217,8 @@ interface StackedColumnProps {
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
   onCancel?: (issue: GitHubIssueCacheRecord) => void;
   onOpenPullRequest?: (url: string) => void;
+  onArchiveAllDone?: () => void;
+  onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
   selectedIssueNumber?: number;
   rerunningId?: string | null;
   issuePhaseChipById: Map<string, IssuePhaseChip | null>;
@@ -227,6 +232,8 @@ export function StackedColumn({
   onRerun,
   onCancel,
   onOpenPullRequest,
+  onArchiveAllDone,
+  onArchiveIssue,
   selectedIssueNumber,
   rerunningId,
   issuePhaseChipById,
@@ -241,16 +248,29 @@ export function StackedColumn({
           <span className={cn('h-2 w-2 shrink-0 rounded-full', COLUMN_DOT_CLASS[column.key])} />
           {column.label}
         </span>
-        <span
-          className={cn(
-            'min-w-[18px] rounded-full border border-transparent bg-tertiary px-1.5 py-px text-center text-[10px] font-medium',
-            !hasIssues && 'text-muted/70',
-            hasIssues && column.key === 'done' && 'border-done/25 bg-done/15 text-done',
-            hasIssues && column.key !== 'done' && 'text-muted',
+        <div className="flex items-center gap-1">
+          {onArchiveAllDone && column.key === 'done' && columnIssues.length > 0 && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="text-muted/60 hover:bg-muted/10 hover:text-muted"
+              title="Archive all done issues"
+              onClick={onArchiveAllDone}
+            >
+              <Archive size={12} />
+            </Button>
           )}
-        >
-          {columnIssues.length}
-        </span>
+          <span
+            className={cn(
+              'min-w-[18px] rounded-full border border-transparent bg-tertiary px-1.5 py-px text-center text-[10px] font-medium',
+              !hasIssues && 'text-muted/70',
+              hasIssues && column.key === 'done' && 'border-done/25 bg-done/15 text-done',
+              hasIssues && column.key !== 'done' && 'text-muted',
+            )}
+          >
+            {columnIssues.length}
+          </span>
+        </div>
       </div>
       <div className="min-h-[60px] flex-1 overflow-y-auto">
         {(column.sections ?? []).map((section) => (
@@ -264,6 +284,7 @@ export function StackedColumn({
             onRerun={onRerun}
             onCancel={onCancel}
             onOpenPullRequest={onOpenPullRequest}
+            onArchiveIssue={onArchiveIssue}
             selectedIssueNumber={selectedIssueNumber}
             rerunningId={rerunningId}
             issuePhaseChipById={issuePhaseChipById}

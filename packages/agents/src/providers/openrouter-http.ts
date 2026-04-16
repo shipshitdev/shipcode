@@ -111,6 +111,7 @@ export class OpenRouterError extends Error {
     message: string,
     public readonly retryable: boolean,
     public readonly status?: number,
+    public readonly retryAfterMs?: number,
   ) {
     super(message);
     this.name = 'OpenRouterError';
@@ -272,16 +273,13 @@ export class OpenRouterClient {
       );
     }
     if (status === 429) {
-      const err = new OpenRouterError(
+      throw new OpenRouterError(
         'rate_limit',
         `OpenRouter rate limit: ${bodyText}`,
         true,
         status,
+        retryAfterHeader ? parseRetryAfter(retryAfterHeader) : undefined,
       );
-      if (retryAfterHeader)
-        (err as unknown as { retryAfterMs: number }).retryAfterMs =
-          parseRetryAfter(retryAfterHeader);
-      throw err;
     }
     if (status >= 500 && status < 600) {
       throw new OpenRouterError('network', `OpenRouter ${status}: ${bodyText}`, true, status);
@@ -479,9 +477,8 @@ function collectToolCalls(map: Map<number, OpenRouterToolCall>): OpenRouterToolC
 }
 
 function computeBackoffMs(attempt: number, err: OpenRouterError): number {
-  const retryAfterMs = (err as unknown as { retryAfterMs?: number }).retryAfterMs;
-  if (typeof retryAfterMs === 'number' && retryAfterMs > 0) {
-    return Math.min(retryAfterMs, OPENROUTER_BACKOFF_MAX_MS);
+  if (typeof err.retryAfterMs === 'number' && err.retryAfterMs > 0) {
+    return Math.min(err.retryAfterMs, OPENROUTER_BACKOFF_MAX_MS);
   }
   const base = OPENROUTER_BACKOFF_BASE_MS * 2 ** attempt;
   const jitter = Math.random() * base * 0.25;

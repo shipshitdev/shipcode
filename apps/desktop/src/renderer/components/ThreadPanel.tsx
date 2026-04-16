@@ -73,6 +73,7 @@ export function ThreadPanel() {
   const settings: AppSettings | undefined = panelData?.settings;
   const threads: Thread[] = panelData?.threads ?? [];
   const branches: string[] = panelData?.branches ?? [];
+  const threadById = new Map(threads.map((thread) => [thread.id, thread] as const));
 
   // Optimistically flip a single issue's pipelineStatus in the local cache so
   // the card jumps to its new column instantly on drop, instead of waiting
@@ -287,9 +288,16 @@ export function ThreadPanel() {
         }}
         onMarkDone={(issue) => {
           if (!activeProjectId) return;
-          setPipelineStatusOptimistic(issue.id, 'done');
+          const linkedThread = issue.threadId ? threadById.get(issue.threadId) : null;
+          const nextStatus: IssuePipelineStatus =
+            issue.state === 'closed'
+              ? 'done'
+              : issue.linkedPrNumber != null || linkedThread?.status === 'completed'
+                ? 'completed'
+                : 'done';
+          setPipelineStatusOptimistic(issue.id, nextStatus);
           window.shipcode
-            .invoke('github:close-issue', {
+            .invoke('github:mark-done', {
               projectId: activeProjectId,
               issueNumber: issue.issueNumber,
             })

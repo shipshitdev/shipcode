@@ -159,7 +159,7 @@ export function KanbanBoard({
       return;
     }
     // 5. any manually draggable card → done (explicitly complete issue)
-    if (dropId === 'done' && onMarkDone) {
+    if ((dropId === 'done' || dropId === 'done:done') && onMarkDone) {
       onMarkDone(issue);
       return;
     }
@@ -216,6 +216,8 @@ export function KanbanBoard({
                     onRerun={handleRerun}
                     onCancel={onCancel}
                     onOpenPullRequest={onOpenPullRequest}
+                    onArchiveAllDone={col.key === 'done' ? onArchiveAllDone : undefined}
+                    onArchiveIssue={col.key === 'done' ? onArchiveIssue : undefined}
                     rerunningId={rerunningId}
                     selectedIssueNumber={selectedIssueNumber}
                     issuePhaseChipById={issuePhaseChipById}

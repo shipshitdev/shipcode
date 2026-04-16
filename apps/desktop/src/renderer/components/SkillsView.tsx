@@ -90,7 +90,7 @@ export function SkillsView() {
 
   const { data: list, isLoading } = useQuery<SkillListEntry[]>({
     queryKey: ['skills:list', projectId],
-    queryFn: () => window.shipcode.invoke('skills:list-for-view', { projectId }),
+    queryFn: () => window.shipcode.invoke<SkillListEntry[]>('skills:list-for-view', { projectId }),
   });
 
   const activeEntry = useMemo(
@@ -121,11 +121,14 @@ export function SkillsView() {
     }: {
       content: string;
     }): Promise<{ ok: boolean; error?: { message: string }; row?: SkillRowView }> =>
-      window.shipcode.invoke('skills:write', {
-        projectId,
-        phase: activePhase,
-        content,
-      }),
+      window.shipcode.invoke<{ ok: boolean; error?: { message: string }; row?: SkillRowView }>(
+        'skills:write',
+        {
+          projectId,
+          phase: activePhase,
+          content,
+        },
+      ),
     onSuccess: (result) => {
       if (!result.ok && result.error) {
         setValidationError(result.error.message);
@@ -141,8 +144,8 @@ export function SkillsView() {
   });
 
   const resetMutation = useMutation({
-    mutationFn: () =>
-      window.shipcode.invoke('skills:reset', {
+    mutationFn: (): Promise<void> =>
+      window.shipcode.invoke<void>('skills:reset', {
         projectId,
         phase: activePhase,
       }),

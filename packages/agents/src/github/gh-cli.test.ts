@@ -463,6 +463,31 @@ describe('GhCli', () => {
     });
   });
 
+  describe('editIssue', () => {
+    it('surfaces label discovery failures instead of clearing managed labels', async () => {
+      const fake = createFakeProc();
+      mockSpawn.mockReturnValueOnce(fake.proc);
+      mockExecFileAsync.mockRejectedValueOnce(new Error('gh label list failed'));
+
+      const promise = gh.editIssue({
+        issueNumber: 42,
+        title: 'Updated title',
+        body: 'Updated body',
+        labels: ['status:queued'],
+      });
+
+      fake.complete(0);
+
+      await expect(promise).rejects.toThrow('gh label list failed');
+      expect(mockSpawn).toHaveBeenCalledWith(
+        'gh',
+        ['issue', 'edit', '42', '--title', 'Updated title', '--body-file', '-'],
+        { cwd: '/test/repo', stdio: ['pipe', 'pipe', 'pipe'] },
+      );
+      expect(mockExecFileAsync).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('getPullRequestFeedback', () => {
     it('maps failing checks and unresolved review threads', async () => {
       success(JSON.stringify({ owner: { login: 'shipshitdev' }, name: 'shipcode' }));

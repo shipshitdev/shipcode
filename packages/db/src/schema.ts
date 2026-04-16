@@ -1,5 +1,24 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { ISO_NOW_SQL } from '@shipcode/shared';
 import { transaction } from './utils';
+
+function execAlterTableIfMissing(db: DatabaseSync, ddl: string): void {
+  try {
+    db.exec(ddl);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    // Only suppress the idempotent duplicate-column case. Any other ALTER
+    // failure must abort the migration so startup retries instead of silently
+    // leaving the schema half-updated.
+    if (!/duplicate column name/i.test(message)) throw err;
+  }
+}
+
+function execAlterTablesIfMissing(db: DatabaseSync, ddls: readonly string[]): void {
+  for (const ddl of ddls) {
+    execAlterTableIfMissing(db, ddl);
+  }
+}
 
 export function migrate(db: DatabaseSync): void {
   db.exec(`
@@ -116,11 +135,7 @@ export function migrateV2(db: DatabaseSync): void {
       'ALTER TABLE threads ADD COLUMN fork_point_sha TEXT',
     ];
 
-    for (const sql of alterColumns) {
-      try {
-        db.exec(sql);
-      } catch {}
-    }
+    execAlterTablesIfMissing(db, alterColumns);
 
     db.exec(`
       CREATE TABLE IF NOT EXISTS verifications (
@@ -178,10 +193,7 @@ export function migrateV3(db: DatabaseSync): void {
   if (row && row.version >= 3) return;
 
   transaction(db, () => {
-    // Add last_status_label column to github_issue_cache
-    try {
-      db.exec('ALTER TABLE github_issue_cache ADD COLUMN last_status_label TEXT');
-    } catch {}
+    execAlterTableIfMissing(db, 'ALTER TABLE github_issue_cache ADD COLUMN last_status_label TEXT');
 
     // Reclassify unclaimed queued issues as todo
     db.exec(`
@@ -204,11 +216,10 @@ export function migrateV4(db: DatabaseSync): void {
     // Per-issue executor model selection (claude | codex) — defaults to 'claude'.
     // The existing threads.executor_model (v2) remains as the pipeline-context default
     // for non-GitHub threads; this column stores the user's choice per cached issue.
-    try {
-      db.exec(
-        "ALTER TABLE github_issue_cache ADD COLUMN executor_model TEXT NOT NULL DEFAULT 'claude'",
-      );
-    } catch {}
+    execAlterTableIfMissing(
+      db,
+      "ALTER TABLE github_issue_cache ADD COLUMN executor_model TEXT NOT NULL DEFAULT 'claude'",
+    );
 
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (4)`);
   });
@@ -288,11 +299,7 @@ export function migrateV6(db: DatabaseSync): void {
       'ALTER TABLE threads ADD COLUMN total_tokens_completion INTEGER NOT NULL DEFAULT 0',
       'ALTER TABLE threads ADD COLUMN total_cost_usd REAL NOT NULL DEFAULT 0',
     ];
-    for (const sql of alterColumns) {
-      try {
-        db.exec(sql);
-      } catch {}
-    }
+    execAlterTablesIfMissing(db, alterColumns);
 
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (6)`);
   });
@@ -304,23 +311,16 @@ export function migrateV7(db: DatabaseSync): void {
     .get() as { version: number } | undefined;
   if (row && row.version >= 7) return;
 
-  const addColumnIfMissing = (ddl: string): void => {
-    try {
-      db.exec(ddl);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      // Only ignore the specific "already applied" case. Any other failure
-      // (locked DB, malformed schema, partial write) must abort so we retry
-      // on next startup instead of masking the problem and leaving the
-      // projects table missing expected columns.
-      if (!/duplicate column name/i.test(message)) throw err;
-    }
-  };
-
   transaction(db, () => {
     // Project-level pin + archive state for sidebar management.
-    addColumnIfMissing(`ALTER TABLE projects ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0`);
-    addColumnIfMissing(`ALTER TABLE projects ADD COLUMN archived INTEGER NOT NULL DEFAULT 0`);
+    execAlterTableIfMissing(
+      db,
+      `ALTER TABLE projects ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0`,
+    );
+    execAlterTableIfMissing(
+      db,
+      `ALTER TABLE projects ADD COLUMN archived INTEGER NOT NULL DEFAULT 0`,
+    );
 
     // Defence-in-depth: verify columns actually exist before marking V7 applied.
     const cols = db.prepare(`PRAGMA table_info(projects)`).all() as { name: string }[];
@@ -388,9 +388,7 @@ export function migrateV8(db: DatabaseSync): void {
 
   transaction(db, () => {
     // Store the last failure reason so the UI can surface it in IssueDetail.
-    try {
-      db.exec('ALTER TABLE threads ADD COLUMN last_error TEXT');
-    } catch {}
+    execAlterTableIfMissing(db, 'ALTER TABLE threads ADD COLUMN last_error TEXT');
 
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (8)`);
   });
@@ -442,9 +440,7 @@ export function migrateV10(db: DatabaseSync): void {
     // Per-project override for the Kanban `board` quick-link. GitHub Projects v2
     // live under a user/org and can span multiple repos, so we can't derive this
     // from `git_remote` alone. NULL means "use the repo Projects tab fallback".
-    try {
-      db.exec('ALTER TABLE projects ADD COLUMN github_project_url TEXT');
-    } catch {}
+    execAlterTableIfMissing(db, 'ALTER TABLE projects ADD COLUMN github_project_url TEXT');
 
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (10)`);
   });
@@ -460,9 +456,7 @@ export function migrateV11(db: DatabaseSync): void {
     // Timestamp when a DONE issue was archived (closed on GitHub + hidden in UI).
     // NULL means the issue has not been archived. Non-null means it is hidden from
     // the Kanban board unless the user explicitly requests archived issues.
-    try {
-      db.exec('ALTER TABLE github_issue_cache ADD COLUMN archived_at TEXT');
-    } catch {}
+    execAlterTableIfMissing(db, 'ALTER TABLE github_issue_cache ADD COLUMN archived_at TEXT');
 
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (11)`);
   });
@@ -481,19 +475,15 @@ export function migrateV12(db: DatabaseSync): void {
       'ALTER TABLE projects ADD COLUMN executor_model_override TEXT',
       'ALTER TABLE projects ADD COLUMN verifier_model_override TEXT',
     ];
-    for (const sql of projectColumns) {
-      try {
-        db.exec(sql);
-      } catch {}
-    }
-
-    try {
-      db.exec("ALTER TABLE threads ADD COLUMN verifier_model TEXT DEFAULT 'claude'");
-    } catch {}
-
-    try {
-      db.exec('ALTER TABLE github_issue_cache ADD COLUMN executor_model_override TEXT');
-    } catch {}
+    execAlterTablesIfMissing(db, projectColumns);
+    execAlterTableIfMissing(
+      db,
+      "ALTER TABLE threads ADD COLUMN verifier_model TEXT DEFAULT 'claude'",
+    );
+    execAlterTableIfMissing(
+      db,
+      'ALTER TABLE github_issue_cache ADD COLUMN executor_model_override TEXT',
+    );
 
     db.exec(`
       UPDATE github_issue_cache
@@ -552,11 +542,7 @@ export function migrateV14(db: DatabaseSync): void {
       'ALTER TABLE github_issue_cache ADD COLUMN pr_last_sync_at TEXT',
     ];
 
-    for (const sql of alterColumns) {
-      try {
-        db.exec(sql);
-      } catch {}
-    }
+    execAlterTablesIfMissing(db, alterColumns);
 
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (14)`);
   });
@@ -580,11 +566,7 @@ export function migrateV15(db: DatabaseSync): void {
       'ALTER TABLE projects ADD COLUMN verifier_reasoning_effort_override TEXT',
     ];
 
-    for (const sql of projectColumns) {
-      try {
-        db.exec(sql);
-      } catch {}
-    }
+    execAlterTablesIfMissing(db, projectColumns);
 
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (15)`);
   });
@@ -603,11 +585,7 @@ export function migrateV16(db: DatabaseSync): void {
       'ALTER TABLE github_issue_cache ADD COLUMN verifier_model_override TEXT',
     ];
 
-    for (const sql of issueColumns) {
-      try {
-        db.exec(sql);
-      } catch {}
-    }
+    execAlterTablesIfMissing(db, issueColumns);
 
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (16)`);
   });
@@ -627,11 +605,7 @@ export function migrateV17(db: DatabaseSync): void {
       'ALTER TABLE github_issue_cache ADD COLUMN verifier_model_id_override TEXT',
     ];
 
-    for (const sql of issueColumns) {
-      try {
-        db.exec(sql);
-      } catch {}
-    }
+    execAlterTablesIfMissing(db, issueColumns);
 
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (17)`);
   });
@@ -697,11 +671,7 @@ export function migrateV20(db: DatabaseSync): void {
       'ALTER TABLE projects ADD COLUMN telegram_chat_id_override TEXT',
     ];
 
-    for (const sql of projectColumns) {
-      try {
-        db.exec(sql);
-      } catch {}
-    }
+    execAlterTablesIfMissing(db, projectColumns);
 
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (20)`);
   });

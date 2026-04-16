@@ -303,8 +303,7 @@ describe('computeBackoffMs', () => {
   });
 
   it('honors Retry-After when present on the error', () => {
-    const err = new OpenRouterError('rate_limit', 'x', true);
-    (err as unknown as { retryAfterMs: number }).retryAfterMs = 7_500;
+    const err = new OpenRouterError('rate_limit', 'x', true, undefined, 7_500);
     expect(computeBackoffMs(0, err)).toBe(7_500);
   });
 });

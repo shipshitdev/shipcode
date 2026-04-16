@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { ContextFileInfo } from '@shipcode/shared';
+import type { ContextFileInfo, ContextGeneratorCli } from '@shipcode/shared';
 
 const CONTEXT_DIR = '.agents/context';
 const CONTEXT_FENCE_TAG = 'shipcode-context';
@@ -13,13 +13,19 @@ const CONTEXT_FILE_NAMES = [
   'CONSTRAINTS.md',
 ] as const;
 
-type ContextGeneratorCli = 'claude' | 'codex';
-
 export interface ContextGenerateResult {
   success: boolean;
   error?: string;
   /** Which files were actually written (a subset if partial failure). */
   written: string[];
+}
+
+function isCliResultEnvelope(value: unknown): value is { result: string } {
+  return (
+    value != null &&
+    typeof value === 'object' &&
+    typeof (value as { result?: unknown }).result === 'string'
+  );
 }
 
 /**
@@ -99,8 +105,8 @@ export async function generateContextFiles(
   // Unwrap to `result`, with a raw-stdout fallback for older CLI versions.
   let text = stdout;
   try {
-    const envelope = JSON.parse(stdout) as Record<string, unknown>;
-    if (envelope && typeof envelope.result === 'string') {
+    const envelope = JSON.parse(stdout) as unknown;
+    if (isCliResultEnvelope(envelope)) {
       text = envelope.result;
     }
   } catch {

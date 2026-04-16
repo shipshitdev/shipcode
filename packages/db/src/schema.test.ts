@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { migrate, migrateV2, migrateV3, migrateV18, migrateV20 } from './schema';
+import { migrate, migrateV2, migrateV3, migrateV18, migrateV20, migrateV21 } from './schema';
 import { asRow } from './utils';
 
 interface ThreadV2Row {
@@ -176,5 +176,50 @@ describe('migrateV20', () => {
 
     expect(row.discord_routing).toBe('custom');
     expect(row.telegram_routing).toBe('disabled');
+  });
+
+  it('is idempotent', () => {
+    migrateV20(db);
+    expect(() => migrateV20(db)).not.toThrow();
+  });
+});
+
+describe('migrateV21', () => {
+  let db: DatabaseSync;
+
+  beforeEach(() => {
+    db = new DatabaseSync(':memory:');
+    migrate(db);
+    migrateV2(db);
+    migrateV3(db);
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('reclassifies open completed issues with linked PR evidence back to completed and closed ones to done', () => {
+    db.prepare("INSERT INTO projects (id, name, path) VALUES ('p1', 'test', '/tmp/test')").run();
+    db.prepare(
+      "INSERT INTO threads (id, project_id, title, prompt, status) VALUES ('t1', 'p1', 'title', 'prompt', 'completed')",
+    ).run();
+    db.prepare(
+      "INSERT INTO github_issue_cache (id, project_id, issue_number, title, labels, state, pipeline_status, thread_id, linked_pr_number) VALUES ('open-issue', 'p1', 1, 'Issue', '[]', 'open', 'todo', 't1', 49)",
+    ).run();
+    db.prepare(
+      "INSERT INTO github_issue_cache (id, project_id, issue_number, title, labels, state, pipeline_status) VALUES ('closed-issue', 'p1', 2, 'Issue 2', '[]', 'closed', 'completed')",
+    ).run();
+
+    migrateV21(db);
+
+    const openRow = db
+      .prepare('SELECT pipeline_status FROM github_issue_cache WHERE id = ?')
+      .get('open-issue') as { pipeline_status: string };
+    const closedRow = db
+      .prepare('SELECT pipeline_status FROM github_issue_cache WHERE id = ?')
+      .get('closed-issue') as { pipeline_status: string };
+
+    expect(openRow.pipeline_status).toBe('completed');
+    expect(closedRow.pipeline_status).toBe('done');
   });
 });

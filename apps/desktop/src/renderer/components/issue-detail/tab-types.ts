@@ -1,7 +1,7 @@
-import type { ExecutorModel, PlanRecord } from '@shipcode/shared';
+import type { ExecutorModel, PlanRecord, ResolvedPhaseModel } from '@shipcode/shared';
 
 export const ISSUE_DETAIL_TABS = ['prd', 'history', 'pipeline', 'activity'] as const;
-export type PhaseKey = 'planner' | 'reviewer' | 'executor' | 'verifier';
+export type PhaseKey = ResolvedPhaseModel;
 export type IssueDetailTab = (typeof ISSUE_DETAIL_TABS)[number];
 
 export type PhaseSelection = {

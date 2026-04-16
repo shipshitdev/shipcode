@@ -11,7 +11,7 @@ The Kanban board is the main view inside a project. Each column corresponds to a
 | Reviewing | `reviewing` / `revising` | Reviewer is critiquing the plan (up to `maxReviewRounds`) |
 | Executing | `executing` | Executor is implementing the plan in an isolated git worktree |
 | Verifying | `verifying` | Verifier is checking the diff against acceptance criteria |
-| Completed | `completed` | Pipeline finished, PR opened, issue linked |
+| Done | `completed` / `done` | `completed`: ShipCode finished and a PR exists. `done`: the issue is explicitly closed/finalized. |
 | Failed | `failed` | Pipeline errored out — check the terminal drawer or Inbox |
 
 The board still groups work by phase, but the model choice is now shown on each card instead of in the column header. That matters because model selection is hierarchical:
@@ -30,7 +30,7 @@ The Kanban component lives in [`packages/ui/src/KanbanBoard.tsx`](https://github
 
 ## List view
 
-Click the toggle in the Kanban header to switch to a flat list view. The list mirrors the same column structure as Planning / Reviewing / Executing / Verifying sub-sections. Use list view when you have more than a handful of concurrent runs and want a denser layout.
+Click the toggle in the Kanban header to switch to a flat list view. The list mirrors the same column structure as Planning / Reviewing / Executing / Verifying, plus the Done column's `Completed` and `Done` sub-sections. Use list view when you have more than a handful of concurrent runs and want a denser layout.
 
 ## Card actions
 

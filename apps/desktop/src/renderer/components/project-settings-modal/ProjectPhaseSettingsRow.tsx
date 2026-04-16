@@ -48,7 +48,7 @@ export function ProjectPhaseSettingsRow({
 }: {
   phase: PhaseKey;
   label: string;
-  validProviders: ExecutorModel[];
+  validProviders: readonly ExecutorModel[];
   settings: AppSettings;
   projectDraft: Project;
   overrides: ProjectOverrideState;

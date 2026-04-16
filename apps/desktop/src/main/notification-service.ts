@@ -2,28 +2,12 @@ import type { ActivityQueries, NotificationsQueries, SettingsQueries } from '@sh
 import {
   filterAttentionRequiredNotifications,
   type NotificationKind,
+  notificationEventFlagForKind,
   type Thread,
 } from '@shipcode/shared';
 import { app, type BrowserWindow, Notification } from 'electron';
 
 const DEDUPE_WINDOW_MS = 2_000;
-
-function kindToEventFlag(
-  kind: NotificationKind,
-): keyof import('@shipcode/shared').NotificationEventToggles {
-  switch (kind) {
-    case 'awaiting_approval':
-      return 'awaitingApproval';
-    case 'failed':
-      return 'failed';
-    case 'completed':
-      return 'completed';
-    case 'verification_exhausted':
-      return 'verificationExhausted';
-    case 'ci_blocked':
-      return 'ciBlocked';
-  }
-}
 
 function buildCopy(kind: NotificationKind, thread: Thread): { title: string; body: string } {
   const label = thread.title || `Thread ${thread.id.slice(0, 6)}`;
@@ -77,8 +61,7 @@ export class NotificationService {
     const settings = this.settings.get();
     if (!settings.notificationsEnabled) return;
 
-    // Per-event toggle
-    const flag = kindToEventFlag(kind);
+    const flag = notificationEventFlagForKind(kind);
     if (!settings.notificationEvents[flag]) return;
 
     // Suppress 'failed' if verification-exhausted just fired for this thread.
@@ -98,7 +81,6 @@ export class NotificationService {
 
     const { title, body } = buildCopy(kind, thread);
 
-    // Persist
     const record = this.notifications.create({
       threadId: thread.id,
       projectId: thread.projectId,
@@ -107,7 +89,6 @@ export class NotificationService {
       body,
     });
 
-    // Log to activity feed
     this.activity.create({
       threadId: thread.id,
       projectId: thread.projectId,
@@ -118,12 +99,10 @@ export class NotificationService {
       metadata: { notificationId: record.id, notificationKind: kind },
     });
 
-    // In-app toast (always when master enabled)
     if (!this.mainWindow.isDestroyed()) {
       this.mainWindow.webContents.send('notification:fire', record);
     }
 
-    // OS notification
     if (settings.notificationOsEnabled && Notification.isSupported()) {
       const n = new Notification({
         title,
@@ -143,7 +122,6 @@ export class NotificationService {
       n.show();
     }
 
-    // Dock badge
     if (settings.notificationBadgeEnabled) this.refreshBadge();
   }
 
@@ -152,7 +130,6 @@ export class NotificationService {
     if (process.platform === 'darwin' && app.dock) {
       app.dock.setBadge(count > 0 ? String(count) : '');
     }
-    // Windows / Linux: no-op for now
   }
 
   listActive() {

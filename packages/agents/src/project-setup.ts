@@ -154,18 +154,33 @@ function detectProfiles(projectPath: string): DetectedProjectProfile[] {
   return chooseRecommendedProfile(profiles);
 }
 
+function readPackageScripts(packageJsonPath: string): Record<string, string> {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8')) as {
+      scripts?: unknown;
+    };
+    if (!parsed.scripts || typeof parsed.scripts !== 'object') return {};
+
+    return Object.fromEntries(
+      Object.entries(parsed.scripts).filter(
+        (entry): entry is [string, string] =>
+          typeof entry[0] === 'string' &&
+          typeof entry[1] === 'string' &&
+          entry[1].trim().length > 0,
+      ),
+    );
+  } catch {
+    return {};
+  }
+}
+
 function detectNodeContract(
   projectPath: string,
   kind: Extract<DetectedProjectKind, 'bun' | 'npm' | 'pnpm' | 'yarn'>,
 ): RepoSetupContract {
   const topLevel = readTopLevelNames(projectPath);
   const packageJsonPath = path.join(projectPath, 'package.json');
-  let scripts: Record<string, unknown> = {};
-  try {
-    scripts = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'))?.scripts ?? {};
-  } catch {
-    scripts = {};
-  }
+  const scripts = readPackageScripts(packageJsonPath);
 
   const setupCommands: string[] = [];
   if (kind === 'bun') {
@@ -187,7 +202,7 @@ function detectNodeContract(
   }
 
   const verifyCommands = ['typecheck', 'test', 'build']
-    .filter((name) => typeof scripts[name] === 'string' && scripts[name].trim().length > 0)
+    .filter((name) => typeof scripts[name] === 'string')
     .map((name) => `${packageRunner(kind)} ${name}`);
 
   return {

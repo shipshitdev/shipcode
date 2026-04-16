@@ -1,4 +1,4 @@
-import type { NotificationKind, NotificationRecord } from './types';
+import type { NotificationEventToggles, NotificationKind, NotificationRecord } from './types';
 
 export const ATTENTION_REQUIRED_NOTIFICATION_KINDS: NotificationKind[] = [
   'awaiting_approval',
@@ -22,4 +22,21 @@ export function filterAttentionRequiredNotifications<T extends Pick<Notification
   notifications: T[],
 ): T[] {
   return notifications.filter(isAttentionRequiredNotification);
+}
+
+export function notificationEventFlagForKind(
+  kind: NotificationKind,
+): keyof NotificationEventToggles {
+  switch (kind) {
+    case 'awaiting_approval':
+      return 'awaitingApproval';
+    case 'failed':
+      return 'failed';
+    case 'completed':
+      return 'completed';
+    case 'verification_exhausted':
+      return 'verificationExhausted';
+    case 'ci_blocked':
+      return 'ciBlocked';
+  }
 }

@@ -1,6 +1,5 @@
 import fs from 'node:fs';
-import { DEFAULT_SKILLS, GhCli, StreamParser } from '@shipcode/agents';
-import { inspectProjectSetup } from '@shipcode/agents/source';
+import { DEFAULT_SKILLS, GhCli, inspectProjectSetup, StreamParser } from '@shipcode/agents';
 import type { PipelineEmitter } from '@shipcode/pipeline';
 import type { ShipCodePlan } from '@shipcode/shared';
 import {
@@ -121,6 +120,7 @@ export async function syncLinkedPullRequestFeedback(
       queries.githubIssues.setCachedLabelPresence(issue.id, 'blocked:ci', false);
       await ghCli.setIssueLabelPresence(issue.issueNumber, 'blocked:ci', false);
     }
+    queries.githubIssues.reconcileCompletedFromEvidence(issue.id);
     return;
   }
 
@@ -133,6 +133,7 @@ export async function syncLinkedPullRequestFeedback(
     failingChecks: feedback.failingChecks,
     unresolvedReviewComments: feedback.unresolvedReviewComments,
   });
+  queries.githubIssues.reconcileCompletedFromEvidence(issue.id);
 
   if (feedback.ciBlocked !== issue.ciBlocked) {
     queries.githubIssues.setCachedLabelPresence(issue.id, 'blocked:ci', feedback.ciBlocked);

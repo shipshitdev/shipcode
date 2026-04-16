@@ -1,8 +1,4 @@
-import type { AgentType } from '@shipcode/shared';
-
-// Narrow to the agent types that can actually execute a pipeline run.
-// 'gh' is excluded because it's a data-plane CLI, not an executor.
-export type ExecutorModel = Exclude<AgentType, 'gh'>;
+import type { ExecutorModel } from '@shipcode/shared';
 
 export interface ModelRoute {
   executorModel: ExecutorModel;

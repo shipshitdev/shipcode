@@ -84,6 +84,9 @@ export function DraggableCard({
   const isAwaiting = issue.pipelineStatus === 'awaiting_approval';
   const isActive = ACTIVE_STATUSES.includes(issue.pipelineStatus);
   const isTodo = issue.pipelineStatus === 'todo';
+  const isCompleted = issue.pipelineStatus === 'completed';
+  const isDone = issue.pipelineStatus === 'done';
+  const isDoneState = isCompleted || isDone;
   const showPhaseElapsed =
     PHASE_ELAPSED_STATUSES.includes(issue.pipelineStatus) && !!issue.lastPhaseUpdate;
   const phaseSince =
@@ -103,7 +106,11 @@ export function DraggableCard({
           : !isSelected && !isActive
             ? 'border-border/50 hover:border-border-strong'
             : '',
-        issue.pipelineStatus === 'completed' &&
+        isCompleted &&
+          (isSelected
+            ? 'border-success/65 bg-success/[0.08] opacity-90'
+            : 'border-success/35 bg-success/[0.04] opacity-80 hover:border-success/55 hover:bg-success/[0.055] hover:opacity-90'),
+        isDone &&
           (isSelected
             ? 'border-done/65 bg-done/[0.09] opacity-85'
             : 'border-done/35 bg-done/[0.045] opacity-70 hover:border-done/55 hover:bg-done/[0.06] hover:opacity-80'),
@@ -135,17 +142,19 @@ export function DraggableCard({
           <div
             className={cn(
               'absolute bottom-0 left-0 right-0 h-[3px] overflow-hidden rounded-b-md',
-              issue.pipelineStatus === 'completed' ? 'bg-done/15' : 'bg-agent/15',
+              isCompleted ? 'bg-success/15' : isDone ? 'bg-done/15' : 'bg-agent/15',
             )}
           >
             <div
               className={cn(
                 'absolute h-full transition-[width] duration-700',
-                issue.pipelineStatus === 'completed'
-                  ? 'bg-done'
-                  : issue.pipelineStatus === 'awaiting_approval'
-                    ? 'bg-warning'
-                    : 'bg-agent',
+                isCompleted
+                  ? 'bg-success'
+                  : isDone
+                    ? 'bg-done'
+                    : issue.pipelineStatus === 'awaiting_approval'
+                      ? 'bg-warning'
+                      : 'bg-agent',
               )}
               style={{ width: `${phaseToProgress(issue.pipelineStatus)}%` }}
             />
@@ -154,7 +163,7 @@ export function DraggableCard({
             )}
           </div>
         )}
-      {issue.pipelineStatus === 'completed' && onArchiveIssue && (
+      {isDoneState && onArchiveIssue && (
         <Button
           variant="ghost"
           size="icon-xs"

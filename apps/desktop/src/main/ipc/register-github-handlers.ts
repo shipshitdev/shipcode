@@ -98,9 +98,10 @@ export function registerGitHubHandlers({
             state: issue.state,
           });
           if (record.state === 'closed') {
-            queries.githubIssues.markCompletedOnClose(record.id);
+            queries.githubIssues.markDoneOnClose(record.id);
           } else if (record.state === 'open') {
             queries.githubIssues.markReopenedOnOpen(record.id);
+            queries.githubIssues.reconcileCompletedFromEvidence(record.id);
             queries.githubIssues.clearArchivedAt(record.id);
           }
 
@@ -173,7 +174,9 @@ export function registerGitHubHandlers({
       if (!issue) throw new Error(`Issue #${issueNumber} not found in project ${projectId}`);
 
       const ghCli = new GhCli(project.path);
-      await ghCli.closeIssue(issueNumber);
+      if (issue.state !== 'closed') {
+        await ghCli.closeIssue(issueNumber);
+      }
       try {
         await ghCli.archiveProjectItems(issueNumber);
       } catch (err) {
@@ -184,7 +187,7 @@ export function registerGitHubHandlers({
       }
 
       try {
-        queries.githubIssues.updatePipelineStatus(issue.id, 'completed');
+        queries.githubIssues.updatePipelineStatus(issue.id, 'done');
         queries.githubIssues.archiveIssues([issue.id]);
       } catch (err) {
         log.error('[github:archive-issue] DB archive failed after GitHub close:', err);
@@ -199,6 +202,31 @@ export function registerGitHubHandlers({
   );
 
   ipcMain.handle(
+    'github:mark-done',
+    async (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
+      if (!issue) throw new Error(`Issue #${issueNumber} not found in project ${projectId}`);
+
+      const thread = issue.threadId ? queries.threads.getById(issue.threadId) : null;
+      const hasCompletionEvidence = issue.linkedPrNumber != null || thread?.status === 'completed';
+
+      if (issue.state === 'closed') {
+        queries.githubIssues.updatePipelineStatus(issue.id, 'done');
+      } else if (hasCompletionEvidence) {
+        queries.githubIssues.updatePipelineStatus(issue.id, 'completed');
+      } else {
+        const ghCli = new GhCli(project.path);
+        await ghCli.closeIssue(issueNumber);
+        queries.githubIssues.updatePipelineStatus(issue.id, 'done');
+      }
+
+      sendGithubIssuesUpdated(mainWindow, queries, projectId);
+    },
+  );
+
+  ipcMain.handle(
     'github:close-issue',
     async (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
       const project = queries.projects.getById(projectId);
@@ -208,9 +236,11 @@ export function registerGitHubHandlers({
       if (!issue) throw new Error(`Issue #${issueNumber} not found in project ${projectId}`);
 
       const ghCli = new GhCli(project.path);
-      await ghCli.closeIssue(issueNumber);
+      if (issue.state !== 'closed') {
+        await ghCli.closeIssue(issueNumber);
+      }
 
-      queries.githubIssues.updatePipelineStatus(issue.id, 'completed');
+      queries.githubIssues.updatePipelineStatus(issue.id, 'done');
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
     },
   );
@@ -228,7 +258,9 @@ export function registerGitHubHandlers({
 
       for (const issue of doneIssues) {
         try {
-          await ghCli.closeIssue(issue.issueNumber);
+          if (issue.state !== 'closed') {
+            await ghCli.closeIssue(issue.issueNumber);
+          }
           await ghCli.archiveProjectItems(issue.issueNumber);
           succeededIds.push(issue.id);
         } catch (err) {
@@ -491,7 +523,9 @@ export function registerGitHubHandlers({
         queries.threads.updateStatus(thread.id, 'idle');
       }
 
-      queries.githubIssues.updatePipelineStatus(issue.id, 'todo');
+      if (!queries.githubIssues.resetToTodo(issue.id)) {
+        queries.githubIssues.reconcileCompletedFromEvidence(issue.id);
+      }
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
     },
   );

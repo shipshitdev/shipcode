@@ -1,4 +1,9 @@
-import type { AppSettings, IntegrationStatus, ProjectOpenTarget } from '@shipcode/shared';
+import type {
+  AppSettings,
+  DesktopAppHealth,
+  IntegrationStatus,
+  ProjectOpenTarget,
+} from '@shipcode/shared';
 import {
   Button,
   FolderGit,
@@ -62,6 +67,21 @@ export function IntegrationsSettingsSection({
     'ghostty',
     'vscode',
   ];
+  const projectOpenTargetLabels: Record<ProjectOpenTarget, string> = {
+    cursor: 'Cursor',
+    finder: 'Finder',
+    terminal: 'Terminal',
+    ghostty: 'Ghostty',
+    vscode: 'Visual Studio Code',
+  };
+  const getDesktopApp = (target: ProjectOpenTarget): DesktopAppHealth =>
+    integrationStatus?.desktopApps?.[target] ?? {
+      key: target,
+      label: projectOpenTargetLabels[target],
+      available: false,
+      path: null,
+      error: null,
+    };
   const projectOpenerSection = (
     <section className="mb-6 rounded-md border border-border bg-secondary/40 p-3">
       <div className="mb-3">
@@ -86,7 +106,7 @@ export function IntegrationsSettingsSection({
           </SelectTrigger>
           <SelectContent>
             {projectOpenTargets.map((target) => {
-              const app = integrationStatus.desktopApps[target];
+              const app = getDesktopApp(target);
               return (
                 <SelectItem key={target} value={target} disabled={!app.available}>
                   {app.label}
@@ -100,7 +120,7 @@ export function IntegrationsSettingsSection({
 
       <div className="space-y-2">
         {projectOpenTargets.map((target) => {
-          const app = integrationStatus.desktopApps[target];
+          const app = getDesktopApp(target);
           return (
             <div key={target} className="rounded-md border border-border bg-primary/40 p-3">
               <div className="flex flex-wrap items-start justify-between gap-2">

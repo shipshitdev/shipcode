@@ -4,9 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
 import { useAppStore } from '../stores/app-store';
 
-type ProjectWithPathState = Project & { pathExists?: boolean };
-
-export function ProjectMissingView({ project }: { project: ProjectWithPathState }) {
+export function ProjectMissingView({ project }: { project: Project }) {
   const queryClient = useQueryClient();
   const { openProjectSettingsModal } = useAppStore();
 

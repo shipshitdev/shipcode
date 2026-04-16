@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
+import type { PipelineCheckpoint, PipelineCheckpointPhase } from '@shipcode/shared';
 import { toIsoUtc } from '@shipcode/shared';
-import type { PipelineCheckpoint, PipelineCheckpointPhase } from '@shipcode/shared/source';
 import { nanoid } from 'nanoid';
 import { asRow, asRows } from '../utils';
 

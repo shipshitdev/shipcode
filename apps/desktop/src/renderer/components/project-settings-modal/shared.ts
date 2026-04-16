@@ -1,20 +1,25 @@
 import {
   type AppSettings,
+  type ContextGeneratorCli,
   type ExecutorModel,
+  PHASE_DESCRIPTORS,
   type Project,
+  type ResolvedPhaseModel,
   resolvePhaseModel,
   resolvePhaseModelId,
   resolvePhaseReasoningEffort,
 } from '@shipcode/shared';
+
+export type { ContextGeneratorCli } from '@shipcode/shared';
+
 import { PROVIDER_DISPLAY } from '../model-provider-options';
 
 export const INHERIT_VALUE = '__inherit__';
 export const PROJECT_TABS = ['general', 'models', 'context'] as const;
-export const PHASES = ['planner', 'reviewer', 'executor', 'verifier'] as const;
+export const PHASES: readonly ResolvedPhaseModel[] = PHASE_DESCRIPTORS.map((phase) => phase.key);
 
 export type ProjectTab = (typeof PROJECT_TABS)[number];
-export type PhaseKey = (typeof PHASES)[number];
-export type ContextGeneratorCli = 'claude' | 'codex';
+export type PhaseKey = ResolvedPhaseModel;
 export type ProjectOverrideState = Pick<
   Project,
   | 'plannerModelOverride'
@@ -86,13 +91,8 @@ export const CONTEXT_GENERATOR_OPTIONS: Array<{
 export const PHASE_META: Array<{
   key: PhaseKey;
   label: string;
-  validProviders: ExecutorModel[];
-}> = [
-  { key: 'planner', label: 'Planner', validProviders: ['claude', 'codex', 'openrouter'] },
-  { key: 'reviewer', label: 'Reviewer', validProviders: ['claude', 'codex', 'openrouter'] },
-  { key: 'executor', label: 'Executor', validProviders: ['claude', 'codex', 'openrouter'] },
-  { key: 'verifier', label: 'Verifier', validProviders: ['claude', 'codex', 'openrouter'] },
-];
+  validProviders: readonly ExecutorModel[];
+}> = [...PHASE_DESCRIPTORS];
 
 export function buildProjectDraft(
   project: Project | null | undefined,

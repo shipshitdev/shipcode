@@ -155,12 +155,13 @@ describe('model-resolution', () => {
     expect(getIssueCardPhase('todo')).toBe('planner');
     expect(getIssueCardPhase('planning')).toBe('planner');
     expect(getIssueCardPhase('reviewing')).toBe('reviewer');
-    expect(getIssueCardPhase('awaiting_approval')).toBe('executor');
+    expect(getIssueCardPhase('awaiting_approval')).toBe('planner');
     expect(getIssueCardPhase('executing')).toBe('executor');
     expect(getIssueCardPhase('testing')).toBe('executor');
     expect(getIssueCardPhase('verifying')).toBe('verifier');
     expect(getIssueCardPhase('failed')).toBeNull();
     expect(getIssueCardPhase('completed')).toBeNull();
+    expect(getIssueCardPhase('done')).toBeNull();
   });
 
   it('returns the global reasoning effort for the current phase', () => {

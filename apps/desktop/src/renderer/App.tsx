@@ -28,8 +28,6 @@ import { useIpc } from './hooks/useIpc';
 import { STABLE_APP_STATE_STALE_TIME } from './query-stale-times';
 import { useAppStore } from './stores/app-store';
 
-type ProjectWithPathState = Project & { pathExists?: boolean };
-
 const ISSUE_DETAIL_MIN_WIDTH = 380;
 const ISSUE_DETAIL_MAX_WIDTH = 760;
 
@@ -84,7 +82,7 @@ export function App() {
     staleTime: STABLE_APP_STATE_STALE_TIME,
   });
 
-  const { data: activeProject } = useQuery<ProjectWithPathState | null>({
+  const { data: activeProject } = useQuery<Project | null>({
     queryKey: ['project', activeProjectId],
     queryFn: () => {
       if (!activeProjectId) {

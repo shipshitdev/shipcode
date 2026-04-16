@@ -1,33 +1,17 @@
 import type { ProjectQueries, SettingsQueries } from '@shipcode/db';
 import type {
-  ChatNotificationEventToggles,
   IntegrationDeliveryStatus,
   NotificationKind,
   Project,
   Thread,
 } from '@shipcode/shared';
-import { clampError } from '@shipcode/shared';
+import { clampError, notificationEventFlagForKind } from '@shipcode/shared';
 import log from './logger.service';
 
 const DEDUPE_WINDOW_MS = 2_000;
 const RETRY_DELAYS_MS = [0, 500, 1_500] as const;
 const DISCORD_WEBHOOK_RE = /^https:\/\/(?:discord(?:app)?\.com)\/api\/webhooks\/[^/\s]+\/[^/\s]+$/i;
 const TELEGRAM_TOKEN_RE = /^\d+:[A-Za-z0-9_-]{20,}$/;
-
-function chatFlagForKind(kind: NotificationKind): keyof ChatNotificationEventToggles {
-  switch (kind) {
-    case 'awaiting_approval':
-      return 'awaitingApproval';
-    case 'failed':
-      return 'failed';
-    case 'completed':
-      return 'completed';
-    case 'verification_exhausted':
-      return 'verificationExhausted';
-    case 'ci_blocked':
-      return 'ciBlocked';
-  }
-}
 
 function kindLabel(kind: NotificationKind): string {
   switch (kind) {
@@ -129,7 +113,7 @@ export class ChatNotificationService {
 
   private async deliver(kind: NotificationKind, thread: Thread) {
     const settings = this.settings.get();
-    if (!settings.chatNotificationEvents[chatFlagForKind(kind)]) return;
+    if (!settings.chatNotificationEvents[notificationEventFlagForKind(kind)]) return;
 
     const project = this.projects.getById(thread.projectId);
     if (!project) return;

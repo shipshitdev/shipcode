@@ -179,8 +179,12 @@ export function CommandPalette() {
           <CommandGroup heading="Git">
             <CommandItem
               onSelect={() =>
-                runAction(() =>
-                  window.shipcode.invoke('git:commit', { projectId: activeProjectId, message: '' }),
+                runAction(
+                  () =>
+                    void window.shipcode.invoke('git:commit', {
+                      projectId: activeProjectId,
+                      message: '',
+                    }),
                 )
               }
             >
@@ -188,7 +192,9 @@ export function CommandPalette() {
             </CommandItem>
             <CommandItem
               onSelect={() =>
-                runAction(() => window.shipcode.invoke('git:push', { projectId: activeProjectId }))
+                runAction(
+                  () => void window.shipcode.invoke('git:push', { projectId: activeProjectId }),
+                )
               }
             >
               <span className="flex-1">Push to Remote</span>

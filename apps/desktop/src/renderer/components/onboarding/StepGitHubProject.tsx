@@ -1,3 +1,4 @@
+import type { OnboardingRepo } from '@shipcode/shared';
 import {
   Button,
   cn,
@@ -12,11 +13,6 @@ import {
 } from '@shipcode/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
-
-interface Repo {
-  name: string;
-  private: boolean;
-}
 
 interface Props {
   selectedRepo: string | null;
@@ -36,7 +32,7 @@ export function StepGitHubProject({ selectedRepo, onSelect }: Props) {
     isLoading,
     error,
     refetch,
-  } = useQuery<Repo[]>({
+  } = useQuery<OnboardingRepo[]>({
     queryKey: ['onboarding-repos'],
     queryFn: () => window.shipcode.invoke('onboarding:list-repos'),
   });
