@@ -41,6 +41,7 @@ interface AppState {
   viewMode: ViewMode;
   sidebarCollapsed: boolean;
   terminalVisible: boolean;
+  terminalMaximized: boolean;
   settingsVisible: boolean;
   settingsSection: SettingsSection;
   issueDetailExpanded: boolean;
@@ -104,6 +105,7 @@ interface AppState {
   toggleSidebar: () => void;
   toggleTerminal: () => void;
   openTerminal: () => void;
+  setTerminalMaximized: (maximized: boolean) => void;
   toggleSettings: () => void;
   setSettingsSection: (section: SettingsSection) => void;
   setPlan: (plan: ShipCodePlan | null) => void;
@@ -149,6 +151,7 @@ export const useAppStore = create<AppState>((set) => ({
   viewMode: 'overview',
   sidebarCollapsed: false,
   terminalVisible: false,
+  terminalMaximized: false,
   settingsVisible: false,
   settingsSection: 'general' as SettingsSection,
   issueDetailExpanded: false,
@@ -183,6 +186,7 @@ export const useAppStore = create<AppState>((set) => ({
       viewMode: 'overview',
       activeIssue: null,
       issueDetailExpanded: false,
+      terminalMaximized: false,
       currentPlan: null,
       currentReview: null,
       currentVerification: null,
@@ -192,6 +196,7 @@ export const useAppStore = create<AppState>((set) => ({
       viewMode: 'activity',
       activeIssue: null,
       issueDetailExpanded: false,
+      terminalMaximized: false,
       currentPlan: null,
       currentReview: null,
       currentVerification: null,
@@ -201,6 +206,7 @@ export const useAppStore = create<AppState>((set) => ({
       viewMode: 'inbox',
       activeIssue: null,
       issueDetailExpanded: false,
+      terminalMaximized: false,
       currentPlan: null,
       currentReview: null,
       currentVerification: null,
@@ -210,6 +216,7 @@ export const useAppStore = create<AppState>((set) => ({
       viewMode: 'costs',
       activeIssue: null,
       issueDetailExpanded: false,
+      terminalMaximized: false,
       currentPlan: null,
       currentReview: null,
       currentVerification: null,
@@ -219,6 +226,7 @@ export const useAppStore = create<AppState>((set) => ({
       viewMode: 'skills',
       activeIssue: null,
       issueDetailExpanded: false,
+      terminalMaximized: false,
       currentPlan: null,
       currentReview: null,
       currentVerification: null,
@@ -228,6 +236,7 @@ export const useAppStore = create<AppState>((set) => ({
       activeProjectId: id,
       activeThreadId: null,
       activeIssue: null,
+      terminalMaximized: false,
       issueDetailExpanded: false,
       currentPlan: null,
       currentReview: null,
@@ -257,13 +266,19 @@ export const useAppStore = create<AppState>((set) => ({
       terminalThreadId: issue?.threadId ?? null,
       // Keep expanded mode when switching between issues; reset when closing.
       issueDetailExpanded: issue ? s.issueDetailExpanded : false,
+      terminalMaximized: issue ? s.terminalMaximized : false,
       // Auto-open terminal when the selected issue has an agent actively running
       terminalVisible:
         issue && AGENT_ACTIVE_STATUSES.has(issue.pipelineStatus) ? true : s.terminalVisible,
     })),
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
-  toggleTerminal: () => set((s) => ({ terminalVisible: !s.terminalVisible })),
-  openTerminal: () => set({ terminalVisible: true }),
+  toggleTerminal: () =>
+    set((s) => ({
+      terminalVisible: !s.terminalVisible,
+      terminalMaximized: s.terminalVisible ? false : s.terminalMaximized,
+    })),
+  openTerminal: () => set({ terminalVisible: true, terminalMaximized: false }),
+  setTerminalMaximized: (maximized) => set({ terminalMaximized: maximized }),
   toggleSettings: () =>
     set((s) => {
       const nextSettingsVisible = !s.settingsVisible;
@@ -271,6 +286,7 @@ export const useAppStore = create<AppState>((set) => ({
         settingsVisible: nextSettingsVisible,
         settingsSection: 'general' as SettingsSection,
         terminalVisible: nextSettingsVisible ? false : s.terminalVisible,
+        terminalMaximized: nextSettingsVisible ? false : s.terminalMaximized,
         issueDetailCollapsed: nextSettingsVisible ? true : s.issueDetailCollapsed,
       };
     }),

@@ -261,4 +261,22 @@ describe('TerminalDrawer', () => {
     expect(await screen.findByText('Second project task')).toBeInTheDocument();
     expect(screen.queryByText('Foreign project task')).not.toBeInTheDocument();
   });
+
+  it('switches into full-size terminal mode instead of keeping the resize handle visible', () => {
+    useAppStore.setState({
+      activeProjectId: 'project-1',
+      terminalThreadId: 'thread-1',
+      githubIssues: [makeIssue()],
+    });
+
+    render(<TerminalDrawer />);
+
+    expect(screen.getByLabelText('Resize terminal drawer')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand terminal' }));
+
+    expect(screen.queryByLabelText('Resize terminal drawer')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Collapse terminal' })).toBeInTheDocument();
+    expect(useAppStore.getState().terminalMaximized).toBe(true);
+  });
 });

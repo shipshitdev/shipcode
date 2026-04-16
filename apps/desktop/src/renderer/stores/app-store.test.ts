@@ -57,6 +57,7 @@ describe('app-store', () => {
       useAppStore.setState({
         settingsVisible: false,
         terminalVisible: true,
+        terminalMaximized: true,
         issueDetailCollapsed: false,
       });
 
@@ -65,6 +66,7 @@ describe('app-store', () => {
       const state = useAppStore.getState();
       expect(state.settingsVisible).toBe(true);
       expect(state.terminalVisible).toBe(false);
+      expect(state.terminalMaximized).toBe(false);
       expect(state.issueDetailCollapsed).toBe(true);
       expect(state.settingsSection).toBe('general');
     });
@@ -118,6 +120,21 @@ describe('app-store', () => {
       useAppStore.getState().selectProject('project-2');
 
       expect(useAppStore.getState().githubIssues).toHaveLength(0);
+    });
+  });
+
+  describe('toggleTerminal', () => {
+    it('clears terminalMaximized when closing the terminal', () => {
+      useAppStore.setState({
+        terminalVisible: true,
+        terminalMaximized: true,
+      });
+
+      useAppStore.getState().toggleTerminal();
+
+      const state = useAppStore.getState();
+      expect(state.terminalVisible).toBe(false);
+      expect(state.terminalMaximized).toBe(false);
     });
   });
 });

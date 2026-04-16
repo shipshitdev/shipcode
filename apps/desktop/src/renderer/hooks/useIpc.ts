@@ -1,8 +1,15 @@
-import type { GitHubIssueCacheRecord } from '@shipcode/shared';
+import type {
+  GitHubIssueCacheRecord,
+  IssuePipelineStatus,
+  TerminalEventRecord,
+} from '@shipcode/shared';
 import { modelDisplay } from '@shipcode/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect } from 'react';
 import { useAppStore } from '../stores/app-store';
+
+const TERMINAL_EVENT_BATCH_MS = 50;
+const LAST_ACTIVITY_THROTTLE_MS = 500;
 
 export function useIpc() {
   const queryClient = useQueryClient();
@@ -10,16 +17,51 @@ export function useIpc() {
     setPlan,
     setReview,
     setPipelinePhase,
-    appendAgentOutput,
     touchLastActivity,
     addNotification,
     removeNotification,
     mapProcessToThread,
     setCurrentModel,
+    hydrateCanonicalEvents,
   } = useAppStore();
 
   useEffect(() => {
     const unsubscribers: (() => void)[] = [];
+    const pendingTerminalEvents = new Map<string, TerminalEventRecord[]>();
+    const lastActivityAt = new Map<string, number>();
+    let terminalFlushTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const flushPendingTerminalEvents = () => {
+      if (terminalFlushTimer) {
+        clearTimeout(terminalFlushTimer);
+        terminalFlushTimer = null;
+      }
+
+      for (const [threadId, events] of pendingTerminalEvents) {
+        if (events.length > 0) {
+          hydrateCanonicalEvents(threadId, events);
+        }
+      }
+      pendingTerminalEvents.clear();
+    };
+
+    const queueTerminalEvent = (record: TerminalEventRecord) => {
+      const pending = pendingTerminalEvents.get(record.threadId) ?? [];
+      pending.push(record);
+      pendingTerminalEvents.set(record.threadId, pending);
+
+      if (
+        record.event.kind !== 'raw' &&
+        record.event.kind !== 'text' &&
+        record.event.kind !== 'thinking'
+      ) {
+        flushPendingTerminalEvents();
+        return;
+      }
+
+      if (terminalFlushTimer) return;
+      terminalFlushTimer = setTimeout(flushPendingTerminalEvents, TERMINAL_EVENT_BATCH_MS);
+    };
 
     unsubscribers.push(
       window.shipcode.on('pipeline:phase', (data) => {
@@ -61,7 +103,7 @@ export function useIpc() {
         }
 
         if (store.activeProjectId) {
-          const mappedStatus = data.phase === 'idle' ? 'todo' : data.phase;
+          const mappedStatus: IssuePipelineStatus = data.phase === 'idle' ? 'todo' : data.phase;
           queryClient.setQueryData<GitHubIssueCacheRecord[]>(
             ['github-issues', store.activeProjectId],
             (prev) =>
@@ -69,28 +111,16 @@ export function useIpc() {
                 i.threadId === data.threadId ? { ...i, pipelineStatus: mappedStatus } : i,
               ),
           );
-        }
-
-        if (store.activeProjectId) {
-          window.shipcode
-            .invoke('github:list-issues', {
-              projectId: store.activeProjectId,
-            })
-            .then((issues) => {
-              useAppStore.getState().setGithubIssues(issues);
-
-              const activeIssue = useAppStore.getState().activeIssue;
-              if (!activeIssue) return;
-
-              const refreshed = issues.find((issue) => issue.id === activeIssue.id) ?? null;
-              useAppStore.setState((state) => ({
-                activeIssue: refreshed,
-                activeThreadId: refreshed?.threadId ?? state.activeThreadId,
-              }));
-            })
-            .catch(() => {
-              // Best-effort sync only.
-            });
+          const nextIssues = store.githubIssues.map((issue) =>
+            issue.threadId === data.threadId ? { ...issue, pipelineStatus: mappedStatus } : issue,
+          );
+          useAppStore.setState((state) => ({
+            githubIssues: nextIssues,
+            activeIssue:
+              state.activeIssue?.threadId === data.threadId
+                ? { ...state.activeIssue, pipelineStatus: mappedStatus }
+                : state.activeIssue,
+          }));
         }
       }),
     );
@@ -142,8 +172,10 @@ export function useIpc() {
 
     unsubscribers.push(
       window.shipcode.on('terminal:event', (data) => {
-        useAppStore.getState().appendCanonicalEvent(data.threadId, data.event, {
+        queueTerminalEvent({
           id: data.id,
+          threadId: data.threadId,
+          event: data.event,
           createdAt: data.createdAt,
         });
       }),
@@ -151,9 +183,20 @@ export function useIpc() {
 
     unsubscribers.push(
       window.shipcode.on('agent:output', (data) => {
-        if (data.threadId && data.processId) mapProcessToThread(data.processId, data.threadId);
-        appendAgentOutput(data.processId, data.chunk);
-        if (data.threadId) touchLastActivity(data.threadId);
+        if (data.threadId && data.processId) {
+          const store = useAppStore.getState();
+          if (store.processToThread[data.processId] !== data.threadId) {
+            mapProcessToThread(data.processId, data.threadId);
+          }
+        }
+        if (data.threadId) {
+          const now = Date.now();
+          const last = lastActivityAt.get(data.threadId) ?? 0;
+          if (now - last >= LAST_ACTIVITY_THROTTLE_MS) {
+            lastActivityAt.set(data.threadId, now);
+            touchLastActivity(data.threadId);
+          }
+        }
       }),
     );
 
@@ -215,18 +258,19 @@ export function useIpc() {
     );
 
     return () => {
+      flushPendingTerminalEvents();
       for (const unsub of unsubscribers) unsub();
     };
   }, [
     setPlan,
     setReview,
     setPipelinePhase,
-    appendAgentOutput,
     touchLastActivity,
     addNotification,
     removeNotification,
     mapProcessToThread,
     setCurrentModel,
+    hydrateCanonicalEvents,
     queryClient,
   ]);
 }

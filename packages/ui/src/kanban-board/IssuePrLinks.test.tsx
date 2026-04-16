@@ -66,6 +66,34 @@ function renderIntoDom(element: ReactElement) {
 }
 
 describe('linked PR affordances', () => {
+  it('renders the animated background layer only for active cards', () => {
+    const activeView = renderIntoDom(
+      <DndContext>
+        <DraggableCard
+          issue={makeIssue({ pipelineStatus: 'executing' })}
+          onClick={vi.fn()}
+          readOnly
+        />
+      </DndContext>,
+    );
+
+    expect(activeView.container.querySelector('.issue-card-active-bg')).toBeTruthy();
+    activeView.cleanup();
+
+    const inactiveView = renderIntoDom(
+      <DndContext>
+        <DraggableCard
+          issue={makeIssue({ pipelineStatus: 'completed' })}
+          onClick={vi.fn()}
+          readOnly
+        />
+      </DndContext>,
+    );
+
+    expect(inactiveView.container.querySelector('.issue-card-active-bg')).toBeNull();
+    inactiveView.cleanup();
+  });
+
   it('opens the linked PR from a done card without triggering card selection', () => {
     const onClick = vi.fn();
     const onOpenPullRequest = vi.fn();

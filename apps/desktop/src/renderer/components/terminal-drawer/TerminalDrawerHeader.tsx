@@ -2,13 +2,16 @@ import type { GitHubIssueCacheRecord, PipelinePhase } from '@shipcode/shared';
 import {
   Button,
   ChevronDown,
+  ChevronUp,
   cn,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
-  Maximize2,
-  Minimize2,
+  MoreHorizontal,
+  PhaseChip,
+  Plus,
   X,
 } from '@shipcode/ui';
 
@@ -38,24 +41,29 @@ export function TerminalDrawerHeader({
   onToggleTerminal,
 }: TerminalDrawerHeaderProps) {
   return (
-    <div className="flex items-center justify-between border-b border-border px-3 py-1.5 shrink-0 gap-3 min-w-0">
-      <div className="flex items-center gap-2 min-w-0 overflow-hidden">
-        <span className="text-xs font-semibold text-secondary shrink-0">Terminal</span>
-        {displayIssue && (
-          <>
-            <span className="text-muted text-xs shrink-0">·</span>
-            {runningTabs.length > 1 ? (
+    <div className="flex items-center justify-between border-b border-border bg-primary/75 px-3 py-1.5 shrink-0 gap-3 min-w-0">
+      <div className="flex items-center gap-3 min-w-0 overflow-hidden">
+        <div className="flex items-center gap-1 shrink-0">
+          <span className="rounded-md bg-tertiary px-3 py-1 text-[11px] font-medium text-primary">
+            Terminal
+          </span>
+          <span className="px-2 py-1 text-[11px] font-medium text-secondary">Problems</span>
+          <span className="px-2 py-1 text-[11px] font-medium text-secondary">Output</span>
+          <span className="px-2 py-1 text-[11px] font-medium text-secondary">Debug Console</span>
+        </div>
+
+        <div className="flex items-center gap-2 min-w-0 overflow-hidden border-l border-border pl-3">
+          {displayIssue &&
+            (runningTabs.length > 1 ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="ghost"
                     size="xs"
-                    className="h-auto min-w-0 gap-1.5 px-1 py-0 text-xs font-normal hover:bg-transparent"
+                    className="h-auto min-w-0 gap-1.5 px-1 py-0 text-xs font-normal text-secondary hover:bg-transparent hover:text-primary"
                   >
                     <span className="font-mono text-muted">#{displayIssue.issueNumber}</span>
-                    <span className="text-secondary truncate max-w-[240px]">
-                      {displayIssue.title}
-                    </span>
+                    <span className="truncate max-w-[240px]">{displayIssue.title}</span>
                     <ChevronDown size={11} className="text-muted shrink-0" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -77,53 +85,94 @@ export function TerminalDrawerHeader({
                 variant="ghost"
                 size="xs"
                 onClick={() => onOpenIssue(displayIssue)}
-                className="h-auto min-w-0 gap-1.5 px-1 py-0 text-xs font-normal hover:bg-transparent"
+                className="h-auto min-w-0 gap-1.5 px-1 py-0 text-xs font-normal text-secondary hover:bg-transparent hover:text-primary"
                 title={`Open issue detail for #${displayIssue.issueNumber}`}
               >
                 <span className="font-mono text-muted">#{displayIssue.issueNumber}</span>
-                <span className="text-secondary truncate hover:text-primary">
-                  {displayIssue.title}
-                </span>
+                <span className="truncate hover:text-primary">{displayIssue.title}</span>
               </Button>
-            )}
-          </>
-        )}
-        {pipelinePhase !== 'idle' && (
-          <>
-            <span className="text-muted text-xs shrink-0">·</span>
-            <span className="text-xs text-accent font-medium shrink-0 capitalize">
-              {pipelinePhase}
-            </span>
-          </>
-        )}
-        {currentModel && pipelinePhase !== 'idle' && (
-          <>
-            <span className="text-muted text-xs shrink-0">·</span>
+            ))}
+
+          {pipelinePhase !== 'idle' && <PhaseChip status={pipelinePhase} className="shrink-0" />}
+
+          {currentModel && pipelinePhase !== 'idle' && (
             <span className="text-xs font-mono text-muted shrink-0 truncate max-w-[180px]">
               {currentModel}
             </span>
-          </>
-        )}
-        {startedAt && (
-          <>
-            <span className="text-muted text-xs shrink-0">·</span>
-            <span className="text-xs font-mono text-muted shrink-0">{startedAt}</span>
-          </>
-        )}
+          )}
+
+          {startedAt && <span className="text-xs font-mono text-muted shrink-0">{startedAt}</span>}
+        </div>
       </div>
-      <div className="flex items-center gap-1">
+
+      <div className="flex items-center gap-0.5 shrink-0">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="xs"
+              className="h-7 gap-0.5 px-1.5 text-muted hover:bg-hover/70 hover:text-primary"
+              aria-label="Open terminal issue list"
+              title="Open terminal issue list"
+            >
+              <Plus size={14} />
+              <ChevronDown size={12} />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" side="top">
+            {runningTabs.length > 0 ? (
+              runningTabs.map((issue) => (
+                <DropdownMenuItem
+                  key={issue.threadId}
+                  onSelect={() => onOpenIssue(issue)}
+                  className={cn(issue.threadId === terminalThreadId && 'bg-hover text-primary')}
+                >
+                  <span className="font-mono text-muted text-xs">#{issue.issueNumber}</span>
+                  <span className="truncate max-w-[280px]">{issue.title}</span>
+                </DropdownMenuItem>
+              ))
+            ) : (
+              <DropdownMenuItem disabled>No running terminal issues</DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="text-muted hover:bg-hover/70 hover:text-primary"
+              aria-label="Terminal actions"
+              title="Terminal actions"
+            >
+              <MoreHorizontal size={14} />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" side="top">
+            <DropdownMenuItem onSelect={onToggleMaximize}>
+              {isMaximized ? 'Collapse terminal' : 'Expand terminal'}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={onToggleTerminal}>Close terminal</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
         <Button
           variant="ghost"
           size="icon-xs"
+          className="text-muted hover:bg-hover/70 hover:text-primary"
           onClick={onToggleMaximize}
-          title={isMaximized ? 'Restore terminal' : 'Maximize terminal'}
-          aria-label={isMaximized ? 'Restore terminal' : 'Maximize terminal'}
+          title={isMaximized ? 'Collapse terminal' : 'Expand terminal'}
+          aria-label={isMaximized ? 'Collapse terminal' : 'Expand terminal'}
         >
-          {isMaximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+          {isMaximized ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
         </Button>
+
         <Button
           variant="ghost"
           size="icon-xs"
+          className="text-muted hover:bg-hover/70 hover:text-primary"
           onClick={onToggleTerminal}
           title="Close terminal"
           aria-label="Close terminal"

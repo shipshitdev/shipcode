@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { extractCliFailureMessage } from './cli-error';
 
 const PRD_FENCE_TAG = 'shipcode-prd';
 
@@ -147,8 +148,7 @@ function runClaudeWithStdin(prompt: string, cwd: string, timeoutMs: number): Pro
         resolve(stdout);
         return;
       }
-      // Trim stderr to a sensible length. Do NOT include stdout / prompt.
-      const tidy = stderr.split('\n').slice(0, 3).join(' ').trim().slice(0, 300) || 'no stderr';
+      const tidy = extractCliFailureMessage(stdout, stderr);
       reject(new Error(`Claude CLI exited ${code}: ${tidy}`));
     });
 

@@ -99,7 +99,7 @@ export function DraggableCard({
     <div
       ref={setNodeRef}
       className={cn(
-        'group relative rounded-md border bg-elevated p-2 transition-colors outline-none',
+        'group relative overflow-hidden rounded-md border bg-elevated p-2 transition-colors outline-none',
         draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-default',
         isSelected && !isFailed && !isAwaiting && !isActive
           ? 'border-text-primary/60 bg-elevated'
@@ -136,12 +136,21 @@ export function DraggableCard({
         onClick();
       }}
     >
+      {isActive && (
+        <div
+          aria-hidden="true"
+          className="issue-card-active-bg pointer-events-none absolute inset-0 rounded-[inherit]"
+        >
+          <span className="absolute inset-0 bg-gradient-to-br from-agent/[0.05] via-agent/[0.02] to-transparent" />
+          <span className="absolute inset-0 animate-slide-progress-card bg-gradient-to-r from-transparent via-white/[0.08] to-transparent" />
+        </div>
+      )}
       {issue.pipelineStatus !== 'todo' &&
         issue.pipelineStatus !== 'queued' &&
         issue.pipelineStatus !== 'failed' && (
           <div
             className={cn(
-              'absolute bottom-0 left-0 right-0 h-[3px] overflow-hidden rounded-b-md',
+              'absolute right-0 bottom-0 left-0 z-10 h-[3px] overflow-hidden rounded-b-md',
               isCompleted ? 'bg-success/15' : isDone ? 'bg-done/15' : 'bg-agent/15',
             )}
           >
@@ -167,7 +176,7 @@ export function DraggableCard({
         <Button
           variant="ghost"
           size="icon-xs"
-          className="absolute top-1.5 right-1.5 text-muted/60 opacity-0 transition-opacity hover:bg-muted/10 hover:text-muted group-hover:opacity-100"
+          className="absolute top-1.5 right-1.5 z-10 text-muted/60 opacity-0 transition-opacity hover:bg-muted/10 hover:text-muted group-hover:opacity-100"
           title="Archive issue"
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => {
@@ -178,7 +187,7 @@ export function DraggableCard({
           <Archive size={14} />
         </Button>
       )}
-      <div className="mb-0.5 flex items-center justify-between gap-2 text-left">
+      <div className="relative z-10 mb-0.5 flex items-center justify-between gap-2 text-left">
         <div className="flex min-w-0 items-center gap-1.5">
           <span className="shrink-0 font-mono text-[11px] text-secondary">
             #{issue.issueNumber}
@@ -213,10 +222,10 @@ export function DraggableCard({
           </span>
         )}
       </div>
-      <div className="line-clamp-2 text-left text-xs font-medium leading-snug text-primary">
+      <div className="relative z-10 line-clamp-2 text-left text-xs font-medium leading-snug text-primary">
         {issue.title}
       </div>
-      <div className="mt-1 flex flex-wrap items-center gap-1 text-left">
+      <div className="relative z-10 mt-1 flex flex-wrap items-center gap-1 text-left">
         {phaseChip && isActive && (
           <Badge
             variant="default"

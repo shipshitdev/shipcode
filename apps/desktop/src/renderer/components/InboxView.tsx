@@ -175,7 +175,7 @@ export function InboxView() {
   };
 
   const renderRow = (n: NotificationRecord) => (
-    <TableRow key={n.id}>
+    <TableRow key={n.id} className="group">
       <TableCell className="w-[1%] whitespace-nowrap align-top">
         <Badge variant={KIND_BADGE_VARIANT[n.kind]}>{KIND_LABEL[n.kind]}</Badge>
       </TableCell>
@@ -187,7 +187,7 @@ export function InboxView() {
         {n.body && <div className="mt-0.5 line-clamp-2 text-[12px] text-secondary">{n.body}</div>}
       </TableCell>
       <TableCell className="w-[1%] whitespace-nowrap align-top text-right">
-        <div className="flex items-center justify-end gap-1">
+        <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
           {n.projectId !== null && (
             <Button
               variant="ghost"

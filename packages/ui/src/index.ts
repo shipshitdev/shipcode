@@ -33,6 +33,8 @@ export {
   Minimize2,
   MoreHorizontal,
   PackageCheck,
+  PanelBottomClose,
+  PanelBottomOpen,
   PanelLeftClose,
   PanelLeftOpen,
   Pencil,

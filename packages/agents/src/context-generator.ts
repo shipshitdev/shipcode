@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ContextFileInfo, ContextGeneratorCli } from '@shipcode/shared';
+import { extractCliFailureMessage } from './cli-error';
 
 const CONTEXT_DIR = '.agents/context';
 const CONTEXT_FENCE_TAG = 'shipcode-context';
@@ -305,7 +306,7 @@ function runContextCliWithStdin(
         resolve(stdout);
         return;
       }
-      const tidy = stderr.split('\n').slice(0, 3).join(' ').trim().slice(0, 300) || 'no stderr';
+      const tidy = extractCliFailureMessage(stdout, stderr);
       reject(new Error(`${label} exited ${code}: ${tidy}`));
     });
 

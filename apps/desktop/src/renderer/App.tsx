@@ -37,6 +37,7 @@ export function App() {
   const queryClient = useQueryClient();
   const {
     terminalVisible,
+    terminalMaximized,
     settingsVisible,
     activeProjectId,
     viewMode,
@@ -175,6 +176,7 @@ export function App() {
     !!activeProjectId &&
     activeProject?.pathExists === false;
   const hideSidebarForReader = !!activeIssue && issueDetailExpanded && !settingsVisible;
+  const hideMainContentForTerminal = terminalVisible && terminalMaximized;
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
@@ -187,41 +189,49 @@ export function App() {
         <div className="flex flex-1 overflow-hidden min-h-0">
           {/* Left column — main views stacked above terminal */}
           <div className="flex flex-col flex-1 overflow-hidden min-h-0">
-            <div className="flex flex-1 overflow-hidden min-h-0">
-              {/* Main view — hidden when issue detail is expanded full-screen */}
-              <div
-                className={
-                  activeIssue && issueDetailExpanded
-                    ? 'hidden'
-                    : 'flex flex-1 overflow-hidden bg-primary'
-                }
-              >
-                {settingsVisible ? (
-                  <SettingsPanel />
-                ) : viewMode === 'activity' ? (
-                  <ActivityView />
-                ) : viewMode === 'costs' ? (
-                  <CostsView />
-                ) : viewMode === 'skills' ? (
-                  <SkillsView />
-                ) : viewMode === 'inbox' ? (
-                  <InboxView />
-                ) : showOverview ? (
-                  <OverviewView />
-                ) : showMissingProject && activeProject ? (
-                  <ProjectMissingView project={activeProject} />
-                ) : (
-                  <ThreadPanel />
-                )}
+            {hideMainContentForTerminal ? (
+              <div className="flex flex-1 overflow-hidden min-h-0">
+                <TerminalDrawer />
               </div>
-              {/* Expanded issue detail takes over the left column entirely */}
-              {activeIssue && issueDetailExpanded && (
-                <div className="flex-1 overflow-hidden">
-                  <IssueDetail expanded={true} />
+            ) : (
+              <>
+                <div className="flex flex-1 overflow-hidden min-h-0">
+                  {/* Main view — hidden when issue detail is expanded full-screen */}
+                  <div
+                    className={
+                      activeIssue && issueDetailExpanded
+                        ? 'hidden'
+                        : 'flex flex-1 overflow-hidden bg-primary'
+                    }
+                  >
+                    {settingsVisible ? (
+                      <SettingsPanel />
+                    ) : viewMode === 'activity' ? (
+                      <ActivityView />
+                    ) : viewMode === 'costs' ? (
+                      <CostsView />
+                    ) : viewMode === 'skills' ? (
+                      <SkillsView />
+                    ) : viewMode === 'inbox' ? (
+                      <InboxView />
+                    ) : showOverview ? (
+                      <OverviewView />
+                    ) : showMissingProject && activeProject ? (
+                      <ProjectMissingView project={activeProject} />
+                    ) : (
+                      <ThreadPanel />
+                    )}
+                  </div>
+                  {/* Expanded issue detail takes over the left column entirely */}
+                  {activeIssue && issueDetailExpanded && (
+                    <div className="flex-1 overflow-hidden">
+                      <IssueDetail expanded={true} />
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-            {terminalVisible && <TerminalDrawer />}
+                {terminalVisible && <TerminalDrawer />}
+              </>
+            )}
           </div>
           {/* Right panel — full height, spans over the terminal */}
           {activeIssue && !issueDetailExpanded && !issueDetailCollapsed && (

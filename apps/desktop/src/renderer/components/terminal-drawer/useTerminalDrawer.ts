@@ -53,9 +53,11 @@ function buildTerminalTheme() {
 }
 
 export function useTerminalDrawer() {
-  const { toggleTerminal } = useAppStore();
+  const toggleTerminal = useAppStore((s) => s.toggleTerminal);
+  const setTerminalMaximized = useAppStore((s) => s.setTerminalMaximized);
   const activeProjectId = useAppStore((s) => s.activeProjectId);
   const terminalThreadId = useAppStore((s) => s.terminalThreadId);
+  const isMaximized = useAppStore((s) => s.terminalMaximized);
   const githubIssues = useAppStore((s) => s.githubIssues);
   const activeIssue = useAppStore((s) => s.activeIssue);
   const scopedIssues = githubIssues.filter((issue) => issue.projectId === activeProjectId);
@@ -101,7 +103,6 @@ export function useTerminalDrawer() {
     action: 'open-issue-detail';
   } | null>(null);
   const [height, setHeight] = useState(DEFAULT_HEIGHT);
-  const [isMaximized, setIsMaximized] = useState(false);
 
   const startedAtRef = useRef<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -116,6 +117,15 @@ export function useTerminalDrawer() {
   const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevHeightRef = useRef(DEFAULT_HEIGHT);
   const dragStartRef = useRef<{ y: number; h: number } | null>(null);
+  const fitFrameRef = useRef<number | null>(null);
+
+  const scheduleFit = useCallback(() => {
+    if (fitFrameRef.current != null) return;
+    fitFrameRef.current = window.requestAnimationFrame(() => {
+      fitFrameRef.current = null;
+      fitRef.current?.fit();
+    });
+  }, []);
 
   const handleResizeMouseDown = useCallback(
     (event: React.MouseEvent) => {
@@ -126,20 +136,20 @@ export function useTerminalDrawer() {
         if (!dragStartRef.current) return;
         const delta = dragStartRef.current.y - moveEvent.clientY;
         setHeight(Math.max(MIN_HEIGHT, dragStartRef.current.h + delta));
-        fitRef.current?.fit();
+        scheduleFit();
       };
 
       const onUp = () => {
         dragStartRef.current = null;
         window.removeEventListener('mousemove', onMove);
         window.removeEventListener('mouseup', onUp);
-        fitRef.current?.fit();
+        scheduleFit();
       };
 
       window.addEventListener('mousemove', onMove);
       window.addEventListener('mouseup', onUp);
     },
-    [height],
+    [height, scheduleFit],
   );
 
   const toggleMaximize = useCallback(() => {
@@ -149,9 +159,9 @@ export function useTerminalDrawer() {
       prevHeightRef.current = height;
       setHeight(9999);
     }
-    setIsMaximized((value) => !value);
-    setTimeout(() => fitRef.current?.fit(), 0);
-  }, [height, isMaximized]);
+    setTerminalMaximized(!isMaximized);
+    setTimeout(scheduleFit, 0);
+  }, [height, isMaximized, scheduleFit, setTerminalMaximized]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -174,7 +184,7 @@ export function useTerminalDrawer() {
     termRef.current = term;
     fitRef.current = fit;
 
-    const resizeObserver = new ResizeObserver(() => fit.fit());
+    const resizeObserver = new ResizeObserver(() => scheduleFit());
     resizeObserver.observe(containerRef.current);
 
     return () => {
@@ -182,9 +192,13 @@ export function useTerminalDrawer() {
       term.dispose();
       termRef.current = null;
       fitRef.current = null;
+      if (fitFrameRef.current != null) {
+        window.cancelAnimationFrame(fitFrameRef.current);
+        fitFrameRef.current = null;
+      }
       if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
     };
-  }, []);
+  }, [scheduleFit]);
 
   useEffect(() => {
     const term = termRef.current;
@@ -242,7 +256,7 @@ export function useTerminalDrawer() {
     if (visibleTerminalThreadId !== prevThreadIdRef.current) {
       stopSpinner();
       term.reset();
-      fitRef.current?.fit();
+      scheduleFit();
       canonicalWrittenRef.current = 0;
       startedAtRef.current = null;
       lastKindRef.current = null;
@@ -266,7 +280,7 @@ export function useTerminalDrawer() {
         }, 0);
       }
     }
-  }, [scopedIssues, startSpinner, stopSpinner, visibleTerminalThreadId]);
+  }, [scheduleFit, scopedIssues, startSpinner, stopSpinner, visibleTerminalThreadId]);
 
   useEffect(() => {
     if (!visibleTerminalThreadId) return;

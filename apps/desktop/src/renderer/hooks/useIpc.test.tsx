@@ -1,7 +1,7 @@
 import type { GitHubIssueCacheRecord, Thread } from '@shipcode/shared';
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '../stores/app-store';
 import { useIpc } from './useIpc';
@@ -151,5 +151,53 @@ describe('useIpc terminal scoping', () => {
       expect(useAppStore.getState().terminalVisible).toBe(true);
       expect(useAppStore.getState().terminalThreadId).toBe('thread-99');
     });
+  });
+
+  it('updates selected-project issue status locally without refetching github issues', () => {
+    useAppStore.setState({
+      activeThreadId: 'thread-1',
+      activeIssue: currentIssue,
+      githubIssues: [currentIssue],
+    });
+
+    renderHarness();
+
+    listeners.get('pipeline:phase')?.({ phase: 'executing', threadId: 'thread-1' });
+
+    const state = useAppStore.getState();
+    expect(state.pipelinePhase).toBe('executing');
+    expect(state.githubIssues[0]?.pipelineStatus).toBe('executing');
+    expect(state.activeIssue?.pipelineStatus).toBe('executing');
+    expect(invokeMock).not.toHaveBeenCalledWith(
+      'github:list-issues',
+      expect.objectContaining({ projectId: 'project-1' }),
+    );
+  });
+
+  it('batches raw terminal events before hydrating the canonical stream', () => {
+    vi.useFakeTimers();
+    renderHarness();
+
+    listeners.get('terminal:event')?.({
+      id: 'event-1',
+      threadId: 'thread-1',
+      event: { kind: 'raw', content: 'hello' },
+      createdAt: new Date('2026-04-16T00:00:00.000Z').toISOString(),
+    });
+    listeners.get('terminal:event')?.({
+      id: 'event-2',
+      threadId: 'thread-1',
+      event: { kind: 'raw', content: 'world' },
+      createdAt: new Date('2026-04-16T00:00:00.001Z').toISOString(),
+    });
+
+    expect(useAppStore.getState().canonicalTerminalStream).toEqual({});
+
+    act(() => {
+      vi.advanceTimersByTime(60);
+    });
+
+    expect(useAppStore.getState().canonicalTerminalStream['thread-1']).toHaveLength(2);
+    vi.useRealTimers();
   });
 });
