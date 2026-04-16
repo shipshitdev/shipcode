@@ -9,6 +9,7 @@ interface EmitterDeps {
   activity: ActivityQueries;
   threads: ThreadQueries;
   notifications: NotificationService;
+  onSlotFreed?: () => void;
 }
 
 // Phase transitions that map to human-visible activity entries.
@@ -72,20 +73,21 @@ export function createElectronEmitter(
   function writeActivity(event: PipelineEvent, thread: Thread | null) {
     if (!thread) return;
 
-    if (event.type === 'pipeline:phase') {
-      // Ignore 'idle' — it's the cancel/reset state and would flood the feed.
-      if (event.phase === 'idle') {
-        deps.activity.create({
-          threadId: thread.id,
+      if (event.type === 'pipeline:phase') {
+        // Ignore 'idle' — it's the cancel/reset state and would flood the feed.
+        if (event.phase === 'idle') {
+          deps.activity.create({
+            threadId: thread.id,
           projectId: thread.projectId,
           kind: 'pipeline_cancelled',
           actor: 'human',
           title: `${thread.title} — cancelled`,
-          subtitle: null,
-          metadata: null,
-        });
-        return;
-      }
+            subtitle: null,
+            metadata: null,
+          });
+          deps.onSlotFreed?.();
+          return;
+        }
 
       const meta = PHASE_ACTIVITY[event.phase];
       if (!meta) return;
@@ -200,6 +202,14 @@ export function createElectronEmitter(
             deps.notifications.fire('failed', thread);
           } else if (event.phase === 'completed') {
             deps.notifications.fire('completed', thread);
+          }
+
+          if (
+            event.phase === 'awaiting_approval' ||
+            event.phase === 'failed' ||
+            event.phase === 'completed'
+          ) {
+            deps.onSlotFreed?.();
           }
         } catch (err) {
           log.error('[pipeline-bridge] notification error:', err);

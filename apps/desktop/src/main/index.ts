@@ -43,16 +43,20 @@ import {
 } from '@shipcode/db';
 import {
   ProcessManager,
+  GhCli,
   createClaudeCliProvider,
   createCodexCliProvider,
   createOpenRouterProvider,
   createProviderRegistry,
 } from '@shipcode/agents';
 import { registerIpcHandlers } from './ipc';
+import { registerGitHubHandlers } from './ipc/register-github-handlers';
+import { registerPipelineHandlers } from './ipc/register-pipeline-handlers';
+import { PipelineScheduler } from './pipeline-scheduler';
 import { createPipeline } from '@shipcode/pipeline';
 import { createElectronEmitter } from './pipeline-bridge';
 import { NotificationService } from './notification-service';
-import { HEARTBEAT_TIMEOUT_MS } from '@shipcode/shared';
+import { deriveGithubIssueUrl, HEARTBEAT_TIMEOUT_MS, parseGithubProjectUrl } from '@shipcode/shared';
 
 let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
@@ -115,11 +119,16 @@ function createWindow() {
     queries.activity,
   );
 
+  let scheduler: PipelineScheduler | undefined;
+
   // Initialize pipeline state machine
   const emitter = createElectronEmitter(mainWindow, {
     activity: queries.activity,
     threads: queries.threads,
     notifications: notificationService,
+    onSlotFreed: () => {
+      void scheduler?.drainQueuedGitHubIssues();
+    },
   });
 
   // Provider registry — claude/codex CLIs + OpenRouter HTTP provider.
@@ -148,8 +157,50 @@ function createWindow() {
     skills: queries.skills,
   });
 
+  scheduler = new PipelineScheduler({
+    pipeline,
+    projects: queries.projects,
+    threads: queries.threads,
+    plans: queries.plans,
+    githubIssues: queries.githubIssues,
+    settings: queries.settings,
+    emitGithubIssuesUpdated: (projectId) => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      mainWindow.webContents.send('github:issues-updated', {
+        projectId,
+        issues: queries.githubIssues.list(projectId),
+      });
+    },
+    attachIssueToProject: async (project, issue) => {
+      const parsed = parseGithubProjectUrl(project.githubProjectUrl);
+      const issueUrl = deriveGithubIssueUrl(project.gitRemote, issue.issueNumber);
+      if (parsed && issueUrl) {
+        try {
+          const ghCliForAttach = new GhCli(project.path);
+          await ghCliForAttach.addIssueToProject({
+            projectNumber: parsed.number,
+            owner: parsed.owner,
+            issueUrl,
+          });
+        } catch (err) {
+          log.warn(`[github:start-issue] project attach failed for #${issue.issueNumber}:`, err);
+        }
+      }
+    },
+    logger: log,
+  });
+
   // Register IPC handlers
   registerIpcHandlers(ipcMain, mainWindow, queries, processManager, pipeline, notificationService);
+  registerGitHubHandlers(ipcMain, scheduler);
+  registerPipelineHandlers(
+    ipcMain,
+    mainWindow,
+    { threads: queries.threads, plans: queries.plans },
+    scheduler,
+  );
+
+  void scheduler.drainQueuedGitHubIssues();
 
   // Watchdog: reset threads stuck in active phases (handles renderer refresh + crash scenarios).
   // HEARTBEAT_TIMEOUT_MS = 120s. Fires every 30s; skips threads that are live in activePipelines.

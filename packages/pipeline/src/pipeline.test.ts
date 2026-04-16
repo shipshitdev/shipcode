@@ -1117,6 +1117,22 @@ describe('createPipeline', () => {
     });
   });
 
+  describe('listActive', () => {
+    it('keeps awaiting_approval in the live/resumable pipeline list', () => {
+      (mock.deps.threads.getById as any).mockReturnValue({ status: 'awaiting_approval' });
+
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', { projectPath: '/proj' });
+
+      expect(pipeline.listActive()).toEqual([
+        expect.objectContaining({
+          threadId: 't1',
+          phase: 'awaiting_approval',
+        }),
+      ]);
+    });
+  });
+
   // ─── Tier 3: pipeline:model-resolved telemetry ─────────────────────
 
   describe('Tier 3 telemetry', () => {

@@ -239,6 +239,8 @@ export interface AppSettings {
   // Max turns the planner/verifier Claude CLI is allowed per run (--max-turns).
   // Does not apply to execute (no limit) or review (always 1, structural).
   plannerMaxTurns: number;
+  // Max non-paused GitHub issue pipelines allowed to consume execution slots.
+  maxConcurrentPipelines: number;
   // Max review→revise cycles before falling through to execute/awaiting_approval.
   maxReviewRounds: number;
   // When true, pipeline pauses at awaiting_approval after review loop for human sign-off.

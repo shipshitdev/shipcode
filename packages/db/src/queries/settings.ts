@@ -81,6 +81,12 @@ export class SettingsQueries {
       worktreeBranchFormat:
         stored.worktreeBranchFormat || DEFAULT_SETTINGS.worktreeBranchFormat,
       plannerMaxTurns: clampInt(stored.plannerMaxTurns, 1, 20, DEFAULT_SETTINGS.plannerMaxTurns),
+      maxConcurrentPipelines: clampInt(
+        stored.maxConcurrentPipelines,
+        1,
+        10,
+        DEFAULT_SETTINGS.maxConcurrentPipelines,
+      ),
       maxReviewRounds: clampInt(stored.maxReviewRounds, 1, 5, DEFAULT_SETTINGS.maxReviewRounds),
       requireApproval: parseBool(stored.requireApproval, DEFAULT_SETTINGS.requireApproval),
       reviewerReasoningEffort: REASONING_EFFORTS.includes(stored.reviewerReasoningEffort as any)
@@ -131,6 +137,12 @@ export class SettingsQueries {
     if ('plannerMaxTurns' in patch && patch.plannerMaxTurns != null) {
       const n = Number(patch.plannerMaxTurns);
       if (!Number.isFinite(n) || n < 1 || n > 20) throw new Error('plannerMaxTurns must be 1–20');
+    }
+    if ('maxConcurrentPipelines' in patch && patch.maxConcurrentPipelines != null) {
+      const n = Number(patch.maxConcurrentPipelines);
+      if (!Number.isFinite(n) || n < 1 || n > 10) {
+        throw new Error('maxConcurrentPipelines must be 1–10');
+      }
     }
     if ('reviewerReasoningEffort' in patch && patch.reviewerReasoningEffort != null) {
       if (!REASONING_EFFORTS.includes(patch.reviewerReasoningEffort as any))

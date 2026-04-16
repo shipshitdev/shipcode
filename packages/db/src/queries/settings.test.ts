@@ -23,6 +23,7 @@ describe('SettingsQueries', () => {
     expect(s.terminalScrollback).toBe(10000);
     expect(s.plannerModel).toBe('claude');
     expect(s.reviewerModel).toBe('codex');
+    expect(s.maxConcurrentPipelines).toBe(3);
     expect(s.githubPollingEnabled).toBe(false);
     expect(s.githubPollingIntervalMs).toBe(30000);
     expect(s.githubBotUsername).toBe('');
@@ -81,6 +82,20 @@ describe('SettingsQueries', () => {
     const s = settings.get();
     expect(s.theme).toBe('dark');
     expect(s.terminalScrollback).toBe(5000);
+  });
+
+  it('round-trips maxConcurrentPipelines', () => {
+    settings.set({ maxConcurrentPipelines: 5 });
+    expect(settings.get().maxConcurrentPipelines).toBe(5);
+  });
+
+  it('rejects maxConcurrentPipelines outside 1-10', () => {
+    expect(() => settings.set({ maxConcurrentPipelines: 0 })).toThrow(
+      /maxConcurrentPipelines must be 1–10/,
+    );
+    expect(() => settings.set({ maxConcurrentPipelines: 11 })).toThrow(
+      /maxConcurrentPipelines must be 1–10/,
+    );
   });
 
   it('set() serializes booleans as string true/false', () => {

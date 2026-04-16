@@ -38,6 +38,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   worktreeRoot: null,
   worktreeBranchFormat: 'ship/{id}-{slug}',
   plannerMaxTurns: 3,
+  maxConcurrentPipelines: 3,
   maxReviewRounds: 2,
   requireApproval: false,
   reviewerReasoningEffort: 'high',
