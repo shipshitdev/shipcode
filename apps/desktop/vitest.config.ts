@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { defineConfig } from 'vitest/config';
+import { withCoverage } from '../../vitest.coverage';
 
 export default defineConfig({
   resolve: {
@@ -14,10 +15,13 @@ export default defineConfig({
       },
     ],
   },
-  test: {
-    environment: 'jsdom',
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
-    setupFiles: ['src/renderer/test/setup.ts'],
-    passWithNoTests: true,
-  },
+  test: withCoverage(
+    {
+      environment: 'jsdom',
+      include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+      setupFiles: ['src/renderer/test/setup.ts'],
+      passWithNoTests: true,
+    },
+    ['src/**/*.{ts,tsx}'],
+  ),
 });

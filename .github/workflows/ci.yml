@@ -4,14 +4,25 @@ on:
   push:
     branches: [master, develop]
   pull_request:
-    branches: [master, develop]
+    branches: [master]
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
 
 env:
-  BUN_VERSION: "1.3.11"
+  BUN_VERSION: "1.3.12"
   NODE_VERSION: "22"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  check:
+  quality:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,7 +32,32 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-      - run: bun install
+      - run: bun install --frozen-lockfile
+      - run: bun run format:check
+      - run: bun run lint:repo
       - run: bun run lint
       - run: bun run typecheck
       - run: bun run test
+
+  coverage:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: bun install --frozen-lockfile
+      - name: Run coverage
+        run: bun run coverage | tee coverage-summary.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-${{ github.run_id }}
+          path: |
+            coverage-summary.txt
+            apps/*/coverage/**
+            packages/*/coverage/**

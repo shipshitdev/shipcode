@@ -54,6 +54,7 @@
     "dev": "vite",
     "start": "electron .",
     "test": "vitest run",
+    "coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit"
   },
   "version": "0.0.1"

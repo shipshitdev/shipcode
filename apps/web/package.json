@@ -6,6 +6,7 @@
     "dev": "next dev -p 3000",
     "build": "next build",
     "test": "vitest run",
+    "coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "lint": "biome check app/",
     "clean": "rm -rf .next out"
