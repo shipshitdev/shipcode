@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { resolveWorktreeParent } from '@shipcode/shared';
+import { resolveWorktreeParent } from '@shipcode/shared/worktree-path';
 import { type SimpleGit, simpleGit } from 'simple-git';
 
 export interface WorktreeManagerOptions {

@@ -9,8 +9,8 @@ import {
   DEFAULT_NOTIFICATION_EVENTS,
   DEFAULT_SETTINGS,
   DEFAULT_STATUS_LABEL_MAPPINGS,
-  expandWorktreeRoot,
 } from '@shipcode/shared';
+import { expandWorktreeRoot } from '@shipcode/shared/worktree-path';
 import { transaction } from '../utils';
 
 function parseBool(raw: string | undefined, fallback: boolean): boolean {

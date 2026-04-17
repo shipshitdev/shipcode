@@ -18,4 +18,5 @@ export * from './skills-types';
 export * from './sqlite-time';
 export * from './tokens';
 export * from './types';
-export * from './worktree-path';
+// worktree-path uses node:path — import directly from '@shipcode/shared/worktree-path'
+// to avoid Vite externalization warnings in renderer code.
