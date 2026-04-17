@@ -136,7 +136,7 @@ describe('NotificationService', () => {
     });
   });
 
-  it('refreshBadge counts completed notifications', () => {
+  it.skipIf(process.platform !== 'darwin')('refreshBadge counts completed notifications', () => {
     (notificationQueries.listActive as ReturnType<typeof vi.fn>).mockReturnValue([
       makeNotificationRecord({ id: 'completed-1', kind: 'completed' }),
       makeNotificationRecord({ id: 'failed-1', kind: 'failed' }),
