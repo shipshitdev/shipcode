@@ -1513,6 +1513,48 @@ describe('createPipeline', () => {
       expect(ctx.verifierReasoningEffort).toBe('high');
       expect(ctx.baseBranch).toBe('develop');
     });
+
+    it('uses the reused worktree as planner cwd when restarting the same issue', async () => {
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.includes('symbolic-ref')) return 'origin/main';
+        if (cmd.includes('rev-parse')) return 'sha789';
+        return '';
+      });
+
+      const openrouterGenerate = vi.fn(async () => ({
+        rawOutput: planBlock(),
+        exitCode: 0,
+        resolvedModel: 'openrouter/auto',
+      }));
+      const openrouterProvider: AgentProvider = {
+        id: 'openrouter',
+        supports: new Set(['plan', 'review', 'revision', 'verify', 'execute']),
+        generate: openrouterGenerate,
+        healthCheck: vi.fn(async () => ({ ok: true })),
+      };
+      const registry = createProviderRegistry({
+        claude: mock.deps.providers.for('claude', 'plan'),
+        codex: mock.deps.providers.for('codex', 'review'),
+        openrouter: openrouterProvider,
+      });
+      const deps = { ...mock.deps, providers: registry };
+      const pipeline = createPipeline(deps);
+      const issue = { number: 11, title: 'Resume issue', body: 'Continue', labels: [] };
+
+      await pipeline.startFromGitHubIssue('t1', '/proj', issue, 'claude', {
+        plannerModel: 'openrouter',
+        worktreePath: '/worktree',
+      });
+      await flush();
+
+      expect(openrouterGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          phase: 'plan',
+          cwd: '/worktree',
+        }),
+      );
+      expect(pipeline.getContext('t1')?.worktreePath).toBe('/worktree');
+    });
   });
 
   // ─── cancel ────────────────────────────────────────────────────────

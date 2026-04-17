@@ -1,6 +1,6 @@
 import type { PlanRecord, ReviewRecord } from '@shipcode/shared';
 import { describe, expect, it } from 'vitest';
-import { getPlanStatusPresentation } from './helpers';
+import { getFailurePresentation, getPlanStatusPresentation } from './helpers';
 
 function makePlan(overrides: Partial<PlanRecord> = {}): PlanRecord {
   return {
@@ -61,6 +61,28 @@ describe('getPlanStatusPresentation', () => {
       label: 'AI requested changes',
       phaseStatus: 'revising',
       style: 'phase-chip',
+    });
+  });
+});
+
+describe('getFailurePresentation', () => {
+  it('classifies verification retries as target-project failures', () => {
+    expect(
+      getFailurePresentation(
+        'Verification commands failed after 2 attempt(s). See terminal output.',
+      ),
+    ).toEqual({
+      label: 'Target project verification failed',
+      detail:
+        'The failing command ran inside the issue worktree, not inside the ShipCode desktop app.',
+    });
+  });
+
+  it('classifies execution/setup failures as worktree execution failures', () => {
+    expect(getFailurePresentation('Setup failed: command failed (1): bun run build')).toEqual({
+      label: 'Target project verification failed',
+      detail:
+        'The failing command ran inside the issue worktree, not inside the ShipCode desktop app.',
     });
   });
 });

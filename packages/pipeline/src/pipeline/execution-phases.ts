@@ -39,7 +39,7 @@ export function createExecutionPhaseHandlers({
     if (!context) return;
 
     if (context.repoContext === null) {
-      context.repoContext = loadRepoContext(context.projectPath);
+      context.repoContext = loadRepoContext(context.worktreePath ?? context.projectPath);
     }
     try {
       ensureRepoSetupContract(context);

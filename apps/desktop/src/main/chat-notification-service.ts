@@ -18,11 +18,11 @@ function kindLabel(kind: NotificationKind): string {
     case 'awaiting_approval':
       return 'Awaiting approval';
     case 'failed':
-      return 'Pipeline failed';
+      return 'Target project failed';
     case 'completed':
       return 'Ready to ship';
     case 'verification_exhausted':
-      return 'Verification exhausted';
+      return 'Target verification failed';
     case 'ci_blocked':
       return 'CI blocked';
   }

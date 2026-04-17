@@ -35,6 +35,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     executorModel: PipelineExecutorModel,
     options?: {
       baseBranch?: string;
+      worktreePath?: string | null;
       executorModelOverride?: string | null;
       plannerModel?: PipelineExecutorModel;
       reviewerModel?: PipelineExecutorModel;
@@ -86,7 +87,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
     contextHelpers.ensureContext(threadId, {
       projectPath,
-      worktreePath: null,
+      worktreePath: options?.worktreePath ?? null,
       retryCount: 0,
       autonomous: true,
       reviewRound: 0,
@@ -133,7 +134,12 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     });
 
     const prompt = `GitHub Issue #${issue.number}: ${issue.title}\n\n${issue.body ?? ''}`;
-    await handlers.startPlanGeneration(threadId, prompt, projectPath, null);
+    await handlers.startPlanGeneration(
+      threadId,
+      prompt,
+      projectPath,
+      options?.worktreePath ?? null,
+    );
   }
 
   function cancel(threadId: string) {

@@ -206,7 +206,38 @@ export function safeErrorMessage(raw: string): string {
       /* skip */
     }
   }
-  return 'Pipeline failed — see devtools console for full trace.';
+  return 'Pipeline failed in the target project/worktree. See terminal output for details.';
+}
+
+export function getFailurePresentation(raw: string | null | undefined): {
+  label: string;
+  detail: string | null;
+} {
+  const text = raw?.trim() ?? '';
+  if (
+    /verification commands failed|verification command error|verification preflight failed|command failed \(\d+\):/i.test(
+      text,
+    )
+  ) {
+    return {
+      label: 'Target project verification failed',
+      detail:
+        'The failing command ran inside the issue worktree, not inside the ShipCode desktop app.',
+    };
+  }
+
+  if (/execution failed|execution error|setup failed|worktree creation failed/i.test(text)) {
+    return {
+      label: 'Worktree execution failed',
+      detail:
+        'This error came from the target project/worktree or the executor run, not from Electron itself.',
+    };
+  }
+
+  return {
+    label: 'Pipeline error',
+    detail: null,
+  };
 }
 
 export const PRD_PROSE_CLASSES =

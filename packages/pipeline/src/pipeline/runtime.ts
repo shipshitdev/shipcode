@@ -274,10 +274,10 @@ export function createPipelineRuntime(
   ): Promise<{ rawOutput: string; exitCode: number; resolvedModel?: string }> {
     const agent = resolveAgentForPhase(context, phase);
     const provider = deps.providers.for(agent, phase);
-    const cwd =
-      phase === 'plan' || phase === 'review'
-        ? context.projectPath
-        : (context.worktreePath ?? context.projectPath);
+    // When a GitHub issue is resumed, planning/review should inspect the same
+    // worktree that already contains in-progress changes instead of the clean
+    // project root.
+    const cwd = context.worktreePath ?? context.projectPath;
     const modelHint = (() => {
       if (agent === context.executorModel && context.executorModelOverride) {
         return context.executorModelOverride;

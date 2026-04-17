@@ -52,6 +52,20 @@ export class ThreadQueries {
     return row ? mapThread(asRow<ThreadRow>(row)) : null;
   }
 
+  getByProjectAndGithubIssue(projectId: string, issueNumber: number): Thread | null {
+    const row = this.db
+      .prepare(
+        `SELECT *
+           FROM threads
+          WHERE project_id = ?
+            AND github_issue_number = ?
+          ORDER BY updated_at DESC, created_at DESC, id DESC
+          LIMIT 1`,
+      )
+      .get(projectId, issueNumber);
+    return row ? mapThread(asRow<ThreadRow>(row)) : null;
+  }
+
   create(projectId: string, prompt: string, title: string): Thread {
     const id = nanoid();
     const now = new Date().toISOString();
@@ -148,6 +162,18 @@ export class ThreadQueries {
         `UPDATE threads SET github_issue_number = ?, github_repo = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
       )
       .run(issueNumber, repo, id);
+  }
+
+  updateIssueContent(id: string, prompt: string, title: string): void {
+    this.db
+      .prepare(
+        `UPDATE threads
+            SET prompt = ?,
+                title = ?,
+                updated_at = ${ISO_NOW_SQL}
+          WHERE id = ?`,
+      )
+      .run(prompt, title, id);
   }
 
   setGithubPr(id: string, prNumber: number): void {

@@ -47,6 +47,26 @@ describe('ThreadQueries', () => {
     expect(threads.getById('nonexistent')).toBeNull();
   });
 
+  it('getByProjectAndGithubIssue() returns the latest thread for the same issue', () => {
+    const older = threads.create(projectId, 'older prompt', 'Older title');
+    threads.setGithubIssue(older.id, 42, 'owner/repo');
+
+    const newer = threads.create(projectId, 'newer prompt', 'Newer title');
+    threads.setGithubIssue(newer.id, 42, 'owner/repo');
+
+    db.prepare('UPDATE threads SET updated_at = ? WHERE id = ?').run(
+      '2026-04-17T08:00:00.000Z',
+      older.id,
+    );
+    db.prepare('UPDATE threads SET updated_at = ? WHERE id = ?').run(
+      '2026-04-17T09:00:00.000Z',
+      newer.id,
+    );
+
+    expect(threads.getByProjectAndGithubIssue(projectId, 42)?.id).toBe(newer.id);
+    expect(threads.getByProjectAndGithubIssue(projectId, 404)).toBeNull();
+  });
+
   it('updateStatus() changes the status', () => {
     const t = threads.create(projectId, 'a', 'A');
     threads.updateStatus(t.id, 'planning');
@@ -112,6 +132,17 @@ describe('ThreadQueries', () => {
     expect(updated).toBeTruthy();
     if (!updated) throw new Error('Expected GitHub PR thread');
     expect(updated.githubPrNumber).toBe(99);
+  });
+
+  it('updateIssueContent() refreshes the stored prompt and title for a reused issue thread', () => {
+    const t = threads.create(projectId, 'old prompt', 'Old title');
+
+    threads.updateIssueContent(t.id, 'new prompt', 'New title');
+
+    expect(threads.getById(t.id)).toMatchObject({
+      prompt: 'new prompt',
+      title: 'New title',
+    });
   });
 
   it('hasActivePipeline() returns true when active statuses exist', () => {

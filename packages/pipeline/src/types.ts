@@ -239,6 +239,7 @@ export interface Pipeline {
     executorModel: PipelineExecutorModel,
     options?: {
       baseBranch?: string;
+      worktreePath?: string | null;
       executorModelOverride?: string | null;
       plannerModel?: PipelineExecutorModel;
       reviewerModel?: PipelineExecutorModel;

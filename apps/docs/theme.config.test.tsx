@@ -19,7 +19,6 @@ describe('docs theme config', () => {
 
     const navbarHtml = renderToStaticMarkup(themeConfig.navbar.props.logo);
     expect(navbarHtml).toContain('ShipCode');
-    expect(navbarHtml).toContain('src="/logo.svg"');
-    expect(navbarHtml).toContain('<img');
+    expect(navbarHtml).toContain('<svg');
   });
 });

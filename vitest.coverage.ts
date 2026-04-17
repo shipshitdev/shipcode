@@ -1,4 +1,6 @@
-import type { InlineConfig } from 'vitest';
+import type { ViteUserConfig } from 'vitest/config';
+
+type TestConfig = NonNullable<ViteUserConfig['test']>;
 
 const DEFAULT_COVERAGE_EXCLUDE = [
   '**/*.test.ts',
@@ -13,7 +15,7 @@ const DEFAULT_COVERAGE_EXCLUDE = [
   '**/vite.config.ts',
 ];
 
-export function withCoverage(test: InlineConfig, coverageInclude: string[]): InlineConfig {
+export function withCoverage(test: TestConfig, coverageInclude: string[]): TestConfig {
   const coverage = test.coverage ?? {};
 
   return {
@@ -22,7 +24,6 @@ export function withCoverage(test: InlineConfig, coverageInclude: string[]): Inl
       provider: 'v8',
       reporter: ['text', 'json-summary', 'html'],
       reportsDirectory: './coverage',
-      all: true,
       include: coverageInclude,
       exclude: [...new Set([...(coverage.exclude ?? []), ...DEFAULT_COVERAGE_EXCLUDE])],
       ...coverage,

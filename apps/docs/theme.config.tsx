@@ -1,4 +1,4 @@
-import Image from 'next/image';
+import { ShipCodeLogoMark } from '@shipcode/ui';
 import { Navbar } from 'nextra-theme-docs';
 
 const config = {
@@ -14,14 +14,7 @@ const config = {
             letterSpacing: '-0.02em',
           }}
         >
-          <Image
-            src="/logo.svg"
-            alt=""
-            aria-hidden={true}
-            width={28}
-            height={28}
-            style={{ display: 'block', flexShrink: 0 }}
-          />
+          <ShipCodeLogoMark size={28} style={{ display: 'block', flexShrink: 0 }} />
           <span>ShipCode</span>
         </span>
       }

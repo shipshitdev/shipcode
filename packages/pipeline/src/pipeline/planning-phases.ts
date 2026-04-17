@@ -34,7 +34,7 @@ export function createPlanningPhaseHandlers({
     const context = ensureContext(threadId, { projectPath, worktreePath });
 
     if (context.repoContext === null) {
-      context.repoContext = loadRepoContext(projectPath);
+      context.repoContext = loadRepoContext(worktreePath ?? projectPath);
     }
     try {
       ensureRepoSetupContract(context);

@@ -11,7 +11,7 @@ import {
   SelectValue,
   Textarea,
 } from '@shipcode/ui';
-import { PIPELINE_PREVIEW_PHASES, safeErrorMessage } from './helpers';
+import { getFailurePresentation, PIPELINE_PREVIEW_PHASES, safeErrorMessage } from './helpers';
 
 interface IssueDetailActionsProps {
   approveError: string | null;
@@ -60,6 +60,7 @@ export function IssueDetailActions({
   onShowRawOutputChange,
   onStartPipeline,
 }: IssueDetailActionsProps) {
+  const failurePresentation = getFailurePresentation(thread?.lastError ?? failingPhaseOutput);
   const pipelineStartCard = canStartPipeline ? (
     <div className="rounded-lg border border-border bg-tertiary p-4 shadow-[0_1px_0_0_rgba(0,0,0,0.3)]">
       <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
@@ -112,7 +113,9 @@ export function IssueDetailActions({
       {(thread?.lastError || failingPhaseOutput) && (
         <div className="mb-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2">
           <div className="mb-1 flex items-center justify-between">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-danger">Error</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-danger">
+              {failurePresentation.label}
+            </p>
             <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
@@ -143,6 +146,9 @@ export function IssueDetailActions({
               )}
             </div>
           </div>
+          {failurePresentation.detail && (
+            <p className="mb-2 text-[11px] text-danger/70">{failurePresentation.detail}</p>
+          )}
           {thread?.lastError && (
             <p className="text-[12px] text-danger/80 break-words">
               {safeErrorMessage(thread.lastError)}

@@ -50,6 +50,8 @@ export {
   Wrench,
   X,
 } from 'lucide-react';
+export type { ShipCodeLogoMarkProps } from './brand/ShipCodeLogoMark';
+export { ShipCodeLogoMark } from './brand/ShipCodeLogoMark';
 export { DiffViewer } from './DiffViewer';
 export { IssueCard } from './IssueCard';
 export { KanbanBoard } from './KanbanBoard';

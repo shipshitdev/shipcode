@@ -21,6 +21,17 @@ const ISSUE_REFRESH_TTL_MS = 5 * 60_000;
 const PR_FEEDBACK_SYNC_TTL_MS = 60_000;
 const refreshIssuesInFlight = new Map<string, Promise<GitHubIssueCacheRecord[]>>();
 
+function resolveCanonicalIssueThread(
+  queries: IpcHandlerDeps['queries'],
+  issue: GitHubIssueCacheRecord,
+) {
+  if (issue.threadId) {
+    const linkedThread = queries.threads.getById(issue.threadId);
+    if (linkedThread) return linkedThread;
+  }
+  return queries.threads.getByProjectAndGithubIssue(issue.projectId, issue.issueNumber);
+}
+
 export function registerGitHubHandlers({
   ipcMain,
   mainWindow,
@@ -433,11 +444,9 @@ export function registerGitHubHandlers({
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
 
-      if (issue.threadId) {
-        const thread = queries.threads.getById(issue.threadId);
-        if (thread && !['failed', 'completed', 'idle'].includes(thread.status)) {
-          throw new Error(`Issue #${issueNumber} already has active thread`);
-        }
+      const reusableThread = resolveCanonicalIssueThread(queries, issue);
+      if (reusableThread && !['failed', 'completed', 'idle'].includes(reusableThread.status)) {
+        throw new Error(`Issue #${issueNumber} already has active thread`);
       }
 
       const settings = queries.settings.get();
@@ -452,7 +461,11 @@ export function registerGitHubHandlers({
       }
 
       queries.githubIssues.updatePipelineStatus(issue.id, 'planning');
-      const thread = queries.threads.create(projectId, issue.body ?? issue.title, issue.title);
+      const thread =
+        reusableThread ?? queries.threads.create(projectId, issue.body ?? issue.title, issue.title);
+      if (reusableThread) {
+        queries.threads.updateIssueContent(thread.id, issue.body ?? issue.title, issue.title);
+      }
       queries.threads.setGithubIssue(thread.id, issue.issueNumber, project.gitRemote);
       queries.githubIssues.linkThread(issue.id, thread.id);
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
@@ -473,10 +486,11 @@ export function registerGitHubHandlers({
         ...phaseModels,
         executorModel: effectiveExecutorModel,
       });
+      queries.plans.supersedeAll(thread.id);
       queries.plans.supersedeAllForIssue(projectId, issueNumber, thread.id);
 
       log.info(
-        `[pipeline] starting issue #${issue.issueNumber} "${issue.title}" (thread ${thread.id}, executor: ${effectiveExecutorModel})`,
+        `[pipeline] starting issue #${issue.issueNumber} "${issue.title}" (thread ${thread.id}${reusableThread ? ', reusing existing worktree' : ''}, executor: ${effectiveExecutorModel})`,
       );
       try {
         await pipeline.startFromGitHubIssue(
@@ -485,6 +499,7 @@ export function registerGitHubHandlers({
           { number: issue.issueNumber, title: issue.title, body: issue.body, labels: issue.labels },
           effectiveExecutorModel,
           {
+            worktreePath: thread.worktreePath,
             baseBranch: project.defaultBranch,
             plannerModel: phaseModels.plannerModel,
             reviewerModel: phaseModels.reviewerModel,
@@ -516,8 +531,7 @@ export function registerGitHubHandlers({
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
 
-      const threads = queries.threads.list(projectId);
-      const thread = threads.find((entry) => entry.githubIssueNumber === issueNumber);
+      const thread = resolveCanonicalIssueThread(queries, issue);
       if (thread && thread.status !== 'idle' && thread.status !== 'completed') {
         pipeline.cancel(thread.id);
         queries.threads.updateStatus(thread.id, 'idle');

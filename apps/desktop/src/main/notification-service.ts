@@ -18,13 +18,16 @@ function buildCopy(kind: NotificationKind, thread: Thread): { title: string; bod
         body: `${label} — tap to approve or request changes`,
       };
     case 'failed':
-      return { title: 'Pipeline failed', body: `${label} ran into an error and stopped` };
+      return {
+        title: 'Pipeline stopped',
+        body: `${label} failed in the target project or worktree`,
+      };
     case 'completed':
       return { title: 'Ready to ship', body: `${label} completed — PR is ready` };
     case 'verification_exhausted':
       return {
-        title: 'Verification failed',
-        body: `${label} hit the retry limit and needs a human`,
+        title: 'Target verification failed',
+        body: `${label} hit the retry limit while running build/test commands in the worktree`,
       };
     case 'ci_blocked':
       return {

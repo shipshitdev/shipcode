@@ -1,7 +1,7 @@
 'use client';
 
+import { ShipCodeLogoMark } from '@shipcode/ui';
 import { useEffect, useState } from 'react';
-import { LogoMark } from './LogoMark';
 
 export function Header() {
   const [scrolled, setScrolled] = useState(false);
@@ -23,7 +23,7 @@ export function Header() {
           href="/"
           className="flex items-center gap-3 text-sm font-medium tracking-[0.18em] text-primary uppercase"
         >
-          <LogoMark className="h-8 w-8 shrink-0" />
+          <ShipCodeLogoMark className="h-8 w-8 shrink-0" />
           ShipCode
         </a>
         <div className="flex items-center gap-6 text-sm">

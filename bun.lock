@@ -89,6 +89,7 @@
       "name": "@shipcode/docs",
       "version": "0.0.1",
       "dependencies": {
+        "@shipcode/ui": "workspace:*",
         "next": "16.2.4",
         "nextra": "4.6.1",
         "nextra-theme-docs": "4.6.1",
