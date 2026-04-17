@@ -254,6 +254,9 @@ export class SettingsQueries {
     if ('worktreeBranchFormat' in patch && patch.worktreeBranchFormat != null) {
       validateBranchFormat(patch.worktreeBranchFormat);
     }
+    if ('worktreeBranchFormat' in patch && patch.worktreeBranchFormat != null) {
+      validateBranchFormat(patch.worktreeBranchFormat);
+    }
 
     const upsert = this.db.prepare(
       'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',

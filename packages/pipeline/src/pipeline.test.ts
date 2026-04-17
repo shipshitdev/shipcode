@@ -1431,7 +1431,7 @@ describe('createPipeline', () => {
       });
     });
 
-    it('C2 regression: after call, getContext returns context with autonomous=true and correct fields', async () => {
+    it('C2 regression: startFromGitHubIssue seeds autonomous=true and issue metadata', async () => {
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.includes('symbolic-ref')) return 'origin/develop';
         if (cmd.includes('rev-parse')) return 'forksha';
