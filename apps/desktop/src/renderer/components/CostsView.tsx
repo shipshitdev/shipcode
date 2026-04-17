@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import type { CostSummary, GitHubIssueCacheRecord, PipelinePhase } from '@shipcode/shared';
+import {
+  formatTokenCount,
+  type CostSummary,
+  type GitHubIssueCacheRecord,
+  type PipelinePhase,
+} from '@shipcode/shared';
 import {
   Button,
   Card,
@@ -30,13 +35,6 @@ function formatDateTime(iso: string): string {
     hour: '2-digit',
     minute: '2-digit',
   });
-}
-
-function formatTokens(n: number): string {
-  if (n === 0) return '—';
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${Math.round(n / 1_000)}k`;
-  return String(n);
 }
 
 // See OverviewView for why all 6 agent phases share one color.
@@ -92,7 +90,7 @@ export function CostsView() {
   });
 
   function displayValue(costUsd: number, tokens: number): string {
-    if (displayMode === 'tokens') return formatTokens(tokens);
+    if (displayMode === 'tokens') return formatTokenCount(tokens);
     return formatCost(costUsd);
   }
 
@@ -159,7 +157,7 @@ export function CostsView() {
                   value={displayValue(data.totalCostAllTime, data.totalTokensAllTime)}
                   subtitle={
                     displayMode === '$'
-                      ? formatTokens(data.totalTokensAllTime) + ' tokens'
+                      ? formatTokenCount(data.totalTokensAllTime) + ' tokens'
                       : undefined
                   }
                 />
