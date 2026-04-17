@@ -464,7 +464,8 @@ describe('ProjectSidebar', () => {
     // Multiple "live" badges may exist (global in Overview + per-project in row).
     // We want the per-project one which is last in DOM order.
     const liveBadges = await screen.findAllByText('1 live');
-    const liveBadge = liveBadges[liveBadges.length - 1]!;
+    // findAllByText throws if nothing found, so the last element is always defined
+    const liveBadge = liveBadges[liveBadges.length - 1] as HTMLElement;
 
     expect(approvalBadge).toBeInTheDocument();
     expect(liveBadge).toBeInTheDocument();
