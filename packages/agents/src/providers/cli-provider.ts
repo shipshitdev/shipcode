@@ -318,7 +318,12 @@ function stripCodexProtocol(raw: string): string {
       continue;
     }
     const item = parsed.item as Record<string, unknown> | undefined;
-    if (!item) continue;
+    if (!item) {
+      // Codex protocol events have a string `type` field (e.g. "thread.started").
+      // Non-protocol JSON (plan/review/verification blocks) lacks it — keep those.
+      if (typeof parsed.type !== 'string') lines.push(trimmed);
+      continue;
+    }
     if (item.type === 'agent_message' && typeof item.text === 'string') {
       lines.push(item.text);
     } else if (item.type === 'command_execution') {

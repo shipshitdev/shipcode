@@ -123,7 +123,7 @@ function createSmokeDeps() {
   });
 
   const settings = {
-    get: vi.fn(() => ({ ...DEFAULT_SETTINGS })),
+    get: vi.fn(() => ({ ...DEFAULT_SETTINGS, requireApproval: true })),
     set: vi.fn(),
   };
 

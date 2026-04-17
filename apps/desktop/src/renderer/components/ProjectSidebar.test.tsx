@@ -461,7 +461,10 @@ describe('ProjectSidebar', () => {
     renderWithProviders();
 
     const approvalBadge = await screen.findByText('1 approval');
-    const liveBadge = await screen.findByText('1 live');
+    // Multiple "live" badges may exist (global in Overview + per-project in row).
+    // We want the per-project one which is last in DOM order.
+    const liveBadges = await screen.findAllByText('1 live');
+    const liveBadge = liveBadges[liveBadges.length - 1]!;
 
     expect(approvalBadge).toBeInTheDocument();
     expect(liveBadge).toBeInTheDocument();

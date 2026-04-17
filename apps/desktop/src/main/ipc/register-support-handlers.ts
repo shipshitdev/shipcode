@@ -139,7 +139,7 @@ export function registerSupportHandlers({
 
   ipcMain.handle(
     'prd-attachments:stage',
-    (_event, { sessionId, filePaths }: { sessionId: string; filePaths: string[] }) => {
+    async (_event, { sessionId, filePaths }: { sessionId: string; filePaths: string[] }) => {
       return stagePrdAttachments(sessionId, filePaths);
     },
   );
