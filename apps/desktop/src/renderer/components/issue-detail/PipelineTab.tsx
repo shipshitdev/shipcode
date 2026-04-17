@@ -181,7 +181,7 @@ export function PipelineTab({
                       <Input
                         key={`${phase}-${currentPhaseSelections[phase].modelId ?? ''}`}
                         className="h-7 text-[11px]"
-                        placeholder="e.g. anthropic/claude-sonnet-4-6"
+                        placeholder="e.g. anthropic/claude-sonnet-4.6"
                         defaultValue={currentPhaseSelections[phase].modelId ?? ''}
                         onBlur={(event) => onPhaseOpenRouterSlugBlur(phase, event.target.value)}
                       />

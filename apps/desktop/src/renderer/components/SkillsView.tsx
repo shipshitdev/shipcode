@@ -44,6 +44,15 @@ interface SkillListEntry {
   active: SkillRowView;
 }
 
+interface WritingPrdsSkillInfoView {
+  projectId: string;
+  projectPath: string;
+  absolutePath: string;
+  exists: boolean;
+  usingFallback: boolean;
+  openTargetPath: string;
+}
+
 const PHASE_LABELS: Record<PhaseSkillKey, { label: string; description: string }> = {
   'plan-generation': {
     label: 'Planner',
@@ -91,6 +100,15 @@ export function SkillsView() {
   const { data: list, isLoading } = useQuery<SkillListEntry[]>({
     queryKey: ['skills:list', projectId],
     queryFn: () => window.shipcode.invoke<SkillListEntry[]>('skills:list-for-view', { projectId }),
+  });
+
+  const { data: writingPrdsInfo } = useQuery<WritingPrdsSkillInfoView>({
+    queryKey: ['skills:writing-prds', activeProjectId],
+    queryFn: () =>
+      window.shipcode.invoke<WritingPrdsSkillInfoView>('skills:get-writing-prds-info', {
+        projectId: activeProjectId as string,
+      }),
+    enabled: Boolean(activeProjectId),
   });
 
   const activeEntry = useMemo(
@@ -154,6 +172,13 @@ export function SkillsView() {
       setDraftDirty(false);
       queryClient.invalidateQueries({ queryKey: ['skills:list'] });
     },
+  });
+
+  const openWritingPrdsMutation = useMutation({
+    mutationFn: (): Promise<void> =>
+      window.shipcode.invoke<void>('skills:open-writing-prds', {
+        projectId: activeProjectId as string,
+      }),
   });
 
   // Pre-validate before save so the renderer gives early feedback. The same
@@ -258,6 +283,63 @@ export function SkillsView() {
               );
             })}
           </ul>
+
+          <div className="mt-6 border-t border-border pt-4">
+            <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted">
+              Other Skills
+            </h4>
+            <div className="rounded border border-border bg-secondary/30 p-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-primary">writing-prds</span>
+                    <Badge variant="info" className="text-[9px]">
+                      Repo file
+                    </Badge>
+                    {writingPrdsInfo ? (
+                      <Badge
+                        variant={writingPrdsInfo.exists ? 'success' : 'default'}
+                        className="text-[9px]"
+                      >
+                        {writingPrdsInfo.exists ? 'Present' : 'Fallback'}
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <p className="mt-1 text-[11px] leading-snug text-secondary">
+                    PRD enhancement style guide. Owned by the active repo, not ShipCode&apos;s
+                    DB-backed pipeline skill system.
+                  </p>
+                </div>
+              </div>
+
+              {activeProjectId && writingPrdsInfo ? (
+                <>
+                  <div className="mt-3 rounded border border-border bg-primary/60 px-2 py-1.5 font-mono text-[10px] leading-snug text-muted break-all">
+                    {writingPrdsInfo.absolutePath}
+                  </div>
+                  <p className="mt-2 text-[11px] leading-snug text-muted">
+                    {writingPrdsInfo.exists
+                      ? 'Edit this file in your normal editor. ShipCode reads it directly when you enhance a PRD.'
+                      : 'This repo is using ShipCode’s built-in fallback because the file is missing. Open the repo to add or inspect the skill location.'}
+                  </p>
+                  <Button
+                    variant="secondary"
+                    className="mt-3 w-full"
+                    onClick={() => openWritingPrdsMutation.mutate()}
+                    disabled={openWritingPrdsMutation.isPending}
+                  >
+                    {openWritingPrdsMutation.isPending ? 'Opening…' : 'Open in system editor'}
+                  </Button>
+                </>
+              ) : (
+                <p className="mt-3 text-[11px] leading-snug text-muted">
+                  Pick a project from the sidebar to inspect that repo&apos;s
+                  <span className="mx-1 font-mono">.agents/skills/writing-prds/SKILL.md</span>
+                  file.
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       </aside>
 

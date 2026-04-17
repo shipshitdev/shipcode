@@ -86,6 +86,42 @@ describe('buildClaudeArgs', () => {
       '--dangerously-skip-permissions',
     ]);
   });
+
+  it('maps xhigh to the highest supported Claude thinking budget', () => {
+    expect(
+      buildClaudeArgs(req({ phase: 'plan', phaseHints: { reasoningEffort: 'xhigh' } })),
+    ).toEqual([
+      '-p',
+      'PROMPT',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--max-turns',
+      '1',
+      '--max-thinking-tokens',
+      '32000',
+      '--dangerously-skip-permissions',
+      '--disallowedTools',
+      'Edit,Write,Bash,NotebookEdit',
+    ]);
+  });
+
+  it('maps none to omitted Claude thinking tokens', () => {
+    expect(
+      buildClaudeArgs(req({ phase: 'plan', phaseHints: { reasoningEffort: 'none' } })),
+    ).toEqual([
+      '-p',
+      'PROMPT',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--max-turns',
+      '1',
+      '--dangerously-skip-permissions',
+      '--disallowedTools',
+      'Edit,Write,Bash,NotebookEdit',
+    ]);
+  });
 });
 
 describe('buildCodexArgs', () => {
@@ -168,6 +204,38 @@ describe('buildCodexArgs', () => {
       'never',
       '-c',
       'model_reasoning_effort=high',
+      'exec',
+      'PROMPT',
+      '--sandbox',
+      'read-only',
+      '--json',
+    ]);
+  });
+
+  it('keeps xhigh exact for codex', () => {
+    expect(
+      buildCodexArgs(req({ phase: 'review', phaseHints: { reasoningEffort: 'xhigh' } })),
+    ).toEqual([
+      '-a',
+      'never',
+      '-c',
+      'model_reasoning_effort=xhigh',
+      'exec',
+      'PROMPT',
+      '--sandbox',
+      'read-only',
+      '--json',
+    ]);
+  });
+
+  it('keeps none exact for codex', () => {
+    expect(
+      buildCodexArgs(req({ phase: 'review', phaseHints: { reasoningEffort: 'none' } })),
+    ).toEqual([
+      '-a',
+      'never',
+      '-c',
+      'model_reasoning_effort=none',
       'exec',
       'PROMPT',
       '--sandbox',

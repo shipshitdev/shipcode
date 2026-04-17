@@ -18,10 +18,11 @@
  *   3. Tier default (openrouterDefaultPaidModel = 'openrouter/auto')
  */
 
-import type { AppSettings } from '@shipcode/shared';
+import { type AppSettings, normalizeReasoningModelId } from '@shipcode/shared';
 import { executeViaOpenRouter } from './openrouter-execute';
 import type { OpenRouterChatMessage } from './openrouter-http';
 import { OpenRouterClient, OpenRouterError } from './openrouter-http';
+import { normalizeOpenRouterReasoningEffort } from './reasoning';
 import type { AgentProvider, ProviderPhase, ProviderRequest, ProviderResponse } from './types';
 
 // System prompts for each phase. The existing prompt builders in
@@ -87,7 +88,11 @@ export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentPro
 
       // Execute phase runs the tool-call agent loop.
       if (req.phase === 'execute') {
-        return executeViaOpenRouter(req, { client, model, onTerminalEvent: req.onTerminalEvent });
+        return executeViaOpenRouter(req, {
+          client,
+          model,
+          onTerminalEvent: req.onTerminalEvent,
+        });
       }
 
       // Everything else is a single streaming chat completion whose
@@ -100,14 +105,14 @@ export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentPro
       messages.push({ role: 'user', content: req.prompt });
 
       try {
-        const effort = req.phaseHints?.reasoningEffort ?? 'high';
+        const effort = normalizeOpenRouterReasoningEffort(req.phaseHints?.reasoningEffort, model);
         const result = await client.chat(
           {
             model,
             messages,
             stream: true,
-            include_reasoning: effort !== 'low',
-            reasoning: effort !== 'low' ? { effort } : undefined,
+            include_reasoning: effort !== 'none',
+            reasoning: { effort },
           },
           req.signal,
           req.onTerminalEvent,
@@ -164,7 +169,7 @@ export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentPro
  * Precedence: explicit modelHint > per-phase setting override > tier default.
  */
 function resolveModel(req: ProviderRequest, settings: AppSettings): string {
-  if (req.modelHint) return req.modelHint;
+  if (req.modelHint) return normalizeReasoningModelId('openrouter', req.modelHint) ?? req.modelHint;
 
   const perPhase = (() => {
     switch (req.phase) {
@@ -180,8 +185,11 @@ function resolveModel(req: ProviderRequest, settings: AppSettings): string {
     }
   })();
 
-  if (perPhase) return perPhase;
-  return settings.openrouterDefaultPaidModel;
+  if (perPhase) return normalizeReasoningModelId('openrouter', perPhase) ?? perPhase;
+  return (
+    normalizeReasoningModelId('openrouter', settings.openrouterDefaultPaidModel) ??
+    settings.openrouterDefaultPaidModel
+  );
 }
 
 export const _internals = { resolveModel, SYSTEM_PROMPTS };

@@ -30,7 +30,7 @@ function makeStubClient(
       content: 'MOCK',
       toolCalls: [],
       finishReason: 'stop',
-      model: 'anthropic/claude-sonnet-4-6',
+      model: 'anthropic/claude-sonnet-4.6',
       usage: null,
       ...result,
     })),
@@ -104,7 +104,7 @@ describe('createOpenRouterProvider', () => {
     const res = await provider.generate(req({ phase: 'plan' }));
     expect(res.exitCode).toBe(0);
     expect(res.rawOutput).toContain('shipcode-plan');
-    expect(res.resolvedModel).toBe('anthropic/claude-sonnet-4-6');
+    expect(res.resolvedModel).toBe('anthropic/claude-sonnet-4.6');
     expect(res.tokensUsed).toEqual({ prompt: 100, completion: 50 });
   });
 
@@ -120,6 +120,80 @@ describe('createOpenRouterProvider', () => {
     await provider.generate(req({ phase: 'plan', modelHint: 'openrouter/auto' }));
 
     expect(chatSpy.mock.calls[0][0]).toEqual(expect.objectContaining({ model: 'openrouter/auto' }));
+  });
+
+  it('normalizes legacy OpenRouter Claude 4.6 aliases before sending', async () => {
+    const stub = makeStubClient();
+    const chatSpy = stub.chat as unknown as ReturnType<typeof vi.fn>;
+    const provider = createOpenRouterProvider({
+      getApiKey: () => 'k',
+      getSettings: () => settings(),
+      createClient: () => stub,
+    });
+
+    await provider.generate(req({ phase: 'plan', modelHint: 'anthropic/claude-sonnet-4-6' }));
+
+    expect(chatSpy.mock.calls[0][0]).toEqual(
+      expect.objectContaining({ model: 'anthropic/claude-sonnet-4.6' }),
+    );
+  });
+
+  it('passes low through to OpenRouter instead of disabling reasoning', async () => {
+    const stub = makeStubClient();
+    const chatSpy = stub.chat as unknown as ReturnType<typeof vi.fn>;
+    const provider = createOpenRouterProvider({
+      getApiKey: () => 'k',
+      getSettings: () => settings(),
+      createClient: () => stub,
+    });
+
+    await provider.generate(req({ phase: 'plan', phaseHints: { reasoningEffort: 'low' } }));
+
+    expect(chatSpy.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        include_reasoning: true,
+        reasoning: { effort: 'low' },
+      }),
+    );
+  });
+
+  it('passes none through to OpenRouter and disables reasoning output', async () => {
+    const stub = makeStubClient();
+    const chatSpy = stub.chat as unknown as ReturnType<typeof vi.fn>;
+    const provider = createOpenRouterProvider({
+      getApiKey: () => 'k',
+      getSettings: () => settings(),
+      createClient: () => stub,
+    });
+
+    await provider.generate(req({ phase: 'plan', phaseHints: { reasoningEffort: 'none' } }));
+
+    expect(chatSpy.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        include_reasoning: false,
+        reasoning: { effort: 'none' },
+      }),
+    );
+  });
+
+  it('disables reasoning for OpenRouter models without reasoning support', async () => {
+    const stub = makeStubClient();
+    const chatSpy = stub.chat as unknown as ReturnType<typeof vi.fn>;
+    const provider = createOpenRouterProvider({
+      getApiKey: () => 'k',
+      getSettings: () => settings({ openrouterPlannerModel: 'qwen/qwen3-coder:free' }),
+      createClient: () => stub,
+    });
+
+    await provider.generate(req({ phase: 'plan', phaseHints: { reasoningEffort: 'high' } }));
+
+    expect(chatSpy.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        model: 'qwen/qwen3-coder:free',
+        include_reasoning: false,
+        reasoning: { effort: 'none' },
+      }),
+    );
   });
 
   it('uses per-phase setting when modelHint is absent', async () => {

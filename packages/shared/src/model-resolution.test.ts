@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS } from './constants';
 import {
   getIssueCardPhase,
+  resolveEffectivePhaseReasoningEffort,
+  resolveEffectivePhaseReasoningEffortForIssue,
   resolveExecutorModelForIssue,
   resolvePhaseModel,
   resolvePhaseModelForIssue,
@@ -181,6 +183,31 @@ describe('model-resolution', () => {
     expect(resolvePhaseReasoningEffort(settings, project, 'planner')).toBe('low');
     expect(resolvePhaseReasoningEffort(settings, project, 'reviewer')).toBe('high');
     expect(resolvePhaseReasoningEffort(settings, project, 'executor')).toBe('low');
+  });
+
+  it('resolves the effective reasoning effort for the selected provider', () => {
+    const project = makeProject({
+      plannerModelOverride: 'claude',
+      plannerReasoningEffortOverride: 'low',
+      reviewerModelOverride: 'codex',
+      reviewerReasoningEffortOverride: 'xhigh',
+    });
+
+    expect(resolveEffectivePhaseReasoningEffort(settings, project, 'planner')).toBe('none');
+    expect(resolveEffectivePhaseReasoningEffort(settings, project, 'reviewer')).toBe('xhigh');
+  });
+
+  it('uses issue-phase provider selection when resolving effective reasoning', () => {
+    const project = makeProject({
+      executorModelOverride: 'claude',
+      executorReasoningEffortOverride: 'minimal',
+    });
+    const issue = makeIssue({ executorModelOverride: 'openrouter' });
+
+    expect(resolveEffectivePhaseReasoningEffortForIssue(settings, project, issue, 'executor')).toBe(
+      'minimal',
+    );
+    expect(resolveEffectivePhaseReasoningEffort(settings, project, 'executor')).toBe('none');
   });
 
   it('resolves project model IDs ahead of global openrouter model settings', () => {

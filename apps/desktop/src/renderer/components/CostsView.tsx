@@ -56,8 +56,10 @@ function formatModelDescription(model: string | null, provider: string): string 
   const value = sanitizeResolvedModel(model) ?? provider;
   switch (value) {
     case 'anthropic/claude-sonnet-4-6':
+    case 'anthropic/claude-sonnet-4.6':
       return 'Claude Sonnet 4.6';
     case 'anthropic/claude-opus-4-6':
+    case 'anthropic/claude-opus-4.6':
       return 'Claude Opus 4.6';
     case 'openai/gpt-5-codex':
       return 'GPT-5 Codex';

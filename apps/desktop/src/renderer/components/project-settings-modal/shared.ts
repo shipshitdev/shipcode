@@ -2,6 +2,7 @@ import {
   type AppSettings,
   type ContextGeneratorCli,
   type ExecutorModel,
+  formatProviderReasoningEffort,
   PHASE_DESCRIPTORS,
   type Project,
   type ResolvedPhaseModel,
@@ -110,5 +111,5 @@ export function formatInheritedSummary(
   const provider = resolvePhaseModel(settings, projectDraft, phase);
   const model = resolvePhaseModelId(settings, projectDraft, phase);
   const effort = resolvePhaseReasoningEffort(settings, projectDraft, phase);
-  return `${PROVIDER_DISPLAY[provider]}${model ? ` / ${model}` : ''} / ${effort}`;
+  return `${PROVIDER_DISPLAY[provider]}${model ? ` / ${model}` : ''} / ${formatProviderReasoningEffort(provider, effort, model)}`;
 }

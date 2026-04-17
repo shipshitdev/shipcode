@@ -129,6 +129,29 @@ describe('executeViaOpenRouter', () => {
     expect(res.tokensUsed).toEqual({ prompt: 300, completion: 80 });
   });
 
+  it('forwards reasoning effort into execute chat requests', async () => {
+    const chat = vi.fn(async () => ({
+      content: 'ok',
+      toolCalls: [toolCall('c1', 'read', { path: 'target.txt' })],
+      finishReason: 'tool_calls',
+      model: 'openrouter/auto',
+      usage: null,
+    }));
+    const client = { chat } as unknown as OpenRouterClient;
+
+    await executeViaOpenRouter(req({ cwd: wt, phaseHints: { reasoningEffort: 'xhigh' } }), {
+      client,
+      model: 'openrouter/auto',
+    });
+
+    expect(chat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reasoning: { effort: 'xhigh' },
+      }),
+      expect.anything(),
+    );
+  });
+
   // ─── Unexpected-stop: 0 tool calls ────────────────────────────────
 
   it('treats finish_reason=stop with ZERO tool calls as a retryable failure', async () => {

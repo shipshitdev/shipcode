@@ -23,7 +23,7 @@
  *   in-process tool-call harness.
  */
 
-import type { AgentType } from '@shipcode/shared';
+import type { AgentType, ReasoningEffort } from '@shipcode/shared';
 import type { TerminalEvent } from '../terminal-events';
 
 export type ProviderPhase = 'plan' | 'review' | 'revision' | 'verify' | 'execute';
@@ -47,8 +47,8 @@ export interface ProviderPhaseHints {
   sandbox?: 'read-only' | 'workspace-write';
   /** codex -a (approval) value when applicable. */
   approval?: 'never' | 'untrusted' | 'on-failure';
-  /** codex reasoning effort. Passed as `-c model_reasoning_effort=<value>` in v0.120.0+. */
-  reasoningEffort?: 'low' | 'medium' | 'high';
+  /** Shared reasoning effort. Providers map unsupported values to the nearest supported level. */
+  reasoningEffort?: ReasoningEffort;
 }
 
 export interface ProviderRequest {

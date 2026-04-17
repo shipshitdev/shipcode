@@ -146,7 +146,10 @@ function runPrdCliWithStdin(
             '--max-turns',
             '1',
             ...(() => {
-              const thinkingTokens = mapReasoningEffortToClaudeThinkingTokens(reasoningEffort);
+              const thinkingTokens = mapReasoningEffortToClaudeThinkingTokens(
+                reasoningEffort,
+                modelId,
+              );
               return thinkingTokens === null
                 ? []
                 : (['--max-thinking-tokens', String(thinkingTokens)] as string[]);
@@ -160,7 +163,7 @@ function runPrdCliWithStdin(
             'never',
             ...(modelId ? ['-m', modelId] : []),
             '-c',
-            `model_reasoning_effort=${mapReasoningEffortToCodex(reasoningEffort)}`,
+            `model_reasoning_effort=${mapReasoningEffortToCodex(reasoningEffort, modelId)}`,
             'exec',
             '-',
             '--sandbox',

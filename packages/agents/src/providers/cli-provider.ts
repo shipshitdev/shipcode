@@ -17,6 +17,7 @@
 
 import type { ProcessManager } from '../process-manager';
 import { StreamParser } from '../stream-parser';
+import { mapReasoningEffortToClaudeThinkingTokens, mapReasoningEffortToCodex } from './reasoning';
 import type { AgentProvider, ProviderPhase, ProviderRequest, ProviderResponse } from './types';
 
 interface CliRunResult {
@@ -98,21 +99,6 @@ async function runCli(
 }
 
 /**
- * Map reasoning effort to Claude --max-thinking-tokens value.
- * Returns null when thinking should be omitted entirely (low effort).
- */
-function claudeThinkingTokens(effort: 'low' | 'medium' | 'high' | undefined): number | null {
-  switch (effort) {
-    case 'low':
-      return null;
-    case 'medium':
-      return 8000;
-    default:
-      return 32000;
-  }
-}
-
-/**
  * Build claude CLI args for a given phase. Mirrors the inline arg
  * construction that previously lived in pipeline.ts verbatim.
  */
@@ -129,7 +115,10 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
       // drawer can display reasoning blocks. Token budget is controlled by
       // phaseHints.reasoningEffort (high=32000, medium=8000, low=omit).
       const maxTurns = String(req.phaseHints?.maxTurns ?? 1);
-      const thinkingTokens = claudeThinkingTokens(req.phaseHints?.reasoningEffort);
+      const thinkingTokens = mapReasoningEffortToClaudeThinkingTokens(
+        req.phaseHints?.reasoningEffort,
+        req.modelHint,
+      );
       const args = [
         '-p',
         req.prompt,
@@ -163,7 +152,10 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
         'Edit,Write,Bash,Glob,Grep,Read',
         '--dangerously-skip-permissions',
       ];
-      const execThinking = claudeThinkingTokens(req.phaseHints?.reasoningEffort);
+      const execThinking = mapReasoningEffortToClaudeThinkingTokens(
+        req.phaseHints?.reasoningEffort,
+        req.modelHint,
+      );
       if (execThinking !== null) {
         execArgs.splice(
           execArgs.indexOf('--dangerously-skip-permissions'),
@@ -210,7 +202,7 @@ function buildCodexArgs(req: ProviderRequest): string[] {
   const topLevelFlags: string[] = ['-a', 'never'];
   if (req.modelHint) topLevelFlags.push('-m', req.modelHint);
   // Default to high reasoning so thinking output is always visible in the terminal.
-  const effort = req.phaseHints?.reasoningEffort ?? 'high';
+  const effort = mapReasoningEffortToCodex(req.phaseHints?.reasoningEffort, req.modelHint);
   topLevelFlags.push('-c', `model_reasoning_effort=${effort}`);
   return [...topLevelFlags, 'exec', req.prompt, '--sandbox', sandbox, '--json'];
 }

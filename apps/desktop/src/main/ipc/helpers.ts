@@ -7,11 +7,12 @@ import {
   type IssuePipelineStatus,
   type PipelinePhase,
   parseGithubProjectUrl,
+  resolveEffectivePhaseReasoningEffort,
+  resolveEffectivePhaseReasoningEffortForIssue,
   resolvePhaseModel,
   resolvePhaseModelForIssue,
   resolvePhaseModelId,
   resolvePhaseModelIdForIssue,
-  resolvePhaseReasoningEffort,
 } from '@shipcode/shared';
 import type { BrowserWindow } from 'electron';
 import type { ChatNotificationService } from '../chat-notification-service';
@@ -57,10 +58,10 @@ export function resolveProjectPhaseModels(
     reviewerModelId: resolvePhaseModelId(settings, project, 'reviewer'),
     verifierModelId: resolvePhaseModelId(settings, project, 'verifier'),
     executorModelId: resolvePhaseModelId(settings, project, 'executor'),
-    plannerReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'planner'),
-    reviewerReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'reviewer'),
-    verifierReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'verifier'),
-    executorReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'executor'),
+    plannerReasoningEffort: resolveEffectivePhaseReasoningEffort(settings, project, 'planner'),
+    reviewerReasoningEffort: resolveEffectivePhaseReasoningEffort(settings, project, 'reviewer'),
+    verifierReasoningEffort: resolveEffectivePhaseReasoningEffort(settings, project, 'verifier'),
+    executorReasoningEffort: resolveEffectivePhaseReasoningEffort(settings, project, 'executor'),
   };
 }
 
@@ -78,10 +79,30 @@ export function resolveIssuePhaseModels(
     reviewerModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'reviewer'),
     verifierModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'verifier'),
     executorModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'executor'),
-    plannerReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'planner'),
-    reviewerReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'reviewer'),
-    verifierReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'verifier'),
-    executorReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'executor'),
+    plannerReasoningEffort: resolveEffectivePhaseReasoningEffortForIssue(
+      settings,
+      project,
+      issue,
+      'planner',
+    ),
+    reviewerReasoningEffort: resolveEffectivePhaseReasoningEffortForIssue(
+      settings,
+      project,
+      issue,
+      'reviewer',
+    ),
+    verifierReasoningEffort: resolveEffectivePhaseReasoningEffortForIssue(
+      settings,
+      project,
+      issue,
+      'verifier',
+    ),
+    executorReasoningEffort: resolveEffectivePhaseReasoningEffortForIssue(
+      settings,
+      project,
+      issue,
+      'executor',
+    ),
   };
 }
 

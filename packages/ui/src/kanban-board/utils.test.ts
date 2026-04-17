@@ -186,4 +186,18 @@ describe('resolveIssuePhaseChip', () => {
 
     expect(chip).toMatchObject({ phase: 'planner', model: 'claude-sonnet-4-6' });
   });
+
+  it('shows the effective effort when a provider degrades the stored value', () => {
+    const issue = makeIssue(44, 'Review issue');
+    issue.pipelineStatus = 'reviewing';
+
+    const chip = resolveIssuePhaseChip(
+      issue,
+      { ...SETTINGS, reviewerReasoningEffort: 'xhigh' },
+      makeProject(),
+      makeThread({ reviewerResolvedModel: 'gpt-5.4' }),
+    );
+
+    expect(chip).toMatchObject({ phase: 'reviewer', model: 'gpt-5.4', effort: 'xhigh' });
+  });
 });

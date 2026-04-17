@@ -1,4 +1,10 @@
-import type { ExecutorModel, OpenRouterModelCheck } from '@shipcode/shared';
+import {
+  type ExecutorModel,
+  getSupportedReasoningEfforts,
+  type OpenRouterModelCheck,
+  type ReasoningEffort,
+  resolveProviderReasoningEffort,
+} from '@shipcode/shared';
 import {
   Input,
   Select,
@@ -15,6 +21,7 @@ export function PhaseModelRow({
   htmlFor,
   modelValue,
   openrouterModelValue,
+  resolvedModelId,
   reasoningEffortValue,
   validProviders,
   onModelChange,
@@ -28,19 +35,27 @@ export function PhaseModelRow({
   htmlFor: string;
   modelValue: string;
   openrouterModelValue: string | null;
-  reasoningEffortValue: 'low' | 'medium' | 'high';
+  resolvedModelId?: string | null;
+  reasoningEffortValue: ReasoningEffort;
   validProviders: ExecutorModel[];
   onModelChange: (value: string) => void;
   onOpenrouterModelChange: (value: string | null) => void;
-  onReasoningEffortChange: (value: 'low' | 'medium' | 'high') => void;
+  onReasoningEffortChange: (value: ReasoningEffort) => void;
   disabledProviders?: Partial<Record<ExecutorModel, string>>;
   warningMessage?: string | null;
   modelCheck?: OpenRouterModelCheck | null;
 }) {
+  const provider = modelValue as ExecutorModel;
   const modelCheckMessage =
     modelValue === 'openrouter' && modelCheck?.status !== 'not_configured'
       ? modelCheck?.message
       : null;
+  const effortResolution = resolveProviderReasoningEffort(
+    provider,
+    reasoningEffortValue,
+    resolvedModelId,
+  );
+  const supportedEfforts = getSupportedReasoningEfforts(provider, resolvedModelId);
   const openrouterModelOptions = getModelOptions('openrouter');
   const knownOpenRouterValues = new Set(openrouterModelOptions.map((option) => option.value));
   const openrouterSelection = openrouterModelValue ?? '__default__';
@@ -107,7 +122,7 @@ export function PhaseModelRow({
         >
           <Input
             id={`${htmlFor}-or-custom`}
-            placeholder="e.g. anthropic/claude-sonnet-4-6"
+            placeholder="e.g. anthropic/claude-sonnet-4.6"
             defaultValue={
               openrouterModelValue && !knownOpenRouterValues.has(openrouterModelValue)
                 ? openrouterModelValue
@@ -126,21 +141,36 @@ export function PhaseModelRow({
           />
         </SettingsRow>
       )}
-      <SettingsRow label="Reasoning effort" htmlFor={`${htmlFor}-reasoning`}>
+      <SettingsRow
+        label={provider === 'claude' ? 'Thinking budget' : 'Reasoning effort'}
+        htmlFor={`${htmlFor}-reasoning`}
+      >
         <Select
           value={reasoningEffortValue}
-          onValueChange={(value) => onReasoningEffortChange(value as 'low' | 'medium' | 'high')}
+          onValueChange={(value) => onReasoningEffortChange(value as ReasoningEffort)}
         >
           <SelectTrigger id={`${htmlFor}-reasoning`} className="w-[120px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="low">low</SelectItem>
-            <SelectItem value="medium">medium</SelectItem>
-            <SelectItem value="high">high</SelectItem>
+            {!effortResolution.exact && (
+              <SelectItem value={reasoningEffortValue}>
+                {`${reasoningEffortValue} (maps to ${effortResolution.effective})`}
+              </SelectItem>
+            )}
+            {supportedEfforts.map((effort) => (
+              <SelectItem key={effort} value={effort}>
+                {effort}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </SettingsRow>
+      {!effortResolution.exact && (
+        <div className="mb-3 rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-300">
+          {effortResolution.message}
+        </div>
+      )}
       {warningMessage && (
         <div className="mb-3 rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-300">
           {warningMessage}

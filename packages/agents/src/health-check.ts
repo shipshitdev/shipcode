@@ -22,7 +22,7 @@ import type {
   ProjectOpenTarget,
   SystemHealth,
 } from '@shipcode/shared';
-import { OPENROUTER_API_BASE } from '@shipcode/shared';
+import { normalizeReasoningModelId, OPENROUTER_API_BASE } from '@shipcode/shared';
 import * as pty from 'node-pty';
 
 const execAsync = promisify(exec);
@@ -951,15 +951,18 @@ function buildOpenRouterModelChecks(
     if (!modelId) {
       return { key, label, modelId: null, status: 'not_configured', message: null };
     }
+    const normalizedModelId = normalizeReasoningModelId('openrouter', modelId) ?? modelId;
     if (!catalog) {
-      return { key, label, modelId, status: 'unverified', message };
+      return { key, label, modelId: normalizedModelId, status: 'unverified', message };
     }
     return {
       key,
       label,
-      modelId,
-      status: catalog.has(modelId) ? 'valid' : 'invalid',
-      message: catalog.has(modelId) ? null : `Model '${modelId}' is not available on OpenRouter`,
+      modelId: normalizedModelId,
+      status: catalog.has(normalizedModelId) ? 'valid' : 'invalid',
+      message: catalog.has(normalizedModelId)
+        ? null
+        : `Model '${normalizedModelId}' is not available on OpenRouter`,
     };
   });
 }
@@ -1019,7 +1022,7 @@ export async function validateOpenRouterModel(
   settings: AppSettings,
   modelId: string,
 ): Promise<OpenRouterModelValidation> {
-  const trimmed = modelId.trim();
+  const trimmed = normalizeReasoningModelId('openrouter', modelId.trim()) ?? modelId.trim();
   if (!trimmed) {
     return { modelId: trimmed, status: 'unverified', message: 'Model slug is required' };
   }

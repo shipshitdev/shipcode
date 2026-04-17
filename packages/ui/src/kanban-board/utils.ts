@@ -7,9 +7,11 @@ import type {
   Thread,
 } from '@shipcode/shared';
 import {
+  formatProviderReasoningEffort,
   getIssueCardPhase,
   resolveExecutorModelForIssue,
   resolvePhaseModelForIssue,
+  resolvePhaseModelIdForIssue,
   resolvePhaseReasoningEffort,
   sanitizeResolvedModel,
 } from '@shipcode/shared';
@@ -30,6 +32,23 @@ export function resolveIssuePhaseChip(
 ): IssuePhaseChip | null {
   const phase = getIssueCardPhase(issue.pipelineStatus);
   if (!phase) return null;
+
+  const provider =
+    phase === 'planner'
+      ? settings
+        ? resolvePhaseModelForIssue(settings, project, issue, 'planner')
+        : null
+      : phase === 'reviewer'
+        ? settings
+          ? resolvePhaseModelForIssue(settings, project, issue, 'reviewer')
+          : null
+        : phase === 'executor'
+          ? settings
+            ? resolveExecutorModelForIssue(settings, project, issue)
+            : null
+          : settings
+            ? resolvePhaseModelForIssue(settings, project, issue, 'verifier')
+            : null;
 
   const model =
     phase === 'planner'
@@ -53,7 +72,14 @@ export function resolveIssuePhaseChip(
   return {
     phase,
     model,
-    effort: settings ? resolvePhaseReasoningEffort(settings, project, phase) : null,
+    effort:
+      settings && provider
+        ? formatProviderReasoningEffort(
+            provider,
+            resolvePhaseReasoningEffort(settings, project, phase),
+            resolvePhaseModelIdForIssue(settings, project, issue, phase),
+          )
+        : null,
   };
 }
 

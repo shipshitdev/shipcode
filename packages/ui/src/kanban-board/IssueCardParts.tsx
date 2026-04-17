@@ -99,7 +99,7 @@ export function DraggableCard({
     <div
       ref={setNodeRef}
       className={cn(
-        'group relative overflow-hidden rounded-md border bg-elevated p-2 transition-colors outline-none',
+        'group relative flex min-h-[92px] flex-col overflow-hidden rounded-md border bg-elevated p-3 text-left transition-colors outline-none',
         draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-default',
         isSelected && !isFailed && !isAwaiting && !isActive
           ? 'border-text-primary/60 bg-elevated'
@@ -187,7 +187,7 @@ export function DraggableCard({
           <Archive size={14} />
         </Button>
       )}
-      <div className="relative z-10 mb-0.5 flex items-center justify-between gap-2 text-left">
+      <div className="relative z-10 flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1.5">
           <span className="shrink-0 font-mono text-[11px] text-secondary">
             #{issue.issueNumber}
@@ -222,10 +222,10 @@ export function DraggableCard({
           </span>
         )}
       </div>
-      <div className="relative z-10 line-clamp-2 text-left text-xs font-medium leading-snug text-primary">
+      <div className="relative z-10 mt-1 line-clamp-2 text-[13px] font-medium leading-snug text-primary">
         {issue.title}
       </div>
-      <div className="relative z-10 mt-1 flex flex-wrap items-center gap-1 text-left">
+      <div className="relative z-10 mt-auto flex flex-wrap items-center gap-1.5 pt-2">
         {phaseChip && isActive && (
           <Badge
             variant="default"
@@ -343,13 +343,15 @@ export function DragOverlayCard({ issue }: { issue: GitHubIssueCacheRecord }) {
   return (
     <div
       className={cn(
-        'cursor-grabbing rounded-md border bg-secondary p-2 opacity-80 shadow-lg',
+        'cursor-grabbing rounded-md border bg-secondary p-3 opacity-80 shadow-lg',
         dragOverlayBorderClass(issue.pipelineStatus),
       )}
     >
-      <div className="mb-0.5 font-mono text-[11px] text-muted">#{issue.issueNumber}</div>
-      <div className="line-clamp-2 text-xs leading-snug text-primary">{issue.title}</div>
-      <div className="mt-1 flex flex-wrap items-center gap-1">
+      <div className="font-mono text-[11px] text-muted">#{issue.issueNumber}</div>
+      <div className="mt-1 line-clamp-2 text-[13px] font-medium leading-snug text-primary">
+        {issue.title}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <PhaseChip status={issue.pipelineStatus} />
         <div className="ml-auto h-5" />
       </div>

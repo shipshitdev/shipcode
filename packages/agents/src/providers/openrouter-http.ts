@@ -20,6 +20,7 @@
  * No new dependencies: uses native Node 22 fetch + ReadableStream.
  */
 
+import type { ReasoningEffort } from '@shipcode/shared';
 import {
   OPENROUTER_API_BASE,
   OPENROUTER_BACKOFF_BASE_MS,
@@ -68,7 +69,7 @@ export interface OpenRouterChatRequest {
   /** Enable reasoning/thinking tokens from supported models. */
   include_reasoning?: boolean;
   /** Reasoning effort configuration. */
-  reasoning?: { effort?: 'low' | 'medium' | 'high' };
+  reasoning?: { effort?: ReasoningEffort };
 }
 
 export interface OpenRouterUsage {

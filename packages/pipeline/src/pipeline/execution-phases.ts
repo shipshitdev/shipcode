@@ -141,7 +141,7 @@ export function createExecutionPhaseHandlers({
     void (async () => {
       try {
         const response = await runProviderPhase(context, 'execute', executionPrompt, {
-          reasoningEffort: deps.settings.get().executorReasoningEffort,
+          reasoningEffort: context.executorReasoningEffort,
         });
 
         if (context.cancelled) return;

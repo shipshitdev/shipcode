@@ -43,12 +43,17 @@ export function PipelineSettingsSection({
   const prdRewriteEffortResolution = resolveProviderReasoningEffort(
     prdRewriteProvider,
     settings.prdRewriteReasoningEffort,
+    prdRewriteModelValue,
   );
-  const prdRewriteSupportedEfforts = getSupportedReasoningEfforts(prdRewriteProvider);
+  const prdRewriteSupportedEfforts = getSupportedReasoningEfforts(
+    prdRewriteProvider,
+    prdRewriteModelValue,
+  );
   const normalizeEffort = (
     provider: ExecutorModel,
     effort: AppSettings['plannerReasoningEffort'],
-  ) => resolveProviderReasoningEffort(provider, effort).effective;
+    modelId?: string | null,
+  ) => resolveProviderReasoningEffort(provider, effort, modelId).effective;
 
   return (
     <>
@@ -150,6 +155,9 @@ export function PipelineSettingsSection({
                     prdRewriteReasoningEffort: resolveProviderReasoningEffort(
                       nextCli as Extract<ExecutorModel, 'claude' | 'codex'>,
                       settings.prdRewriteReasoningEffort,
+                      nextCli === 'claude'
+                        ? settings.prdRewriteClaudeModel
+                        : settings.prdRewriteCodexModel,
                     ).effective as AppSettings['prdRewriteReasoningEffort'],
                   });
                 }}
@@ -169,17 +177,28 @@ export function PipelineSettingsSection({
             >
               <Select
                 value={prdRewriteModelValue ?? '__default__'}
-                onValueChange={(value) =>
+                onValueChange={(value) => {
+                  const nextModelId = value === '__default__' ? null : value;
                   onUpdate(
                     prdRewriteProvider === 'claude'
                       ? {
-                          prdRewriteClaudeModel: value === '__default__' ? null : value,
+                          prdRewriteClaudeModel: nextModelId,
+                          prdRewriteReasoningEffort: resolveProviderReasoningEffort(
+                            'claude',
+                            settings.prdRewriteReasoningEffort,
+                            nextModelId,
+                          ).effective as AppSettings['prdRewriteReasoningEffort'],
                         }
                       : {
-                          prdRewriteCodexModel: value === '__default__' ? null : value,
+                          prdRewriteCodexModel: nextModelId,
+                          prdRewriteReasoningEffort: resolveProviderReasoningEffort(
+                            'codex',
+                            settings.prdRewriteReasoningEffort,
+                            nextModelId,
+                          ).effective as AppSettings['prdRewriteReasoningEffort'],
                         },
-                  )
-                }
+                  );
+                }}
               >
                 <SelectTrigger className="w-[220px]">
                   <SelectValue />
@@ -321,6 +340,11 @@ export function PipelineSettingsSection({
               htmlFor="planner-model"
               modelValue={settings.plannerModel}
               openrouterModelValue={settings.openrouterPlannerModel}
+              resolvedModelId={
+                settings.plannerModel === 'openrouter'
+                  ? (settings.openrouterPlannerModel ?? settings.openrouterDefaultPaidModel)
+                  : null
+              }
               reasoningEffortValue={settings.plannerReasoningEffort}
               validProviders={['claude', 'codex', 'openrouter']}
               onModelChange={(value) =>
@@ -329,10 +353,22 @@ export function PipelineSettingsSection({
                   plannerReasoningEffort: normalizeEffort(
                     value as ExecutorModel,
                     settings.plannerReasoningEffort,
+                    value === 'openrouter'
+                      ? (settings.openrouterPlannerModel ?? settings.openrouterDefaultPaidModel)
+                      : null,
                   ),
                 })
               }
-              onOpenrouterModelChange={(value) => onUpdate({ openrouterPlannerModel: value })}
+              onOpenrouterModelChange={(value) =>
+                onUpdate({
+                  openrouterPlannerModel: value,
+                  plannerReasoningEffort: normalizeEffort(
+                    'openrouter',
+                    settings.plannerReasoningEffort,
+                    value ?? settings.openrouterDefaultPaidModel,
+                  ),
+                })
+              }
               onReasoningEffortChange={(value) => onUpdate({ plannerReasoningEffort: value })}
               modelCheck={
                 integrationStatus?.openrouter.modelChecks.find(
@@ -351,6 +387,11 @@ export function PipelineSettingsSection({
               htmlFor="reviewer-model"
               modelValue={settings.reviewerModel}
               openrouterModelValue={settings.openrouterReviewerModel}
+              resolvedModelId={
+                settings.reviewerModel === 'openrouter'
+                  ? (settings.openrouterReviewerModel ?? settings.openrouterDefaultPaidModel)
+                  : null
+              }
               reasoningEffortValue={settings.reviewerReasoningEffort}
               validProviders={['claude', 'codex', 'openrouter']}
               onModelChange={(value) =>
@@ -359,10 +400,22 @@ export function PipelineSettingsSection({
                   reviewerReasoningEffort: normalizeEffort(
                     value as ExecutorModel,
                     settings.reviewerReasoningEffort,
+                    value === 'openrouter'
+                      ? (settings.openrouterReviewerModel ?? settings.openrouterDefaultPaidModel)
+                      : null,
                   ),
                 })
               }
-              onOpenrouterModelChange={(value) => onUpdate({ openrouterReviewerModel: value })}
+              onOpenrouterModelChange={(value) =>
+                onUpdate({
+                  openrouterReviewerModel: value,
+                  reviewerReasoningEffort: normalizeEffort(
+                    'openrouter',
+                    settings.reviewerReasoningEffort,
+                    value ?? settings.openrouterDefaultPaidModel,
+                  ),
+                })
+              }
               onReasoningEffortChange={(value) => onUpdate({ reviewerReasoningEffort: value })}
               modelCheck={
                 integrationStatus?.openrouter.modelChecks.find(
@@ -381,6 +434,11 @@ export function PipelineSettingsSection({
               htmlFor="executor-model"
               modelValue={settings.executorModel}
               openrouterModelValue={settings.openrouterExecutorModel}
+              resolvedModelId={
+                settings.executorModel === 'openrouter'
+                  ? (settings.openrouterExecutorModel ?? settings.openrouterDefaultPaidModel)
+                  : null
+              }
               reasoningEffortValue={settings.executorReasoningEffort}
               validProviders={['claude', 'codex', 'openrouter']}
               onModelChange={(value) =>
@@ -389,10 +447,22 @@ export function PipelineSettingsSection({
                   executorReasoningEffort: normalizeEffort(
                     value as ExecutorModel,
                     settings.executorReasoningEffort,
+                    value === 'openrouter'
+                      ? (settings.openrouterExecutorModel ?? settings.openrouterDefaultPaidModel)
+                      : null,
                   ),
                 })
               }
-              onOpenrouterModelChange={(value) => onUpdate({ openrouterExecutorModel: value })}
+              onOpenrouterModelChange={(value) =>
+                onUpdate({
+                  openrouterExecutorModel: value,
+                  executorReasoningEffort: normalizeEffort(
+                    'openrouter',
+                    settings.executorReasoningEffort,
+                    value ?? settings.openrouterDefaultPaidModel,
+                  ),
+                })
+              }
               onReasoningEffortChange={(value) => onUpdate({ executorReasoningEffort: value })}
               modelCheck={
                 integrationStatus?.openrouter.modelChecks.find(
@@ -411,6 +481,11 @@ export function PipelineSettingsSection({
               htmlFor="verifier-model"
               modelValue={settings.verifierModel}
               openrouterModelValue={settings.openrouterVerifierModel}
+              resolvedModelId={
+                settings.verifierModel === 'openrouter'
+                  ? (settings.openrouterVerifierModel ?? settings.openrouterDefaultPaidModel)
+                  : null
+              }
               reasoningEffortValue={settings.verifierReasoningEffort}
               validProviders={['claude', 'codex', 'openrouter']}
               onModelChange={(value) =>
@@ -419,10 +494,22 @@ export function PipelineSettingsSection({
                   verifierReasoningEffort: normalizeEffort(
                     value as ExecutorModel,
                     settings.verifierReasoningEffort,
+                    value === 'openrouter'
+                      ? (settings.openrouterVerifierModel ?? settings.openrouterDefaultPaidModel)
+                      : null,
                   ),
                 })
               }
-              onOpenrouterModelChange={(value) => onUpdate({ openrouterVerifierModel: value })}
+              onOpenrouterModelChange={(value) =>
+                onUpdate({
+                  openrouterVerifierModel: value,
+                  verifierReasoningEffort: normalizeEffort(
+                    'openrouter',
+                    settings.verifierReasoningEffort,
+                    value ?? settings.openrouterDefaultPaidModel,
+                  ),
+                })
+              }
               onReasoningEffortChange={(value) => onUpdate({ verifierReasoningEffort: value })}
               modelCheck={
                 integrationStatus?.openrouter.modelChecks.find(

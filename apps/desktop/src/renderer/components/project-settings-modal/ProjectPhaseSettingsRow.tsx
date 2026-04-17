@@ -1,12 +1,15 @@
 import {
   type AppSettings,
   type ExecutorModel,
+  formatProviderReasoningEffort,
+  getSupportedReasoningEfforts,
   type IntegrationStatus,
   type OpenRouterModelValidation,
   type Project,
   resolvePhaseModel,
   resolvePhaseModelId,
   resolvePhaseReasoningEffort,
+  resolveProviderReasoningEffort,
 } from '@shipcode/shared';
 import {
   Input,
@@ -33,6 +36,11 @@ import {
   PROVIDER_OVERRIDE_KEYS,
   type ProjectOverrideState,
 } from './shared';
+
+function asExecutorModel(value: Project['plannerModelOverride']): ExecutorModel | null {
+  if (value === 'claude' || value === 'codex' || value === 'openrouter') return value;
+  return null;
+}
 
 export function ProjectPhaseSettingsRow({
   phase,
@@ -68,16 +76,31 @@ export function ProjectPhaseSettingsRow({
   const effortOverride = overrides[effortKey];
 
   const effectiveProvider = resolvePhaseModel(settings, projectDraft, phase);
-  const modelOptions = getModelOptions(effectiveProvider);
-  const knownModelValues = new Set<string>(modelOptions.map((option) => option.value));
   const inheritedModelId = resolvePhaseModelId(settings, projectDraft, phase);
+  const selectedProvider = asExecutorModel(providerOverride) ?? effectiveProvider;
+  const selectedModelId =
+    modelIdOverride ?? (selectedProvider === effectiveProvider ? inheritedModelId : null);
+  const inheritedModelOptions = getModelOptions(effectiveProvider);
+  const modelOptions = getModelOptions(selectedProvider);
+  const knownModelValues = new Set<string>(modelOptions.map((option) => option.value));
+  const inheritedEffort = resolvePhaseReasoningEffort(settings, projectDraft, phase);
+  const inheritedEffortResolution = resolveProviderReasoningEffort(
+    effectiveProvider,
+    inheritedEffort,
+    inheritedModelId,
+  );
+  const supportedEfforts = getSupportedReasoningEfforts(selectedProvider, selectedModelId);
+  const effortResolution =
+    effortOverride === null
+      ? null
+      : resolveProviderReasoningEffort(selectedProvider, effortOverride, selectedModelId);
   const inheritedModelLabel = formatModelInheritanceLabel(
     effectiveProvider,
     inheritedModelId,
-    modelOptions,
+    inheritedModelOptions,
   );
   const providerWarning =
-    effectiveProvider === 'openrouter'
+    selectedProvider === 'openrouter'
       ? integrationStatus?.openrouter.authStatus !== 'valid'
         ? (integrationStatus?.openrouter.message ?? 'OpenRouter is not ready')
         : null
@@ -106,6 +129,14 @@ export function ProjectPhaseSettingsRow({
                 ...current,
                 [providerKey]: next === INHERIT_VALUE ? null : (next as ExecutorModel),
                 [modelIdKey]: null,
+                [effortKey]:
+                  next === INHERIT_VALUE || current[effortKey] === null
+                    ? current[effortKey]
+                    : (resolveProviderReasoningEffort(
+                        next as ExecutorModel,
+                        current[effortKey],
+                        null,
+                      ).effective as Project['plannerReasoningEffortOverride']),
               }));
               setModelValidation((current) => ({ ...current, [phase]: null }));
             }}
@@ -135,9 +166,18 @@ export function ProjectPhaseSettingsRow({
           <Select
             value={modelIdOverride ?? INHERIT_VALUE}
             onValueChange={(next) => {
+              const nextModelId = next === INHERIT_VALUE ? null : next;
               setOverrides((current) => ({
                 ...current,
-                [modelIdKey]: next === INHERIT_VALUE ? null : next,
+                [modelIdKey]: nextModelId,
+                [effortKey]:
+                  current[effortKey] === null
+                    ? null
+                    : (resolveProviderReasoningEffort(
+                        selectedProvider,
+                        current[effortKey],
+                        nextModelId,
+                      ).effective as Project['plannerReasoningEffortOverride']),
               }));
               setModelValidation((current) => ({ ...current, [phase]: null }));
             }}
@@ -164,7 +204,9 @@ export function ProjectPhaseSettingsRow({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label className="text-[11px] text-secondary">Effort</Label>
+          <Label className="text-[11px] text-secondary">
+            {selectedProvider === 'claude' ? 'Thinking budget' : 'Effort'}
+          </Label>
           <Select
             value={effortOverride ?? INHERIT_VALUE}
             onValueChange={(next) => {
@@ -180,34 +222,47 @@ export function ProjectPhaseSettingsRow({
             <SelectTrigger>
               <SelectValue>
                 {effortOverride === null ? (
-                  <InheritValueDisplay
-                    detail={resolvePhaseReasoningEffort(settings, projectDraft, phase)}
-                  />
+                  <InheritValueDisplay detail={inheritedEffortResolution.effective} />
                 ) : undefined}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={INHERIT_VALUE}>
-                Inherit ({resolvePhaseReasoningEffort(settings, projectDraft, phase)})
+                Inherit ({inheritedEffortResolution.effective})
               </SelectItem>
-              <SelectItem value="low">low</SelectItem>
-              <SelectItem value="medium">medium</SelectItem>
-              <SelectItem value="high">high</SelectItem>
+              {effortOverride && effortResolution && !effortResolution.exact ? (
+                <SelectItem value={effortOverride}>
+                  {`${effortOverride} (maps to ${effortResolution.effective})`}
+                </SelectItem>
+              ) : null}
+              {supportedEfforts.map((effort) => (
+                <SelectItem key={effort} value={effort}>
+                  {effort}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
       </div>
 
-      {effectiveProvider === 'openrouter' && phase !== 'executor' ? (
+      {selectedProvider === 'openrouter' && phase !== 'executor' ? (
         <div className="mt-3 flex flex-col gap-1.5">
           <Label className="text-[11px] text-secondary">Custom OpenRouter model slug</Label>
           <Input
             key={`${phase}-${modelIdOverride ?? ''}`}
-            placeholder="e.g. anthropic/claude-sonnet-4-6"
+            placeholder="e.g. anthropic/claude-sonnet-4.6"
             defaultValue={modelIdOverride ?? ''}
             onBlur={async (e) => {
               const next = e.target.value.trim() || null;
-              setOverrides((current) => ({ ...current, [modelIdKey]: next }));
+              setOverrides((current) => ({
+                ...current,
+                [modelIdKey]: next,
+                [effortKey]:
+                  current[effortKey] === null
+                    ? null
+                    : (resolveProviderReasoningEffort(selectedProvider, current[effortKey], next)
+                        .effective as Project['plannerReasoningEffortOverride']),
+              }));
               if (!next) {
                 setModelValidation((current) => ({ ...current, [phase]: null }));
                 return;
@@ -228,6 +283,20 @@ export function ProjectPhaseSettingsRow({
       {providerWarning ? (
         <div className="mt-3 rounded-md border border-amber-500/20 bg-amber-500/10 px-2.5 py-2 text-[11px] text-amber-300">
           {providerWarning}
+        </div>
+      ) : null}
+      {effortOverride !== null && effortResolution && !effortResolution.exact ? (
+        <div className="mt-2 rounded-md border border-amber-500/20 bg-amber-500/10 px-2.5 py-2 text-[11px] text-amber-300">
+          {effortResolution.message}
+        </div>
+      ) : null}
+      {effortOverride === null && !inheritedEffortResolution.exact ? (
+        <div className="mt-2 rounded-md border border-amber-500/20 bg-amber-500/10 px-2.5 py-2 text-[11px] text-amber-300">
+          {`Inherited ${inheritedEffort} maps to ${formatProviderReasoningEffort(
+            effectiveProvider,
+            inheritedEffort,
+            inheritedModelId,
+          )} for ${PROVIDER_DISPLAY[effectiveProvider]}.`}
         </div>
       ) : null}
       {validationMessage ? (

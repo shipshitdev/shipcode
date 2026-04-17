@@ -20,7 +20,7 @@ export const CODEX_MODELS = [
 export const OPENROUTER_MODELS = [
   { value: 'openrouter/auto', label: 'Auto (paid)' },
   { value: 'openrouter/free', label: 'Auto (free)' },
-  { value: 'anthropic/claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
+  { value: 'anthropic/claude-sonnet-4.6', label: 'Claude Sonnet 4.6' },
   { value: 'qwen/qwen3.6-plus', label: 'Qwen 3.6 Plus' },
   { value: 'qwen/qwen3-coder:free', label: 'Qwen 3 Coder Free' },
 ] as const;

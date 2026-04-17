@@ -1,3 +1,4 @@
+import { resolveProviderReasoningEffort } from './reasoning-effort';
 import type {
   AppSettings,
   ExecutorModel,
@@ -212,6 +213,17 @@ export function resolvePhaseReasoningEffort(
   return settings[descriptor.settingsReasoningEffortKey];
 }
 
+export function resolveEffectivePhaseReasoningEffort(
+  settings: AppSettings,
+  project: ProjectModelOverrides | null | undefined,
+  phase: ResolvedPhaseModel,
+): ReasoningEffort {
+  const provider = resolvePhaseModel(settings, project, phase);
+  const modelId = resolvePhaseModelId(settings, project, phase);
+  const configured = resolvePhaseReasoningEffort(settings, project, phase);
+  return resolveProviderReasoningEffort(provider, configured, modelId).effective;
+}
+
 export function resolvePhaseModelId(
   settings: AppSettings,
   project: ProjectModelOverrides | null | undefined,
@@ -236,6 +248,18 @@ export function resolvePhaseModelIdForIssue(
   const issueOverride = issue?.[descriptor.issueModelIdOverrideKey];
   if (issueOverride) return issueOverride;
   return resolvePhaseModelId(settings, project, phase);
+}
+
+export function resolveEffectivePhaseReasoningEffortForIssue(
+  settings: AppSettings,
+  project: ProjectModelOverrides | null | undefined,
+  issue: IssuePhaseOverrides | null | undefined,
+  phase: ResolvedPhaseModel,
+): ReasoningEffort {
+  const provider = resolvePhaseModelForIssue(settings, project, issue, phase);
+  const modelId = resolvePhaseModelIdForIssue(settings, project, issue, phase);
+  const configured = resolvePhaseReasoningEffort(settings, project, phase);
+  return resolveProviderReasoningEffort(provider, configured, modelId).effective;
 }
 
 export function getIssueCardPhase(

@@ -23,6 +23,10 @@ The modal lives at [`apps/desktop/src/renderer/components/ProjectSettingsModal.t
 | Reviewer model override | `projects.reviewer_model_override` | Optional project-local reviewer override. `null` inherits the global Settings value |
 | Executor model override | `projects.executor_model_override` | Optional project-local executor override. `null` inherits the global Settings value unless an issue-level executor override exists |
 | Verifier model override | `projects.verifier_model_override` | Optional project-local verifier override. `null` inherits the global Settings value |
+| Planner effort override | `projects.planner_reasoning_effort_override` | Optional project-local planner effort override. Exact options depend on the selected provider |
+| Reviewer effort override | `projects.reviewer_reasoning_effort_override` | Optional project-local reviewer effort override. Exact options depend on the selected provider |
+| Executor effort override | `projects.executor_reasoning_effort_override` | Optional project-local executor effort override. Exact options depend on the selected provider |
+| Verifier effort override | `projects.verifier_reasoning_effort_override` | Optional project-local verifier effort override. Exact options depend on the selected provider |
 
 ## Model override hierarchy
 
@@ -32,6 +36,14 @@ Project Settings sits between the global Settings panel and the issue-level exec
 - Executor: `global settings -> project override -> issue override`
 
 `Inherit` means the project stores `null` for that phase and falls back to the global Settings default.
+
+Effort options are provider-specific:
+
+- Claude CLI: `none`, `medium`, `high`
+- Codex: `low`, `medium`, `high`
+- OpenRouter: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`
+
+If an older stored effort is not exact for the chosen provider, the UI surfaces the fallback mapping explicitly.
 
 Issue-level overrides remain executor-only. They live in Issue Detail / Kanban because executor choice is the only phase that routinely needs issue-by-issue variation.
 

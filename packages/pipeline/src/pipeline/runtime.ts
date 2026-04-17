@@ -262,9 +262,6 @@ export function createPipelineRuntime(
       case 'verify':
         return context.verifierModel;
       case 'execute':
-        if (context.executorModelOverride) {
-          return context.executorModelOverride as PipelineExecutorModel;
-        }
         if (context.executorModel) return context.executorModel;
         return 'claude';
     }

@@ -88,11 +88,13 @@ export class SettingsQueries {
       stored[row.key] = row.value;
     }
 
+    const parsedFontSize = stored.fontSize ? parseInt(stored.fontSize, 10) : Number.NaN;
+
     return {
       theme: (stored.theme as AppSettings['theme']) ?? DEFAULT_SETTINGS.theme,
       fontStyle: (stored.fontStyle as AppSettings['fontStyle']) ?? DEFAULT_SETTINGS.fontStyle,
-      fontSize: isFontSize(stored.fontSize ? parseInt(stored.fontSize, 10) : Number.NaN)
-        ? (parseInt(stored.fontSize!, 10) as AppSettings['fontSize'])
+      fontSize: isFontSize(parsedFontSize)
+        ? (parsedFontSize as AppSettings['fontSize'])
         : DEFAULT_SETTINGS.fontSize,
       defaultWorktreeEnabled: parseBool(
         stored.defaultWorktreeEnabled,

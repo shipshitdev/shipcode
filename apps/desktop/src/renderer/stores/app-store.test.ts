@@ -137,4 +137,87 @@ describe('app-store', () => {
       expect(state.terminalMaximized).toBe(false);
     });
   });
+
+  describe('selectIssue', () => {
+    it('auto-opens the terminal for active pipeline issues', () => {
+      useAppStore.setState({ terminalVisible: false });
+
+      useAppStore
+        .getState()
+        .selectIssue(makeIssue({ threadId: 'thread-2', pipelineStatus: 'executing' }));
+
+      const state = useAppStore.getState();
+      expect(state.activeThreadId).toBe('thread-2');
+      expect(state.terminalThreadId).toBe('thread-2');
+      expect(state.terminalVisible).toBe(true);
+    });
+  });
+
+  describe('notifications', () => {
+    it('replaces notifications with the same id instead of duplicating them', () => {
+      const createdAt = new Date().toISOString();
+
+      useAppStore.getState().addNotification({
+        id: 'notification-1',
+        threadId: 'thread-1',
+        projectId: 'project-1',
+        kind: 'completed',
+        title: 'Done',
+        body: 'first',
+        createdAt,
+        dismissedAt: null,
+      });
+      useAppStore.getState().addNotification({
+        id: 'notification-1',
+        threadId: 'thread-1',
+        projectId: 'project-1',
+        kind: 'completed',
+        title: 'Done',
+        body: 'updated',
+        createdAt,
+        dismissedAt: null,
+      });
+
+      expect(useAppStore.getState().notifications).toHaveLength(1);
+      expect(useAppStore.getState().notifications[0]?.body).toBe('updated');
+    });
+  });
+
+  describe('canonical terminal stream', () => {
+    it('deduplicates canonical events by id when appending and hydrating', () => {
+      useAppStore
+        .getState()
+        .appendCanonicalEvent(
+          'thread-1',
+          { kind: 'text', content: 'hello' },
+          { id: 'event-1', createdAt: '2026-04-16T00:00:00.000Z' },
+        );
+      useAppStore
+        .getState()
+        .appendCanonicalEvent(
+          'thread-1',
+          { kind: 'text', content: 'hello again' },
+          { id: 'event-1', createdAt: '2026-04-16T00:00:01.000Z' },
+        );
+
+      useAppStore.getState().hydrateCanonicalEvents('thread-1', [
+        {
+          id: 'event-1',
+          threadId: 'thread-1',
+          event: { kind: 'text', content: 'hydrated duplicate' },
+          createdAt: '2026-04-16T00:00:02.000Z',
+        },
+        {
+          id: 'event-2',
+          threadId: 'thread-1',
+          event: { kind: 'done', totalTokens: { prompt: 1, completion: 2 } },
+          createdAt: '2026-04-16T00:00:03.000Z',
+        },
+      ]);
+
+      expect(useAppStore.getState().canonicalTerminalStream['thread-1']).toHaveLength(2);
+      expect(useAppStore.getState().canonicalTerminalStream['thread-1']?.[0]?.id).toBe('event-1');
+      expect(useAppStore.getState().canonicalTerminalStream['thread-1']?.[1]?.id).toBe('event-2');
+    });
+  });
 });

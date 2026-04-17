@@ -1,7 +1,22 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { DEFAULT_SKILLS, PHASE_SKILL_KEYS, validateSkill } from '@shipcode/agents';
 import type { PhaseSkillKey } from '@shipcode/shared';
+import { shell } from 'electron';
 import { buildSkillRow } from './helpers';
 import type { IpcHandlerDeps } from './types';
+
+function getWritingPrdsPaths(projectPath: string) {
+  const skillDir = path.join(projectPath, '.agents', 'skills', 'writing-prds');
+  const skillPath = path.join(skillDir, 'SKILL.md');
+  const exists = fs.existsSync(skillPath);
+
+  return {
+    absolutePath: skillPath,
+    exists,
+    openTargetPath: exists ? skillPath : fs.existsSync(skillDir) ? skillDir : projectPath,
+  };
+}
 
 export function registerSkillsHandlers({ ipcMain, queries }: IpcHandlerDeps): void {
   ipcMain.handle('skills:list-for-view', (_event, { projectId }: { projectId: string | null }) => {
@@ -66,4 +81,31 @@ export function registerSkillsHandlers({ ipcMain, queries }: IpcHandlerDeps): vo
       updatedAt: row.updatedAt,
     }));
   });
+
+  ipcMain.handle('skills:get-writing-prds-info', (_event, { projectId }: { projectId: string }) => {
+    const project = queries.projects.getById(projectId);
+    if (!project) throw new Error(`Project ${projectId} not found`);
+
+    const paths = getWritingPrdsPaths(project.path);
+    return {
+      projectId,
+      projectPath: project.path,
+      absolutePath: paths.absolutePath,
+      exists: paths.exists,
+      usingFallback: !paths.exists,
+      openTargetPath: paths.openTargetPath,
+    };
+  });
+
+  ipcMain.handle(
+    'skills:open-writing-prds',
+    async (_event, { projectId }: { projectId: string }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+
+      const { openTargetPath } = getWritingPrdsPaths(project.path);
+      const openError = await shell.openPath(openTargetPath);
+      if (openError) throw new Error(openError);
+    },
+  );
 }

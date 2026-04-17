@@ -111,6 +111,12 @@ export { Modal, ModalFooter } from './primitives/modal';
 export type { PaginationProps } from './primitives/pagination';
 export { Pagination } from './primitives/pagination';
 export {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+  PopoverTrigger,
+} from './primitives/popover';
+export {
   Select,
   SelectContent,
   SelectGroup,

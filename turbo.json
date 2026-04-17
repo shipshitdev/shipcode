@@ -19,6 +19,11 @@
       "inputs": ["$TURBO_DEFAULT$"],
       "outputs": []
     },
+    "coverage": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$"],
+      "outputs": ["coverage/**"]
+    },
     "lint": {},
     "clean": {
       "cache": false

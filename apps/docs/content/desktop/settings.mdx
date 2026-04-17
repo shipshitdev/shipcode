@@ -22,7 +22,10 @@ All settings persist in the local SQLite DB under the single `settings` row. The
 | `requireApproval` | false | Global approval gate. When on, the pipeline pauses at `awaiting_approval` after review for human sign-off. When off, GitHub issue runs execute automatically unless another runtime safety branch stops them |
 | `maxReviewRounds` | 2 | How many review → revise cycles before falling through (1–5) |
 | `plannerMaxTurns` | 12 | `--max-turns` cap on the planner and verifier Claude CLI runs (1–20). Execute and review are unaffected |
-| `reviewerReasoningEffort` | `high` | Codex reasoning effort for the review phase (low / medium / high) |
+| `plannerReasoningEffort` | `high` | Default planner effort. Exact options depend on the selected provider |
+| `reviewerReasoningEffort` | `high` | Default reviewer effort. Exact options depend on the selected provider |
+| `executorReasoningEffort` | `high` | Default executor effort. Exact options depend on the selected provider |
+| `verifierReasoningEffort` | `high` | Default verifier effort. Exact options depend on the selected provider |
 | `autoPickupEnabled` | false | When on, ShipCode auto-pulls new `agent:*`-labeled issues from GitHub on a poll interval |
 | `githubPollingIntervalMs` | 60000 | GitHub polling interval when auto-pickup is enabled |
 | `githubBotUsername` | — | Label filter used to skip issues already handled by the bot |
@@ -38,12 +41,18 @@ All settings persist in the local SQLite DB under the single `settings` row. The
 
 All four phase models are editable here. These are the **global defaults** that new projects inherit unless they opt into a project-level override.
 
+Effort options are provider-specific:
+
+- Claude CLI: `none`, `medium`, `high`
+- Codex: `low`, `medium`, `high`
+- OpenRouter: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`
+
 Override precedence:
 
 - Planner / Reviewer / Verifier: `global settings -> project override`
 - Executor: `global settings -> project override -> issue override`
 
-Reasoning effort remains global-only in this release. The Kanban cards display the effective phase model plus the global reasoning effort for that phase, but only Settings changes the effort value.
+If an older stored value is no longer exact for the current provider, the UI shows the mapping explicitly instead of pretending it is supported. Kanban cards display the effective phase model plus the effective effort for the current phase.
 
 OpenRouter-specific toggles (`openrouterEnabled`, tier defaults, per-phase overrides) are documented on the [OpenRouter page](/openrouter).
 
@@ -74,6 +83,7 @@ Some settings are per-project rather than global:
 
 - `githubProjectUrl` override for the Kanban `board` quick-link
 - Per-project planner / reviewer / executor / verifier model overrides
+- Per-project planner / reviewer / executor / verifier effort overrides
 
 Issue-level overrides are narrower by design: only the executor can be overridden from Issue Detail / Kanban, and that override applies to the next run of that issue only.
 

@@ -62,10 +62,10 @@ import { createPipeline } from '@shipcode/pipeline';
 import {
   clampError,
   HEARTBEAT_TIMEOUT_MS,
+  resolveEffectivePhaseReasoningEffortForIssue,
   resolveExecutorModelForIssue,
   resolvePhaseModelForIssue,
   resolvePhaseModelIdForIssue,
-  resolvePhaseReasoningEffort,
 } from '@shipcode/shared';
 import { ChatNotificationService } from './chat-notification-service';
 import { registerIpcHandlers } from './ipc';
@@ -191,10 +191,30 @@ function resolveIssuePhaseModels(
     reviewerModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'reviewer'),
     verifierModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'verifier'),
     executorModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'executor'),
-    plannerReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'planner'),
-    reviewerReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'reviewer'),
-    verifierReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'verifier'),
-    executorReasoningEffort: resolvePhaseReasoningEffort(settings, project, 'executor'),
+    plannerReasoningEffort: resolveEffectivePhaseReasoningEffortForIssue(
+      settings,
+      project,
+      issue,
+      'planner',
+    ),
+    reviewerReasoningEffort: resolveEffectivePhaseReasoningEffortForIssue(
+      settings,
+      project,
+      issue,
+      'reviewer',
+    ),
+    verifierReasoningEffort: resolveEffectivePhaseReasoningEffortForIssue(
+      settings,
+      project,
+      issue,
+      'verifier',
+    ),
+    executorReasoningEffort: resolveEffectivePhaseReasoningEffortForIssue(
+      settings,
+      project,
+      issue,
+      'executor',
+    ),
   };
 }
 

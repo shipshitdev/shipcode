@@ -37,6 +37,7 @@ import { executeToolCall, getToolSchemas, toolCallHash } from '../tools/registry
 import type { ToolContext } from '../tools/types';
 import type { OpenRouterChatMessage } from './openrouter-http';
 import { type OpenRouterClient, OpenRouterError } from './openrouter-http';
+import { normalizeOpenRouterReasoningEffort } from './reasoning';
 import type { ProviderRequest, ProviderResponse } from './types';
 
 /**
@@ -118,6 +119,10 @@ export async function executeViaOpenRouter(
   let totalCompletionTokens = 0;
   let lastResolvedModel: string | undefined;
   const recentHashes: string[] = [];
+  const reasoningEffort = normalizeOpenRouterReasoningEffort(
+    req.phaseHints?.reasoningEffort,
+    deps.model,
+  );
 
   const emit = deps.onTerminalEvent;
 
@@ -140,7 +145,13 @@ export async function executeViaOpenRouter(
       // long plan/review phases but tool calls are emitted as a single
       // chunk at the end, so we gain nothing from SSE here.
       response = await deps.client.chat(
-        { model: deps.model, messages, tools, stream: false },
+        {
+          model: deps.model,
+          messages,
+          tools,
+          stream: false,
+          reasoning: { effort: reasoningEffort },
+        },
         req.signal,
       );
     } catch (err) {

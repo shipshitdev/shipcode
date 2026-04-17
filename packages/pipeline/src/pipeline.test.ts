@@ -968,6 +968,48 @@ describe('createPipeline', () => {
       );
       expect(mock.deps.processManager.spawn).not.toHaveBeenCalled();
     });
+
+    it('uses executor model override as modelHint and keeps the provider selection on the executor provider', async () => {
+      const openrouterGenerate = vi.fn(async () => ({
+        rawOutput: 'done',
+        exitCode: 0,
+        resolvedModel: 'anthropic/claude-sonnet-4-6',
+      }));
+      const openrouterProvider: AgentProvider = {
+        id: 'openrouter',
+        supports: new Set(['plan', 'review', 'revision', 'verify', 'execute']),
+        generate: openrouterGenerate,
+        healthCheck: vi.fn(async () => ({ ok: true })),
+      };
+      const registry = createProviderRegistry({
+        claude: mock.deps.providers.for('claude', 'plan'),
+        codex: mock.deps.providers.for('codex', 'review'),
+        openrouter: openrouterProvider,
+      });
+      const deps = { ...mock.deps, providers: registry };
+      const pipeline = createPipeline(deps);
+
+      pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        executorModel: 'openrouter',
+        executorModelOverride: 'openrouter/auto',
+        executorReasoningEffort: 'low',
+      });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+      await flush();
+
+      expect(openrouterGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          phase: 'execute',
+          cwd: '/worktree',
+          modelHint: 'openrouter/auto',
+          phaseHints: expect.objectContaining({ reasoningEffort: 'low' }),
+        }),
+      );
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'completed');
+    });
   });
 
   // ─── startVerification ─────────────────────────────────────────────
@@ -1429,6 +1471,47 @@ describe('createPipeline', () => {
           baseBranch: 'main',
         }),
       );
+    });
+
+    it('stores phase-specific provider, model-id, and reasoning selections in context', async () => {
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.includes('symbolic-ref')) return 'origin/main';
+        if (cmd.includes('rev-parse')) return 'sha789';
+        return '';
+      });
+
+      const pipeline = createPipeline(mock.deps);
+      const issue = { number: 11, title: 'Phase routing', body: 'Check phase config', labels: [] };
+
+      await pipeline.startFromGitHubIssue('t1', '/proj', issue, 'openrouter', {
+        baseBranch: 'develop',
+        plannerModel: 'claude',
+        reviewerModel: 'codex',
+        verifierModel: 'openrouter',
+        plannerModelIdOverride: 'claude-opus-4-6',
+        reviewerModelIdOverride: 'gpt-5.4-mini',
+        executorModelIdOverride: 'openrouter/auto',
+        verifierModelIdOverride: 'anthropic/claude-sonnet-4-6',
+        plannerReasoningEffort: 'high',
+        reviewerReasoningEffort: 'medium',
+        executorReasoningEffort: 'low',
+        verifierReasoningEffort: 'high',
+      });
+
+      const ctx = requireContext(pipeline);
+      expect(ctx.plannerModel).toBe('claude');
+      expect(ctx.reviewerModel).toBe('codex');
+      expect(ctx.executorModel).toBe('openrouter');
+      expect(ctx.verifierModel).toBe('openrouter');
+      expect(ctx.plannerModelIdOverride).toBe('claude-opus-4-6');
+      expect(ctx.reviewerModelIdOverride).toBe('gpt-5.4-mini');
+      expect(ctx.executorModelIdOverride).toBe('openrouter/auto');
+      expect(ctx.verifierModelIdOverride).toBe('anthropic/claude-sonnet-4-6');
+      expect(ctx.plannerReasoningEffort).toBe('high');
+      expect(ctx.reviewerReasoningEffort).toBe('medium');
+      expect(ctx.executorReasoningEffort).toBe('low');
+      expect(ctx.verifierReasoningEffort).toBe('high');
+      expect(ctx.baseBranch).toBe('develop');
     });
   });
 

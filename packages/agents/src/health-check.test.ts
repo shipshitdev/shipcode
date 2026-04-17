@@ -638,7 +638,7 @@ describe('checkOpenRouterHealth', () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            data: [{ id: 'openrouter/auto' }, { id: 'anthropic/claude-sonnet-4-6' }],
+            data: [{ id: 'openrouter/auto' }, { id: 'anthropic/claude-sonnet-4.6' }],
           }),
           { status: 200 },
         ),
