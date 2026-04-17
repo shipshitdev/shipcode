@@ -17,3 +17,6 @@ pnpm-lock.yaml
 next-env.d.ts
 logs/events.log
 apps/desktop/logs/events.log
+coverage/
+coverage-summary.txt
+.nyc_output/
