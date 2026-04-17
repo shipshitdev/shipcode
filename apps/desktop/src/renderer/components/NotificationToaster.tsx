@@ -1,10 +1,10 @@
 import type { AppSettings, NotificationKind, NotificationRecord } from '@shipcode/shared';
-import { Button, X } from '@shipcode/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 import notifySoundUrl from '../assets/notify.wav?url';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
+import { InAppNotification } from './InAppNotification';
 
 const STICKY_KINDS: NotificationKind[] = [
   'awaiting_approval',
@@ -17,12 +17,12 @@ const AUTO_DISMISS_MS: Partial<Record<NotificationKind, number>> = {
   completed: 3_000,
 };
 
-const KIND_TONE: Record<NotificationKind, string> = {
-  awaiting_approval: 'border-amber-500/40 bg-amber-500/10',
-  failed: 'border-danger/40 bg-danger/10',
-  verification_exhausted: 'border-danger/40 bg-danger/10',
-  ci_blocked: 'border-danger/40 bg-danger/10',
-  completed: 'border-success/40 bg-success/10',
+const KIND_TONE: Record<NotificationKind, 'warning' | 'danger' | 'success'> = {
+  awaiting_approval: 'warning',
+  failed: 'danger',
+  verification_exhausted: 'danger',
+  ci_blocked: 'danger',
+  completed: 'success',
 };
 
 function ToastRow({
@@ -46,31 +46,13 @@ function ToastRow({
   }, [dismissAfterMs, sticky, onHide]);
 
   return (
-    <div
-      className={`group flex items-start gap-2 rounded-xl border px-3 py-2.5 shadow-lg backdrop-blur-sm ${
-        KIND_TONE[notification.kind] ?? 'border-border bg-elevated'
-      }`}
-    >
-      <Button
-        variant="ghost"
-        onClick={onClick}
-        className="h-auto flex-1 justify-start whitespace-normal bg-transparent px-0 py-0 text-left font-normal hover:bg-transparent focus-visible:ring-0"
-      >
-        <div className="flex flex-col items-start gap-0.5">
-          <div className="text-[12px] font-semibold text-primary">{notification.title}</div>
-          <div className="text-[11px] text-secondary">{notification.body}</div>
-        </div>
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        onClick={onDismiss}
-        className="text-muted"
-        title="Dismiss"
-      >
-        <X size={14} />
-      </Button>
-    </div>
+    <InAppNotification
+      title={notification.title}
+      description={notification.body}
+      tone={KIND_TONE[notification.kind] ?? 'default'}
+      onClick={onClick}
+      onDismiss={onDismiss}
+    />
   );
 }
 
@@ -128,7 +110,10 @@ export function NotificationToaster() {
   if (notifications.length === 0) return null;
 
   return (
-    <div className="pointer-events-none fixed bottom-4 right-4 z-50 flex max-w-sm flex-col gap-2">
+    <div
+      data-testid="notification-toaster"
+      className="pointer-events-none fixed right-4 top-[calc(var(--spacing-titlebar)+0.75rem)] z-50 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2"
+    >
       {notifications.slice(0, 5).map((n) => (
         <div key={n.id} className="pointer-events-auto">
           <ToastRow

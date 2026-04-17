@@ -46,6 +46,7 @@ import type { ComponentType } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { NOTIFICATIONS_STALE_TIME, STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
+import { ProjectProviderWarningPopover } from './ProjectProviderWarningPopover';
 
 const SIDEBAR_MIN = 180;
 const SIDEBAR_MAX = 256;
@@ -449,7 +450,8 @@ export function ProjectSidebar() {
                   <Button
                     variant="ghost"
                     className={cn(
-                      'h-auto w-full justify-start gap-2 pl-3 pr-8 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
+                      'h-auto w-full justify-start gap-2 pl-3 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
+                      warningBadgeLabel ? 'pr-[7.25rem]' : 'pr-8',
                       project.pathExists === false && 'opacity-50',
                       viewMode === 'project' &&
                         activeProjectId === project.id &&
@@ -489,18 +491,6 @@ export function ProjectSidebar() {
                         Setup!
                       </Badge>
                     )}
-                    {warningBadgeLabel ? (
-                      <Badge
-                        variant="warning"
-                        className={cn(
-                          'shrink-0 text-[10px]',
-                          hasBlockedWarning && 'border-danger/30 bg-danger/10 text-danger',
-                        )}
-                        title={warningTitle}
-                      >
-                        {warningBadgeLabel}
-                      </Badge>
-                    ) : null}
                     {(stats?.agentsRunningByProject?.[project.id] ?? 0) > 0 && (
                       <span className="inline-flex items-center gap-1 shrink-0 rounded-full border border-agent/30 bg-agent/10 px-1.5 py-0.5 text-[10px] font-medium text-agent">
                         <span className="relative flex h-1.5 w-1.5 items-center justify-center">
@@ -512,123 +502,133 @@ export function ProjectSidebar() {
                     )}
                   </Button>
 
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        className={cn(
-                          'absolute right-1.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 focus:opacity-100',
-                          warningBadgeLabel ? 'text-warning' : 'text-muted',
-                        )}
-                        aria-label={`More actions for ${project.name}`}
-                        title={warningTitle}
-                      >
-                        <MoreHorizontal size={14} />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="end"
-                      collisionPadding={{ top: 44, right: 8, bottom: 8, left: 8 }}
-                      className="min-w-[220px]"
-                      onInteractOutside={(e) => {
-                        const target = e.target as Element | null;
-                        if (target?.closest('[data-project-list]')) {
-                          e.preventDefault();
-                        }
-                      }}
-                    >
-                      {(() => {
-                        const availableTargets = PROJECT_OPEN_TARGETS.filter(
-                          (target) => integrations?.desktopApps?.[target]?.available,
-                        );
-
-                        if (availableTargets.length === 0) return null;
-
-                        return (
-                          <DropdownMenuSub>
-                            <DropdownMenuSubTrigger disabled={project.pathExists === false}>
-                              <FolderOpen size={12} />
-                              <span className="truncate">Open in</span>
-                            </DropdownMenuSubTrigger>
-                            <DropdownMenuSubContent className="min-w-[240px]">
-                              {availableTargets.map((target) => {
-                                const app = integrations?.desktopApps?.[target];
-                                if (!app) return null;
-
-                                const isDefaultTarget =
-                                  (settings?.projectOpenTarget ?? 'cursor') === target;
-                                const Icon = PROJECT_OPEN_TARGET_ICONS[target];
-
-                                return (
-                                  <DropdownMenuItem
-                                    key={target}
-                                    onSelect={() =>
-                                      openProjectPath.mutate({ projectId: project.id, target })
-                                    }
-                                  >
-                                    <span className="flex h-3.5 w-3.5 items-center justify-center">
-                                      {isDefaultTarget ? <Check size={12} /> : null}
-                                    </span>
-                                    <Icon size={12} className="shrink-0 text-secondary" />
-                                    <span className="flex-1 truncate">{app.label}</span>
-                                    {isDefaultTarget ? (
-                                      <span className="text-[11px] text-muted">Default</span>
-                                    ) : null}
-                                  </DropdownMenuItem>
-                                );
-                              })}
-                            </DropdownMenuSubContent>
-                          </DropdownMenuSub>
-                        );
-                      })()}
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onSelect={() => openProjectSettingsModal(project.id)}>
-                        <Settings size={12} /> Settings
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => openProjectSetupModal(project.id)}>
-                        <Wrench size={12} /> Configure setup...
-                      </DropdownMenuItem>
-                      {project.pathExists === false && (
-                        <DropdownMenuItem onSelect={() => relinkProject.mutate(project.id)}>
-                          <Wrench size={12} /> Relink folder…
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem
-                        onSelect={() =>
-                          pinProject.mutate({ projectId: project.id, pinned: !project.pinned })
-                        }
-                      >
-                        {project.pinned ? (
-                          <>
-                            <PinOff size={12} /> Unpin
-                          </>
-                        ) : (
-                          <>
-                            <Pin size={12} /> Pin to top
-                          </>
-                        )}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => archiveProject.mutate(project.id)}>
-                        <Archive size={12} /> Archive
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onSelect={() => {
-                          if (
-                            window.confirm(
-                              `Remove "${project.name}" from ShipCode? This does not delete the repository on disk.`,
-                            )
-                          ) {
-                            removeProject.mutate(project.id);
+                  <div className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-1">
+                    {warningBadgeLabel && settings ? (
+                      <ProjectProviderWarningPopover
+                        settings={settings}
+                        project={project}
+                        warnings={projectWarnings}
+                        className="app-region-no-drag"
+                      />
+                    ) : null}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          className={cn(
+                            'opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100',
+                            warningBadgeLabel ? 'text-warning' : 'text-muted',
+                          )}
+                          aria-label={`More actions for ${project.name}`}
+                          title={warningTitle}
+                        >
+                          <MoreHorizontal size={14} />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="end"
+                        collisionPadding={{ top: 44, right: 8, bottom: 8, left: 8 }}
+                        className="min-w-[220px]"
+                        onInteractOutside={(e) => {
+                          const target = e.target as Element | null;
+                          if (target?.closest('[data-project-list]')) {
+                            e.preventDefault();
                           }
                         }}
-                        className="text-danger"
                       >
-                        <Trash2 size={12} /> Remove
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                        {(() => {
+                          const availableTargets = PROJECT_OPEN_TARGETS.filter(
+                            (target) => integrations?.desktopApps?.[target]?.available,
+                          );
+
+                          if (availableTargets.length === 0) return null;
+
+                          return (
+                            <DropdownMenuSub>
+                              <DropdownMenuSubTrigger disabled={project.pathExists === false}>
+                                <FolderOpen size={12} />
+                                <span className="truncate">Open in</span>
+                              </DropdownMenuSubTrigger>
+                              <DropdownMenuSubContent className="min-w-[240px]">
+                                {availableTargets.map((target) => {
+                                  const app = integrations?.desktopApps?.[target];
+                                  if (!app) return null;
+
+                                  const isDefaultTarget =
+                                    (settings?.projectOpenTarget ?? 'cursor') === target;
+                                  const Icon = PROJECT_OPEN_TARGET_ICONS[target];
+
+                                  return (
+                                    <DropdownMenuItem
+                                      key={target}
+                                      onSelect={() =>
+                                        openProjectPath.mutate({ projectId: project.id, target })
+                                      }
+                                    >
+                                      <span className="flex h-3.5 w-3.5 items-center justify-center">
+                                        {isDefaultTarget ? <Check size={12} /> : null}
+                                      </span>
+                                      <Icon size={12} className="shrink-0 text-secondary" />
+                                      <span className="flex-1 truncate">{app.label}</span>
+                                      {isDefaultTarget ? (
+                                        <span className="text-[11px] text-muted">Default</span>
+                                      ) : null}
+                                    </DropdownMenuItem>
+                                  );
+                                })}
+                              </DropdownMenuSubContent>
+                            </DropdownMenuSub>
+                          );
+                        })()}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onSelect={() => openProjectSettingsModal(project.id)}>
+                          <Settings size={12} /> Settings
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => openProjectSetupModal(project.id)}>
+                          <Wrench size={12} /> Configure setup...
+                        </DropdownMenuItem>
+                        {project.pathExists === false && (
+                          <DropdownMenuItem onSelect={() => relinkProject.mutate(project.id)}>
+                            <Wrench size={12} /> Relink folder…
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem
+                          onSelect={() =>
+                            pinProject.mutate({ projectId: project.id, pinned: !project.pinned })
+                          }
+                        >
+                          {project.pinned ? (
+                            <>
+                              <PinOff size={12} /> Unpin
+                            </>
+                          ) : (
+                            <>
+                              <Pin size={12} /> Pin to top
+                            </>
+                          )}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => archiveProject.mutate(project.id)}>
+                          <Archive size={12} /> Archive
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onSelect={() => {
+                            if (
+                              window.confirm(
+                                `Remove "${project.name}" from ShipCode? This does not delete the repository on disk.`,
+                              )
+                            ) {
+                              removeProject.mutate(project.id);
+                            }
+                          }}
+                          className="text-danger"
+                        >
+                          <Trash2 size={12} /> Remove
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </>
               );
             })()}

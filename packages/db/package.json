@@ -23,6 +23,6 @@
     "nanoid": "5.1.9"
   },
   "devDependencies": {
-    "typescript": "6.0.2"
+    "typescript": "6.0.3"
   }
 }

@@ -99,6 +99,10 @@ describe('NotificationToaster', () => {
     renderWithProviders();
 
     expect(await screen.findByText('Build complete')).toBeInTheDocument();
+    expect(screen.getByTestId('notification-toaster')).toHaveClass(
+      'right-4',
+      'top-[calc(var(--spacing-titlebar)+0.75rem)]',
+    );
     await waitFor(() => {
       expect(audioCtorMock).toHaveBeenCalledTimes(1);
       expect(playMock).toHaveBeenCalledTimes(1);

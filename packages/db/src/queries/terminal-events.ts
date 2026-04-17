@@ -24,12 +24,14 @@ export class TerminalEventQueries {
 
   create(threadId: string, event: CanonicalTerminalEvent): TerminalEventRecord {
     const id = nanoid();
-    this.db
-      .prepare(`INSERT INTO terminal_events (id, thread_id, event) VALUES (?, ?, ?)`)
-      .run(id, threadId, JSON.stringify(event));
-
     const row = asRow<TerminalEventRow>(
-      this.db.prepare('SELECT * FROM terminal_events WHERE id = ?').get(id),
+      this.db
+        .prepare(
+          `INSERT INTO terminal_events (id, thread_id, event)
+           VALUES (?, ?, ?)
+           RETURNING id, thread_id, event, created_at`,
+        )
+        .get(id, threadId, JSON.stringify(event)),
     );
     return mapRow(row);
   }

@@ -586,6 +586,36 @@ describe('IssueDetail', () => {
     expect(screen.queryByText('request_changes')).not.toBeInTheDocument();
   });
 
+  it('renders a single resolved status for approved plans even if review data conflicts', async () => {
+    const thread = makeThread({ status: 'completed' });
+    const plan = makePlan({ status: 'approved' });
+    const review = makeReview({ planId: plan.id, decision: 'request_changes' });
+
+    useAppStore.setState({
+      activeThreadId: thread.id,
+      activeIssue: makeIssue({ threadId: thread.id, pipelineStatus: 'completed' }),
+      pipelinePhase: 'completed',
+    });
+
+    invokeMock.mockImplementation(async (channel, args) => {
+      if (channel === 'thread:get') return thread;
+      if (channel === 'plan:list') return [plan];
+      if (channel === 'review:list-by-plans') return { [plan.id]: review };
+      return args ?? null;
+    });
+
+    renderWithProviders();
+    const historyTab = screen.getByRole('tab', { name: /Plan History/ });
+    fireEvent.mouseDown(historyTab, { button: 0 });
+    fireEvent.click(historyTab);
+    await waitFor(() => {
+      expect(historyTab).toHaveAttribute('data-state', 'active');
+    });
+
+    expect(await screen.findByText('AI approved')).toBeInTheDocument();
+    expect(screen.queryByText('Changes requested')).not.toBeInTheDocument();
+  });
+
   it('sets a planner codex override from the issue detail panel', async () => {
     const thread = makeThread({ status: 'failed' });
 

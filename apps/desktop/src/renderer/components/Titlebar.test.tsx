@@ -389,7 +389,11 @@ describe('Titlebar', () => {
     renderWithProviders();
 
     expect(await screen.findByText('Mission Control')).toBeInTheDocument();
-    expect(screen.getByText('Blocked')).toHaveAttribute('title', 'Codex CLI session exhausted');
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Project model warnings for Mission Control' }),
+    );
+    expect(await screen.findByText('Selected models vs CLI status')).toBeInTheDocument();
+    expect(screen.getByText('Codex CLI session exhausted')).toBeInTheDocument();
     expect(screen.getByText('CLI')).toBeInTheDocument();
   });
 });

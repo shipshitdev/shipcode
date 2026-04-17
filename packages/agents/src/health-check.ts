@@ -1,5 +1,5 @@
 import { exec } from 'node:child_process';
-import { access, mkdir } from 'node:fs/promises';
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -297,10 +297,17 @@ function extractClaudePercent(compactText: string, labels: string[]): number | n
     const index = compactText.lastIndexOf(label);
     if (index === -1) continue;
     const slice = compactText.slice(index + label.length, index + label.length + 160);
-    const match = /([0-9]{1,3})%left/.exec(slice);
-    if (!match) continue;
-    const value = Number.parseInt(match[1], 10);
-    if (Number.isFinite(value)) return Math.max(0, Math.min(100, value));
+    // Try "N% left" first (legacy), then "N% used" (v2.1+)
+    const leftMatch = /([0-9]{1,3})%left/.exec(slice);
+    if (leftMatch) {
+      const value = Number.parseInt(leftMatch[1], 10);
+      if (Number.isFinite(value)) return Math.max(0, Math.min(100, value));
+    }
+    const usedMatch = /([0-9]{1,3})%used/.exec(slice);
+    if (usedMatch) {
+      const value = Number.parseInt(usedMatch[1], 10);
+      if (Number.isFinite(value)) return Math.max(0, Math.min(100, 100 - value));
+    }
   }
   return null;
 }
@@ -323,10 +330,15 @@ function extractClaudeReset(collapsedText: string, labels: string[]): string | n
 }
 
 function extractClaudePercentsInOrder(compactText: string): number[] {
-  return [...compactText.matchAll(/([0-9]{1,3})%left/g)]
-    .map((match) => Number.parseInt(match[1], 10))
-    .filter((value) => Number.isFinite(value))
-    .map((value) => Math.max(0, Math.min(100, value)));
+  // Match both "N%left" (legacy, value = left%) and "N%used" (v2.1+, value = 100 - used%)
+  return [...compactText.matchAll(/([0-9]{1,3})%(left|used)/g)]
+    .map((match) => {
+      const raw = Number.parseInt(match[1], 10);
+      if (!Number.isFinite(raw)) return null;
+      const leftPercent = match[2] === 'used' ? 100 - raw : raw;
+      return Math.max(0, Math.min(100, leftPercent));
+    })
+    .filter((value): value is number => value != null);
 }
 
 export function parseClaudeAuthStatusOutput(stdout: string): ClaudeAuthDetails {
@@ -364,6 +376,19 @@ async function ensureProbeDir(provider: CliProviderUsageProvider): Promise<strin
   const dir = join(homedir(), '.shipcode', 'provider-probes', provider);
   await mkdir(dir, { recursive: true });
   return dir;
+}
+
+async function ensureCodexDirTrusted(cwd: string): Promise<void> {
+  const configPath = join(homedir(), '.codex', 'config.toml');
+  const section = `\n[projects."${cwd}"]\ntrust_level = "trusted"\n`;
+  try {
+    const content = await readFile(configPath, 'utf8');
+    if (content.includes(`[projects."${cwd}"]`)) return;
+    await writeFile(configPath, content + section);
+  } catch {
+    await mkdir(join(homedir(), '.codex'), { recursive: true });
+    await writeFile(configPath, section);
+  }
 }
 
 async function runPtyProbe(options: PtyProbeOptions): Promise<string> {
@@ -589,6 +614,8 @@ export function parseClaudeUsageText(
   const clean = stripAnsiCodes(stdout);
   const collapsed = clean.replace(/\s+/g, ' ').trim();
   const compact = normalizeForSearch(clean);
+
+  // --- Legacy format: "Current session ... N% left" ---
   const sessionLabel = ['Current session'];
   const weeklyLabel = ['Current week (all models)', 'Current week'];
   const modelLabels = [
@@ -619,11 +646,21 @@ export function parseClaudeUsageText(
     : compact.includes(normalizeForSearch('Current week (Haiku'))
       ? 'Haiku'
       : 'Opus';
-  const windows = [
+  let windows = [
     toWindow('session', 'Session', sessionPercent, extractClaudeReset(collapsed, sessionLabel)),
     toWindow('weekly', 'Weekly', weeklyPercent, extractClaudeReset(collapsed, weeklyLabel)),
     toWindow('model', modelLabel, modelPercent, extractClaudeReset(collapsed, modelLabels)),
   ].filter((window): window is CliProviderUsageWindow => window !== null);
+
+  // --- New status-bar format: "N% used" (Claude Code v2.1+) ---
+  if (windows.length === 0) {
+    const statusBarUsed = extractStatusBarUsedPercent(clean);
+    if (statusBarUsed != null) {
+      windows = [toWindow('session', 'Session', 100 - statusBarUsed, null)].filter(
+        (window): window is CliProviderUsageWindow => window !== null,
+      );
+    }
+  }
 
   const loadFailure = /failed\s*to\s*load\s*usage\s*data/i.test(clean);
   return {
@@ -646,6 +683,21 @@ export function parseClaudeUsageText(
     creditsRemaining: null,
     windows,
   };
+}
+
+/**
+ * Extract the "N% used" value from the Claude Code status bar.
+ * Newer Claude Code versions (v2.1+) display usage in the bottom status bar
+ * as e.g. "| 10% used" instead of the old /usage table format.
+ * Returns the used percent (0–100) or null if not found.
+ */
+function extractStatusBarUsedPercent(cleanText: string): number | null {
+  const matches = [...cleanText.matchAll(/(\d{1,3})%\s*used/gi)];
+  if (matches.length === 0) return null;
+  // Take the last occurrence (most likely the final status bar render)
+  const lastMatch = matches[matches.length - 1];
+  const value = Number.parseInt(lastMatch[1], 10);
+  return Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : null;
 }
 
 async function probeClaudeUsage(
@@ -672,12 +724,14 @@ async function probeClaudeUsage(
       'Current week (Opus)',
       'Current week (Sonnet only)',
       'Current week (Sonnet)',
+      'Extra usage',
       'Failed to load usage data',
     ],
     sendOnSubstrings: {
       'Quick safety check:': '\r',
       'Yes, I trust this folder': '\r',
       'Do you trust the files in this folder?': 'y\r',
+      'Do you trust the contents of this directory?': '\r',
       'Ready to code here?': '\r',
       'Press Enter to continue': '\r',
       'Show plan usage limits': '\r',
@@ -693,6 +747,7 @@ async function probeCodexUsage(
 ): Promise<CliProviderUsageStatus> {
   const checkedAt = new Date().toISOString();
   const cwd = await ensureProbeDir('codex');
+  await ensureCodexDirTrusted(cwd);
   const stdout = await runPtyProbe({
     command: binaryPath,
     args: ['-s', 'read-only', '-a', 'untrusted'],
@@ -701,8 +756,14 @@ async function probeCodexUsage(
     rows: 70,
     cols: 220,
     initialInput: '/status\n',
-    initialDelayMs: 400,
-    idleTimeoutMs: 2_500,
+    initialDelayMs: 3_000,
+    idleTimeoutMs: 3_000,
+    periodicEnterMs: 1_000,
+    sendOnSubstrings: {
+      'Do you trust the contents of this directory?': '\r\n',
+      'Yes, continue': '\r\n',
+      'Press enter to continue': '\r\n',
+    },
   });
   return parseCodexStatusText(stdout, checkedAt, version);
 }

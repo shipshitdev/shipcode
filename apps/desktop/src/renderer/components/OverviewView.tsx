@@ -337,11 +337,9 @@ export function OverviewView() {
                           </TableCell>
                           <TableCell className="max-w-0 w-full">
                             <div className="truncate text-[12px] text-primary">{entry.title}</div>
-                            {entry.subtitle ? (
-                              <div className="truncate text-[11px] text-muted">
-                                {entry.subtitle}
-                              </div>
-                            ) : null}
+                            <div className="truncate text-[11px] text-muted">
+                              {entry.subtitle || '–'}
+                            </div>
                           </TableCell>
                           <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-muted">
                             {timeAgo(entry.createdAt)}

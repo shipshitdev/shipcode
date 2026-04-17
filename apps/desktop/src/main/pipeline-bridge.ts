@@ -156,11 +156,21 @@ export function createElectronEmitter(
     }
   }
 
-  function invalidateDashboard() {
+  function invalidateDashboardImmediate() {
     if (mainWindow.isDestroyed()) return;
     mainWindow.webContents.send('dashboard:invalidate', {
       kinds: ['stats', 'activity', 'running', 'recent'],
     });
+  }
+
+  let _dashboardThrottleTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function invalidateDashboard() {
+    if (_dashboardThrottleTimer !== null) return;
+    _dashboardThrottleTimer = setTimeout(() => {
+      _dashboardThrottleTimer = null;
+      invalidateDashboardImmediate();
+    }, 2000);
   }
 
   function writeActivity(event: PipelineEvent, thread: Thread | null) {
@@ -405,7 +415,20 @@ export function createElectronEmitter(
       }
 
       // 6. Tell the renderer to refresh dashboard queries.
-      invalidateDashboard();
+      // Terminal phases flush immediately; all other events are throttled to
+      // at most once per 2 s to reduce renderer churn during EXECUTE.
+      const isTerminalPhase =
+        event.type === 'pipeline:phase' &&
+        (event.phase === 'completed' || event.phase === 'failed' || event.phase === 'idle');
+      if (isTerminalPhase) {
+        if (_dashboardThrottleTimer !== null) {
+          clearTimeout(_dashboardThrottleTimer);
+          _dashboardThrottleTimer = null;
+        }
+        invalidateDashboardImmediate();
+      } else {
+        invalidateDashboard();
+      }
     },
   };
 }

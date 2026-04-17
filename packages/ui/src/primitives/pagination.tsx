@@ -30,7 +30,7 @@ function Pagination({ page, totalPages, onPageChange, className }: PaginationPro
   };
 
   return (
-    <div className={cn('flex items-center justify-center gap-1 pt-3', className)}>
+    <div className={cn('flex items-center justify-start gap-1 pt-3', className)}>
       <button
         type="button"
         onClick={() => onPageChange(page - 1)}

@@ -11,12 +11,7 @@ import {
   PlanViewer,
   ReviewViewer,
 } from '@shipcode/ui';
-import {
-  getPlanStatusPresentation,
-  getReviewDecisionPresentation,
-  resolveClientSidePlan,
-  resolveRawPlanText,
-} from './helpers';
+import { getPlanStatusPresentation, resolveClientSidePlan, resolveRawPlanText } from './helpers';
 import { PlanWaiting } from './PlanWaiting';
 import type { PlanRunGroup } from './tab-types';
 
@@ -121,15 +116,7 @@ export function PlanHistoryTab({
                       const isExpanded = effectiveExpanded === plan.id;
                       const review = normalizedReviewsByPlanId[plan.id];
                       const statusPresentation = getPlanStatusPresentation(plan, review);
-                      const reviewPresentation = review
-                        ? getReviewDecisionPresentation(review, threadPhase)
-                        : null;
                       const isSuperseded = plan.status === 'superseded';
-                      const showReviewBadge =
-                        !!review &&
-                        plan.status !== 'superseded' &&
-                        plan.status !== 'awaiting_approval' &&
-                        !!reviewPresentation;
 
                       return (
                         <div
@@ -161,25 +148,20 @@ export function PlanHistoryTab({
                                 <span className="font-mono text-xs font-semibold text-muted">
                                   v{plan.version}
                                 </span>
-                                {statusPresentation.usePhaseChip ? (
+                                {statusPresentation.style === 'phase-chip' ? (
                                   <PhaseChip
                                     status={statusPresentation.phaseStatus}
                                     label={statusPresentation.label}
                                     className="text-[10px]"
                                   />
                                 ) : (
-                                  <span className="text-xs text-muted">
-                                    {statusPresentation.label}
-                                  </span>
-                                )}
-                                {showReviewBadge ? (
                                   <Badge
-                                    variant={reviewPresentation.badgeVariant}
-                                    className="text-[10px]"
+                                    variant={statusPresentation.badgeVariant}
+                                    className="text-[10px] text-muted border-border/70 bg-secondary/40"
                                   >
-                                    {reviewPresentation.label}
+                                    {statusPresentation.label}
                                   </Badge>
-                                ) : null}
+                                )}
                                 <span className="ml-auto shrink-0 text-[11px] text-muted">
                                   {new Date(plan.createdAt).toLocaleString()}
                                 </span>

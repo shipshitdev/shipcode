@@ -209,6 +209,7 @@ export function registerPipelineHandlers({
     }
 
     pipeline.rehydrateContext(threadId, project.path, issue.title);
+    notificationService.dismissByThread(threadId);
     await pipeline.startStabilization(threadId, {
       prNumber: issue.linkedPrNumber,
       prUrl: issue.linkedPrUrl,
@@ -248,6 +249,7 @@ export function registerPipelineHandlers({
     }
 
     pipeline.rehydrateContext(threadId, project.path, issue?.title);
+    notificationService.dismissByThread(threadId);
     logEvent('pipeline:start-context', {
       threadId,
       source: 'pipeline:retry',

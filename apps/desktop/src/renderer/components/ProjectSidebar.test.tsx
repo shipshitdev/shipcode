@@ -1,4 +1,6 @@
 import {
+  type CliProviderUsageMap,
+  type CliProviderUsageStatus,
   type DashboardStats,
   DEFAULT_SETTINGS,
   type IntegrationStatus,
@@ -167,6 +169,81 @@ const integrations: IntegrationStatus = {
   },
 };
 
+function makeUsage(
+  provider: 'claude' | 'codex',
+  overrides: Partial<CliProviderUsageStatus>,
+): CliProviderUsageStatus {
+  return {
+    provider,
+    available: true,
+    stale: false,
+    state: 'ready',
+    source: 'cli',
+    version: '1.0.0',
+    accountEmail: 'vincent@shipshit.dev',
+    loginMethod: 'pro',
+    updatedAt: '2026-04-16T16:00:00.000Z',
+    checkedAt: '2026-04-16T16:01:00.000Z',
+    message: null,
+    creditsRemaining: null,
+    windows:
+      provider === 'claude'
+        ? [
+            {
+              key: 'session',
+              label: 'Session',
+              usedPercent: 10,
+              leftPercent: 90,
+              resetsAt: null,
+              resetDescription: null,
+            },
+            {
+              key: 'weekly',
+              label: 'Weekly',
+              usedPercent: 20,
+              leftPercent: 80,
+              resetsAt: null,
+              resetDescription: null,
+            },
+            {
+              key: 'model',
+              label: 'Sonnet',
+              usedPercent: 30,
+              leftPercent: 70,
+              resetsAt: null,
+              resetDescription: null,
+            },
+          ]
+        : [
+            {
+              key: 'session',
+              label: 'Session',
+              usedPercent: 10,
+              leftPercent: 90,
+              resetsAt: null,
+              resetDescription: null,
+            },
+            {
+              key: 'weekly',
+              label: 'Weekly',
+              usedPercent: 20,
+              leftPercent: 80,
+              resetsAt: null,
+              resetDescription: null,
+            },
+          ],
+    ...overrides,
+  };
+}
+
+function makeUsageMap(overrides: Partial<CliProviderUsageMap> = {}): CliProviderUsageMap {
+  return {
+    claude: makeUsage('claude', {}),
+    codex: makeUsage('codex', {}),
+    ...overrides,
+  };
+}
+
 describe('ProjectSidebar', () => {
   const invokeMock = vi.fn<(channel: string, args?: unknown) => Promise<unknown>>();
 
@@ -199,6 +276,7 @@ describe('ProjectSidebar', () => {
         } satisfies Partial<DashboardStats>;
       if (channel === 'notification:list') return [] satisfies NotificationRecord[];
       if (channel === 'integrations:check') return integrations;
+      if (channel === 'provider-usage:check') return makeUsageMap();
       if (channel === 'project:open-path') return undefined;
       return [];
     });
@@ -219,6 +297,7 @@ describe('ProjectSidebar', () => {
         } satisfies Partial<DashboardStats>;
       if (channel === 'notification:list') return [] satisfies NotificationRecord[];
       if (channel === 'integrations:check') return integrations;
+      if (channel === 'provider-usage:check') return makeUsageMap();
       return [];
     });
 
@@ -245,6 +324,7 @@ describe('ProjectSidebar', () => {
         } satisfies Partial<DashboardStats>;
       if (channel === 'notification:list') return [] satisfies NotificationRecord[];
       if (channel === 'integrations:check') return integrations;
+      if (channel === 'provider-usage:check') return makeUsageMap();
       if (channel === 'project:open-path') return undefined;
       return [];
     });
@@ -260,5 +340,62 @@ describe('ProjectSidebar', () => {
         target: 'finder',
       });
     });
+  });
+
+  it('shows a warning popover with selected phases and current CLI status', async () => {
+    const warnedProject: Project = {
+      ...project,
+      plannerModelOverride: 'codex',
+      executorModelOverride: 'codex',
+    };
+
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'projects-visible' || channel === 'project:list-visible')
+        return [warnedProject];
+      if (channel === 'settings:get') return DEFAULT_SETTINGS;
+      if (channel === 'dashboard:get-stats')
+        return {
+          agentsRunning: 0,
+          agentsRunningByProject: {},
+        } satisfies Partial<DashboardStats>;
+      if (channel === 'notification:list') return [] satisfies NotificationRecord[];
+      if (channel === 'integrations:check') return integrations;
+      if (channel === 'provider-usage:check') {
+        return makeUsageMap({
+          codex: makeUsage('codex', {
+            state: 'blocked',
+            windows: [
+              {
+                key: 'session',
+                label: 'Session',
+                usedPercent: 100,
+                leftPercent: 0,
+                resetsAt: null,
+                resetDescription: 'in 2h',
+              },
+              {
+                key: 'weekly',
+                label: 'Weekly',
+                usedPercent: 40,
+                leftPercent: 60,
+                resetsAt: null,
+                resetDescription: null,
+              },
+            ],
+          }),
+        });
+      }
+      return [];
+    });
+
+    renderWithProviders();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Project model warnings for ShipCode' }),
+    );
+
+    expect(await screen.findByText('Selected models vs CLI status')).toBeInTheDocument();
+    expect(screen.getByText('Codex CLI session exhausted')).toBeInTheDocument();
+    expect(screen.getByText('Planner')).toBeInTheDocument();
   });
 });

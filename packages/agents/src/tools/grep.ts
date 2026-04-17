@@ -71,13 +71,15 @@ export const grepTool: Tool<GrepInput> = {
   },
 };
 
+let hasRipgrepCache: Promise<boolean> | null = null;
+
 async function hasRipgrep(): Promise<boolean> {
-  try {
-    await execFileAsync('rg', ['--version'], { timeout: 2_000 });
-    return true;
-  } catch {
-    return false;
+  if (hasRipgrepCache === null) {
+    hasRipgrepCache = execFileAsync('rg', ['--version'], { timeout: 2_000 })
+      .then(() => true)
+      .catch(() => false);
   }
+  return hasRipgrepCache;
 }
 
 async function runRipgrep(input: GrepInput, rootAbs: string): Promise<ToolResult> {

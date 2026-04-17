@@ -9,7 +9,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   PhaseChip,
-  Plus,
   X,
 } from '@shipcode/ui';
 
@@ -101,37 +100,6 @@ export function TerminalDrawerHeader({
       </div>
 
       <div className="flex items-center gap-0.5 shrink-0">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="xs"
-              className="h-7 gap-0.5 px-1.5 text-muted hover:bg-hover/70 hover:text-primary"
-              aria-label="Open terminal issue list"
-              title="Open terminal issue list"
-            >
-              <Plus size={14} />
-              <ChevronDown size={12} />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" side="top">
-            {runningTabs.length > 0 ? (
-              runningTabs.map((issue) => (
-                <DropdownMenuItem
-                  key={issue.threadId}
-                  onSelect={() => onOpenIssue(issue)}
-                  className={cn(issue.threadId === terminalThreadId && 'bg-hover text-primary')}
-                >
-                  <span className="font-mono text-muted text-xs">#{issue.issueNumber}</span>
-                  <span className="truncate max-w-[280px]">{issue.title}</span>
-                </DropdownMenuItem>
-              ))
-            ) : (
-              <DropdownMenuItem disabled>No running terminal issues</DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-
         <Button
           variant="ghost"
           size="icon-xs"

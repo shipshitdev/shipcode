@@ -10,7 +10,12 @@ const { mockExec, mockAccess, mockHomedir, mockMkdir, mockPtySpawn } = vi.hoiste
 }));
 
 vi.mock('node:child_process', () => ({ exec: mockExec }));
-vi.mock('node:fs/promises', () => ({ access: mockAccess, mkdir: mockMkdir }));
+vi.mock('node:fs/promises', () => ({
+  access: mockAccess,
+  mkdir: mockMkdir,
+  readFile: vi.fn().mockResolvedValue(''),
+  writeFile: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock('node:os', () => ({ homedir: mockHomedir }));
 vi.mock('node-pty', () => ({ spawn: mockPtySpawn }));
 
@@ -95,8 +100,11 @@ function createMockPty(text: string) {
   let onData: ((chunk: string) => void) | null = null;
   let onExit: ((event: { exitCode: number }) => void) | null = null;
   let killed = false;
+  let flushed = false;
 
   const flush = () => {
+    if (flushed) return;
+    flushed = true;
     queueMicrotask(() => {
       if (!killed) onData?.(text);
       onExit?.({ exitCode: 0 });
@@ -113,6 +121,8 @@ function createMockPty(text: string) {
     }),
     onData: vi.fn((handler: (chunk: string) => void) => {
       onData = handler;
+      // Auto-flush after both handlers are registered (simulates CLI startup output)
+      queueMicrotask(() => flush());
     }),
     onExit: vi.fn((handler: (event: { exitCode: number }) => void) => {
       onExit = handler;
@@ -439,6 +449,48 @@ describe('parseClaudeUsageText', () => {
         expect.objectContaining({ key: 'model', label: 'Sonnet', leftPercent: 46 }),
       ]),
     );
+  });
+
+  it('parses new "N% used" format with labels from Claude Code v2.1+', () => {
+    const status = parseClaudeUsageText(
+      `Current session    70% used  Resets 10am
+       Current week (all models) 16% used  Resets Apr 23
+       Current week (Sonnet only) 13% used  Resets Apr 23`,
+      '2026-04-17T06:00:00.000Z',
+      { accountEmail: 'vincent@genfeed.ai', loginMethod: 'max' },
+      '2.1.92',
+    );
+
+    expect(status.available).toBe(true);
+    expect(status.windows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'session', leftPercent: 30 }),
+        expect.objectContaining({ key: 'weekly', leftPercent: 84 }),
+        expect.objectContaining({ key: 'model', label: 'Sonnet', leftPercent: 87 }),
+      ]),
+    );
+  });
+
+  it('falls back to status-bar "N% used" when no labels present', () => {
+    const status = parseClaudeUsageText(
+      `[Opus 4.6] ~/.shipcode/provider-probes/claude | in: 338 / out: 13 | 10% used\n◐ medium · /effort`,
+      '2026-04-17T06:00:00.000Z',
+      { accountEmail: 'vincent@genfeed.ai', loginMethod: 'max' },
+      '2.1.92',
+    );
+
+    expect(status.available).toBe(true);
+    expect(status.state).toBe('ready');
+    expect(status.windows).toEqual([
+      expect.objectContaining({ key: 'session', leftPercent: 90, usedPercent: 10 }),
+    ]);
+  });
+
+  it('returns no-data when output has no recognizable format', () => {
+    const status = parseClaudeUsageText('Welcome to Claude Code!\n❯ ', '2026-04-17T06:00:00.000Z');
+
+    expect(status.available).toBe(false);
+    expect(status.message).toBe('Claude CLI returned no quota data');
   });
 });
 

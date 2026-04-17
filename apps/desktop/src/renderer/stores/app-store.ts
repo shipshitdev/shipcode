@@ -127,6 +127,7 @@ interface AppState {
     event: CanonicalTerminalEvent,
     meta?: Pick<TerminalEventRecord, 'id' | 'createdAt'>,
   ) => void;
+  appendCanonicalEvents: (threadId: string, events: TerminalEventRecord[]) => void;
   hydrateCanonicalEvents: (threadId: string, events: TerminalEventRecord[]) => void;
   addNotification: (notification: NotificationRecord) => void;
   removeNotification: (id: string) => void;
@@ -348,6 +349,15 @@ export const useAppStore = create<AppState>((set) => ({
       const deduped = Array.from(new Map(merged.map((entry) => [entry.id, entry])).values());
       const trimmed = deduped.length >= 2000 ? deduped.slice(-2000) : deduped;
       return { canonicalTerminalStream: { ...s.canonicalTerminalStream, [threadId]: trimmed } };
+    }),
+  appendCanonicalEvents: (threadId, events) =>
+    set((s) => {
+      const prev = s.canonicalTerminalStream[threadId] ?? [];
+      const merged =
+        prev.length + events.length > 2000
+          ? [...prev.slice(-(2000 - events.length)), ...events]
+          : [...prev, ...events];
+      return { canonicalTerminalStream: { ...s.canonicalTerminalStream, [threadId]: merged } };
     }),
   hydrateCanonicalEvents: (threadId, events) =>
     set((s) => {

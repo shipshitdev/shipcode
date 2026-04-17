@@ -83,7 +83,7 @@ describe('TerminalDrawerHeader', () => {
     expect(onToggleTerminal).toHaveBeenCalledTimes(1);
   });
 
-  it('lists multiple running tabs in the dropdown menus', async () => {
+  it('lists multiple running tabs in the primary dropdown', async () => {
     const onOpenIssue = vi.fn();
     const issueA = makeIssue({ id: 'issue-1', issueNumber: 19, title: 'Fix the board' });
     const issueB = makeIssue({
@@ -116,11 +116,5 @@ describe('TerminalDrawerHeader', () => {
 
     fireEvent.click(screen.getByText('Retry pipeline'));
     expect(onOpenIssue).toHaveBeenCalledWith(issueB);
-
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Open terminal issue list' }));
-
-    await waitFor(() => {
-      expect(screen.getAllByText('Retry pipeline').length).toBeGreaterThan(0);
-    });
   });
 });

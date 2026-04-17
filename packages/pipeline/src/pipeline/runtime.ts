@@ -11,7 +11,6 @@ export function createPipelineRuntime(
   _contextHelpers: PipelineContextHelpers,
 ): PipelineRuntime {
   function emitTerminalRaw(threadId: string, content: string) {
-    deps.emitter.emit({ type: 'pipeline:output', threadId, chunk: content });
     deps.emitter.emit({ type: 'terminal:event', threadId, event: { kind: 'raw', content } });
   }
 

@@ -26,7 +26,7 @@ export const SPINNER_FRAMES = [
   '\u2807',
   '\u280F',
 ];
-export const SPINNER_INTERVAL_MS = 80;
+export const SPINNER_INTERVAL_MS = 200;
 
 // Map pipeline phase to a human-readable label for the spinner
 export const PHASE_LABELS: Record<string, string> = {

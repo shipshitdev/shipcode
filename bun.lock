@@ -11,7 +11,7 @@
         "esbuild": "0.28.0",
         "sass": "^1.99.0",
         "turbo": "2.9.6",
-        "typescript": "6.0.2",
+        "typescript": "6.0.3",
         "vitest": "4.1.4",
       },
     },
@@ -36,7 +36,7 @@
         "@shipcode/shared": "workspace:*",
         "@types/node": "25.6.0",
         "tsup": "8.5.1",
-        "typescript": "6.0.2",
+        "typescript": "6.0.3",
       },
     },
     "apps/desktop": {
@@ -78,7 +78,7 @@
         "esbuild": "0.28.0",
         "jsdom": "29.0.2",
         "tailwindcss": "4.2.2",
-        "typescript": "6.0.2",
+        "typescript": "6.0.3",
         "vite": "8.0.8",
         "vite-plugin-electron": "0.29.1",
         "vite-plugin-electron-renderer": "0.14.6",
@@ -117,7 +117,7 @@
         "@types/react": "19.2.14",
         "@types/react-dom": "19.2.3",
         "tailwindcss": "4.2.2",
-        "typescript": "6.0.2",
+        "typescript": "6.0.3",
       },
     },
     "packages/agents": {
@@ -130,7 +130,7 @@
         "zod": "4.3.6",
       },
       "devDependencies": {
-        "typescript": "6.0.2",
+        "typescript": "6.0.3",
       },
     },
     "packages/db": {
@@ -141,7 +141,7 @@
         "nanoid": "5.1.9",
       },
       "devDependencies": {
-        "typescript": "6.0.2",
+        "typescript": "6.0.3",
       },
     },
     "packages/git": {
@@ -152,7 +152,7 @@
         "simple-git": "3.36.0",
       },
       "devDependencies": {
-        "typescript": "6.0.2",
+        "typescript": "6.0.3",
       },
     },
     "packages/pipeline": {
@@ -165,7 +165,7 @@
         "@shipcode/shared": "workspace:*",
       },
       "devDependencies": {
-        "typescript": "6.0.2",
+        "typescript": "6.0.3",
         "vitest": "4.1.4",
       },
     },
@@ -176,7 +176,7 @@
         "zod": "4.3.6",
       },
       "devDependencies": {
-        "typescript": "6.0.2",
+        "typescript": "6.0.3",
       },
     },
     "packages/ui": {
@@ -208,7 +208,7 @@
       "devDependencies": {
         "@types/react": "19.2.14",
         "@types/react-dom": "19.2.3",
-        "typescript": "6.0.2",
+        "typescript": "6.0.3",
       },
     },
   },
@@ -2314,7 +2314,7 @@
 
     "type-fest": ["type-fest@0.13.1", "", {}, "sha512-34R7HTnG0XIJcBSn5XhDd7nNFPRcXYRZrBB2O2jdKqYODldSzBAqzsWoZYYvduky73toYS/ESqxPvkDf/F0XMg=="],
 
-    "typescript": ["typescript@6.0.2", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-bGdAIrZ0wiGDo5l8c++HWtbaNCWTS4UTv7RaTH/ThVIgjkveJt83m74bBHMJkuCbslY8ixgLBVZJIOiQlQTjfQ=="],
+    "typescript": ["typescript@6.0.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw=="],
 
     "ufo": ["ufo@1.6.3", "", {}, "sha512-yDJTmhydvl5lJzBmy/hyOAA0d+aqCBuwl818haVdYCRrWV84o7YyeVm4QlVHStqNrrJSTb6jKuFAVqAFsr+K3Q=="],
 

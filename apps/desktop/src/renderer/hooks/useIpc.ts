@@ -22,7 +22,7 @@ export function useIpc() {
     removeNotification,
     mapProcessToThread,
     setCurrentModel,
-    hydrateCanonicalEvents,
+    appendCanonicalEvents,
   } = useAppStore();
 
   useEffect(() => {
@@ -39,7 +39,7 @@ export function useIpc() {
 
       for (const [threadId, events] of pendingTerminalEvents) {
         if (events.length > 0) {
-          hydrateCanonicalEvents(threadId, events);
+          appendCanonicalEvents(threadId, events);
         }
       }
       pendingTerminalEvents.clear();
@@ -49,15 +49,6 @@ export function useIpc() {
       const pending = pendingTerminalEvents.get(record.threadId) ?? [];
       pending.push(record);
       pendingTerminalEvents.set(record.threadId, pending);
-
-      if (
-        record.event.kind !== 'raw' &&
-        record.event.kind !== 'text' &&
-        record.event.kind !== 'thinking'
-      ) {
-        flushPendingTerminalEvents();
-        return;
-      }
 
       if (terminalFlushTimer) return;
       terminalFlushTimer = setTimeout(flushPendingTerminalEvents, TERMINAL_EVENT_BATCH_MS);
@@ -270,7 +261,7 @@ export function useIpc() {
     removeNotification,
     mapProcessToThread,
     setCurrentModel,
-    hydrateCanonicalEvents,
+    appendCanonicalEvents,
     queryClient,
   ]);
 }

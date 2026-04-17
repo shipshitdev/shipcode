@@ -191,10 +191,12 @@ export function registerSupportHandlers({
       normalizers.delete(processId);
     }
     if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
-    if (state === 'running' || state === 'exited') {
-      log.info(`[process:${type}] ${processId} → ${state}`);
-    }
     const proc = processManager.get(processId);
+    const exitSuffix =
+      state === 'exited' && proc?.exitCode != null ? ` (code ${proc.exitCode})` : '';
+    if (state === 'running' || state === 'exited') {
+      log.info(`[process:${type}] ${processId} → ${state}${exitSuffix}`);
+    }
     try {
       mainWindow.webContents.send('agent:state', {
         processId,
@@ -218,7 +220,7 @@ export function registerSupportHandlers({
       const exitColor = state === 'exited' ? '\x1b[2m' : '';
       emitTerminalEvent(proc.threadId, {
         kind: 'lifecycle',
-        message: `\x1b[2m[${ts}]\x1b[0m ${exitColor}${agentColor}${type}\x1b[0m${exitColor} process ${state === 'running' ? 'started' : 'exited'}\x1b[0m`,
+        message: `\x1b[2m[${ts}]\x1b[0m ${exitColor}${agentColor}${type}\x1b[0m${exitColor} process ${state === 'running' ? 'started' : 'exited'}${exitSuffix}\x1b[0m`,
       });
     }
   });

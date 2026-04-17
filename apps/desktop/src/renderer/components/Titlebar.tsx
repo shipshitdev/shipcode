@@ -8,7 +8,6 @@ import type {
 } from '@shipcode/shared';
 import { getProjectProviderWarnings } from '@shipcode/shared';
 import {
-  Badge,
   Button,
   cn,
   PanelLeftClose,
@@ -23,6 +22,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
+import { ProjectProviderWarningPopover } from './ProjectProviderWarningPopover';
 
 type ProviderTone = 'claude' | 'codex';
 
@@ -193,12 +193,12 @@ function ProviderStatusBadge({ providerUsage }: { providerUsage: CliProviderUsag
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="sm"
           aria-label="CLI availability"
           className={cn(
-            'flex items-center gap-2 rounded-md border px-2.5 py-1.5 outline-none app-region-no-drag transition-colors',
-            'focus-visible:ring-1 focus-visible:ring-accent',
+            'flex items-center gap-2 rounded-md border px-2.5 py-1.5 app-region-no-drag',
             overallState === 'blocked'
               ? 'border-danger/25 bg-danger/5 hover:bg-danger/10'
               : overallState === 'warning'
@@ -217,7 +217,7 @@ function ProviderStatusBadge({ providerUsage }: { providerUsage: CliProviderUsag
               title={claudeTitle}
             />
           </span>
-        </button>
+        </Button>
       </PopoverTrigger>
       <PopoverContent
         align="end"
@@ -292,12 +292,7 @@ export function Titlebar() {
   const hasBlockedProjectWarning = projectWarnings.some(
     (warning) => warning.severity === 'blocked',
   );
-  const projectWarningLabel =
-    projectWarnings.length === 0 ? null : hasBlockedProjectWarning ? 'Blocked' : 'Low';
-  const projectWarningTitle =
-    projectWarnings.length === 0
-      ? undefined
-      : projectWarnings.map((warning) => warning.message).join(' · ');
+  const projectWarningLabel = projectWarnings.length === 0 ? null : hasBlockedProjectWarning;
 
   // Live-running count intentionally NOT shown here — the sidebar
   // Mission Control entry already carries a pulsing "N live" badge, and
@@ -323,17 +318,13 @@ export function Titlebar() {
             <span className="text-muted">ShipCode</span>
             <span className="text-muted">/</span>
             <span className="truncate text-primary">{activeProject.name}</span>
-            {projectWarningLabel ? (
-              <Badge
-                variant="warning"
-                className={cn(
-                  'shrink-0 text-[10px]',
-                  hasBlockedProjectWarning && 'border-danger/30 bg-danger/10 text-danger',
-                )}
-                title={projectWarningTitle}
-              >
-                {projectWarningLabel}
-              </Badge>
+            {projectWarningLabel && settings ? (
+              <ProjectProviderWarningPopover
+                settings={settings}
+                project={activeProject}
+                warnings={projectWarnings}
+                className="shrink-0 app-region-no-drag"
+              />
             ) : null}
           </>
         ) : (

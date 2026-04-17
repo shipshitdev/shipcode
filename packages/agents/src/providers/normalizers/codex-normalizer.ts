@@ -14,6 +14,13 @@
 
 import type { TerminalEvent } from '../../terminal-events';
 
+/** Strip ANSI escape codes so JSON.parse works on PTY-colored output. */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: intentional ANSI stripping
+const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]|\x1b\].*?(?:\x07|\x1b\\)/g;
+function stripAnsi(str: string): string {
+  return str.replace(ANSI_RE, '');
+}
+
 const FENCE_ACTIONS: Record<string, { label: string; action: 'open-issue-detail' }> = {
   'shipcode-plan': { label: 'Plan drafted', action: 'open-issue-detail' },
   'shipcode-review': { label: 'AI review complete', action: 'open-issue-detail' },
@@ -87,7 +94,7 @@ export class CodexNormalizer {
 
       let event: Record<string, unknown>;
       try {
-        event = JSON.parse(line);
+        event = JSON.parse(stripAnsi(line));
       } catch {
         if (!this.fenceSuppressed) {
           this.onEvent({ kind: 'raw', content: line });

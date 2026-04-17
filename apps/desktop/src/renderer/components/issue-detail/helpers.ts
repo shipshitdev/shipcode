@@ -50,75 +50,55 @@ export function getPlanStatusPresentation(
 ): {
   label: string;
   phaseStatus: PipelinePhase | 'idle';
-  usePhaseChip: boolean;
+  style: 'phase-chip' | 'badge';
+  badgeVariant?: PlanStatusBadgeVariant;
 } {
   switch (plan.status) {
     case 'approved':
       return {
         label: 'AI approved',
         phaseStatus: 'completed',
-        usePhaseChip: true,
+        style: 'phase-chip',
       };
     case 'awaiting_approval':
       return {
         label: 'Awaiting approval',
         phaseStatus: 'reviewing',
-        usePhaseChip: true,
+        style: 'phase-chip',
       };
     case 'rejected':
       if (review?.decision === 'request_changes') {
         return {
           label: 'AI requested changes',
           phaseStatus: 'revising',
-          usePhaseChip: true,
+          style: 'phase-chip',
         };
       }
       return {
         label: 'AI rejected',
         phaseStatus: 'failed',
-        usePhaseChip: true,
+        style: 'phase-chip',
       };
     case 'superseded':
       return {
         label: 'Superseded',
         phaseStatus: 'idle',
-        usePhaseChip: false,
+        style: 'badge',
+        badgeVariant: 'default',
       };
     case 'pending_review':
       return {
         label: 'AI reviewing',
         phaseStatus: 'reviewing',
-        usePhaseChip: true,
+        style: 'phase-chip',
       };
     default:
       return {
         label: 'Plan drafted',
         phaseStatus: 'planning',
-        usePhaseChip: true,
+        style: 'phase-chip',
       };
   }
-}
-
-export function getReviewDecisionPresentation(
-  review: ReviewRecord,
-  threadPhase: PipelinePhase | 'idle',
-): {
-  label: string;
-  badgeVariant: PlanStatusBadgeVariant;
-} {
-  if (review.decision === 'approve') {
-    return { label: 'Approved', badgeVariant: 'success' };
-  }
-  if (review.decision === 'request_changes') {
-    return {
-      label: 'Changes requested',
-      badgeVariant: threadPhase === 'awaiting_approval' ? 'warning' : 'accent',
-    };
-  }
-  return {
-    label: 'Rejected',
-    badgeVariant: threadPhase === 'awaiting_approval' ? 'warning' : 'danger',
-  };
 }
 
 export function timeAgo(input: string | number): string {

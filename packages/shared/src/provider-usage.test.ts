@@ -300,4 +300,49 @@ describe('getProjectProviderWarnings', () => {
 
     expect(warnings).toEqual([]);
   });
+
+  it('keeps all affected phases when multiple selections share the same CLI warning', () => {
+    const project = makeProject({
+      plannerModelOverride: 'codex',
+      executorModelOverride: 'codex',
+    });
+    const usage = makeUsageMap({
+      codex: makeUsage('codex', {
+        windows: [
+          {
+            key: 'session',
+            label: 'Session',
+            usedPercent: 100,
+            leftPercent: 0,
+            resetsAt: null,
+            resetDescription: 'in 2h',
+          },
+          {
+            key: 'weekly',
+            label: 'Weekly',
+            usedPercent: 40,
+            leftPercent: 60,
+            resetsAt: null,
+            resetDescription: null,
+          },
+        ],
+      }),
+    });
+
+    const warnings = getProjectProviderWarnings(
+      DEFAULT_SETTINGS,
+      project,
+      { claude: readyCli, codex: readyCli },
+      usage,
+    );
+
+    expect(warnings).toEqual([
+      expect.objectContaining({
+        provider: 'codex',
+        severity: 'blocked',
+        message: 'Codex CLI session exhausted',
+        phases: ['planner', 'reviewer', 'executor'],
+      }),
+    ]);
+  });
 });

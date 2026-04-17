@@ -157,7 +157,7 @@ describe('issue-detail leaf components', () => {
     );
 
     expect(screen.getByText('Open the latest issue')).toBeInTheDocument();
-    expect(screen.getByText('#42 Regression -- click to open')).toBeInTheDocument();
+    expect(screen.getByText('#42 Regression - click to open')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Open the latest issue/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));

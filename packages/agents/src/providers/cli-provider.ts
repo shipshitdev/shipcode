@@ -267,7 +267,7 @@ export function createCodexCliProvider(processManager: ProcessManager): AgentPro
       parser.feed(result.rawOutput);
       const usage = parser.extractUsage();
       return {
-        rawOutput: result.rawOutput,
+        rawOutput: stripCodexProtocol(result.rawOutput),
         exitCode: result.exitCode,
         resolvedModel: 'codex',
         ...(usage
@@ -295,8 +295,47 @@ export function createCodexCliProvider(processManager: ProcessManager): AgentPro
   };
 }
 
+/**
+ * Extract human-readable text from Codex NDJSON protocol output.
+ *
+ * Codex `--json` mode emits one JSON object per line with types like
+ * `thread.started`, `item.completed`, `turn.completed`, etc. The
+ * pipeline stores `rawOutput` for display in the error panel — raw
+ * NDJSON is unreadable, so we extract agent messages and command
+ * output into a plain-text summary.
+ */
+function stripCodexProtocol(raw: string): string {
+  const lines: string[] = [];
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      // Not JSON — keep as-is (e.g. non-JSON stderr lines)
+      lines.push(trimmed);
+      continue;
+    }
+    const item = parsed.item as Record<string, unknown> | undefined;
+    if (!item) continue;
+    if (item.type === 'agent_message' && typeof item.text === 'string') {
+      lines.push(item.text);
+    } else if (item.type === 'command_execution') {
+      const cmd = item.command as string | undefined;
+      const output = item.aggregated_output as string | undefined;
+      const exitCode = item.exit_code as number | null | undefined;
+      if (cmd) lines.push(`$ ${cmd}`);
+      if (output) lines.push(output.trimEnd());
+      if (exitCode != null && exitCode !== 0) lines.push(`[exit ${exitCode}]`);
+    }
+  }
+  return lines.join('\n');
+}
+
 // Exported for unit testing (snapshot regression against pipeline.ts).
 export const _internals = {
   buildClaudeArgs,
   buildCodexArgs,
+  stripCodexProtocol,
 };
