@@ -115,7 +115,7 @@ describe('PipelineScheduler', () => {
   function makeQueries(settingsOverrides: Record<string, unknown> = {}) {
     return {
       projects: {
-        getById: vi.fn(() => makeProject()),
+        getById: vi.fn(() => makeProject() as ReturnType<typeof makeProject> | null),
       },
       threads: {
         getById: vi.fn(() => null),
@@ -134,11 +134,11 @@ describe('PipelineScheduler', () => {
         setPhaseModels: vi.fn(),
       },
       githubIssues: {
-        getByNumber: vi.fn(() => makeIssue()),
+        getByNumber: vi.fn(() => makeIssue() as ReturnType<typeof makeIssue> | null),
         updatePipelineStatus: vi.fn(),
         linkThread: vi.fn(),
         list: vi.fn(() => []),
-        getNextQueued: vi.fn(() => null),
+        getNextQueued: vi.fn(() => null as ReturnType<typeof makeIssue> | null),
       },
       settings: {
         get: vi.fn(() => makeBaseSettings(settingsOverrides)),

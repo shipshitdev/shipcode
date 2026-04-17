@@ -53,7 +53,7 @@ const queries = {
   terminalEvents: {
     create: vi.fn((threadId: string, event: unknown) => ({ threadId, ...(event as object) })),
   },
-} as never;
+};
 
 const processManager = {
   on: vi.fn(),
@@ -77,7 +77,7 @@ beforeEach(() => {
   registerSupportHandlers({
     ipcMain,
     mainWindow: mainWindow as never,
-    queries,
+    queries: queries as unknown as never,
     processManager,
     pipeline: {} as never,
     emitter: {} as never,
