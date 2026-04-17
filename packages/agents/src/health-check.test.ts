@@ -792,31 +792,34 @@ describe('checkIntegrationStatus', () => {
     expect(result.openrouter.authStatus).toBe('valid');
     expect(result.discord.validationStatus).toBe('missing');
     expect(result.telegram.validationStatus).toBe('missing');
-    expect(result.desktopApps.finder.available).toBe(true);
+    expect(result.desktopApps.finder.available).toBe(process.platform === 'darwin');
     expect(result.desktopApps.cursor.available).toBe(false);
   });
 });
 
 describe('checkDesktopApps', () => {
-  it('detects installed desktop apps via AppleScript and treats Finder as available on macOS', async () => {
-    execRouted({
-      'POSIX path of (path to application "Cursor")': {
-        stdout: '/Applications/Cursor.app/\n',
-      },
-      'POSIX path of (path to application "Terminal")': {
-        stdout: '/System/Applications/Utilities/Terminal.app/\n',
-      },
-      'POSIX path of (path to application "Ghostty")': new Error('not found'),
-      'POSIX path of (path to application "Visual Studio Code")': {
-        stdout: '/Applications/Visual Studio Code.app/\n',
-      },
-    });
+  it.skipIf(process.platform !== 'darwin')(
+    'detects installed desktop apps via AppleScript and treats Finder as available on macOS',
+    async () => {
+      execRouted({
+        'POSIX path of (path to application "Cursor")': {
+          stdout: '/Applications/Cursor.app/\n',
+        },
+        'POSIX path of (path to application "Terminal")': {
+          stdout: '/System/Applications/Utilities/Terminal.app/\n',
+        },
+        'POSIX path of (path to application "Ghostty")': new Error('not found'),
+        'POSIX path of (path to application "Visual Studio Code")': {
+          stdout: '/Applications/Visual Studio Code.app/\n',
+        },
+      });
 
-    const result = await checkDesktopApps();
-    expect(result.finder.available).toBe(true);
-    expect(result.cursor.available).toBe(true);
-    expect(result.terminal.available).toBe(true);
-    expect(result.ghostty.available).toBe(false);
-    expect(result.vscode.available).toBe(true);
-  });
+      const result = await checkDesktopApps();
+      expect(result.finder.available).toBe(true);
+      expect(result.cursor.available).toBe(true);
+      expect(result.terminal.available).toBe(true);
+      expect(result.ghostty.available).toBe(false);
+      expect(result.vscode.available).toBe(true);
+    },
+  );
 });
