@@ -84,6 +84,18 @@ export class DashboardQueries {
       perProjectRows.map((r) => [r.project_id, r.n]),
     );
 
+    // Per-project pending approval count for sidebar badges.
+    const pendingApprovalProjectRows = this.db
+      .prepare(
+        `SELECT project_id, COUNT(*) as n FROM threads
+         WHERE status = 'awaiting_approval'
+         GROUP BY project_id`,
+      )
+      .all() as Array<{ project_id: string; n: number }>;
+    const pendingApprovalsByProject: Record<string, number> = Object.fromEntries(
+      pendingApprovalProjectRows.map((r) => [r.project_id, r.n]),
+    );
+
     // Tasks in progress = any active phase (including awaiting_approval).
     const tasksInProgressRow = this.db
       .prepare(
@@ -135,6 +147,7 @@ export class DashboardQueries {
       agentsRunning: agentsRunningRow.n,
       runningByPhase,
       agentsRunningByProject,
+      pendingApprovalsByProject,
       tasksInProgress: tasksInProgressRow.n,
       tasksOpen: tasksOpenRow.n,
       tasksBlocked: blockedRow.n,

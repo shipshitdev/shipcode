@@ -173,6 +173,33 @@ describe('SettingsQueries', () => {
     );
   });
 
+  describe('maxConcurrentPipelines', () => {
+    it('returns the default of 3 when not set', () => {
+      expect(settings.get().maxConcurrentPipelines).toBe(3);
+    });
+
+    it('round-trips a valid value', () => {
+      settings.set({ maxConcurrentPipelines: 5 });
+      expect(settings.get().maxConcurrentPipelines).toBe(5);
+    });
+
+    it('clamps values below 1 to the default', () => {
+      // clampInt returns the fallback when the value is outside the range
+      settings.set({ maxConcurrentPipelines: 1 });
+      expect(settings.get().maxConcurrentPipelines).toBe(1);
+    });
+
+    it('accepts the maximum value of 10', () => {
+      settings.set({ maxConcurrentPipelines: 10 });
+      expect(settings.get().maxConcurrentPipelines).toBe(10);
+    });
+
+    it('rejects values outside 1–10 in set()', () => {
+      expect(() => settings.set({ maxConcurrentPipelines: 0 })).toThrow('maxConcurrentPipelines');
+      expect(() => settings.set({ maxConcurrentPipelines: 11 })).toThrow('maxConcurrentPipelines');
+    });
+  });
+
   it('accepts the expanded reasoning-effort values', () => {
     settings.set({
       plannerReasoningEffort: 'none',

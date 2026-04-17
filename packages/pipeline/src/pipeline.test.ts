@@ -1593,6 +1593,57 @@ describe('createPipeline', () => {
     });
   });
 
+  // ─── listActive ────────────────────────────────────────────────────
+
+  describe('listActive', () => {
+    it('returns an empty array when no pipelines are running', () => {
+      const pipeline = createPipeline(mock.deps);
+      expect(pipeline.listActive()).toEqual([]);
+    });
+
+    it('includes a running pipeline with its phase from the thread', async () => {
+      mock.deps.threads.getById = vi.fn(() => ({
+        id: 't1',
+        projectId: 'project-1',
+        githubIssueNumber: 42,
+        status: 'planning',
+      })) as never;
+
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+
+      const active = pipeline.listActive();
+      expect(active).toHaveLength(1);
+      expect(active[0].threadId).toBe('t1');
+      expect(active[0].phase).toBe('planning');
+    });
+
+    it('reflects awaiting_approval phase from the thread for scheduler slot accounting', async () => {
+      mock.deps.threads.getById = vi.fn(() => ({
+        id: 't1',
+        projectId: 'project-1',
+        githubIssueNumber: 42,
+        status: 'awaiting_approval',
+      })) as never;
+
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+
+      const active = pipeline.listActive();
+      expect(active).toHaveLength(1);
+      expect(active[0].phase).toBe('awaiting_approval');
+    });
+
+    it('removes a pipeline from the active list after cancel', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      expect(pipeline.listActive()).toHaveLength(1);
+
+      pipeline.cancel('t1');
+      expect(pipeline.listActive()).toHaveLength(0);
+    });
+  });
+
   // ─── Tier 3: pipeline:model-resolved telemetry ─────────────────────
 
   describe('Tier 3 telemetry', () => {

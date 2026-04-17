@@ -342,6 +342,135 @@ describe('ProjectSidebar', () => {
     });
   });
 
+  it('shows an approval badge when pendingApprovalsByProject has a count > 0', async () => {
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'projects-visible' || channel === 'project:list-visible') return [project];
+      if (channel === 'settings:get') return DEFAULT_SETTINGS;
+      if (channel === 'dashboard:get-stats')
+        return {
+          agentsRunning: 0,
+          agentsRunningByProject: {},
+          pendingApprovalsByProject: { [project.id]: 2 },
+        } satisfies Partial<DashboardStats>;
+      if (channel === 'notification:list') return [] satisfies NotificationRecord[];
+      if (channel === 'integrations:check') return integrations;
+      if (channel === 'provider-usage:check') return makeUsageMap();
+      return [];
+    });
+
+    renderWithProviders();
+
+    expect(await screen.findByText('2 approvals')).toBeInTheDocument();
+  });
+
+  it('hides the approval badge when pendingApprovalsByProject count is 0', async () => {
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'projects-visible' || channel === 'project:list-visible') return [project];
+      if (channel === 'settings:get') return DEFAULT_SETTINGS;
+      if (channel === 'dashboard:get-stats')
+        return {
+          agentsRunning: 0,
+          agentsRunningByProject: {},
+          pendingApprovalsByProject: { [project.id]: 0 },
+        } satisfies Partial<DashboardStats>;
+      if (channel === 'notification:list') return [] satisfies NotificationRecord[];
+      if (channel === 'integrations:check') return integrations;
+      if (channel === 'provider-usage:check') return makeUsageMap();
+      return [];
+    });
+
+    renderWithProviders();
+    await screen.findByText('ShipCode');
+
+    expect(screen.queryByText(/approval/)).not.toBeInTheDocument();
+  });
+
+  it('does not crash when agentsRunningByProject is missing from stats', async () => {
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'projects-visible' || channel === 'project:list-visible') return [project];
+      if (channel === 'settings:get') return DEFAULT_SETTINGS;
+      if (channel === 'dashboard:get-stats')
+        return {
+          agentsRunning: 0,
+          pendingApprovalsByProject: {},
+        } satisfies Partial<DashboardStats>;
+      if (channel === 'notification:list') return [] satisfies NotificationRecord[];
+      if (channel === 'integrations:check') return integrations;
+      if (channel === 'provider-usage:check') return makeUsageMap();
+      return [];
+    });
+
+    renderWithProviders();
+
+    expect(await screen.findByText('ShipCode')).toBeInTheDocument();
+  });
+
+  it('does not crash when pendingApprovalsByProject is missing from stats', async () => {
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'projects-visible' || channel === 'project:list-visible') return [project];
+      if (channel === 'settings:get') return DEFAULT_SETTINGS;
+      if (channel === 'dashboard:get-stats')
+        return {
+          agentsRunning: 0,
+          agentsRunningByProject: {},
+        } satisfies Partial<DashboardStats>;
+      if (channel === 'notification:list') return [] satisfies NotificationRecord[];
+      if (channel === 'integrations:check') return integrations;
+      if (channel === 'provider-usage:check') return makeUsageMap();
+      return [];
+    });
+
+    renderWithProviders();
+
+    expect(await screen.findByText('ShipCode')).toBeInTheDocument();
+  });
+
+  it('does not crash when both agentsRunningByProject and pendingApprovalsByProject are missing', async () => {
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'projects-visible' || channel === 'project:list-visible') return [project];
+      if (channel === 'settings:get') return DEFAULT_SETTINGS;
+      if (channel === 'dashboard:get-stats')
+        return { agentsRunning: 0 } satisfies Partial<DashboardStats>;
+      if (channel === 'notification:list') return [] satisfies NotificationRecord[];
+      if (channel === 'integrations:check') return integrations;
+      if (channel === 'provider-usage:check') return makeUsageMap();
+      return [];
+    });
+
+    renderWithProviders();
+
+    expect(await screen.findByText('ShipCode')).toBeInTheDocument();
+  });
+
+  it('renders approval badge before live badge when both are present', async () => {
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'projects-visible' || channel === 'project:list-visible') return [project];
+      if (channel === 'settings:get') return DEFAULT_SETTINGS;
+      if (channel === 'dashboard:get-stats')
+        return {
+          agentsRunning: 1,
+          agentsRunningByProject: { [project.id]: 1 },
+          pendingApprovalsByProject: { [project.id]: 1 },
+        } satisfies Partial<DashboardStats>;
+      if (channel === 'notification:list') return [] satisfies NotificationRecord[];
+      if (channel === 'integrations:check') return integrations;
+      if (channel === 'provider-usage:check') return makeUsageMap();
+      return [];
+    });
+
+    renderWithProviders();
+
+    const approvalBadge = await screen.findByText('1 approval');
+    const liveBadge = await screen.findByText('1 live');
+
+    expect(approvalBadge).toBeInTheDocument();
+    expect(liveBadge).toBeInTheDocument();
+
+    // Approval badge should come before live badge in the DOM
+    const approvalPosition = approvalBadge.compareDocumentPosition(liveBadge);
+    expect(approvalPosition & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('shows a warning popover with selected phases and current CLI status', async () => {
     const warnedProject: Project = {
       ...project,

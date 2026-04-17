@@ -491,6 +491,14 @@ export function ProjectSidebar() {
                         Setup!
                       </Badge>
                     )}
+                    {(stats?.pendingApprovalsByProject?.[project.id] ?? 0) > 0 && (
+                      <Badge variant="warning" className="shrink-0 text-[10px]">
+                        {stats?.pendingApprovalsByProject[project.id]}{' '}
+                        {stats?.pendingApprovalsByProject[project.id] === 1
+                          ? 'approval'
+                          : 'approvals'}
+                      </Badge>
+                    )}
                     {(stats?.agentsRunningByProject?.[project.id] ?? 0) > 0 && (
                       <span className="inline-flex items-center gap-1 shrink-0 rounded-full border border-agent/30 bg-agent/10 px-1.5 py-0.5 text-[10px] font-medium text-agent">
                         <span className="relative flex h-1.5 w-1.5 items-center justify-center">

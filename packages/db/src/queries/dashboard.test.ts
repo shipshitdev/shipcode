@@ -122,4 +122,30 @@ describe('DashboardQueries', () => {
     const stats = dashboard.getStats();
     expect(stats.agentsRunningByProject[projectId]).toBeUndefined();
   });
+
+  it('getStats().pendingApprovalsByProject counts awaiting_approval threads per project', () => {
+    const project2Id = projects.add('/tmp/test-project-2').id;
+    const t1 = threads.create(projectId, 'needs approval a', 'Approval A');
+    const t2 = threads.create(projectId, 'needs approval b', 'Approval B');
+    const t3 = threads.create(project2Id, 'needs approval c', 'Approval C');
+    const t4 = threads.create(project2Id, 'executing', 'Executing');
+    db.prepare(`UPDATE threads SET status = 'awaiting_approval' WHERE id = ?`).run(t1.id);
+    db.prepare(`UPDATE threads SET status = 'awaiting_approval' WHERE id = ?`).run(t2.id);
+    db.prepare(`UPDATE threads SET status = 'awaiting_approval' WHERE id = ?`).run(t3.id);
+    db.prepare(`UPDATE threads SET status = 'executing' WHERE id = ?`).run(t4.id);
+
+    const stats = dashboard.getStats();
+    expect(stats.pendingApprovalsByProject[projectId]).toBe(2);
+    expect(stats.pendingApprovalsByProject[project2Id]).toBe(1);
+    // executing thread should not appear in pendingApprovalsByProject
+    expect(Object.keys(stats.pendingApprovalsByProject)).toHaveLength(2);
+  });
+
+  it('getStats().pendingApprovalsByProject returns empty object when no approvals pending', () => {
+    const t = threads.create(projectId, 'executing', 'Executing');
+    db.prepare(`UPDATE threads SET status = 'executing' WHERE id = ?`).run(t.id);
+
+    const stats = dashboard.getStats();
+    expect(stats.pendingApprovalsByProject).toEqual({});
+  });
 });

@@ -40,6 +40,21 @@ import type {
   WritingPrdsSkillInfo,
 } from './types';
 
+// === Shared attachment types ===
+
+export interface StagedPrdAttachment {
+  /** Original absolute path on disk (after path normalisation). */
+  originalPath: string;
+  /** Copy in the session temp dir that will be uploaded/embedded. */
+  stagedPath: string;
+  /** File name without directory. */
+  fileName: string;
+  /** MIME type detected from magic bytes (image/png | image/jpeg | image/gif | image/webp). */
+  mimeType: string;
+  /** Size in bytes of the staged copy. */
+  sizeBytes: number;
+}
+
 // === Request-Response Channels (invoke/handle) ===
 
 export interface IpcInvokeChannels {
@@ -259,8 +274,26 @@ export interface IpcInvokeChannels {
 
   // AI-assisted PRD enhancement (in-place refinement of a draft PRD body)
   'ai:enhance-prd': {
-    args: { projectId: string; draftBody: string };
+    args: { projectId: string; draftBody: string; attachmentSessionId: string | null };
     result: { body: string };
+  };
+
+  // PRD attachment lifecycle (image staging before issue creation)
+  'prd-attachments:create-session': {
+    args: { senderId: string; projectId: string };
+    result: { sessionId: string };
+  };
+  'prd-attachments:stage': {
+    args: { sessionId: string; filePaths: string[] };
+    result: { staged: StagedPrdAttachment[]; errors: string[] };
+  };
+  'prd-attachments:remove': {
+    args: { sessionId: string; filePath: string };
+    result: undefined;
+  };
+  'prd-attachments:clear': {
+    args: { sessionId: string };
+    result: undefined;
   };
 
   // Repo context files (Phase 2)

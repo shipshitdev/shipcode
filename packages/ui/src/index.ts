@@ -22,6 +22,7 @@ export {
   FolderOpen,
   Ghost,
   Globe,
+  ImageIcon,
   Inbox,
   Keyboard,
   Layers,

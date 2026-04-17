@@ -4,7 +4,7 @@ import type {
   GitHubIssueCacheRecord,
   PipelinePhase,
 } from '@shipcode/shared';
-import { sanitizeResolvedModel } from '@shipcode/shared';
+import { formatTokenCount, sanitizeResolvedModel } from '@shipcode/shared';
 import {
   Button,
   Card,
@@ -39,13 +39,6 @@ function formatDateTime(iso: string): string {
     hour: '2-digit',
     minute: '2-digit',
   });
-}
-
-function formatTokens(n: number): string {
-  if (n === 0) return '—';
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${Math.round(n / 1_000)}k`;
-  return String(n);
 }
 
 function formatProvider(provider: string): string {
@@ -170,7 +163,7 @@ export function CostsView() {
   const projectTasksTotalPages = Math.max(1, Math.ceil(projectTasksTotal / PAGE_SIZE));
 
   function displayValue(costUsd: number, tokens: number): string {
-    if (displayMode === 'tokens') return formatTokens(tokens);
+    if (displayMode === 'tokens') return formatTokenCount(tokens);
     return formatCost(costUsd);
   }
 
@@ -237,7 +230,7 @@ export function CostsView() {
                   value={displayValue(data.totalCostAllTime, data.totalTokensAllTime)}
                   subtitle={
                     displayMode === '$'
-                      ? `${formatTokens(data.totalTokensAllTime)} tokens`
+                      ? `${formatTokenCount(data.totalTokensAllTime)} tokens`
                       : undefined
                   }
                 />
@@ -362,7 +355,7 @@ export function CostsView() {
                                 {formatModelDescription(t.model, t.provider)}
                               </TableCell>
                               <TableCell className="text-right font-mono text-xs text-primary">
-                                {formatTokens(t.tokensPrompt + t.tokensCompletion)}
+                                {formatTokenCount(t.tokensPrompt + t.tokensCompletion)}
                               </TableCell>
                               <TableCell className="text-right font-mono text-xs text-primary">
                                 {formatCost(t.costUsd)}
@@ -443,7 +436,7 @@ export function CostsView() {
                                 {formatModelDescription(t.model, t.provider)}
                               </TableCell>
                               <TableCell className="text-right font-mono text-xs text-primary">
-                                {formatTokens(t.tokensPrompt + t.tokensCompletion)}
+                                {formatTokenCount(t.tokensPrompt + t.tokensCompletion)}
                               </TableCell>
                               <TableCell className="text-right font-mono text-xs text-primary">
                                 {formatCost(t.costUsd)}

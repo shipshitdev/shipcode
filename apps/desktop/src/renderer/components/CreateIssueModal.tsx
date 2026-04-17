@@ -6,11 +6,23 @@ import {
   type PrdBlastRadius,
   type PrdEstimatedComplexity,
   readPrdIssueMetadata,
+  type StagedPrdAttachment,
 } from '@shipcode/shared';
-import { Button, Checkbox, Keycap, Label, Modal, ModalFooter, Textarea } from '@shipcode/ui';
+import {
+  Button,
+  Checkbox,
+  cn,
+  ImageIcon,
+  Keycap,
+  Label,
+  Modal,
+  ModalFooter,
+  Textarea,
+  Trash2,
+} from '@shipcode/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 
 /**
@@ -39,6 +51,12 @@ function clampError(err: unknown): string {
   return 'Unknown error';
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function CreateIssueModal() {
   const queryClient = useQueryClient();
   const { createIssueModalOpen, closeCreateIssueModal, activeProjectId, editingPrd, selectIssue } =
@@ -52,7 +70,138 @@ export function CreateIssueModal() {
   const [submitAnother, setSubmitAnother] = useState(false);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
 
+  // Attachment state
+  const [attachments, setAttachments] = useState<StagedPrdAttachment[]>([]);
+  const [dragActive, setDragActive] = useState(false);
+  const [attachmentErrors, setAttachmentErrors] = useState<string[]>([]);
+  const sessionIdRef = useRef<string | null>(null);
+  const senderIdRef = useRef<string>(crypto.randomUUID());
+
   const mode: 'create' | 'edit' = editingPrd ? 'edit' : 'create';
+
+  // ---------------------------------------------------------------------------
+  // Attachment session lifecycle
+  // ---------------------------------------------------------------------------
+
+  const ensureSession = useCallback(async (): Promise<string> => {
+    if (sessionIdRef.current) return sessionIdRef.current;
+    if (!activeProjectId) throw new Error('No active project');
+    const result = await window.shipcode.invoke<{ sessionId: string }>(
+      'prd-attachments:create-session',
+      {
+        senderId: senderIdRef.current,
+        projectId: activeProjectId,
+      },
+    );
+    sessionIdRef.current = result.sessionId;
+    return result.sessionId;
+  }, [activeProjectId]);
+
+  const clearAttachmentSession = useCallback(async () => {
+    const id = sessionIdRef.current;
+    if (!id) return;
+    sessionIdRef.current = null;
+    setAttachments([]);
+    setAttachmentErrors([]);
+    try {
+      await window.shipcode.invoke('prd-attachments:clear', { sessionId: id });
+    } catch (err) {
+      log.warn('[CreateIssueModal] failed to clear attachment session', err);
+    }
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // File ingestion
+  // ---------------------------------------------------------------------------
+
+  const ingestFiles = useCallback(
+    async (files: File[] | string[]) => {
+      if (mode !== 'create') return;
+      setAttachmentErrors([]);
+      try {
+        const sessionId = await ensureSession();
+        const filePaths = files.map((f) =>
+          typeof f === 'string' ? f : (f as File & { path: string }).path,
+        );
+        const result = await window.shipcode.invoke<{
+          staged: StagedPrdAttachment[];
+          errors: string[];
+        }>('prd-attachments:stage', {
+          sessionId,
+          filePaths,
+        });
+        setAttachments((prev) => [...prev, ...result.staged]);
+        if (result.errors.length > 0) {
+          setAttachmentErrors(result.errors);
+        }
+      } catch (err) {
+        log.error('[CreateIssueModal] stage failed', err);
+        setAttachmentErrors([clampError(err)]);
+      }
+    },
+    [ensureSession, mode],
+  );
+
+  const handleRemoveAttachment = useCallback(async (attachment: StagedPrdAttachment) => {
+    const id = sessionIdRef.current;
+    if (!id) return;
+    try {
+      await window.shipcode.invoke('prd-attachments:remove', {
+        sessionId: id,
+        filePath: attachment.originalPath,
+      });
+      setAttachments((prev) => prev.filter((a) => a.originalPath !== attachment.originalPath));
+    } catch (err) {
+      log.error('[CreateIssueModal] remove attachment failed', err);
+    }
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Drag-and-drop
+  // ---------------------------------------------------------------------------
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setDragActive(false);
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length > 0) {
+        void ingestFiles(files);
+      }
+    },
+    [ingestFiles],
+  );
+
+  const handleFilePickerClick = useCallback(() => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/png,image/jpeg,image/gif,image/webp';
+    input.multiple = true;
+    input.onchange = () => {
+      const files = Array.from(input.files ?? []);
+      if (files.length > 0) {
+        void ingestFiles(files);
+      }
+    };
+    input.click();
+  }, [ingestFiles]);
+
+  // ---------------------------------------------------------------------------
+  // Modal open/close
+  // ---------------------------------------------------------------------------
 
   useEffect(() => {
     if (!createIssueModalOpen) return;
@@ -71,7 +220,15 @@ export function CreateIssueModal() {
     setTimeout(() => bodyRef.current?.focus(), 50);
   }, [createIssueModalOpen, mode, editingPrd]);
 
-  // Edit mode: keep the PRD sections validation. Create mode: just check non-empty.
+  const handleClose = useCallback(() => {
+    void clearAttachmentSession();
+    closeCreateIssueModal();
+  }, [clearAttachmentSession, closeCreateIssueModal]);
+
+  // ---------------------------------------------------------------------------
+  // Validation
+  // ---------------------------------------------------------------------------
+
   const editBodyValid = bodyHasRequiredPrdSections(body);
   const missingSections = useMemo(
     () => PRD_REQUIRED_HEADINGS.filter((h) => !body.includes(h)),
@@ -86,6 +243,10 @@ export function CreateIssueModal() {
 
   if (!activeProjectId) return null;
 
+  // ---------------------------------------------------------------------------
+  // Handlers
+  // ---------------------------------------------------------------------------
+
   const handleEnhance = async () => {
     if (!activeProjectId) return;
     setEnhancing(true);
@@ -94,6 +255,7 @@ export function CreateIssueModal() {
       const result = await window.shipcode.invoke<{ body: string }>('ai:enhance-prd', {
         projectId: activeProjectId,
         draftBody: body,
+        attachmentSessionId: sessionIdRef.current,
       });
       const metadata = readPrdIssueMetadata(result.body);
       setBody(metadata.cleanBody);
@@ -152,6 +314,8 @@ export function CreateIssueModal() {
           // Reset form and stay open so the user can submit the next idea.
           setBody('');
           setSubmitting(false);
+          // Clear attachments for the next submission
+          void clearAttachmentSession();
           return;
         }
         selectIssue(created.issue);
@@ -166,6 +330,8 @@ export function CreateIssueModal() {
           return;
         }
       }
+      // Clear attachment session on successful submit
+      void clearAttachmentSession();
       closeCreateIssueModal();
     } catch (err) {
       log.error('[CreateIssueModal] submit failed', err);
@@ -178,7 +344,7 @@ export function CreateIssueModal() {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
       e.preventDefault();
-      closeCreateIssueModal();
+      handleClose();
     }
     if (e.metaKey && e.key === 'Enter') {
       e.preventDefault();
@@ -203,10 +369,12 @@ export function CreateIssueModal() {
       ? 'Save'
       : 'Create Plan';
 
+  const hasAttachments = attachments.length > 0;
+
   return (
     <Modal
       open={createIssueModalOpen}
-      onClose={closeCreateIssueModal}
+      onClose={handleClose}
       title={mode === 'edit' ? 'Edit PRD' : 'New Issue'}
       className="max-w-[720px]"
       onKeyDown={handleKeyDown}
@@ -233,6 +401,69 @@ export function CreateIssueModal() {
             disabled={enhancing}
           />
         </div>
+
+        {/* Image drop zone — only in create mode */}
+        {mode === 'create' && (
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label="Image drop zone"
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={cn(
+              'flex h-auto w-full cursor-pointer flex-col items-center justify-center rounded-md border border-dashed px-4 py-3 text-xs transition-colors',
+              dragActive
+                ? 'border-accent bg-accent/10 text-accent'
+                : 'border-border bg-tertiary/20 text-muted hover:border-accent/50 hover:text-secondary',
+            )}
+            onClick={handleFilePickerClick}
+          >
+            <ImageIcon className="mb-1 h-4 w-4 opacity-60" />
+            <span>{dragActive ? 'Drop images here' : 'Drop images or click to attach'}</span>
+            <span className="mt-0.5 text-muted/70">
+              PNG, JPEG, GIF, WebP · max 10 MB each · up to 6
+            </span>
+          </Button>
+        )}
+
+        {/* Attachment errors */}
+        {attachmentErrors.length > 0 && (
+          <div className="rounded-md border border-warning/30 bg-warning/10 px-2.5 py-2 text-xs text-warning">
+            {attachmentErrors.map((e) => (
+              <div key={e}>{e}</div>
+            ))}
+          </div>
+        )}
+
+        {/* Staged attachments list */}
+        {hasAttachments && (
+          <div className="flex flex-col gap-1">
+            {attachments.map((a) => (
+              <div
+                key={a.originalPath}
+                className="flex items-center gap-2 rounded-md border border-border bg-tertiary/30 px-2.5 py-1.5 text-xs"
+              >
+                <ImageIcon className="h-3.5 w-3.5 shrink-0 text-muted" />
+                <span className="min-w-0 flex-1 truncate text-secondary" title={a.fileName}>
+                  {a.fileName}
+                </span>
+                <span className="shrink-0 text-muted">{formatBytes(a.sizeBytes)}</span>
+                <button
+                  type="button"
+                  aria-label={`Remove ${a.fileName}`}
+                  className="shrink-0 rounded p-0.5 text-muted transition-colors hover:text-danger"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void handleRemoveAttachment(a);
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {mode === 'edit' && !editBodyValid && body.length > 0 && (
           <div className="max-h-20 overflow-y-auto rounded-md border border-warning/30 bg-warning/10 px-2.5 py-2 text-xs text-warning">
@@ -263,18 +494,18 @@ export function CreateIssueModal() {
             Submit another
           </Label>
         )}
-        <Button
-          variant="secondary"
-          onClick={closeCreateIssueModal}
-          disabled={submitting || enhancing}
-        >
+        <Button variant="secondary" onClick={handleClose} disabled={submitting || enhancing}>
           Cancel
         </Button>
         <Button
           variant="secondary"
           onClick={handleEnhance}
-          disabled={enhancing || submitting || bodyIsEmpty}
-          title="Let AI structure your idea into a full PRD using this repo's writing-prds skill"
+          disabled={enhancing || submitting || bodyIsEmpty || hasAttachments}
+          title={
+            hasAttachments
+              ? 'Remove attachments before using Write PRD (not yet supported with images)'
+              : "Let AI structure your idea into a full PRD using this repo's writing-prds skill"
+          }
         >
           {enhancing
             ? mode === 'edit'

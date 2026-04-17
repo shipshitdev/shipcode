@@ -15,6 +15,12 @@ import {
 } from '@shipcode/agents';
 import type { ContextGeneratorCli } from '@shipcode/shared';
 import log, { logProcessOutput } from '../logger.service';
+import {
+  clearPrdAttachmentSession,
+  createPrdAttachmentSession,
+  removePrdAttachment,
+  stagePrdAttachments,
+} from './prd-attachments';
 import type { IpcHandlerDeps } from './types';
 
 const execAsync = promisify(exec);
@@ -71,9 +77,23 @@ export function registerSupportHandlers({
 
   ipcMain.handle(
     'ai:enhance-prd',
-    async (_event, { projectId, draftBody }: { projectId: string; draftBody: string }) => {
+    async (
+      _event,
+      {
+        projectId,
+        draftBody,
+        attachmentSessionId,
+      }: { projectId: string; draftBody: string; attachmentSessionId: string | null },
+    ) => {
       const project = queries.projects.getById(projectId);
       if (!project) throw new Error(`Project ${projectId} not found`);
+
+      if (attachmentSessionId) {
+        throw new Error(
+          'PRD enhancement with image attachments is not yet supported. Remove attachments before enhancing.',
+        );
+      }
+
       const settings = queries.settings.get();
 
       const skillPath = path.join(project.path, '.agents', 'skills', 'writing-prds', 'SKILL.md');
@@ -108,6 +128,32 @@ export function registerSupportHandlers({
       }
     },
   );
+
+  ipcMain.handle(
+    'prd-attachments:create-session',
+    (_event, { senderId, projectId }: { senderId: string; projectId: string }) => {
+      const sessionId = createPrdAttachmentSession(senderId, projectId);
+      return { sessionId };
+    },
+  );
+
+  ipcMain.handle(
+    'prd-attachments:stage',
+    (_event, { sessionId, filePaths }: { sessionId: string; filePaths: string[] }) => {
+      return stagePrdAttachments(sessionId, filePaths);
+    },
+  );
+
+  ipcMain.handle(
+    'prd-attachments:remove',
+    (_event, { sessionId, filePath }: { sessionId: string; filePath: string }) => {
+      removePrdAttachment(sessionId, filePath);
+    },
+  );
+
+  ipcMain.handle('prd-attachments:clear', (_event, { sessionId }: { sessionId: string }) => {
+    clearPrdAttachmentSession(sessionId);
+  });
 
   ipcMain.handle('context:list', (_event, { projectId }: { projectId: string }) => {
     const project = queries.projects.getById(projectId);

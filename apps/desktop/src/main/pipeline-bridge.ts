@@ -403,9 +403,14 @@ export function createElectronEmitter(
       }
 
       // 5. Promote next queued issue if a pipeline slot opened up.
+      // awaiting_approval is included: the slot becomes available while the
+      // human reviews, so the next queued issue can start in parallel.
       if (
         event.type === 'pipeline:phase' &&
-        (event.phase === 'completed' || event.phase === 'failed' || event.phase === 'idle')
+        (event.phase === 'awaiting_approval' ||
+          event.phase === 'completed' ||
+          event.phase === 'failed' ||
+          event.phase === 'idle')
       ) {
         try {
           deps.onPipelineTerminal?.();
