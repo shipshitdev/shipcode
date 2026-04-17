@@ -27,6 +27,23 @@ import type {
 // === Request-Response Channels (invoke/handle) ===
 
 export interface IpcInvokeChannels {
+  'prd-attachments:create-session': {
+    args: { projectId: string };
+    result: { attachmentSessionId: string };
+  };
+  'prd-attachments:stage': {
+    args: { projectId: string; attachmentSessionId: string; paths: string[] };
+    result: { attachments: StagedPrdAttachment[] };
+  };
+  'prd-attachments:remove': {
+    args: { projectId: string; attachmentSessionId: string; attachmentId: string };
+    result: { attachments: StagedPrdAttachment[] };
+  };
+  'prd-attachments:clear': {
+    args: { projectId: string; attachmentSessionId: string };
+    result: void;
+  };
+
   'project:list': { args: void; result: Project[] };
   'project:list-visible': { args: void; result: Project[] };
   'project:list-archived': { args: void; result: Project[] };
@@ -124,7 +141,7 @@ export interface IpcInvokeChannels {
 
   // AI-assisted PRD enhancement (in-place refinement of a draft PRD body)
   'ai:enhance-prd': {
-    args: { projectId: string; draftBody: string };
+    args: { projectId: string; draftBody: string; attachmentSessionId: string | null };
     result: { body: string };
   };
 
@@ -182,4 +199,11 @@ export interface IpcStreamChannels {
   'notification:focus-thread': { threadId: string; projectId: string | null };
   'activity:appended': ActivityEntry;
   'dashboard:invalidate': { kinds: Array<'stats' | 'activity' | 'running' | 'recent'> };
+}
+
+export interface StagedPrdAttachment {
+  id: string;
+  name: string;
+  size: number;
+  mimeType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
 }

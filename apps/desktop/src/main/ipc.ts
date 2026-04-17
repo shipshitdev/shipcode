@@ -31,13 +31,13 @@ import {
   checkSystemHealthWithAuth,
   checkGhAuth,
   GhCli,
-  enhancePrdDraft,
   validateSkill,
   DEFAULT_SKILLS,
   PHASE_SKILL_KEYS,
   StreamParser,
 } from '@shipcode/agents';
 import { isSafeExternalUrl } from './security';
+import { registerSupportHandlers } from './ipc/register-support-handlers';
 
 const execAsync = promisify(exec);
 import { GitService, WorktreeManager } from '@shipcode/git';
@@ -1008,54 +1008,7 @@ export function registerIpcHandlers(
     }
   });
 
-  // === AI-assisted PRD enhancement (in-place refinement) ===
-  ipcMain.handle(
-    'ai:enhance-prd',
-    async (_event, { projectId, draftBody }: { projectId: string; draftBody: string }) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
-
-      // Load the repo's writing-prds skill. Preferred location is
-      // .agents/skills/writing-prds/SKILL.md inside the target project. If the
-      // project doesn't have one, fall back to a minimal inline instruction so
-      // enhancement still works — but the result will be less repo-tailored.
-      const skillPath = path.join(project.path, '.agents', 'skills', 'writing-prds', 'SKILL.md');
-      let skillContent: string;
-      try {
-        skillContent = fs.readFileSync(skillPath, 'utf-8');
-      } catch {
-        skillContent =
-          "You are drafting a PRD that will be consumed by the ShipCode pipeline's planner agent. " +
-          'The PRD lives in a GitHub issue body. Required sections: Executive Summary, Problem Statement, ' +
-          'Goals, Non-Goals, User Stories, Functional Requirements, Non-Functional Requirements, ' +
-          'Success Criteria, Out of Scope, Dependencies, Verification Plan, Risks & Open Questions.';
-      }
-
-      // enhancePrdDraft only accepts 'claude' | 'codex'. AppSettings.plannerModel
-      // widened to AgentType in Tier 1 (claude | codex | gh | openrouter), so
-      // when the user picks 'openrouter' or 'gh' we fall back to 'claude' rather
-      // than double-casting an unsupported value through the type system.
-      const settings = queries.settings.get();
-      const plannerModel: 'claude' | 'codex' =
-        settings.plannerModel === 'codex' ? 'codex' : 'claude';
-
-      try {
-        return await enhancePrdDraft({
-          draftBody: draftBody ?? '',
-          skillContent,
-          plannerModel,
-          cwd: project.path,
-        });
-      } catch (err) {
-        // Full trace stays in main-process stdout for devtools/console debugging.
-        log.error('[ai:enhance-prd]', err);
-        // Short, prompt-free message crosses the IPC boundary to the renderer.
-        const short =
-          err instanceof Error ? err.message.split('\n')[0].slice(0, 300) : 'Enhancement failed';
-        throw new Error(short);
-      }
-    },
-  );
+  registerSupportHandlers(ipcMain, queries);
 
   // === Agent output forwarding to renderer ===
   processManager.on('output', (processId: string, data: string) => {

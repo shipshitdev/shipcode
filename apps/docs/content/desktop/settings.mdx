@@ -38,6 +38,14 @@ All settings persist in the local SQLite DB under the single `settings` row. The
 
 Only the executor is editable from this panel today. Planner, reviewer, and verifier are set during `shipcode onboard` (or the desktop onboarding wizard) and can be changed afterward by editing the `settings` row in the local SQLite DB. A full Models section is on the roadmap.
 
+### Create Issue / Write PRD
+
+The Create Issue modal already reads the global PRD rewrite provider/model/effort values from this panel. `Write PRD` uses the current planner model and planner turn limit from Settings, and the modal shows those values next to the action so users can see what will run.
+
+Dropped images in `CreateIssueModal` are staged locally in a modal-scoped attachment session only. They are cleared on cancel/reset and on successful create paths, including `Submit another`, but they stay staged after a failed create attempt so the user can retry without re-dropping files.
+
+Attachment-assisted PRD rewrites are still blocked. ShipCode does not yet have a real multimodal CLI transport end-to-end, so staged images are intentionally kept out of the PRD rewrite path for now.
+
 OpenRouter-specific toggles (`openrouterEnabled`, tier defaults, per-phase overrides) are documented on the [OpenRouter page](/openrouter).
 
 ### Notifications
