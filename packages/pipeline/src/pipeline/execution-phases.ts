@@ -258,6 +258,8 @@ export function createExecutionPhaseHandlers({
       }
     }
 
+    context.testRetries = 0;
+    context.testOutput = null;
     handlers.startVerification(threadId);
   }
 
@@ -288,8 +290,12 @@ export function createExecutionPhaseHandlers({
           encoding: 'utf-8',
         });
       }
-    } catch {
-      // if commit fails, diff check below will catch it
+    } catch (commitError) {
+      const msg = commitError instanceof Error ? commitError.message : String(commitError);
+      console.error(`[pipeline] pre-verification commit failed for thread ${threadId}:`, msg);
+      emitPhase(threadId, 'failed', `Pre-verification commit failed: ${msg}`);
+      activePipelines.delete(threadId);
+      return;
     }
 
     const headSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf-8' }).trim();

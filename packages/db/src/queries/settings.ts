@@ -307,6 +307,7 @@ function validateBranchFormat(format: string): void {
     throw new Error('worktreeBranchFormat contains characters invalid in a git branch name');
   }
   if (
+    sample.startsWith('/') ||
     sample.startsWith('-') ||
     sample.startsWith('.') ||
     sample.endsWith('.lock') ||

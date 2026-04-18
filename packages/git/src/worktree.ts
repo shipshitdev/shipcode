@@ -29,7 +29,7 @@ function slugify(title: string): string {
 }
 
 /** ShipCode-managed branch prefixes for list() filtering. */
-const SHIPCODE_BRANCH_RE = /^(shipcode\/|ship\/\d+-)/;
+const SHIPCODE_BRANCH_RE = /^(shipcode\/|ship\/\d+)/;
 
 export class WorktreeManager {
   private git: SimpleGit;
