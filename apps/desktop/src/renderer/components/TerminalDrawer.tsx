@@ -1,17 +1,13 @@
-import { TerminalDrawerActionBanner } from './terminal-drawer/TerminalDrawerActionBanner';
 import { TerminalDrawerEmptyState } from './terminal-drawer/TerminalDrawerEmptyState';
 import { TerminalDrawerHeader } from './terminal-drawer/TerminalDrawerHeader';
 import { useTerminalDrawer } from './terminal-drawer/useTerminalDrawer';
 
 export function TerminalDrawer() {
   const {
-    actionBanner,
     canonicalStream,
     containerRef,
     currentModel,
     displayIssue,
-    dismissActionBanner,
-    handleActionBannerClick,
     handleResizeMouseDown,
     handleRunningTabSelect,
     isMaximized,
@@ -53,14 +49,6 @@ export function TerminalDrawer() {
       <div className="relative flex-1 overflow-hidden min-h-0">
         <div ref={containerRef} className="absolute inset-0" />
         {showEmptyState && <TerminalDrawerEmptyState />}
-        {actionBanner && (
-          <TerminalDrawerActionBanner
-            actionBanner={actionBanner}
-            pinnedIssue={displayIssue}
-            onDismiss={dismissActionBanner}
-            onOpen={handleActionBannerClick}
-          />
-        )}
       </div>
     </div>
   );
