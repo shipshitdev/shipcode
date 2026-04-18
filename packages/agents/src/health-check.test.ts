@@ -492,6 +492,17 @@ describe('parseClaudeUsageText', () => {
     expect(status.available).toBe(false);
     expect(status.message).toBe('Claude CLI returned no quota data');
   });
+
+  it('strips parenthetical suffix from version string', () => {
+    const withSuffix = parseClaudeUsageText('', undefined, undefined, '2.1.92 (Claude Code)');
+    expect(withSuffix.version).toBe('2.1.92');
+
+    const plain = parseClaudeUsageText('', undefined, undefined, '2.1.92');
+    expect(plain.version).toBe('2.1.92');
+
+    const noVersion = parseClaudeUsageText('', undefined, undefined, null);
+    expect(noVersion.version).toBeNull();
+  });
 });
 
 describe('parseCodexStatusText', () => {
@@ -513,6 +524,17 @@ describe('parseCodexStatusText', () => {
       expect.objectContaining({ key: 'session', label: 'Session', leftPercent: 98 }),
       expect.objectContaining({ key: 'weekly', label: 'Weekly', leftPercent: 35 }),
     ]);
+  });
+
+  it('strips binary name prefix from version string', () => {
+    const full = parseCodexStatusText('', undefined, 'codex-cli 0.121.0');
+    expect(full.version).toBe('0.121.0');
+
+    const plain = parseCodexStatusText('', undefined, '0.121.0');
+    expect(plain.version).toBe('0.121.0');
+
+    const noVersion = parseCodexStatusText('', undefined, null);
+    expect(noVersion.version).toBeNull();
   });
 });
 

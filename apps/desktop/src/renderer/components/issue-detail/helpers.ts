@@ -186,6 +186,36 @@ export function resolveClientSidePlan(rawOutput: string): ShipCodePlan | null {
   }
 }
 
+type ZodIssue = { path: (string | number)[]; message: string };
+function isZodError(e: unknown): e is { issues: ZodIssue[] } {
+  return (
+    e instanceof Error && 'issues' in e && Array.isArray((e as Record<string, unknown>).issues)
+  );
+}
+
+export function diagnosePlanParseFailure(rawOutput: string): string {
+  const text = resolveRawPlanText(rawOutput);
+  const match = text.match(/```shipcode-plan[^\n]*\n([\s\S]*?)\n```/m);
+  if (!match) {
+    return 'Plan output could not be parsed: no shipcode-plan fence found in model output.';
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(match[1].trim());
+  } catch {
+    return 'Plan output could not be parsed: fence found but content is not valid JSON.';
+  }
+  try {
+    shipCodePlanSchema.parse(parsed);
+  } catch (e) {
+    const detail = isZodError(e)
+      ? `${e.issues[0]?.path.join('.') ?? 'unknown'}: ${e.issues[0]?.message ?? 'invalid'}`
+      : String(e).slice(0, 200);
+    return `Plan output could not be parsed: schema validation failed — ${detail}`;
+  }
+  return 'Plan output could not be parsed. Check devtools console for the full trace.';
+}
+
 export function safeErrorMessage(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed.startsWith('{')) return trimmed;

@@ -300,12 +300,12 @@ describe('Titlebar', () => {
 
     const heading = await screen.findByText('CLI availability');
     expect(heading).toBeInTheDocument();
-    expect(screen.getByText('vincent@shipshit.dev')).toBeInTheDocument();
+    expect(screen.queryByText('vincent@shipshit.dev')).not.toBeInTheDocument();
     expect(screen.getByText('v1.2.3')).toBeInTheDocument();
     expect(screen.getByText('v0.9.0')).toBeInTheDocument();
     expect(screen.getByText('1200')).toBeInTheDocument();
-    expect(screen.getByText(/42% used · resets 6am \(Europe\/Malta\)/)).toBeInTheDocument();
-    expect(screen.getByText(/10% used · in 5h/)).toBeInTheDocument();
+    expect(screen.getByText(/58% left · resets 6am \(Europe\/Malta\)/)).toBeInTheDocument();
+    expect(screen.getByText(/90% left · in 5h/)).toBeInTheDocument();
 
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
     await waitFor(() => {

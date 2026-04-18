@@ -573,6 +573,9 @@ export function parseCodexStatusText(
   checkedAt = new Date().toISOString(),
   version: string | null = null,
 ): CliProviderUsageStatus {
+  // "codex --version" outputs "codex-cli X.Y.Z" — strip the binary name prefix so
+  // the UI renders "vX.Y.Z" instead of "vcodex-cli X.Y.Z".
+  const normalizedVersion = version ? (version.match(/\d+\.\d+[\w.-]*/)?.[0] ?? version) : null;
   const clean = stripAnsiCodes(stdout);
   const creditsRemaining = firstNumber(/Credits:\s*([0-9][0-9., ]*)/i, clean);
   const sessionLine = firstLineMatching(/5h limit[^\n]*/i, clean);
@@ -593,7 +596,7 @@ export function parseCodexStatusText(
     stale: false,
     state: deriveUsageState('codex', windows, creditsRemaining),
     source: 'cli',
-    version,
+    version: normalizedVersion,
     accountEmail: null,
     loginMethod: null,
     updatedAt: checkedAt,
@@ -611,6 +614,9 @@ export function parseClaudeUsageText(
   auth: ClaudeAuthDetails = { accountEmail: null, loginMethod: null },
   version: string | null = null,
 ): CliProviderUsageStatus {
+  // "claude --version" outputs e.g. "2.1.92 (Claude Code)" — strip the parenthetical
+  // so the UI renders "v2.1.92" instead of "v2.1.92 (Claude Code)".
+  const normalizedVersion = version ? (version.match(/\d+\.\d+[\w.-]*/)?.[0] ?? version) : null;
   const clean = stripAnsiCodes(stdout);
   const collapsed = clean.replace(/\s+/g, ' ').trim();
   const compact = normalizeForSearch(clean);
@@ -669,7 +675,7 @@ export function parseClaudeUsageText(
     stale: false,
     state: deriveUsageState('claude', windows, null),
     source: 'cli',
-    version,
+    version: normalizedVersion,
     accountEmail: auth.accountEmail,
     loginMethod: auth.loginMethod,
     updatedAt: checkedAt,

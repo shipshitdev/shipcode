@@ -11,7 +11,12 @@ import {
   PlanViewer,
   ReviewViewer,
 } from '@shipcode/ui';
-import { getPlanStatusPresentation, resolveClientSidePlan, resolveRawPlanText } from './helpers';
+import {
+  diagnosePlanParseFailure,
+  getPlanStatusPresentation,
+  resolveClientSidePlan,
+  resolveRawPlanText,
+} from './helpers';
 import { PlanWaiting } from './PlanWaiting';
 import type { PlanRunGroup } from './tab-types';
 
@@ -190,17 +195,23 @@ export function PlanHistoryTab({
                                     (() => {
                                       const fallbackRaw = plan.rawOutput ?? '';
                                       const resolved = resolveRawPlanText(fallbackRaw);
-                                      return resolved === fallbackRaw ? (
+                                      const displayText = resolved.trim() || fallbackRaw.trim();
+                                      return displayText ? (
+                                        <div className="space-y-2">
+                                          <p className="text-xs italic text-muted">
+                                            {diagnosePlanParseFailure(fallbackRaw)}
+                                          </p>
+                                          <div className="overflow-x-auto">
+                                            <pre className="whitespace-pre-wrap text-xs text-secondary">
+                                              {displayText}
+                                            </pre>
+                                          </div>
+                                        </div>
+                                      ) : (
                                         <p className="text-xs italic text-muted">
                                           Plan output could not be parsed. Check devtools console
                                           for the full trace.
                                         </p>
-                                      ) : (
-                                        <div className="overflow-x-auto">
-                                          <pre className="whitespace-pre-wrap text-xs text-secondary">
-                                            {resolved}
-                                          </pre>
-                                        </div>
                                       );
                                     })()}
                                 </div>

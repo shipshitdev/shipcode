@@ -1,6 +1,27 @@
 import type { PlanRecord, ReviewRecord } from '@shipcode/shared';
 import { describe, expect, it } from 'vitest';
-import { getFailurePresentation, getPlanStatusPresentation } from './helpers';
+import {
+  diagnosePlanParseFailure,
+  getFailurePresentation,
+  getPlanStatusPresentation,
+} from './helpers';
+
+const VALID_PLAN_JSON = JSON.stringify({
+  id: 'plan-1',
+  threadId: 'thread-1',
+  version: 1,
+  objective: 'Add feature',
+  files: [{ path: 'src/foo.ts', action: 'modify', description: 'Update foo' }],
+  steps: [{ order: 1, description: 'Do the thing', files: ['src/foo.ts'], rationale: 'Needed' }],
+  acceptanceCriteria: ['Tests pass'],
+  outOfScope: [],
+  estimatedComplexity: 'low',
+  dependencies: [],
+});
+
+function wrapInFence(json: string) {
+  return `Here is the plan:\n\`\`\`shipcode-plan\n${json}\n\`\`\`\nDone.`;
+}
 
 function makePlan(overrides: Partial<PlanRecord> = {}): PlanRecord {
   return {
@@ -62,6 +83,43 @@ describe('getPlanStatusPresentation', () => {
       phaseStatus: 'revising',
       style: 'phase-chip',
     });
+  });
+});
+
+describe('diagnosePlanParseFailure', () => {
+  it('returns no-fence message for empty input', () => {
+    expect(diagnosePlanParseFailure('')).toContain('no shipcode-plan fence');
+  });
+
+  it('returns no-fence message when output has no fence', () => {
+    expect(diagnosePlanParseFailure('Here is some output without a fence')).toContain(
+      'no shipcode-plan fence',
+    );
+  });
+
+  it('returns no-fence message for Claude NDJSON without a plan fence', () => {
+    const ndjson = JSON.stringify({ type: 'result', result: 'No fence here, sorry.' });
+    expect(diagnosePlanParseFailure(ndjson)).toContain('no shipcode-plan fence');
+  });
+
+  it('returns invalid-json message when fence content is malformed', () => {
+    const raw = wrapInFence('{ not valid json ,,, }');
+    expect(diagnosePlanParseFailure(raw)).toContain('not valid JSON');
+  });
+
+  it('returns schema-validation message with field detail for wrong enum', () => {
+    const badPlan = JSON.parse(VALID_PLAN_JSON);
+    badPlan.files[0].action = 'update'; // invalid — must be create|modify|delete|rename
+    const raw = wrapInFence(JSON.stringify(badPlan));
+    const result = diagnosePlanParseFailure(raw);
+    expect(result).toContain('schema validation failed');
+  });
+
+  it('returns schema-validation message when required field is missing', () => {
+    const badPlan = JSON.parse(VALID_PLAN_JSON);
+    delete badPlan.objective;
+    const raw = wrapInFence(JSON.stringify(badPlan));
+    expect(diagnosePlanParseFailure(raw)).toContain('schema validation failed');
   });
 });
 

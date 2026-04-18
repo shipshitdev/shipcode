@@ -10,11 +10,13 @@ import { getProjectProviderWarnings } from '@shipcode/shared';
 import {
   Button,
   cn,
+  Loader2,
   PanelLeftClose,
   PanelLeftOpen,
   Popover,
   PopoverContent,
   PopoverTrigger,
+  RefreshCw,
   Settings,
   Terminal,
   X,
@@ -26,17 +28,17 @@ import { ProjectProviderWarningPopover } from './ProjectProviderWarningPopover';
 
 type ProviderTone = 'claude' | 'codex';
 
-function dotClass(tone: ProviderTone, state: CliProviderUsageStatus['state']): string {
+function dotClass(_tone: ProviderTone, state: CliProviderUsageStatus['state']): string {
   if (state === 'blocked') return 'bg-danger';
   if (state === 'warning') return 'bg-warning';
   if (state === 'unknown') return 'bg-tertiary ring-1 ring-inset ring-border';
-  return tone === 'codex' ? 'bg-agent' : 'bg-warning/80';
+  return 'bg-success';
 }
 
-function barFillClass(tone: ProviderTone, state: CliProviderUsageStatus['state']): string {
+function barFillClass(_tone: ProviderTone, state: CliProviderUsageStatus['state']): string {
   if (state === 'blocked') return 'bg-danger';
   if (state === 'warning') return 'bg-warning';
-  return tone === 'codex' ? 'bg-agent/80' : 'bg-warning/80';
+  return 'bg-success';
 }
 
 function ProviderStatusDot({
@@ -81,20 +83,25 @@ function ProviderWindowBar({
   state: CliProviderUsageStatus['state'];
   window: CliProviderUsageWindow;
 }) {
-  const used = window.usedPercent == null ? null : Math.max(0, Math.min(100, window.usedPercent));
+  const left =
+    window.leftPercent != null
+      ? Math.max(0, Math.min(100, window.leftPercent))
+      : window.usedPercent != null
+        ? Math.max(0, Math.min(100, 100 - window.usedPercent))
+        : null;
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-baseline justify-between gap-2 text-[10px] text-secondary">
         <span className="truncate">{window.label}</span>
         <span className="shrink-0 tabular-nums text-muted">
-          {used == null ? '—' : `${used}% used`}
+          {left == null ? '—' : `${left}% left`}
           {window.resetDescription ? ` · ${window.resetDescription}` : ''}
         </span>
       </div>
       <div className="h-[3px] overflow-hidden rounded-full bg-tertiary">
         <div
           className={cn('h-full rounded-full transition-[width]', barFillClass(tone, state))}
-          style={{ width: `${used ?? 0}%` }}
+          style={{ width: `${left ?? 0}%` }}
         />
       </div>
     </div>
@@ -137,10 +144,6 @@ function ProviderDetailRow({
         ) : null}
       </div>
 
-      {status.accountEmail ? (
-        <div className="truncate text-[10px] text-muted">{status.accountEmail}</div>
-      ) : null}
-
       {status.creditsRemaining != null ? (
         <div className="text-[10px] text-secondary">
           <span className="tabular-nums text-primary">{status.creditsRemaining}</span>
@@ -180,7 +183,15 @@ function ProviderDetailRow({
   );
 }
 
-function ProviderStatusBadge({ providerUsage }: { providerUsage: CliProviderUsageMap }) {
+function ProviderStatusBadge({
+  providerUsage,
+  onRefresh,
+  isRefreshing,
+}: {
+  providerUsage: CliProviderUsageMap;
+  onRefresh: () => void;
+  isRefreshing: boolean;
+}) {
   const overallState = [providerUsage.codex.state, providerUsage.claude.state].includes('blocked')
     ? 'blocked'
     : [providerUsage.codex.state, providerUsage.claude.state].includes('warning')
@@ -219,17 +230,28 @@ function ProviderStatusBadge({ providerUsage }: { providerUsage: CliProviderUsag
           </span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent
-        align="end"
-        sideOffset={6}
-        className="w-[320px] bg-primary/98 p-2 shadow-2xl backdrop-blur-sm"
-      >
-        <div className="mb-2 px-1">
-          <div className="text-[11px] font-medium text-primary">CLI availability</div>
-          <div className="text-[10px] text-muted">
-            Soft quota status from the local Claude and Codex CLIs. Project warnings stay in the
-            sidebar.
+      <PopoverContent align="end" sideOffset={6} className="w-[320px] bg-elevated p-2 shadow-lg">
+        <div className="mb-2 flex items-start justify-between gap-2 px-1">
+          <div>
+            <div className="text-[11px] font-medium text-primary">CLI availability</div>
+            <div className="text-[10px] text-muted">
+              Soft quota status from the local Claude and Codex CLIs.
+            </div>
           </div>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="mt-0.5 h-5 w-5 shrink-0 text-muted hover:text-primary"
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            title="Refresh CLI status"
+          >
+            {isRefreshing ? (
+              <Loader2 size={10} className="animate-spin" />
+            ) : (
+              <RefreshCw size={10} />
+            )}
+          </Button>
         </div>
         <div className="space-y-2">
           <ProviderDetailRow label="Codex" tone="codex" status={providerUsage.codex} />
@@ -277,7 +299,11 @@ export function Titlebar() {
     refetchIntervalInBackground: true,
   });
 
-  const { data: providerUsage } = useQuery<CliProviderUsageMap>({
+  const {
+    data: providerUsage,
+    refetch: refetchProviderUsage,
+    isFetching: isProviderUsageFetching,
+  } = useQuery<CliProviderUsageMap>({
     queryKey: ['provider-usage'],
     queryFn: () => window.shipcode.invoke<CliProviderUsageMap>('provider-usage:check'),
     staleTime: 60_000,
@@ -332,7 +358,13 @@ export function Titlebar() {
         )}
       </div>
       <div className="flex items-center gap-2">
-        {providerUsage ? <ProviderStatusBadge providerUsage={providerUsage} /> : null}
+        {providerUsage ? (
+          <ProviderStatusBadge
+            providerUsage={providerUsage}
+            onRefresh={() => void refetchProviderUsage()}
+            isRefreshing={isProviderUsageFetching}
+          />
+        ) : null}
         {!settingsVisible && (
           <Button
             variant="ghost"
