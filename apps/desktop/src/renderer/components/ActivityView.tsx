@@ -4,14 +4,17 @@ import {
   Card,
   CardContent,
   Loader2,
+  Pagination,
   Table,
   TableBody,
   TableCell,
   TableRow,
 } from '@shipcode/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
+
+const PAGE_SIZE = 25;
 
 function timeAgo(input: string | number): string {
   const t = typeof input === 'number' ? input : new Date(input).getTime();
@@ -61,6 +64,7 @@ function groupByDay(entries: ActivityEntry[]): { label: string; entries: Activit
 export function ActivityView() {
   const queryClient = useQueryClient();
   const { selectProject, selectThread } = useAppStore();
+  const [page, setPage] = useState(1);
 
   const {
     data: activity = [],
@@ -68,22 +72,24 @@ export function ActivityView() {
     isError,
     refetch,
   } = useQuery<ActivityEntry[]>({
-    queryKey: ['activity', { limit: 200 }],
+    queryKey: ['activity', { limit: 500 }],
     queryFn: () =>
-      window.shipcode.invoke<ActivityEntry[]>('dashboard:get-activity', { limit: 200 }),
+      window.shipcode.invoke<ActivityEntry[]>('dashboard:get-activity', { limit: 500 }),
   });
 
   useEffect(() => {
     const unsub = window.shipcode.on('dashboard:invalidate', (data: unknown) => {
       const kinds = (data as { kinds?: string[] } | null)?.kinds;
       if (kinds?.includes('activity')) {
-        queryClient.invalidateQueries({ queryKey: ['activity', { limit: 200 }] });
+        queryClient.invalidateQueries({ queryKey: ['activity', { limit: 500 }] });
       }
     });
     return () => unsub();
   }, [queryClient]);
 
-  const groups = groupByDay(activity);
+  const totalPages = Math.max(1, Math.ceil(activity.length / PAGE_SIZE));
+  const pageEntries = activity.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const groups = groupByDay(pageEntries);
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -163,6 +169,17 @@ export function ActivityView() {
                 </Card>
               </div>
             ))}
+
+          {!isLoading && !isError && totalPages > 1 && (
+            <div className="mt-2">
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                onPageChange={setPage}
+                className="w-full"
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>
