@@ -235,37 +235,33 @@ export function InboxView() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex items-center justify-between border-b border-border px-6 py-4">
-        <div>
-          <h1 className="text-base font-semibold text-primary">Inbox</h1>
-          <p className="text-xs text-muted">Notifications requiring attention.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setSortOrder((s) => (s === 'newest' ? 'oldest' : 'newest'))}
-            className="h-7 gap-1.5 text-[11px] text-muted"
-            title={sortOrder === 'newest' ? 'Showing newest first' : 'Showing oldest first'}
-          >
-            <ArrowUpDown size={12} />
-            {sortOrder === 'newest' ? 'Newest' : 'Oldest'}
-          </Button>
-          {active.length > 0 && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => dismissAll.mutate()}
-              disabled={dismissAll.isPending}
-            >
-              Read all
-            </Button>
-          )}
-        </div>
-      </div>
-
       <div className="flex-1 overflow-y-auto px-6 py-6">
         <div className="max-w-5xl space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-primary">Inbox</h2>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSortOrder((s) => (s === 'newest' ? 'oldest' : 'newest'))}
+                className="h-7 gap-1.5 text-[11px] text-muted"
+                title={sortOrder === 'newest' ? 'Showing newest first' : 'Showing oldest first'}
+              >
+                <ArrowUpDown size={12} />
+                {sortOrder === 'newest' ? 'Newest' : 'Oldest'}
+              </Button>
+              {active.length > 0 && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => dismissAll.mutate()}
+                  disabled={dismissAll.isPending}
+                >
+                  Read all
+                </Button>
+              )}
+            </div>
+          </div>
           {isLoading && (
             <div className="flex items-center justify-center py-16">
               <Loader2 size={20} className="animate-spin text-muted" />

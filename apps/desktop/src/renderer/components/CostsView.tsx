@@ -9,7 +9,6 @@ import {
   Button,
   Card,
   CardContent,
-  CardFooter,
   cn,
   Loader2,
   modelDisplay,
@@ -169,43 +168,35 @@ export function CostsView() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex items-center justify-between border-b border-border px-6 py-4">
-        <div>
-          <h1 className="text-base font-semibold text-primary">Costs</h1>
-          <p className="text-xs text-muted">
-            {displayMode === 'tokens'
-              ? 'Token spend across all projects and tasks. Exact counts for every provider.'
-              : 'USD estimates for Claude / Codex CLI runs from published pricing — only OpenRouter amounts are real billing.'}
-          </p>
-        </div>
-        <div className="flex items-center rounded-md border border-border bg-secondary p-0.5 text-[11px]">
-          <Button
-            variant="ghost"
-            size="xs"
-            onClick={() => setDisplayMode('$')}
-            className={cn(
-              displayMode === '$' ? 'bg-tertiary text-primary font-medium' : 'text-muted',
-            )}
-            aria-label="Show costs in US dollars"
-          >
-            USD
-          </Button>
-          <Button
-            variant="ghost"
-            size="xs"
-            onClick={() => setDisplayMode('tokens')}
-            className={cn(
-              displayMode === 'tokens' ? 'bg-tertiary text-primary font-medium' : 'text-muted',
-            )}
-            aria-label="Show costs in tokens"
-          >
-            Tokens
-          </Button>
-        </div>
-      </div>
-
       <div className="flex-1 overflow-y-auto px-6 py-6">
         <div className="max-w-5xl space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-primary">Costs</h2>
+            <div className="flex items-center rounded-md border border-border bg-secondary p-0.5 text-[11px]">
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => setDisplayMode('$')}
+                className={cn(
+                  displayMode === '$' ? 'bg-tertiary text-primary font-medium' : 'text-muted',
+                )}
+                aria-label="Show costs in US dollars"
+              >
+                USD
+              </Button>
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => setDisplayMode('tokens')}
+                className={cn(
+                  displayMode === 'tokens' ? 'bg-tertiary text-primary font-medium' : 'text-muted',
+                )}
+                aria-label="Show costs in tokens"
+              >
+                Tokens
+              </Button>
+            </div>
+          </div>
           {isLoading && (
             <div className="flex items-center justify-center py-16">
               <Loader2 size={20} className="animate-spin text-muted" />
@@ -365,17 +356,17 @@ export function CostsView() {
                         </TableBody>
                       </Table>
                     </CardContent>
-                    {projectTasksTotalPages > 1 && (
-                      <CardFooter className="pt-0 pb-4 px-5">
-                        <Pagination
-                          page={projectPage}
-                          totalPages={projectTasksTotalPages}
-                          onPageChange={setProjectPage}
-                          className="w-full"
-                        />
-                      </CardFooter>
-                    )}
                   </Card>
+                  {projectTasksTotalPages > 1 && (
+                    <div className="mt-3 px-1">
+                      <Pagination
+                        page={projectPage}
+                        totalPages={projectTasksTotalPages}
+                        onPageChange={setProjectPage}
+                        className="w-full"
+                      />
+                    </div>
+                  )}
                 </section>
               )}
 
@@ -389,74 +380,76 @@ export function CostsView() {
                     No tasks yet.
                   </div>
                 ) : (
-                  <Card>
-                    <CardContent className="p-0">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Phase</TableHead>
-                            <TableHead>Date</TableHead>
-                            <TableHead>Task</TableHead>
-                            <TableHead>Provider</TableHead>
-                            <TableHead>Model</TableHead>
-                            <TableHead className="text-right">Tokens</TableHead>
-                            <TableHead className="text-right">Cost</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {tasks.map((t) => (
-                            <TableRow
-                              key={t.threadId}
-                              className={cn(
-                                'cursor-pointer hover:bg-hover',
-                                navigatingThreadId === t.threadId && 'opacity-60',
-                              )}
-                              onClick={() => goToTask(t.projectId, t.threadId)}
-                            >
-                              <TableCell>
-                                <span
-                                  className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${PHASE_COLOR[t.phase] ?? PHASE_COLOR.idle}`}
-                                >
-                                  {t.phase.replace(/_/g, ' ')}
-                                </span>
-                              </TableCell>
-                              <TableCell className="text-[11px] text-muted whitespace-nowrap">
-                                {t.updatedAt ? formatDateTime(t.updatedAt) : '—'}
-                              </TableCell>
-                              <TableCell>
-                                <div className="font-medium text-primary truncate max-w-[260px]">
-                                  {t.title}
-                                </div>
-                                <div className="text-[11px] text-muted">{t.projectName}</div>
-                              </TableCell>
-                              <TableCell className="text-[11px] text-muted whitespace-nowrap">
-                                {formatProvider(t.provider)}
-                              </TableCell>
-                              <TableCell className="text-[11px] text-primary whitespace-nowrap">
-                                {formatModelDescription(t.model, t.provider)}
-                              </TableCell>
-                              <TableCell className="text-right font-mono text-xs text-primary">
-                                {formatTokenCount(t.tokensPrompt + t.tokensCompletion)}
-                              </TableCell>
-                              <TableCell className="text-right font-mono text-xs text-primary">
-                                {formatCost(t.costUsd)}
-                              </TableCell>
+                  <>
+                    <Card>
+                      <CardContent className="p-0">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Phase</TableHead>
+                              <TableHead>Date</TableHead>
+                              <TableHead>Task</TableHead>
+                              <TableHead>Provider</TableHead>
+                              <TableHead>Model</TableHead>
+                              <TableHead className="text-right">Tokens</TableHead>
+                              <TableHead className="text-right">Cost</TableHead>
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </CardContent>
+                          </TableHeader>
+                          <TableBody>
+                            {tasks.map((t) => (
+                              <TableRow
+                                key={t.threadId}
+                                className={cn(
+                                  'cursor-pointer hover:bg-hover',
+                                  navigatingThreadId === t.threadId && 'opacity-60',
+                                )}
+                                onClick={() => goToTask(t.projectId, t.threadId)}
+                              >
+                                <TableCell>
+                                  <span
+                                    className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${PHASE_COLOR[t.phase] ?? PHASE_COLOR.idle}`}
+                                  >
+                                    {t.phase.replace(/_/g, ' ')}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-[11px] text-muted whitespace-nowrap">
+                                  {t.updatedAt ? formatDateTime(t.updatedAt) : '—'}
+                                </TableCell>
+                                <TableCell>
+                                  <div className="font-medium text-primary truncate max-w-[260px]">
+                                    {t.title}
+                                  </div>
+                                  <div className="text-[11px] text-muted">{t.projectName}</div>
+                                </TableCell>
+                                <TableCell className="text-[11px] text-muted whitespace-nowrap">
+                                  {formatProvider(t.provider)}
+                                </TableCell>
+                                <TableCell className="text-[11px] text-primary whitespace-nowrap">
+                                  {formatModelDescription(t.model, t.provider)}
+                                </TableCell>
+                                <TableCell className="text-right font-mono text-xs text-primary">
+                                  {formatTokenCount(t.tokensPrompt + t.tokensCompletion)}
+                                </TableCell>
+                                <TableCell className="text-right font-mono text-xs text-primary">
+                                  {formatCost(t.costUsd)}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </CardContent>
+                    </Card>
                     {tasksTotalPages > 1 && (
-                      <CardFooter className="pt-0 pb-4 px-5">
+                      <div className="mt-3 px-1">
                         <Pagination
                           page={tasksPage}
                           totalPages={tasksTotalPages}
                           onPageChange={setTasksPage}
                           className="w-full"
                         />
-                      </CardFooter>
+                      </div>
                     )}
-                  </Card>
+                  </>
                 )}
               </section>
             </>

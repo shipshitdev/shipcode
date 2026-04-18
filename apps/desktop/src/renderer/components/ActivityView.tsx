@@ -87,13 +87,9 @@ export function ActivityView() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="border-b border-border px-6 py-4">
-        <h1 className="text-base font-semibold text-primary">Activity</h1>
-        <p className="text-xs text-muted">All pipeline events across every project.</p>
-      </div>
-
       <div className="flex-1 overflow-y-auto px-6 py-6">
         <div className="max-w-5xl">
+          <h2 className="text-sm font-semibold text-primary mb-3">Activity</h2>
           {isLoading && (
             <div className="flex items-center justify-center py-16">
               <Loader2 size={20} className="animate-spin text-muted" />
