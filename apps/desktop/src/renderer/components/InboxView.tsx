@@ -15,8 +15,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
-  TableHeader,
   TableRow,
   X,
 } from '@shipcode/ui';
@@ -219,14 +217,6 @@ export function InboxView() {
     <Card>
       <CardContent className="p-0">
         <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Status</TableHead>
-              <TableHead>Time</TableHead>
-              <TableHead>Notification</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
           <TableBody>{rows.map(renderRow)}</TableBody>
         </Table>
       </CardContent>
