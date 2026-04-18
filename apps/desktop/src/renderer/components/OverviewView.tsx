@@ -12,9 +12,6 @@ import {
   Button,
   Card,
   CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
   ListTodo,
   PackageCheck,
   Pagination,
@@ -246,189 +243,189 @@ export function OverviewView() {
           </div>
 
           {/* Running Agents — always first after stats */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Running Agents</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0">
-              {running.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted">
-                  No agents running. Start a pipeline to see live status here.
-                </div>
-              ) : (
-                <ul className="divide-y divide-border">
-                  {running.map((row) => (
-                    <li key={row.threadId} className="flex items-center gap-3 py-2.5">
-                      <Button
-                        variant="ghost"
-                        onClick={() => handleRowClick(row.projectId, row.threadId)}
-                        className="h-auto flex-1 justify-start gap-3 px-0 py-0 text-left font-normal hover:bg-transparent"
-                      >
-                        <span className="inline-flex shrink-0 items-center rounded-md border border-border bg-tertiary px-1.5 py-0.5 text-[10px] text-secondary">
-                          {row.projectName}
-                        </span>
-                        <span className="flex-1 truncate text-[13px] text-primary">
-                          {row.threadTitle}
-                        </span>
-                        <PhaseChip status={row.phase} />
-                        <span className="w-16 text-right text-[11px] tabular-nums text-muted">
-                          <ElapsedClock since={row.startedAt} />
-                        </span>
-                      </Button>
-                      <Button
-                        size="xs"
-                        variant="destructive"
-                        onClick={() => handleStop(row.threadId)}
-                      >
-                        Stop
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
+          <div>
+            <h2 className="text-sm font-semibold text-primary mb-3">Running Agents</h2>
+            <Card>
+              <CardContent className="p-0 px-4">
+                {running.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted">
+                    No agents running. Start a pipeline to see live status here.
+                  </div>
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {running.map((row) => (
+                      <li key={row.threadId} className="flex items-center gap-3 py-2.5">
+                        <Button
+                          variant="ghost"
+                          onClick={() => handleRowClick(row.projectId, row.threadId)}
+                          className="h-auto flex-1 justify-start gap-3 px-0 py-0 text-left font-normal hover:bg-transparent"
+                        >
+                          <span className="inline-flex shrink-0 items-center rounded-md border border-border bg-tertiary px-1.5 py-0.5 text-[10px] text-secondary">
+                            {row.projectName}
+                          </span>
+                          <span className="flex-1 truncate text-[13px] text-primary">
+                            {row.threadTitle}
+                          </span>
+                          <PhaseChip status={row.phase} />
+                          <span className="w-16 text-right text-[11px] tabular-nums text-muted">
+                            <ElapsedClock since={row.startedAt} />
+                          </span>
+                        </Button>
+                        <Button
+                          size="xs"
+                          variant="destructive"
+                          onClick={() => handleStop(row.threadId)}
+                        >
+                          Stop
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          </div>
 
           {/* Activity + Recent tasks */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Recent Activity</CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={openActivity}
-                    className="h-auto px-0 text-[11px] font-normal text-muted hover:bg-transparent capitalize"
-                  >
-                    View all →
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                {activity.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted">
-                    No activity yet.
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader className="sr-only">
-                      <TableRow>
-                        <TableHead>Actor</TableHead>
-                        <TableHead>Activity</TableHead>
-                        <TableHead>Time</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {activitySlice.map((entry) => (
-                        <TableRow
-                          key={entry.id}
-                          className="cursor-pointer hover:bg-hover"
-                          onClick={() => {
-                            if (entry.projectId && entry.threadId) {
-                              handleRowClick(entry.projectId, entry.threadId);
-                            }
-                          }}
-                        >
-                          <TableCell className="w-px whitespace-nowrap pr-2 align-top pt-2.5">
-                            <span className="inline-flex items-center justify-center rounded border border-border bg-tertiary px-1 py-0.5 text-[9px] uppercase text-secondary">
-                              {entry.actor}
-                            </span>
-                          </TableCell>
-                          <TableCell className="max-w-0 w-full">
-                            <div className="truncate text-[12px] text-primary">{entry.title}</div>
-                            <div className="truncate text-[11px] text-muted">
-                              {entry.subtitle || '–'}
-                            </div>
-                          </TableCell>
-                          <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-muted">
-                            {timeAgo(entry.createdAt)}
-                          </TableCell>
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-primary">Recent Activity</h2>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={openActivity}
+                  className="h-auto px-0 text-[11px] font-normal text-muted hover:bg-transparent capitalize"
+                >
+                  View all →
+                </Button>
+              </div>
+              <Card>
+                <CardContent className="p-0">
+                  {activity.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted">
+                      No activity yet.
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader className="sr-only">
+                        <TableRow>
+                          <TableHead>Actor</TableHead>
+                          <TableHead>Activity</TableHead>
+                          <TableHead>Time</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
+                      </TableHeader>
+                      <TableBody>
+                        {activitySlice.map((entry) => (
+                          <TableRow
+                            key={entry.id}
+                            className="cursor-pointer hover:bg-hover"
+                            onClick={() => {
+                              if (entry.projectId && entry.threadId) {
+                                handleRowClick(entry.projectId, entry.threadId);
+                              }
+                            }}
+                          >
+                            <TableCell className="w-px whitespace-nowrap pr-2 align-top pt-2.5">
+                              <span className="inline-flex items-center justify-center rounded border border-border bg-tertiary px-1 py-0.5 text-[9px] uppercase text-secondary">
+                                {entry.actor}
+                              </span>
+                            </TableCell>
+                            <TableCell className="max-w-0 w-full">
+                              <div className="truncate text-[12px] text-primary">{entry.title}</div>
+                              <div className="truncate text-[11px] text-muted">
+                                {entry.subtitle || '–'}
+                              </div>
+                            </TableCell>
+                            <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-muted">
+                              {timeAgo(entry.createdAt)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
               {activityTotalPages > 1 && (
-                <CardFooter className="pt-0 pb-4 px-5">
+                <div className="mt-3 px-1">
                   <Pagination
                     page={activityPage}
                     totalPages={activityTotalPages}
                     onPageChange={setActivityPage}
                     className="w-full"
                   />
-                </CardFooter>
-              )}
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Recent Tasks</CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={openInbox}
-                    className="h-auto px-0 text-[11px] font-normal text-muted hover:bg-transparent capitalize"
-                  >
-                    View all →
-                  </Button>
                 </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                {recent.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted">
-                    No recent tasks.
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader className="sr-only">
-                      <TableRow>
-                        <TableHead>Phase</TableHead>
-                        <TableHead>Title</TableHead>
-                        <TableHead>Time</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {tasksSlice.map((task) => (
-                        <TableRow
-                          key={task.threadId}
-                          className="cursor-pointer hover:bg-hover"
-                          onClick={() => handleRowClick(task.projectId, task.threadId)}
-                        >
-                          <TableCell className="w-px whitespace-nowrap pr-2 align-top pt-2.5">
-                            <PhaseChip status={task.phase} />
-                          </TableCell>
-                          <TableCell className="max-w-0 w-full">
-                            <div className="truncate text-[12px] text-primary">
-                              {task.githubIssueNumber ? `#${task.githubIssueNumber} ` : ''}
-                              {task.title}
-                            </div>
-                            <div className="truncate text-[11px] text-muted">
-                              {task.projectName} · {task.phase.replace(/_/g, ' ')}
-                            </div>
-                          </TableCell>
-                          <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-muted align-top pt-2.5">
-                            {timeAgo(task.updatedAt)}
-                          </TableCell>
+              )}
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-primary">Recent Tasks</h2>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={openInbox}
+                  className="h-auto px-0 text-[11px] font-normal text-muted hover:bg-transparent capitalize"
+                >
+                  View all →
+                </Button>
+              </div>
+              <Card>
+                <CardContent className="p-0">
+                  {recent.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted">
+                      No recent tasks.
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader className="sr-only">
+                        <TableRow>
+                          <TableHead>Phase</TableHead>
+                          <TableHead>Title</TableHead>
+                          <TableHead>Time</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
+                      </TableHeader>
+                      <TableBody>
+                        {tasksSlice.map((task) => (
+                          <TableRow
+                            key={task.threadId}
+                            className="cursor-pointer hover:bg-hover"
+                            onClick={() => handleRowClick(task.projectId, task.threadId)}
+                          >
+                            <TableCell className="w-px whitespace-nowrap pr-2 align-top pt-2.5">
+                              <PhaseChip status={task.phase} />
+                            </TableCell>
+                            <TableCell className="max-w-0 w-full">
+                              <div className="truncate text-[12px] text-primary">
+                                {task.githubIssueNumber ? `#${task.githubIssueNumber} ` : ''}
+                                {task.title}
+                              </div>
+                              <div className="truncate text-[11px] text-muted">
+                                {task.projectName} · {task.phase.replace(/_/g, ' ')}
+                              </div>
+                            </TableCell>
+                            <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-muted align-top pt-2.5">
+                              {timeAgo(task.updatedAt)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
               {tasksTotalPages > 1 && (
-                <CardFooter className="pt-0 pb-4 px-5">
+                <div className="mt-3 px-1">
                   <Pagination
                     page={tasksPage}
                     totalPages={tasksTotalPages}
                     onPageChange={setTasksPage}
                     className="w-full"
                   />
-                </CardFooter>
+                </div>
               )}
-            </Card>
+            </div>
           </div>
         </div>
       </div>
