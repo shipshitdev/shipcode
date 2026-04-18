@@ -256,9 +256,9 @@ export function OverviewView() {
                     key={row.threadId}
                     className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 min-w-[260px] max-w-[340px] flex-1"
                   >
-                    <button
-                      type="button"
-                      className="flex items-start justify-between gap-2 text-left w-full"
+                    <Button
+                      variant="ghost"
+                      className="flex items-start justify-between gap-2 text-left w-full h-auto px-0 py-0 hover:bg-transparent font-normal"
                       onClick={() => handleRowClick(row.projectId, row.threadId)}
                     >
                       <div className="min-w-0">
@@ -268,7 +268,7 @@ export function OverviewView() {
                         </div>
                       </div>
                       <PhaseChip status={row.phase} />
-                    </button>
+                    </Button>
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[11px] tabular-nums text-muted">
                         <ElapsedClock since={row.startedAt} />
