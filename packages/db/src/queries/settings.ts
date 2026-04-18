@@ -202,6 +202,18 @@ export class SettingsQueries {
         10,
         DEFAULT_SETTINGS.maxConcurrentPipelines,
       ),
+      maxConcurrentExecutions: clampInt(
+        stored.maxConcurrentExecutions,
+        1,
+        10,
+        DEFAULT_SETTINGS.maxConcurrentExecutions,
+      ),
+      instantDefaultPanes: clampInt(
+        stored.instantDefaultPanes,
+        1,
+        4,
+        DEFAULT_SETTINGS.instantDefaultPanes,
+      ) as AppSettings['instantDefaultPanes'],
     };
   }
 
@@ -222,6 +234,11 @@ export class SettingsQueries {
       const n = Number(patch.maxConcurrentPipelines);
       if (!Number.isFinite(n) || n < 1 || n > 10)
         throw new Error('maxConcurrentPipelines must be 1–10');
+    }
+    if ('maxConcurrentExecutions' in patch && patch.maxConcurrentExecutions != null) {
+      const n = Number(patch.maxConcurrentExecutions);
+      if (!Number.isFinite(n) || n < 1 || n > 10)
+        throw new Error('maxConcurrentExecutions must be 1–10');
     }
     for (const key of [
       'plannerReasoningEffort',
@@ -250,9 +267,6 @@ export class SettingsQueries {
       if (!isContextGeneratorCli(patch.prdRewriteCli)) {
         throw new Error('prdRewriteCli must be claude|codex');
       }
-    }
-    if ('worktreeBranchFormat' in patch && patch.worktreeBranchFormat != null) {
-      validateBranchFormat(patch.worktreeBranchFormat);
     }
     if ('worktreeBranchFormat' in patch && patch.worktreeBranchFormat != null) {
       validateBranchFormat(patch.worktreeBranchFormat);

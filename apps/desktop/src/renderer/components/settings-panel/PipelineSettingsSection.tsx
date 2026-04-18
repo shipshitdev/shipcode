@@ -100,6 +100,25 @@ export function PipelineSettingsSection({
               />
             </SettingsRow>
             <SettingsRow
+              label="Max concurrent executions"
+              htmlFor="max-concurrent-executions"
+              description="How many pipelines can execute at once. Approved pipelines wait until a slot opens."
+            >
+              <Input
+                id="max-concurrent-executions"
+                type="number"
+                className="w-[80px]"
+                value={settings.maxConcurrentExecutions}
+                onChange={(e) => {
+                  const value = Number.parseInt(e.target.value, 10);
+                  if (value >= 1 && value <= 10) onUpdate({ maxConcurrentExecutions: value });
+                }}
+                min={1}
+                max={10}
+                step={1}
+              />
+            </SettingsRow>
+            <SettingsRow
               label="Review rounds"
               htmlFor="max-review-rounds"
               description="How many review->revise cycles before execution or approval."

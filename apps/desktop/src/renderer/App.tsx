@@ -8,6 +8,8 @@ import { CostsView } from './components/CostsView';
 import { CreateIssueModal } from './components/CreateIssueModal';
 import { HealthBanner } from './components/HealthBanner';
 import { InboxView } from './components/InboxView';
+import { InstantFixModal } from './components/InstantFixModal';
+import { InstantView } from './components/InstantView';
 import { IssueDetail } from './components/IssueDetail';
 import { NotificationToaster } from './components/NotificationToaster';
 import { OverviewView } from './components/OverviewView';
@@ -214,6 +216,8 @@ export function App() {
                       <SkillsView />
                     ) : viewMode === 'inbox' ? (
                       <InboxView />
+                    ) : viewMode === 'instant' ? (
+                      <InstantView />
                     ) : showOverview ? (
                       <OverviewView />
                     ) : showMissingProject && activeProject ? (
@@ -255,6 +259,7 @@ export function App() {
         </div>
       </div>
       <CommandPalette />
+      <InstantFixModal />
       <CreateIssueModal />
       <ProjectSettingsModal />
       <ProjectSetupModal />

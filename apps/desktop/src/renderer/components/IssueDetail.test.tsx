@@ -55,6 +55,7 @@ const makeThread = (overrides: Partial<Thread> = {}): Thread => {
     title: 'Thread title',
     prompt: 'Do the thing',
     status: 'awaiting_approval',
+    kind: 'pipeline' as const,
     worktreeBranch: null,
     worktreePath: null,
     plannerModel: 'claude',
@@ -152,6 +153,7 @@ const makeProject = () => ({
   defaultBranch: 'main',
   pinned: false,
   archived: false,
+  hidden: false,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 });
@@ -369,6 +371,7 @@ describe('IssueDetail', () => {
           defaultBranch: 'main',
           pinned: false,
           archived: false,
+          hidden: false,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
@@ -654,6 +657,7 @@ describe('IssueDetail', () => {
             defaultBranch: 'main',
             pinned: false,
             archived: false,
+            hidden: false,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           },

@@ -61,6 +61,7 @@ import {
 import { createPipeline } from '@shipcode/pipeline';
 import {
   clampError,
+  EXECUTION_PHASES,
   HEARTBEAT_TIMEOUT_MS,
   resolveEffectivePhaseReasoningEffortForIssue,
   resolveExecutorModelForIssue,
@@ -284,6 +285,7 @@ function createWindow() {
   // Initialize pipeline state machine.
   // onPipelineTerminal is set after pipeline is created (late-binding).
   let onPipelineTerminal: (() => void) | undefined;
+  let onExecutionSlotFreed: (() => void) | undefined;
   const emitter = createElectronEmitter(mainWindow, {
     activity: queries.activity,
     terminalEvents: queries.terminalEvents,
@@ -291,6 +293,7 @@ function createWindow() {
     notifications: notificationService,
     chatNotifications: chatNotificationService,
     onPipelineTerminal: () => onPipelineTerminal?.(),
+    onExecutionSlotFreed: () => onExecutionSlotFreed?.(),
   });
 
   // Provider registry — claude/codex CLIs + OpenRouter HTTP provider.
@@ -390,11 +393,49 @@ function createWindow() {
     }
   };
 
+  // Execution queue promotion: start the next approved-but-waiting thread
+  // when an execution slot opens (pipeline reaches completed/failed/idle).
+  onExecutionSlotFreed = () => {
+    try {
+      const settings = queries.settings.get();
+      const executingCount = activePipeline.listActiveInPhases(EXECUTION_PHASES).length;
+      if (executingCount >= settings.maxConcurrentExecutions) return;
+
+      const thread = queries.threads.getAwaitingWithApprovedPlan();
+      if (!thread) return;
+
+      const latestPlan = queries.plans.getLatest(thread.id);
+      if (!latestPlan?.structured) return;
+
+      const project = queries.projects.getById(thread.projectId);
+      if (!project) return;
+
+      activePipeline.rehydrateContext(thread.id, project.path);
+
+      log.info(`[execution-queue] promoting thread ${thread.id} "${thread.title}"`);
+
+      activePipeline.startExecution(thread.id, latestPlan.structured).catch((err) => {
+        transitionThreadPhase(requireMainWindow(), queries, emitter, {
+          threadId: thread.id,
+          phase: 'failed',
+          errorMessage: clampError(err),
+        });
+        log.error('[execution-queue] promotion failed:', err);
+      });
+    } catch (err) {
+      log.error('[execution-queue] drain error:', err);
+    }
+  };
+
   // Startup: promote any queued items from a previous session.
   setTimeout(() => {
     const settings = queries.settings.get();
     for (let i = 0; i < settings.maxConcurrentPipelines; i++) {
       onPipelineTerminal?.();
+    }
+    // Also drain any threads that were approved pre-restart and waiting for execution.
+    for (let i = 0; i < settings.maxConcurrentExecutions; i++) {
+      onExecutionSlotFreed?.();
     }
   }, 0);
 

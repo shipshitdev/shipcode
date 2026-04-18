@@ -9,6 +9,7 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     title: 'Test thread',
     prompt: 'Prompt',
     status: 'failed',
+    kind: 'pipeline' as const,
     worktreeBranch: null,
     worktreePath: null,
     plannerModel: 'claude',

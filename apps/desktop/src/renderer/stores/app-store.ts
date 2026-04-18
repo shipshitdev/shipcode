@@ -21,7 +21,14 @@ const AGENT_ACTIVE_STATUSES = new Set<IssuePipelineStatus>([
   'shipping',
 ]);
 
-export type ViewMode = 'overview' | 'project' | 'activity' | 'inbox' | 'costs' | 'skills';
+export type ViewMode =
+  | 'overview'
+  | 'project'
+  | 'activity'
+  | 'inbox'
+  | 'costs'
+  | 'skills'
+  | 'instant';
 export type SettingsSection =
   | 'general'
   | 'integrations'
@@ -92,6 +99,11 @@ interface AppState {
   projectSetupModalOpen: boolean;
   projectSetupModalProjectId: string | null;
 
+  // Instant fix
+  instantFixModalOpen: boolean;
+  instantPaneThreadIds: string[];
+  instantSplitDirection: 'horizontal' | 'vertical';
+
   // Actions
   setViewMode: (mode: ViewMode) => void;
   openOverview: () => void;
@@ -143,6 +155,14 @@ interface AppState {
   closeProjectSettingsModal: () => void;
   openProjectSetupModal: (projectId: string) => void;
   closeProjectSetupModal: () => void;
+
+  // Instant fix actions
+  openInstantFixModal: () => void;
+  closeInstantFixModal: () => void;
+  openInstant: () => void;
+  addInstantPane: (threadId: string) => void;
+  removeInstantPane: (threadId: string) => void;
+  setInstantSplitDirection: (dir: 'horizontal' | 'vertical') => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -178,6 +198,9 @@ export const useAppStore = create<AppState>((set) => ({
   projectSettingsModalProjectId: null,
   projectSetupModalOpen: false,
   projectSetupModalProjectId: null,
+  instantFixModalOpen: false,
+  instantPaneThreadIds: [],
+  instantSplitDirection: 'horizontal',
   currentModels: {},
   canonicalTerminalStream: {},
 
@@ -411,4 +434,29 @@ export const useAppStore = create<AppState>((set) => ({
     }),
   closeProjectSetupModal: () =>
     set({ projectSetupModalOpen: false, projectSetupModalProjectId: null }),
+
+  // Instant fix
+  openInstantFixModal: () => set({ instantFixModalOpen: true, commandPaletteOpen: false }),
+  closeInstantFixModal: () => set({ instantFixModalOpen: false }),
+  openInstant: () =>
+    set({
+      viewMode: 'instant',
+      activeIssue: null,
+      issueDetailExpanded: false,
+      terminalMaximized: false,
+      currentPlan: null,
+      currentReview: null,
+      currentVerification: null,
+    }),
+  addInstantPane: (threadId) =>
+    set((s) => {
+      if (s.instantPaneThreadIds.includes(threadId)) return s;
+      const next = [...s.instantPaneThreadIds, threadId].slice(0, 4);
+      return { instantPaneThreadIds: next };
+    }),
+  removeInstantPane: (threadId) =>
+    set((s) => ({
+      instantPaneThreadIds: s.instantPaneThreadIds.filter((id) => id !== threadId),
+    })),
+  setInstantSplitDirection: (dir) => set({ instantSplitDirection: dir }),
 }));

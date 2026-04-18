@@ -65,6 +65,7 @@ describe('registerGitHubHandlers', () => {
     title: 'Old title',
     prompt: 'Old prompt',
     status: 'failed',
+    kind: 'pipeline' as const,
     worktreeBranch: 'ship/42-issue-title',
     worktreePath: '/tmp/worktree',
     plannerModel: 'claude',

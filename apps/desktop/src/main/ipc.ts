@@ -4,6 +4,7 @@ import type { BrowserWindow, IpcMain } from 'electron';
 import type { ChatNotificationService } from './chat-notification-service';
 import { transitionThreadPhase } from './ipc/helpers';
 import { registerGitHubHandlers } from './ipc/register-github-handlers';
+import { registerInstantHandlers } from './ipc/register-instant-handlers';
 import { registerPipelineHandlers } from './ipc/register-pipeline-handlers';
 import { registerProjectHandlers } from './ipc/register-project-handlers';
 import { registerSkillsHandlers } from './ipc/register-skills-handlers';
@@ -82,4 +83,5 @@ export function registerIpcHandlers(
   registerPipelineHandlers(deps);
   registerSkillsHandlers(deps);
   registerSupportHandlers(deps);
+  registerInstantHandlers(deps);
 }

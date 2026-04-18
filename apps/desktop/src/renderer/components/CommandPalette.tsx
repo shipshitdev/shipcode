@@ -32,6 +32,7 @@ export function CommandPalette() {
     openCosts,
     selectProject,
     openProjectSetupModal,
+    openInstantFixModal,
   } = useAppStore();
 
   const addProject = useMutation({
@@ -136,6 +137,13 @@ export function CommandPalette() {
             </CommandItem>
           </CommandGroup>
         )}
+
+        <CommandGroup heading="Quick Actions">
+          <CommandItem onSelect={() => runAction(() => openInstantFixModal())}>
+            <span className="flex-1">Instant Fix...</span>
+            <CommandShortcut>{getShortcut('instant-fix').glyph}</CommandShortcut>
+          </CommandItem>
+        </CommandGroup>
 
         <CommandGroup heading="Go to">
           <CommandItem onSelect={() => runAction(() => openOverview())}>

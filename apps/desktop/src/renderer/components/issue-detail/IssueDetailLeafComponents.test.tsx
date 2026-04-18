@@ -1,15 +1,10 @@
 // @vitest-environment jsdom
 
-import type {
-  ActivePipelineSummary,
-  ActivityEntry,
-  GitHubIssueCacheRecord,
-} from '@shipcode/shared';
+import type { ActivePipelineSummary, ActivityEntry } from '@shipcode/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '../../stores/app-store';
-import { TerminalDrawerActionBanner } from '../terminal-drawer/TerminalDrawerActionBanner';
 import { IssueHistoryTab } from './IssueHistoryTab';
 import { PlanWaiting } from './PlanWaiting';
 
@@ -24,43 +19,6 @@ function renderWithProviders(element: React.ReactNode) {
   });
 
   return render(<QueryClientProvider client={queryClient}>{element}</QueryClientProvider>);
-}
-
-function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssueCacheRecord {
-  return {
-    id: 'issue-1',
-    projectId: 'project-1',
-    issueNumber: 19,
-    title: 'Fix the board',
-    body: null,
-    labels: [],
-    assignee: null,
-    state: 'open',
-    pipelineStatus: 'planning',
-    threadId: 'thread-1',
-    claimedAt: null,
-    claimedBy: null,
-    lastPhaseUpdate: null,
-    lastStatusLabel: null,
-    plannerModelOverride: null,
-    reviewerModelOverride: null,
-    executorModelOverride: null,
-    verifierModelOverride: null,
-    plannerModelIdOverride: null,
-    reviewerModelIdOverride: null,
-    executorModelIdOverride: null,
-    verifierModelIdOverride: null,
-    linkedPrNumber: null,
-    linkedPrUrl: null,
-    linkedPrIsDraft: false,
-    ciBlocked: false,
-    failingChecks: [],
-    unresolvedReviewComments: [],
-    unresolvedReviewCommentCount: 0,
-    prLastSyncAt: null,
-    fetchedAt: '2026-04-16T00:00:00.000Z',
-    ...overrides,
-  };
 }
 
 afterEach(() => {
@@ -141,28 +99,5 @@ describe('issue-detail leaf components', () => {
     expect(screen.getByText('Plan drafted')).toBeInTheDocument();
     expect(screen.getByText('First draft ready')).toBeInTheDocument();
     expect(screen.getByText('Run 3')).toBeInTheDocument();
-  });
-
-  it('renders the terminal action banner and forwards both actions', () => {
-    const onDismiss = vi.fn();
-    const onOpen = vi.fn();
-
-    render(
-      <TerminalDrawerActionBanner
-        actionBanner={{ label: 'Open the latest issue', action: 'open-issue-detail' }}
-        pinnedIssue={makeIssue({ issueNumber: 42, title: 'Regression' })}
-        onDismiss={onDismiss}
-        onOpen={onOpen}
-      />,
-    );
-
-    expect(screen.getByText('Open the latest issue')).toBeInTheDocument();
-    expect(screen.getByText('#42 Regression - click to open')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /Open the latest issue/i }));
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
-
-    expect(onOpen).toHaveBeenCalledTimes(1);
-    expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 });

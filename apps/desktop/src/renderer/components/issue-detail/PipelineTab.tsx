@@ -3,8 +3,10 @@ import type {
   IntegrationStatus,
   OpenRouterModelValidation,
   PipelineCheckpoint,
+  ReasoningEffort,
   Thread,
 } from '@shipcode/shared';
+import { getSupportedReasoningEfforts, resolveProviderReasoningEffort } from '@shipcode/shared';
 import {
   Badge,
   Button,
@@ -33,18 +35,22 @@ export function PipelineTab({
   activeIssue,
   activeThreadId,
   checkpoints,
+  currentPhaseReasoningEfforts,
   currentPhaseSelections,
   effectivePhaseResolvedModels,
   executorEditable,
   hasPrFeedbackBlockers,
+  inheritedPhaseReasoningEfforts,
   integrationStatus,
   isSubmitting,
   linkedPrUrl,
+  phaseEffortSelectValues,
   phaseModelValidation,
   phaseSelectValues,
   projectDefaultPhaseSelections,
   thread,
   onPhaseAgentChange,
+  onPhaseEffortChange,
   onPhaseOpenRouterSlugBlur,
   onRestoreCheckpoint,
   onStabilizePr,
@@ -52,18 +58,22 @@ export function PipelineTab({
   activeIssue: GitHubIssueCacheRecord;
   activeThreadId: string | null;
   checkpoints: PipelineCheckpoint[];
+  currentPhaseReasoningEfforts: Record<PhaseKey, ReasoningEffort>;
   currentPhaseSelections: Record<PhaseKey, PhaseSelection>;
   effectivePhaseResolvedModels: Record<PhaseKey, string>;
   executorEditable: boolean;
   hasPrFeedbackBlockers: boolean;
+  inheritedPhaseReasoningEfforts: Record<PhaseKey, ReasoningEffort>;
   integrationStatus?: IntegrationStatus;
   isSubmitting: boolean;
   linkedPrUrl: string | null;
+  phaseEffortSelectValues: Record<PhaseKey, string>;
   phaseModelValidation: Partial<Record<PhaseKey, OpenRouterModelValidation | null>>;
   phaseSelectValues: Record<PhaseKey, string>;
   projectDefaultPhaseSelections: Record<PhaseKey, PhaseSelection>;
   thread: Thread | null | undefined;
   onPhaseAgentChange: (phase: PhaseKey, value: string) => void;
+  onPhaseEffortChange: (phase: PhaseKey, effort: string) => void;
   onPhaseOpenRouterSlugBlur: (phase: PhaseKey, rawValue: string) => void;
   onRestoreCheckpoint: (checkpoint: PipelineCheckpoint) => void;
   onStabilizePr: () => void;
@@ -201,11 +211,75 @@ export function PipelineTab({
                       {phaseModelValidation[phase]?.message}
                     </div>
                   ) : null}
+
+                  {/* Effort selector */}
+                  {(() => {
+                    const provider = currentPhaseSelections[phase].provider;
+                    const modelId = currentPhaseSelections[phase].modelId;
+                    const supportedEfforts = getSupportedReasoningEfforts(provider, modelId);
+                    const configuredEffort = currentPhaseReasoningEfforts[phase];
+                    const effortResolution = resolveProviderReasoningEffort(
+                      provider,
+                      configuredEffort,
+                      modelId,
+                    );
+                    const effortSelectValue = phaseEffortSelectValues[phase];
+                    const isInherited = effortSelectValue === '__inherit__';
+                    return (
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[10px] uppercase tracking-wide text-muted">
+                          {provider === 'claude' ? 'Thinking budget' : 'Effort'}
+                        </span>
+                        <Select
+                          value={effortSelectValue}
+                          onValueChange={(next) => onPhaseEffortChange(phase, next)}
+                        >
+                          <SelectTrigger className="h-6 w-full text-[11px]">
+                            <SelectValue>
+                              {isInherited ? (
+                                <InheritValueDisplay
+                                  detail={`inherit (${inheritedPhaseReasoningEfforts[phase]})`}
+                                />
+                              ) : undefined}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__inherit__">
+                              Inherit ({inheritedPhaseReasoningEfforts[phase]})
+                            </SelectItem>
+                            <SelectSeparator />
+                            {!isInherited && !effortResolution.exact ? (
+                              <SelectItem value={configuredEffort}>
+                                {`${configuredEffort} (maps to ${effortResolution.effective})`}
+                              </SelectItem>
+                            ) : null}
+                            {supportedEfforts.map((effort) => (
+                              <SelectItem key={effort} value={effort}>
+                                {effort}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {!isInherited && !effortResolution.exact ? (
+                          <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-300">
+                            {effortResolution.message}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })()}
                 </>
               ) : (
-                <Badge variant="default" className="w-fit font-mono normal-case tracking-normal">
-                  {MODEL_DISPLAY[displayModel] ?? displayModel}
-                </Badge>
+                <>
+                  <Badge variant="default" className="w-fit font-mono normal-case tracking-normal">
+                    {MODEL_DISPLAY[displayModel] ?? displayModel}
+                  </Badge>
+                  {phaseEffortSelectValues[phase] !== '__inherit__' ? (
+                    <span className="text-[10px] text-muted">
+                      {currentPhaseReasoningEfforts[phase]}
+                    </span>
+                  ) : null}
+                </>
               )}
             </div>
           ))}

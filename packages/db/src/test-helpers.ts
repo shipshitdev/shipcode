@@ -22,6 +22,8 @@ import {
   migrateV20,
   migrateV21,
   migrateV22,
+  migrateV23,
+  migrateV24,
 } from './schema';
 
 export function createTestDb(): DatabaseSync {
@@ -48,5 +50,7 @@ export function createTestDb(): DatabaseSync {
   migrateV20(db);
   migrateV21(db);
   migrateV22(db);
+  migrateV23(db);
+  migrateV24(db);
   return db;
 }

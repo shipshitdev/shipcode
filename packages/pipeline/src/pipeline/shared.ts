@@ -28,6 +28,7 @@ export interface PipelineContextHelpers {
     };
   };
   listActive: () => ActivePipelineSummary[];
+  listActiveInPhases: (phases: readonly string[]) => ActivePipelineSummary[];
 }
 
 export interface PipelineRuntime {

@@ -12,7 +12,8 @@ export type ShortcutId =
   | 'command-palette'
   | 'toggle-terminal'
   | 'toggle-sidebar'
-  | 'toggle-issue-detail';
+  | 'toggle-issue-detail'
+  | 'instant-fix';
 
 export type ShortcutCategory = 'Navigation' | 'Workspace';
 
@@ -70,6 +71,14 @@ export const SHORTCUTS: ShortcutDef[] = [
     category: 'Workspace',
     glyph: '⌘J',
     combo: { meta: true, key: 'j' },
+  },
+  {
+    id: 'instant-fix',
+    label: 'Instant Fix',
+    description: 'Open the instant fix modal for a quick CLI run',
+    category: 'Navigation',
+    glyph: '⇧⌘I',
+    combo: { meta: true, shift: true, key: 'i' },
   },
 ];
 

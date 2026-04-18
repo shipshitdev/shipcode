@@ -86,9 +86,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   testCommand: null,
   testingContext: null,
   maxConcurrentPipelines: 3,
+  maxConcurrentExecutions: 1,
+  instantDefaultPanes: 1,
 };
 
 export const CURRENT_ONBOARDING_VERSION = 1;
+
+export const EXECUTION_PHASES = ['executing', 'testing', 'verifying', 'shipping'] as const;
 
 export const PIPELINE_MAX_RETRIES = 3;
 

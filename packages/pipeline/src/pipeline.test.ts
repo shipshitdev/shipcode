@@ -155,6 +155,7 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     title: 'test',
     prompt: 'test',
     status: 'awaiting_approval',
+    kind: 'pipeline' as const,
     worktreeBranch: null,
     worktreePath: null,
     plannerModel: 'claude',
@@ -209,6 +210,10 @@ function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
     reviewerModelIdOverride: null,
     executorModelIdOverride: null,
     verifierModelIdOverride: null,
+    plannerReasoningEffortOverride: null,
+    reviewerReasoningEffortOverride: null,
+    executorReasoningEffortOverride: null,
+    verifierReasoningEffortOverride: null,
     linkedPrNumber: null,
     linkedPrUrl: null,
     linkedPrIsDraft: false,
@@ -1641,6 +1646,150 @@ describe('createPipeline', () => {
 
       pipeline.cancel('t1');
       expect(pipeline.listActive()).toHaveLength(0);
+    });
+  });
+
+  // ─── listActiveInPhases ─────────────────────────────────────────────
+
+  describe('listActiveInPhases', () => {
+    it('returns only pipelines whose thread status matches the given phases', async () => {
+      // Seed two threads: one in planning, one in executing
+      let callCount = 0;
+      mock.deps.threads.getById = vi.fn(() => {
+        callCount++;
+        return {
+          id: callCount <= 1 ? 't1' : 't2',
+          status: callCount <= 1 ? 'planning' : 'executing',
+        };
+      }) as never;
+
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      await pipeline.startPlanGeneration('t2', 'do more', '/proj', null);
+
+      // Reset the mock to return consistent per-id statuses
+      mock.deps.threads.getById = vi.fn((id: string) => ({
+        id,
+        status: id === 't1' ? 'planning' : 'executing',
+      })) as never;
+
+      const executing = pipeline.listActiveInPhases([
+        'executing',
+        'testing',
+        'verifying',
+        'shipping',
+      ]);
+      expect(executing).toHaveLength(1);
+      expect(executing[0].threadId).toBe('t2');
+
+      const planning = pipeline.listActiveInPhases(['planning', 'reviewing', 'revising']);
+      expect(planning).toHaveLength(1);
+      expect(planning[0].threadId).toBe('t1');
+    });
+
+    it('returns empty array when no pipelines match the given phases', async () => {
+      mock.deps.threads.getById = vi.fn(() => ({
+        id: 't1',
+        status: 'planning',
+      })) as never;
+
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+
+      expect(pipeline.listActiveInPhases(['executing'])).toHaveLength(0);
+    });
+  });
+
+  // ─── execution concurrency gate ───────────────────────────────────
+
+  describe('execution concurrency gate', () => {
+    it('blocks execution when maxConcurrentExecutions is reached', async () => {
+      // Default maxConcurrentExecutions is 1 via DEFAULT_SETTINGS
+
+      // One pipeline already executing
+      mock.deps.threads.getById = vi.fn((id: string) => ({
+        id,
+        projectId: 'project-1',
+        status: id === 't-existing' ? 'executing' : 'awaiting_approval',
+      })) as never;
+
+      const pipeline = createPipeline(mock.deps);
+      // Seed the existing executing pipeline into active map
+      pipeline.initializeContext('t-existing', { projectPath: '/proj' });
+      // Seed the candidate pipeline
+      pipeline.initializeContext('t-new', { projectPath: '/proj' });
+
+      const plan = { steps: [] } as never;
+      await pipeline.startExecution('t-new', plan);
+
+      // Should have emitted awaiting_approval, not executing
+      const phaseEvents = mock.emittedEvents.filter(
+        (e: PipelineEvent) => e.type === 'pipeline:phase' && e.threadId === 't-new',
+      );
+      expect(phaseEvents[phaseEvents.length - 1]).toMatchObject({
+        type: 'pipeline:phase',
+        phase: 'awaiting_approval',
+      });
+    });
+
+    it('allows execution when under maxConcurrentExecutions limit', async () => {
+      // Raise limit to 2 so one executing pipeline doesn't block
+      mock.deps.settings.get = vi.fn(() => ({
+        ...DEFAULT_SETTINGS,
+        maxConcurrentExecutions: 2,
+      })) as never;
+
+      mock.deps.threads.getById = vi.fn((id: string) => ({
+        id,
+        projectId: 'project-1',
+        status: id === 't-existing' ? 'executing' : 'awaiting_approval',
+      })) as never;
+
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t-existing', { projectPath: '/proj' });
+      pipeline.initializeContext('t-new', { projectPath: '/proj' });
+
+      const plan = { steps: [] } as never;
+      await pipeline.startExecution('t-new', plan);
+
+      // Should have emitted executing (gate passed), not awaiting_approval
+      const phaseEvents = mock.emittedEvents.filter(
+        (e: PipelineEvent) => e.type === 'pipeline:phase' && e.threadId === 't-new',
+      );
+      expect(phaseEvents[phaseEvents.length - 1]).toMatchObject({
+        type: 'pipeline:phase',
+        phase: 'executing',
+      });
+    });
+
+    it('allows multiple concurrent executions when limit permits', async () => {
+      mock.deps.settings.get = vi.fn(() => ({
+        ...DEFAULT_SETTINGS,
+        maxConcurrentExecutions: 3,
+      })) as never;
+
+      mock.deps.threads.getById = vi.fn((id: string) => ({
+        id,
+        projectId: 'project-1',
+        status: id === 't3' ? 'awaiting_approval' : 'executing',
+      })) as never;
+
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', { projectPath: '/proj' });
+      pipeline.initializeContext('t2', { projectPath: '/proj' });
+      pipeline.initializeContext('t3', { projectPath: '/proj' });
+
+      const plan = { steps: [] } as never;
+      await pipeline.startExecution('t3', plan);
+
+      // 2 executing + t3 = 3 total, which is at limit but t3 should pass (2 < 3 at check time)
+      const phaseEvents = mock.emittedEvents.filter(
+        (e: PipelineEvent) => e.type === 'pipeline:phase' && e.threadId === 't3',
+      );
+      expect(phaseEvents[phaseEvents.length - 1]).toMatchObject({
+        type: 'pipeline:phase',
+        phase: 'executing',
+      });
     });
   });
 

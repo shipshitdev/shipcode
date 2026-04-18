@@ -175,5 +175,6 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     cancel,
     getContext: (threadId: string) => activePipelines.get(threadId),
     listActive: contextHelpers.listActive,
+    listActiveInPhases: contextHelpers.listActiveInPhases,
   };
 }

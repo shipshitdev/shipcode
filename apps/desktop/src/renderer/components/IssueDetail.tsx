@@ -14,10 +14,12 @@ import type {
 } from '@shipcode/shared';
 import {
   deriveGithubIssueUrl,
+  resolveEffectivePhaseReasoningEffort,
   resolveExecutorModelForIssue,
   resolvePhaseModel,
   resolvePhaseModelForIssue,
   resolvePhaseModelId,
+  resolvePhaseReasoningEffortForIssue,
   sanitizeResolvedModel,
 } from '@shipcode/shared';
 import {
@@ -506,6 +508,28 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     await queryClient.invalidateQueries({ queryKey: ['github-issues', activeProjectId] });
   };
 
+  const handlePhaseEffortChange = async (
+    phase: 'planner' | 'reviewer' | 'executor' | 'verifier',
+    effort: string,
+  ) => {
+    if (!activeProjectId || !activeIssue) return;
+    if (effort === '__inherit__') {
+      await window.shipcode.invoke('github:clear-phase-reasoning-effort-override', {
+        projectId: activeProjectId,
+        issueNumber: activeIssue.issueNumber,
+        phase,
+      });
+    } else {
+      await window.shipcode.invoke('github:set-phase-reasoning-effort-override', {
+        projectId: activeProjectId,
+        issueNumber: activeIssue.issueNumber,
+        phase,
+        effort: effort as import('@shipcode/shared').ReasoningEffort,
+      });
+    }
+    await queryClient.invalidateQueries({ queryKey: ['github-issues', activeProjectId] });
+  };
+
   const handleEditPrd = () => {
     if (!activeIssue) return;
     openEditPrdModal(activeIssue.issueNumber, activeIssue.body ?? '', activeIssue.labels);
@@ -626,6 +650,42 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
           )
         : INHERIT_EXECUTOR_VALUE,
   } as const;
+  const INHERIT_EFFORT_VALUE = '__inherit__';
+  const phaseEffortSelectValues = {
+    planner: activeIssue.plannerReasoningEffortOverride ?? INHERIT_EFFORT_VALUE,
+    reviewer: activeIssue.reviewerReasoningEffortOverride ?? INHERIT_EFFORT_VALUE,
+    executor: activeIssue.executorReasoningEffortOverride ?? INHERIT_EFFORT_VALUE,
+    verifier: activeIssue.verifierReasoningEffortOverride ?? INHERIT_EFFORT_VALUE,
+  } as const;
+  const inheritedPhaseReasoningEfforts = {
+    planner: settings
+      ? resolveEffectivePhaseReasoningEffort(settings, activeProject, 'planner')
+      : 'none',
+    reviewer: settings
+      ? resolveEffectivePhaseReasoningEffort(settings, activeProject, 'reviewer')
+      : 'none',
+    executor: settings
+      ? resolveEffectivePhaseReasoningEffort(settings, activeProject, 'executor')
+      : 'none',
+    verifier: settings
+      ? resolveEffectivePhaseReasoningEffort(settings, activeProject, 'verifier')
+      : 'none',
+  } as const;
+  const currentPhaseReasoningEfforts = {
+    planner: settings
+      ? resolvePhaseReasoningEffortForIssue(settings, activeProject, activeIssue, 'planner')
+      : 'none',
+    reviewer: settings
+      ? resolvePhaseReasoningEffortForIssue(settings, activeProject, activeIssue, 'reviewer')
+      : 'none',
+    executor: settings
+      ? resolvePhaseReasoningEffortForIssue(settings, activeProject, activeIssue, 'executor')
+      : 'none',
+    verifier: settings
+      ? resolvePhaseReasoningEffortForIssue(settings, activeProject, activeIssue, 'verifier')
+      : 'none',
+  } as const;
+
   const currentPhaseSelections = {
     planner:
       phaseSelectValues.planner === INHERIT_EXECUTOR_VALUE
@@ -935,8 +995,14 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       onEditPrd={handleEditPrd}
       onActiveTabChange={setActiveTab}
       onFullScreenPlan={setFullScreenPlanId}
+      currentPhaseReasoningEfforts={currentPhaseReasoningEfforts}
+      inheritedPhaseReasoningEfforts={inheritedPhaseReasoningEfforts}
+      phaseEffortSelectValues={phaseEffortSelectValues}
       onPhaseAgentChange={(phase, value) => {
         void handlePhaseAgentChange(phase, value);
+      }}
+      onPhaseEffortChange={(phase, effort) => {
+        void handlePhaseEffortChange(phase, effort);
       }}
       onPhaseOpenRouterSlugBlur={(phase, value) => {
         void handlePhaseOpenRouterSlugBlur(phase, value);

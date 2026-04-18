@@ -38,6 +38,7 @@ interface ProjectRow {
   default_branch: string;
   pinned: number;
   archived: number;
+  hidden: number;
   created_at: string;
   updated_at: string;
 }
@@ -62,7 +63,7 @@ export class ProjectQueries {
    */
   listVisible(): Project[] {
     const rows = this.db
-      .prepare('SELECT * FROM projects WHERE archived = 0 ORDER BY updated_at DESC')
+      .prepare('SELECT * FROM projects WHERE archived = 0 AND hidden = 0 ORDER BY updated_at DESC')
       .all();
     return asRows<ProjectRow>(rows).map(mapProject);
   }
@@ -197,6 +198,28 @@ export class ProjectQueries {
 
   unarchive(id: string): void {
     this.db.prepare(`UPDATE projects SET archived = 0 WHERE id = ?`).run(id);
+  }
+
+  /** Stable path for instant fix threads. The project is hidden from the sidebar. */
+  static readonly INSTANT_PROJECT_NAME = '__instant__';
+
+  getOrCreateInstantProject(homedir: string): Project {
+    const existing = this.db
+      .prepare(`SELECT * FROM projects WHERE name = ? LIMIT 1`)
+      .get(ProjectQueries.INSTANT_PROJECT_NAME);
+    if (existing) return mapProject(asRow<ProjectRow>(existing));
+
+    const id = nanoid();
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        'INSERT INTO projects (id, name, path, hidden, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)',
+      )
+      .run(id, ProjectQueries.INSTANT_PROJECT_NAME, homedir, now, now);
+
+    const created = this.getById(id);
+    if (!created) throw new Error('Failed to create instant project');
+    return created;
   }
 
   /**
@@ -361,6 +384,7 @@ function mapProject(row: ProjectRow): Project {
     defaultBranch: row.default_branch,
     pinned: row.pinned === 1,
     archived: row.archived === 1,
+    hidden: row.hidden === 1,
     createdAt: toIsoUtc(row.created_at) ?? row.created_at,
     updatedAt: toIsoUtc(row.updated_at) ?? row.updated_at,
   };

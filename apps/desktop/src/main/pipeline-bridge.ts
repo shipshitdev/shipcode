@@ -13,6 +13,7 @@ interface EmitterDeps {
   notifications: NotificationService;
   chatNotifications: ChatNotificationService;
   onPipelineTerminal?: () => void;
+  onExecutionSlotFreed?: () => void;
 }
 
 function formatClock(isoLike: string): string {
@@ -416,6 +417,20 @@ export function createElectronEmitter(
           deps.onPipelineTerminal?.();
         } catch (err) {
           log.error('[pipeline-bridge] queue promotion error:', err);
+        }
+      }
+
+      // 5b. Promote next execution-queued pipeline if an execution slot opened.
+      // Only terminal phases free an execution slot — awaiting_approval frees a
+      // planning slot, not an execution slot.
+      if (
+        event.type === 'pipeline:phase' &&
+        (event.phase === 'completed' || event.phase === 'failed' || event.phase === 'idle')
+      ) {
+        try {
+          deps.onExecutionSlotFreed?.();
+        } catch (err) {
+          log.error('[pipeline-bridge] execution-queue promotion error:', err);
         }
       }
 

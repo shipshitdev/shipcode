@@ -69,6 +69,7 @@ function makeProject(overrides: Record<string, unknown> = {}) {
     telegramChatIdOverride: null,
     pinned: false,
     archived: false,
+    hidden: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     ...overrides,

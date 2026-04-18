@@ -1,11 +1,18 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { ISO_NOW_SQL, type Thread, type ThreadStatus, toIsoUtc } from '@shipcode/shared';
+import {
+  ISO_NOW_SQL,
+  type Thread,
+  type ThreadKind,
+  type ThreadStatus,
+  toIsoUtc,
+} from '@shipcode/shared';
 import { nanoid } from 'nanoid';
 import { asRow, asRows } from '../utils';
 
 interface ThreadRow {
   id: string;
   project_id: string;
+  kind: ThreadKind;
   title: string;
   prompt: string;
   status: ThreadStatus;
@@ -42,7 +49,9 @@ export class ThreadQueries {
 
   list(projectId: string): Thread[] {
     const rows = this.db
-      .prepare('SELECT * FROM threads WHERE project_id = ? ORDER BY updated_at DESC')
+      .prepare(
+        "SELECT * FROM threads WHERE project_id = ? AND kind = 'pipeline' ORDER BY updated_at DESC",
+      )
       .all(projectId);
     return asRows<ThreadRow>(rows).map(mapThread);
   }
@@ -66,16 +75,16 @@ export class ThreadQueries {
     return row ? mapThread(asRow<ThreadRow>(row)) : null;
   }
 
-  create(projectId: string, prompt: string, title: string): Thread {
+  create(projectId: string, prompt: string, title: string, kind: ThreadKind = 'pipeline'): Thread {
     const id = nanoid();
     const now = new Date().toISOString();
 
     this.db
       .prepare(
-        `INSERT INTO threads (id, project_id, title, prompt, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO threads (id, project_id, kind, title, prompt, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(id, projectId, title, prompt, now, now);
+      .run(id, projectId, kind, title, prompt, now, now);
 
     const thread = this.getById(id);
     if (!thread) {
@@ -277,6 +286,22 @@ export class ThreadQueries {
     ).map(mapThread);
   }
 
+  /** Find the oldest thread in awaiting_approval whose latest plan is approved (execution-queued). */
+  getAwaitingWithApprovedPlan(): Thread | null {
+    const row = this.db
+      .prepare(
+        `SELECT t.* FROM threads t
+         INNER JOIN plans p ON p.thread_id = t.id
+           AND p.status = 'approved'
+           AND p.version = (SELECT MAX(p2.version) FROM plans p2 WHERE p2.thread_id = t.id)
+         WHERE t.status = 'awaiting_approval'
+         ORDER BY t.updated_at ASC
+         LIMIT 1`,
+      )
+      .get();
+    return row ? mapThread(asRow<ThreadRow>(row)) : null;
+  }
+
   getStuck(thresholdMs: number): Thread[] {
     const thresholdSec = Math.floor(thresholdMs / 1000);
     const rows = this.db
@@ -288,12 +313,35 @@ export class ThreadQueries {
       .all(thresholdSec);
     return asRows<ThreadRow>(rows).map(mapThread);
   }
+
+  listInstant(): Thread[] {
+    const rows = this.db
+      .prepare("SELECT * FROM threads WHERE kind = 'instant' ORDER BY updated_at DESC")
+      .all();
+    return asRows<ThreadRow>(rows).map(mapThread);
+  }
+
+  /**
+   * Delete threads of a given kind older than `days` days.
+   * Returns the number of rows deleted. `terminal_events` cascade automatically.
+   */
+  deleteOlderThan(kind: ThreadKind, days: number): number {
+    const result = this.db
+      .prepare(
+        `DELETE FROM threads
+         WHERE kind = ?
+           AND julianday('now') - julianday(updated_at) > ?`,
+      )
+      .run(kind, days);
+    return Number(result.changes ?? 0);
+  }
 }
 
 function mapThread(row: ThreadRow): Thread {
   return {
     id: row.id,
     projectId: row.project_id,
+    kind: row.kind ?? 'pipeline',
     title: row.title,
     prompt: row.prompt,
     status: row.status as ThreadStatus,

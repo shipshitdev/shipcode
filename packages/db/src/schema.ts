@@ -732,3 +732,37 @@ export function migrateV22(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (22)`);
   });
 }
+
+export function migrateV23(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 23) return;
+
+  transaction(db, () => {
+    execAlterTablesIfMissing(db, [
+      'ALTER TABLE github_issue_cache ADD COLUMN planner_reasoning_effort_override TEXT',
+      'ALTER TABLE github_issue_cache ADD COLUMN reviewer_reasoning_effort_override TEXT',
+      'ALTER TABLE github_issue_cache ADD COLUMN executor_reasoning_effort_override TEXT',
+      'ALTER TABLE github_issue_cache ADD COLUMN verifier_reasoning_effort_override TEXT',
+    ]);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (23)`);
+  });
+}
+
+export function migrateV24(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 24) return;
+
+  transaction(db, () => {
+    execAlterTablesIfMissing(db, [
+      "ALTER TABLE threads ADD COLUMN kind TEXT NOT NULL DEFAULT 'pipeline'",
+      'ALTER TABLE projects ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0',
+    ]);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (24)`);
+  });
+}

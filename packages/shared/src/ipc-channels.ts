@@ -14,6 +14,7 @@ import type {
   GhAuthStatus,
   GitHubIssueCacheRecord,
   GitState,
+  InstantFixScope,
   IntegrationStatus,
   NotificationRecord,
   OnboardingRepo,
@@ -27,6 +28,7 @@ import type {
   ProjectOpenTarget,
   ProjectSetupDraft,
   ProjectSetupInspection,
+  ReasoningEffort,
   RecentTask,
   RepoSetupContract,
   ReviewRecord,
@@ -256,6 +258,23 @@ export interface IpcInvokeChannels {
     };
     result: GitHubIssueCacheRecord | null;
   };
+  'github:set-phase-reasoning-effort-override': {
+    args: {
+      projectId: string;
+      issueNumber: number;
+      phase: 'planner' | 'reviewer' | 'executor' | 'verifier';
+      effort: ReasoningEffort;
+    };
+    result: GitHubIssueCacheRecord | null;
+  };
+  'github:clear-phase-reasoning-effort-override': {
+    args: {
+      projectId: string;
+      issueNumber: number;
+      phase: 'planner' | 'reviewer' | 'executor' | 'verifier';
+    };
+    result: GitHubIssueCacheRecord | null;
+  };
 
   // Plans & Reviews (backfill)
   'plan:list': { args: { threadId: string }; result: PlanRecord[] };
@@ -356,6 +375,22 @@ export interface IpcInvokeChannels {
     result: WritingPrdsSkillInfo;
   };
   'skills:open-writing-prds': { args: { projectId: string }; result: undefined };
+
+  // Instant Fix — direct CLI runs without pipeline
+  'instant:run': {
+    args: {
+      projectId?: string;
+      prompt: string;
+      scope: InstantFixScope;
+      cli: 'claude' | 'codex';
+      attachmentSessionId?: string;
+      customSystemPrompt?: string;
+    };
+    result: { threadId: string };
+  };
+  'instant:cancel': { args: { threadId: string }; result: undefined };
+  'instant:list': { args: undefined; result: Thread[] };
+  'instant:cleanup': { args: undefined; result: { deleted: number } };
 }
 
 // === Streaming Channels (send/on) ===

@@ -14,6 +14,7 @@ export {
   ChevronRight,
   ChevronUp,
   Code2,
+  Columns2,
   Copy,
   DollarSign,
   ExternalLink,
@@ -43,13 +44,16 @@ export {
   PinOff,
   Plus,
   RefreshCw,
+  Rows2,
   Settings,
   Sparkles,
+  Square,
   Terminal,
   Trash2,
   Workflow,
   Wrench,
   X,
+  Zap,
 } from 'lucide-react';
 export type { ShipCodeLogoMarkProps } from './brand/ShipCodeLogoMark';
 export { ShipCodeLogoMark } from './brand/ShipCodeLogoMark';

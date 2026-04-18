@@ -63,6 +63,7 @@ const project: Project = {
   defaultBranch: 'main',
   pinned: false,
   archived: false,
+  hidden: false,
   createdAt: '2026-04-14T00:00:00.000Z',
   updatedAt: '2026-04-14T00:00:00.000Z',
 };

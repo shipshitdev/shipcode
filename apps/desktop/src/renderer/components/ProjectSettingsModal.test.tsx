@@ -62,6 +62,7 @@ describe('ProjectSettingsModal', () => {
     defaultBranch: 'main',
     pinned: false,
     archived: false,
+    hidden: false,
     createdAt: '2026-04-13T00:00:00.000Z',
     updatedAt: '2026-04-13T00:00:00.000Z',
   };

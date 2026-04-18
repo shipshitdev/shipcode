@@ -5,6 +5,7 @@ import type {
   PipelineCheckpoint,
   PipelinePhase,
   PlanRecord,
+  ReasoningEffort,
   ReviewRecord,
   Thread,
 } from '@shipcode/shared';
@@ -36,6 +37,9 @@ interface IssueDetailTabsProps {
   normalizedThreadPlanHistory: PlanRecord[];
   isPlanHistoryLoading: boolean;
   hasPlanHistory: boolean;
+  currentPhaseReasoningEfforts: Record<PhaseKey, ReasoningEffort>;
+  inheritedPhaseReasoningEfforts: Record<PhaseKey, ReasoningEffort>;
+  phaseEffortSelectValues: Record<PhaseKey, string>;
   phaseModelValidation: Partial<Record<PhaseKey, OpenRouterModelValidation | null>>;
   phaseSelectValues: Record<PhaseKey, string>;
   planHistoryCollapsed: boolean;
@@ -49,6 +53,7 @@ interface IssueDetailTabsProps {
   onActiveTabChange: (tab: IssueDetailTab) => void;
   onFullScreenPlan: (planId: string | null) => void;
   onPhaseAgentChange: (phase: PhaseKey, value: string) => void;
+  onPhaseEffortChange: (phase: PhaseKey, effort: string) => void;
   onPhaseOpenRouterSlugBlur: (phase: PhaseKey, rawValue: string) => void;
   onPlanExpandedChange: (planId: string | null | undefined) => void;
   onPlanHistoryCollapsedChange: (collapsed: boolean) => void;
@@ -78,6 +83,9 @@ export function IssueDetailTabs({
   normalizedThreadPlanHistory,
   isPlanHistoryLoading,
   hasPlanHistory,
+  currentPhaseReasoningEfforts,
+  inheritedPhaseReasoningEfforts,
+  phaseEffortSelectValues,
   phaseModelValidation,
   phaseSelectValues,
   planHistoryCollapsed,
@@ -91,6 +99,7 @@ export function IssueDetailTabs({
   onActiveTabChange,
   onFullScreenPlan,
   onPhaseAgentChange,
+  onPhaseEffortChange,
   onPhaseOpenRouterSlugBlur,
   onPlanExpandedChange,
   onPlanHistoryCollapsedChange,
@@ -172,18 +181,22 @@ export function IssueDetailTabs({
           activeIssue={activeIssue}
           activeThreadId={activeThreadId}
           checkpoints={checkpoints}
+          currentPhaseReasoningEfforts={currentPhaseReasoningEfforts}
           currentPhaseSelections={currentPhaseSelections}
           effectivePhaseResolvedModels={effectivePhaseResolvedModels}
           executorEditable={executorEditable}
           hasPrFeedbackBlockers={hasPrFeedbackBlockers}
+          inheritedPhaseReasoningEfforts={inheritedPhaseReasoningEfforts}
           integrationStatus={integrationStatus}
           isSubmitting={isSubmitting}
           linkedPrUrl={linkedPrUrl}
+          phaseEffortSelectValues={phaseEffortSelectValues}
           phaseModelValidation={phaseModelValidation}
           phaseSelectValues={phaseSelectValues}
           projectDefaultPhaseSelections={projectDefaultPhaseSelections}
           thread={thread}
           onPhaseAgentChange={onPhaseAgentChange}
+          onPhaseEffortChange={onPhaseEffortChange}
           onPhaseOpenRouterSlugBlur={onPhaseOpenRouterSlugBlur}
           onRestoreCheckpoint={onRestoreCheckpoint}
           onStabilizePr={onStabilizePr}

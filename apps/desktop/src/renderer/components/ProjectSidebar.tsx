@@ -40,6 +40,7 @@ import {
   Terminal,
   Trash2,
   Wrench,
+  Zap,
 } from '@shipcode/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ComponentType } from 'react';
@@ -90,6 +91,7 @@ export function ProjectSidebar() {
     openInbox,
     openCosts,
     openSkills,
+    openInstant,
     openProjectSettingsModal,
     openProjectSetupModal,
     sidebarCollapsed,
@@ -380,6 +382,19 @@ export function ProjectSidebar() {
         >
           <DollarSign size={14} className="shrink-0 text-secondary" />
           <span className="flex-1 truncate">Costs</span>
+        </Button>
+
+        {/* Instant */}
+        <Button
+          variant="ghost"
+          className={cn(
+            'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
+            !settingsVisible && viewMode === 'instant' && 'bg-tertiary text-primary font-medium',
+          )}
+          onClick={() => openInstant()}
+        >
+          <Zap size={14} className="shrink-0 text-secondary" />
+          <span className="flex-1 truncate">Instant</span>
         </Button>
       </div>
 

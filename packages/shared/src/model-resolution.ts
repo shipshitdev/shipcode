@@ -49,6 +49,10 @@ type IssuePhaseOverrides = Pick<
   | 'reviewerModelIdOverride'
   | 'executorModelIdOverride'
   | 'verifierModelIdOverride'
+  | 'plannerReasoningEffortOverride'
+  | 'reviewerReasoningEffortOverride'
+  | 'executorReasoningEffortOverride'
+  | 'verifierReasoningEffortOverride'
 >;
 
 export interface ResolvedPhaseDescriptor {
@@ -93,6 +97,13 @@ export interface ResolvedPhaseDescriptor {
     | 'executorModelIdOverride'
     | 'verifierModelIdOverride'
   >;
+  issueReasoningEffortOverrideKey: keyof Pick<
+    GitHubIssueCacheRecord,
+    | 'plannerReasoningEffortOverride'
+    | 'reviewerReasoningEffortOverride'
+    | 'executorReasoningEffortOverride'
+    | 'verifierReasoningEffortOverride'
+  >;
   issueStatuses: readonly IssuePipelineStatus[];
 }
 
@@ -115,6 +126,7 @@ export const PHASE_DESCRIPTORS: readonly ResolvedPhaseDescriptor[] = [
     projectReasoningEffortOverrideKey: 'plannerReasoningEffortOverride',
     issueModelOverrideKey: 'plannerModelOverride',
     issueModelIdOverrideKey: 'plannerModelIdOverride',
+    issueReasoningEffortOverrideKey: 'plannerReasoningEffortOverride',
     issueStatuses: ['todo', 'queued', 'planning', 'revising', 'awaiting_approval'],
   },
   {
@@ -129,6 +141,7 @@ export const PHASE_DESCRIPTORS: readonly ResolvedPhaseDescriptor[] = [
     projectReasoningEffortOverrideKey: 'reviewerReasoningEffortOverride',
     issueModelOverrideKey: 'reviewerModelOverride',
     issueModelIdOverrideKey: 'reviewerModelIdOverride',
+    issueReasoningEffortOverrideKey: 'reviewerReasoningEffortOverride',
     issueStatuses: ['reviewing'],
   },
   {
@@ -143,6 +156,7 @@ export const PHASE_DESCRIPTORS: readonly ResolvedPhaseDescriptor[] = [
     projectReasoningEffortOverrideKey: 'executorReasoningEffortOverride',
     issueModelOverrideKey: 'executorModelOverride',
     issueModelIdOverrideKey: 'executorModelIdOverride',
+    issueReasoningEffortOverrideKey: 'executorReasoningEffortOverride',
     issueStatuses: ['executing', 'testing'],
   },
   {
@@ -157,6 +171,7 @@ export const PHASE_DESCRIPTORS: readonly ResolvedPhaseDescriptor[] = [
     projectReasoningEffortOverrideKey: 'verifierReasoningEffortOverride',
     issueModelOverrideKey: 'verifierModelOverride',
     issueModelIdOverrideKey: 'verifierModelIdOverride',
+    issueReasoningEffortOverrideKey: 'verifierReasoningEffortOverride',
     issueStatuses: ['verifying', 'shipping'],
   },
 ] as const;
@@ -209,7 +224,7 @@ export function resolvePhaseReasoningEffort(
 ): ReasoningEffort {
   const descriptor = getPhaseDescriptor(phase);
   const projectOverride = project?.[descriptor.projectReasoningEffortOverrideKey];
-  if (projectOverride) return projectOverride;
+  if (projectOverride != null) return projectOverride;
   return settings[descriptor.settingsReasoningEffortKey];
 }
 
@@ -250,6 +265,18 @@ export function resolvePhaseModelIdForIssue(
   return resolvePhaseModelId(settings, project, phase);
 }
 
+export function resolvePhaseReasoningEffortForIssue(
+  settings: AppSettings,
+  project: ProjectModelOverrides | null | undefined,
+  issue: IssuePhaseOverrides | null | undefined,
+  phase: ResolvedPhaseModel,
+): ReasoningEffort {
+  const descriptor = getPhaseDescriptor(phase);
+  const issueOverride = issue?.[descriptor.issueReasoningEffortOverrideKey];
+  if (issueOverride != null) return issueOverride;
+  return resolvePhaseReasoningEffort(settings, project, phase);
+}
+
 export function resolveEffectivePhaseReasoningEffortForIssue(
   settings: AppSettings,
   project: ProjectModelOverrides | null | undefined,
@@ -258,7 +285,7 @@ export function resolveEffectivePhaseReasoningEffortForIssue(
 ): ReasoningEffort {
   const provider = resolvePhaseModelForIssue(settings, project, issue, phase);
   const modelId = resolvePhaseModelIdForIssue(settings, project, issue, phase);
-  const configured = resolvePhaseReasoningEffort(settings, project, phase);
+  const configured = resolvePhaseReasoningEffortForIssue(settings, project, issue, phase);
   return resolveProviderReasoningEffort(provider, configured, modelId).effective;
 }
 

@@ -7,6 +7,7 @@ import {
 } from '@shipcode/agents';
 import { WorktreeManager } from '@shipcode/git';
 import {
+  EXECUTION_PHASES,
   type GitHubPrCheckSummary,
   type GitHubPrReviewCommentSummary,
   MAX_TEST_RETRIES,
@@ -35,6 +36,14 @@ export function createExecutionPhaseHandlers({
   } = runtime;
 
   async function startExecution(threadId: string, plan: ShipCodePlan) {
+    const settings = deps.settings.get();
+    const executingCount = contextHelpers.listActiveInPhases(EXECUTION_PHASES).length;
+    if (executingCount >= settings.maxConcurrentExecutions) {
+      // Execution slots full — stay in awaiting_approval until a slot frees
+      emitPhase(threadId, 'awaiting_approval');
+      return;
+    }
+
     const context = activePipelines.get(threadId);
     if (!context) return;
 

@@ -7,6 +7,7 @@ export function useGlobalKeyboard() {
   const toggleTerminal = useAppStore((s) => s.toggleTerminal);
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const toggleIssueDetail = useAppStore((s) => s.toggleIssueDetail);
+  const openInstantFixModal = useAppStore((s) => s.openInstantFixModal);
 
   useEffect(() => {
     const actions: Record<ShortcutId, () => void> = {
@@ -14,6 +15,7 @@ export function useGlobalKeyboard() {
       'toggle-terminal': toggleTerminal,
       'toggle-sidebar': toggleSidebar,
       'toggle-issue-detail': toggleIssueDetail,
+      'instant-fix': openInstantFixModal,
     };
 
     const handler = (e: KeyboardEvent) => {
@@ -28,5 +30,5 @@ export function useGlobalKeyboard() {
 
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [toggleCommandPalette, toggleTerminal, toggleSidebar, toggleIssueDetail]);
+  }, [toggleCommandPalette, toggleTerminal, toggleSidebar, toggleIssueDetail, openInstantFixModal]);
 }

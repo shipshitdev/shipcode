@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { GhCli } from '@shipcode/agents';
-import type { ExecutorModel, GitHubIssueCacheRecord } from '@shipcode/shared';
+import type { ExecutorModel, GitHubIssueCacheRecord, ReasoningEffort } from '@shipcode/shared';
 import {
   clampError,
   deriveGithubIssueUrl,
@@ -636,6 +636,63 @@ export function registerGitHubHandlers({
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
       queries.githubIssues.updatePhaseModelIdOverride(issue.id, phase, null);
+      sendGithubIssuesUpdated(mainWindow, queries, projectId);
+      return queries.githubIssues.getByNumber(projectId, issueNumber);
+    },
+  );
+
+  ipcMain.handle(
+    'github:set-phase-reasoning-effort-override',
+    (
+      _event,
+      {
+        projectId,
+        issueNumber,
+        phase,
+        effort,
+      }: {
+        projectId: string;
+        issueNumber: number;
+        phase: 'planner' | 'reviewer' | 'executor' | 'verifier';
+        effort: ReasoningEffort;
+      },
+    ) => {
+      const VALID_EFFORTS: readonly string[] = [
+        'none',
+        'minimal',
+        'low',
+        'medium',
+        'high',
+        'xhigh',
+      ];
+      if (!VALID_EFFORTS.includes(effort)) {
+        throw new Error(`Invalid ${phase} reasoning effort: ${effort}`);
+      }
+      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
+      if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
+      queries.githubIssues.updatePhaseReasoningEffortOverride(issue.id, phase, effort);
+      sendGithubIssuesUpdated(mainWindow, queries, projectId);
+      return queries.githubIssues.getByNumber(projectId, issueNumber);
+    },
+  );
+
+  ipcMain.handle(
+    'github:clear-phase-reasoning-effort-override',
+    (
+      _event,
+      {
+        projectId,
+        issueNumber,
+        phase,
+      }: {
+        projectId: string;
+        issueNumber: number;
+        phase: 'planner' | 'reviewer' | 'executor' | 'verifier';
+      },
+    ) => {
+      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
+      if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
+      queries.githubIssues.updatePhaseReasoningEffortOverride(issue.id, phase, null);
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
       return queries.githubIssues.getByNumber(projectId, issueNumber);
     },

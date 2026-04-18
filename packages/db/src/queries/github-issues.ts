@@ -6,6 +6,7 @@ import {
   type GitHubPrReviewCommentSummary,
   ISO_NOW_SQL,
   type IssuePipelineStatus,
+  type ReasoningEffort,
   toIsoUtc,
 } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
@@ -34,6 +35,10 @@ interface GitHubIssueCacheRow {
   reviewer_model_id_override: string | null;
   executor_model_id_override: string | null;
   verifier_model_id_override: string | null;
+  planner_reasoning_effort_override: ReasoningEffort | null;
+  reviewer_reasoning_effort_override: ReasoningEffort | null;
+  executor_reasoning_effort_override: ReasoningEffort | null;
+  verifier_reasoning_effort_override: ReasoningEffort | null;
   linked_pr_number: number | null;
   linked_pr_url: string | null;
   linked_pr_is_draft: number | null;
@@ -90,6 +95,10 @@ export class GitHubIssueQueries {
       | 'reviewerModelIdOverride'
       | 'executorModelIdOverride'
       | 'verifierModelIdOverride'
+      | 'plannerReasoningEffortOverride'
+      | 'reviewerReasoningEffortOverride'
+      | 'executorReasoningEffortOverride'
+      | 'verifierReasoningEffortOverride'
       | 'linkedPrNumber'
       | 'linkedPrUrl'
       | 'linkedPrIsDraft'
@@ -344,6 +353,22 @@ export class GitHubIssueQueries {
     this.db.prepare(`UPDATE github_issue_cache SET ${column} = ? WHERE id = ?`).run(model, id);
   }
 
+  updatePhaseReasoningEffortOverride(
+    id: string,
+    phase: 'planner' | 'reviewer' | 'executor' | 'verifier',
+    effort: ReasoningEffort | null,
+  ): void {
+    const column =
+      phase === 'planner'
+        ? 'planner_reasoning_effort_override'
+        : phase === 'reviewer'
+          ? 'reviewer_reasoning_effort_override'
+          : phase === 'executor'
+            ? 'executor_reasoning_effort_override'
+            : 'verifier_reasoning_effort_override';
+    this.db.prepare(`UPDATE github_issue_cache SET ${column} = ? WHERE id = ?`).run(effort, id);
+  }
+
   updatePhaseModelIdOverride(
     id: string,
     phase: 'planner' | 'reviewer' | 'executor' | 'verifier',
@@ -495,6 +520,10 @@ export class GitHubIssueQueries {
       reviewerModelIdOverride: row.reviewer_model_id_override ?? null,
       executorModelIdOverride: row.executor_model_id_override ?? null,
       verifierModelIdOverride: row.verifier_model_id_override ?? null,
+      plannerReasoningEffortOverride: row.planner_reasoning_effort_override ?? null,
+      reviewerReasoningEffortOverride: row.reviewer_reasoning_effort_override ?? null,
+      executorReasoningEffortOverride: row.executor_reasoning_effort_override ?? null,
+      verifierReasoningEffortOverride: row.verifier_reasoning_effort_override ?? null,
       linkedPrNumber: row.linked_pr_number ?? null,
       linkedPrUrl: row.linked_pr_url ?? null,
       linkedPrIsDraft: !!row.linked_pr_is_draft,

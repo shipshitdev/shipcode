@@ -95,6 +95,7 @@ export interface Project {
   defaultBranch: string;
   pinned: boolean;
   archived: boolean;
+  hidden: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -115,10 +116,13 @@ export type PipelinePhase =
   | 'failed';
 
 export type ThreadStatus = PipelinePhase;
+export type ThreadKind = 'pipeline' | 'instant';
+export type InstantFixScope = 'user' | 'project' | 'custom';
 
 export interface Thread {
   id: string;
   projectId: string;
+  kind: ThreadKind;
   title: string;
   prompt: string;
   status: ThreadStatus;
@@ -361,6 +365,11 @@ export interface AppSettings {
   testingContext: string | null;
   /** Max concurrent pipeline runs. New starts queue when limit is reached. */
   maxConcurrentPipelines: number;
+  /** Max concurrent pipelines in execution phases (executing/testing/verifying/shipping).
+   *  Approved pipelines wait in awaiting_approval until an execution slot opens. */
+  maxConcurrentExecutions: number;
+  /** Default number of terminal panes when opening the Instant view. */
+  instantDefaultPanes: 1 | 2 | 4;
 }
 
 export interface RepoSetupEnvFile {
@@ -637,6 +646,10 @@ export interface GitHubIssueCacheRecord {
   reviewerModelIdOverride: string | null;
   executorModelIdOverride: string | null;
   verifierModelIdOverride: string | null;
+  plannerReasoningEffortOverride: ReasoningEffort | null;
+  reviewerReasoningEffortOverride: ReasoningEffort | null;
+  executorReasoningEffortOverride: ReasoningEffort | null;
+  verifierReasoningEffortOverride: ReasoningEffort | null;
   linkedPrNumber: number | null;
   linkedPrUrl: string | null;
   linkedPrIsDraft: boolean;

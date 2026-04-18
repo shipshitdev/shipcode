@@ -10,6 +10,7 @@ import {
   resolvePhaseModelId,
   resolvePhaseModelIdForIssue,
   resolvePhaseReasoningEffort,
+  resolvePhaseReasoningEffortForIssue,
 } from './model-resolution';
 import type { AppSettings, GitHubIssueCacheRecord, Project } from './types';
 
@@ -39,6 +40,7 @@ function makeProject(overrides: Partial<Project> = {}): Project {
     defaultBranch: 'main',
     pinned: false,
     archived: false,
+    hidden: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     ...overrides,
@@ -69,6 +71,10 @@ function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
     reviewerModelIdOverride: null,
     executorModelIdOverride: null,
     verifierModelIdOverride: null,
+    plannerReasoningEffortOverride: null,
+    reviewerReasoningEffortOverride: null,
+    executorReasoningEffortOverride: null,
+    verifierReasoningEffortOverride: null,
     linkedPrNumber: null,
     linkedPrUrl: null,
     linkedPrIsDraft: false,
@@ -208,6 +214,30 @@ describe('model-resolution', () => {
       'minimal',
     );
     expect(resolveEffectivePhaseReasoningEffort(settings, project, 'executor')).toBe('none');
+  });
+
+  it('respects project-level effort override of none over global non-none', () => {
+    const settingsWithHighPlanner: AppSettings = {
+      ...settings,
+      plannerModel: 'codex',
+      plannerReasoningEffort: 'high',
+    };
+    const project = makeProject({
+      plannerReasoningEffortOverride: 'none',
+    });
+
+    expect(resolvePhaseReasoningEffort(settingsWithHighPlanner, project, 'planner')).toBe('none');
+  });
+
+  it('respects issue-level effort override of none over project-level non-none', () => {
+    const project = makeProject({
+      plannerModelOverride: 'codex',
+      plannerReasoningEffortOverride: 'high',
+    });
+    const issue = makeIssue({ plannerReasoningEffortOverride: 'none' });
+
+    // Issue-level 'none' must win over project-level 'high'
+    expect(resolvePhaseReasoningEffortForIssue(settings, project, issue, 'planner')).toBe('none');
   });
 
   it('resolves project model IDs ahead of global openrouter model settings', () => {

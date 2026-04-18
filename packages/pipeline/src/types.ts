@@ -261,4 +261,5 @@ export interface Pipeline {
   cancel: (threadId: string) => void;
   getContext: (threadId: string) => PipelineContext | undefined;
   listActive: () => ActivePipelineSummary[];
+  listActiveInPhases: (phases: readonly string[]) => ActivePipelineSummary[];
 }

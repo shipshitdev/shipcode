@@ -98,10 +98,6 @@ export function useTerminalDrawer() {
   const hydrateCanonicalEvents = useAppStore((s) => s.hydrateCanonicalEvents);
   const setTerminalThread = useAppStore((s) => s.setTerminalThread);
   const selectIssue = useAppStore((s) => s.selectIssue);
-  const [actionBanner, setActionBanner] = useState<{
-    label: string;
-    action: 'open-issue-detail';
-  } | null>(null);
   const [height, setHeight] = useState(DEFAULT_HEIGHT);
 
   const startedAtRef = useRef<string | null>(null);
@@ -114,7 +110,6 @@ export function useTerminalDrawer() {
   const spinnerActiveRef = useRef(false);
   const spinnerLabelRef = useRef('Thinking');
   const lastKindRef = useRef<string | null>(null);
-  const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevHeightRef = useRef(DEFAULT_HEIGHT);
   const dragStartRef = useRef<{ y: number; h: number } | null>(null);
   const fitFrameRef = useRef<number | null>(null);
@@ -196,7 +191,6 @@ export function useTerminalDrawer() {
         window.cancelAnimationFrame(fitFrameRef.current);
         fitFrameRef.current = null;
       }
-      if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
     };
   }, [scheduleFit]);
 
@@ -260,8 +254,6 @@ export function useTerminalDrawer() {
       canonicalWrittenRef.current = 0;
       startedAtRef.current = null;
       lastKindRef.current = null;
-      setActionBanner(null);
-      if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
       prevThreadIdRef.current = visibleTerminalThreadId;
 
       const nextIssue = scopedIssues.find((issue) => issue.threadId === visibleTerminalThreadId);
@@ -334,11 +326,6 @@ export function useTerminalDrawer() {
     for (const entry of newEvents) {
       const event = entry.event;
       if (event.kind === 'action') {
-        stopSpinner();
-        if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
-        setActionBanner({ label: event.label, action: event.action });
-        bannerTimerRef.current = setTimeout(() => setActionBanner(null), 8_000);
-        lastKindRef.current = event.kind;
         continue;
       }
 
@@ -425,25 +412,11 @@ export function useTerminalDrawer() {
     [selectIssue, setTerminalThread],
   );
 
-  const handleActionBannerClick = useCallback(() => {
-    if (actionBanner?.action === 'open-issue-detail' && displayIssue) {
-      selectIssue(displayIssue);
-    }
-  }, [actionBanner?.action, displayIssue, selectIssue]);
-
-  const dismissActionBanner = useCallback(() => {
-    setActionBanner(null);
-    if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
-  }, []);
-
   return {
-    actionBanner,
     canonicalStream,
     containerRef,
     currentModel,
     displayIssue,
-    dismissActionBanner,
-    handleActionBannerClick,
     handleResizeMouseDown,
     handleRunningTabSelect,
     isMaximized,

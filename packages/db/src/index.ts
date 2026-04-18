@@ -23,6 +23,8 @@ import {
   migrateV20,
   migrateV21,
   migrateV22,
+  migrateV23,
+  migrateV24,
 } from './schema';
 
 export { ActivityQueries } from './queries/activity';
@@ -76,6 +78,8 @@ export function getDatabase(dataDir: string): DatabaseSync {
   migrateV20(db);
   migrateV21(db);
   migrateV22(db);
+  migrateV23(db);
+  migrateV24(db);
   return db;
 }
 

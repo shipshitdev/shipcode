@@ -73,6 +73,7 @@ function makeProject(overrides: Partial<Project> = {}): Project {
     defaultBranch: 'main',
     pinned: false,
     archived: false,
+    hidden: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     ...overrides,

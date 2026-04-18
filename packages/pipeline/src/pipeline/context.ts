@@ -291,11 +291,17 @@ export function createPipelineContextHelpers(
     });
   }
 
+  function listActiveInPhases(phases: readonly string[]) {
+    const phaseSet = new Set(phases);
+    return listActive().filter((s) => phaseSet.has(s.phase));
+  }
+
   return {
     activePipelines,
     ensureContext,
     rehydrateContext,
     skillCallSite,
     listActive,
+    listActiveInPhases,
   };
 }

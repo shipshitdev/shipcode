@@ -26,6 +26,7 @@ function makeThread(overrides: Record<string, unknown> = {}) {
     title: 'Fix bug',
     prompt: 'Fix it',
     status: 'awaiting_approval',
+    kind: 'pipeline' as const,
     worktreeBranch: null,
     worktreePath: '/tmp/worktree',
     plannerModel: 'claude',

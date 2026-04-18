@@ -54,7 +54,7 @@ export class DashboardQueries {
     // Agents running = threads in any agent-running phase.
     const agentsRunningRow = this.db
       .prepare(
-        `SELECT COUNT(*) as n FROM threads WHERE status IN (${placeholders(AGENT_RUNNING_PHASES.length)})`,
+        `SELECT COUNT(*) as n FROM threads WHERE kind = 'pipeline' AND status IN (${placeholders(AGENT_RUNNING_PHASES.length)})`,
       )
       .get(...AGENT_RUNNING_PHASES) as { n: number };
 
@@ -62,7 +62,7 @@ export class DashboardQueries {
     const perPhaseRows = this.db
       .prepare(
         `SELECT status, COUNT(*) as n FROM threads
-       WHERE status IN (${placeholders(AGENT_RUNNING_PHASES.length)})
+       WHERE kind = 'pipeline' AND status IN (${placeholders(AGENT_RUNNING_PHASES.length)})
        GROUP BY status`,
       )
       .all(...AGENT_RUNNING_PHASES) as Array<{ status: string; n: number }>;
@@ -76,7 +76,7 @@ export class DashboardQueries {
     const perProjectRows = this.db
       .prepare(
         `SELECT project_id, COUNT(*) as n FROM threads
-         WHERE status IN (${placeholders(AGENT_RUNNING_PHASES.length)})
+         WHERE kind = 'pipeline' AND status IN (${placeholders(AGENT_RUNNING_PHASES.length)})
          GROUP BY project_id`,
       )
       .all(...AGENT_RUNNING_PHASES) as Array<{ project_id: string; n: number }>;
@@ -99,20 +99,20 @@ export class DashboardQueries {
     // Tasks in progress = any active phase (including awaiting_approval).
     const tasksInProgressRow = this.db
       .prepare(
-        `SELECT COUNT(*) as n FROM threads WHERE status IN (${placeholders(ACTIVE_PHASES.length)})`,
+        `SELECT COUNT(*) as n FROM threads WHERE kind = 'pipeline' AND status IN (${placeholders(ACTIVE_PHASES.length)})`,
       )
       .get(...ACTIVE_PHASES) as { n: number };
 
     // Open / blocked breakdown.
     const blockedRow = this.db
       .prepare(
-        `SELECT COUNT(*) as n FROM threads WHERE status IN (${placeholders(BLOCKED_PHASES.length)})`,
+        `SELECT COUNT(*) as n FROM threads WHERE kind = 'pipeline' AND status IN (${placeholders(BLOCKED_PHASES.length)})`,
       )
       .get(...BLOCKED_PHASES) as { n: number };
 
     const tasksOpenRow = this.db
       .prepare(
-        `SELECT COUNT(*) as n FROM threads WHERE status NOT IN ('completed', 'failed', 'idle')`,
+        `SELECT COUNT(*) as n FROM threads WHERE kind = 'pipeline' AND status NOT IN ('completed', 'failed', 'idle')`,
       )
       .get() as { n: number };
 
@@ -121,7 +121,7 @@ export class DashboardQueries {
     const staleRow = this.db
       .prepare(
         `SELECT COUNT(*) as n FROM threads
-       WHERE status = 'awaiting_approval'
+       WHERE kind = 'pipeline' AND status = 'awaiting_approval'
          AND julianday('now') - julianday(updated_at) > 1.0`,
       )
       .get() as { n: number };
@@ -130,7 +130,7 @@ export class DashboardQueries {
     const shippedRow = this.db
       .prepare(
         `SELECT COUNT(*) as n FROM threads
-       WHERE status = 'completed'
+       WHERE kind = 'pipeline' AND status = 'completed'
          AND julianday('now') - julianday(updated_at) <= 7.0`,
       )
       .get() as { n: number };
@@ -138,7 +138,7 @@ export class DashboardQueries {
     const failedRow = this.db
       .prepare(
         `SELECT COUNT(*) as n FROM threads
-       WHERE status = 'failed'
+       WHERE kind = 'pipeline' AND status = 'failed'
          AND julianday('now') - julianday(updated_at) <= 7.0`,
       )
       .get() as { n: number };
@@ -171,7 +171,7 @@ export class DashboardQueries {
          p.name as project_name
        FROM threads t
        INNER JOIN projects p ON p.id = t.project_id
-      WHERE t.status != 'idle'
+      WHERE t.kind = 'pipeline' AND t.status != 'idle'
        ORDER BY t.updated_at DESC
        LIMIT ? OFFSET ?`,
       )
@@ -190,7 +190,9 @@ export class DashboardQueries {
 
   countRecentTasks(): number {
     const row = this.db
-      .prepare(`SELECT COUNT(*) as n FROM threads t WHERE t.status != 'idle'`)
+      .prepare(
+        `SELECT COUNT(*) as n FROM threads t WHERE t.kind = 'pipeline' AND t.status != 'idle'`,
+      )
       .get() as { n: number };
     return row.n;
   }
