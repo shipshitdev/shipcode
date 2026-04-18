@@ -245,45 +245,46 @@ export function OverviewView() {
           {/* Running Agents — always first after stats */}
           <div>
             <h2 className="text-sm font-semibold text-primary mb-3">Running Agents</h2>
-            <Card>
-              <CardContent className="p-0 px-4">
-                {running.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted">
-                    No agents running. Start a pipeline to see live status here.
+            {running.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted">
+                No agents running. Start a pipeline to see live status here.
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-3">
+                {running.map((row) => (
+                  <div
+                    key={row.threadId}
+                    className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 min-w-[260px] max-w-[340px] flex-1"
+                  >
+                    <button
+                      type="button"
+                      className="flex items-start justify-between gap-2 text-left w-full"
+                      onClick={() => handleRowClick(row.projectId, row.threadId)}
+                    >
+                      <div className="min-w-0">
+                        <div className="text-[11px] text-muted mb-1">{row.projectName}</div>
+                        <div className="text-[13px] font-medium text-primary truncate leading-snug">
+                          {row.threadTitle}
+                        </div>
+                      </div>
+                      <PhaseChip status={row.phase} />
+                    </button>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] tabular-nums text-muted">
+                        <ElapsedClock since={row.startedAt} />
+                      </span>
+                      <Button
+                        size="xs"
+                        variant="destructive"
+                        onClick={() => handleStop(row.threadId)}
+                      >
+                        Stop
+                      </Button>
+                    </div>
                   </div>
-                ) : (
-                  <ul className="divide-y divide-border">
-                    {running.map((row) => (
-                      <li key={row.threadId} className="flex items-center gap-3 py-2.5">
-                        <Button
-                          variant="ghost"
-                          onClick={() => handleRowClick(row.projectId, row.threadId)}
-                          className="h-auto flex-1 justify-start gap-3 px-0 py-0 text-left font-normal hover:bg-transparent"
-                        >
-                          <span className="inline-flex shrink-0 items-center rounded-md border border-border bg-tertiary px-1.5 py-0.5 text-[10px] text-secondary">
-                            {row.projectName}
-                          </span>
-                          <span className="flex-1 truncate text-[13px] text-primary">
-                            {row.threadTitle}
-                          </span>
-                          <PhaseChip status={row.phase} />
-                          <span className="w-16 text-right text-[11px] tabular-nums text-muted">
-                            <ElapsedClock since={row.startedAt} />
-                          </span>
-                        </Button>
-                        <Button
-                          size="xs"
-                          variant="destructive"
-                          onClick={() => handleStop(row.threadId)}
-                        >
-                          Stop
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </CardContent>
-            </Card>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Activity + Recent tasks */}
