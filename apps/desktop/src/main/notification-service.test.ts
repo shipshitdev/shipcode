@@ -121,6 +121,7 @@ describe('NotificationService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    (notificationQueries.listActive as ReturnType<typeof vi.fn>).mockReturnValue([]);
     (settingsQueries.get as ReturnType<typeof vi.fn>).mockReturnValue({
       notificationsEnabled: true,
       notificationOsEnabled: true,
