@@ -314,9 +314,9 @@ export function CostsView() {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead>Task</TableHead>
-                            <TableHead>Date</TableHead>
                             <TableHead>Phase</TableHead>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Task</TableHead>
                             <TableHead>Provider</TableHead>
                             <TableHead>Model</TableHead>
                             <TableHead className="text-right">Tokens</TableHead>
@@ -334,19 +334,19 @@ export function CostsView() {
                               onClick={() => goToTask(t.projectId, t.threadId)}
                             >
                               <TableCell>
-                                <div className="font-medium text-primary truncate max-w-[260px]">
-                                  {t.title}
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-[11px] text-muted whitespace-nowrap">
-                                {t.updatedAt ? formatDateTime(t.updatedAt) : '—'}
-                              </TableCell>
-                              <TableCell>
                                 <span
                                   className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${PHASE_COLOR[t.phase] ?? PHASE_COLOR.idle}`}
                                 >
                                   {t.phase.replace(/_/g, ' ')}
                                 </span>
+                              </TableCell>
+                              <TableCell className="text-[11px] text-muted whitespace-nowrap">
+                                {t.updatedAt ? formatDateTime(t.updatedAt) : '—'}
+                              </TableCell>
+                              <TableCell>
+                                <div className="font-medium text-primary truncate max-w-[260px]">
+                                  {t.title}
+                                </div>
                               </TableCell>
                               <TableCell className="text-[11px] text-muted whitespace-nowrap">
                                 {formatProvider(t.provider)}
@@ -394,9 +394,9 @@ export function CostsView() {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead>Task</TableHead>
-                            <TableHead>Date</TableHead>
                             <TableHead>Phase</TableHead>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Task</TableHead>
                             <TableHead>Provider</TableHead>
                             <TableHead>Model</TableHead>
                             <TableHead className="text-right">Tokens</TableHead>
@@ -414,20 +414,20 @@ export function CostsView() {
                               onClick={() => goToTask(t.projectId, t.threadId)}
                             >
                               <TableCell>
-                                <div className="font-medium text-primary truncate max-w-[260px]">
-                                  {t.title}
-                                </div>
-                                <div className="text-[11px] text-muted">{t.projectName}</div>
-                              </TableCell>
-                              <TableCell className="text-[11px] text-muted whitespace-nowrap">
-                                {t.updatedAt ? formatDateTime(t.updatedAt) : '—'}
-                              </TableCell>
-                              <TableCell>
                                 <span
                                   className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${PHASE_COLOR[t.phase] ?? PHASE_COLOR.idle}`}
                                 >
                                   {t.phase.replace(/_/g, ' ')}
                                 </span>
+                              </TableCell>
+                              <TableCell className="text-[11px] text-muted whitespace-nowrap">
+                                {t.updatedAt ? formatDateTime(t.updatedAt) : '—'}
+                              </TableCell>
+                              <TableCell>
+                                <div className="font-medium text-primary truncate max-w-[260px]">
+                                  {t.title}
+                                </div>
+                                <div className="text-[11px] text-muted">{t.projectName}</div>
                               </TableCell>
                               <TableCell className="text-[11px] text-muted whitespace-nowrap">
                                 {formatProvider(t.provider)}
