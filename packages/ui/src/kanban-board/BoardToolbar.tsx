@@ -180,7 +180,7 @@ export function BoardToolbar({
         </Button>
         {onNewIssue && (
           <Button size="sm" onClick={onNewIssue}>
-            + New PRD
+            + New Issue
           </Button>
         )}
       </div>

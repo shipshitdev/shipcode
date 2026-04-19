@@ -1,4 +1,4 @@
-import type { Project } from '@shipcode/shared';
+import type { GitHubIssueCacheRecord, Project } from '@shipcode/shared';
 import {
   CommandDialog,
   CommandEmpty,
@@ -8,8 +8,10 @@ import {
   CommandList,
   CommandShortcut,
 } from '@shipcode/ui';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { getShortcut } from '../data/shortcuts';
+import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 
 export function CommandPalette() {
@@ -30,10 +32,46 @@ export function CommandPalette() {
     openActivity,
     openInbox,
     openCosts,
+    openSkills,
+    openInstant,
     selectProject,
     openProjectSetupModal,
     openInstantFixModal,
+    navigateToIssue,
   } = useAppStore();
+
+  // Cross-project issue search — only fetches when palette is open
+  const { data: allProjects = [] } = useQuery<Project[]>({
+    queryKey: ['projects-visible'],
+    queryFn: () => window.shipcode.invoke('project:list-visible'),
+    staleTime: STABLE_APP_STATE_STALE_TIME,
+    enabled: commandPaletteOpen,
+  });
+
+  const issueResults = useQueries({
+    queries: allProjects.map((p) => ({
+      queryKey: ['github-issues', p.id] as const,
+      queryFn: () =>
+        window.shipcode.invoke<GitHubIssueCacheRecord[]>('github:list-issues', {
+          projectId: p.id,
+        }),
+      staleTime: STABLE_APP_STATE_STALE_TIME,
+      enabled: commandPaletteOpen,
+    })),
+  });
+
+  const allIssues = useMemo(() => {
+    const result: Array<{ issue: GitHubIssueCacheRecord; project: Project }> = [];
+    for (let i = 0; i < issueResults.length; i++) {
+      const data = issueResults[i]?.data;
+      const project = allProjects[i];
+      if (!data || !project) continue;
+      for (const issue of data) {
+        result.push({ issue, project });
+      }
+    }
+    return result;
+  }, [issueResults, allProjects]);
 
   const addProject = useMutation({
     mutationFn: async () => {
@@ -61,15 +99,32 @@ export function CommandPalette() {
 
   return (
     <CommandDialog open={commandPaletteOpen} onOpenChange={toggleCommandPalette}>
-      <CommandInput placeholder="Type a command..." />
+      <CommandInput placeholder="Search issues, commands..." />
       <CommandList>
-        <CommandEmpty>No commands found.</CommandEmpty>
+        <CommandEmpty>No results found.</CommandEmpty>
+
+        {allIssues.length > 0 && (
+          <CommandGroup heading="Issues">
+            {allIssues.map(({ issue, project }) => (
+              <CommandItem
+                key={`${project.id}:${issue.issueNumber}`}
+                value={`${project.name} #${issue.issueNumber} ${issue.title}`}
+                onSelect={() => runAction(() => navigateToIssue(project.id, issue))}
+              >
+                <span className="shrink-0 text-muted font-mono text-xs">#{issue.issueNumber}</span>
+                <span className="flex-1 truncate">{issue.title}</span>
+                <CommandShortcut>{project.name}</CommandShortcut>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        )}
 
         <CommandGroup heading="GitHub">
           {activeProjectId && (
             <>
               <CommandItem onSelect={() => runAction(() => openCreateIssueModal())}>
-                <span className="flex-1">New PRD...</span>
+                <span className="flex-1">New Issue...</span>
+                <CommandShortcut>{getShortcut('new-issue').glyph}</CommandShortcut>
               </CommandItem>
               <CommandItem
                 onSelect={() =>
@@ -157,6 +212,12 @@ export function CommandPalette() {
           </CommandItem>
           <CommandItem onSelect={() => runAction(() => openCosts())}>
             <span className="flex-1">Costs</span>
+          </CommandItem>
+          <CommandItem onSelect={() => runAction(() => openSkills())}>
+            <span className="flex-1">Skills</span>
+          </CommandItem>
+          <CommandItem onSelect={() => runAction(() => openInstant())}>
+            <span className="flex-1">Instant</span>
           </CommandItem>
           <CommandItem onSelect={() => runAction(() => toggleSettings())}>
             <span className="flex-1">Settings</span>

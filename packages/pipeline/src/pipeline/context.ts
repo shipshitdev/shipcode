@@ -156,6 +156,7 @@ export function createPipelineContextHelpers(
       repoSetupLoaded: seed.repoSetupLoaded ?? false,
       abort: seed.abort ?? new AbortController(),
       stabilizationFeedback: seed.stabilizationFeedback ?? null,
+      previousPlanRawOutput: seed.previousPlanRawOutput ?? null,
     };
     activePipelines.set(threadId, context);
     return context;
@@ -257,6 +258,7 @@ export function createPipelineContextHelpers(
       cancelled: false,
       verifiedSha: null,
       stabilizationFeedback: null,
+      previousPlanRawOutput: null,
     });
   }
 

@@ -13,7 +13,8 @@ export type ShortcutId =
   | 'toggle-terminal'
   | 'toggle-sidebar'
   | 'toggle-issue-detail'
-  | 'instant-fix';
+  | 'instant-fix'
+  | 'new-issue';
 
 export type ShortcutCategory = 'Navigation' | 'Workspace';
 
@@ -79,6 +80,14 @@ export const SHORTCUTS: ShortcutDef[] = [
     category: 'Navigation',
     glyph: '⇧⌘I',
     combo: { meta: true, shift: true, key: 'i' },
+  },
+  {
+    id: 'new-issue',
+    label: 'New Issue',
+    description: 'Create a new GitHub issue / PRD',
+    category: 'Navigation',
+    glyph: '⌘N',
+    combo: { meta: true, key: 'n' },
   },
 ];
 

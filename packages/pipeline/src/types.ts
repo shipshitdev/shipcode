@@ -176,6 +176,13 @@ export interface PipelineContext {
    * execute pass appends them to the prompt and then clears the field.
    */
   stabilizationFeedback: string | null;
+  /**
+   * Raw output from a previous failed plan attempt. When set,
+   * `startPlanGeneration` appends format-correction context so the
+   * model can fix its output format instead of starting from scratch.
+   * Consumed (cleared) after use.
+   */
+  previousPlanRawOutput: string | null;
 }
 
 export interface ActivePipelineSummary {

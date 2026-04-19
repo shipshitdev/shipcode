@@ -43,7 +43,11 @@ export type {
   PlanPromptDeps,
   PlanPromptOptions,
 } from './prompts/plan-prompt';
-export { buildPlanPrompt, buildRevisionPrompt } from './prompts/plan-prompt';
+export {
+  buildPlanPrompt,
+  buildPreviousAttemptContext,
+  buildRevisionPrompt,
+} from './prompts/plan-prompt';
 export type {
   ReviewPromptContext,
   ReviewPromptDeps,

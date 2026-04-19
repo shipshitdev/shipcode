@@ -156,6 +156,10 @@ interface AppState {
   openProjectSetupModal: (projectId: string) => void;
   closeProjectSetupModal: () => void;
 
+  // Cross-project navigation
+  navigateToIssue: (projectId: string, issue: GitHubIssueCacheRecord) => void;
+  openCommandPalette: () => void;
+
   // Instant fix actions
   openInstantFixModal: () => void;
   closeInstantFixModal: () => void;
@@ -434,6 +438,26 @@ export const useAppStore = create<AppState>((set) => ({
     }),
   closeProjectSetupModal: () =>
     set({ projectSetupModalOpen: false, projectSetupModalProjectId: null }),
+
+  // Cross-project navigation
+  navigateToIssue: (projectId, issue) =>
+    set((s) => ({
+      activeProjectId: projectId,
+      viewMode: 'project',
+      activeIssue: issue,
+      activeThreadId: issue.threadId ?? null,
+      currentPlan: null,
+      currentReview: null,
+      currentVerification: null,
+      pipelinePhase: 'idle',
+      terminalEvents: [],
+      terminalThreadId: issue.threadId ?? null,
+      issueDetailExpanded: s.issueDetailExpanded,
+      terminalMaximized: s.terminalMaximized,
+      terminalVisible: AGENT_ACTIVE_STATUSES.has(issue.pipelineStatus) ? true : s.terminalVisible,
+      commandPaletteOpen: false,
+    })),
+  openCommandPalette: () => set({ commandPaletteOpen: true }),
 
   // Instant fix
   openInstantFixModal: () => set({ instantFixModalOpen: true, commandPaletteOpen: false }),

@@ -1,8 +1,7 @@
-import type { InstantFixScope, Project, StagedPrdAttachment } from '@shipcode/shared';
+import type { Project, StagedPrdAttachment } from '@shipcode/shared';
 import {
   Button,
   cn,
-  ImageIcon,
   Modal,
   ModalFooter,
   Select,
@@ -21,10 +20,8 @@ export function InstantFixModal() {
   const { instantFixModalOpen, closeInstantFixModal, addInstantPane, openInstant } = useAppStore();
 
   const [prompt, setPrompt] = useState('');
-  const [scope, setScope] = useState<InstantFixScope>('project');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [cli, setCli] = useState<'claude' | 'codex'>('claude');
-  const [customSystemPrompt, setCustomSystemPrompt] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,16 +46,11 @@ export function InstantFixModal() {
       setPrompt('');
       setError(null);
       setAttachments([]);
-      setCustomSystemPrompt('');
       sessionIdRef.current = null;
       if (activeProjectId && projects.some((p) => p.id === activeProjectId)) {
         setSelectedProjectId(activeProjectId);
-        setScope('project');
       } else if (projects.length > 0) {
         setSelectedProjectId(projects[0].id);
-        setScope('project');
-      } else {
-        setScope('user');
       }
     }
   }, [instantFixModalOpen, activeProjectId, projects]);
@@ -75,15 +67,13 @@ export function InstantFixModal() {
 
   const ensureSession = useCallback(async (): Promise<string> => {
     if (sessionIdRef.current) return sessionIdRef.current;
-    const projectIdForSession =
-      scope === 'user' ? '__instant__' : (selectedProjectId ?? '__instant__');
     const result = await window.shipcode.invoke<{ sessionId: string }>(
       'prd-attachments:create-session',
-      { senderId: 'instant-fix', projectId: projectIdForSession },
+      { senderId: 'instant-fix', projectId: selectedProjectId ?? '__instant__' },
     );
     sessionIdRef.current = result.sessionId;
     return result.sessionId;
-  }, [scope, selectedProjectId]);
+  }, [selectedProjectId]);
 
   const ingestFiles = useCallback(
     async (files: File[]) => {
@@ -132,31 +122,18 @@ export function InstantFixModal() {
     [ingestFiles],
   );
 
-  const handleFilePickerClick = useCallback(() => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/png,image/jpeg,image/gif,image/webp';
-    input.multiple = true;
-    input.onchange = () => {
-      const files = Array.from(input.files ?? []);
-      if (files.length > 0) void ingestFiles(files);
-    };
-    input.click();
-  }, [ingestFiles]);
-
   const handleSubmit = useCallback(async () => {
-    if (!prompt.trim()) return;
+    if (!prompt.trim() || !selectedProjectId) return;
     setIsSubmitting(true);
     setError(null);
 
     try {
       const result = await window.shipcode.invoke<{ threadId: string }>('instant:run', {
-        projectId: scope !== 'user' ? selectedProjectId : undefined,
+        projectId: selectedProjectId,
         prompt: prompt.trim(),
-        scope,
+        scope: 'project',
         cli,
         attachmentSessionId: sessionIdRef.current ?? undefined,
-        customSystemPrompt: scope === 'custom' ? customSystemPrompt.trim() : undefined,
       });
 
       addInstantPane(result.threadId);
@@ -167,135 +144,77 @@ export function InstantFixModal() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [
-    prompt,
-    scope,
-    selectedProjectId,
-    cli,
-    customSystemPrompt,
-    addInstantPane,
-    openInstant,
-    closeInstantFixModal,
-  ]);
+  }, [prompt, selectedProjectId, cli, addInstantPane, openInstant, closeInstantFixModal]);
 
   return (
     <Modal open={instantFixModalOpen} onClose={closeInstantFixModal} title="Instant Fix">
       <div className="flex flex-col gap-4">
-        {/* Prompt */}
-        <Textarea
-          placeholder="Describe what to fix..."
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          rows={4}
-          autoFocus
-        />
-
-        {/* Scope + CLI row */}
-        <div className="flex gap-3">
-          <div className="flex-1">
-            <label className="text-xs text-muted mb-1 block">Scope</label>
-            <Select value={scope} onValueChange={(v) => setScope(v as InstantFixScope)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="project">Project</SelectItem>
-                <SelectItem value="user">User (read-only)</SelectItem>
-                <SelectItem value="custom">Custom</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex-1">
-            <label className="text-xs text-muted mb-1 block">CLI</label>
-            <Select value={cli} onValueChange={(v) => setCli(v as 'claude' | 'codex')}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="claude">Claude</SelectItem>
-                <SelectItem value="codex">Codex</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {/* Project picker (project/custom scope) */}
-        {scope !== 'user' && (
-          <div>
-            <label className="text-xs text-muted mb-1 block">Project</label>
-            <Select value={selectedProjectId ?? ''} onValueChange={setSelectedProjectId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select a project" />
-              </SelectTrigger>
-              <SelectContent>
-                {projects.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
-        {/* Custom system prompt */}
-        {scope === 'custom' && (
-          <div>
-            <label className="text-xs text-muted mb-1 block">System Prompt</label>
-            <Textarea
-              placeholder="Custom system instructions..."
-              value={customSystemPrompt}
-              onChange={(e) => setCustomSystemPrompt(e.target.value)}
-              rows={3}
-            />
-          </div>
-        )}
-
-        {/* Security warning for user scope */}
-        {scope === 'user' && (
-          <div className="rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-warning">
-            User scope runs in read-only mode — no file writes allowed.
-          </div>
-        )}
-
-        {/* Image drop zone */}
-        <div>
-          <label className="text-xs text-muted mb-1 block">Screenshots (optional)</label>
-          <Button
-            variant="ghost"
-            className={cn(
-              'w-full h-20 border-2 border-dashed border-border rounded-lg flex items-center justify-center gap-2 text-muted text-xs',
-              dragActive && 'border-accent bg-accent/5',
-            )}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            onClick={handleFilePickerClick}
-          >
-            <ImageIcon size={16} />
-            Drop images here or click to browse
-          </Button>
+        {/* Prompt + drop zone */}
+        <section
+          aria-label="Prompt and file drop zone"
+          className={cn(
+            'rounded-lg border border-border transition-colors',
+            dragActive && 'border-accent bg-accent/5',
+          )}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          <Textarea
+            placeholder="Describe what to fix..."
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            rows={4}
+            autoFocus
+            className="border-0 focus-visible:ring-0 resize-none"
+          />
 
           {/* Attachment previews */}
           {attachments.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-2">
+            <div className="flex flex-wrap gap-2 px-3 pb-2">
               {attachments.map((att) => (
-                <div
-                  key={att.originalPath}
-                  className="flex items-center gap-1.5 rounded border border-border px-2 py-1 text-xs text-secondary"
-                >
-                  <span className="truncate max-w-[120px]">{att.fileName}</span>
+                <div key={att.originalPath} className="relative group">
+                  <img
+                    src={`file://${att.stagedPath}`}
+                    alt={att.fileName}
+                    className="h-16 w-16 rounded border border-border object-cover"
+                  />
                   <button
                     type="button"
-                    className="text-muted hover:text-danger"
+                    className="absolute -top-1.5 -right-1.5 hidden group-hover:flex h-4 w-4 items-center justify-center rounded-full bg-danger text-white"
                     onClick={() => void removeAttachment(att)}
                   >
-                    <X size={12} />
+                    <X size={10} />
                   </button>
                 </div>
               ))}
             </div>
           )}
+        </section>
+
+        {/* CLI + Project row */}
+        <div className="flex gap-3">
+          <Select value={cli} onValueChange={(v) => setCli(v as 'claude' | 'codex')}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="claude">Claude</SelectItem>
+              <SelectItem value="codex">Codex</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={selectedProjectId ?? ''} onValueChange={setSelectedProjectId}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select a project" />
+            </SelectTrigger>
+            <SelectContent>
+              {projects.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Error */}
@@ -310,7 +229,10 @@ export function InstantFixModal() {
         <Button variant="ghost" onClick={closeInstantFixModal}>
           Cancel
         </Button>
-        <Button onClick={handleSubmit} disabled={!prompt.trim() || isSubmitting}>
+        <Button
+          onClick={handleSubmit}
+          disabled={!prompt.trim() || !selectedProjectId || isSubmitting}
+        >
           {isSubmitting ? 'Starting...' : 'Run'}
         </Button>
       </ModalFooter>

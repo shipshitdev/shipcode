@@ -27,6 +27,49 @@ const PLAN_SCHEMA_DESCRIPTION = `{
 
 const PLAN_OUTPUT_SCHEMA = `\`\`\`${PLAN_FENCE_TAG}\n${PLAN_SCHEMA_DESCRIPTION}\n\`\`\``;
 
+/**
+ * Appended to the end of every plan prompt to reinforce fence format.
+ * Models (especially GPT-5.x via Codex) sometimes ignore mid-prompt format
+ * instructions. End-of-prompt reminders are more reliably followed.
+ */
+const FORMAT_REINFORCEMENT = `
+
+<!-- FORMAT REMINDER — this takes priority over any conflicting instruction above -->
+Your response MUST contain exactly one code fence tagged \`${PLAN_FENCE_TAG}\`.
+Do NOT use \`\`\`json or \`\`\`typescript — use exactly: \`\`\`${PLAN_FENCE_TAG}
+The JSON inside the fence must validate against the ShipCodePlan schema shown above.
+Any response without a valid \`\`\`${PLAN_FENCE_TAG} fence will be rejected and retried.`;
+
+/**
+ * Build a context block from a previous failed plan attempt, telling the model
+ * what went wrong and asking it to produce correct output this time.
+ */
+export function buildPreviousAttemptContext(previousRawOutput: string): string {
+  // Truncate to avoid blowing up context — keep the last 2000 chars which
+  // are most likely to contain the model's actual plan attempt.
+  const truncated =
+    previousRawOutput.length > 2000
+      ? `[…truncated…]\n${previousRawOutput.slice(-2000)}`
+      : previousRawOutput;
+
+  return `
+
+<previous_attempt_failed>
+A previous planning attempt produced output but it could NOT be parsed.
+The most likely reason: the output was missing the required \`\`\`${PLAN_FENCE_TAG} code fence,
+or the JSON inside the fence did not match the ShipCodePlan schema.
+
+Here is a snippet of the previous output for reference — do NOT repeat the same mistake:
+<previous_output>
+${truncated}
+</previous_output>
+
+Fix the format: wrap your plan JSON in exactly \`\`\`${PLAN_FENCE_TAG} ... \`\`\` and ensure
+all required fields (id, threadId, version, objective, files, steps, acceptanceCriteria,
+outOfScope, estimatedComplexity, dependencies) are present.
+</previous_attempt_failed>`;
+}
+
 export interface PlanPromptContext {
   projectId: string | null;
 }
@@ -61,7 +104,7 @@ export function buildPlanPrompt(
   const note = testCommand
     ? `\n\n<!-- auto-injected: test command configured -->\nNote: This project runs \`${testCommand}\` after execution. The plan MUST include an acceptance criterion: "Test suite passes (\`${testCommand}\`)."`
     : '';
-  return base + note;
+  return base + note + FORMAT_REINFORCEMENT;
 }
 
 export function buildRevisionPrompt(
@@ -86,5 +129,5 @@ export function buildRevisionPrompt(
   const note = testCommand
     ? `\n\n<!-- auto-injected: test command configured -->\nNote: This project runs \`${testCommand}\` after execution. The plan MUST include an acceptance criterion: "Test suite passes (\`${testCommand}\`)."`
     : '';
-  return base + note;
+  return base + note + FORMAT_REINFORCEMENT;
 }

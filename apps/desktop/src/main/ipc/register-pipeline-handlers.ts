@@ -278,6 +278,10 @@ export function registerPipelineHandlers({
       } else if (retryAction === 'commit_and_push') {
         await pipeline.startCommitAndPush(threadId);
       } else {
+        const retryCtx = pipeline.getContext(threadId);
+        if (retryCtx && latestPlan?.rawOutput) {
+          retryCtx.previousPlanRawOutput = latestPlan.rawOutput;
+        }
         queries.plans.supersedeAll(threadId);
         await pipeline.startPlanGeneration(
           threadId,
@@ -287,6 +291,14 @@ export function registerPipelineHandlers({
         );
       }
       return;
+    }
+
+    // Capture raw output from the latest failed plan so the next attempt
+    // gets format-correction context instead of starting completely blind.
+    const failedPlan = queries.plans.getLatest(threadId);
+    const ctx = pipeline.getContext(threadId);
+    if (ctx && failedPlan?.rawOutput) {
+      ctx.previousPlanRawOutput = failedPlan.rawOutput;
     }
 
     queries.plans.supersedeAll(threadId);

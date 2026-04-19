@@ -1,5 +1,6 @@
 import {
   buildPlanPrompt,
+  buildPreviousAttemptContext,
   buildReviewPrompt,
   buildRevisionPrompt,
   loadRepoContext,
@@ -47,6 +48,8 @@ export function createPlanningPhaseHandlers({
     emitPhase(threadId, 'planning');
 
     const skill = skillCallSite(context);
+    const previousAttempt = context.previousPlanRawOutput;
+    context.previousPlanRawOutput = null; // consume — one shot
     const planPrompt =
       buildPlanPrompt(
         prompt,
@@ -57,7 +60,9 @@ export function createPlanningPhaseHandlers({
           contextFiles: context.repoContext ?? undefined,
         },
         getVerifyCommands(context).join(' && ') || null,
-      ) + buildRepoSetupPlannerNote(context);
+      ) +
+      buildRepoSetupPlannerNote(context) +
+      (previousAttempt ? buildPreviousAttemptContext(previousAttempt) : '');
 
     void (async () => {
       try {
@@ -94,6 +99,7 @@ export function createPlanningPhaseHandlers({
             const detectedError = parser.detectError();
             if (context.retryCount < PIPELINE_MAX_RETRIES) {
               context.retryCount++;
+              context.previousPlanRawOutput = response.rawOutput;
               handlers.startPlanGeneration(threadId, prompt, projectPath, worktreePath);
             } else {
               let cliError: string | null = null;

@@ -80,7 +80,13 @@ If a step depends on a fact you cannot verify from the codebase, state the assum
 <repository_context>
 src/shortcuts.ts (new file)
 </repository_context>
-"
+
+
+<!-- FORMAT REMINDER — this takes priority over any conflicting instruction above -->
+Your response MUST contain exactly one code fence tagged \`shipcode-plan\`.
+Do NOT use \`\`\`json or \`\`\`typescript — use exactly: \`\`\`shipcode-plan
+The JSON inside the fence must validate against the ShipCodePlan schema shown above.
+Any response without a valid \`\`\`shipcode-plan fence will be rejected and retried."
 `;
 
 exports[`buildRevisionPrompt > matches snapshot 1`] = `
@@ -189,5 +195,11 @@ Every claim in a \`rationale\` must be defensible from the plan or repo state �
 <review_feedback>
 Add tests
 </review_feedback>
-"
+
+
+<!-- FORMAT REMINDER — this takes priority over any conflicting instruction above -->
+Your response MUST contain exactly one code fence tagged \`shipcode-plan\`.
+Do NOT use \`\`\`json or \`\`\`typescript — use exactly: \`\`\`shipcode-plan
+The JSON inside the fence must validate against the ShipCodePlan schema shown above.
+Any response without a valid \`\`\`shipcode-plan fence will be rejected and retried."
 `;
