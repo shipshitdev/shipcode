@@ -425,7 +425,7 @@ export function CreateIssueModal() {
         {/* Project + Format row — below textarea in create mode */}
         {mode === 'create' && projects.length > 0 && (
           <div className="flex items-end gap-2">
-            <div className="flex flex-col gap-1 flex-1">
+            <div className="flex flex-col gap-1 w-48">
               <Label htmlFor="issue-project" className="text-xs text-secondary">
                 Project
               </Label>
@@ -529,7 +529,7 @@ export function CreateIssueModal() {
         )}
       </section>
 
-      <ModalFooter className="items-center border-t border-border px-6 pt-4">
+      <ModalFooter className="items-center border-t border-border -mx-6 px-6 pt-4">
         {mode === 'create' && (
           <Label
             htmlFor="submit-another"
