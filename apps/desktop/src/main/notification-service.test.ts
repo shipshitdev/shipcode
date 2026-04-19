@@ -68,6 +68,7 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     revisorResolvedModel: null,
     executorResolvedModel: null,
     verifierResolvedModel: null,
+    kind: 'pipeline' as const,
     totalTokensPrompt: 0,
     totalTokensCompletion: 0,
     totalCostUsd: 0,

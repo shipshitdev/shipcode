@@ -74,6 +74,7 @@ function makeProject(overrides: Partial<Project> = {}): Project {
     pinned: false,
     archived: false,
     hidden: false,
+    notifyGithubUser: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     ...overrides,

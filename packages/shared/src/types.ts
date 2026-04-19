@@ -96,6 +96,7 @@ export interface Project {
   pinned: boolean;
   archived: boolean;
   hidden: boolean;
+  notifyGithubUser: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -602,6 +603,7 @@ export interface GitHubIssue {
   assignee: string | null;
   state: 'open' | 'closed';
   url: string;
+  author?: { login: string };
 }
 
 export interface GitHubPrCheckSummary {

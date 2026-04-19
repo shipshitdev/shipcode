@@ -28,7 +28,6 @@ interface BoardToolbarProps {
   onViewChange: (view: 'kanban' | 'list') => void;
   refreshing: boolean;
   onRefresh: () => void;
-  onNewIssue?: () => void;
   projectName?: string;
   repoUrl?: string | null;
   projectsUrl?: string | null;
@@ -48,7 +47,6 @@ export function BoardToolbar({
   onViewChange,
   refreshing,
   onRefresh,
-  onNewIssue,
   projectName,
   repoUrl,
   projectsUrl,
@@ -178,11 +176,6 @@ export function BoardToolbar({
         <Button variant="outline" size="icon-sm" onClick={onRefresh} title="Refresh board">
           <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
         </Button>
-        {onNewIssue && (
-          <Button size="sm" onClick={onNewIssue}>
-            + New Issue
-          </Button>
-        )}
       </div>
     </div>
   );

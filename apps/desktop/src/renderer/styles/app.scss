@@ -207,6 +207,8 @@
 	::-webkit-scrollbar-thumb { background: var(--bg-hover); border-radius: 4px; }
 	::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
+	button, [role="button"] { cursor: pointer; }
+	button:disabled, [role="button"][aria-disabled="true"] { cursor: not-allowed; }
+
 	*:focus { outline: none; }
-	*:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 }

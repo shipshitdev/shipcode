@@ -38,10 +38,12 @@ export function ProjectSettingsGeneralTab({
   discordWebhookUrlOverride,
   telegramRouting,
   telegramChatIdOverride,
+  notifyGithubUser,
   onDiscordRoutingChange,
   onDiscordWebhookChange,
   onTelegramRoutingChange,
   onTelegramChatIdChange,
+  onNotifyGithubUserChange,
 }: {
   project: Project;
   urlInput: string;
@@ -66,10 +68,12 @@ export function ProjectSettingsGeneralTab({
   discordWebhookUrlOverride: string;
   telegramRouting: ProjectNotificationRoutingMode;
   telegramChatIdOverride: string;
+  notifyGithubUser: string;
   onDiscordRoutingChange: (value: ProjectNotificationRoutingMode) => void;
   onDiscordWebhookChange: (value: string) => void;
   onTelegramRoutingChange: (value: ProjectNotificationRoutingMode) => void;
   onTelegramChatIdChange: (value: string) => void;
+  onNotifyGithubUserChange: (value: string) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -233,6 +237,25 @@ export function ProjectSettingsGeneralTab({
             />
           </div>
         </div>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <Label htmlFor="notify-github-user" className="text-xs text-secondary">
+          Notify GitHub user on issue rewrite
+        </Label>
+        <Input
+          id="notify-github-user"
+          type="text"
+          value={notifyGithubUser}
+          onChange={(e) => onNotifyGithubUserChange(e.target.value)}
+          placeholder="github-handle (without @)"
+          autoComplete="off"
+          spellCheck={false}
+        />
+        <p className="text-[11px] text-muted">
+          When an issue is rewritten, ShipCode will @mention this user in the comment. Leave blank
+          to only tag the issue author.
+        </p>
       </div>
 
       <div className="rounded-md border border-border bg-secondary/30 p-3">

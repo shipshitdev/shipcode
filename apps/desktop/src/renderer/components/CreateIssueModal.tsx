@@ -5,6 +5,7 @@ import {
   PRD_REQUIRED_HEADINGS,
   type PrdBlastRadius,
   type PrdEstimatedComplexity,
+  type Project,
   readPrdIssueMetadata,
   type StagedPrdAttachment,
 } from '@shipcode/shared';
@@ -17,12 +18,18 @@ import {
   Label,
   Modal,
   ModalFooter,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Textarea,
   Trash2,
 } from '@shipcode/ui';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 
 /**
@@ -59,8 +66,14 @@ function formatBytes(bytes: number): string {
 
 export function CreateIssueModal() {
   const queryClient = useQueryClient();
-  const { createIssueModalOpen, closeCreateIssueModal, activeProjectId, editingPrd, selectIssue } =
-    useAppStore();
+  const {
+    createIssueModalOpen,
+    closeCreateIssueModal,
+    activeProjectId,
+    editingPrd,
+    selectIssue,
+    selectProject,
+  } = useAppStore();
   const [body, setBody] = useState('');
   const [estimatedComplexity, setEstimatedComplexity] = useState<PrdEstimatedComplexity>('medium');
   const [blastRadius, setBlastRadius] = useState<PrdBlastRadius>('contained');
@@ -69,6 +82,19 @@ export function CreateIssueModal() {
   const [error, setError] = useState<string | null>(null);
   const [submitAnother, setSubmitAnother] = useState(false);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
+
+  // Local project selection — defaults to activeProjectId when modal opens
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+
+  const { data: projects = [] } = useQuery<Project[]>({
+    queryKey: ['projects-visible'],
+    queryFn: () => window.shipcode.invoke('project:list-visible'),
+    staleTime: STABLE_APP_STATE_STALE_TIME,
+    enabled: createIssueModalOpen,
+  });
+
+  // The project ID used for all operations in this modal
+  const effectiveProjectId = selectedProjectId ?? activeProjectId;
 
   // Attachment state
   const [attachments, setAttachments] = useState<StagedPrdAttachment[]>([]);
@@ -85,17 +111,17 @@ export function CreateIssueModal() {
 
   const ensureSession = useCallback(async (): Promise<string> => {
     if (sessionIdRef.current) return sessionIdRef.current;
-    if (!activeProjectId) throw new Error('No active project');
+    if (!effectiveProjectId) throw new Error('No active project');
     const result = await window.shipcode.invoke<{ sessionId: string }>(
       'prd-attachments:create-session',
       {
         senderId: senderIdRef.current,
-        projectId: activeProjectId,
+        projectId: effectiveProjectId,
       },
     );
     sessionIdRef.current = result.sessionId;
     return result.sessionId;
-  }, [activeProjectId]);
+  }, [effectiveProjectId]);
 
   const clearAttachmentSession = useCallback(async () => {
     const id = sessionIdRef.current;
@@ -157,7 +183,7 @@ export function CreateIssueModal() {
   }, []);
 
   // ---------------------------------------------------------------------------
-  // Drag-and-drop
+  // Drag-and-drop (entire modal is the drop zone)
   // ---------------------------------------------------------------------------
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -185,26 +211,13 @@ export function CreateIssueModal() {
     [ingestFiles],
   );
 
-  const handleFilePickerClick = useCallback(() => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/png,image/jpeg,image/gif,image/webp';
-    input.multiple = true;
-    input.onchange = () => {
-      const files = Array.from(input.files ?? []);
-      if (files.length > 0) {
-        void ingestFiles(files);
-      }
-    };
-    input.click();
-  }, [ingestFiles]);
-
   // ---------------------------------------------------------------------------
   // Modal open/close
   // ---------------------------------------------------------------------------
 
   useEffect(() => {
     if (!createIssueModalOpen) return;
+    setSelectedProjectId(activeProjectId);
     if (mode === 'edit' && editingPrd) {
       const metadata = readPrdIssueMetadata(editingPrd.body ?? '', editingPrd.labels);
       setBody(metadata.cleanBody);
@@ -218,7 +231,7 @@ export function CreateIssueModal() {
       setError(null);
     }
     setTimeout(() => bodyRef.current?.focus(), 50);
-  }, [createIssueModalOpen, mode, editingPrd]);
+  }, [createIssueModalOpen, mode, editingPrd, activeProjectId]);
 
   const handleClose = useCallback(() => {
     void clearAttachmentSession();
@@ -241,19 +254,17 @@ export function CreateIssueModal() {
     [estimatedComplexity, blastRadius],
   );
 
-  if (!activeProjectId) return null;
-
   // ---------------------------------------------------------------------------
   // Handlers
   // ---------------------------------------------------------------------------
 
   const handleEnhance = async () => {
-    if (!activeProjectId) return;
+    if (!effectiveProjectId) return;
     setEnhancing(true);
     setError(null);
     try {
       const result = await window.shipcode.invoke<{ body: string }>('ai:enhance-prd', {
-        projectId: activeProjectId,
+        projectId: effectiveProjectId,
         draftBody: body,
         attachmentSessionId: sessionIdRef.current,
       });
@@ -276,12 +287,13 @@ export function CreateIssueModal() {
       if (!derivedTitle || body.trim().length === 0) return;
     }
     if (mode === 'create' && !derivedTitle) return;
+    if (!effectiveProjectId) return;
     setSubmitting(true);
     setError(null);
     try {
       if (mode === 'edit' && editingPrd) {
         await window.shipcode.invoke('github:edit-issue-body', {
-          projectId: activeProjectId,
+          projectId: effectiveProjectId,
           issueNumber: editingPrd.issueNumber,
           title: derivedTitle,
           body,
@@ -293,7 +305,7 @@ export function CreateIssueModal() {
           issue: GitHubIssueCacheRecord;
           projectAttachWarning: string | null;
         }>('github:create-issue', {
-          projectId: activeProjectId,
+          projectId: effectiveProjectId,
           title: derivedTitle,
           body,
           labels: metadataLabels,
@@ -303,7 +315,7 @@ export function CreateIssueModal() {
         // so the user can watch planning start.
         try {
           await window.shipcode.invoke('github:start-issue', {
-            projectId: activeProjectId,
+            projectId: effectiveProjectId,
             issueNumber: created.issue.issueNumber,
           });
         } catch (startErr) {
@@ -317,6 +329,9 @@ export function CreateIssueModal() {
           // Clear attachments for the next submission
           void clearAttachmentSession();
           return;
+        }
+        if (effectiveProjectId !== activeProjectId) {
+          selectProject(effectiveProjectId);
         }
         selectIssue(created.issue);
         // If best-effort board attach failed, keep the modal open with an
@@ -355,11 +370,12 @@ export function CreateIssueModal() {
   const bodyIsEmpty = body.trim().length === 0;
 
   // Submit disabled logic differs by mode.
+  const noProject = !effectiveProjectId;
   const titleMissing = mode === 'create' && !derivedTitle;
   const submitDisabled =
     mode === 'edit'
       ? !editBodyValid || submitting || enhancing
-      : titleMissing || bodyIsEmpty || submitting || enhancing;
+      : noProject || titleMissing || bodyIsEmpty || submitting || enhancing;
 
   const submitLabel = submitting
     ? mode === 'edit'
@@ -379,51 +395,85 @@ export function CreateIssueModal() {
       className="max-w-[720px]"
       onKeyDown={handleKeyDown}
     >
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="issue-body" className="text-xs text-secondary">
-            What do you want to build?
-          </Label>
-          <Textarea
-            ref={bodyRef}
-            id="issue-body"
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder={mode === 'create' ? 'Describe what you want to build…' : 'PRD markdown...'}
-            rows={mode === 'create' ? 10 : 14}
-            className={
-              mode === 'edit' && editBodyValid
+      <section
+        aria-label="Issue content"
+        className={cn(
+          'flex flex-col gap-3 transition-colors',
+          dragActive && 'rounded-lg ring-2 ring-accent/50 bg-accent/5',
+        )}
+        onDragOver={mode === 'create' ? handleDragOver : undefined}
+        onDragLeave={mode === 'create' ? handleDragLeave : undefined}
+        onDrop={mode === 'create' ? handleDrop : undefined}
+      >
+        <Textarea
+          ref={bodyRef}
+          id="issue-body"
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          placeholder={mode === 'create' ? 'Describe what you want to build…' : 'PRD markdown...'}
+          rows={mode === 'create' ? 10 : 14}
+          className={
+            mode === 'edit' && editBodyValid
+              ? 'font-mono text-xs'
+              : mode === 'edit'
                 ? 'font-mono text-xs'
-                : mode === 'edit'
-                  ? 'font-mono text-xs'
-                  : 'text-[13px]'
-            }
-            disabled={enhancing}
-          />
-        </div>
+                : 'text-[13px]'
+          }
+          disabled={enhancing}
+        />
 
-        {/* Image drop zone — only in create mode */}
-        {mode === 'create' && (
+        {/* Project + Format row — below textarea in create mode */}
+        {mode === 'create' && projects.length > 0 && (
+          <div className="flex items-end gap-2">
+            <div className="flex flex-col gap-1 flex-1">
+              <Label htmlFor="issue-project" className="text-xs text-secondary">
+                Project
+              </Label>
+              <Select
+                value={effectiveProjectId ?? ''}
+                onValueChange={(value) => setSelectedProjectId(value)}
+              >
+                <SelectTrigger id="issue-project" className="bg-transparent">
+                  <SelectValue placeholder="Select a project..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              variant="secondary"
+              onClick={handleEnhance}
+              disabled={enhancing || submitting || bodyIsEmpty || hasAttachments}
+              title={
+                hasAttachments
+                  ? 'Remove attachments before using Format (not yet supported with images)'
+                  : "Let AI structure your idea into a full PRD using this repo's writing-prds skill"
+              }
+            >
+              {enhancing ? 'Formatting…' : 'Format'}
+            </Button>
+          </div>
+        )}
+
+        {/* Format button for edit mode — no project selector needed */}
+        {mode === 'edit' && (
           <Button
-            type="button"
-            variant="ghost"
-            aria-label="Image drop zone"
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            className={cn(
-              'flex h-auto w-full cursor-pointer flex-col items-center justify-center rounded-md border border-dashed px-4 py-3 text-xs transition-colors',
-              dragActive
-                ? 'border-accent bg-accent/10 text-accent'
-                : 'border-border bg-tertiary/20 text-muted hover:border-accent/50 hover:text-secondary',
-            )}
-            onClick={handleFilePickerClick}
+            variant="secondary"
+            onClick={handleEnhance}
+            disabled={enhancing || submitting || bodyIsEmpty || hasAttachments}
+            className="self-start"
+            title={
+              hasAttachments
+                ? 'Remove attachments before using Format (not yet supported with images)'
+                : "Let AI structure your idea into a full PRD using this repo's writing-prds skill"
+            }
           >
-            <ImageIcon className="mb-1 h-4 w-4 opacity-60" />
-            <span>{dragActive ? 'Drop images here' : 'Drop images or click to attach'}</span>
-            <span className="mt-0.5 text-muted/70">
-              PNG, JPEG, GIF, WebP · max 10 MB each · up to 6
-            </span>
+            {enhancing ? 'Rewriting…' : 'Rewrite with AI'}
           </Button>
         )}
 
@@ -477,7 +527,7 @@ export function CreateIssueModal() {
             <span className="ml-2 text-muted">(full trace in devtools console)</span>
           </div>
         )}
-      </div>
+      </section>
 
       <ModalFooter className="items-center border-t border-border px-6 pt-4">
         {mode === 'create' && (
@@ -498,33 +548,13 @@ export function CreateIssueModal() {
           Cancel
         </Button>
         <Button
-          variant="secondary"
-          onClick={handleEnhance}
-          disabled={enhancing || submitting || bodyIsEmpty || hasAttachments}
-          title={
-            hasAttachments
-              ? 'Remove attachments before using Write PRD (not yet supported with images)'
-              : "Let AI structure your idea into a full PRD using this repo's writing-prds skill"
-          }
+          onClick={handleSubmit}
+          disabled={submitDisabled}
+          aria-label={mode === 'edit' ? 'Save PRD' : undefined}
         >
-          {enhancing
-            ? mode === 'edit'
-              ? 'Rewriting…'
-              : 'Writing PRD…'
-            : mode === 'edit'
-              ? 'Rewrite with AI'
-              : 'Write PRD'}
+          <span>{submitLabel}</span>
+          <Keycap>⌘↩</Keycap>
         </Button>
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={handleSubmit}
-            disabled={submitDisabled}
-            aria-label={mode === 'edit' ? 'Save PRD' : undefined}
-          >
-            <span>{submitLabel}</span>
-            <Keycap>⌘↩</Keycap>
-          </Button>
-        </div>
       </ModalFooter>
     </Modal>
   );

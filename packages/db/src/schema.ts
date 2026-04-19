@@ -766,3 +766,15 @@ export function migrateV24(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (24)`);
   });
 }
+
+export function migrateV25(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 25) return;
+
+  transaction(db, () => {
+    execAlterTableIfMissing(db, 'ALTER TABLE projects ADD COLUMN notify_github_user TEXT');
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (25)`);
+  });
+}

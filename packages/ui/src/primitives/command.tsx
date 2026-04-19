@@ -1,13 +1,13 @@
 import { Command as CommandPrimitive } from 'cmdk';
 import type * as React from 'react';
 import { cn } from '../lib/utils';
-import { Dialog, DialogContent } from './dialog';
+import { Dialog, DialogContent, DialogTitle } from './dialog';
 
 function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>) {
   return (
     <CommandPrimitive
       className={cn(
-        'flex h-full w-full flex-col overflow-hidden rounded-xl bg-elevated text-primary',
+        'flex h-full w-full flex-col overflow-hidden rounded-xl bg-tertiary text-primary',
         className,
       )}
       {...props}
@@ -18,6 +18,7 @@ function CommandDialog({ children, ...props }: React.ComponentProps<typeof Dialo
   return (
     <Dialog {...props}>
       <DialogContent className="overflow-hidden p-0 shadow-lg max-w-[640px]">
+        <DialogTitle className="sr-only">Command palette</DialogTitle>
         <Command className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3">
           {children}
         </Command>

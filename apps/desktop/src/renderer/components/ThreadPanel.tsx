@@ -19,8 +19,7 @@ const DONE_PIPELINE_STATUSES: IssuePipelineStatus[] = ['completed', 'done'];
 
 export function ThreadPanel() {
   const queryClient = useQueryClient();
-  const { activeProjectId, selectIssue, openCreateIssueModal, activeIssue, setGithubIssues } =
-    useAppStore();
+  const { activeProjectId, selectIssue, activeIssue, setGithubIssues } = useAppStore();
   const [isRefreshingBranches, setIsRefreshingBranches] = useState(false);
   const [archiveFeedback, setArchiveFeedback] = useState<{
     tone: 'pending' | 'success' | 'error';
@@ -181,7 +180,6 @@ export function ThreadPanel() {
         onIssueClick={(issue) => selectIssue(issue)}
         selectedIssueNumber={activeIssue?.issueNumber}
         onRefresh={() => activeProjectId && refreshIssues.mutate(activeProjectId)}
-        onNewIssue={() => openCreateIssueModal()}
         baseBranch={project?.defaultBranch}
         branches={branches}
         refreshingBranches={isRefreshingBranches}

@@ -39,6 +39,7 @@ interface ProjectRow {
   pinned: number;
   archived: number;
   hidden: number;
+  notify_github_user: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -282,6 +283,14 @@ export class ProjectQueries {
       .run(url, id);
   }
 
+  updateNotifyGithubUser(id: string, handle: string | null): void {
+    this.db
+      .prepare(
+        `UPDATE projects SET notify_github_user = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
+      )
+      .run(handle || null, id);
+  }
+
   updateModelOverrides(
     id: string,
     overrides: {
@@ -385,6 +394,7 @@ function mapProject(row: ProjectRow): Project {
     pinned: row.pinned === 1,
     archived: row.archived === 1,
     hidden: row.hidden === 1,
+    notifyGithubUser: row.notify_github_user ?? null,
     createdAt: toIsoUtc(row.created_at) ?? row.created_at,
     updatedAt: toIsoUtc(row.updated_at) ?? row.updated_at,
   };

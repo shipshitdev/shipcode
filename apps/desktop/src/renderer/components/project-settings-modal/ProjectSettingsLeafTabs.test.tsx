@@ -34,6 +34,7 @@ function makeProject(overrides: Partial<Project> = {}): Project {
     pinned: false,
     archived: false,
     hidden: false,
+    notifyGithubUser: null,
     createdAt: '2026-04-16T00:00:00.000Z',
     updatedAt: '2026-04-16T00:00:00.000Z',
     ...overrides,
@@ -149,6 +150,8 @@ describe('project settings leaf tabs', () => {
         onDiscordWebhookChange={onDiscordWebhookChange}
         onTelegramRoutingChange={vi.fn()}
         onTelegramChatIdChange={onTelegramChatIdChange}
+        notifyGithubUser=""
+        onNotifyGithubUserChange={vi.fn()}
       />,
     );
 

@@ -13,6 +13,7 @@ import type {
   VerificationRecord,
 } from '@shipcode/shared';
 import {
+  clampError,
   deriveGithubIssueUrl,
   resolveEffectivePhaseReasoningEffort,
   resolveExecutorModelForIssue,
@@ -30,6 +31,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   PhaseChip,
+  Wand2,
   X,
 } from '@shipcode/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -67,6 +69,8 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     'approve',
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRewriting, setIsRewriting] = useState(false);
+  const [rewriteError, setRewriteError] = useState<string | null>(null);
   const [isRefreshingFromGithub, setIsRefreshingFromGithub] = useState(false);
   const [planHistoryCollapsed, setPlanHistoryCollapsed] = useState(false);
   const [showRawOutput, setShowRawOutput] = useState(false);
@@ -354,6 +358,24 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       await refreshIssueState();
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleRewriteIssue = async () => {
+    if (!activeProjectId || !activeIssue) return;
+    setIsRewriting(true);
+    setRewriteError(null);
+    try {
+      await window.shipcode.invoke('github:rewrite-issue', {
+        projectId: activeProjectId,
+        issueNumber: activeIssue.issueNumber,
+      });
+      await refreshIssueState();
+    } catch (err) {
+      const msg = clampError(err);
+      setRewriteError(msg);
+    } finally {
+      setIsRewriting(false);
     }
   };
 
@@ -945,8 +967,10 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     failingPhaseOutput,
     feedback,
     hasApprovalDecision,
+    isRewriting,
     isSubmitting,
     pendingAction,
+    rewriteError,
     showRawOutput,
     thread,
     onApprove: () => void handleApprove(),
@@ -957,6 +981,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     onPendingActionChange: setPendingAction,
     onReject: () => void handleReject(),
     onRerun: () => void handleRerun(),
+    onRewriteIssue: () => void handleRewriteIssue(),
     onShowRawOutputChange: setShowRawOutput,
     onStartPipeline: () => void handleStartPipeline(),
   });

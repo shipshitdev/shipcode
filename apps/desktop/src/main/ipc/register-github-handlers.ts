@@ -1,5 +1,6 @@
 import fs from 'node:fs';
-import { GhCli } from '@shipcode/agents';
+import path from 'node:path';
+import { enhancePrdDraft, GhCli } from '@shipcode/agents';
 import type { ExecutorModel, GitHubIssueCacheRecord, ReasoningEffort } from '@shipcode/shared';
 import {
   clampError,
@@ -695,6 +696,87 @@ export function registerGitHubHandlers({
       queries.githubIssues.updatePhaseReasoningEffortOverride(issue.id, phase, null);
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
       return queries.githubIssues.getByNumber(projectId, issueNumber);
+    },
+  );
+
+  ipcMain.handle(
+    'github:add-comment',
+    async (
+      _event,
+      { projectId, issueNumber, body }: { projectId: string; issueNumber: number; body: string },
+    ) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+      const ghCli = new GhCli(project.path);
+      await ghCli.addIssueComment(issueNumber, body);
+    },
+  );
+
+  ipcMain.handle(
+    'github:rewrite-issue',
+    async (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+
+      const ghCli = new GhCli(project.path);
+      const issue = await ghCli.getIssue(issueNumber);
+
+      const settings = queries.settings.get();
+      const skillPath = path.join(project.path, '.agents', 'skills', 'writing-prds', 'SKILL.md');
+      let skillContent: string;
+      try {
+        skillContent = fs.readFileSync(skillPath, 'utf-8');
+      } catch {
+        skillContent =
+          "You are drafting a PRD that will be consumed by the ShipCode pipeline's planner agent. " +
+          'The PRD lives in a GitHub issue body. Required sections: Executive Summary, Problem Statement, ' +
+          'Goals, Non-Goals, User Stories, Functional Requirements, Non-Functional Requirements, ' +
+          'Success Criteria, Out of Scope, Dependencies, Verification Plan, Risks & Open Questions.';
+      }
+
+      const enhanced = await enhancePrdDraft({
+        draftBody: issue.body ?? '',
+        skillContent,
+        cwd: project.path,
+        cli: settings.prdRewriteCli,
+        modelId:
+          settings.prdRewriteCli === 'claude'
+            ? settings.prdRewriteClaudeModel
+            : settings.prdRewriteCodexModel,
+        reasoningEffort: settings.prdRewriteReasoningEffort,
+      });
+
+      await ghCli.editIssue({
+        issueNumber,
+        title: issue.title,
+        body: enhanced.body,
+        labels: issue.labels,
+      });
+
+      const handles: string[] = [];
+      if (issue.author?.login) handles.push(`@${issue.author.login}`);
+      if (project.notifyGithubUser) handles.push(`@${project.notifyGithubUser}`);
+      const mention = handles.length > 0 ? `${handles.join(' ')} — ` : '';
+      const commentBody = `${mention}This issue has been rewritten as a structured spec by ShipCode. Please review and let us know if anything is missing or incorrect.`;
+      await ghCli.addIssueComment(issueNumber, commentBody);
+
+      const updatedIssue = await ghCli.getIssue(issueNumber);
+      const cached = queries.githubIssues.getByNumber(projectId, issueNumber);
+      if (cached) {
+        queries.githubIssues.upsert({
+          projectId,
+          issueNumber: updatedIssue.number,
+          title: updatedIssue.title,
+          body: updatedIssue.body,
+          labels: updatedIssue.labels,
+          assignee: updatedIssue.assignee,
+          state: updatedIssue.state,
+        });
+      }
+      sendGithubIssuesUpdated(mainWindow, queries, projectId);
+      const result = queries.githubIssues.getByNumber(projectId, issueNumber);
+      if (!result) throw new Error(`Issue #${issueNumber} not found in cache after rewrite`);
+      return result;
     },
   );
 }

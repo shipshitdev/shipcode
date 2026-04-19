@@ -9,7 +9,6 @@ export function useGlobalKeyboard() {
   const toggleIssueDetail = useAppStore((s) => s.toggleIssueDetail);
   const openInstantFixModal = useAppStore((s) => s.openInstantFixModal);
   const openCreateIssueModal = useAppStore((s) => s.openCreateIssueModal);
-  const activeProjectId = useAppStore((s) => s.activeProjectId);
 
   useEffect(() => {
     const actions: Record<ShortcutId, () => void> = {
@@ -18,9 +17,7 @@ export function useGlobalKeyboard() {
       'toggle-sidebar': toggleSidebar,
       'toggle-issue-detail': toggleIssueDetail,
       'instant-fix': openInstantFixModal,
-      'new-issue': () => {
-        if (activeProjectId) openCreateIssueModal();
-      },
+      'new-issue': openCreateIssueModal,
     };
 
     const handler = (e: KeyboardEvent) => {
@@ -49,6 +46,5 @@ export function useGlobalKeyboard() {
     toggleIssueDetail,
     openInstantFixModal,
     openCreateIssueModal,
-    activeProjectId,
   ]);
 }

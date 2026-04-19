@@ -52,6 +52,7 @@ export {
   Square,
   Terminal,
   Trash2,
+  Wand2,
   Workflow,
   Wrench,
   X,

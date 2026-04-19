@@ -493,6 +493,7 @@ function createWindow() {
   // Load renderer
   if (RENDERER_URL) {
     mainWindow.loadURL(RENDERER_URL);
+    mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
     mainWindow.loadFile(RENDERER_HTML);
   }

@@ -70,6 +70,7 @@ function makeProject(overrides: Record<string, unknown> = {}) {
     pinned: false,
     archived: false,
     hidden: false,
+    notifyGithubUser: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     ...overrides,

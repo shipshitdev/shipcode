@@ -582,4 +582,17 @@ export function registerProjectHandlers({
       return updated;
     },
   );
+
+  ipcMain.handle(
+    'project:set-notify-github-user',
+    (_event, { projectId, handle }: { projectId: string; handle: string | null }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+      queries.projects.updateNotifyGithubUser(projectId, handle);
+      const updated = enrichProjectPath(queries.projects.getById(projectId));
+      if (!updated)
+        throw new Error(`Project ${projectId} not found after notify github user update`);
+      return updated;
+    },
+  );
 }

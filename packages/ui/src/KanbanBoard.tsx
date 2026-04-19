@@ -24,7 +24,6 @@ export function KanbanBoard({
   readOnly = false,
   onIssueClick,
   onRefresh,
-  onNewIssue,
   onStartPipeline,
   onRetry,
   onRerun,
@@ -180,7 +179,6 @@ export function KanbanBoard({
         onViewChange={setView}
         refreshing={refreshing}
         onRefresh={handleRefresh}
-        onNewIssue={onNewIssue}
         projectName={projectName}
         repoUrl={repoUrl}
         projectsUrl={projectsUrl}

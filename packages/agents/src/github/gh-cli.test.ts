@@ -99,7 +99,7 @@ describe('GhCli', () => {
           '--state',
           'open',
           '--json',
-          'number,title,body,labels,assignees,state,url',
+          'number,title,body,labels,assignees,author,state,url',
           '--limit',
           '50',
         ],
@@ -282,7 +282,7 @@ describe('GhCli', () => {
       });
       expect(mockExecFileAsync).toHaveBeenCalledWith(
         'gh',
-        ['issue', 'view', '42', '--json', 'number,title,body,labels,assignees,state,url'],
+        ['issue', 'view', '42', '--json', 'number,title,body,labels,assignees,author,state,url'],
         { cwd: '/test/repo' },
       );
     });
@@ -655,15 +655,18 @@ describe('GhCli', () => {
 
   describe('addIssueComment', () => {
     it('calls with correct args and resolves', async () => {
-      success('');
+      const fake = createFakeProc();
+      mockSpawn.mockReturnValueOnce(fake.proc);
 
-      await gh.addIssueComment(42, 'Hello world');
+      const promise = gh.addIssueComment(42, 'Hello world');
+      fake.complete(0);
+      await promise;
 
-      expect(mockExecFileAsync).toHaveBeenCalledWith(
-        'gh',
-        ['issue', 'comment', '42', '--body', 'Hello world'],
-        { cwd: '/test/repo' },
-      );
+      expect(mockSpawn).toHaveBeenCalledWith('gh', ['issue', 'comment', '42', '--body-file', '-'], {
+        cwd: '/test/repo',
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+      expect(fake.stdinWrites).toEqual(['Hello world']);
     });
   });
 

@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
   Textarea,
+  Wand2,
 } from '@shipcode/ui';
 import { getFailurePresentation, PIPELINE_PREVIEW_PHASES, safeErrorMessage } from './helpers';
 
@@ -21,8 +22,10 @@ interface IssueDetailActionsProps {
   failingPhaseOutput: string | null;
   feedback: string;
   hasApprovalDecision: boolean;
+  isRewriting: boolean;
   isSubmitting: boolean;
   pendingAction: 'approve' | 'request_changes' | 'cancel';
+  rewriteError: string | null;
   showRawOutput: boolean;
   thread: Thread | null | undefined;
   onApprove: () => void;
@@ -33,6 +36,7 @@ interface IssueDetailActionsProps {
   onPendingActionChange: (value: 'approve' | 'request_changes' | 'cancel') => void;
   onReject: () => void;
   onRerun: () => void;
+  onRewriteIssue: () => void;
   onShowRawOutputChange: (show: boolean) => void;
   onStartPipeline: () => void;
 }
@@ -45,8 +49,10 @@ export function IssueDetailActions({
   failingPhaseOutput,
   feedback,
   hasApprovalDecision,
+  isRewriting,
   isSubmitting,
   pendingAction,
+  rewriteError,
   showRawOutput,
   thread,
   onApprove,
@@ -57,6 +63,7 @@ export function IssueDetailActions({
   onPendingActionChange,
   onReject,
   onRerun,
+  onRewriteIssue,
   onShowRawOutputChange,
   onStartPipeline,
 }: IssueDetailActionsProps) {
@@ -93,7 +100,7 @@ export function IssueDetailActions({
       </ol>
 
       <div className="flex items-center gap-3">
-        <Button size="sm" onClick={onStartPipeline} disabled={isSubmitting}>
+        <Button size="sm" onClick={onStartPipeline} disabled={isSubmitting || isRewriting}>
           {isSubmitting ? 'Starting…' : 'Start pipeline'}
         </Button>
         <Button
@@ -104,7 +111,23 @@ export function IssueDetailActions({
         >
           Edit PRD first
         </Button>
+        <Button
+          variant="secondary"
+          size="xs"
+          onClick={onRewriteIssue}
+          disabled={isRewriting || isSubmitting}
+          className="gap-1"
+          title="AI-rewrite this issue body"
+        >
+          <Wand2 size={12} />
+          {isRewriting ? 'Rewriting…' : 'Rewrite'}
+        </Button>
       </div>
+      {rewriteError && (
+        <p className="mt-2 text-[11px] text-danger">
+          {rewriteError} <span className="text-muted">(full trace in devtools console)</span>
+        </p>
+      )}
     </div>
   ) : null;
 

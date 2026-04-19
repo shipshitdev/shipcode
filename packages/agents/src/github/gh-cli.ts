@@ -124,7 +124,7 @@ export class GhCli {
         '--state',
         'open',
         '--json',
-        'number,title,body,labels,assignees,state,url',
+        'number,title,body,labels,assignees,author,state,url',
         '--limit',
         '50',
       ],
@@ -140,6 +140,9 @@ export class GhCli {
       assignee: ((r.assignees as Array<{ login: string }>) ?? [])[0]?.login ?? null,
       state: ((r.state as string)?.toLowerCase() ?? 'open') as 'open' | 'closed',
       url: (r.url as string) ?? '',
+      author: (r.author as { login?: string } | null)?.login
+        ? { login: (r.author as { login: string }).login }
+        : undefined,
     }));
   }
 
@@ -152,7 +155,7 @@ export class GhCli {
         '--state',
         'all',
         '--json',
-        'number,title,body,labels,assignees,state,url',
+        'number,title,body,labels,assignees,author,state,url',
         '--limit',
         '200',
       ],
@@ -168,6 +171,9 @@ export class GhCli {
       assignee: ((r.assignees as Array<{ login: string }>) ?? [])[0]?.login ?? null,
       state: ((r.state as string)?.toLowerCase() ?? 'open') as 'open' | 'closed',
       url: (r.url as string) ?? '',
+      author: (r.author as { login?: string } | null)?.login
+        ? { login: (r.author as { login: string }).login }
+        : undefined,
     }));
   }
 
@@ -191,7 +197,13 @@ export class GhCli {
   async getIssue(number: number): Promise<GitHubIssue> {
     const { stdout } = await execFileAsync(
       'gh',
-      ['issue', 'view', String(number), '--json', 'number,title,body,labels,assignees,state,url'],
+      [
+        'issue',
+        'view',
+        String(number),
+        '--json',
+        'number,title,body,labels,assignees,author,state,url',
+      ],
       { cwd: this.cwd },
     );
 
@@ -204,6 +216,9 @@ export class GhCli {
       assignee: ((r.assignees as Array<{ login: string }>) ?? [])[0]?.login ?? null,
       state: ((r.state as string)?.toLowerCase() ?? 'open') as 'open' | 'closed',
       url: (r.url as string) ?? '',
+      author: (r.author as { login?: string } | null)?.login
+        ? { login: (r.author as { login: string }).login }
+        : undefined,
     };
   }
 
@@ -610,9 +625,11 @@ export class GhCli {
   }
 
   async addIssueComment(issueNumber: number, body: string): Promise<void> {
-    await execFileAsync('gh', ['issue', 'comment', String(issueNumber), '--body', body], {
-      cwd: this.cwd,
-    });
+    await this.spawnWithStdin(
+      'gh',
+      ['issue', 'comment', String(issueNumber), '--body-file', '-'],
+      body,
+    );
   }
 
   async closeIssue(issueNumber: number): Promise<void> {

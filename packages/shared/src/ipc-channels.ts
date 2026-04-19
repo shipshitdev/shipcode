@@ -123,6 +123,10 @@ export interface IpcInvokeChannels {
     };
     result: Project;
   };
+  'project:set-notify-github-user': {
+    args: { projectId: string; handle: string | null };
+    result: Project;
+  };
 
   'thread:list': { args: { projectId: string }; result: Thread[] };
   'thread-panel:get-data': { args: { projectId: string }; result: ThreadPanelData };
@@ -274,6 +278,14 @@ export interface IpcInvokeChannels {
       phase: 'planner' | 'reviewer' | 'executor' | 'verifier';
     };
     result: GitHubIssueCacheRecord | null;
+  };
+  'github:add-comment': {
+    args: { projectId: string; issueNumber: number; body: string };
+    result: undefined;
+  };
+  'github:rewrite-issue': {
+    args: { projectId: string; issueNumber: number };
+    result: GitHubIssueCacheRecord;
   };
 
   // Plans & Reviews (backfill)

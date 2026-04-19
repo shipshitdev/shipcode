@@ -63,6 +63,7 @@ export function ProjectSettingsModal() {
   const [modelValidation, setModelValidation] = useState<
     Partial<Record<PhaseKey, OpenRouterModelValidation | null>>
   >({});
+  const [notifyGithubUser, setNotifyGithubUser] = useState('');
 
   const { data: project } = useQuery<Project | null>({
     queryKey: ['project', projectSettingsModalProjectId],
@@ -118,6 +119,7 @@ export function ProjectSettingsModal() {
       telegramRouting: project?.telegramRouting ?? 'inherit',
       telegramChatIdOverride: project?.telegramChatIdOverride ?? null,
     });
+    setNotifyGithubUser(project?.notifyGithubUser ?? '');
     setTouched(false);
     setSubmitError(null);
     setSyncResult(null);
@@ -135,6 +137,7 @@ export function ProjectSettingsModal() {
     project?.discordRouting,
     project?.discordWebhookUrlOverride,
     project?.githubProjectUrl,
+    project?.notifyGithubUser,
     project?.plannerModelIdOverride,
     project?.plannerModelOverride,
     project?.plannerReasoningEffortOverride,
@@ -167,6 +170,10 @@ export function ProjectSettingsModal() {
           telegramRouting: overrides.telegramRouting,
           telegramChatIdOverride: overrides.telegramChatIdOverride,
         },
+      });
+      await window.shipcode.invoke<Project>('project:set-notify-github-user', {
+        projectId: projectSettingsModalProjectId,
+        handle: notifyGithubUser.trim() || null,
       });
       return window.shipcode.invoke<Project>('project:set-model-overrides', {
         projectId: projectSettingsModalProjectId,
@@ -409,6 +416,8 @@ export function ProjectSettingsModal() {
                     telegramChatIdOverride: value || null,
                   }))
                 }
+                notifyGithubUser={notifyGithubUser}
+                onNotifyGithubUserChange={setNotifyGithubUser}
                 onConfigureSetup={() => {
                   closeProjectSettingsModal();
                   openProjectSetupModal(project.id);

@@ -26,7 +26,6 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-  FilePlus,
   Folder,
   FolderOpen,
   Ghost,
@@ -308,58 +307,30 @@ export function ProjectSidebar() {
       className="relative flex flex-col border-r border-border bg-primary"
       style={{ width: sidebarWidth, minWidth: SIDEBAR_MIN, maxWidth: SIDEBAR_MAX }}
     >
-      <div className="flex items-center gap-1 px-2 pt-3">
-        {activeProjectId ? (
-          <Button
-            variant="ghost"
-            className="flex-1 h-auto justify-start gap-2 py-2 text-[13px] font-normal text-secondary app-region-no-drag"
-            onClick={() => openCreateIssueModal()}
-            title="New Issue ⌘N"
-          >
-            <FilePlus size={14} className="shrink-0 text-secondary" />
-            <span className="truncate">New Issue</span>
-          </Button>
-        ) : (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                className="flex-1 h-auto justify-start gap-2 py-2 text-[13px] font-normal text-secondary app-region-no-drag"
-                disabled={projects.length === 0}
-                title="New Issue ⌘N"
-              >
-                <FilePlus size={14} className="shrink-0 text-secondary" />
-                <span className="truncate">New Issue</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              {sortedProjects.map((p) => (
-                <DropdownMenuItem
-                  key={p.id}
-                  onSelect={() => {
-                    selectProject(p.id);
-                    openCreateIssueModal();
-                  }}
-                >
-                  <Folder size={12} />
-                  {p.name}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+      <div className="px-2 pt-3 space-y-0.5">
+        {/* New Issue */}
         <Button
           variant="ghost"
-          className="flex-1 h-auto justify-start gap-2 py-2 text-[13px] font-normal text-secondary app-region-no-drag"
+          className="group/item h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag"
+          onClick={() => openCreateIssueModal()}
+          disabled={projects.length === 0}
+        >
+          <Plus size={14} className="shrink-0 text-secondary" />
+          <span className="flex-1 truncate">New Issue</span>
+          <kbd className="hidden group-hover/item:inline text-[10px] text-muted font-mono">⌘N</kbd>
+        </Button>
+
+        {/* Search */}
+        <Button
+          variant="ghost"
+          className="group/item h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag"
           onClick={() => openCommandPalette()}
-          title="Search ⌘K"
         >
           <Search size={14} className="shrink-0 text-secondary" />
-          <span className="truncate">Search</span>
+          <span className="flex-1 truncate">Search</span>
+          <kbd className="hidden group-hover/item:inline text-[10px] text-muted font-mono">⌘K</kbd>
         </Button>
-      </div>
 
-      <div className="px-2 space-y-0.5">
         {/* Overview */}
         <Button
           variant="ghost"

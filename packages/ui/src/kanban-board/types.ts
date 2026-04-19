@@ -15,7 +15,6 @@ export interface KanbanBoardProps {
   readOnly?: boolean;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
   onRefresh: () => void;
-  onNewIssue?: () => void;
   onStartPipeline?: (issue: GitHubIssueCacheRecord) => void;
   onRetry?: (issue: GitHubIssueCacheRecord) => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
