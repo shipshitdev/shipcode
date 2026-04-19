@@ -22,7 +22,7 @@ export function IssueHistoryTab({
           No issue activity yet.
         </div>
       ) : (
-        <div className="overflow-hidden rounded-md border border-border bg-secondary/20">
+        <div className="overflow-hidden rounded-md border border-border bg-tertiary">
           <div className="divide-y divide-border">
             {normalizedIssueActivity.map((entry) => {
               const runNumber =

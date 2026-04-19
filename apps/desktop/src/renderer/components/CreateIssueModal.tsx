@@ -411,7 +411,7 @@ export function CreateIssueModal() {
           value={body}
           onChange={(e) => setBody(e.target.value)}
           placeholder={mode === 'create' ? 'Describe what you want to build…' : 'PRD markdown...'}
-          rows={mode === 'create' ? 10 : 14}
+          rows={mode === 'create' ? 5 : 14}
           className={
             mode === 'edit' && editBodyValid
               ? 'font-mono text-xs'
