@@ -34,6 +34,7 @@ export function CommandPalette() {
     openCosts,
     openSkills,
     openTerminalSessions,
+    setProjectTab,
     selectProject,
     openProjectSettingsModal,
     openInstantFixModal,
@@ -218,6 +219,9 @@ export function CommandPalette() {
           </CommandItem>
           <CommandItem onSelect={() => runAction(() => openTerminalSessions())}>
             <span className="flex-1">Terminal Sessions</span>
+          </CommandItem>
+          <CommandItem onSelect={() => runAction(() => setProjectTab('pull-requests'))}>
+            <span className="flex-1">Pull Requests</span>
           </CommandItem>
           <CommandItem onSelect={() => runAction(() => toggleSettings())}>
             <span className="flex-1">Settings</span>

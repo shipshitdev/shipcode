@@ -26,6 +26,9 @@ vi.mock('./components/HealthBanner', () => ({
 vi.mock('./components/InboxView', () => ({
   InboxView: () => <div>InboxView</div>,
 }));
+vi.mock('./components/InstantFixModal', () => ({
+  InstantFixModal: () => <div>InstantFixModal</div>,
+}));
 vi.mock('./components/IssueDetail', () => ({
   IssueDetail: ({ expanded }: { expanded: boolean }) => (
     <div>{expanded ? 'IssueDetailExpanded' : 'IssueDetailPanel'}</div>
@@ -70,6 +73,9 @@ vi.mock('./components/SkillsView', () => ({
 }));
 vi.mock('./components/TerminalDrawer', () => ({
   TerminalDrawer: () => <div>TerminalDrawer</div>,
+}));
+vi.mock('./components/ProjectView', () => ({
+  ProjectView: () => <div>ProjectView</div>,
 }));
 vi.mock('./components/ThreadPanel', () => ({
   ThreadPanel: () => <div>ThreadPanel</div>,
