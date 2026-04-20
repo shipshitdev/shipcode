@@ -153,6 +153,7 @@ export interface IpcInvokeChannels {
   'pipeline:skip-review': { args: { threadId: string }; result: undefined };
 
   'plan:get': { args: { threadId: string }; result: PlanRecord | null };
+  'plan:get-by-id': { args: { planId: string }; result: PlanRecord | null };
   'plan:list-for-issue': {
     args: { projectId: string; issueNumber: number };
     result: PlanRecord[];

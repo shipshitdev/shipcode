@@ -333,6 +333,10 @@ export function registerProjectHandlers({
     return queries.plans.getLatest(threadId);
   });
 
+  ipcMain.handle('plan:get-by-id', (_event, { planId }: { planId: string }) => {
+    return queries.plans.getById(planId);
+  });
+
   ipcMain.handle('plan:list', (_event, { threadId }: { threadId: string }) => {
     return queries.plans.list(threadId);
   });

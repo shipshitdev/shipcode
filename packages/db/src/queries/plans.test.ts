@@ -91,6 +91,7 @@ describe('PlanQueries', () => {
     const list = plans.listByIssue(projectId, 38);
     expect(list).toHaveLength(2);
     expect(list.map((plan) => plan.id)).toEqual([secondPlan.id, firstPlan.id]);
+    expect(list.map((plan) => plan.rawOutput)).toEqual(['', '']);
   });
 
   it('getById() returns plan or null', () => {

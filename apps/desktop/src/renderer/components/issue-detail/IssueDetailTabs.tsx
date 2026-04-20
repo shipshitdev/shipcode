@@ -44,6 +44,7 @@ interface IssueDetailTabsProps {
   isRefreshingFromGithub: boolean;
   isSubmitting: boolean;
   linkedPrUrl: string | null;
+  loadingPlanDetailIds: string[];
   normalizedIssueActivity: import('@shipcode/shared').ActivityEntry[];
   normalizedPlanHistory: PlanRecord[];
   normalizedReviewsByPlanId: Record<string, ReviewRecord>;
@@ -92,6 +93,7 @@ export function IssueDetailTabs({
   isRefreshingFromGithub,
   isSubmitting,
   linkedPrUrl,
+  loadingPlanDetailIds,
   normalizedIssueActivity,
   normalizedPlanHistory,
   normalizedReviewsByPlanId,
@@ -206,6 +208,7 @@ export function IssueDetailTabs({
           effectiveExpanded={effectiveExpanded}
           expanded={expanded}
           isPlanHistoryLoading={isPlanHistoryLoading}
+          loadingPlanDetailIds={loadingPlanDetailIds}
           normalizedPlanHistory={normalizedPlanHistory}
           normalizedReviewsByPlanId={normalizedReviewsByPlanId}
           normalizedThreadPlanHistory={normalizedThreadPlanHistory}

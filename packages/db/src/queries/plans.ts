@@ -33,7 +33,14 @@ export class PlanQueries {
   listByIssue(projectId: string, issueNumber: number): PlanRecord[] {
     const rows = this.db
       .prepare(
-        `SELECT p.*
+        `SELECT
+             p.id,
+             p.thread_id,
+             p.version,
+             '' AS raw_output,
+             p.structured,
+             p.status,
+             p.created_at
            FROM plans p
            INNER JOIN threads t ON t.id = p.thread_id
           WHERE t.project_id = ?

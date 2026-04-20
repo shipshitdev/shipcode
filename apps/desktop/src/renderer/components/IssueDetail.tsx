@@ -270,6 +270,85 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       ) as Record<string, number>,
     [planRunGroups],
   );
+  const effectiveExpanded = expandedPlanId === undefined ? latestPlanId : expandedPlanId;
+  const expandedHistoryPlan = useMemo(
+    () => normalizedPlanHistory.find((plan) => plan.id === effectiveExpanded) ?? null,
+    [effectiveExpanded, normalizedPlanHistory],
+  );
+  const shouldFetchExpandedPlanDetail =
+    activeTab === 'history' &&
+    !!expandedHistoryPlan &&
+    !expandedHistoryPlan.structured &&
+    !expandedHistoryPlan.rawOutput;
+  const { data: expandedPlanDetail, isLoading: isExpandedPlanDetailLoading } =
+    useQuery<PlanRecord | null>({
+      queryKey: ['plan-by-id', expandedHistoryPlan?.id],
+      queryFn: () => {
+        if (!expandedHistoryPlan?.id) {
+          throw new Error('Missing plan id for expanded history detail');
+        }
+        return window.shipcode.invoke('plan:get-by-id', { planId: expandedHistoryPlan.id });
+      },
+      enabled: shouldFetchExpandedPlanDetail,
+      staleTime: STABLE_APP_STATE_STALE_TIME,
+    });
+  const fullScreenPlanBase = useMemo(
+    () => normalizedPlanHistory.find((plan) => plan.id === fullScreenPlanId) ?? null,
+    [fullScreenPlanId, normalizedPlanHistory],
+  );
+  const shouldFetchFullScreenPlanDetail =
+    !!fullScreenPlanBase && !fullScreenPlanBase.structured && !fullScreenPlanBase.rawOutput;
+  const { data: fullScreenPlanDetail, isLoading: isFullScreenPlanDetailLoading } =
+    useQuery<PlanRecord | null>({
+      queryKey: ['plan-by-id', fullScreenPlanBase?.id],
+      queryFn: () => {
+        if (!fullScreenPlanBase?.id) {
+          throw new Error('Missing plan id for full-screen history detail');
+        }
+        return window.shipcode.invoke('plan:get-by-id', { planId: fullScreenPlanBase.id });
+      },
+      enabled: shouldFetchFullScreenPlanDetail,
+      staleTime: STABLE_APP_STATE_STALE_TIME,
+    });
+  const planDetailsById = useMemo(() => {
+    const entries: Array<[string, PlanRecord]> = [];
+    if (expandedPlanDetail?.id) entries.push([expandedPlanDetail.id, expandedPlanDetail]);
+    if (fullScreenPlanDetail?.id) entries.push([fullScreenPlanDetail.id, fullScreenPlanDetail]);
+    return Object.fromEntries(entries) as Record<string, PlanRecord>;
+  }, [expandedPlanDetail, fullScreenPlanDetail]);
+  const resolvedPlanHistory = useMemo(
+    () => normalizedPlanHistory.map((plan) => planDetailsById[plan.id] ?? plan),
+    [normalizedPlanHistory, planDetailsById],
+  );
+  const resolvedPlanRunGroups = useMemo(
+    () =>
+      planRunGroups.map((group) => ({
+        ...group,
+        plans: group.plans.map((plan) => planDetailsById[plan.id] ?? plan),
+      })),
+    [planDetailsById, planRunGroups],
+  );
+  const loadingPlanDetailIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (shouldFetchExpandedPlanDetail && expandedHistoryPlan?.id && isExpandedPlanDetailLoading) {
+      ids.add(expandedHistoryPlan.id);
+    }
+    if (
+      shouldFetchFullScreenPlanDetail &&
+      fullScreenPlanBase?.id &&
+      isFullScreenPlanDetailLoading
+    ) {
+      ids.add(fullScreenPlanBase.id);
+    }
+    return Array.from(ids);
+  }, [
+    expandedHistoryPlan?.id,
+    fullScreenPlanBase?.id,
+    isExpandedPlanDetailLoading,
+    isFullScreenPlanDetailLoading,
+    shouldFetchExpandedPlanDetail,
+    shouldFetchFullScreenPlanDetail,
+  ]);
 
   // When a new plan version arrives, auto-follow the new latest — but only
   // when the user was in auto mode or was already tracking the previous
@@ -323,7 +402,6 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     return () => document.removeEventListener('keydown', handler);
   }, [selectIssue, expanded, toggleIssueDetailExpanded]);
 
-  const effectiveExpanded = expandedPlanId === undefined ? latestPlanId : expandedPlanId;
   const latestPlan = useMemo(
     () => normalizedThreadPlanHistory[0] ?? null,
     [normalizedThreadPlanHistory],
@@ -1007,7 +1085,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   );
   const hasPrFeedbackBlockers =
     activeIssue.ciBlocked || activeIssue.unresolvedReviewCommentCount > 0;
-  const fullScreenPlan = normalizedPlanHistory.find((plan) => plan.id === fullScreenPlanId) ?? null;
+  const fullScreenPlan = resolvedPlanHistory.find((plan) => plan.id === fullScreenPlanId) ?? null;
   const fullScreenReview = fullScreenPlan
     ? normalizedReviewsByPlanId[fullScreenPlan.id]
     : undefined;
@@ -1054,7 +1132,8 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       isSubmitting={isSubmitting}
       linkedPrUrl={linkedPrUrl}
       normalizedIssueActivity={normalizedIssueActivity}
-      normalizedPlanHistory={normalizedPlanHistory}
+      loadingPlanDetailIds={loadingPlanDetailIds}
+      normalizedPlanHistory={resolvedPlanHistory}
       normalizedReviewsByPlanId={normalizedReviewsByPlanId}
       normalizedThreadPlanHistory={normalizedThreadPlanHistory}
       isPlanHistoryLoading={isPlanHistoryLoading}
@@ -1063,7 +1142,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       phaseSelectValues={phaseSelectValues}
       planHistoryCollapsed={planHistoryCollapsed}
       planRunCount={planRunCount}
-      planRunGroups={planRunGroups}
+      planRunGroups={resolvedPlanRunGroups}
       projectDefaultPhaseSelections={projectDefaultPhaseSelections}
       runNumberByThreadId={runNumberByThreadId}
       thread={thread}
@@ -1105,6 +1184,9 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       fullScreenPlan={fullScreenPlan}
       fullScreenPlanId={fullScreenPlanId}
       fullScreenReview={fullScreenReview}
+      isFullScreenPlanLoading={
+        shouldFetchFullScreenPlanDetail && isFullScreenPlanDetailLoading && !!fullScreenPlanId
+      }
       isSubmitting={isSubmitting}
       latestPlanId={latestPlan?.id ?? null}
       onApprove={() => {

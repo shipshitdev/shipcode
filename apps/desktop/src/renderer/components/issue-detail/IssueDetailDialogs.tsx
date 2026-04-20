@@ -1,6 +1,6 @@
 import type { PlanRecord, ReviewRecord } from '@shipcode/shared';
 import { Button, Modal, ModalFooter, PlanViewer, ReviewViewer, X } from '@shipcode/ui';
-import { resolveClientSidePlan, resolveRawPlanText } from './helpers';
+import { diagnosePlanParseFailure, resolveClientSidePlan } from './helpers';
 
 interface IssueDetailDialogsProps {
   activeIssueNumber: number;
@@ -8,6 +8,7 @@ interface IssueDetailDialogsProps {
   fullScreenPlan: PlanRecord | null;
   fullScreenPlanId: string | null;
   fullScreenReview?: ReviewRecord;
+  isFullScreenPlanLoading: boolean;
   isSubmitting: boolean;
   latestPlanId: string | null;
   onApprove: () => void;
@@ -26,6 +27,7 @@ export function IssueDetailDialogs({
   fullScreenPlan,
   fullScreenPlanId,
   fullScreenReview,
+  isFullScreenPlanLoading,
   isSubmitting,
   latestPlanId,
   onApprove,
@@ -43,6 +45,9 @@ export function IssueDetailDialogs({
       : null;
   const fullScreenDisplayPlan = fullScreenPlan?.structured ?? fullScreenClientPlan;
   const fullScreenIsLatest = fullScreenPlanId === latestPlanId;
+  const fullScreenParseFailureMessage = fullScreenPlan?.rawOutput.trim()
+    ? diagnosePlanParseFailure(fullScreenPlan.rawOutput)
+    : 'Structured plan data is unavailable for this version.';
 
   return (
     <>
@@ -61,9 +66,19 @@ export function IssueDetailDialogs({
         <div className="flex-1 overflow-y-auto">
           {fullScreenDisplayPlan && <PlanViewer plan={fullScreenDisplayPlan} />}
           {fullScreenReview?.structured && <ReviewViewer review={fullScreenReview.structured} />}
-          {!fullScreenDisplayPlan && fullScreenPlan && (
-            <div className="p-6 text-sm leading-relaxed whitespace-pre-wrap text-secondary">
-              {resolveRawPlanText(fullScreenPlan.rawOutput ?? '')}
+          {!fullScreenDisplayPlan && isFullScreenPlanLoading && (
+            <div className="p-6 text-sm text-muted">Loading plan details…</div>
+          )}
+          {!fullScreenDisplayPlan && fullScreenPlan && !isFullScreenPlanLoading && (
+            <div className="p-6">
+              <div className="space-y-2 rounded-md border border-warning/30 bg-warning/10 px-4 py-3">
+                <p className="text-sm font-medium text-warning">Structured plan unavailable</p>
+                <p className="text-sm text-muted">{fullScreenParseFailureMessage}</p>
+                <p className="text-sm text-muted">
+                  Raw planner transcript is hidden here. Use the terminal drawer for subprocess
+                  output.
+                </p>
+              </div>
             </div>
           )}
         </div>

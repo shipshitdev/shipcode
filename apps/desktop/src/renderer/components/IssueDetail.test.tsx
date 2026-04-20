@@ -626,6 +626,61 @@ describe('IssueDetail', () => {
     expect(screen.queryByText('Changes requested')).not.toBeInTheDocument();
   });
 
+  it('lazy-loads malformed issue-history plans and hides raw planner transcript spam', async () => {
+    const thread = makeThread({ status: 'reviewing' });
+    const currentThreadPlan = makePlan();
+    const summaryPlan = makePlan({
+      id: 'plan-history-1',
+      threadId: thread.id,
+      structured: null,
+      rawOutput: '',
+    });
+    const malformedPlan = makePlan({
+      id: summaryPlan.id,
+      threadId: thread.id,
+      structured: null,
+      rawOutput: [
+        'Producing the execution contract for Issue #48.',
+        "$ /bin/zsh -lc 'pwd && rg --files .'",
+        '```shipcode-plan',
+        '{ not valid json',
+        '```',
+      ].join('\n'),
+    });
+
+    useAppStore.setState({
+      activeThreadId: thread.id,
+      activeIssue: makeIssue({ threadId: thread.id, pipelineStatus: 'reviewing' }),
+      pipelinePhase: 'reviewing',
+    });
+
+    invokeMock.mockImplementation(async (channel, args) => {
+      if (channel === 'thread:get') return thread;
+      if (channel === 'plan:list') return [currentThreadPlan];
+      if (channel === 'plan:list-for-issue') return [summaryPlan];
+      if (channel === 'plan:get-by-id') return malformedPlan;
+      if (channel === 'review:list-by-plans') return {};
+      return args ?? null;
+    });
+
+    renderWithProviders();
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /Plan History/ })).toHaveAttribute(
+        'data-state',
+        'active',
+      );
+    });
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('plan:get-by-id', { planId: summaryPlan.id });
+    });
+
+    expect(await screen.findByText('Structured plan unavailable')).toBeInTheDocument();
+    expect(screen.getByText(/fence found but content is not valid JSON/i)).toBeInTheDocument();
+    expect(screen.queryByText(/\/bin\/zsh -lc/)).not.toBeInTheDocument();
+  });
+
   it('sets a planner codex override from the issue detail panel', async () => {
     const thread = makeThread({ status: 'failed' });
 

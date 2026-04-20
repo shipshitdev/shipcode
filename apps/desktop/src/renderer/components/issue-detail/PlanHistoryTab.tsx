@@ -15,7 +15,6 @@ import {
   diagnosePlanParseFailure,
   getPlanStatusPresentation,
   resolveClientSidePlan,
-  resolveRawPlanText,
 } from './helpers';
 import { PlanWaiting } from './PlanWaiting';
 import type { PlanRunGroup } from './tab-types';
@@ -25,6 +24,7 @@ export function PlanHistoryTab({
   effectiveExpanded,
   expanded,
   isPlanHistoryLoading,
+  loadingPlanDetailIds,
   normalizedPlanHistory,
   normalizedReviewsByPlanId,
   normalizedThreadPlanHistory,
@@ -40,6 +40,7 @@ export function PlanHistoryTab({
   effectiveExpanded: string | null | undefined;
   expanded: boolean;
   isPlanHistoryLoading: boolean;
+  loadingPlanDetailIds: string[];
   normalizedPlanHistory: PlanRecord[];
   normalizedReviewsByPlanId: Record<string, ReviewRecord>;
   normalizedThreadPlanHistory: PlanRecord[];
@@ -119,6 +120,7 @@ export function PlanHistoryTab({
                   <div className="divide-y divide-border">
                     {runGroup.plans.map((plan) => {
                       const isExpanded = effectiveExpanded === plan.id;
+                      const isDetailLoading = loadingPlanDetailIds.includes(plan.id);
                       const review = normalizedReviewsByPlanId[plan.id];
                       const statusPresentation = getPlanStatusPresentation(plan, review);
                       const isSuperseded = plan.status === 'superseded';
@@ -183,6 +185,10 @@ export function PlanHistoryTab({
                             (() => {
                               const inlineDisplayPlan =
                                 plan.structured ?? resolveClientSidePlan(plan.rawOutput ?? '');
+                              const parseFailureMessage =
+                                plan.rawOutput.trim().length > 0
+                                  ? diagnosePlanParseFailure(plan.rawOutput)
+                                  : 'Structured plan data is unavailable for this version.';
                               return (
                                 <div className="border-t border-border p-3">
                                   {inlineDisplayPlan ? (
@@ -191,29 +197,24 @@ export function PlanHistoryTab({
                                   {review?.structured ? (
                                     <ReviewViewer review={review.structured} />
                                   ) : null}
-                                  {!inlineDisplayPlan &&
-                                    (() => {
-                                      const fallbackRaw = plan.rawOutput ?? '';
-                                      const resolved = resolveRawPlanText(fallbackRaw);
-                                      const displayText = resolved.trim() || fallbackRaw.trim();
-                                      return displayText ? (
-                                        <div className="space-y-2">
-                                          <p className="text-xs italic text-muted">
-                                            {diagnosePlanParseFailure(fallbackRaw)}
-                                          </p>
-                                          <div className="overflow-x-auto">
-                                            <pre className="whitespace-pre-wrap text-xs text-secondary">
-                                              {displayText}
-                                            </pre>
-                                          </div>
-                                        </div>
-                                      ) : (
-                                        <p className="text-xs italic text-muted">
-                                          Plan output could not be parsed. Check devtools console
-                                          for the full trace.
+                                  {!inlineDisplayPlan && !review?.structured ? (
+                                    isDetailLoading ? (
+                                      <p className="text-xs italic text-muted">
+                                        Loading plan details…
+                                      </p>
+                                    ) : (
+                                      <div className="space-y-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2">
+                                        <p className="text-xs font-medium text-warning">
+                                          Structured plan unavailable
                                         </p>
-                                      );
-                                    })()}
+                                        <p className="text-xs text-muted">{parseFailureMessage}</p>
+                                        <p className="text-xs text-muted">
+                                          Raw planner transcript is hidden in Plan History. Use the
+                                          terminal drawer for subprocess output.
+                                        </p>
+                                      </div>
+                                    )
+                                  ) : null}
                                 </div>
                               );
                             })()}
