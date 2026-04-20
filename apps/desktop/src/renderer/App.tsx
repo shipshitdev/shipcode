@@ -9,7 +9,6 @@ import { CreateIssueModal } from './components/CreateIssueModal';
 import { HealthBanner } from './components/HealthBanner';
 import { InboxView } from './components/InboxView';
 import { InstantFixModal } from './components/InstantFixModal';
-import { InstantView } from './components/InstantView';
 import { IssueDetail } from './components/IssueDetail';
 import { NotificationToaster } from './components/NotificationToaster';
 import { OverviewView } from './components/OverviewView';
@@ -18,11 +17,11 @@ import { ProjectMissingView } from './components/ProjectMissingView';
 import { ProjectPathBanner } from './components/ProjectPathBanner';
 import { ProjectSettingsModal } from './components/ProjectSettingsModal';
 import { ProjectSidebar } from './components/ProjectSidebar';
+import { ProjectView } from './components/ProjectView';
 import { SettingsPanel } from './components/SettingsPanel';
 import { SettingsSidebar } from './components/SettingsSidebar';
 import { SkillsView } from './components/SkillsView';
 import { TerminalDrawer } from './components/TerminalDrawer';
-import { ThreadPanel } from './components/ThreadPanel';
 import { Titlebar } from './components/Titlebar';
 import { useGlobalKeyboard } from './hooks/useGlobalKeyboard';
 import { useIpc } from './hooks/useIpc';
@@ -259,14 +258,12 @@ export function App() {
                       <SkillsView />
                     ) : viewMode === 'inbox' ? (
                       <InboxView />
-                    ) : viewMode === 'terminal' ? (
-                      <InstantView />
                     ) : showOverview ? (
                       <OverviewView />
                     ) : showMissingProject && activeProject ? (
                       <ProjectMissingView project={activeProject} />
                     ) : (
-                      <ThreadPanel />
+                      <ProjectView />
                     )}
                   </div>
                   {/* Expanded issue detail takes over the left column entirely */}
