@@ -32,6 +32,8 @@ interface ThreadRow {
   github_pr_number: number | null;
   github_repo: string | null;
   last_error: string | null;
+  failure_phase: string | null;
+  failure_count: number;
   created_at: string;
   updated_at: string;
   planner_resolved_model: string | null;
@@ -107,6 +109,22 @@ export class ThreadQueries {
         )
         .run(status, id);
     }
+  }
+
+  recordFailure(id: string, failurePhase: string, lastError?: string): void {
+    this.db
+      .prepare(
+        `UPDATE threads SET status = 'failed', last_error = ?, failure_phase = ?, failure_count = failure_count + 1, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
+      )
+      .run(lastError ?? null, failurePhase, id);
+  }
+
+  resetFailureTracking(id: string): void {
+    this.db
+      .prepare(
+        `UPDATE threads SET failure_phase = NULL, failure_count = 0, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
+      )
+      .run(id);
   }
 
   setWorktree(id: string, branch: string, worktreePath: string): void {
@@ -361,6 +379,8 @@ function mapThread(row: ThreadRow): Thread {
     githubPrNumber: row.github_pr_number ?? null,
     githubRepo: row.github_repo ?? null,
     lastError: row.last_error ?? null,
+    failurePhase: row.failure_phase ?? null,
+    failureCount: row.failure_count ?? 0,
     createdAt: toIsoUtc(row.created_at) ?? row.created_at,
     updatedAt: toIsoUtc(row.updated_at) ?? row.updated_at,
     plannerResolvedModel: row.planner_resolved_model ?? null,

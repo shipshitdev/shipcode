@@ -58,6 +58,11 @@ const REASONING_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'] 
 const PROJECT_OPEN_TARGETS = ['cursor', 'finder', 'terminal', 'ghostty', 'vscode'] as const;
 const FONT_SIZES = [12, 13, 14, 15] as const;
 const CONTEXT_GENERATOR_CLIS = ['claude', 'codex'] as const;
+const DEV_LOG_LEVELS = ['error', 'warn', 'info', 'debug'] as const;
+
+function isDevLogLevel(value: unknown): value is AppSettings['devLogLevel'] {
+  return typeof value === 'string' && (DEV_LOG_LEVELS as readonly string[]).includes(value);
+}
 
 function isReasoningEffort(value: unknown): value is AppSettings['plannerReasoningEffort'] {
   return typeof value === 'string' && (REASONING_EFFORTS as readonly string[]).includes(value);
@@ -214,6 +219,9 @@ export class SettingsQueries {
         4,
         DEFAULT_SETTINGS.instantDefaultPanes,
       ) as AppSettings['instantDefaultPanes'],
+      devLogLevel: isDevLogLevel(stored.devLogLevel)
+        ? stored.devLogLevel
+        : DEFAULT_SETTINGS.devLogLevel,
     };
   }
 
@@ -270,6 +278,11 @@ export class SettingsQueries {
     }
     if ('worktreeBranchFormat' in patch && patch.worktreeBranchFormat != null) {
       validateBranchFormat(patch.worktreeBranchFormat);
+    }
+    if ('devLogLevel' in patch && patch.devLogLevel != null) {
+      if (!isDevLogLevel(patch.devLogLevel)) {
+        throw new Error('devLogLevel must be error|warn|info|debug');
+      }
     }
 
     const upsert = this.db.prepare(

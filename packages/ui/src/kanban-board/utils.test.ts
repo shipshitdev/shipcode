@@ -105,6 +105,8 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     githubPrNumber: null,
     githubRepo: null,
     lastError: null,
+    failurePhase: null,
+    failureCount: 0,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     plannerResolvedModel: null,

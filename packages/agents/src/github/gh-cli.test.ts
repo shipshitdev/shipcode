@@ -762,6 +762,164 @@ describe('GhCli', () => {
     });
   });
 
+  describe('listRepoLabelsWithMeta', () => {
+    it('returns labels with name, color, and description', async () => {
+      const raw = [
+        { name: 'bug', color: 'd73a4a', description: 'Something is broken.' },
+        { name: 'enhancement', color: 'a2eeef', description: 'Feature or product improvement.' },
+      ];
+      success(JSON.stringify(raw));
+
+      const labels = await gh.listRepoLabelsWithMeta();
+
+      expect(labels).toEqual([
+        { name: 'bug', color: 'd73a4a', description: 'Something is broken.' },
+        { name: 'enhancement', color: 'a2eeef', description: 'Feature or product improvement.' },
+      ]);
+      expect(mockExecFileAsync).toHaveBeenCalledWith(
+        'gh',
+        ['label', 'list', '--limit', '200', '--json', 'name,color,description'],
+        { cwd: '/test/repo' },
+      );
+    });
+
+    it('filters out entries with missing names', async () => {
+      const raw = [
+        { name: 'bug', color: 'd73a4a', description: 'desc' },
+        { name: '', color: 'aaa', description: '' },
+        { color: 'bbb', description: 'no name' },
+      ];
+      success(JSON.stringify(raw));
+
+      const labels = await gh.listRepoLabelsWithMeta();
+
+      expect(labels).toHaveLength(1);
+      expect(labels[0].name).toBe('bug');
+    });
+
+    it('defaults color and description to empty string when missing', async () => {
+      const raw = [{ name: 'test-label' }];
+      success(JSON.stringify(raw));
+
+      const labels = await gh.listRepoLabelsWithMeta();
+
+      expect(labels).toEqual([{ name: 'test-label', color: '', description: '' }]);
+    });
+  });
+
+  describe('createLabel', () => {
+    it('calls gh label create with correct args', async () => {
+      success('');
+
+      await gh.createLabel({
+        name: 'agent:claude',
+        color: '1f6feb',
+        description: 'Route to Claude.',
+      });
+
+      expect(mockExecFileAsync).toHaveBeenCalledWith(
+        'gh',
+        [
+          'label',
+          'create',
+          'agent:claude',
+          '--color',
+          '1f6feb',
+          '--description',
+          'Route to Claude.',
+        ],
+        { cwd: '/test/repo' },
+      );
+    });
+
+    it('treats "already exists" as idempotent success', async () => {
+      const err = new Error('exit 1') as Error & { stderr?: string };
+      err.stderr = 'label already exists';
+      mockExecFileAsync.mockRejectedValueOnce(err);
+
+      await expect(
+        gh.createLabel({ name: 'bug', color: 'd73a4a', description: 'desc' }),
+      ).resolves.toBeUndefined();
+    });
+
+    it('rethrows non-duplicate errors', async () => {
+      const err = new Error('exit 1') as Error & { stderr?: string };
+      err.stderr = 'authentication required';
+      mockExecFileAsync.mockRejectedValueOnce(err);
+
+      await expect(
+        gh.createLabel({ name: 'bug', color: 'd73a4a', description: 'desc' }),
+      ).rejects.toThrow('exit 1');
+    });
+  });
+
+  describe('ensureLabels', () => {
+    it('creates missing labels and reports already present ones', async () => {
+      // listRepoLabels call
+      success(JSON.stringify([{ name: 'bug' }, { name: 'enhancement' }]));
+      // createLabel call for 'agent:claude'
+      success('');
+
+      const result = await gh.ensureLabels([
+        { name: 'bug', color: 'd73a4a', description: 'desc' },
+        { name: 'agent:claude', color: '1f6feb', description: 'Route to Claude.' },
+      ]);
+
+      expect(result.alreadyPresent).toEqual(['bug']);
+      expect(result.created).toEqual(['agent:claude']);
+      expect(result.failed).toEqual([]);
+    });
+
+    it('reports failures without throwing', async () => {
+      // listRepoLabels
+      success(JSON.stringify([]));
+      // createLabel fails
+      mockExecFileAsync.mockRejectedValueOnce(new Error('rate limited'));
+
+      const result = await gh.ensureLabels([
+        { name: 'new-label', color: 'aaa', description: 'desc' },
+      ]);
+
+      expect(result.created).toEqual([]);
+      expect(result.alreadyPresent).toEqual([]);
+      expect(result.failed).toEqual([{ name: 'new-label', error: 'rate limited' }]);
+    });
+
+    it('handles mixed success and failure', async () => {
+      // listRepoLabels
+      success(JSON.stringify([{ name: 'existing' }]));
+      // createLabel succeeds for first
+      success('');
+      // createLabel fails for second
+      mockExecFileAsync.mockRejectedValueOnce(new Error('forbidden'));
+
+      const result = await gh.ensureLabels([
+        { name: 'existing', color: '111', description: 'a' },
+        { name: 'new-ok', color: '222', description: 'b' },
+        { name: 'new-fail', color: '333', description: 'c' },
+      ]);
+
+      expect(result.alreadyPresent).toEqual(['existing']);
+      expect(result.created).toEqual(['new-ok']);
+      expect(result.failed).toEqual([{ name: 'new-fail', error: 'forbidden' }]);
+    });
+
+    it('returns all as alreadyPresent when nothing is missing', async () => {
+      success(JSON.stringify([{ name: 'a' }, { name: 'b' }]));
+
+      const result = await gh.ensureLabels([
+        { name: 'a', color: '111', description: 'x' },
+        { name: 'b', color: '222', description: 'y' },
+      ]);
+
+      expect(result.alreadyPresent).toEqual(['a', 'b']);
+      expect(result.created).toEqual([]);
+      expect(result.failed).toEqual([]);
+      // Only the listRepoLabels call, no createLabel calls
+      expect(mockExecFileAsync).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('editIssueBody', () => {
     it('pipes the body to stdin and resolves on exit 0', async () => {
       const { proc, stdinWrites, isStdinEnded, complete } = createFakeProc();

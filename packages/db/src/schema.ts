@@ -778,3 +778,20 @@ export function migrateV25(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (25)`);
   });
 }
+
+export function migrateV26(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 26) return;
+
+  transaction(db, () => {
+    execAlterTableIfMissing(db, 'ALTER TABLE threads ADD COLUMN failure_phase TEXT');
+    execAlterTableIfMissing(
+      db,
+      'ALTER TABLE threads ADD COLUMN failure_count INTEGER NOT NULL DEFAULT 0',
+    );
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (26)`);
+  });
+}

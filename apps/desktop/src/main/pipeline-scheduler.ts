@@ -209,6 +209,7 @@ export class PipelineScheduler {
       ...phaseModels,
       executorModel: effectiveExecutorModel,
     });
+    queries.threads.resetFailureTracking(thread.id);
     queries.plans.supersedeAll(thread.id);
     queries.plans.supersedeAllForIssue(issue.projectId, issue.issueNumber, thread.id);
 

@@ -14,7 +14,10 @@ interface IssueDetailDialogsProps {
   onArchiveConfirmed: () => void;
   onCloseArchiveConfirm: () => void;
   onCloseFullScreenPlan: () => void;
+  onMarkAsDoneConfirmed: () => void;
+  onCloseMarkAsDoneConfirm: () => void;
   showArchiveConfirm: boolean;
+  showMarkAsDoneConfirm: boolean;
 }
 
 export function IssueDetailDialogs({
@@ -29,7 +32,10 @@ export function IssueDetailDialogs({
   onArchiveConfirmed,
   onCloseArchiveConfirm,
   onCloseFullScreenPlan,
+  onMarkAsDoneConfirmed,
+  onCloseMarkAsDoneConfirm,
   showArchiveConfirm,
+  showMarkAsDoneConfirm,
 }: IssueDetailDialogsProps) {
   const fullScreenClientPlan =
     fullScreenPlan && !fullScreenPlan.structured
@@ -92,6 +98,30 @@ export function IssueDetailDialogs({
           </Button>
           <Button variant="destructive" size="sm" onClick={onArchiveConfirmed}>
             Archive
+          </Button>
+        </ModalFooter>
+      </Modal>
+
+      <Modal
+        open={showMarkAsDoneConfirm}
+        onClose={onCloseMarkAsDoneConfirm}
+        title={`Mark issue #${activeIssueNumber} as done?`}
+        className="max-w-sm"
+      >
+        <p className="text-sm text-secondary">
+          This will move the issue to the Done column. You can still reopen it later from GitHub.
+        </p>
+        <ModalFooter>
+          <Button variant="ghost" size="sm" onClick={onCloseMarkAsDoneConfirm}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            onClick={onMarkAsDoneConfirmed}
+            disabled={isSubmitting}
+            className="bg-purple-600 text-white hover:bg-purple-700"
+          >
+            {isSubmitting ? 'Marking...' : 'Mark As Done'}
           </Button>
         </ModalFooter>
       </Modal>

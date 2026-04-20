@@ -51,6 +51,31 @@ export class PlanQueries {
     return row ? mapPlan(asRow<PlanRow>(row)) : null;
   }
 
+  getLatestStructured(threadId: string): PlanRecord | null {
+    const row = this.db
+      .prepare(
+        'SELECT * FROM plans WHERE thread_id = ? AND structured IS NOT NULL ORDER BY version DESC LIMIT 1',
+      )
+      .get(threadId);
+    return row ? mapPlan(asRow<PlanRow>(row)) : null;
+  }
+
+  getLatestStructuredForIssue(projectId: string, issueNumber: number): PlanRecord | null {
+    const row = this.db
+      .prepare(
+        `SELECT p.*
+           FROM plans p
+           INNER JOIN threads t ON t.id = p.thread_id
+          WHERE t.project_id = ?
+            AND t.github_issue_number = ?
+            AND p.structured IS NOT NULL
+          ORDER BY p.created_at DESC
+          LIMIT 1`,
+      )
+      .get(projectId, issueNumber);
+    return row ? mapPlan(asRow<PlanRow>(row)) : null;
+  }
+
   getById(id: string): PlanRecord | null {
     const row = this.db.prepare('SELECT * FROM plans WHERE id = ?').get(id);
     return row ? mapPlan(asRow<PlanRow>(row)) : null;

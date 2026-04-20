@@ -143,6 +143,8 @@ export interface Thread {
   githubPrNumber: number | null;
   githubRepo: string | null;
   lastError: string | null;
+  failurePhase: string | null;
+  failureCount: number;
   createdAt: string;
   updatedAt: string;
   // Tier 3 telemetry: what openrouter/auto (or claude/codex) actually
@@ -371,6 +373,22 @@ export interface AppSettings {
   maxConcurrentExecutions: number;
   /** Default number of terminal panes when opening the Instant view. */
   instantDefaultPanes: 1 | 2 | 4;
+  /** Persisted log level for the electron-log file transport. Console stays at 'info'. */
+  devLogLevel: 'error' | 'warn' | 'info' | 'debug';
+}
+
+export interface DeveloperInfo {
+  appVersion: string;
+  electronVersion: string;
+  nodeVersion: string;
+  platform: string;
+  osRelease: string;
+  cliVersions: {
+    claude: string | null;
+    codex: string | null;
+    git: string | null;
+    gh: string | null;
+  };
 }
 
 export interface RepoSetupEnvFile {
@@ -788,6 +806,14 @@ export interface ThreadPanelData {
   settings: AppSettings;
   threads: Thread[];
   branches: string[];
+}
+
+export interface GitHubIssueComment {
+  id: number;
+  author: string | null;
+  body: string;
+  createdAt: string;
+  url: string;
 }
 
 export interface ProjectCostSummary {

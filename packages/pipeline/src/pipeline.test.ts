@@ -172,6 +172,8 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     githubPrNumber: null,
     githubRepo: null,
     lastError: null,
+    failurePhase: null,
+    failureCount: 0,
     createdAt: '',
     updatedAt: '',
     plannerResolvedModel: null,
@@ -350,10 +352,12 @@ function createMockDeps() {
       processManager,
       threads: {
         updateStatus: vi.fn(),
+        recordFailure: vi.fn(),
         getById: vi.fn(() => ({
           id: 't1',
           projectId: 'project-1',
           githubIssueNumber: 42,
+          status: 'planning',
         })),
         incrementReviewRound: vi.fn(),
         setGithubPr: vi.fn(),
@@ -572,9 +576,9 @@ describe('createPipeline', () => {
       }
 
       expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(PIPELINE_MAX_RETRIES + 1);
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith(
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
-        'failed',
+        expect.any(String),
         expect.any(String),
       );
     });
@@ -597,9 +601,9 @@ describe('createPipeline', () => {
 
       // Fourth failure: exhausted → should emit failed
       await mock.trigger('exit', 'proc-4', 1);
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith(
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
-        'failed',
+        expect.any(String),
         expect.any(String),
       );
     });
@@ -720,7 +724,11 @@ describe('createPipeline', () => {
       await mock.trigger('exit', 'proc-2', 0);
 
       expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'rejected');
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed');
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        undefined,
+      );
       expect(pipeline.getContext('t1')).toBeUndefined();
     });
 
@@ -733,7 +741,11 @@ describe('createPipeline', () => {
       await mock.trigger('output', 'proc-2', 'some garbage that is not a review block');
       await mock.trigger('exit', 'proc-2', 0);
 
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed');
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        undefined,
+      );
     });
 
     it('approve + non-autonomous + !requireApproval → awaiting_approval (no auto-execute)', async () => {
@@ -823,7 +835,11 @@ describe('createPipeline', () => {
       await mock.trigger('output', 'proc-2', 'garbage output');
       await mock.trigger('exit', 'proc-2', 0);
 
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed');
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        undefined,
+      );
       expect(pipeline.getContext('t1')).toBeUndefined();
     });
   });
@@ -880,9 +896,9 @@ describe('createPipeline', () => {
 
       await mock.trigger('exit', 'proc-2', 1);
 
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith(
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
-        'failed',
+        expect.any(String),
         expect.any(String),
       );
       expect(pipeline.getContext('t1')).toBeUndefined();
@@ -966,9 +982,9 @@ describe('createPipeline', () => {
 
       await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
 
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith(
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
-        'failed',
+        expect.any(String),
         expect.stringContaining('Setup failed: required env file missing: .env.local'),
       );
       expect(mock.deps.processManager.spawn).not.toHaveBeenCalled();
@@ -1034,7 +1050,11 @@ describe('createPipeline', () => {
 
       await pipeline.startVerification('t1');
 
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed');
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        undefined,
+      );
       expect(pipeline.getContext('t1')).toBeUndefined();
     });
 
@@ -1056,7 +1076,11 @@ describe('createPipeline', () => {
         'No changes detected',
         null,
       );
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed');
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        undefined,
+      );
     });
 
     it('dirty worktree is auto-committed before verification, then retries on verifier failure', async () => {
@@ -1122,7 +1146,11 @@ describe('createPipeline', () => {
       await mock.trigger('exit', 'proc-2', 0);
 
       expect(mock.deps.verifications.create).toHaveBeenCalled();
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed');
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        undefined,
+      );
       expect(pipeline.getContext('t1')).toBeUndefined();
     });
 
@@ -1202,7 +1230,11 @@ describe('createPipeline', () => {
       await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_FAILED_JSON));
       await mock.trigger('exit', 'proc-2', 0);
 
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed');
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        undefined,
+      );
       expect(pipeline.getContext('t1')).toBeUndefined();
 
       // When retries are exhausted, the pipeline MUST emit
@@ -1240,7 +1272,11 @@ describe('createPipeline', () => {
 
       await pipeline.startCommitAndPush('t1');
 
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed');
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        undefined,
+      );
       expect(pipeline.getContext('t1')).toBeUndefined();
     });
 
@@ -1257,7 +1293,11 @@ describe('createPipeline', () => {
 
       await pipeline.startCommitAndPush('t1');
 
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed');
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        undefined,
+      );
       expect(pipeline.getContext('t1')).toBeUndefined();
     });
 
@@ -1298,7 +1338,11 @@ describe('createPipeline', () => {
 
       await pipeline.startCommitAndPush('t1');
 
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed');
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        undefined,
+      );
       expect(pipeline.getContext('t1')).toBeUndefined();
     });
   });
@@ -1408,7 +1452,11 @@ describe('createPipeline', () => {
 
       await pipeline.startShipping('t1');
 
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'failed');
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        undefined,
+      );
     });
   });
 

@@ -9,7 +9,18 @@ import type {
   ReviewRecord,
   Thread,
 } from '@shipcode/shared';
-import { cn, Tabs, TabsContent, TabsList, TabsTrigger } from '@shipcode/ui';
+import {
+  Button,
+  cn,
+  Pencil,
+  RefreshCw,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@shipcode/ui';
+import { CommentsTab } from './CommentsTab';
+import { CostsTab } from './CostsTab';
 import { IssueHistoryTab } from './IssueHistoryTab';
 import { PipelineTab } from './PipelineTab';
 import { PlanHistoryTab } from './PlanHistoryTab';
@@ -49,6 +60,7 @@ interface IssueDetailTabsProps {
   runNumberByThreadId: Record<string, number>;
   thread: Thread | null | undefined;
   threadPhase: PipelinePhase | 'idle';
+  projectId: string;
   onEditPrd: () => void;
   onActiveTabChange: (tab: IssueDetailTab) => void;
   onFullScreenPlan: (planId: string | null) => void;
@@ -95,6 +107,7 @@ export function IssueDetailTabs({
   runNumberByThreadId,
   thread,
   threadPhase,
+  projectId,
   onEditPrd,
   onActiveTabChange,
   onFullScreenPlan,
@@ -113,15 +126,18 @@ export function IssueDetailTabs({
           value: 'history',
           label: `Plan History${normalizedPlanHistory.length > 0 ? ` (${normalizedPlanHistory.length})` : ''}`,
         },
-        { value: 'prd', label: 'PRD' },
+        { value: 'prd', label: 'Issue' },
+        { value: 'comments', label: 'Comments' },
         { value: 'pipeline', label: 'Pipeline' },
         {
           value: 'activity',
           label: `Issue History${normalizedIssueActivity.length > 0 ? ` (${normalizedIssueActivity.length})` : ''}`,
         },
+        { value: 'costs', label: 'Costs' },
       ]
     : [
-        { value: 'prd', label: 'PRD' },
+        { value: 'prd', label: 'Issue' },
+        { value: 'comments', label: 'Comments' },
         {
           value: 'history',
           label: `Plan History${normalizedPlanHistory.length > 0 ? ` (${normalizedPlanHistory.length})` : ''}`,
@@ -131,6 +147,7 @@ export function IssueDetailTabs({
           value: 'activity',
           label: `Issue History${normalizedIssueActivity.length > 0 ? ` (${normalizedIssueActivity.length})` : ''}`,
         },
+        { value: 'costs', label: 'Costs' },
       ];
 
   return (
@@ -139,22 +156,43 @@ export function IssueDetailTabs({
       onValueChange={(value) => onActiveTabChange(value as IssueDetailTab)}
       className="flex min-h-0 flex-col"
     >
-      <TabsList className={cn('shrink-0', expanded ? 'mb-5' : 'px-4')}>
-        {orderedTabs.map((tab) => (
-          <TabsTrigger key={tab.value} value={tab.value}>
-            {tab.label}
-          </TabsTrigger>
-        ))}
-      </TabsList>
+      <div className={cn('flex shrink-0 items-center overflow-x-auto', expanded ? 'mb-5' : '')}>
+        <TabsList className={cn(expanded ? '' : 'px-4')}>
+          {orderedTabs.map((tab) => (
+            <TabsTrigger key={tab.value} value={tab.value}>
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        <div className="ml-auto flex shrink-0 items-center gap-1 pr-4">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={onRefreshFromGithub}
+            disabled={isRefreshingFromGithub}
+            title="Re-fetch issue from GitHub"
+            aria-label="Refresh issue from GitHub"
+          >
+            <RefreshCw size={12} className={isRefreshingFromGithub ? 'animate-spin' : ''} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={onEditPrd}
+            title="Edit issue body"
+            aria-label="Edit issue body"
+          >
+            <Pencil size={13} />
+          </Button>
+        </div>
+      </div>
 
       <TabsContent value="prd" className={cn('mt-0', !expanded && 'p-4')}>
-        <PrdTab
-          activeIssue={activeIssue}
-          expanded={expanded}
-          isRefreshingFromGithub={isRefreshingFromGithub}
-          onEditPrd={onEditPrd}
-          onRefreshFromGithub={onRefreshFromGithub}
-        />
+        <PrdTab activeIssue={activeIssue} expanded={expanded} />
+      </TabsContent>
+
+      <TabsContent value="comments" className={cn('mt-0', !expanded && 'p-4')}>
+        <CommentsTab projectId={projectId} issueNumber={activeIssue.issueNumber} />
       </TabsContent>
 
       <TabsContent value="history" className={cn('mt-0', !expanded && 'p-4')}>
@@ -208,6 +246,10 @@ export function IssueDetailTabs({
           normalizedIssueActivity={normalizedIssueActivity}
           runNumberByThreadId={runNumberByThreadId}
         />
+      </TabsContent>
+
+      <TabsContent value="costs" className={cn('mt-0', !expanded && 'p-4')}>
+        <CostsTab projectId={projectId} issueNumber={activeIssue.issueNumber} thread={thread} />
       </TabsContent>
     </Tabs>
   );

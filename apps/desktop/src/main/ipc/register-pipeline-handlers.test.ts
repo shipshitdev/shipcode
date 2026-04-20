@@ -43,6 +43,8 @@ function makeThread(overrides: Record<string, unknown> = {}) {
     githubPrNumber: null,
     githubRepo: 'acme/repo',
     lastError: null,
+    failurePhase: null,
+    failureCount: 0,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     plannerResolvedModel: null,
@@ -76,9 +78,14 @@ describe('registerPipelineHandlers', () => {
     threads: {
       getById: ReturnType<typeof vi.fn>;
       updateStatus: ReturnType<typeof vi.fn>;
+      resetFailureTracking: ReturnType<typeof vi.fn>;
     };
     plans: {
       getLatest: ReturnType<typeof vi.fn>;
+      getLatestStructured: ReturnType<typeof vi.fn>;
+      getLatestStructuredForIssue: ReturnType<typeof vi.fn>;
+      getMaxVersion: ReturnType<typeof vi.fn>;
+      create: ReturnType<typeof vi.fn>;
       updateStructured: ReturnType<typeof vi.fn>;
       updateStatus: ReturnType<typeof vi.fn>;
       supersedeAll: ReturnType<typeof vi.fn>;
@@ -139,6 +146,7 @@ describe('registerPipelineHandlers', () => {
       threads: {
         getById: vi.fn(() => makeThread()),
         updateStatus: vi.fn(),
+        resetFailureTracking: vi.fn(),
       },
       plans: {
         getLatest: vi.fn(() => ({
@@ -150,6 +158,10 @@ describe('registerPipelineHandlers', () => {
           status: 'awaiting_approval',
           createdAt: new Date().toISOString(),
         })),
+        getLatestStructured: vi.fn(() => null),
+        getLatestStructuredForIssue: vi.fn(() => null),
+        getMaxVersion: vi.fn(() => 0),
+        create: vi.fn(),
         updateStructured: vi.fn(),
         updateStatus: vi.fn(),
         supersedeAll: vi.fn(),

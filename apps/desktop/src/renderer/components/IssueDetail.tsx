@@ -27,11 +27,16 @@ import {
   Archive,
   Badge,
   Button,
+  CircleCheck,
+  CircleDot,
   cn,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   PanelLeftClose,
   PanelLeftOpen,
   PhaseChip,
-  Wand2,
   X,
 } from '@shipcode/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -72,9 +77,11 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const [isRewriting, setIsRewriting] = useState(false);
   const [rewriteError, setRewriteError] = useState<string | null>(null);
   const [isRefreshingFromGithub, setIsRefreshingFromGithub] = useState(false);
+  const [isTogglingState, setIsTogglingState] = useState(false);
   const [planHistoryCollapsed, setPlanHistoryCollapsed] = useState(false);
   const [showRawOutput, setShowRawOutput] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
+  const [showMarkAsDoneConfirm, setShowMarkAsDoneConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState<IssueDetailTab>('prd');
   const [phaseModelValidation, setPhaseModelValidation] = useState<
     Partial<
@@ -570,6 +577,27 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     await window.shipcode.invoke('shell:open-external', { url: linkedPrUrl });
   };
 
+  const handleToggleIssueState = async (newState: 'open' | 'closed') => {
+    if (!activeProjectId || !activeIssue || activeIssue.state === newState) return;
+    setIsTogglingState(true);
+    try {
+      if (newState === 'closed') {
+        await window.shipcode.invoke('github:close-issue', {
+          projectId: activeProjectId,
+          issueNumber: activeIssue.issueNumber,
+        });
+      } else {
+        await window.shipcode.invoke('github:reopen-issue', {
+          projectId: activeProjectId,
+          issueNumber: activeIssue.issueNumber,
+        });
+      }
+      await queryClient.invalidateQueries({ queryKey: ['github-issues', activeProjectId] });
+    } finally {
+      setIsTogglingState(false);
+    }
+  };
+
   const handleRefreshFromGithub = async () => {
     if (!activeProjectId) return;
     setIsRefreshingFromGithub(true);
@@ -900,6 +928,44 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       ) : (
         <span className="font-mono text-xs text-muted">#{activeIssue.issueNumber}</span>
       )}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="xs"
+            className={cn(
+              'h-5 gap-1 px-1.5 text-[10px] font-medium',
+              activeIssue.state === 'open'
+                ? 'text-done hover:bg-done/10 hover:text-done'
+                : 'text-muted hover:bg-secondary hover:text-primary',
+            )}
+            disabled={isTogglingState}
+          >
+            {activeIssue.state === 'open' ? (
+              <CircleDot className="h-3 w-3" />
+            ) : (
+              <CircleCheck className="h-3 w-3" />
+            )}
+            {isTogglingState ? '…' : activeIssue.state === 'open' ? 'Open' : 'Closed'}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          <DropdownMenuItem
+            disabled={activeIssue.state === 'open'}
+            onClick={() => void handleToggleIssueState('open')}
+          >
+            <CircleDot className="mr-2 h-3.5 w-3.5 text-done" />
+            Reopen issue
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={activeIssue.state === 'closed'}
+            onClick={() => void handleToggleIssueState('closed')}
+          >
+            <CircleCheck className="mr-2 h-3.5 w-3.5 text-muted" />
+            Close issue
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       {activeIssue.linkedPrNumber &&
         (linkedPrUrl ? (
           <Button
@@ -977,7 +1043,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     onCancel: () => void handleCancel(),
     onEditPrd: handleEditPrd,
     onFeedbackChange: setFeedback,
-    onMarkAsDone: () => void handleMarkAsDone(),
+    onMarkAsDone: () => setShowMarkAsDoneConfirm(true),
     onPendingActionChange: setPendingAction,
     onReject: () => void handleReject(),
     onRerun: () => void handleRerun(),
@@ -1043,6 +1109,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       onStabilizePr={() => {
         void handleStabilizePr();
       }}
+      projectId={activeProjectId ?? ''}
     />
   );
 
@@ -1061,7 +1128,13 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       onArchiveConfirmed={handleArchiveConfirmed}
       onCloseArchiveConfirm={() => setShowArchiveConfirm(false)}
       onCloseFullScreenPlan={() => setFullScreenPlanId(null)}
+      onMarkAsDoneConfirmed={() => {
+        setShowMarkAsDoneConfirm(false);
+        void handleMarkAsDone();
+      }}
+      onCloseMarkAsDoneConfirm={() => setShowMarkAsDoneConfirm(false)}
       showArchiveConfirm={showArchiveConfirm}
+      showMarkAsDoneConfirm={showMarkAsDoneConfirm}
     />
   );
 

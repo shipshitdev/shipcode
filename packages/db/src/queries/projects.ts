@@ -100,6 +100,16 @@ export class ProjectQueries {
       this.db
         .prepare(`UPDATE projects SET archived = 0, updated_at = ${ISO_NOW_SQL} WHERE id = ?`)
         .run(existing.id);
+      // Reset stale queued issues so they don't auto-start pipelines on restore.
+      this.db
+        .prepare(
+          `UPDATE github_issue_cache
+             SET pipeline_status = 'todo', last_phase_update = NULL
+           WHERE project_id = ?
+             AND pipeline_status = 'queued'
+             AND claimed_at IS NULL`,
+        )
+        .run(existing.id);
       const restored = this.getById(existing.id);
       if (!restored) {
         throw new Error(`Failed to load restored project: ${existing.id}`);
@@ -199,6 +209,16 @@ export class ProjectQueries {
 
   unarchive(id: string): void {
     this.db.prepare(`UPDATE projects SET archived = 0 WHERE id = ?`).run(id);
+    // Reset stale queued issues so they don't auto-start pipelines on unarchive.
+    this.db
+      .prepare(
+        `UPDATE github_issue_cache
+           SET pipeline_status = 'todo', last_phase_update = NULL
+         WHERE project_id = ?
+           AND pipeline_status = 'queued'
+           AND claimed_at IS NULL`,
+      )
+      .run(id);
   }
 
   /** Stable path for instant fix threads. The project is hidden from the sidebar. */

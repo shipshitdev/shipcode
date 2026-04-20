@@ -59,20 +59,27 @@ describe('TerminalDrawerHeader', () => {
 
     render(
       <TerminalDrawerHeader
+        activeProjectId={null}
         currentModel="gpt-5.4"
         displayIssue={issue}
+        ghosttyAvailable={false}
         isMaximized={false}
         pipelinePhase="executing"
         runningTabs={[issue]}
         startedAt="2m 10s"
+        terminalAvailable={false}
         terminalThreadId={issue.threadId}
+        onNewClaudeSession={() => {}}
+        onNewCodexSession={() => {}}
+        onOpenInGhostty={() => {}}
+        onOpenInTerminalApp={() => {}}
         onOpenIssue={onOpenIssue}
         onToggleMaximize={onToggleMaximize}
         onToggleTerminal={onToggleTerminal}
       />,
     );
 
-    expect(screen.getByText('Terminal')).toBeInTheDocument();
+    expect(screen.getByText('Console')).toBeInTheDocument();
     expect(screen.getByText('#19')).toBeInTheDocument();
     expect(screen.getByText('Fix the board')).toBeInTheDocument();
     expect(screen.getByText('gpt-5.4')).toBeInTheDocument();
@@ -99,13 +106,20 @@ describe('TerminalDrawerHeader', () => {
 
     render(
       <TerminalDrawerHeader
+        activeProjectId={null}
         currentModel={null}
         displayIssue={issueA}
+        ghosttyAvailable={false}
         isMaximized={true}
         pipelinePhase="idle"
         runningTabs={[issueA, issueB]}
         startedAt={null}
+        terminalAvailable={false}
         terminalThreadId={issueA.threadId}
+        onNewClaudeSession={() => {}}
+        onNewCodexSession={() => {}}
+        onOpenInGhostty={() => {}}
+        onOpenInTerminalApp={() => {}}
         onOpenIssue={onOpenIssue}
         onToggleMaximize={vi.fn()}
         onToggleTerminal={vi.fn()}
@@ -120,5 +134,44 @@ describe('TerminalDrawerHeader', () => {
 
     fireEvent.click(screen.getByText('Retry pipeline'));
     expect(onOpenIssue).toHaveBeenCalledWith(issueB);
+  });
+
+  it('renders the "+" button and disables Open in Ghostty / Terminal.app when unavailable', async () => {
+    const issue = makeIssue();
+
+    render(
+      <TerminalDrawerHeader
+        activeProjectId={null}
+        currentModel={null}
+        displayIssue={issue}
+        ghosttyAvailable={false}
+        isMaximized={false}
+        pipelinePhase="idle"
+        runningTabs={[issue]}
+        startedAt={null}
+        terminalAvailable={false}
+        terminalThreadId={issue.threadId}
+        onNewClaudeSession={() => {}}
+        onNewCodexSession={() => {}}
+        onOpenInGhostty={() => {}}
+        onOpenInTerminalApp={() => {}}
+        onOpenIssue={() => {}}
+        onToggleMaximize={() => {}}
+        onToggleTerminal={() => {}}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'New session' })).toBeInTheDocument();
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'New session' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('New Claude Session')).toBeInTheDocument();
+    });
+
+    const ghosttyItem = screen.getByText('Open in Ghostty').closest('[role="menuitem"]');
+    const terminalItem = screen.getByText('Open in Terminal.app').closest('[role="menuitem"]');
+    expect(ghosttyItem).toHaveAttribute('aria-disabled', 'true');
+    expect(terminalItem).toHaveAttribute('aria-disabled', 'true');
   });
 });

@@ -196,10 +196,15 @@ export function sendGithubIssuesUpdated(
   queries: Queries,
   projectId: string,
 ) {
-  mainWindow.webContents.send('github:issues-updated', {
-    projectId,
-    issues: queries.githubIssues.list(projectId),
-  });
+  if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) return;
+  try {
+    mainWindow.webContents.send('github:issues-updated', {
+      projectId,
+      issues: queries.githubIssues.list(projectId),
+    });
+  } catch {
+    /* render frame disposed during HMR */
+  }
 }
 
 type AttentionPhase = Extract<PipelinePhase, 'awaiting_approval' | 'completed' | 'failed' | 'idle'>;

@@ -1,4 +1,4 @@
-import { Button, cn, Plus, Zap } from '@shipcode/ui';
+import { Button, cn, Plus, Terminal } from '@shipcode/ui';
 import { useCallback, useMemo } from 'react';
 import { useAppStore } from '../stores/app-store';
 import { InstantTerminalPane } from './instant-terminal/InstantTerminalPane';
@@ -50,11 +50,11 @@ export function InstantView() {
   if (instantPaneThreadIds.length === 0) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-4 text-muted">
-        <Zap size={32} className="text-muted" />
-        <p className="text-sm">No instant fix panes open</p>
-        <Button variant="default" onClick={openInstantFixModal}>
+        <Terminal size={32} className="text-muted" />
+        <p className="text-sm">No terminal sessions open</p>
+        <Button variant="default" onClick={() => openInstantFixModal()}>
           <Plus size={14} className="mr-1.5" />
-          New Instant Fix
+          New Terminal Session
         </Button>
         <p className="text-xs text-muted">or press ⇧⌘I</p>
       </div>
@@ -65,8 +65,8 @@ export function InstantView() {
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-border">
-        <h2 className="text-sm font-medium text-primary">Instant</h2>
-        <Button variant="ghost" size="sm" onClick={openInstantFixModal}>
+        <h2 className="text-sm font-medium text-primary">Terminal Sessions</h2>
+        <Button variant="ghost" size="sm" onClick={() => openInstantFixModal()}>
           <Plus size={14} className="mr-1" />
           New
         </Button>

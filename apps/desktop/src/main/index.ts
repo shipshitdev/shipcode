@@ -439,6 +439,9 @@ function createWindow() {
     }
   }, 0);
 
+  // Apply persisted log level (default is 'debug' from logger.service.ts init)
+  log.transports.file.level = queries.settings.get().devLogLevel;
+
   // Register IPC handlers
   registerIpcHandlers(
     ipcMain,

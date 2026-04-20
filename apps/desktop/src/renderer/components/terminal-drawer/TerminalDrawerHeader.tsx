@@ -7,19 +7,28 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
   PhaseChip,
+  Plus,
   X,
 } from '@shipcode/ui';
 
 interface TerminalDrawerHeaderProps {
+  activeProjectId: string | null;
   currentModel: string | null;
   displayIssue: GitHubIssueCacheRecord | null;
+  ghosttyAvailable: boolean;
   isMaximized: boolean;
   pipelinePhase: PipelinePhase;
   runningTabs: GitHubIssueCacheRecord[];
   startedAt: string | null;
+  terminalAvailable: boolean;
   terminalThreadId: string | null;
+  onNewClaudeSession: () => void;
+  onNewCodexSession: () => void;
+  onOpenInGhostty: () => void;
+  onOpenInTerminalApp: () => void;
   onOpenIssue: (issue: GitHubIssueCacheRecord) => void;
   onToggleMaximize: () => void;
   onToggleTerminal: () => void;
@@ -28,11 +37,17 @@ interface TerminalDrawerHeaderProps {
 export function TerminalDrawerHeader({
   currentModel,
   displayIssue,
+  ghosttyAvailable,
   isMaximized,
   pipelinePhase,
   runningTabs,
   startedAt,
+  terminalAvailable,
   terminalThreadId,
+  onNewClaudeSession,
+  onNewCodexSession,
+  onOpenInGhostty,
+  onOpenInTerminalApp,
   onOpenIssue,
   onToggleMaximize,
   onToggleTerminal,
@@ -42,7 +57,7 @@ export function TerminalDrawerHeader({
       <div className="flex items-center gap-3 min-w-0 overflow-hidden">
         <div className="shrink-0">
           <span className="rounded-md bg-tertiary px-3 py-1 text-[11px] font-medium text-primary">
-            Terminal
+            Console
           </span>
         </div>
 
@@ -100,6 +115,25 @@ export function TerminalDrawerHeader({
       </div>
 
       <div className="flex items-center gap-0.5 shrink-0">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon-xs" title="New session" aria-label="New session">
+              <Plus size={14} />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" side="top">
+            <DropdownMenuItem onSelect={onNewClaudeSession}>New Claude Session</DropdownMenuItem>
+            <DropdownMenuItem onSelect={onNewCodexSession}>New Codex Session</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={onOpenInGhostty} disabled={!ghosttyAvailable}>
+              Open in Ghostty
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={onOpenInTerminalApp} disabled={!terminalAvailable}>
+              Open in Terminal.app
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
         <Button
           variant="ghost"
           size="icon-xs"

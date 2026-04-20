@@ -2,6 +2,7 @@ import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import {
   type GitHubIssue,
+  type GitHubIssueComment,
   type GitHubPrCheckSummary,
   type GitHubPrReviewCommentSummary,
   type GitHubStatusLabel,
@@ -52,7 +53,7 @@ export class GhCli {
     return { owner, repo };
   }
 
-  private async listRepoLabels(): Promise<string[]> {
+  async listRepoLabels(): Promise<string[]> {
     const { stdout } = await execFileAsync(
       'gh',
       ['label', 'list', '--limit', '200', '--json', 'name'],
@@ -61,6 +62,73 @@ export class GhCli {
 
     const raw = JSON.parse(stdout) as Array<{ name?: string }>;
     return raw.map((label) => label.name).filter((name): name is string => !!name);
+  }
+
+  async listRepoLabelsWithMeta(): Promise<
+    Array<{ name: string; color: string; description: string }>
+  > {
+    const { stdout } = await execFileAsync(
+      'gh',
+      ['label', 'list', '--limit', '200', '--json', 'name,color,description'],
+      { cwd: this.cwd },
+    );
+
+    const raw = JSON.parse(stdout) as Array<{
+      name?: string;
+      color?: string;
+      description?: string;
+    }>;
+    return raw
+      .filter(
+        (label): label is { name: string; color?: string; description?: string } => !!label.name,
+      )
+      .map((label) => ({
+        name: label.name,
+        color: label.color ?? '',
+        description: label.description ?? '',
+      }));
+  }
+
+  async createLabel(label: { name: string; color: string; description: string }): Promise<void> {
+    try {
+      await execFileAsync(
+        'gh',
+        ['label', 'create', label.name, '--color', label.color, '--description', label.description],
+        { cwd: this.cwd },
+      );
+    } catch (err) {
+      const stderr = String((err as { stderr?: string }).stderr ?? (err as Error).message ?? '');
+      if (/already exists/i.test(stderr)) return;
+      throw err;
+    }
+  }
+
+  async ensureLabels(
+    labels: ReadonlyArray<{ name: string; color: string; description: string }>,
+  ): Promise<{
+    created: string[];
+    alreadyPresent: string[];
+    failed: Array<{ name: string; error: string }>;
+  }> {
+    const existing = new Set(await this.listRepoLabels());
+    const created: string[] = [];
+    const alreadyPresent: string[] = [];
+    const failed: Array<{ name: string; error: string }> = [];
+
+    for (const label of labels) {
+      if (existing.has(label.name)) {
+        alreadyPresent.push(label.name);
+        continue;
+      }
+      try {
+        await this.createLabel(label);
+        created.push(label.name);
+      } catch (err) {
+        failed.push({ name: label.name, error: String((err as Error).message ?? err) });
+      }
+    }
+
+    return { created, alreadyPresent, failed };
   }
 
   private async filterExistingLabels(labels: string[]): Promise<string[]> {
@@ -632,8 +700,36 @@ export class GhCli {
     );
   }
 
+  async listIssueComments(issueNumber: number): Promise<GitHubIssueComment[]> {
+    const { stdout } = await execFileAsync(
+      'gh',
+      ['issue', 'view', String(issueNumber), '--json', 'comments'],
+      { cwd: this.cwd },
+    );
+    const parsed = JSON.parse(stdout) as {
+      comments: Array<{
+        id: string;
+        author: { login: string } | null;
+        body: string;
+        createdAt: string;
+        url: string;
+      }>;
+    };
+    return (parsed.comments ?? []).map((c) => ({
+      id: Number(c.id),
+      author: c.author?.login ?? null,
+      body: c.body,
+      createdAt: c.createdAt,
+      url: c.url,
+    }));
+  }
+
   async closeIssue(issueNumber: number): Promise<void> {
     await execFileAsync('gh', ['issue', 'close', String(issueNumber)], { cwd: this.cwd });
+  }
+
+  async reopenIssue(issueNumber: number): Promise<void> {
+    await execFileAsync('gh', ['issue', 'reopen', String(issueNumber)], { cwd: this.cwd });
   }
 
   /**

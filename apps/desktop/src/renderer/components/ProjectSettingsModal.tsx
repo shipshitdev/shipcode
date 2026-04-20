@@ -6,6 +6,8 @@ import {
   type OpenRouterModelValidation,
   type Project,
   type ProjectSetupDraft,
+  type RepoSetupContract,
+  type RepoSetupEnvFile,
   validateGithubProjectUrl,
 } from '@shipcode/shared';
 import {
@@ -20,17 +22,28 @@ import {
 } from '@shipcode/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 import { ProjectSettingsContextTab } from './project-settings-modal/ProjectSettingsContextTab';
 import { ProjectSettingsGeneralTab } from './project-settings-modal/ProjectSettingsGeneralTab';
+import { ProjectSettingsGitHubTab } from './project-settings-modal/ProjectSettingsGitHubTab';
 import { ProjectSettingsModelsTab } from './project-settings-modal/ProjectSettingsModelsTab';
+import { ProjectSettingsNotificationsTab } from './project-settings-modal/ProjectSettingsNotificationsTab';
+import { ProjectSettingsSetupTab } from './project-settings-modal/ProjectSettingsSetupTab';
+import {
+  commandsToText,
+  type LocalEnvFile,
+  makeEnvFileId,
+  normalizeEnvFiles,
+  textToCommands,
+} from './project-settings-modal/setup-utils';
 import {
   buildProjectDraft,
   type ContextGeneratorCli,
   EMPTY_OVERRIDES,
   type PhaseKey,
+  PROJECT_TABS,
   type ProjectOverrideState,
   type ProjectTab,
 } from './project-settings-modal/shared';
@@ -40,8 +53,8 @@ export function ProjectSettingsModal() {
   const {
     projectSettingsModalOpen,
     projectSettingsModalProjectId,
+    projectSettingsModalInitialTab,
     closeProjectSettingsModal,
-    openProjectSetupModal,
   } = useAppStore();
 
   const [activeTab, setActiveTab] = useState<ProjectTab>('general');
@@ -65,6 +78,17 @@ export function ProjectSettingsModal() {
   >({});
   const [notifyGithubUser, setNotifyGithubUser] = useState('');
 
+  // Setup tab state
+  const [setupCommandsText, setSetupCommandsText] = useState('');
+  const [verifyCommandsText, setVerifyCommandsText] = useState('');
+  const [testingContext, setTestingContext] = useState('');
+  const [setupBeforeVerify, setSetupBeforeVerify] = useState(false);
+  const [envFiles, setEnvFiles] = useState<LocalEnvFile[]>([]);
+  const [setupSaveError, setSetupSaveError] = useState<string | null>(null);
+
+  // Track open transition to apply initialTab only once
+  const prevOpenRef = useRef(false);
+
   const { data: project } = useQuery<Project | null>({
     queryKey: ['project', projectSettingsModalProjectId],
     queryFn: () =>
@@ -87,7 +111,7 @@ export function ProjectSettingsModal() {
     staleTime: 30_000,
   });
 
-  const { data: projectSetup } = useQuery<ProjectSetupDraft>({
+  const { data: projectSetup, refetch: refetchSetup } = useQuery<ProjectSetupDraft>({
     queryKey: ['project-setup', projectSettingsModalProjectId],
     queryFn: () =>
       window.shipcode.invoke('project:get-setup', {
@@ -97,9 +121,19 @@ export function ProjectSettingsModal() {
     staleTime: 0,
   });
 
+  // Seed all state on open transition
   useEffect(() => {
+    const isOpening = projectSettingsModalOpen && !prevOpenRef.current;
+    prevOpenRef.current = projectSettingsModalOpen;
+
     if (!projectSettingsModalOpen) return;
-    setActiveTab('general');
+
+    if (isOpening) {
+      const tab = projectSettingsModalInitialTab;
+      const isValidTab = tab && (PROJECT_TABS as readonly string[]).includes(tab);
+      setActiveTab(isValidTab ? (tab as ProjectTab) : 'general');
+    }
+
     setUrlInput(project?.githubProjectUrl ?? '');
     setOverrides({
       plannerModelOverride: project?.plannerModelOverride ?? null,
@@ -122,6 +156,7 @@ export function ProjectSettingsModal() {
     setNotifyGithubUser(project?.notifyGithubUser ?? '');
     setTouched(false);
     setSubmitError(null);
+    setSetupSaveError(null);
     setSyncResult(null);
     setSyncError(null);
     setContextGenerating(false);
@@ -131,6 +166,7 @@ export function ProjectSettingsModal() {
     setModelValidation({});
   }, [
     projectSettingsModalOpen,
+    projectSettingsModalInitialTab,
     project?.executorModelIdOverride,
     project?.executorModelOverride,
     project?.executorReasoningEffortOverride,
@@ -151,9 +187,45 @@ export function ProjectSettingsModal() {
     project?.telegramChatIdOverride,
   ]);
 
+  // Seed setup state from setup draft
+  useEffect(() => {
+    if (!projectSettingsModalOpen || !projectSetup) return;
+    const contract = projectSetup.inspection.contract ?? projectSetup.suggestedContract;
+    setSetupCommandsText(commandsToText(contract.setupCommands));
+    setVerifyCommandsText(commandsToText(contract.verifyCommands));
+    setTestingContext(contract.testingContext ?? '');
+    setSetupBeforeVerify(contract.setupBeforeVerify);
+    setEnvFiles(normalizeEnvFiles(contract.envFiles));
+    setSetupSaveError(null);
+  }, [projectSettingsModalOpen, projectSetup]);
+
   const validation = useMemo(() => validateGithubProjectUrl(urlInput), [urlInput]);
   const showInlineError = touched && !validation.ok;
   const projectDraft = useMemo(() => buildProjectDraft(project, overrides), [project, overrides]);
+
+  const detectedProfiles = useMemo(() => projectSetup?.profiles ?? [], [projectSetup]);
+  const setupInspection = projectSetup?.inspection ?? null;
+
+  // Env file handlers
+  const addEnvFile = useCallback(
+    () =>
+      setEnvFiles((prev) => [
+        ...prev,
+        { id: makeEnvFileId(), source: '', target: undefined, required: true },
+      ]),
+    [],
+  );
+
+  const updateEnvFile = useCallback(
+    (id: string, patch: Partial<RepoSetupEnvFile>) =>
+      setEnvFiles((prev) => prev.map((file) => (file.id === id ? { ...file, ...patch } : file))),
+    [],
+  );
+
+  const removeEnvFile = useCallback(
+    (id: string) => setEnvFiles((prev) => prev.filter((file) => file.id !== id)),
+    [],
+  );
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -180,17 +252,37 @@ export function ProjectSettingsModal() {
         overrides,
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['settings'] });
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-      queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
-      queryClient.invalidateQueries({ queryKey: ['projects-archived'] });
-      queryClient.invalidateQueries({ queryKey: ['project', projectSettingsModalProjectId] });
-      closeProjectSettingsModal();
-    },
     onError: (err: unknown) => {
       log.error('[ProjectSettingsModal] save failed', err);
       setSubmitError(clampError(err));
+    },
+  });
+
+  const setupSaveMutation = useMutation({
+    mutationFn: async () => {
+      if (!projectSettingsModalProjectId) throw new Error('Missing project id');
+      const contract: RepoSetupContract = {
+        version: 1,
+        setupCommands: textToCommands(setupCommandsText),
+        verifyCommands: textToCommands(verifyCommandsText),
+        envFiles: envFiles
+          .map((file) => ({
+            source: file.source.trim(),
+            target: file.target?.trim() || undefined,
+            required: file.required,
+          }))
+          .filter((file) => file.source.length > 0),
+        setupBeforeVerify,
+        testingContext: testingContext.trim() || null,
+      };
+      return window.shipcode.invoke('project:save-setup', {
+        projectId: projectSettingsModalProjectId,
+        contract,
+      });
+    },
+    onError: (err: unknown) => {
+      log.error('[ProjectSettingsModal] setup save failed', err);
+      setSetupSaveError(clampError(err));
     },
   });
 
@@ -263,14 +355,35 @@ export function ProjectSettingsModal() {
     enabled: !!projectSettingsModalProjectId && projectSettingsModalOpen,
   });
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setSubmitError(null);
+    setSetupSaveError(null);
     setTouched(true);
     if (!validation.ok) {
       setActiveTab('general');
       return;
     }
-    saveMutation.mutate();
+    try {
+      // Sequential: DB settings first, then setup file
+      await saveMutation.mutateAsync();
+      if (projectSetup) {
+        await setupSaveMutation.mutateAsync();
+      }
+      // Both succeeded — invalidate and close
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['settings'] }),
+        queryClient.invalidateQueries({ queryKey: ['projects'] }),
+        queryClient.invalidateQueries({ queryKey: ['projects-visible'] }),
+        queryClient.invalidateQueries({ queryKey: ['projects-archived'] }),
+        queryClient.invalidateQueries({ queryKey: ['project', projectSettingsModalProjectId] }),
+        queryClient.invalidateQueries({
+          queryKey: ['project-setup', projectSettingsModalProjectId],
+        }),
+      ]);
+      closeProjectSettingsModal();
+    } catch {
+      // Errors already handled by individual mutation onError callbacks
+    }
   };
 
   const handleSync = () => {
@@ -301,7 +414,8 @@ export function ProjectSettingsModal() {
   const hasSavedUrl = !!project?.githubProjectUrl;
   const canSync =
     hasSavedUrl && inputMatchesSaved && !syncMutation.isPending && !saveMutation.isPending;
-  const modalBusy = saveMutation.isPending || contextGenerating;
+  const modalBusy = saveMutation.isPending || setupSaveMutation.isPending || contextGenerating;
+  const pathExists = project?.pathExists !== false;
   const contextCliUnavailableReason =
     contextGeneratorCli === 'claude'
       ? !integrationStatus?.system.claude.available
@@ -346,9 +460,11 @@ export function ProjectSettingsModal() {
     }
     if (e.metaKey && e.key === 'Enter' && !contextGenerating) {
       e.preventDefault();
-      handleSave();
+      void handleSave();
     }
   };
+
+  const displayError = submitError ?? setupSaveError;
 
   return (
     <Modal
@@ -357,7 +473,7 @@ export function ProjectSettingsModal() {
         if (!modalBusy) closeProjectSettingsModal();
       }}
       title="Project Settings"
-      className="max-w-[720px]"
+      className="max-w-[800px]"
       onKeyDown={handleKeyDown}
     >
       {!project || !settings || !projectDraft ? (
@@ -367,7 +483,10 @@ export function ProjectSettingsModal() {
           <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as ProjectTab)}>
             <TabsList className="mb-4">
               <TabsTrigger value="general">General</TabsTrigger>
+              <TabsTrigger value="setup">Setup</TabsTrigger>
               <TabsTrigger value="models">Models</TabsTrigger>
+              <TabsTrigger value="notifications">Notifications</TabsTrigger>
+              <TabsTrigger value="github">GitHub</TabsTrigger>
               <TabsTrigger value="context">Context</TabsTrigger>
             </TabsList>
 
@@ -393,11 +512,54 @@ export function ProjectSettingsModal() {
                 hasSavedUrl={hasSavedUrl}
                 inputMatchesSaved={inputMatchesSaved}
                 onSync={handleSync}
-                setupInspection={projectSetup?.inspection ?? null}
+              />
+            </TabsContent>
+
+            <TabsContent value="setup" className="space-y-4">
+              <ProjectSettingsSetupTab
+                setupCommandsText={setupCommandsText}
+                setSetupCommandsText={setSetupCommandsText}
+                verifyCommandsText={verifyCommandsText}
+                setVerifyCommandsText={setVerifyCommandsText}
+                testingContext={testingContext}
+                setTestingContext={setTestingContext}
+                setupBeforeVerify={setupBeforeVerify}
+                setSetupBeforeVerify={setSetupBeforeVerify}
+                envFiles={envFiles}
+                addEnvFile={addEnvFile}
+                updateEnvFile={updateEnvFile}
+                removeEnvFile={removeEnvFile}
+                detectedProfiles={detectedProfiles}
+                inspection={setupInspection}
+                projectPath={project.path}
+                pathExists={pathExists}
+                submitError={setupSaveError}
+                onRedetect={() => {
+                  void refetchSetup();
+                }}
+                detectPending={false}
+              />
+            </TabsContent>
+
+            <TabsContent value="models" className="space-y-3">
+              <ProjectSettingsModelsTab
+                settings={settings}
+                projectDraft={projectDraft}
+                overrides={overrides}
+                setOverrides={setOverrides}
+                integrationStatus={integrationStatus}
+                modelValidation={modelValidation}
+                setModelValidation={setModelValidation}
+              />
+            </TabsContent>
+
+            <TabsContent value="notifications" className="space-y-4">
+              <ProjectSettingsNotificationsTab
                 discordRouting={overrides.discordRouting}
                 discordWebhookUrlOverride={overrides.discordWebhookUrlOverride ?? ''}
                 telegramRouting={overrides.telegramRouting}
                 telegramChatIdOverride={overrides.telegramChatIdOverride ?? ''}
+                notifyGithubUser={notifyGithubUser}
                 onDiscordRoutingChange={(value) =>
                   setOverrides((current) => ({ ...current, discordRouting: value }))
                 }
@@ -416,24 +578,15 @@ export function ProjectSettingsModal() {
                     telegramChatIdOverride: value || null,
                   }))
                 }
-                notifyGithubUser={notifyGithubUser}
                 onNotifyGithubUserChange={setNotifyGithubUser}
-                onConfigureSetup={() => {
-                  closeProjectSettingsModal();
-                  openProjectSetupModal(project.id);
-                }}
               />
             </TabsContent>
 
-            <TabsContent value="models" className="space-y-3">
-              <ProjectSettingsModelsTab
-                settings={settings}
-                projectDraft={projectDraft}
-                overrides={overrides}
-                setOverrides={setOverrides}
-                integrationStatus={integrationStatus}
-                modelValidation={modelValidation}
-                setModelValidation={setModelValidation}
+            <TabsContent value="github" className="space-y-4">
+              <ProjectSettingsGitHubTab
+                pathExists={pathExists}
+                projectId={projectSettingsModalProjectId ?? ''}
+                isActive={activeTab === 'github'}
               />
             </TabsContent>
 
@@ -453,9 +606,9 @@ export function ProjectSettingsModal() {
             </TabsContent>
           </Tabs>
 
-          {submitError && (
+          {displayError && (
             <div className="rounded-md border border-danger/30 bg-danger/10 px-2.5 py-2 text-xs text-danger">
-              <span className="line-clamp-1">{submitError}</span>
+              <span className="line-clamp-1">{displayError}</span>
             </div>
           )}
         </div>
@@ -465,8 +618,13 @@ export function ProjectSettingsModal() {
         <Button variant="secondary" onClick={closeProjectSettingsModal} disabled={modalBusy}>
           Cancel
         </Button>
-        <Button onClick={handleSave} disabled={modalBusy || (touched && !validation.ok)}>
-          <span>{saveMutation.isPending ? 'Saving…' : 'Save'}</span>
+        <Button
+          onClick={() => {
+            void handleSave();
+          }}
+          disabled={modalBusy || (touched && !validation.ok)}
+        >
+          <span>{saveMutation.isPending || setupSaveMutation.isPending ? 'Saving…' : 'Save'}</span>
           <Keycap>⌘↩</Keycap>
         </Button>
       </ModalFooter>

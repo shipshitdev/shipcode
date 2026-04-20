@@ -61,7 +61,7 @@ describe('misc leaf components', () => {
 
     expect(screen.getByText('No issue selected for this project')).toBeInTheDocument();
     expect(
-      screen.getByText(/Terminal output will appear when you select or start an issue/i),
+      screen.getByText(/Console output will appear when you select or start an issue/i),
     ).toBeInTheDocument();
   });
 

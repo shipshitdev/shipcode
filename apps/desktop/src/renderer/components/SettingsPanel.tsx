@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 import { ArchivedSettingsSection } from './settings-panel/ArchivedSettingsSection';
+import { DeveloperSettingsSection } from './settings-panel/DeveloperSettingsSection';
 import { GeneralSettingsSection } from './settings-panel/GeneralSettingsSection';
 import { GithubSettingsSection } from './settings-panel/GithubSettingsSection';
 import { IntegrationsSettingsSection } from './settings-panel/IntegrationsSettingsSection';
@@ -143,6 +144,9 @@ export function SettingsPanel() {
             onUnarchiveProject={(projectId) => unarchiveProject.mutate(projectId)}
             onUnarchiveIssue={(issueId) => unarchiveIssue.mutate(issueId)}
           />
+        )}
+        {settingsSection === 'developer' && (
+          <DeveloperSettingsSection settings={settings} onUpdate={update} />
         )}
       </div>
     </div>

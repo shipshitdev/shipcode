@@ -28,7 +28,7 @@ export type ViewMode =
   | 'inbox'
   | 'costs'
   | 'skills'
-  | 'instant';
+  | 'terminal';
 export type SettingsSection =
   | 'general'
   | 'integrations'
@@ -36,7 +36,8 @@ export type SettingsSection =
   | 'notifications'
   | 'pipeline'
   | 'shortcuts'
-  | 'archived';
+  | 'archived'
+  | 'developer';
 
 interface AppState {
   // Selection
@@ -96,11 +97,11 @@ interface AppState {
   editingPrd: { issueNumber: number; body: string; labels: string[] } | null;
   projectSettingsModalOpen: boolean;
   projectSettingsModalProjectId: string | null;
-  projectSetupModalOpen: boolean;
-  projectSetupModalProjectId: string | null;
+  projectSettingsModalInitialTab: string | null;
 
   // Instant fix
   instantFixModalOpen: boolean;
+  instantFixModalDefaultCli: 'claude' | 'codex' | null;
   instantPaneThreadIds: string[];
   instantSplitDirection: 'horizontal' | 'vertical';
 
@@ -151,19 +152,17 @@ interface AppState {
   openCreateIssueModal: () => void;
   openEditPrdModal: (issueNumber: number, body: string, labels: string[]) => void;
   closeCreateIssueModal: () => void;
-  openProjectSettingsModal: (projectId: string) => void;
+  openProjectSettingsModal: (projectId: string, initialTab?: string) => void;
   closeProjectSettingsModal: () => void;
-  openProjectSetupModal: (projectId: string) => void;
-  closeProjectSetupModal: () => void;
 
   // Cross-project navigation
   navigateToIssue: (projectId: string, issue: GitHubIssueCacheRecord) => void;
   openCommandPalette: () => void;
 
   // Instant fix actions
-  openInstantFixModal: () => void;
+  openInstantFixModal: (defaultCli?: 'claude' | 'codex') => void;
   closeInstantFixModal: () => void;
-  openInstant: () => void;
+  openTerminalSessions: () => void;
   addInstantPane: (threadId: string) => void;
   removeInstantPane: (threadId: string) => void;
   setInstantSplitDirection: (dir: 'horizontal' | 'vertical') => void;
@@ -200,9 +199,9 @@ export const useAppStore = create<AppState>((set) => ({
   editingPrd: null,
   projectSettingsModalOpen: false,
   projectSettingsModalProjectId: null,
-  projectSetupModalOpen: false,
-  projectSetupModalProjectId: null,
+  projectSettingsModalInitialTab: null,
   instantFixModalOpen: false,
+  instantFixModalDefaultCli: null,
   instantPaneThreadIds: [],
   instantSplitDirection: 'horizontal',
   currentModels: {},
@@ -422,23 +421,19 @@ export const useAppStore = create<AppState>((set) => ({
       commandPaletteOpen: false,
     }),
   closeCreateIssueModal: () => set({ createIssueModalOpen: false, editingPrd: null }),
-  openProjectSettingsModal: (projectId) =>
+  openProjectSettingsModal: (projectId, initialTab) =>
     set({
       projectSettingsModalOpen: true,
       projectSettingsModalProjectId: projectId,
+      projectSettingsModalInitialTab: initialTab ?? null,
       commandPaletteOpen: false,
     }),
   closeProjectSettingsModal: () =>
-    set({ projectSettingsModalOpen: false, projectSettingsModalProjectId: null }),
-  openProjectSetupModal: (projectId) =>
     set({
-      projectSetupModalOpen: true,
-      projectSetupModalProjectId: projectId,
-      commandPaletteOpen: false,
+      projectSettingsModalOpen: false,
+      projectSettingsModalProjectId: null,
+      projectSettingsModalInitialTab: null,
     }),
-  closeProjectSetupModal: () =>
-    set({ projectSetupModalOpen: false, projectSetupModalProjectId: null }),
-
   // Cross-project navigation
   navigateToIssue: (projectId, issue) =>
     set((s) => ({
@@ -460,11 +455,16 @@ export const useAppStore = create<AppState>((set) => ({
   openCommandPalette: () => set({ commandPaletteOpen: true }),
 
   // Instant fix
-  openInstantFixModal: () => set({ instantFixModalOpen: true, commandPaletteOpen: false }),
-  closeInstantFixModal: () => set({ instantFixModalOpen: false }),
-  openInstant: () =>
+  openInstantFixModal: (defaultCli) =>
     set({
-      viewMode: 'instant',
+      instantFixModalOpen: true,
+      instantFixModalDefaultCli: defaultCli ?? null,
+      commandPaletteOpen: false,
+    }),
+  closeInstantFixModal: () => set({ instantFixModalOpen: false, instantFixModalDefaultCli: null }),
+  openTerminalSessions: () =>
+    set({
+      viewMode: 'terminal',
       activeIssue: null,
       issueDetailExpanded: false,
       terminalMaximized: false,

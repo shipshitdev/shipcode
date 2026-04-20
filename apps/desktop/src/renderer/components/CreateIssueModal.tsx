@@ -405,6 +405,50 @@ export function CreateIssueModal() {
         onDragLeave={mode === 'create' ? handleDragLeave : undefined}
         onDrop={mode === 'create' ? handleDrop : undefined}
       >
+        {/* Notifications — above textarea */}
+        {mode === 'edit' && !editBodyValid && body.length > 0 && (
+          <div className="flex items-center gap-2 rounded-md border border-warning/30 bg-warning/10 px-2.5 py-2 text-xs text-warning">
+            <span className="min-w-0 flex-1">
+              Missing required sections: {missingSections.join(', ')}
+            </span>
+            <Button
+              variant="ghost"
+              size="xs"
+              className="shrink-0 text-warning hover:text-warning hover:bg-warning/20"
+              onClick={handleEnhance}
+              disabled={enhancing || submitting || bodyIsEmpty || hasAttachments}
+            >
+              {enhancing ? 'Formatting…' : 'Format'}
+            </Button>
+          </div>
+        )}
+
+        {clampedError && (
+          <div className="flex items-center gap-2 rounded-md border border-danger/30 bg-danger/10 px-2.5 py-2 text-xs text-danger">
+            <span className="min-w-0 flex-1">
+              <span className="line-clamp-1">{clampedError}</span>
+              <span className="ml-2 text-muted">(full trace in devtools console)</span>
+            </span>
+            <Button
+              variant="ghost"
+              size="xs"
+              className="shrink-0 text-danger hover:text-danger hover:bg-danger/20"
+              onClick={handleEnhance}
+              disabled={enhancing || submitting || bodyIsEmpty || hasAttachments}
+            >
+              Retry
+            </Button>
+          </div>
+        )}
+
+        {attachmentErrors.length > 0 && (
+          <div className="rounded-md border border-warning/30 bg-warning/10 px-2.5 py-2 text-xs text-warning">
+            {attachmentErrors.map((e) => (
+              <div key={e}>{e}</div>
+            ))}
+          </div>
+        )}
+
         <Textarea
           ref={bodyRef}
           id="issue-body"
@@ -473,17 +517,8 @@ export function CreateIssueModal() {
                 : "Let AI structure your idea into a full PRD using this repo's writing-prds skill"
             }
           >
-            {enhancing ? 'Rewriting…' : 'Rewrite with AI'}
+            {enhancing ? 'Formatting…' : 'Format'}
           </Button>
-        )}
-
-        {/* Attachment errors */}
-        {attachmentErrors.length > 0 && (
-          <div className="rounded-md border border-warning/30 bg-warning/10 px-2.5 py-2 text-xs text-warning">
-            {attachmentErrors.map((e) => (
-              <div key={e}>{e}</div>
-            ))}
-          </div>
         )}
 
         {/* Staged attachments list */}
@@ -512,19 +547,6 @@ export function CreateIssueModal() {
                 </button>
               </div>
             ))}
-          </div>
-        )}
-
-        {mode === 'edit' && !editBodyValid && body.length > 0 && (
-          <div className="max-h-20 overflow-y-auto rounded-md border border-warning/30 bg-warning/10 px-2.5 py-2 text-xs text-warning">
-            Missing required sections: {missingSections.join(', ')}
-          </div>
-        )}
-
-        {clampedError && (
-          <div className="max-h-12 overflow-hidden rounded-md border border-danger/30 bg-danger/10 px-2.5 py-2 text-xs text-danger">
-            <span className="line-clamp-1">{clampedError}</span>
-            <span className="ml-2 text-muted">(full trace in devtools console)</span>
           </div>
         )}
       </section>

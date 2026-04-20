@@ -9,6 +9,7 @@ import {
   Keyboard,
   Settings,
   Workflow,
+  Wrench,
 } from '@shipcode/ui';
 import type { ReactNode } from 'react';
 import type { SettingsSection } from '../stores/app-store';
@@ -49,6 +50,11 @@ const SECTIONS: { key: SettingsSection; label: string; icon: ReactNode }[] = [
     key: 'archived',
     label: 'Archived',
     icon: <Archive size={14} />,
+  },
+  {
+    key: 'developer',
+    label: 'Developer',
+    icon: <Wrench size={14} />,
   },
 ];
 

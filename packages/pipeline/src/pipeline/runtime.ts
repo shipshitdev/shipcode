@@ -355,7 +355,12 @@ export function createPipelineRuntime(
     phase: Parameters<typeof deps.threads.updateStatus>[1],
     error?: string,
   ) {
-    if (error !== undefined) {
+    if (phase === 'failed') {
+      // Read BEFORE writing — the current status IS the active phase that failed
+      const current = deps.threads.getById(threadId);
+      const activePhase = current?.status ?? 'unknown';
+      deps.threads.recordFailure(threadId, activePhase, error);
+    } else if (error !== undefined) {
       deps.threads.updateStatus(threadId, phase, error);
     } else {
       deps.threads.updateStatus(threadId, phase);

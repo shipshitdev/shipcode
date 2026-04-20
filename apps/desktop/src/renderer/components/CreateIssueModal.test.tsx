@@ -68,6 +68,8 @@ describe('CreateIssueModal — image drop / attachment management', () => {
         return { issue: { issueNumber: 1, id: 'i1' }, projectAttachWarning: null };
       }
       if (channel === 'github:start-issue') return undefined;
+      if (channel === 'project:list-visible')
+        return [{ id: 'project-1', name: 'Test Project', path: '/tmp/repo' }];
       return null;
     });
 
@@ -95,12 +97,12 @@ describe('CreateIssueModal — image drop / attachment management', () => {
     } as never);
   });
 
-  it('renders the image drop zone in create mode', () => {
+  it('renders the drop zone section in create mode', () => {
     renderWithProviders();
-    expect(screen.getByRole('button', { name: /image drop zone/i })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: /issue content/i })).toBeInTheDocument();
   });
 
-  it('does not render the image drop zone in edit mode', () => {
+  it('renders the drop zone section in edit mode without drag handlers', () => {
     useAppStore.setState({
       editingPrd: {
         issueNumber: 42,
@@ -110,13 +112,14 @@ describe('CreateIssueModal — image drop / attachment management', () => {
     } as never);
 
     renderWithProviders();
-    expect(screen.queryByRole('button', { name: /image drop zone/i })).not.toBeInTheDocument();
+    // Section exists but drag-and-drop is disabled in edit mode
+    expect(screen.getByRole('region', { name: /issue content/i })).toBeInTheDocument();
   });
 
   it('stages files on drop and shows attachment in list', async () => {
     renderWithProviders();
 
-    const dropZone = screen.getByRole('button', { name: /image drop zone/i });
+    const dropZone = screen.getByRole('region', { name: /issue content/i });
 
     const file = new File(['dummy'], 'test.png', { type: 'image/png' });
     Object.defineProperty(file, 'path', { value: '/tmp/test.png', writable: false });
@@ -147,7 +150,7 @@ describe('CreateIssueModal — image drop / attachment management', () => {
   it('removes an attachment when the remove button is clicked', async () => {
     renderWithProviders();
 
-    const dropZone = screen.getByRole('button', { name: /image drop zone/i });
+    const dropZone = screen.getByRole('region', { name: /issue content/i });
     const file = new File(['dummy'], 'test.png', { type: 'image/png' });
     Object.defineProperty(file, 'path', { value: '/tmp/test.png', writable: false });
 
@@ -175,7 +178,7 @@ describe('CreateIssueModal — image drop / attachment management', () => {
     renderWithProviders();
 
     // Stage an attachment to create a session
-    const dropZone = screen.getByRole('button', { name: /image drop zone/i });
+    const dropZone = screen.getByRole('region', { name: /issue content/i });
     const file = new File(['dummy'], 'test.png', { type: 'image/png' });
     Object.defineProperty(file, 'path', { value: '/tmp/test.png', writable: false });
 
@@ -197,18 +200,19 @@ describe('CreateIssueModal — image drop / attachment management', () => {
     });
   });
 
-  it('disables Write PRD button when attachments are present', async () => {
+  it('disables Format button when attachments are present', async () => {
     renderWithProviders();
 
-    // Initially Write PRD is enabled (once body is non-empty)
+    // Initially Format is enabled (once body is non-empty)
     const textarea = screen.getByRole('textbox');
     fireEvent.change(textarea, { target: { value: 'Some idea here' } });
 
-    const writePrdBtn = screen.getByRole('button', { name: /write prd/i });
-    expect(writePrdBtn).not.toBeDisabled();
+    // Wait for project query to resolve so Format button renders
+    const formatBtn = await screen.findByRole('button', { name: /^format$/i });
+    expect(formatBtn).not.toBeDisabled();
 
     // Drop an image
-    const dropZone = screen.getByRole('button', { name: /image drop zone/i });
+    const dropZone = screen.getByRole('region', { name: /issue content/i });
     const file = new File(['dummy'], 'test.png', { type: 'image/png' });
     Object.defineProperty(file, 'path', { value: '/tmp/test.png', writable: false });
     fireEvent.drop(dropZone, {
@@ -219,6 +223,6 @@ describe('CreateIssueModal — image drop / attachment management', () => {
       expect(screen.getByText('test.png')).toBeInTheDocument();
     });
 
-    expect(writePrdBtn).toBeDisabled();
+    expect(formatBtn).toBeDisabled();
   });
 });

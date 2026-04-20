@@ -75,8 +75,8 @@ export const SHORTCUTS: ShortcutDef[] = [
   },
   {
     id: 'instant-fix',
-    label: 'Instant Fix',
-    description: 'Open the instant fix modal for a quick CLI run',
+    label: 'New Terminal Session',
+    description: 'Open a new terminal session with Claude or Codex',
     category: 'Navigation',
     glyph: '⇧⌘I',
     combo: { meta: true, shift: true, key: 'i' },

@@ -105,6 +105,22 @@ describe('GitHubIssueQueries', () => {
     expect(updated.pipelineStatus).toBe('queued');
   });
 
+  it('getNextQueued() skips issues whose project is archived', () => {
+    const projects = new ProjectQueries(db);
+    const archivedProject = projects.add('/tmp/archived-proj');
+    const issue = issues.upsert(makeIssue({ projectId: archivedProject.id, issueNumber: 99 }));
+    issues.updatePipelineStatus(issue.id, 'queued');
+
+    // Archive the project directly via SQL to bypass idle guard
+    db.prepare('UPDATE projects SET archived = 1 WHERE id = ?').run(archivedProject.id);
+
+    expect(issues.getNextQueued()).toBeNull();
+
+    // Unarchive: should now be visible
+    db.prepare('UPDATE projects SET archived = 0 WHERE id = ?').run(archivedProject.id);
+    expect(issues.getNextQueued()?.issueNumber).toBe(99);
+  });
+
   it('updatePipelineStatus() changes the status', () => {
     const record = issues.upsert(makeIssue());
     issues.updatePipelineStatus(record.id, 'planning');

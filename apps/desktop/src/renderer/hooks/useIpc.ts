@@ -26,6 +26,8 @@ export function useIpc() {
   } = useAppStore();
 
   useEffect(() => {
+    if (!window.shipcode?.on) return;
+
     const unsubscribers: (() => void)[] = [];
     const pendingTerminalEvents = new Map<string, TerminalEventRecord[]>();
     const lastActivityAt = new Map<string, number>();

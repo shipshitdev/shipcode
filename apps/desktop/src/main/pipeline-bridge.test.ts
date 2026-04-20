@@ -48,6 +48,8 @@ function makeThread(overrides: Record<string, unknown> = {}) {
     githubPrNumber: null,
     githubRepo: null,
     lastError: null,
+    failurePhase: null,
+    failureCount: 0,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     plannerResolvedModel: null,

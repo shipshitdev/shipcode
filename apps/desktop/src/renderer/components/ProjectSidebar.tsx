@@ -41,7 +41,6 @@ import {
   Terminal,
   Trash2,
   Wrench,
-  Zap,
 } from '@shipcode/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ComponentType } from 'react';
@@ -92,9 +91,8 @@ export function ProjectSidebar() {
     openInbox,
     openCosts,
     openSkills,
-    openInstant,
+    openTerminalSessions,
     openProjectSettingsModal,
-    openProjectSetupModal,
     sidebarCollapsed,
     openCreateIssueModal,
     openCommandPalette,
@@ -158,7 +156,7 @@ export function ProjectSidebar() {
       if (project) {
         invalidateProjects();
         selectProject(project.id);
-        openProjectSetupModal(project.id);
+        openProjectSettingsModal(project.id, 'setup');
         window.shipcode
           .invoke('github:refresh-issues', { projectId: project.id, force: true })
           .catch(() => {});
@@ -410,17 +408,17 @@ export function ProjectSidebar() {
           <span className="flex-1 truncate">Costs</span>
         </Button>
 
-        {/* Instant */}
+        {/* Terminal Sessions */}
         <Button
           variant="ghost"
           className={cn(
             'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
-            !settingsVisible && viewMode === 'instant' && 'bg-tertiary text-primary font-medium',
+            !settingsVisible && viewMode === 'terminal' && 'bg-tertiary text-primary font-medium',
           )}
-          onClick={() => openInstant()}
+          onClick={() => openTerminalSessions()}
         >
-          <Zap size={14} className="shrink-0 text-secondary" />
-          <span className="flex-1 truncate">Instant</span>
+          <Terminal size={14} className="shrink-0 text-secondary" />
+          <span className="flex-1 truncate">Terminal Sessions</span>
         </Button>
       </div>
 
@@ -634,7 +632,9 @@ export function ProjectSidebar() {
                         <DropdownMenuItem onSelect={() => openProjectSettingsModal(project.id)}>
                           <Settings size={12} /> Settings
                         </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => openProjectSetupModal(project.id)}>
+                        <DropdownMenuItem
+                          onSelect={() => openProjectSettingsModal(project.id, 'setup')}
+                        >
                           <Wrench size={12} /> Configure setup...
                         </DropdownMenuItem>
                         {project.pathExists === false && (

@@ -249,6 +249,15 @@ export function PlanHistoryTab({
           </div>
         )
       ) : null}
+
+      {!activeThreadId &&
+      !isPlanHistoryLoading &&
+      normalizedPlanHistory.length === 0 &&
+      normalizedThreadPlanHistory.length === 0 ? (
+        <div className="rounded-md border border-dashed border-border bg-secondary/10 px-4 py-8 text-center text-[12px] text-muted">
+          No plans generated yet. Start a pipeline to generate a plan.
+        </div>
+      ) : null}
     </>
   );
 }

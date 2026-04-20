@@ -17,7 +17,6 @@ import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
 import { ProjectMissingView } from './components/ProjectMissingView';
 import { ProjectPathBanner } from './components/ProjectPathBanner';
 import { ProjectSettingsModal } from './components/ProjectSettingsModal';
-import { ProjectSetupModal } from './components/ProjectSetupModal';
 import { ProjectSidebar } from './components/ProjectSidebar';
 import { SettingsPanel } from './components/SettingsPanel';
 import { SettingsSidebar } from './components/SettingsSidebar';
@@ -128,7 +127,7 @@ export function App() {
           if (newProjectId) {
             queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
             useAppStore.getState().selectProject(newProjectId);
-            useAppStore.getState().openProjectSetupModal(newProjectId);
+            useAppStore.getState().openProjectSettingsModal(newProjectId, 'setup');
             window.shipcode
               .invoke('github:refresh-issues', { projectId: newProjectId, force: true })
               .catch(() => {});
@@ -148,25 +147,69 @@ export function App() {
   }
 
   if (!settings) {
+    const isBridgeMissing = !window.shipcode?.invoke;
+
     return (
       <div
         className="flex h-screen w-screen items-center justify-center bg-primary"
         style={{ animation: 'fadeIn 0.2s ease-out' }}
       >
-        <style>{`@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }`}</style>
+        <style>{`@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+@keyframes spin { to { transform: rotate(360deg) } }`}</style>
         <div className="flex flex-col items-center gap-6">
-          <div
-            className="h-10 w-10 rounded-full"
-            style={{
-              border: '1.5px solid rgba(244,244,245,0.08)',
-              borderTopColor: 'rgba(244,244,245,0.6)',
-              animation: 'spin 0.9s linear infinite',
-            }}
-          />
-          <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-          <span className="text-xs font-medium tracking-[0.25em] text-muted uppercase">
-            ShipCode
-          </span>
+          {isBridgeMissing ? (
+            <>
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-500/10">
+                <svg
+                  aria-hidden="true"
+                  width="28"
+                  height="28"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-red-500"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+              </div>
+              <div className="flex flex-col items-center gap-2 text-center">
+                <h1 className="text-lg font-semibold text-red-400">Preload bridge failed</h1>
+                <p className="max-w-sm text-sm text-muted">
+                  The Electron preload script didn't load. Try rebuilding with{' '}
+                  <code className="rounded bg-red-500/10 px-1.5 py-0.5 text-xs text-red-300">
+                    bun run build:preload
+                  </code>{' '}
+                  then restart the app.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="inline-flex items-center justify-center rounded-md bg-red-600 px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-red-700"
+              >
+                Reload App
+              </button>
+            </>
+          ) : (
+            <>
+              <div
+                className="h-10 w-10 rounded-full"
+                style={{
+                  border: '1.5px solid rgba(244,244,245,0.08)',
+                  borderTopColor: 'rgba(244,244,245,0.6)',
+                  animation: 'spin 0.9s linear infinite',
+                }}
+              />
+              <span className="text-xs font-medium tracking-[0.25em] text-muted uppercase">
+                ShipCode
+              </span>
+            </>
+          )}
         </div>
       </div>
     );
@@ -216,7 +259,7 @@ export function App() {
                       <SkillsView />
                     ) : viewMode === 'inbox' ? (
                       <InboxView />
-                    ) : viewMode === 'instant' ? (
+                    ) : viewMode === 'terminal' ? (
                       <InstantView />
                     ) : showOverview ? (
                       <OverviewView />
@@ -262,7 +305,6 @@ export function App() {
       <InstantFixModal />
       <CreateIssueModal />
       <ProjectSettingsModal />
-      <ProjectSetupModal />
       <NotificationToaster />
     </div>
   );

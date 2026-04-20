@@ -1,6 +1,13 @@
 import type { ExecutorModel, PlanRecord, ResolvedPhaseModel } from '@shipcode/shared';
 
-export const ISSUE_DETAIL_TABS = ['prd', 'history', 'pipeline', 'activity'] as const;
+export const ISSUE_DETAIL_TABS = [
+  'prd',
+  'comments',
+  'history',
+  'pipeline',
+  'activity',
+  'costs',
+] as const;
 export type PhaseKey = ResolvedPhaseModel;
 export type IssueDetailTab = (typeof ISSUE_DETAIL_TABS)[number];
 

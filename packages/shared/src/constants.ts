@@ -88,6 +88,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   maxConcurrentPipelines: 3,
   maxConcurrentExecutions: 1,
   instantDefaultPanes: 1,
+  devLogLevel: 'debug',
 };
 
 export const CURRENT_ONBOARDING_VERSION = 1;

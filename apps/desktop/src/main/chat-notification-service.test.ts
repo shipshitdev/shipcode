@@ -62,6 +62,8 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     githubPrNumber: 99,
     githubRepo: 'shipshitdev/shipcode',
     lastError: null,
+    failurePhase: null,
+    failureCount: 0,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     plannerResolvedModel: null,

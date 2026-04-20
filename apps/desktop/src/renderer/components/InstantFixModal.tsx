@@ -17,7 +17,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 
 export function InstantFixModal() {
-  const { instantFixModalOpen, closeInstantFixModal, addInstantPane, openInstant } = useAppStore();
+  const {
+    instantFixModalOpen,
+    closeInstantFixModal,
+    addInstantPane,
+    openTerminalSessions,
+    instantFixModalDefaultCli,
+  } = useAppStore();
 
   const [prompt, setPrompt] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -47,13 +53,14 @@ export function InstantFixModal() {
       setError(null);
       setAttachments([]);
       sessionIdRef.current = null;
+      setCli(instantFixModalDefaultCli ?? 'claude');
       if (activeProjectId && projects.some((p) => p.id === activeProjectId)) {
         setSelectedProjectId(activeProjectId);
       } else if (projects.length > 0) {
         setSelectedProjectId(projects[0].id);
       }
     }
-  }, [instantFixModalOpen, activeProjectId, projects]);
+  }, [instantFixModalOpen, activeProjectId, projects, instantFixModalDefaultCli]);
 
   // Cleanup attachment session on close
   useEffect(() => {
@@ -137,17 +144,17 @@ export function InstantFixModal() {
       });
 
       addInstantPane(result.threadId);
-      openInstant();
+      openTerminalSessions();
       closeInstantFixModal();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsSubmitting(false);
     }
-  }, [prompt, selectedProjectId, cli, addInstantPane, openInstant, closeInstantFixModal]);
+  }, [prompt, selectedProjectId, cli, addInstantPane, openTerminalSessions, closeInstantFixModal]);
 
   return (
-    <Modal open={instantFixModalOpen} onClose={closeInstantFixModal} title="Instant Fix">
+    <Modal open={instantFixModalOpen} onClose={closeInstantFixModal} title="New Terminal Session">
       <div className="flex flex-col gap-4">
         {/* Prompt + drop zone */}
         <section

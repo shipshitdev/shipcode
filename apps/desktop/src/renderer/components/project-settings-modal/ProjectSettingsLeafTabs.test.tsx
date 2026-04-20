@@ -107,9 +107,6 @@ describe('project settings leaf tabs', () => {
     const setTouched = vi.fn();
     const onRelink = vi.fn();
     const onSync = vi.fn();
-    const onConfigureSetup = vi.fn();
-    const onDiscordWebhookChange = vi.fn();
-    const onTelegramChatIdChange = vi.fn();
 
     render(
       <ProjectSettingsGeneralTab
@@ -135,30 +132,12 @@ describe('project settings leaf tabs', () => {
         hasSavedUrl={true}
         inputMatchesSaved={true}
         onSync={onSync}
-        setupInspection={{
-          status: 'invalid',
-          path: '/tmp/shipcode/.shipcode/setup.json',
-          contract: null,
-          error: 'Malformed setup file',
-        }}
-        onConfigureSetup={onConfigureSetup}
-        discordRouting="custom"
-        discordWebhookUrlOverride="https://discord.com/api/webhooks/123"
-        telegramRouting="custom"
-        telegramChatIdOverride="-1001234567890"
-        onDiscordRoutingChange={vi.fn()}
-        onDiscordWebhookChange={onDiscordWebhookChange}
-        onTelegramRoutingChange={vi.fn()}
-        onTelegramChatIdChange={onTelegramChatIdChange}
-        notifyGithubUser=""
-        onNotifyGithubUserChange={vi.fn()}
       />,
     );
 
     expect(screen.getByText(/This path is missing\./)).toBeInTheDocument();
     expect(screen.getByText('Folder lookup failed')).toBeInTheDocument();
     expect(screen.getByText('Not a valid project URL')).toBeInTheDocument();
-    expect(screen.getByText('Malformed setup file')).toBeInTheDocument();
     expect(screen.getByText(/Attached 2, already present 1, failed 1/)).toBeInTheDocument();
     expect(screen.getByText(/Issue #19 failed/)).toBeInTheDocument();
     expect(screen.getByText('Sync partially failed')).toBeInTheDocument();
@@ -167,23 +146,13 @@ describe('project settings leaf tabs', () => {
       target: { value: 'https://github.com/orgs/shipshitdev/projects/2' },
     });
     fireEvent.blur(screen.getByLabelText('GitHub Projects board URL'));
-    fireEvent.change(screen.getByPlaceholderText('https://discord.com/api/webhooks/...'), {
-      target: { value: 'https://discord.com/api/webhooks/456' },
-    });
-    fireEvent.change(screen.getByPlaceholderText('-1001234567890'), {
-      target: { value: '-100999' },
-    });
 
     fireEvent.click(screen.getByRole('button', { name: 'Change folder...' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Configure setup...' }));
     fireEvent.click(screen.getByRole('button', { name: 'Sync existing issues to board' }));
 
     expect(setUrlInput).toHaveBeenCalledWith('https://github.com/orgs/shipshitdev/projects/2');
     expect(setTouched).toHaveBeenCalledWith(true);
-    expect(onDiscordWebhookChange).toHaveBeenCalledWith('https://discord.com/api/webhooks/456');
-    expect(onTelegramChatIdChange).toHaveBeenCalledWith('-100999');
     expect(onRelink).toHaveBeenCalledTimes(1);
-    expect(onConfigureSetup).toHaveBeenCalledTimes(1);
     expect(onSync).toHaveBeenCalledTimes(1);
   });
 });

@@ -223,6 +223,37 @@ export class CostsQueries {
     return this.listTaskRows(limit, offset, projectId).map((row) => this.mapTaskRow(row));
   }
 
+  listTasksForIssue(projectId: string, issueNumber: number): CostTaskSummary[] {
+    const rows = this.db
+      .prepare(
+        `SELECT
+           t.id as thread_id,
+           t.project_id,
+           t.title,
+           t.status as phase,
+           t.planner_model,
+           t.reviewer_model,
+           t.executor_model,
+           t.verifier_model,
+           t.planner_resolved_model,
+           t.reviewer_resolved_model,
+           t.revisor_resolved_model,
+           t.executor_resolved_model,
+           t.verifier_resolved_model,
+           t.total_cost_usd as cost_usd,
+           t.total_tokens_prompt as tokens_prompt,
+           t.total_tokens_completion as tokens_completion,
+           t.updated_at,
+           p.name as project_name
+         FROM threads t
+         INNER JOIN projects p ON p.id = t.project_id
+         WHERE t.project_id = ? AND t.github_issue_number = ? AND t.status != 'idle'
+         ORDER BY t.updated_at DESC`,
+      )
+      .all(projectId, issueNumber) as TaskCostRow[];
+    return rows.map((row) => this.mapTaskRow(row));
+  }
+
   countTasks(projectId?: string | null): number {
     const where = [`status != 'idle'`];
     const args: Array<string> = [];

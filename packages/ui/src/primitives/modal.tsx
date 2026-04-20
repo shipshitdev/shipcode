@@ -1,6 +1,14 @@
+import { X } from 'lucide-react';
 import type * as React from 'react';
 import { cn } from '../lib/utils';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from './dialog';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from './dialog';
 
 export { DialogFooter as ModalFooter };
 
@@ -36,14 +44,12 @@ export function Modal({
       }}
     >
       <DialogContent className={className} onKeyDown={onKeyDown}>
-        <DialogHeader
-          className={cn(
-            headerAction && 'flex-row items-center justify-between mb-0',
-            headerClassName,
-          )}
-        >
+        <DialogHeader className={cn('flex-row items-center justify-between mb-0', headerClassName)}>
           <DialogTitle>{title}</DialogTitle>
           {headerAction}
+          <DialogClose className="rounded-md p-1 text-muted transition-colors hover:text-primary hover:bg-hover">
+            <X size={16} />
+          </DialogClose>
         </DialogHeader>
         {children}
       </DialogContent>

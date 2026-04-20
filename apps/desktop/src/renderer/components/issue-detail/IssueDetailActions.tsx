@@ -67,7 +67,10 @@ export function IssueDetailActions({
   onShowRawOutputChange,
   onStartPipeline,
 }: IssueDetailActionsProps) {
-  const failurePresentation = getFailurePresentation(thread?.lastError ?? failingPhaseOutput);
+  const failurePresentation = getFailurePresentation(
+    thread?.lastError ?? failingPhaseOutput,
+    thread,
+  );
   const pipelineStartCard = canStartPipeline ? (
     <div className="rounded-lg border border-border bg-tertiary p-4 shadow-[0_1px_0_0_rgba(0,0,0,0.3)]">
       <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
@@ -199,7 +202,7 @@ export function IssueDetailActions({
           variant="outline"
           onClick={onMarkAsDone}
           disabled={isSubmitting}
-          className="flex-1 border-border text-muted hover:bg-secondary hover:text-primary"
+          className="flex-1 border-purple-500/40 text-purple-400 hover:border-purple-500 hover:bg-purple-500/10"
         >
           Mark As Done
         </Button>

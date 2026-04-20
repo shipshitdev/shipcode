@@ -99,7 +99,7 @@ describe('enhancePrdDraft', () => {
         '--output-format',
         'json',
         '--max-turns',
-        '1',
+        '3',
         '--dangerously-skip-permissions',
         '--disallowedTools',
         'Edit,Write,Bash,NotebookEdit',

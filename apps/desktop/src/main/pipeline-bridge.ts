@@ -299,8 +299,12 @@ export function createElectronEmitter(
       }
 
       // 1. Forward to renderer (always — preserves existing behaviour).
-      if (!mainWindow.isDestroyed()) {
-        mainWindow.webContents.send(event.type, event);
+      if (!mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+        try {
+          mainWindow.webContents.send(event.type, event);
+        } catch {
+          /* render frame disposed during HMR */
+        }
       }
 
       // Resolve thread once per event for shared logging/notifications.

@@ -239,18 +239,34 @@ export function safeErrorMessage(raw: string): string {
   return 'Pipeline failed in the target project/worktree. See terminal output for details.';
 }
 
-export function getFailurePresentation(raw: string | null | undefined): {
+const PHASE_LABELS: Record<string, string> = {
+  planning: 'Planning failed',
+  reviewing: 'Review failed',
+  revising: 'Revision failed',
+  executing: 'Execution failed',
+  testing: 'Test run failed',
+  verifying: 'Verification failed',
+  shipping: 'Shipping failed',
+};
+
+export function getFailurePresentation(
+  raw: string | null | undefined,
+  thread?: { failurePhase?: string | null; failureCount?: number } | null,
+): {
   label: string;
   detail: string | null;
 } {
   const text = raw?.trim() ?? '';
+  const failureCount = thread?.failureCount ?? 0;
+  const countSuffix = failureCount > 1 ? ` (attempt ${failureCount})` : '';
+
   if (
     /verification commands failed|verification command error|verification preflight failed|command failed \(\d+\):/i.test(
       text,
     )
   ) {
     return {
-      label: 'Target project verification failed',
+      label: `Target project verification failed${countSuffix}`,
       detail:
         'The failing command ran inside the issue worktree, not inside the ShipCode desktop app.',
     };
@@ -258,14 +274,15 @@ export function getFailurePresentation(raw: string | null | undefined): {
 
   if (/execution failed|execution error|setup failed|worktree creation failed/i.test(text)) {
     return {
-      label: 'Worktree execution failed',
+      label: `Worktree execution failed${countSuffix}`,
       detail:
         'This error came from the target project/worktree or the executor run, not from Electron itself.',
     };
   }
 
+  const phaseLabel = thread?.failurePhase ? PHASE_LABELS[thread.failurePhase] : null;
   return {
-    label: 'Pipeline error',
+    label: (phaseLabel ?? 'Pipeline error') + countSuffix,
     detail: null,
   };
 }

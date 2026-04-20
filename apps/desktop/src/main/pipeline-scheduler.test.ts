@@ -134,6 +134,7 @@ describe('PipelineScheduler', () => {
         updateIssueContent: vi.fn(),
         setGithubIssue: vi.fn(),
         setPhaseModels: vi.fn(),
+        resetFailureTracking: vi.fn(),
       },
       githubIssues: {
         getByNumber: vi.fn(() => makeIssue() as ReturnType<typeof makeIssue> | null),

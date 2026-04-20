@@ -3,6 +3,7 @@ import type { Pipeline, PipelineEmitter } from '@shipcode/pipeline';
 import type { BrowserWindow, IpcMain } from 'electron';
 import type { ChatNotificationService } from './chat-notification-service';
 import { transitionThreadPhase } from './ipc/helpers';
+import { registerDeveloperHandlers } from './ipc/register-developer-handlers';
 import { registerGitHubHandlers } from './ipc/register-github-handlers';
 import { registerInstantHandlers } from './ipc/register-instant-handlers';
 import { registerPipelineHandlers } from './ipc/register-pipeline-handlers';
@@ -84,4 +85,5 @@ export function registerIpcHandlers(
   registerSkillsHandlers(deps);
   registerSupportHandlers(deps);
   registerInstantHandlers(deps);
+  registerDeveloperHandlers(deps);
 }

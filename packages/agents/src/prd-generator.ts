@@ -144,7 +144,7 @@ function runPrdCliWithStdin(
             '--output-format',
             'json',
             '--max-turns',
-            '1',
+            '3',
             ...(() => {
               const thinkingTokens = mapReasoningEffortToClaudeThinkingTokens(
                 reasoningEffort,

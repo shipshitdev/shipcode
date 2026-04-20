@@ -7,6 +7,7 @@ import {
   deriveGithubIssueUrl,
   parseGithubProjectUrl,
   resolveExecutorModelForIssue,
+  SHIPCODE_DEFAULT_LABELS,
 } from '@shipcode/shared';
 import log, { logEvent } from '../logger.service';
 import {
@@ -258,6 +259,26 @@ export function registerGitHubHandlers({
   );
 
   ipcMain.handle(
+    'github:reopen-issue',
+    async (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+
+      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
+      if (!issue) throw new Error(`Issue #${issueNumber} not found in project ${projectId}`);
+
+      const ghCli = new GhCli(project.path);
+      if (issue.state !== 'open') {
+        await ghCli.reopenIssue(issueNumber);
+      }
+
+      queries.githubIssues.markReopenedOnOpen(issue.id);
+      queries.githubIssues.clearArchivedAt(issue.id);
+      sendGithubIssuesUpdated(mainWindow, queries, projectId);
+    },
+  );
+
+  ipcMain.handle(
     'github:archive-all-done',
     async (_event, { projectId }: { projectId: string }) => {
       const project = queries.projects.getById(projectId);
@@ -437,6 +458,30 @@ export function registerGitHubHandlers({
   );
 
   ipcMain.handle(
+    'github:list-repo-labels',
+    async (_event, { projectId }: { projectId: string }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+      const ghCli = new GhCli(project.path);
+      return ghCli.listRepoLabelsWithMeta();
+    },
+  );
+
+  ipcMain.handle(
+    'github:ensure-shipcode-labels',
+    async (_event, { projectId }: { projectId: string }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+      const ghCli = new GhCli(project.path);
+      const result = await ghCli.ensureLabels(SHIPCODE_DEFAULT_LABELS);
+      log.info(
+        `[github:ensure-shipcode-labels] project=${projectId} created=${result.created.length} alreadyPresent=${result.alreadyPresent.length} failed=${result.failed.length}`,
+      );
+      return result;
+    },
+  );
+
+  ipcMain.handle(
     'github:start-issue',
     async (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
       const project = queries.projects.getById(projectId);
@@ -487,6 +532,7 @@ export function registerGitHubHandlers({
         ...phaseModels,
         executorModel: effectiveExecutorModel,
       });
+      queries.threads.resetFailureTracking(thread.id);
       queries.plans.supersedeAll(thread.id);
       queries.plans.supersedeAllForIssue(projectId, issueNumber, thread.id);
 
@@ -709,6 +755,16 @@ export function registerGitHubHandlers({
       if (!project) throw new Error(`Project ${projectId} not found`);
       const ghCli = new GhCli(project.path);
       await ghCli.addIssueComment(issueNumber, body);
+    },
+  );
+
+  ipcMain.handle(
+    'github:list-comments',
+    async (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+      const ghCli = new GhCli(project.path);
+      return ghCli.listIssueComments(issueNumber);
     },
   );
 

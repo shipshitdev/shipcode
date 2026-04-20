@@ -1,9 +1,21 @@
 import type { GitHubIssueCacheRecord } from '@shipcode/shared';
 import '@testing-library/jest-dom/vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '../stores/app-store';
 import { TerminalDrawer } from './TerminalDrawer';
+
+function renderWithProviders() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <TerminalDrawer />
+    </QueryClientProvider>,
+  );
+}
 
 const fitSpy = vi.fn();
 
@@ -86,7 +98,10 @@ describe('TerminalDrawer', () => {
       value: MockResizeObserver,
     });
     (window as typeof window & { shipcode: typeof window.shipcode }).shipcode = {
-      invoke: vi.fn(async () => null) as unknown as typeof window.shipcode.invoke,
+      invoke: vi.fn(async (channel: string) => {
+        if (channel === 'integrations:check') return Promise.resolve(undefined);
+        return null;
+      }) as unknown as typeof window.shipcode.invoke,
       on: vi.fn(() => () => {}) as unknown as typeof window.shipcode.on,
     };
 
@@ -133,12 +148,12 @@ describe('TerminalDrawer', () => {
       currentModels: { 'thread-1': 'gpt-5.4' },
     });
 
-    render(<TerminalDrawer />);
+    renderWithProviders();
 
     expect(screen.getByText('No issue selected for this project')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Terminal output will appear when you select or start an issue in this project.',
+        'Console output will appear when you select or start an issue in this project.',
       ),
     ).toBeInTheDocument();
   });
@@ -160,7 +175,7 @@ describe('TerminalDrawer', () => {
       ],
     });
 
-    render(<TerminalDrawer />);
+    renderWithProviders();
 
     expect(screen.getByText('Current project task')).toBeInTheDocument();
     expect(screen.queryByText('Foreign project task')).not.toBeInTheDocument();
@@ -188,7 +203,7 @@ describe('TerminalDrawer', () => {
       },
     });
 
-    render(<TerminalDrawer />);
+    renderWithProviders();
 
     expect(screen.getByText('Selected but not yet hydrated')).toBeInTheDocument();
     expect(screen.queryByText('No issue selected for this project')).not.toBeInTheDocument();
@@ -226,7 +241,7 @@ describe('TerminalDrawer', () => {
       canonicalTerminalStream: {},
     });
 
-    render(<TerminalDrawer />);
+    renderWithProviders();
 
     await waitFor(() => {
       expect(useAppStore.getState().canonicalTerminalStream['thread-1']).toHaveLength(1);
@@ -258,7 +273,7 @@ describe('TerminalDrawer', () => {
       ],
     });
 
-    render(<TerminalDrawer />);
+    renderWithProviders();
 
     fireEvent.pointerDown(screen.getByRole('button', { name: /Current project task/i }));
 
@@ -273,7 +288,7 @@ describe('TerminalDrawer', () => {
       githubIssues: [makeIssue()],
     });
 
-    render(<TerminalDrawer />);
+    renderWithProviders();
 
     expect(screen.getByLabelText('Resize terminal drawer')).toBeInTheDocument();
 

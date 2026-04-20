@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from '../test-helpers';
+import { GitHubIssueQueries } from './github-issues';
 import { ProjectQueries } from './projects';
 
 describe('ProjectQueries', () => {
@@ -230,6 +231,49 @@ describe('ProjectQueries', () => {
     const restored = projects.add('/tmp/old');
     expect(restored.id).toBe(p.id);
     expect(restored.archived).toBe(false);
+  });
+
+  it('add() resets queued issues to todo when restoring an archived project', () => {
+    const issues = new GitHubIssueQueries(db);
+    const p = projects.add('/tmp/restore-queue');
+    const issue = issues.upsert({
+      projectId: p.id,
+      issueNumber: 1,
+      title: 'Stale issue',
+      body: '',
+      labels: [],
+      assignee: null,
+      state: 'open',
+    });
+    issues.updatePipelineStatus(issue.id, 'queued');
+    expect(projects.archiveIfIdle(p.id)).toBe(true);
+
+    projects.add('/tmp/restore-queue');
+
+    const after = issues.getByNumber(p.id, 1);
+    expect(after?.pipelineStatus).toBe('todo');
+    expect(after?.lastPhaseUpdate).toBeNull();
+  });
+
+  it('unarchive() resets queued issues to todo', () => {
+    const issues = new GitHubIssueQueries(db);
+    const p = projects.add('/tmp/unarchive-queue');
+    const issue = issues.upsert({
+      projectId: p.id,
+      issueNumber: 1,
+      title: 'Stale issue',
+      body: '',
+      labels: [],
+      assignee: null,
+      state: 'open',
+    });
+    issues.updatePipelineStatus(issue.id, 'queued');
+    expect(projects.archiveIfIdle(p.id)).toBe(true);
+
+    projects.unarchive(p.id);
+
+    const after = issues.getByNumber(p.id, 1);
+    expect(after?.pipelineStatus).toBe('todo');
   });
 
   // === listVisible / listArchived ===

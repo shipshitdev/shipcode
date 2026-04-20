@@ -7,12 +7,15 @@ import type {
   ContextFileInfo,
   ContextGeneratorCli,
   CostSummary,
+  CostTaskSummary,
   DashboardOverview,
   DashboardStats,
+  DeveloperInfo,
   DiffRecord,
   FileChange,
   GhAuthStatus,
   GitHubIssueCacheRecord,
+  GitHubIssueComment,
   GitState,
   InstantFixScope,
   IntegrationStatus,
@@ -214,6 +217,18 @@ export interface IpcInvokeChannels {
       errors: string[];
     };
   };
+  'github:list-repo-labels': {
+    args: { projectId: string };
+    result: Array<{ name: string; color: string; description: string }>;
+  };
+  'github:ensure-shipcode-labels': {
+    args: { projectId: string };
+    result: {
+      created: string[];
+      alreadyPresent: string[];
+      failed: Array<{ name: string; error: string }>;
+    };
+  };
   'github:archive-issue': {
     args: { projectId: string; issueNumber: number };
     result: { archivedCount: number };
@@ -283,9 +298,21 @@ export interface IpcInvokeChannels {
     args: { projectId: string; issueNumber: number; body: string };
     result: undefined;
   };
+  'github:list-comments': {
+    args: { projectId: string; issueNumber: number };
+    result: GitHubIssueComment[];
+  };
   'github:rewrite-issue': {
     args: { projectId: string; issueNumber: number };
     result: GitHubIssueCacheRecord;
+  };
+  'github:close-issue': {
+    args: { projectId: string; issueNumber: number };
+    result: undefined;
+  };
+  'github:reopen-issue': {
+    args: { projectId: string; issueNumber: number };
+    result: undefined;
   };
 
   // Plans & Reviews (backfill)
@@ -360,6 +387,10 @@ export interface IpcInvokeChannels {
 
   // Cost tracking
   'costs:get-summary': { args: undefined; result: CostSummary };
+  'costs:list-for-issue': {
+    args: { projectId: string; issueNumber: number };
+    result: CostTaskSummary[];
+  };
 
   // Active pipelines listing (for Running Agents panel)
   'pipeline:list-active': { args: undefined; result: ActivePipelineSummary[] };
@@ -403,6 +434,12 @@ export interface IpcInvokeChannels {
   'instant:cancel': { args: { threadId: string }; result: undefined };
   'instant:list': { args: undefined; result: Thread[] };
   'instant:cleanup': { args: undefined; result: { deleted: number } };
+
+  // Developer diagnostics
+  'developer:get-info': { args: undefined; result: DeveloperInfo };
+  'developer:open-devtools': { args: undefined; result: undefined };
+  'developer:open-log-directory': { args: undefined; result: undefined };
+  'developer:set-log-level': { args: { level: AppSettings['devLogLevel'] }; result: undefined };
 }
 
 // === Streaming Channels (send/on) ===

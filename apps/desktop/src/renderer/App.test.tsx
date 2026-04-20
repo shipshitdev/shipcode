@@ -174,8 +174,7 @@ describe('App', () => {
       editingPrd: null,
       projectSettingsModalOpen: false,
       projectSettingsModalProjectId: null,
-      projectSetupModalOpen: false,
-      projectSetupModalProjectId: null,
+      projectSettingsModalInitialTab: null,
       currentModels: {},
       canonicalTerminalStream: {},
     });

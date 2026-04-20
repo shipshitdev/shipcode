@@ -16,7 +16,14 @@ export type { ContextGeneratorCli } from '@shipcode/shared';
 import { PROVIDER_DISPLAY } from '../model-provider-options';
 
 export const INHERIT_VALUE = '__inherit__';
-export const PROJECT_TABS = ['general', 'models', 'context'] as const;
+export const PROJECT_TABS = [
+  'general',
+  'setup',
+  'models',
+  'notifications',
+  'github',
+  'context',
+] as const;
 export const PHASES: readonly ResolvedPhaseModel[] = PHASE_DESCRIPTORS.map((phase) => phase.key);
 
 export type ProjectTab = (typeof PROJECT_TABS)[number];

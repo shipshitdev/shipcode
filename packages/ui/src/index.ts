@@ -13,6 +13,8 @@ export {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  CircleCheck,
+  CircleDot,
   Code2,
   Columns2,
   Copy,

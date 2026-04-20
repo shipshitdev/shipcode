@@ -125,6 +125,9 @@ export default defineConfig(async ({ command, mode }) => {
               },
               rollupOptions: {
                 external: NATIVE_EXTERNALS,
+                output: {
+                  format: 'cjs',
+                },
               },
               commonjsOptions: {
                 ignoreDynamicRequires: true,
@@ -147,6 +150,9 @@ export default defineConfig(async ({ command, mode }) => {
               },
               rollupOptions: {
                 external: NATIVE_EXTERNALS,
+                output: {
+                  format: 'cjs',
+                },
               },
             },
           },

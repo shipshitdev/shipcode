@@ -106,6 +106,7 @@ export function registerPipelineHandlers({
       reviewRound: thread.reviewRound,
     });
 
+    queries.threads.resetFailureTracking(threadId);
     queries.plans.supersedeAll(threadId);
     await pipeline.startPlanGeneration(threadId, thread.prompt, project.path, null);
   });
@@ -293,8 +294,38 @@ export function registerPipelineHandlers({
       return;
     }
 
-    // Capture raw output from the latest failed plan so the next attempt
-    // gets format-correction context instead of starting completely blind.
+    // Smart retry: walk backward through plan history before re-planning.
+    // 1. Check current thread for an earlier plan with structured content.
+    const fallbackPlan = queries.plans.getLatestStructured(threadId);
+    // 2. Cross-thread: check other threads for the same issue.
+    const borrowedPlan =
+      fallbackPlan ??
+      (thread.githubIssueNumber
+        ? queries.plans.getLatestStructuredForIssue(project.id, thread.githubIssueNumber)
+        : null);
+
+    if (borrowedPlan?.structured) {
+      // Clone the plan into the current thread with corrected threadId/version.
+      const nextVersion = queries.plans.getMaxVersion(threadId) + 1;
+      const clonedStructured = {
+        ...borrowedPlan.structured,
+        threadId,
+        version: nextVersion,
+      };
+      queries.plans.supersedeAll(threadId);
+      const clonedPlan = queries.plans.create(
+        threadId,
+        borrowedPlan.rawOutput,
+        clonedStructured,
+        nextVersion,
+      );
+      // Borrowed plans always go to review — they came from a different context.
+      queries.plans.updateStatus(clonedPlan.id, 'pending_review');
+      await pipeline.startReview(threadId, clonedStructured);
+      return;
+    }
+
+    // No structured plan exists anywhere — restart planning from scratch.
     const failedPlan = queries.plans.getLatest(threadId);
     const ctx = pipeline.getContext(threadId);
     if (ctx && failedPlan?.rawOutput) {
@@ -446,4 +477,11 @@ export function registerPipelineHandlers({
   ipcMain.handle('costs:count-tasks', (_event, { projectId }: { projectId?: string } = {}) => {
     return queries.costs.countTasks(projectId ?? null);
   });
+
+  ipcMain.handle(
+    'costs:list-for-issue',
+    (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
+      return queries.costs.listTasksForIssue(projectId, issueNumber);
+    },
+  );
 }

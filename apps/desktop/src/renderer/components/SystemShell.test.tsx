@@ -153,8 +153,7 @@ describe('system shell components', () => {
       editingPrd: null,
       projectSettingsModalOpen: false,
       projectSettingsModalProjectId: null,
-      projectSetupModalOpen: false,
-      projectSetupModalProjectId: null,
+      projectSettingsModalInitialTab: null,
     });
   });
 

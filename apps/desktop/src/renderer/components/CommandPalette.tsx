@@ -33,9 +33,9 @@ export function CommandPalette() {
     openInbox,
     openCosts,
     openSkills,
-    openInstant,
+    openTerminalSessions,
     selectProject,
-    openProjectSetupModal,
+    openProjectSettingsModal,
     openInstantFixModal,
     navigateToIssue,
   } = useAppStore();
@@ -85,7 +85,7 @@ export function CommandPalette() {
         queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
         queryClient.invalidateQueries({ queryKey: ['projects-archived'] });
         selectProject(project.id);
-        openProjectSetupModal(project.id);
+        openProjectSettingsModal(project.id, 'setup');
       }
     },
   });
@@ -195,7 +195,7 @@ export function CommandPalette() {
 
         <CommandGroup heading="Quick Actions">
           <CommandItem onSelect={() => runAction(() => openInstantFixModal())}>
-            <span className="flex-1">Instant Fix...</span>
+            <span className="flex-1">New Terminal Session...</span>
             <CommandShortcut>{getShortcut('instant-fix').glyph}</CommandShortcut>
           </CommandItem>
         </CommandGroup>
@@ -216,8 +216,8 @@ export function CommandPalette() {
           <CommandItem onSelect={() => runAction(() => openSkills())}>
             <span className="flex-1">Skills</span>
           </CommandItem>
-          <CommandItem onSelect={() => runAction(() => openInstant())}>
-            <span className="flex-1">Instant</span>
+          <CommandItem onSelect={() => runAction(() => openTerminalSessions())}>
+            <span className="flex-1">Terminal Sessions</span>
           </CommandItem>
           <CommandItem onSelect={() => runAction(() => toggleSettings())}>
             <span className="flex-1">Settings</span>

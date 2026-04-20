@@ -86,6 +86,8 @@ const makeThread = (overrides: Partial<Thread> = {}): Thread => {
     totalTokensCompletion: 0,
     totalCostUsd: 0,
     lastError: null,
+    failurePhase: null,
+    failureCount: 0,
   };
   return { ...base, ...overrides };
 };
@@ -220,7 +222,7 @@ describe('IssueDetail', () => {
 
     renderWithProviders();
 
-    const prdTab = screen.getByRole('tab', { name: 'PRD' });
+    const prdTab = screen.getByRole('tab', { name: 'Issue' });
     fireEvent.mouseDown(prdTab, { button: 0 });
     fireEvent.click(prdTab);
     await waitFor(() => {
@@ -756,18 +758,18 @@ describe('IssueDetail', () => {
 
     renderWithProviders();
 
-    expect(screen.getByRole('tab', { name: 'PRD' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Issue' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Plan History' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Pipeline' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Issue History' })).toBeInTheDocument();
   });
 
-  it('PRD tab is active by default when no plan history exists', async () => {
+  it('Issue tab is active by default when no plan history exists', async () => {
     invokeMock.mockResolvedValue([]);
 
     renderWithProviders();
 
-    const prdTab = screen.getByRole('tab', { name: 'PRD' });
+    const prdTab = screen.getByRole('tab', { name: 'Issue' });
     expect(prdTab).toHaveAttribute('data-state', 'active');
   });
 
@@ -799,7 +801,14 @@ describe('IssueDetail', () => {
     });
 
     const tabLabels = screen.getAllByRole('tab').map((tab) => tab.textContent?.trim());
-    expect(tabLabels).toEqual(['Plan History (1)', 'PRD', 'Pipeline', 'Issue History']);
+    expect(tabLabels).toEqual([
+      'Plan History (1)',
+      'Issue',
+      'Comments',
+      'Pipeline',
+      'Issue History',
+      'Costs',
+    ]);
   });
 
   it('pipeline start card is above the tab bar when pipeline not started', async () => {
@@ -808,7 +817,7 @@ describe('IssueDetail', () => {
     renderWithProviders();
 
     const startButton = screen.getByRole('button', { name: 'Start pipeline' });
-    const prdTab = screen.getByRole('tab', { name: 'PRD' });
+    const prdTab = screen.getByRole('tab', { name: 'Issue' });
     // Start button should appear before the tab list in the DOM
     expect(startButton.compareDocumentPosition(prdTab)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });

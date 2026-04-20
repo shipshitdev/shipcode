@@ -310,7 +310,13 @@ export class GitHubIssueQueries {
   getNextQueued(): GitHubIssueCacheRecord | null {
     const row = this.db
       .prepare(
-        "SELECT * FROM github_issue_cache WHERE pipeline_status = 'queued' AND archived_at IS NULL ORDER BY last_phase_update ASC LIMIT 1",
+        `SELECT gic.* FROM github_issue_cache gic
+           JOIN projects p ON p.id = gic.project_id
+          WHERE gic.pipeline_status = 'queued'
+            AND gic.archived_at IS NULL
+            AND p.archived = 0
+          ORDER BY gic.last_phase_update ASC
+          LIMIT 1`,
       )
       .get();
     return row ? this.toRecord(asRow<GitHubIssueCacheRow>(row)) : null;
