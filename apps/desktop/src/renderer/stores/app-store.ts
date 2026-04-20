@@ -21,14 +21,9 @@ const AGENT_ACTIVE_STATUSES = new Set<IssuePipelineStatus>([
   'shipping',
 ]);
 
-export type ViewMode =
-  | 'overview'
-  | 'project'
-  | 'activity'
-  | 'inbox'
-  | 'costs'
-  | 'skills'
-  | 'terminal';
+export type ViewMode = 'overview' | 'project' | 'activity' | 'inbox' | 'costs' | 'skills';
+
+export type ProjectTab = 'issues' | 'pull-requests' | 'sessions';
 export type SettingsSection =
   | 'general'
   | 'integrations'
@@ -99,6 +94,10 @@ interface AppState {
   projectSettingsModalProjectId: string | null;
   projectSettingsModalInitialTab: string | null;
 
+  // Project tab
+  projectTab: ProjectTab;
+  activePrNumber: number | null;
+
   // Instant fix
   instantFixModalOpen: boolean;
   instantFixModalDefaultCli: 'claude' | 'codex' | null;
@@ -159,6 +158,10 @@ interface AppState {
   navigateToIssue: (projectId: string, issue: GitHubIssueCacheRecord) => void;
   openCommandPalette: () => void;
 
+  // Project tab actions
+  setProjectTab: (tab: ProjectTab) => void;
+  setActivePrNumber: (n: number | null) => void;
+
   // Instant fix actions
   openInstantFixModal: (defaultCli?: 'claude' | 'codex') => void;
   closeInstantFixModal: () => void;
@@ -168,7 +171,7 @@ interface AppState {
   setInstantSplitDirection: (dir: 'horizontal' | 'vertical') => void;
 }
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>((set, get) => ({
   activeProjectId: null,
   activeThreadId: null,
   activeIssue: null,
@@ -200,6 +203,8 @@ export const useAppStore = create<AppState>((set) => ({
   projectSettingsModalOpen: false,
   projectSettingsModalProjectId: null,
   projectSettingsModalInitialTab: null,
+  projectTab: 'issues' as ProjectTab,
+  activePrNumber: null,
   instantFixModalOpen: false,
   instantFixModalDefaultCli: null,
   instantPaneThreadIds: [],
@@ -270,6 +275,7 @@ export const useAppStore = create<AppState>((set) => ({
       currentVerification: null,
       pipelinePhase: 'idle',
       viewMode: 'project',
+      projectTab: 'issues' as ProjectTab,
       githubIssues: [],
     }),
   selectThread: (id) =>
@@ -439,6 +445,7 @@ export const useAppStore = create<AppState>((set) => ({
     set((s) => ({
       activeProjectId: projectId,
       viewMode: 'project',
+      projectTab: 'issues' as ProjectTab,
       activeIssue: issue,
       activeThreadId: issue.threadId ?? null,
       currentPlan: null,
@@ -454,6 +461,10 @@ export const useAppStore = create<AppState>((set) => ({
     })),
   openCommandPalette: () => set({ commandPaletteOpen: true }),
 
+  // Project tab actions
+  setProjectTab: (tab) => set({ projectTab: tab }),
+  setActivePrNumber: (n) => set({ activePrNumber: n }),
+
   // Instant fix
   openInstantFixModal: (defaultCli) =>
     set({
@@ -462,16 +473,20 @@ export const useAppStore = create<AppState>((set) => ({
       commandPaletteOpen: false,
     }),
   closeInstantFixModal: () => set({ instantFixModalOpen: false, instantFixModalDefaultCli: null }),
-  openTerminalSessions: () =>
+  openTerminalSessions: () => {
+    const { activeProjectId } = get();
+    if (!activeProjectId) return;
     set({
-      viewMode: 'terminal',
+      viewMode: 'project',
+      projectTab: 'sessions' as ProjectTab,
       activeIssue: null,
       issueDetailExpanded: false,
       terminalMaximized: false,
       currentPlan: null,
       currentReview: null,
       currentVerification: null,
-    }),
+    });
+  },
   addInstantPane: (threadId) =>
     set((s) => {
       if (s.instantPaneThreadIds.includes(threadId)) return s;

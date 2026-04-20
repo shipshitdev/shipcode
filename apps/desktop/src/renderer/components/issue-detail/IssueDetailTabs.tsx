@@ -164,27 +164,29 @@ export function IssueDetailTabs({
             </TabsTrigger>
           ))}
         </TabsList>
-        <div className="ml-auto flex shrink-0 items-center gap-1 pr-4">
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={onRefreshFromGithub}
-            disabled={isRefreshingFromGithub}
-            title="Re-fetch issue from GitHub"
-            aria-label="Refresh issue from GitHub"
-          >
-            <RefreshCw size={12} className={isRefreshingFromGithub ? 'animate-spin' : ''} />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={onEditPrd}
-            title="Edit issue body"
-            aria-label="Edit issue body"
-          >
-            <Pencil size={13} />
-          </Button>
-        </div>
+        {activeTab === 'prd' && (
+          <div className="ml-auto flex shrink-0 items-center gap-1 pr-4">
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={onRefreshFromGithub}
+              disabled={isRefreshingFromGithub}
+              title="Re-fetch issue from GitHub"
+              aria-label="Refresh issue from GitHub"
+            >
+              <RefreshCw size={12} className={isRefreshingFromGithub ? 'animate-spin' : ''} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={onEditPrd}
+              title="Edit issue body"
+              aria-label="Edit issue body"
+            >
+              <Pencil size={13} />
+            </Button>
+          </div>
+        )}
       </div>
 
       <TabsContent value="prd" className={cn('mt-0', !expanded && 'p-4')}>

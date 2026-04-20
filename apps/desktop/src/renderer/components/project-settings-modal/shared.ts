@@ -20,9 +20,9 @@ export const PROJECT_TABS = [
   'general',
   'setup',
   'models',
-  'notifications',
   'github',
   'context',
+  'notifications',
 ] as const;
 export const PHASES: readonly ResolvedPhaseModel[] = PHASE_DESCRIPTORS.map((phase) => phase.key);
 

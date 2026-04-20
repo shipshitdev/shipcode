@@ -31,6 +31,9 @@ import type {
   ProjectOpenTarget,
   ProjectSetupDraft,
   ProjectSetupInspection,
+  PullRequestDetail,
+  PullRequestListFilter,
+  PullRequestListItem,
   ReasoningEffort,
   RecentTask,
   RepoSetupContract,
@@ -434,6 +437,20 @@ export interface IpcInvokeChannels {
   'instant:cancel': { args: { threadId: string }; result: undefined };
   'instant:list': { args: undefined; result: Thread[] };
   'instant:cleanup': { args: undefined; result: { deleted: number } };
+
+  // Pull request browsing
+  'github:list-prs': {
+    args: { projectId: string; filter?: PullRequestListFilter; limit?: number };
+    result: PullRequestListItem[];
+  };
+  'github:get-pr-detail': {
+    args: { projectId: string; prNumber: number };
+    result: PullRequestDetail;
+  };
+  'skills:load-content': {
+    args: { name: string };
+    result: string | null;
+  };
 
   // Developer diagnostics
   'developer:get-info': { args: undefined; result: DeveloperInfo };

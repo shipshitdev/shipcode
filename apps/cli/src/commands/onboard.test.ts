@@ -9,6 +9,7 @@ const {
   mkdirSyncMock,
   checkSystemHealthMock,
   checkClaudeAuthMock,
+  checkCodexAuthMock,
   checkOpenRouterAuthMock,
   parseGhProjectScopeMock,
   getDatabaseMock,
@@ -23,6 +24,7 @@ const {
   mkdirSyncMock: vi.fn(),
   checkSystemHealthMock: vi.fn(),
   checkClaudeAuthMock: vi.fn(),
+  checkCodexAuthMock: vi.fn(),
   checkOpenRouterAuthMock: vi.fn(),
   parseGhProjectScopeMock: vi.fn(),
   getDatabaseMock: vi.fn(),
@@ -47,6 +49,7 @@ vi.mock('node:fs', () => ({
 vi.mock('@shipcode/agents', () => ({
   checkSystemHealth: checkSystemHealthMock,
   checkClaudeAuth: checkClaudeAuthMock,
+  checkCodexAuth: checkCodexAuthMock,
   checkOpenRouterAuth: checkOpenRouterAuthMock,
   parseGhProjectScope: parseGhProjectScopeMock,
 }));
@@ -86,6 +89,7 @@ describe('onboardCommand', () => {
       codex: { available: true },
     });
     checkClaudeAuthMock.mockResolvedValue(true);
+    checkCodexAuthMock.mockResolvedValue(true);
     checkOpenRouterAuthMock.mockResolvedValue({ ok: true, label: 'openrouter/auto' });
     parseGhProjectScopeMock.mockReturnValue(true);
     listProjectsMock.mockReturnValue([]);
@@ -150,6 +154,7 @@ describe('onboardCommand', () => {
       'main',
     );
     expect(logSpy).toHaveBeenCalledWith('  ✓ gh — authenticated (project scope ok)');
+    expect(logSpy).toHaveBeenCalledWith('  ✓ codex — authenticated');
     expect(logSpy).toHaveBeenCalledWith('  ⚠ openrouter — OPENROUTER_API_KEY not set (optional)');
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('  ✓ Created labels:'));
     expect(logSpy).toHaveBeenCalledWith(
@@ -191,5 +196,15 @@ describe('onboardCommand', () => {
     expect(execFileMock).toHaveBeenCalled();
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('  ✓ Created labels:'));
     expect(logSpy).toHaveBeenCalledWith('  ✓ Existing labels kept: 1');
+  });
+
+  it('warns when codex CLI is installed but not authenticated', async () => {
+    checkCodexAuthMock.mockResolvedValueOnce(false);
+
+    await onboardCommand();
+
+    expect(logSpy).toHaveBeenCalledWith(
+      '  ⚠ codex — not authenticated (adversarial review will be skipped). Run: codex login',
+    );
   });
 });

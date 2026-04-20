@@ -7,6 +7,7 @@ import { registerDeveloperHandlers } from './ipc/register-developer-handlers';
 import { registerGitHubHandlers } from './ipc/register-github-handlers';
 import { registerInstantHandlers } from './ipc/register-instant-handlers';
 import { registerPipelineHandlers } from './ipc/register-pipeline-handlers';
+import { registerPullRequestHandlers } from './ipc/register-pr-handlers';
 import { registerProjectHandlers } from './ipc/register-project-handlers';
 import { registerSkillsHandlers } from './ipc/register-skills-handlers';
 import { registerSupportHandlers } from './ipc/register-support-handlers';
@@ -85,5 +86,6 @@ export function registerIpcHandlers(
   registerSkillsHandlers(deps);
   registerSupportHandlers(deps);
   registerInstantHandlers(deps);
+  registerPullRequestHandlers(deps);
   registerDeveloperHandlers(deps);
 }

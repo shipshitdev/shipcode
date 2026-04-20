@@ -4,6 +4,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import {
   checkClaudeAuth,
+  checkCodexAuth,
   checkOpenRouterAuth,
   checkSystemHealth,
   parseGhProjectScope,
@@ -90,7 +91,14 @@ export async function onboardCommand() {
     process.exit(1);
   }
 
-  console.log('  ⚠ codex — auth not verifiable (ensure API key is configured)');
+  const codexAuth = await checkCodexAuth();
+  if (codexAuth) {
+    console.log('  ✓ codex — authenticated');
+  } else {
+    console.log(
+      '  ⚠ codex — not authenticated (adversarial review will be skipped). Run: codex login',
+    );
+  }
 
   // OpenRouter is optional. A missing key is a warning, not a failure,
   // because the pipeline still works with claude/codex alone.

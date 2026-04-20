@@ -49,7 +49,7 @@ import { NOTIFICATIONS_STALE_TIME, STABLE_APP_STATE_STALE_TIME } from '../query-
 import { useAppStore } from '../stores/app-store';
 import { ProjectProviderWarningPopover } from './ProjectProviderWarningPopover';
 
-const SIDEBAR_MIN = 180;
+const SIDEBAR_MIN = 220;
 const SIDEBAR_MAX = 256;
 const SIDEBAR_DEFAULT = SIDEBAR_MAX;
 

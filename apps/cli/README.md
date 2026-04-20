@@ -44,7 +44,7 @@ Pass `--help` to any subcommand for its flags.
 |----------|----------|---------|
 | `OPENROUTER_API_KEY` | Optional | Enables the `openrouter` executor + `agent:openrouter`, `agent:openrouter/auto`, `agent:openrouter/free` GitHub label routes |
 
-Claude and Codex auth come from their own CLIs (`claude auth`, Codex env vars); `gh` auth comes from `gh auth login`. The CLI does not read any other env vars directly.
+Claude and Codex auth come from their own CLIs (`claude auth`, `codex login`); `gh` auth comes from `gh auth login`. The CLI does not read any other env vars directly.
 
 ## Local development
 

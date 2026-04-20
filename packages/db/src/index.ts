@@ -84,6 +84,18 @@ export function getDatabase(dataDir: string): DatabaseSync {
   migrateV24(db);
   migrateV25(db);
   migrateV26(db);
+
+  // Startup cleanup: reset unclaimed queued issues to todo on every launch.
+  // An unclaimed queued issue has no active worker holding it — it's stale state
+  // from a crash, restart, or interrupted pipeline. V22 migration only cleared
+  // issues without thread_id; this catches the remainder on every startup.
+  db.exec(`
+    UPDATE github_issue_cache
+       SET pipeline_status = 'todo', last_phase_update = NULL
+     WHERE pipeline_status = 'queued'
+       AND claimed_at IS NULL
+  `);
+
   return db;
 }
 

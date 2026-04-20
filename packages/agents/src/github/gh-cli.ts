@@ -8,6 +8,11 @@ import {
   type GitHubStatusLabel,
   PRD_MANAGED_DISCRETE_LABELS,
   PRD_MANAGED_LABEL_PREFIXES,
+  type PullRequestDetail,
+  type PullRequestListFilter,
+  type PullRequestListItem,
+  type PullRequestReviewDecision,
+  type PullRequestState,
 } from '@shipcode/shared';
 
 const execFileAsync = promisify(execFile);
@@ -452,6 +457,64 @@ export class GhCli {
     return found ? { number: found.number, url: found.url, isDraft: !!found.isDraft } : null;
   }
 
+  async listPullRequests(options?: {
+    state?: PullRequestListFilter;
+    limit?: number;
+  }): Promise<PullRequestListItem[]> {
+    const state = options?.state ?? 'open';
+    const limit = options?.limit ?? 30;
+    const ghState =
+      state === 'merged'
+        ? 'merged'
+        : state === 'closed'
+          ? 'closed'
+          : state === 'all'
+            ? 'all'
+            : 'open';
+    const { stdout } = await execFileAsync(
+      'gh',
+      [
+        'pr',
+        'list',
+        '--state',
+        ghState,
+        '--json',
+        'number,title,author,headRefName,baseRefName,isDraft,state,reviewDecision,updatedAt,url,labels,closingIssuesReferences',
+        '--limit',
+        String(limit),
+      ],
+      { cwd: this.cwd },
+    );
+    const rows = JSON.parse(stdout) as Array<{
+      number: number;
+      title: string;
+      author: { login: string } | null;
+      headRefName: string;
+      baseRefName: string;
+      isDraft: boolean;
+      state: string;
+      reviewDecision: string | null;
+      updatedAt: string;
+      url: string;
+      labels: Array<{ name: string }>;
+      closingIssuesReferences: Array<{ number: number }> | null;
+    }>;
+    return rows.map((row) => ({
+      number: row.number,
+      title: row.title,
+      author: row.author?.login ?? null,
+      headRefName: row.headRefName,
+      baseRefName: row.baseRefName,
+      isDraft: !!row.isDraft,
+      state: row.state as PullRequestState,
+      reviewDecision: (row.reviewDecision as PullRequestReviewDecision) ?? null,
+      updatedAt: row.updatedAt,
+      url: row.url,
+      labels: row.labels.map((l) => l.name),
+      linkedIssueNumbers: (row.closingIssuesReferences ?? []).map((r) => r.number),
+    }));
+  }
+
   async updatePullRequest(options: {
     prNumber: number;
     title: string;
@@ -685,6 +748,250 @@ export class GhCli {
       number: pr.number,
       url: pr.url,
       isDraft: !!pr.isDraft,
+      ciBlocked: failingChecks.length > 0,
+      failingChecks,
+      unresolvedReviewComments,
+      unresolvedReviewCommentCount: unresolvedThreads.length,
+    };
+  }
+
+  async getPullRequestDetail(prNumber: number): Promise<PullRequestDetail> {
+    const { owner, repo } = await this.getRepoCoordinates();
+    const query = `
+      query($owner:String!, $repo:String!, $number:Int!) {
+        repository(owner:$owner, name:$repo) {
+          pullRequest(number:$number) {
+            number
+            url
+            title
+            body
+            author { login }
+            headRefName
+            baseRefName
+            isDraft
+            state
+            reviewDecision
+            additions
+            deletions
+            changedFiles
+            labels(first:20) { nodes { name } }
+            closingIssuesReferences(first:10) { nodes { number } }
+            commits(last:1) {
+              nodes {
+                commit {
+                  statusCheckRollup {
+                    contexts(first:50) {
+                      nodes {
+                        __typename
+                        ... on CheckRun {
+                          name
+                          conclusion
+                          status
+                          detailsUrl
+                          checkSuite {
+                            workflowRun {
+                              workflow {
+                                name
+                              }
+                            }
+                          }
+                        }
+                        ... on StatusContext {
+                          context
+                          state
+                          targetUrl
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            reviewThreads(first:50) {
+              nodes {
+                isResolved
+                isOutdated
+                comments(first:20) {
+                  nodes {
+                    body
+                    url
+                    createdAt
+                    path
+                    line
+                    author {
+                      login
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    const { stdout } = await execFileAsync(
+      'gh',
+      [
+        'api',
+        'graphql',
+        '-f',
+        `query=${query}`,
+        '-F',
+        `owner=${owner}`,
+        '-F',
+        `repo=${repo}`,
+        '-F',
+        `number=${prNumber}`,
+      ],
+      { cwd: this.cwd },
+    );
+
+    const parsed = JSON.parse(stdout) as {
+      data?: {
+        repository?: {
+          pullRequest?: {
+            number: number;
+            url: string;
+            title: string;
+            body: string | null;
+            author: { login: string } | null;
+            headRefName: string;
+            baseRefName: string;
+            isDraft: boolean;
+            state: string;
+            reviewDecision: string | null;
+            additions: number;
+            deletions: number;
+            changedFiles: number;
+            labels?: { nodes?: Array<{ name?: string }> } | null;
+            closingIssuesReferences?: { nodes?: Array<{ number?: number }> } | null;
+            commits?: {
+              nodes?: Array<{
+                commit?: {
+                  statusCheckRollup?: {
+                    contexts?: {
+                      nodes?: Array<
+                        | {
+                            __typename: 'CheckRun';
+                            name?: string;
+                            conclusion?: string | null;
+                            status?: string | null;
+                            detailsUrl?: string | null;
+                            checkSuite?: {
+                              workflowRun?: { workflow?: { name?: string | null } | null } | null;
+                            } | null;
+                          }
+                        | {
+                            __typename: 'StatusContext';
+                            context?: string;
+                            state?: string | null;
+                            targetUrl?: string | null;
+                          }
+                      >;
+                    } | null;
+                  } | null;
+                } | null;
+              }>;
+            } | null;
+            reviewThreads?: {
+              nodes?: Array<{
+                isResolved?: boolean;
+                isOutdated?: boolean;
+                comments?: {
+                  nodes?: Array<{
+                    body?: string;
+                    url?: string;
+                    createdAt?: string;
+                    path?: string | null;
+                    line?: number | null;
+                    author?: { login?: string | null } | null;
+                  }>;
+                } | null;
+              }>;
+            } | null;
+          } | null;
+        } | null;
+      };
+    };
+
+    const pr = parsed.data?.repository?.pullRequest;
+    if (!pr) {
+      throw new Error(`Pull request #${prNumber} not found`);
+    }
+
+    const failingChecks: GitHubPrCheckSummary[] = [];
+    const contexts = pr.commits?.nodes?.[0]?.commit?.statusCheckRollup?.contexts?.nodes ?? [];
+
+    for (const node of contexts) {
+      if (!node) continue;
+      if (node.__typename === 'CheckRun') {
+        const status = (node.status ?? '').toUpperCase();
+        const conclusion = (node.conclusion ?? '').toUpperCase();
+        const summary: GitHubPrCheckSummary = {
+          name: node.name ?? 'check',
+          status:
+            status !== 'COMPLETED'
+              ? 'pending'
+              : conclusion === 'SUCCESS' || conclusion === 'NEUTRAL' || conclusion === 'SKIPPED'
+                ? 'success'
+                : 'failed',
+          conclusion: node.conclusion?.toLowerCase() ?? null,
+          detailsUrl: node.detailsUrl ?? null,
+          workflowName: node.checkSuite?.workflowRun?.workflow?.name ?? null,
+        };
+        if (summary.status === 'failed') failingChecks.push(summary);
+        continue;
+      }
+
+      const state = (node.state ?? '').toUpperCase();
+      const summary: GitHubPrCheckSummary = {
+        name: node.context ?? 'status',
+        status: state === 'SUCCESS' ? 'success' : state === 'PENDING' ? 'pending' : 'failed',
+        conclusion: node.state?.toLowerCase() ?? null,
+        detailsUrl: node.targetUrl ?? null,
+        workflowName: null,
+      };
+      if (summary.status === 'failed') failingChecks.push(summary);
+    }
+
+    const unresolvedThreads = (pr.reviewThreads?.nodes ?? []).filter(
+      (thread) => !thread?.isResolved && !thread?.isOutdated,
+    );
+    const unresolvedReviewComments: GitHubPrReviewCommentSummary[] = unresolvedThreads
+      .map((thread) => {
+        const comments = thread.comments?.nodes ?? [];
+        const comment = comments[comments.length - 1];
+        if (!comment?.url || !comment.body || !comment.createdAt) return null;
+        return {
+          author: comment.author?.login ?? null,
+          body: comment.body,
+          url: comment.url,
+          createdAt: comment.createdAt,
+          path: comment.path ?? null,
+          line: comment.line ?? null,
+        } satisfies GitHubPrReviewCommentSummary;
+      })
+      .filter((comment): comment is GitHubPrReviewCommentSummary => !!comment);
+
+    return {
+      number: pr.number,
+      url: pr.url,
+      title: pr.title,
+      body: pr.body ?? null,
+      author: pr.author?.login ?? null,
+      headRefName: pr.headRefName,
+      baseRefName: pr.baseRefName,
+      isDraft: !!pr.isDraft,
+      state: pr.state as PullRequestState,
+      reviewDecision: (pr.reviewDecision as PullRequestReviewDecision) ?? null,
+      additions: pr.additions,
+      deletions: pr.deletions,
+      changedFiles: pr.changedFiles,
+      labels: (pr.labels?.nodes ?? []).map((n) => n.name ?? '').filter(Boolean),
+      linkedIssueNumbers: (pr.closingIssuesReferences?.nodes ?? [])
+        .map((n) => n.number)
+        .filter((n): n is number => typeof n === 'number'),
       ciBlocked: failingChecks.length > 0,
       failingChecks,
       unresolvedReviewComments,

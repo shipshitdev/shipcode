@@ -104,23 +104,26 @@ export function ProjectSettingsNotificationsTab({
         </div>
       </div>
 
-      <div className="flex flex-col gap-1">
-        <Label htmlFor="notify-github-user" className="text-xs text-secondary">
-          Notify GitHub user on issue rewrite
-        </Label>
-        <Input
-          id="notify-github-user"
-          type="text"
-          value={notifyGithubUser}
-          onChange={(e) => onNotifyGithubUserChange(e.target.value)}
-          placeholder="github-handle (without @)"
-          autoComplete="off"
-          spellCheck={false}
-        />
-        <p className="text-[11px] text-muted">
-          When an issue is rewritten, ShipCode will @mention this user in the comment. Leave blank
-          to only tag the issue author.
-        </p>
+      <div className="rounded-md border border-border bg-secondary/30 p-3">
+        <div className="mb-2 text-[12px] font-medium text-primary">Issue rewrite @mention</div>
+        <div className="space-y-2">
+          <Label htmlFor="notify-github-user" className="text-xs text-secondary">
+            Additional recipient
+          </Label>
+          <Input
+            id="notify-github-user"
+            type="text"
+            value={notifyGithubUser}
+            onChange={(e) => onNotifyGithubUserChange(e.target.value)}
+            placeholder="github-handle"
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <p className="text-[11px] text-muted">
+            Tagged on every issue rewrite alongside the issue author. Leave blank to only tag the
+            author.
+          </p>
+        </div>
       </div>
     </div>
   );

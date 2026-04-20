@@ -485,9 +485,9 @@ export function ProjectSettingsModal() {
               <TabsTrigger value="general">General</TabsTrigger>
               <TabsTrigger value="setup">Setup</TabsTrigger>
               <TabsTrigger value="models">Models</TabsTrigger>
-              <TabsTrigger value="notifications">Notifications</TabsTrigger>
               <TabsTrigger value="github">GitHub</TabsTrigger>
               <TabsTrigger value="context">Context</TabsTrigger>
+              <TabsTrigger value="notifications">Notifications</TabsTrigger>
             </TabsList>
 
             <TabsContent value="general" className="space-y-4">
@@ -553,6 +553,29 @@ export function ProjectSettingsModal() {
               />
             </TabsContent>
 
+            <TabsContent value="github" className="space-y-4">
+              <ProjectSettingsGitHubTab
+                pathExists={pathExists}
+                projectId={projectSettingsModalProjectId ?? ''}
+                isActive={activeTab === 'github'}
+              />
+            </TabsContent>
+
+            <TabsContent value="context" className="space-y-4">
+              <ProjectSettingsContextTab
+                contextFiles={contextFiles}
+                contextGeneratorCli={contextGeneratorCli}
+                setContextGeneratorCli={setContextGeneratorCli}
+                contextGenerating={contextGenerating}
+                contextCliUnavailableReason={contextCliUnavailableReason}
+                contextError={contextError}
+                cliOptions={contextCliOptions}
+                onGenerateContext={() => {
+                  void handleGenerateContext();
+                }}
+              />
+            </TabsContent>
+
             <TabsContent value="notifications" className="space-y-4">
               <ProjectSettingsNotificationsTab
                 discordRouting={overrides.discordRouting}
@@ -579,29 +602,6 @@ export function ProjectSettingsModal() {
                   }))
                 }
                 onNotifyGithubUserChange={setNotifyGithubUser}
-              />
-            </TabsContent>
-
-            <TabsContent value="github" className="space-y-4">
-              <ProjectSettingsGitHubTab
-                pathExists={pathExists}
-                projectId={projectSettingsModalProjectId ?? ''}
-                isActive={activeTab === 'github'}
-              />
-            </TabsContent>
-
-            <TabsContent value="context" className="space-y-4">
-              <ProjectSettingsContextTab
-                contextFiles={contextFiles}
-                contextGeneratorCli={contextGeneratorCli}
-                setContextGeneratorCli={setContextGeneratorCli}
-                contextGenerating={contextGenerating}
-                contextCliUnavailableReason={contextCliUnavailableReason}
-                contextError={contextError}
-                cliOptions={contextCliOptions}
-                onGenerateContext={() => {
-                  void handleGenerateContext();
-                }}
               />
             </TabsContent>
           </Tabs>

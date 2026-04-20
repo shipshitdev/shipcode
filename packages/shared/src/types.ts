@@ -641,6 +641,47 @@ export interface GitHubPrReviewCommentSummary {
   line: number | null;
 }
 
+export type PullRequestState = 'OPEN' | 'CLOSED' | 'MERGED';
+export type PullRequestReviewDecision = 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED';
+export type PullRequestListFilter = 'open' | 'closed' | 'merged' | 'all';
+
+export interface PullRequestListItem {
+  number: number;
+  title: string;
+  author: string | null;
+  headRefName: string;
+  baseRefName: string;
+  isDraft: boolean;
+  state: PullRequestState;
+  reviewDecision: PullRequestReviewDecision | null;
+  url: string;
+  labels: string[];
+  updatedAt: string;
+  linkedIssueNumbers: number[];
+}
+
+export interface PullRequestDetail {
+  number: number;
+  url: string;
+  title: string;
+  body: string | null;
+  author: string | null;
+  headRefName: string;
+  baseRefName: string;
+  isDraft: boolean;
+  state: PullRequestState;
+  reviewDecision: PullRequestReviewDecision | null;
+  additions: number;
+  deletions: number;
+  changedFiles: number;
+  labels: string[];
+  linkedIssueNumbers: number[];
+  ciBlocked: boolean;
+  failingChecks: GitHubPrCheckSummary[];
+  unresolvedReviewComments: GitHubPrReviewCommentSummary[];
+  unresolvedReviewCommentCount: number;
+}
+
 export interface GitHubIssueCacheRecord {
   id: string;
   projectId: string;
