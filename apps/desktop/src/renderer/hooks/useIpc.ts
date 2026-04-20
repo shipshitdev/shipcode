@@ -1,9 +1,9 @@
-import type {
-  GitHubIssueCacheRecord,
-  IssuePipelineStatus,
-  TerminalEventRecord,
+import {
+  formatResolvedModelDisplay,
+  type GitHubIssueCacheRecord,
+  type IssuePipelineStatus,
+  type TerminalEventRecord,
 } from '@shipcode/shared';
-import { modelDisplay } from '@shipcode/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect } from 'react';
 import { useAppStore } from '../stores/app-store';
@@ -22,6 +22,7 @@ export function useIpc() {
     removeNotification,
     mapProcessToThread,
     setCurrentModel,
+    setInstantPaneState,
     appendCanonicalEvents,
   } = useAppStore();
 
@@ -199,19 +200,16 @@ export function useIpc() {
         if (data.state === 'running' && data.processId && data.threadId) {
           mapProcessToThread(data.processId, data.threadId);
         }
+        if (data.threadId) {
+          setInstantPaneState(data.threadId, data.state);
+        }
       }),
     );
 
     unsubscribers.push(
       window.shipcode.on('pipeline:model-resolved', (data) => {
         const store = useAppStore.getState();
-        const isOpenRouter = String(data.requestedModel ?? '').startsWith('openrouter');
-        const requestedOrResolved = data.requestedModel ?? data.resolvedModel ?? null;
-        const displayName = isOpenRouter
-          ? (data.resolvedModel ?? null)
-          : requestedOrResolved
-            ? modelDisplay(requestedOrResolved)
-            : null;
+        const displayName = formatResolvedModelDisplay(data.requestedModel, data.resolvedModel);
         const tid = data.threadId ?? store.terminalThreadId;
         if (tid && displayName) setCurrentModel(tid, displayName);
       }),
@@ -263,6 +261,7 @@ export function useIpc() {
     removeNotification,
     mapProcessToThread,
     setCurrentModel,
+    setInstantPaneState,
     appendCanonicalEvents,
     queryClient,
   ]);

@@ -161,20 +161,24 @@ export function createPlanningPhaseHandlers({
           handlers.startReview(threadId, result.data);
         } else {
           deps.plans.create(threadId, result.raw, null, nextVersion);
-          deps.emitter.emit({
-            type: 'pipeline:approval-gate',
+          const detectedError = parser.detectError();
+          const rawSnippet =
+            detectedError?.match ??
+            parser
+              .getRawOutput()
+              .trim()
+              .split('\n')
+              .filter(Boolean)
+              .slice(-3)
+              .join(' ')
+              .slice(0, 300);
+          const reason = rawSnippet?.trimStart().startsWith('{') ? '' : rawSnippet;
+          emitPhase(
             threadId,
-            outcome: 'awaiting_approval',
-            reviewDecision: 'parse_failure',
-            planVersion: nextVersion,
-            requireApproval: deps.settings.get().requireApproval,
-            autonomous: context.autonomous,
-            reviewRound: context.reviewRound,
-            maxReviewRounds: deps.settings.get().maxReviewRounds,
-            hasCriticalOrMajor: false,
-            reasons: ['parseFailure'],
-          });
-          emitPhase(threadId, 'awaiting_approval');
+            'failed',
+            reason || 'Plan generation failed — no structured plan was produced.',
+          );
+          activePipelines.delete(threadId);
         }
       } catch (error) {
         if (!context.cancelled) {

@@ -7,6 +7,7 @@ import type {
   Thread,
 } from '@shipcode/shared';
 import {
+  type ExecutorModel,
   formatProviderReasoningEffort,
   getIssueCardPhase,
   resolveExecutorModelForIssue,
@@ -33,7 +34,7 @@ export function resolveIssuePhaseChip(
   const phase = getIssueCardPhase(issue.pipelineStatus);
   if (!phase) return null;
 
-  const provider =
+  const provider: ExecutorModel | null =
     phase === 'planner'
       ? settings
         ? resolvePhaseModelForIssue(settings, project, issue, 'planner')
@@ -71,6 +72,7 @@ export function resolveIssuePhaseChip(
 
   return {
     phase,
+    provider: provider ?? 'claude',
     model,
     effort:
       settings && provider

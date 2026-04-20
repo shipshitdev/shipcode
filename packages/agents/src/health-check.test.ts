@@ -21,6 +21,7 @@ vi.mock('node-pty', () => ({ spawn: mockPtySpawn }));
 
 import { type AppSettings, DEFAULT_SETTINGS } from '@shipcode/shared';
 import {
+  __resetHealthCheckCachesForTests,
   checkClaudeAuth,
   checkCliProviderUsage,
   checkCodexAuth,
@@ -92,6 +93,7 @@ function execRouted(routes: Record<string, { stdout?: string; stderr?: string } 
 
 beforeEach(() => {
   vi.clearAllMocks();
+  __resetHealthCheckCachesForTests();
   mockAccess.mockRejectedValue(new Error('ENOENT'));
   mockMkdir.mockResolvedValue(undefined);
 });
@@ -398,6 +400,34 @@ describe('checkSystemHealthWithAuth', () => {
     expect(result.codex.available).toBe(false);
     expect(result.codex.authenticated).toBe(false);
   });
+
+  it('reuses fresh cached auth health results until forced', async () => {
+    mockExec.mockImplementation((cmd: string, opts: unknown, cb?: unknown) => {
+      if (typeof opts === 'function') {
+        cb = opts;
+        opts = {};
+      }
+      if (cmd.includes('which')) {
+        (cb as ExecCallback)(null, { stdout: '/usr/local/bin/tool', stderr: '' });
+      } else if (cmd.includes('claude auth status')) {
+        (cb as ExecCallback)(null, { stdout: 'Authenticated', stderr: '' });
+      } else if (cmd.includes('printenv OPENAI_API_KEY')) {
+        (cb as ExecCallback)(null, { stdout: 'sk-key', stderr: '' });
+      } else {
+        (cb as ExecCallback)(null, { stdout: 'version 1.0', stderr: '' });
+      }
+    });
+
+    const first = await checkSystemHealthWithAuth();
+    vi.clearAllMocks();
+
+    const second = await checkSystemHealthWithAuth();
+    expect(second).toEqual(first);
+    expect(mockExec).not.toHaveBeenCalled();
+
+    await checkSystemHealthWithAuth({ force: true });
+    expect(mockExec).toHaveBeenCalled();
+  });
 });
 
 describe('parseClaudeAuthStatusOutput', () => {
@@ -587,6 +617,46 @@ describe('checkCliProviderUsage', () => {
     expect(result.codex.windows).toEqual(
       expect.arrayContaining([expect.objectContaining({ key: 'session', leftPercent: 98 })]),
     );
+  });
+
+  it('reuses fresh cached provider usage results until forced', async () => {
+    execRouted({
+      'which claude': { stdout: '/usr/local/bin/claude\n' },
+      'which codex': { stdout: '/usr/local/bin/codex\n' },
+      'claude --version': { stdout: '1.0.88\n' },
+      'codex --version': { stdout: '0.121.0\n' },
+      'claude auth status': {
+        stdout: JSON.stringify({
+          loggedIn: true,
+          email: 'vincent@shipshit.dev',
+          subscriptionType: 'max',
+        }),
+      },
+    });
+    mockPtySpawn.mockImplementation((command: string) => {
+      if (command.includes('claude')) {
+        return createMockPty(`
+          Current session
+          99% left
+          Resets in 4h 49m
+        `);
+      }
+      return createMockPty(`
+        Credits: 54.72
+        5h limit 98% left resets in 4h 49m
+      `);
+    });
+
+    const first = await checkCliProviderUsage();
+    vi.clearAllMocks();
+
+    const second = await checkCliProviderUsage();
+    expect(second).toEqual(first);
+    expect(mockExec).not.toHaveBeenCalled();
+    expect(mockPtySpawn).not.toHaveBeenCalled();
+
+    await checkCliProviderUsage({ force: true });
+    expect(mockPtySpawn).toHaveBeenCalled();
   });
 });
 

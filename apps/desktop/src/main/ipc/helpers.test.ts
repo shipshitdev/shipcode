@@ -5,7 +5,9 @@ import type { Queries } from './types';
 
 describe('transitionThreadPhase', () => {
   const mainWindow = {
+    isDestroyed: vi.fn(() => false),
     webContents: {
+      isDestroyed: vi.fn(() => false),
       send: vi.fn(),
     },
   } as const;

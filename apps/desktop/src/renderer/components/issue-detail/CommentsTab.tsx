@@ -1,6 +1,6 @@
 import type { GitHubIssueComment } from '@shipcode/shared';
 import { Button, RefreshCw, Textarea } from '@shipcode/ui';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { timeAgo } from './helpers';
 
@@ -19,11 +19,24 @@ export function CommentsTab({
     data: comments = [],
     isLoading,
     isRefetching,
-    refetch,
   } = useQuery<GitHubIssueComment[]>({
     queryKey: ['issue-comments', projectId, issueNumber],
     queryFn: () => window.shipcode.invoke('github:list-comments', { projectId, issueNumber }),
     enabled: !!projectId,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const refreshComments = useMutation({
+    mutationFn: () =>
+      window.shipcode.invoke<GitHubIssueComment[]>('github:list-comments', {
+        projectId,
+        issueNumber,
+        force: true,
+      }),
+    onSuccess: (freshComments) => {
+      queryClient.setQueryData(['issue-comments', projectId, issueNumber], freshComments);
+    },
   });
 
   const handlePost = async () => {
@@ -51,12 +64,15 @@ export function CommentsTab({
         <Button
           variant="ghost"
           size="icon-xs"
-          onClick={() => void refetch()}
-          disabled={isRefetching}
+          onClick={() => refreshComments.mutate()}
+          disabled={isRefetching || refreshComments.isPending}
           title="Refresh comments from GitHub"
           aria-label="Refresh comments"
         >
-          <RefreshCw size={12} className={isRefetching ? 'animate-spin' : ''} />
+          <RefreshCw
+            size={12}
+            className={isRefetching || refreshComments.isPending ? 'animate-spin' : ''}
+          />
         </Button>
       </div>
 

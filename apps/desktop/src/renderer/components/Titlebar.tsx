@@ -21,7 +21,7 @@ import {
   Terminal,
   X,
 } from '@shipcode/ui';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 import { ProjectProviderWarningPopover } from './ProjectProviderWarningPopover';
@@ -263,6 +263,7 @@ function ProviderStatusBadge({
 }
 
 export function Titlebar() {
+  const queryClient = useQueryClient();
   const {
     settingsVisible,
     toggleSettings,
@@ -299,16 +300,21 @@ export function Titlebar() {
     refetchIntervalInBackground: true,
   });
 
-  const {
-    data: providerUsage,
-    refetch: refetchProviderUsage,
-    isFetching: isProviderUsageFetching,
-  } = useQuery<CliProviderUsageMap>({
-    queryKey: ['provider-usage'],
-    queryFn: () => window.shipcode.invoke<CliProviderUsageMap>('provider-usage:check'),
-    staleTime: 60_000,
-    refetchInterval: 60_000,
-    refetchIntervalInBackground: true,
+  const { data: providerUsage, isFetching: isProviderUsageFetching } =
+    useQuery<CliProviderUsageMap>({
+      queryKey: ['provider-usage'],
+      queryFn: () => window.shipcode.invoke<CliProviderUsageMap>('provider-usage:check'),
+      staleTime: 60_000,
+      refetchInterval: 60_000,
+      refetchIntervalInBackground: true,
+    });
+
+  const refreshProviderUsage = useMutation({
+    mutationFn: () =>
+      window.shipcode.invoke<CliProviderUsageMap>('provider-usage:check', { force: true }),
+    onSuccess: (freshUsage) => {
+      queryClient.setQueryData(['provider-usage'], freshUsage);
+    },
   });
 
   const projectWarnings =
@@ -361,8 +367,8 @@ export function Titlebar() {
         {providerUsage ? (
           <ProviderStatusBadge
             providerUsage={providerUsage}
-            onRefresh={() => void refetchProviderUsage()}
-            isRefreshing={isProviderUsageFetching}
+            onRefresh={() => refreshProviderUsage.mutate()}
+            isRefreshing={isProviderUsageFetching || refreshProviderUsage.isPending}
           />
         ) : null}
         {!settingsVisible && (

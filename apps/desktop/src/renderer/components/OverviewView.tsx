@@ -7,6 +7,7 @@ import type {
   RecentTask,
 } from '@shipcode/shared';
 import {
+  ActivePipelineCard,
   Bell,
   Bot,
   Button,
@@ -24,7 +25,7 @@ import {
   TableRow,
 } from '@shipcode/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 
 function timeAgo(input: string | number): string {
@@ -38,31 +39,6 @@ function timeAgo(input: string | number): string {
   if (h < 24) return `${h}h ago`;
   const d = Math.floor(h / 24);
   return `${d}d ago`;
-}
-
-function ElapsedClock({ since }: { since: number }) {
-  const [, tick] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => tick((n) => n + 1), 1000);
-    return () => clearInterval(id);
-  }, []);
-  const elapsed = Date.now() - since;
-  const s = Math.floor(elapsed / 1000);
-  if (s < 60) return <>{s}s</>;
-  const m = Math.floor(s / 60);
-  const rem = s % 60;
-  if (m < 60)
-    return (
-      <>
-        {m}m {rem}s
-      </>
-    );
-  const h = Math.floor(m / 60);
-  return (
-    <>
-      {h}h {m % 60}m
-    </>
-  );
 }
 
 interface StatCardProps {
@@ -252,35 +228,19 @@ export function OverviewView() {
             ) : (
               <div className="flex flex-wrap gap-3">
                 {running.map((row) => (
-                  <div
-                    key={row.threadId}
-                    className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 min-w-[260px] max-w-[340px] flex-1"
-                  >
-                    <Button
-                      variant="ghost"
-                      className="flex items-start justify-between gap-2 text-left w-full h-auto px-0 py-0 hover:bg-transparent font-normal"
+                  <div key={row.threadId} className="min-w-[280px] max-w-[360px] flex-1">
+                    <ActivePipelineCard
+                      projectName={row.projectName}
+                      title={row.threadTitle}
+                      phase={row.phase}
+                      startedAt={row.startedAt}
+                      issueNumber={row.githubIssueNumber}
+                      modelProvider={row.modelProvider}
+                      model={row.model}
+                      reasoningEffort={row.reasoningEffort}
                       onClick={() => handleRowClick(row.projectId, row.threadId)}
-                    >
-                      <div className="min-w-0">
-                        <div className="text-[11px] text-muted mb-1">{row.projectName}</div>
-                        <div className="text-[13px] font-medium text-primary truncate leading-snug">
-                          {row.threadTitle}
-                        </div>
-                      </div>
-                      <PhaseChip status={row.phase} />
-                    </Button>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] tabular-nums text-muted">
-                        <ElapsedClock since={row.startedAt} />
-                      </span>
-                      <Button
-                        size="xs"
-                        variant="destructive"
-                        onClick={() => handleStop(row.threadId)}
-                      >
-                        Stop
-                      </Button>
-                    </div>
+                      onCancel={() => handleStop(row.threadId)}
+                    />
                   </div>
                 ))}
               </div>

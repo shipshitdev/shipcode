@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS } from './constants';
 import {
   getIssueCardPhase,
+  getPipelineCardPhase,
   resolveEffectivePhaseReasoningEffort,
   resolveEffectivePhaseReasoningEffortForIssue,
   resolveExecutorModelForIssue,
@@ -11,8 +12,9 @@ import {
   resolvePhaseModelIdForIssue,
   resolvePhaseReasoningEffort,
   resolvePhaseReasoningEffortForIssue,
+  resolveThreadPhasePresentation,
 } from './model-resolution';
-import type { AppSettings, GitHubIssueCacheRecord, Project } from './types';
+import type { AppSettings, GitHubIssueCacheRecord, Project, Thread } from './types';
 
 function makeProject(overrides: Partial<Project> = {}): Project {
   return {
@@ -85,6 +87,46 @@ function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
     unresolvedReviewCommentCount: 0,
     prLastSyncAt: null,
     fetchedAt: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
+function makeThread(overrides: Partial<Thread> = {}): Thread {
+  return {
+    id: 'thread-1',
+    projectId: 'project-1',
+    kind: 'pipeline',
+    title: 'Test thread',
+    prompt: 'Ship it',
+    status: 'planning',
+    worktreeBranch: null,
+    worktreePath: null,
+    plannerModel: 'claude',
+    reviewerModel: 'codex',
+    verifierModel: 'claude',
+    executorModel: 'claude',
+    reviewRound: 0,
+    verificationStatus: null,
+    verificationRetries: 0,
+    autonomous: false,
+    baseBranch: null,
+    forkPointSha: null,
+    githubIssueNumber: 42,
+    githubPrNumber: null,
+    githubRepo: null,
+    lastError: null,
+    failurePhase: null,
+    failureCount: 0,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    plannerResolvedModel: null,
+    reviewerResolvedModel: null,
+    revisorResolvedModel: null,
+    executorResolvedModel: null,
+    verifierResolvedModel: null,
+    totalTokensPrompt: 0,
+    totalTokensCompletion: 0,
+    totalCostUsd: 0,
     ...overrides,
   };
 }
@@ -171,6 +213,19 @@ describe('model-resolution', () => {
     expect(getIssueCardPhase('failed')).toBeNull();
     expect(getIssueCardPhase('completed')).toBeNull();
     expect(getIssueCardPhase('done')).toBeNull();
+  });
+
+  it('maps pipeline phases to the current card phase', () => {
+    expect(getPipelineCardPhase('planning')).toBe('planner');
+    expect(getPipelineCardPhase('revising')).toBe('planner');
+    expect(getPipelineCardPhase('awaiting_approval')).toBe('planner');
+    expect(getPipelineCardPhase('reviewing')).toBe('reviewer');
+    expect(getPipelineCardPhase('executing')).toBe('executor');
+    expect(getPipelineCardPhase('testing')).toBe('executor');
+    expect(getPipelineCardPhase('verifying')).toBe('verifier');
+    expect(getPipelineCardPhase('shipping')).toBe('verifier');
+    expect(getPipelineCardPhase('failed')).toBeNull();
+    expect(getPipelineCardPhase('completed')).toBeNull();
   });
 
   it('returns the global reasoning effort for the current phase', () => {
@@ -267,5 +322,23 @@ describe('model-resolution', () => {
     expect(resolvePhaseModelId(withOpenRouterDefaults, project, 'verifier')).toBe(
       'openrouter/auto',
     );
+  });
+
+  it('prefers the thread phase provider and resolved model for live pipeline displays', () => {
+    const project = makeProject({
+      plannerModelOverride: 'claude',
+      plannerReasoningEffortOverride: 'high',
+    });
+    const thread = makeThread({
+      plannerModel: 'codex',
+      plannerResolvedModel: 'gpt-5.4-mini',
+      status: 'planning',
+    });
+
+    expect(resolveThreadPhasePresentation(settings, project, thread, 'planning')).toEqual({
+      provider: 'codex',
+      model: 'gpt-5.4-mini',
+      effort: 'high',
+    });
   });
 });

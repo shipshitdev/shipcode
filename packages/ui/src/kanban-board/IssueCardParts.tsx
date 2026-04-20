@@ -5,7 +5,7 @@ import type { GitHubIssueCacheRecord } from '@shipcode/shared';
 import { phaseToProgress } from '@shipcode/shared';
 import { Archive } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { MODEL_DISPLAY } from '../lib/model-display';
+import { formatProviderModelDisplay } from '../lib/model-display';
 import { cn } from '../lib/utils';
 import { PhaseChip } from '../PhaseChip';
 import { Badge } from '../primitives/badge';
@@ -234,7 +234,7 @@ export function DraggableCard({
               phaseChip.effort ? ` (${phaseChip.effort})` : ''
             }`}
           >
-            {MODEL_DISPLAY[phaseChip.model] ?? phaseChip.model}
+            {formatProviderModelDisplay(phaseChip.provider, phaseChip.model)}
             {phaseChip.effort ? ` · ${phaseChip.effort}` : ''}
           </Badge>
         )}

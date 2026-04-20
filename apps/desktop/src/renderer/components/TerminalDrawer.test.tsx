@@ -18,16 +18,21 @@ function renderWithProviders() {
 }
 
 const fitSpy = vi.fn();
+const scrollToBottomSpy = vi.fn();
 
 vi.mock('@xterm/xterm', () => ({
   Terminal: class MockTerminal {
     options: Record<string, unknown> = {};
     rows = 24;
+    buffer = { active: { baseY: 0, viewportY: 0 } };
     loadAddon() {}
     open() {}
     write() {}
     reset() {}
     refresh() {}
+    scrollToBottom() {
+      scrollToBottomSpy();
+    }
     dispose() {}
   },
 }));
@@ -88,6 +93,7 @@ describe('TerminalDrawer', () => {
 
   beforeEach(() => {
     fitSpy.mockClear();
+    scrollToBottomSpy.mockClear();
     class MockResizeObserver {
       observe() {}
       disconnect() {}
@@ -247,6 +253,7 @@ describe('TerminalDrawer', () => {
       expect(useAppStore.getState().canonicalTerminalStream['thread-1']).toHaveLength(1);
     });
     expect(fitSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(scrollToBottomSpy).toHaveBeenCalled();
   });
 
   it('filters the terminal dropdown to running issues in the selected project only', async () => {

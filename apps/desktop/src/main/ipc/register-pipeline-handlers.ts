@@ -1,5 +1,5 @@
 import type { ActivePipelineSummary } from '@shipcode/shared';
-import { resolveExecutorModelForIssue } from '@shipcode/shared';
+import { resolveExecutorModelForIssue, resolveThreadPhasePresentation } from '@shipcode/shared';
 import { logEvent } from '../logger.service';
 import {
   resolveIssuePhaseModels,
@@ -18,6 +18,32 @@ export function registerPipelineHandlers({
   emitter,
   notificationService,
 }: IpcHandlerDeps): void {
+  const buildActivePipelineSummary = (
+    summary: ReturnType<typeof pipeline.listActive>[number],
+  ): ActivePipelineSummary => {
+    const thread = queries.threads.getById(summary.threadId);
+    const project = thread ? queries.projects.getById(thread.projectId) : null;
+    const settings = queries.settings.get();
+    const phasePresentation =
+      thread != null
+        ? resolveThreadPhasePresentation(settings, project, thread, summary.phase)
+        : null;
+
+    return {
+      threadId: summary.threadId,
+      projectId: thread?.projectId ?? '',
+      projectName: project?.name ?? 'Unknown project',
+      threadTitle: thread?.title ?? summary.threadId,
+      phase: summary.phase,
+      startedAt: summary.startedAt,
+      activeProcessId: summary.activeProcessId,
+      githubIssueNumber: thread?.githubIssueNumber ?? null,
+      modelProvider: phasePresentation?.provider ?? null,
+      model: phasePresentation?.model ?? null,
+      reasoningEffort: phasePresentation?.effort ?? null,
+    };
+  };
+
   ipcMain.handle('verification:get', (_event, { threadId }: { threadId: string }) => {
     return queries.verifications.getLatest(threadId);
   });
@@ -361,20 +387,7 @@ export function registerPipelineHandlers({
   });
 
   ipcMain.handle('pipeline:list-active', (): ActivePipelineSummary[] => {
-    const summaries = pipeline.listActive();
-    return summaries.map((summary) => {
-      const thread = queries.threads.getById(summary.threadId);
-      const project = thread ? queries.projects.getById(thread.projectId) : null;
-      return {
-        threadId: summary.threadId,
-        projectId: thread?.projectId ?? '',
-        projectName: project?.name ?? 'Unknown project',
-        threadTitle: thread?.title ?? summary.threadId,
-        phase: summary.phase,
-        startedAt: summary.startedAt,
-        activeProcessId: summary.activeProcessId,
-      };
-    });
+    return pipeline.listActive().map(buildActivePipelineSummary);
   });
 
   ipcMain.handle(
@@ -393,19 +406,7 @@ export function registerPipelineHandlers({
         recentOffset?: number;
       } = {},
     ) => {
-      const running = pipeline.listActive().map((summary) => {
-        const thread = queries.threads.getById(summary.threadId);
-        const project = thread ? queries.projects.getById(thread.projectId) : null;
-        return {
-          threadId: summary.threadId,
-          projectId: thread?.projectId ?? '',
-          projectName: project?.name ?? 'Unknown project',
-          threadTitle: thread?.title ?? summary.threadId,
-          phase: summary.phase,
-          startedAt: summary.startedAt,
-          activeProcessId: summary.activeProcessId,
-        };
-      });
+      const running = pipeline.listActive().map(buildActivePipelineSummary);
 
       return {
         stats: queries.dashboard.getStats(),

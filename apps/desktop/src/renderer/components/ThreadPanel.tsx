@@ -174,7 +174,7 @@ export function ThreadPanel() {
   const projectsUrl = githubProjectsUrl(project?.gitRemote, project?.githubProjectUrl);
 
   return (
-    <div className="relative flex flex-1 min-w-0 flex-col bg-primary">
+    <div className="relative flex flex-1 min-h-0 min-w-0 flex-col bg-primary">
       <KanbanBoard
         issues={issues}
         onIssueClick={(issue) => selectIssue(issue)}

@@ -13,7 +13,7 @@ import {
   listContextFiles,
   readContextFile,
 } from '@shipcode/agents';
-import type { ContextGeneratorCli } from '@shipcode/shared';
+import { type ContextGeneratorCli, type ExecutorModel, providerDisplay } from '@shipcode/shared';
 import log, { logProcessOutput } from '../logger.service';
 import {
   clearPrdAttachmentSession,
@@ -214,9 +214,13 @@ export function registerSupportHandlers({
     const proc = processManager.get(processId);
 
     if (proc?.threadId) {
-      ensureNormalizer(processId, proc.type, proc.threadId);
-      const normalizer = normalizers.get(processId);
-      normalizer?.feed(data);
+      if (proc.outputMode === 'raw') {
+        emitTerminalEvent(proc.threadId, { kind: 'raw', content: data });
+      } else {
+        ensureNormalizer(processId, proc.type, proc.threadId);
+        const normalizer = normalizers.get(processId);
+        normalizer?.feed(data);
+      }
     }
 
     logProcessOutput(proc?.type ?? 'unknown', data);
@@ -264,9 +268,13 @@ export function registerSupportHandlers({
       const agentColor =
         type === 'claude' ? '\x1b[36m' : type === 'codex' ? '\x1b[33m' : '\x1b[35m';
       const exitColor = state === 'exited' ? '\x1b[2m' : '';
+      const typeLabel =
+        type === 'claude' || type === 'codex' || type === 'openrouter'
+          ? `${providerDisplay(type as ExecutorModel)}${type === 'openrouter' ? '' : ' CLI'}`
+          : type;
       emitTerminalEvent(proc.threadId, {
         kind: 'lifecycle',
-        message: `\x1b[2m[${ts}]\x1b[0m ${exitColor}${agentColor}${type}\x1b[0m${exitColor} process ${state === 'running' ? 'started' : 'exited'}${exitSuffix}\x1b[0m`,
+        message: `\x1b[2m[${ts}]\x1b[0m ${exitColor}${agentColor}${typeLabel}\x1b[0m${exitColor} process ${state === 'running' ? 'started' : 'exited'}${exitSuffix}\x1b[0m`,
       });
     }
   });

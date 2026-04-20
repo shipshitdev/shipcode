@@ -1,4 +1,5 @@
 import type {
+  AgentState,
   CanonicalTerminalEvent,
   GitHubIssueCacheRecord,
   IssuePipelineStatus,
@@ -24,6 +25,7 @@ const AGENT_ACTIVE_STATUSES = new Set<IssuePipelineStatus>([
 export type ViewMode = 'overview' | 'project' | 'activity' | 'inbox' | 'costs' | 'skills';
 
 export type ProjectTab = 'issues' | 'pull-requests' | 'sessions';
+export type InstantPaneMode = 'replay' | 'live';
 export type SettingsSection =
   | 'general'
   | 'integrations'
@@ -103,6 +105,15 @@ interface AppState {
   instantFixModalDefaultCli: 'claude' | 'codex' | null;
   instantPaneThreadIds: string[];
   instantSplitDirection: 'horizontal' | 'vertical';
+  instantPaneMetaByThread: Record<
+    string,
+    {
+      mode: InstantPaneMode;
+      title?: string | null;
+      cli?: 'claude' | 'codex';
+      state?: AgentState;
+    }
+  >;
 
   // Actions
   setViewMode: (mode: ViewMode) => void;
@@ -166,9 +177,18 @@ interface AppState {
   openInstantFixModal: (defaultCli?: 'claude' | 'codex') => void;
   closeInstantFixModal: () => void;
   openTerminalSessions: () => void;
-  addInstantPane: (threadId: string) => void;
+  addInstantPane: (
+    threadId: string,
+    meta?: {
+      mode?: InstantPaneMode;
+      title?: string | null;
+      cli?: 'claude' | 'codex';
+      state?: AgentState;
+    },
+  ) => void;
   removeInstantPane: (threadId: string) => void;
   setInstantSplitDirection: (dir: 'horizontal' | 'vertical') => void;
+  setInstantPaneState: (threadId: string, state: AgentState) => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -209,6 +229,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   instantFixModalDefaultCli: null,
   instantPaneThreadIds: [],
   instantSplitDirection: 'horizontal',
+  instantPaneMetaByThread: {},
   currentModels: {},
   canonicalTerminalStream: {},
 
@@ -487,15 +508,44 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentVerification: null,
     });
   },
-  addInstantPane: (threadId) =>
+  addInstantPane: (threadId, meta) =>
     set((s) => {
-      if (s.instantPaneThreadIds.includes(threadId)) return s;
-      const next = [...s.instantPaneThreadIds, threadId].slice(0, 4);
-      return { instantPaneThreadIds: next };
+      const nextIds = s.instantPaneThreadIds.includes(threadId)
+        ? s.instantPaneThreadIds
+        : [...s.instantPaneThreadIds, threadId].slice(0, 4);
+      const existingMeta = s.instantPaneMetaByThread[threadId];
+      const nextMeta = {
+        ...existingMeta,
+        mode: meta?.mode ?? existingMeta?.mode ?? 'replay',
+        title: meta?.title ?? existingMeta?.title ?? null,
+        cli: meta?.cli ?? existingMeta?.cli,
+        state: meta?.state ?? existingMeta?.state,
+      };
+      return {
+        instantPaneThreadIds: nextIds,
+        instantPaneMetaByThread: {
+          ...s.instantPaneMetaByThread,
+          [threadId]: nextMeta,
+        },
+      };
     }),
   removeInstantPane: (threadId) =>
     set((s) => ({
       instantPaneThreadIds: s.instantPaneThreadIds.filter((id) => id !== threadId),
+      instantPaneMetaByThread: Object.fromEntries(
+        Object.entries(s.instantPaneMetaByThread).filter(([id]) => id !== threadId),
+      ),
     })),
   setInstantSplitDirection: (dir) => set({ instantSplitDirection: dir }),
+  setInstantPaneState: (threadId, state) =>
+    set((s) => {
+      const existing = s.instantPaneMetaByThread[threadId];
+      if (!existing) return s;
+      return {
+        instantPaneMetaByThread: {
+          ...s.instantPaneMetaByThread,
+          [threadId]: { ...existing, state },
+        },
+      };
+    }),
 }));

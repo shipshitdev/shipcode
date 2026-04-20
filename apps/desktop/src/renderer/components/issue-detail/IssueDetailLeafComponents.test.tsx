@@ -39,6 +39,10 @@ describe('issue-detail leaf components', () => {
             phase: 'planning',
             startedAt: Date.now() - 120_000,
             activeProcessId: 'process-1',
+            githubIssueNumber: 42,
+            modelProvider: 'claude',
+            model: 'claude',
+            reasoningEffort: 'high',
           },
         ] satisfies ActivePipelineSummary[];
       }

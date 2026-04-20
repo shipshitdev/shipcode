@@ -28,7 +28,31 @@ import * as pty from 'node-pty';
 const execAsync = promisify(exec);
 const CLI_USAGE_TIMEOUT_MS = 20_000;
 const CLI_USAGE_OUTPUT_TAIL = 8_192;
-const providerUsageCache = new Map<CliProviderUsageProvider, CliProviderUsageStatus>();
+const SYSTEM_HEALTH_TTL_MS = 30_000;
+const SYSTEM_HEALTH_WITH_AUTH_TTL_MS = 30_000;
+const PROVIDER_USAGE_TTL_MS = 60_000;
+const INTEGRATION_STATUS_TTL_MS = 30_000;
+
+interface TimedCacheEntry<T> {
+  value: T;
+  cachedAtMs: number;
+}
+
+export interface CacheOptions {
+  force?: boolean;
+}
+
+let systemHealthCache: TimedCacheEntry<SystemHealth> | null = null;
+let systemHealthInFlight: Promise<SystemHealth> | null = null;
+let systemHealthWithAuthCache: TimedCacheEntry<SystemHealth> | null = null;
+let systemHealthWithAuthInFlight: Promise<SystemHealth> | null = null;
+const providerUsageCache = new Map<
+  CliProviderUsageProvider,
+  TimedCacheEntry<CliProviderUsageStatus>
+>();
+const providerUsageInFlight = new Map<CliProviderUsageProvider, Promise<CliProviderUsageStatus>>();
+const integrationStatusCache = new Map<string, TimedCacheEntry<IntegrationStatus>>();
+const integrationStatusInFlight = new Map<string, Promise<IntegrationStatus>>();
 const DESKTOP_APP_LABELS: Record<ProjectOpenTarget, string> = {
   cursor: 'Cursor',
   finder: 'Finder',
@@ -155,6 +179,36 @@ async function readEnvVar(name: string): Promise<string | null> {
 
   const fallback = process.env[name]?.trim();
   return fallback ? fallback : null;
+}
+
+function getFreshCachedValue<T>(
+  entry: TimedCacheEntry<T> | null | undefined,
+  ttlMs: number,
+): T | null {
+  if (!entry) return null;
+  return Date.now() - entry.cachedAtMs < ttlMs ? entry.value : null;
+}
+
+function createTimedCacheEntry<T>(value: T): TimedCacheEntry<T> {
+  return { value, cachedAtMs: Date.now() };
+}
+
+function buildIntegrationStatusCacheKey(settings: AppSettings): string {
+  return JSON.stringify({
+    discordEnabled: settings.discordEnabled,
+    discordWebhookUrl: settings.discordWebhookUrl,
+    telegramEnabled: settings.telegramEnabled,
+    telegramBotToken: settings.telegramBotToken,
+    telegramDefaultChatId: settings.telegramDefaultChatId,
+    projectOpenTarget: settings.projectOpenTarget,
+    openrouterDefaultPaidModel: settings.openrouterDefaultPaidModel,
+    openrouterDefaultFreeModel: settings.openrouterDefaultFreeModel,
+    openrouterExplicitFallback: settings.openrouterExplicitFallback,
+    openrouterPlannerModel: settings.openrouterPlannerModel,
+    openrouterReviewerModel: settings.openrouterReviewerModel,
+    openrouterExecutorModel: settings.openrouterExecutorModel,
+    openrouterVerifierModel: settings.openrouterVerifierModel,
+  });
 }
 
 function summarizeExecFailure(error: unknown): string {
@@ -720,10 +774,10 @@ async function probeClaudeUsage(
     rows: 50,
     cols: 160,
     initialInput: '/usage\r',
-    initialDelayMs: 2_000,
+    initialDelayMs: 1_250,
     idleTimeoutMs: null,
-    periodicEnterMs: 800,
-    settleAfterStopMs: 2_000,
+    periodicEnterMs: 600,
+    settleAfterStopMs: 750,
     stopOnSubstrings: [
       'Current session',
       'Current week (all models)',
@@ -762,9 +816,11 @@ async function probeCodexUsage(
     rows: 70,
     cols: 220,
     initialInput: '/status\n',
-    initialDelayMs: 3_000,
-    idleTimeoutMs: 3_000,
-    periodicEnterMs: 1_000,
+    initialDelayMs: 1_750,
+    idleTimeoutMs: 2_000,
+    periodicEnterMs: 750,
+    settleAfterStopMs: 500,
+    stopOnSubstrings: ['Credits:', '5h limit', 'Weekly limit'],
     sendOnSubstrings: {
       'Do you trust the contents of this directory?': '\r\n',
       'Yes, continue': '\r\n',
@@ -776,35 +832,55 @@ async function probeCodexUsage(
 
 async function checkProviderUsage(
   provider: CliProviderUsageProvider,
+  options: CacheOptions = {},
 ): Promise<CliProviderUsageStatus> {
   const checkedAt = new Date().toISOString();
-  try {
-    const cli = await checkCli(provider, '--version');
-    if (!cli.available || !cli.path) {
-      return emptyProviderUsage(provider, checkedAt, `${provider} CLI not found in PATH`);
-    }
+  const cached = getFreshCachedValue(providerUsageCache.get(provider), PROVIDER_USAGE_TTL_MS);
+  if (!options.force && cached) {
+    return cached;
+  }
 
-    const parsed =
-      provider === 'claude'
-        ? await probeClaudeUsage(cli.version, cli.path)
-        : await probeCodexUsage(cli.version, cli.path);
-    providerUsageCache.set(provider, parsed);
-    return parsed;
-  } catch (error) {
-    const cached = providerUsageCache.get(provider);
-    if (cached) {
-      return {
-        ...cached,
-        stale: true,
+  const inFlight = providerUsageInFlight.get(provider);
+  if (inFlight) {
+    return inFlight;
+  }
+
+  const run = (async () => {
+    try {
+      const cli = await checkCli(provider, '--version');
+      if (!cli.available || !cli.path) {
+        return emptyProviderUsage(provider, checkedAt, `${provider} CLI not found in PATH`);
+      }
+
+      const parsed =
+        provider === 'claude'
+          ? await probeClaudeUsage(cli.version, cli.path)
+          : await probeCodexUsage(cli.version, cli.path);
+      providerUsageCache.set(provider, createTimedCacheEntry(parsed));
+      return parsed;
+    } catch (error) {
+      const stale = providerUsageCache.get(provider)?.value;
+      if (stale) {
+        return {
+          ...stale,
+          stale: true,
+          checkedAt,
+          message: stale.message ?? `Using cached ${provider} usage data`,
+        };
+      }
+      return emptyProviderUsage(
+        provider,
         checkedAt,
-        message: cached.message ?? `Using cached ${provider} usage data`,
-      };
+        `${provider === 'claude' ? 'Claude' : 'Codex'} CLI usage unavailable: ${summarizeExecFailure(error)}`,
+      );
     }
-    return emptyProviderUsage(
-      provider,
-      checkedAt,
-      `${provider === 'claude' ? 'Claude' : 'Codex'} CLI usage unavailable: ${summarizeExecFailure(error)}`,
-    );
+  })();
+
+  providerUsageInFlight.set(provider, run);
+  try {
+    return await run;
+  } finally {
+    providerUsageInFlight.delete(provider);
   }
 }
 const DISCORD_WEBHOOK_RE = /^https:\/\/(?:discord(?:app)?\.com)\/api\/webhooks\/[^/\s]+\/[^/\s]+$/i;
@@ -1185,53 +1261,132 @@ export async function checkGhAuth(): Promise<GhAuthStatus> {
   }
 }
 
-export async function checkSystemHealth(): Promise<SystemHealth> {
-  const [claude, codex, git, gh] = await Promise.all([
-    checkCli('claude', '--version'),
-    checkCli('codex', '--version'),
-    checkCli('git', '--version'),
-    checkCli('gh', '--version'),
-  ]);
+export async function checkSystemHealth(options: CacheOptions = {}): Promise<SystemHealth> {
+  const cached = getFreshCachedValue(systemHealthCache, SYSTEM_HEALTH_TTL_MS);
+  if (!options.force && cached) {
+    return cached;
+  }
 
-  return { claude, codex, git, gh };
+  if (systemHealthInFlight) {
+    return systemHealthInFlight;
+  }
+
+  systemHealthInFlight = (async () => {
+    const [claude, codex, git, gh] = await Promise.all([
+      checkCli('claude', '--version'),
+      checkCli('codex', '--version'),
+      checkCli('git', '--version'),
+      checkCli('gh', '--version'),
+    ]);
+
+    const result = { claude, codex, git, gh };
+    systemHealthCache = createTimedCacheEntry(result);
+    return result;
+  })();
+
+  try {
+    return await systemHealthInFlight;
+  } finally {
+    systemHealthInFlight = null;
+  }
 }
 
-export async function checkSystemHealthWithAuth(): Promise<SystemHealth> {
-  const [health, claudeAuth, codexAuth] = await Promise.all([
-    checkSystemHealth(),
-    checkClaudeAuth(),
-    checkCodexAuth(),
-  ]);
+export async function checkSystemHealthWithAuth(options: CacheOptions = {}): Promise<SystemHealth> {
+  const cached = getFreshCachedValue(systemHealthWithAuthCache, SYSTEM_HEALTH_WITH_AUTH_TTL_MS);
+  if (!options.force && cached) {
+    return cached;
+  }
 
-  return {
-    ...health,
-    claude: { ...health.claude, authenticated: health.claude.available && claudeAuth },
-    codex: { ...health.codex, authenticated: health.codex.available && codexAuth },
-  };
+  if (systemHealthWithAuthInFlight) {
+    return systemHealthWithAuthInFlight;
+  }
+
+  systemHealthWithAuthInFlight = (async () => {
+    const [health, claudeAuth, codexAuth] = await Promise.all([
+      checkSystemHealth(options),
+      checkClaudeAuth(),
+      checkCodexAuth(),
+    ]);
+
+    const result = {
+      ...health,
+      claude: { ...health.claude, authenticated: health.claude.available && claudeAuth },
+      codex: { ...health.codex, authenticated: health.codex.available && codexAuth },
+    };
+    systemHealthWithAuthCache = createTimedCacheEntry(result);
+    return result;
+  })();
+
+  try {
+    return await systemHealthWithAuthInFlight;
+  } finally {
+    systemHealthWithAuthInFlight = null;
+  }
 }
 
-export async function checkCliProviderUsage(): Promise<CliProviderUsageMap> {
+export async function checkCliProviderUsage(
+  options: CacheOptions = {},
+): Promise<CliProviderUsageMap> {
   const [claude, codex] = await Promise.all([
-    checkProviderUsage('claude'),
-    checkProviderUsage('codex'),
+    checkProviderUsage('claude', options),
+    checkProviderUsage('codex', options),
   ]);
   return { claude, codex };
 }
 
-export async function checkIntegrationStatus(settings: AppSettings): Promise<IntegrationStatus> {
-  const [system, ghAuth, openrouter, desktopApps] = await Promise.all([
-    checkSystemHealthWithAuth(),
-    checkGhAuth(),
-    checkOpenRouterHealth(settings),
-    checkDesktopApps(),
-  ]);
+export async function checkIntegrationStatus(
+  settings: AppSettings,
+  options: CacheOptions = {},
+): Promise<IntegrationStatus> {
+  const cacheKey = buildIntegrationStatusCacheKey(settings);
+  const cached = getFreshCachedValue(
+    integrationStatusCache.get(cacheKey),
+    INTEGRATION_STATUS_TTL_MS,
+  );
+  if (!options.force && cached) {
+    return cached;
+  }
 
-  return {
-    system,
-    ghAuth,
-    openrouter,
-    discord: checkDiscordHealth(settings),
-    telegram: checkTelegramHealth(settings),
-    desktopApps,
-  };
+  const inFlight = integrationStatusInFlight.get(cacheKey);
+  if (inFlight) {
+    return inFlight;
+  }
+
+  const run = (async () => {
+    const [system, ghAuth, openrouter, desktopApps] = await Promise.all([
+      checkSystemHealthWithAuth(options),
+      checkGhAuth(),
+      checkOpenRouterHealth(settings),
+      checkDesktopApps(),
+    ]);
+
+    const result = {
+      system,
+      ghAuth,
+      openrouter,
+      discord: checkDiscordHealth(settings),
+      telegram: checkTelegramHealth(settings),
+      desktopApps,
+    };
+    integrationStatusCache.set(cacheKey, createTimedCacheEntry(result));
+    return result;
+  })();
+
+  integrationStatusInFlight.set(cacheKey, run);
+  try {
+    return await run;
+  } finally {
+    integrationStatusInFlight.delete(cacheKey);
+  }
+}
+
+export function __resetHealthCheckCachesForTests(): void {
+  systemHealthCache = null;
+  systemHealthInFlight = null;
+  systemHealthWithAuthCache = null;
+  systemHealthWithAuthInFlight = null;
+  providerUsageCache.clear();
+  providerUsageInFlight.clear();
+  integrationStatusCache.clear();
+  integrationStatusInFlight.clear();
 }

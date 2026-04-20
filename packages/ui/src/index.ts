@@ -62,12 +62,22 @@ export {
   X,
   Zap,
 } from 'lucide-react';
+export type { ActivePipelineCardProps } from './ActivePipelineCard';
+export { ActivePipelineCard } from './ActivePipelineCard';
 export type { ShipCodeLogoMarkProps } from './brand/ShipCodeLogoMark';
 export { ShipCodeLogoMark } from './brand/ShipCodeLogoMark';
 export { DiffViewer } from './DiffViewer';
 export { IssueCard } from './IssueCard';
 export { KanbanBoard } from './KanbanBoard';
-export { MODEL_DISPLAY, modelDisplay } from './lib/model-display';
+export {
+  formatProviderModelDisplay,
+  formatResolvedModelDisplay,
+  inferProviderFromModel,
+  MODEL_DISPLAY,
+  modelDisplay,
+  PROVIDER_DISPLAY,
+  providerDisplay,
+} from './lib/model-display';
 export type { StatusBadgeVariant } from './lib/status-variant';
 export { getStatusBadgeVariant } from './lib/status-variant';
 export { cn } from './lib/utils';

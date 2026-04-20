@@ -65,15 +65,21 @@ export function SettingsPanel() {
     },
   });
 
-  const {
-    data: integrationStatus,
-    refetch: refetchIntegrations,
-    isFetching: integrationsFetching,
-  } = useQuery<IntegrationStatus>({
-    queryKey: ['integrations'],
-    queryFn: () => window.shipcode.invoke('integrations:check'),
-    enabled: settingsSection === 'integrations' || settingsSection === 'pipeline',
-    staleTime: 30_000,
+  const { data: integrationStatus, isFetching: integrationsFetching } = useQuery<IntegrationStatus>(
+    {
+      queryKey: ['integrations'],
+      queryFn: () => window.shipcode.invoke('integrations:check'),
+      enabled: settingsSection === 'integrations' || settingsSection === 'pipeline',
+      staleTime: 30_000,
+    },
+  );
+
+  const refreshIntegrations = useMutation({
+    mutationFn: () =>
+      window.shipcode.invoke<IntegrationStatus>('integrations:check', { force: true }),
+    onSuccess: (freshStatus) => {
+      queryClient.setQueryData(['integrations'], freshStatus);
+    },
   });
 
   if (!settings) return null;
@@ -112,11 +118,11 @@ export function SettingsPanel() {
         {settingsSection === 'integrations' && (
           <IntegrationsSettingsSection
             integrationStatus={integrationStatus}
-            integrationsFetching={integrationsFetching}
+            integrationsFetching={integrationsFetching || refreshIntegrations.isPending}
             settings={settings}
             onUpdate={update}
             onRefetch={() => {
-              void refetchIntegrations();
+              refreshIntegrations.mutate();
             }}
             onTestChat={testChat}
           />

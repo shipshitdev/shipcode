@@ -1,7 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { enhancePrdDraft, GhCli } from '@shipcode/agents';
-import type { ExecutorModel, GitHubIssueCacheRecord, ReasoningEffort } from '@shipcode/shared';
+import type {
+  ExecutorModel,
+  GitHubIssueCacheRecord,
+  GitHubIssueComment,
+  ReasoningEffort,
+} from '@shipcode/shared';
 import {
   clampError,
   deriveGithubIssueUrl,
@@ -21,7 +26,13 @@ import type { IpcHandlerDeps } from './types';
 
 const ISSUE_REFRESH_TTL_MS = 5 * 60_000;
 const PR_FEEDBACK_SYNC_TTL_MS = 60_000;
+const ISSUE_COMMENT_TTL_MS = 30_000;
 const refreshIssuesInFlight = new Map<string, Promise<GitHubIssueCacheRecord[]>>();
+const issueCommentsCache = new Map<
+  string,
+  { comments: GitHubIssueComment[]; cachedAtMs: number }
+>();
+const issueCommentsInFlight = new Map<string, Promise<GitHubIssueComment[]>>();
 
 function resolveCanonicalIssueThread(
   queries: IpcHandlerDeps['queries'],
@@ -755,16 +766,46 @@ export function registerGitHubHandlers({
       if (!project) throw new Error(`Project ${projectId} not found`);
       const ghCli = new GhCli(project.path);
       await ghCli.addIssueComment(issueNumber, body);
+      issueCommentsCache.delete(`${projectId}:${issueNumber}`);
     },
   );
 
   ipcMain.handle(
     'github:list-comments',
-    async (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
+    async (
+      _event,
+      {
+        projectId,
+        issueNumber,
+        force = false,
+      }: { projectId: string; issueNumber: number; force?: boolean },
+    ) => {
+      const cacheKey = `${projectId}:${issueNumber}`;
+      const cached = issueCommentsCache.get(cacheKey);
+      if (!force && cached && Date.now() - cached.cachedAtMs < ISSUE_COMMENT_TTL_MS) {
+        return cached.comments;
+      }
+
+      const inFlight = issueCommentsInFlight.get(cacheKey);
+      if (inFlight) {
+        return inFlight;
+      }
+
       const project = queries.projects.getById(projectId);
       if (!project) throw new Error(`Project ${projectId} not found`);
-      const ghCli = new GhCli(project.path);
-      return ghCli.listIssueComments(issueNumber);
+      const request = (async () => {
+        const ghCli = new GhCli(project.path);
+        const comments = await ghCli.listIssueComments(issueNumber);
+        issueCommentsCache.set(cacheKey, { comments, cachedAtMs: Date.now() });
+        return comments;
+      })();
+
+      issueCommentsInFlight.set(cacheKey, request);
+      try {
+        return await request;
+      } finally {
+        issueCommentsInFlight.delete(cacheKey);
+      }
     },
   );
 

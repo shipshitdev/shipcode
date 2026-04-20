@@ -166,7 +166,7 @@ export function KanbanBoard({
   }
 
   return (
-    <div className="relative flex flex-col h-full overflow-hidden">
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
       <BoardToolbar
         baseBranch={baseBranch}
         branches={branches}
@@ -202,7 +202,7 @@ export function KanbanBoard({
           />
         )}
         {view === 'kanban' && (
-          <div className="flex flex-1 overflow-x-auto overflow-y-hidden gap-0.5 p-3 px-2">
+          <div className="flex min-h-0 flex-1 gap-0.5 overflow-x-auto overflow-y-hidden p-3 px-2">
             {COLUMNS.map((col) => {
               if (col.sections) {
                 return (

@@ -78,6 +78,7 @@ describe('useIpc terminal scoping', () => {
       githubIssues: [currentIssue],
       currentModels: {},
       canonicalTerminalStream: {},
+      instantPaneMetaByThread: {},
       notifications: [],
     });
   });
@@ -203,5 +204,38 @@ describe('useIpc terminal scoping', () => {
 
     expect(useAppStore.getState().canonicalTerminalStream['thread-1']).toHaveLength(2);
     vi.useRealTimers();
+  });
+
+  it('tracks live instant pane state from agent lifecycle events', () => {
+    useAppStore.getState().addInstantPane('thread-live', {
+      mode: 'live',
+      cli: 'claude',
+      title: 'Claude shell',
+      state: 'running',
+    });
+
+    renderHarness();
+
+    listeners.get('agent:state')?.({
+      processId: 'proc-live',
+      type: 'claude',
+      state: 'exited',
+      threadId: 'thread-live',
+    });
+
+    expect(useAppStore.getState().instantPaneMetaByThread['thread-live']?.state).toBe('exited');
+  });
+
+  it('formats provider and model consistently for terminal headers', () => {
+    renderHarness();
+
+    listeners.get('pipeline:model-resolved')?.({
+      threadId: 'thread-1',
+      phase: 'review',
+      requestedModel: 'gpt-5.4',
+      resolvedModel: 'codex',
+    });
+
+    expect(useAppStore.getState().currentModels['thread-1']).toBe('Codex / GPT-5.4');
   });
 });

@@ -224,4 +224,28 @@ describe('app-store', () => {
       expect(useAppStore.getState().canonicalTerminalStream['thread-1']?.[1]?.id).toBe('event-2');
     });
   });
+
+  describe('instant pane metadata', () => {
+    it('stores pane mode/title/state and removes metadata on close', () => {
+      useAppStore.getState().addInstantPane('thread-live', {
+        mode: 'live',
+        cli: 'claude',
+        title: 'Claude shell',
+        state: 'running',
+      });
+
+      expect(useAppStore.getState().instantPaneMetaByThread['thread-live']).toEqual({
+        mode: 'live',
+        cli: 'claude',
+        title: 'Claude shell',
+        state: 'running',
+      });
+
+      useAppStore.getState().setInstantPaneState('thread-live', 'exited');
+      expect(useAppStore.getState().instantPaneMetaByThread['thread-live']?.state).toBe('exited');
+
+      useAppStore.getState().removeInstantPane('thread-live');
+      expect(useAppStore.getState().instantPaneMetaByThread['thread-live']).toBeUndefined();
+    });
+  });
 });

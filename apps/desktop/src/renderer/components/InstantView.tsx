@@ -4,29 +4,57 @@ import { useAppStore } from '../stores/app-store';
 import { InstantTerminalPane } from './instant-terminal/InstantTerminalPane';
 
 export function InstantView() {
-  const { instantPaneThreadIds, instantSplitDirection, removeInstantPane, openInstantFixModal } =
-    useAppStore();
+  const {
+    instantPaneThreadIds,
+    instantSplitDirection,
+    instantPaneMetaByThread,
+    removeInstantPane,
+    openInstantFixModal,
+  } = useAppStore();
 
   const canonicalStream = useAppStore((s) => s.canonicalTerminalStream);
 
   const isRunning = useCallback(
     (threadId: string) => {
+      const metaState = instantPaneMetaByThread[threadId]?.state;
+      if (metaState) {
+        return metaState === 'running' || metaState === 'starting';
+      }
       const stream = canonicalStream[threadId];
       if (!stream || stream.length === 0) return true;
       const lastEvent = stream[stream.length - 1];
+      if (
+        lastEvent?.event.kind === 'lifecycle' &&
+        lastEvent.event.message.includes('process exited')
+      ) {
+        return false;
+      }
       return lastEvent.event.kind !== 'done';
     },
-    [canonicalStream],
+    [canonicalStream, instantPaneMetaByThread],
   );
 
-  const paneTitle = useCallback((threadId: string) => {
-    // Use first line of the stream or a generic title
-    return threadId.slice(0, 8);
-  }, []);
+  const paneTitle = useCallback(
+    (threadId: string) => {
+      return instantPaneMetaByThread[threadId]?.title ?? threadId.slice(0, 8);
+    },
+    [instantPaneMetaByThread],
+  );
 
   const handleCancel = useCallback((threadId: string) => {
     void window.shipcode.invoke('instant:cancel', { threadId });
   }, []);
+
+  const handleClose = useCallback(
+    (threadId: string) => {
+      const meta = instantPaneMetaByThread[threadId];
+      if (meta?.mode === 'live' && isRunning(threadId)) {
+        void window.shipcode.invoke('instant:cancel', { threadId });
+      }
+      removeInstantPane(threadId);
+    },
+    [instantPaneMetaByThread, isRunning, removeInstantPane],
+  );
 
   const handleSplitHorizontal = useCallback(() => {
     useAppStore.getState().setInstantSplitDirection('horizontal');
@@ -79,7 +107,8 @@ export function InstantView() {
             key={threadId}
             threadId={threadId}
             title={paneTitle(threadId)}
-            onClose={removeInstantPane}
+            mode={instantPaneMetaByThread[threadId]?.mode ?? 'replay'}
+            onClose={handleClose}
             onSplitHorizontal={handleSplitHorizontal}
             onSplitVertical={handleSplitVertical}
             onCancel={handleCancel}

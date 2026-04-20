@@ -4,7 +4,7 @@ export { loadRepoContext } from './context-loader';
 export { GhCli } from './github/gh-cli';
 export { IssuePoller } from './github/issue-poller';
 export { routeFromLabels } from './github/model-router';
-export type { OpenRouterAuthStatus } from './health-check';
+export type { CacheOptions, OpenRouterAuthStatus } from './health-check';
 export {
   checkClaudeAuth,
   checkCliProviderUsage,

@@ -1,11 +1,14 @@
-import { resolveProviderReasoningEffort } from './reasoning-effort';
+import { sanitizeResolvedModel } from './model-identifiers';
+import { formatProviderReasoningEffort, resolveProviderReasoningEffort } from './reasoning-effort';
 import type {
   AppSettings,
   ExecutorModel,
   GitHubIssueCacheRecord,
   IssuePipelineStatus,
+  PipelinePhase,
   Project,
   ReasoningEffort,
+  Thread,
 } from './types';
 
 export const RESOLVED_PHASE_MODELS = ['planner', 'reviewer', 'executor', 'verifier'] as const;
@@ -53,6 +56,18 @@ type IssuePhaseOverrides = Pick<
   | 'reviewerReasoningEffortOverride'
   | 'executorReasoningEffortOverride'
   | 'verifierReasoningEffortOverride'
+>;
+
+type ThreadPhaseState = Pick<
+  Thread,
+  | 'plannerModel'
+  | 'reviewerModel'
+  | 'executorModel'
+  | 'verifierModel'
+  | 'plannerResolvedModel'
+  | 'reviewerResolvedModel'
+  | 'executorResolvedModel'
+  | 'verifierResolvedModel'
 >;
 
 export interface ResolvedPhaseDescriptor {
@@ -105,6 +120,12 @@ export interface ResolvedPhaseDescriptor {
     | 'verifierReasoningEffortOverride'
   >;
   issueStatuses: readonly IssuePipelineStatus[];
+}
+
+export interface ThreadPhasePresentation {
+  provider: ExecutorModel;
+  model: string;
+  effort: string | null;
 }
 
 const VALID_PHASE_PROVIDERS = [
@@ -295,4 +316,85 @@ export function getIssueCardPhase(
   return (
     PHASE_DESCRIPTORS.find((descriptor) => descriptor.issueStatuses.includes(status))?.key ?? null
   );
+}
+
+export function getPipelineCardPhase(status: PipelinePhase): ResolvedPhaseModel | null {
+  if (status === 'planning' || status === 'revising' || status === 'awaiting_approval') {
+    return 'planner';
+  }
+
+  if (status === 'reviewing') return 'reviewer';
+  if (status === 'executing' || status === 'testing') return 'executor';
+  if (status === 'verifying' || status === 'shipping') return 'verifier';
+
+  return null;
+}
+
+function resolveThreadProvider(
+  thread: ThreadPhaseState,
+  phase: ResolvedPhaseModel,
+): ExecutorModel | null {
+  const value =
+    phase === 'planner'
+      ? thread.plannerModel
+      : phase === 'reviewer'
+        ? thread.reviewerModel
+        : phase === 'executor'
+          ? thread.executorModel
+          : thread.verifierModel;
+
+  return asExecutorModel(value);
+}
+
+function resolveThreadModel(
+  thread: ThreadPhaseState,
+  phase: ResolvedPhaseModel,
+  fallbackProvider: ExecutorModel,
+): string {
+  const resolved =
+    phase === 'planner'
+      ? sanitizeResolvedModel(thread.plannerResolvedModel)
+      : phase === 'reviewer'
+        ? sanitizeResolvedModel(thread.reviewerResolvedModel)
+        : phase === 'executor'
+          ? sanitizeResolvedModel(thread.executorResolvedModel)
+          : sanitizeResolvedModel(thread.verifierResolvedModel);
+
+  if (resolved) return resolved;
+
+  const configured =
+    phase === 'planner'
+      ? thread.plannerModel
+      : phase === 'reviewer'
+        ? thread.reviewerModel
+        : phase === 'executor'
+          ? thread.executorModel
+          : thread.verifierModel;
+
+  return configured || fallbackProvider;
+}
+
+export function resolveThreadPhasePresentation(
+  settings: AppSettings,
+  project: ProjectModelOverrides | null | undefined,
+  thread: ThreadPhaseState,
+  status: PipelinePhase,
+): ThreadPhasePresentation | null {
+  const phase = getPipelineCardPhase(status);
+  if (!phase) return null;
+
+  const provider =
+    resolveThreadProvider(thread, phase) ?? resolvePhaseModel(settings, project, phase);
+  const model = resolveThreadModel(thread, phase, provider);
+  const effort = formatProviderReasoningEffort(
+    provider,
+    resolvePhaseReasoningEffort(settings, project, phase),
+    model,
+  );
+
+  return {
+    provider,
+    model,
+    effort,
+  };
 }

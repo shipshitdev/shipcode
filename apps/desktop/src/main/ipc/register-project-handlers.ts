@@ -395,17 +395,23 @@ export function registerProjectHandlers({
     queries.settings.set(patch);
   });
 
-  ipcMain.handle('health:check', async () => {
-    return checkSystemHealthWithAuth();
+  ipcMain.handle('health:check', async (_event, { force = false }: { force?: boolean } = {}) => {
+    return checkSystemHealthWithAuth({ force });
   });
 
-  ipcMain.handle('provider-usage:check', async () => {
-    return checkCliProviderUsage();
-  });
+  ipcMain.handle(
+    'provider-usage:check',
+    async (_event, { force = false }: { force?: boolean } = {}) => {
+      return checkCliProviderUsage({ force });
+    },
+  );
 
-  ipcMain.handle('integrations:check', async () => {
-    return checkIntegrationStatus(queries.settings.get());
-  });
+  ipcMain.handle(
+    'integrations:check',
+    async (_event, { force = false }: { force?: boolean } = {}) => {
+      return checkIntegrationStatus(queries.settings.get(), { force });
+    },
+  );
 
   ipcMain.handle(
     'integrations:validate-openrouter-model',

@@ -309,6 +309,10 @@ export function useTerminalDrawer() {
 
     const newEvents = canonicalStream.slice(canonicalWrittenRef.current);
     if (newEvents.length === 0) return;
+    const shouldStickToBottom =
+      canonicalWrittenRef.current === 0 ||
+      term.buffer?.active == null ||
+      term.buffer.active.viewportY >= term.buffer.active.baseY - 1;
 
     if (canonicalWrittenRef.current === 0 && newEvents.length > 0 && !startedAtRef.current) {
       // xterm wraps against its current column count, not CSS. Re-fit before
@@ -402,6 +406,9 @@ export function useTerminalDrawer() {
     }
 
     canonicalWrittenRef.current = canonicalStream.length;
+    if (shouldStickToBottom) {
+      term.scrollToBottom();
+    }
   }, [canonicalStream, startSpinner, stopSpinner]);
 
   const handleRunningTabSelect = useCallback(

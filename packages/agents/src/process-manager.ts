@@ -77,6 +77,12 @@ function resolveCommand(command: string): string {
 
 let cachedEnv: Record<string, string> | null = null;
 
+export type ManagedProcessOutputMode = 'normalized' | 'raw';
+
+export interface ManagedProcessSpawnOptions {
+  outputMode?: ManagedProcessOutputMode;
+}
+
 export interface ManagedProcess {
   id: string;
   type: AgentType;
@@ -85,6 +91,7 @@ export interface ManagedProcess {
   cwd: string;
   exitCode: number | null;
   threadId?: string;
+  outputMode: ManagedProcessOutputMode;
 }
 
 export class ProcessManager extends EventEmitter {
@@ -96,8 +103,10 @@ export class ProcessManager extends EventEmitter {
     args: string[],
     cwd: string,
     threadId?: string,
+    options: ManagedProcessSpawnOptions = {},
   ): ManagedProcess {
     const id = nanoid();
+    const outputMode = options.outputMode ?? 'normalized';
 
     if (!cachedEnv) {
       cachedEnv = getShellEnv();
@@ -126,6 +135,7 @@ export class ProcessManager extends EventEmitter {
         cwd,
         exitCode: 127,
         threadId,
+        outputMode,
       };
       this.processes.set(id, managed);
 
@@ -147,6 +157,7 @@ export class ProcessManager extends EventEmitter {
       threadId,
       cwd,
       exitCode: null,
+      outputMode,
     };
 
     this.processes.set(id, managed);

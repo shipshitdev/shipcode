@@ -56,6 +56,7 @@ export type BoardColumn = {
 
 export type IssuePhaseChip = {
   phase: ResolvedPhaseModel;
+  provider: 'claude' | 'codex' | 'openrouter';
   model: string;
   effort: string | null;
 };

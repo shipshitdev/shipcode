@@ -16,7 +16,7 @@ export function ProjectView() {
   const { projectTab, setProjectTab } = useAppStore();
 
   return (
-    <div className="flex flex-1 min-w-0 flex-col bg-primary">
+    <div className="flex flex-1 min-h-0 min-w-0 flex-col bg-primary">
       {/* Tab strip */}
       <div className="flex shrink-0 items-center gap-1 border-b border-border px-4 py-1.5">
         {PROJECT_TABS.map(({ value, label, icon: Icon }) => (
@@ -36,15 +36,25 @@ export function ProjectView() {
       </div>
 
       {/* Force-mounted panels — CSS visibility, not unmount */}
-      <div className={cn('flex flex-1 min-w-0 flex-col', projectTab !== 'issues' && 'hidden')}>
+      <div
+        className={cn('flex flex-1 min-h-0 min-w-0 flex-col', projectTab !== 'issues' && 'hidden')}
+      >
         <ThreadPanel />
       </div>
       <div
-        className={cn('flex flex-1 min-w-0 flex-col', projectTab !== 'pull-requests' && 'hidden')}
+        className={cn(
+          'flex flex-1 min-h-0 min-w-0 flex-col',
+          projectTab !== 'pull-requests' && 'hidden',
+        )}
       >
         <PullRequestsPanel />
       </div>
-      <div className={cn('flex flex-1 min-w-0 flex-col', projectTab !== 'sessions' && 'hidden')}>
+      <div
+        className={cn(
+          'flex flex-1 min-h-0 min-w-0 flex-col',
+          projectTab !== 'sessions' && 'hidden',
+        )}
+      >
         <InstantView />
       </div>
     </div>

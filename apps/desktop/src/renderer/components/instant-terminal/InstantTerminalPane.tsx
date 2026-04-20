@@ -1,9 +1,11 @@
 import { Badge, Button, Columns2, Rows2, Square, X } from '@shipcode/ui';
+import type { InstantPaneMode } from '../../stores/app-store';
 import { useInstantTerminalPane } from './useInstantTerminalPane';
 
 interface InstantTerminalPaneProps {
   threadId: string;
   title: string;
+  mode: InstantPaneMode;
   onClose: (threadId: string) => void;
   onSplitHorizontal: () => void;
   onSplitVertical: () => void;
@@ -14,13 +16,14 @@ interface InstantTerminalPaneProps {
 export function InstantTerminalPane({
   threadId,
   title,
+  mode,
   onClose,
   onSplitHorizontal,
   onSplitVertical,
   onCancel,
   isRunning,
 }: InstantTerminalPaneProps) {
-  const { containerRef } = useInstantTerminalPane(threadId);
+  const { containerRef } = useInstantTerminalPane(threadId, mode, isRunning);
 
   return (
     <div className="flex flex-col border border-border rounded-lg overflow-hidden bg-secondary">

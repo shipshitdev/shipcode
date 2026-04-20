@@ -33,6 +33,7 @@ export { ActivityQueries } from './queries/activity';
 export { CheckpointQueries } from './queries/checkpoints';
 export { CostsQueries } from './queries/costs';
 export { DashboardQueries } from './queries/dashboard';
+export type { DiffInsert } from './queries/diffs';
 export { DiffQueries } from './queries/diffs';
 export { GitHubIssueQueries } from './queries/github-issues';
 export { NotificationsQueries } from './queries/notifications';

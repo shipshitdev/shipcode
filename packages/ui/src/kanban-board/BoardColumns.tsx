@@ -47,7 +47,7 @@ export function DroppableColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        'flex max-w-[220px] min-w-[140px] flex-1 flex-col overflow-hidden rounded-md border border-border/40 bg-secondary transition-colors',
+        'flex min-h-0 max-w-[220px] min-w-[140px] flex-1 flex-col overflow-hidden rounded-md border border-border/40 bg-secondary transition-colors',
         isOver && droppable && 'bg-tertiary ring-2 ring-accent',
       )}
     >
@@ -80,7 +80,7 @@ export function DroppableColumn({
           </span>
         </div>
       </div>
-      <div className="flex min-h-[60px] flex-1 flex-col gap-1 overflow-y-auto p-1.5">
+      <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-1.5 supports-[scrollbar-gutter:stable]:[scrollbar-gutter:stable]">
         {issues.map((issue) => (
           <DraggableCard
             key={issue.id}
@@ -242,7 +242,7 @@ export function StackedColumn({
   const hasIssues = columnIssues.length > 0;
 
   return (
-    <div className="flex min-w-[180px] max-w-[280px] flex-[1.3] flex-col overflow-hidden rounded-md border border-border/40 bg-secondary">
+    <div className="flex min-h-0 min-w-[180px] max-w-[280px] flex-[1.3] flex-col overflow-hidden rounded-md border border-border/40 bg-secondary">
       <div className="flex shrink-0 items-center justify-between border-b border-border px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-primary">
         <span className="flex items-center gap-1.5">
           <span className={cn('h-2 w-2 shrink-0 rounded-full', COLUMN_DOT_CLASS[column.key])} />
@@ -272,7 +272,7 @@ export function StackedColumn({
           </span>
         </div>
       </div>
-      <div className="min-h-[60px] flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto supports-[scrollbar-gutter:stable]:[scrollbar-gutter:stable]">
         {(column.sections ?? []).map((section) => (
           <SectionBlock
             key={section.key}

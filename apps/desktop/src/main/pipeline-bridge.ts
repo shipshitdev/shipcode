@@ -1,6 +1,11 @@
 import type { ActivityQueries, TerminalEventQueries, ThreadQueries } from '@shipcode/db';
 import type { PipelineEmitter, PipelineEvent } from '@shipcode/pipeline';
-import type { ActivityKind, PipelinePhase, Thread } from '@shipcode/shared';
+import {
+  type ActivityKind,
+  formatResolvedModelDisplay,
+  type PipelinePhase,
+  type Thread,
+} from '@shipcode/shared';
 import type { BrowserWindow } from 'electron';
 import type { ChatNotificationService } from './chat-notification-service';
 import log, { logEvent } from './logger.service';
@@ -335,11 +340,9 @@ export function createElectronEmitter(
 
       if (event.type === 'pipeline:model-resolved') {
         try {
-          const isOpenRouter = String(event.requestedModel ?? '').startsWith('openrouter');
-          const isCodex = event.requestedModel === 'codex';
-          const displayName = isOpenRouter
-            ? (event.resolvedModel ?? null)
-            : (event.requestedModel ?? event.resolvedModel ?? null);
+          const displayName = formatResolvedModelDisplay(event.requestedModel, event.resolvedModel);
+          const isOpenRouter = displayName?.startsWith('OpenRouter') ?? false;
+          const isCodex = displayName?.startsWith('Codex') ?? false;
           if (displayName) {
             const tokenStr =
               event.tokensUsed != null

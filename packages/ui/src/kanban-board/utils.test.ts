@@ -179,7 +179,12 @@ describe('resolveIssuePhaseChip', () => {
       makeThread({ plannerResolvedModel: '<synthetic>', plannerModel: 'claude' }),
     );
 
-    expect(chip).toMatchObject({ phase: 'planner', model: 'claude', effort: 'high' });
+    expect(chip).toMatchObject({
+      phase: 'planner',
+      provider: 'claude',
+      model: 'claude',
+      effort: 'high',
+    });
   });
 
   it('keeps real resolved models when they are concrete', () => {
@@ -193,7 +198,11 @@ describe('resolveIssuePhaseChip', () => {
       makeThread({ plannerResolvedModel: 'claude-sonnet-4-6' }),
     );
 
-    expect(chip).toMatchObject({ phase: 'planner', model: 'claude-sonnet-4-6' });
+    expect(chip).toMatchObject({
+      phase: 'planner',
+      provider: 'claude',
+      model: 'claude-sonnet-4-6',
+    });
   });
 
   it('shows the effective effort when a provider degrades the stored value', () => {
@@ -207,6 +216,11 @@ describe('resolveIssuePhaseChip', () => {
       makeThread({ reviewerResolvedModel: 'gpt-5.4' }),
     );
 
-    expect(chip).toMatchObject({ phase: 'reviewer', model: 'gpt-5.4', effort: 'xhigh' });
+    expect(chip).toMatchObject({
+      phase: 'reviewer',
+      provider: 'codex',
+      model: 'gpt-5.4',
+      effort: 'xhigh',
+    });
   });
 });
