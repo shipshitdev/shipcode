@@ -84,6 +84,22 @@ describe('GitHubIssueQueries', () => {
     expect(issues.getByThreadId('missing')).toBeNull();
   });
 
+  it('getByLinkedPrNumber() returns the issue linked to a pull request', () => {
+    const record = issues.upsert(makeIssue({ issueNumber: 42 }));
+
+    issues.updatePullRequestFeedback(record.id, {
+      linkedPrNumber: 77,
+      linkedPrUrl: 'https://github.com/shipshitdev/shipcode/pull/77',
+      linkedPrIsDraft: false,
+      ciBlocked: false,
+      failingChecks: [],
+      unresolvedReviewComments: [],
+    });
+
+    expect(issues.getByLinkedPrNumber(projectId, 77)?.id).toBe(record.id);
+    expect(issues.getByLinkedPrNumber(projectId, 999)).toBeNull();
+  });
+
   it('tryClaim() returns true if unclaimed, false if already claimed', () => {
     const record = issues.upsert(makeIssue());
     expect(issues.tryClaim(record.id, 'instance-1')).toBe(true);

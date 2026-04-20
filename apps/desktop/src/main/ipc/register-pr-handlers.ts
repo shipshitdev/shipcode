@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { GhCli } from '@shipcode/agents';
+import type { PullRequestDetailResponse } from '@shipcode/shared';
 import log from '../logger.service';
 import type { IpcHandlerDeps } from './types';
 
@@ -27,13 +28,23 @@ export function registerPullRequestHandlers({ ipcMain, queries }: IpcHandlerDeps
   // --- github:get-pr-detail ---
   ipcMain.handle(
     'github:get-pr-detail',
-    async (_event, { projectId, prNumber }: { projectId: string; prNumber: number }) => {
+    async (
+      _event,
+      { projectId, prNumber }: { projectId: string; prNumber: number },
+    ): Promise<PullRequestDetailResponse> => {
       const project = queries.projects.getById(projectId);
       if (!project) throw new Error(`Project not found: ${projectId}`);
       const cli = new GhCli(project.path);
       const result = await cli.getPullRequestDetail(prNumber);
+      const linkedIssue = queries.githubIssues.getByLinkedPrNumber(projectId, prNumber);
+      const linkedThreadId = linkedIssue?.threadId ?? null;
+      const diffs = linkedThreadId ? queries.diffs.list(linkedThreadId) : [];
       log.info(`[pr] fetched detail for PR #${prNumber} in project ${projectId}`);
-      return result;
+      return {
+        ...result,
+        linkedThreadId,
+        diffs,
+      };
     },
   );
 

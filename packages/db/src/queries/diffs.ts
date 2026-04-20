@@ -1,7 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { type DiffRecord, toIsoUtc } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
-import { asRows } from '../utils';
+import { asRows, transaction } from '../utils';
 
 interface DiffRow {
   id: string;
@@ -14,12 +14,17 @@ interface DiffRow {
   created_at: string;
 }
 
+export type DiffInsert = Pick<
+  DiffRecord,
+  'filePath' | 'action' | 'diffContent' | 'beforeHash' | 'afterHash'
+>;
+
 export class DiffQueries {
   constructor(private db: DatabaseSync) {}
 
   list(threadId: string): DiffRecord[] {
     const rows = this.db
-      .prepare('SELECT * FROM diffs WHERE thread_id = ? ORDER BY created_at ASC')
+      .prepare('SELECT * FROM diffs WHERE thread_id = ? ORDER BY created_at ASC, rowid ASC')
       .all(threadId);
     return asRows<DiffRow>(rows).map(mapDiff);
   }
@@ -27,29 +32,53 @@ export class DiffQueries {
   create(
     threadId: string,
     filePath: string,
-    action: string,
+    action: DiffRecord['action'],
     diffContent: string | null,
+    options?: {
+      beforeHash?: string | null;
+      afterHash?: string | null;
+    },
   ): DiffRecord {
     const id = nanoid();
     const now = new Date().toISOString();
+    const beforeHash = options?.beforeHash ?? null;
+    const afterHash = options?.afterHash ?? null;
 
     this.db
       .prepare(
-        `INSERT INTO diffs (id, thread_id, file_path, action, diff_content, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO diffs (id, thread_id, file_path, action, diff_content, before_hash, after_hash, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(id, threadId, filePath, action, diffContent, now);
+      .run(id, threadId, filePath, action, diffContent, beforeHash, afterHash, now);
 
     return {
       id,
       threadId,
       filePath,
-      action: action as DiffRecord['action'],
+      action,
       diffContent,
-      beforeHash: null,
-      afterHash: null,
+      beforeHash,
+      afterHash,
       createdAt: now,
     };
+  }
+
+  replaceForThread(threadId: string, diffs: DiffInsert[]): DiffRecord[] {
+    return transaction(this.db, () => {
+      this.db.prepare('DELETE FROM diffs WHERE thread_id = ?').run(threadId);
+
+      const created: DiffRecord[] = [];
+      for (const diff of diffs) {
+        created.push(
+          this.create(threadId, diff.filePath, diff.action, diff.diffContent, {
+            beforeHash: diff.beforeHash,
+            afterHash: diff.afterHash,
+          }),
+        );
+      }
+
+      return created;
+    });
   }
 }
 

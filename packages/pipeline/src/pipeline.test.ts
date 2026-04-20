@@ -384,6 +384,9 @@ function createMockDeps() {
       reviews: {
         create: vi.fn(),
       },
+      diffs: {
+        replaceForThread: vi.fn(),
+      },
       verifications: {
         create: vi.fn(),
       },
@@ -509,11 +512,9 @@ describe('createPipeline', () => {
 
       await mock.trigger('output', 'proc-1', 'some random output without a plan block');
       await mock.trigger('exit', 'proc-1', 0);
+      await flush();
 
-      expect(mock.deps.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
-        'issue-1',
-        'awaiting_approval',
-      );
+      expect(mock.deps.githubIssues.updatePipelineStatus).toHaveBeenCalledWith('issue-1', 'failed');
     });
 
     it('exit 0 + valid plan → creates plan, emits plan:parsed, emits reviewing (manual)', async () => {
@@ -545,15 +546,20 @@ describe('createPipeline', () => {
       expect(secondCall[1]).toBe('codex');
     });
 
-    it('exit 0 + no valid plan → creates plan with null, emits awaiting_approval', async () => {
+    it('exit 0 + no valid plan → creates plan with null, emits failed', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
 
       await mock.trigger('output', 'proc-1', 'some random output without a plan block');
       await mock.trigger('exit', 'proc-1', 0);
+      await flush();
 
       expect(mock.deps.plans.create).toHaveBeenCalledWith('t1', expect.any(String), null, 1);
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'awaiting_approval');
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        'planning',
+        'some random output without a plan block',
+      );
     });
 
     it('exit non-zero → retries (spawns again)', async () => {
@@ -1081,6 +1087,56 @@ describe('createPipeline', () => {
         expect.any(String),
         undefined,
       );
+      expect(mock.deps.diffs.replaceForThread).toHaveBeenCalledWith('t1', []);
+    });
+
+    it('persists parsed per-file diffs before running verification', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      requireContext(pipeline).forkPointSha = 'abc123';
+
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git diff')) {
+          return [
+            'diff --git a/src/foo.ts b/src/foo.ts',
+            'index 1111111..2222222 100644',
+            '--- a/src/foo.ts',
+            '+++ b/src/foo.ts',
+            '@@ -1 +1 @@',
+            '-old',
+            '+new',
+            'diff --git a/src/new.ts b/src/new.ts',
+            'new file mode 100644',
+            'index 0000000..3333333',
+            '--- /dev/null',
+            '+++ b/src/new.ts',
+            '@@ -0,0 +1 @@',
+            '+hello',
+          ].join('\n');
+        }
+        if (cmd.startsWith('git status')) return '';
+        if (cmd.startsWith('git rev-parse')) return 'headsha123';
+        return '';
+      });
+
+      await pipeline.startVerification('t1');
+
+      expect(mock.deps.diffs.replaceForThread).toHaveBeenCalledWith('t1', [
+        {
+          filePath: 'src/foo.ts',
+          action: 'modify',
+          diffContent: expect.stringContaining('diff --git a/src/foo.ts b/src/foo.ts'),
+          beforeHash: '1111111',
+          afterHash: '2222222',
+        },
+        {
+          filePath: 'src/new.ts',
+          action: 'create',
+          diffContent: expect.stringContaining('diff --git a/src/new.ts b/src/new.ts'),
+          beforeHash: '0000000',
+          afterHash: '3333333',
+        },
+      ]);
     });
 
     it('dirty worktree is auto-committed before verification, then retries on verifier failure', async () => {

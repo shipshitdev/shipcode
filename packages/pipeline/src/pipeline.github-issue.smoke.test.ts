@@ -162,6 +162,9 @@ function createSmokeDeps() {
     reviews: {
       create: vi.fn(),
     },
+    diffs: {
+      replaceForThread: vi.fn(),
+    },
     verifications: {
       create: vi.fn(),
     },

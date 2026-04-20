@@ -682,6 +682,11 @@ export interface PullRequestDetail {
   unresolvedReviewCommentCount: number;
 }
 
+export interface PullRequestDetailResponse extends PullRequestDetail {
+  linkedThreadId: string | null;
+  diffs: DiffRecord[];
+}
+
 export interface GitHubIssueCacheRecord {
   id: string;
   projectId: string;
@@ -934,6 +939,10 @@ export interface ActivePipelineSummary {
   phase: PipelinePhase;
   startedAt: number;
   activeProcessId: string | null;
+  githubIssueNumber: number | null;
+  modelProvider: ExecutorModel | null;
+  model: string | null;
+  reasoningEffort: string | null;
 }
 
 // === Notifications ===

@@ -77,6 +77,13 @@ export class GitHubIssueQueries {
     return row ? this.toRecord(asRow<GitHubIssueCacheRow>(row)) : null;
   }
 
+  getByLinkedPrNumber(projectId: string, prNumber: number): GitHubIssueCacheRecord | null {
+    const row = this.db
+      .prepare('SELECT * FROM github_issue_cache WHERE project_id = ? AND linked_pr_number = ?')
+      .get(projectId, prNumber);
+    return row ? this.toRecord(asRow<GitHubIssueCacheRow>(row)) : null;
+  }
+
   upsert(
     record: Omit<
       GitHubIssueCacheRecord,

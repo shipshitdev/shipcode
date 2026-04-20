@@ -4,8 +4,11 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { InstantPaneMode } from '../../stores/app-store';
 import { useAppStore } from '../../stores/app-store';
 import { renderTerminalEvent } from '../terminal-drawer/render-terminal-event';
+
+const EMPTY_STREAM: TerminalEventRecord[] = [];
 
 function readCssColor(name: string, fallback: string): string {
   const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -41,7 +44,23 @@ function buildTerminalTheme() {
   };
 }
 
-export function useInstantTerminalPane(threadId: string) {
+function writeTerminalRecord(term: Terminal, mode: InstantPaneMode, record: TerminalEventRecord) {
+  if (mode === 'live' && record.event.kind === 'raw') {
+    term.write(record.event.content);
+    return;
+  }
+
+  const rendered = renderTerminalEvent(record.event);
+  if (!rendered) return;
+  const normalized = rendered.replace(/\n/g, '\r\n');
+  term.write(normalized);
+}
+
+export function useInstantTerminalPane(
+  threadId: string,
+  mode: InstantPaneMode,
+  isRunning: boolean,
+) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -49,25 +68,37 @@ export function useInstantTerminalPane(threadId: string) {
   const [isReady, setIsReady] = useState(false);
 
   const canonicalStream = useAppStore(
-    useCallback(
-      (s) => s.canonicalTerminalStream[threadId] ?? ([] as TerminalEventRecord[]),
-      [threadId],
-    ),
+    useCallback((s) => s.canonicalTerminalStream[threadId] ?? EMPTY_STREAM, [threadId]),
   );
+
+  const syncPtySize = useCallback(() => {
+    if (mode !== 'live') return;
+    const term = termRef.current;
+    if (!term) return;
+    void window.shipcode
+      .invoke('instant:shell-resize', {
+        threadId,
+        cols: term.cols,
+        rows: term.rows,
+      })
+      .catch(() => {
+        // Best-effort resize sync only.
+      });
+  }, [mode, threadId]);
 
   // Initialize xterm
   useEffect(() => {
     if (!containerRef.current) return;
 
     const term = new Terminal({
-      disableStdin: true,
+      disableStdin: mode !== 'live',
       convertEol: true,
       scrollback: 5000,
       fontSize: 13,
       fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
       theme: buildTerminalTheme(),
-      cursorBlink: false,
-      cursorStyle: 'underline',
+      cursorBlink: mode === 'live',
+      cursorStyle: mode === 'live' ? 'block' : 'underline',
     });
 
     const fit = new FitAddon();
@@ -75,9 +106,19 @@ export function useInstantTerminalPane(threadId: string) {
     term.loadAddon(new WebLinksAddon());
     term.open(containerRef.current);
 
+    const dataDisposable =
+      mode === 'live'
+        ? term.onData((data) => {
+            void window.shipcode.invoke('instant:shell-input', { threadId, data }).catch(() => {
+              // Session may have exited before the keystroke is delivered.
+            });
+          })
+        : null;
+
     // Initial fit after DOM layout
     requestAnimationFrame(() => {
       fit.fit();
+      syncPtySize();
     });
 
     termRef.current = term;
@@ -87,11 +128,19 @@ export function useInstantTerminalPane(threadId: string) {
 
     return () => {
       setIsReady(false);
+      dataDisposable?.dispose();
       term.dispose();
       termRef.current = null;
       fitRef.current = null;
     };
-  }, []);
+  }, [mode, syncPtySize, threadId]);
+
+  useEffect(() => {
+    if (!termRef.current) return;
+    termRef.current.options.disableStdin = mode !== 'live' || !isRunning;
+    termRef.current.options.cursorBlink = mode === 'live' && isRunning;
+    termRef.current.options.cursorStyle = mode === 'live' ? 'block' : 'underline';
+  }, [isRunning, mode]);
 
   // ResizeObserver for CSS grid resizing — re-attaches after terminal initialises
   useEffect(() => {
@@ -100,13 +149,14 @@ export function useInstantTerminalPane(threadId: string) {
     const observer = new ResizeObserver(() => {
       try {
         fit.fit();
+        syncPtySize();
       } catch {
         // ignore fit errors during teardown
       }
     });
     observer.observe(containerRef.current);
     return () => observer.disconnect();
-  }, []);
+  }, [syncPtySize]);
 
   // Write new events from the canonical stream
   useEffect(() => {
@@ -115,14 +165,10 @@ export function useInstantTerminalPane(threadId: string) {
 
     const newEvents = canonicalStream.slice(writtenCountRef.current);
     for (const record of newEvents) {
-      const rendered = renderTerminalEvent(record.event);
-      if (rendered) {
-        const normalized = rendered.replace(/\n/g, '\r\n');
-        term.write(normalized);
-      }
+      writeTerminalRecord(term, mode, record);
     }
     writtenCountRef.current = canonicalStream.length;
-  }, [canonicalStream, isReady]);
+  }, [canonicalStream, isReady, mode]);
 
   // Theme sync on data-theme changes
   useEffect(() => {

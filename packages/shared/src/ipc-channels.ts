@@ -31,7 +31,7 @@ import type {
   ProjectOpenTarget,
   ProjectSetupDraft,
   ProjectSetupInspection,
-  PullRequestDetail,
+  PullRequestDetailResponse,
   PullRequestListFilter,
   PullRequestListItem,
   ReasoningEffort,
@@ -429,10 +429,31 @@ export interface IpcInvokeChannels {
       prompt: string;
       scope: InstantFixScope;
       cli: 'claude' | 'codex';
+      modelId?: string | null;
+      reasoningEffort?: ReasoningEffort;
       attachmentSessionId?: string;
       customSystemPrompt?: string;
     };
     result: { threadId: string };
+  };
+  'instant:shell-start': {
+    args: {
+      projectId: string;
+      cli: 'claude' | 'codex';
+      modelId?: string | null;
+      reasoningEffort?: ReasoningEffort;
+      initialPrompt?: string;
+      attachmentSessionId?: string;
+    };
+    result: { threadId: string };
+  };
+  'instant:shell-input': {
+    args: { threadId: string; data: string };
+    result: undefined;
+  };
+  'instant:shell-resize': {
+    args: { threadId: string; cols: number; rows: number };
+    result: undefined;
   };
   'instant:cancel': { args: { threadId: string }; result: undefined };
   'instant:list': { args: undefined; result: Thread[] };
@@ -445,7 +466,7 @@ export interface IpcInvokeChannels {
   };
   'github:get-pr-detail': {
     args: { projectId: string; prNumber: number };
-    result: PullRequestDetail;
+    result: PullRequestDetailResponse;
   };
   'skills:load-content': {
     args: { name: string };

@@ -11,6 +11,7 @@ import {
 } from '@shipcode/agents';
 import {
   CheckpointQueries,
+  DiffQueries,
   GitHubIssueQueries,
   getDatabase,
   PlanQueries,
@@ -43,6 +44,7 @@ export async function runCommand(issueNumber: string) {
   const threads = new ThreadQueries(db);
   const plans = new PlanQueries(db);
   const reviews = new ReviewQueries(db);
+  const diffs = new DiffQueries(db);
   const verifications = new VerificationQueries(db);
   const githubIssues = new GitHubIssueQueries(db);
   const settings = new SettingsQueries(db);
@@ -89,6 +91,7 @@ export async function runCommand(issueNumber: string) {
     threads,
     plans,
     reviews,
+    diffs,
     verifications,
     githubIssues,
     checkpoints,

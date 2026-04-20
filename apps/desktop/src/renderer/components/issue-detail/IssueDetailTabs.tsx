@@ -1,4 +1,5 @@
 import type {
+  DiffRecord,
   GitHubIssueCacheRecord,
   IntegrationStatus,
   OpenRouterModelValidation,
@@ -33,6 +34,7 @@ interface IssueDetailTabsProps {
   activeThreadId: string | null;
   checkpoints: PipelineCheckpoint[];
   currentPhaseSelections: Record<PhaseKey, PhaseSelection>;
+  diffs: DiffRecord[];
   effectiveExpanded: string | null | undefined;
   effectivePhaseResolvedModels: Record<PhaseKey, string>;
   executorEditable: boolean;
@@ -80,6 +82,7 @@ export function IssueDetailTabs({
   activeThreadId,
   checkpoints,
   currentPhaseSelections,
+  diffs,
   effectiveExpanded,
   effectivePhaseResolvedModels,
   executorEditable,
@@ -223,6 +226,7 @@ export function IssueDetailTabs({
           checkpoints={checkpoints}
           currentPhaseReasoningEfforts={currentPhaseReasoningEfforts}
           currentPhaseSelections={currentPhaseSelections}
+          diffs={diffs}
           effectivePhaseResolvedModels={effectivePhaseResolvedModels}
           executorEditable={executorEditable}
           hasPrFeedbackBlockers={hasPrFeedbackBlockers}

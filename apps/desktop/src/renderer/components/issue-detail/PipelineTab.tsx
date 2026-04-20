@@ -1,4 +1,5 @@
 import type {
+  DiffRecord,
   GitHubIssueCacheRecord,
   IntegrationStatus,
   OpenRouterModelValidation,
@@ -10,6 +11,7 @@ import { getSupportedReasoningEfforts, resolveProviderReasoningEffort } from '@s
 import {
   Badge,
   Button,
+  DiffViewer,
   ExternalLink,
   Input,
   MODEL_DISPLAY,
@@ -22,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@shipcode/ui';
+import { useEffect, useState } from 'react';
 import {
   formatProviderSelectionLabel,
   getModelOptions,
@@ -37,6 +40,7 @@ export function PipelineTab({
   checkpoints,
   currentPhaseReasoningEfforts,
   currentPhaseSelections,
+  diffs,
   effectivePhaseResolvedModels,
   executorEditable,
   hasPrFeedbackBlockers,
@@ -60,6 +64,7 @@ export function PipelineTab({
   checkpoints: PipelineCheckpoint[];
   currentPhaseReasoningEfforts: Record<PhaseKey, ReasoningEffort>;
   currentPhaseSelections: Record<PhaseKey, PhaseSelection>;
+  diffs: DiffRecord[];
   effectivePhaseResolvedModels: Record<PhaseKey, string>;
   executorEditable: boolean;
   hasPrFeedbackBlockers: boolean;
@@ -78,6 +83,12 @@ export function PipelineTab({
   onRestoreCheckpoint: (checkpoint: PipelineCheckpoint) => void;
   onStabilizePr: () => void;
 }) {
+  const [activeDiffFile, setActiveDiffFile] = useState<string | undefined>();
+
+  useEffect(() => {
+    setActiveDiffFile(diffs[0]?.filePath);
+  }, [diffs]);
+
   return (
     <>
       <div className="mb-5">
@@ -474,6 +485,34 @@ export function PipelineTab({
               </div>
             ))}
           </div>
+        </div>
+      ) : null}
+
+      {activeThreadId ? (
+        <div className="mb-5">
+          <div className="mb-2 flex items-center justify-between">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">
+              Code Diff
+            </h4>
+            {diffs.length > 0 ? (
+              <span className="text-[11px] text-muted">
+                {diffs.length} file{diffs.length === 1 ? '' : 's'}
+              </span>
+            ) : null}
+          </div>
+          {diffs.length > 0 ? (
+            <div className="overflow-hidden rounded-md border border-border bg-secondary/20">
+              <DiffViewer
+                diffs={diffs}
+                activeFile={activeDiffFile}
+                onFileSelect={setActiveDiffFile}
+              />
+            </div>
+          ) : (
+            <div className="rounded-md border border-border bg-secondary px-3 py-2 text-[11px] text-muted">
+              Diff will appear here after execution produces changes.
+            </div>
+          )}
         </div>
       ) : null}
     </>

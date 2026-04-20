@@ -1,4 +1,12 @@
-import type { Project, StagedPrdAttachment } from '@shipcode/shared';
+import {
+  getSupportedReasoningEfforts,
+  type Project,
+  type ReasoningEffort,
+  resolveEffectivePhaseReasoningEffort,
+  resolvePhaseModel,
+  resolvePhaseModelId,
+  type StagedPrdAttachment,
+} from '@shipcode/shared';
 import {
   Button,
   cn,
@@ -15,6 +23,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
+import { getModelOptions, PROVIDER_DISPLAY } from './model-provider-options';
 
 export function InstantFixModal() {
   const {
@@ -28,6 +37,8 @@ export function InstantFixModal() {
   const [prompt, setPrompt] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [cli, setCli] = useState<'claude' | 'codex'>('claude');
+  const [modelId, setModelId] = useState<string | null>(null);
+  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>('high');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,8 +54,17 @@ export function InstantFixModal() {
     staleTime: 30_000,
     enabled: instantFixModalOpen,
   });
+  const { data: settings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: () => window.shipcode.invoke('settings:get'),
+    staleTime: 30_000,
+    enabled: instantFixModalOpen,
+  });
 
   const activeProjectId = useAppStore((s) => s.activeProjectId);
+  const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? null;
+  const supportedEfforts = getSupportedReasoningEfforts(cli, modelId);
+  const modelOptions = getModelOptions(cli);
 
   // Set default project on open
   useEffect(() => {
@@ -53,14 +73,34 @@ export function InstantFixModal() {
       setError(null);
       setAttachments([]);
       sessionIdRef.current = null;
-      setCli(instantFixModalDefaultCli ?? 'claude');
-      if (activeProjectId && projects.some((p) => p.id === activeProjectId)) {
-        setSelectedProjectId(activeProjectId);
-      } else if (projects.length > 0) {
-        setSelectedProjectId(projects[0].id);
+      const nextProjectId =
+        activeProjectId && projects.some((p) => p.id === activeProjectId)
+          ? activeProjectId
+          : (projects[0]?.id ?? null);
+      setSelectedProjectId(nextProjectId);
+      if (settings) {
+        const project = projects.find((p) => p.id === nextProjectId) ?? null;
+        const resolvedProvider = resolvePhaseModel(settings, project, 'executor');
+        const nextCli =
+          instantFixModalDefaultCli ??
+          (resolvedProvider === 'claude' || resolvedProvider === 'codex'
+            ? resolvedProvider
+            : 'claude');
+        setCli(nextCli);
+        const nextModelId =
+          resolvedProvider === nextCli ? resolvePhaseModelId(settings, project, 'executor') : null;
+        setModelId(nextModelId);
+        const nextEffort =
+          resolvedProvider === nextCli
+            ? resolveEffectivePhaseReasoningEffort(settings, project, 'executor')
+            : 'high';
+        const allowed = getSupportedReasoningEfforts(nextCli, nextModelId);
+        setReasoningEffort(
+          allowed.includes(nextEffort) ? nextEffort : (allowed[allowed.length - 1] ?? 'high'),
+        );
       }
     }
-  }, [instantFixModalOpen, activeProjectId, projects, instantFixModalDefaultCli]);
+  }, [instantFixModalOpen, activeProjectId, projects, instantFixModalDefaultCli, settings]);
 
   // Cleanup attachment session on close
   useEffect(() => {
@@ -130,20 +170,32 @@ export function InstantFixModal() {
   );
 
   const handleSubmit = useCallback(async () => {
-    if (!prompt.trim() || !selectedProjectId) return;
+    if (!selectedProjectId) return;
     setIsSubmitting(true);
     setError(null);
 
     try {
-      const result = await window.shipcode.invoke<{ threadId: string }>('instant:run', {
+      const trimmedPrompt = prompt.trim();
+      const result = await window.shipcode.invoke<{ threadId: string }>('instant:shell-start', {
         projectId: selectedProjectId,
-        prompt: prompt.trim(),
-        scope: 'project',
         cli,
+        modelId,
+        reasoningEffort,
+        initialPrompt: trimmedPrompt || undefined,
         attachmentSessionId: sessionIdRef.current ?? undefined,
       });
 
-      addInstantPane(result.threadId);
+      const paneTitle =
+        trimmedPrompt.length > 0
+          ? `${cli === 'claude' ? 'Claude' : 'Codex'} • ${trimmedPrompt.slice(0, 40)}`
+          : `${cli === 'claude' ? 'Claude' : 'Codex'} shell`;
+
+      addInstantPane(result.threadId, {
+        mode: 'live',
+        cli,
+        title: paneTitle,
+        state: 'running',
+      });
       openTerminalSessions();
       closeInstantFixModal();
     } catch (err) {
@@ -151,7 +203,16 @@ export function InstantFixModal() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [prompt, selectedProjectId, cli, addInstantPane, openTerminalSessions, closeInstantFixModal]);
+  }, [
+    prompt,
+    selectedProjectId,
+    cli,
+    modelId,
+    reasoningEffort,
+    addInstantPane,
+    openTerminalSessions,
+    closeInstantFixModal,
+  ]);
 
   return (
     <Modal open={instantFixModalOpen} onClose={closeInstantFixModal} title="New Terminal Session">
@@ -168,7 +229,7 @@ export function InstantFixModal() {
           onDrop={handleDrop}
         >
           <Textarea
-            placeholder="Describe what to fix..."
+            placeholder="Optional initial prompt for the live shell..."
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             rows={4}
@@ -199,9 +260,72 @@ export function InstantFixModal() {
           )}
         </section>
 
-        {/* CLI + Project row */}
-        <div className="flex gap-3">
-          <Select value={cli} onValueChange={(v) => setCli(v as 'claude' | 'codex')}>
+        {/* Project + CLI + Model + Effort row */}
+        <div className="grid gap-3 md:grid-cols-4">
+          <Select
+            value={selectedProjectId ?? ''}
+            onValueChange={(value) => {
+              setSelectedProjectId(value);
+              if (settings) {
+                const project = projects.find((p) => p.id === value) ?? null;
+                const resolvedProvider = resolvePhaseModel(settings, project, 'executor');
+                const nextModelId =
+                  resolvedProvider === cli
+                    ? resolvePhaseModelId(settings, project, 'executor')
+                    : null;
+                setModelId(nextModelId);
+                const nextEffort =
+                  resolvedProvider === cli
+                    ? resolveEffectivePhaseReasoningEffort(settings, project, 'executor')
+                    : 'high';
+                const allowed = getSupportedReasoningEfforts(cli, nextModelId);
+                setReasoningEffort(
+                  allowed.includes(nextEffort)
+                    ? nextEffort
+                    : (allowed[allowed.length - 1] ?? 'high'),
+                );
+              }
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select a project" />
+            </SelectTrigger>
+            <SelectContent>
+              {projects.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={cli}
+            onValueChange={(value) => {
+              const nextCli = value as 'claude' | 'codex';
+              setCli(nextCli);
+              if (settings) {
+                const resolvedProvider = resolvePhaseModel(settings, selectedProject, 'executor');
+                const nextModelId =
+                  resolvedProvider === nextCli
+                    ? resolvePhaseModelId(settings, selectedProject, 'executor')
+                    : null;
+                setModelId(nextModelId);
+                const nextEffort =
+                  resolvedProvider === nextCli
+                    ? resolveEffectivePhaseReasoningEffort(settings, selectedProject, 'executor')
+                    : 'high';
+                const allowed = getSupportedReasoningEfforts(nextCli, nextModelId);
+                setReasoningEffort(
+                  allowed.includes(nextEffort)
+                    ? nextEffort
+                    : (allowed[allowed.length - 1] ?? 'high'),
+                );
+              } else {
+                setModelId(null);
+                setReasoningEffort('high');
+              }
+            }}
+          >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -210,14 +334,33 @@ export function InstantFixModal() {
               <SelectItem value="codex">Codex</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={selectedProjectId ?? ''} onValueChange={setSelectedProjectId}>
+          <Select
+            value={modelId ?? '__default__'}
+            onValueChange={(value) => setModelId(value === '__default__' ? null : value)}
+          >
             <SelectTrigger>
-              <SelectValue placeholder="Select a project" />
+              <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {projects.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.name}
+              <SelectItem value="__default__">Default ({PROVIDER_DISPLAY[cli]})</SelectItem>
+              {modelOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={reasoningEffort}
+            onValueChange={(value) => setReasoningEffort(value as ReasoningEffort)}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {supportedEfforts.map((effort) => (
+                <SelectItem key={effort} value={effort}>
+                  {effort}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -236,11 +379,8 @@ export function InstantFixModal() {
         <Button variant="ghost" onClick={closeInstantFixModal}>
           Cancel
         </Button>
-        <Button
-          onClick={handleSubmit}
-          disabled={!prompt.trim() || !selectedProjectId || isSubmitting}
-        >
-          {isSubmitting ? 'Starting...' : 'Run'}
+        <Button onClick={handleSubmit} disabled={!selectedProjectId || isSubmitting}>
+          {isSubmitting ? 'Starting...' : 'Start Shell'}
         </Button>
       </ModalFooter>
     </Modal>

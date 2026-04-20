@@ -6,6 +6,7 @@ import type {
 } from '@shipcode/agents';
 import type {
   CheckpointQueries,
+  DiffQueries,
   GitHubIssueQueries,
   PlanQueries,
   ProjectQueries,
@@ -199,6 +200,7 @@ export interface PipelineDeps {
   threads: ThreadQueries;
   plans: PlanQueries;
   reviews: ReviewQueries;
+  diffs: DiffQueries;
   verifications: VerificationQueries;
   githubIssues: GitHubIssueQueries;
   checkpoints: CheckpointQueries;

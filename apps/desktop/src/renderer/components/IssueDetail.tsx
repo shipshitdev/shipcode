@@ -1,6 +1,7 @@
 import type {
   ActivityEntry,
   AppSettings,
+  DiffRecord,
   ExecutorModel,
   IntegrationStatus,
   OpenRouterModelValidation,
@@ -218,6 +219,13 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const { data: checkpoints = [] } = useQuery<PipelineCheckpoint[]>({
     queryKey: ['checkpoints', activeThreadId],
     queryFn: () => window.shipcode.invoke('checkpoint:list', { threadId: activeThreadId }),
+    enabled: !!activeThreadId && shouldLoadPipelineTab,
+    refetchInterval: shouldPollLiveThread && shouldLoadPipelineTab ? 15_000 : false,
+  });
+
+  const { data: diffs = [] } = useQuery<DiffRecord[]>({
+    queryKey: ['diffs', activeThreadId],
+    queryFn: () => window.shipcode.invoke('diff:list', { threadId: activeThreadId }),
     enabled: !!activeThreadId && shouldLoadPipelineTab,
     refetchInterval: shouldPollLiveThread && shouldLoadPipelineTab ? 15_000 : false,
   });
@@ -915,7 +923,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
             className={cn(
               'h-5 gap-1 px-1.5 text-[10px] font-medium',
               activeIssue.state === 'open'
-                ? 'text-done hover:bg-done/10 hover:text-done'
+                ? 'text-success hover:bg-success/10 hover:text-success'
                 : 'text-muted hover:bg-secondary hover:text-primary',
             )}
             disabled={isTogglingState}
@@ -933,7 +941,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
             disabled={activeIssue.state === 'open'}
             onClick={() => void handleToggleIssueState('open')}
           >
-            <CircleDot className="mr-2 h-3.5 w-3.5 text-done" />
+            <CircleDot className="mr-2 h-3.5 w-3.5 text-success" />
             Reopen issue
           </DropdownMenuItem>
           <DropdownMenuItem
@@ -1035,6 +1043,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       activeThreadId={activeThreadId}
       checkpoints={checkpoints}
       currentPhaseSelections={currentPhaseSelections}
+      diffs={diffs}
       effectiveExpanded={effectiveExpanded}
       effectivePhaseResolvedModels={effectivePhaseResolvedModels}
       executorEditable={executorEditable}

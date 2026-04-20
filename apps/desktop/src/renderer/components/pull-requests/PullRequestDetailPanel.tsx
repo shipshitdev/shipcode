@@ -1,23 +1,33 @@
-import type { PullRequestDetail } from '@shipcode/shared';
-import { Button, cn, ExternalLink, GitPullRequest } from '@shipcode/ui';
+import type { PullRequestDetailResponse } from '@shipcode/shared';
+import { Button, cn, DiffViewer, ExternalLink, GitPullRequest } from '@shipcode/ui';
 import { useQuery } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
 import { useAppStore } from '../../stores/app-store';
 import { PullRequestDetailActions } from './PullRequestDetailActions';
 
 export function PullRequestDetailPanel({ prNumber }: { prNumber: number }) {
   const { activeProjectId } = useAppStore();
+  const [activeDiffFile, setActiveDiffFile] = useState<string | undefined>();
 
-  const { data: detail, isLoading } = useQuery<PullRequestDetail>({
+  const { data: detail, isLoading } = useQuery<PullRequestDetailResponse>({
     queryKey: ['pr-detail', activeProjectId, prNumber],
-    queryFn: () =>
-      window.shipcode.invoke('github:get-pr-detail', {
-        projectId: activeProjectId!,
+    queryFn: () => {
+      if (!activeProjectId) {
+        throw new Error('Missing active project id');
+      }
+      return window.shipcode.invoke('github:get-pr-detail', {
+        projectId: activeProjectId,
         prNumber,
-      }),
+      });
+    },
     enabled: !!activeProjectId,
     staleTime: 60_000,
     refetchOnWindowFocus: true,
   });
+
+  useEffect(() => {
+    setActiveDiffFile(detail?.diffs[0]?.filePath);
+  }, [detail?.diffs]);
 
   if (isLoading || !detail) {
     return (
@@ -70,6 +80,25 @@ export function PullRequestDetailPanel({ prNumber }: { prNumber: number }) {
         <span className="text-red-400">-{detail.deletions}</span>
       </div>
 
+      <div className="mb-4">
+        <h3 className="mb-2 text-xs font-medium text-primary">Code Changes</h3>
+        {detail.diffs.length > 0 ? (
+          <div className="overflow-hidden rounded-md border border-border bg-secondary/20">
+            <DiffViewer
+              diffs={detail.diffs}
+              activeFile={activeDiffFile}
+              onFileSelect={setActiveDiffFile}
+            />
+          </div>
+        ) : (
+          <div className="rounded-md border border-border bg-secondary/30 px-3 py-2 text-[11px] text-muted">
+            {detail.linkedThreadId
+              ? 'No local execution diff is stored for this PR yet.'
+              : 'This PR is not linked to a ShipCode pipeline thread, so no local execution diff is available.'}
+          </div>
+        )}
+      </div>
+
       {/* CI Checks */}
       {detail.failingChecks.length > 0 && (
         <div className="mb-4">
@@ -90,7 +119,9 @@ export function PullRequestDetailPanel({ prNumber }: { prNumber: number }) {
                     variant="ghost"
                     className="h-5 w-5 p-0 text-secondary"
                     onClick={() =>
-                      window.shipcode.invoke('shell:open-external', { url: check.detailsUrl! })
+                      check.detailsUrl
+                        ? window.shipcode.invoke('shell:open-external', { url: check.detailsUrl })
+                        : Promise.resolve()
                     }
                   >
                     <ExternalLink size={10} />
@@ -143,6 +174,7 @@ export function PullRequestDetailPanel({ prNumber }: { prNumber: number }) {
       <PullRequestDetailActions
         prNumber={detail.number}
         prUrl={detail.url}
+        prState={detail.state}
         hasUnresolvedComments={detail.unresolvedReviewCommentCount > 0}
       />
 

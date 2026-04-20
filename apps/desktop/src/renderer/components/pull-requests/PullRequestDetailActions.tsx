@@ -1,3 +1,4 @@
+import type { PullRequestState } from '@shipcode/shared';
 import { Button } from '@shipcode/ui';
 import { useState } from 'react';
 import { useAppStore } from '../../stores/app-store';
@@ -5,15 +6,19 @@ import { useAppStore } from '../../stores/app-store';
 export function PullRequestDetailActions({
   prNumber,
   prUrl,
+  prState,
   hasUnresolvedComments,
 }: {
   prNumber: number;
   prUrl: string;
+  prState: PullRequestState;
   hasUnresolvedComments: boolean;
 }) {
   const { activeProjectId, setProjectTab } = useAppStore();
   const [isReviewing, setIsReviewing] = useState(false);
   const [isAddressing, setIsAddressing] = useState(false);
+  const canReview = prState === 'OPEN';
+  const canAddressComments = prState === 'OPEN' && hasUnresolvedComments;
 
   const handleAiReview = async () => {
     if (!activeProjectId) return;
@@ -30,7 +35,12 @@ export function PullRequestDetailActions({
         customSystemPrompt: skillContent ?? undefined,
       });
       const { addInstantPane } = useAppStore.getState();
-      addInstantPane(result.threadId);
+      addInstantPane(result.threadId, {
+        mode: 'replay',
+        cli: 'claude',
+        title: `Review PR #${prNumber}`,
+        state: 'running',
+      });
       setProjectTab('sessions');
     } finally {
       setIsReviewing(false);
@@ -52,19 +62,30 @@ export function PullRequestDetailActions({
         customSystemPrompt: skillContent ?? undefined,
       });
       const { addInstantPane } = useAppStore.getState();
-      addInstantPane(result.threadId);
+      addInstantPane(result.threadId, {
+        mode: 'replay',
+        cli: 'claude',
+        title: `Address PR #${prNumber}`,
+        state: 'running',
+      });
       setProjectTab('sessions');
     } finally {
       setIsAddressing(false);
     }
   };
 
+  if (!canReview && !canAddressComments) {
+    return null;
+  }
+
   return (
     <div className="flex items-center gap-2">
-      <Button onClick={() => void handleAiReview()} disabled={isReviewing}>
-        {isReviewing ? 'Reviewing...' : 'AI Review'}
-      </Button>
-      {hasUnresolvedComments && (
+      {canReview ? (
+        <Button onClick={() => void handleAiReview()} disabled={isReviewing}>
+          {isReviewing ? 'Reviewing...' : 'Review'}
+        </Button>
+      ) : null}
+      {canAddressComments ? (
         <Button
           variant="secondary"
           onClick={() => void handleAddressComments()}
@@ -72,7 +93,7 @@ export function PullRequestDetailActions({
         >
           {isAddressing ? 'Addressing...' : 'Address Comments'}
         </Button>
-      )}
+      ) : null}
     </div>
   );
 }

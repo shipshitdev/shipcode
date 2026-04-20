@@ -14,6 +14,7 @@ import {
   MAX_VERIFICATION_RETRIES,
   type ShipCodePlan,
 } from '@shipcode/shared';
+import { parseUnifiedDiff } from './diff-parser';
 import type { PipelineHelperEnv } from './shared';
 
 export function createExecutionPhaseHandlers({
@@ -313,11 +314,14 @@ export function createExecutionPhaseHandlers({
     }
 
     if (!diff.trim()) {
+      deps.diffs.replaceForThread(threadId, []);
       deps.verifications.create(threadId, latestPlan.id, 'No changes detected', null);
       emitPhase(threadId, 'failed');
       activePipelines.delete(threadId);
       return;
     }
+
+    deps.diffs.replaceForThread(threadId, parseUnifiedDiff(diff));
 
     const skill = skillCallSite(context);
     const verificationPrompt = buildVerificationPrompt(

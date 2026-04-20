@@ -315,6 +315,7 @@ function createWindow() {
     threads: queries.threads,
     plans: queries.plans,
     reviews: queries.reviews,
+    diffs: queries.diffs,
     verifications: queries.verifications,
     githubIssues: queries.githubIssues,
     checkpoints: queries.checkpoints,
