@@ -14,11 +14,12 @@ import {
   resolvePhaseModelForIssue,
   resolvePhaseModelIdForIssue,
   resolvePhaseReasoningEffort,
+  resolveRequireApprovalStateForIssue,
   resolveRevisionCountForIssue,
   sanitizeResolvedModel,
 } from '@shipcode/shared';
 import { ACTIVE_STATUSES } from './constants';
-import type { BoardSortOrder, IssuePhaseChip, RowTone } from './types';
+import type { BoardSortOrder, IssueApprovalBadge, IssuePhaseChip, RowTone } from './types';
 
 export function dragOverlayBorderClass(status: IssuePipelineStatus): string {
   if (status === 'failed') return 'border-danger';
@@ -98,6 +99,31 @@ export function resolveIssueRevisionLabel(
     return `Rev ${Math.min(thread.reviewRound, revisionCount)}/${revisionCount}`;
   }
   return `Rev ${revisionCount}`;
+}
+
+export function resolveIssueApprovalBadge(
+  issue: GitHubIssueCacheRecord,
+  settings: AppSettings | null | undefined,
+  project: Project | null | undefined,
+): IssueApprovalBadge | null {
+  if (!settings) return null;
+  if (issue.pipelineStatus === 'completed' || issue.pipelineStatus === 'done') return null;
+
+  const approval = resolveRequireApprovalStateForIssue(settings, project, issue);
+  if (!approval.required) return null;
+
+  const sourceLabel =
+    approval.source === 'issue'
+      ? 'issue override'
+      : approval.source === 'project'
+        ? 'project override'
+        : 'app default';
+
+  return {
+    label: 'Approval',
+    title: `Approval required via ${sourceLabel}`,
+    source: approval.source,
+  };
 }
 
 export function formatPhaseElapsed(since: number): string {

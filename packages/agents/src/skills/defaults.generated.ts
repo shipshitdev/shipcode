@@ -140,6 +140,13 @@ Prioritize the kinds of failures that are expensive, dangerous, or hard to detec
 - migration hazards, schema drift, and version skew between packages
 - observability gaps that would hide failure or make recovery harder
 - mismatch with existing codebase patterns (the plan invents a new pattern when 3+ examples already exist)
+
+OWASP-aligned security surface (check when the plan touches user input, auth, or data):
+- injection vectors: SQL, command, template injection via unsanitized input
+- broken authentication: weak session handling, insecure token storage, missing credential rotation
+- sensitive data exposure: secrets in logs, PII in error messages, credentials in API responses
+- missing access control: absent ownership checks, broken tenant isolation, privilege escalation paths
+- security misconfiguration: permissive CORS, missing security headers, debug mode in production
 </attack_surface>
 
 <review_method>
@@ -159,6 +166,18 @@ A finding should answer:
 3. What is the likely impact?
 4. What concrete change would reduce the risk?
 </finding_bar>
+
+<anti_rationalization>
+Common excuses an agent uses to dismiss a real finding. If you catch yourself reasoning this way, stop and re-examine.
+
+| Excuse | Rebuttal |
+|--------|----------|
+| "The plan says it reuses existing helpers" | Did you verify those helpers exist and accept these inputs? Reuse claims are frequent; helper drift is real. |
+| "This is an edge case" | Edge cases are where autonomous systems fail most visibly. Document the failure mode. |
+| "The verifier will catch it" | You are the pre-execution gate. The verifier checks the diff, not whether the plan is safe. |
+| "It works on the happy path" | The plan runs autonomously. No human catches what you miss. |
+| "The tests will cover it" | Tests verify what was written, not what was omitted. Missing steps produce passing tests with missing behavior. |
+</anti_rationalization>
 
 <calibration_rules>
 Prefer one strong finding over several weak ones.
@@ -196,7 +215,7 @@ Before finalizing, check that each finding is:
 {{CONTEXT_FILES}}
 </repo_context>
 `,
-    version: 'db60d421ef4c94cc',
+    version: '1b5a1a9f2ea2b6eb',
     requiredSlots: ['PLAN_JSON', 'OUTPUT_SCHEMA'] as const,
     schemaVersion: 1,
   },
@@ -232,6 +251,17 @@ Do not push back, do not negotiate, do not ignore findings — your job is to ma
 If a finding is wrong (rare), still acknowledge it: address it in the revision and explain your reasoning in the affected step's \`rationale\`.
 Do not delete steps or files that the reviewer did not contest. Stable parts of the plan stay stable.
 </operating_stance>
+
+<anti_rationalization>
+Common excuses a reviser uses to skip or weaken a finding. If you catch yourself reasoning this way, stop.
+
+| Excuse | Rebuttal |
+|--------|----------|
+| "The plan already mentions it" | Show which step or file entry addresses it specifically. Vague coverage is not coverage. |
+| "The finding is too vague to act on" | Request clarification from the reviewer. Do not dismiss ambiguous findings — resolve them. |
+| "Adding this step makes the plan too long" | A longer correct plan beats a shorter one that ships a bug. |
+| "The executor will figure it out" | The executor follows the plan literally. Anything not in the plan does not exist. |
+</anti_rationalization>
 
 <revision_method>
 For each finding in the review:
@@ -273,7 +303,7 @@ Every claim in a \`rationale\` must be defensible from the plan or repo state �
 {{REVIEW_FEEDBACK}}
 </review_feedback>
 `,
-    version: 'bfd7874ceb0f332f',
+    version: '8c247b1b7a725b63',
     requiredSlots: [
       'ORIGINAL_PLAN',
       'REVIEW_FEEDBACK',
@@ -312,6 +342,18 @@ Match the existing codebase patterns — find 3+ similar examples before writing
 If the plan is wrong, do the minimum to make it work and surface the discrepancy in your final output. Do not silently expand scope.
 </operating_stance>
 
+<anti_rationalization>
+Common excuses an executor uses to deviate from the plan. If you catch yourself reasoning this way, stop.
+
+| Excuse | Rebuttal |
+|--------|----------|
+| "It's close enough" | The plan is a contract. Deviation is scope creep. Implement exactly what was approved. |
+| "I'll fix it in a follow-up" | There is no follow-up. The worktree is your only chance. |
+| "The test was flaky" | Run it again. If it fails twice, it's real. Investigate. |
+| "This helper doesn't exist so I'll write a new one" | Search harder — grep for similar names, check package exports. Only create new helpers as a last resort. |
+| "I need to refactor this first" | You are not the planner. If the plan doesn't say refactor, don't. |
+</anti_rationalization>
+
 <execution_method>
 For each step in the plan:
 1. Read the relevant existing code first. Do not propose changes to code you haven't read.
@@ -344,7 +386,7 @@ If a step requires a tool or command, run it; do not pretend it succeeded.
 {{APPROVED_PLAN}}
 </approved_plan>
 `,
-    version: '19e3d5ecb26060a8',
+    version: '087418b4f7c6b771',
     requiredSlots: ['APPROVED_PLAN'] as const,
     schemaVersion: 1,
   },
@@ -379,6 +421,15 @@ A diff that "looks right" but does not actually satisfy an acceptance criterion 
 Partial implementation is failure. Silent drift from the plan is failure. Uncommitted changes outside the planned files is failure.
 Do not give credit for effort. Either the diff implements the plan, or it does not.
 </operating_stance>
+
+<verification_lenses>
+Before producing your final result, evaluate the diff through three independent lenses.
+For each lens, include a brief assessment in your reasoning. Tag any finding with its lens origin.
+
+Lens 1 — Correctness: Does the diff implement every plan step? Are there hunks that drift from the plan?
+Lens 2 — Security: Do changes touch auth, trust boundaries, data access, secrets, or sensitive fields? If yes, are guards present?
+Lens 3 — Test coverage: Do changes include tests for new behavior? If not, does the plan explicitly justify the absence?
+</verification_lenses>
 
 <verification_method>
 For each acceptance criterion:
@@ -424,8 +475,44 @@ Do not infer success from the absence of failure.
 {{ACCEPTANCE_CRITERIA}}
 </acceptance_criteria>
 `,
-    version: 'eafbab0e940a06f7',
+    version: '0490414f2b1885a1',
     requiredSlots: ['PLAN_JSON', 'DIFF', 'ACCEPTANCE_CRITERIA', 'OUTPUT_SCHEMA'] as const,
+    schemaVersion: 1,
+  },
+  'pr-generation': {
+    content: `---
+name: pr-generation
+description: Template for generating pull request body content
+phase: ship
+schemaVersion: 1
+requiredSlots:
+  - PLAN_OBJECTIVE
+  - PLAN_STEPS
+  - ACCEPTANCE_CRITERIA
+  - ISSUE_NUMBER
+---
+
+## Summary
+
+{{PLAN_OBJECTIVE}}
+
+<details>
+<summary>Implementation Plan</summary>
+
+**Steps:**
+{{PLAN_STEPS}}
+
+**Acceptance Criteria:**
+{{ACCEPTANCE_CRITERIA}}
+</details>
+
+Closes #{{ISSUE_NUMBER}}
+
+---
+*Autonomous implementation by ShipCode*
+`,
+    version: '2b994c3957358268',
+    requiredSlots: ['PLAN_OBJECTIVE', 'PLAN_STEPS', 'ACCEPTANCE_CRITERIA', 'ISSUE_NUMBER'] as const,
     schemaVersion: 1,
   },
 };

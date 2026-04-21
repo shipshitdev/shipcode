@@ -5,6 +5,7 @@ export const ISSUE_DETAIL_TABS = [
   'comments',
   'history',
   'pipeline',
+  'diff',
   'activity',
   'costs',
 ] as const;

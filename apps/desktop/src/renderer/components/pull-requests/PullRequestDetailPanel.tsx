@@ -1,13 +1,11 @@
 import type { PullRequestDetailResponse } from '@shipcode/shared';
-import { Button, cn, DiffViewer, ExternalLink, GitPullRequest } from '@shipcode/ui';
+import { Button, cn, ExternalLink, GitPullRequest, SideBySideDiffViewer } from '@shipcode/ui';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
 import { useAppStore } from '../../stores/app-store';
 import { PullRequestDetailActions } from './PullRequestDetailActions';
 
 export function PullRequestDetailPanel({ prNumber }: { prNumber: number }) {
   const { activeProjectId } = useAppStore();
-  const [activeDiffFile, setActiveDiffFile] = useState<string | undefined>();
 
   const { data: detail, isLoading } = useQuery<PullRequestDetailResponse>({
     queryKey: ['pr-detail', activeProjectId, prNumber],
@@ -24,10 +22,6 @@ export function PullRequestDetailPanel({ prNumber }: { prNumber: number }) {
     staleTime: 60_000,
     refetchOnWindowFocus: true,
   });
-
-  useEffect(() => {
-    setActiveDiffFile(detail?.diffs[0]?.filePath);
-  }, [detail?.diffs]);
 
   if (isLoading || !detail) {
     return (
@@ -83,12 +77,8 @@ export function PullRequestDetailPanel({ prNumber }: { prNumber: number }) {
       <div className="mb-4">
         <h3 className="mb-2 text-xs font-medium text-primary">Code Changes</h3>
         {detail.diffs.length > 0 ? (
-          <div className="overflow-hidden rounded-md border border-border bg-secondary/20">
-            <DiffViewer
-              diffs={detail.diffs}
-              activeFile={activeDiffFile}
-              onFileSelect={setActiveDiffFile}
-            />
+          <div className="h-[500px] overflow-hidden rounded-md border border-border bg-secondary/20">
+            <SideBySideDiffViewer diffs={detail.diffs} className="h-full" />
           </div>
         ) : (
           <div className="rounded-md border border-border bg-secondary/30 px-3 py-2 text-[11px] text-muted">

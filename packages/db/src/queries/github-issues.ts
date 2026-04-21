@@ -40,6 +40,7 @@ interface GitHubIssueCacheRow {
   executor_reasoning_effort_override: ReasoningEffort | null;
   verifier_reasoning_effort_override: ReasoningEffort | null;
   revision_count_override: GitHubIssueCacheRecord['revisionCountOverride'];
+  require_approval_override: number | null;
   linked_pr_number: number | null;
   linked_pr_url: string | null;
   linked_pr_is_draft: number | null;
@@ -108,6 +109,7 @@ export class GitHubIssueQueries {
       | 'executorReasoningEffortOverride'
       | 'verifierReasoningEffortOverride'
       | 'revisionCountOverride'
+      | 'requireApprovalOverride'
       | 'linkedPrNumber'
       | 'linkedPrUrl'
       | 'linkedPrIsDraft'
@@ -393,6 +395,15 @@ export class GitHubIssueQueries {
       .run(revisionCount, id);
   }
 
+  updateRequireApprovalOverride(
+    id: string,
+    requireApproval: GitHubIssueCacheRecord['requireApprovalOverride'],
+  ): void {
+    this.db
+      .prepare('UPDATE github_issue_cache SET require_approval_override = ? WHERE id = ?')
+      .run(requireApproval == null ? null : Number(requireApproval), id);
+  }
+
   updatePhaseModelIdOverride(
     id: string,
     phase: 'planner' | 'reviewer' | 'executor' | 'verifier',
@@ -425,7 +436,8 @@ export class GitHubIssueQueries {
                reviewer_reasoning_effort_override = NULL,
                executor_reasoning_effort_override = NULL,
                verifier_reasoning_effort_override = NULL,
-               revision_count_override = NULL
+               revision_count_override = NULL,
+               require_approval_override = NULL
          WHERE project_id = ?
            AND (
              planner_model_override IS NOT NULL
@@ -441,6 +453,7 @@ export class GitHubIssueQueries {
              OR executor_reasoning_effort_override IS NOT NULL
              OR verifier_reasoning_effort_override IS NOT NULL
              OR revision_count_override IS NOT NULL
+             OR require_approval_override IS NOT NULL
            )`,
       )
       .run(projectId);
@@ -587,6 +600,8 @@ export class GitHubIssueQueries {
       executorReasoningEffortOverride: row.executor_reasoning_effort_override ?? null,
       verifierReasoningEffortOverride: row.verifier_reasoning_effort_override ?? null,
       revisionCountOverride: row.revision_count_override ?? null,
+      requireApprovalOverride:
+        row.require_approval_override == null ? null : row.require_approval_override === 1,
       linkedPrNumber: row.linked_pr_number ?? null,
       linkedPrUrl: row.linked_pr_url ?? null,
       linkedPrIsDraft: !!row.linked_pr_is_draft,

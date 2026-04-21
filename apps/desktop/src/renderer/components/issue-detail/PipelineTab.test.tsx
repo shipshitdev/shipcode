@@ -34,6 +34,7 @@ function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
     executorReasoningEffortOverride: null,
     verifierReasoningEffortOverride: null,
     revisionCountOverride: null,
+    requireApprovalOverride: null,
     linkedPrNumber: null,
     linkedPrUrl: null,
     linkedPrIsDraft: false,
@@ -115,6 +116,7 @@ function renderPipelineTab(diffs: DiffRecord[]) {
         executor: 'claude',
         verifier: 'claude',
       }}
+      effectiveRequireApproval={false}
       effectiveRevisionCount={1}
       executorEditable={false}
       hasPrFeedbackBlockers={false}
@@ -124,6 +126,7 @@ function renderPipelineTab(diffs: DiffRecord[]) {
         executor: 'high',
         verifier: 'high',
       }}
+      inheritedRequireApproval={true}
       inheritedRevisionCount={0}
       isSubmitting={false}
       linkedPrUrl={null}
@@ -146,10 +149,12 @@ function renderPipelineTab(diffs: DiffRecord[]) {
         executor: { provider: 'claude', modelId: null },
         verifier: { provider: 'claude', modelId: null },
       }}
+      requireApprovalSelectValue="__inherit__"
       revisionCountSelectValue="__inherit__"
       thread={makeThread()}
       onPhaseAgentChange={vi.fn()}
       onPhaseEffortChange={vi.fn()}
+      onRequireApprovalChange={vi.fn()}
       onRevisionCountChange={vi.fn()}
       onPhaseOpenRouterSlugBlur={vi.fn()}
       onRestoreCheckpoint={vi.fn()}
@@ -179,12 +184,13 @@ describe('PipelineTab', () => {
     ]);
 
     expect(screen.getByText('Code Diff')).toBeInTheDocument();
-    expect(screen.getByText('src/foo.ts')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'src/foo.ts' })).toBeInTheDocument();
   });
 
   it('shows a waiting message before a diff exists', () => {
     renderPipelineTab([]);
 
+    expect(screen.getByText('Human Approval')).toBeInTheDocument();
     expect(screen.getByText('Revisions')).toBeInTheDocument();
     expect(screen.getByText(/Current workflow uses 1 revision/i)).toBeInTheDocument();
     expect(screen.getByText('Code Diff')).toBeInTheDocument();

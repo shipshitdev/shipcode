@@ -118,6 +118,8 @@ export interface IpcInvokeChannels {
         executorReasoningEffortOverride: Project['executorReasoningEffortOverride'];
         verifierReasoningEffortOverride: Project['verifierReasoningEffortOverride'];
         revisionCountOverride: Project['revisionCountOverride'];
+        requireApprovalOverride: Project['requireApprovalOverride'];
+        prdQualityGate: Project['prdQualityGate'];
       };
     };
     result: Project;
@@ -299,6 +301,14 @@ export interface IpcInvokeChannels {
       projectId: string;
       issueNumber: number;
       revisionCount: GitHubIssueCacheRecord['revisionCountOverride'];
+    };
+    result: GitHubIssueCacheRecord | null;
+  };
+  'github:set-require-approval-override': {
+    args: {
+      projectId: string;
+      issueNumber: number;
+      requireApproval: GitHubIssueCacheRecord['requireApprovalOverride'];
     };
     result: GitHubIssueCacheRecord | null;
   };

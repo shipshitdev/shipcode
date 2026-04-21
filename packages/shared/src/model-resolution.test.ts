@@ -12,6 +12,10 @@ import {
   resolvePhaseModelIdForIssue,
   resolvePhaseReasoningEffort,
   resolvePhaseReasoningEffortForIssue,
+  resolveRequireApproval,
+  resolveRequireApprovalForIssue,
+  resolveRequireApprovalState,
+  resolveRequireApprovalStateForIssue,
   resolveRevisionCount,
   resolveRevisionCountForIssue,
   resolveThreadPhasePresentation,
@@ -42,6 +46,7 @@ function makeProject(overrides: Partial<Project> = {}): Project {
     executorReasoningEffortOverride: null,
     verifierReasoningEffortOverride: null,
     revisionCountOverride: null,
+    requireApprovalOverride: null,
     discordRouting: 'inherit',
     discordWebhookUrlOverride: null,
     telegramRouting: 'inherit',
@@ -86,6 +91,7 @@ function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
     executorReasoningEffortOverride: null,
     verifierReasoningEffortOverride: null,
     revisionCountOverride: null,
+    requireApprovalOverride: null,
     linkedPrNumber: null,
     linkedPrUrl: null,
     linkedPrIsDraft: false,
@@ -243,6 +249,72 @@ describe('model-resolution', () => {
         makeIssue({ revisionCountOverride: 2 }),
       ),
     ).toBe(2);
+  });
+
+  it('resolves human approval through app and project inheritance', () => {
+    expect(resolveRequireApproval(settings, makeProject())).toBe(false);
+    expect(resolveRequireApproval({ ...settings, requireApproval: true }, makeProject())).toBe(
+      true,
+    );
+    expect(
+      resolveRequireApproval(
+        { ...settings, requireApproval: false },
+        makeProject({ requireApprovalOverride: true }),
+      ),
+    ).toBe(true);
+    expect(
+      resolveRequireApproval(
+        { ...settings, requireApproval: true },
+        makeProject({ requireApprovalOverride: false }),
+      ),
+    ).toBe(false);
+  });
+
+  it('lets issue approval overrides shadow project and app defaults', () => {
+    const settingsWithApproval: AppSettings = { ...settings, requireApproval: false };
+    const project = makeProject({ requireApprovalOverride: true });
+
+    expect(resolveRequireApprovalForIssue(settingsWithApproval, project, makeIssue())).toBe(true);
+    expect(
+      resolveRequireApprovalForIssue(
+        settingsWithApproval,
+        project,
+        makeIssue({ requireApprovalOverride: false }),
+      ),
+    ).toBe(false);
+    expect(
+      resolveRequireApprovalForIssue(
+        { ...settingsWithApproval, requireApproval: true },
+        makeProject({ requireApprovalOverride: null }),
+        makeIssue({ requireApprovalOverride: false }),
+      ),
+    ).toBe(false);
+  });
+
+  it('reports where the effective approval requirement comes from', () => {
+    expect(resolveRequireApprovalState(settings, makeProject())).toEqual({
+      required: false,
+      source: 'app',
+    });
+    expect(
+      resolveRequireApprovalState(
+        { ...settings, requireApproval: false },
+        makeProject({ requireApprovalOverride: true }),
+      ),
+    ).toEqual({
+      required: true,
+      source: 'project',
+    });
+    expect(
+      resolveRequireApprovalStateForIssue(
+        { ...settings, requireApproval: true },
+        makeProject({ requireApprovalOverride: true }),
+        makeIssue({ requireApprovalOverride: false }),
+      ),
+    ).toEqual({
+      required: false,
+      source: 'issue',
+    });
   });
 
   it('maps issue statuses to the current card phase', () => {

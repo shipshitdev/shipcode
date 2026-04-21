@@ -141,6 +141,22 @@ export const STALE_LEASE_THRESHOLD_MS = 30 * 60 * 1000;
 export const ORPHAN_CLAIM_THRESHOLD_MS = 5 * 60 * 1000;
 export const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;
 
+// === PRD Quality Gate ===
+
+/**
+ * Section headings that a PRD (GitHub issue body) should contain.
+ * Used by the quality gate to warn or block before planning starts.
+ * Matched case-insensitively against markdown headings (## or ###).
+ */
+export const REQUIRED_PRD_SECTIONS = [
+  'Executive Summary',
+  'Problem Statement',
+  'Goals',
+  'Functional Requirements',
+  'Acceptance Criteria',
+  'Verification Plan',
+] as const;
+
 // === OpenRouter ===
 export const OPENROUTER_API_BASE = 'https://openrouter.ai/api/v1';
 export const OPENROUTER_BACKOFF_BASE_MS = 500;

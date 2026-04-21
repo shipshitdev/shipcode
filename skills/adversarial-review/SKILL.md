@@ -39,6 +39,13 @@ Prioritize the kinds of failures that are expensive, dangerous, or hard to detec
 - migration hazards, schema drift, and version skew between packages
 - observability gaps that would hide failure or make recovery harder
 - mismatch with existing codebase patterns (the plan invents a new pattern when 3+ examples already exist)
+
+OWASP-aligned security surface (check when the plan touches user input, auth, or data):
+- injection vectors: SQL, command, template injection via unsanitized input
+- broken authentication: weak session handling, insecure token storage, missing credential rotation
+- sensitive data exposure: secrets in logs, PII in error messages, credentials in API responses
+- missing access control: absent ownership checks, broken tenant isolation, privilege escalation paths
+- security misconfiguration: permissive CORS, missing security headers, debug mode in production
 </attack_surface>
 
 <review_method>
@@ -58,6 +65,18 @@ A finding should answer:
 3. What is the likely impact?
 4. What concrete change would reduce the risk?
 </finding_bar>
+
+<anti_rationalization>
+Common excuses an agent uses to dismiss a real finding. If you catch yourself reasoning this way, stop and re-examine.
+
+| Excuse | Rebuttal |
+|--------|----------|
+| "The plan says it reuses existing helpers" | Did you verify those helpers exist and accept these inputs? Reuse claims are frequent; helper drift is real. |
+| "This is an edge case" | Edge cases are where autonomous systems fail most visibly. Document the failure mode. |
+| "The verifier will catch it" | You are the pre-execution gate. The verifier checks the diff, not whether the plan is safe. |
+| "It works on the happy path" | The plan runs autonomously. No human catches what you miss. |
+| "The tests will cover it" | Tests verify what was written, not what was omitted. Missing steps produce passing tests with missing behavior. |
+</anti_rationalization>
 
 <calibration_rules>
 Prefer one strong finding over several weak ones.

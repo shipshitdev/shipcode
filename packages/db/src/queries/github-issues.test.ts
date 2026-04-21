@@ -157,6 +157,7 @@ describe('GitHubIssueQueries', () => {
     expect(record.linkedPrUrl).toBeNull();
     expect(record.linkedPrIsDraft).toBe(false);
     expect(record.revisionCountOverride).toBeNull();
+    expect(record.requireApprovalOverride).toBeNull();
     expect(record.ciBlocked).toBe(false);
     expect(record.failingChecks).toEqual([]);
     expect(record.unresolvedReviewComments).toEqual([]);
@@ -172,6 +173,19 @@ describe('GitHubIssueQueries', () => {
 
     issues.updateRevisionCountOverride(record.id, null);
     expect(issues.getByNumber(projectId, 1)?.revisionCountOverride).toBeNull();
+  });
+
+  it('updateRequireApprovalOverride() persists values and can clear them', () => {
+    const record = issues.upsert(makeIssue());
+
+    issues.updateRequireApprovalOverride(record.id, true);
+    expect(issues.getByNumber(projectId, 1)?.requireApprovalOverride).toBe(true);
+
+    issues.updateRequireApprovalOverride(record.id, false);
+    expect(issues.getByNumber(projectId, 1)?.requireApprovalOverride).toBe(false);
+
+    issues.updateRequireApprovalOverride(record.id, null);
+    expect(issues.getByNumber(projectId, 1)?.requireApprovalOverride).toBeNull();
   });
 
   it('updatePhaseModelOverride() persists values and can clear them', () => {
@@ -236,6 +250,8 @@ describe('GitHubIssueQueries', () => {
     issues.updatePhaseModelIdOverride(untouched.id, 'planner', 'gpt-5.4');
     issues.updatePhaseReasoningEffortOverride(untouched.id, 'planner', 'high');
     issues.updateRevisionCountOverride(untouched.id, 5);
+    issues.updateRequireApprovalOverride(issue.id, true);
+    issues.updateRequireApprovalOverride(untouched.id, false);
     issues.updatePipelineStatus(issue.id, 'planning');
 
     expect(issues.clearAllPhaseOverridesForProject(projectId)).toBe(1);
@@ -245,6 +261,7 @@ describe('GitHubIssueQueries', () => {
       plannerModelIdOverride: null,
       plannerReasoningEffortOverride: null,
       revisionCountOverride: null,
+      requireApprovalOverride: null,
       pipelineStatus: 'planning',
     });
     expect(issues.getByNumber(otherProjectId, 11)).toMatchObject({
@@ -252,6 +269,7 @@ describe('GitHubIssueQueries', () => {
       plannerModelIdOverride: 'gpt-5.4',
       plannerReasoningEffortOverride: 'high',
       revisionCountOverride: 5,
+      requireApprovalOverride: false,
     });
   });
 

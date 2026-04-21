@@ -22,6 +22,7 @@ import {
 } from '@shipcode/ui';
 import { CommentsTab } from './CommentsTab';
 import { CostsTab } from './CostsTab';
+import { DiffTab } from './DiffTab';
 import { IssueHistoryTab } from './IssueHistoryTab';
 import { PipelineTab } from './PipelineTab';
 import { PlanHistoryTab } from './PlanHistoryTab';
@@ -45,7 +46,9 @@ interface IssueDetailTabsProps {
   isSubmitting: boolean;
   isShowingAllPlanRuns: boolean;
   linkedPrUrl: string | null;
+  effectiveRequireApproval: boolean;
   effectiveRevisionCount: number;
+  inheritedRequireApproval: boolean;
   inheritedRevisionCount: number;
   loadingPlanDetailIds: string[];
   normalizedIssueActivity: import('@shipcode/shared').ActivityEntry[];
@@ -58,6 +61,7 @@ interface IssueDetailTabsProps {
   phaseEffortSelectValues: Record<PhaseKey, string>;
   phaseModelValidation: Partial<Record<PhaseKey, OpenRouterModelValidation | null>>;
   phaseSelectValues: Record<PhaseKey, string>;
+  requireApprovalSelectValue: string;
   revisionCountSelectValue: string;
   planHistoryCollapsed: boolean;
   planRunCount: number;
@@ -72,6 +76,7 @@ interface IssueDetailTabsProps {
   onFullScreenPlan: (planId: string | null) => void;
   onPhaseAgentChange: (phase: PhaseKey, value: string) => void;
   onPhaseEffortChange: (phase: PhaseKey, effort: string) => void;
+  onRequireApprovalChange: (value: string) => void;
   onRevisionCountChange: (value: string) => void;
   onPhaseOpenRouterSlugBlur: (phase: PhaseKey, rawValue: string) => void;
   onPlanExpandedChange: (planId: string | null | undefined) => void;
@@ -99,7 +104,9 @@ export function IssueDetailTabs({
   isSubmitting,
   isShowingAllPlanRuns,
   linkedPrUrl,
+  effectiveRequireApproval,
   effectiveRevisionCount,
+  inheritedRequireApproval,
   inheritedRevisionCount,
   loadingPlanDetailIds,
   normalizedIssueActivity,
@@ -112,6 +119,7 @@ export function IssueDetailTabs({
   phaseEffortSelectValues,
   phaseModelValidation,
   phaseSelectValues,
+  requireApprovalSelectValue,
   revisionCountSelectValue,
   planHistoryCollapsed,
   planRunCount,
@@ -126,6 +134,7 @@ export function IssueDetailTabs({
   onFullScreenPlan,
   onPhaseAgentChange,
   onPhaseEffortChange,
+  onRequireApprovalChange,
   onRevisionCountChange,
   onPhaseOpenRouterSlugBlur,
   onPlanExpandedChange,
@@ -143,6 +152,7 @@ export function IssueDetailTabs({
       label: `Plans${normalizedPlanHistory.length > 0 ? ` (${normalizedPlanHistory.length})` : ''}`,
     },
     { value: 'pipeline', label: 'Pipeline' },
+    ...(diffs.length > 0 ? [{ value: 'diff' as const, label: `Diff (${diffs.length})` }] : []),
     {
       value: 'activity',
       label: `Activity${normalizedIssueActivity.length > 0 ? ` (${normalizedIssueActivity.length})` : ''}`,
@@ -228,9 +238,11 @@ export function IssueDetailTabs({
           currentPhaseSelections={currentPhaseSelections}
           diffs={diffs}
           effectivePhaseResolvedModels={effectivePhaseResolvedModels}
+          effectiveRequireApproval={effectiveRequireApproval}
           executorEditable={executorEditable}
           hasPrFeedbackBlockers={hasPrFeedbackBlockers}
           inheritedPhaseReasoningEfforts={inheritedPhaseReasoningEfforts}
+          inheritedRequireApproval={inheritedRequireApproval}
           inheritedRevisionCount={inheritedRevisionCount}
           integrationStatus={integrationStatus}
           isSubmitting={isSubmitting}
@@ -239,16 +251,22 @@ export function IssueDetailTabs({
           phaseEffortSelectValues={phaseEffortSelectValues}
           phaseModelValidation={phaseModelValidation}
           phaseSelectValues={phaseSelectValues}
+          requireApprovalSelectValue={requireApprovalSelectValue}
           revisionCountSelectValue={revisionCountSelectValue}
           projectDefaultPhaseSelections={projectDefaultPhaseSelections}
           thread={thread}
           onPhaseAgentChange={onPhaseAgentChange}
           onPhaseEffortChange={onPhaseEffortChange}
+          onRequireApprovalChange={onRequireApprovalChange}
           onRevisionCountChange={onRevisionCountChange}
           onPhaseOpenRouterSlugBlur={onPhaseOpenRouterSlugBlur}
           onRestoreCheckpoint={onRestoreCheckpoint}
           onStabilizePr={onStabilizePr}
         />
+      </TabsContent>
+
+      <TabsContent value="diff" className={cn('mt-0', !expanded && 'p-4')}>
+        <DiffTab diffs={diffs} expanded={expanded} />
       </TabsContent>
 
       <TabsContent value="activity" className={cn('mt-0', !expanded && 'p-4')}>

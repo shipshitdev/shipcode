@@ -11,7 +11,6 @@ import { getSupportedReasoningEfforts, resolveProviderReasoningEffort } from '@s
 import {
   Badge,
   Button,
-  DiffViewer,
   ExternalLink,
   Input,
   MODEL_DISPLAY,
@@ -23,8 +22,8 @@ import {
   SelectSeparator,
   SelectTrigger,
   SelectValue,
+  SideBySideDiffViewer,
 } from '@shipcode/ui';
-import { useEffect, useState } from 'react';
 import {
   formatProviderSelectionLabel,
   getModelOptions,
@@ -42,10 +41,12 @@ export function PipelineTab({
   currentPhaseSelections,
   diffs,
   effectivePhaseResolvedModels,
+  effectiveRequireApproval,
   effectiveRevisionCount,
   executorEditable,
   hasPrFeedbackBlockers,
   inheritedPhaseReasoningEfforts,
+  inheritedRequireApproval,
   inheritedRevisionCount,
   integrationStatus,
   isSubmitting,
@@ -53,11 +54,13 @@ export function PipelineTab({
   phaseEffortSelectValues,
   phaseModelValidation,
   phaseSelectValues,
+  requireApprovalSelectValue,
   projectDefaultPhaseSelections,
   revisionCountSelectValue,
   thread,
   onPhaseAgentChange,
   onPhaseEffortChange,
+  onRequireApprovalChange,
   onRevisionCountChange,
   onPhaseOpenRouterSlugBlur,
   onRestoreCheckpoint,
@@ -70,10 +73,12 @@ export function PipelineTab({
   currentPhaseSelections: Record<PhaseKey, PhaseSelection>;
   diffs: DiffRecord[];
   effectivePhaseResolvedModels: Record<PhaseKey, string>;
+  effectiveRequireApproval: boolean;
   effectiveRevisionCount: number;
   executorEditable: boolean;
   hasPrFeedbackBlockers: boolean;
   inheritedPhaseReasoningEfforts: Record<PhaseKey, ReasoningEffort>;
+  inheritedRequireApproval: boolean;
   inheritedRevisionCount: number;
   integrationStatus?: IntegrationStatus;
   isSubmitting: boolean;
@@ -81,22 +86,18 @@ export function PipelineTab({
   phaseEffortSelectValues: Record<PhaseKey, string>;
   phaseModelValidation: Partial<Record<PhaseKey, OpenRouterModelValidation | null>>;
   phaseSelectValues: Record<PhaseKey, string>;
+  requireApprovalSelectValue: string;
   projectDefaultPhaseSelections: Record<PhaseKey, PhaseSelection>;
   revisionCountSelectValue: string;
   thread: Thread | null | undefined;
   onPhaseAgentChange: (phase: PhaseKey, value: string) => void;
   onPhaseEffortChange: (phase: PhaseKey, effort: string) => void;
+  onRequireApprovalChange: (value: string) => void;
   onRevisionCountChange: (value: string) => void;
   onPhaseOpenRouterSlugBlur: (phase: PhaseKey, rawValue: string) => void;
   onRestoreCheckpoint: (checkpoint: PipelineCheckpoint) => void;
   onStabilizePr: () => void;
 }) {
-  const [activeDiffFile, setActiveDiffFile] = useState<string | undefined>();
-
-  useEffect(() => {
-    setActiveDiffFile(diffs[0]?.filePath);
-  }, [diffs]);
-
   return (
     <>
       <div className="mb-5">
@@ -302,6 +303,29 @@ export function PipelineTab({
               )}
             </div>
           ))}
+        </div>
+      </div>
+
+      <div className="mb-5 rounded-md border border-border bg-secondary p-2">
+        <span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-muted">
+          Human Approval
+        </span>
+        <Select value={requireApprovalSelectValue} onValueChange={onRequireApprovalChange}>
+          <SelectTrigger className="h-7 w-full text-[11px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__inherit__">
+              {`Inherit project default (${inheritedRequireApproval ? 'Required' : 'Off'})`}
+            </SelectItem>
+            <SelectItem value="true">Required</SelectItem>
+            <SelectItem value="false">Off</SelectItem>
+          </SelectContent>
+        </Select>
+        <div className="mt-1 text-[11px] text-muted">
+          {effectiveRequireApproval
+            ? 'Current workflow pauses for approval before execution.'
+            : 'Current workflow executes automatically after planning/revisions.'}
         </div>
       </div>
 
@@ -538,12 +562,8 @@ export function PipelineTab({
             ) : null}
           </div>
           {diffs.length > 0 ? (
-            <div className="overflow-hidden rounded-md border border-border bg-secondary/20">
-              <DiffViewer
-                diffs={diffs}
-                activeFile={activeDiffFile}
-                onFileSelect={setActiveDiffFile}
-              />
+            <div className="h-[500px] overflow-hidden rounded-md border border-border bg-secondary/20">
+              <SideBySideDiffViewer diffs={diffs} className="h-full" />
             </div>
           ) : (
             <div className="rounded-md border border-border bg-secondary px-3 py-2 text-[11px] text-muted">

@@ -13,6 +13,7 @@ import type { BoardSortOrder, ColumnKey, KanbanBoardProps } from './kanban-board
 import {
   compareIssues,
   customCollisionDetection,
+  resolveIssueApprovalBadge,
   resolveIssuePhaseChip,
   resolveIssueRevisionLabel,
 } from './kanban-board/utils';
@@ -55,6 +56,7 @@ export function KanbanBoard({
   const activeIssue = issues.find((issue) => issue.id === activeId);
   const [view, setView] = useState<'kanban' | 'list'>('kanban');
   const [sortOrder, setSortOrder] = useState<BoardSortOrder>('priority');
+  const [approvalFilter, setApprovalFilter] = useState<'all' | 'needs-approval'>('all');
   const [refreshing, setRefreshing] = useState(false);
   const [showRefreshToast, setShowRefreshToast] = useState(false);
   const [rerunningId, setRerunningId] = useState<string | null>(null);
@@ -92,9 +94,23 @@ export function KanbanBoard({
       ),
     [issues, project, settings, threadById],
   );
+  const issueApprovalBadgeById = useMemo(
+    () =>
+      new Map(
+        issues.map((issue) => [issue.id, resolveIssueApprovalBadge(issue, settings, project)]),
+      ),
+    [issues, project, settings],
+  );
   const sortedIssues = useMemo(
     () => [...issues].sort((a, b) => compareIssues(a, b, sortOrder)),
     [issues, sortOrder],
+  );
+  const visibleIssues = useMemo(
+    () =>
+      approvalFilter === 'needs-approval'
+        ? sortedIssues.filter((issue) => issueApprovalBadgeById.get(issue.id) != null)
+        : sortedIssues,
+    [approvalFilter, issueApprovalBadgeById, sortedIssues],
   );
 
   const handleRerun = useCallback(
@@ -195,6 +211,8 @@ export function KanbanBoard({
         onSortOrderChange={setSortOrder}
         view={view}
         onViewChange={setView}
+        approvalFilter={approvalFilter}
+        onApprovalFilterChange={setApprovalFilter}
         refreshing={refreshing}
         onRefresh={handleRefresh}
         projectName={projectName}
@@ -210,10 +228,11 @@ export function KanbanBoard({
       >
         {view === 'list' && (
           <IssueListView
-            issues={sortedIssues}
+            issues={visibleIssues}
             selectedIssueNumber={selectedIssueNumber}
             activeId={activeId}
             issueRevisionLabelById={issueRevisionLabelById}
+            issueApprovalBadgeById={issueApprovalBadgeById}
             onIssueClick={onIssueClick}
             onOpenPullRequest={onOpenPullRequest}
             onArchiveIssue={onArchiveIssue}
@@ -228,7 +247,7 @@ export function KanbanBoard({
                   <StackedColumn
                     key={col.key}
                     column={col}
-                    issues={sortedIssues}
+                    issues={visibleIssues}
                     onIssueClick={onIssueClick}
                     onRerun={handleRerun}
                     onCancel={onCancel}
@@ -239,11 +258,12 @@ export function KanbanBoard({
                     selectedIssueNumber={selectedIssueNumber}
                     issuePhaseChipById={issuePhaseChipById}
                     issueRevisionLabelById={issueRevisionLabelById}
+                    issueApprovalBadgeById={issueApprovalBadgeById}
                     readOnly={readOnly}
                   />
                 );
               }
-              const columnIssues = sortedIssues.filter((i) =>
+              const columnIssues = visibleIssues.filter((i) =>
                 col.statuses.includes(i.pipelineStatus),
               );
               return (
@@ -262,6 +282,7 @@ export function KanbanBoard({
                   onArchiveIssue={col.key === 'done' ? onArchiveIssue : undefined}
                   issuePhaseChipById={issuePhaseChipById}
                   issueRevisionLabelById={issueRevisionLabelById}
+                  issueApprovalBadgeById={issueApprovalBadgeById}
                   readOnly={readOnly}
                 />
               );

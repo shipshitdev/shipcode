@@ -243,6 +243,21 @@ export function createPipelineRuntime(
       '',
       'Apply the minimal follow-up changes, rerun the required verification, and leave the branch ready for another push.',
       '</stabilization_feedback>',
+      '',
+      '<debugging_methodology>',
+      '<scope_constraint>',
+      'These steps apply ONLY to diagnosing the failing check.',
+      'Do not expand beyond the files touched in the original execution.',
+      'Do not redesign, refactor, or improve code outside the failure path.',
+      '</scope_constraint>',
+      '',
+      '1. READ the full error output — not just the last line.',
+      '2. REPRODUCE the failure in isolation before changing anything.',
+      '3. HYPOTHESIZE explicitly before each change — state what you believe is wrong and why.',
+      '4. LOCALIZE — narrow the failure to the smallest scope. Is it your code or existing code?',
+      '5. FIX the root cause, not the symptom. Suppressing errors or changing test expectations is not a fix.',
+      '6. GUARD — write or update a test that fails without the fix and passes with it.',
+      '</debugging_methodology>',
     );
 
     return lines.join('\n');

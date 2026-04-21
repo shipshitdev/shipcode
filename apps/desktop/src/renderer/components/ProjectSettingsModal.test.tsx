@@ -60,6 +60,7 @@ describe('ProjectSettingsModal', () => {
     executorReasoningEffortOverride: null,
     verifierReasoningEffortOverride: null,
     revisionCountOverride: null,
+    requireApprovalOverride: null,
     discordRouting: 'inherit',
     discordWebhookUrlOverride: null,
     telegramRouting: 'inherit',

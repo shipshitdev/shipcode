@@ -11,6 +11,7 @@ import {
   migrateV27,
   migrateV29,
   migrateV30,
+  migrateV31,
 } from './schema';
 import { asRow } from './utils';
 
@@ -383,5 +384,48 @@ describe('migrateV30', () => {
       .get('revisionCount') as { value: string } | undefined;
 
     expect(revisionCount?.value).toBe('1');
+  });
+});
+
+describe('migrateV31', () => {
+  let db: DatabaseSync;
+
+  beforeEach(() => {
+    db = new DatabaseSync(':memory:');
+    migrate(db);
+    migrateV2(db);
+    migrateV3(db);
+    migrateV29(db);
+    migrateV30(db);
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('adds project and issue approval override columns', () => {
+    migrateV31(db);
+
+    db.prepare(
+      "INSERT INTO projects (id, name, path, require_approval_override) VALUES ('p1', 'test', '/tmp/test', 1)",
+    ).run();
+    db.prepare(
+      "INSERT INTO github_issue_cache (id, project_id, issue_number, title, labels, state, pipeline_status, require_approval_override) VALUES ('i1', 'p1', 1, 'Issue', '[]', 'open', 'todo', 0)",
+    ).run();
+
+    const projectRow = db
+      .prepare('SELECT require_approval_override FROM projects WHERE id = ?')
+      .get('p1') as { require_approval_override: number };
+    const issueRow = db
+      .prepare('SELECT require_approval_override FROM github_issue_cache WHERE id = ?')
+      .get('i1') as { require_approval_override: number };
+
+    expect(projectRow.require_approval_override).toBe(1);
+    expect(issueRow.require_approval_override).toBe(0);
+  });
+
+  it('is idempotent', () => {
+    migrateV31(db);
+    expect(() => migrateV31(db)).not.toThrow();
   });
 });

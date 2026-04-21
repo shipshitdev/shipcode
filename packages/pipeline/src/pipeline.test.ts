@@ -16,6 +16,7 @@ import {
   MAX_VERIFICATION_RETRIES,
   PIPELINE_MAX_RETRIES,
   type PlanRecord,
+  type Project,
   type Thread,
 } from '@shipcode/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -220,6 +221,7 @@ function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
     executorReasoningEffortOverride: null,
     verifierReasoningEffortOverride: null,
     revisionCountOverride: null,
+    requireApprovalOverride: null,
     linkedPrNumber: null,
     linkedPrUrl: null,
     linkedPrIsDraft: false,
@@ -242,6 +244,46 @@ function makePlanRecord(overrides: Partial<PlanRecord> = {}): PlanRecord {
     structured: JSON.parse(PLAN_JSON),
     status: 'pending_review',
     createdAt: '',
+    ...overrides,
+  };
+}
+
+function makeProject(overrides: Partial<Project> = {}): Project {
+  return {
+    id: 'project-1',
+    name: 'Project',
+    path: '/proj',
+    gitRemote: 'https://github.com/acme/repo.git',
+    githubRepoId: null,
+    githubRepoFullName: null,
+    starterIssueNumber: null,
+    starterIssueCreatedAt: null,
+    githubProjectUrl: null,
+    plannerModelOverride: null,
+    reviewerModelOverride: null,
+    executorModelOverride: null,
+    verifierModelOverride: null,
+    plannerModelIdOverride: null,
+    reviewerModelIdOverride: null,
+    executorModelIdOverride: null,
+    verifierModelIdOverride: null,
+    plannerReasoningEffortOverride: null,
+    reviewerReasoningEffortOverride: null,
+    executorReasoningEffortOverride: null,
+    verifierReasoningEffortOverride: null,
+    revisionCountOverride: null,
+    requireApprovalOverride: null,
+    discordRouting: 'inherit',
+    discordWebhookUrlOverride: null,
+    telegramRouting: 'inherit',
+    telegramChatIdOverride: null,
+    defaultBranch: 'main',
+    pinned: false,
+    archived: false,
+    hidden: false,
+    notifyGithubUser: null,
+    createdAt: '',
+    updatedAt: '',
     ...overrides,
   };
 }
@@ -364,6 +406,7 @@ function createMockDeps() {
           status: 'planning',
         })),
         incrementReviewRound: vi.fn(),
+        clearClarification: vi.fn(),
         setGithubPr: vi.fn(),
         updateAutonomousFields: vi.fn(),
         setResolvedModel: vi.fn(),
@@ -387,12 +430,14 @@ function createMockDeps() {
       },
       reviews: {
         create: vi.fn(),
+        getByPlanId: vi.fn(() => null),
       },
       diffs: {
         replaceForThread: vi.fn(),
       },
       verifications: {
         create: vi.fn(),
+        getLatest: vi.fn(() => null),
       },
       githubIssues: {
         getByNumber: vi.fn(() => null),
@@ -404,17 +449,7 @@ function createMockDeps() {
         create: vi.fn(),
       },
       projects: {
-        getById: vi.fn(() => ({
-          id: 'project-1',
-          plannerModelIdOverride: null,
-          reviewerModelIdOverride: null,
-          executorModelIdOverride: null,
-          verifierModelIdOverride: null,
-          plannerReasoningEffortOverride: null,
-          reviewerReasoningEffortOverride: null,
-          executorReasoningEffortOverride: null,
-          verifierReasoningEffortOverride: null,
-        })),
+        getById: vi.fn(() => makeProject()),
       },
       settings,
       providers,
@@ -493,6 +528,7 @@ describe('createPipeline', () => {
 
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      await flush();
 
       expect(mock.deps.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
         'issue-1',
@@ -504,7 +540,7 @@ describe('createPipeline', () => {
 
       expect(mock.deps.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
         'issue-1',
-        'reviewing',
+        'awaiting_approval',
       );
     });
 
@@ -521,33 +557,36 @@ describe('createPipeline', () => {
       expect(mock.deps.githubIssues.updatePipelineStatus).toHaveBeenCalledWith('issue-1', 'failed');
     });
 
-    it('exit 0 + valid plan → creates plan, emits plan:parsed, emits reviewing (manual)', async () => {
+    it('exit 0 + valid plan → creates plan, emits plan:parsed, then awaits approval by default', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      await flush();
 
       await mock.trigger('output', 'proc-1', planBlock());
       await mock.trigger('exit', 'proc-1', 0);
 
       expect(mock.deps.plans.create).toHaveBeenCalled();
-      expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'pending_review');
+      expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'approved');
+      expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'awaiting_approval');
       expect(mock.emittedEvents).toContainEqual(
         expect.objectContaining({ type: 'plan:parsed', threadId: 't1' }),
       );
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'reviewing');
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'awaiting_approval');
     });
 
-    it('exit 0 + valid plan + autonomous → calls startReview (spawns codex)', async () => {
+    it('exit 0 + valid plan + autonomous → calls startExecution (spawns claude) when revisions are off', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
       requireContext(pipeline).autonomous = true;
+      await flush();
 
       await mock.trigger('output', 'proc-1', planBlock());
       await mock.trigger('exit', 'proc-1', 0);
 
-      // startReview was called → spawns a codex process
+      // Default revisionCount is 0, so a parsed plan goes straight to execution.
       expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(2);
       const secondCall = vi.mocked(mock.deps.processManager.spawn).mock.calls[1];
-      expect(secondCall[1]).toBe('codex');
+      expect(secondCall[1]).toBe('claude');
     });
 
     it('exit 0 + no valid plan → creates plan with null, emits failed', async () => {
@@ -677,6 +716,10 @@ describe('createPipeline', () => {
     });
 
     it('request_changes + autonomous + round < MAX_REVIEW_ROUNDS → emits revising', async () => {
+      vi.mocked(mock.deps.settings.get).mockReturnValue({
+        ...DEFAULT_SETTINGS,
+        revisionCount: 1,
+      });
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
       const context = requireContext(pipeline);
@@ -684,6 +727,7 @@ describe('createPipeline', () => {
       context.reviewRound = 0;
 
       await pipeline.startReview('t1', JSON.parse(PLAN_JSON));
+      await flush();
 
       await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_REQUEST_CHANGES_JSON));
       await mock.trigger('exit', 'proc-2', 0);
@@ -784,6 +828,24 @@ describe('createPipeline', () => {
 
       await pipeline.startReview('t1', JSON.parse(PLAN_JSON));
       await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_REQUEST_CHANGES_CRITICAL_JSON));
+      await mock.trigger('exit', 'proc-2', 0);
+
+      expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'awaiting_approval');
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'awaiting_approval');
+    });
+
+    it('approve + autonomous + project approval override → awaiting_approval', async () => {
+      vi.mocked(mock.deps.projects.getById).mockReturnValue(
+        makeProject({ requireApprovalOverride: true }),
+      );
+      vi.mocked(mock.deps.githubIssues.getByNumber).mockReturnValue(makeIssue());
+
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      requireContext(pipeline).autonomous = true;
+
+      await pipeline.startReview('t1', JSON.parse(PLAN_JSON));
+      await mock.trigger('output', 'proc-2', reviewBlock(REVIEW_APPROVE_JSON));
       await mock.trigger('exit', 'proc-2', 0);
 
       expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'awaiting_approval');
@@ -1625,6 +1687,41 @@ describe('createPipeline', () => {
       expect(ctx.executorReasoningEffort).toBe('low');
       expect(ctx.verifierReasoningEffort).toBe('high');
       expect(ctx.baseBranch).toBe('develop');
+    });
+
+    it('uses issue approval override ahead of the project default in start-context events', async () => {
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.includes('symbolic-ref')) return 'origin/main';
+        if (cmd.includes('rev-parse')) return 'sha789';
+        return '';
+      });
+      vi.mocked(mock.deps.projects.getById).mockReturnValue(
+        makeProject({ requireApprovalOverride: true }),
+      );
+      vi.mocked(mock.deps.githubIssues.getByNumber).mockReturnValue(
+        makeIssue({ requireApprovalOverride: false }),
+      );
+
+      const pipeline = createPipeline(mock.deps);
+      const issue = {
+        number: 11,
+        title: 'Approval precedence',
+        body: 'Check overrides',
+        labels: [],
+      };
+
+      await pipeline.startFromGitHubIssue('t1', '/proj', issue, 'claude');
+
+      expect(mock.emittedEvents).toContainEqual({
+        type: 'pipeline:start-context',
+        threadId: 't1',
+        source: 'github:start-issue',
+        projectPath: '/proj',
+        githubIssueNumber: 11,
+        autonomous: true,
+        requireApproval: false,
+        reviewRound: 0,
+      });
     });
 
     it('uses the reused worktree as planner cwd when restarting the same issue', async () => {

@@ -54,6 +54,8 @@ describe('registerGitHubHandlers', () => {
     reviewerReasoningEffortOverride: null,
     executorReasoningEffortOverride: null,
     verifierReasoningEffortOverride: null,
+    revisionCountOverride: null,
+    requireApprovalOverride: null,
     linkedPrNumber: null,
     linkedPrUrl: null,
     linkedPrIsDraft: false,
@@ -219,6 +221,55 @@ describe('registerGitHubHandlers', () => {
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('github:issues-updated', {
       projectId: 'project-1',
       issues: refreshedIssues,
+    });
+  });
+
+  it('updates an issue-specific human approval override and returns the refreshed issue', () => {
+    const refreshedIssue = { ...baseIssue, requireApprovalOverride: true };
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+      },
+      githubIssues: {
+        getByNumber: vi.fn((_projectId: string, issueNumber: number) =>
+          issueNumber === 42 ? refreshedIssue : null,
+        ),
+        updateRequireApprovalOverride: vi.fn(),
+        list: vi.fn(() => [refreshedIssue]),
+      },
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const setApprovalOverride = handlers.get('github:set-require-approval-override');
+    if (!setApprovalOverride) {
+      throw new Error('github:set-require-approval-override handler not registered');
+    }
+
+    expect(
+      setApprovalOverride(undefined, {
+        projectId: 'project-1',
+        issueNumber: 42,
+        requireApproval: true,
+      }),
+    ).toEqual(refreshedIssue);
+
+    expect(queries.githubIssues.updateRequireApprovalOverride).toHaveBeenCalledWith(
+      'issue-1',
+      true,
+    );
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('github:issues-updated', {
+      projectId: 'project-1',
+      issues: [refreshedIssue],
     });
   });
 });

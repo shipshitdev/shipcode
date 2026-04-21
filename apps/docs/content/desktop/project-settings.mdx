@@ -19,6 +19,8 @@ The modal lives at [`apps/desktop/src/renderer/components/ProjectSettingsModal.t
 | Field | DB column | Purpose |
 |-------|-----------|---------|
 | GitHub Projects v2 URL | `projects.github_project_url` | Override for the Kanban header `board` button — points it at a real Projects v2 board instead of the repo's `/projects` tab |
+| Human approval override | `projects.require_approval_override` | Optional project-local approval gate. `null` inherits the app default; issue-level overrides can still change a specific issue |
+| Revision override | `projects.revision_count_override` | Optional project-local revision count. `null` inherits the app default; issue-level overrides can still change a specific issue |
 | Planner model override | `projects.planner_model_override` | Optional project-local planner override. `null` inherits the global Settings value |
 | Reviewer model override | `projects.reviewer_model_override` | Optional project-local reviewer override. `null` inherits the global Settings value |
 | Executor model override | `projects.executor_model_override` | Optional project-local executor override. `null` inherits the global Settings value unless an issue-level executor override exists |
@@ -28,14 +30,16 @@ The modal lives at [`apps/desktop/src/renderer/components/ProjectSettingsModal.t
 | Executor effort override | `projects.executor_reasoning_effort_override` | Optional project-local executor effort override. Exact options depend on the selected provider |
 | Verifier effort override | `projects.verifier_reasoning_effort_override` | Optional project-local verifier effort override. Exact options depend on the selected provider |
 
-## Model override hierarchy
+## Override Hierarchy
 
-Project Settings sits between the global Settings panel and the issue-level executor override.
+Project Settings sits between the global Settings panel and the issue-level overrides.
 
 - Planner / Reviewer / Verifier: `global settings -> project override`
 - Executor: `global settings -> project override -> issue override`
+- Human approval: `app default -> project override -> issue override`
+- Revisions: `app default -> project override -> issue override`
 
-`Inherit` means the project stores `null` for that phase and falls back to the global Settings default.
+`Inherit` means the project stores `null` for that field and falls back to the app default.
 
 Effort options are provider-specific:
 
@@ -45,7 +49,7 @@ Effort options are provider-specific:
 
 If an older stored effort is not exact for the chosen provider, the UI surfaces the fallback mapping explicitly.
 
-Issue-level overrides remain executor-only. They live in Issue Detail / Kanban because executor choice is the only phase that routinely needs issue-by-issue variation.
+Issue Detail can still override human approval, revisions, and phase models for a single issue when one task needs a different workflow than the rest of the repo.
 
 ## Why the GitHub Projects v2 override exists
 

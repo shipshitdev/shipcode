@@ -1,9 +1,10 @@
 /**
  * Smoke test: startFromGitHubIssue
  *
- * Drives the full plan → review cycle via the mock process manager,
+ * Drives the default plan flow via the mock process manager,
  * using the same helpers and mock patterns as pipeline.test.ts.
- * Asserts the thread lands on awaiting_approval (manual-mode default).
+ * Asserts the thread lands on awaiting_approval with the current
+ * default workflow (0 revisions + approval required).
  */
 import type { AgentProvider, ProcessManager } from '@shipcode/agents';
 import {
@@ -54,21 +55,8 @@ const PLAN_JSON = JSON.stringify({
   dependencies: [],
 });
 
-const REVIEW_APPROVE_JSON = JSON.stringify({
-  planId: 'p1',
-  decision: 'approve',
-  confidence: 'high',
-  summary: 'Plan looks good',
-  findings: [],
-  suggestedChanges: [],
-});
-
 function planBlock(json: string = PLAN_JSON) {
   return `\`\`\`shipcode-plan\n${json}\n\`\`\``;
-}
-
-function reviewBlock(json: string) {
-  return `\`\`\`shipcode-review\n${json}\n\`\`\``;
 }
 
 // ─── Mock deps factory ──────────────────────────────────────────────────────
@@ -138,6 +126,7 @@ function createSmokeDeps() {
         githubIssueNumber: 42,
       })),
       incrementReviewRound: vi.fn(),
+      clearClarification: vi.fn(),
       setGithubPr: vi.fn(),
       updateAutonomousFields: vi.fn(),
       setResolvedModel: vi.fn(),
@@ -264,7 +253,7 @@ describe('startFromGitHubIssue — smoke', () => {
     vi.restoreAllMocks();
   });
 
-  it('plan → review → awaiting_approval (manual mode)', async () => {
+  it('plan → awaiting_approval with the default workflow', async () => {
     const pipeline = createPipeline(smoke.deps);
     const issue = { number: 42, title: 'Fix the bug', body: 'It crashes on startup', labels: [] };
 
@@ -280,20 +269,14 @@ describe('startFromGitHubIssue — smoke', () => {
     await smoke.trigger('output', 'proc-1', planBlock());
     await smoke.trigger('exit', 'proc-1', 0);
 
-    // Plan was created and review started
+    // Plan was created and, with the default 0 revisions, approval is requested immediately
     expect(smoke.deps.plans.create).toHaveBeenCalled();
-    expect(smoke.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'pending_review');
-    expect(smoke.deps.threads.updateStatus).toHaveBeenCalledWith('t-smoke', 'reviewing');
-
-    // Drive review output and exit (approve, but manual mode → awaiting_approval)
-    await smoke.trigger('output', 'proc-2', reviewBlock(REVIEW_APPROVE_JSON));
-    await smoke.trigger('exit', 'proc-2', 0);
-
+    expect(smoke.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'approved');
     expect(smoke.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'awaiting_approval');
     expect(smoke.deps.threads.updateStatus).toHaveBeenCalledWith('t-smoke', 'awaiting_approval');
   });
 
-  it('syncs GitHub issue pipeline status through planning → reviewing → awaiting_approval', async () => {
+  it('syncs GitHub issue pipeline status through planning → awaiting_approval', async () => {
     const pipeline = createPipeline(smoke.deps);
     const issue = { number: 42, title: 'Fix the bug', body: 'It crashes', labels: [] };
 
@@ -306,14 +289,6 @@ describe('startFromGitHubIssue — smoke', () => {
 
     await smoke.trigger('output', 'proc-1', planBlock());
     await smoke.trigger('exit', 'proc-1', 0);
-
-    expect(smoke.deps.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
-      'issue-42',
-      'reviewing',
-    );
-
-    await smoke.trigger('output', 'proc-2', reviewBlock(REVIEW_APPROVE_JSON));
-    await smoke.trigger('exit', 'proc-2', 0);
 
     expect(smoke.deps.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
       'issue-42',

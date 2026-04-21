@@ -36,6 +36,8 @@ interface ProjectRow {
   executor_reasoning_effort_override: Project['executorReasoningEffortOverride'];
   verifier_reasoning_effort_override: Project['verifierReasoningEffortOverride'];
   revision_count_override: Project['revisionCountOverride'];
+  require_approval_override: number | null;
+  prd_quality_gate: number | null;
   discord_routing: Project['discordRouting'];
   discord_webhook_url_override: string | null;
   telegram_routing: Project['telegramRouting'];
@@ -411,6 +413,8 @@ export class ProjectQueries {
       executorReasoningEffortOverride: Project['executorReasoningEffortOverride'];
       verifierReasoningEffortOverride: Project['verifierReasoningEffortOverride'];
       revisionCountOverride: Project['revisionCountOverride'];
+      requireApprovalOverride: Project['requireApprovalOverride'];
+      prdQualityGate: Project['prdQualityGate'];
     },
   ): void {
     this.db
@@ -429,6 +433,8 @@ export class ProjectQueries {
                executor_reasoning_effort_override = ?,
                verifier_reasoning_effort_override = ?,
                revision_count_override = ?,
+               require_approval_override = ?,
+               prd_quality_gate = ?,
                updated_at = ${ISO_NOW_SQL}
          WHERE id = ?`,
       )
@@ -446,6 +452,10 @@ export class ProjectQueries {
         overrides.executorReasoningEffortOverride,
         overrides.verifierReasoningEffortOverride,
         overrides.revisionCountOverride,
+        overrides.requireApprovalOverride == null
+          ? null
+          : Number(overrides.requireApprovalOverride),
+        overrides.prdQualityGate == null ? null : Number(overrides.prdQualityGate),
         id,
       );
   }
@@ -498,6 +508,9 @@ function mapProject(row: ProjectRow): Project {
     executorReasoningEffortOverride: row.executor_reasoning_effort_override ?? null,
     verifierReasoningEffortOverride: row.verifier_reasoning_effort_override ?? null,
     revisionCountOverride: row.revision_count_override ?? null,
+    requireApprovalOverride:
+      row.require_approval_override == null ? null : row.require_approval_override === 1,
+    prdQualityGate: row.prd_quality_gate == null ? null : row.prd_quality_gate === 1,
     discordRouting: row.discord_routing ?? 'inherit',
     discordWebhookUrlOverride: row.discord_webhook_url_override ?? null,
     telegramRouting: row.telegram_routing ?? 'inherit',

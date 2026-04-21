@@ -21,3 +21,5 @@ coverage/
 coverage-summary.txt
 .nyc_output/
 .claude/settings.json
+# Added by code-review-graph
+.code-review-graph/

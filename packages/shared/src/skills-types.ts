@@ -17,6 +17,7 @@ export const PHASE_SKILL_KEYS = [
   'plan-revision',
   'plan-execution',
   'plan-verification',
+  'pr-generation',
 ] as const;
 
 export type PhaseSkillKey = (typeof PHASE_SKILL_KEYS)[number];

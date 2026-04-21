@@ -17,6 +17,7 @@ import {
 } from './primitives/card';
 import { Modal } from './primitives/modal';
 import { SettingsRow } from './primitives/settings-row';
+import { SideBySideDiffViewer } from './SideBySideDiffViewer';
 import { StatusMappingEditor } from './StatusMappingEditor';
 
 function renderIntoDom(element: ReactElement) {
@@ -65,6 +66,40 @@ const diffRecords: DiffRecord[] = [
     beforeHash: null,
     afterHash: 'after-2',
     createdAt: new Date('2026-04-16T00:00:01.000Z').toISOString(),
+  },
+];
+
+const sideBySideDiffRecords: DiffRecord[] = [
+  {
+    id: 'side-diff-1',
+    threadId: 'thread-1',
+    filePath: 'packages/ui/src/SideBySideDiffViewer.tsx',
+    diffContent: `diff --git a/packages/ui/src/SideBySideDiffViewer.tsx b/packages/ui/src/SideBySideDiffViewer.tsx
+index 1111111..2222222 100644
+--- a/packages/ui/src/SideBySideDiffViewer.tsx
++++ b/packages/ui/src/SideBySideDiffViewer.tsx
+@@ -1,4 +1,5 @@
+ const stable = true;
+-before();
+-oldOnly();
++after();
++newOnly();
++addedOnly();
+ return stable;`,
+    action: 'modify',
+    beforeHash: 'before-side-1',
+    afterHash: 'after-side-1',
+    createdAt: new Date('2026-04-21T00:00:00.000Z').toISOString(),
+  },
+  {
+    id: 'side-diff-2',
+    threadId: 'thread-1',
+    filePath: 'packages/ui/src/empty-file.ts',
+    diffContent: '',
+    action: 'create',
+    beforeHash: null,
+    afterHash: 'after-side-2',
+    createdAt: new Date('2026-04-21T00:00:01.000Z').toISOString(),
   },
 ];
 
@@ -118,6 +153,36 @@ describe('UI component regression coverage', () => {
     expect(view.container.textContent).toContain('No diff content available');
 
     view.rerender(<DiffViewer diffs={[]} />);
+    expect(view.container.textContent).toContain('No changes to display');
+    view.cleanup();
+  });
+
+  it('renders side-by-side diff rows, file selection, and empty fallbacks', () => {
+    const view = renderIntoDom(<SideBySideDiffViewer diffs={sideBySideDiffRecords} />);
+
+    expect(view.container.textContent).toContain('2 files changed');
+    expect(view.container.textContent).toContain('@@ -1,4 +1,5 @@');
+    expect(view.container.textContent).toContain('const stable = true;');
+    expect(view.container.textContent).toContain('before();');
+    expect(view.container.textContent).toContain('after();');
+    expect(view.container.textContent).toContain('addedOnly();');
+    expect(view.container.querySelectorAll('tbody tr')).toHaveLength(6);
+
+    const emptyFileButton = Array.from(view.container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('empty-file.ts'),
+    );
+    if (!(emptyFileButton instanceof HTMLButtonElement)) {
+      throw new Error('Expected empty file button');
+    }
+    expect(emptyFileButton.getAttribute('aria-label')).toBe('packages/ui/src/empty-file.ts');
+
+    act(() => {
+      emptyFileButton.click();
+    });
+
+    expect(view.container.textContent).toContain('No diff content available for this file');
+
+    view.rerender(<SideBySideDiffViewer diffs={[]} />);
     expect(view.container.textContent).toContain('No changes to display');
     view.cleanup();
   });

@@ -92,7 +92,7 @@ describe('PullRequestDetailPanel', () => {
     renderPanel();
 
     expect(await screen.findByText('Code Changes')).toBeInTheDocument();
-    expect(screen.getByText('src/foo.ts')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'src/foo.ts' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Review' })).toBeInTheDocument();
   });
 

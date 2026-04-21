@@ -1,7 +1,7 @@
 import type { AppSettings, GitHubIssueCacheRecord, Project, Thread } from '@shipcode/shared';
 import { DEFAULT_SETTINGS } from '@shipcode/shared';
 import { describe, expect, it } from 'vitest';
-import { compareIssues, resolveIssuePhaseChip } from './utils';
+import { compareIssues, resolveIssueApprovalBadge, resolveIssuePhaseChip } from './utils';
 
 function makeIssue(
   issueNumber: number,
@@ -72,6 +72,7 @@ function makeProject(overrides: Partial<Project> = {}): Project {
     executorReasoningEffortOverride: null,
     verifierReasoningEffortOverride: null,
     revisionCountOverride: null,
+    requireApprovalOverride: null,
     discordRouting: 'inherit',
     discordWebhookUrlOverride: null,
     telegramRouting: 'inherit',
@@ -231,5 +232,75 @@ describe('resolveIssuePhaseChip', () => {
       model: 'gpt-5.4',
       effort: 'xhigh',
     });
+  });
+});
+
+describe('resolveIssueApprovalBadge', () => {
+  it('returns null when approval is not required', () => {
+    const badge = resolveIssueApprovalBadge(
+      makeIssue(45, 'No approval needed'),
+      { ...SETTINGS, requireApproval: false },
+      makeProject(),
+    );
+
+    expect(badge).toBeNull();
+  });
+
+  it('reports app-default sourced approval', () => {
+    const badge = resolveIssueApprovalBadge(
+      makeIssue(46, 'App default approval'),
+      { ...SETTINGS, requireApproval: true },
+      makeProject(),
+    );
+
+    expect(badge).toEqual({
+      label: 'Approval',
+      title: 'Approval required via app default',
+      source: 'app',
+    });
+  });
+
+  it('reports project override approval', () => {
+    const badge = resolveIssueApprovalBadge(
+      makeIssue(47, 'Project approval'),
+      { ...SETTINGS, requireApproval: false },
+      makeProject({ requireApprovalOverride: true }),
+    );
+
+    expect(badge).toEqual({
+      label: 'Approval',
+      title: 'Approval required via project override',
+      source: 'project',
+    });
+  });
+
+  it('reports issue override approval', () => {
+    const issue = makeIssue(48, 'Issue approval');
+    issue.requireApprovalOverride = true;
+
+    const badge = resolveIssueApprovalBadge(
+      issue,
+      { ...SETTINGS, requireApproval: false },
+      makeProject({ requireApprovalOverride: false }),
+    );
+
+    expect(badge).toEqual({
+      label: 'Approval',
+      title: 'Approval required via issue override',
+      source: 'issue',
+    });
+  });
+
+  it('hides approval badges for done states', () => {
+    const issue = makeIssue(49, 'Completed issue');
+    issue.pipelineStatus = 'completed';
+
+    const badge = resolveIssueApprovalBadge(
+      issue,
+      { ...SETTINGS, requireApproval: true },
+      makeProject(),
+    );
+
+    expect(badge).toBeNull();
   });
 });

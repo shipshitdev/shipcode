@@ -2,6 +2,8 @@ import type { ActivePipelineSummary } from '@shipcode/shared';
 import {
   clarificationAnswerSchema,
   resolveExecutorModelForIssue,
+  resolveRequireApproval,
+  resolveRequireApprovalForIssue,
   resolveRevisionCount,
   resolveRevisionCountForIssue,
   resolveThreadPhasePresentation,
@@ -24,6 +26,24 @@ export function registerPipelineHandlers({
   emitter,
   notificationService,
 }: IpcHandlerDeps): void {
+  const resolveEffectiveRequireApproval = (threadId: string) => {
+    const thread = queries.threads.getById(threadId);
+    if (!thread) return queries.settings.get().requireApproval;
+
+    const settings = queries.settings.get();
+    const project = queries.projects.getById(thread.projectId);
+    if (!project) return settings.requireApproval;
+
+    const issue =
+      thread.githubIssueNumber != null
+        ? queries.githubIssues.getByNumber(project.id, thread.githubIssueNumber)
+        : null;
+
+    return issue
+      ? resolveRequireApprovalForIssue(settings, project, issue)
+      : resolveRequireApproval(settings, project);
+  };
+
   const buildActivePipelineSummary = (
     summary: ReturnType<typeof pipeline.listActive>[number],
   ): ActivePipelineSummary => {
@@ -134,7 +154,7 @@ export function registerPipelineHandlers({
       projectPath: project.path,
       githubIssueNumber: thread.githubIssueNumber ?? null,
       autonomous: false,
-      requireApproval: settings.requireApproval,
+      requireApproval: resolveRequireApproval(settings, project),
       reviewRound: thread.reviewRound,
     });
 
@@ -244,7 +264,7 @@ export function registerPipelineHandlers({
           projectPath: project.path,
           githubIssueNumber: thread.githubIssueNumber ?? null,
           autonomous: thread.autonomous,
-          requireApproval: queries.settings.get().requireApproval,
+          requireApproval: resolveEffectiveRequireApproval(threadId),
           reviewRound: thread.reviewRound,
         });
       }
@@ -365,7 +385,7 @@ export function registerPipelineHandlers({
       projectPath: project.path,
       githubIssueNumber: thread.githubIssueNumber ?? null,
       autonomous: thread.autonomous,
-      requireApproval: settings.requireApproval,
+      requireApproval: resolveEffectiveRequireApproval(threadId),
       reviewRound: thread.reviewRound,
     });
 
@@ -455,7 +475,7 @@ export function registerPipelineHandlers({
       outcome: 'awaiting_approval',
       reviewDecision: 'approve',
       planVersion: latestPlan?.version ?? null,
-      requireApproval: queries.settings.get().requireApproval,
+      requireApproval: resolveEffectiveRequireApproval(threadId),
       autonomous: thread?.autonomous ?? false,
       reviewRound: thread?.reviewRound ?? 0,
       revisionCount:

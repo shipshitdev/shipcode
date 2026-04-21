@@ -7,7 +7,13 @@ import { cn } from '../lib/utils';
 import { Button } from '../primitives/button';
 import { COLUMN_DOT_CLASS } from './constants';
 import { DraggableCard } from './IssueCardParts';
-import type { BoardColumn, ColumnKey, IssuePhaseChip, PhaseSection } from './types';
+import type {
+  BoardColumn,
+  ColumnKey,
+  IssueApprovalBadge,
+  IssuePhaseChip,
+  PhaseSection,
+} from './types';
 
 interface DroppableColumnProps {
   id: string;
@@ -24,6 +30,7 @@ interface DroppableColumnProps {
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
   issuePhaseChipById: Map<string, IssuePhaseChip | null>;
   issueRevisionLabelById: Map<string, string | null>;
+  issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
 }
 
 export function DroppableColumn({
@@ -41,6 +48,7 @@ export function DroppableColumn({
   onArchiveIssue,
   issuePhaseChipById,
   issueRevisionLabelById,
+  issueApprovalBadgeById,
 }: DroppableColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id, disabled: !droppable || readOnly });
   const hasIssues = issues.length > 0;
@@ -89,6 +97,7 @@ export function DroppableColumn({
             issue={issue}
             phaseChip={issuePhaseChipById.get(issue.id) ?? null}
             revisionLabel={issueRevisionLabelById.get(issue.id) ?? null}
+            approvalBadge={issueApprovalBadgeById.get(issue.id) ?? null}
             onClick={() => onIssueClick(issue)}
             onStartPipeline={onStartPipeline}
             onOpenPullRequest={onOpenPullRequest}
@@ -116,6 +125,7 @@ interface SectionBlockProps {
   rerunningId?: string | null;
   issuePhaseChipById: Map<string, IssuePhaseChip | null>;
   issueRevisionLabelById: Map<string, string | null>;
+  issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
 }
 
 function SectionBlock({
@@ -132,6 +142,7 @@ function SectionBlock({
   rerunningId,
   issuePhaseChipById,
   issueRevisionLabelById,
+  issueApprovalBadgeById,
 }: SectionBlockProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: `${columnKey}:${section.key}`,
@@ -190,6 +201,7 @@ function SectionBlock({
               issue={issue}
               phaseChip={issuePhaseChipById.get(issue.id) ?? null}
               revisionLabel={issueRevisionLabelById.get(issue.id) ?? null}
+              approvalBadge={issueApprovalBadgeById.get(issue.id) ?? null}
               onClick={() => onIssueClick(issue)}
               onRerun={onRerun}
               onCancel={onCancel}
@@ -229,6 +241,7 @@ interface StackedColumnProps {
   rerunningId?: string | null;
   issuePhaseChipById: Map<string, IssuePhaseChip | null>;
   issueRevisionLabelById: Map<string, string | null>;
+  issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
 }
 
 export function StackedColumn({
@@ -245,6 +258,7 @@ export function StackedColumn({
   rerunningId,
   issuePhaseChipById,
   issueRevisionLabelById,
+  issueApprovalBadgeById,
 }: StackedColumnProps) {
   const columnIssues = issues.filter((issue) => column.statuses.includes(issue.pipelineStatus));
   const hasIssues = columnIssues.length > 0;
@@ -297,6 +311,7 @@ export function StackedColumn({
             rerunningId={rerunningId}
             issuePhaseChipById={issuePhaseChipById}
             issueRevisionLabelById={issueRevisionLabelById}
+            issueApprovalBadgeById={issueApprovalBadgeById}
           />
         ))}
       </div>

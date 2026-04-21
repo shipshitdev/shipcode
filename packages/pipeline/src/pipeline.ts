@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { resolveRequireApproval, resolveRequireApprovalForIssue } from '@shipcode/shared';
 import { createPipelineContextHelpers } from './pipeline/context';
 import { createExecutionPhaseHandlers } from './pipeline/execution-phases';
 import { createPlanningPhaseHandlers } from './pipeline/planning-phases';
@@ -126,6 +127,20 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       verifiedSha: null,
     });
 
+    const settings = deps.settings.get();
+    const thread = deps.threads.getById(threadId);
+    const project = thread ? deps.projects.getById(thread.projectId) : null;
+    const cachedIssue =
+      thread?.projectId != null
+        ? deps.githubIssues.getByNumber(thread.projectId, issue.number)
+        : null;
+    const requireApproval =
+      project && cachedIssue
+        ? resolveRequireApprovalForIssue(settings, project, cachedIssue)
+        : project
+          ? resolveRequireApproval(settings, project)
+          : settings.requireApproval;
+
     deps.emitter.emit({
       type: 'pipeline:start-context',
       threadId,
@@ -133,7 +148,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       projectPath,
       githubIssueNumber: issue.number,
       autonomous: true,
-      requireApproval: deps.settings.get().requireApproval,
+      requireApproval,
       reviewRound: 0,
     });
 

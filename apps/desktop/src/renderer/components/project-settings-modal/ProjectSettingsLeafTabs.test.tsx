@@ -293,6 +293,8 @@ describe('project settings leaf tabs', () => {
           executorReasoningEffortOverride: null,
           verifierReasoningEffortOverride: null,
           revisionCountOverride: null,
+          requireApprovalOverride: null,
+          prdQualityGate: null,
           discordRouting: 'inherit',
           discordWebhookUrlOverride: null,
           telegramRouting: 'inherit',
@@ -311,6 +313,7 @@ describe('project settings leaf tabs', () => {
     );
 
     expect(screen.getByText('Reset issue overrides on 2 issues.')).toBeInTheDocument();
+    expect(screen.getByText('Human Approval')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Apply Claude' }));
     fireEvent.click(screen.getByRole('button', { name: 'Apply Codex' }));

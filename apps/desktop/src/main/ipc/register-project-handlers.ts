@@ -706,6 +706,8 @@ export function registerProjectHandlers({
           executorReasoningEffortOverride: import('@shipcode/shared').Project['executorReasoningEffortOverride'];
           verifierReasoningEffortOverride: import('@shipcode/shared').Project['verifierReasoningEffortOverride'];
           revisionCountOverride: import('@shipcode/shared').Project['revisionCountOverride'];
+          requireApprovalOverride: import('@shipcode/shared').Project['requireApprovalOverride'];
+          prdQualityGate: import('@shipcode/shared').Project['prdQualityGate'];
         };
       },
     ) => {

@@ -16,12 +16,13 @@ import {
   LIST_COLUMN_LABEL,
 } from './constants';
 import { IssueExternalBlockers } from './IssueCardParts';
-import type { ColumnKey, PhaseSection } from './types';
+import type { ColumnKey, IssueApprovalBadge, PhaseSection } from './types';
 import { formatDate, rowToneFor } from './utils';
 
 interface DraggableListRowProps {
   issue: GitHubIssueCacheRecord;
   revisionLabel?: string | null;
+  approvalBadge?: IssueApprovalBadge | null;
   selectedIssueNumber?: number;
   activeId: string | null;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
@@ -32,6 +33,7 @@ interface DraggableListRowProps {
 function DraggableListRow({
   issue,
   revisionLabel,
+  approvalBadge,
   selectedIssueNumber,
   activeId,
   onIssueClick,
@@ -135,6 +137,15 @@ function DraggableListRow({
             {revisionLabel}
           </Badge>
         ) : null}
+        {approvalBadge ? (
+          <Badge
+            variant="warning"
+            className="px-1.5 py-px text-[10px] font-medium"
+            title={approvalBadge.title}
+          >
+            {approvalBadge.label}
+          </Badge>
+        ) : null}
       </span>
       <span className="flex shrink-0 items-center gap-1 text-xs text-secondary">
         <User size={11} className="text-muted" />
@@ -165,6 +176,7 @@ interface ListSectionBlockProps {
   section: PhaseSection;
   issues: GitHubIssueCacheRecord[];
   issueRevisionLabelById: Map<string, string | null>;
+  issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
   selectedIssueNumber?: number;
   activeId: string | null;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
@@ -177,6 +189,7 @@ function ListSectionBlock({
   section,
   issues,
   issueRevisionLabelById,
+  issueApprovalBadgeById,
   selectedIssueNumber,
   activeId,
   onIssueClick,
@@ -227,6 +240,7 @@ function ListSectionBlock({
               key={issue.id}
               issue={issue}
               revisionLabel={issueRevisionLabelById.get(issue.id) ?? null}
+              approvalBadge={issueApprovalBadgeById.get(issue.id) ?? null}
               selectedIssueNumber={selectedIssueNumber}
               activeId={activeId}
               onIssueClick={onIssueClick}
@@ -264,6 +278,7 @@ function DroppableListGroup({ dropId, children }: DroppableListGroupProps) {
 interface IssueListViewProps {
   issues: GitHubIssueCacheRecord[];
   issueRevisionLabelById: Map<string, string | null>;
+  issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
   selectedIssueNumber?: number;
   activeId: string | null;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
@@ -275,6 +290,7 @@ interface IssueListViewProps {
 export function IssueListView({
   issues,
   issueRevisionLabelById,
+  issueApprovalBadgeById,
   selectedIssueNumber,
   activeId,
   onIssueClick,
@@ -341,6 +357,7 @@ export function IssueListView({
                           section.statuses.includes(issue.pipelineStatus),
                         )}
                         issueRevisionLabelById={issueRevisionLabelById}
+                        issueApprovalBadgeById={issueApprovalBadgeById}
                         selectedIssueNumber={selectedIssueNumber}
                         activeId={activeId}
                         onIssueClick={onIssueClick}
@@ -356,6 +373,7 @@ export function IssueListView({
                         key={issue.id}
                         issue={issue}
                         revisionLabel={issueRevisionLabelById.get(issue.id) ?? null}
+                        approvalBadge={issueApprovalBadgeById.get(issue.id) ?? null}
                         selectedIssueNumber={selectedIssueNumber}
                         activeId={activeId}
                         onIssueClick={onIssueClick}

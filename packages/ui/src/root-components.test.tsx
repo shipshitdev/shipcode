@@ -15,6 +15,12 @@ import { PlanViewer } from './PlanViewer';
 import { ReviewViewer } from './ReviewViewer';
 import { VerificationViewer } from './VerificationViewer';
 
+(
+  globalThis as typeof globalThis & {
+    IS_REACT_ACT_ENVIRONMENT?: boolean;
+  }
+).IS_REACT_ACT_ENVIRONMENT = true;
+
 function renderIntoDom(element: ReactElement) {
   const container = document.createElement('div');
   document.body.appendChild(container);
@@ -180,15 +186,31 @@ describe('root UI components', () => {
     expect(view.container.textContent).not.toContain('Execute');
 
     const buttons = Array.from(view.container.querySelectorAll('button'));
+    const planButton = buttons.find((button) => button.textContent?.includes('Plan'));
+    const clarifyButton = buttons.find((button) => button.textContent?.includes('Clarify'));
+    const reviewButton = buttons.find((button) => button.textContent?.includes('Review'));
+    const firstFutureButton = buttons.find((button) => button.disabled);
+
+    if (
+      !(planButton instanceof HTMLButtonElement) ||
+      !(clarifyButton instanceof HTMLButtonElement) ||
+      !(reviewButton instanceof HTMLButtonElement) ||
+      !(firstFutureButton instanceof HTMLButtonElement)
+    ) {
+      throw new Error('Expected completed, active, and future pipeline phase buttons');
+    }
+
     act(() => {
-      buttons[0]?.click();
-      buttons[1]?.click();
-      buttons[4]?.click();
+      planButton.click();
+      clarifyButton.click();
+      reviewButton.click();
+      firstFutureButton.click();
     });
 
-    expect(onPhaseClick).toHaveBeenCalledTimes(2);
+    expect(onPhaseClick).toHaveBeenCalledTimes(3);
     expect(onPhaseClick).toHaveBeenNthCalledWith(1, 'planning');
-    expect(onPhaseClick).toHaveBeenNthCalledWith(2, 'reviewing');
+    expect(onPhaseClick).toHaveBeenNthCalledWith(2, 'clarifying');
+    expect(onPhaseClick).toHaveBeenNthCalledWith(3, 'reviewing');
     view.cleanup();
   });
 

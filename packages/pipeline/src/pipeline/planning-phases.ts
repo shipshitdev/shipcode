@@ -12,11 +12,30 @@ import {
   MAX_CLARIFICATION_ROUNDS,
   PIPELINE_MAX_RETRIES,
   type PlanRecord,
+  REQUIRED_PRD_SECTIONS,
+  resolveRequireApproval,
+  resolveRequireApprovalForIssue,
   resolveRevisionCount,
   resolveRevisionCountForIssue,
   type ShipCodePlan,
 } from '@shipcode/shared';
 import type { PipelineHelperEnv } from './shared';
+
+/**
+ * Scan a PRD (issue body / prompt) for required section headings.
+ * Returns the list of section names that are MISSING.
+ * Matching is case-insensitive against `##` or `###` markdown headings.
+ */
+function checkPrdSections(prompt: string): string[] {
+  const headingPattern = /^#{2,3}\s+(.+)$/gm;
+  const found = new Set<string>();
+  while (true) {
+    const match = headingPattern.exec(prompt);
+    if (!match) break;
+    found.add(match[1].trim().toLowerCase());
+  }
+  return REQUIRED_PRD_SECTIONS.filter((section) => !found.has(section.toLowerCase()));
+}
 
 export function createPlanningPhaseHandlers({
   deps,
@@ -28,6 +47,7 @@ export function createPlanningPhaseHandlers({
   const {
     buildRepoSetupPlannerNote,
     emitPhase,
+    emitTerminalLifecycle,
     ensureRepoSetupContract,
     getVerifyCommands,
     postPlanComment,
@@ -101,6 +121,18 @@ export function createPlanningPhaseHandlers({
       : resolveRevisionCount(settings, project);
   }
 
+  function getRequireApprovalForContext(context: ReturnType<typeof ensureContext>): boolean {
+    const settings = deps.settings.get();
+    const project = context.projectId ? deps.projects.getById(context.projectId) : null;
+    const issue =
+      context.projectId && context.githubIssueNumber != null
+        ? deps.githubIssues.getByNumber(context.projectId, context.githubIssueNumber)
+        : null;
+    return issue
+      ? resolveRequireApprovalForIssue(settings, project, issue)
+      : resolveRequireApproval(settings, project);
+  }
+
   function continueFromStructuredPlan(
     threadId: string,
     context: ReturnType<typeof ensureContext>,
@@ -117,7 +149,7 @@ export function createPlanningPhaseHandlers({
     }
 
     deps.plans.updateStatus(plan.id, 'approved');
-    const requireApproval = deps.settings.get().requireApproval;
+    const requireApproval = getRequireApprovalForContext(context);
     const reasons: Array<'requireApproval' | 'nonAutonomous' | 'reviewApproved'> = [
       'reviewApproved',
     ];
@@ -177,6 +209,30 @@ export function createPlanningPhaseHandlers({
       emitPhase(threadId, 'failed', error instanceof Error ? error.message : String(error));
       activePipelines.delete(threadId);
       return;
+    }
+
+    // PRD quality gate — check issue body for required sections
+    const missingSections = checkPrdSections(prompt);
+    if (missingSections.length > 0) {
+      const project = context.projectId ? deps.projects.getById(context.projectId) : null;
+      const gateEnabled = project?.prdQualityGate === true;
+      const sectionList = missingSections.join(', ');
+
+      if (gateEnabled) {
+        emitPhase(
+          threadId,
+          'failed',
+          `PRD quality gate: missing sections — ${sectionList}. Update the issue body and re-trigger.`,
+        );
+        activePipelines.delete(threadId);
+        return;
+      }
+
+      // Gate OFF (default) — post/log a warning and continue
+      emitTerminalLifecycle(
+        threadId,
+        `[prd-gate] Warning: PRD may be missing sections: ${sectionList}\r\n`,
+      );
     }
 
     emitPhase(threadId, 'planning');
@@ -387,7 +443,7 @@ export function createPlanningPhaseHandlers({
           deps.emitter.emit({ type: 'review:parsed', threadId, review: result.data });
 
           if (result.data.decision === 'approve') {
-            const requireApproval = deps.settings.get().requireApproval;
+            const requireApproval = getRequireApprovalForContext(context);
             const revisionCount = getRevisionCountForContext(context);
             const reasons: Array<'requireApproval' | 'nonAutonomous' | 'reviewApproved'> = [
               'reviewApproved',
@@ -448,7 +504,7 @@ export function createPlanningPhaseHandlers({
                 (finding: { severity: string }) =>
                   finding.severity === 'critical' || finding.severity === 'major',
               );
-              const requireApproval = deps.settings.get().requireApproval;
+              const requireApproval = getRequireApprovalForContext(context);
               const reasons: Array<
                 'requireApproval' | 'nonAutonomous' | 'criticalFindings' | 'revisionsExhausted'
               > = ['revisionsExhausted'];

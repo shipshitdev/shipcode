@@ -59,6 +59,7 @@ export function InboxView() {
   const { removeNotification, clearNotifications, selectProject, selectIssue } = useAppStore();
 
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
+  const [showOnlyApprovalRequired, setShowOnlyApprovalRequired] = useState(false);
   const [navigatingId, setNavigatingId] = useState<string | null>(null);
   // Stale-navigation guard: each click gets a token; async results are discarded
   // if a newer click (or user navigation) has since taken over.
@@ -85,6 +86,9 @@ export function InboxView() {
       ? new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       : new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
   );
+  const visibleNotifications = showOnlyApprovalRequired
+    ? sorted.filter((notification) => notification.kind === 'awaiting_approval')
+    : sorted;
 
   const dismiss = useMutation({
     mutationFn: (id: string) => window.shipcode.invoke('notification:dismiss', { id }),
@@ -175,7 +179,14 @@ export function InboxView() {
   const renderRow = (n: NotificationRecord) => (
     <TableRow key={n.id} className="group">
       <TableCell className="w-[1%] whitespace-nowrap align-top">
-        <Badge variant={KIND_BADGE_VARIANT[n.kind]}>{KIND_LABEL[n.kind]}</Badge>
+        <div className="flex items-center gap-1.5">
+          <Badge variant={KIND_BADGE_VARIANT[n.kind]}>{KIND_LABEL[n.kind]}</Badge>
+          {n.kind === 'awaiting_approval' ? (
+            <Badge variant="default" title="This issue pauses before execution for human approval">
+              Approval required
+            </Badge>
+          ) : null}
+        </div>
       </TableCell>
       <TableCell className="w-[1%] whitespace-nowrap align-top text-[11px] text-muted">
         {timeAgo(n.createdAt)}
@@ -240,6 +251,19 @@ export function InboxView() {
                 <ArrowUpDown size={12} />
                 {sortOrder === 'newest' ? 'Newest' : 'Oldest'}
               </Button>
+              <Button
+                variant={showOnlyApprovalRequired ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setShowOnlyApprovalRequired((current) => !current)}
+                className="h-7 text-[11px]"
+                title={
+                  showOnlyApprovalRequired
+                    ? 'Show all notifications'
+                    : 'Show only notifications that need approval'
+                }
+              >
+                Needs approval
+              </Button>
               {active.length > 0 && (
                 <Button
                   variant="secondary"
@@ -273,7 +297,16 @@ export function InboxView() {
             </div>
           )}
 
-          {!isLoading && !isError && active.length > 0 && renderTable(sorted)}
+          {!isLoading && !isError && active.length > 0 && visibleNotifications.length === 0 && (
+            <div className="rounded-lg border border-dashed border-border px-4 py-12 text-center text-xs text-muted">
+              No notifications match the current filter.
+            </div>
+          )}
+
+          {!isLoading &&
+            !isError &&
+            visibleNotifications.length > 0 &&
+            renderTable(visibleNotifications)}
         </div>
       </div>
     </div>

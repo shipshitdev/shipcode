@@ -43,6 +43,8 @@ export type ProjectOverrideState = Pick<
   | 'executorReasoningEffortOverride'
   | 'verifierReasoningEffortOverride'
   | 'revisionCountOverride'
+  | 'requireApprovalOverride'
+  | 'prdQualityGate'
   | 'discordRouting'
   | 'discordWebhookUrlOverride'
   | 'telegramRouting'
@@ -63,6 +65,8 @@ export const EMPTY_OVERRIDES: ProjectOverrideState = {
   executorReasoningEffortOverride: null,
   verifierReasoningEffortOverride: null,
   revisionCountOverride: null,
+  requireApprovalOverride: null,
+  prdQualityGate: null,
   discordRouting: 'inherit',
   discordWebhookUrlOverride: null,
   telegramRouting: 'inherit',

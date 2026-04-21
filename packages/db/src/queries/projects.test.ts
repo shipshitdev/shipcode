@@ -117,6 +117,7 @@ describe('ProjectQueries', () => {
     expect(p.executorReasoningEffortOverride).toBeNull();
     expect(p.verifierReasoningEffortOverride).toBeNull();
     expect(p.revisionCountOverride).toBeNull();
+    expect(p.requireApprovalOverride).toBeNull();
     expect(p.discordRouting).toBe('inherit');
     expect(p.discordWebhookUrlOverride).toBeNull();
     expect(p.telegramRouting).toBe('inherit');
@@ -139,6 +140,8 @@ describe('ProjectQueries', () => {
       executorReasoningEffortOverride: 'high',
       verifierReasoningEffortOverride: 'medium',
       revisionCountOverride: 3,
+      requireApprovalOverride: true,
+      prdQualityGate: true,
     });
 
     let updated = projects.getById(p.id);
@@ -157,6 +160,8 @@ describe('ProjectQueries', () => {
     expect(updated.executorReasoningEffortOverride).toBe('high');
     expect(updated.verifierReasoningEffortOverride).toBe('medium');
     expect(updated.revisionCountOverride).toBe(3);
+    expect(updated.requireApprovalOverride).toBe(true);
+    expect(updated.prdQualityGate).toBe(true);
 
     projects.updateModelOverrides(p.id, {
       plannerModelOverride: null,
@@ -172,6 +177,8 @@ describe('ProjectQueries', () => {
       executorReasoningEffortOverride: null,
       verifierReasoningEffortOverride: null,
       revisionCountOverride: null,
+      requireApprovalOverride: null,
+      prdQualityGate: null,
     });
 
     updated = projects.getById(p.id);
@@ -190,6 +197,8 @@ describe('ProjectQueries', () => {
     expect(updated.executorReasoningEffortOverride).toBeNull();
     expect(updated.verifierReasoningEffortOverride).toBeNull();
     expect(updated.revisionCountOverride).toBeNull();
+    expect(updated.requireApprovalOverride).toBeNull();
+    expect(updated.prdQualityGate).toBeNull();
   });
 
   it('persists GitHub repo identity and starter issue metadata', () => {

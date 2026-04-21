@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import {
   buildExecutionPrompt,
+  buildPRBody,
   buildVerificationPrompt,
   loadRepoContext,
   StreamParser,
@@ -441,6 +442,7 @@ export function createExecutionPhaseHandlers({
       activePipelines.delete(threadId);
       return;
     }
+    const issueNumber = context.githubIssueNumber;
 
     const cwd = context.worktreePath ?? context.projectPath;
 
@@ -452,15 +454,30 @@ export function createExecutionPhaseHandlers({
       const latestPlan = deps.plans.getLatest(threadId);
       const plan = latestPlan?.structured;
       const title = plan?.objective ?? `ShipCode: Issue #${context.githubIssueNumber}`;
-      const body = [
-        '## Summary',
-        plan?.objective ?? '',
-        '',
-        `Closes #${context.githubIssueNumber}`,
-        '',
-        '---',
-        '*Autonomous implementation by ShipCode*',
-      ].join('\n');
+
+      // Collect reviews for the latest plan
+      const reviews = latestPlan
+        ? (() => {
+            const review = deps.reviews.getByPlanId(latestPlan.id);
+            return review?.structured ? [review.structured] : [];
+          })()
+        : [];
+
+      // Get latest verification
+      const latestVerification = deps.verifications.getLatest(threadId);
+
+      const body = plan
+        ? buildPRBody(plan, reviews, latestVerification?.structured ?? null, issueNumber, {
+            projectId: context.projectId,
+            skills: deps.skills,
+          })
+        : [
+            '## Summary',
+            `Closes #${issueNumber}`,
+            '',
+            '---',
+            '*Autonomous implementation by ShipCode*',
+          ].join('\n');
 
       if (!context.baseBranch) {
         throw new Error(`Thread ${threadId}: missing baseBranch at PR creation`);

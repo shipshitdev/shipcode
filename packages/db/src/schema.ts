@@ -915,3 +915,34 @@ export function migrateV30(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (30)`);
   });
 }
+
+export function migrateV31(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 31) return;
+
+  transaction(db, () => {
+    execAlterTablesIfMissing(db, [
+      'ALTER TABLE projects ADD COLUMN require_approval_override INTEGER',
+      'ALTER TABLE github_issue_cache ADD COLUMN require_approval_override INTEGER',
+    ]);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (31)`);
+  });
+}
+
+export function migrateV32(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 32) return;
+
+  transaction(db, () => {
+    execAlterTablesIfMissing(db, [
+      'ALTER TABLE projects ADD COLUMN prd_quality_gate INTEGER DEFAULT 0',
+    ]);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (32)`);
+  });
+}

@@ -93,6 +93,8 @@ export interface Project {
   executorReasoningEffortOverride: ReasoningEffort | null;
   verifierReasoningEffortOverride: ReasoningEffort | null;
   revisionCountOverride: RevisionCount | null;
+  requireApprovalOverride?: boolean | null;
+  prdQualityGate?: boolean | null;
   discordRouting: ProjectNotificationRoutingMode;
   discordWebhookUrlOverride: string | null;
   telegramRouting: ProjectNotificationRoutingMode;
@@ -766,6 +768,7 @@ export interface GitHubIssueCacheRecord {
   executorReasoningEffortOverride: ReasoningEffort | null;
   verifierReasoningEffortOverride: ReasoningEffort | null;
   revisionCountOverride: RevisionCount | null;
+  requireApprovalOverride?: boolean | null;
   linkedPrNumber: number | null;
   linkedPrUrl: string | null;
   linkedPrIsDraft: boolean;

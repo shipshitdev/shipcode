@@ -165,5 +165,6 @@ export {
 export { Tabs, TabsContent, TabsList, TabsTrigger } from './primitives/tabs';
 export { Textarea } from './primitives/textarea';
 export { ReviewViewer } from './ReviewViewer';
+export { SideBySideDiffViewer } from './SideBySideDiffViewer';
 export { StatusMappingEditor } from './StatusMappingEditor';
 export { VerificationViewer } from './VerificationViewer';

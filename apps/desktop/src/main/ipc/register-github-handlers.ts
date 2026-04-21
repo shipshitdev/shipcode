@@ -745,6 +745,31 @@ export function registerGitHubHandlers({
   );
 
   ipcMain.handle(
+    'github:set-require-approval-override',
+    (
+      _event,
+      {
+        projectId,
+        issueNumber,
+        requireApproval,
+      }: {
+        projectId: string;
+        issueNumber: number;
+        requireApproval: import('@shipcode/shared').GitHubIssueCacheRecord['requireApprovalOverride'];
+      },
+    ) => {
+      if (requireApproval !== null && typeof requireApproval !== 'boolean') {
+        throw new Error(`Invalid requireApproval override: ${String(requireApproval)}`);
+      }
+      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
+      if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
+      queries.githubIssues.updateRequireApprovalOverride(issue.id, requireApproval);
+      sendGithubIssuesUpdated(mainWindow, queries, projectId);
+      return queries.githubIssues.getByNumber(projectId, issueNumber);
+    },
+  );
+
+  ipcMain.handle(
     'github:set-phase-reasoning-effort-override',
     (
       _event,

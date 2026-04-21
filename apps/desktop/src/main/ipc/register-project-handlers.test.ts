@@ -82,6 +82,7 @@ describe('registerProjectHandlers', () => {
     executorReasoningEffortOverride: null,
     verifierReasoningEffortOverride: null,
     revisionCountOverride: null,
+    requireApprovalOverride: null,
     discordRouting: 'inherit' as const,
     discordWebhookUrlOverride: null,
     telegramRouting: 'inherit' as const,

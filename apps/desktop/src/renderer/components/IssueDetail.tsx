@@ -22,6 +22,8 @@ import {
   resolvePhaseModelForIssue,
   resolvePhaseModelId,
   resolvePhaseReasoningEffortForIssue,
+  resolveRequireApproval,
+  resolveRequireApprovalForIssue,
   resolveRevisionCount,
   resolveRevisionCountForIssue,
   sanitizeResolvedModel,
@@ -769,6 +771,16 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     await queryClient.invalidateQueries({ queryKey: ['github-issues', activeProjectId] });
   };
 
+  const handleRequireApprovalChange = async (value: string) => {
+    if (!activeProjectId || !activeIssue) return;
+    await window.shipcode.invoke('github:set-require-approval-override', {
+      projectId: activeProjectId,
+      issueNumber: activeIssue.issueNumber,
+      requireApproval: value === '__inherit__' ? null : value === 'true',
+    });
+    await queryClient.invalidateQueries({ queryKey: ['github-issues', activeProjectId] });
+  };
+
   const handleEditPrd = () => {
     if (!activeIssue) return;
     openEditPrdModal(activeIssue.issueNumber, activeIssue.body ?? '', activeIssue.labels);
@@ -969,10 +981,23 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     settings && activeIssue
       ? resolveRevisionCountForIssue(settings, activeProject, activeIssue)
       : inheritedRevisionCount;
+  const inheritedRequireApproval = settings
+    ? resolveRequireApproval(settings, activeProject)
+    : false;
+  const effectiveRequireApproval =
+    settings && activeIssue
+      ? resolveRequireApprovalForIssue(settings, activeProject, activeIssue)
+      : inheritedRequireApproval;
   const revisionCountSelectValue =
     activeIssue.revisionCountOverride == null
       ? '__inherit__'
       : String(activeIssue.revisionCountOverride);
+  const requireApprovalSelectValue =
+    activeIssue.requireApprovalOverride == null
+      ? '__inherit__'
+      : activeIssue.requireApprovalOverride
+        ? 'true'
+        : 'false';
 
   // ─── Shared render sections ──────────────────────────────────────────────
 
@@ -1260,7 +1285,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       hasApprovalDecision,
       isSubmitting,
       pendingAction,
-      requireApproval: settings?.requireApproval ?? false,
+      requireApproval: effectiveRequireApproval,
       retryButtonLabel,
       retrySummary,
       showRawOutput,
@@ -1298,7 +1323,9 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       isSubmitting={isSubmitting}
       isShowingAllPlanRuns={isShowingAllPlanRuns}
       linkedPrUrl={linkedPrUrl}
+      effectiveRequireApproval={effectiveRequireApproval}
       effectiveRevisionCount={effectiveRevisionCount}
+      inheritedRequireApproval={inheritedRequireApproval}
       inheritedRevisionCount={inheritedRevisionCount}
       normalizedIssueActivity={normalizedIssueActivity}
       loadingPlanDetailIds={loadingPlanDetailIds}
@@ -1308,6 +1335,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       isPlanHistoryLoading={isPlanHistoryLoading}
       phaseModelValidation={phaseModelValidation}
       phaseSelectValues={phaseSelectValues}
+      requireApprovalSelectValue={requireApprovalSelectValue}
       revisionCountSelectValue={revisionCountSelectValue}
       planHistoryCollapsed={planHistoryCollapsed}
       planRunCount={planRunCount}
@@ -1327,6 +1355,9 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       }}
       onPhaseEffortChange={(phase, effort) => {
         void handlePhaseEffortChange(phase, effort);
+      }}
+      onRequireApprovalChange={(value) => {
+        void handleRequireApprovalChange(value);
       }}
       onRevisionCountChange={(value) => {
         void handleRevisionCountChange(value);

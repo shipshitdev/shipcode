@@ -60,3 +60,9 @@ export type IssuePhaseChip = {
   model: string;
   effort: string | null;
 };
+
+export type IssueApprovalBadge = {
+  label: string;
+  title: string;
+  source: 'app' | 'project' | 'issue';
+};

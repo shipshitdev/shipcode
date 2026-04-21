@@ -26,6 +26,8 @@ interface BoardToolbarProps {
   onSortOrderChange: (order: BoardSortOrder) => void;
   view: 'kanban' | 'list';
   onViewChange: (view: 'kanban' | 'list') => void;
+  approvalFilter: 'all' | 'needs-approval';
+  onApprovalFilterChange: (filter: 'all' | 'needs-approval') => void;
   refreshing: boolean;
   onRefresh: () => void;
   projectName?: string;
@@ -45,6 +47,8 @@ export function BoardToolbar({
   onSortOrderChange,
   view,
   onViewChange,
+  approvalFilter,
+  onApprovalFilterChange,
   refreshing,
   onRefresh,
   projectName,
@@ -150,6 +154,25 @@ export function BoardToolbar({
             </SelectContent>
           </Select>
         </div>
+        <Button
+          variant="outline"
+          size="xs"
+          className={cn(
+            'shrink-0',
+            approvalFilter === 'needs-approval' &&
+              'border-warning/40 bg-warning/10 text-warning hover:bg-warning/15 hover:text-warning',
+          )}
+          title={
+            approvalFilter === 'needs-approval'
+              ? 'Show all issues'
+              : 'Show only issues that require approval'
+          }
+          onClick={() =>
+            onApprovalFilterChange(approvalFilter === 'needs-approval' ? 'all' : 'needs-approval')
+          }
+        >
+          Needs approval
+        </Button>
         <div className="flex shrink-0 items-center overflow-hidden rounded-md border border-border">
           <Button
             variant="ghost"

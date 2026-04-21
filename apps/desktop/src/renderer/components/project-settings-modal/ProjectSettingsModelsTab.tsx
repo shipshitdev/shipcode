@@ -5,7 +5,11 @@ import type {
   OpenRouterModelValidation,
   Project,
 } from '@shipcode/shared';
-import { MODEL_CONFIG_PRESETS, resolveRevisionCount } from '@shipcode/shared';
+import {
+  MODEL_CONFIG_PRESETS,
+  resolveRequireApproval,
+  resolveRevisionCount,
+} from '@shipcode/shared';
 import {
   Button,
   Select,
@@ -72,6 +76,73 @@ export function ProjectSettingsModelsTab({
             </Button>
           ))}
         </div>
+      </div>
+      <div className="rounded-md border border-border bg-secondary/40 p-3">
+        <div className="mb-3">
+          <div className="text-[13px] font-medium text-primary">Human Approval</div>
+          <div className="text-[11px] text-muted">
+            Override whether this project pauses for human sign-off before execution.
+          </div>
+        </div>
+        <Select
+          value={
+            overrides.requireApprovalOverride == null
+              ? '__inherit__'
+              : overrides.requireApprovalOverride
+                ? 'true'
+                : 'false'
+          }
+          onValueChange={(value) =>
+            setOverrides((current) => ({
+              ...current,
+              requireApprovalOverride: value === '__inherit__' ? null : value === 'true',
+            }))
+          }
+        >
+          <SelectTrigger className="w-[260px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__inherit__">
+              {`Inherit app default (${resolveRequireApproval(settings, null) ? 'Required' : 'Off'})`}
+            </SelectItem>
+            <SelectItem value="true">Required</SelectItem>
+            <SelectItem value="false">Off</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="rounded-md border border-border bg-secondary/40 p-3">
+        <div className="mb-3">
+          <div className="text-[13px] font-medium text-primary">PRD Quality Gate</div>
+          <div className="text-[11px] text-muted">
+            When enabled, incomplete PRDs block pipeline entry. When off, missing sections produce a
+            warning but planning proceeds.
+          </div>
+        </div>
+        <Select
+          value={
+            overrides.prdQualityGate == null
+              ? '__inherit__'
+              : overrides.prdQualityGate
+                ? 'true'
+                : 'false'
+          }
+          onValueChange={(value) =>
+            setOverrides((current) => ({
+              ...current,
+              prdQualityGate: value === '__inherit__' ? null : value === 'true',
+            }))
+          }
+        >
+          <SelectTrigger className="w-[260px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__inherit__">Inherit default (Off)</SelectItem>
+            <SelectItem value="true">Enabled (blocking)</SelectItem>
+            <SelectItem value="false">Off (warning only)</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       <div className="rounded-md border border-border bg-secondary/40 p-3">
         <div className="mb-3">

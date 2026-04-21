@@ -11,7 +11,7 @@ import { PhaseChip } from '../PhaseChip';
 import { Badge } from '../primitives/badge';
 import { Button } from '../primitives/button';
 import { ACTIVE_STATUSES, DRAGGABLE_STATUSES, PHASE_ELAPSED_STATUSES } from './constants';
-import type { IssuePhaseChip } from './types';
+import type { IssueApprovalBadge, IssuePhaseChip } from './types';
 import { dragOverlayBorderClass, formatPhaseElapsed } from './utils';
 
 function PhaseElapsed({ since }: { since: number }) {
@@ -50,6 +50,7 @@ interface DraggableCardProps {
   issue: GitHubIssueCacheRecord;
   phaseChip?: IssuePhaseChip | null;
   revisionLabel?: string | null;
+  approvalBadge?: IssueApprovalBadge | null;
   readOnly?: boolean;
   onClick: () => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
@@ -65,6 +66,7 @@ export function DraggableCard({
   issue,
   phaseChip,
   revisionLabel,
+  approvalBadge,
   readOnly = false,
   onClick,
   onRerun,
@@ -245,6 +247,15 @@ export function DraggableCard({
         {revisionLabel ? (
           <Badge variant="default" className="px-1.5 py-px text-[10px] font-medium">
             {revisionLabel}
+          </Badge>
+        ) : null}
+        {approvalBadge ? (
+          <Badge
+            variant="warning"
+            className="px-1.5 py-px text-[10px] font-medium"
+            title={approvalBadge.title}
+          >
+            {approvalBadge.label}
           </Badge>
         ) : null}
         {issue.labels

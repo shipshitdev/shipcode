@@ -61,6 +61,8 @@ type IssuePhaseOverrides = Pick<
 
 type ProjectRevisionOverride = Pick<Project, 'revisionCountOverride'>;
 type IssueRevisionOverride = Pick<GitHubIssueCacheRecord, 'revisionCountOverride'>;
+type ProjectApprovalOverride = Pick<Project, 'requireApprovalOverride'>;
+type IssueApprovalOverride = Pick<GitHubIssueCacheRecord, 'requireApprovalOverride'>;
 
 type ThreadPhaseState = Pick<
   Thread,
@@ -130,6 +132,13 @@ export interface ThreadPhasePresentation {
   provider: ExecutorModel;
   model: string;
   effort: string | null;
+}
+
+export type RequireApprovalSource = 'app' | 'project' | 'issue';
+
+export interface RequireApprovalResolution {
+  required: boolean;
+  source: RequireApprovalSource;
 }
 
 const VALID_PHASE_PROVIDERS = [
@@ -216,6 +225,10 @@ function asRevisionCount(value: number | null | undefined): RevisionCount | null
     : null;
 }
 
+function asNullableBoolean(value: boolean | null | undefined): boolean | null {
+  return typeof value === 'boolean' ? value : null;
+}
+
 export function resolveRevisionCount(
   settings: Pick<AppSettings, 'revisionCount'>,
   project: ProjectRevisionOverride | null | undefined,
@@ -231,6 +244,55 @@ export function resolveRevisionCountForIssue(
   issue: IssueRevisionOverride | null | undefined,
 ): RevisionCount {
   return asRevisionCount(issue?.revisionCountOverride) ?? resolveRevisionCount(settings, project);
+}
+
+export function resolveRequireApproval(
+  settings: Pick<AppSettings, 'requireApproval'>,
+  project: ProjectApprovalOverride | null | undefined,
+): boolean {
+  return resolveRequireApprovalState(settings, project).required;
+}
+
+export function resolveRequireApprovalForIssue(
+  settings: Pick<AppSettings, 'requireApproval'>,
+  project: ProjectApprovalOverride | null | undefined,
+  issue: IssueApprovalOverride | null | undefined,
+): boolean {
+  return resolveRequireApprovalStateForIssue(settings, project, issue).required;
+}
+
+export function resolveRequireApprovalState(
+  settings: Pick<AppSettings, 'requireApproval'>,
+  project: ProjectApprovalOverride | null | undefined,
+): RequireApprovalResolution {
+  const projectOverride = asNullableBoolean(project?.requireApprovalOverride);
+  if (projectOverride != null) {
+    return {
+      required: projectOverride,
+      source: 'project',
+    };
+  }
+
+  return {
+    required: settings.requireApproval,
+    source: 'app',
+  };
+}
+
+export function resolveRequireApprovalStateForIssue(
+  settings: Pick<AppSettings, 'requireApproval'>,
+  project: ProjectApprovalOverride | null | undefined,
+  issue: IssueApprovalOverride | null | undefined,
+): RequireApprovalResolution {
+  const issueOverride = asNullableBoolean(issue?.requireApprovalOverride);
+  if (issueOverride != null) {
+    return {
+      required: issueOverride,
+      source: 'issue',
+    };
+  }
+
+  return resolveRequireApprovalState(settings, project);
 }
 
 export function resolvePhaseModel(

@@ -19,7 +19,7 @@ All settings persist in the local SQLite DB under the single `settings` row. The
 
 | Setting | Default | Purpose |
 |---------|---------|---------|
-| `requireApproval` | false | Global approval gate. When on, the pipeline pauses at `awaiting_approval` after planning / revisions for human sign-off. When off, GitHub issue runs execute automatically unless another runtime safety branch stops them |
+| `requireApproval` | false | App default for the human approval gate. Project and issue overrides can require approval for a narrower scope, or turn it off for a specific repo / issue |
 | `revisionCount` | 0 | Default number of review → revise cycles before approval or execution. `0` skips plan review for the fastest path; per-project and per-issue overrides can raise or lower it |
 | `plannerReasoningEffort` | `high` | Default planner effort. Exact options depend on the selected provider |
 | `reviewerReasoningEffort` | `high` | Default reviewer effort. Exact options depend on the selected provider |
@@ -81,21 +81,23 @@ Keyboard shortcut reference — not yet remappable. See the page itself for the 
 Some settings are per-project rather than global:
 
 - `githubProjectUrl` override for the Kanban `board` quick-link
+- Per-project `requireApprovalOverride`
 - Per-project `revisionCountOverride`
 - Per-project planner / reviewer / executor / verifier model overrides
 - Per-project planner / reviewer / executor / verifier effort overrides
 
-Issue-level overrides are narrower by design: the revision count and phase models can be overridden from Issue Detail, and those overrides apply to the next run of that issue only.
+Issue-level overrides are narrower by design: the human approval gate, revision count, and phase models can be overridden from Issue Detail, and those overrides apply to the next run of that issue only.
 
-## Approval behavior
+## Human Approval Behavior
 
-`requireApproval` is a **global** setting today.
+Human approval resolves through inheritance:
 
-- It is not configurable per project
-- It is not configurable per issue
+- app default in Settings
+- optional project override in Project Settings
+- optional issue override in Issue Detail
 - Mentioning "human approval" inside an issue body or PRD does **not** change runtime behavior by itself
 
-Approval decisions are made by the pipeline runtime, not by prompt text. For GitHub issue runs, the engine starts in autonomous mode and the global setting decides whether review should pause before execution.
+Approval decisions are made by the pipeline runtime, not by prompt text. For GitHub issue runs, the engine starts in autonomous mode and the effective inherited approval setting decides whether planning pauses before execution.
 
 ## Troubleshooting logs
 
