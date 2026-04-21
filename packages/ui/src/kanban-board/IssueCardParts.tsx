@@ -49,6 +49,7 @@ export function IssueExternalBlockers({ issue }: { issue: GitHubIssueCacheRecord
 interface DraggableCardProps {
   issue: GitHubIssueCacheRecord;
   phaseChip?: IssuePhaseChip | null;
+  revisionLabel?: string | null;
   readOnly?: boolean;
   onClick: () => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
@@ -63,6 +64,7 @@ interface DraggableCardProps {
 export function DraggableCard({
   issue,
   phaseChip,
+  revisionLabel,
   readOnly = false,
   onClick,
   onRerun,
@@ -81,7 +83,8 @@ export function DraggableCard({
   });
 
   const isFailed = issue.pipelineStatus === 'failed';
-  const isAwaiting = issue.pipelineStatus === 'awaiting_approval';
+  const isAwaiting =
+    issue.pipelineStatus === 'awaiting_approval' || issue.pipelineStatus === 'clarifying';
   const isActive = ACTIVE_STATUSES.includes(issue.pipelineStatus);
   const isTodo = issue.pipelineStatus === 'todo';
   const isCompleted = issue.pipelineStatus === 'completed';
@@ -161,7 +164,8 @@ export function DraggableCard({
                   ? 'bg-success'
                   : isDone
                     ? 'bg-done'
-                    : issue.pipelineStatus === 'awaiting_approval'
+                    : issue.pipelineStatus === 'awaiting_approval' ||
+                        issue.pipelineStatus === 'clarifying'
                       ? 'bg-warning'
                       : 'bg-agent',
               )}
@@ -238,6 +242,11 @@ export function DraggableCard({
             {phaseChip.effort ? ` · ${phaseChip.effort}` : ''}
           </Badge>
         )}
+        {revisionLabel ? (
+          <Badge variant="default" className="px-1.5 py-px text-[10px] font-medium">
+            {revisionLabel}
+          </Badge>
+        ) : null}
         {issue.labels
           .filter((label) => !readOnly && label.startsWith('agent:'))
           .map((label) => (

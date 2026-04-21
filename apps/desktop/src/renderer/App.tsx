@@ -1,4 +1,4 @@
-import type { AppSettings, Project } from '@shipcode/shared';
+import type { AppSettings, GitHubIssueCacheRecord, Project } from '@shipcode/shared';
 import { CURRENT_ONBOARDING_VERSION } from '@shipcode/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef } from 'react';
@@ -124,12 +124,38 @@ export function App() {
           queryClient.invalidateQueries({ queryKey: ['settings'] });
           queryClient.invalidateQueries({ queryKey: ['health'] });
           if (newProjectId) {
+            const store = useAppStore.getState();
             queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
-            useAppStore.getState().selectProject(newProjectId);
-            useAppStore.getState().openProjectSettingsModal(newProjectId, 'setup');
-            window.shipcode
-              .invoke('github:refresh-issues', { projectId: newProjectId, force: true })
-              .catch(() => {});
+            store.selectProject(newProjectId);
+
+            const project = await queryClient.fetchQuery<Project | null>({
+              queryKey: ['project', newProjectId],
+              queryFn: () => window.shipcode.invoke('project:get', { projectId: newProjectId }),
+              staleTime: STABLE_APP_STATE_STALE_TIME,
+            });
+
+            const issues = await window.shipcode
+              .invoke<GitHubIssueCacheRecord[]>('github:refresh-issues', {
+                projectId: newProjectId,
+                force: true,
+              })
+              .catch(async () =>
+                window.shipcode.invoke<GitHubIssueCacheRecord[]>('github:list-issues', {
+                  projectId: newProjectId,
+                }),
+              );
+
+            queryClient.setQueryData(['github-issues', newProjectId], issues);
+            store.setGithubIssues(issues);
+
+            if (project?.starterIssueNumber) {
+              const starterIssue = issues.find(
+                (issue) => issue.issueNumber === project.starterIssueNumber,
+              );
+              if (starterIssue) {
+                store.selectIssue(starterIssue);
+              }
+            }
           } else {
             const projects = await queryClient.fetchQuery<Project[]>({
               queryKey: ['projects-visible'],

@@ -14,6 +14,7 @@ import {
   resolvePhaseModelForIssue,
   resolvePhaseModelIdForIssue,
   resolvePhaseReasoningEffort,
+  resolveRevisionCountForIssue,
   sanitizeResolvedModel,
 } from '@shipcode/shared';
 import { ACTIVE_STATUSES } from './constants';
@@ -21,7 +22,7 @@ import type { BoardSortOrder, IssuePhaseChip, RowTone } from './types';
 
 export function dragOverlayBorderClass(status: IssuePipelineStatus): string {
   if (status === 'failed') return 'border-danger';
-  if (status === 'awaiting_approval') return 'border-warning';
+  if (status === 'awaiting_approval' || status === 'clarifying') return 'border-warning';
   return 'border-accent';
 }
 
@@ -83,6 +84,20 @@ export function resolveIssuePhaseChip(
           )
         : null,
   };
+}
+
+export function resolveIssueRevisionLabel(
+  issue: GitHubIssueCacheRecord,
+  settings: AppSettings | null | undefined,
+  project: Project | null | undefined,
+  thread: Thread | null | undefined,
+): string | null {
+  if (!settings) return null;
+  const revisionCount = resolveRevisionCountForIssue(settings, project, issue);
+  if (thread && revisionCount > 0 && thread.reviewRound > 0) {
+    return `Rev ${Math.min(thread.reviewRound, revisionCount)}/${revisionCount}`;
+  }
+  return `Rev ${revisionCount}`;
 }
 
 export function formatPhaseElapsed(since: number): string {
@@ -178,7 +193,7 @@ export function compareIssues(
 
 export function rowToneFor(status: IssuePipelineStatus): RowTone {
   if (status === 'failed') return 'danger';
-  if (status === 'awaiting_approval') return 'warning';
+  if (status === 'awaiting_approval' || status === 'clarifying') return 'warning';
   if (status === 'completed') return 'success';
   if (status === 'done') return 'done';
   if (ACTIVE_STATUSES.includes(status)) return 'agent';

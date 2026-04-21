@@ -18,6 +18,7 @@ export function getStatusBadgeVariant(
     case 'failed':
       return 'danger';
     case 'awaiting_approval':
+    case 'clarifying':
       return 'warning';
     case 'planning':
     case 'reviewing':

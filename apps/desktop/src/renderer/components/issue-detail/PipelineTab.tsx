@@ -42,9 +42,11 @@ export function PipelineTab({
   currentPhaseSelections,
   diffs,
   effectivePhaseResolvedModels,
+  effectiveRevisionCount,
   executorEditable,
   hasPrFeedbackBlockers,
   inheritedPhaseReasoningEfforts,
+  inheritedRevisionCount,
   integrationStatus,
   isSubmitting,
   linkedPrUrl,
@@ -52,9 +54,11 @@ export function PipelineTab({
   phaseModelValidation,
   phaseSelectValues,
   projectDefaultPhaseSelections,
+  revisionCountSelectValue,
   thread,
   onPhaseAgentChange,
   onPhaseEffortChange,
+  onRevisionCountChange,
   onPhaseOpenRouterSlugBlur,
   onRestoreCheckpoint,
   onStabilizePr,
@@ -66,9 +70,11 @@ export function PipelineTab({
   currentPhaseSelections: Record<PhaseKey, PhaseSelection>;
   diffs: DiffRecord[];
   effectivePhaseResolvedModels: Record<PhaseKey, string>;
+  effectiveRevisionCount: number;
   executorEditable: boolean;
   hasPrFeedbackBlockers: boolean;
   inheritedPhaseReasoningEfforts: Record<PhaseKey, ReasoningEffort>;
+  inheritedRevisionCount: number;
   integrationStatus?: IntegrationStatus;
   isSubmitting: boolean;
   linkedPrUrl: string | null;
@@ -76,9 +82,11 @@ export function PipelineTab({
   phaseModelValidation: Partial<Record<PhaseKey, OpenRouterModelValidation | null>>;
   phaseSelectValues: Record<PhaseKey, string>;
   projectDefaultPhaseSelections: Record<PhaseKey, PhaseSelection>;
+  revisionCountSelectValue: string;
   thread: Thread | null | undefined;
   onPhaseAgentChange: (phase: PhaseKey, value: string) => void;
   onPhaseEffortChange: (phase: PhaseKey, effort: string) => void;
+  onRevisionCountChange: (value: string) => void;
   onPhaseOpenRouterSlugBlur: (phase: PhaseKey, rawValue: string) => void;
   onRestoreCheckpoint: (checkpoint: PipelineCheckpoint) => void;
   onStabilizePr: () => void;
@@ -297,6 +305,31 @@ export function PipelineTab({
         </div>
       </div>
 
+      <div className="mb-5 rounded-md border border-border bg-secondary p-2">
+        <span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-muted">
+          Revisions
+        </span>
+        <Select value={revisionCountSelectValue} onValueChange={onRevisionCountChange}>
+          <SelectTrigger className="h-7 w-full text-[11px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__inherit__">
+              {`Inherit project default (${inheritedRevisionCount})`}
+            </SelectItem>
+            <SelectItem value="0">0 · Skip review</SelectItem>
+            <SelectItem value="1">1 revision</SelectItem>
+            <SelectItem value="2">2 revisions</SelectItem>
+            <SelectItem value="3">3 revisions</SelectItem>
+            <SelectItem value="4">4 revisions</SelectItem>
+            <SelectItem value="5">5 revisions</SelectItem>
+          </SelectContent>
+        </Select>
+        <div className="mt-1 text-[11px] text-muted">
+          {`Current workflow uses ${effectiveRevisionCount} revision${effectiveRevisionCount === 1 ? '' : 's'} before approval/execution.`}
+        </div>
+      </div>
+
       {thread ? (
         <div className="mb-5">
           <div className="mb-2 flex items-center justify-between">
@@ -459,6 +492,10 @@ export function PipelineTab({
               Checkpoints
             </h4>
             <span className="text-[11px] text-muted">{checkpoints.length}</span>
+          </div>
+          <div className="mb-2 text-[11px] text-muted">
+            Restoring a checkpoint rewinds code state only. It does not resume the same planner
+            session.
           </div>
           <div className="space-y-2">
             {checkpoints.map((checkpoint) => (

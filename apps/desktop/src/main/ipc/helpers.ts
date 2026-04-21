@@ -207,7 +207,10 @@ export function sendGithubIssuesUpdated(
   }
 }
 
-type AttentionPhase = Extract<PipelinePhase, 'awaiting_approval' | 'completed' | 'failed' | 'idle'>;
+type AttentionPhase = Extract<
+  PipelinePhase,
+  'clarifying' | 'awaiting_approval' | 'completed' | 'failed' | 'idle'
+>;
 
 function mapPhaseToIssueStatus(phase: AttentionPhase): IssuePipelineStatus {
   return phase === 'idle' ? 'todo' : phase;

@@ -5,6 +5,7 @@ export * from './format-token-count';
 export * from './github-labels';
 export * from './github-url';
 export * from './ipc-channels';
+export * from './model-config-presets';
 export * from './model-display';
 export * from './model-identifiers';
 export * from './model-resolution';

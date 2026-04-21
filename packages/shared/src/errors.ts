@@ -16,3 +16,16 @@ export function clampError(raw: unknown, max = 280): string {
   if (firstLine.length <= max) return firstLine;
   return `${firstLine.slice(0, max - 1)}…`;
 }
+
+/**
+ * Clamp a multiline text artifact to a bounded size while preserving the tail,
+ * which is usually where the model's final answer or parse failure lives.
+ */
+export function clampTextBlock(raw: string, max = 16_000): string {
+  const text = raw.trim();
+  if (text.length <= max) return text;
+
+  const prefix = `[truncated ${text.length - max + 1} chars]\n`;
+  const tail = text.slice(-(max - prefix.length));
+  return `${prefix}${tail}`;
+}

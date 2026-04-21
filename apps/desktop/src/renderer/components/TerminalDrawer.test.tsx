@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import type { GitHubIssueCacheRecord } from '@shipcode/shared';
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -16,38 +18,6 @@ function renderWithProviders() {
     </QueryClientProvider>,
   );
 }
-
-const fitSpy = vi.fn();
-const scrollToBottomSpy = vi.fn();
-
-vi.mock('@xterm/xterm', () => ({
-  Terminal: class MockTerminal {
-    options: Record<string, unknown> = {};
-    rows = 24;
-    buffer = { active: { baseY: 0, viewportY: 0 } };
-    loadAddon() {}
-    open() {}
-    write() {}
-    reset() {}
-    refresh() {}
-    scrollToBottom() {
-      scrollToBottomSpy();
-    }
-    dispose() {}
-  },
-}));
-
-vi.mock('@xterm/addon-fit', () => ({
-  FitAddon: class MockFitAddon {
-    fit() {
-      fitSpy();
-    }
-  },
-}));
-
-vi.mock('@xterm/addon-web-links', () => ({
-  WebLinksAddon: class MockWebLinksAddon {},
-}));
 
 const makeIssue = (overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssueCacheRecord => ({
   id: 'issue-1',
@@ -76,6 +46,7 @@ const makeIssue = (overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
   reviewerReasoningEffortOverride: null,
   executorReasoningEffortOverride: null,
   verifierReasoningEffortOverride: null,
+  revisionCountOverride: null,
   linkedPrNumber: null,
   linkedPrUrl: null,
   linkedPrIsDraft: false,
@@ -92,8 +63,6 @@ describe('TerminalDrawer', () => {
   const originalResizeObserver = globalThis.ResizeObserver;
 
   beforeEach(() => {
-    fitSpy.mockClear();
-    scrollToBottomSpy.mockClear();
     class MockResizeObserver {
       observe() {}
       disconnect() {}
@@ -252,8 +221,7 @@ describe('TerminalDrawer', () => {
     await waitFor(() => {
       expect(useAppStore.getState().canonicalTerminalStream['thread-1']).toHaveLength(1);
     });
-    expect(fitSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
-    expect(scrollToBottomSpy).toHaveBeenCalled();
+    expect(await screen.findByText('persisted output')).toBeInTheDocument();
   });
 
   it('filters the terminal dropdown to running issues in the selected project only', async () => {

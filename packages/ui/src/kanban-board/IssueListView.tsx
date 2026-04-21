@@ -21,6 +21,7 @@ import { formatDate, rowToneFor } from './utils';
 
 interface DraggableListRowProps {
   issue: GitHubIssueCacheRecord;
+  revisionLabel?: string | null;
   selectedIssueNumber?: number;
   activeId: string | null;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
@@ -30,6 +31,7 @@ interface DraggableListRowProps {
 
 function DraggableListRow({
   issue,
+  revisionLabel,
   selectedIssueNumber,
   activeId,
   onIssueClick,
@@ -128,6 +130,11 @@ function DraggableListRow({
       <span className="flex-1 truncate">{issue.title}</span>
       <span className="flex shrink-0 items-center gap-1">
         <IssueExternalBlockers issue={issue} />
+        {revisionLabel ? (
+          <Badge variant="default" className="px-1.5 py-px text-[10px] font-medium">
+            {revisionLabel}
+          </Badge>
+        ) : null}
       </span>
       <span className="flex shrink-0 items-center gap-1 text-xs text-secondary">
         <User size={11} className="text-muted" />
@@ -157,6 +164,7 @@ interface ListSectionBlockProps {
   columnKey: ColumnKey;
   section: PhaseSection;
   issues: GitHubIssueCacheRecord[];
+  issueRevisionLabelById: Map<string, string | null>;
   selectedIssueNumber?: number;
   activeId: string | null;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
@@ -168,6 +176,7 @@ function ListSectionBlock({
   columnKey,
   section,
   issues,
+  issueRevisionLabelById,
   selectedIssueNumber,
   activeId,
   onIssueClick,
@@ -217,6 +226,7 @@ function ListSectionBlock({
             <DraggableListRow
               key={issue.id}
               issue={issue}
+              revisionLabel={issueRevisionLabelById.get(issue.id) ?? null}
               selectedIssueNumber={selectedIssueNumber}
               activeId={activeId}
               onIssueClick={onIssueClick}
@@ -253,6 +263,7 @@ function DroppableListGroup({ dropId, children }: DroppableListGroupProps) {
 
 interface IssueListViewProps {
   issues: GitHubIssueCacheRecord[];
+  issueRevisionLabelById: Map<string, string | null>;
   selectedIssueNumber?: number;
   activeId: string | null;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
@@ -263,6 +274,7 @@ interface IssueListViewProps {
 
 export function IssueListView({
   issues,
+  issueRevisionLabelById,
   selectedIssueNumber,
   activeId,
   onIssueClick,
@@ -328,6 +340,7 @@ export function IssueListView({
                         issues={columnIssues.filter((issue) =>
                           section.statuses.includes(issue.pipelineStatus),
                         )}
+                        issueRevisionLabelById={issueRevisionLabelById}
                         selectedIssueNumber={selectedIssueNumber}
                         activeId={activeId}
                         onIssueClick={onIssueClick}
@@ -342,6 +355,7 @@ export function IssueListView({
                       <DraggableListRow
                         key={issue.id}
                         issue={issue}
+                        revisionLabel={issueRevisionLabelById.get(issue.id) ?? null}
                         selectedIssueNumber={selectedIssueNumber}
                         activeId={activeId}
                         onIssueClick={onIssueClick}

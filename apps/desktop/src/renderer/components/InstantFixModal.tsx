@@ -10,6 +10,7 @@ import {
 import {
   Button,
   cn,
+  Keycap,
   Modal,
   ModalFooter,
   Select,
@@ -21,9 +22,11 @@ import {
   X,
 } from '@shipcode/ui';
 import { useQuery } from '@tanstack/react-query';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { type KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 import { getModelOptions, PROVIDER_DISPLAY } from './model-provider-options';
+
+const EMPTY_PROJECTS: Project[] = [];
 
 export function InstantFixModal() {
   const {
@@ -48,7 +51,7 @@ export function InstantFixModal() {
   const sessionIdRef = useRef<string | null>(null);
 
   // Fetch visible projects for the project picker
-  const { data: projects = [] } = useQuery({
+  const { data: projects = EMPTY_PROJECTS } = useQuery({
     queryKey: ['projects-visible'],
     queryFn: () => window.shipcode.invoke<Project[]>('project:list-visible'),
     staleTime: 30_000,
@@ -214,8 +217,29 @@ export function InstantFixModal() {
     closeInstantFixModal,
   ]);
 
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLDivElement>) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeInstantFixModal();
+        return;
+      }
+
+      if (e.metaKey && e.key === 'Enter') {
+        e.preventDefault();
+        void handleSubmit();
+      }
+    },
+    [closeInstantFixModal, handleSubmit],
+  );
+
   return (
-    <Modal open={instantFixModalOpen} onClose={closeInstantFixModal} title="New Terminal Session">
+    <Modal
+      open={instantFixModalOpen}
+      onClose={closeInstantFixModal}
+      title="New Terminal Session"
+      onKeyDown={handleKeyDown}
+    >
       <div className="flex flex-col gap-4">
         {/* Prompt + drop zone */}
         <section
@@ -249,6 +273,8 @@ export function InstantFixModal() {
                   />
                   <button
                     type="button"
+                    title={`Remove ${att.fileName}`}
+                    aria-label={`Remove ${att.fileName}`}
                     className="absolute -top-1.5 -right-1.5 hidden group-hover:flex h-4 w-4 items-center justify-center rounded-full bg-danger text-white"
                     onClick={() => void removeAttachment(att)}
                   >
@@ -375,12 +401,13 @@ export function InstantFixModal() {
         )}
       </div>
 
-      <ModalFooter>
+      <ModalFooter className="items-center">
         <Button variant="ghost" onClick={closeInstantFixModal}>
           Cancel
         </Button>
         <Button onClick={handleSubmit} disabled={!selectedProjectId || isSubmitting}>
-          {isSubmitting ? 'Starting...' : 'Start Shell'}
+          <span>{isSubmitting ? 'Starting...' : 'Start Shell'}</span>
+          <Keycap>⌘↩</Keycap>
         </Button>
       </ModalFooter>
     </Modal>

@@ -39,6 +39,7 @@ interface GitHubIssueCacheRow {
   reviewer_reasoning_effort_override: ReasoningEffort | null;
   executor_reasoning_effort_override: ReasoningEffort | null;
   verifier_reasoning_effort_override: ReasoningEffort | null;
+  revision_count_override: GitHubIssueCacheRecord['revisionCountOverride'];
   linked_pr_number: number | null;
   linked_pr_url: string | null;
   linked_pr_is_draft: number | null;
@@ -106,6 +107,7 @@ export class GitHubIssueQueries {
       | 'reviewerReasoningEffortOverride'
       | 'executorReasoningEffortOverride'
       | 'verifierReasoningEffortOverride'
+      | 'revisionCountOverride'
       | 'linkedPrNumber'
       | 'linkedPrUrl'
       | 'linkedPrIsDraft'
@@ -382,6 +384,15 @@ export class GitHubIssueQueries {
     this.db.prepare(`UPDATE github_issue_cache SET ${column} = ? WHERE id = ?`).run(effort, id);
   }
 
+  updateRevisionCountOverride(
+    id: string,
+    revisionCount: GitHubIssueCacheRecord['revisionCountOverride'],
+  ): void {
+    this.db
+      .prepare('UPDATE github_issue_cache SET revision_count_override = ? WHERE id = ?')
+      .run(revisionCount, id);
+  }
+
   updatePhaseModelIdOverride(
     id: string,
     phase: 'planner' | 'reviewer' | 'executor' | 'verifier',
@@ -396,6 +407,44 @@ export class GitHubIssueQueries {
             ? 'executor_model_id_override'
             : 'verifier_model_id_override';
     this.db.prepare(`UPDATE github_issue_cache SET ${column} = ? WHERE id = ?`).run(modelId, id);
+  }
+
+  clearAllPhaseOverridesForProject(projectId: string): number {
+    const result = this.db
+      .prepare(
+        `UPDATE github_issue_cache
+           SET planner_model_override = NULL,
+               reviewer_model_override = NULL,
+               executor_model_override = NULL,
+               verifier_model_override = NULL,
+               planner_model_id_override = NULL,
+               reviewer_model_id_override = NULL,
+               executor_model_id_override = NULL,
+               verifier_model_id_override = NULL,
+               planner_reasoning_effort_override = NULL,
+               reviewer_reasoning_effort_override = NULL,
+               executor_reasoning_effort_override = NULL,
+               verifier_reasoning_effort_override = NULL,
+               revision_count_override = NULL
+         WHERE project_id = ?
+           AND (
+             planner_model_override IS NOT NULL
+             OR reviewer_model_override IS NOT NULL
+             OR executor_model_override IS NOT NULL
+             OR verifier_model_override IS NOT NULL
+             OR planner_model_id_override IS NOT NULL
+             OR reviewer_model_id_override IS NOT NULL
+             OR executor_model_id_override IS NOT NULL
+             OR verifier_model_id_override IS NOT NULL
+             OR planner_reasoning_effort_override IS NOT NULL
+             OR reviewer_reasoning_effort_override IS NOT NULL
+             OR executor_reasoning_effort_override IS NOT NULL
+             OR verifier_reasoning_effort_override IS NOT NULL
+             OR revision_count_override IS NOT NULL
+           )`,
+      )
+      .run(projectId);
+    return Number(result.changes ?? 0);
   }
 
   updatePullRequestFeedback(
@@ -537,6 +586,7 @@ export class GitHubIssueQueries {
       reviewerReasoningEffortOverride: row.reviewer_reasoning_effort_override ?? null,
       executorReasoningEffortOverride: row.executor_reasoning_effort_override ?? null,
       verifierReasoningEffortOverride: row.verifier_reasoning_effort_override ?? null,
+      revisionCountOverride: row.revision_count_override ?? null,
       linkedPrNumber: row.linked_pr_number ?? null,
       linkedPrUrl: row.linked_pr_url ?? null,
       linkedPrIsDraft: !!row.linked_pr_is_draft,

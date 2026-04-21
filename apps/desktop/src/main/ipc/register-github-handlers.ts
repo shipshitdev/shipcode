@@ -700,6 +700,51 @@ export function registerGitHubHandlers({
   );
 
   ipcMain.handle(
+    'github:clear-all-phase-overrides-for-project',
+    (_event, { projectId }: { projectId: string }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+
+      const clearedCount = queries.githubIssues.clearAllPhaseOverridesForProject(projectId);
+      sendGithubIssuesUpdated(mainWindow, queries, projectId);
+      return { clearedCount };
+    },
+  );
+
+  ipcMain.handle(
+    'github:set-revision-count-override',
+    (
+      _event,
+      {
+        projectId,
+        issueNumber,
+        revisionCount,
+      }: {
+        projectId: string;
+        issueNumber: number;
+        revisionCount: import('@shipcode/shared').GitHubIssueCacheRecord['revisionCountOverride'];
+      },
+    ) => {
+      if (
+        revisionCount !== null &&
+        revisionCount !== 0 &&
+        revisionCount !== 1 &&
+        revisionCount !== 2 &&
+        revisionCount !== 3 &&
+        revisionCount !== 4 &&
+        revisionCount !== 5
+      ) {
+        throw new Error(`Invalid revision count override: ${revisionCount}`);
+      }
+      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
+      if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
+      queries.githubIssues.updateRevisionCountOverride(issue.id, revisionCount);
+      sendGithubIssuesUpdated(mainWindow, queries, projectId);
+      return queries.githubIssues.getByNumber(projectId, issueNumber);
+    },
+  );
+
+  ipcMain.handle(
     'github:set-phase-reasoning-effort-override',
     (
       _event,
@@ -819,7 +864,7 @@ export function registerGitHubHandlers({
       const issue = await ghCli.getIssue(issueNumber);
 
       const settings = queries.settings.get();
-      const skillPath = path.join(project.path, '.agents', 'skills', 'writing-prds', 'SKILL.md');
+      const skillPath = path.join(project.path, 'skills', 'writing-prds', 'SKILL.md');
       let skillContent: string;
       try {
         skillContent = fs.readFileSync(skillPath, 'utf-8');

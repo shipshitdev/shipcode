@@ -34,6 +34,14 @@ describe('PlanQueries', () => {
     expect(p.status).toBe('draft');
   });
 
+  it('create() clamps oversized raw output', () => {
+    const rawOutput = `prefix\n${'x'.repeat(20_000)}\nsuffix`;
+    const p = plans.create(threadId, rawOutput, null, 1);
+    expect(p.rawOutput.length).toBeLessThanOrEqual(16_000);
+    expect(p.rawOutput).toContain('suffix');
+    expect(p.rawOutput).toContain('[truncated');
+  });
+
   it('getMaxVersion() returns 0 when no plans', () => {
     expect(plans.getMaxVersion(threadId)).toBe(0);
   });
@@ -92,6 +100,7 @@ describe('PlanQueries', () => {
     expect(list).toHaveLength(2);
     expect(list.map((plan) => plan.id)).toEqual([secondPlan.id, firstPlan.id]);
     expect(list.map((plan) => plan.rawOutput)).toEqual(['', '']);
+    expect(list.map((plan) => plan.structured)).toEqual([null, null]);
   });
 
   it('getById() returns plan or null', () => {

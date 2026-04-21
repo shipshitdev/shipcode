@@ -11,7 +11,7 @@ By default, the Inbox surfaces threads in these states:
 - `awaiting_approval` — pipeline paused after review, waiting for human sign-off (only when `requireApproval` is enabled in Settings)
 - `failed` — any phase errored out
 - `completed` — PR opened and ready for you to review/read
-- Verification-exhausted — verifier hit `maxReviewRounds` without passing
+- Verification-exhausted — verifier ran out of retries without passing
 - `ci_blocked` — linked PR checks are failing
 
 Items remain in the Inbox badge queue until you explicitly dismiss them.

@@ -33,6 +33,7 @@ function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
     reviewerReasoningEffortOverride: null,
     executorReasoningEffortOverride: null,
     verifierReasoningEffortOverride: null,
+    revisionCountOverride: null,
     linkedPrNumber: null,
     linkedPrUrl: null,
     linkedPrIsDraft: false,
@@ -61,6 +62,9 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     executorModel: 'claude',
     verifierModel: 'claude',
     reviewRound: 0,
+    clarificationRound: 0,
+    clarificationRequest: null,
+    clarificationAnswers: [],
     verificationStatus: null,
     verificationRetries: 0,
     autonomous: true,
@@ -111,6 +115,7 @@ function renderPipelineTab(diffs: DiffRecord[]) {
         executor: 'claude',
         verifier: 'claude',
       }}
+      effectiveRevisionCount={1}
       executorEditable={false}
       hasPrFeedbackBlockers={false}
       inheritedPhaseReasoningEfforts={{
@@ -119,6 +124,7 @@ function renderPipelineTab(diffs: DiffRecord[]) {
         executor: 'high',
         verifier: 'high',
       }}
+      inheritedRevisionCount={0}
       isSubmitting={false}
       linkedPrUrl={null}
       phaseEffortSelectValues={{
@@ -140,9 +146,11 @@ function renderPipelineTab(diffs: DiffRecord[]) {
         executor: { provider: 'claude', modelId: null },
         verifier: { provider: 'claude', modelId: null },
       }}
+      revisionCountSelectValue="__inherit__"
       thread={makeThread()}
       onPhaseAgentChange={vi.fn()}
       onPhaseEffortChange={vi.fn()}
+      onRevisionCountChange={vi.fn()}
       onPhaseOpenRouterSlugBlur={vi.fn()}
       onRestoreCheckpoint={vi.fn()}
       onStabilizePr={vi.fn()}
@@ -177,6 +185,8 @@ describe('PipelineTab', () => {
   it('shows a waiting message before a diff exists', () => {
     renderPipelineTab([]);
 
+    expect(screen.getByText('Revisions')).toBeInTheDocument();
+    expect(screen.getByText(/Current workflow uses 1 revision/i)).toBeInTheDocument();
     expect(screen.getByText('Code Diff')).toBeInTheDocument();
     expect(
       screen.getByText('Diff will appear here after execution produces changes.'),

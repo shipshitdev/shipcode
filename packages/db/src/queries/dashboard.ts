@@ -10,6 +10,7 @@ import { asRows } from '../utils';
 // Phases that represent active work (agent running or waiting on action).
 const ACTIVE_PHASES: PipelinePhase[] = [
   'planning',
+  'clarifying',
   'reviewing',
   'revising',
   'awaiting_approval',
@@ -31,7 +32,7 @@ const AGENT_RUNNING_PHASES: PipelinePhase[] = [
 ];
 
 // Phases where the user is blocked waiting for input / failure recovery.
-const BLOCKED_PHASES: PipelinePhase[] = ['awaiting_approval'];
+const BLOCKED_PHASES: PipelinePhase[] = ['clarifying', 'awaiting_approval'];
 
 interface RecentTaskRow {
   thread_id: string;

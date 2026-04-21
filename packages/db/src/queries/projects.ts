@@ -18,6 +18,10 @@ interface ProjectRow {
   name: string;
   path: string;
   git_remote: string | null;
+  github_repo_id: string | null;
+  github_repo_full_name: string | null;
+  starter_issue_number: number | null;
+  starter_issue_created_at: string | null;
   github_project_url: string | null;
   planner_model_override: AgentType | null;
   reviewer_model_override: AgentType | null;
@@ -31,6 +35,7 @@ interface ProjectRow {
   reviewer_reasoning_effort_override: Project['reviewerReasoningEffortOverride'];
   executor_reasoning_effort_override: Project['executorReasoningEffortOverride'];
   verifier_reasoning_effort_override: Project['verifierReasoningEffortOverride'];
+  revision_count_override: Project['revisionCountOverride'];
   discord_routing: Project['discordRouting'];
   discord_webhook_url_override: string | null;
   telegram_routing: Project['telegramRouting'];
@@ -94,12 +99,24 @@ export class ProjectQueries {
    * + bump updated_at) and return it. Prevents UNIQUE(path) violations when
    * re-adding an archived project from the CLI or Add Repository dialog.
    */
-  add(projectPath: string): Project {
+  add(
+    projectPath: string,
+    options?: {
+      githubRepoId?: string | null;
+      githubRepoFullName?: string | null;
+    },
+  ): Project {
     const existing = this.getByPath(projectPath);
     if (existing) {
       this.db
         .prepare(`UPDATE projects SET archived = 0, updated_at = ${ISO_NOW_SQL} WHERE id = ?`)
         .run(existing.id);
+      if (options?.githubRepoId || options?.githubRepoFullName) {
+        this.updateGithubRepoIdentity(existing.id, {
+          githubRepoId: options?.githubRepoId ?? null,
+          githubRepoFullName: options?.githubRepoFullName ?? null,
+        });
+      }
       // Reset stale queued issues so they don't auto-start pipelines on restore.
       this.db
         .prepare(
@@ -123,9 +140,25 @@ export class ProjectQueries {
 
     this.db
       .prepare(
-        'INSERT INTO projects (id, name, path, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+        `INSERT INTO projects (
+          id,
+          name,
+          path,
+          github_repo_id,
+          github_repo_full_name,
+          created_at,
+          updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(id, name, projectPath, now, now);
+      .run(
+        id,
+        name,
+        projectPath,
+        options?.githubRepoId ?? null,
+        options?.githubRepoFullName ?? null,
+        now,
+        now,
+      );
 
     const created = this.getById(id);
     if (!created) {
@@ -276,6 +309,57 @@ export class ProjectQueries {
       .run(gitRemote, defaultBranch, id);
   }
 
+  getByGithubRepoIdentity(
+    githubRepoId: string | null,
+    githubRepoFullName: string | null,
+  ): Project | null {
+    if (githubRepoId) {
+      const row = this.db
+        .prepare('SELECT * FROM projects WHERE github_repo_id = ? ORDER BY updated_at DESC LIMIT 1')
+        .get(githubRepoId);
+      if (row) return mapProject(asRow<ProjectRow>(row));
+    }
+    if (githubRepoFullName) {
+      const row = this.db
+        .prepare(
+          'SELECT * FROM projects WHERE github_repo_full_name = ? ORDER BY updated_at DESC LIMIT 1',
+        )
+        .get(githubRepoFullName);
+      if (row) return mapProject(asRow<ProjectRow>(row));
+    }
+    return null;
+  }
+
+  updateGithubRepoIdentity(
+    id: string,
+    fields: { githubRepoId: string | null; githubRepoFullName: string | null },
+  ): void {
+    this.db
+      .prepare(
+        `UPDATE projects
+            SET github_repo_id = ?,
+                github_repo_full_name = ?,
+                updated_at = ${ISO_NOW_SQL}
+          WHERE id = ?`,
+      )
+      .run(fields.githubRepoId, fields.githubRepoFullName, id);
+  }
+
+  markStarterIssueSeeded(
+    id: string,
+    fields: { starterIssueNumber: number | null; starterIssueCreatedAt?: string | null },
+  ): void {
+    this.db
+      .prepare(
+        `UPDATE projects
+            SET starter_issue_number = ?,
+                starter_issue_created_at = COALESCE(?, ${ISO_NOW_SQL}),
+                updated_at = ${ISO_NOW_SQL}
+          WHERE id = ?`,
+      )
+      .run(fields.starterIssueNumber, fields.starterIssueCreatedAt ?? null, id);
+  }
+
   updateDefaultBranch(id: string, branch: string): void {
     this.db
       .prepare(`UPDATE projects SET default_branch = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`)
@@ -326,6 +410,7 @@ export class ProjectQueries {
       reviewerReasoningEffortOverride: Project['reviewerReasoningEffortOverride'];
       executorReasoningEffortOverride: Project['executorReasoningEffortOverride'];
       verifierReasoningEffortOverride: Project['verifierReasoningEffortOverride'];
+      revisionCountOverride: Project['revisionCountOverride'];
     },
   ): void {
     this.db
@@ -343,6 +428,7 @@ export class ProjectQueries {
                reviewer_reasoning_effort_override = ?,
                executor_reasoning_effort_override = ?,
                verifier_reasoning_effort_override = ?,
+               revision_count_override = ?,
                updated_at = ${ISO_NOW_SQL}
          WHERE id = ?`,
       )
@@ -359,6 +445,7 @@ export class ProjectQueries {
         overrides.reviewerReasoningEffortOverride,
         overrides.executorReasoningEffortOverride,
         overrides.verifierReasoningEffortOverride,
+        overrides.revisionCountOverride,
         id,
       );
   }
@@ -393,6 +480,10 @@ function mapProject(row: ProjectRow): Project {
     name: row.name,
     path: row.path,
     gitRemote: row.git_remote,
+    githubRepoId: row.github_repo_id ?? null,
+    githubRepoFullName: row.github_repo_full_name ?? null,
+    starterIssueNumber: row.starter_issue_number ?? null,
+    starterIssueCreatedAt: toIsoUtc(row.starter_issue_created_at) ?? row.starter_issue_created_at,
     githubProjectUrl: row.github_project_url ?? null,
     plannerModelOverride: row.planner_model_override ?? null,
     reviewerModelOverride: row.reviewer_model_override ?? null,
@@ -406,6 +497,7 @@ function mapProject(row: ProjectRow): Project {
     reviewerReasoningEffortOverride: row.reviewer_reasoning_effort_override ?? null,
     executorReasoningEffortOverride: row.executor_reasoning_effort_override ?? null,
     verifierReasoningEffortOverride: row.verifier_reasoning_effort_override ?? null,
+    revisionCountOverride: row.revision_count_override ?? null,
     discordRouting: row.discord_routing ?? 'inherit',
     discordWebhookUrlOverride: row.discord_webhook_url_override ?? null,
     telegramRouting: row.telegram_routing ?? 'inherit',

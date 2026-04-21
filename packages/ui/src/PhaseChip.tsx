@@ -5,6 +5,7 @@ const AGENT_PHASE_CLASSES = 'bg-agent/10 text-agent border-agent/25';
 
 const PHASE_COLOR: Record<string, string> = {
   planning: AGENT_PHASE_CLASSES,
+  clarifying: 'bg-warning/12 text-warning border-warning/25',
   reviewing: AGENT_PHASE_CLASSES,
   revising: AGENT_PHASE_CLASSES,
   executing: AGENT_PHASE_CLASSES,

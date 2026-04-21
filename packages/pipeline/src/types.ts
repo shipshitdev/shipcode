@@ -17,6 +17,8 @@ import type {
   VerificationQueries,
 } from '@shipcode/db';
 import type {
+  ClarificationAnswer,
+  ClarificationRequest,
   ExecutorModel,
   GitHubPrCheckSummary,
   GitHubPrReviewCommentSummary,
@@ -53,14 +55,14 @@ export type PipelineEvent =
       requireApproval: boolean;
       autonomous: boolean;
       reviewRound: number;
-      maxReviewRounds: number;
+      revisionCount: number;
       hasCriticalOrMajor: boolean;
       reasons: (
         | 'requireApproval'
         | 'nonAutonomous'
         | 'criticalFindings'
         | 'reviewApproved'
-        | 'reviewRoundsExhausted'
+        | 'revisionsExhausted'
         | 'parseFailure'
         | 'manualSkipReview'
       )[];
@@ -129,6 +131,9 @@ export interface PipelineContext {
   retryCount: number;
   autonomous: boolean;
   reviewRound: number;
+  clarificationRound: number;
+  clarificationRequest: ClarificationRequest | null;
+  clarificationAnswers: ClarificationAnswer[];
   verificationRetries: number;
   testRetries: number;
   testOutput: string | null;

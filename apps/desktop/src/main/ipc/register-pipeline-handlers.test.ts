@@ -34,6 +34,9 @@ function makeThread(overrides: Record<string, unknown> = {}) {
     executorModel: 'claude',
     verifierModel: 'claude',
     reviewRound: 0,
+    clarificationRound: 0,
+    clarificationRequest: null,
+    clarificationAnswers: [],
     verificationStatus: null,
     verificationRetries: 0,
     autonomous: false,
@@ -79,6 +82,9 @@ describe('registerPipelineHandlers', () => {
       getById: ReturnType<typeof vi.fn>;
       updateStatus: ReturnType<typeof vi.fn>;
       resetFailureTracking: ReturnType<typeof vi.fn>;
+      setClarificationAnswers: ReturnType<typeof vi.fn>;
+      clearClarification: ReturnType<typeof vi.fn>;
+      setPhaseModels: ReturnType<typeof vi.fn>;
     };
     plans: {
       getLatest: ReturnType<typeof vi.fn>;
@@ -132,10 +138,16 @@ describe('registerPipelineHandlers', () => {
     listActive: ReturnType<typeof vi.fn>;
     startExecution: ReturnType<typeof vi.fn>;
     rehydrateContext: ReturnType<typeof vi.fn>;
+    startPlanGeneration: ReturnType<typeof vi.fn>;
+    getContext: ReturnType<typeof vi.fn>;
+    initializeContext: ReturnType<typeof vi.fn>;
   };
 
   let notificationService: {
     dismissByThread: ReturnType<typeof vi.fn>;
+  };
+  let emitter: {
+    emit: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
@@ -147,6 +159,9 @@ describe('registerPipelineHandlers', () => {
         getById: vi.fn(() => makeThread()),
         updateStatus: vi.fn(),
         resetFailureTracking: vi.fn(),
+        setClarificationAnswers: vi.fn(),
+        clearClarification: vi.fn(),
+        setPhaseModels: vi.fn(),
       },
       plans: {
         getLatest: vi.fn(() => ({
@@ -181,7 +196,7 @@ describe('registerPipelineHandlers', () => {
       settings: {
         get: vi.fn(() => ({
           requireApproval: false,
-          maxReviewRounds: 2,
+          revisionCount: 2,
           maxConcurrentPipelines: 3,
         })),
       },
@@ -229,10 +244,17 @@ describe('registerPipelineHandlers', () => {
       listActive: vi.fn(() => []),
       startExecution: vi.fn(async () => undefined),
       rehydrateContext: vi.fn(),
+      startPlanGeneration: vi.fn(async () => undefined),
+      getContext: vi.fn(() => ({})),
+      initializeContext: vi.fn(),
     };
 
     notificationService = {
       dismissByThread: vi.fn(),
+    };
+
+    emitter = {
+      emit: vi.fn(),
     };
 
     registerPipelineHandlers({
@@ -240,7 +262,7 @@ describe('registerPipelineHandlers', () => {
       mainWindow: mainWindow as never,
       queries: queries as never,
       pipeline: pipeline as never,
-      emitter: { emit: vi.fn() } as never,
+      emitter: emitter as never,
       notificationService: notificationService as never,
       chatNotificationService: {} as never,
       processManager: {} as never,
@@ -298,6 +320,65 @@ describe('registerPipelineHandlers', () => {
       await handler(undefined, { threadId: 'thread-missing' });
 
       expect(pipeline.startExecution).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('pipeline:answer-clarification', () => {
+    it('stores answers, emits a transcript event, and resumes planning', async () => {
+      const clarificationRequest = {
+        id: 'clarify-1',
+        threadId: 'thread-1',
+        phase: 'plan' as const,
+        summary: 'Need one choice before planning.',
+        questions: [
+          {
+            id: 'scope',
+            title: 'Scope',
+            prompt: 'Which scope should the plan target?',
+            description: null,
+            choices: [
+              { id: 'narrow', label: 'Narrow', description: 'Ship the smallest version.' },
+              { id: 'wide', label: 'Wide', description: 'Include extra cleanup.' },
+            ],
+            allowFreeform: false,
+            freeformPlaceholder: null,
+          },
+        ],
+      };
+      queries.threads.getById.mockReturnValue(
+        makeThread({
+          status: 'clarifying',
+          clarificationRequest,
+          worktreePath: '/tmp/worktree',
+        }),
+      );
+
+      const handler = handlers.get('pipeline:answer-clarification');
+      if (!handler) throw new Error('pipeline:answer-clarification handler not registered');
+
+      await handler(undefined, {
+        threadId: 'thread-1',
+        answers: [{ questionId: 'scope', selectedChoiceId: 'wide', freeformText: null }],
+      });
+
+      expect(queries.threads.setClarificationAnswers).toHaveBeenCalledWith('thread-1', [
+        { questionId: 'scope', selectedChoiceId: 'wide', freeformText: null },
+      ]);
+      expect(emitter.emit).toHaveBeenCalledWith({
+        type: 'terminal:event',
+        threadId: 'thread-1',
+        event: {
+          kind: 'clarification_answered',
+          questionCount: 1,
+        },
+      });
+      expect(pipeline.rehydrateContext).toHaveBeenCalledWith('thread-1', '/tmp/project', undefined);
+      expect(pipeline.startPlanGeneration).toHaveBeenCalledWith(
+        'thread-1',
+        'Fix it',
+        '/tmp/project',
+        '/tmp/worktree',
+      );
     });
   });
 

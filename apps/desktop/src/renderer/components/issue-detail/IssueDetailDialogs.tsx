@@ -48,6 +48,28 @@ export function IssueDetailDialogs({
   const fullScreenParseFailureMessage = fullScreenPlan?.rawOutput.trim()
     ? diagnosePlanParseFailure(fullScreenPlan.rawOutput)
     : 'Structured plan data is unavailable for this version.';
+  const handleApproveAndClose = () => {
+    onApprove();
+    onCloseFullScreenPlan();
+  };
+  const handleFullScreenKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.metaKey && e.key === 'Enter' && canApprove && fullScreenIsLatest && !isSubmitting) {
+      e.preventDefault();
+      handleApproveAndClose();
+    }
+  };
+  const handleArchiveKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.metaKey && e.key === 'Enter') {
+      e.preventDefault();
+      onArchiveConfirmed();
+    }
+  };
+  const handleMarkAsDoneKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.metaKey && e.key === 'Enter' && !isSubmitting) {
+      e.preventDefault();
+      onMarkAsDoneConfirmed();
+    }
+  };
 
   return (
     <>
@@ -57,6 +79,7 @@ export function IssueDetailDialogs({
         title={`Plan v${fullScreenPlan?.version}${fullScreenPlan?.status ? ` - ${fullScreenPlan.status}` : ''}`}
         className="max-w-4xl h-[90vh] flex flex-col overflow-hidden p-0"
         headerClassName="shrink-0 border-b border-border px-6 py-4"
+        onKeyDown={handleFullScreenKeyDown}
         headerAction={
           <Button variant="ghost" className="h-7 w-7 p-0" onClick={onCloseFullScreenPlan}>
             <X size={15} strokeWidth={2.25} />
@@ -84,13 +107,7 @@ export function IssueDetailDialogs({
         </div>
         {canApprove && fullScreenIsLatest && (
           <ModalFooter className="shrink-0 border-t border-border px-6 py-4">
-            <Button
-              onClick={() => {
-                onApprove();
-                onCloseFullScreenPlan();
-              }}
-              disabled={isSubmitting}
-            >
+            <Button onClick={handleApproveAndClose} disabled={isSubmitting}>
               {isSubmitting ? 'Approving...' : 'Approve & Execute'}
             </Button>
           </ModalFooter>
@@ -102,6 +119,7 @@ export function IssueDetailDialogs({
         onClose={onCloseArchiveConfirm}
         title={`Archive issue #${activeIssueNumber}?`}
         className="max-w-sm"
+        onKeyDown={handleArchiveKeyDown}
       >
         <div className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
           Warning: this closes the GitHub issue and archives its GitHub Project card. Archived items
@@ -122,6 +140,7 @@ export function IssueDetailDialogs({
         onClose={onCloseMarkAsDoneConfirm}
         title={`Mark issue #${activeIssueNumber} as done?`}
         className="max-w-sm"
+        onKeyDown={handleMarkAsDoneKeyDown}
       >
         <p className="text-sm text-secondary">
           This will move the issue to the Done column. You can still reopen it later from GitHub.

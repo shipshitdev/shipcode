@@ -13,54 +13,13 @@
  */
 
 import type { TerminalEvent } from '../../terminal-events';
+import { FENCE_ACTIONS, findOpeningFence, getDeferredFencePrefix } from './fence-suppression';
 
 /** Strip ANSI escape codes so JSON.parse works on PTY-colored output. */
 // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional ANSI stripping
 const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]|\x1b\].*?(?:\x07|\x1b\\)/g;
 function stripAnsi(str: string): string {
   return str.replace(ANSI_RE, '');
-}
-
-const FENCE_ACTIONS: Record<string, { label: string; action: 'open-issue-detail' }> = {
-  'shipcode-plan': { label: 'Plan drafted', action: 'open-issue-detail' },
-  'shipcode-review': { label: 'AI review complete', action: 'open-issue-detail' },
-  'shipcode-verification': { label: 'Verification complete', action: 'open-issue-detail' },
-};
-type FenceTag = keyof typeof FENCE_ACTIONS;
-
-const OPENING_FENCES = (Object.keys(FENCE_ACTIONS) as FenceTag[]).map((tag) => ({
-  marker: `\`\`\`${tag}`,
-  tag,
-}));
-
-function findOpeningFence(text: string): { index: number; length: number; tag: FenceTag } | null {
-  let match: { index: number; length: number; tag: FenceTag } | null = null;
-
-  for (const { marker, tag } of OPENING_FENCES) {
-    const index = text.indexOf(marker);
-    if (index !== -1 && (!match || index < match.index)) {
-      match = { index, length: marker.length, tag };
-    }
-  }
-
-  return match;
-}
-
-function getDeferredFencePrefix(text: string): string {
-  let longest = '';
-
-  for (const { marker } of OPENING_FENCES) {
-    const maxLength = Math.min(marker.length - 1, text.length);
-    for (let length = maxLength; length > longest.length; length--) {
-      const suffix = text.slice(-length);
-      if (marker.startsWith(suffix)) {
-        longest = suffix;
-        break;
-      }
-    }
-  }
-
-  return longest;
 }
 
 export class CodexNormalizer {

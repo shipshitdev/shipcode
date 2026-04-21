@@ -1,6 +1,7 @@
 import type {
   ActivityEntry,
   AppSettings,
+  ClarificationAnswer,
   DiffRecord,
   ExecutorModel,
   IntegrationStatus,
@@ -21,6 +22,8 @@ import {
   resolvePhaseModelForIssue,
   resolvePhaseModelId,
   resolvePhaseReasoningEffortForIssue,
+  resolveRevisionCount,
+  resolveRevisionCountForIssue,
   sanitizeResolvedModel,
 } from '@shipcode/shared';
 import {
@@ -63,11 +66,8 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     openEditPrdModal,
     toggleIssueDetailExpanded,
   } = useAppStore();
-  // undefined = untouched (auto-expand latest); null = user explicitly collapsed
-  const [expandedPlanId, setExpandedPlanId] = useState<string | null | undefined>(undefined);
-  const prevLatestPlanIdRef = useRef<string | null>(null);
+  const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
   const prevIssueSelectionKeyRef = useRef<string | null>(null);
-  const prevHasPlanHistoryRef = useRef<boolean | null>(null);
   const [fullScreenPlanId, setFullScreenPlanId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState('');
   const [pendingAction, setPendingAction] = useState<'approve' | 'request_changes' | 'cancel'>(
@@ -77,10 +77,21 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const [isRefreshingFromGithub, setIsRefreshingFromGithub] = useState(false);
   const [isTogglingState, setIsTogglingState] = useState(false);
   const [planHistoryCollapsed, setPlanHistoryCollapsed] = useState(false);
+  const [showAllPlanRuns, setShowAllPlanRuns] = useState(false);
   const [showRawOutput, setShowRawOutput] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [showMarkAsDoneConfirm, setShowMarkAsDoneConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState<IssueDetailTab>('prd');
+  const [clarificationDraft, setClarificationDraft] = useState<
+    Record<
+      string,
+      {
+        selectedChoiceId: string | null;
+        freeformText: string;
+      }
+    >
+  >({});
+  const [clarificationError, setClarificationError] = useState<string | null>(null);
   const [phaseModelValidation, setPhaseModelValidation] = useState<
     Partial<
       Record<'planner' | 'reviewer' | 'executor' | 'verifier', OpenRouterModelValidation | null>
@@ -121,6 +132,11 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const shouldPollPlanData =
     !!activeThreadId && PLAN_MUTATING_PHASES.includes(currentPipelinePhase as PipelinePhase);
   const shouldLoadHistoryTab = activeTab === 'history';
+  const shouldLoadIssueWidePlanHistory =
+    shouldLoadHistoryTab &&
+    !!activeProjectId &&
+    !!activeIssue &&
+    (!activeThreadId || showAllPlanRuns);
   const shouldLoadActivityTab = activeTab === 'activity';
   const shouldLoadPipelineTab = activeTab === 'pipeline';
 
@@ -145,17 +161,17 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         issueNumber: activeIssue.issueNumber,
       });
     },
-    enabled: !!activeProjectId && !!activeIssue && shouldLoadHistoryTab,
-    refetchInterval: shouldPollPlanData && shouldLoadHistoryTab ? 15_000 : false,
+    enabled: shouldLoadIssueWidePlanHistory,
+    refetchInterval: shouldPollPlanData && shouldLoadIssueWidePlanHistory ? 15_000 : false,
   });
   const isIssuePlanHistoryLoading =
-    !!activeProjectId && !!activeIssue && issuePlanHistory === undefined;
+    shouldLoadIssueWidePlanHistory && issuePlanHistory === undefined;
   const normalizedIssuePlanHistory = Array.isArray(issuePlanHistory) ? issuePlanHistory : [];
+  const isShowingAllPlanRuns = !activeThreadId || showAllPlanRuns;
   const normalizedPlanHistory =
-    normalizedIssuePlanHistory.length > 0
+    isShowingAllPlanRuns && normalizedIssuePlanHistory.length > 0
       ? normalizedIssuePlanHistory
       : normalizedThreadPlanHistory;
-  const hasPlanHistory = normalizedPlanHistory.length > 0;
   const issueSelectionKey = `${activeIssue?.id ?? ''}:${activeThreadId ?? ''}`;
   const isPlanHistoryLoading = isThreadPlanHistoryLoading || isIssuePlanHistoryLoading;
   const { data: issueActivity = [] } = useQuery<ActivityEntry[]>({
@@ -192,12 +208,18 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     }));
   }, [activeThreadId, normalizedPlanHistory]);
 
-  // Fetch reviews for all plans
-  const planIds = normalizedPlanHistory.map((p) => p.id);
+  const latestThreadPlanId = normalizedThreadPlanHistory[0]?.id ?? null;
+  const reviewPlanIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (thread?.status === 'failed' && latestThreadPlanId) ids.add(latestThreadPlanId);
+    if (activeTab === 'history' && expandedPlanId) ids.add(expandedPlanId);
+    if (fullScreenPlanId) ids.add(fullScreenPlanId);
+    return Array.from(ids);
+  }, [activeTab, expandedPlanId, fullScreenPlanId, latestThreadPlanId, thread?.status]);
   const { data: reviewsByPlanId = {} } = useQuery<Record<string, ReviewRecord>>({
-    queryKey: ['reviews-by-plans', planIds.join(',')],
-    queryFn: () => window.shipcode.invoke('review:list-by-plans', { planIds }),
-    enabled: planIds.length > 0,
+    queryKey: ['reviews-by-plans', reviewPlanIds.join(',')],
+    queryFn: () => window.shipcode.invoke('review:list-by-plans', { planIds: reviewPlanIds }),
+    enabled: reviewPlanIds.length > 0,
     refetchInterval: shouldPollPlanData && shouldLoadHistoryTab ? 15_000 : false,
   });
   const normalizedReviewsByPlanId =
@@ -260,8 +282,6 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     return normalizedThreadPlanHistory[0]?.rawOutput ?? null;
   })();
 
-  // Auto-expand latest plan
-  const latestPlanId = normalizedPlanHistory[0]?.id ?? null;
   const planRunCount = planRunGroups.length;
   const runNumberByThreadId = useMemo(
     () =>
@@ -270,7 +290,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       ) as Record<string, number>,
     [planRunGroups],
   );
-  const effectiveExpanded = expandedPlanId === undefined ? latestPlanId : expandedPlanId;
+  const effectiveExpanded = expandedPlanId;
   const expandedHistoryPlan = useMemo(
     () => normalizedPlanHistory.find((plan) => plan.id === effectiveExpanded) ?? null,
     [effectiveExpanded, normalizedPlanHistory],
@@ -350,20 +370,6 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     shouldFetchFullScreenPlanDetail,
   ]);
 
-  // When a new plan version arrives, auto-follow the new latest — but only
-  // when the user was in auto mode or was already tracking the previous
-  // latest. Preserves deliberate pins to older versions (e.g. a user
-  // inspecting v2 while v4 is produced should not be yanked to v4).
-  useEffect(() => {
-    const prev = prevLatestPlanIdRef.current;
-    if (!latestPlanId || latestPlanId === prev) return;
-    setExpandedPlanId((current) => {
-      if (current === undefined || current === prev) return undefined;
-      return current;
-    });
-    prevLatestPlanIdRef.current = latestPlanId;
-  }, [latestPlanId]);
-
   // Reset raw output toggle when switching threads so stale expanded state doesn't bleed across.
   useEffect(() => {
     if (activeThreadId) {
@@ -374,18 +380,49 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   }, [activeThreadId]);
 
   useEffect(() => {
-    const nextDefaultTab: IssueDetailTab = hasPlanHistory ? 'history' : 'prd';
-    if (prevIssueSelectionKeyRef.current !== issueSelectionKey) {
-      prevIssueSelectionKeyRef.current = issueSelectionKey;
-      prevHasPlanHistoryRef.current = hasPlanHistory;
-      setActiveTab(nextDefaultTab);
+    if (prevIssueSelectionKeyRef.current === issueSelectionKey) return;
+    prevIssueSelectionKeyRef.current = issueSelectionKey;
+    setActiveTab('prd');
+    setExpandedPlanId(null);
+    setShowAllPlanRuns(false);
+  }, [issueSelectionKey]);
+
+  const clarificationRequestKey = thread?.clarificationRequest
+    ? `${thread.id}:${thread.clarificationRequest.id}`
+    : null;
+  const prevClarificationRequestKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (prevClarificationRequestKeyRef.current === clarificationRequestKey) return;
+    prevClarificationRequestKeyRef.current = clarificationRequestKey;
+
+    if (!thread?.clarificationRequest) {
+      setClarificationDraft({});
+      setClarificationError(null);
       return;
     }
-    if (prevHasPlanHistoryRef.current !== hasPlanHistory) {
-      prevHasPlanHistoryRef.current = hasPlanHistory;
-      setActiveTab(nextDefaultTab);
-    }
-  }, [hasPlanHistory, issueSelectionKey]);
+
+    setClarificationDraft(
+      Object.fromEntries(
+        thread.clarificationRequest.questions.map((question) => {
+          const existing = thread.clarificationAnswers.find(
+            (answer) => answer.questionId === question.id,
+          );
+          return [
+            question.id,
+            {
+              selectedChoiceId:
+                existing?.selectedChoiceId ??
+                question.choices.find((choice) => choice.recommended)?.id ??
+                null,
+              freeformText: existing?.freeformText ?? '',
+            },
+          ];
+        }),
+      ),
+    );
+    setClarificationError(null);
+  }, [clarificationRequestKey, thread]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -406,6 +443,39 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     () => normalizedThreadPlanHistory[0] ?? null,
     [normalizedThreadPlanHistory],
   );
+  const retryAction = useMemo(() => {
+    if (!thread) return null;
+    const structuredPlan = latestPlan?.structured ?? null;
+    if (!structuredPlan) return 'plan' as const;
+    if (!thread.worktreePath) return 'review' as const;
+    if (latestVerification && latestVerification.planId === latestPlan?.id) {
+      if (latestVerification.result === 'failed') return 'verify' as const;
+      if (latestVerification.result === 'passed') return 'commit_and_push' as const;
+    }
+    return 'execute' as const;
+  }, [latestPlan?.id, latestPlan?.structured, latestVerification, thread]);
+  const retryButtonLabel =
+    retryAction === 'review'
+      ? 'Resume review'
+      : retryAction === 'execute'
+        ? 'Resume execution'
+        : retryAction === 'verify'
+          ? 'Resume verification'
+          : retryAction === 'commit_and_push'
+            ? 'Resume shipping'
+            : 'Re-plan';
+  const retrySummary =
+    retryAction === 'review'
+      ? 'Retry will resume from review using the latest structured plan.'
+      : retryAction === 'execute'
+        ? 'Retry will resume from execution using the latest structured plan.'
+        : retryAction === 'verify'
+          ? 'Retry will resume from verification using the current worktree.'
+          : retryAction === 'commit_and_push'
+            ? 'Retry will resume from commit and push using the verified worktree.'
+            : retryAction === 'plan'
+              ? 'Retry will start a fresh planning pass. This resumes the workflow, not the same live planner session.'
+              : null;
   const threadPhase = currentPipelinePhase;
   const canStartPipeline =
     !activeThreadId &&
@@ -416,6 +486,14 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const hasApprovalDecision =
     !!activeThreadId && threadPhase === 'awaiting_approval' && !!latestPlan;
   const canApprove = hasApprovalDecision && !!(latestPlan?.structured || latestPlan?.rawOutput);
+  const canSubmitClarification =
+    !!thread?.clarificationRequest &&
+    thread.clarificationRequest.questions.every((question) => {
+      const answer = clarificationDraft[question.id];
+      const hasChoice = !!answer?.selectedChoiceId;
+      const hasFreeform = !!answer?.freeformText.trim();
+      return hasChoice || (question.allowFreeform && hasFreeform);
+    });
 
   if (!activeIssue) return null;
 
@@ -483,6 +561,13 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     }
   };
 
+  const handleShowAllPlanRunsChange = (show: boolean) => {
+    setShowAllPlanRuns(show);
+    if (!show) {
+      setExpandedPlanId(null);
+    }
+  };
+
   const handleApprove = async () => {
     if (!activeThreadId || !canApprove) return;
     setIsSubmitting(true);
@@ -520,6 +605,56 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     try {
       await window.shipcode.invoke('pipeline:cancel', { threadId: activeThreadId });
       await refreshIssueState();
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleClarificationChoiceChange = (questionId: string, choiceId: string) => {
+    setClarificationDraft((current) => ({
+      ...current,
+      [questionId]: {
+        selectedChoiceId: choiceId,
+        freeformText: current[questionId]?.freeformText ?? '',
+      },
+    }));
+    setClarificationError(null);
+  };
+
+  const handleClarificationFreeformChange = (questionId: string, value: string) => {
+    setClarificationDraft((current) => ({
+      ...current,
+      [questionId]: {
+        selectedChoiceId: current[questionId]?.selectedChoiceId ?? null,
+        freeformText: value,
+      },
+    }));
+    setClarificationError(null);
+  };
+
+  const handleSubmitClarification = async () => {
+    if (!activeThreadId || !thread?.clarificationRequest) return;
+    setIsSubmitting(true);
+    setClarificationError(null);
+    try {
+      const answers: ClarificationAnswer[] = thread.clarificationRequest.questions.map(
+        (question) => {
+          const draft = clarificationDraft[question.id];
+          const freeformText = draft?.freeformText.trim();
+          return {
+            questionId: question.id,
+            selectedChoiceId: draft?.selectedChoiceId ?? null,
+            freeformText: freeformText ? freeformText : null,
+          };
+        },
+      );
+      await window.shipcode.invoke('pipeline:answer-clarification', {
+        threadId: activeThreadId,
+        answers,
+      });
+      await refreshIssueState();
+    } catch (error) {
+      setClarificationError(error instanceof Error ? error.message : String(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -621,6 +756,16 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         effort: effort as import('@shipcode/shared').ReasoningEffort,
       });
     }
+    await queryClient.invalidateQueries({ queryKey: ['github-issues', activeProjectId] });
+  };
+
+  const handleRevisionCountChange = async (value: string) => {
+    if (!activeProjectId || !activeIssue) return;
+    await window.shipcode.invoke('github:set-revision-count-override', {
+      projectId: activeProjectId,
+      issueNumber: activeIssue.issueNumber,
+      revisionCount: value === '__inherit__' ? null : Number.parseInt(value, 10),
+    });
     await queryClient.invalidateQueries({ queryKey: ['github-issues', activeProjectId] });
   };
 
@@ -819,6 +964,15 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         ? { provider: effectivePhaseProviders.verifier, modelId: null as string | null }
         : decodePhaseOption(phaseSelectValues.verifier),
   } as const;
+  const inheritedRevisionCount = settings ? resolveRevisionCount(settings, activeProject) : 0;
+  const effectiveRevisionCount =
+    settings && activeIssue
+      ? resolveRevisionCountForIssue(settings, activeProject, activeIssue)
+      : inheritedRevisionCount;
+  const revisionCountSelectValue =
+    activeIssue.revisionCountOverride == null
+      ? '__inherit__'
+      : String(activeIssue.revisionCountOverride);
 
   // ─── Shared render sections ──────────────────────────────────────────────
 
@@ -843,7 +997,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const handleRestoreCheckpoint = async (checkpoint: PipelineCheckpoint) => {
     if (!activeThreadId) return;
     const confirmed = window.confirm(
-      `Restore checkpoint "${checkpoint.label}"?\n\nThis will hard-reset the worktree to ${checkpoint.commitSha.slice(0, 12)} and remove untracked files in that worktree.`,
+      `Restore checkpoint "${checkpoint.label}"?\n\nThis will hard-reset the worktree to ${checkpoint.commitSha.slice(0, 12)} and remove untracked files in that worktree.\n\nThis restores code state only. It does not resume the same planner session.`,
     );
     if (!confirmed) return;
     setIsSubmitting(true);
@@ -1090,29 +1244,41 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     ? normalizedReviewsByPlanId[fullScreenPlan.id]
     : undefined;
 
-  const { approvalSection, pipelineStartCard, rerunSection } = IssueDetailActions({
-    approveError,
-    canApprove,
-    canRerun,
-    canStartPipeline,
-    failingPhaseOutput,
-    feedback,
-    hasApprovalDecision,
-    isSubmitting,
-    pendingAction,
-    showRawOutput,
-    thread,
-    onApprove: () => void handleApprove(),
-    onCancel: () => void handleCancel(),
-    onEditPrd: handleEditPrd,
-    onFeedbackChange: setFeedback,
-    onMarkAsDone: () => setShowMarkAsDoneConfirm(true),
-    onPendingActionChange: setPendingAction,
-    onReject: () => void handleReject(),
-    onRerun: () => void handleRerun(),
-    onShowRawOutputChange: setShowRawOutput,
-    onStartPipeline: () => void handleStartPipeline(),
-  });
+  const { approvalSection, clarificationSection, pipelineStartCard, rerunSection } =
+    IssueDetailActions({
+      approveError,
+      canApprove,
+      canRerun,
+      canStartPipeline,
+      canSubmitClarification,
+      effectiveRevisionCount,
+      clarificationDraft,
+      clarificationError,
+      clarificationRequest: thread?.clarificationRequest ?? null,
+      failingPhaseOutput,
+      feedback,
+      hasApprovalDecision,
+      isSubmitting,
+      pendingAction,
+      requireApproval: settings?.requireApproval ?? false,
+      retryButtonLabel,
+      retrySummary,
+      showRawOutput,
+      thread,
+      onApprove: () => void handleApprove(),
+      onCancel: () => void handleCancel(),
+      onClarificationChoiceChange: handleClarificationChoiceChange,
+      onClarificationFreeformChange: handleClarificationFreeformChange,
+      onEditPrd: handleEditPrd,
+      onFeedbackChange: setFeedback,
+      onMarkAsDone: () => setShowMarkAsDoneConfirm(true),
+      onPendingActionChange: setPendingAction,
+      onReject: () => void handleReject(),
+      onRerun: () => void handleRerun(),
+      onShowRawOutputChange: setShowRawOutput,
+      onStartPipeline: () => void handleStartPipeline(),
+      onSubmitClarification: () => void handleSubmitClarification(),
+    });
 
   const detailTabs = (
     <IssueDetailTabs
@@ -1130,16 +1296,19 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       integrationStatus={integrationStatus}
       isRefreshingFromGithub={isRefreshingFromGithub}
       isSubmitting={isSubmitting}
+      isShowingAllPlanRuns={isShowingAllPlanRuns}
       linkedPrUrl={linkedPrUrl}
+      effectiveRevisionCount={effectiveRevisionCount}
+      inheritedRevisionCount={inheritedRevisionCount}
       normalizedIssueActivity={normalizedIssueActivity}
       loadingPlanDetailIds={loadingPlanDetailIds}
       normalizedPlanHistory={resolvedPlanHistory}
       normalizedReviewsByPlanId={normalizedReviewsByPlanId}
       normalizedThreadPlanHistory={normalizedThreadPlanHistory}
       isPlanHistoryLoading={isPlanHistoryLoading}
-      hasPlanHistory={hasPlanHistory}
       phaseModelValidation={phaseModelValidation}
       phaseSelectValues={phaseSelectValues}
+      revisionCountSelectValue={revisionCountSelectValue}
       planHistoryCollapsed={planHistoryCollapsed}
       planRunCount={planRunCount}
       planRunGroups={resolvedPlanRunGroups}
@@ -1159,11 +1328,15 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       onPhaseEffortChange={(phase, effort) => {
         void handlePhaseEffortChange(phase, effort);
       }}
+      onRevisionCountChange={(value) => {
+        void handleRevisionCountChange(value);
+      }}
       onPhaseOpenRouterSlugBlur={(phase, value) => {
         void handlePhaseOpenRouterSlugBlur(phase, value);
       }}
-      onPlanExpandedChange={setExpandedPlanId}
+      onPlanExpandedChange={(planId) => setExpandedPlanId(planId ?? null)}
       onPlanHistoryCollapsedChange={setPlanHistoryCollapsed}
+      onShowAllPlanRunsChange={handleShowAllPlanRunsChange}
       onRefreshFromGithub={() => {
         void handleRefreshFromGithub();
       }}
@@ -1233,6 +1406,11 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
               <div className="mx-auto w-full max-w-5xl">{rerunSection}</div>
             </div>
           )}
+          {clarificationSection && (
+            <div className="shrink-0 border-b border-border px-6 py-4">
+              <div className="mx-auto w-full max-w-5xl">{clarificationSection}</div>
+            </div>
+          )}
           {approvalSection && (
             <div className="shrink-0 border-b border-border px-6 py-4">
               <div className="mx-auto w-full max-w-5xl">{approvalSection}</div>
@@ -1268,6 +1446,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       {/* Primary CTAs — above tabs, always visible */}
       {pipelineStartCard && <div className="shrink-0 p-4 pb-0">{pipelineStartCard}</div>}
       {rerunSection && <div className="shrink-0 px-4 pt-4">{rerunSection}</div>}
+      {clarificationSection && <div className="shrink-0 px-4 pt-4">{clarificationSection}</div>}
       {approvalSection && <div className="shrink-0 px-4 pt-4">{approvalSection}</div>}
 
       {/* Tabbed content — min-h-0 required for flex scroll containment */}

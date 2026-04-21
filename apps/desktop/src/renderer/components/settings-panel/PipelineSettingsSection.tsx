@@ -1,11 +1,15 @@
 import {
   type AppSettings,
+  buildAppSettingsModelPresetPatch,
   type ExecutorModel,
   getSupportedReasoningEfforts,
   type IntegrationStatus,
+  MODEL_CONFIG_PRESETS,
+  type ModelConfigPresetKey,
   resolveProviderReasoningEffort,
 } from '@shipcode/shared';
 import {
+  Button,
   Input,
   Select,
   SelectContent,
@@ -54,6 +58,9 @@ export function PipelineSettingsSection({
     effort: AppSettings['plannerReasoningEffort'],
     modelId?: string | null,
   ) => resolveProviderReasoningEffort(provider, effort, modelId).effective;
+  const applyPreset = (preset: ModelConfigPresetKey) => {
+    onUpdate(buildAppSettingsModelPresetPatch(preset));
+  };
 
   return (
     <>
@@ -119,48 +126,58 @@ export function PipelineSettingsSection({
               />
             </SettingsRow>
             <SettingsRow
-              label="Review rounds"
-              htmlFor="max-review-rounds"
-              description="How many review->revise cycles before execution or approval."
+              label="Default revisions"
+              description="How many review-to-revise cycles ShipCode runs before approval or execution. 0 skips plan review for the fastest path."
             >
-              <Input
-                id="max-review-rounds"
-                type="number"
-                className="w-[80px]"
-                value={settings.maxReviewRounds}
-                onChange={(e) => {
-                  const value = Number.parseInt(e.target.value, 10);
-                  if (value >= 1 && value <= 5) onUpdate({ maxReviewRounds: value });
-                }}
-                min={1}
-                max={5}
-                step={1}
-              />
-            </SettingsRow>
-            <SettingsRow
-              label="Planner max turns"
-              htmlFor="planner-max-turns"
-              description="Max Claude turns per plan / revision / verify phase."
-            >
-              <Input
-                id="planner-max-turns"
-                type="number"
-                className="w-[80px]"
-                value={settings.plannerMaxTurns}
-                onChange={(e) => {
-                  const value = Number.parseInt(e.target.value, 10);
-                  if (value >= 1 && value <= 20) onUpdate({ plannerMaxTurns: value });
-                }}
-                min={1}
-                max={20}
-                step={1}
-              />
+              <Select
+                value={String(settings.revisionCount)}
+                onValueChange={(value) =>
+                  onUpdate({
+                    revisionCount: Number.parseInt(value, 10) as AppSettings['revisionCount'],
+                  })
+                }
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">0 · Skip review</SelectItem>
+                  <SelectItem value="1">1 revision</SelectItem>
+                  <SelectItem value="2">2 revisions</SelectItem>
+                  <SelectItem value="3">3 revisions</SelectItem>
+                  <SelectItem value="4">4 revisions</SelectItem>
+                  <SelectItem value="5">5 revisions</SelectItem>
+                </SelectContent>
+              </Select>
             </SettingsRow>
           </section>
         </TabsContent>
 
         <TabsContent value="models" className="mt-0">
           <section className="mb-8">
+            <div className="mb-5 rounded-md border border-border bg-secondary/40 p-3">
+              <div className="mb-3">
+                <div className="text-[13px] font-medium text-primary">Model Presets</div>
+                <div className="text-[11px] text-muted">
+                  Apply a full Claude, Codex, or Hybrid phase layout in one shot. OpenRouter
+                  fallback defaults stay unchanged.
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {MODEL_CONFIG_PRESETS.map((preset) => (
+                  <Button
+                    key={preset.key}
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => applyPreset(preset.key)}
+                  >
+                    {`Apply ${preset.label}`}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
             <SettingsRow
               label="PRD rewrite CLI"
               description="Which CLI powers `Rewrite with AI` in the PRD editor."

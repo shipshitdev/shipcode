@@ -9,6 +9,7 @@ import { shipCodePlanSchema } from '@shipcode/shared';
 
 export const ACTIVE_PHASES: PipelinePhase[] = [
   'planning',
+  'clarifying',
   'reviewing',
   'revising',
   'executing',
@@ -19,6 +20,7 @@ export const ACTIVE_PHASES: PipelinePhase[] = [
 
 export const PIPELINE_PREVIEW_PHASES = [
   { id: 'plan', label: 'Plan' },
+  { id: 'clarify', label: 'Clarify' },
   { id: 'review', label: 'Review' },
   { id: 'execute', label: 'Execute' },
   { id: 'test', label: 'Test' },
@@ -177,13 +179,15 @@ export function resolveRawPlanText(raw: string): string {
 
 export function resolveClientSidePlan(rawOutput: string): ShipCodePlan | null {
   const text = resolveRawPlanText(rawOutput);
-  const match = text.match(/```shipcode-plan[^\n]*\n([\s\S]*?)\n```/m);
-  if (!match) return null;
-  try {
-    return shipCodePlanSchema.parse(JSON.parse(match[1].trim()));
-  } catch {
-    return null;
+  const matches = Array.from(text.matchAll(/```shipcode-plan[^\n]*\n([\s\S]*?)\n```/gm));
+  for (let i = matches.length - 1; i >= 0; i--) {
+    try {
+      return shipCodePlanSchema.parse(JSON.parse(matches[i][1].trim()));
+    } catch {
+      /* keep scanning older fences */
+    }
   }
+  return null;
 }
 
 type ZodIssue = { path: (string | number)[]; message: string };
@@ -195,10 +199,11 @@ function isZodError(e: unknown): e is { issues: ZodIssue[] } {
 
 export function diagnosePlanParseFailure(rawOutput: string): string {
   const text = resolveRawPlanText(rawOutput);
-  const match = text.match(/```shipcode-plan[^\n]*\n([\s\S]*?)\n```/m);
-  if (!match) {
+  const matches = Array.from(text.matchAll(/```shipcode-plan[^\n]*\n([\s\S]*?)\n```/gm));
+  if (matches.length === 0) {
     return 'Plan output could not be parsed: no shipcode-plan fence found in model output.';
   }
+  const match = matches[matches.length - 1];
   let parsed: unknown;
   try {
     parsed = JSON.parse(match[1].trim());
@@ -241,6 +246,7 @@ export function safeErrorMessage(raw: string): string {
 
 const PHASE_LABELS: Record<string, string> = {
   planning: 'Planning failed',
+  clarifying: 'Clarification failed',
   reviewing: 'Review failed',
   revising: 'Revision failed',
   executing: 'Execution failed',

@@ -39,6 +39,9 @@ function makeThread(overrides: Record<string, unknown> = {}) {
     executorModel: 'claude',
     verifierModel: 'claude',
     reviewRound: 0,
+    clarificationRound: 0,
+    clarificationRequest: null,
+    clarificationAnswers: [],
     verificationStatus: null,
     verificationRetries: 0,
     autonomous: false,
@@ -125,6 +128,11 @@ describe('createElectronEmitter onPipelineTerminal (slot-freed) callback', () =>
 
   it('fires onPipelineTerminal on awaiting_approval', () => {
     emitPhase('awaiting_approval');
+    expect(deps.onPipelineTerminal).toHaveBeenCalledTimes(1);
+  });
+
+  it('fires onPipelineTerminal on clarifying', () => {
+    emitPhase('clarifying');
     expect(deps.onPipelineTerminal).toHaveBeenCalledTimes(1);
   });
 

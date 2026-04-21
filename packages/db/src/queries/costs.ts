@@ -34,6 +34,7 @@ function resolveProviderAndModel(row: TaskCostRow): {
 } {
   switch (row.phase as PipelinePhase) {
     case 'planning':
+    case 'clarifying':
       return { provider: row.planner_model as ExecutorModel, model: row.planner_resolved_model };
     case 'reviewing':
       return { provider: row.reviewer_model as ExecutorModel, model: row.reviewer_resolved_model };

@@ -1,5 +1,6 @@
 import type { ProviderPhase, SkillValidationError } from '@shipcode/agents';
 import type {
+  ClarificationRequest,
   GitHubPrCheckSummary,
   GitHubPrReviewCommentSummary,
   PhaseSkillKey,
@@ -63,7 +64,12 @@ export interface PipelineRuntime {
       maxTurns?: number;
       reasoningEffort?: PipelineContext['plannerReasoningEffort'];
     },
-  ) => Promise<{ rawOutput: string; exitCode: number; resolvedModel?: string }>;
+  ) => Promise<{
+    rawOutput: string;
+    exitCode: number;
+    resolvedModel?: string;
+    clarificationRequest?: ClarificationRequest;
+  }>;
   emitPhase: (
     threadId: string,
     phase: Parameters<PipelineDeps['threads']['updateStatus']>[1],

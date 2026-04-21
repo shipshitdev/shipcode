@@ -1,16 +1,28 @@
+import type { Thread } from '@shipcode/shared';
 import { Button, cn, Plus, Terminal } from '@shipcode/ui';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 import { InstantTerminalPane } from './instant-terminal/InstantTerminalPane';
+
+function formatLivePaneTitle(cli: 'claude' | 'codex', prompt: string): string {
+  const trimmedPrompt = prompt.trim();
+  if (trimmedPrompt.length > 0) {
+    return `${cli === 'claude' ? 'Claude' : 'Codex'} • ${trimmedPrompt.slice(0, 40)}`;
+  }
+  return `${cli === 'claude' ? 'Claude' : 'Codex'} shell`;
+}
 
 export function InstantView() {
   const {
     instantPaneThreadIds,
     instantSplitDirection,
     instantPaneMetaByThread,
+    addInstantPane,
     removeInstantPane,
     openInstantFixModal,
   } = useAppStore();
+  const [restartingThreadId, setRestartingThreadId] = useState<string | null>(null);
+  const [restartErrors, setRestartErrors] = useState<Record<string, string>>({});
 
   const canonicalStream = useAppStore((s) => s.canonicalTerminalStream);
 
@@ -54,6 +66,53 @@ export function InstantView() {
       removeInstantPane(threadId);
     },
     [instantPaneMetaByThread, isRunning, removeInstantPane],
+  );
+
+  const handleRestart = useCallback(
+    async (threadId: string) => {
+      const meta = instantPaneMetaByThread[threadId];
+      if (!meta || meta.mode !== 'live') return;
+
+      setRestartingThreadId(threadId);
+      setRestartErrors((current) => {
+        if (!(threadId in current)) return current;
+        const next = { ...current };
+        delete next[threadId];
+        return next;
+      });
+
+      try {
+        const originalThread = await window.shipcode.invoke<Thread | null>('thread:get', {
+          threadId,
+        });
+        if (!originalThread) {
+          throw new Error('Original session was not found');
+        }
+
+        const cli = meta.cli ?? 'claude';
+        const result = await window.shipcode.invoke<{ threadId: string }>('instant:shell-start', {
+          projectId: originalThread.projectId,
+          cli,
+          initialPrompt: originalThread.prompt.trim() || undefined,
+        });
+
+        removeInstantPane(threadId);
+        addInstantPane(result.threadId, {
+          mode: 'live',
+          cli,
+          title: formatLivePaneTitle(cli, originalThread.prompt),
+          state: 'running',
+        });
+      } catch (error) {
+        setRestartErrors((current) => ({
+          ...current,
+          [threadId]: error instanceof Error ? error.message : String(error),
+        }));
+      } finally {
+        setRestartingThreadId((current) => (current === threadId ? null : current));
+      }
+    },
+    [addInstantPane, instantPaneMetaByThread, removeInstantPane],
   );
 
   const handleSplitHorizontal = useCallback(() => {
@@ -112,6 +171,10 @@ export function InstantView() {
             onSplitHorizontal={handleSplitHorizontal}
             onSplitVertical={handleSplitVertical}
             onCancel={handleCancel}
+            onRestart={handleRestart}
+            canRestart={!isRunning(threadId) && instantPaneMetaByThread[threadId]?.mode === 'live'}
+            restartPending={restartingThreadId === threadId}
+            restartError={restartErrors[threadId] ?? null}
             isRunning={isRunning(threadId)}
           />
         ))}

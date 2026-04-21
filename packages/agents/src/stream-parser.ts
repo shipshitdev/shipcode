@@ -1,6 +1,16 @@
-import type { ErrorType, PlanReview, ShipCodePlan, VerificationResult } from '@shipcode/shared';
+import type {
+  ClarificationRequest,
+  ErrorType,
+  PlanReview,
+  ShipCodePlan,
+  VerificationResult,
+} from '@shipcode/shared';
 import {
+  CLARIFICATION_FENCE_TAG,
+  clampTextBlock,
+  clarificationRequestSchema,
   ERROR_PATTERNS,
+  MAX_PIPELINE_RAW_OUTPUT_CHARS,
   PLAN_FENCE_TAG,
   planReviewSchema,
   REVIEW_FENCE_TAG,
@@ -41,6 +51,13 @@ export class StreamParser {
 
   extractPlan(): ParseResult<ShipCodePlan> {
     return this.extractFencedBlock<ShipCodePlan>(PLAN_FENCE_TAG, shipCodePlanSchema);
+  }
+
+  extractClarificationRequest(): ParseResult<ClarificationRequest> {
+    return this.extractFencedBlock<ClarificationRequest>(
+      CLARIFICATION_FENCE_TAG,
+      clarificationRequestSchema,
+    );
   }
 
   extractReview(): ParseResult<PlanReview> {
@@ -179,41 +196,79 @@ export class StreamParser {
     tag: string,
     schema: { parse: (data: unknown) => T },
   ): ParseResult<T> {
-    const raw = this.buffer; // stored as-is (original output)
     const text = this.resolveBuffer(); // resolved LLM text for parsing
 
-    // Look for ```tag ... ``` blocks.
-    // Require \n before the closing fence so that ``` inside JSON string values
-    // (e.g. ```ts code examples in step descriptions) don't terminate the match early.
-    const fenceRegex = new RegExp(`\`\`\`${tag}[^\n]*\n([\\s\\S]*?)\n\`\`\``, 'm');
-    const match = text.match(fenceRegex);
-
-    if (!match) {
-      // Try to find raw JSON object in the output as fallback
-      const jsonMatch = this.tryExtractJson(text);
-      if (jsonMatch) {
-        try {
-          const parsed = schema.parse(JSON.parse(jsonMatch));
-          return { success: true, data: parsed, raw };
-        } catch (e) {
-          return {
-            success: false,
-            data: null,
-            raw,
-            error: `JSON found but schema validation failed: ${e}`,
-          };
-        }
+    // Search all ```tag ... ``` blocks from the end. The planner prompt or
+    // repo context can mention the fence tag earlier, so the final answer is
+    // usually the last valid block, not the first match.
+    const fenceMatches = this.findFencedBlocks(tag, text);
+    let lastFenceError: string | undefined;
+    for (let i = fenceMatches.length - 1; i >= 0; i--) {
+      const match = fenceMatches[i];
+      try {
+        const parsedJson = JSON.parse(match[1].trim());
+        const parsed = schema.parse(parsedJson);
+        return {
+          success: true,
+          data: parsed,
+          raw: this.formatFencedArtifact(tag, parsed),
+        };
+      } catch (e) {
+        lastFenceError = `Parse error: ${e}`;
       }
-      return { success: false, data: null, raw, error: `No ${tag} fenced block found` };
     }
 
-    try {
-      const json = JSON.parse(match[1].trim());
-      const parsed = schema.parse(json);
-      return { success: true, data: parsed, raw };
-    } catch (e) {
-      return { success: false, data: null, raw, error: `Parse error: ${e}` };
+    if (fenceMatches.length > 0) {
+      const lastFence = fenceMatches[fenceMatches.length - 1];
+      return {
+        success: false,
+        data: null,
+        raw: this.compactArtifact(lastFence[0]),
+        error: lastFenceError ?? `No valid ${tag} fenced block found`,
+      };
     }
+
+    // Try to find raw JSON object in the output as fallback
+    const jsonMatch = this.tryExtractJson(text);
+    if (jsonMatch) {
+      try {
+        const parsed = schema.parse(JSON.parse(jsonMatch));
+        return {
+          success: true,
+          data: parsed,
+          raw: this.formatFencedArtifact(tag, parsed),
+        };
+      } catch (e) {
+        return {
+          success: false,
+          data: null,
+          raw: this.compactArtifact(`\`\`\`${tag}\n${jsonMatch.trim()}\n\`\`\``),
+          error: `JSON found but schema validation failed: ${e}`,
+        };
+      }
+    }
+
+    return {
+      success: false,
+      data: null,
+      raw: this.compactArtifact(text),
+      error: `No ${tag} fenced block found`,
+    };
+  }
+
+  private findFencedBlocks(tag: string, text: string): RegExpMatchArray[] {
+    // Require \n before the closing fence so that ``` inside JSON string
+    // values don't terminate the match early.
+    const fenceRegex = new RegExp(`\`\`\`${tag}[^\n]*\n([\\s\\S]*?)\n\`\`\``, 'gm');
+    return Array.from(text.matchAll(fenceRegex));
+  }
+
+  private formatFencedArtifact(tag: string, data: unknown): string {
+    return `\`\`\`${tag}\n${JSON.stringify(data, null, 2)}\n\`\`\``;
+  }
+
+  private compactArtifact(text: string): string {
+    return clampTextBlock(text, MAX_PIPELINE_RAW_OUTPUT_CHARS);
   }
 
   private tryExtractJson(text: string): string | null {

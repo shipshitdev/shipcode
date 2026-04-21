@@ -1,56 +1,13 @@
 import type { GitHubIssueCacheRecord, TerminalEventRecord } from '@shipcode/shared';
-import { FitAddon } from '@xterm/addon-fit';
-import { WebLinksAddon } from '@xterm/addon-web-links';
-import { Terminal } from '@xterm/xterm';
-import '@xterm/xterm/css/xterm.css';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../stores/app-store';
 import {
-  AGENT_ACTIVE_STATUSES,
-  CONTENT_KINDS,
+  CONSOLE_VISIBLE_STATUSES,
   DEFAULT_HEIGHT,
   EMPTY_STREAM,
-  LIFECYCLE_KINDS,
   MIN_HEIGHT,
   PHASE_LABELS,
-  SPINNER_FRAMES,
-  SPINNER_INTERVAL_MS,
 } from './constants';
-import { renderTerminalEvent } from './render-terminal-event';
-
-function readCssColor(name: string, fallback: string): string {
-  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  return value || fallback;
-}
-
-function buildTerminalTheme() {
-  return {
-    background: readCssColor('--bg-secondary', '#0c0d10'),
-    foreground: readCssColor('--text-secondary', '#b4b4bc'),
-    cursor: readCssColor('--text-primary', '#f4f4f5'),
-    selectionBackground:
-      readCssColor('--data-terminal-selection', '') ||
-      (document.documentElement.dataset.theme === 'light'
-        ? 'rgba(17, 24, 39, 0.14)'
-        : 'rgba(244, 244, 245, 0.20)'),
-    black: readCssColor('--bg-elevated', '#1a1c21'),
-    red: '#ef4444',
-    green: '#10b981',
-    yellow: '#f59e0b',
-    blue: '#3b82f6',
-    magenta: '#a855f7',
-    cyan: '#06b6d4',
-    white: readCssColor('--text-primary', '#f4f4f5'),
-    brightBlack: readCssColor('--text-muted', '#6b6b78'),
-    brightRed: '#f87171',
-    brightGreen: '#34d399',
-    brightYellow: '#fbbf24',
-    brightBlue: '#60a5fa',
-    brightMagenta: '#c084fc',
-    brightCyan: '#22d3ee',
-    brightWhite: readCssColor('--accent', '#fafafa'),
-  };
-}
 
 export function useTerminalDrawer() {
   const toggleTerminal = useAppStore((s) => s.toggleTerminal);
@@ -62,7 +19,7 @@ export function useTerminalDrawer() {
   const activeIssue = useAppStore((s) => s.activeIssue);
   const scopedIssues = githubIssues.filter((issue) => issue.projectId === activeProjectId);
   const runningTabs = scopedIssues.filter((issue) =>
-    AGENT_ACTIVE_STATUSES.has(issue.pipelineStatus),
+    CONSOLE_VISIBLE_STATUSES.has(issue.pipelineStatus),
   );
   const scopedActiveIssue = activeIssue?.projectId === activeProjectId ? activeIssue : null;
   const explicitIssue =
@@ -99,28 +56,8 @@ export function useTerminalDrawer() {
   const setTerminalThread = useAppStore((s) => s.setTerminalThread);
   const selectIssue = useAppStore((s) => s.selectIssue);
   const [height, setHeight] = useState(DEFAULT_HEIGHT);
-
-  const startedAtRef = useRef<string | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const termRef = useRef<Terminal | null>(null);
-  const fitRef = useRef<FitAddon | null>(null);
-  const prevThreadIdRef = useRef<string | null>(null);
-  const canonicalWrittenRef = useRef(0);
-  const spinnerTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const spinnerActiveRef = useRef(false);
-  const spinnerLabelRef = useRef('Thinking');
-  const lastKindRef = useRef<string | null>(null);
   const prevHeightRef = useRef(DEFAULT_HEIGHT);
   const dragStartRef = useRef<{ y: number; h: number } | null>(null);
-  const fitFrameRef = useRef<number | null>(null);
-
-  const scheduleFit = useCallback(() => {
-    if (fitFrameRef.current != null) return;
-    fitFrameRef.current = window.requestAnimationFrame(() => {
-      fitFrameRef.current = null;
-      fitRef.current?.fit();
-    });
-  }, []);
 
   const handleResizeMouseDown = useCallback(
     (event: React.MouseEvent) => {
@@ -131,20 +68,18 @@ export function useTerminalDrawer() {
         if (!dragStartRef.current) return;
         const delta = dragStartRef.current.y - moveEvent.clientY;
         setHeight(Math.max(MIN_HEIGHT, dragStartRef.current.h + delta));
-        scheduleFit();
       };
 
       const onUp = () => {
         dragStartRef.current = null;
         window.removeEventListener('mousemove', onMove);
         window.removeEventListener('mouseup', onUp);
-        scheduleFit();
       };
 
       window.addEventListener('mousemove', onMove);
       window.addEventListener('mouseup', onUp);
     },
-    [height, scheduleFit],
+    [height],
   );
 
   const toggleMaximize = useCallback(() => {
@@ -155,124 +90,7 @@ export function useTerminalDrawer() {
       setHeight(9999);
     }
     setTerminalMaximized(!isMaximized);
-    setTimeout(scheduleFit, 0);
-  }, [height, isMaximized, scheduleFit, setTerminalMaximized]);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-
-    const term = new Terminal({
-      theme: buildTerminalTheme(),
-      fontFamily: '"SF Mono", SFMono-Regular, Consolas, Menlo, monospace',
-      fontSize: 12,
-      lineHeight: 1.5,
-      cursorBlink: false,
-      disableStdin: true,
-      scrollback: 5000,
-    });
-
-    const fit = new FitAddon();
-    term.loadAddon(fit);
-    term.loadAddon(new WebLinksAddon());
-    term.open(containerRef.current);
-    fit.fit();
-    termRef.current = term;
-    fitRef.current = fit;
-
-    const resizeObserver = new ResizeObserver(() => scheduleFit());
-    resizeObserver.observe(containerRef.current);
-
-    return () => {
-      resizeObserver.disconnect();
-      term.dispose();
-      termRef.current = null;
-      fitRef.current = null;
-      if (fitFrameRef.current != null) {
-        window.cancelAnimationFrame(fitFrameRef.current);
-        fitFrameRef.current = null;
-      }
-    };
-  }, [scheduleFit]);
-
-  useEffect(() => {
-    const term = termRef.current;
-    if (!term) return;
-
-    const root = document.documentElement;
-    const applyTheme = () => {
-      term.options.theme = buildTerminalTheme();
-      term.refresh(0, term.rows - 1);
-    };
-
-    applyTheme();
-
-    const observer = new MutationObserver(applyTheme);
-    observer.observe(root, {
-      attributes: true,
-      attributeFilter: ['data-theme', 'data-font-style'],
-    });
-
-    return () => observer.disconnect();
-  }, []);
-
-  const startSpinner = useCallback((label: string) => {
-    const term = termRef.current;
-    if (!term || spinnerActiveRef.current) return;
-
-    spinnerActiveRef.current = true;
-    spinnerLabelRef.current = label;
-    let frame = 0;
-
-    term.write(`\r\x1b[K\x1b[2;36m${SPINNER_FRAMES[0]} ${label}...\x1b[0m`);
-    spinnerTimerRef.current = setInterval(() => {
-      if (!termRef.current) return;
-      frame = (frame + 1) % SPINNER_FRAMES.length;
-      termRef.current.write(
-        `\r\x1b[K\x1b[2;36m${SPINNER_FRAMES[frame]} ${spinnerLabelRef.current}...\x1b[0m`,
-      );
-    }, SPINNER_INTERVAL_MS);
-  }, []);
-
-  const stopSpinner = useCallback(() => {
-    if (!spinnerActiveRef.current) return;
-    if (spinnerTimerRef.current) {
-      clearInterval(spinnerTimerRef.current);
-      spinnerTimerRef.current = null;
-    }
-    spinnerActiveRef.current = false;
-    termRef.current?.write('\r\x1b[K');
-  }, []);
-
-  useEffect(() => {
-    const term = termRef.current;
-    if (!term) return;
-
-    if (visibleTerminalThreadId !== prevThreadIdRef.current) {
-      stopSpinner();
-      term.reset();
-      scheduleFit();
-      canonicalWrittenRef.current = 0;
-      startedAtRef.current = null;
-      lastKindRef.current = null;
-      prevThreadIdRef.current = visibleTerminalThreadId;
-
-      const nextIssue = scopedIssues.find((issue) => issue.threadId === visibleTerminalThreadId);
-      const nextStream = visibleTerminalThreadId
-        ? (useAppStore.getState().canonicalTerminalStream[visibleTerminalThreadId] ?? [])
-        : [];
-      const nextIssueStatus = nextIssue?.pipelineStatus;
-      const isActivePipeline =
-        nextIssueStatus != null &&
-        (AGENT_ACTIVE_STATUSES.has(nextIssueStatus) || nextIssueStatus === 'queued');
-
-      if (nextStream.length === 0 && isActivePipeline) {
-        const label = nextIssueStatus ? (PHASE_LABELS[nextIssueStatus] ?? 'Working') : 'Working';
-        setTimeout(() => {
-          if (canonicalWrittenRef.current === 0) startSpinner(label);
-        }, 0);
-      }
-    }
-  }, [scheduleFit, scopedIssues, startSpinner, stopSpinner, visibleTerminalThreadId]);
+  }, [height, isMaximized, setTerminalMaximized]);
 
   useEffect(() => {
     if (!visibleTerminalThreadId) return;
@@ -297,120 +115,6 @@ export function useTerminalDrawer() {
     };
   }, [canonicalStream.length, hydrateCanonicalEvents, visibleTerminalThreadId]);
 
-  useEffect(() => {
-    return () => {
-      if (spinnerTimerRef.current) clearInterval(spinnerTimerRef.current);
-    };
-  }, []);
-
-  useEffect(() => {
-    const term = termRef.current;
-    if (!term) return;
-
-    const newEvents = canonicalStream.slice(canonicalWrittenRef.current);
-    if (newEvents.length === 0) return;
-    const shouldStickToBottom =
-      canonicalWrittenRef.current === 0 ||
-      term.buffer?.active == null ||
-      term.buffer.active.viewportY >= term.buffer.active.baseY - 1;
-
-    if (canonicalWrittenRef.current === 0 && newEvents.length > 0 && !startedAtRef.current) {
-      // xterm wraps against its current column count, not CSS. Re-fit before
-      // replaying the first batch so hydrated history wraps for the drawer's
-      // current width instead of whatever size the terminal last used.
-      fitRef.current?.fit();
-      startedAtRef.current = new Date(newEvents[0].createdAt).toLocaleTimeString('en-US', {
-        hour12: false,
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      });
-    }
-
-    for (const entry of newEvents) {
-      const event = entry.event;
-      if (event.kind === 'action') {
-        continue;
-      }
-
-      switch (event.kind) {
-        case 'lifecycle': {
-          const phaseMessage = event.message.replaceAll('\x1b[36m', '').replaceAll('\x1b[0m', '');
-          const phaseMatch = /phase: (\w+)/.exec(phaseMessage);
-          if (phaseMatch) {
-            const phase = phaseMatch[1];
-            if (lastKindRef.current && !LIFECYCLE_KINDS.has(lastKindRef.current)) {
-              term.write('\r\n');
-            }
-            const normalized = event.message.replace(/\r?\n/g, '\r\n');
-            term.write(`${normalized}\r\n`);
-            lastKindRef.current = event.kind;
-            stopSpinner();
-            if (AGENT_ACTIVE_STATUSES.has(phase)) {
-              startSpinner(PHASE_LABELS[phase] ?? 'Working');
-            }
-            continue;
-          }
-          if (lastKindRef.current && CONTENT_KINDS.has(lastKindRef.current)) {
-            stopSpinner();
-            term.write('\r\n');
-          } else {
-            stopSpinner();
-          }
-          break;
-        }
-        case 'tool_start':
-          stopSpinner();
-          break;
-        case 'tool_end':
-          break;
-        case 'thinking':
-          stopSpinner();
-          if (lastKindRef.current && LIFECYCLE_KINDS.has(lastKindRef.current)) {
-            term.write('\r\n');
-          }
-          break;
-        case 'text':
-        case 'raw':
-          stopSpinner();
-          if (lastKindRef.current && LIFECYCLE_KINDS.has(lastKindRef.current)) {
-            term.write('\r\n');
-          }
-          break;
-        case 'turn_start':
-          stopSpinner();
-          if (lastKindRef.current) {
-            term.write('\r\n');
-          }
-          break;
-        case 'done':
-        case 'error':
-          stopSpinner();
-          break;
-        default:
-          break;
-      }
-
-      const text = renderTerminalEvent(event);
-      if (text === null) continue;
-
-      const normalized = text.replace(/\r?\n/g, '\r\n');
-      term.write(normalized.endsWith('\r\n') ? normalized : `${normalized}\r\n`);
-      lastKindRef.current = event.kind;
-
-      if (event.kind === 'tool_start') {
-        startSpinner('Working');
-      } else if (event.kind === 'tool_end' || event.kind === 'turn_end') {
-        startSpinner('Thinking');
-      }
-    }
-
-    canonicalWrittenRef.current = canonicalStream.length;
-    if (shouldStickToBottom) {
-      term.scrollToBottom();
-    }
-  }, [canonicalStream, startSpinner, stopSpinner]);
-
   const handleRunningTabSelect = useCallback(
     (issue: GitHubIssueCacheRecord) => {
       setTerminalThread(issue.threadId ?? null);
@@ -421,17 +125,28 @@ export function useTerminalDrawer() {
 
   return {
     canonicalStream,
-    containerRef,
     currentModel,
     displayIssue,
     handleResizeMouseDown,
     handleRunningTabSelect,
     isMaximized,
+    pendingLabel:
+      canonicalStream.length === 0 && displayIssue?.pipelineStatus
+        ? (PHASE_LABELS[displayIssue.pipelineStatus] ?? 'Working')
+        : null,
     pipelinePhase,
     resolvedHeight: isMaximized ? undefined : height,
     runningTabs,
     showEmptyState: displayIssue === null,
-    startedAt: startedAtRef.current,
+    startedAt:
+      canonicalStream[0]?.createdAt != null
+        ? new Date(canonicalStream[0].createdAt).toLocaleTimeString('en-US', {
+            hour12: false,
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+          })
+        : null,
     terminalThreadId: visibleTerminalThreadId,
     toggleMaximize,
     toggleTerminal,

@@ -12,9 +12,7 @@ export function IssueHistoryTab({
   return (
     <div className="mb-5">
       <div className="mb-2 flex items-center justify-between">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">
-          Issue History
-        </h4>
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">Activity</h4>
         <span className="text-[11px] text-muted">{normalizedIssueActivity.length} events</span>
       </div>
       {normalizedIssueActivity.length === 0 ? (

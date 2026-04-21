@@ -27,6 +27,37 @@ export const shipCodePlanSchema = z.object({
   dependencies: z.array(z.string()),
 });
 
+export const clarificationChoiceSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  description: z.string().min(1),
+  recommended: z.boolean().optional(),
+});
+
+export const clarificationQuestionSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  prompt: z.string().min(1),
+  description: z.string().nullable().optional().default(null),
+  choices: z.array(clarificationChoiceSchema).min(2).max(4),
+  allowFreeform: z.boolean().default(false),
+  freeformPlaceholder: z.string().nullable().optional().default(null),
+});
+
+export const clarificationRequestSchema = z.object({
+  id: z.string().min(1),
+  threadId: z.string().min(1),
+  phase: z.enum(['plan', 'revision']),
+  summary: z.string().min(1),
+  questions: z.array(clarificationQuestionSchema).min(1).max(3),
+});
+
+export const clarificationAnswerSchema = z.object({
+  questionId: z.string().min(1),
+  selectedChoiceId: z.string().nullable().optional().default(null),
+  freeformText: z.string().nullable().optional().default(null),
+});
+
 export const reviewFindingSchema = z.object({
   id: z.string().min(1),
   severity: z.enum(['critical', 'major', 'minor', 'nit']),

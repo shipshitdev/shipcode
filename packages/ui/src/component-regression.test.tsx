@@ -6,6 +6,7 @@ import { createRoot } from 'react-dom/client';
 import { describe, expect, it, vi } from 'vitest';
 import { DiffViewer } from './DiffViewer';
 import { Alert, AlertDescription, AlertTitle } from './primitives/alert';
+import { Button } from './primitives/button';
 import {
   Card,
   CardContent,
@@ -71,6 +72,7 @@ const mappings: StatusLabelMapping = {
   todo: '',
   queued: 'status:queued',
   planning: 'status:in-progress',
+  clarifying: 'status:in-progress',
   reviewing: 'status:in-progress',
   revising: 'status:in-progress',
   awaiting_approval: 'status:in-progress',
@@ -128,7 +130,7 @@ describe('UI component regression coverage', () => {
     expect(view.container.textContent).toContain(
       "Labels are auto-created on GitHub if they don't exist.",
     );
-    expect(view.container.querySelectorAll('tbody tr')).toHaveLength(12);
+    expect(view.container.querySelectorAll('tbody tr')).toHaveLength(13);
 
     const resetButton = view.container.querySelector(
       'button[aria-label="Reset status mapping to defaults"]',
@@ -145,6 +147,7 @@ describe('UI component regression coverage', () => {
       todo: '',
       queued: 'status:queued',
       planning: 'status:in-progress',
+      clarifying: 'status:in-progress',
       reviewing: 'status:in-progress',
       revising: 'status:in-progress',
       awaiting_approval: 'status:in-progress',
@@ -178,6 +181,9 @@ describe('UI component regression coverage', () => {
         <SettingsRow label="Theme" description="Choose the renderer theme" htmlFor="theme">
           <input id="theme" defaultValue="dark" />
         </SettingsRow>
+        <Button size="icon-xs" aria-label="Refresh terminal sessions">
+          R
+        </Button>
         <Modal
           open
           onClose={onClose}
@@ -196,9 +202,13 @@ describe('UI component regression coverage', () => {
       'Autonomous coding pipeline',
     );
     expect((view.container.querySelector('#theme') as HTMLInputElement | null)?.value).toBe('dark');
+    expect(
+      view.container.querySelector('button[title="Refresh terminal sessions"]'),
+    ).not.toBeNull();
     expect(document.body.textContent).toContain('Settings');
     expect(document.body.textContent).toContain('Close action');
     expect(document.body.textContent).toContain('Modal content');
+    expect(document.body.querySelector('button[title="Close"]')).not.toBeNull();
     expect(onClose).not.toHaveBeenCalled();
     view.cleanup();
   });

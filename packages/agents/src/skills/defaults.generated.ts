@@ -49,7 +49,8 @@ User task:
 Treat the plan as an executable contract, not a sketch.
 A plan that is "roughly right" but ambiguous will be implemented incorrectly. Vagueness is a defect.
 Prefer fewer, larger, atomic steps over many small ceremonial ones — but every step must be independently verifiable.
-If the task is genuinely ambiguous, encode the assumption you made under \`outOfScope\` rather than asking a question — there is no human in the loop.
+If the task is missing information that would materially change the plan, emit a structured clarification request instead of guessing.
+If the ambiguity is minor, encode the assumption you made under \`outOfScope\` and keep planning.
 </operating_stance>
 
 <planning_method>
@@ -93,7 +94,7 @@ If a step depends on a fact you cannot verify from the codebase, state the assum
 {{CONTEXT_FILES}}
 </repository_context>
 `,
-    version: '47b30b969c4b85ef',
+    version: 'd85e551f76863a82',
     requiredSlots: ['USER_PROMPT', 'THREAD_ID', 'OUTPUT_SCHEMA'] as const,
     schemaVersion: 1,
   },
@@ -321,18 +322,10 @@ For each step in the plan:
 Throughout execution:
 - Stay inside the worktree directory. Do not edit files outside the planned \`files\` list without strong justification.
 - Do not introduce new dependencies unless the plan explicitly calls for them.
-- Do not commit. The pipeline will commit once verification passes.
+- Commit your changes when all steps are complete. Use \`git add -A && git commit -m "<concise summary of what was done>"\`. Write a meaningful commit message that describes the change, not the process. Do not skip hooks.
 - Do not skip hooks, do not bypass validation, do not weaken type safety to make code compile.
 - If you encounter a real blocker (missing file, broken dep, bad assumption in the plan), surface it clearly and stop — do not paper over it.
 </execution_method>
-
-<testing_guidance>
-Write tests for new functionality when the plan calls for it or when acceptance criteria reference test coverage.
-Use existing test patterns in the codebase — find at least one existing test file before writing a new one.
-Tests must be colocated with source files unless the project convention differs.
-Do not write tests for code you did not change.
-{{TESTING_CONTEXT}}
-</testing_guidance>
 
 <finding_bar>
 Do not add error handling, fallbacks, or validation for scenarios that cannot happen.
@@ -340,10 +333,6 @@ Do not add comments explaining what the code obviously does.
 Do not add docstrings or type annotations to code you did not change.
 Three similar lines of code are better than a premature abstraction.
 </finding_bar>
-
-<repository_context>
-{{CONTEXT_FILES}}
-</repository_context>
 
 <grounding_rules>
 Every file you create or modify must appear in the plan's \`files\` array.
@@ -355,7 +344,7 @@ If a step requires a tool or command, run it; do not pretend it succeeded.
 {{APPROVED_PLAN}}
 </approved_plan>
 `,
-    version: '075bf8dc3570ddcf',
+    version: '19e3d5ecb26060a8',
     requiredSlots: ['APPROVED_PLAN'] as const,
     schemaVersion: 1,
   },
@@ -416,10 +405,6 @@ A warning means a noteworthy concern that does not block — scope creep, minor 
 Your verification MUST be valid JSON inside a code fence per the schema below.
 {{OUTPUT_SCHEMA}}
 </structured_output_contract>
-
-<repository_context>
-{{CONTEXT_FILES}}
-</repository_context>
 
 <grounding_rules>
 Every \`evidence\` field must point to something concrete in the diff — a file path, a hunk, a function name, a config key.

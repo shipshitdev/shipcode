@@ -98,7 +98,7 @@ describe('issue-detail leaf components', () => {
       <IssueHistoryTab normalizedIssueActivity={entries} runNumberByThreadId={{ 'thread-1': 3 }} />,
     );
 
-    expect(screen.getByText('Issue History')).toBeInTheDocument();
+    expect(screen.getByText('Activity')).toBeInTheDocument();
     expect(screen.getByText('1 events')).toBeInTheDocument();
     expect(screen.getByText('Plan drafted')).toBeInTheDocument();
     expect(screen.getByText('First draft ready')).toBeInTheDocument();

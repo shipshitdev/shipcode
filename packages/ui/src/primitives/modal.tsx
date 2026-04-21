@@ -47,7 +47,11 @@ export function Modal({
         <DialogHeader className={cn('flex-row items-center justify-between mb-0', headerClassName)}>
           <DialogTitle>{title}</DialogTitle>
           {headerAction}
-          <DialogClose className="rounded-md p-1 text-muted transition-colors hover:text-primary hover:bg-hover">
+          <DialogClose
+            title="Close"
+            aria-label="Close"
+            className="rounded-md p-1 text-muted transition-colors hover:text-primary hover:bg-hover"
+          >
             <X size={16} />
           </DialogClose>
         </DialogHeader>

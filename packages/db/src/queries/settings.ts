@@ -147,8 +147,7 @@ export class SettingsQueries {
         DEFAULT_SETTINGS.projectSortOrder,
       worktreeRoot: readWorktreeRoot(stored.worktreeRoot),
       worktreeBranchFormat: stored.worktreeBranchFormat || DEFAULT_SETTINGS.worktreeBranchFormat,
-      plannerMaxTurns: clampInt(stored.plannerMaxTurns, 1, 20, DEFAULT_SETTINGS.plannerMaxTurns),
-      maxReviewRounds: clampInt(stored.maxReviewRounds, 1, 5, DEFAULT_SETTINGS.maxReviewRounds),
+      revisionCount: readRevisionCount(stored.revisionCount, DEFAULT_SETTINGS.revisionCount),
       requireApproval: parseBool(stored.requireApproval, DEFAULT_SETTINGS.requireApproval),
       plannerReasoningEffort: isReasoningEffort(stored.plannerReasoningEffort)
         ? (stored.plannerReasoningEffort as AppSettings['plannerReasoningEffort'])
@@ -230,13 +229,9 @@ export class SettingsQueries {
     if ('worktreeRoot' in patch && patch.worktreeRoot != null && patch.worktreeRoot !== '') {
       expandWorktreeRoot(patch.worktreeRoot);
     }
-    if ('maxReviewRounds' in patch && patch.maxReviewRounds != null) {
-      const n = Number(patch.maxReviewRounds);
-      if (!Number.isFinite(n) || n < 1 || n > 5) throw new Error('maxReviewRounds must be 1–5');
-    }
-    if ('plannerMaxTurns' in patch && patch.plannerMaxTurns != null) {
-      const n = Number(patch.plannerMaxTurns);
-      if (!Number.isFinite(n) || n < 1 || n > 20) throw new Error('plannerMaxTurns must be 1–20');
+    if ('revisionCount' in patch && patch.revisionCount != null) {
+      const n = Number(patch.revisionCount);
+      if (!Number.isFinite(n) || n < 0 || n > 5) throw new Error('revisionCount must be 0–5');
     }
     if ('maxConcurrentPipelines' in patch && patch.maxConcurrentPipelines != null) {
       const n = Number(patch.maxConcurrentPipelines);
@@ -336,4 +331,13 @@ function readWorktreeRoot(raw: string | undefined): string | null {
   // as "use the default".
   if (raw == null || raw === '' || raw === 'null') return null;
   return raw;
+}
+
+function readRevisionCount(
+  raw: string | undefined,
+  fallback: AppSettings['revisionCount'],
+): AppSettings['revisionCount'] {
+  return raw !== undefined
+    ? (clampInt(raw, 0, 5, fallback) as AppSettings['revisionCount'])
+    : fallback;
 }

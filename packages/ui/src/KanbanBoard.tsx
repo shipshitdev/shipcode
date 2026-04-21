@@ -14,6 +14,7 @@ import {
   compareIssues,
   customCollisionDetection,
   resolveIssuePhaseChip,
+  resolveIssueRevisionLabel,
 } from './kanban-board/utils';
 
 export function KanbanBoard({
@@ -67,6 +68,21 @@ export function KanbanBoard({
         issues.map((issue) => [
           issue.id,
           resolveIssuePhaseChip(
+            issue,
+            settings,
+            project,
+            issue.threadId ? threadById.get(issue.threadId) : null,
+          ),
+        ]),
+      ),
+    [issues, project, settings, threadById],
+  );
+  const issueRevisionLabelById = useMemo(
+    () =>
+      new Map(
+        issues.map((issue) => [
+          issue.id,
+          resolveIssueRevisionLabel(
             issue,
             settings,
             project,
@@ -141,7 +157,9 @@ export function KanbanBoard({
     if (
       sourceColumn === 'human' &&
       dropId === 'todo' &&
-      (issue.pipelineStatus === 'failed' || issue.pipelineStatus === 'awaiting_approval') &&
+      (issue.pipelineStatus === 'failed' ||
+        issue.pipelineStatus === 'clarifying' ||
+        issue.pipelineStatus === 'awaiting_approval') &&
       onRetry
     ) {
       onRetry(issue);
@@ -195,6 +213,7 @@ export function KanbanBoard({
             issues={sortedIssues}
             selectedIssueNumber={selectedIssueNumber}
             activeId={activeId}
+            issueRevisionLabelById={issueRevisionLabelById}
             onIssueClick={onIssueClick}
             onOpenPullRequest={onOpenPullRequest}
             onArchiveIssue={onArchiveIssue}
@@ -219,6 +238,7 @@ export function KanbanBoard({
                     rerunningId={rerunningId}
                     selectedIssueNumber={selectedIssueNumber}
                     issuePhaseChipById={issuePhaseChipById}
+                    issueRevisionLabelById={issueRevisionLabelById}
                     readOnly={readOnly}
                   />
                 );
@@ -241,6 +261,7 @@ export function KanbanBoard({
                   onArchiveAllDone={col.key === 'done' ? onArchiveAllDone : undefined}
                   onArchiveIssue={col.key === 'done' ? onArchiveIssue : undefined}
                   issuePhaseChipById={issuePhaseChipById}
+                  issueRevisionLabelById={issueRevisionLabelById}
                   readOnly={readOnly}
                 />
               );

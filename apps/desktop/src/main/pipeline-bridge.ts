@@ -43,6 +43,11 @@ const PHASE_ACTIVITY: Partial<
     title: (t) => `${t.title} — planning started`,
     subtitle: 'Claude is drafting the plan',
   },
+  clarifying: {
+    kind: 'phase_change',
+    title: (t) => `${t.title} — clarification needed`,
+    subtitle: 'Waiting for your answer before planning continues',
+  },
   reviewing: {
     kind: 'phase_change',
     title: (t) => `${t.title} — in review`,
@@ -205,7 +210,11 @@ export function createElectronEmitter(
         projectId: thread.projectId,
         kind: meta.kind,
         actor:
-          event.phase === 'reviewing' ? 'codex' : event.phase === 'completed' ? 'system' : 'claude',
+          event.phase === 'reviewing'
+            ? 'codex'
+            : event.phase === 'completed' || event.phase === 'clarifying'
+              ? 'system'
+              : 'claude',
         title: meta.title(thread),
         subtitle: meta.subtitle ?? null,
         metadata: { phase: event.phase },
@@ -411,11 +420,12 @@ export function createElectronEmitter(
       }
 
       // 5. Promote next queued issue if a pipeline slot opened up.
-      // awaiting_approval is included: the slot becomes available while the
-      // human reviews, so the next queued issue can start in parallel.
+      // clarifying/awaiting_approval are included: the slot becomes available
+      // while the human responds, so the next queued issue can start in parallel.
       if (
         event.type === 'pipeline:phase' &&
-        (event.phase === 'awaiting_approval' ||
+        (event.phase === 'clarifying' ||
+          event.phase === 'awaiting_approval' ||
           event.phase === 'completed' ||
           event.phase === 'failed' ||
           event.phase === 'idle')

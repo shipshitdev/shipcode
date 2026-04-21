@@ -6,16 +6,17 @@ import { useAppStore } from '../stores/app-store';
 import { TerminalDrawerEmptyState } from './terminal-drawer/TerminalDrawerEmptyState';
 import { TerminalDrawerHeader } from './terminal-drawer/TerminalDrawerHeader';
 import { useTerminalDrawer } from './terminal-drawer/useTerminalDrawer';
+import { TerminalTranscript } from './terminal-transcript/TerminalTranscript';
 
 export function TerminalDrawer() {
   const {
     canonicalStream,
-    containerRef,
     currentModel,
     displayIssue,
     handleResizeMouseDown,
     handleRunningTabSelect,
     isMaximized,
+    pendingLabel,
     pipelinePhase,
     resolvedHeight,
     runningTabs,
@@ -96,8 +97,22 @@ export function TerminalDrawer() {
         onToggleTerminal={toggleTerminal}
       />
       <div className="relative flex-1 overflow-hidden min-h-0">
-        <div ref={containerRef} className="absolute inset-0" />
-        {showEmptyState && <TerminalDrawerEmptyState />}
+        {showEmptyState ? (
+          <TerminalDrawerEmptyState />
+        ) : (
+          <TerminalTranscript
+            events={canonicalStream}
+            pendingLabel={pendingLabel}
+            emptyMessage="No console output yet."
+            onAction={
+              displayIssue
+                ? () => {
+                    handleRunningTabSelect(displayIssue);
+                  }
+                : undefined
+            }
+          />
+        )}
       </div>
     </div>
   );

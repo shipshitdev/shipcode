@@ -23,6 +23,10 @@ function makeProject(overrides: Partial<Project> = {}): Project {
     path: '/tmp/shipcode',
     pathExists: true,
     gitRemote: null,
+    githubRepoId: null,
+    githubRepoFullName: null,
+    starterIssueNumber: null,
+    starterIssueCreatedAt: null,
     githubProjectUrl: null,
     plannerModelOverride: null,
     reviewerModelOverride: null,
@@ -36,6 +40,7 @@ function makeProject(overrides: Partial<Project> = {}): Project {
     reviewerReasoningEffortOverride: null,
     executorReasoningEffortOverride: null,
     verifierReasoningEffortOverride: null,
+    revisionCountOverride: null,
     discordRouting: 'inherit',
     discordWebhookUrlOverride: null,
     telegramRouting: 'inherit',
@@ -108,6 +113,11 @@ describe('misc leaf components', () => {
         integrationStatus={undefined}
         modelValidation={{}}
         setModelValidation={vi.fn()}
+        onApplyPreset={vi.fn()}
+        onResetIssueOverrides={vi.fn()}
+        issueOverrideResetPending={false}
+        issueOverrideResetResult={null}
+        issueOverrideResetError={null}
       />,
     );
 

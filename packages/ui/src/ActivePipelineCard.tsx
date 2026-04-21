@@ -66,7 +66,7 @@ export function ActivePipelineCard({
   onCancel,
   className,
 }: ActivePipelineCardProps) {
-  const isAwaiting = phase === 'awaiting_approval';
+  const isAwaiting = phase === 'awaiting_approval' || phase === 'clarifying';
   const isAgentActive = AGENT_ACTIVE_PHASES.has(phase);
   const progress = phaseToProgress(phase);
 

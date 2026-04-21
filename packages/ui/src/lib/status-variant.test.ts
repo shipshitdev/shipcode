@@ -6,6 +6,7 @@ describe('getStatusBadgeVariant', () => {
     ['completed', 'success'],
     ['done', 'done'],
     ['failed', 'danger'],
+    ['clarifying', 'warning'],
     ['awaiting_approval', 'warning'],
     ['planning', 'accent'],
     ['reviewing', 'accent'],

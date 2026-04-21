@@ -43,19 +43,22 @@ interface IssueDetailTabsProps {
   integrationStatus?: IntegrationStatus;
   isRefreshingFromGithub: boolean;
   isSubmitting: boolean;
+  isShowingAllPlanRuns: boolean;
   linkedPrUrl: string | null;
+  effectiveRevisionCount: number;
+  inheritedRevisionCount: number;
   loadingPlanDetailIds: string[];
   normalizedIssueActivity: import('@shipcode/shared').ActivityEntry[];
   normalizedPlanHistory: PlanRecord[];
   normalizedReviewsByPlanId: Record<string, ReviewRecord>;
   normalizedThreadPlanHistory: PlanRecord[];
   isPlanHistoryLoading: boolean;
-  hasPlanHistory: boolean;
   currentPhaseReasoningEfforts: Record<PhaseKey, ReasoningEffort>;
   inheritedPhaseReasoningEfforts: Record<PhaseKey, ReasoningEffort>;
   phaseEffortSelectValues: Record<PhaseKey, string>;
   phaseModelValidation: Partial<Record<PhaseKey, OpenRouterModelValidation | null>>;
   phaseSelectValues: Record<PhaseKey, string>;
+  revisionCountSelectValue: string;
   planHistoryCollapsed: boolean;
   planRunCount: number;
   planRunGroups: PlanRunGroup[];
@@ -69,9 +72,11 @@ interface IssueDetailTabsProps {
   onFullScreenPlan: (planId: string | null) => void;
   onPhaseAgentChange: (phase: PhaseKey, value: string) => void;
   onPhaseEffortChange: (phase: PhaseKey, effort: string) => void;
+  onRevisionCountChange: (value: string) => void;
   onPhaseOpenRouterSlugBlur: (phase: PhaseKey, rawValue: string) => void;
   onPlanExpandedChange: (planId: string | null | undefined) => void;
   onPlanHistoryCollapsedChange: (collapsed: boolean) => void;
+  onShowAllPlanRunsChange: (show: boolean) => void;
   onRefreshFromGithub: () => void;
   onRestoreCheckpoint: (checkpoint: PipelineCheckpoint) => void;
   onStabilizePr: () => void;
@@ -92,19 +97,22 @@ export function IssueDetailTabs({
   integrationStatus,
   isRefreshingFromGithub,
   isSubmitting,
+  isShowingAllPlanRuns,
   linkedPrUrl,
+  effectiveRevisionCount,
+  inheritedRevisionCount,
   loadingPlanDetailIds,
   normalizedIssueActivity,
   normalizedPlanHistory,
   normalizedReviewsByPlanId,
   normalizedThreadPlanHistory,
   isPlanHistoryLoading,
-  hasPlanHistory,
   currentPhaseReasoningEfforts,
   inheritedPhaseReasoningEfforts,
   phaseEffortSelectValues,
   phaseModelValidation,
   phaseSelectValues,
+  revisionCountSelectValue,
   planHistoryCollapsed,
   planRunCount,
   planRunGroups,
@@ -118,42 +126,29 @@ export function IssueDetailTabs({
   onFullScreenPlan,
   onPhaseAgentChange,
   onPhaseEffortChange,
+  onRevisionCountChange,
   onPhaseOpenRouterSlugBlur,
   onPlanExpandedChange,
   onPlanHistoryCollapsedChange,
+  onShowAllPlanRunsChange,
   onRefreshFromGithub,
   onRestoreCheckpoint,
   onStabilizePr,
 }: IssueDetailTabsProps) {
-  const orderedTabs: Array<{ value: IssueDetailTab; label: string }> = hasPlanHistory
-    ? [
-        {
-          value: 'history',
-          label: `Plan History${normalizedPlanHistory.length > 0 ? ` (${normalizedPlanHistory.length})` : ''}`,
-        },
-        { value: 'prd', label: 'Issue' },
-        { value: 'comments', label: 'Comments' },
-        { value: 'pipeline', label: 'Pipeline' },
-        {
-          value: 'activity',
-          label: `Issue History${normalizedIssueActivity.length > 0 ? ` (${normalizedIssueActivity.length})` : ''}`,
-        },
-        { value: 'costs', label: 'Costs' },
-      ]
-    : [
-        { value: 'prd', label: 'Issue' },
-        { value: 'comments', label: 'Comments' },
-        {
-          value: 'history',
-          label: `Plan History${normalizedPlanHistory.length > 0 ? ` (${normalizedPlanHistory.length})` : ''}`,
-        },
-        { value: 'pipeline', label: 'Pipeline' },
-        {
-          value: 'activity',
-          label: `Issue History${normalizedIssueActivity.length > 0 ? ` (${normalizedIssueActivity.length})` : ''}`,
-        },
-        { value: 'costs', label: 'Costs' },
-      ];
+  const orderedTabs: Array<{ value: IssueDetailTab; label: string }> = [
+    { value: 'prd', label: 'Issue' },
+    { value: 'comments', label: 'Comments' },
+    {
+      value: 'history',
+      label: `Plans${normalizedPlanHistory.length > 0 ? ` (${normalizedPlanHistory.length})` : ''}`,
+    },
+    { value: 'pipeline', label: 'Pipeline' },
+    {
+      value: 'activity',
+      label: `Activity${normalizedIssueActivity.length > 0 ? ` (${normalizedIssueActivity.length})` : ''}`,
+    },
+    { value: 'costs', label: 'Costs' },
+  ];
 
   return (
     <Tabs
@@ -208,6 +203,7 @@ export function IssueDetailTabs({
           effectiveExpanded={effectiveExpanded}
           expanded={expanded}
           isPlanHistoryLoading={isPlanHistoryLoading}
+          isShowingAllPlanRuns={isShowingAllPlanRuns}
           loadingPlanDetailIds={loadingPlanDetailIds}
           normalizedPlanHistory={normalizedPlanHistory}
           normalizedReviewsByPlanId={normalizedReviewsByPlanId}
@@ -219,6 +215,7 @@ export function IssueDetailTabs({
           onFullScreenPlan={onFullScreenPlan}
           onPlanExpandedChange={onPlanExpandedChange}
           onPlanHistoryCollapsedChange={onPlanHistoryCollapsedChange}
+          onShowAllPlanRunsChange={onShowAllPlanRunsChange}
         />
       </TabsContent>
 
@@ -234,16 +231,20 @@ export function IssueDetailTabs({
           executorEditable={executorEditable}
           hasPrFeedbackBlockers={hasPrFeedbackBlockers}
           inheritedPhaseReasoningEfforts={inheritedPhaseReasoningEfforts}
+          inheritedRevisionCount={inheritedRevisionCount}
           integrationStatus={integrationStatus}
           isSubmitting={isSubmitting}
           linkedPrUrl={linkedPrUrl}
+          effectiveRevisionCount={effectiveRevisionCount}
           phaseEffortSelectValues={phaseEffortSelectValues}
           phaseModelValidation={phaseModelValidation}
           phaseSelectValues={phaseSelectValues}
+          revisionCountSelectValue={revisionCountSelectValue}
           projectDefaultPhaseSelections={projectDefaultPhaseSelections}
           thread={thread}
           onPhaseAgentChange={onPhaseAgentChange}
           onPhaseEffortChange={onPhaseEffortChange}
+          onRevisionCountChange={onRevisionCountChange}
           onPhaseOpenRouterSlugBlur={onPhaseOpenRouterSlugBlur}
           onRestoreCheckpoint={onRestoreCheckpoint}
           onStabilizePr={onStabilizePr}

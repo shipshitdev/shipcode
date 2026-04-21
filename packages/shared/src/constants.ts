@@ -55,8 +55,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   projectSortOrder: 'recent',
   worktreeRoot: null,
   worktreeBranchFormat: 'ship/{id}-{slug}',
-  plannerMaxTurns: 3,
-  maxReviewRounds: 2,
+  revisionCount: 0,
   requireApproval: false,
   plannerReasoningEffort: 'high',
   reviewerReasoningEffort: 'high',
@@ -129,9 +128,12 @@ export const REPO_SETUP_CONTRACT_FILE = '.shipcode/setup.json';
 export const DEFAULT_WORKTREE_ROOT = '~/.shipcode/worktrees';
 
 export const PLAN_FENCE_TAG = 'shipcode-plan';
+export const CLARIFICATION_FENCE_TAG = 'shipcode-clarification';
 export const REVIEW_FENCE_TAG = 'shipcode-review';
 export const VERIFICATION_FENCE_TAG = 'shipcode-verification';
-export const MAX_REVIEW_ROUNDS = 2;
+export const MAX_PIPELINE_RAW_OUTPUT_CHARS = 16_000;
+export const MAX_REVIEW_ROUNDS = 5;
+export const MAX_CLARIFICATION_ROUNDS = 2;
 export const MAX_VERIFICATION_RETRIES = 1;
 export const MAX_TEST_RETRIES = 1;
 export const GITHUB_POLL_INTERVAL_MS = 30_000;

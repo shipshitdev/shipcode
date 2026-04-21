@@ -7,6 +7,7 @@ import {
   type ReviewRecord,
   type Thread,
 } from '@shipcode/shared';
+import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -40,6 +41,7 @@ const makeIssue = (overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
   reviewerReasoningEffortOverride: null,
   executorReasoningEffortOverride: null,
   verifierReasoningEffortOverride: null,
+  revisionCountOverride: null,
   linkedPrNumber: null,
   linkedPrUrl: null,
   linkedPrIsDraft: false,
@@ -67,6 +69,9 @@ const makeThread = (overrides: Partial<Thread> = {}): Thread => {
     executorModel: 'claude',
     verifierModel: 'claude',
     reviewRound: 0,
+    clarificationRound: 0,
+    clarificationRequest: null,
+    clarificationAnswers: [],
     verificationStatus: null,
     verificationRetries: 0,
     autonomous: false,
@@ -143,6 +148,10 @@ const makeProject = () => ({
   name: 'Project',
   path: '/tmp/project',
   gitRemote: 'https://github.com/acme/repo.git',
+  githubRepoId: null,
+  githubRepoFullName: null,
+  starterIssueNumber: null,
+  starterIssueCreatedAt: null,
   githubProjectUrl: null,
   plannerModelOverride: null,
   reviewerModelOverride: null,
@@ -156,10 +165,12 @@ const makeProject = () => ({
   reviewerReasoningEffortOverride: null,
   executorReasoningEffortOverride: null,
   verifierReasoningEffortOverride: null,
+  revisionCountOverride: null,
   defaultBranch: 'main',
   pinned: false,
   archived: false,
   hidden: false,
+  notifyGithubUser: null,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 });
@@ -191,8 +202,10 @@ describe('IssueDetail', () => {
       configurable: true,
       value: vi.fn(),
     });
-    window.shipcode.invoke = invokeMock as unknown as typeof window.shipcode.invoke;
-    window.shipcode.on = vi.fn(() => () => {}) as unknown as typeof window.shipcode.on;
+    window.shipcode = {
+      invoke: invokeMock as typeof window.shipcode.invoke,
+      on: vi.fn(() => () => {}) as typeof window.shipcode.on,
+    };
 
     useAppStore.setState({
       activeProjectId: 'project-1',
@@ -332,7 +345,7 @@ describe('IssueDetail', () => {
     });
 
     renderWithProviders();
-    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Re-plan' }));
 
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith('pipeline:retry', { threadId: thread.id });
@@ -340,6 +353,61 @@ describe('IssueDetail', () => {
     expect(invokeMock).not.toHaveBeenCalledWith('github:start-issue', {
       projectId: 'project-1',
       issueNumber: 42,
+    });
+  });
+
+  it('renders clarification questions and resumes planning with submitted answers', async () => {
+    const thread = makeThread({
+      status: 'clarifying',
+      clarificationRequest: {
+        id: 'clarify-1',
+        threadId: 'thread-1',
+        phase: 'plan',
+        summary: 'Need one decision before planning.',
+        questions: [
+          {
+            id: 'scope',
+            title: 'Scope',
+            prompt: 'Which scope should ShipCode plan for?',
+            description: null,
+            choices: [
+              { id: 'narrow', label: 'Narrow', description: 'Ship the smallest useful change.' },
+              { id: 'wide', label: 'Wide', description: 'Include adjacent cleanup too.' },
+            ],
+            allowFreeform: false,
+            freeformPlaceholder: null,
+          },
+        ],
+      },
+    });
+
+    useAppStore.setState({
+      activeThreadId: thread.id,
+      activeIssue: makeIssue({ threadId: thread.id, pipelineStatus: 'clarifying' }),
+      pipelinePhase: 'clarifying',
+    });
+
+    invokeMock.mockImplementation(async (channel, args) => {
+      if (channel === 'project:get') return makeProject();
+      if (channel === 'thread:get') return thread;
+      if (channel === 'plan:list') return [];
+      if (channel === 'review:list-by-plans') return {};
+      if (channel === 'pipeline:answer-clarification') return undefined;
+      return args ?? null;
+    });
+
+    renderWithProviders();
+
+    expect(await screen.findByText('Answer these before planning continues')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Wide/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Resume planning' }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('pipeline:answer-clarification', {
+        threadId: thread.id,
+        answers: [{ questionId: 'scope', selectedChoiceId: 'wide', freeformText: null }],
+      });
     });
   });
 
@@ -400,8 +468,7 @@ describe('IssueDetail', () => {
           projectSortOrder: 'recent',
           worktreeRoot: null,
           worktreeBranchFormat: 'ship/{id}-{slug}',
-          plannerMaxTurns: 3,
-          maxReviewRounds: 2,
+          revisionCount: 2,
           requireApproval: false,
           plannerReasoningEffort: 'high',
           reviewerReasoningEffort: 'high',
@@ -527,7 +594,7 @@ describe('IssueDetail', () => {
     });
 
     renderWithProviders();
-    const historyTab = screen.getByRole('tab', { name: /Plan History/ });
+    const historyTab = screen.getByRole('tab', { name: /Plans/ });
     fireEvent.mouseDown(historyTab, { button: 0 });
     fireEvent.click(historyTab);
     await waitFor(() => {
@@ -538,9 +605,15 @@ describe('IssueDetail', () => {
     expect(screen.queryByText('pending_review')).not.toBeInTheDocument();
   });
 
-  it('loads issue-wide history eagerly so default-tab selection can use it', async () => {
+  it('does not load issue-wide history until View all runs is clicked', async () => {
     const thread = makeThread({ status: 'reviewing' });
-    const plan = makePlan();
+    const currentPlan = makePlan();
+    const olderPlan = makePlan({
+      id: 'plan-0',
+      threadId: 'thread-older',
+      version: 1,
+      status: 'superseded',
+    });
 
     useAppStore.setState({
       activeThreadId: thread.id,
@@ -550,7 +623,8 @@ describe('IssueDetail', () => {
 
     invokeMock.mockImplementation(async (channel, args) => {
       if (channel === 'thread:get') return thread;
-      if (channel === 'plan:list') return [plan];
+      if (channel === 'plan:list') return [currentPlan];
+      if (channel === 'plan:list-for-issue') return [currentPlan, olderPlan];
       if (channel === 'review:list-by-plans') return {};
       return args ?? [];
     });
@@ -558,11 +632,34 @@ describe('IssueDetail', () => {
     renderWithProviders();
 
     await waitFor(() => {
+      expect(screen.getByRole('tab', { name: 'Issue' })).toHaveAttribute('data-state', 'active');
+    });
+    expect(invokeMock).not.toHaveBeenCalledWith('plan:list-for-issue', {
+      projectId: 'project-1',
+      issueNumber: 42,
+    });
+
+    const historyTab = screen.getByRole('tab', { name: /Plans/ });
+    fireEvent.mouseDown(historyTab, { button: 0 });
+    fireEvent.click(historyTab);
+
+    await waitFor(() => {
+      expect(historyTab).toHaveAttribute('data-state', 'active');
+    });
+    expect(invokeMock).not.toHaveBeenCalledWith('plan:list-for-issue', {
+      projectId: 'project-1',
+      issueNumber: 42,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'View all runs' }));
+
+    await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith('plan:list-for-issue', {
         projectId: 'project-1',
         issueNumber: 42,
       });
     });
+    expect(await screen.findByRole('button', { name: 'Latest run only' })).toBeInTheDocument();
   });
 
   it('renders reviewer feedback labels without leaking raw decision enums', async () => {
@@ -584,7 +681,7 @@ describe('IssueDetail', () => {
     });
 
     renderWithProviders();
-    const historyTab = screen.getByRole('tab', { name: /Plan History/ });
+    const historyTab = screen.getByRole('tab', { name: /Plans/ });
     fireEvent.mouseDown(historyTab, { button: 0 });
     fireEvent.click(historyTab);
     await waitFor(() => {
@@ -615,7 +712,7 @@ describe('IssueDetail', () => {
     });
 
     renderWithProviders();
-    const historyTab = screen.getByRole('tab', { name: /Plan History/ });
+    const historyTab = screen.getByRole('tab', { name: /Plans/ });
     fireEvent.mouseDown(historyTab, { button: 0 });
     fireEvent.click(historyTab);
     await waitFor(() => {
@@ -628,15 +725,14 @@ describe('IssueDetail', () => {
 
   it('lazy-loads malformed issue-history plans and hides raw planner transcript spam', async () => {
     const thread = makeThread({ status: 'reviewing' });
-    const currentThreadPlan = makePlan();
-    const summaryPlan = makePlan({
+    const currentThreadPlan = makePlan({
       id: 'plan-history-1',
       threadId: thread.id,
       structured: null,
       rawOutput: '',
     });
     const malformedPlan = makePlan({
-      id: summaryPlan.id,
+      id: currentThreadPlan.id,
       threadId: thread.id,
       structured: null,
       rawOutput: [
@@ -657,7 +753,6 @@ describe('IssueDetail', () => {
     invokeMock.mockImplementation(async (channel, args) => {
       if (channel === 'thread:get') return thread;
       if (channel === 'plan:list') return [currentThreadPlan];
-      if (channel === 'plan:list-for-issue') return [summaryPlan];
       if (channel === 'plan:get-by-id') return malformedPlan;
       if (channel === 'review:list-by-plans') return {};
       return args ?? null;
@@ -665,15 +760,18 @@ describe('IssueDetail', () => {
 
     renderWithProviders();
 
-    await waitFor(() => {
-      expect(screen.getByRole('tab', { name: /Plan History/ })).toHaveAttribute(
-        'data-state',
-        'active',
-      );
-    });
+    const historyTab = await screen.findByRole('tab', { name: /Plans/ });
+    fireEvent.mouseDown(historyTab, { button: 0 });
+    fireEvent.click(historyTab);
 
     await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith('plan:get-by-id', { planId: summaryPlan.id });
+      expect(historyTab).toHaveAttribute('data-state', 'active');
+    });
+
+    fireEvent.click(screen.getByText('v1'));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('plan:get-by-id', { planId: currentThreadPlan.id });
     });
 
     expect(await screen.findByText('Structured plan unavailable')).toBeInTheDocument();
@@ -743,8 +841,7 @@ describe('IssueDetail', () => {
           projectSortOrder: 'recent',
           worktreeRoot: null,
           worktreeBranchFormat: 'ship/{id}-{slug}',
-          plannerMaxTurns: 3,
-          maxReviewRounds: 2,
+          revisionCount: 2,
           requireApproval: false,
           plannerReasoningEffort: 'high',
           reviewerReasoningEffort: 'high',
@@ -814,9 +911,9 @@ describe('IssueDetail', () => {
     renderWithProviders();
 
     expect(screen.getByRole('tab', { name: 'Issue' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Plan History' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Plans' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Pipeline' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Issue History' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Activity' })).toBeInTheDocument();
   });
 
   it('Issue tab is active by default when no plan history exists', async () => {
@@ -828,7 +925,7 @@ describe('IssueDetail', () => {
     expect(prdTab).toHaveAttribute('data-state', 'active');
   });
 
-  it('Plan History is first and active by default when history exists', async () => {
+  it('keeps a stable tab order and defaults to Issue even when history exists', async () => {
     const thread = makeThread({ status: 'reviewing' });
     const plan = makePlan();
 
@@ -841,7 +938,6 @@ describe('IssueDetail', () => {
     invokeMock.mockImplementation(async (channel, args) => {
       if (channel === 'thread:get') return thread;
       if (channel === 'plan:list') return [plan];
-      if (channel === 'plan:list-for-issue') return [plan];
       if (channel === 'review:list-by-plans') return {};
       return args ?? [];
     });
@@ -849,21 +945,11 @@ describe('IssueDetail', () => {
     renderWithProviders();
 
     await waitFor(() => {
-      expect(screen.getByRole('tab', { name: /Plan History/ })).toHaveAttribute(
-        'data-state',
-        'active',
-      );
+      expect(screen.getByRole('tab', { name: 'Issue' })).toHaveAttribute('data-state', 'active');
     });
 
     const tabLabels = screen.getAllByRole('tab').map((tab) => tab.textContent?.trim());
-    expect(tabLabels).toEqual([
-      'Plan History (1)',
-      'Issue',
-      'Comments',
-      'Pipeline',
-      'Issue History',
-      'Costs',
-    ]);
+    expect(tabLabels).toEqual(['Issue', 'Comments', 'Plans', 'Pipeline', 'Activity', 'Costs']);
   });
 
   it('pipeline start card is above the tab bar when pipeline not started', async () => {

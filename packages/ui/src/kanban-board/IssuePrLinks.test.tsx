@@ -36,6 +36,7 @@ function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
     reviewerReasoningEffortOverride: null,
     executorReasoningEffortOverride: null,
     verifierReasoningEffortOverride: null,
+    revisionCountOverride: null,
     linkedPrNumber: 91,
     linkedPrUrl: 'https://github.com/acme/repo/pull/91',
     linkedPrIsDraft: true,
@@ -136,6 +137,7 @@ describe('linked PR affordances', () => {
         <IssueListView
           issues={[makeIssue()]}
           activeId={null}
+          issueRevisionLabelById={new Map()}
           onIssueClick={onIssueClick}
           onOpenPullRequest={onOpenPullRequest}
         />

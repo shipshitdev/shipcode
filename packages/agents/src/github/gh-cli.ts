@@ -45,6 +45,19 @@ export interface PullRequestFeedback {
 export class GhCli {
   constructor(private cwd: string) {}
 
+  async getRepoMetadata(): Promise<{ githubRepoId: string; githubRepoFullName: string }> {
+    const { stdout } = await execFileAsync('gh', ['repo', 'view', '--json', 'id,nameWithOwner'], {
+      cwd: this.cwd,
+    });
+    const parsed = JSON.parse(stdout) as { id?: string; nameWithOwner?: string };
+    const githubRepoId = parsed.id?.trim();
+    const githubRepoFullName = parsed.nameWithOwner?.trim();
+    if (!githubRepoId || !githubRepoFullName) {
+      throw new Error('Failed to resolve repository id/name via gh repo view');
+    }
+    return { githubRepoId, githubRepoFullName };
+  }
+
   private async getRepoCoordinates(): Promise<{ owner: string; repo: string }> {
     const { stdout } = await execFileAsync('gh', ['repo', 'view', '--json', 'owner,name'], {
       cwd: this.cwd,

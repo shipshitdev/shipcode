@@ -7,7 +7,7 @@ import { buildSkillRow } from './helpers';
 import type { IpcHandlerDeps } from './types';
 
 function getWritingPrdsPaths(projectPath: string) {
-  const skillDir = path.join(projectPath, '.agents', 'skills', 'writing-prds');
+  const skillDir = path.join(projectPath, 'skills', 'writing-prds');
   const skillPath = path.join(skillDir, 'SKILL.md');
   const exists = fs.existsSync(skillPath);
 

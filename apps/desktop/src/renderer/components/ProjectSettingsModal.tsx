@@ -1,8 +1,10 @@
 import {
   type AppSettings,
+  buildProjectModelPresetOverrides,
   type ContextFileInfo,
   clampError,
   type IntegrationStatus,
+  type ModelConfigPresetKey,
   type OpenRouterModelValidation,
   type Project,
   type ProjectSetupDraft,
@@ -73,6 +75,8 @@ export function ProjectSettingsModal() {
   } | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [relinkError, setRelinkError] = useState<string | null>(null);
+  const [issueOverrideResetResult, setIssueOverrideResetResult] = useState<string | null>(null);
+  const [issueOverrideResetError, setIssueOverrideResetError] = useState<string | null>(null);
   const [modelValidation, setModelValidation] = useState<
     Partial<Record<PhaseKey, OpenRouterModelValidation | null>>
   >({});
@@ -148,6 +152,7 @@ export function ProjectSettingsModal() {
       reviewerReasoningEffortOverride: project?.reviewerReasoningEffortOverride ?? null,
       executorReasoningEffortOverride: project?.executorReasoningEffortOverride ?? null,
       verifierReasoningEffortOverride: project?.verifierReasoningEffortOverride ?? null,
+      revisionCountOverride: project?.revisionCountOverride ?? null,
       discordRouting: project?.discordRouting ?? 'inherit',
       discordWebhookUrlOverride: project?.discordWebhookUrlOverride ?? null,
       telegramRouting: project?.telegramRouting ?? 'inherit',
@@ -163,6 +168,8 @@ export function ProjectSettingsModal() {
     setContextGeneratorCli('claude');
     setContextError(null);
     setRelinkError(null);
+    setIssueOverrideResetResult(null);
+    setIssueOverrideResetError(null);
     setModelValidation({});
   }, [
     projectSettingsModalOpen,
@@ -177,6 +184,7 @@ export function ProjectSettingsModal() {
     project?.plannerModelIdOverride,
     project?.plannerModelOverride,
     project?.plannerReasoningEffortOverride,
+    project?.revisionCountOverride,
     project?.reviewerModelIdOverride,
     project?.reviewerModelOverride,
     project?.reviewerReasoningEffortOverride,
@@ -342,6 +350,34 @@ export function ProjectSettingsModal() {
     },
   });
 
+  const resetIssueOverridesMutation = useMutation({
+    mutationFn: async () => {
+      if (!projectSettingsModalProjectId) throw new Error('No project selected');
+      return window.shipcode.invoke<{ clearedCount: number }>(
+        'github:clear-all-phase-overrides-for-project',
+        {
+          projectId: projectSettingsModalProjectId,
+        },
+      );
+    },
+    onSuccess: ({ clearedCount }) => {
+      setIssueOverrideResetError(null);
+      setIssueOverrideResetResult(
+        clearedCount === 0
+          ? 'No issue overrides were set.'
+          : clearedCount === 1
+            ? 'Reset issue overrides on 1 issue.'
+            : `Reset issue overrides on ${clearedCount} issues.`,
+      );
+      queryClient.invalidateQueries({ queryKey: ['github-issues', projectSettingsModalProjectId] });
+    },
+    onError: (err: unknown) => {
+      log.error('[ProjectSettingsModal] issue override reset failed', err);
+      setIssueOverrideResetResult(null);
+      setIssueOverrideResetError(clampError(err));
+    },
+  });
+
   const { data: contextFiles, refetch: refetchContext } = useQuery<ContextFileInfo[]>({
     queryKey: ['context-files', projectSettingsModalProjectId],
     queryFn: () => {
@@ -384,6 +420,25 @@ export function ProjectSettingsModal() {
     } catch {
       // Errors already handled by individual mutation onError callbacks
     }
+  };
+
+  const handleApplyModelPreset = (preset: ModelConfigPresetKey) => {
+    setOverrides((current) => ({
+      ...current,
+      ...buildProjectModelPresetOverrides(preset),
+    }));
+    setIssueOverrideResetResult(null);
+    setIssueOverrideResetError(null);
+    setModelValidation({});
+  };
+
+  const handleResetIssueOverrides = () => {
+    if (!projectSettingsModalProjectId) return;
+    const confirmed = window.confirm(
+      'Reset all per-issue model and reasoning overrides for this project? Issues will inherit project/global settings again.',
+    );
+    if (!confirmed) return;
+    resetIssueOverridesMutation.mutate();
   };
 
   const handleSync = () => {
@@ -550,6 +605,11 @@ export function ProjectSettingsModal() {
                 integrationStatus={integrationStatus}
                 modelValidation={modelValidation}
                 setModelValidation={setModelValidation}
+                onApplyPreset={handleApplyModelPreset}
+                onResetIssueOverrides={handleResetIssueOverrides}
+                issueOverrideResetPending={resetIssueOverridesMutation.isPending}
+                issueOverrideResetResult={issueOverrideResetResult}
+                issueOverrideResetError={issueOverrideResetError}
               />
             </TabsContent>
 

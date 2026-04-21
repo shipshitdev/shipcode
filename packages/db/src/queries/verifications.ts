@@ -1,5 +1,11 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { toIsoUtc, type VerificationRecord, type VerificationResult } from '@shipcode/shared';
+import {
+  clampTextBlock,
+  MAX_PIPELINE_RAW_OUTPUT_CHARS,
+  toIsoUtc,
+  type VerificationRecord,
+  type VerificationResult,
+} from '@shipcode/shared';
 import { nanoid } from 'nanoid';
 import { asRow, asRows } from '../utils';
 
@@ -40,6 +46,7 @@ export class VerificationQueries {
     const id = nanoid();
     const result = structured?.result ?? 'failed';
     const retryCount = structured ? 0 : 0;
+    const compactRawOutput = clampTextBlock(rawOutput, MAX_PIPELINE_RAW_OUTPUT_CHARS);
     this.db
       .prepare(
         'INSERT INTO verifications (id, thread_id, plan_id, raw_output, structured, result, retry_count) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -48,7 +55,7 @@ export class VerificationQueries {
         id,
         threadId,
         planId,
-        rawOutput,
+        compactRawOutput,
         structured ? JSON.stringify(structured) : null,
         result,
         retryCount,

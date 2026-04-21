@@ -1,5 +1,12 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { type PlanRecord, type PlanStatus, type ShipCodePlan, toIsoUtc } from '@shipcode/shared';
+import {
+  clampTextBlock,
+  MAX_PIPELINE_RAW_OUTPUT_CHARS,
+  type PlanRecord,
+  type PlanStatus,
+  type ShipCodePlan,
+  toIsoUtc,
+} from '@shipcode/shared';
 import { nanoid } from 'nanoid';
 import { asRow, asRows } from '../utils';
 
@@ -38,7 +45,7 @@ export class PlanQueries {
              p.thread_id,
              p.version,
              '' AS raw_output,
-             p.structured,
+             NULL AS structured,
              p.status,
              p.created_at
            FROM plans p
@@ -103,7 +110,14 @@ export class PlanQueries {
         `INSERT INTO plans (id, thread_id, version, raw_output, structured, created_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
       )
-      .run(id, threadId, version, rawOutput, structuredJson, now);
+      .run(
+        id,
+        threadId,
+        version,
+        clampTextBlock(rawOutput, MAX_PIPELINE_RAW_OUTPUT_CHARS),
+        structuredJson,
+        now,
+      );
 
     const plan = this.getById(id);
     if (!plan) {

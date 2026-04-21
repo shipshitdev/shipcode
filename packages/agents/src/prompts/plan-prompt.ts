@@ -1,5 +1,5 @@
-import type { ShipCodePlan } from '@shipcode/shared';
-import { PLAN_FENCE_TAG } from '@shipcode/shared';
+import type { ClarificationAnswer, ClarificationRequest, ShipCodePlan } from '@shipcode/shared';
+import { CLARIFICATION_FENCE_TAG, PLAN_FENCE_TAG } from '@shipcode/shared';
 import {
   interpolateSkill,
   type PhaseSkillKey,
@@ -27,6 +27,44 @@ const PLAN_SCHEMA_DESCRIPTION = `{
 
 const PLAN_OUTPUT_SCHEMA = `\`\`\`${PLAN_FENCE_TAG}\n${PLAN_SCHEMA_DESCRIPTION}\n\`\`\``;
 
+const CLARIFICATION_SCHEMA_DESCRIPTION = `{
+  "id": "clarify-<timestamp>-<shortid>",
+  "threadId": "<thread-id>",
+  "phase": "plan|revision",
+  "summary": "Why the missing information blocks a safe plan",
+  "questions": [
+    {
+      "id": "question-1",
+      "title": "Short heading",
+      "prompt": "The concrete thing the user needs to choose or clarify",
+      "description": "Optional extra context for the question",
+      "choices": [
+        {
+          "id": "option-a",
+          "label": "Short option label",
+          "description": "What happens if this option is chosen",
+          "recommended": true
+        },
+        {
+          "id": "option-b",
+          "label": "Alternative label",
+          "description": "Tradeoff or effect of the alternative"
+        }
+      ],
+      "allowFreeform": true,
+      "freeformPlaceholder": "Optional extra constraint or note"
+    }
+  ]
+}`;
+
+const CLARIFICATION_OUTPUT_SCHEMA = `\`\`\`${CLARIFICATION_FENCE_TAG}\n${CLARIFICATION_SCHEMA_DESCRIPTION}\n\`\`\``;
+
+const PLAN_OR_CLARIFICATION_SCHEMA = `${PLAN_OUTPUT_SCHEMA}
+
+OR, if critical information is missing and you cannot produce a safe plan yet:
+
+${CLARIFICATION_OUTPUT_SCHEMA}`;
+
 /**
  * Appended to the end of every plan prompt to reinforce fence format.
  * Models (especially GPT-5.x via Codex) sometimes ignore mid-prompt format
@@ -35,10 +73,13 @@ const PLAN_OUTPUT_SCHEMA = `\`\`\`${PLAN_FENCE_TAG}\n${PLAN_SCHEMA_DESCRIPTION}\
 const FORMAT_REINFORCEMENT = `
 
 <!-- FORMAT REMINDER — this takes priority over any conflicting instruction above -->
-Your response MUST contain exactly one code fence tagged \`${PLAN_FENCE_TAG}\`.
-Do NOT use \`\`\`json or \`\`\`typescript — use exactly: \`\`\`${PLAN_FENCE_TAG}
-The JSON inside the fence must validate against the ShipCodePlan schema shown above.
-Any response without a valid \`\`\`${PLAN_FENCE_TAG} fence will be rejected and retried.`;
+Return exactly one fenced JSON block and nothing else.
+If you can plan safely, use exactly \`\`\`${PLAN_FENCE_TAG}.
+If you need user clarification first, use exactly \`\`\`${CLARIFICATION_FENCE_TAG}.
+Do NOT use \`\`\`json or \`\`\`typescript.
+Never output both fence types in one response.
+The JSON inside the fence must validate against the matching schema shown above.
+Any response without a valid \`\`\`${PLAN_FENCE_TAG} or \`\`\`${CLARIFICATION_FENCE_TAG} fence will be rejected and retried.`;
 
 /**
  * Build a context block from a previous failed plan attempt, telling the model
@@ -81,6 +122,7 @@ export interface PlanPromptDeps {
 
 export interface PlanPromptOptions {
   contextFiles?: string;
+  clarificationContext?: string;
 }
 
 export function buildPlanPrompt(
@@ -99,12 +141,15 @@ export function buildPlanPrompt(
     { key: 'USER_PROMPT', value: userPrompt },
     { key: 'THREAD_ID', value: threadId },
     { key: 'CONTEXT_FILES', value: opts.contextFiles ?? 'No extra files provided.' },
-    { key: 'OUTPUT_SCHEMA', value: PLAN_OUTPUT_SCHEMA },
+    { key: 'OUTPUT_SCHEMA', value: PLAN_OR_CLARIFICATION_SCHEMA },
   ]);
   const note = testCommand
     ? `\n\n<!-- auto-injected: test command configured -->\nNote: This project runs \`${testCommand}\` after execution. The plan MUST include an acceptance criterion: "Test suite passes (\`${testCommand}\`)."`
     : '';
-  return base + note + FORMAT_REINFORCEMENT;
+  const clarificationContext = opts.clarificationContext
+    ? `\n\n<clarification_context>\n${opts.clarificationContext}\n</clarification_context>`
+    : '';
+  return base + note + clarificationContext + FORMAT_REINFORCEMENT;
 }
 
 export function buildRevisionPrompt(
@@ -124,10 +169,41 @@ export function buildRevisionPrompt(
     { key: 'REVIEW_FEEDBACK', value: reviewFeedback },
     { key: 'THREAD_ID', value: threadId },
     { key: 'NEW_VERSION', value: String(originalPlan.version + 1) },
-    { key: 'OUTPUT_SCHEMA', value: PLAN_OUTPUT_SCHEMA },
+    { key: 'OUTPUT_SCHEMA', value: PLAN_OR_CLARIFICATION_SCHEMA },
   ]);
   const note = testCommand
     ? `\n\n<!-- auto-injected: test command configured -->\nNote: This project runs \`${testCommand}\` after execution. The plan MUST include an acceptance criterion: "Test suite passes (\`${testCommand}\`)."`
     : '';
   return base + note + FORMAT_REINFORCEMENT;
+}
+
+export function formatClarificationContext(
+  request: ClarificationRequest | null,
+  answers: ClarificationAnswer[],
+): string | null {
+  if (!request || answers.length === 0) return null;
+
+  const answerByQuestionId = new Map(answers.map((answer) => [answer.questionId, answer]));
+  const lines = [
+    `Clarification request: ${request.summary}`,
+    'Use the answers below as hard requirements while planning.',
+  ];
+
+  for (const question of request.questions) {
+    const answer = answerByQuestionId.get(question.id);
+    if (!answer) continue;
+
+    const selectedChoice =
+      question.choices.find((choice) => choice.id === answer.selectedChoiceId) ?? null;
+    lines.push('', `${question.title}: ${question.prompt}`);
+    if (selectedChoice) {
+      lines.push(`Selected option: ${selectedChoice.label}`);
+      lines.push(`Option detail: ${selectedChoice.description}`);
+    }
+    if (answer.freeformText?.trim()) {
+      lines.push(`Extra note: ${answer.freeformText.trim()}`);
+    }
+  }
+
+  return lines.join('\n');
 }

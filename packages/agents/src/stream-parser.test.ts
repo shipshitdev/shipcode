@@ -32,6 +32,27 @@ const VALID_VERIFICATION = {
   issues: [],
 };
 
+const VALID_CLARIFICATION = {
+  id: 'clarify-1',
+  threadId: 'thread-1',
+  phase: 'plan',
+  summary: 'Need one product decision before planning.',
+  questions: [
+    {
+      id: 'scope',
+      title: 'Which scope?',
+      prompt: 'Pick the preferred implementation scope.',
+      description: null,
+      choices: [
+        { id: 'narrow', label: 'Narrow', description: 'Ship the smallest useful version.' },
+        { id: 'wide', label: 'Wide', description: 'Include adjacent cleanup work too.' },
+      ],
+      allowFreeform: false,
+      freeformPlaceholder: null,
+    },
+  ],
+};
+
 function fenced(tag: string, json: unknown): string {
   return `\`\`\`${tag}\n${JSON.stringify(json, null, 2)}\n\`\`\``;
 }
@@ -176,6 +197,38 @@ describe('StreamParser', () => {
       const result = parser.extractPlan();
       expect(result.success).toBe(true);
     });
+
+    it('prefers the last valid fence when earlier matching fences are invalid', () => {
+      parser.feed(
+        [
+          'Context mentioning the tag first',
+          '```shipcode-plan',
+          '{ not valid json }',
+          '```',
+          fenced('shipcode-plan', VALID_PLAN),
+        ].join('\n'),
+      );
+      const result = parser.extractPlan();
+      expect(result.success).toBe(true);
+      expect(result.data?.objective).toBe('Test objective');
+    });
+
+    it('stores a compact normalized artifact instead of the whole transcript on success', () => {
+      parser.feed(['noise before', fenced('shipcode-plan', VALID_PLAN), 'noise after'].join('\n'));
+      const result = parser.extractPlan();
+      expect(result.success).toBe(true);
+      expect(result.raw).toContain('```shipcode-plan');
+      expect(result.raw).not.toContain('noise before');
+      expect(result.raw).not.toContain('noise after');
+    });
+
+    it('clamps oversized parse failures to a bounded snippet', () => {
+      parser.feed(`${'x'.repeat(20_000)}\nno fence here`);
+      const result = parser.extractPlan();
+      expect(result.success).toBe(false);
+      expect(result.raw.length).toBeLessThanOrEqual(16_000);
+      expect(result.raw).toContain('no fence here');
+    });
   });
 
   describe('extractReview', () => {
@@ -203,6 +256,23 @@ describe('StreamParser', () => {
       const result = parser.extractReview();
       expect(result.success).toBe(true);
       expect(result.data?.summary).toBe('Looks good');
+    });
+  });
+
+  describe('extractClarificationRequest', () => {
+    it('extracts a valid clarification request from a fenced block', () => {
+      parser.feed(fenced('shipcode-clarification', VALID_CLARIFICATION));
+      const result = parser.extractClarificationRequest();
+      expect(result.success).toBe(true);
+      expect(result.data?.summary).toBe('Need one product decision before planning.');
+      expect(result.data?.questions[0]?.id).toBe('scope');
+    });
+
+    it('returns failure when no clarification block is found', () => {
+      parser.feed('no clarification here');
+      const result = parser.extractClarificationRequest();
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('No shipcode-clarification fenced block found');
     });
   });
 

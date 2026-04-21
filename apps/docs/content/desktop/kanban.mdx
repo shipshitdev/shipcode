@@ -8,7 +8,7 @@ The Kanban board is the main view inside a project. Each column corresponds to a
 |--------|----------------|----------|
 | Todo | — | Unclaimed issues with an `agent:*` label but no active pipeline |
 | Planning | `planning` | Planner is rewriting the issue into a structured plan |
-| Reviewing | `reviewing` / `revising` | Reviewer is critiquing the plan (up to `maxReviewRounds`) |
+| Reviewing | `reviewing` / `revising` | Reviewer is critiquing the plan for the configured revision count |
 | Executing | `executing` | Executor is implementing the plan in an isolated git worktree |
 | Verifying | `verifying` | Verifier is checking the diff against acceptance criteria |
 | Done | `completed` / `done` | `completed`: ShipCode finished and a PR exists. `done`: the issue is explicitly closed/finalized. |
@@ -21,6 +21,8 @@ The board still groups work by phase, but the model choice is now shown on each 
 - Issue Detail can override the executor per issue
 
 Each active card shows a compact chip with the effective model and the effective effort for that card's current phase.
+
+Cards also show the effective revision count for that issue. If a run is already in flight, the badge updates to show current revision progress such as `Rev 1/3`.
 
 ## Drag to launch
 
@@ -41,6 +43,7 @@ Click a card to open the Issue Detail overlay, which shows:
 - Review rounds and reviewer verdicts
 - The diff (once the executor has produced one)
 - Cost + token totals for the thread
+- Effective revision count for the next run, with issue-level override control
 - Effective planner / reviewer / executor / verifier models for the next run
 - Executor override control with an `Inherit` reset back to project/global defaults
 

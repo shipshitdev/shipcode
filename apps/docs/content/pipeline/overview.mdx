@@ -7,7 +7,7 @@ The ShipCode pipeline is a state machine that processes GitHub issues through mu
 | Phase | Default model | Description |
 |-------|---------------|-------------|
 | Plan | Opus 4.6 | Rewrites issue into spec + structured plan |
-| Review | Codex (high reasoning) — set during onboarding | Adversarial critique, max 2 rounds |
+| Review | Codex (high reasoning) — set during onboarding | Adversarial critique during configured revision rounds |
 | Execute | Routed per `agent:*` label (claude / codex / openrouter) — configurable in Settings | Implements in isolated git worktree |
 | Verify | Opus 4.6 — set during onboarding | Checks diff against acceptance criteria |
 | Ship | gh CLI | Push branch, create PR, link to issue |
@@ -21,8 +21,8 @@ Todo → Planning → Reviewing ⇄ Revising → (Awaiting Approval) → Executi
                                                                                                  ↘ Failed
 ```
 
-- **Awaiting Approval** is skipped unless `requireApproval` is enabled in Settings. When enabled, the pipeline pauses after review and waits for a human to click "Approve" before executing.
-- **Revising** loops back to **Reviewing** up to `maxReviewRounds` times (default 2, configurable 1–5).
+- **Awaiting Approval** is skipped unless `requireApproval` is enabled in Settings. When enabled, the pipeline pauses after planning / revisions and waits for a human to click "Approve" before executing.
+- **Revising** loops back to **Reviewing** up to the configured revision count. New installs default to `0`, which skips plan review for the fastest first run.
 - **Shipping** runs after **Verifying** and uses `gh` CLI to push the branch, open the PR, and link it back to the issue.
 - Any phase can transition to **Failed** on error.
 

@@ -63,8 +63,14 @@ export const COLUMNS: BoardColumn[] = [
   {
     key: 'human',
     label: 'Human',
-    statuses: ['awaiting_approval', 'failed'],
+    statuses: ['clarifying', 'awaiting_approval', 'failed'],
     sections: [
+      {
+        key: 'clarifying',
+        label: 'Clarifying',
+        statuses: ['clarifying'],
+        droppable: false,
+      },
       {
         key: 'awaiting',
         label: 'Awaiting Approval',
@@ -128,6 +134,7 @@ export const ACTIVE_STATUSES: IssuePipelineStatus[] = [
 
 export const PHASE_ELAPSED_STATUSES: IssuePipelineStatus[] = [
   'planning',
+  'clarifying',
   'reviewing',
   'revising',
   'awaiting_approval',

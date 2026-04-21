@@ -19,6 +19,7 @@
  */
 
 import { type AppSettings, normalizeReasoningModelId } from '@shipcode/shared';
+import { StreamParser } from '../stream-parser';
 import { executeViaOpenRouter } from './openrouter-execute';
 import type { OpenRouterChatMessage } from './openrouter-http';
 import { OpenRouterClient, OpenRouterError } from './openrouter-http';
@@ -35,11 +36,11 @@ import type { AgentProvider, ProviderPhase, ProviderRequest, ProviderResponse } 
 // essential structure here. The execute phase has its own system
 // prompt inside openrouter-execute.ts (the tool-call harness).
 const SYSTEM_PROMPTS: Partial<Record<ProviderPhase, string>> = {
-  plan: 'You are a senior software engineer creating implementation plans. Emit a single fenced ```shipcode-plan JSON block containing the plan. Do not include any other fenced blocks.',
+  plan: 'You are a senior software engineer creating implementation plans. Emit either a single fenced ```shipcode-plan JSON block containing the plan, or a single fenced ```shipcode-clarification JSON block when user input is required before planning. Do not include any other fenced blocks.',
   review:
     'You are a senior software engineer reviewing an implementation plan. Emit a single fenced ```shipcode-review JSON block containing your review. Do not include any other fenced blocks.',
   revision:
-    'You are a senior software engineer revising an implementation plan based on review feedback. Emit a single fenced ```shipcode-plan JSON block containing the revised plan. Do not include any other fenced blocks.',
+    'You are a senior software engineer revising an implementation plan based on review feedback. Emit either a single fenced ```shipcode-plan JSON block containing the revised plan, or a single fenced ```shipcode-clarification JSON block when user input is required before revising safely. Do not include any other fenced blocks.',
   verify:
     'You are a senior software engineer verifying that an implementation matches its plan. Emit a single fenced ```shipcode-verification JSON block containing the verification result. Do not include any other fenced blocks.',
 };
@@ -129,6 +130,14 @@ export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentPro
           tokensUsed: result.usage
             ? { prompt: result.usage.prompt_tokens, completion: result.usage.completion_tokens }
             : undefined,
+          ...(() => {
+            const parser = new StreamParser();
+            parser.feed(result.content);
+            const clarification = parser.extractClarificationRequest();
+            return clarification.success && clarification.data
+              ? { clarificationRequest: clarification.data }
+              : {};
+          })(),
         };
       } catch (err) {
         if (err instanceof OpenRouterError) {

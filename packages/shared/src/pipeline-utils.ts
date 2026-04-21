@@ -11,6 +11,7 @@ export function phaseToProgress(phase: PipelinePhase | IssuePipelineStatus): num
     todo: 0,
     queued: 2,
     planning: 12,
+    clarifying: 20,
     reviewing: 28,
     revising: 38,
     awaiting_approval: 48,

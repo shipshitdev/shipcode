@@ -7,6 +7,7 @@ import {
   checkIntegrationStatus,
   checkSystemHealthWithAuth,
   detectProjectSetup,
+  GhCli,
   inspectProjectSetup,
   validateOpenRouterModel,
   writeProjectSetup,
@@ -15,14 +16,15 @@ import { GitService, WorktreeManager } from '@shipcode/git';
 import type {
   AppSettings,
   DesktopAppHealthMap,
+  OnboardingRepo,
   ProjectOpenTarget,
   ShipCodePlan,
 } from '@shipcode/shared';
-import { clampError, validateGithubProjectUrl } from '@shipcode/shared';
+import { clampError, parseGithubRemote, validateGithubProjectUrl } from '@shipcode/shared';
 import { dialog, shell } from 'electron';
 import log from '../logger.service';
 import { isSafeExternalUrl } from '../security';
-import { enrichProjectPath, enrichProjectPaths } from './helpers';
+import { enrichProjectPath, enrichProjectPaths, sendGithubIssuesUpdated } from './helpers';
 import type { IpcHandlerDeps } from './types';
 
 const execAsync = promisify(exec);
@@ -41,6 +43,107 @@ const PROJECT_OPEN_APP_NAMES: Record<ProjectOpenTarget, string> = {
   ghostty: 'Ghostty',
   vscode: 'Visual Studio Code',
 };
+
+const STARTER_ISSUE_TITLE = 'Ship your first change with ShipCode';
+
+function buildStarterIssueBody(repoFullName: string): string {
+  return [
+    `## Objective`,
+    `Run ShipCode end-to-end on \`${repoFullName}\` with one tiny, safe change.`,
+    '',
+    `## Task`,
+    `Choose one low-risk improvement in this repository and ship it through the full loop: plan, execute, verify, and open a PR.`,
+    '',
+    `Good starter scopes:`,
+    `- add or improve a tooltip, empty state, or button label`,
+    `- fix a typo or tighten a README / docs section`,
+    `- add a tiny guardrail or validation for an obvious edge case`,
+    '',
+    `## Acceptance Criteria`,
+    `- keep the change intentionally small`,
+    `- avoid architecture work, dependency upgrades, or broad refactors`,
+    `- preserve existing behavior except for the targeted improvement`,
+    `- pass the repo's existing verify/test/typecheck flow`,
+    `- open a PR with a concise explanation of the change`,
+    '',
+    `## Constraints`,
+    `- prefer the smallest diff that still demonstrates the ShipCode workflow`,
+    `- if there is any uncertainty, bias toward docs or UI copy over code-heavy work`,
+  ].join('\n');
+}
+
+async function resolveGithubRepoIdentity(
+  projectPath: string,
+  gitRemote: string | null,
+  repoArg?: Pick<OnboardingRepo, 'id' | 'name'> | null,
+): Promise<{ githubRepoId: string; githubRepoFullName: string } | null> {
+  if (repoArg?.id && repoArg?.name) {
+    return { githubRepoId: repoArg.id, githubRepoFullName: repoArg.name };
+  }
+  if (!parseGithubRemote(gitRemote)) return null;
+  try {
+    const ghCli = new GhCli(projectPath);
+    return await ghCli.getRepoMetadata();
+  } catch (error) {
+    log.warn('[project:add] failed to resolve GitHub repo metadata:', error);
+    return null;
+  }
+}
+
+async function ensureStarterIssue({
+  mainWindow,
+  queries,
+  projectId,
+}: {
+  mainWindow: import('electron').BrowserWindow;
+  queries: IpcHandlerDeps['queries'];
+  projectId: string;
+}): Promise<void> {
+  const project = queries.projects.getById(projectId);
+  if (!project?.githubRepoFullName || project.starterIssueCreatedAt) return;
+
+  const existingProject = queries.projects.getByGithubRepoIdentity(
+    project.githubRepoId,
+    project.githubRepoFullName,
+  );
+  if (
+    existingProject &&
+    existingProject.id !== projectId &&
+    existingProject.starterIssueCreatedAt
+  ) {
+    queries.projects.markStarterIssueSeeded(projectId, {
+      starterIssueNumber: existingProject.starterIssueNumber,
+      starterIssueCreatedAt: existingProject.starterIssueCreatedAt,
+    });
+    return;
+  }
+
+  try {
+    const ghCli = new GhCli(project.path);
+    const issue = await ghCli.createIssue({
+      title: STARTER_ISSUE_TITLE,
+      body: buildStarterIssueBody(project.githubRepoFullName),
+      labels: [],
+    });
+
+    queries.githubIssues.upsert({
+      projectId: project.id,
+      issueNumber: issue.number,
+      title: issue.title,
+      body: issue.body,
+      labels: issue.labels,
+      assignee: issue.assignee,
+      state: issue.state,
+    });
+    queries.projects.markStarterIssueSeeded(project.id, {
+      starterIssueNumber: issue.number,
+      starterIssueCreatedAt: new Date().toISOString(),
+    });
+    sendGithubIssuesUpdated(mainWindow, queries, project.id);
+  } catch (error) {
+    log.warn('[project:add] failed to seed starter issue:', error);
+  }
+}
 
 function resolveProjectOpenTarget(
   settings: AppSettings,
@@ -101,19 +204,41 @@ export function registerProjectHandlers({
     return enrichProjectPaths(queries.projects.listArchived());
   });
 
-  ipcMain.handle('project:add', async (_event, { path: projectPath }: { path: string }) => {
-    const project = queries.projects.add(projectPath);
+  ipcMain.handle(
+    'project:add',
+    async (
+      _event,
+      {
+        path: projectPath,
+        repo,
+      }: {
+        path: string;
+        repo?: Pick<OnboardingRepo, 'id' | 'name'> | null;
+      },
+    ) => {
+      const project = queries.projects.add(projectPath, {
+        githubRepoId: repo?.id ?? null,
+        githubRepoFullName: repo?.name ?? null,
+      });
 
-    try {
-      const git = new GitService(projectPath);
-      const remote = await git.getRemoteUrl();
-      const branch = await git.getDefaultBranch();
-      queries.projects.updateGitInfo(project.id, remote, branch);
-      return enrichProjectPath({ ...project, gitRemote: remote, defaultBranch: branch });
-    } catch {
-      return enrichProjectPath(project);
-    }
-  });
+      try {
+        const git = new GitService(projectPath);
+        const remote = await git.getRemoteUrl();
+        const branch = await git.getDefaultBranch();
+        queries.projects.updateGitInfo(project.id, remote, branch);
+
+        const repoIdentity = await resolveGithubRepoIdentity(projectPath, remote, repo);
+        if (repoIdentity) {
+          queries.projects.updateGithubRepoIdentity(project.id, repoIdentity);
+          await ensureStarterIssue({ mainWindow, queries, projectId: project.id });
+        }
+
+        return enrichProjectPath(queries.projects.getById(project.id));
+      } catch {
+        return enrichProjectPath(queries.projects.getById(project.id));
+      }
+    },
+  );
 
   ipcMain.handle(
     'project:detect-setup',
@@ -580,6 +705,7 @@ export function registerProjectHandlers({
           reviewerReasoningEffortOverride: import('@shipcode/shared').Project['reviewerReasoningEffortOverride'];
           executorReasoningEffortOverride: import('@shipcode/shared').Project['executorReasoningEffortOverride'];
           verifierReasoningEffortOverride: import('@shipcode/shared').Project['verifierReasoningEffortOverride'];
+          revisionCountOverride: import('@shipcode/shared').Project['revisionCountOverride'];
         };
       },
     ) => {

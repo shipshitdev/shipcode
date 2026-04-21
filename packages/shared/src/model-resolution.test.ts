@@ -12,6 +12,8 @@ import {
   resolvePhaseModelIdForIssue,
   resolvePhaseReasoningEffort,
   resolvePhaseReasoningEffortForIssue,
+  resolveRevisionCount,
+  resolveRevisionCountForIssue,
   resolveThreadPhasePresentation,
 } from './model-resolution';
 import type { AppSettings, GitHubIssueCacheRecord, Project, Thread } from './types';
@@ -22,6 +24,10 @@ function makeProject(overrides: Partial<Project> = {}): Project {
     name: 'shipcode',
     path: '/tmp/shipcode',
     gitRemote: 'git@github.com:shipshitdev/shipcode.git',
+    githubRepoId: null,
+    githubRepoFullName: null,
+    starterIssueNumber: null,
+    starterIssueCreatedAt: null,
     githubProjectUrl: null,
     plannerModelOverride: null,
     reviewerModelOverride: null,
@@ -35,6 +41,7 @@ function makeProject(overrides: Partial<Project> = {}): Project {
     reviewerReasoningEffortOverride: null,
     executorReasoningEffortOverride: null,
     verifierReasoningEffortOverride: null,
+    revisionCountOverride: null,
     discordRouting: 'inherit',
     discordWebhookUrlOverride: null,
     telegramRouting: 'inherit',
@@ -78,6 +85,7 @@ function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
     reviewerReasoningEffortOverride: null,
     executorReasoningEffortOverride: null,
     verifierReasoningEffortOverride: null,
+    revisionCountOverride: null,
     linkedPrNumber: null,
     linkedPrUrl: null,
     linkedPrIsDraft: false,
@@ -106,6 +114,9 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     verifierModel: 'claude',
     executorModel: 'claude',
     reviewRound: 0,
+    clarificationRound: 0,
+    clarificationRequest: null,
+    clarificationAnswers: [],
     verificationStatus: null,
     verificationRetries: 0,
     autonomous: false,
@@ -202,9 +213,42 @@ describe('model-resolution', () => {
     );
   });
 
+  it('resolves revision count through app and project inheritance', () => {
+    expect(resolveRevisionCount(settings, makeProject())).toBe(0);
+    expect(resolveRevisionCount({ ...settings, revisionCount: 2 }, makeProject())).toBe(2);
+    expect(
+      resolveRevisionCount(
+        { ...settings, revisionCount: 1 },
+        makeProject({ revisionCountOverride: 4 }),
+      ),
+    ).toBe(4);
+  });
+
+  it('lets issue revision overrides shadow project and app defaults', () => {
+    const settingsWithRevisions: AppSettings = { ...settings, revisionCount: 1 };
+    const project = makeProject({ revisionCountOverride: 3 });
+
+    expect(resolveRevisionCountForIssue(settingsWithRevisions, project, makeIssue())).toBe(3);
+    expect(
+      resolveRevisionCountForIssue(
+        settingsWithRevisions,
+        project,
+        makeIssue({ revisionCountOverride: 5 }),
+      ),
+    ).toBe(5);
+    expect(
+      resolveRevisionCountForIssue(
+        { ...settingsWithRevisions, revisionCount: 0 },
+        makeProject({ revisionCountOverride: null }),
+        makeIssue({ revisionCountOverride: 2 }),
+      ),
+    ).toBe(2);
+  });
+
   it('maps issue statuses to the current card phase', () => {
     expect(getIssueCardPhase('todo')).toBe('planner');
     expect(getIssueCardPhase('planning')).toBe('planner');
+    expect(getIssueCardPhase('clarifying')).toBe('planner');
     expect(getIssueCardPhase('reviewing')).toBe('reviewer');
     expect(getIssueCardPhase('awaiting_approval')).toBe('planner');
     expect(getIssueCardPhase('executing')).toBe('executor');
@@ -217,6 +261,7 @@ describe('model-resolution', () => {
 
   it('maps pipeline phases to the current card phase', () => {
     expect(getPipelineCardPhase('planning')).toBe('planner');
+    expect(getPipelineCardPhase('clarifying')).toBe('planner');
     expect(getPipelineCardPhase('revising')).toBe('planner');
     expect(getPipelineCardPhase('awaiting_approval')).toBe('planner');
     expect(getPipelineCardPhase('reviewing')).toBe('reviewer');

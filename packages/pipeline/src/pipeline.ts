@@ -84,6 +84,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       baseBranch,
       forkPointSha,
     });
+    deps.threads.clearClarification(threadId);
 
     contextHelpers.ensureContext(threadId, {
       projectPath,
@@ -91,6 +92,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       retryCount: 0,
       autonomous: true,
       reviewRound: 0,
+      clarificationRound: 0,
+      clarificationRequest: null,
+      clarificationAnswers: [],
       verificationRetries: 0,
       githubIssueNumber: issue.number,
       githubIssueTitle: issue.title,

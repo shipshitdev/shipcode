@@ -68,6 +68,10 @@ export interface Project {
   setupPath?: string;
   setupError?: string | null;
   gitRemote: string | null;
+  githubRepoId: string | null;
+  githubRepoFullName: string | null;
+  starterIssueNumber: number | null;
+  starterIssueCreatedAt: string | null;
   /**
    * Optional override for the Kanban `board` quick-link. GitHub Projects v2
    * live under a user/org (`/users/<name>/projects/<n>` or `/orgs/<name>/projects/<n>`)
@@ -88,6 +92,7 @@ export interface Project {
   reviewerReasoningEffortOverride: ReasoningEffort | null;
   executorReasoningEffortOverride: ReasoningEffort | null;
   verifierReasoningEffortOverride: ReasoningEffort | null;
+  revisionCountOverride: RevisionCount | null;
   discordRouting: ProjectNotificationRoutingMode;
   discordWebhookUrlOverride: string | null;
   telegramRouting: ProjectNotificationRoutingMode;
@@ -106,6 +111,7 @@ export interface Project {
 export type PipelinePhase =
   | 'idle'
   | 'planning'
+  | 'clarifying'
   | 'reviewing'
   | 'revising'
   | 'awaiting_approval'
@@ -134,6 +140,9 @@ export interface Thread {
   verifierModel: string;
   executorModel: string;
   reviewRound: number;
+  clarificationRound: number;
+  clarificationRequest: ClarificationRequest | null;
+  clarificationAnswers: ClarificationAnswer[];
   verificationStatus: string | null;
   verificationRetries: number;
   autonomous: boolean;
@@ -162,6 +171,37 @@ export interface Thread {
 
 // === Terminal Types ===
 
+export interface ClarificationChoice {
+  id: string;
+  label: string;
+  description: string;
+  recommended?: boolean;
+}
+
+export interface ClarificationQuestion {
+  id: string;
+  title: string;
+  prompt: string;
+  description: string | null;
+  choices: ClarificationChoice[];
+  allowFreeform: boolean;
+  freeformPlaceholder: string | null;
+}
+
+export interface ClarificationRequest {
+  id: string;
+  threadId: string;
+  phase: 'plan' | 'revision';
+  summary: string;
+  questions: ClarificationQuestion[];
+}
+
+export interface ClarificationAnswer {
+  questionId: string;
+  selectedChoiceId: string | null;
+  freeformText: string | null;
+}
+
 export type CanonicalTerminalEvent =
   | { kind: 'text'; content: string }
   | { kind: 'thinking'; content: string }
@@ -178,6 +218,15 @@ export type CanonicalTerminalEvent =
   | { kind: 'raw'; content: string }
   | { kind: 'error'; message: string }
   | { kind: 'action'; label: string; action: 'open-issue-detail' }
+  | {
+      kind: 'clarification_requested';
+      summary: string;
+      questionCount: number;
+    }
+  | {
+      kind: 'clarification_answered';
+      questionCount: number;
+    }
   | {
       kind: 'done';
       totalTokens?: { prompt: number; completion: number };
@@ -227,6 +276,7 @@ export type AgentType = 'claude' | 'codex' | 'gh' | 'openrouter';
 export type ExecutorModel = 'claude' | 'codex' | 'openrouter';
 export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
 export type ContextGeneratorCli = 'claude' | 'codex';
+export type RevisionCount = 0 | 1 | 2 | 3 | 4 | 5;
 
 export type AgentState = 'starting' | 'running' | 'idle' | 'errored' | 'exited';
 
@@ -324,11 +374,9 @@ export interface AppSettings {
   // Branch naming format for worktrees. Tokens: {id} = issue number, {slug} = slugified title.
   // Default: 'ship/{id}-{slug}'. Falls back to 'shipcode/{threadId}' for non-issue threads.
   worktreeBranchFormat: string;
-  // Max turns the planner/verifier Claude CLI is allowed per run (--max-turns).
-  // Does not apply to execute (no limit) or review (always 1, structural).
-  plannerMaxTurns: number;
-  // Max review→revise cycles before falling through to execute/awaiting_approval.
-  maxReviewRounds: number;
+  // Default review→revise cycles before falling through to execute/awaiting_approval.
+  // 0 = skip review/revise entirely for the fastest path.
+  revisionCount: RevisionCount;
   // When true, pipeline pauses at awaiting_approval after review loop for human sign-off.
   // When false (default), it proceeds directly to execution.
   requireApproval: boolean;
@@ -431,6 +479,7 @@ export interface ProjectSetupDraft {
 }
 
 export interface OnboardingRepo {
+  id: string;
   name: string;
   private: boolean;
 }
@@ -716,6 +765,7 @@ export interface GitHubIssueCacheRecord {
   reviewerReasoningEffortOverride: ReasoningEffort | null;
   executorReasoningEffortOverride: ReasoningEffort | null;
   verifierReasoningEffortOverride: ReasoningEffort | null;
+  revisionCountOverride: RevisionCount | null;
   linkedPrNumber: number | null;
   linkedPrUrl: string | null;
   linkedPrIsDraft: boolean;
@@ -731,6 +781,7 @@ export type IssuePipelineStatus =
   | 'todo'
   | 'queued'
   | 'planning'
+  | 'clarifying'
   | 'reviewing'
   | 'revising'
   | 'awaiting_approval'

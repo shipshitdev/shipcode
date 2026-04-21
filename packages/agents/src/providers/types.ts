@@ -23,7 +23,7 @@
  *   in-process tool-call harness.
  */
 
-import type { AgentType, ReasoningEffort } from '@shipcode/shared';
+import type { AgentType, ClarificationRequest, ReasoningEffort } from '@shipcode/shared';
 import type { TerminalEvent } from '../terminal-events';
 
 export type ProviderPhase = 'plan' | 'review' | 'revision' | 'verify' | 'execute';
@@ -126,6 +126,7 @@ export interface ProviderResponse {
   resolvedModel?: string;
   tokensUsed?: { prompt: number; completion: number };
   costUsd?: number;
+  clarificationRequest?: ClarificationRequest;
 }
 
 export interface AgentProvider {

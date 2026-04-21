@@ -47,6 +47,7 @@ export {
   buildPlanPrompt,
   buildPreviousAttemptContext,
   buildRevisionPrompt,
+  formatClarificationContext,
 } from './prompts/plan-prompt';
 export type {
   ReviewPromptContext,

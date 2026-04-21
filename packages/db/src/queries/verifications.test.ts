@@ -37,6 +37,12 @@ describe('VerificationQueries', () => {
     expect(v.result).toBe('failed');
   });
 
+  it('create() clamps oversized raw output', () => {
+    const v = verifications.create(threadId, planId, `prefix\n${'x'.repeat(20_000)}\nsuffix`, null);
+    expect(v.rawOutput.length).toBeLessThanOrEqual(16_000);
+    expect(v.rawOutput).toContain('suffix');
+  });
+
   it('create() with structured uses its result', () => {
     const structured: VerificationResult = {
       threadId,

@@ -1,5 +1,11 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { ISO_NOW_SQL } from '@shipcode/shared';
+import {
+  ISO_NOW_SQL,
+  MAX_PIPELINE_RAW_OUTPUT_CHARS,
+  PLAN_FENCE_TAG,
+  REVIEW_FENCE_TAG,
+  VERIFICATION_FENCE_TAG,
+} from '@shipcode/shared';
 import { transaction } from './utils';
 
 function execAlterTableIfMissing(db: DatabaseSync, ddl: string): void {
@@ -793,5 +799,119 @@ export function migrateV26(db: DatabaseSync): void {
     );
 
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (26)`);
+  });
+}
+
+export function migrateV27(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 27) return;
+
+  transaction(db, () => {
+    const tailPrefix = '[truncated historical raw_output]\n';
+    const keepChars = MAX_PIPELINE_RAW_OUTPUT_CHARS - tailPrefix.length;
+    const planFencePrefix = `\`\`\`${PLAN_FENCE_TAG}\n`;
+    const reviewFencePrefix = `\`\`\`${REVIEW_FENCE_TAG}\n`;
+    const verificationFencePrefix = `\`\`\`${VERIFICATION_FENCE_TAG}\n`;
+    const fenceSuffix = '\n```';
+
+    db.prepare(
+      `UPDATE plans
+          SET raw_output = ? || structured || ?
+        WHERE structured IS NOT NULL`,
+    ).run(planFencePrefix, fenceSuffix);
+    db.prepare(
+      `UPDATE reviews
+          SET raw_output = ? || structured || ?
+        WHERE structured IS NOT NULL`,
+    ).run(reviewFencePrefix, fenceSuffix);
+    db.prepare(
+      `UPDATE verifications
+          SET raw_output = ? || structured || ?
+        WHERE structured IS NOT NULL`,
+    ).run(verificationFencePrefix, fenceSuffix);
+
+    db.prepare(
+      `UPDATE plans
+          SET raw_output = ? || substr(raw_output, -?)
+        WHERE length(raw_output) > ?`,
+    ).run(tailPrefix, keepChars, MAX_PIPELINE_RAW_OUTPUT_CHARS);
+    db.prepare(
+      `UPDATE reviews
+          SET raw_output = ? || substr(raw_output, -?)
+        WHERE length(raw_output) > ?`,
+    ).run(tailPrefix, keepChars, MAX_PIPELINE_RAW_OUTPUT_CHARS);
+    db.prepare(
+      `UPDATE verifications
+          SET raw_output = ? || substr(raw_output, -?)
+        WHERE length(raw_output) > ?`,
+    ).run(tailPrefix, keepChars, MAX_PIPELINE_RAW_OUTPUT_CHARS);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (27)`);
+  });
+}
+
+export function migrateV28(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 28) return;
+
+  transaction(db, () => {
+    execAlterTablesIfMissing(db, [
+      'ALTER TABLE threads ADD COLUMN clarification_round INTEGER NOT NULL DEFAULT 0',
+      'ALTER TABLE threads ADD COLUMN clarification_request TEXT',
+      "ALTER TABLE threads ADD COLUMN clarification_answers TEXT NOT NULL DEFAULT '[]'",
+    ]);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (28)`);
+  });
+}
+
+export function migrateV29(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 29) return;
+
+  transaction(db, () => {
+    execAlterTablesIfMissing(db, [
+      'ALTER TABLE projects ADD COLUMN github_repo_id TEXT',
+      'ALTER TABLE projects ADD COLUMN github_repo_full_name TEXT',
+      'ALTER TABLE projects ADD COLUMN starter_issue_number INTEGER',
+      'ALTER TABLE projects ADD COLUMN starter_issue_created_at TEXT',
+      'ALTER TABLE projects ADD COLUMN revision_count_override INTEGER',
+      'ALTER TABLE github_issue_cache ADD COLUMN revision_count_override INTEGER',
+    ]);
+
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_projects_github_repo_id ON projects(github_repo_id);
+      CREATE INDEX IF NOT EXISTS idx_projects_github_repo_full_name ON projects(github_repo_full_name);
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (29)`);
+  });
+}
+
+export function migrateV30(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 30) return;
+
+  transaction(db, () => {
+    db.exec(`
+      INSERT INTO settings (key, value)
+      SELECT 'revisionCount', value
+        FROM settings
+       WHERE key = 'maxReviewRounds'
+         AND NOT EXISTS (SELECT 1 FROM settings WHERE key = 'revisionCount');
+
+      DELETE FROM settings
+       WHERE key IN ('maxReviewRounds', 'plannerMaxTurns');
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (30)`);
   });
 }

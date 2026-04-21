@@ -197,6 +197,7 @@ function createSmokeDeps() {
           reviewerReasoningEffortOverride: null,
           executorReasoningEffortOverride: null,
           verifierReasoningEffortOverride: null,
+          revisionCountOverride: null,
           linkedPrNumber: null,
           linkedPrUrl: null,
           linkedPrIsDraft: false,

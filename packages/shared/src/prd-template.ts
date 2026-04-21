@@ -1,6 +1,6 @@
 /**
  * PRD template scaffold used by the CreatePRDModal and referenced by the
- * `writing-prds` skill at `.agents/skills/writing-prds/SKILL.md`.
+ * `writing-prds` skill at `skills/writing-prds/SKILL.md`.
  *
  * The sections and order here are load-bearing: the planner agent translates
  * them directly into `PlanStructured` fields (see the mapping table in the

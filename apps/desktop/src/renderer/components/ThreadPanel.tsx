@@ -8,11 +8,12 @@ import {
   type Thread,
   type ThreadPanelData,
 } from '@shipcode/shared';
-import { Button, KanbanBoard, Modal, ModalFooter, RefreshCw } from '@shipcode/ui';
+import { KanbanBoard, RefreshCw } from '@shipcode/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
 import { useEffect, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
+import { ThreadPanelArchiveDialog } from './ThreadPanelArchiveDialog';
 
 const EMPTY_ISSUES: GitHubIssueCacheRecord[] = [];
 const DONE_PIPELINE_STATUSES: IssuePipelineStatus[] = ['completed', 'done'];
@@ -335,29 +336,13 @@ export function ThreadPanel() {
             });
         }}
       />
-      <Modal
+      <ThreadPanelArchiveDialog
         open={archiveConfirm !== null}
+        issueNumber={archiveConfirm?.type === 'one' ? archiveConfirm.issue.issueNumber : undefined}
+        count={archiveConfirm?.type === 'all' ? archiveConfirm.count : undefined}
         onClose={() => setArchiveConfirm(null)}
-        title={
-          archiveConfirm?.type === 'one'
-            ? `Archive issue #${archiveConfirm.issue.issueNumber}?`
-            : `Archive ${archiveConfirm?.count ?? 0} done issue${(archiveConfirm?.count ?? 0) !== 1 ? 's' : ''}?`
-        }
-        className="max-w-sm"
-      >
-        <div className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-          Warning: this closes the GitHub issue and archives its GitHub Project card. Archived items
-          disappear from the Done column.
-        </div>
-        <ModalFooter>
-          <Button variant="ghost" size="sm" onClick={() => setArchiveConfirm(null)}>
-            Cancel
-          </Button>
-          <Button variant="destructive" size="sm" onClick={handleArchiveConfirm}>
-            Archive
-          </Button>
-        </ModalFooter>
-      </Modal>
+        onConfirm={handleArchiveConfirm}
+      />
       {archiveFeedback && (
         <div className="absolute bottom-4 left-1/2 z-50 -translate-x-1/2 animate-in fade-in slide-in-from-bottom-2 duration-200">
           <div

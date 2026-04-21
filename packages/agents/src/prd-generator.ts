@@ -15,7 +15,7 @@ export interface GeneratedPrd {
 export interface EnhancePrdOptions {
   /** Current draft PRD body (may be empty, the bare template, or a real draft). */
   draftBody: string;
-  /** Contents of `.agents/skills/writing-prds/SKILL.md` from the target repo, or a fallback. */
+  /** Contents of `skills/writing-prds/SKILL.md` from the target repo, or a fallback. */
   skillContent: string;
   /** Working directory (usually the project path). */
   cwd: string;

@@ -8,6 +8,7 @@ import type {
   PipelinePhase,
   Project,
   ReasoningEffort,
+  RevisionCount,
   Thread,
 } from './types';
 
@@ -57,6 +58,9 @@ type IssuePhaseOverrides = Pick<
   | 'executorReasoningEffortOverride'
   | 'verifierReasoningEffortOverride'
 >;
+
+type ProjectRevisionOverride = Pick<Project, 'revisionCountOverride'>;
+type IssueRevisionOverride = Pick<GitHubIssueCacheRecord, 'revisionCountOverride'>;
 
 type ThreadPhaseState = Pick<
   Thread,
@@ -148,7 +152,7 @@ export const PHASE_DESCRIPTORS: readonly ResolvedPhaseDescriptor[] = [
     issueModelOverrideKey: 'plannerModelOverride',
     issueModelIdOverrideKey: 'plannerModelIdOverride',
     issueReasoningEffortOverrideKey: 'plannerReasoningEffortOverride',
-    issueStatuses: ['todo', 'queued', 'planning', 'revising', 'awaiting_approval'],
+    issueStatuses: ['todo', 'queued', 'planning', 'clarifying', 'revising', 'awaiting_approval'],
   },
   {
     key: 'reviewer',
@@ -204,6 +208,29 @@ export function getPhaseDescriptor(phase: ResolvedPhaseModel): ResolvedPhaseDesc
 function asExecutorModel(value: string | null | undefined): ExecutorModel | null {
   if (value === 'claude' || value === 'codex' || value === 'openrouter') return value;
   return null;
+}
+
+function asRevisionCount(value: number | null | undefined): RevisionCount | null {
+  return value === 0 || value === 1 || value === 2 || value === 3 || value === 4 || value === 5
+    ? value
+    : null;
+}
+
+export function resolveRevisionCount(
+  settings: Pick<AppSettings, 'revisionCount'>,
+  project: ProjectRevisionOverride | null | undefined,
+): RevisionCount {
+  return (
+    asRevisionCount(project?.revisionCountOverride) ?? asRevisionCount(settings.revisionCount) ?? 0
+  );
+}
+
+export function resolveRevisionCountForIssue(
+  settings: Pick<AppSettings, 'revisionCount'>,
+  project: ProjectRevisionOverride | null | undefined,
+  issue: IssueRevisionOverride | null | undefined,
+): RevisionCount {
+  return asRevisionCount(issue?.revisionCountOverride) ?? resolveRevisionCount(settings, project);
 }
 
 export function resolvePhaseModel(
@@ -319,7 +346,12 @@ export function getIssueCardPhase(
 }
 
 export function getPipelineCardPhase(status: PipelinePhase): ResolvedPhaseModel | null {
-  if (status === 'planning' || status === 'revising' || status === 'awaiting_approval') {
+  if (
+    status === 'planning' ||
+    status === 'clarifying' ||
+    status === 'revising' ||
+    status === 'awaiting_approval'
+  ) {
     return 'planner';
   }
 

@@ -116,6 +116,7 @@ describe('ProjectQueries', () => {
     expect(p.reviewerReasoningEffortOverride).toBeNull();
     expect(p.executorReasoningEffortOverride).toBeNull();
     expect(p.verifierReasoningEffortOverride).toBeNull();
+    expect(p.revisionCountOverride).toBeNull();
     expect(p.discordRouting).toBe('inherit');
     expect(p.discordWebhookUrlOverride).toBeNull();
     expect(p.telegramRouting).toBe('inherit');
@@ -137,6 +138,7 @@ describe('ProjectQueries', () => {
       reviewerReasoningEffortOverride: 'medium',
       executorReasoningEffortOverride: 'high',
       verifierReasoningEffortOverride: 'medium',
+      revisionCountOverride: 3,
     });
 
     let updated = projects.getById(p.id);
@@ -154,6 +156,7 @@ describe('ProjectQueries', () => {
     expect(updated.reviewerReasoningEffortOverride).toBe('medium');
     expect(updated.executorReasoningEffortOverride).toBe('high');
     expect(updated.verifierReasoningEffortOverride).toBe('medium');
+    expect(updated.revisionCountOverride).toBe(3);
 
     projects.updateModelOverrides(p.id, {
       plannerModelOverride: null,
@@ -168,6 +171,7 @@ describe('ProjectQueries', () => {
       reviewerReasoningEffortOverride: null,
       executorReasoningEffortOverride: null,
       verifierReasoningEffortOverride: null,
+      revisionCountOverride: null,
     });
 
     updated = projects.getById(p.id);
@@ -185,6 +189,27 @@ describe('ProjectQueries', () => {
     expect(updated.reviewerReasoningEffortOverride).toBeNull();
     expect(updated.executorReasoningEffortOverride).toBeNull();
     expect(updated.verifierReasoningEffortOverride).toBeNull();
+    expect(updated.revisionCountOverride).toBeNull();
+  });
+
+  it('persists GitHub repo identity and starter issue metadata', () => {
+    const project = projects.add('/tmp/repo-identity', {
+      githubRepoId: 'R_kgDOStarter',
+      githubRepoFullName: 'shipshitdev/shipcode',
+    });
+
+    expect(project.githubRepoId).toBe('R_kgDOStarter');
+    expect(project.githubRepoFullName).toBe('shipshitdev/shipcode');
+    expect(projects.getByGithubRepoIdentity('R_kgDOStarter', null)?.id).toBe(project.id);
+
+    projects.markStarterIssueSeeded(project.id, {
+      starterIssueNumber: 101,
+      starterIssueCreatedAt: '2026-04-21T10:00:00.000Z',
+    });
+
+    const updated = projects.getById(project.id);
+    expect(updated?.starterIssueNumber).toBe(101);
+    expect(updated?.starterIssueCreatedAt).toBe('2026-04-21T10:00:00.000Z');
   });
 
   it('updateNotificationRouting() persists values and clears back to inherit/null', () => {

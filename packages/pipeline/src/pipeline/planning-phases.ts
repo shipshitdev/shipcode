@@ -3,10 +3,19 @@ import {
   buildPreviousAttemptContext,
   buildReviewPrompt,
   buildRevisionPrompt,
+  formatClarificationContext,
   loadRepoContext,
   StreamParser,
 } from '@shipcode/agents';
-import { PIPELINE_MAX_RETRIES, type ShipCodePlan } from '@shipcode/shared';
+import {
+  type ClarificationRequest,
+  MAX_CLARIFICATION_ROUNDS,
+  PIPELINE_MAX_RETRIES,
+  type PlanRecord,
+  resolveRevisionCount,
+  resolveRevisionCountForIssue,
+  type ShipCodePlan,
+} from '@shipcode/shared';
 import type { PipelineHelperEnv } from './shared';
 
 export function createPlanningPhaseHandlers({
@@ -25,6 +34,131 @@ export function createPlanningPhaseHandlers({
     resolveAgentForPhase,
     runProviderPhase,
   } = runtime;
+
+  function resolveClarificationRequest(
+    parser: StreamParser,
+    responseClarification?: ClarificationRequest,
+  ): ClarificationRequest | null {
+    if (responseClarification) return responseClarification;
+    const parsed = parser.extractClarificationRequest();
+    return parsed.success ? parsed.data : null;
+  }
+
+  function enterClarifying(
+    threadId: string,
+    context: ReturnType<typeof ensureContext>,
+    request: ClarificationRequest,
+  ) {
+    const nextRound = context.clarificationRound + 1;
+    if (nextRound > MAX_CLARIFICATION_ROUNDS) {
+      emitPhase(
+        threadId,
+        'failed',
+        `Planning clarification limit reached after ${MAX_CLARIFICATION_ROUNDS} rounds.`,
+      );
+      activePipelines.delete(threadId);
+      return;
+    }
+
+    context.clarificationRound = nextRound;
+    context.clarificationRequest = {
+      ...request,
+      threadId,
+      phase: 'plan',
+    };
+    context.clarificationAnswers = [];
+    context.retryCount = 0;
+
+    deps.threads.setClarificationRequest(threadId, context.clarificationRequest, nextRound);
+    deps.emitter.emit({
+      type: 'terminal:event',
+      threadId,
+      event: {
+        kind: 'clarification_requested',
+        summary: context.clarificationRequest.summary,
+        questionCount: context.clarificationRequest.questions.length,
+      },
+    });
+    emitPhase(threadId, 'clarifying');
+  }
+
+  function clearClarificationState(threadId: string, context: ReturnType<typeof ensureContext>) {
+    context.clarificationRound = 0;
+    context.clarificationRequest = null;
+    context.clarificationAnswers = [];
+    deps.threads.clearClarification(threadId);
+  }
+
+  function getRevisionCountForContext(context: ReturnType<typeof ensureContext>): number {
+    const settings = deps.settings.get();
+    const project = context.projectId ? deps.projects.getById(context.projectId) : null;
+    const issue =
+      context.projectId && context.githubIssueNumber != null
+        ? deps.githubIssues.getByNumber(context.projectId, context.githubIssueNumber)
+        : null;
+    return issue
+      ? resolveRevisionCountForIssue(settings, project, issue)
+      : resolveRevisionCount(settings, project);
+  }
+
+  function continueFromStructuredPlan(
+    threadId: string,
+    context: ReturnType<typeof ensureContext>,
+    plan: PlanRecord,
+    structuredPlan: ShipCodePlan,
+  ) {
+    const revisionCount = getRevisionCountForContext(context);
+    deps.emitter.emit({ type: 'plan:parsed', threadId, plan: structuredPlan });
+
+    if (revisionCount > 0) {
+      deps.plans.updateStatus(plan.id, 'pending_review');
+      handlers.startReview(threadId, structuredPlan);
+      return;
+    }
+
+    deps.plans.updateStatus(plan.id, 'approved');
+    const requireApproval = deps.settings.get().requireApproval;
+    const reasons: Array<'requireApproval' | 'nonAutonomous' | 'reviewApproved'> = [
+      'reviewApproved',
+    ];
+    if (requireApproval) reasons.push('requireApproval');
+    if (!context.autonomous) reasons.push('nonAutonomous');
+
+    if (requireApproval || !context.autonomous) {
+      deps.emitter.emit({
+        type: 'pipeline:approval-gate',
+        threadId,
+        outcome: 'awaiting_approval',
+        reviewDecision: 'approve',
+        planVersion: plan.version,
+        requireApproval,
+        autonomous: context.autonomous,
+        reviewRound: context.reviewRound,
+        revisionCount,
+        hasCriticalOrMajor: false,
+        reasons,
+      });
+      deps.plans.updateStatus(plan.id, 'awaiting_approval');
+      void postPlanComment(context, structuredPlan);
+      emitPhase(threadId, 'awaiting_approval');
+      return;
+    }
+
+    deps.emitter.emit({
+      type: 'pipeline:approval-gate',
+      threadId,
+      outcome: 'auto_execute',
+      reviewDecision: 'approve',
+      planVersion: plan.version,
+      requireApproval,
+      autonomous: context.autonomous,
+      reviewRound: context.reviewRound,
+      revisionCount,
+      hasCriticalOrMajor: false,
+      reasons,
+    });
+    handlers.startExecution(threadId, structuredPlan);
+  }
 
   async function startPlanGeneration(
     threadId: string,
@@ -50,6 +184,10 @@ export function createPlanningPhaseHandlers({
     const skill = skillCallSite(context);
     const previousAttempt = context.previousPlanRawOutput;
     context.previousPlanRawOutput = null; // consume — one shot
+    const clarificationContext = formatClarificationContext(
+      context.clarificationRequest,
+      context.clarificationAnswers,
+    );
     const planPrompt =
       buildPlanPrompt(
         prompt,
@@ -58,6 +196,7 @@ export function createPlanningPhaseHandlers({
         skill.deps,
         {
           contextFiles: context.repoContext ?? undefined,
+          clarificationContext: clarificationContext ?? undefined,
         },
         getVerifyCommands(context).join(' && ') || null,
       ) +
@@ -86,15 +225,20 @@ export function createPlanningPhaseHandlers({
 
         const parser = new StreamParser();
         parser.feed(response.rawOutput);
+        const clarificationRequest = resolveClarificationRequest(
+          parser,
+          response.clarificationRequest,
+        );
 
         if (response.exitCode !== 0) {
           const result = parser.extractPlan();
           if (result.success && result.data) {
+            clearClarificationState(threadId, context);
             const nextVersion = deps.plans.getMaxVersion(threadId) + 1;
             const plan = deps.plans.create(threadId, result.raw, result.data, nextVersion);
-            deps.plans.updateStatus(plan.id, 'pending_review');
-            deps.emitter.emit({ type: 'plan:parsed', threadId, plan: result.data });
-            handlers.startReview(threadId, result.data);
+            continueFromStructuredPlan(threadId, context, plan, result.data);
+          } else if (clarificationRequest) {
+            enterClarifying(threadId, context, clarificationRequest);
           } else {
             const detectedError = parser.detectError();
             if (context.retryCount < PIPELINE_MAX_RETRIES) {
@@ -155,10 +299,11 @@ export function createPlanningPhaseHandlers({
         const result = parser.extractPlan();
         const nextVersion = deps.plans.getMaxVersion(threadId) + 1;
         if (result.success && result.data) {
+          clearClarificationState(threadId, context);
           const plan = deps.plans.create(threadId, result.raw, result.data, nextVersion);
-          deps.plans.updateStatus(plan.id, 'pending_review');
-          deps.emitter.emit({ type: 'plan:parsed', threadId, plan: result.data });
-          handlers.startReview(threadId, result.data);
+          continueFromStructuredPlan(threadId, context, plan, result.data);
+        } else if (clarificationRequest) {
+          enterClarifying(threadId, context, clarificationRequest);
         } else {
           deps.plans.create(threadId, result.raw, null, nextVersion);
           const detectedError = parser.detectError();
@@ -243,6 +388,7 @@ export function createPlanningPhaseHandlers({
 
           if (result.data.decision === 'approve') {
             const requireApproval = deps.settings.get().requireApproval;
+            const revisionCount = getRevisionCountForContext(context);
             const reasons: Array<'requireApproval' | 'nonAutonomous' | 'reviewApproved'> = [
               'reviewApproved',
             ];
@@ -259,7 +405,7 @@ export function createPlanningPhaseHandlers({
                 requireApproval,
                 autonomous: context.autonomous,
                 reviewRound: context.reviewRound,
-                maxReviewRounds: deps.settings.get().maxReviewRounds,
+                revisionCount,
                 hasCriticalOrMajor: false,
                 reasons,
               });
@@ -276,15 +422,15 @@ export function createPlanningPhaseHandlers({
                 requireApproval,
                 autonomous: context.autonomous,
                 reviewRound: context.reviewRound,
-                maxReviewRounds: deps.settings.get().maxReviewRounds,
+                revisionCount,
                 hasCriticalOrMajor: false,
                 reasons,
               });
               handlers.startExecution(threadId, latestStructuredPlan);
             }
           } else if (result.data.decision === 'request_changes') {
-            const maxReviewRounds = deps.settings.get().maxReviewRounds;
-            if (context.reviewRound < maxReviewRounds) {
+            const revisionCountLimit = getRevisionCountForContext(context);
+            if (context.reviewRound < revisionCountLimit) {
               context.reviewRound++;
               deps.threads.incrementReviewRound(threadId);
               const feedback =
@@ -304,8 +450,8 @@ export function createPlanningPhaseHandlers({
               );
               const requireApproval = deps.settings.get().requireApproval;
               const reasons: Array<
-                'requireApproval' | 'nonAutonomous' | 'criticalFindings' | 'reviewRoundsExhausted'
-              > = ['reviewRoundsExhausted'];
+                'requireApproval' | 'nonAutonomous' | 'criticalFindings' | 'revisionsExhausted'
+              > = ['revisionsExhausted'];
               if (requireApproval) reasons.push('requireApproval');
               if (!context.autonomous) reasons.push('nonAutonomous');
               if (hasCriticalOrMajor) reasons.push('criticalFindings');
@@ -320,7 +466,7 @@ export function createPlanningPhaseHandlers({
                   requireApproval,
                   autonomous: context.autonomous,
                   reviewRound: context.reviewRound,
-                  maxReviewRounds,
+                  revisionCount: revisionCountLimit,
                   hasCriticalOrMajor,
                   reasons,
                 });
@@ -337,7 +483,7 @@ export function createPlanningPhaseHandlers({
                   requireApproval,
                   autonomous: context.autonomous,
                   reviewRound: context.reviewRound,
-                  maxReviewRounds,
+                  revisionCount: revisionCountLimit,
                   hasCriticalOrMajor,
                   reasons,
                 });

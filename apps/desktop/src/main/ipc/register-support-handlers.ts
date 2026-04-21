@@ -52,18 +52,19 @@ export function registerSupportHandlers({
   ipcMain.handle('onboarding:list-repos', async () => {
     try {
       const { stdout } = await execAsync(
-        "gh api 'user/repos?per_page=100&affiliation=owner,collaborator,organization_member' --paginate --jq '.[] | [.full_name, (.private | tostring)] | join(\":\")'",
+        "gh api 'user/repos?per_page=100&affiliation=owner,collaborator,organization_member' --paginate --jq '.[] | {id: .node_id, name: .full_name, private: .private} | @json'",
         { timeout: 20_000 },
       );
 
       const seen = new Set<string>();
-      const repos: { name: string; private: boolean }[] = [];
+      const repos: { id: string; name: string; private: boolean }[] = [];
       for (const line of stdout.trim().split('\n').filter(Boolean)) {
-        const lastColon = line.lastIndexOf(':');
-        const name = line.slice(0, lastColon);
-        if (!name || seen.has(name)) continue;
+        const parsed = JSON.parse(line) as { id?: string; name?: string; private?: boolean };
+        const name = parsed.name?.trim();
+        const id = parsed.id?.trim();
+        if (!id || !name || seen.has(name)) continue;
         seen.add(name);
-        repos.push({ name, private: line.slice(lastColon + 1) === 'true' });
+        repos.push({ id, name, private: !!parsed.private });
       }
       return repos.sort((a, b) => a.name.localeCompare(b.name));
     } catch (err) {

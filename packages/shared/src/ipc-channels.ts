@@ -3,6 +3,7 @@ import type {
   ActivityEntry,
   AgentState,
   AppSettings,
+  ClarificationAnswer,
   CliProviderUsageMap,
   ContextFileInfo,
   ContextGeneratorCli,
@@ -70,7 +71,10 @@ export interface IpcInvokeChannels {
   'project:list-visible': { args: undefined; result: Project[] };
   'project:list-archived': { args: undefined; result: Project[] };
   'project:get': { args: { projectId: string }; result: Project | null };
-  'project:add': { args: { path: string }; result: Project };
+  'project:add': {
+    args: { path: string; repo?: Pick<OnboardingRepo, 'id' | 'name'> | null };
+    result: Project;
+  };
   'project:detect-setup': {
     args: { projectId?: string; path?: string };
     result: ProjectSetupDraft;
@@ -113,6 +117,7 @@ export interface IpcInvokeChannels {
         reviewerReasoningEffortOverride: Project['reviewerReasoningEffortOverride'];
         executorReasoningEffortOverride: Project['executorReasoningEffortOverride'];
         verifierReasoningEffortOverride: Project['verifierReasoningEffortOverride'];
+        revisionCountOverride: Project['revisionCountOverride'];
       };
     };
     result: Project;
@@ -146,6 +151,10 @@ export interface IpcInvokeChannels {
 
   'pipeline:start': { args: { threadId: string }; result: undefined };
   'pipeline:retry': { args: { threadId: string }; result: undefined };
+  'pipeline:answer-clarification': {
+    args: { threadId: string; answers: ClarificationAnswer[] };
+    result: undefined;
+  };
   'pipeline:approve': { args: { threadId: string }; result: undefined };
   'pipeline:reject': { args: { threadId: string; feedback: string }; result: undefined };
   'pipeline:stabilize-pr': { args: { threadId: string }; result: undefined };
@@ -278,6 +287,18 @@ export interface IpcInvokeChannels {
       projectId: string;
       issueNumber: number;
       phase: 'planner' | 'reviewer' | 'executor' | 'verifier';
+    };
+    result: GitHubIssueCacheRecord | null;
+  };
+  'github:clear-all-phase-overrides-for-project': {
+    args: { projectId: string };
+    result: { clearedCount: number };
+  };
+  'github:set-revision-count-override': {
+    args: {
+      projectId: string;
+      issueNumber: number;
+      revisionCount: GitHubIssueCacheRecord['revisionCountOverride'];
     };
     result: GitHubIssueCacheRecord | null;
   };

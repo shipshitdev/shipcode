@@ -5,6 +5,7 @@ import { Button } from './primitives/button';
 
 const PHASES: { key: PipelinePhase; label: string }[] = [
   { key: 'planning', label: 'Plan' },
+  { key: 'clarifying', label: 'Clarify' },
   { key: 'reviewing', label: 'Review' },
   { key: 'revising', label: 'Revise' },
   { key: 'awaiting_approval', label: 'Approve' },

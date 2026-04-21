@@ -4,6 +4,7 @@ import {
   diagnosePlanParseFailure,
   getFailurePresentation,
   getPlanStatusPresentation,
+  resolveClientSidePlan,
 } from './helpers';
 
 const VALID_PLAN_JSON = JSON.stringify({
@@ -105,6 +106,11 @@ describe('diagnosePlanParseFailure', () => {
   it('returns invalid-json message when fence content is malformed', () => {
     const raw = wrapInFence('{ not valid json ,,, }');
     expect(diagnosePlanParseFailure(raw)).toContain('not valid JSON');
+  });
+
+  it('uses the last matching fence when earlier fences are invalid', () => {
+    const raw = [wrapInFence('{ not valid json ,,, }'), wrapInFence(VALID_PLAN_JSON)].join('\n\n');
+    expect(resolveClientSidePlan(raw)?.objective).toBe('Add feature');
   });
 
   it('returns schema-validation message with field detail for wrong enum', () => {

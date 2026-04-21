@@ -156,11 +156,22 @@ describe('GitHubIssueQueries', () => {
     expect(record.linkedPrNumber).toBeNull();
     expect(record.linkedPrUrl).toBeNull();
     expect(record.linkedPrIsDraft).toBe(false);
+    expect(record.revisionCountOverride).toBeNull();
     expect(record.ciBlocked).toBe(false);
     expect(record.failingChecks).toEqual([]);
     expect(record.unresolvedReviewComments).toEqual([]);
     expect(record.unresolvedReviewCommentCount).toBe(0);
     expect(record.prLastSyncAt).toBeNull();
+  });
+
+  it('updateRevisionCountOverride() persists values and can clear them', () => {
+    const record = issues.upsert(makeIssue());
+
+    issues.updateRevisionCountOverride(record.id, 4);
+    expect(issues.getByNumber(projectId, 1)?.revisionCountOverride).toBe(4);
+
+    issues.updateRevisionCountOverride(record.id, null);
+    expect(issues.getByNumber(projectId, 1)?.revisionCountOverride).toBeNull();
   });
 
   it('updatePhaseModelOverride() persists values and can clear them', () => {
@@ -209,6 +220,39 @@ describe('GitHubIssueQueries', () => {
     expect(issues.getByNumber(projectId, 1)?.reviewerModelIdOverride).toBeNull();
     expect(issues.getByNumber(projectId, 1)?.executorModelIdOverride).toBeNull();
     expect(issues.getByNumber(projectId, 1)?.verifierModelIdOverride).toBeNull();
+  });
+
+  it('clearAllPhaseOverridesForProject() clears issue overrides only for the target project', () => {
+    const otherProjectId = new ProjectQueries(db).add('/tmp/other-project').id;
+    const issue = issues.upsert(makeIssue({ issueNumber: 10 }));
+    const untouched = issues.upsert(makeIssue({ projectId: otherProjectId, issueNumber: 11 }));
+
+    issues.updatePhaseModelOverride(issue.id, 'planner', 'claude');
+    issues.updatePhaseModelIdOverride(issue.id, 'planner', 'claude-sonnet-4-6');
+    issues.updatePhaseReasoningEffortOverride(issue.id, 'planner', 'high');
+    issues.updateRevisionCountOverride(issue.id, 2);
+
+    issues.updatePhaseModelOverride(untouched.id, 'planner', 'codex');
+    issues.updatePhaseModelIdOverride(untouched.id, 'planner', 'gpt-5.4');
+    issues.updatePhaseReasoningEffortOverride(untouched.id, 'planner', 'high');
+    issues.updateRevisionCountOverride(untouched.id, 5);
+    issues.updatePipelineStatus(issue.id, 'planning');
+
+    expect(issues.clearAllPhaseOverridesForProject(projectId)).toBe(1);
+
+    expect(issues.getByNumber(projectId, 10)).toMatchObject({
+      plannerModelOverride: null,
+      plannerModelIdOverride: null,
+      plannerReasoningEffortOverride: null,
+      revisionCountOverride: null,
+      pipelineStatus: 'planning',
+    });
+    expect(issues.getByNumber(otherProjectId, 11)).toMatchObject({
+      plannerModelOverride: 'codex',
+      plannerModelIdOverride: 'gpt-5.4',
+      plannerReasoningEffortOverride: 'high',
+      revisionCountOverride: 5,
+    });
   });
 
   it('updatePullRequestFeedback() persists linked PR metadata and blocker summaries', () => {

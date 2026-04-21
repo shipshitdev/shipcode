@@ -1,5 +1,9 @@
 import type { DatabaseSync } from 'node:sqlite';
 import {
+  type ClarificationAnswer,
+  type ClarificationRequest,
+  clarificationAnswerSchema,
+  clarificationRequestSchema,
   ISO_NOW_SQL,
   type Thread,
   type ThreadKind,
@@ -23,6 +27,9 @@ interface ThreadRow {
   verifier_model: string | null;
   executor_model: string | null;
   review_round: number | null;
+  clarification_round: number | null;
+  clarification_request: string | null;
+  clarification_answers: string | null;
   verification_status: string | null;
   verification_retries: number | null;
   autonomous: number | null;
@@ -171,6 +178,43 @@ export class ThreadQueries {
     this.db
       .prepare(
         `UPDATE threads SET review_round = review_round + 1, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
+      )
+      .run(id);
+  }
+
+  setClarificationRequest(id: string, request: ClarificationRequest, round: number): void {
+    this.db
+      .prepare(
+        `UPDATE threads
+            SET clarification_request = ?,
+                clarification_answers = '[]',
+                clarification_round = ?,
+                updated_at = ${ISO_NOW_SQL}
+          WHERE id = ?`,
+      )
+      .run(JSON.stringify(request), round, id);
+  }
+
+  setClarificationAnswers(id: string, answers: ClarificationAnswer[]): void {
+    this.db
+      .prepare(
+        `UPDATE threads
+            SET clarification_answers = ?,
+                updated_at = ${ISO_NOW_SQL}
+          WHERE id = ?`,
+      )
+      .run(JSON.stringify(answers), id);
+  }
+
+  clearClarification(id: string): void {
+    this.db
+      .prepare(
+        `UPDATE threads
+            SET clarification_request = NULL,
+                clarification_answers = '[]',
+                clarification_round = 0,
+                updated_at = ${ISO_NOW_SQL}
+          WHERE id = ?`,
       )
       .run(id);
   }
@@ -370,6 +414,9 @@ function mapThread(row: ThreadRow): Thread {
     verifierModel: row.verifier_model ?? 'claude',
     executorModel: row.executor_model ?? 'claude',
     reviewRound: row.review_round ?? 0,
+    clarificationRound: row.clarification_round ?? 0,
+    clarificationRequest: parseClarificationRequest(row.clarification_request),
+    clarificationAnswers: parseClarificationAnswers(row.clarification_answers),
     verificationStatus: row.verification_status ?? null,
     verificationRetries: row.verification_retries ?? 0,
     autonomous: !!row.autonomous,
@@ -392,4 +439,24 @@ function mapThread(row: ThreadRow): Thread {
     totalTokensCompletion: row.total_tokens_completion ?? 0,
     totalCostUsd: row.total_cost_usd ?? 0,
   };
+}
+
+function parseClarificationRequest(value: string | null): ClarificationRequest | null {
+  if (!value) return null;
+  try {
+    return clarificationRequestSchema.parse(JSON.parse(value));
+  } catch {
+    return null;
+  }
+}
+
+function parseClarificationAnswers(value: string | null): ClarificationAnswer[] {
+  if (!value) return [];
+  try {
+    return JSON.parse(value)
+      .map((entry: unknown) => clarificationAnswerSchema.parse(entry))
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
 }

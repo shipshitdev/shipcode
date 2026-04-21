@@ -18,12 +18,22 @@ export interface PipelineSchedulerDeps {
   getMainWindow: () => BrowserWindow;
 }
 
+const RUNNING_PIPELINE_PHASES = [
+  'planning',
+  'reviewing',
+  'revising',
+  'executing',
+  'testing',
+  'verifying',
+  'shipping',
+] as const;
+
 /**
  * PipelineScheduler manages a global cap on concurrently-running pipelines.
  *
  * When `maxConcurrentPipelines` slots are all occupied, new issues are queued
  * (status = 'queued') in the DB.  Whenever a slot opens up — because a
- * pipeline reaches awaiting_approval, completed, failed, or idle — the
+ * pipeline reaches clarifying, awaiting_approval, completed, failed, or idle — the
  * scheduler drains the next queued issue.
  *
  * This class is intentionally a thin wrapper around the existing pipeline +
@@ -49,7 +59,7 @@ export class PipelineScheduler {
     if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
 
     const settings = queries.settings.get();
-    const activeCount = pipeline.listActive().length;
+    const activeCount = pipeline.listActiveInPhases(RUNNING_PIPELINE_PHASES).length;
 
     if (activeCount >= settings.maxConcurrentPipelines) {
       queries.githubIssues.updatePipelineStatus(issue.id, 'queued');
@@ -65,14 +75,14 @@ export class PipelineScheduler {
   }
 
   /**
-   * Called when a pipeline slot frees up (awaiting_approval, completed, failed, idle).
+   * Called when a pipeline slot frees up (clarifying, awaiting_approval, completed, failed, idle).
    * Drains one queued issue if capacity allows.
    */
   onSlotFreed(): void {
     const { queries, pipeline } = this.deps;
     try {
       const settings = queries.settings.get();
-      const activeCount = pipeline.listActive().length;
+      const activeCount = pipeline.listActiveInPhases(RUNNING_PIPELINE_PHASES).length;
       if (activeCount >= settings.maxConcurrentPipelines) return;
 
       const next = queries.githubIssues.getNextQueued();

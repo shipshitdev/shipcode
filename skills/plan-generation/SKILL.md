@@ -28,7 +28,8 @@ User task:
 Treat the plan as an executable contract, not a sketch.
 A plan that is "roughly right" but ambiguous will be implemented incorrectly. Vagueness is a defect.
 Prefer fewer, larger, atomic steps over many small ceremonial ones — but every step must be independently verifiable.
-If the task is genuinely ambiguous, encode the assumption you made under `outOfScope` rather than asking a question — there is no human in the loop.
+If the task is missing information that would materially change the plan, emit a structured clarification request instead of guessing.
+If the ambiguity is minor, encode the assumption you made under `outOfScope` and keep planning.
 </operating_stance>
 
 <planning_method>

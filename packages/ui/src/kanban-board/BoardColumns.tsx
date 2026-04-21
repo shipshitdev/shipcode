@@ -23,6 +23,7 @@ interface DroppableColumnProps {
   onArchiveAllDone?: () => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
   issuePhaseChipById: Map<string, IssuePhaseChip | null>;
+  issueRevisionLabelById: Map<string, string | null>;
 }
 
 export function DroppableColumn({
@@ -39,6 +40,7 @@ export function DroppableColumn({
   onArchiveAllDone,
   onArchiveIssue,
   issuePhaseChipById,
+  issueRevisionLabelById,
 }: DroppableColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id, disabled: !droppable || readOnly });
   const hasIssues = issues.length > 0;
@@ -86,6 +88,7 @@ export function DroppableColumn({
             key={issue.id}
             issue={issue}
             phaseChip={issuePhaseChipById.get(issue.id) ?? null}
+            revisionLabel={issueRevisionLabelById.get(issue.id) ?? null}
             onClick={() => onIssueClick(issue)}
             onStartPipeline={onStartPipeline}
             onOpenPullRequest={onOpenPullRequest}
@@ -112,6 +115,7 @@ interface SectionBlockProps {
   selectedIssueNumber?: number;
   rerunningId?: string | null;
   issuePhaseChipById: Map<string, IssuePhaseChip | null>;
+  issueRevisionLabelById: Map<string, string | null>;
 }
 
 function SectionBlock({
@@ -127,6 +131,7 @@ function SectionBlock({
   selectedIssueNumber,
   rerunningId,
   issuePhaseChipById,
+  issueRevisionLabelById,
 }: SectionBlockProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: `${columnKey}:${section.key}`,
@@ -184,6 +189,7 @@ function SectionBlock({
               key={issue.id}
               issue={issue}
               phaseChip={issuePhaseChipById.get(issue.id) ?? null}
+              revisionLabel={issueRevisionLabelById.get(issue.id) ?? null}
               onClick={() => onIssueClick(issue)}
               onRerun={onRerun}
               onCancel={onCancel}
@@ -222,6 +228,7 @@ interface StackedColumnProps {
   selectedIssueNumber?: number;
   rerunningId?: string | null;
   issuePhaseChipById: Map<string, IssuePhaseChip | null>;
+  issueRevisionLabelById: Map<string, string | null>;
 }
 
 export function StackedColumn({
@@ -237,6 +244,7 @@ export function StackedColumn({
   selectedIssueNumber,
   rerunningId,
   issuePhaseChipById,
+  issueRevisionLabelById,
 }: StackedColumnProps) {
   const columnIssues = issues.filter((issue) => column.statuses.includes(issue.pipelineStatus));
   const hasIssues = columnIssues.length > 0;
@@ -288,6 +296,7 @@ export function StackedColumn({
             selectedIssueNumber={selectedIssueNumber}
             rerunningId={rerunningId}
             issuePhaseChipById={issuePhaseChipById}
+            issueRevisionLabelById={issueRevisionLabelById}
           />
         ))}
       </div>

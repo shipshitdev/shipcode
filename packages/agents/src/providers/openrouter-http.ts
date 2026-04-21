@@ -29,6 +29,11 @@ import {
   OPENROUTER_REQUEST_TIMEOUT_MS,
 } from '@shipcode/shared';
 import type { TerminalEvent } from '../terminal-events';
+import {
+  FENCE_ACTIONS,
+  findOpeningFence,
+  getDeferredFencePrefix,
+} from './normalizers/fence-suppression';
 
 // === Public types ===
 
@@ -332,6 +337,66 @@ export class OpenRouterClient {
     let finishReason: string | null = null;
     let model: string | null = null;
     let usage: OpenRouterUsage | null = null;
+    let fenceSuppressed = false;
+    let deferredFencePrefix = '';
+    let suppressedFenceCarry = '';
+
+    const flushDeferredFencePrefix = () => {
+      if (!fenceSuppressed && deferredFencePrefix) {
+        onDelta?.({ kind: 'text', content: deferredFencePrefix });
+        deferredFencePrefix = '';
+      }
+    };
+
+    const consumeSuppressedFragment = (fragment: string): string => {
+      const combined = suppressedFenceCarry + fragment;
+      const closingFenceIndex = combined.indexOf('```');
+
+      if (closingFenceIndex === -1) {
+        suppressedFenceCarry = combined.slice(-2);
+        return '';
+      }
+
+      fenceSuppressed = false;
+      suppressedFenceCarry = '';
+      return combined.slice(closingFenceIndex + 3);
+    };
+
+    const emitTextFragment = (fragment: string) => {
+      let remaining = deferredFencePrefix + fragment;
+      deferredFencePrefix = '';
+
+      while (remaining) {
+        if (fenceSuppressed) {
+          remaining = consumeSuppressedFragment(remaining);
+          continue;
+        }
+
+        const openingFence = findOpeningFence(remaining);
+        if (!openingFence) {
+          const deferredPrefix = getDeferredFencePrefix(remaining);
+          const visibleText = deferredPrefix
+            ? remaining.slice(0, -deferredPrefix.length)
+            : remaining;
+          if (visibleText) {
+            onDelta?.({ kind: 'text', content: visibleText });
+          }
+          deferredFencePrefix = deferredPrefix;
+          return;
+        }
+
+        const visibleText = remaining.slice(0, openingFence.index);
+        if (visibleText) {
+          onDelta?.({ kind: 'text', content: visibleText });
+        }
+
+        fenceSuppressed = true;
+        suppressedFenceCarry = '';
+        const action = FENCE_ACTIONS[openingFence.tag];
+        onDelta?.({ kind: 'action', label: action.label, action: action.action });
+        remaining = remaining.slice(openingFence.index + openingFence.length);
+      }
+    };
 
     const onAbort = () => {
       reader.cancel().catch(() => {});
@@ -363,6 +428,7 @@ export class OpenRouterClient {
           if (payload === '[DONE]') {
             // Stream terminator. Drain any remaining bytes and finish.
             signal.removeEventListener('abort', onAbort);
+            flushDeferredFencePrefix();
             onDelta?.({
               kind: 'done',
               totalTokens: usage
@@ -402,9 +468,7 @@ export class OpenRouterClient {
 
           if (typeof delta.content === 'string') {
             content += delta.content;
-            if (delta.content) {
-              onDelta?.({ kind: 'text', content: delta.content });
-            }
+            if (delta.content) emitTextFragment(delta.content);
           }
 
           if (delta.tool_calls) {
@@ -432,6 +496,7 @@ export class OpenRouterClient {
       if (signal.aborted) {
         throw new OpenRouterError('aborted', 'stream aborted', false);
       }
+      flushDeferredFencePrefix();
       // Stream ended without [DONE] sentinel. Accept what we have.
       return { content, toolCalls: collectToolCalls(toolCallsById), finishReason, model, usage };
     } catch (err) {

@@ -3,7 +3,9 @@ const EMPTY_STREAM: never[] = [];
 export const MIN_HEIGHT = 120;
 export const DEFAULT_HEIGHT = 250;
 
-export const AGENT_ACTIVE_STATUSES = new Set([
+export const CONSOLE_VISIBLE_STATUSES = new Set([
+  'clarifying',
+  'awaiting_approval',
   'planning',
   'reviewing',
   'revising',
@@ -13,34 +15,17 @@ export const AGENT_ACTIVE_STATUSES = new Set([
   'shipping',
 ]);
 
-// Braille spinner frames for animated status indicator
-export const SPINNER_FRAMES = [
-  '\u280B',
-  '\u2819',
-  '\u2839',
-  '\u2838',
-  '\u283C',
-  '\u2834',
-  '\u2826',
-  '\u2827',
-  '\u2807',
-  '\u280F',
-];
-export const SPINNER_INTERVAL_MS = 200;
-
-// Map pipeline phase to a human-readable label for the spinner
+// Map pipeline phase to a readable pending label while output is still empty.
 export const PHASE_LABELS: Record<string, string> = {
   planning: 'Thinking',
+  clarifying: 'Waiting for clarification',
   reviewing: 'Reviewing',
   revising: 'Thinking',
+  awaiting_approval: 'Waiting for approval',
   executing: 'Working',
   testing: 'Running tests',
   verifying: 'Verifying',
   shipping: 'Shipping',
 };
-
-// Event kind groups for inserting blank lines at group boundaries in the terminal.
-export const LIFECYCLE_KINDS = new Set(['lifecycle']);
-export const CONTENT_KINDS = new Set(['text', 'thinking', 'raw']);
 
 export { EMPTY_STREAM };

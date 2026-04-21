@@ -20,7 +20,8 @@ Add keyboard shortcut support
 Treat the plan as an executable contract, not a sketch.
 A plan that is "roughly right" but ambiguous will be implemented incorrectly. Vagueness is a defect.
 Prefer fewer, larger, atomic steps over many small ceremonial ones — but every step must be independently verifiable.
-If the task is genuinely ambiguous, encode the assumption you made under \`outOfScope\` rather than asking a question — there is no human in the loop.
+If the task is missing information that would materially change the plan, emit a structured clarification request instead of guessing.
+If the ambiguity is minor, encode the assumption you made under \`outOfScope\` and keep planning.
 </operating_stance>
 
 <planning_method>
@@ -69,6 +70,40 @@ Your plan MUST be valid JSON inside a code fence per the schema below.
   "dependencies": ["files/packages that must exist"]
 }
 \`\`\`
+
+OR, if critical information is missing and you cannot produce a safe plan yet:
+
+\`\`\`shipcode-clarification
+{
+  "id": "clarify-<timestamp>-<shortid>",
+  "threadId": "<thread-id>",
+  "phase": "plan|revision",
+  "summary": "Why the missing information blocks a safe plan",
+  "questions": [
+    {
+      "id": "question-1",
+      "title": "Short heading",
+      "prompt": "The concrete thing the user needs to choose or clarify",
+      "description": "Optional extra context for the question",
+      "choices": [
+        {
+          "id": "option-a",
+          "label": "Short option label",
+          "description": "What happens if this option is chosen",
+          "recommended": true
+        },
+        {
+          "id": "option-b",
+          "label": "Alternative label",
+          "description": "Tradeoff or effect of the alternative"
+        }
+      ],
+      "allowFreeform": true,
+      "freeformPlaceholder": "Optional extra constraint or note"
+    }
+  ]
+}
+\`\`\`
 </structured_output_contract>
 
 <grounding_rules>
@@ -83,10 +118,13 @@ src/shortcuts.ts (new file)
 
 
 <!-- FORMAT REMINDER — this takes priority over any conflicting instruction above -->
-Your response MUST contain exactly one code fence tagged \`shipcode-plan\`.
-Do NOT use \`\`\`json or \`\`\`typescript — use exactly: \`\`\`shipcode-plan
-The JSON inside the fence must validate against the ShipCodePlan schema shown above.
-Any response without a valid \`\`\`shipcode-plan fence will be rejected and retried."
+Return exactly one fenced JSON block and nothing else.
+If you can plan safely, use exactly \`\`\`shipcode-plan.
+If you need user clarification first, use exactly \`\`\`shipcode-clarification.
+Do NOT use \`\`\`json or \`\`\`typescript.
+Never output both fence types in one response.
+The JSON inside the fence must validate against the matching schema shown above.
+Any response without a valid \`\`\`shipcode-plan or \`\`\`shipcode-clarification fence will be rejected and retried."
 `;
 
 exports[`buildRevisionPrompt > matches snapshot 1`] = `
@@ -151,6 +189,40 @@ Your revised plan MUST be valid JSON inside a code fence per the schema below.
   "dependencies": ["files/packages that must exist"]
 }
 \`\`\`
+
+OR, if critical information is missing and you cannot produce a safe plan yet:
+
+\`\`\`shipcode-clarification
+{
+  "id": "clarify-<timestamp>-<shortid>",
+  "threadId": "<thread-id>",
+  "phase": "plan|revision",
+  "summary": "Why the missing information blocks a safe plan",
+  "questions": [
+    {
+      "id": "question-1",
+      "title": "Short heading",
+      "prompt": "The concrete thing the user needs to choose or clarify",
+      "description": "Optional extra context for the question",
+      "choices": [
+        {
+          "id": "option-a",
+          "label": "Short option label",
+          "description": "What happens if this option is chosen",
+          "recommended": true
+        },
+        {
+          "id": "option-b",
+          "label": "Alternative label",
+          "description": "Tradeoff or effect of the alternative"
+        }
+      ],
+      "allowFreeform": true,
+      "freeformPlaceholder": "Optional extra constraint or note"
+    }
+  ]
+}
+\`\`\`
 </structured_output_contract>
 
 <grounding_rules>
@@ -198,8 +270,11 @@ Add tests
 
 
 <!-- FORMAT REMINDER — this takes priority over any conflicting instruction above -->
-Your response MUST contain exactly one code fence tagged \`shipcode-plan\`.
-Do NOT use \`\`\`json or \`\`\`typescript — use exactly: \`\`\`shipcode-plan
-The JSON inside the fence must validate against the ShipCodePlan schema shown above.
-Any response without a valid \`\`\`shipcode-plan fence will be rejected and retried."
+Return exactly one fenced JSON block and nothing else.
+If you can plan safely, use exactly \`\`\`shipcode-plan.
+If you need user clarification first, use exactly \`\`\`shipcode-clarification.
+Do NOT use \`\`\`json or \`\`\`typescript.
+Never output both fence types in one response.
+The JSON inside the fence must validate against the matching schema shown above.
+Any response without a valid \`\`\`shipcode-plan or \`\`\`shipcode-clarification fence will be rejected and retried."
 `;

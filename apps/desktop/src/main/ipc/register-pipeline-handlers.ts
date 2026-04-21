@@ -1,5 +1,11 @@
 import type { ActivePipelineSummary } from '@shipcode/shared';
-import { resolveExecutorModelForIssue, resolveThreadPhasePresentation } from '@shipcode/shared';
+import {
+  clarificationAnswerSchema,
+  resolveExecutorModelForIssue,
+  resolveRevisionCount,
+  resolveRevisionCountForIssue,
+  resolveThreadPhasePresentation,
+} from '@shipcode/shared';
 import { logEvent } from '../logger.service';
 import {
   resolveIssuePhaseModels,
@@ -134,8 +140,84 @@ export function registerPipelineHandlers({
 
     queries.threads.resetFailureTracking(threadId);
     queries.plans.supersedeAll(threadId);
+    queries.threads.clearClarification(threadId);
     await pipeline.startPlanGeneration(threadId, thread.prompt, project.path, null);
   });
+
+  ipcMain.handle(
+    'pipeline:answer-clarification',
+    async (
+      _event,
+      {
+        threadId,
+        answers,
+      }: {
+        threadId: string;
+        answers: import('@shipcode/shared').ClarificationAnswer[];
+      },
+    ) => {
+      const thread = queries.threads.getById(threadId);
+      if (!thread || thread.status !== 'clarifying') return;
+      if (!thread.clarificationRequest) {
+        throw new Error('No pending clarification request found for this task');
+      }
+
+      const normalizedAnswers = answers.map((answer) => clarificationAnswerSchema.parse(answer));
+      for (const question of thread.clarificationRequest.questions) {
+        const answer = normalizedAnswers.find((entry) => entry.questionId === question.id);
+        if (!answer) {
+          throw new Error(`Missing answer for "${question.title}"`);
+        }
+
+        const selectedChoice =
+          answer.selectedChoiceId != null
+            ? (question.choices.find((choice) => choice.id === answer.selectedChoiceId) ?? null)
+            : null;
+        const hasFreeform = Boolean(answer.freeformText?.trim());
+
+        if (answer.selectedChoiceId && !selectedChoice) {
+          throw new Error(`Invalid option selected for "${question.title}"`);
+        }
+        if (hasFreeform && !question.allowFreeform) {
+          throw new Error(`"${question.title}" does not accept freeform notes`);
+        }
+        if (!selectedChoice && !hasFreeform) {
+          throw new Error(`Provide a selection or note for "${question.title}"`);
+        }
+      }
+
+      const project = queries.projects.getById(thread.projectId);
+      if (!project) throw new Error(`Project ${thread.projectId} not found`);
+
+      queries.threads.setClarificationAnswers(threadId, normalizedAnswers);
+      emitter.emit({
+        type: 'terminal:event',
+        threadId,
+        event: {
+          kind: 'clarification_answered',
+          questionCount: normalizedAnswers.length,
+        },
+      });
+
+      const issue = thread.githubIssueNumber
+        ? queries.githubIssues.getByNumber(project.id, thread.githubIssueNumber)
+        : null;
+      pipeline.rehydrateContext(threadId, project.path, issue?.title);
+      const context = pipeline.getContext(threadId);
+      if (context) {
+        context.clarificationRequest = thread.clarificationRequest;
+        context.clarificationAnswers = normalizedAnswers;
+        context.clarificationRound = thread.clarificationRound;
+      }
+
+      await pipeline.startPlanGeneration(
+        threadId,
+        thread.prompt,
+        project.path,
+        thread.worktreePath,
+      );
+    },
+  );
 
   ipcMain.handle('pipeline:approve', async (_event, { threadId }: { threadId: string }) => {
     const thread = queries.threads.getById(threadId);
@@ -376,7 +458,17 @@ export function registerPipelineHandlers({
       requireApproval: queries.settings.get().requireApproval,
       autonomous: thread?.autonomous ?? false,
       reviewRound: thread?.reviewRound ?? 0,
-      maxReviewRounds: queries.settings.get().maxReviewRounds,
+      revisionCount:
+        thread?.projectId && thread.githubIssueNumber != null
+          ? resolveRevisionCountForIssue(
+              queries.settings.get(),
+              queries.projects.getById(thread.projectId),
+              queries.githubIssues.getByNumber(thread.projectId, thread.githubIssueNumber),
+            )
+          : resolveRevisionCount(
+              queries.settings.get(),
+              thread?.projectId ? queries.projects.getById(thread.projectId) : null,
+            ),
       hasCriticalOrMajor: false,
       reasons: ['manualSkipReview'],
     });

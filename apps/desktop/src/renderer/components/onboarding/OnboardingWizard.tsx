@@ -1,6 +1,7 @@
 import type {
   AgentType,
   GhAuthStatus,
+  OnboardingRepo,
   Project,
   StatusLabelMapping,
   SystemHealth,
@@ -28,7 +29,7 @@ interface Props {
 export function OnboardingWizard({ onComplete }: Props) {
   const [step, setStep] = useState<Step>(0);
   const [authResult, setAuthResult] = useState<AuthResult | null>(null);
-  const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
+  const [selectedRepo, setSelectedRepo] = useState<OnboardingRepo | null>(null);
   const [plannerModel, setPlannerModel] = useState<AgentType>('claude');
   const [reviewerModel, setReviewerModel] = useState<AgentType>('codex');
   const [labelMappings, setLabelMappings] = useState<StatusLabelMapping>(
@@ -85,7 +86,10 @@ export function OnboardingWizard({ onComplete }: Props) {
       if (selectedRepo) {
         const localPath = await window.shipcode.invoke<string | null>('dialog:open-directory');
         if (localPath) {
-          const project = await window.shipcode.invoke<Project>('project:add', { path: localPath });
+          const project = await window.shipcode.invoke<Project>('project:add', {
+            path: localPath,
+            repo: { id: selectedRepo.id, name: selectedRepo.name },
+          });
           newProjectId = project.id;
         }
       }

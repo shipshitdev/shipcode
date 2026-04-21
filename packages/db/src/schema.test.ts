@@ -8,6 +8,9 @@ import {
   migrateV20,
   migrateV21,
   migrateV22,
+  migrateV27,
+  migrateV29,
+  migrateV30,
 } from './schema';
 import { asRow } from './utils';
 
@@ -269,5 +272,116 @@ describe('migrateV22', () => {
     expect(queuedRow.pipeline_status).toBe('todo');
     expect(queuedRow.last_phase_update).toBeNull();
     expect(claimedRow.pipeline_status).toBe('queued');
+  });
+});
+
+describe('migrateV27', () => {
+  let db: DatabaseSync;
+
+  beforeEach(() => {
+    db = new DatabaseSync(':memory:');
+    migrate(db);
+    migrateV2(db);
+    migrateV3(db);
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('normalizes structured artifacts and truncates oversized raw output', () => {
+    db.prepare("INSERT INTO projects (id, name, path) VALUES ('p1', 'test', '/tmp/test')").run();
+    db.prepare(
+      "INSERT INTO threads (id, project_id, title, prompt) VALUES ('t1', 'p1', 'Issue', 'Prompt')",
+    ).run();
+
+    db.prepare(
+      `INSERT INTO plans (id, thread_id, version, raw_output, structured, status)
+       VALUES ('plan-1', 't1', 1, 'junk', '{"id":"p","threadId":"t1","version":1,"objective":"obj","files":[],"steps":[],"acceptanceCriteria":[],"outOfScope":[],"estimatedComplexity":"low","dependencies":[]}', 'draft')`,
+    ).run();
+    db.prepare(
+      `INSERT INTO reviews (id, plan_id, decision, confidence, raw_output, structured)
+       VALUES ('review-1', 'plan-1', 'approve', 'high', 'junk', '{"planId":"plan-1","decision":"approve","confidence":"high","summary":"ok","findings":[],"suggestedChanges":[]}')`,
+    ).run();
+    db.prepare(
+      `INSERT INTO verifications (id, thread_id, plan_id, raw_output, structured, result, retry_count)
+       VALUES ('verification-1', 't1', 'plan-1', 'junk', '{"threadId":"t1","planId":"plan-1","result":"passed","summary":"ok","criteriaResults":[],"issues":[]}', 'passed', 0)`,
+    ).run();
+    db.prepare(
+      `INSERT INTO plans (id, thread_id, version, raw_output, structured, status)
+       VALUES ('plan-2', 't1', 2, ?, NULL, 'draft')`,
+    ).run(`prefix\n${'x'.repeat(20_000)}\nsuffix`);
+
+    migrateV27(db);
+
+    const planStructured = db
+      .prepare('SELECT raw_output FROM plans WHERE id = ?')
+      .get('plan-1') as { raw_output: string };
+    const reviewStructured = db
+      .prepare('SELECT raw_output FROM reviews WHERE id = ?')
+      .get('review-1') as { raw_output: string };
+    const verificationStructured = db
+      .prepare('SELECT raw_output FROM verifications WHERE id = ?')
+      .get('verification-1') as { raw_output: string };
+    const truncatedPlan = db.prepare('SELECT raw_output FROM plans WHERE id = ?').get('plan-2') as {
+      raw_output: string;
+    };
+
+    expect(planStructured.raw_output).toContain('```shipcode-plan');
+    expect(reviewStructured.raw_output).toContain('```shipcode-review');
+    expect(verificationStructured.raw_output).toContain('```shipcode-verification');
+    expect(truncatedPlan.raw_output.length).toBeLessThanOrEqual(16_000);
+    expect(truncatedPlan.raw_output).toContain('suffix');
+    expect(truncatedPlan.raw_output).toContain('[truncated historical raw_output]');
+  });
+});
+
+describe('migrateV30', () => {
+  let db: DatabaseSync;
+
+  beforeEach(() => {
+    db = new DatabaseSync(':memory:');
+    migrate(db);
+    migrateV2(db);
+    migrateV3(db);
+    migrateV29(db);
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('renames legacy revision settings and drops planner turn leftovers', () => {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('maxReviewRounds', '3')").run();
+    db.prepare("INSERT INTO settings (key, value) VALUES ('plannerMaxTurns', '12')").run();
+
+    migrateV30(db);
+
+    const revisionCount = db
+      .prepare('SELECT value FROM settings WHERE key = ?')
+      .get('revisionCount') as { value: string } | undefined;
+    const legacyReviewKey = db
+      .prepare('SELECT value FROM settings WHERE key = ?')
+      .get('maxReviewRounds');
+    const legacyPlannerKey = db
+      .prepare('SELECT value FROM settings WHERE key = ?')
+      .get('plannerMaxTurns');
+
+    expect(revisionCount?.value).toBe('3');
+    expect(legacyReviewKey).toBeUndefined();
+    expect(legacyPlannerKey).toBeUndefined();
+  });
+
+  it('preserves an explicit revisionCount when cleaning legacy keys', () => {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('revisionCount', '1')").run();
+    db.prepare("INSERT INTO settings (key, value) VALUES ('maxReviewRounds', '4')").run();
+
+    migrateV30(db);
+
+    const revisionCount = db
+      .prepare('SELECT value FROM settings WHERE key = ?')
+      .get('revisionCount') as { value: string } | undefined;
+
+    expect(revisionCount?.value).toBe('1');
   });
 });

@@ -15,8 +15,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
 interface Props {
-  selectedRepo: string | null;
-  onSelect: (repo: string | null) => void;
+  selectedRepo: OnboardingRepo | null;
+  onSelect: (repo: OnboardingRepo | null) => void;
 }
 
 type Visibility = 'all' | 'public' | 'private';
@@ -144,11 +144,11 @@ export function StepGitHubProject({ selectedRepo, onSelect }: Props) {
                   key={repo.name}
                   className={cn(
                     'h-auto w-full justify-start gap-2 rounded-md border px-3 py-2 font-mono text-[13px] font-normal',
-                    selectedRepo === repo.name
+                    selectedRepo?.id === repo.id
                       ? 'border-accent bg-accent/10 text-primary'
                       : 'border-transparent bg-tertiary text-primary hover:border-text-muted',
                   )}
-                  onClick={() => onSelect(repo.name)}
+                  onClick={() => onSelect(repo)}
                 >
                   {repo.private ? (
                     <Lock size={12} className="shrink-0 text-muted" />

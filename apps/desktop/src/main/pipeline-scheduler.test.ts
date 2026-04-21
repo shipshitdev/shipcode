@@ -109,6 +109,7 @@ describe('PipelineScheduler', () => {
   let queries: ReturnType<typeof makeQueries>;
   let pipeline: {
     listActive: ReturnType<typeof vi.fn>;
+    listActiveInPhases: ReturnType<typeof vi.fn>;
     startFromGitHubIssue: ReturnType<typeof vi.fn>;
   };
   let mainWindow: ReturnType<typeof makeMainWindow>;
@@ -158,6 +159,7 @@ describe('PipelineScheduler', () => {
     queries = makeQueries();
     pipeline = {
       listActive: vi.fn(() => []),
+      listActiveInPhases: vi.fn(() => []),
       startFromGitHubIssue: vi.fn(async () => undefined),
     };
     mainWindow = makeMainWindow();
@@ -171,7 +173,7 @@ describe('PipelineScheduler', () => {
 
   describe('startOrQueue', () => {
     it('starts the pipeline immediately when a slot is free', async () => {
-      pipeline.listActive.mockReturnValue([]);
+      pipeline.listActiveInPhases.mockReturnValue([]);
       queries.settings.get.mockReturnValue(makeBaseSettings({ maxConcurrentPipelines: 3 }));
 
       const result = await scheduler.startOrQueue('project-1', 42);
@@ -182,7 +184,7 @@ describe('PipelineScheduler', () => {
     });
 
     it('queues the issue when all slots are full', async () => {
-      pipeline.listActive.mockReturnValue([
+      pipeline.listActiveInPhases.mockReturnValue([
         { threadId: 'a', phase: 'executing', startedAt: Date.now(), activeProcessId: null },
         { threadId: 'b', phase: 'planning', startedAt: Date.now(), activeProcessId: null },
         { threadId: 'c', phase: 'reviewing', startedAt: Date.now(), activeProcessId: null },
@@ -213,7 +215,7 @@ describe('PipelineScheduler', () => {
     });
 
     it('respects a maxConcurrentPipelines of 1', async () => {
-      pipeline.listActive.mockReturnValue([
+      pipeline.listActiveInPhases.mockReturnValue([
         { threadId: 'a', phase: 'executing', startedAt: Date.now(), activeProcessId: null },
       ]);
       queries.settings.get.mockReturnValue(makeBaseSettings({ maxConcurrentPipelines: 1 }));
@@ -226,7 +228,7 @@ describe('PipelineScheduler', () => {
 
   describe('onSlotFreed', () => {
     it('does nothing when no queued issues exist', () => {
-      pipeline.listActive.mockReturnValue([]);
+      pipeline.listActiveInPhases.mockReturnValue([]);
       queries.githubIssues.getNextQueued.mockReturnValue(null);
 
       scheduler.onSlotFreed();
@@ -235,7 +237,7 @@ describe('PipelineScheduler', () => {
     });
 
     it('does nothing when all slots are still occupied', () => {
-      pipeline.listActive.mockReturnValue([
+      pipeline.listActiveInPhases.mockReturnValue([
         { threadId: 'a', phase: 'executing', startedAt: Date.now(), activeProcessId: null },
         { threadId: 'b', phase: 'planning', startedAt: Date.now(), activeProcessId: null },
         { threadId: 'c', phase: 'reviewing', startedAt: Date.now(), activeProcessId: null },
@@ -249,7 +251,7 @@ describe('PipelineScheduler', () => {
     });
 
     it('promotes the next queued issue when a slot is free', () => {
-      pipeline.listActive.mockReturnValue([
+      pipeline.listActiveInPhases.mockReturnValue([
         { threadId: 'a', phase: 'executing', startedAt: Date.now(), activeProcessId: null },
         { threadId: 'b', phase: 'awaiting_approval', startedAt: Date.now(), activeProcessId: null },
       ]);
@@ -266,7 +268,7 @@ describe('PipelineScheduler', () => {
     });
 
     it('skips promotion if the project for the queued issue no longer exists', () => {
-      pipeline.listActive.mockReturnValue([]);
+      pipeline.listActiveInPhases.mockReturnValue([]);
       queries.settings.get.mockReturnValue(makeBaseSettings({ maxConcurrentPipelines: 3 }));
       queries.githubIssues.getNextQueued.mockReturnValue(makeIssue());
       queries.projects.getById.mockReturnValue(null);
@@ -277,7 +279,7 @@ describe('PipelineScheduler', () => {
     });
 
     it('links the new thread to the queued issue', () => {
-      pipeline.listActive.mockReturnValue([]);
+      pipeline.listActiveInPhases.mockReturnValue([]);
       queries.settings.get.mockReturnValue(makeBaseSettings({ maxConcurrentPipelines: 3 }));
       queries.githubIssues.getNextQueued.mockReturnValue(makeIssue({ id: 'issue-queued' }));
 

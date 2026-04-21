@@ -110,7 +110,8 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
     case 'verify': {
       // Analysis phases: stream-json for real-time terminal output,
       // no file-mutating tools. --verbose is required by stream-json mode.
-      // maxTurns comes from AppSettings.plannerMaxTurns (default 3) via phaseHints.
+      // Planning/verification are intentionally single-shot at the runtime layer;
+      // review/revision loops are controlled by the revision-count pipeline setting.
       // --max-thinking-tokens enables extended thinking so the terminal
       // drawer can display reasoning blocks. Token budget is controlled by
       // phaseHints.reasoningEffort (high=32000, medium=8000, low=omit).
@@ -224,6 +225,7 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
       const parser = new StreamParser();
       parser.feed(result.rawOutput);
       const usage = parser.extractUsage();
+      const clarification = parser.extractClarificationRequest();
       return {
         rawOutput: StreamParser.stripSystemEvents(result.rawOutput),
         exitCode: result.exitCode,
@@ -233,6 +235,9 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
               tokensUsed: { prompt: usage.inputTokens, completion: usage.outputTokens },
               costUsd: usage.costUsd,
             }
+          : {}),
+        ...(clarification.success && clarification.data
+          ? { clarificationRequest: clarification.data }
           : {}),
         ...(result.exitCode === 127
           ? {
@@ -266,6 +271,7 @@ export function createCodexCliProvider(processManager: ProcessManager): AgentPro
       const parser = new StreamParser();
       parser.feed(result.rawOutput);
       const usage = parser.extractUsage();
+      const clarification = parser.extractClarificationRequest();
       return {
         rawOutput: stripCodexProtocol(result.rawOutput),
         exitCode: result.exitCode,
@@ -275,6 +281,9 @@ export function createCodexCliProvider(processManager: ProcessManager): AgentPro
               tokensUsed: { prompt: usage.inputTokens, completion: usage.outputTokens },
               costUsd: usage.costUsd,
             }
+          : {}),
+        ...(clarification.success && clarification.data
+          ? { clarificationRequest: clarification.data }
           : {}),
         ...(result.exitCode === 127
           ? {

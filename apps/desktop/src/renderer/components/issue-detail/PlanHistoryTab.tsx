@@ -24,6 +24,7 @@ export function PlanHistoryTab({
   effectiveExpanded,
   expanded,
   isPlanHistoryLoading,
+  isShowingAllPlanRuns,
   loadingPlanDetailIds,
   normalizedPlanHistory,
   normalizedReviewsByPlanId,
@@ -35,11 +36,13 @@ export function PlanHistoryTab({
   onFullScreenPlan,
   onPlanExpandedChange,
   onPlanHistoryCollapsedChange,
+  onShowAllPlanRunsChange,
 }: {
   activeThreadId: string | null;
   effectiveExpanded: string | null | undefined;
   expanded: boolean;
   isPlanHistoryLoading: boolean;
+  isShowingAllPlanRuns: boolean;
   loadingPlanDetailIds: string[];
   normalizedPlanHistory: PlanRecord[];
   normalizedReviewsByPlanId: Record<string, ReviewRecord>;
@@ -51,10 +54,11 @@ export function PlanHistoryTab({
   onFullScreenPlan: (planId: string | null) => void;
   onPlanExpandedChange: (planId: string | null | undefined) => void;
   onPlanHistoryCollapsedChange: (collapsed: boolean) => void;
+  onShowAllPlanRunsChange: (show: boolean) => void;
 }) {
-  const planHistoryCollapseLabel = planHistoryCollapsed
-    ? 'Expand plan history'
-    : 'Collapse plan history';
+  const planHistoryCollapseLabel = planHistoryCollapsed ? 'Expand plans' : 'Collapse plans';
+  const canToggleRunScope = activeThreadId !== null;
+  const runScopeLabel = isShowingAllPlanRuns ? 'Latest run only' : 'View all runs';
 
   return (
     <>
@@ -69,7 +73,7 @@ export function PlanHistoryTab({
               aria-label={planHistoryCollapseLabel}
             >
               <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">
-                Plan History ({normalizedPlanHistory.length} version
+                Plans ({normalizedPlanHistory.length} version
                 {normalizedPlanHistory.length !== 1 ? 's' : ''}
                 {planRunCount > 1 ? ` across ${planRunCount} runs` : ''})
               </h4>
@@ -90,6 +94,16 @@ export function PlanHistoryTab({
                 <ChevronUp size={16} strokeWidth={2.25} className="text-muted" />
               )}
             </Button>
+            {canToggleRunScope ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-[11px] text-muted"
+                onClick={() => onShowAllPlanRunsChange(!isShowingAllPlanRuns)}
+              >
+                {runScopeLabel}
+              </Button>
+            ) : null}
           </div>
           {!planHistoryCollapsed ? (
             <div className="flex flex-col gap-3">
@@ -209,7 +223,7 @@ export function PlanHistoryTab({
                                         </p>
                                         <p className="text-xs text-muted">{parseFailureMessage}</p>
                                         <p className="text-xs text-muted">
-                                          Raw planner transcript is hidden in Plan History. Use the
+                                          Raw planner transcript is hidden in Plans. Use the
                                           terminal drawer for subprocess output.
                                         </p>
                                       </div>
@@ -231,7 +245,7 @@ export function PlanHistoryTab({
 
       {isPlanHistoryLoading && normalizedPlanHistory.length === 0 ? (
         <div className="mb-5">
-          <p className="py-4 text-center text-[13px] text-muted">Loading plan history…</p>
+          <p className="py-4 text-center text-[13px] text-muted">Loading plans…</p>
         </div>
       ) : null}
 

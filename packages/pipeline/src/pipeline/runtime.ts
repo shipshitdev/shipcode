@@ -271,7 +271,12 @@ export function createPipelineRuntime(
     phase: ProviderPhase,
     prompt: string,
     phaseHints: ProviderRequest['phaseHints'],
-  ): Promise<{ rawOutput: string; exitCode: number; resolvedModel?: string }> {
+  ): Promise<{
+    rawOutput: string;
+    exitCode: number;
+    resolvedModel?: string;
+    clarificationRequest?: import('@shipcode/shared').ClarificationRequest;
+  }> {
     const agent = resolveAgentForPhase(context, phase);
     const provider = deps.providers.for(agent, phase);
     // When a GitHub issue is resumed, planning/review should inspect the same
@@ -297,7 +302,7 @@ export function createPipelineRuntime(
 
     const plannerPhases: ProviderPhase[] = ['plan', 'revision', 'verify'];
     const mergedHints: ProviderRequest['phaseHints'] = plannerPhases.includes(phase)
-      ? { maxTurns: deps.settings.get().plannerMaxTurns, ...phaseHints }
+      ? { maxTurns: 1, ...phaseHints }
       : phaseHints;
 
     const response = await provider.generate({
@@ -347,6 +352,7 @@ export function createPipelineRuntime(
       rawOutput: response.rawOutput,
       exitCode: response.exitCode,
       resolvedModel: response.resolvedModel,
+      clarificationRequest: response.clarificationRequest,
     };
   }
 

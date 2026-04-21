@@ -50,6 +50,10 @@ describe('registerGitHubHandlers', () => {
     reviewerModelIdOverride: null,
     executorModelIdOverride: null,
     verifierModelIdOverride: null,
+    plannerReasoningEffortOverride: null,
+    reviewerReasoningEffortOverride: null,
+    executorReasoningEffortOverride: null,
+    verifierReasoningEffortOverride: null,
     linkedPrNumber: null,
     linkedPrUrl: null,
     linkedPrIsDraft: false,
@@ -75,6 +79,9 @@ describe('registerGitHubHandlers', () => {
     executorModel: 'claude',
     verifierModel: 'claude',
     reviewRound: 1,
+    clarificationRound: 0,
+    clarificationRequest: null,
+    clarificationAnswers: [],
     verificationStatus: null,
     verificationRetries: 0,
     autonomous: true,
@@ -172,5 +179,46 @@ describe('registerGitHubHandlers', () => {
         worktreePath: reusableThread.worktreePath,
       }),
     );
+  });
+
+  it('clears all issue phase overrides for a project and broadcasts fresh issue data', async () => {
+    const refreshedIssues = [{ ...baseIssue, plannerModelOverride: null }];
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+      },
+      githubIssues: {
+        clearAllPhaseOverridesForProject: vi.fn(() => 3),
+        list: vi.fn(() => refreshedIssues),
+      },
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const clearOverrides = handlers.get('github:clear-all-phase-overrides-for-project');
+    if (!clearOverrides) {
+      throw new Error('github:clear-all-phase-overrides-for-project handler not registered');
+    }
+
+    expect(
+      clearOverrides(undefined, {
+        projectId: 'project-1',
+      }),
+    ).toEqual({ clearedCount: 3 });
+
+    expect(queries.githubIssues.clearAllPhaseOverridesForProject).toHaveBeenCalledWith('project-1');
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('github:issues-updated', {
+      projectId: 'project-1',
+      issues: refreshedIssues,
+    });
   });
 });
