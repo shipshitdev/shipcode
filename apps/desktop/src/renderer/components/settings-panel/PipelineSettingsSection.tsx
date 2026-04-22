@@ -10,6 +10,11 @@ import {
 } from '@shipcode/shared';
 import {
   Button,
+  ChevronDown,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   Input,
   Select,
   SelectContent,
@@ -163,19 +168,31 @@ export function PipelineSettingsSection({
                   fallback defaults stay unchanged.
                 </div>
               </div>
-
-              <div className="flex flex-wrap gap-2">
-                {MODEL_CONFIG_PRESETS.map((preset) => (
-                  <Button
-                    key={preset.key}
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => applyPreset(preset.key)}
-                  >
-                    {`Apply ${preset.label}`}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="secondary" size="sm">
+                    Apply Preset
+                    <ChevronDown size={14} />
                   </Button>
-                ))}
-              </div>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="min-w-[260px]">
+                  {MODEL_CONFIG_PRESETS.map((preset) => (
+                    <DropdownMenuItem
+                      key={preset.key}
+                      onSelect={() => applyPreset(preset.key)}
+                      className="flex flex-col items-start gap-0.5"
+                    >
+                      <span>{preset.label}</span>
+                      <span className="text-[11px] text-muted">{preset.description}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+
+            <div className="mb-3 text-[11px] text-muted">
+              Workflow order here is Planner → Reviewer → Executor → Verifier. Clarifying and
+              Awaiting Approval are human checkpoints, so they do not have model rows.
             </div>
 
             <SettingsRow

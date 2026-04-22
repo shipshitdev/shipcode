@@ -157,7 +157,8 @@ describe('PipelineSettingsSection', () => {
     const modelsTab = screen.getByRole('tab', { name: 'Models' });
     fireEvent.mouseDown(modelsTab, { button: 0 });
     fireEvent.click(modelsTab);
-    fireEvent.click(screen.getByRole('button', { name: 'Apply Codex' }));
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Apply Preset' }));
+    fireEvent.click(screen.getByText('Codex'));
 
     expect(onUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -165,9 +166,9 @@ describe('PipelineSettingsSection', () => {
         reviewerModel: 'codex',
         executorModel: 'codex',
         verifierModel: 'codex',
-        plannerReasoningEffort: 'high',
+        plannerReasoningEffort: 'xhigh',
         reviewerReasoningEffort: 'high',
-        executorReasoningEffort: 'high',
+        executorReasoningEffort: 'medium',
         verifierReasoningEffort: 'high',
         prdRewriteCli: 'codex',
         prdRewriteCodexModel: 'gpt-5.4-mini',

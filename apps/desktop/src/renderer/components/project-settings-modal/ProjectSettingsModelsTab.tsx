@@ -5,18 +5,14 @@ import type {
   OpenRouterModelValidation,
   Project,
 } from '@shipcode/shared';
-import {
-  MODEL_CONFIG_PRESETS,
-  resolveRequireApproval,
-  resolveRevisionCount,
-} from '@shipcode/shared';
+import { MODEL_CONFIG_PRESETS } from '@shipcode/shared';
 import {
   Button,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  ChevronDown,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
 } from '@shipcode/ui';
 import type { Dispatch, SetStateAction } from 'react';
 import { ProjectPhaseSettingsRow } from './ProjectPhaseSettingsRow';
@@ -31,10 +27,6 @@ export function ProjectSettingsModelsTab({
   modelValidation,
   setModelValidation,
   onApplyPreset,
-  onResetIssueOverrides,
-  issueOverrideResetPending,
-  issueOverrideResetResult,
-  issueOverrideResetError,
 }: {
   settings: AppSettings;
   projectDraft: Project;
@@ -46,17 +38,14 @@ export function ProjectSettingsModelsTab({
     SetStateAction<Partial<Record<PhaseKey, OpenRouterModelValidation | null>>>
   >;
   onApplyPreset: (preset: ModelConfigPresetKey) => void;
-  onResetIssueOverrides: () => void;
-  issueOverrideResetPending: boolean;
-  issueOverrideResetResult: string | null;
-  issueOverrideResetError: string | null;
 }) {
   return (
     <div className="space-y-3">
       <div className="text-[11px] text-muted">
-        Project overrides shadow the global defaults for this repo only. Leave any field on inherit
-        to keep using the global phase setting.
+        Project model overrides shadow the global defaults for this repo only. Leave any field on
+        inherit to keep using the global phase setting.
       </div>
+
       <div className="rounded-md border border-border bg-secondary/40 p-3">
         <div className="mb-3">
           <div className="text-[13px] font-medium text-primary">Model Presets</div>
@@ -64,154 +53,33 @@ export function ProjectSettingsModelsTab({
             Apply explicit project overrides for Claude, Codex, or the current Hybrid layout.
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {MODEL_CONFIG_PRESETS.map((preset) => (
-            <Button
-              key={preset.key}
-              variant="secondary"
-              size="sm"
-              onClick={() => onApplyPreset(preset.key)}
-            >
-              {`Apply ${preset.label}`}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="secondary" size="sm">
+              Apply Preset
+              <ChevronDown size={14} />
             </Button>
-          ))}
-        </div>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="min-w-[260px]">
+            {MODEL_CONFIG_PRESETS.map((preset) => (
+              <DropdownMenuItem
+                key={preset.key}
+                onSelect={() => onApplyPreset(preset.key)}
+                className="flex flex-col items-start gap-0.5"
+              >
+                <span>{preset.label}</span>
+                <span className="text-[11px] text-muted">{preset.description}</span>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
-      <div className="rounded-md border border-border bg-secondary/40 p-3">
-        <div className="mb-3">
-          <div className="text-[13px] font-medium text-primary">Human Approval</div>
-          <div className="text-[11px] text-muted">
-            Override whether this project pauses for human sign-off before execution.
-          </div>
-        </div>
-        <Select
-          value={
-            overrides.requireApprovalOverride == null
-              ? '__inherit__'
-              : overrides.requireApprovalOverride
-                ? 'true'
-                : 'false'
-          }
-          onValueChange={(value) =>
-            setOverrides((current) => ({
-              ...current,
-              requireApprovalOverride: value === '__inherit__' ? null : value === 'true',
-            }))
-          }
-        >
-          <SelectTrigger className="w-[260px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__inherit__">
-              {`Inherit app default (${resolveRequireApproval(settings, null) ? 'Required' : 'Off'})`}
-            </SelectItem>
-            <SelectItem value="true">Required</SelectItem>
-            <SelectItem value="false">Off</SelectItem>
-          </SelectContent>
-        </Select>
+
+      <div className="text-[11px] text-muted">
+        Workflow order here is Planner → Reviewer → Executor → Verifier. Clarifying and Awaiting
+        Approval are human checkpoints, so they do not have model rows.
       </div>
-      <div className="rounded-md border border-border bg-secondary/40 p-3">
-        <div className="mb-3">
-          <div className="text-[13px] font-medium text-primary">PRD Quality Gate</div>
-          <div className="text-[11px] text-muted">
-            When enabled, incomplete PRDs block pipeline entry. When off, missing sections produce a
-            warning but planning proceeds.
-          </div>
-        </div>
-        <Select
-          value={
-            overrides.prdQualityGate == null
-              ? '__inherit__'
-              : overrides.prdQualityGate
-                ? 'true'
-                : 'false'
-          }
-          onValueChange={(value) =>
-            setOverrides((current) => ({
-              ...current,
-              prdQualityGate: value === '__inherit__' ? null : value === 'true',
-            }))
-          }
-        >
-          <SelectTrigger className="w-[260px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__inherit__">Inherit default (Off)</SelectItem>
-            <SelectItem value="true">Enabled (blocking)</SelectItem>
-            <SelectItem value="false">Off (warning only)</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="rounded-md border border-border bg-secondary/40 p-3">
-        <div className="mb-3">
-          <div className="text-[13px] font-medium text-primary">Revisions</div>
-          <div className="text-[11px] text-muted">
-            Override how many review-to-revise loops this project gets before approval or execution.
-          </div>
-        </div>
-        <Select
-          value={
-            overrides.revisionCountOverride == null
-              ? '__inherit__'
-              : String(overrides.revisionCountOverride)
-          }
-          onValueChange={(value) =>
-            setOverrides((current) => ({
-              ...current,
-              revisionCountOverride:
-                value === '__inherit__'
-                  ? null
-                  : (Number.parseInt(value, 10) as Project['revisionCountOverride']),
-            }))
-          }
-        >
-          <SelectTrigger className="w-[260px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__inherit__">
-              {`Inherit app default (${resolveRevisionCount(settings, null)})`}
-            </SelectItem>
-            <SelectItem value="0">0 · Skip review</SelectItem>
-            <SelectItem value="1">1 revision</SelectItem>
-            <SelectItem value="2">2 revisions</SelectItem>
-            <SelectItem value="3">3 revisions</SelectItem>
-            <SelectItem value="4">4 revisions</SelectItem>
-            <SelectItem value="5">5 revisions</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="rounded-md border border-border bg-secondary/40 p-3">
-        <div className="mb-3">
-          <div className="text-[13px] font-medium text-primary">Issue Overrides</div>
-          <div className="text-[11px] text-muted">
-            Clear every per-issue phase override for this project so issues go back to inheriting
-            from project and global settings.
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={onResetIssueOverrides}
-            disabled={issueOverrideResetPending}
-          >
-            {issueOverrideResetPending ? 'Resetting…' : 'Reset All Issue Overrides'}
-          </Button>
-        </div>
-        {issueOverrideResetResult ? (
-          <div className="mt-3 rounded-md border border-success/30 bg-success/10 px-3 py-2 text-[11px] text-success">
-            {issueOverrideResetResult}
-          </div>
-        ) : null}
-        {issueOverrideResetError ? (
-          <div className="mt-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-[11px] text-danger">
-            {issueOverrideResetError}
-          </div>
-        ) : null}
-      </div>
+
       {PHASE_META.map((phase) => (
         <ProjectPhaseSettingsRow
           key={phase.key}

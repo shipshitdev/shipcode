@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ProjectSettingsContextTab } from './ProjectSettingsContextTab';
 import { ProjectSettingsGeneralTab } from './ProjectSettingsGeneralTab';
 import { ProjectSettingsModelsTab } from './ProjectSettingsModelsTab';
+import { ProjectSettingsPipelineTab } from './ProjectSettingsPipelineTab';
+import { ProjectSettingsSetupTab } from './ProjectSettingsSetupTab';
 
 function makeProject(overrides: Partial<Project> = {}): Project {
   return {
@@ -159,10 +161,10 @@ describe('project settings leaf tabs', () => {
     const setContextGeneratorCli = vi.fn();
     const onGenerateContext = vi.fn();
     const contextFiles: ContextFileInfo[] = [
-      { name: 'GOAL.md', exists: true, size: 1200 },
-      { name: 'TECH-STACK.md', exists: true, size: 900 },
-      { name: 'ARCHITECTURE.md', exists: false },
-      { name: 'CONSTRAINTS.md', exists: false },
+      { name: 'goal.md', exists: true, size: 1200 },
+      { name: 'architecture.md', exists: true, size: 900 },
+      { name: 'constraints.md', exists: false },
+      { name: 'do-dont.md', exists: false },
     ];
 
     render(
@@ -181,13 +183,13 @@ describe('project settings leaf tabs', () => {
       />,
     );
 
-    expect(screen.getByText('Context Files')).toBeInTheDocument();
-    expect(screen.getByText('GOAL.md')).toBeInTheDocument();
+    expect(screen.getByText('Memory Files')).toBeInTheDocument();
+    expect(screen.getByText('goal.md')).toBeInTheDocument();
     expect(screen.getByText('1.2 KB')).toBeInTheDocument();
     expect(screen.getByText('900 B')).toBeInTheDocument();
     expect(screen.getByText('Generator failed')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Generate Context' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Generate Memory' }));
     expect(onGenerateContext).toHaveBeenCalledTimes(1);
 
     cleanup();
@@ -265,9 +267,143 @@ describe('project settings leaf tabs', () => {
     expect(onSync).toHaveBeenCalledTimes(1);
   });
 
-  it('renders model preset actions and forwards the apply/reset callbacks', () => {
-    const onApplyPreset = vi.fn();
+  it('renders detected setup profiles as apply buttons', () => {
+    const setSetupCommandsText = vi.fn();
+    const setVerifyCommandsText = vi.fn();
+    const setTestingContext = vi.fn();
+    const setSetupBeforeVerify = vi.fn();
+    const addEnvFile = vi.fn();
+    const updateEnvFile = vi.fn();
+    const removeEnvFile = vi.fn();
+    const onRedetect = vi.fn();
+    const onApplyDetectedProfile = vi.fn();
+
+    render(
+      <ProjectSettingsSetupTab
+        setupCommandsText=""
+        setSetupCommandsText={setSetupCommandsText}
+        verifyCommandsText=""
+        setVerifyCommandsText={setVerifyCommandsText}
+        testingContext=""
+        setTestingContext={setTestingContext}
+        setupBeforeVerify={false}
+        setSetupBeforeVerify={setSetupBeforeVerify}
+        envFiles={[]}
+        addEnvFile={addEnvFile}
+        updateEnvFile={updateEnvFile}
+        removeEnvFile={removeEnvFile}
+        detectedProfiles={[
+          {
+            kind: 'bun',
+            label: 'Bun',
+            recommended: true,
+            evidence: ['package.json', 'bun.lock'],
+            suggestedContract: {
+              version: 1,
+              setupCommands: ['bun install --frozen-lockfile'],
+              verifyCommands: ['bun run test'],
+              envFiles: [],
+              setupBeforeVerify: false,
+              testingContext: 'Detected bun scripts.',
+            },
+          },
+          {
+            kind: 'npm',
+            label: 'npm',
+            recommended: false,
+            evidence: ['package.json'],
+            suggestedContract: {
+              version: 1,
+              setupCommands: ['npm ci'],
+              verifyCommands: ['npm run test'],
+              envFiles: [],
+              setupBeforeVerify: false,
+              testingContext: 'Detected npm scripts.',
+            },
+          },
+        ]}
+        inspection={{
+          status: 'missing',
+          path: '/tmp/shipcode/.shipcode/setup.json',
+          contract: null,
+          error: null,
+        }}
+        projectPath="/tmp/shipcode"
+        pathExists={true}
+        submitError={null}
+        onRedetect={onRedetect}
+        onApplyDetectedProfile={onApplyDetectedProfile}
+        detectPending={false}
+      />,
+    );
+
+    expect(
+      screen.getByText(/Click a detected profile to fill the commands below/),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Bun recommended' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Re-detect' }));
+
+    expect(onApplyDetectedProfile).toHaveBeenCalledTimes(1);
+    expect(onApplyDetectedProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'bun',
+      }),
+    );
+    expect(onRedetect).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders pipeline overrides and forwards the reset callback', () => {
     const onResetIssueOverrides = vi.fn();
+    const setOverrides = vi.fn();
+    const settings: AppSettings = {
+      ...DEFAULT_SETTINGS,
+      openrouterDefaultPaidModel: 'openrouter/auto',
+    };
+
+    render(
+      <ProjectSettingsPipelineTab
+        settings={settings}
+        overrides={{
+          plannerModelOverride: null,
+          reviewerModelOverride: null,
+          executorModelOverride: null,
+          verifierModelOverride: null,
+          plannerModelIdOverride: null,
+          reviewerModelIdOverride: null,
+          executorModelIdOverride: null,
+          verifierModelIdOverride: null,
+          plannerReasoningEffortOverride: null,
+          reviewerReasoningEffortOverride: null,
+          executorReasoningEffortOverride: null,
+          verifierReasoningEffortOverride: null,
+          revisionCountOverride: null,
+          requireApprovalOverride: null,
+          prdQualityGate: null,
+          discordRouting: 'inherit',
+          discordWebhookUrlOverride: null,
+          telegramRouting: 'inherit',
+          telegramChatIdOverride: null,
+        }}
+        setOverrides={setOverrides}
+        onResetIssueOverrides={onResetIssueOverrides}
+        issueOverrideResetPending={false}
+        issueOverrideResetResult="Reset issue overrides on 2 issues."
+        issueOverrideResetError={null}
+      />,
+    );
+
+    expect(screen.getByText('Human Approval')).toBeInTheDocument();
+    expect(screen.getByText('PRD Quality Gate')).toBeInTheDocument();
+    expect(screen.getByText('Reset issue overrides on 2 issues.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset All Issue Overrides' }));
+
+    expect(onResetIssueOverrides).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders model preset actions and forwards the apply callback', () => {
+    const onApplyPreset = vi.fn();
     const setOverrides = vi.fn();
     const setModelValidation = vi.fn();
     const settings: AppSettings = {
@@ -305,24 +441,22 @@ describe('project settings leaf tabs', () => {
         modelValidation={{}}
         setModelValidation={setModelValidation}
         onApplyPreset={onApplyPreset}
-        onResetIssueOverrides={onResetIssueOverrides}
-        issueOverrideResetPending={false}
-        issueOverrideResetResult="Reset issue overrides on 2 issues."
-        issueOverrideResetError={null}
       />,
     );
 
-    expect(screen.getByText('Reset issue overrides on 2 issues.')).toBeInTheDocument();
-    expect(screen.getByText('Human Approval')).toBeInTheDocument();
+    expect(screen.getByText('Model Presets')).toBeInTheDocument();
+    expect(screen.getByText('Planner')).toBeInTheDocument();
+    expect(screen.getByText('Verifier')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Apply Claude' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Apply Codex' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Apply Hybrid' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Reset All Issue Overrides' }));
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Apply Preset' }));
+    fireEvent.click(screen.getByText('Claude'));
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Apply Preset' }));
+    fireEvent.click(screen.getByText('Codex'));
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Apply Preset' }));
+    fireEvent.click(screen.getByText('Hybrid'));
 
     expect(onApplyPreset).toHaveBeenNthCalledWith(1, 'claude');
     expect(onApplyPreset).toHaveBeenNthCalledWith(2, 'codex');
     expect(onApplyPreset).toHaveBeenNthCalledWith(3, 'hybrid');
-    expect(onResetIssueOverrides).toHaveBeenCalledTimes(1);
   });
 });
