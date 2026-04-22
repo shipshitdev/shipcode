@@ -1,3 +1,4 @@
+import { getKnownModelLabel, KNOWN_MODEL_LABELS } from './model-catalog';
 import { sanitizeResolvedModel } from './model-identifiers';
 import type { ExecutorModel } from './types';
 
@@ -7,25 +8,7 @@ export const PROVIDER_DISPLAY: Record<ExecutorModel, string> = {
   openrouter: 'OpenRouter',
 };
 
-export const MODEL_DISPLAY: Record<string, string> = {
-  claude: 'Sonnet 4.6',
-  codex: 'GPT-5.4',
-  openrouter: 'OpenRouter',
-  'claude-sonnet-4-6': 'Sonnet 4.6',
-  'claude-opus-4-6': 'Opus 4.6',
-  'claude-haiku-4-5-20251001': 'Haiku 4.5',
-  'gpt-5.4': 'GPT-5.4',
-  'gpt-5.4-mini': 'GPT-5.4 Mini',
-  'openrouter/auto': 'Auto (paid)',
-  'openrouter/free': 'Auto (free)',
-  'anthropic/claude-sonnet-4-6': 'Claude Sonnet 4.6',
-  'anthropic/claude-sonnet-4.6': 'Claude Sonnet 4.6',
-  'anthropic/claude-opus-4-6': 'Claude Opus 4.6',
-  'anthropic/claude-opus-4.6': 'Claude Opus 4.6',
-  'openai/gpt-5-codex': 'GPT-5 Codex',
-  'qwen/qwen3.6-plus': 'Qwen 3.6 Plus',
-  'qwen/qwen3-coder:free': 'Qwen 3 Coder Free',
-};
+export const MODEL_DISPLAY: Record<string, string> = { ...KNOWN_MODEL_LABELS };
 
 const CODEX_MODEL_PATTERN = /^gpt-5(?:[.-]|$)/i;
 
@@ -37,7 +20,7 @@ function normalizeModel(value: string | null | undefined): string | null {
 }
 
 export function modelDisplay(model: string): string {
-  return MODEL_DISPLAY[model] ?? model;
+  return getKnownModelLabel(model) ?? model;
 }
 
 export function providerDisplay(provider: ExecutorModel): string {

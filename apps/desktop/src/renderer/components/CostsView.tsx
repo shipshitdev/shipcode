@@ -45,25 +45,7 @@ function formatProvider(provider: string): string {
 }
 
 function formatModelDescription(model: string | null, provider: string): string {
-  const value = sanitizeResolvedModel(model) ?? provider;
-  switch (value) {
-    case 'anthropic/claude-sonnet-4-6':
-    case 'anthropic/claude-sonnet-4.6':
-      return 'Claude Sonnet 4.6';
-    case 'anthropic/claude-opus-4-6':
-    case 'anthropic/claude-opus-4.6':
-      return 'Claude Opus 4.6';
-    case 'openai/gpt-5-codex':
-      return 'GPT-5 Codex';
-    case 'qwen/qwen3.6-plus':
-      return 'Qwen 3.6 Plus';
-    case 'qwen/qwen3-coder:free':
-      return 'Qwen 3 Coder Free';
-    case 'openrouter/auto':
-      return 'Auto (paid)';
-    default:
-      return modelDisplay(value);
-  }
+  return modelDisplay(sanitizeResolvedModel(model) ?? provider);
 }
 
 // See OverviewView for why all 6 agent phases share one color.

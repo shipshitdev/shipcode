@@ -12,6 +12,7 @@ describe('reasoning-effort', () => {
       'none',
       'medium',
       'high',
+      'xhigh',
     ]);
     expect(getSupportedReasoningEfforts('codex', 'gpt-5.4')).toEqual([
       'none',

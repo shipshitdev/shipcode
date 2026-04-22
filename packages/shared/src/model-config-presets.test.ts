@@ -16,9 +16,9 @@ describe('model config presets', () => {
       reviewerModel: 'codex',
       executorModel: 'claude',
       verifierModel: 'claude',
-      plannerReasoningEffort: 'high',
+      plannerReasoningEffort: 'xhigh',
       reviewerReasoningEffort: 'high',
-      executorReasoningEffort: 'high',
+      executorReasoningEffort: 'medium',
       verifierReasoningEffort: 'high',
       prdRewriteCli: 'claude',
       prdRewriteClaudeModel: 'claude-sonnet-4-6',
@@ -39,9 +39,9 @@ describe('model config presets', () => {
       reviewerModelIdOverride: 'gpt-5.4',
       executorModelIdOverride: 'gpt-5.4',
       verifierModelIdOverride: 'gpt-5.4',
-      plannerReasoningEffortOverride: 'high',
+      plannerReasoningEffortOverride: 'xhigh',
       reviewerReasoningEffortOverride: 'high',
-      executorReasoningEffortOverride: 'high',
+      executorReasoningEffortOverride: 'medium',
       verifierReasoningEffortOverride: 'high',
     });
   });

@@ -1,3 +1,4 @@
+import { CLAUDE_MODEL_IDS, CODEX_MODEL_IDS, PINNED_MODEL_DEFAULTS } from './model-catalog';
 import type { ResolvedPhaseModel } from './model-resolution';
 import { resolveProviderReasoningEffort } from './reasoning-effort';
 import type { AppSettings, ExecutorModel, Project, ReasoningEffort } from './types';
@@ -38,21 +39,28 @@ export type ProjectModelPresetOverrides = Pick<
   | 'verifierReasoningEffortOverride'
 >;
 
-const CLAUDE_PHASE: PhasePreset = {
-  provider: 'claude',
-  modelId: 'claude-sonnet-4-6',
-  reasoningEffort: 'high',
+const DEFAULT_PHASE_EFFORTS: Record<ResolvedPhaseModel, ReasoningEffort> = {
+  planner: 'xhigh',
+  reviewer: 'high',
+  executor: 'medium',
+  verifier: 'high',
 };
 
-const CODEX_PHASE: PhasePreset = {
-  provider: 'codex',
-  modelId: 'gpt-5.4',
-  reasoningEffort: 'high',
-};
+function makePhasePreset(
+  provider: ExecutorModel,
+  modelId: string,
+  phase: ResolvedPhaseModel,
+): PhasePreset {
+  return {
+    provider,
+    modelId,
+    reasoningEffort: DEFAULT_PHASE_EFFORTS[phase],
+  };
+}
 
 const SHARED_PRD_MODELS = {
-  claude: 'claude-sonnet-4-6',
-  codex: 'gpt-5.4-mini',
+  claude: PINNED_MODEL_DEFAULTS.claude.prdRewrite,
+  codex: PINNED_MODEL_DEFAULTS.codex.prdRewrite,
 } as const;
 
 export const MODEL_CONFIG_PRESETS: readonly ModelConfigPreset[] = [
@@ -61,10 +69,10 @@ export const MODEL_CONFIG_PRESETS: readonly ModelConfigPreset[] = [
     label: 'Claude',
     description: 'Anthropic across planning, review, execution, and verification.',
     phases: {
-      planner: CLAUDE_PHASE,
-      reviewer: CLAUDE_PHASE,
-      executor: CLAUDE_PHASE,
-      verifier: CLAUDE_PHASE,
+      planner: makePhasePreset('claude', CLAUDE_MODEL_IDS.sonnet46, 'planner'),
+      reviewer: makePhasePreset('claude', CLAUDE_MODEL_IDS.sonnet46, 'reviewer'),
+      executor: makePhasePreset('claude', CLAUDE_MODEL_IDS.sonnet46, 'executor'),
+      verifier: makePhasePreset('claude', CLAUDE_MODEL_IDS.sonnet46, 'verifier'),
     },
     prdRewrite: {
       cli: 'claude',
@@ -77,10 +85,10 @@ export const MODEL_CONFIG_PRESETS: readonly ModelConfigPreset[] = [
     label: 'Codex',
     description: 'OpenAI across planning, review, execution, and verification.',
     phases: {
-      planner: CODEX_PHASE,
-      reviewer: CODEX_PHASE,
-      executor: CODEX_PHASE,
-      verifier: CODEX_PHASE,
+      planner: makePhasePreset('codex', CODEX_MODEL_IDS.gpt54, 'planner'),
+      reviewer: makePhasePreset('codex', CODEX_MODEL_IDS.gpt54, 'reviewer'),
+      executor: makePhasePreset('codex', CODEX_MODEL_IDS.gpt54, 'executor'),
+      verifier: makePhasePreset('codex', CODEX_MODEL_IDS.gpt54, 'verifier'),
     },
     prdRewrite: {
       cli: 'codex',
@@ -93,10 +101,10 @@ export const MODEL_CONFIG_PRESETS: readonly ModelConfigPreset[] = [
     label: 'Hybrid',
     description: 'Claude for plan/execute/verify, Codex for review.',
     phases: {
-      planner: CLAUDE_PHASE,
-      reviewer: CODEX_PHASE,
-      executor: CLAUDE_PHASE,
-      verifier: CLAUDE_PHASE,
+      planner: makePhasePreset('claude', CLAUDE_MODEL_IDS.sonnet46, 'planner'),
+      reviewer: makePhasePreset('codex', CODEX_MODEL_IDS.gpt54, 'reviewer'),
+      executor: makePhasePreset('claude', CLAUDE_MODEL_IDS.sonnet46, 'executor'),
+      verifier: makePhasePreset('claude', CLAUDE_MODEL_IDS.sonnet46, 'verifier'),
     },
     prdRewrite: {
       cli: 'claude',
@@ -109,11 +117,6 @@ export const MODEL_CONFIG_PRESETS: readonly ModelConfigPreset[] = [
 const PRESET_BY_KEY = Object.fromEntries(
   MODEL_CONFIG_PRESETS.map((preset) => [preset.key, preset]),
 ) as Record<ModelConfigPresetKey, ModelConfigPreset>;
-
-function getPresetPhaseEffort(phase: PhasePreset): ReasoningEffort {
-  return resolveProviderReasoningEffort(phase.provider, phase.reasoningEffort, phase.modelId)
-    .effective;
-}
 
 export function getModelConfigPreset(key: ModelConfigPresetKey): ModelConfigPreset {
   return PRESET_BY_KEY[key];
@@ -132,10 +135,10 @@ export function buildAppSettingsModelPresetPatch(key: ModelConfigPresetKey): Par
     reviewerModel: preset.phases.reviewer.provider,
     executorModel: preset.phases.executor.provider,
     verifierModel: preset.phases.verifier.provider,
-    plannerReasoningEffort: getPresetPhaseEffort(preset.phases.planner),
-    reviewerReasoningEffort: getPresetPhaseEffort(preset.phases.reviewer),
-    executorReasoningEffort: getPresetPhaseEffort(preset.phases.executor),
-    verifierReasoningEffort: getPresetPhaseEffort(preset.phases.verifier),
+    plannerReasoningEffort: preset.phases.planner.reasoningEffort,
+    reviewerReasoningEffort: preset.phases.reviewer.reasoningEffort,
+    executorReasoningEffort: preset.phases.executor.reasoningEffort,
+    verifierReasoningEffort: preset.phases.verifier.reasoningEffort,
     prdRewriteCli: preset.prdRewrite.cli,
     prdRewriteClaudeModel: SHARED_PRD_MODELS.claude,
     prdRewriteCodexModel: SHARED_PRD_MODELS.codex,
@@ -157,9 +160,9 @@ export function buildProjectModelPresetOverrides(
     reviewerModelIdOverride: preset.phases.reviewer.modelId,
     executorModelIdOverride: preset.phases.executor.modelId,
     verifierModelIdOverride: preset.phases.verifier.modelId,
-    plannerReasoningEffortOverride: getPresetPhaseEffort(preset.phases.planner),
-    reviewerReasoningEffortOverride: getPresetPhaseEffort(preset.phases.reviewer),
-    executorReasoningEffortOverride: getPresetPhaseEffort(preset.phases.executor),
-    verifierReasoningEffortOverride: getPresetPhaseEffort(preset.phases.verifier),
+    plannerReasoningEffortOverride: preset.phases.planner.reasoningEffort,
+    reviewerReasoningEffortOverride: preset.phases.reviewer.reasoningEffort,
+    executorReasoningEffortOverride: preset.phases.executor.reasoningEffort,
+    verifierReasoningEffortOverride: preset.phases.verifier.reasoningEffort,
   };
 }

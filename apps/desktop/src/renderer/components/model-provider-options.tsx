@@ -1,4 +1,10 @@
-import type { ExecutorModel } from '@shipcode/shared';
+import {
+  CLAUDE_MODEL_OPTIONS,
+  CODEX_MODEL_OPTIONS,
+  type ExecutorModel,
+  getKnownModelLabel,
+  OPENROUTER_MODEL_OPTIONS,
+} from '@shipcode/shared';
 
 export const PROVIDER_DISPLAY: Record<ExecutorModel, string> = {
   claude: 'Anthropic',
@@ -6,31 +12,12 @@ export const PROVIDER_DISPLAY: Record<ExecutorModel, string> = {
   openrouter: 'OpenRouter',
 };
 
-export const CLAUDE_MODELS = [
-  { value: 'claude-sonnet-4-6', label: 'Sonnet 4.6' },
-  { value: 'claude-opus-4-6', label: 'Opus 4.6' },
-  { value: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
-] as const;
-
-export const CODEX_MODELS = [
-  { value: 'gpt-5.4', label: 'GPT-5.4' },
-  { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' },
-] as const;
-
-export const OPENROUTER_MODELS = [
-  { value: 'openrouter/auto', label: 'Auto (paid)' },
-  { value: 'openrouter/free', label: 'Auto (free)' },
-  { value: 'anthropic/claude-sonnet-4.6', label: 'Claude Sonnet 4.6' },
-  { value: 'qwen/qwen3.6-plus', label: 'Qwen 3.6 Plus' },
-  { value: 'qwen/qwen3-coder:free', label: 'Qwen 3 Coder Free' },
-] as const;
-
 export function getModelOptions(
   provider: ExecutorModel,
 ): ReadonlyArray<{ value: string; label: string }> {
-  if (provider === 'claude') return CLAUDE_MODELS;
-  if (provider === 'codex') return CODEX_MODELS;
-  return OPENROUTER_MODELS;
+  if (provider === 'claude') return CLAUDE_MODEL_OPTIONS;
+  if (provider === 'codex') return CODEX_MODEL_OPTIONS;
+  return OPENROUTER_MODEL_OPTIONS;
 }
 
 export function formatProviderSelectionLabel(
@@ -50,7 +37,11 @@ export function formatModelInheritanceLabel(
   modelOptions: ReadonlyArray<{ value: string; label: string }>,
 ): string {
   if (!modelId) return 'Default model';
-  return modelOptions.find((option) => option.value === modelId)?.label ?? modelId;
+  return (
+    getKnownModelLabel(modelId) ??
+    modelOptions.find((option) => option.value === modelId)?.label ??
+    modelId
+  );
 }
 
 export function InheritValueDisplay({ detail }: { detail: string }) {

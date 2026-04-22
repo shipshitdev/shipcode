@@ -1,3 +1,4 @@
+import { OPENROUTER_MODEL_IDS } from './model-catalog';
 import type { ExecutorModel, ReasoningEffort } from './types';
 
 const ALL_REASONING_EFFORTS = [
@@ -13,6 +14,7 @@ const CLAUDE_REASONING_EFFORTS = [
   'none',
   'medium',
   'high',
+  'xhigh',
 ] as const satisfies readonly ReasoningEffort[];
 const OPENROUTER_ADAPTIVE_CLAUDE_EFFORTS = [
   'none',
@@ -23,16 +25,16 @@ const OPENROUTER_DISABLED_REASONING_EFFORTS = [
 ] as const satisfies readonly ReasoningEffort[];
 
 const OPENROUTER_MODEL_ALIASES: Record<string, string> = {
-  'anthropic/claude-sonnet-4-6': 'anthropic/claude-sonnet-4.6',
-  'anthropic/claude-opus-4-6': 'anthropic/claude-opus-4.6',
+  'anthropic/claude-sonnet-4-6': OPENROUTER_MODEL_IDS.claudeSonnet46,
+  'anthropic/claude-opus-4-6': OPENROUTER_MODEL_IDS.claudeOpus46,
 };
 
-const OPENROUTER_ADAPTIVE_CLAUDE_MODELS = new Set([
-  'anthropic/claude-sonnet-4.6',
-  'anthropic/claude-opus-4.6',
+const OPENROUTER_ADAPTIVE_CLAUDE_MODELS = new Set<string>([
+  OPENROUTER_MODEL_IDS.claudeSonnet46,
+  OPENROUTER_MODEL_IDS.claudeOpus46,
 ]);
 
-const OPENROUTER_NO_REASONING_MODELS = new Set(['qwen/qwen3-coder:free']);
+const OPENROUTER_NO_REASONING_MODELS = new Set<string>([OPENROUTER_MODEL_IDS.qwen3CoderFree]);
 
 export interface ProviderReasoningEffortResolution {
   configured: ReasoningEffort;
@@ -152,7 +154,8 @@ export function resolveProviderReasoningEffort(
     effective: configured,
     exact: false,
     message:
-      normalizedModelId === 'openrouter/auto' || normalizedModelId === 'openrouter/free'
+      normalizedModelId === OPENROUTER_MODEL_IDS.autoPaid ||
+      normalizedModelId === OPENROUTER_MODEL_IDS.autoFree
         ? `${normalizedModelId} is a router. OpenRouter may remap the requested effort to the nearest supported level for the selected upstream model.`
         : normalizedModelId
           ? `${normalizedModelId} accepts reasoning via OpenRouter, but OpenRouter may remap unsupported effort levels to the nearest supported level.`

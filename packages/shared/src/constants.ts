@@ -1,3 +1,4 @@
+import { PINNED_MODEL_DEFAULTS } from './model-catalog';
 import type { AppSettings } from './types';
 
 export const DEFAULT_STATUS_LABEL_MAPPINGS: Record<string, string> = {
@@ -43,8 +44,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   verifierModel: 'claude',
   executorModel: 'claude',
   prdRewriteCli: 'claude',
-  prdRewriteClaudeModel: 'claude-sonnet-4-6',
-  prdRewriteCodexModel: 'gpt-5.4-mini',
+  prdRewriteClaudeModel: PINNED_MODEL_DEFAULTS.claude.prdRewrite,
+  prdRewriteCodexModel: PINNED_MODEL_DEFAULTS.codex.prdRewrite,
   prdRewriteReasoningEffort: 'low',
   githubPollingEnabled: false,
   githubPollingIntervalMs: 30_000,
@@ -57,9 +58,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   worktreeBranchFormat: 'ship/{id}-{slug}',
   revisionCount: 0,
   requireApproval: false,
-  plannerReasoningEffort: 'high',
+  plannerReasoningEffort: 'xhigh',
   reviewerReasoningEffort: 'high',
-  executorReasoningEffort: 'high',
+  executorReasoningEffort: 'medium',
   verifierReasoningEffort: 'high',
   notificationsEnabled: true,
   notificationOsEnabled: true,
@@ -79,9 +80,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   openrouterReviewerModel: null,
   openrouterVerifierModel: null,
   openrouterExecutorModel: null,
-  openrouterDefaultPaidModel: 'openrouter/auto',
-  openrouterDefaultFreeModel: 'openrouter/free',
-  openrouterExplicitFallback: 'qwen/qwen3.6-plus',
+  openrouterDefaultPaidModel: PINNED_MODEL_DEFAULTS.openrouter.paid,
+  openrouterDefaultFreeModel: PINNED_MODEL_DEFAULTS.openrouter.free,
+  openrouterExplicitFallback: PINNED_MODEL_DEFAULTS.openrouter.explicitFallback,
   testCommand: null,
   testingContext: null,
   maxConcurrentPipelines: 3,
