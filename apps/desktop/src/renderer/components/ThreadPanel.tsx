@@ -173,12 +173,19 @@ export function ThreadPanel() {
 
   const repoUrl = githubRepoUrl(project?.gitRemote);
   const projectsUrl = githubProjectsUrl(project?.gitRemote, project?.githubProjectUrl);
+  const handleIssueClick = (issue: GitHubIssueCacheRecord) => {
+    selectIssue(issue);
+    const store = useAppStore.getState();
+    if (store.issueDetailCollapsed) {
+      store.toggleIssueDetail();
+    }
+  };
 
   return (
     <div className="relative flex flex-1 min-h-0 min-w-0 flex-col bg-primary">
       <KanbanBoard
         issues={issues}
-        onIssueClick={(issue) => selectIssue(issue)}
+        onIssueClick={handleIssueClick}
         selectedIssueNumber={activeIssue?.issueNumber}
         onRefresh={() => activeProjectId && refreshIssues.mutate(activeProjectId)}
         baseBranch={project?.defaultBranch}
