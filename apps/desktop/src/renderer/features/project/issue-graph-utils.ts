@@ -1,7 +1,6 @@
-// @ts-expect-error dagre does not ship types in this workspace.
-
 import type { IssuePipelineStatus, ProjectIssueGraph } from '@shipcode/shared';
 import type { Edge, Node } from '@xyflow/react';
+// @ts-expect-error dagre does not ship types in this workspace.
 import dagre from 'dagre';
 
 export interface IssueGraphNodeData extends Record<string, unknown> {
