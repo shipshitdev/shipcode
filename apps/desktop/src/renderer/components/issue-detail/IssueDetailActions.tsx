@@ -7,14 +7,9 @@ import {
   Copy,
   cn,
   LoadingButtonContent,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   Textarea,
 } from '@shipshitdev/ui';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { getFailurePresentation, PIPELINE_PREVIEW_PHASES, safeErrorMessage } from './helpers';
 
 type ClarificationDraft = Record<
@@ -90,11 +85,6 @@ function ClarificationSection({
     buildClarificationDraft(request, thread),
   );
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setDraft(buildClarificationDraft(request, thread));
-    setError(null);
-  }, [request, thread]);
 
   const canSubmit = useMemo(
     () =>
@@ -347,6 +337,7 @@ export function IssueDetailActions({
   const clarificationSection =
     clarificationRequest && thread?.status === 'clarifying' ? (
       <ClarificationSection
+        key={`${thread.id}:${clarificationRequest.id}`}
         isSubmitting={isSubmitting}
         request={clarificationRequest}
         thread={thread}
