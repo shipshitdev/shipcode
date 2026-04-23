@@ -3,16 +3,19 @@ import {
   Button,
   ChevronDown,
   ChevronUp,
+  Code2,
   cn,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
+  Ghost,
   PhaseChip,
-  Plus,
+  Sparkles,
+  Terminal,
   X,
 } from '@shipshitdev/ui';
+import type { ReactNode } from 'react';
 
 interface TerminalDrawerHeaderProps {
   activeProjectId: string | null;
@@ -35,7 +38,22 @@ interface TerminalDrawerHeaderProps {
   onToggleTerminal: () => void;
 }
 
+function MenuLogo({ children, className }: { children: ReactNode; className: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        'flex h-5 w-5 shrink-0 items-center justify-center rounded-[6px] border bg-primary/70',
+        className,
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
 export function TerminalDrawerHeader({
+  activeProjectId,
   approvedAwaitingExecution = false,
   currentModel,
   displayIssue,
@@ -126,21 +144,53 @@ export function TerminalDrawerHeader({
       </div>
 
       <div className="flex items-center gap-0.5 shrink-0">
+        <Button
+          variant="ghost"
+          size="xs"
+          className="h-6 gap-1 px-2 text-warning hover:bg-warning/10 hover:text-warning"
+          disabled={!activeProjectId}
+          onClick={onNewClaudeSession}
+          title="New Claude shell"
+          aria-label="New Claude shell"
+        >
+          <Sparkles size={13} />
+          <span className="hidden sm:inline">Claude</span>
+        </Button>
+        <Button
+          variant="ghost"
+          size="xs"
+          className="h-6 gap-1 px-2 text-agent hover:bg-agent/10 hover:text-agent"
+          disabled={!activeProjectId}
+          onClick={onNewCodexSession}
+          title="New Codex shell"
+          aria-label="New Codex shell"
+        >
+          <Code2 size={13} />
+          <span className="hidden sm:inline">Codex</span>
+        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-xs" title="New session" aria-label="New session">
-              <Plus size={14} />
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              title="Open external terminal"
+              aria-label="Open external terminal"
+            >
+              <Terminal size={14} />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" side="top">
-            <DropdownMenuItem onSelect={onNewClaudeSession}>New Claude Session</DropdownMenuItem>
-            <DropdownMenuItem onSelect={onNewCodexSession}>New Codex Session</DropdownMenuItem>
-            <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={onOpenInGhostty} disabled={!ghosttyAvailable}>
-              Open in Ghostty
+              <MenuLogo className="border-accent/25 text-accent">
+                <Ghost size={13} />
+              </MenuLogo>
+              <span>Open in Ghostty</span>
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={onOpenInTerminalApp} disabled={!terminalAvailable}>
-              Open in Terminal.app
+              <MenuLogo className="border-success/25 text-success">
+                <Terminal size={13} />
+              </MenuLogo>
+              <span>Open in Terminal.app</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

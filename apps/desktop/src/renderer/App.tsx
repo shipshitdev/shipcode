@@ -9,7 +9,6 @@ import { CostsView } from './components/CostsView';
 import { CreateIssueModal } from './components/CreateIssueModal';
 import { HealthBanner } from './components/HealthBanner';
 import { InboxView } from './components/InboxView';
-import { InstantFixModal } from './components/InstantFixModal';
 import { IssueDetail } from './components/IssueDetail';
 import { NotificationToaster } from './components/NotificationToaster';
 import { OverviewView } from './components/OverviewView';
@@ -317,7 +316,6 @@ export function App() {
         </div>
       </div>
       <CommandPalette />
-      <InstantFixModal />
       <CreateIssueModal />
       <ProjectSettingsModal />
       <NotificationToaster />

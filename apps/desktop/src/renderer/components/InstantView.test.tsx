@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import type { Thread } from '@shipcode/shared';
+import { DEFAULT_SETTINGS, type Thread } from '@shipcode/shared';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Profiler } from 'react';
@@ -83,6 +83,51 @@ describe('InstantView', () => {
       },
       canonicalTerminalStream: {},
     } as never);
+  });
+
+  it('starts Claude and Codex shells directly from the empty state', async () => {
+    invokeMock.mockImplementation(async (channel: string, args?: unknown) => {
+      if (channel === 'settings:get') return DEFAULT_SETTINGS;
+      if (channel === 'project:get') return null;
+      if (channel === 'instant:shell-start') {
+        const cli = (args as { cli: 'claude' | 'codex' }).cli;
+        return { threadId: `thread-${cli}` };
+      }
+      return null;
+    });
+    useAppStore.setState({
+      activeProjectId: 'project-1',
+      instantPaneThreadIds: [],
+      instantPaneMetaByThread: {},
+      canonicalTerminalStream: {},
+    } as never);
+
+    render(<InstantView />);
+
+    expect(screen.queryByText('New Terminal Session')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Claude CLI/i }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('instant:shell-start', {
+        projectId: 'project-1',
+        cli: 'claude',
+        modelId: null,
+        reasoningEffort: 'medium',
+      });
+    });
+    expect(useAppStore.getState().instantPaneThreadIds).toEqual(['thread-claude']);
+
+    fireEvent.click(screen.getByRole('button', { name: /Codex/i }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('instant:shell-start', {
+        projectId: 'project-1',
+        cli: 'codex',
+        modelId: null,
+        reasoningEffort: 'high',
+      });
+    });
+    expect(useAppStore.getState().instantPaneThreadIds).toEqual(['thread-claude', 'thread-codex']);
   });
 
   it('restarts a finished live shell into a fresh pane', async () => {

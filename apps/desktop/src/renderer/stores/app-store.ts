@@ -132,9 +132,7 @@ interface AppState {
   projectTab: ProjectTab;
   activePrNumber: number | null;
 
-  // Instant fix
-  instantFixModalOpen: boolean;
-  instantFixModalDefaultCli: 'claude' | 'codex' | null;
+  // Instant terminal sessions
   instantPaneThreadIds: string[];
   instantSplitDirection: 'horizontal' | 'vertical';
   instantPaneMetaByThread: Record<
@@ -205,9 +203,7 @@ interface AppState {
   setProjectTab: (tab: ProjectTab) => void;
   setActivePrNumber: (n: number | null) => void;
 
-  // Instant fix actions
-  openInstantFixModal: (defaultCli?: 'claude' | 'codex') => void;
-  closeInstantFixModal: () => void;
+  // Instant terminal actions
   openTerminalSessions: () => void;
   addInstantPane: (
     threadId: string,
@@ -257,8 +253,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   projectSettingsModalInitialTab: null,
   projectTab: 'issues' as ProjectTab,
   activePrNumber: null,
-  instantFixModalOpen: false,
-  instantFixModalDefaultCli: null,
   instantPaneThreadIds: [],
   instantSplitDirection: 'horizontal',
   instantPaneMetaByThread: {},
@@ -517,14 +511,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   setProjectTab: (tab) => set({ projectTab: tab }),
   setActivePrNumber: (n) => set({ activePrNumber: n }),
 
-  // Instant fix
-  openInstantFixModal: (defaultCli) =>
-    set({
-      instantFixModalOpen: true,
-      instantFixModalDefaultCli: defaultCli ?? null,
-      commandPaletteOpen: false,
-    }),
-  closeInstantFixModal: () => set({ instantFixModalOpen: false, instantFixModalDefaultCli: null }),
   openTerminalSessions: () => {
     const { activeProjectId } = get();
     if (!activeProjectId) return;

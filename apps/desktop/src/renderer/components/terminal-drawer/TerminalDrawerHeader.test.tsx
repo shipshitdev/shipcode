@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import type { GitHubIssueCacheRecord } from '@shipcode/shared';
+import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TerminalDrawerHeader } from './TerminalDrawerHeader';
@@ -139,12 +140,14 @@ describe('TerminalDrawerHeader', () => {
     expect(onOpenIssue).toHaveBeenCalledWith(issueB);
   });
 
-  it('renders the "+" button and disables Open in Ghostty / Terminal.app when unavailable', async () => {
+  it('renders direct CLI shell buttons and disables unavailable external terminals', async () => {
     const issue = makeIssue();
+    const onNewClaudeSession = vi.fn();
+    const onNewCodexSession = vi.fn();
 
     render(
       <TerminalDrawerHeader
-        activeProjectId={null}
+        activeProjectId="project-1"
         approvedAwaitingExecution={false}
         currentModel={null}
         displayIssue={issue}
@@ -155,8 +158,8 @@ describe('TerminalDrawerHeader', () => {
         startedAt={null}
         terminalAvailable={false}
         terminalThreadId={issue.threadId}
-        onNewClaudeSession={() => {}}
-        onNewCodexSession={() => {}}
+        onNewClaudeSession={onNewClaudeSession}
+        onNewCodexSession={onNewCodexSession}
         onOpenInGhostty={() => {}}
         onOpenInTerminalApp={() => {}}
         onOpenIssue={() => {}}
@@ -165,18 +168,17 @@ describe('TerminalDrawerHeader', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: 'New session' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'New Claude shell' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New Codex shell' }));
 
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'New session' }));
-
-    await waitFor(() => {
-      expect(screen.getByText('New Claude Session')).toBeInTheDocument();
-    });
-
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Open external terminal' }));
     const ghosttyItem = screen.getByText('Open in Ghostty').closest('[role="menuitem"]');
     const terminalItem = screen.getByText('Open in Terminal.app').closest('[role="menuitem"]');
     expect(ghosttyItem).toHaveAttribute('aria-disabled', 'true');
     expect(terminalItem).toHaveAttribute('aria-disabled', 'true');
+
+    expect(onNewClaudeSession).toHaveBeenCalledTimes(1);
+    expect(onNewCodexSession).toHaveBeenCalledTimes(1);
   });
 
   it('renders waiting-for-slot copy for approved execution waiters', () => {

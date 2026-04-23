@@ -26,9 +26,6 @@ vi.mock('./components/HealthBanner', () => ({
 vi.mock('./components/InboxView', () => ({
   InboxView: () => <div>InboxView</div>,
 }));
-vi.mock('./components/InstantFixModal', () => ({
-  InstantFixModal: () => <div>InstantFixModal</div>,
-}));
 vi.mock('./components/IssueDetail', () => ({
   IssueDetail: ({ expanded }: { expanded: boolean }) => (
     <div>{expanded ? 'IssueDetailExpanded' : 'IssueDetailPanel'}</div>

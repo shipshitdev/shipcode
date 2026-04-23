@@ -27,6 +27,14 @@ describe('shortcuts', () => {
       label: 'Toggle Terminal',
       glyph: '⌘J',
     });
+    expect(getShortcut('new-claude-shell')).toMatchObject({
+      label: 'New Claude Shell',
+      glyph: '⇧⌘C',
+    });
+    expect(getShortcut('new-codex-shell')).toMatchObject({
+      label: 'New Codex Shell',
+      glyph: '⇧⌘X',
+    });
 
     expect(() => getShortcut('unknown-shortcut' as never)).toThrow('Unknown shortcut id');
   });

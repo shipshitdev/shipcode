@@ -13,7 +13,8 @@ export type ShortcutId =
   | 'toggle-terminal'
   | 'toggle-sidebar'
   | 'toggle-issue-detail'
-  | 'instant-fix'
+  | 'new-claude-shell'
+  | 'new-codex-shell'
   | 'new-issue';
 
 export type ShortcutCategory = 'Navigation' | 'Workspace';
@@ -74,12 +75,20 @@ export const SHORTCUTS: ShortcutDef[] = [
     combo: { meta: true, key: 'j' },
   },
   {
-    id: 'instant-fix',
-    label: 'New Terminal Session',
-    description: 'Open a new terminal session with Claude or Codex',
+    id: 'new-claude-shell',
+    label: 'New Claude Shell',
+    description: 'Start a Claude CLI shell in the current project',
     category: 'Navigation',
-    glyph: '⇧⌘I',
-    combo: { meta: true, shift: true, key: 'i' },
+    glyph: '⇧⌘C',
+    combo: { meta: true, shift: true, key: 'c' },
+  },
+  {
+    id: 'new-codex-shell',
+    label: 'New Codex Shell',
+    description: 'Start a Codex CLI shell in the current project',
+    category: 'Navigation',
+    glyph: '⇧⌘X',
+    combo: { meta: true, shift: true, key: 'x' },
   },
   {
     id: 'new-issue',

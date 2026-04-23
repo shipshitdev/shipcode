@@ -1,6 +1,8 @@
 import type { Thread } from '@shipcode/shared';
-import { Button, cn, Plus, Terminal } from '@shipshitdev/ui';
+import { Button, Code2, cn, Sparkles, Terminal } from '@shipshitdev/ui';
 import { useCallback, useMemo, useState } from 'react';
+import { getShortcut } from '../data/shortcuts';
+import { type InstantShellCli, useStartInstantShell } from '../hooks/useStartInstantShell';
 import { type InstantPaneMode, useAppStore } from '../stores/app-store';
 import { InstantTerminalPane } from './instant-terminal/InstantTerminalPane';
 
@@ -18,9 +20,19 @@ export function InstantView() {
   const instantPaneMetaByThread = useAppStore((state) => state.instantPaneMetaByThread);
   const addInstantPane = useAppStore((state) => state.addInstantPane);
   const removeInstantPane = useAppStore((state) => state.removeInstantPane);
-  const openInstantFixModal = useAppStore((state) => state.openInstantFixModal);
+  const activeProjectId = useAppStore((state) => state.activeProjectId);
+  const { startInstantShell, startingCli } = useStartInstantShell();
   const [restartingThreadId, setRestartingThreadId] = useState<string | null>(null);
   const [restartErrors, setRestartErrors] = useState<Record<string, string>>({});
+
+  const handleStartShell = useCallback(
+    (cli: InstantShellCli) => {
+      void startInstantShell(cli).catch((error) => {
+        window.alert(error instanceof Error ? error.message : `Failed to start ${cli} shell`);
+      });
+    },
+    [startInstantShell],
+  );
 
   const paneTitle = useCallback(
     (threadId: string) => {
@@ -91,15 +103,37 @@ export function InstantView() {
     [addInstantPane, instantPaneMetaByThread, removeInstantPane],
   );
 
-  const handleSplitHorizontal = useCallback(() => {
-    useAppStore.getState().setInstantSplitDirection('horizontal');
-    openInstantFixModal();
-  }, [openInstantFixModal]);
+  const handleSplitHorizontal = useCallback(
+    (threadId: string) => {
+      const cli = instantPaneMetaByThread[threadId]?.cli ?? 'codex';
+      handleStartShell(cli);
+    },
+    [handleStartShell, instantPaneMetaByThread],
+  );
 
-  const handleSplitVertical = useCallback(() => {
-    useAppStore.getState().setInstantSplitDirection('vertical');
-    openInstantFixModal();
-  }, [openInstantFixModal]);
+  const handleSplitVertical = useCallback(
+    (threadId: string) => {
+      const cli = instantPaneMetaByThread[threadId]?.cli ?? 'codex';
+      handleStartShell(cli);
+    },
+    [handleStartShell, instantPaneMetaByThread],
+  );
+
+  const handleSplitHorizontalClick = useCallback(
+    (threadId: string) => {
+      useAppStore.getState().setInstantSplitDirection('horizontal');
+      handleSplitHorizontal(threadId);
+    },
+    [handleSplitHorizontal],
+  );
+
+  const handleSplitVerticalClick = useCallback(
+    (threadId: string) => {
+      useAppStore.getState().setInstantSplitDirection('vertical');
+      handleSplitVertical(threadId);
+    },
+    [handleSplitVertical],
+  );
 
   const gridClass = useMemo(() => {
     const count = instantPaneThreadIds.length;
@@ -115,11 +149,28 @@ export function InstantView() {
       <div className="flex flex-1 flex-col items-center justify-center gap-4 text-muted">
         <Terminal size={32} className="text-muted" />
         <p className="text-sm">No terminal sessions open</p>
-        <Button variant="default" onClick={() => openInstantFixModal()}>
-          <Plus size={14} className="mr-1.5" />
-          New Terminal Session
-        </Button>
-        <p className="text-xs text-muted">or press ⇧⌘I</p>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Button
+            variant="secondary"
+            disabled={!activeProjectId || startingCli != null}
+            onClick={() => handleStartShell('claude')}
+          >
+            <Sparkles size={14} />
+            Claude CLI
+          </Button>
+          <Button
+            variant="default"
+            disabled={!activeProjectId || startingCli != null}
+            onClick={() => handleStartShell('codex')}
+          >
+            <Code2 size={14} />
+            Codex CLI
+          </Button>
+        </div>
+        <p className="text-xs text-muted">
+          {getShortcut('new-claude-shell').glyph} Claude · {getShortcut('new-codex-shell').glyph}{' '}
+          Codex
+        </p>
       </div>
     );
   }
@@ -129,10 +180,26 @@ export function InstantView() {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-border">
         <h2 className="text-sm font-medium text-primary">Terminal Sessions</h2>
-        <Button variant="ghost" size="sm" onClick={() => openInstantFixModal()}>
-          <Plus size={14} className="mr-1" />
-          New
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!activeProjectId || startingCli != null}
+            onClick={() => handleStartShell('claude')}
+          >
+            <Sparkles size={14} />
+            Claude
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!activeProjectId || startingCli != null}
+            onClick={() => handleStartShell('codex')}
+          >
+            <Code2 size={14} />
+            Codex
+          </Button>
+        </div>
       </div>
 
       {/* Pane grid */}
@@ -145,8 +212,8 @@ export function InstantView() {
             mode={(instantPaneMetaByThread[threadId]?.mode ?? 'replay') as InstantPaneMode}
             paneState={instantPaneMetaByThread[threadId]?.state}
             onClose={handleClose}
-            onSplitHorizontal={handleSplitHorizontal}
-            onSplitVertical={handleSplitVertical}
+            onSplitHorizontal={() => handleSplitHorizontalClick(threadId)}
+            onSplitVertical={() => handleSplitVerticalClick(threadId)}
             onCancel={handleCancel}
             onRestart={handleRestart}
             restartPending={restartingThreadId === threadId}

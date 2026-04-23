@@ -3,6 +3,13 @@
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '../stores/app-store';
+
+const startInstantShellMock = vi.hoisted(() => vi.fn());
+
+vi.mock('./useStartInstantShell', () => ({
+  useStartInstantShell: () => ({ startInstantShell: startInstantShellMock }),
+}));
+
 import { useGlobalKeyboard } from './useGlobalKeyboard';
 
 function KeyboardHarness() {
@@ -25,6 +32,8 @@ describe('useGlobalKeyboard', () => {
     toggleTerminal.mockReset();
     toggleSidebar.mockReset();
     toggleIssueDetail.mockReset();
+    startInstantShellMock.mockReset();
+    startInstantShellMock.mockResolvedValue('thread-1');
 
     useAppStore.setState({
       toggleCommandPalette,
@@ -41,11 +50,15 @@ describe('useGlobalKeyboard', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', metaKey: true }));
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', metaKey: true }));
     window.dispatchEvent(new KeyboardEvent('keydown', { key: '∫', metaKey: true, altKey: true }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', metaKey: true, shiftKey: true }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', metaKey: true, shiftKey: true }));
 
     expect(toggleCommandPalette).toHaveBeenCalledTimes(1);
     expect(toggleTerminal).toHaveBeenCalledTimes(1);
     expect(toggleSidebar).toHaveBeenCalledTimes(1);
     expect(toggleIssueDetail).toHaveBeenCalledTimes(1);
+    expect(startInstantShellMock).toHaveBeenCalledWith('claude');
+    expect(startInstantShellMock).toHaveBeenCalledWith('codex');
   });
 
   it('ignores unrelated key presses', () => {

@@ -1,22 +1,29 @@
 import { useEffect } from 'react';
 import { getShortcut, matchesShortcut, SHORTCUTS, type ShortcutId } from '../data/shortcuts';
 import { useAppStore } from '../stores/app-store';
+import { type InstantShellCli, useStartInstantShell } from './useStartInstantShell';
 
 export function useGlobalKeyboard() {
   const toggleCommandPalette = useAppStore((s) => s.toggleCommandPalette);
   const toggleTerminal = useAppStore((s) => s.toggleTerminal);
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const toggleIssueDetail = useAppStore((s) => s.toggleIssueDetail);
-  const openInstantFixModal = useAppStore((s) => s.openInstantFixModal);
   const openCreateIssueModal = useAppStore((s) => s.openCreateIssueModal);
+  const { startInstantShell } = useStartInstantShell();
 
   useEffect(() => {
+    const startShell = (cli: InstantShellCli) => {
+      void startInstantShell(cli).catch((error) => {
+        window.alert(error instanceof Error ? error.message : `Failed to start ${cli} shell`);
+      });
+    };
     const actions: Record<ShortcutId, () => void> = {
       'command-palette': toggleCommandPalette,
       'toggle-terminal': toggleTerminal,
       'toggle-sidebar': toggleSidebar,
       'toggle-issue-detail': toggleIssueDetail,
-      'instant-fix': openInstantFixModal,
+      'new-claude-shell': () => startShell('claude'),
+      'new-codex-shell': () => startShell('codex'),
       'new-issue': openCreateIssueModal,
     };
 
@@ -44,7 +51,7 @@ export function useGlobalKeyboard() {
     toggleTerminal,
     toggleSidebar,
     toggleIssueDetail,
-    openInstantFixModal,
     openCreateIssueModal,
+    startInstantShell,
   ]);
 }

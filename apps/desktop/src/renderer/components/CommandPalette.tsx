@@ -11,6 +11,7 @@ import {
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { getShortcut } from '../data/shortcuts';
+import { type InstantShellCli, useStartInstantShell } from '../hooks/useStartInstantShell';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 
@@ -36,8 +37,8 @@ export function CommandPalette() {
   const setProjectTab = useAppStore((state) => state.setProjectTab);
   const selectProject = useAppStore((state) => state.selectProject);
   const openProjectSettingsModal = useAppStore((state) => state.openProjectSettingsModal);
-  const openInstantFixModal = useAppStore((state) => state.openInstantFixModal);
   const navigateToIssue = useAppStore((state) => state.navigateToIssue);
+  const { startInstantShell } = useStartInstantShell();
 
   // Cross-project issue search — only fetches when palette is open
   const { data: allProjects = [] } = useQuery<Project[]>({
@@ -103,6 +104,13 @@ export function CommandPalette() {
   const runAction = (fn: () => void | Promise<void>) => {
     close();
     fn();
+  };
+  const runShellAction = (cli: InstantShellCli) => {
+    runAction(() => {
+      void startInstantShell(cli).catch((error) => {
+        window.alert(error instanceof Error ? error.message : `Failed to start ${cli} shell`);
+      });
+    });
   };
 
   return (
@@ -207,9 +215,13 @@ export function CommandPalette() {
         )}
 
         <CommandGroup heading="Quick Actions">
-          <CommandItem onSelect={() => runAction(() => openInstantFixModal())}>
-            <span className="flex-1">New Terminal Session...</span>
-            <CommandShortcut>{getShortcut('instant-fix').glyph}</CommandShortcut>
+          <CommandItem disabled={!activeProjectId} onSelect={() => runShellAction('claude')}>
+            <span className="flex-1">New Claude Shell</span>
+            <CommandShortcut>{getShortcut('new-claude-shell').glyph}</CommandShortcut>
+          </CommandItem>
+          <CommandItem disabled={!activeProjectId} onSelect={() => runShellAction('codex')}>
+            <span className="flex-1">New Codex Shell</span>
+            <CommandShortcut>{getShortcut('new-codex-shell').glyph}</CommandShortcut>
           </CommandItem>
         </CommandGroup>
 

@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
 
-import type { GitHubIssueCacheRecord, PlanRecord } from '@shipcode/shared';
+import {
+  DEFAULT_SETTINGS,
+  type GitHubIssueCacheRecord,
+  type PlanRecord,
+  type Project,
+} from '@shipcode/shared';
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -56,6 +61,43 @@ const makeIssue = (overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
   unresolvedReviewCommentCount: 0,
   prLastSyncAt: null,
   fetchedAt: new Date().toISOString(),
+  ...overrides,
+});
+
+const makeProject = (overrides: Partial<Project> = {}): Project => ({
+  id: 'project-1',
+  name: 'ShipCode',
+  path: '/tmp/shipcode',
+  gitRemote: null,
+  githubRepoId: null,
+  githubRepoFullName: null,
+  starterIssueNumber: null,
+  starterIssueCreatedAt: null,
+  githubProjectUrl: null,
+  plannerModelOverride: null,
+  reviewerModelOverride: null,
+  executorModelOverride: null,
+  verifierModelOverride: null,
+  plannerModelIdOverride: null,
+  reviewerModelIdOverride: null,
+  executorModelIdOverride: null,
+  verifierModelIdOverride: null,
+  plannerReasoningEffortOverride: null,
+  reviewerReasoningEffortOverride: null,
+  executorReasoningEffortOverride: null,
+  verifierReasoningEffortOverride: null,
+  revisionCountOverride: null,
+  discordRouting: 'inherit',
+  discordWebhookUrlOverride: null,
+  telegramRouting: 'inherit',
+  telegramChatIdOverride: null,
+  defaultBranch: 'main',
+  pinned: false,
+  archived: false,
+  hidden: false,
+  notifyGithubUser: null,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
   ...overrides,
 });
 
@@ -254,6 +296,51 @@ describe('TerminalDrawer', () => {
 
     expect(await screen.findByText('Second project task')).toBeInTheDocument();
     expect(screen.queryByText('Foreign project task')).not.toBeInTheDocument();
+  });
+
+  it('starts a selected CLI shell directly from the header button', async () => {
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'integrations:check') return undefined;
+      if (channel === 'settings:get') return DEFAULT_SETTINGS;
+      if (channel === 'project:get') return makeProject();
+      if (channel === 'instant:shell-start') return { threadId: 'thread-codex' };
+      return null;
+    });
+
+    (window as typeof window & { shipcode: typeof window.shipcode }).shipcode = {
+      invoke: invoke as unknown as typeof window.shipcode.invoke,
+      on: vi.fn(() => () => {}) as unknown as typeof window.shipcode.on,
+    };
+
+    useAppStore.setState({
+      activeProjectId: 'project-1',
+      instantPaneThreadIds: [],
+      instantPaneMetaByThread: {},
+    } as never);
+
+    renderWithProviders();
+
+    fireEvent.click(screen.getByRole('button', { name: 'New Codex shell' }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('settings:get');
+      expect(invoke).toHaveBeenCalledWith('project:get', { projectId: 'project-1' });
+      expect(invoke).toHaveBeenCalledWith('instant:shell-start', {
+        projectId: 'project-1',
+        cli: 'codex',
+        modelId: null,
+        reasoningEffort: 'high',
+      });
+    });
+
+    expect(useAppStore.getState().projectTab).toBe('sessions');
+    expect(useAppStore.getState().instantPaneThreadIds).toEqual(['thread-codex']);
+    expect(useAppStore.getState().instantPaneMetaByThread['thread-codex']).toEqual({
+      mode: 'live',
+      cli: 'codex',
+      title: 'Codex shell',
+      state: 'running',
+    });
   });
 
   it('switches into full-size terminal mode instead of keeping the resize handle visible', () => {

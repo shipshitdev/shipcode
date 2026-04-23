@@ -5,6 +5,7 @@ import type {
 } from '@shipcode/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect } from 'react';
+import { useStartInstantShell } from '../hooks/useStartInstantShell';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 import { EMPTY_STREAM, PHASE_LABELS } from './terminal-drawer/constants';
@@ -91,9 +92,8 @@ export function TerminalDrawer() {
     toggleTerminal,
   } = useTerminalDrawer();
 
-  const openTerminalSessions = useAppStore((state) => state.openTerminalSessions);
-  const openInstantFixModal = useAppStore((state) => state.openInstantFixModal);
   const activeProjectId = useAppStore((state) => state.activeProjectId);
+  const { startInstantShell } = useStartInstantShell();
 
   const { data: integrations } = useQuery<IntegrationStatus>({
     queryKey: ['integrations'],
@@ -104,30 +104,47 @@ export function TerminalDrawer() {
   const ghosttyAvailable = integrations?.desktopApps?.ghostty?.available ?? false;
   const terminalAvailable = integrations?.desktopApps?.terminal?.available ?? false;
 
+  const handleNewCliSession = useCallback(
+    async (cli: 'claude' | 'codex') => {
+      await startInstantShell(cli);
+    },
+    [startInstantShell],
+  );
+
   const handleNewClaudeSession = useCallback(() => {
-    openTerminalSessions();
-    openInstantFixModal('claude');
-  }, [openTerminalSessions, openInstantFixModal]);
+    void handleNewCliSession('claude').catch((error) => {
+      window.alert(error instanceof Error ? error.message : 'Failed to start Claude shell');
+    });
+  }, [handleNewCliSession]);
 
   const handleNewCodexSession = useCallback(() => {
-    openTerminalSessions();
-    openInstantFixModal('codex');
-  }, [openTerminalSessions, openInstantFixModal]);
+    void handleNewCliSession('codex').catch((error) => {
+      window.alert(error instanceof Error ? error.message : 'Failed to start Codex shell');
+    });
+  }, [handleNewCliSession]);
 
   const handleOpenInGhostty = useCallback(() => {
     if (!activeProjectId) return;
-    void window.shipcode.invoke('project:open-path', {
-      projectId: activeProjectId,
-      target: 'ghostty',
-    });
+    void window.shipcode
+      .invoke('project:open-path', {
+        projectId: activeProjectId,
+        target: 'ghostty',
+      })
+      .catch((error) => {
+        window.alert(error instanceof Error ? error.message : 'Failed to open Ghostty');
+      });
   }, [activeProjectId]);
 
   const handleOpenInTerminalApp = useCallback(() => {
     if (!activeProjectId) return;
-    void window.shipcode.invoke('project:open-path', {
-      projectId: activeProjectId,
-      target: 'terminal',
-    });
+    void window.shipcode
+      .invoke('project:open-path', {
+        projectId: activeProjectId,
+        target: 'terminal',
+      })
+      .catch((error) => {
+        window.alert(error instanceof Error ? error.message : 'Failed to open Terminal.app');
+      });
   }, [activeProjectId]);
 
   return (
