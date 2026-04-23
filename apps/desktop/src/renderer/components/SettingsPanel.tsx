@@ -19,7 +19,7 @@ import { ShortcutsSection } from './settings-panel/ShortcutsSection';
 
 export function SettingsPanel() {
   const queryClient = useQueryClient();
-  const { settingsSection } = useAppStore();
+  const settingsSection = useAppStore((state) => state.settingsSection);
   const [worktreeRootError, setWorktreeRootError] = useState<string | null>(null);
 
   const { data: settings } = useQuery<AppSettings>({

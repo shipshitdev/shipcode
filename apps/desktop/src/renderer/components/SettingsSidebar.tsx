@@ -10,7 +10,7 @@ import {
   Settings,
   Workflow,
   Wrench,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
 import type { ReactNode } from 'react';
 import type { SettingsSection } from '../stores/app-store';
 import { useAppStore } from '../stores/app-store';
@@ -59,7 +59,9 @@ const SECTIONS: { key: SettingsSection; label: string; icon: ReactNode }[] = [
 ];
 
 export function SettingsSidebar() {
-  const { settingsSection, setSettingsSection, toggleSettings } = useAppStore();
+  const settingsSection = useAppStore((state) => state.settingsSection);
+  const setSettingsSection = useAppStore((state) => state.setSettingsSection);
+  const toggleSettings = useAppStore((state) => state.toggleSettings);
 
   return (
     <aside className="flex w-[256px] min-w-[256px] flex-col border-r border-border bg-primary">

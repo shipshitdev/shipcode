@@ -114,14 +114,12 @@ describe('misc leaf components', () => {
         modelValidation={{}}
         setModelValidation={vi.fn()}
         onApplyPreset={vi.fn()}
-        onResetIssueOverrides={vi.fn()}
-        issueOverrideResetPending={false}
-        issueOverrideResetResult={null}
-        issueOverrideResetError={null}
       />,
     );
 
-    expect(screen.getByText(/Project overrides shadow the global defaults/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Project model overrides shadow the global defaults/i),
+    ).toBeInTheDocument();
     expect(screen.getByTestId('phase-row-planner')).toHaveTextContent('Planner');
     expect(screen.getByTestId('phase-row-reviewer')).toHaveTextContent('Reviewer');
     expect(screen.getByTestId('phase-row-executor')).toHaveTextContent('Executor');

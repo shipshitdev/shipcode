@@ -3,13 +3,14 @@ import {
   Badge,
   Button,
   cn,
+  LoadingButtonContent,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
   Textarea,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
@@ -74,13 +75,17 @@ const PHASE_LABELS: Record<PhaseSkillKey, { label: string; description: string }
     label: 'Verifier',
     description: 'Confirms the diff matches the plan',
   },
+  'pr-generation': {
+    label: 'PR Writer',
+    description: 'Generates the pull request body content',
+  },
 };
 
 const SCOPE_GLOBAL = '__GLOBAL__' as const;
 
 export function SkillsView() {
   const queryClient = useQueryClient();
-  const { activeProjectId } = useAppStore();
+  const activeProjectId = useAppStore((state) => state.activeProjectId);
   const [scope, setScope] = useState<string>(SCOPE_GLOBAL);
   const [activePhase, setActivePhase] = useState<PhaseSkillKey>('plan-generation');
   const [draft, setDraft] = useState<string>('');
@@ -328,7 +333,9 @@ export function SkillsView() {
                     onClick={() => openWritingPrdsMutation.mutate()}
                     disabled={openWritingPrdsMutation.isPending}
                   >
-                    {openWritingPrdsMutation.isPending ? 'Opening…' : 'Open in system editor'}
+                    <LoadingButtonContent loading={openWritingPrdsMutation.isPending}>
+                      Open in system editor
+                    </LoadingButtonContent>
                   </Button>
                 </>
               ) : (
@@ -417,7 +424,9 @@ export function SkillsView() {
                     Reset
                   </Button>
                   <Button onClick={handleSave} disabled={!draftDirty || writeMutation.isPending}>
-                    {writeMutation.isPending ? 'Saving…' : 'Save'}
+                    <LoadingButtonContent loading={writeMutation.isPending}>
+                      Save
+                    </LoadingButtonContent>
                   </Button>
                 </div>
               </header>

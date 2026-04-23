@@ -19,7 +19,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useAppStore } from '../stores/app-store';
@@ -68,7 +68,10 @@ const PHASE_COLOR: Partial<Record<PipelinePhase, string>> = {
 type DisplayMode = '$' | 'tokens';
 
 export function CostsView() {
-  const { selectProject, selectThread, selectIssue, setGithubIssues } = useAppStore();
+  const selectProject = useAppStore((state) => state.selectProject);
+  const selectThread = useAppStore((state) => state.selectThread);
+  const selectIssue = useAppStore((state) => state.selectIssue);
+  const setGithubIssues = useAppStore((state) => state.setGithubIssues);
   // Default to tokens because token counts are exact for every provider,
   // whereas USD amounts are only real for OpenRouter (billed) and are
   // best-effort estimates for Claude/Codex CLI runs priced from published rates.

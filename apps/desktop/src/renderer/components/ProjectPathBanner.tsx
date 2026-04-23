@@ -1,9 +1,9 @@
 import type { Project } from '@shipcode/shared';
-import { Alert, AlertDescription } from '@shipcode/ui';
+import { Alert, AlertDescription } from '@shipshitdev/ui';
 import { useAppStore } from '../stores/app-store';
 
 export function ProjectPathBanner({ project }: { project: Project | null }) {
-  const { settingsVisible } = useAppStore();
+  const settingsVisible = useAppStore((state) => state.settingsVisible);
 
   if (settingsVisible || !project || project.pathExists !== false) return null;
 

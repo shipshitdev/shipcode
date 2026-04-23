@@ -1,6 +1,6 @@
 import type { AppSettings, Project, ProjectProviderWarning } from '@shipcode/shared';
 import { getPhaseDescriptor, resolvePhaseModel, resolvePhaseModelId } from '@shipcode/shared';
-import { Badge, Button, cn, Popover, PopoverContent, PopoverTrigger } from '@shipcode/ui';
+import { Badge, Button, cn, Popover, PopoverContent, PopoverTrigger } from '@shipshitdev/ui';
 import { formatProviderSelectionLabel, PROVIDER_DISPLAY } from './model-provider-options';
 
 function formatResolvedSelection(
@@ -28,6 +28,9 @@ export function ProjectProviderWarningPopover({
 }) {
   const hasBlockedWarning = warnings.some((warning) => warning.severity === 'blocked');
   const label = hasBlockedWarning ? 'Blocked' : 'Low';
+  const triggerTitle = hasBlockedWarning
+    ? `Project model access blocked: ${warnings.map((warning) => warning.message).join(' · ')}`
+    : `Project model usage running low: ${warnings.map((warning) => warning.message).join(' · ')}`;
 
   return (
     <Popover>
@@ -37,6 +40,7 @@ export function ProjectProviderWarningPopover({
           variant="ghost"
           size="sm"
           aria-label={`Project model warnings for ${project.name}`}
+          title={triggerTitle}
           className={cn('h-auto p-0 hover:bg-transparent', className)}
         >
           <Badge

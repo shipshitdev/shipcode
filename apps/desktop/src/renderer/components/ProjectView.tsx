@@ -1,4 +1,4 @@
-import { Button, cn, GitPullRequest, LayoutList, Terminal } from '@shipcode/ui';
+import { Button, cn, GitPullRequest, LayoutList, Terminal } from '@shipshitdev/ui';
 import { type ProjectTab, useAppStore } from '../stores/app-store';
 import { InstantView } from './InstantView';
 import { PullRequestsPanel } from './pull-requests/PullRequestsPanel';
@@ -13,7 +13,8 @@ const PROJECT_TABS: Array<{ value: ProjectTab; label: string; icon: TabIcon }> =
 ];
 
 export function ProjectView() {
-  const { projectTab, setProjectTab } = useAppStore();
+  const projectTab = useAppStore((state) => state.projectTab);
+  const setProjectTab = useAppStore((state) => state.setProjectTab);
 
   return (
     <div className="flex flex-1 min-h-0 min-w-0 flex-col bg-primary">
@@ -35,27 +36,14 @@ export function ProjectView() {
         ))}
       </div>
 
-      {/* Force-mounted panels — CSS visibility, not unmount */}
-      <div
-        className={cn('flex flex-1 min-h-0 min-w-0 flex-col', projectTab !== 'issues' && 'hidden')}
-      >
-        <ThreadPanel />
-      </div>
-      <div
-        className={cn(
-          'flex flex-1 min-h-0 min-w-0 flex-col',
-          projectTab !== 'pull-requests' && 'hidden',
+      <div className="flex flex-1 min-h-0 min-w-0 flex-col">
+        {projectTab === 'issues' ? (
+          <ThreadPanel />
+        ) : projectTab === 'pull-requests' ? (
+          <PullRequestsPanel />
+        ) : (
+          <InstantView />
         )}
-      >
-        <PullRequestsPanel />
-      </div>
-      <div
-        className={cn(
-          'flex flex-1 min-h-0 min-w-0 flex-col',
-          projectTab !== 'sessions' && 'hidden',
-        )}
-      >
-        <InstantView />
       </div>
     </div>
   );

@@ -41,7 +41,7 @@ import {
   Terminal,
   Trash2,
   Wrench,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ComponentType } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -81,21 +81,19 @@ const PROJECT_OPEN_TARGET_ICONS: Record<AppSettings['projectOpenTarget'], AppIco
 };
 
 export function ProjectSidebar() {
-  const {
-    activeProjectId,
-    viewMode,
-    settingsVisible,
-    selectProject,
-    openOverview,
-    openActivity,
-    openInbox,
-    openCosts,
-    openSkills,
-    openProjectSettingsModal,
-    sidebarCollapsed,
-    openCreateIssueModal,
-    openCommandPalette,
-  } = useAppStore();
+  const activeProjectId = useAppStore((state) => state.activeProjectId);
+  const viewMode = useAppStore((state) => state.viewMode);
+  const settingsVisible = useAppStore((state) => state.settingsVisible);
+  const selectProject = useAppStore((state) => state.selectProject);
+  const openOverview = useAppStore((state) => state.openOverview);
+  const openActivity = useAppStore((state) => state.openActivity);
+  const openInbox = useAppStore((state) => state.openInbox);
+  const openCosts = useAppStore((state) => state.openCosts);
+  const openSkills = useAppStore((state) => state.openSkills);
+  const openProjectSettingsModal = useAppStore((state) => state.openProjectSettingsModal);
+  const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
+  const openCreateIssueModal = useAppStore((state) => state.openCreateIssueModal);
+  const openCommandPalette = useAppStore((state) => state.openCommandPalette);
   const queryClient = useQueryClient();
 
   const { data: projects = [] } = useQuery<ProjectWithPathState[]>({
@@ -618,11 +616,14 @@ export function ProjectSidebar() {
                         <DropdownMenuItem onSelect={() => openProjectSettingsModal(project.id)}>
                           <Settings size={12} /> Settings
                         </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onSelect={() => openProjectSettingsModal(project.id, 'setup')}
-                        >
-                          <Wrench size={12} /> Configure setup...
-                        </DropdownMenuItem>
+                        {project.pathExists !== false &&
+                        (project.setupStatus === 'missing' || project.setupStatus === 'invalid') ? (
+                          <DropdownMenuItem
+                            onSelect={() => openProjectSettingsModal(project.id, 'setup')}
+                          >
+                            <Wrench size={12} /> Setup
+                          </DropdownMenuItem>
+                        ) : null}
                         {project.pathExists === false && (
                           <DropdownMenuItem onSelect={() => relinkProject.mutate(project.id)}>
                             <Wrench size={12} /> Relink folder…

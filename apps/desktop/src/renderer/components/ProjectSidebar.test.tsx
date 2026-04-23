@@ -30,8 +30,12 @@ function renderWithProviders() {
   );
 }
 
-async function openProjectOpenerSubmenu() {
+async function openProjectActionsMenu() {
   fireEvent.pointerDown(await screen.findByRole('button', { name: 'More actions for ShipCode' }));
+}
+
+async function openProjectOpenerSubmenu() {
+  await openProjectActionsMenu();
   const openInTrigger = await screen.findByText('Open in');
   openInTrigger.focus();
   fireEvent.keyDown(openInTrigger, { key: 'ArrowRight' });
@@ -42,6 +46,7 @@ const project: Project = {
   name: 'ShipCode',
   path: '/tmp/shipcode',
   pathExists: true,
+  setupStatus: 'configured',
   gitRemote: 'git@github.com:shipshitdev/shipcode.git',
   githubRepoId: null,
   githubRepoFullName: null,
@@ -349,6 +354,52 @@ describe('ProjectSidebar', () => {
     });
   });
 
+  it('shows a setup shortcut in the project actions menu when setup is missing', async () => {
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'projects-visible' || channel === 'project:list-visible')
+        return [{ ...project, setupStatus: 'missing' satisfies Project['setupStatus'] }];
+      if (channel === 'settings:get') return DEFAULT_SETTINGS;
+      if (channel === 'dashboard:get-stats')
+        return {
+          agentsRunning: 0,
+          agentsRunningByProject: {},
+        } satisfies Partial<DashboardStats>;
+      if (channel === 'notification:list') return [] satisfies NotificationRecord[];
+      if (channel === 'integrations:check') return integrations;
+      if (channel === 'provider-usage:check') return makeUsageMap();
+      return [];
+    });
+
+    renderWithProviders();
+
+    await openProjectActionsMenu();
+
+    expect(await screen.findByRole('menuitem', { name: 'Setup' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Configure setup...' })).not.toBeInTheDocument();
+  });
+
+  it('hides the setup shortcut in the project actions menu when setup is already configured', async () => {
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'projects-visible' || channel === 'project:list-visible') return [project];
+      if (channel === 'settings:get') return DEFAULT_SETTINGS;
+      if (channel === 'dashboard:get-stats')
+        return {
+          agentsRunning: 0,
+          agentsRunningByProject: {},
+        } satisfies Partial<DashboardStats>;
+      if (channel === 'notification:list') return [] satisfies NotificationRecord[];
+      if (channel === 'integrations:check') return integrations;
+      if (channel === 'provider-usage:check') return makeUsageMap();
+      return [];
+    });
+
+    renderWithProviders();
+
+    await openProjectActionsMenu();
+
+    expect(screen.queryByRole('menuitem', { name: 'Setup' })).not.toBeInTheDocument();
+  });
+
   it('shows an approval badge when pendingApprovalsByProject has a count > 0', async () => {
     invokeMock.mockImplementation(async (channel) => {
       if (channel === 'projects-visible' || channel === 'project:list-visible') return [project];
@@ -537,5 +588,54 @@ describe('ProjectSidebar', () => {
     expect(await screen.findByText('Selected models vs CLI status')).toBeInTheDocument();
     expect(screen.getByText('Codex CLI session exhausted')).toBeInTheDocument();
     expect(screen.getByText('Planner')).toBeInTheDocument();
+  });
+
+  it('adds a hover title to the low warning badge trigger', async () => {
+    const warnedProject: Project = {
+      ...project,
+      plannerModelOverride: 'codex',
+    };
+
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'projects-visible' || channel === 'project:list-visible')
+        return [warnedProject];
+      if (channel === 'settings:get') return DEFAULT_SETTINGS;
+      if (channel === 'dashboard:get-stats')
+        return {
+          agentsRunning: 0,
+          agentsRunningByProject: {},
+        } satisfies Partial<DashboardStats>;
+      if (channel === 'notification:list') return [] satisfies NotificationRecord[];
+      if (channel === 'integrations:check') return integrations;
+      if (channel === 'provider-usage:check') {
+        return makeUsageMap({
+          codex: makeUsage('codex', {
+            state: 'warning',
+            windows: [
+              {
+                key: 'session',
+                label: 'Session',
+                usedPercent: 88,
+                leftPercent: 12,
+                resetsAt: null,
+                resetDescription: 'in 45m',
+              },
+            ],
+          }),
+        });
+      }
+      return [];
+    });
+
+    renderWithProviders();
+
+    const warningButton = await screen.findByRole('button', {
+      name: 'Project model warnings for ShipCode',
+    });
+
+    expect(warningButton).toHaveAttribute(
+      'title',
+      expect.stringContaining('Project model usage running low: Codex CLI session running low'),
+    );
   });
 });

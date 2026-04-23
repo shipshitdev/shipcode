@@ -1,12 +1,12 @@
 import { clampError, type Project } from '@shipcode/shared';
-import { Button } from '@shipcode/ui';
+import { Button, LoadingButtonContent } from '@shipshitdev/ui';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
 import { useAppStore } from '../stores/app-store';
 
 export function ProjectMissingView({ project }: { project: Project }) {
   const queryClient = useQueryClient();
-  const { openProjectSettingsModal } = useAppStore();
+  const openProjectSettingsModal = useAppStore((state) => state.openProjectSettingsModal);
 
   const relinkProject = useMutation({
     mutationFn: async () => {
@@ -56,7 +56,9 @@ export function ProjectMissingView({ project }: { project: Project }) {
         </div>
         <div className="mt-5 flex flex-wrap gap-2">
           <Button onClick={() => relinkProject.mutate()} disabled={relinkProject.isPending}>
-            {relinkProject.isPending ? 'Locating…' : 'Locate moved folder'}
+            <LoadingButtonContent loading={relinkProject.isPending}>
+              Locate moved folder
+            </LoadingButtonContent>
           </Button>
           <Button variant="secondary" onClick={() => openProjectSettingsModal(project.id)}>
             Project settings
