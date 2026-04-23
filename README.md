@@ -1,8 +1,5 @@
 # ShipCode
 
-> **Warning**
-> This project is under active development and not yet ready for production use. APIs, architecture, and features may change without notice.
-
 Autonomous AI coding pipeline. GitHub issues in, pull requests out.
 
 Label a GitHub issue with `agent:claude` or `agent:codex`, and ShipCode handles the rest: plan, adversarial review, implement, verify, and ship a PR. No human gates until the PR is created.
@@ -63,7 +60,7 @@ packages/
 **Desktop app (macOS, Homebrew):**
 
 ```bash
-brew tap shipshitdev/shipcode
+brew tap shipshitdev/tap
 brew install --cask shipcode
 ```
 
@@ -72,6 +69,9 @@ brew install --cask shipcode
 ```bash
 npx shipcode onboard
 npx shipcode run 42
+
+# Optional global install
+npm install -g shipcode
 ```
 
 **From source:**

@@ -1,5 +1,5 @@
 {
-  "name": "@shipshitdev/shipcode",
+  "name": "shipcode",
   "version": "0.0.1",
   "description": "Autonomous AI coding pipeline. GitHub issues in, pull requests out.",
   "type": "module",

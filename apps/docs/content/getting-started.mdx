@@ -21,7 +21,7 @@ Both read the same SQLite DB and worktree layout, so you can install both and th
 ## Desktop App
 
 ```bash
-brew tap shipshitdev/shipcode
+brew tap shipshitdev/tap
 brew install --cask shipcode
 ```
 
@@ -31,16 +31,16 @@ Launch ShipCode from Applications. First run opens the onboarding wizard, which 
 
 ```bash
 # Run once without installing
-npx @shipshitdev/shipcode onboard
-npx @shipshitdev/shipcode run <issue-number>
+npx shipcode onboard
+npx shipcode run <issue-number>
 
 # Or install globally so the `shipcode` command is always on your PATH
-npm install -g @shipshitdev/shipcode
+npm install -g shipcode
 shipcode onboard
 shipcode run <issue-number>
 ```
 
-After a global install the command name is `shipcode`, not `@shipshitdev/shipcode` — the scope only appears on the `npx` path.
+The package is published as `shipcode`, so the clean path is the default one: `npx shipcode`, `npm install -g shipcode`, then `shipcode ...`.
 
 ## Adding a Repository
 

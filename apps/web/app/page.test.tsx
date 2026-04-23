@@ -6,7 +6,8 @@ describe('web home page', () => {
   it('renders the main marketing headline and primary CTAs', () => {
     const html = renderToStaticMarkup(<Home />);
 
-    expect(html).toContain('Issues in. PRs out.');
+    expect(html).toContain('From issue queue');
+    expect(html).toContain('to reviewed PR.');
     expect(html).toContain('View on GitHub');
     expect(html).toContain('Read the docs');
   });
@@ -15,8 +16,8 @@ describe('web home page', () => {
     const html = renderToStaticMarkup(<Home />);
 
     expect(html).toContain(
-      'Plan with Opus, review with Codex, execute in an isolated worktree, and keep verifying until the pull request is ready to land.',
+      'Install the desktop app with Homebrew or run the same pipeline instantly with',
     );
-    expect(html).toContain('Planning. Review loops. Worktrees. Verifier retries.');
+    expect(html).toContain('Homebrew for the desktop app.');
   });
 });

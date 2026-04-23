@@ -42,8 +42,8 @@ describe('web component coverage', () => {
   });
 
   it('renders the marketing layout metadata and font classes', () => {
-    expect(metadata.title).toBe('ShipCode — Make Planning Great Again');
-    expect(metadata.description).toContain('Autonomous AI coding pipeline');
+    expect(metadata.title).toBe('ShipCode — Autonomous AI Coding Pipeline');
+    expect(metadata.description).toContain('Desktop app + CLI');
 
     const html = renderToStaticMarkup(
       <RootLayout>
@@ -82,7 +82,7 @@ describe('web component coverage', () => {
     view.cleanup();
   });
 
-  it('copies the install command and resets the button label after the timeout', async () => {
+  it('copies the active install command and resets the button label after the timeout', async () => {
     vi.useFakeTimers();
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(globalThis.navigator, 'clipboard', {
@@ -102,7 +102,7 @@ describe('web component coverage', () => {
       button.click();
     });
 
-    expect(writeText).toHaveBeenCalledWith(`brew tap shipshitdev/shipcode
+    expect(writeText).toHaveBeenCalledWith(`brew tap shipshitdev/tap
 brew install --cask shipcode`);
     expect(button.textContent).toBe('Copied!');
 
@@ -111,6 +111,24 @@ brew install --cask shipcode`);
     });
 
     expect(button.textContent).toBe('Copy');
+
+    const cliButton = Array.from(view.container.querySelectorAll('button')).find((node) =>
+      node.textContent?.includes('CLI'),
+    );
+    if (!(cliButton instanceof HTMLButtonElement)) {
+      throw new Error('Expected CLI button');
+    }
+
+    await act(async () => {
+      cliButton.click();
+    });
+
+    await act(async () => {
+      button.click();
+    });
+
+    expect(writeText).toHaveBeenLastCalledWith(`npx shipcode onboard
+npx shipcode run 42`);
     view.cleanup();
     vi.useRealTimers();
   });

@@ -6,6 +6,7 @@ if (major < 22 || (major === 22 && minor < 5)) {
   process.exit(1);
 }
 
+import { createRequire } from 'node:module';
 import { Command } from 'commander';
 import { approveCommand } from './commands/approve';
 import { logsCommand } from './commands/logs';
@@ -18,9 +19,11 @@ import { runCommand } from './commands/run';
 import { startCommand } from './commands/start';
 import { statusCommand } from './commands/status';
 
+const require = createRequire(import.meta.url);
+const { version } = require('../package.json') as { version: string };
 const program = new Command();
 
-program.name('shipcode').description('ShipCode — Autonomous AI coding pipeline').version('0.0.1');
+program.name('shipcode').description('ShipCode — Autonomous AI coding pipeline').version(version);
 
 program
   .command('onboard')

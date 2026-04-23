@@ -1,4 +1,4 @@
-# @shipshitdev/shipcode
+# shipcode
 
 Headless CLI for ShipCode — an autonomous AI coding pipeline that takes GitHub issues in and ships pull requests out.
 
@@ -8,14 +8,14 @@ This package is the **terminal / CI / server** entry point. If you want the desk
 
 ```bash
 # Run once without installing
-npx @shipshitdev/shipcode onboard
+npx shipcode onboard
 
 # Or install globally so the `shipcode` command is always on your PATH
-npm install -g @shipshitdev/shipcode
+npm install -g shipcode
 shipcode onboard
 ```
 
-The `bin` map in `package.json` exposes the command as `shipcode`, so after a global install you type `shipcode`, not `@shipshitdev/shipcode`. Only `npx` carries the scope.
+The package is published to npm as `shipcode`, so the clean path is the default one: `npx shipcode`, `npm install -g shipcode`, then `shipcode ...`.
 
 ## Prerequisites
 
@@ -52,14 +52,14 @@ From the monorepo root:
 
 ```bash
 bun install                                             # install all workspace deps
-bun run --filter @shipshitdev/shipcode build            # build apps/cli -> apps/cli/dist
+bun run --filter shipcode build                         # build apps/cli -> apps/cli/dist
 node apps/cli/dist/index.js onboard                     # run the built CLI in any repo
 ```
 
 Watch mode (rebuild on change):
 
 ```bash
-bun run --filter @shipshitdev/shipcode dev
+bun run --filter shipcode dev
 ```
 
 ## Executors
@@ -90,7 +90,7 @@ See the [architecture docs](https://shipcode.shipshit.dev/docs/architecture) for
 | If you want... | Use |
 |---|---|
 | A GUI to watch pipelines, triage issues, edit settings, view costs | Desktop app (`brew install --cask shipcode`) |
-| To run the pipeline from a terminal, script, cron job, or CI job | This CLI (`npm i -g @shipshitdev/shipcode`) |
+| To run the pipeline from a terminal, script, cron job, or CI job | This CLI (`npm i -g shipcode`) |
 | Both | Install both — they share the same SQLite DB and worktree layout |
 
 ## See also

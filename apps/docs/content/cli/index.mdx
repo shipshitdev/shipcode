@@ -1,6 +1,6 @@
 # CLI
 
-`@shipshitdev/shipcode` is the headless pipeline runner. It's a **separate product** from the [desktop app](/desktop/overview) — no GUI, no Electron, just the `shipcode` command. Both share the same pipeline engine, same SQLite DB, and same worktree layout, so you can install one or both.
+`shipcode` is the headless pipeline runner. It's a **separate product** from the [desktop app](/desktop/overview) — no GUI, no Electron, just the `shipcode` command. Both share the same pipeline engine, same SQLite DB, and same worktree layout, so you can install one or both.
 
 ## When to use the CLI vs the desktop app
 
@@ -18,15 +18,15 @@ The two products do not conflict. They read and write the same local SQLite DB, 
 
 ```bash
 # Run once without installing
-npx @shipshitdev/shipcode onboard
+npx shipcode onboard
 
 # Or install globally so the `shipcode` command is always on your PATH
-npm install -g @shipshitdev/shipcode
+npm install -g shipcode
 ```
 
 Requires Node.js ≥ 22.5.0 (for the built-in `node:sqlite` module).
 
-After a global install, the command name is `shipcode` — the `@shipshitdev/` scope only appears in the `npx` path and in `package.json` metadata. `shipcode --help` lists every command.
+The npm package name is also `shipcode`, so there is no scoped install syntax to remember. `shipcode --help` lists every command.
 
 ## Commands
 

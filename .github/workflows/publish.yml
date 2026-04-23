@@ -1,19 +1,10 @@
 name: Publish
 
-# Manual-dispatch only until Apple signing / notarization is wired.
-# When CSC_LINK + APPLE_* secrets are available, re-enable the
-# `release: published` trigger below and restore the commented
-# `build-desktop-macos` + `update-homebrew-cask` jobs at the bottom.
-#
-# File renamed from `release.yml` to `publish.yml` because the previous
-# registration cached a stale state where GitHub kept recording 0-job
-# "failure" runs on every push to master even though the workflow has
-# no push trigger. Renaming forces a fresh workflow registration.
 on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Release tag to publish (e.g. v0.1.0). Must match an existing GitHub release for Linux uploads."
+        description: "Release tag to publish (e.g. v0.1.0). Must match an existing GitHub release."
         required: true
         type: string
       deploy_web:
@@ -26,8 +17,18 @@ on:
         required: false
         type: boolean
         default: true
+      build_macos:
+        description: "Build + upload desktop macOS installers (unsigned dmg + zip)"
+        required: false
+        type: boolean
+        default: true
+      update_homebrew:
+        description: "Update the shipcode cask in shipshitdev/homebrew-tap"
+        required: false
+        type: boolean
+        default: true
       publish_cli:
-        description: "Publish the CLI to npm (requires NPM_TOKEN secret)"
+        description: "Publish the CLI to npm via Trusted Publisher"
         required: false
         type: boolean
         default: false
@@ -36,7 +37,7 @@ permissions:
   contents: write
 
 env:
-  BUN_VERSION: "1.3.11"
+  BUN_VERSION: "1.3.13"
   NODE_VERSION: "22"
   VERCEL_PROJECT_ID_WEB: "prj_em8zYt0Lxin5PqxObNI47qBl2fOa"
 
@@ -82,10 +83,18 @@ jobs:
       - name: Install native build dependencies
         run: sudo apt-get update && sudo apt-get install -y build-essential python3
       - run: bun install
+      - name: Set desktop version from release tag
+        run: |
+          VERSION="${{ inputs.release_tag }}"
+          VERSION="${VERSION#v}"
+          CURRENT=$(node -p "require('./apps/desktop/package.json').version")
+          if [ "$CURRENT" != "$VERSION" ]; then
+            cd apps/desktop && npm version "$VERSION" --no-git-tag-version
+          fi
       - name: Build desktop app
         run: cd apps/desktop && bun run build:code
       - name: Package Linux installers
-        run: cd apps/desktop && npx electron-builder --linux
+        run: cd apps/desktop && npx electron-builder --linux --publish never
       - name: Upload Linux binaries to release
         run: |
           gh release upload "${{ inputs.release_tag }}" \
@@ -95,13 +104,99 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  build-desktop-macos:
+    if: ${{ inputs.build_macos }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-13
+            arch: x64
+          - runner: macos-15
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: bun install
+      - name: Set desktop version from release tag
+        run: |
+          VERSION="${{ inputs.release_tag }}"
+          VERSION="${VERSION#v}"
+          CURRENT=$(node -p "require('./apps/desktop/package.json').version")
+          if [ "$CURRENT" != "$VERSION" ]; then
+            cd apps/desktop && npm version "$VERSION" --no-git-tag-version
+          fi
+      - name: Build desktop app
+        run: cd apps/desktop && bun run build:code
+      - name: Package macOS installers
+        run: cd apps/desktop && npx electron-builder --mac --${{ matrix.arch }} --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - name: Upload macOS binaries to release
+        run: |
+          gh release upload "${{ inputs.release_tag }}" \
+            apps/desktop/out/*.dmg \
+            apps/desktop/out/*.zip \
+            --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-homebrew-cask:
+    if: ${{ inputs.build_macos && inputs.update_homebrew && secrets.HOMEBREW_TAP_TOKEN != '' }}
+    needs: build-desktop-macos
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tap repo
+        uses: actions/checkout@v4
+        with:
+          repository: shipshitdev/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          ref: master
+      - name: Download macOS release artifacts
+        run: |
+          VERSION="${{ inputs.release_tag }}"
+          VERSION="${VERSION#v}"
+          gh release download "v${VERSION}" \
+            --repo shipshitdev/shipcode \
+            --pattern "*.dmg" \
+            --dir ./artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compute SHA256 hashes
+        id: sha
+        run: |
+          ARM_FILE=$(ls artifacts/*-arm64.dmg 2>/dev/null | head -1)
+          INTEL_FILE=$(ls artifacts/*-x64.dmg 2>/dev/null | head -1)
+          if [ -n "$ARM_FILE" ]; then
+            echo "arm_sha=$(shasum -a 256 "$ARM_FILE" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -n "$INTEL_FILE" ]; then
+            echo "intel_sha=$(shasum -a 256 "$INTEL_FILE" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Update cask version and SHA256
+        run: |
+          VERSION="${{ inputs.release_tag }}"
+          VERSION="${VERSION#v}"
+          sed -i "s/version \".*\"/version \"${VERSION}\"/" Casks/shipcode.rb
+          sed -i "s|arm:   \"[a-f0-9]*\"|arm:   \"${{ steps.sha.outputs.arm_sha }}\"|" Casks/shipcode.rb
+          sed -i "s|intel: \"[a-f0-9]*\"|intel: \"${{ steps.sha.outputs.intel_sha }}\"|" Casks/shipcode.rb
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/shipcode.rb
+          git commit -m "chore: bump shipcode to ${{ inputs.release_tag }}"
+          git push
+
   publish-cli:
     if: ${{ inputs.publish_cli }}
     runs-on: ubuntu-latest
-    # id-token: write is required for npm Trusted Publishers (OIDC).
-    # contents: read is required for actions/checkout. The job-level
-    # permissions block fully replaces the top-level, so we re-declare
-    # contents: read explicitly.
     permissions:
       id-token: write
       contents: read
@@ -116,117 +211,19 @@ jobs:
           registry-url: "https://registry.npmjs.org"
       - run: bun install
       - name: Build CLI and dependencies
-        run: bun run turbo run build --filter=@shipshitdev/shipcode
+        run: bun run turbo run build --filter=shipcode
       - name: Set version from release tag
         run: |
           VERSION="${{ inputs.release_tag }}"
           VERSION="${VERSION#v}"
-          cd apps/cli && npm version "$VERSION" --no-git-tag-version
+          CURRENT=$(node -p "require('./apps/cli/package.json').version")
+          if [ "$CURRENT" != "$VERSION" ]; then
+            cd apps/cli && npm version "$VERSION" --no-git-tag-version
+          fi
       - name: Publish to npm (OIDC / Trusted Publisher)
         run: cd apps/cli && npm publish --access public --provenance
         # No NODE_AUTH_TOKEN. Authentication happens via OIDC — the npm
         # registry verifies the GitHub Actions ID token against the
         # Trusted Publisher config on the package. One-time setup at
-        # https://www.npmjs.com/package/@shipshitdev/shipcode/access
+        # https://www.npmjs.com/package/shipcode/access
         # (Repository: shipshitdev/shipcode, Workflow: publish.yml).
-        #
-        # IMPORTANT: npm's Trusted Publisher binding pins the workflow
-        # filename exactly (case-sensitive, with .yml extension). If you
-        # rename this file you MUST update the "Workflow filename" field
-        # in the npm package's Trusted Publishing settings or
-        # `npm publish --provenance` will fail with an auth error.
-
-# ─────────────────────────────────────────────────────────────────
-# DISABLED until Apple codesigning + notarization are wired.
-#
-# Required secrets (currently NOT set in repo Actions secrets):
-#   - CSC_LINK
-#   - CSC_KEY_PASSWORD
-#   - APPLE_ID
-#   - APPLE_APP_SPECIFIC_PASSWORD
-#   - APPLE_TEAM_ID
-#
-# When those are in place, restore the two jobs below and remove
-# this comment block. Then consider flipping the top trigger back
-# to `on: release: published` so cutting a GH release does everything
-# automatically instead of requiring manual dispatch.
-#
-#  build-desktop-macos:
-#    runs-on: macos-latest
-#    steps:
-#      - uses: actions/checkout@v4
-#      - uses: oven-sh/setup-bun@v2
-#        with:
-#          bun-version: ${{ env.BUN_VERSION }}
-#      - uses: actions/setup-node@v4
-#        with:
-#          node-version: ${{ env.NODE_VERSION }}
-#      - run: bun install
-#      - name: Build desktop app
-#        run: cd apps/desktop && bun run build:code
-#      - name: Package macOS installers
-#        run: cd apps/desktop && npx electron-builder --mac
-#        env:
-#          CSC_LINK: ${{ secrets.CSC_LINK }}
-#          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-#          APPLE_ID: ${{ secrets.APPLE_ID }}
-#          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-#          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-#      - name: Upload macOS binaries to release
-#        run: |
-#          gh release upload "${{ inputs.release_tag }}" \
-#            apps/desktop/out/*.dmg \
-#            apps/desktop/out/*.zip \
-#            --clobber
-#        env:
-#          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#
-#  update-homebrew-cask:
-#    needs: build-desktop-macos
-#    runs-on: ubuntu-latest
-#    steps:
-#      - name: Checkout tap repo
-#        uses: actions/checkout@v4
-#        with:
-#          repository: shipshitdev/homebrew-shipcode
-#          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-#          ref: master
-#      - name: Download macOS release artifacts
-#        run: |
-#          VERSION="${{ inputs.release_tag }}"
-#          VERSION="${VERSION#v}"
-#          gh release download "v${VERSION}" \
-#            --repo shipshitdev/shipcode \
-#            --pattern "*.dmg" \
-#            --dir ./artifacts
-#        env:
-#          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#      - name: Compute SHA256 hashes
-#        id: sha
-#        run: |
-#          ARM_FILE=$(ls artifacts/*arm64*.dmg 2>/dev/null | head -1)
-#          INTEL_FILE=$(ls artifacts/*.dmg 2>/dev/null | grep -v arm64 | head -1)
-#          if [ -n "$ARM_FILE" ]; then
-#            echo "arm_sha=$(shasum -a 256 "$ARM_FILE" | awk '{print $1}')" >> $GITHUB_OUTPUT
-#          fi
-#          if [ -n "$INTEL_FILE" ]; then
-#            echo "intel_sha=$(shasum -a 256 "$INTEL_FILE" | awk '{print $1}')" >> $GITHUB_OUTPUT
-#          fi
-#      - name: Update cask version and SHA256
-#        run: |
-#          VERSION="${{ inputs.release_tag }}"
-#          VERSION="${VERSION#v}"
-#          sed -i "s/version \".*\"/version \"${VERSION}\"/" Casks/shipcode.rb
-#          if [ -n "${{ steps.sha.outputs.arm_sha }}" ]; then
-#            sed -i "s|arm:   \"[a-f0-9]*\"|arm:   \"${{ steps.sha.outputs.arm_sha }}\"|" Casks/shipcode.rb
-#          fi
-#          if [ -n "${{ steps.sha.outputs.intel_sha }}" ]; then
-#            sed -i "s|intel: \"[a-f0-9]*\"|intel: \"${{ steps.sha.outputs.intel_sha }}\"|" Casks/shipcode.rb
-#          fi
-#      - name: Commit and push
-#        run: |
-#          git config user.name "github-actions[bot]"
-#          git config user.email "github-actions[bot]@users.noreply.github.com"
-#          git add Casks/shipcode.rb
-#          git commit -m "chore: bump shipcode to ${{ inputs.release_tag }}"
-#          git push

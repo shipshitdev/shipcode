@@ -15,9 +15,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'ShipCode — Make Planning Great Again',
+  title: 'ShipCode — Autonomous AI Coding Pipeline',
   description:
-    'Autonomous AI coding pipeline. ShipCode plans with Opus, reviews with Codex, and iterates until the plan is bulletproof. Then it executes.',
+    'Desktop app + CLI for turning GitHub issues into reviewed pull requests with a real plan, review, execute, verify pipeline.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

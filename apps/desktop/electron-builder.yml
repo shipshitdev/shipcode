@@ -1,5 +1,6 @@
-appId: com.shipcode.app
+appId: dev.shipshit.shipcode
 productName: ShipCode
+artifactName: "${productName}-${version}-${arch}.${ext}"
 directories:
   output: out
   buildResources: resources
