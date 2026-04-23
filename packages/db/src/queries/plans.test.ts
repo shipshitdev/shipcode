@@ -38,6 +38,7 @@ describe('PlanQueries', () => {
     const rawOutput = `prefix\n${'x'.repeat(20_000)}\nsuffix`;
     const p = plans.create(threadId, rawOutput, null, 1);
     expect(p.rawOutput.length).toBeLessThanOrEqual(16_000);
+    expect(p.rawOutput).toContain('prefix');
     expect(p.rawOutput).toContain('suffix');
     expect(p.rawOutput).toContain('[truncated');
   });

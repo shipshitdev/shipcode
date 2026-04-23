@@ -52,6 +52,7 @@ describe('ReviewQueries', () => {
   it('create() clamps oversized raw output', () => {
     const r = reviews.create(planId, `prefix\n${'x'.repeat(20_000)}\nsuffix`, null);
     expect(r.rawOutput.length).toBeLessThanOrEqual(16_000);
+    expect(r.rawOutput).toContain('prefix');
     expect(r.rawOutput).toContain('suffix');
   });
 

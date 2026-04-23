@@ -25,7 +25,22 @@ export function clampTextBlock(raw: string, max = 16_000): string {
   const text = raw.trim();
   if (text.length <= max) return text;
 
-  const prefix = `[truncated ${text.length - max + 1} chars]\n`;
-  const tail = text.slice(-(max - prefix.length));
-  return `${prefix}${tail}`;
+  const buildMarker = (omitted: number) => `\n[truncated ${omitted} chars]\n`;
+
+  let marker = buildMarker(text.length - max);
+  let available = max - marker.length;
+  let headChars = Math.max(0, Math.floor(available * 0.4));
+  let tailChars = Math.max(0, available - headChars);
+  let omitted = text.length - headChars - tailChars;
+
+  marker = buildMarker(omitted);
+  available = max - marker.length;
+  headChars = Math.max(0, Math.floor(available * 0.4));
+  tailChars = Math.max(0, available - headChars);
+  omitted = text.length - headChars - tailChars;
+  marker = buildMarker(omitted);
+
+  const head = text.slice(0, headChars);
+  const tail = text.slice(-tailChars);
+  return `${head}${marker}${tail}`;
 }

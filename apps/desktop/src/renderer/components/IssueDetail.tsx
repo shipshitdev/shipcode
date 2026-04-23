@@ -39,6 +39,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  LoadingButtonContent,
   PanelLeftClose,
   PanelLeftOpen,
   PhaseChip,
@@ -48,7 +49,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
-import { ACTIVE_PHASES, decodePhaseOption, encodePhaseOption } from './issue-detail/helpers';
+import {
+  ACTIVE_PHASES,
+  decodePhaseOption,
+  encodePhaseOption,
+  resolveFailingPhaseOutput,
+} from './issue-detail/helpers';
 import { IssueDetailActions } from './issue-detail/IssueDetailActions';
 import { IssueDetailDialogs } from './issue-detail/IssueDetailDialogs';
 import { IssueDetailTabs } from './issue-detail/IssueDetailTabs';
@@ -59,15 +65,13 @@ const PLAN_MUTATING_PHASES: PipelinePhase[] = ['planning', 'reviewing', 'revisin
 
 export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const queryClient = useQueryClient();
-  const {
-    activeIssue,
-    activeThreadId,
-    activeProjectId,
-    selectIssue,
-    pipelinePhase,
-    openEditPrdModal,
-    toggleIssueDetailExpanded,
-  } = useAppStore();
+  const activeIssue = useAppStore((state) => state.activeIssue);
+  const activeThreadId = useAppStore((state) => state.activeThreadId);
+  const activeProjectId = useAppStore((state) => state.activeProjectId);
+  const selectIssue = useAppStore((state) => state.selectIssue);
+  const pipelinePhase = useAppStore((state) => state.pipelinePhase);
+  const openEditPrdModal = useAppStore((state) => state.openEditPrdModal);
+  const toggleIssueDetailExpanded = useAppStore((state) => state.toggleIssueDetailExpanded);
   const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
   const prevIssueSelectionKeyRef = useRef<string | null>(null);
   const [fullScreenPlanId, setFullScreenPlanId] = useState<string | null>(null);
@@ -269,20 +273,15 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     setPhaseModelValidation({});
   }, [activeIssue?.id]);
 
-  // Pick the right raw output based on which phase failed
-  const failingPhaseOutput = (() => {
-    if (!thread || thread.status !== 'failed')
-      return normalizedThreadPlanHistory[0]?.rawOutput ?? null;
-    // Verification failure — show verification output
-    if (latestVerification?.rawOutput) return latestVerification.rawOutput;
-    // Review failure — show review output for the latest plan
-    const latestReview = normalizedThreadPlanHistory[0]?.id
-      ? normalizedReviewsByPlanId[normalizedThreadPlanHistory[0].id]
-      : null;
-    if (latestReview?.rawOutput) return latestReview.rawOutput;
-    // Fall back to plan output
-    return normalizedThreadPlanHistory[0]?.rawOutput ?? null;
-  })();
+  const latestReview = normalizedThreadPlanHistory[0]?.id
+    ? normalizedReviewsByPlanId[normalizedThreadPlanHistory[0].id]
+    : null;
+  const failingPhaseOutput = resolveFailingPhaseOutput({
+    thread,
+    latestPlanRawOutput: normalizedThreadPlanHistory[0]?.rawOutput ?? null,
+    latestReviewRawOutput: latestReview?.rawOutput ?? null,
+    latestVerificationRawOutput: latestVerification?.rawOutput ?? null,
+  });
 
   const planRunCount = planRunGroups.length;
   const runNumberByThreadId = useMemo(
@@ -485,8 +484,13 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     activeIssue?.pipelineStatus !== 'completed' &&
     activeIssue?.pipelineStatus !== 'done';
   const canRerun = !!activeIssue && activeIssue.pipelineStatus === 'failed' && !!activeProjectId;
+  const approvedAwaitingExecution =
+    !!activeThreadId && threadPhase === 'awaiting_approval' && latestPlan?.status === 'approved';
   const hasApprovalDecision =
-    !!activeThreadId && threadPhase === 'awaiting_approval' && !!latestPlan;
+    !!activeThreadId &&
+    threadPhase === 'awaiting_approval' &&
+    !!latestPlan &&
+    latestPlan.status !== 'approved';
   const canApprove = hasApprovalDecision && !!(latestPlan?.structured || latestPlan?.rawOutput);
   const canSubmitClarification =
     !!thread?.clarificationRequest &&
@@ -1113,7 +1117,9 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         onClick={handleStartPipeline}
         disabled={isSubmitting}
       >
-        {isSubmitting ? 'START…' : 'PLAN'}
+        <LoadingButtonContent loading={isSubmitting} className="gap-1" spinnerSize={10}>
+          PLAN
+        </LoadingButtonContent>
       </Button>
     </span>
   ) : phaseIsActive ? (
@@ -1129,7 +1135,9 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         onClick={handleCancel}
         disabled={isSubmitting}
       >
-        {isSubmitting ? 'STOP…' : 'CANCEL'}
+        <LoadingButtonContent loading={isSubmitting} className="gap-1" spinnerSize={10}>
+          CANCEL
+        </LoadingButtonContent>
       </Button>
     </span>
   ) : canRerun ? (
@@ -1145,7 +1153,9 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         onClick={handleRerun}
         disabled={isSubmitting}
       >
-        {isSubmitting ? 'START…' : 'RETRY'}
+        <LoadingButtonContent loading={isSubmitting} className="gap-1" spinnerSize={10}>
+          RETRY
+        </LoadingButtonContent>
       </Button>
     </span>
   ) : (
@@ -1190,7 +1200,14 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
             ) : (
               <CircleCheck className="h-3 w-3" />
             )}
-            {isTogglingState ? '…' : activeIssue.state === 'open' ? 'Open' : 'Closed'}
+            <LoadingButtonContent
+              loading={isTogglingState}
+              className="gap-1"
+              labelClassName="gap-1"
+              spinnerSize={10}
+            >
+              {activeIssue.state === 'open' ? 'Open' : 'Closed'}
+            </LoadingButtonContent>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
@@ -1272,6 +1289,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const { approvalSection, clarificationSection, pipelineStartCard, rerunSection } =
     IssueDetailActions({
       approveError,
+      approvedAwaitingExecution,
       canApprove,
       canRerun,
       canStartPipeline,
@@ -1409,6 +1427,16 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     />
   );
 
+  const detailActionStack =
+    pipelineStartCard || rerunSection || clarificationSection || approvalSection ? (
+      <div className={cn('space-y-4', expanded ? 'mb-6' : 'px-4 pt-4 pb-4')}>
+        {pipelineStartCard}
+        {rerunSection}
+        {clarificationSection}
+        {approvalSection}
+      </div>
+    ) : null;
+
   // ─── Expanded (full-page) layout ────────────────────────────────────────
 
   if (expanded) {
@@ -1427,30 +1455,12 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
               {issueBadges}
             </div>
           </div>
-          {pipelineStartCard && (
-            <div className="shrink-0 border-b border-border px-6 py-4">
-              <div className="mx-auto w-full max-w-5xl">{pipelineStartCard}</div>
-            </div>
-          )}
-          {rerunSection && (
-            <div className="shrink-0 border-b border-border px-6 py-4">
-              <div className="mx-auto w-full max-w-5xl">{rerunSection}</div>
-            </div>
-          )}
-          {clarificationSection && (
-            <div className="shrink-0 border-b border-border px-6 py-4">
-              <div className="mx-auto w-full max-w-5xl">{clarificationSection}</div>
-            </div>
-          )}
-          {approvalSection && (
-            <div className="shrink-0 border-b border-border px-6 py-4">
-              <div className="mx-auto w-full max-w-5xl">{approvalSection}</div>
-            </div>
-          )}
-
           {/* Scrollable content */}
-          <div className="flex-1 overflow-y-auto p-6">
-            <div className="mx-auto flex w-full max-w-5xl min-h-full flex-col">{detailTabs}</div>
+          <div className="flex-1 min-h-0 overflow-y-auto" data-issue-detail-scroll-region>
+            <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col p-6">
+              {detailActionStack}
+              {detailTabs}
+            </div>
           </div>
         </div>
         {detailDialogs}
@@ -1473,15 +1483,11 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         {issueBadges}
       </div>
 
-      {/* Phase stepper — shown once pipeline has started */}
-      {/* Primary CTAs — above tabs, always visible */}
-      {pipelineStartCard && <div className="shrink-0 p-4 pb-0">{pipelineStartCard}</div>}
-      {rerunSection && <div className="shrink-0 px-4 pt-4">{rerunSection}</div>}
-      {clarificationSection && <div className="shrink-0 px-4 pt-4">{clarificationSection}</div>}
-      {approvalSection && <div className="shrink-0 px-4 pt-4">{approvalSection}</div>}
-
       {/* Tabbed content — min-h-0 required for flex scroll containment */}
-      <div className="flex-1 min-h-0 overflow-y-auto">{detailTabs}</div>
+      <div className="flex-1 min-h-0 overflow-y-auto" data-issue-detail-scroll-region>
+        {detailActionStack}
+        {detailTabs}
+      </div>
 
       {/* Portal-based dialog — outside tabs to avoid unmount on tab switch */}
       {detailDialogs}

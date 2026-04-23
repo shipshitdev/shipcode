@@ -1,10 +1,12 @@
 import type { PlanRecord, ReviewRecord } from '@shipcode/shared';
+import { clampTextBlock } from '@shipcode/shared';
 import { describe, expect, it } from 'vitest';
 import {
   diagnosePlanParseFailure,
   getFailurePresentation,
   getPlanStatusPresentation,
   resolveClientSidePlan,
+  resolveFailingPhaseOutput,
 } from './helpers';
 
 const VALID_PLAN_JSON = JSON.stringify({
@@ -85,6 +87,14 @@ describe('getPlanStatusPresentation', () => {
       style: 'phase-chip',
     });
   });
+
+  it('uses needs-approval copy for approval-gated plans', () => {
+    expect(getPlanStatusPresentation(makePlan({ status: 'awaiting_approval' }))).toEqual({
+      label: 'Needs approval',
+      phaseStatus: 'reviewing',
+      style: 'phase-chip',
+    });
+  });
 });
 
 describe('diagnosePlanParseFailure', () => {
@@ -148,5 +158,41 @@ describe('getFailurePresentation', () => {
       detail:
         'The failing command ran inside the issue worktree, not inside the ShipCode desktop app.',
     });
+  });
+});
+
+describe('resolveFailingPhaseOutput', () => {
+  it('prefers plan output for planning failures even if older verification output exists', () => {
+    expect(
+      resolveFailingPhaseOutput({
+        thread: { status: 'failed', failurePhase: 'planning' },
+        latestPlanRawOutput: 'planner transcript',
+        latestReviewRawOutput: 'review transcript',
+        latestVerificationRawOutput: 'verification transcript',
+      }),
+    ).toBe('planner transcript');
+  });
+
+  it('prefers verification output for verification failures', () => {
+    expect(
+      resolveFailingPhaseOutput({
+        thread: { status: 'failed', failurePhase: 'verifying' },
+        latestPlanRawOutput: 'planner transcript',
+        latestReviewRawOutput: 'review transcript',
+        latestVerificationRawOutput: 'verification transcript',
+      }),
+    ).toBe('verification transcript');
+  });
+});
+
+describe('clampTextBlock', () => {
+  it('preserves both the head and tail of oversized output', () => {
+    const raw = `authentication failed\n${'x'.repeat(20_000)}\nfinal tail`;
+    const clamped = clampTextBlock(raw, 280);
+
+    expect(clamped.length).toBeLessThanOrEqual(280);
+    expect(clamped).toContain('authentication failed');
+    expect(clamped).toContain('final tail');
+    expect(clamped).toContain('[truncated ');
   });
 });

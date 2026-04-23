@@ -64,7 +64,7 @@ export function getPlanStatusPresentation(
       };
     case 'awaiting_approval':
       return {
-        label: 'Awaiting approval',
+        label: 'Needs approval',
         phaseStatus: 'reviewing',
         style: 'phase-chip',
       };
@@ -219,6 +219,40 @@ export function diagnosePlanParseFailure(rawOutput: string): string {
     return `Plan output could not be parsed: schema validation failed — ${detail}`;
   }
   return 'Plan output could not be parsed. Check devtools console for the full trace.';
+}
+
+export function resolveFailingPhaseOutput({
+  thread,
+  latestPlanRawOutput,
+  latestReviewRawOutput,
+  latestVerificationRawOutput,
+}: {
+  thread?: { status?: string | null; failurePhase?: string | null } | null;
+  latestPlanRawOutput?: string | null;
+  latestReviewRawOutput?: string | null;
+  latestVerificationRawOutput?: string | null;
+}): string | null {
+  const planOutput = latestPlanRawOutput?.trim() ? latestPlanRawOutput : null;
+  const reviewOutput = latestReviewRawOutput?.trim() ? latestReviewRawOutput : null;
+  const verificationOutput = latestVerificationRawOutput?.trim()
+    ? latestVerificationRawOutput
+    : null;
+
+  if (!thread || thread.status !== 'failed') return planOutput;
+
+  switch (thread.failurePhase) {
+    case 'planning':
+    case 'clarifying':
+      return planOutput;
+    case 'reviewing':
+    case 'revising':
+      return reviewOutput ?? planOutput;
+    case 'testing':
+    case 'verifying':
+      return verificationOutput ?? planOutput;
+    default:
+      return verificationOutput ?? reviewOutput ?? planOutput;
+  }
 }
 
 export function safeErrorMessage(raw: string): string {
