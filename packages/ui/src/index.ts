@@ -69,6 +69,7 @@ export { ShipCodeLogoMark } from './brand/ShipCodeLogoMark';
 export { DiffViewer } from './DiffViewer';
 export { IssueCard } from './IssueCard';
 export { KanbanBoard } from './KanbanBoard';
+export { LoadingButtonContent } from './LoadingButtonContent';
 export {
   formatProviderModelDisplay,
   formatResolvedModelDisplay,
@@ -132,6 +133,8 @@ export { Input } from './primitives/input';
 export { Keycap } from './primitives/keycap';
 export { Label } from './primitives/label';
 export { Modal, ModalFooter } from './primitives/modal';
+export type { OverlayPanelProps } from './primitives/overlay-panel';
+export { OverlayPanel } from './primitives/overlay-panel';
 export type { PaginationProps } from './primitives/pagination';
 export { Pagination } from './primitives/pagination';
 export {

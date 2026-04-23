@@ -1,5 +1,6 @@
 import type { AppSettings, GitHubIssueCacheRecord, Project } from '@shipcode/shared';
 import { CURRENT_ONBOARDING_VERSION } from '@shipcode/shared';
+import { OverlayPanel } from '@shipcode/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef } from 'react';
 import { ActivityView } from './components/ActivityView';
@@ -35,18 +36,16 @@ export function App() {
   useGlobalKeyboard();
   useIpc();
   const queryClient = useQueryClient();
-  const {
-    terminalVisible,
-    terminalMaximized,
-    settingsVisible,
-    activeProjectId,
-    viewMode,
-    activeIssue,
-    issueDetailExpanded,
-    issueDetailCollapsed,
-    issueDetailWidth,
-    setIssueDetailWidth,
-  } = useAppStore();
+  const terminalVisible = useAppStore((state) => state.terminalVisible);
+  const terminalMaximized = useAppStore((state) => state.terminalMaximized);
+  const settingsVisible = useAppStore((state) => state.settingsVisible);
+  const activeProjectId = useAppStore((state) => state.activeProjectId);
+  const viewMode = useAppStore((state) => state.viewMode);
+  const hasActiveIssue = useAppStore((state) => state.activeIssue !== null);
+  const issueDetailExpanded = useAppStore((state) => state.issueDetailExpanded);
+  const issueDetailCollapsed = useAppStore((state) => state.issueDetailCollapsed);
+  const issueDetailWidth = useAppStore((state) => state.issueDetailWidth);
+  const setIssueDetailWidth = useAppStore((state) => state.setIssueDetailWidth);
   const issueDetailDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
   const handleIssueDetailResizeMouseDown = useCallback(
@@ -245,7 +244,7 @@ export function App() {
     viewMode === 'project' &&
     !!activeProjectId &&
     activeProject?.pathExists === false;
-  const hideSidebarForReader = !!activeIssue && issueDetailExpanded && !settingsVisible;
+  const hideSidebarForReader = hasActiveIssue && issueDetailExpanded && !settingsVisible;
   const hideMainContentForTerminal = terminalVisible && terminalMaximized;
 
   return (
@@ -256,7 +255,7 @@ export function App() {
       <div className="flex flex-1 overflow-hidden">
         {!hideSidebarForReader && (settingsVisible ? <SettingsSidebar /> : <ProjectSidebar />)}
         {/* Content: left column (views + terminal) | right panel (issue detail, full-height) */}
-        <div className="flex flex-1 overflow-hidden min-h-0">
+        <div className="relative flex flex-1 overflow-hidden min-h-0">
           {/* Left column — main views stacked above terminal */}
           <div className="flex flex-col flex-1 overflow-hidden min-h-0">
             {hideMainContentForTerminal ? (
@@ -269,7 +268,7 @@ export function App() {
                   {/* Main view — hidden when issue detail is expanded full-screen */}
                   <div
                     className={
-                      activeIssue && issueDetailExpanded
+                      hasActiveIssue && issueDetailExpanded
                         ? 'hidden'
                         : 'flex flex-1 overflow-hidden bg-primary'
                     }
@@ -293,7 +292,7 @@ export function App() {
                     )}
                   </div>
                   {/* Expanded issue detail takes over the left column entirely */}
-                  {activeIssue && issueDetailExpanded && (
+                  {hasActiveIssue && issueDetailExpanded && (
                     <div className="flex-1 overflow-hidden">
                       <IssueDetail expanded={true} />
                     </div>
@@ -304,23 +303,16 @@ export function App() {
             )}
           </div>
           {/* Right panel — full height, spans over the terminal */}
-          {activeIssue && !issueDetailExpanded && !issueDetailCollapsed && (
-            <div
-              className="relative shrink-0 border-l border-border overflow-hidden"
-              style={{
-                width: issueDetailWidth,
-                minWidth: ISSUE_DETAIL_MIN_WIDTH,
-                maxWidth: ISSUE_DETAIL_MAX_WIDTH,
-              }}
+          {hasActiveIssue && !issueDetailExpanded && !issueDetailCollapsed && (
+            <OverlayPanel
+              width={issueDetailWidth}
+              minWidth={ISSUE_DETAIL_MIN_WIDTH}
+              maxWidth={ISSUE_DETAIL_MAX_WIDTH}
+              onResizeStart={handleIssueDetailResizeMouseDown}
+              resizeHandleLabel="Resize issue detail panel"
             >
-              <button
-                type="button"
-                aria-label="Resize issue detail panel"
-                className="absolute inset-y-0 left-0 z-10 w-1 -translate-x-1/2 cursor-col-resize transition-colors hover:bg-accent/20 active:bg-accent/30"
-                onMouseDown={handleIssueDetailResizeMouseDown}
-              />
               <IssueDetail expanded={false} />
-            </div>
+            </OverlayPanel>
           )}
         </div>
       </div>

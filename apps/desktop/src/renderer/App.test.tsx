@@ -3,7 +3,7 @@
 import { type AppSettings, DEFAULT_SETTINGS } from '@shipcode/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { useAppStore } from './stores/app-store';
@@ -187,6 +187,7 @@ describe('App', () => {
   });
 
   afterEach(() => {
+    cleanup();
     document.documentElement.removeAttribute('data-theme');
     document.documentElement.removeAttribute('data-font-style');
     document.documentElement.removeAttribute('data-font-size');
@@ -244,5 +245,35 @@ describe('App', () => {
     renderApp();
 
     expect(await screen.findByText('ProjectMissingView:/tmp/missing-project')).toBeInTheDocument();
+  });
+
+  it('renders issue detail as an overlay without unmounting the main project view', async () => {
+    useAppStore.setState({
+      activeProjectId: 'project-1',
+      viewMode: 'project',
+      activeIssue: {
+        id: 'issue-1',
+        projectId: 'project-1',
+        issueNumber: 18,
+        title: 'Overlay issue',
+        pipelineStatus: 'failed',
+        threadId: 'thread-1',
+      } as never,
+      activeThreadId: 'thread-1',
+      issueDetailExpanded: false,
+      issueDetailCollapsed: false,
+      issueDetailWidth: 480,
+    });
+
+    const view = renderApp();
+
+    expect(await screen.findByText('ProjectView')).toBeInTheDocument();
+    const issueDetailPanel = within(view.container).getByText('IssueDetailPanel');
+    const overlayPanel = view.container.querySelector('[data-slot="overlay-panel"]');
+
+    expect(overlayPanel).not.toBeNull();
+    expect(overlayPanel).toContainElement(issueDetailPanel);
+    expect(overlayPanel).toHaveClass('pointer-events-auto', 'relative', 'overflow-hidden');
+    expect(overlayPanel).toHaveStyle({ width: '480px' });
   });
 });

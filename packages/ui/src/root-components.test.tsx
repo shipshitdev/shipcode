@@ -214,6 +214,15 @@ describe('root UI components', () => {
     view.cleanup();
   });
 
+  it('uses noun labels for passive workflow stages', () => {
+    const view = renderIntoDom(<PipelineStatus currentPhase="awaiting_approval" />);
+
+    expect(view.container.textContent).toContain('Approval');
+    expect(view.container.textContent).not.toContain('Approve');
+
+    view.cleanup();
+  });
+
   it('renders plan details and the waiting state', () => {
     const waitingView = renderIntoDom(<PlanViewer plan={null} />);
     expect(waitingView.container.textContent).toContain('Waiting for plan generation');

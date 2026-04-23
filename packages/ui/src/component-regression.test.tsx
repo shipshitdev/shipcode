@@ -4,7 +4,9 @@ import type { DiffRecord, StatusLabelMapping } from '@shipcode/shared';
 import { act, type ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { describe, expect, it, vi } from 'vitest';
+import { ActivePipelineCard } from './ActivePipelineCard';
 import { DiffViewer } from './DiffViewer';
+import { LoadingButtonContent } from './LoadingButtonContent';
 import { Alert, AlertDescription, AlertTitle } from './primitives/alert';
 import { Button } from './primitives/button';
 import {
@@ -16,6 +18,7 @@ import {
   CardTitle,
 } from './primitives/card';
 import { Modal } from './primitives/modal';
+import { OverlayPanel } from './primitives/overlay-panel';
 import { SettingsRow } from './primitives/settings-row';
 import { SideBySideDiffViewer } from './SideBySideDiffViewer';
 import { StatusMappingEditor } from './StatusMappingEditor';
@@ -227,6 +230,45 @@ describe('UI component regression coverage', () => {
     view.cleanup();
   });
 
+  it('renders an overlay panel with resize affordance and width constraints', () => {
+    const onResizeStart = vi.fn();
+    const view = renderIntoDom(
+      <div className="relative h-[320px]">
+        <OverlayPanel
+          width={480}
+          minWidth={380}
+          maxWidth={760}
+          onResizeStart={onResizeStart}
+          resizeHandleLabel="Resize issue detail panel"
+        >
+          <div>Overlay content</div>
+        </OverlayPanel>
+      </div>,
+    );
+
+    const panel = view.container.querySelector('[data-slot="overlay-panel"]');
+    if (!(panel instanceof HTMLDivElement)) {
+      throw new Error('Expected overlay panel');
+    }
+    expect(panel.style.width).toBe('480px');
+    expect(panel.style.minWidth).toBe('380px');
+    expect(panel.style.maxWidth).toBe('760px');
+    expect(panel.textContent).toContain('Overlay content');
+
+    const resizeHandle = view.container.querySelector('[data-slot="overlay-panel-resize-handle"]');
+    if (!(resizeHandle instanceof HTMLButtonElement)) {
+      throw new Error('Expected overlay panel resize handle');
+    }
+    expect(resizeHandle.getAttribute('aria-label')).toBe('Resize issue detail panel');
+
+    act(() => {
+      resizeHandle.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    });
+
+    expect(onResizeStart).toHaveBeenCalledTimes(1);
+    view.cleanup();
+  });
+
   it('renders alert, card, settings row, and modal primitives', () => {
     const onClose = vi.fn();
     const view = renderIntoDom(
@@ -275,6 +317,57 @@ describe('UI component regression coverage', () => {
     expect(document.body.textContent).toContain('Modal content');
     expect(document.body.querySelector('button[title="Close"]')).not.toBeNull();
     expect(onClose).not.toHaveBeenCalled();
+    view.cleanup();
+  });
+
+  it('renders loading button content without collapsing the label', () => {
+    const view = renderIntoDom(
+      <Button>
+        <LoadingButtonContent loading spinnerSize={14}>
+          <span>Save</span>
+        </LoadingButtonContent>
+      </Button>,
+    );
+
+    expect(view.container.textContent).toContain('Save');
+    expect(view.container.querySelector('.animate-spin')).not.toBeNull();
+    view.cleanup();
+  });
+
+  it('renders active pipeline model chips without provider prefixes', () => {
+    const view = renderIntoDom(
+      <ActivePipelineCard
+        projectName="shipcode"
+        title="Candidate-to-role matching"
+        phase="planning"
+        startedAt={Date.now() - 5_000}
+        modelProvider="codex"
+        model="gpt-5.4"
+        reasoningEffort="high"
+        onClick={vi.fn()}
+      />,
+    );
+
+    expect(view.container.textContent).toContain('GPT-5.4 · high');
+    expect(view.container.textContent).not.toContain('Codex / GPT-5.4');
+    expect(view.container.querySelector('[title="Active model: GPT-5.4 · high"]')).not.toBeNull();
+    view.cleanup();
+  });
+
+  it('renders approved execution waiters with waiting-for-slot copy', () => {
+    const view = renderIntoDom(
+      <ActivePipelineCard
+        projectName="shipcode"
+        title="Hold for execution capacity"
+        phase="awaiting_approval"
+        approvedAwaitingExecution
+        startedAt={Date.now() - 5_000}
+        onClick={vi.fn()}
+      />,
+    );
+
+    expect(view.container.textContent).toContain('Waiting for slot');
+    expect(view.container.textContent).not.toContain('awaiting approval');
     view.cleanup();
   });
 });

@@ -1,8 +1,9 @@
 'use client';
 
 import { type ExecutorModel, type PipelinePhase, phaseToProgress } from '@shipcode/shared';
-import { type KeyboardEvent, useEffect, useState } from 'react';
-import { formatProviderModelDisplay } from './lib/model-display';
+import type { KeyboardEvent } from 'react';
+import { modelDisplay } from './lib/model-display';
+import { useSharedSecondNow } from './lib/second-ticker';
 import { cn } from './lib/utils';
 import { PhaseChip } from './PhaseChip';
 import { Badge } from './primitives/badge';
@@ -18,8 +19,8 @@ const AGENT_ACTIVE_PHASES = new Set<PipelinePhase>([
   'shipping',
 ]);
 
-function formatElapsed(since: number): string {
-  const seconds = Math.max(0, Math.floor((Date.now() - since) / 1000));
+function formatElapsed(since: number, now: number): string {
+  const seconds = Math.max(0, Math.floor((now - since) / 1000));
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
@@ -28,13 +29,8 @@ function formatElapsed(since: number): string {
 }
 
 function PhaseElapsed({ since }: { since: number }) {
-  const [label, setLabel] = useState(() => formatElapsed(since));
-
-  useEffect(() => {
-    setLabel(formatElapsed(since));
-    const id = setInterval(() => setLabel(formatElapsed(since)), 1000);
-    return () => clearInterval(id);
-  }, [since]);
+  const now = useSharedSecondNow();
+  const label = formatElapsed(since, now);
 
   return <span className="font-mono tabular-nums text-[10px] text-muted">{label}</span>;
 }
@@ -43,6 +39,7 @@ export interface ActivePipelineCardProps {
   projectName: string;
   title: string;
   phase: PipelinePhase;
+  approvedAwaitingExecution?: boolean;
   startedAt: number;
   issueNumber?: number | null;
   modelProvider?: ExecutorModel | null;
@@ -57,16 +54,17 @@ export function ActivePipelineCard({
   projectName,
   title,
   phase,
+  approvedAwaitingExecution = false,
   startedAt,
   issueNumber = null,
-  modelProvider = null,
   model = null,
   reasoningEffort = null,
   onClick,
   onCancel,
   className,
 }: ActivePipelineCardProps) {
-  const isAwaiting = phase === 'awaiting_approval' || phase === 'clarifying';
+  const isHumanBlocked =
+    phase === 'clarifying' || (phase === 'awaiting_approval' && !approvedAwaitingExecution);
   const isAgentActive = AGENT_ACTIVE_PHASES.has(phase);
   const progress = phaseToProgress(phase);
 
@@ -84,7 +82,7 @@ export function ActivePipelineCard({
       aria-label={`Open ${title}`}
       className={cn(
         'group relative flex min-h-[92px] w-full flex-col overflow-hidden rounded-md border bg-elevated p-3 text-left transition-colors outline-none',
-        isAwaiting
+        isHumanBlocked
           ? 'border-warning/30 bg-warning/[0.03] hover:border-warning/50'
           : 'border-agent/40 bg-agent/[0.03] shadow-[0_0_12px_rgba(56,189,248,0.18)] hover:border-agent/60',
         className,
@@ -105,13 +103,13 @@ export function ActivePipelineCard({
       <div
         className={cn(
           'absolute right-0 bottom-0 left-0 z-10 h-[3px] overflow-hidden rounded-b-md',
-          isAwaiting ? 'bg-warning/15' : 'bg-agent/15',
+          isHumanBlocked ? 'bg-warning/15' : 'bg-agent/15',
         )}
       >
         <div
           className={cn(
             'absolute h-full transition-[width] duration-700',
-            isAwaiting ? 'bg-warning' : 'bg-agent',
+            isHumanBlocked ? 'bg-warning' : 'bg-agent',
           )}
           style={{ width: `${progress}%` }}
         />
@@ -138,13 +136,13 @@ export function ActivePipelineCard({
       </div>
 
       <div className="relative z-10 mt-auto flex flex-wrap items-center gap-1.5 pt-2">
-        {modelProvider && model && (
+        {model && (
           <Badge
             variant="default"
             className="px-1.5 py-px text-[10px] font-medium normal-case tracking-normal"
-            title={`Active model ${model}${reasoningEffort ? ` (${reasoningEffort})` : ''}`}
+            title={`Active model: ${modelDisplay(model)}${reasoningEffort ? ` · ${reasoningEffort}` : ''}`}
           >
-            {formatProviderModelDisplay(modelProvider, model)}
+            {modelDisplay(model)}
             {reasoningEffort ? ` · ${reasoningEffort}` : ''}
           </Badge>
         )}
@@ -152,14 +150,20 @@ export function ActivePipelineCard({
         {onCancel ? (
           <span className="relative inline-flex items-center">
             <span className="pointer-events-none transition-opacity group-hover:opacity-0">
-              <PhaseChip status={phase} />
+              <PhaseChip
+                status={phase}
+                label={approvedAwaitingExecution ? 'Waiting for slot' : undefined}
+                className={cn(
+                  approvedAwaitingExecution && 'border-agent/25 bg-agent/10 text-agent',
+                )}
+              />
             </span>
             <Button
               variant="ghost"
               size="xs"
               className={cn(
                 'absolute inset-0 h-auto rounded px-1.5 py-0.5 text-[10px] font-medium opacity-0 transition-opacity group-hover:opacity-100',
-                isAwaiting
+                isHumanBlocked
                   ? 'text-warning/70 hover:bg-warning/10 hover:text-warning'
                   : 'text-danger/70 hover:bg-danger/10 hover:text-danger',
               )}
@@ -174,28 +178,12 @@ export function ActivePipelineCard({
             </Button>
           </span>
         ) : (
-          <PhaseChip status={phase} />
+          <PhaseChip
+            status={phase}
+            label={approvedAwaitingExecution ? 'Waiting for slot' : undefined}
+            className={cn(approvedAwaitingExecution && 'border-agent/25 bg-agent/10 text-agent')}
+          />
         )}
-
-        <div className="ml-auto flex items-center gap-1.5">
-          <Button
-            variant="ghost"
-            className={cn(
-              'h-5 px-1.5 text-[10px] font-medium opacity-0 transition-all group-hover:opacity-100',
-              isAwaiting
-                ? 'text-warning/60 hover:bg-warning/10 hover:text-warning'
-                : 'text-agent/60 hover:bg-agent/10 hover:text-agent',
-            )}
-            title="Open issue detail"
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.stopPropagation();
-              onClick();
-            }}
-          >
-            View
-          </Button>
-        </div>
       </div>
     </div>
   );
