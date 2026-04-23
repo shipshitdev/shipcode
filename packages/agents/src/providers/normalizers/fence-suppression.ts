@@ -27,7 +27,7 @@ export const FENCE_ACTIONS: Record<
   },
 } as const;
 
-export const OPENING_FENCES = (Object.keys(FENCE_ACTIONS) as SuppressedFenceTag[]).map((tag) => ({
+const OPENING_FENCES = (Object.keys(FENCE_ACTIONS) as SuppressedFenceTag[]).map((tag) => ({
   marker: `\`\`\`${tag}`,
   tag,
 }));

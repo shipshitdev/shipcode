@@ -35,7 +35,7 @@ const ALL_TOOLS: ReadonlyArray<Tool<unknown>> = [
 
 const BY_NAME = new Map<string, Tool<unknown>>(ALL_TOOLS.map((t) => [t.name, t]));
 
-export function listTools(): ReadonlyArray<Tool<unknown>> {
+function listTools(): ReadonlyArray<Tool<unknown>> {
   return ALL_TOOLS;
 }
 

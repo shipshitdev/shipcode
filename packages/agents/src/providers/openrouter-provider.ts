@@ -200,5 +200,3 @@ function resolveModel(req: ProviderRequest, settings: AppSettings): string {
     settings.openrouterDefaultPaidModel
   );
 }
-
-export const _internals = { resolveModel, SYSTEM_PROMPTS };

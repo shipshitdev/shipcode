@@ -331,10 +331,3 @@ async function resolveWorktreeCwd(worktreePath: string, sub: string | undefined)
   }
   return candidateReal;
 }
-
-// Exported for unit tests
-export const _internals = {
-  validateGitArgs,
-  validateGitConfigValue,
-  resolveWorktreeCwd,
-};

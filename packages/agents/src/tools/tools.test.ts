@@ -13,7 +13,7 @@ import { editTool } from './edit';
 import { globTool } from './glob';
 import { grepTool } from './grep';
 import { readTool } from './read';
-import { executeToolCall, getToolSchemas, listTools, toolCallHash } from './registry';
+import { executeToolCall, getToolSchemas, toolCallHash } from './registry';
 import type { ToolContext } from './types';
 import { writeTool } from './write';
 
@@ -263,9 +263,9 @@ describe('grepTool', () => {
 // ─── registry / dispatcher ───────────────────────────────────────────
 
 describe('tool registry', () => {
-  it('listTools returns all 6 tools', () => {
-    const names = listTools()
-      .map((t) => t.name)
+  it('getToolSchemas returns all 6 tools', () => {
+    const names = getToolSchemas()
+      .map((tool) => tool.function.name)
       .sort();
     expect(names).toEqual(['edit', 'glob', 'grep', 'read', 'shell', 'write']);
   });
