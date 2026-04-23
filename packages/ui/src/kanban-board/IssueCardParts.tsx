@@ -235,8 +235,8 @@ function DraggableCardComponent({
           </Button>
         )}
       </div>
-      <div className="relative z-10 flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-1.5">
+      <div className="relative z-10 flex min-w-0 items-center justify-between gap-2 pr-7">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <span className="shrink-0 font-mono text-[11px] text-secondary">
             #{issue.issueNumber}
           </span>
@@ -262,7 +262,7 @@ function DraggableCardComponent({
             ))}
         </div>
         {showPhaseElapsed && (
-          <span className="flex items-center gap-1.5">
+          <span className="ml-auto flex shrink-0 items-center gap-1.5">
             <span className="font-mono tabular-nums text-[10px] text-muted">
               {phaseToProgress(issue.pipelineStatus)}%
             </span>
@@ -270,7 +270,7 @@ function DraggableCardComponent({
           </span>
         )}
       </div>
-      <div className="relative z-10 mt-1 w-full min-w-0 truncate text-[13px] font-medium leading-snug text-primary">
+      <div className="relative z-10 mt-1 line-clamp-2 w-full min-w-0 text-[13px] font-medium leading-snug text-primary">
         {issue.title}
       </div>
       <div className="relative z-10 mt-auto flex flex-wrap items-center gap-1.5 pt-2">
@@ -409,7 +409,7 @@ export function DragOverlayCard({
       )}
     >
       <div className="font-mono text-[11px] text-muted">#{issue.issueNumber}</div>
-      <div className="mt-1 w-full min-w-0 truncate text-[13px] font-medium leading-snug text-primary">
+      <div className="mt-1 line-clamp-2 w-full min-w-0 text-[13px] font-medium leading-snug text-primary">
         {issue.title}
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">

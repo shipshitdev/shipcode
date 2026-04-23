@@ -131,7 +131,7 @@ export function ActivePipelineCard({
         </span>
       </div>
 
-      <div className="relative z-10 mt-1 line-clamp-2 text-[13px] font-medium leading-snug text-primary">
+      <div className="relative z-10 mt-1 line-clamp-2 w-full min-w-0 text-[13px] font-medium leading-snug text-primary">
         {title}
       </div>
 

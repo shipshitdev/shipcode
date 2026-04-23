@@ -12,7 +12,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ActivePipelineCard } from '../ActivePipelineCard';
 import { KanbanBoard } from '../KanbanBoard';
-import { StackedColumn } from './BoardColumns';
+import { DroppableColumn, StackedColumn } from './BoardColumns';
 import { COLUMNS } from './constants';
 import { DraggableCard } from './IssueCardParts';
 import { IssueListView } from './IssueListView';
@@ -747,6 +747,40 @@ describe('linked PR affordances', () => {
     expect(modelBadge.className).toContain('whitespace-nowrap');
     expect(modelBadge.getAttribute('title')).toBe('executor model: GPT-5.4 · medium');
     expect(view.container.querySelector('button[title="Open issue detail"]')).toBeTruthy();
+    expect(view.container.querySelector('.pr-7')).toBeTruthy();
+    view.cleanup();
+  });
+
+  it('keeps kanban columns wide enough for readable issue cards', () => {
+    const todoColumn = COLUMNS.find((column) => column.key === 'todo');
+    if (!todoColumn) throw new Error('Expected todo column');
+
+    const view = renderIntoDom(
+      <DndContext>
+        <DroppableColumn
+          id="todo"
+          columnKey="todo"
+          label="Todo"
+          issues={[]}
+          droppable
+          onIssueClick={vi.fn()}
+          issuePhaseChipById={new Map()}
+          issueRevisionBadgeById={new Map()}
+          issueApprovalBadgeById={new Map()}
+        />
+        <StackedColumn
+          {...({
+            column: COLUMNS.find((column) => column.key === 'agent'),
+            issues: [],
+            onIssueClick: vi.fn(),
+          } as unknown as ComponentProps<typeof StackedColumn>)}
+        />
+      </DndContext>,
+    );
+
+    const columns = Array.from(view.container.children);
+    expect(columns[0]?.className).toContain('min-w-[240px]');
+    expect(columns[1]?.className).toContain('min-w-[280px]');
     view.cleanup();
   });
 });
