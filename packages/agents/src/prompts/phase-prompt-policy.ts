@@ -69,6 +69,10 @@ export function getPhasePromptPolicy(phase: PromptPhase): PhasePromptPolicy {
   return PHASE_PROMPT_POLICY[phase];
 }
 
+export function toPipelinePromptScope(phase: PromptPhase): PhasePromptPolicy {
+  return getPhasePromptPolicy(phase);
+}
+
 export function isPromptMaterialAllowed(
   phase: PromptPhase,
   kind: PromptMaterialKind,

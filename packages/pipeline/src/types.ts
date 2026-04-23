@@ -2,11 +2,11 @@ import type {
   LoadedRepoSetupContract,
   PromptMaterial,
   PromptMaterialSummary,
-  PromptTelemetry,
   ProcessManager,
   ProviderRegistry,
   TerminalEvent,
 } from '@shipcode/agents';
+import type { PhasePromptTelemetry } from '@shipcode/agents/source';
 import type {
   CheckpointQueries,
   DiffQueries,
@@ -39,8 +39,8 @@ export type PipelineExecutorModel = ExecutorModel;
 export type PipelinePromptPhase = 'plan' | 'review' | 'revision' | 'verify' | 'execute';
 export interface PipelinePromptScope {
   phase: PipelinePromptPhase;
-  allowedContextSlices: ('repoContextFiles' | 'testingContext')[];
-  allowedMaterialKinds: PromptMaterial['kind'][];
+  allowedContextSlices: readonly ('repoContextFiles' | 'testingContext')[];
+  allowedMaterialKinds: readonly PromptMaterial['kind'][];
   defaultReasoningEffort: ReasoningEffort;
 }
 
@@ -183,11 +183,14 @@ export interface PipelineContext {
    */
   repoContext: string | null;
   repoPromptMaterials: PromptMaterial[] | null;
+  phasePromptScopes: Record<PipelinePromptPhase, PipelinePromptScope>;
+  phaseReasoningOverrides: Partial<Record<PipelinePromptPhase, ReasoningEffort>>;
+  phaseReasoningEfforts: Record<PipelinePromptPhase, ReasoningEffort>;
   promptMaterialSummaries: Partial<
     Record<PipelinePromptPhase, PromptMaterialSummary>
   >;
-  promptTelemetry: PromptTelemetry[];
-  promptTelemetryDiagnostics: string[];
+  promptTelemetry: PhasePromptTelemetry[];
+  promptTelemetryDiagnostics: PromptTelemetryPersistenceDiagnostic[];
   /**
    * Optional repo-owned setup contract loaded from `.shipcode/setup.json`.
    * `repoSetupLoaded` distinguishes "no file exists" from "not read yet".

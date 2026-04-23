@@ -17,6 +17,11 @@ export interface RepoContextSlices {
   testingContext: PromptMaterial[];
 }
 
+const EMPTY_REPO_CONTEXT_SLICES: RepoContextSlices = {
+  repoContextFiles: [],
+  testingContext: [],
+};
+
 /**
  * Load repo memory from `<projectPath>/.agents/memory/` for prompt injection.
  * All markdown files in the folder are included, with `MEMORY.md` and the
@@ -44,7 +49,7 @@ export function loadRepoContextSlices(projectPath: string): RepoContextSlices {
       .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.md'))
       .map((entry) => entry.name);
   } catch {
-    return { repoContextFiles: [], testingContext: [] };
+    return EMPTY_REPO_CONTEXT_SLICES;
   }
 
   const repoContextFiles: PromptMaterial[] = [];

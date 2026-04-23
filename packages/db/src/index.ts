@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+export type { PromptTelemetryInsert, PromptTelemetryRecord } from '@shipcode/shared';
 import {
   migrate,
   migrateV2,

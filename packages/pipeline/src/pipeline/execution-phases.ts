@@ -180,9 +180,15 @@ export function createExecutionPhaseHandlers({
 
     void (async () => {
       try {
-        const response = await runProviderPhase(context, 'execute', executionPrompt, {
-          reasoningEffort: context.executorReasoningEffort,
-        });
+        const response = await runProviderPhase(
+          context,
+          'execute',
+          executionPrompt,
+          executeMaterials,
+          {
+            reasoningEffort: context.phaseReasoningEfforts.execute,
+          },
+        );
 
         if (context.cancelled) return;
 
@@ -374,9 +380,15 @@ export function createExecutionPhaseHandlers({
 
     void (async () => {
       try {
-        const response = await runProviderPhase(context, 'verify', verificationPrompt, {
-          reasoningEffort: context.verifierReasoningEffort,
-        });
+        const response = await runProviderPhase(
+          context,
+          'verify',
+          verificationPrompt,
+          verifyMaterials,
+          {
+            reasoningEffort: context.phaseReasoningEfforts.verify,
+          },
+        );
 
         if (context.cancelled) return;
 

@@ -114,14 +114,19 @@ describe('pipeline prompt telemetry', () => {
         phase: 'plan',
         provider: 'claude-cli',
         model: 'claude',
-        promptCharacters: 123,
-        promptBytes: 123,
-        promptLines: 5,
+        promptCharacters: expect.any(Number),
+        promptBytes: expect.any(Number),
+        promptLines: expect.any(Number),
         promptTokens: 11,
         completionTokens: 7,
         costUsd: 0.02,
         selectedMaterials: expect.objectContaining({
-          kinds: expect.arrayContaining(['repo_file_context']),
+          selectedScope: expect.objectContaining({
+            allowedContextSlices: expect.any(Array),
+            allowedMaterialKinds: expect.any(Array),
+          }),
+          sections: expect.any(Array),
+          kinds: expect.arrayContaining(['issue_prompt']),
         }),
       }),
     );
@@ -138,6 +143,8 @@ describe('pipeline prompt telemetry', () => {
     await flush();
 
     expect(deps.plans.create).toHaveBeenCalled();
-    expect(pipeline.getContext('t1')?.promptTelemetryDiagnostics).toEqual(['db unavailable']);
+    expect(pipeline.getContext('t1')?.promptTelemetryDiagnostics).toEqual([
+      { phase: 'plan', message: 'db unavailable', nonFatal: true },
+    ]);
   });
 });

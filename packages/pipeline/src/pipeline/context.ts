@@ -1,5 +1,9 @@
 import type { SkillValidationError } from '@shipcode/agents';
 import {
+  resolvePhaseReasoningEffort,
+  toPipelinePromptScope,
+} from '@shipcode/agents/source';
+import {
   resolvePhaseModel,
   resolvePhaseModelForIssue,
   resolvePhaseModelIdForIssue,
@@ -7,6 +11,16 @@ import {
 } from '@shipcode/shared';
 import type { PipelineContext, PipelineDeps, PipelineExecutorModel } from '../types';
 import type { PipelineContextHelpers } from './shared';
+
+function buildPhasePromptScopes(): PipelineContext['phasePromptScopes'] {
+  return {
+    plan: toPipelinePromptScope('plan'),
+    review: toPipelinePromptScope('review'),
+    revision: toPipelinePromptScope('revision'),
+    verify: toPipelinePromptScope('verify'),
+    execute: toPipelinePromptScope('execute'),
+  };
+}
 
 export function createPipelineContextHelpers(
   deps: PipelineDeps,
@@ -40,32 +54,80 @@ export function createPipelineContextHelpers(
         seed.executorModelIdOverride ?? existing.executorModelIdOverride ?? null;
       const verifierModelIdOverride =
         seed.verifierModelIdOverride ?? existing.verifierModelIdOverride ?? null;
+      const phaseReasoningOverrides = {
+        plan:
+          seed.phaseReasoningOverrides?.plan ??
+          existing.phaseReasoningOverrides.plan ??
+          seed.plannerReasoningEffort ??
+          existing.phaseReasoningOverrides.plan ??
+          settings.plannerReasoningEffort,
+        review:
+          seed.phaseReasoningOverrides?.review ??
+          existing.phaseReasoningOverrides.review ??
+          seed.reviewerReasoningEffort ??
+          settings.reviewerReasoningEffort,
+        revision:
+          seed.phaseReasoningOverrides?.revision ??
+          existing.phaseReasoningOverrides.revision ??
+          seed.plannerReasoningEffort ??
+          existing.phaseReasoningOverrides.plan ??
+          settings.plannerReasoningEffort,
+        execute:
+          seed.phaseReasoningOverrides?.execute ??
+          existing.phaseReasoningOverrides.execute ??
+          seed.executorReasoningEffort ??
+          settings.executorReasoningEffort,
+        verify:
+          seed.phaseReasoningOverrides?.verify ??
+          existing.phaseReasoningOverrides.verify ??
+          seed.verifierReasoningEffort ??
+          settings.verifierReasoningEffort,
+      } satisfies PipelineContext['phaseReasoningOverrides'];
+      const phaseReasoningEfforts = {
+        plan: resolveProviderReasoningEffort(
+          plannerModel,
+          resolvePhaseReasoningEffort('plan', phaseReasoningOverrides.plan),
+          plannerModelIdOverride,
+        ).effective,
+        review: resolveProviderReasoningEffort(
+          reviewerModel,
+          resolvePhaseReasoningEffort('review', phaseReasoningOverrides.review),
+          reviewerModelIdOverride,
+        ).effective,
+        revision: resolveProviderReasoningEffort(
+          plannerModel,
+          resolvePhaseReasoningEffort('revision', phaseReasoningOverrides.revision),
+          plannerModelIdOverride,
+        ).effective,
+        execute: resolveProviderReasoningEffort(
+          executorModel,
+          resolvePhaseReasoningEffort('execute', phaseReasoningOverrides.execute),
+          executorModelIdOverride,
+        ).effective,
+        verify: resolveProviderReasoningEffort(
+          verifierModel,
+          resolvePhaseReasoningEffort('verify', phaseReasoningOverrides.verify),
+          verifierModelIdOverride,
+        ).effective,
+      } satisfies PipelineContext['phaseReasoningEfforts'];
       const plannerReasoningEffort = resolveProviderReasoningEffort(
         plannerModel,
-        seed.plannerReasoningEffort ??
-          existing.plannerReasoningEffort ??
-          settings.plannerReasoningEffort,
+        phaseReasoningEfforts.plan,
         plannerModelIdOverride,
       ).effective;
       const reviewerReasoningEffort = resolveProviderReasoningEffort(
         reviewerModel,
-        seed.reviewerReasoningEffort ??
-          existing.reviewerReasoningEffort ??
-          settings.reviewerReasoningEffort,
+        phaseReasoningEfforts.review,
         reviewerModelIdOverride,
       ).effective;
       const executorReasoningEffort = resolveProviderReasoningEffort(
         executorModel,
-        seed.executorReasoningEffort ??
-          existing.executorReasoningEffort ??
-          settings.executorReasoningEffort,
+        phaseReasoningEfforts.execute,
         executorModelIdOverride,
       ).effective;
       const verifierReasoningEffort = resolveProviderReasoningEffort(
         verifierModel,
-        seed.verifierReasoningEffort ??
-          existing.verifierReasoningEffort ??
-          settings.verifierReasoningEffort,
+        phaseReasoningEfforts.verify,
         verifierModelIdOverride,
       ).effective;
 
@@ -79,6 +141,9 @@ export function createPipelineContextHelpers(
         reviewerModelIdOverride,
         executorModelIdOverride,
         verifierModelIdOverride,
+        phasePromptScopes: seed.phasePromptScopes ?? existing.phasePromptScopes,
+        phaseReasoningOverrides,
+        phaseReasoningEfforts,
         plannerReasoningEffort,
         reviewerReasoningEffort,
         executorReasoningEffort,
@@ -96,26 +161,48 @@ export function createPipelineContextHelpers(
     const reviewerModelIdOverride = seed.reviewerModelIdOverride ?? null;
     const executorModelIdOverride = seed.executorModelIdOverride ?? null;
     const verifierModelIdOverride = seed.verifierModelIdOverride ?? null;
-    const plannerReasoningEffort = resolveProviderReasoningEffort(
-      plannerModel,
-      seed.plannerReasoningEffort ?? settings.plannerReasoningEffort,
-      plannerModelIdOverride,
-    ).effective;
-    const reviewerReasoningEffort = resolveProviderReasoningEffort(
-      reviewerModel,
-      seed.reviewerReasoningEffort ?? settings.reviewerReasoningEffort,
-      reviewerModelIdOverride,
-    ).effective;
-    const executorReasoningEffort = resolveProviderReasoningEffort(
-      executorModel,
-      seed.executorReasoningEffort ?? settings.executorReasoningEffort,
-      executorModelIdOverride,
-    ).effective;
-    const verifierReasoningEffort = resolveProviderReasoningEffort(
-      verifierModel,
-      seed.verifierReasoningEffort ?? settings.verifierReasoningEffort,
-      verifierModelIdOverride,
-    ).effective;
+    const phaseReasoningOverrides = {
+      plan: seed.phaseReasoningOverrides?.plan ?? seed.plannerReasoningEffort ?? settings.plannerReasoningEffort,
+      review:
+        seed.phaseReasoningOverrides?.review ?? seed.reviewerReasoningEffort ?? settings.reviewerReasoningEffort,
+      revision:
+        seed.phaseReasoningOverrides?.revision ?? seed.plannerReasoningEffort ?? settings.plannerReasoningEffort,
+      execute:
+        seed.phaseReasoningOverrides?.execute ?? seed.executorReasoningEffort ?? settings.executorReasoningEffort,
+      verify:
+        seed.phaseReasoningOverrides?.verify ?? seed.verifierReasoningEffort ?? settings.verifierReasoningEffort,
+    } satisfies PipelineContext['phaseReasoningOverrides'];
+    const phaseReasoningEfforts = {
+      plan: resolveProviderReasoningEffort(
+        plannerModel,
+        resolvePhaseReasoningEffort('plan', phaseReasoningOverrides.plan),
+        plannerModelIdOverride,
+      ).effective,
+      review: resolveProviderReasoningEffort(
+        reviewerModel,
+        resolvePhaseReasoningEffort('review', phaseReasoningOverrides.review),
+        reviewerModelIdOverride,
+      ).effective,
+      revision: resolveProviderReasoningEffort(
+        plannerModel,
+        resolvePhaseReasoningEffort('revision', phaseReasoningOverrides.revision),
+        plannerModelIdOverride,
+      ).effective,
+      execute: resolveProviderReasoningEffort(
+        executorModel,
+        resolvePhaseReasoningEffort('execute', phaseReasoningOverrides.execute),
+        executorModelIdOverride,
+      ).effective,
+      verify: resolveProviderReasoningEffort(
+        verifierModel,
+        resolvePhaseReasoningEffort('verify', phaseReasoningOverrides.verify),
+        verifierModelIdOverride,
+      ).effective,
+    } satisfies PipelineContext['phaseReasoningEfforts'];
+    const plannerReasoningEffort = phaseReasoningEfforts.plan;
+    const reviewerReasoningEffort = phaseReasoningEfforts.review;
+    const executorReasoningEffort = phaseReasoningEfforts.execute;
+    const verifierReasoningEffort = phaseReasoningEfforts.verify;
 
     const seededProjectId = seed.projectId ?? deps.threads.getById(threadId)?.projectId ?? null;
 
@@ -157,6 +244,9 @@ export function createPipelineContextHelpers(
       startedAt: seed.startedAt ?? Date.now(),
       repoContext: seed.repoContext ?? null,
       repoPromptMaterials: seed.repoPromptMaterials ?? null,
+      phasePromptScopes: seed.phasePromptScopes ?? buildPhasePromptScopes(),
+      phaseReasoningOverrides,
+      phaseReasoningEfforts,
       promptMaterialSummaries: seed.promptMaterialSummaries ?? {},
       promptTelemetry: seed.promptTelemetry ?? [],
       promptTelemetryDiagnostics: seed.promptTelemetryDiagnostics ?? [],
@@ -227,42 +317,13 @@ export function createPipelineContextHelpers(
         issue && project
           ? resolvePhaseModelIdForIssue(settings, project, issue, 'verifier')
           : (project?.verifierModelIdOverride ?? null),
-      plannerReasoningEffort: resolveProviderReasoningEffort(
-        issue && project
-          ? resolvePhaseModelForIssue(settings, project, issue, 'planner')
-          : resolvePhaseModel(settings, project, 'planner'),
-        project?.plannerReasoningEffortOverride ?? settings.plannerReasoningEffort,
-        issue && project
-          ? resolvePhaseModelIdForIssue(settings, project, issue, 'planner')
-          : (project?.plannerModelIdOverride ?? null),
-      ).effective,
-      reviewerReasoningEffort: resolveProviderReasoningEffort(
-        issue && project
-          ? resolvePhaseModelForIssue(settings, project, issue, 'reviewer')
-          : resolvePhaseModel(settings, project, 'reviewer'),
+      plannerReasoningEffort: project?.plannerReasoningEffortOverride ?? settings.plannerReasoningEffort,
+      reviewerReasoningEffort:
         project?.reviewerReasoningEffortOverride ?? settings.reviewerReasoningEffort,
-        issue && project
-          ? resolvePhaseModelIdForIssue(settings, project, issue, 'reviewer')
-          : (project?.reviewerModelIdOverride ?? null),
-      ).effective,
-      executorReasoningEffort: resolveProviderReasoningEffort(
-        issue && project
-          ? resolvePhaseModelForIssue(settings, project, issue, 'executor')
-          : resolvePhaseModel(settings, project, 'executor'),
+      executorReasoningEffort:
         project?.executorReasoningEffortOverride ?? settings.executorReasoningEffort,
-        issue && project
-          ? resolvePhaseModelIdForIssue(settings, project, issue, 'executor')
-          : (project?.executorModelIdOverride ?? null),
-      ).effective,
-      verifierReasoningEffort: resolveProviderReasoningEffort(
-        issue && project
-          ? resolvePhaseModelForIssue(settings, project, issue, 'verifier')
-          : resolvePhaseModel(settings, project, 'verifier'),
+      verifierReasoningEffort:
         project?.verifierReasoningEffortOverride ?? settings.verifierReasoningEffort,
-        issue && project
-          ? resolvePhaseModelIdForIssue(settings, project, issue, 'verifier')
-          : (project?.verifierModelIdOverride ?? null),
-      ).effective,
       baseBranch: thread.baseBranch ?? '',
       forkPointSha: thread.forkPointSha ?? '',
       activeProcessId: null,

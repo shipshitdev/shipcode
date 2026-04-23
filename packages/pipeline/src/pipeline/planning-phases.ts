@@ -301,8 +301,8 @@ export function createPlanningPhaseHandlers({
 
     void (async () => {
       try {
-        const response = await runProviderPhase(context, 'plan', planPrompt, {
-          reasoningEffort: context.plannerReasoningEffort,
+        const response = await runProviderPhase(context, 'plan', planPrompt, planMaterials, {
+          reasoningEffort: context.phaseReasoningEfforts.plan,
         });
 
         if (context.cancelled) return;
@@ -449,9 +449,15 @@ export function createPlanningPhaseHandlers({
 
     void (async () => {
       try {
-        const response = await runProviderPhase(context, 'review', reviewPromptText, {
-          reasoningEffort: context.reviewerReasoningEffort,
-        });
+        const response = await runProviderPhase(
+          context,
+          'review',
+          reviewPromptText,
+          reviewMaterials,
+          {
+            reasoningEffort: context.phaseReasoningEfforts.review,
+          },
+        );
 
         if (context.cancelled) return;
 
@@ -646,9 +652,15 @@ export function createPlanningPhaseHandlers({
 
     void (async () => {
       try {
-        const response = await runProviderPhase(context, 'revision', revisionPrompt, {
-          reasoningEffort: context.plannerReasoningEffort,
-        });
+        const response = await runProviderPhase(
+          context,
+          'revision',
+          revisionPrompt,
+          revisionMaterials,
+          {
+            reasoningEffort: context.phaseReasoningEfforts.revision,
+          },
+        );
 
         if (context.cancelled) return;
 

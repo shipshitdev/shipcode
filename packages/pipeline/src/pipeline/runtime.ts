@@ -1,8 +1,12 @@
 import { spawn } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, resolve, sep } from 'node:path';
-import type { ProviderPhase, ProviderRequest } from '@shipcode/agents';
+import type { PromptMaterial, ProviderPhase, ProviderRequest } from '@shipcode/agents';
 import { formatPlanComment, GhCli, loadRepoSetupContract } from '@shipcode/agents';
+import {
+  measurePhasePromptTelemetry,
+  toPersistedPromptTelemetryMaterials,
+} from '@shipcode/agents/source';
 import { syncThreadAndIssuePhase } from '../phase-sync';
 import type { PipelineContext, PipelineDeps, PipelineExecutorModel } from '../types';
 import type { PipelineContextHelpers, PipelineRuntime } from './shared';
@@ -286,12 +290,13 @@ export function createPipelineRuntime(
     context: PipelineContext,
     phase: ProviderPhase,
     prompt: string,
+    promptMaterials: PromptMaterial[],
     phaseHints: ProviderRequest['phaseHints'],
   ): Promise<{
     rawOutput: string;
     exitCode: number;
     resolvedModel?: string;
-    promptTelemetry?: import('@shipcode/agents').PromptTelemetry;
+    promptTelemetry?: import('@shipcode/agents/source').PhasePromptTelemetry;
     clarificationRequest?: import('@shipcode/shared').ClarificationRequest;
   }> {
     const agent = resolveAgentForPhase(context, phase);
@@ -336,29 +341,34 @@ export function createPipelineRuntime(
         deps.emitter.emit({ type: 'terminal:event', threadId: context.threadId, event }),
     });
 
-    if (response.promptTelemetry) {
-      context.promptTelemetry.push(response.promptTelemetry);
-      try {
-        deps.promptTelemetry?.create({
-          threadId: context.threadId,
-          phase,
-          invocationId: `${context.threadId}:${phase}:${context.promptTelemetry.length}`,
-          attempt: context.promptTelemetry.length,
-          provider: provider.id,
-          model: response.resolvedModel ?? modelHint ?? agent,
-          promptCharacters: response.promptTelemetry.promptSize.characters,
-          promptBytes: response.promptTelemetry.promptSize.bytes,
-          promptLines: response.promptTelemetry.promptSize.lines,
-          selectedMaterials: response.promptTelemetry.selectedMaterials ?? null,
-          promptTokens: response.tokensUsed?.prompt ?? null,
-          completionTokens: response.tokensUsed?.completion ?? null,
-          costUsd: response.costUsd ?? null,
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        context.promptTelemetryDiagnostics.push(message);
-        console.error('[pipeline] prompt telemetry persistence failed:', error);
-      }
+    const promptTelemetry = measurePhasePromptTelemetry({
+      phase,
+      prompt,
+      materials: promptMaterials,
+    });
+    context.promptTelemetry.push(promptTelemetry);
+    try {
+      deps.promptTelemetry?.create({
+        threadId: context.threadId,
+        phase,
+        invocationId: `${context.threadId}:${phase}:${context.promptTelemetry.length}`,
+        attempt: context.promptTelemetry.length,
+        provider: provider.id,
+        model: response.resolvedModel ?? modelHint ?? agent,
+        promptCharacters: promptTelemetry.promptSize.characters,
+        promptBytes: promptTelemetry.promptSize.bytes,
+        promptLines: promptTelemetry.promptSize.lines,
+        selectedMaterials: toPersistedPromptTelemetryMaterials(promptTelemetry) as NonNullable<
+          Parameters<NonNullable<PipelineDeps['promptTelemetry']>['create']>[0]['selectedMaterials']
+        >,
+        promptTokens: response.tokensUsed?.prompt ?? null,
+        completionTokens: response.tokensUsed?.completion ?? null,
+        costUsd: response.costUsd ?? null,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      context.promptTelemetryDiagnostics.push({ phase, message, nonFatal: true });
+      console.error('[pipeline] prompt telemetry persistence failed:', error);
     }
 
     if (response.resolvedModel) {
@@ -395,7 +405,7 @@ export function createPipelineRuntime(
       rawOutput: response.rawOutput,
       exitCode: response.exitCode,
       resolvedModel: response.resolvedModel,
-      promptTelemetry: response.promptTelemetry,
+      promptTelemetry,
       clarificationRequest: response.clarificationRequest,
     };
   }

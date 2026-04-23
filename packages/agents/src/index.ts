@@ -21,6 +21,24 @@ export {
   selectPromptMaterials,
   summarizePromptMaterials,
 } from './prompt-scope';
+export type {
+  PhasePromptContextSlice,
+  PhasePromptPolicy,
+} from './prompts/phase-prompt-policy';
+export {
+  getPhasePromptPolicy,
+  resolvePhaseReasoningEffort,
+  selectPhasePromptMaterials,
+  toPipelinePromptScope,
+} from './prompts/phase-prompt-policy';
+export type {
+  PhasePromptTelemetry,
+  PhasePromptTelemetrySection,
+} from './prompts/phase-prompt-telemetry';
+export {
+  measurePhasePromptTelemetry,
+  toPersistedPromptTelemetryMaterials,
+} from './prompts/phase-prompt-telemetry';
 export { GhCli } from './github/gh-cli';
 export { IssuePoller } from './github/issue-poller';
 export { routeFromLabels } from './github/model-router';

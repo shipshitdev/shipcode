@@ -7,21 +7,6 @@ import { createPipelineRuntime } from './pipeline/runtime';
 import type { PipelinePhaseHandlers } from './pipeline/shared';
 import type { Pipeline, PipelineContext, PipelineDeps, PipelineExecutorModel } from './types';
 
-const PHASE_REASONING_DEFAULTS = {
-  plan: 'high',
-  review: 'low',
-  execute: 'medium',
-  verify: 'low',
-} as const;
-
-function resolveConfiguredReasoningEffort(
-  phase: 'plan' | 'review' | 'execute' | 'verify',
-  explicit: PipelineContext['plannerReasoningEffort'] | null | undefined,
-  configured: PipelineContext['plannerReasoningEffort'] | null | undefined,
-) {
-  return explicit ?? configured ?? PHASE_REASONING_DEFAULTS[phase];
-}
-
 export function createPipeline(deps: PipelineDeps): Pipeline {
   const activePipelines = new Map<string, PipelineContext>();
   const contextHelpers = createPipelineContextHelpers(deps, activePipelines);
@@ -128,29 +113,13 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       executorModelIdOverride: options?.executorModelIdOverride ?? null,
       verifierModelIdOverride: options?.verifierModelIdOverride ?? null,
       plannerReasoningEffort:
-        resolveConfiguredReasoningEffort(
-          'plan',
-          options?.plannerReasoningEffort,
-          settings.plannerReasoningEffort,
-        ),
+        options?.plannerReasoningEffort ?? settings.plannerReasoningEffort,
       reviewerReasoningEffort:
-        resolveConfiguredReasoningEffort(
-          'review',
-          options?.reviewerReasoningEffort,
-          settings.reviewerReasoningEffort,
-        ),
+        options?.reviewerReasoningEffort ?? settings.reviewerReasoningEffort,
       executorReasoningEffort:
-        resolveConfiguredReasoningEffort(
-          'execute',
-          options?.executorReasoningEffort,
-          settings.executorReasoningEffort,
-        ),
+        options?.executorReasoningEffort ?? settings.executorReasoningEffort,
       verifierReasoningEffort:
-        resolveConfiguredReasoningEffort(
-          'verify',
-          options?.verifierReasoningEffort,
-          settings.verifierReasoningEffort,
-        ),
+        options?.verifierReasoningEffort ?? settings.verifierReasoningEffort,
       executorModelOverride,
       baseBranch,
       forkPointSha,

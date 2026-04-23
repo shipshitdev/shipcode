@@ -63,6 +63,7 @@ describe('phase prompt policy', () => {
 
   it('applies lower-cost default reasoning only when no explicit override is provided', () => {
     expect(resolvePhaseReasoningEffort('review')).toBe('low');
+    expect(resolvePhaseReasoningEffort('revision')).toBe('low');
     expect(resolvePhaseReasoningEffort('verify')).toBe('low');
     expect(resolvePhaseReasoningEffort('review', 'high')).toBe('high');
     expect(resolvePhaseReasoningEffort('execute')).toBe('medium');

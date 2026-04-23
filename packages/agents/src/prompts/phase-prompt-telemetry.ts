@@ -28,6 +28,18 @@ export interface PhasePromptTelemetry {
   sections: PhasePromptTelemetrySection[];
 }
 
+export function toPersistedPromptTelemetryMaterials(telemetry: PhasePromptTelemetry) {
+  return {
+    ...(telemetry.selectedMaterials ?? {
+      count: 0,
+      labels: [],
+      kinds: [],
+    }),
+    selectedScope: telemetry.selectedScope,
+    sections: telemetry.sections,
+  };
+}
+
 export function measurePhasePromptTelemetry(input: {
   phase: PromptPhase;
   prompt: string;
