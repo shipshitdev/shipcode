@@ -7,6 +7,21 @@ import { createPipelineRuntime } from './pipeline/runtime';
 import type { PipelinePhaseHandlers } from './pipeline/shared';
 import type { Pipeline, PipelineContext, PipelineDeps, PipelineExecutorModel } from './types';
 
+const PHASE_REASONING_DEFAULTS = {
+  plan: 'high',
+  review: 'low',
+  execute: 'medium',
+  verify: 'low',
+} as const;
+
+function resolveConfiguredReasoningEffort(
+  phase: 'plan' | 'review' | 'execute' | 'verify',
+  explicit: PipelineContext['plannerReasoningEffort'] | null | undefined,
+  configured: PipelineContext['plannerReasoningEffort'] | null | undefined,
+) {
+  return explicit ?? configured ?? PHASE_REASONING_DEFAULTS[phase];
+}
+
 export function createPipeline(deps: PipelineDeps): Pipeline {
   const activePipelines = new Map<string, PipelineContext>();
   const contextHelpers = createPipelineContextHelpers(deps, activePipelines);
@@ -52,6 +67,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     },
   ) {
     const executorModelOverride = options?.executorModelOverride ?? null;
+    const settings = deps.settings.get();
 
     let baseBranch = options?.baseBranch ?? '';
     let forkPointSha = '';
@@ -101,24 +117,40 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       githubIssueTitle: issue.title,
       githubRepo: null,
       plannerModel:
-        options?.plannerModel ?? (deps.settings.get().plannerModel as PipelineExecutorModel),
+        options?.plannerModel ?? (settings.plannerModel as PipelineExecutorModel),
       reviewerModel:
-        options?.reviewerModel ?? (deps.settings.get().reviewerModel as PipelineExecutorModel),
+        options?.reviewerModel ?? (settings.reviewerModel as PipelineExecutorModel),
       verifierModel:
-        options?.verifierModel ?? (deps.settings.get().verifierModel as PipelineExecutorModel),
+        options?.verifierModel ?? (settings.verifierModel as PipelineExecutorModel),
       executorModel,
       plannerModelIdOverride: options?.plannerModelIdOverride ?? null,
       reviewerModelIdOverride: options?.reviewerModelIdOverride ?? null,
       executorModelIdOverride: options?.executorModelIdOverride ?? null,
       verifierModelIdOverride: options?.verifierModelIdOverride ?? null,
       plannerReasoningEffort:
-        options?.plannerReasoningEffort ?? deps.settings.get().plannerReasoningEffort,
+        resolveConfiguredReasoningEffort(
+          'plan',
+          options?.plannerReasoningEffort,
+          settings.plannerReasoningEffort,
+        ),
       reviewerReasoningEffort:
-        options?.reviewerReasoningEffort ?? deps.settings.get().reviewerReasoningEffort,
+        resolveConfiguredReasoningEffort(
+          'review',
+          options?.reviewerReasoningEffort,
+          settings.reviewerReasoningEffort,
+        ),
       executorReasoningEffort:
-        options?.executorReasoningEffort ?? deps.settings.get().executorReasoningEffort,
+        resolveConfiguredReasoningEffort(
+          'execute',
+          options?.executorReasoningEffort,
+          settings.executorReasoningEffort,
+        ),
       verifierReasoningEffort:
-        options?.verifierReasoningEffort ?? deps.settings.get().verifierReasoningEffort,
+        resolveConfiguredReasoningEffort(
+          'verify',
+          options?.verifierReasoningEffort,
+          settings.verifierReasoningEffort,
+        ),
       executorModelOverride,
       baseBranch,
       forkPointSha,
@@ -127,7 +159,6 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       verifiedSha: null,
     });
 
-    const settings = deps.settings.get();
     const thread = deps.threads.getById(threadId);
     const project = thread ? deps.projects.getById(thread.projectId) : null;
     const cachedIssue =

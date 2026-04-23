@@ -4,6 +4,10 @@ import {
   buildPRBody,
   buildVerificationPrompt,
   loadRepoContext,
+  loadStructuredRepoContext,
+  selectPromptMaterials,
+  summarizePromptMaterials,
+  type PromptMaterial,
   StreamParser,
 } from '@shipcode/agents';
 import { WorktreeManager } from '@shipcode/git';
@@ -37,6 +41,28 @@ export function createExecutionPhaseHandlers({
     runShellCommand,
   } = runtime;
 
+  function ensureRepoPromptMaterials(context: NonNullable<ReturnType<typeof activePipelines.get>>): PromptMaterial[] {
+    if (context.repoPromptMaterials === null) {
+      context.repoPromptMaterials = loadStructuredRepoContext(
+        context.worktreePath ?? context.projectPath,
+      );
+      context.repoContext =
+        context.repoPromptMaterials.map((material) => material.content).join('\n\n') ||
+        loadRepoContext(context.worktreePath ?? context.projectPath);
+    }
+    return context.repoPromptMaterials;
+  }
+
+  function rememberMaterialSummary(
+    context: NonNullable<ReturnType<typeof activePipelines.get>>,
+    phase: 'execute' | 'verify',
+    materials: PromptMaterial[],
+  ) {
+    context.promptMaterialSummaries[phase] = summarizePromptMaterials(
+      selectPromptMaterials(phase, materials),
+    );
+  }
+
   async function startExecution(threadId: string, plan: ShipCodePlan) {
     const settings = deps.settings.get();
     const executingCount = contextHelpers.listActiveInPhases(EXECUTION_PHASES).length;
@@ -49,9 +75,7 @@ export function createExecutionPhaseHandlers({
     const context = activePipelines.get(threadId);
     if (!context) return;
 
-    if (context.repoContext === null) {
-      context.repoContext = loadRepoContext(context.worktreePath ?? context.projectPath);
-    }
+    ensureRepoPromptMaterials(context);
     try {
       ensureRepoSetupContract(context);
     } catch (error) {
@@ -141,9 +165,14 @@ export function createExecutionPhaseHandlers({
     context.testOutput = null;
     const stabilizationFeedback = context.stabilizationFeedback ?? '';
     context.stabilizationFeedback = null;
+    const executeMaterials: PromptMaterial[] = [
+      { kind: 'issue_prompt', label: 'thread prompt', content: deps.threads.getById(threadId)?.prompt ?? '' },
+      ...ensureRepoPromptMaterials(context),
+    ];
+    rememberMaterialSummary(context, 'execute', executeMaterials);
     const executionPrompt =
       buildExecutionPrompt(plan, skill.context, skill.deps, {
-        contextFiles: context.repoContext ?? undefined,
+        promptMaterials: executeMaterials,
         testingContext: getTestingContext(context),
       }) +
       testFeedback +
@@ -325,6 +354,14 @@ export function createExecutionPhaseHandlers({
     deps.diffs.replaceForThread(threadId, parseUnifiedDiff(diff));
 
     const skill = skillCallSite(context);
+    const verifyMaterials: PromptMaterial[] = [
+      ...ensureRepoPromptMaterials(context),
+      { kind: 'diff_summary', label: 'implementation diff', content: diff },
+      ...(context.testOutput
+        ? [{ kind: 'verification_output' as const, label: 'test output', content: context.testOutput }]
+        : []),
+    ];
+    rememberMaterialSummary(context, 'verify', verifyMaterials);
     const verificationPrompt = buildVerificationPrompt(
       plan,
       diff,
@@ -332,7 +369,7 @@ export function createExecutionPhaseHandlers({
       skill.context,
       skill.deps,
       context.testOutput ?? null,
-      { contextFiles: context.repoContext ?? undefined },
+      { promptMaterials: verifyMaterials },
     );
 
     void (async () => {

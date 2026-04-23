@@ -291,6 +291,7 @@ export function createPipelineRuntime(
     rawOutput: string;
     exitCode: number;
     resolvedModel?: string;
+    promptTelemetry?: import('@shipcode/agents').PromptTelemetry;
     clarificationRequest?: import('@shipcode/shared').ClarificationRequest;
   }> {
     const agent = resolveAgentForPhase(context, phase);
@@ -328,11 +329,37 @@ export function createPipelineRuntime(
       projectPath: context.projectPath,
       signal: context.abort.signal,
       phaseHints: mergedHints,
+      promptMaterialSummary: context.promptMaterialSummaries[phase],
       modelHint: modelHint ?? undefined,
       threadId: context.threadId,
       onTerminalEvent: (event) =>
         deps.emitter.emit({ type: 'terminal:event', threadId: context.threadId, event }),
     });
+
+    if (response.promptTelemetry) {
+      context.promptTelemetry.push(response.promptTelemetry);
+      try {
+        deps.promptTelemetry?.create({
+          threadId: context.threadId,
+          phase,
+          invocationId: `${context.threadId}:${phase}:${context.promptTelemetry.length}`,
+          attempt: context.promptTelemetry.length,
+          provider: provider.id,
+          model: response.resolvedModel ?? modelHint ?? agent,
+          promptCharacters: response.promptTelemetry.promptSize.characters,
+          promptBytes: response.promptTelemetry.promptSize.bytes,
+          promptLines: response.promptTelemetry.promptSize.lines,
+          selectedMaterials: response.promptTelemetry.selectedMaterials ?? null,
+          promptTokens: response.tokensUsed?.prompt ?? null,
+          completionTokens: response.tokensUsed?.completion ?? null,
+          costUsd: response.costUsd ?? null,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        context.promptTelemetryDiagnostics.push(message);
+        console.error('[pipeline] prompt telemetry persistence failed:', error);
+      }
+    }
 
     if (response.resolvedModel) {
       const requestedModel = modelHint ?? agent;
@@ -368,6 +395,7 @@ export function createPipelineRuntime(
       rawOutput: response.rawOutput,
       exitCode: response.exitCode,
       resolvedModel: response.resolvedModel,
+      promptTelemetry: response.promptTelemetry,
       clarificationRequest: response.clarificationRequest,
     };
   }

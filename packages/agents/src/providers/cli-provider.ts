@@ -16,6 +16,7 @@
  */
 
 import type { ProcessManager } from '../process-manager';
+import { measurePromptPayload } from '../prompt-scope';
 import { StreamParser } from '../stream-parser';
 import { stripAnsi } from './output-summary';
 import { mapReasoningEffortToClaudeThinkingTokens, mapReasoningEffortToCodex } from './reasoning';
@@ -214,6 +215,11 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
     id: 'claude-cli',
     supports: new Set<ProviderPhase>(['plan', 'review', 'revision', 'verify', 'execute']),
     async generate(req: ProviderRequest): Promise<ProviderResponse> {
+      const promptTelemetry = {
+        phase: req.phase,
+        promptSize: measurePromptPayload(req.prompt),
+        ...(req.promptMaterialSummary ? { selectedMaterials: req.promptMaterialSummary } : {}),
+      };
       const args = buildClaudeArgs(req);
       const result = await runCli(
         processManager,
@@ -231,6 +237,7 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
         rawOutput: StreamParser.stripSystemEvents(result.rawOutput),
         exitCode: result.exitCode,
         resolvedModel: parser.extractModel() ?? 'claude',
+        promptTelemetry,
         ...(usage
           ? {
               tokensUsed: { prompt: usage.inputTokens, completion: usage.outputTokens },
@@ -267,6 +274,11 @@ export function createCodexCliProvider(processManager: ProcessManager): AgentPro
     id: 'codex-cli',
     supports: new Set<ProviderPhase>(['plan', 'review', 'revision', 'verify', 'execute']),
     async generate(req: ProviderRequest): Promise<ProviderResponse> {
+      const promptTelemetry = {
+        phase: req.phase,
+        promptSize: measurePromptPayload(req.prompt),
+        ...(req.promptMaterialSummary ? { selectedMaterials: req.promptMaterialSummary } : {}),
+      };
       const args = buildCodexArgs(req);
       const result = await runCli(processManager, 'codex', args, req.cwd, req.signal, req.threadId);
       const parser = new StreamParser();
@@ -277,6 +289,7 @@ export function createCodexCliProvider(processManager: ProcessManager): AgentPro
         rawOutput: stripCodexProtocol(result.rawOutput),
         exitCode: result.exitCode,
         resolvedModel: 'codex',
+        promptTelemetry,
         ...(usage
           ? {
               tokensUsed: { prompt: usage.inputTokens, completion: usage.outputTokens },

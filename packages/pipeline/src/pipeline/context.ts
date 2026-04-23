@@ -83,6 +83,7 @@ export function createPipelineContextHelpers(
         reviewerReasoningEffort,
         executorReasoningEffort,
         verifierReasoningEffort,
+        repoPromptMaterials: seed.repoPromptMaterials ?? existing.repoPromptMaterials ?? null,
       });
       return existing;
     }
@@ -155,6 +156,10 @@ export function createPipelineContextHelpers(
       verifiedSha: seed.verifiedSha ?? null,
       startedAt: seed.startedAt ?? Date.now(),
       repoContext: seed.repoContext ?? null,
+      repoPromptMaterials: seed.repoPromptMaterials ?? null,
+      promptMaterialSummaries: seed.promptMaterialSummaries ?? {},
+      promptTelemetry: seed.promptTelemetry ?? [],
+      promptTelemetryDiagnostics: seed.promptTelemetryDiagnostics ?? [],
       repoSetupContract: seed.repoSetupContract ?? null,
       repoSetupLoaded: seed.repoSetupLoaded ?? false,
       abort: seed.abort ?? new AbortController(),

@@ -1,5 +1,6 @@
 import type { ClarificationAnswer, ClarificationRequest, ShipCodePlan } from '@shipcode/shared';
 import { CLARIFICATION_FENCE_TAG, PLAN_FENCE_TAG } from '@shipcode/shared';
+import { buildScopedContext, type PromptMaterial } from '../prompt-scope';
 import {
   interpolateSkill,
   type PhaseSkillKey,
@@ -123,6 +124,16 @@ export interface PlanPromptDeps {
 export interface PlanPromptOptions {
   contextFiles?: string;
   clarificationContext?: string;
+  promptMaterials?: PromptMaterial[];
+}
+
+function withRepoContext(
+  prompt: string,
+  contextFiles: string,
+  include: boolean,
+): string {
+  if (!include || !contextFiles || prompt.includes(contextFiles)) return prompt;
+  return `${prompt}\n\n<repo_context>\n${contextFiles}\n</repo_context>`;
 }
 
 export function buildPlanPrompt(
@@ -137,10 +148,11 @@ export function buildPlanPrompt(
   if (fallbackUsed) {
     deps.onFallback?.('plan-generation', error);
   }
+  const scoped = buildScopedContext('plan', opts.promptMaterials, opts.contextFiles);
   const base = interpolateSkill(skill.content, [
     { key: 'USER_PROMPT', value: userPrompt },
     { key: 'THREAD_ID', value: threadId },
-    { key: 'CONTEXT_FILES', value: opts.contextFiles ?? 'No extra files provided.' },
+    { key: 'CONTEXT_FILES', value: scoped.contextFiles },
     { key: 'OUTPUT_SCHEMA', value: PLAN_OR_CLARIFICATION_SCHEMA },
   ]);
   const note = testCommand
@@ -149,7 +161,17 @@ export function buildPlanPrompt(
   const clarificationContext = opts.clarificationContext
     ? `\n\n<clarification_context>\n${opts.clarificationContext}\n</clarification_context>`
     : '';
-  return base + note + clarificationContext + FORMAT_REINFORCEMENT;
+  return (
+    withRepoContext(base, scoped.contextFiles, Boolean(opts.promptMaterials?.length || opts.contextFiles)) +
+    note +
+    clarificationContext +
+    FORMAT_REINFORCEMENT
+  );
+}
+
+export interface RevisionPromptOptions {
+  contextFiles?: string;
+  promptMaterials?: PromptMaterial[];
 }
 
 export function buildRevisionPrompt(
@@ -159,22 +181,30 @@ export function buildRevisionPrompt(
   context: PlanPromptContext,
   deps: PlanPromptDeps,
   testCommand?: string | null,
+  opts: RevisionPromptOptions = {},
 ): string {
   const { skill, fallbackUsed, error } = resolveSkill('plan-revision', context.projectId, deps);
   if (fallbackUsed) {
     deps.onFallback?.('plan-revision', error);
   }
+  const semanticMaterials: PromptMaterial[] = [...(opts.promptMaterials ?? [])];
+  const scoped = buildScopedContext('revision', semanticMaterials);
   const base = interpolateSkill(skill.content, [
     { key: 'ORIGINAL_PLAN', value: JSON.stringify(originalPlan, null, 2) },
     { key: 'REVIEW_FEEDBACK', value: reviewFeedback },
     { key: 'THREAD_ID', value: threadId },
     { key: 'NEW_VERSION', value: String(originalPlan.version + 1) },
+    { key: 'CONTEXT_FILES', value: scoped.contextFiles },
     { key: 'OUTPUT_SCHEMA', value: PLAN_OR_CLARIFICATION_SCHEMA },
   ]);
   const note = testCommand
     ? `\n\n<!-- auto-injected: test command configured -->\nNote: This project runs \`${testCommand}\` after execution. The plan MUST include an acceptance criterion: "Test suite passes (\`${testCommand}\`)."`
     : '';
-  return base + note + FORMAT_REINFORCEMENT;
+  return (
+    withRepoContext(base, scoped.contextFiles, Boolean(opts.promptMaterials?.length || opts.contextFiles)) +
+    note +
+    FORMAT_REINFORCEMENT
+  );
 }
 
 export function formatClarificationContext(

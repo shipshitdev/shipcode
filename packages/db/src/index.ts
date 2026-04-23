@@ -34,6 +34,7 @@ import {
   migrateV31,
   migrateV32,
   migrateV33,
+  migrateV34,
 } from './schema';
 
 export { ActivityQueries } from './queries/activity';
@@ -45,6 +46,7 @@ export { DiffQueries } from './queries/diffs';
 export { GitHubIssueQueries } from './queries/github-issues';
 export { NotificationsQueries } from './queries/notifications';
 export { PlanQueries } from './queries/plans';
+export { PromptTelemetryQueries } from './queries/prompt-telemetry';
 export { ProjectQueries } from './queries/projects';
 export { ReviewQueries } from './queries/reviews';
 export { SettingsQueries } from './queries/settings';
@@ -99,6 +101,7 @@ export function getDatabase(dataDir: string): DatabaseSync {
   migrateV31(db);
   migrateV32(db);
   migrateV33(db);
+  migrateV34(db);
 
   // Startup cleanup: reset unclaimed queued issues to todo on every launch.
   // An unclaimed queued issue has no active worker holding it — it's stale state

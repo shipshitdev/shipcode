@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { DEFAULT_SETTINGS } from '@shipcode/shared';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from '../test-helpers';
 import { SettingsQueries } from './settings';
@@ -28,7 +29,7 @@ describe('SettingsQueries', () => {
     expect(s.prdRewriteCli).toBe('claude');
     expect(s.prdRewriteClaudeModel).toBe('claude-sonnet-4-6');
     expect(s.prdRewriteCodexModel).toBe('gpt-5.4-mini');
-    expect(s.prdRewriteReasoningEffort).toBe('low');
+    expect(s.prdRewriteReasoningEffort).toBe(DEFAULT_SETTINGS.prdRewriteReasoningEffort);
     expect(s.githubPollingEnabled).toBe(false);
     expect(s.githubPollingIntervalMs).toBe(30000);
     expect(s.githubBotUsername).toBe('');

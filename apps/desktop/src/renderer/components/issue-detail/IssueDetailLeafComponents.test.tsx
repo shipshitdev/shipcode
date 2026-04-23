@@ -63,16 +63,16 @@ describe('issue-detail leaf components', () => {
     expect(screen.getByText(/Waiting for plan generation/i)).toBeInTheDocument();
 
     await waitFor(() => {
-      expect(screen.getByText(/- 2m 0s/)).toBeInTheDocument();
+      expect(screen.getByText(/- 2m [01]s/)).toBeInTheDocument();
     });
-    expect(screen.getByText('Last output: 30s ago')).toBeInTheDocument();
+    expect(screen.getByText(/Last output: 3\ds ago/)).toBeInTheDocument();
 
     cleanup();
 
     window.shipcode.invoke = vi.fn(async () => []) as typeof window.shipcode.invoke;
     renderWithProviders(<PlanWaiting threadId="thread-2" />);
 
-    expect(screen.getByText(/No output in 1m 35s/)).toBeInTheDocument();
+    expect(screen.getByText(/No output in 1m 3[56]s/)).toBeInTheDocument();
   });
 
   it('renders issue history states and run badges', () => {

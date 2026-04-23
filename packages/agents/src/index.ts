@@ -4,7 +4,23 @@ export {
   listContextFiles,
   readContextFile,
 } from './context-generator';
-export { loadRepoContext } from './context-loader';
+export { loadRepoContext, loadStructuredRepoContext } from './context-loader';
+export type {
+  PromptMaterial,
+  PromptMaterialKind,
+  PromptMaterialSummary,
+  PromptPayloadSize,
+  PromptPhase,
+  PromptTelemetry,
+} from './prompt-scope';
+export {
+  buildScopedContext,
+  measurePromptPayload,
+  PROMPT_PHASES,
+  renderPromptMaterials,
+  selectPromptMaterials,
+  summarizePromptMaterials,
+} from './prompt-scope';
 export { GhCli } from './github/gh-cli';
 export { IssuePoller } from './github/issue-poller';
 export { routeFromLabels } from './github/model-router';

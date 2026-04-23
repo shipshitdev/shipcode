@@ -5,6 +5,10 @@ import {
   buildRevisionPrompt,
   formatClarificationContext,
   loadRepoContext,
+  loadStructuredRepoContext,
+  selectPromptMaterials,
+  summarizePromptMaterials,
+  type PromptMaterial,
   StreamParser,
 } from '@shipcode/agents';
 import {
@@ -54,6 +58,26 @@ export function createPlanningPhaseHandlers({
     resolveAgentForPhase,
     runProviderPhase,
   } = runtime;
+
+  function ensureRepoPromptMaterials(context: ReturnType<typeof ensureContext>): PromptMaterial[] {
+    if (context.repoPromptMaterials === null) {
+      context.repoPromptMaterials = loadStructuredRepoContext(
+        context.worktreePath ?? context.projectPath,
+      );
+      context.repoContext = context.repoPromptMaterials.map((material) => material.content).join('\n\n');
+    }
+    return context.repoPromptMaterials;
+  }
+
+  function rememberMaterialSummary(
+    context: ReturnType<typeof ensureContext>,
+    phase: 'plan' | 'review' | 'revision',
+    materials: PromptMaterial[],
+  ) {
+    context.promptMaterialSummaries[phase] = summarizePromptMaterials(
+      selectPromptMaterials(phase, materials),
+    );
+  }
 
   function resolveClarificationRequest(
     parser: StreamParser,
@@ -208,8 +232,11 @@ export function createPlanningPhaseHandlers({
   ) {
     const context = ensureContext(threadId, { projectPath, worktreePath });
 
-    if (context.repoContext === null) {
-      context.repoContext = loadRepoContext(worktreePath ?? projectPath);
+    if (context.repoPromptMaterials === null) {
+      context.repoPromptMaterials = loadStructuredRepoContext(worktreePath ?? projectPath);
+      context.repoContext =
+        context.repoPromptMaterials.map((material) => material.content).join('\n\n') ||
+        loadRepoContext(worktreePath ?? projectPath);
     }
     try {
       ensureRepoSetupContract(context);
@@ -252,6 +279,11 @@ export function createPlanningPhaseHandlers({
       context.clarificationRequest,
       context.clarificationAnswers,
     );
+    const planMaterials: PromptMaterial[] = [
+      { kind: 'issue_prompt', label: 'issue prompt', content: prompt },
+      ...ensureRepoPromptMaterials(context),
+    ];
+    rememberMaterialSummary(context, 'plan', planMaterials);
     const planPrompt =
       buildPlanPrompt(
         prompt,
@@ -259,7 +291,7 @@ export function createPlanningPhaseHandlers({
         skill.context,
         skill.deps,
         {
-          contextFiles: context.repoContext ?? undefined,
+          promptMaterials: planMaterials,
           clarificationContext: clarificationContext ?? undefined,
         },
         getVerifyCommands(context).join(' && ') || null,
@@ -405,9 +437,14 @@ export function createPlanningPhaseHandlers({
     emitPhase(threadId, 'reviewing');
 
     const skill = skillCallSite(context);
+    const reviewMaterials: PromptMaterial[] = [
+      { kind: 'issue_prompt', label: 'thread prompt', content: deps.threads.getById(threadId)?.prompt ?? '' },
+      ...ensureRepoPromptMaterials(context),
+    ];
+    rememberMaterialSummary(context, 'review', reviewMaterials);
     const reviewPromptText = buildReviewPrompt(plan, skill.context, skill.deps, {
       autonomous: context.autonomous,
-      contextFiles: context.repoContext ?? undefined,
+      promptMaterials: reviewMaterials,
     });
 
     void (async () => {
@@ -585,6 +622,11 @@ export function createPlanningPhaseHandlers({
     emitPhase(threadId, 'revising');
 
     const skill = skillCallSite(context);
+    const revisionMaterials: PromptMaterial[] = [
+      { kind: 'issue_prompt', label: 'thread prompt', content: deps.threads.getById(threadId)?.prompt ?? '' },
+      ...ensureRepoPromptMaterials(context),
+    ];
+    rememberMaterialSummary(context, 'revision', revisionMaterials);
     let revisionPrompt: string;
     try {
       revisionPrompt = buildRevisionPrompt(
@@ -594,6 +636,7 @@ export function createPlanningPhaseHandlers({
         skill.context,
         skill.deps,
         getVerifyCommands(context).join(' && ') || null,
+        { promptMaterials: revisionMaterials },
       );
     } catch (error) {
       emitPhase(threadId, 'failed', error instanceof Error ? error.message : String(error));
