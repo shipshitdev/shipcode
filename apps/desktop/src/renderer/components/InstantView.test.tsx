@@ -3,6 +3,7 @@
 import type { Thread } from '@shipcode/shared';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { Profiler } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '../stores/app-store';
 import { InstantView } from './InstantView';
@@ -11,28 +12,33 @@ vi.mock('./instant-terminal/InstantTerminalPane', () => ({
   InstantTerminalPane: ({
     threadId,
     title,
-    canRestart,
+    mode,
+    paneState,
     restartPending,
     restartError,
     onRestart,
   }: {
     threadId: string;
     title: string;
-    canRestart: boolean;
+    mode: 'live' | 'replay';
+    paneState?: string;
     restartPending: boolean;
     restartError: string | null;
     onRestart: (threadId: string) => void;
-  }) => (
-    <div>
-      <span>{title}</span>
-      {canRestart ? (
-        <button type="button" onClick={() => void onRestart(threadId)} disabled={restartPending}>
-          Restart shell
-        </button>
-      ) : null}
-      {restartError ? <span>{restartError}</span> : null}
-    </div>
-  ),
+  }) => {
+    const canRestart = mode === 'live' && paneState === 'exited';
+    return (
+      <div>
+        <span>{title}</span>
+        {canRestart ? (
+          <button type="button" onClick={() => void onRestart(threadId)} disabled={restartPending}>
+            Restart shell
+          </button>
+        ) : null}
+        {restartError ? <span>{restartError}</span> : null}
+      </div>
+    );
+  },
 }));
 
 afterEach(() => {
@@ -101,5 +107,30 @@ describe('InstantView', () => {
       title: 'Claude • Pick up where we left off',
       state: 'running',
     });
+  });
+
+  it('does not rerender the sessions grid when unrelated terminal streams update', () => {
+    const onRender = vi.fn();
+    render(
+      <Profiler id="instant-view" onRender={onRender}>
+        <InstantView />
+      </Profiler>,
+    );
+    onRender.mockClear();
+
+    useAppStore.setState({
+      canonicalTerminalStream: {
+        'other-thread': [
+          {
+            id: 'event-1',
+            threadId: 'other-thread',
+            createdAt: '2026-04-23T09:00:00.000Z',
+            event: { kind: 'text', content: 'unrelated output' },
+          },
+        ],
+      },
+    } as never);
+
+    expect(onRender).not.toHaveBeenCalled();
   });
 });

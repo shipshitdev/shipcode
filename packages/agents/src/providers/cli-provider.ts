@@ -17,6 +17,7 @@
 
 import type { ProcessManager } from '../process-manager';
 import { StreamParser } from '../stream-parser';
+import { stripAnsi } from './output-summary';
 import { mapReasoningEffortToClaudeThinkingTokens, mapReasoningEffortToCodex } from './reasoning';
 import type { AgentProvider, ProviderPhase, ProviderRequest, ProviderResponse } from './types';
 
@@ -337,7 +338,10 @@ function stripCodexProtocol(raw: string): string {
       lines.push(item.text);
     } else if (item.type === 'command_execution') {
       const cmd = item.command as string | undefined;
-      const output = item.aggregated_output as string | undefined;
+      const output =
+        typeof item.aggregated_output === 'string'
+          ? stripAnsi(item.aggregated_output).trimEnd()
+          : undefined;
       const exitCode = item.exit_code as number | null | undefined;
       if (cmd) lines.push(`$ ${cmd}`);
       if (output) lines.push(output.trimEnd());

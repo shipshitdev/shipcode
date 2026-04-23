@@ -37,6 +37,7 @@ import { executeToolCall, getToolSchemas, toolCallHash } from '../tools/registry
 import type { ToolContext } from '../tools/types';
 import type { OpenRouterChatMessage } from './openrouter-http';
 import { type OpenRouterClient, OpenRouterError } from './openrouter-http';
+import { summarizeTerminalText } from './output-summary';
 import { normalizeOpenRouterReasoningEffort } from './reasoning';
 import type { ProviderRequest, ProviderResponse } from './types';
 
@@ -269,6 +270,12 @@ export async function executeViaOpenRouter(
           kind: 'tool_end',
           name: call.function.name,
           durationMs: Date.now() - toolStart,
+          ...(!result.ok
+            ? {
+                exitCode: 1,
+                outputSummary: summarizeTerminalText(result.error),
+              }
+            : {}),
         });
 
         messages.push({

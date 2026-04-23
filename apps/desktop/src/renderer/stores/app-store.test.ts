@@ -224,6 +224,39 @@ describe('app-store', () => {
       expect(useAppStore.getState().canonicalTerminalStream['thread-1']?.[0]?.id).toBe('event-1');
       expect(useAppStore.getState().canonicalTerminalStream['thread-1']?.[1]?.id).toBe('event-2');
     });
+
+    it('deduplicates batched canonical events by id', () => {
+      useAppStore.getState().appendCanonicalEvents('thread-1', [
+        {
+          id: 'event-1',
+          threadId: 'thread-1',
+          event: { kind: 'text', content: 'first copy' },
+          createdAt: '2026-04-16T00:00:00.000Z',
+        },
+        {
+          id: 'event-2',
+          threadId: 'thread-1',
+          event: { kind: 'text', content: 'second event' },
+          createdAt: '2026-04-16T00:00:01.000Z',
+        },
+      ]);
+
+      useAppStore.getState().appendCanonicalEvents('thread-1', [
+        {
+          id: 'event-1',
+          threadId: 'thread-1',
+          event: { kind: 'text', content: 'latest copy' },
+          createdAt: '2026-04-16T00:00:02.000Z',
+        },
+      ]);
+
+      expect(useAppStore.getState().canonicalTerminalStream['thread-1']).toHaveLength(2);
+      expect(useAppStore.getState().canonicalTerminalStream['thread-1']?.[0]?.event).toEqual({
+        kind: 'text',
+        content: 'latest copy',
+      });
+      expect(useAppStore.getState().canonicalTerminalStream['thread-1']?.[1]?.id).toBe('event-2');
+    });
   });
 
   describe('instant pane metadata', () => {

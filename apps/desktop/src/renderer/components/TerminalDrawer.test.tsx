@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import type { GitHubIssueCacheRecord } from '@shipcode/shared';
+import type { GitHubIssueCacheRecord, PlanRecord } from '@shipcode/shared';
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -272,5 +272,55 @@ describe('TerminalDrawer', () => {
     expect(screen.queryByLabelText('Resize terminal drawer')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Collapse terminal' })).toBeInTheDocument();
     expect(useAppStore.getState().terminalMaximized).toBe(true);
+  });
+
+  it('shows waiting-for-execution copy for approved slot waiters', async () => {
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'integrations:check') return undefined;
+      if (channel === 'plan:list') {
+        return [
+          {
+            id: 'plan-1',
+            threadId: 'thread-1',
+            version: 2,
+            rawOutput: '',
+            structured: null,
+            status: 'approved',
+            createdAt: new Date().toISOString(),
+          },
+        ] satisfies PlanRecord[];
+      }
+      return null;
+    });
+
+    (window as typeof window & { shipcode: typeof window.shipcode }).shipcode = {
+      invoke: invoke as unknown as typeof window.shipcode.invoke,
+      on: vi.fn(() => () => {}) as unknown as typeof window.shipcode.on,
+    };
+
+    useAppStore.setState({
+      activeProjectId: 'project-1',
+      activeThreadId: 'thread-1',
+      activeIssue: makeIssue({
+        pipelineStatus: 'awaiting_approval',
+        title: 'Approved slot waiter',
+        threadId: 'thread-1',
+      }),
+      terminalThreadId: 'thread-1',
+      pipelinePhase: 'awaiting_approval',
+      githubIssues: [
+        makeIssue({
+          pipelineStatus: 'awaiting_approval',
+          title: 'Approved slot waiter',
+          threadId: 'thread-1',
+        }),
+      ],
+      canonicalTerminalStream: {},
+    });
+
+    renderWithProviders();
+
+    expect(await screen.findByText('Waiting for slot')).toBeInTheDocument();
+    expect(screen.getByText(/Waiting for execution slot/i)).toBeInTheDocument();
   });
 });

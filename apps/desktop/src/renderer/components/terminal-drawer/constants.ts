@@ -21,7 +21,7 @@ export const PHASE_LABELS: Record<string, string> = {
   clarifying: 'Waiting for clarification',
   reviewing: 'Reviewing',
   revising: 'Thinking',
-  awaiting_approval: 'Waiting for approval',
+  awaiting_approval: 'Needs approval',
   executing: 'Working',
   testing: 'Running tests',
   verifying: 'Verifying',

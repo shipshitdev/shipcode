@@ -1,5 +1,5 @@
-import type { TerminalEventRecord } from '@shipcode/shared';
-import { Badge, Button, Columns2, RefreshCw, Rows2, Square, X } from '@shipcode/ui';
+import type { AgentState, TerminalEventRecord } from '@shipcode/shared';
+import { Badge, Button, Columns2, RefreshCw, Rows2, Square, X } from '@shipshitdev/ui';
 import { useMemo } from 'react';
 import { useSharedSecondNow } from '../../hooks/useSharedSecondNow';
 import type { InstantPaneMode } from '../../stores/app-store';
@@ -20,33 +20,42 @@ interface InstantTerminalPaneProps {
   threadId: string;
   title: string;
   mode: InstantPaneMode;
-  onClose: (threadId: string) => void;
+  paneState?: AgentState;
+  onClose: (threadId: string, isRunning: boolean) => void;
   onSplitHorizontal: () => void;
   onSplitVertical: () => void;
   onCancel: (threadId: string) => void;
   onRestart: (threadId: string) => void;
-  canRestart: boolean;
   restartPending: boolean;
   restartError: string | null;
-  isRunning: boolean;
 }
 
 export function InstantTerminalPane({
   threadId,
   title,
   mode,
+  paneState,
   onClose,
   onSplitHorizontal,
   onSplitVertical,
   onCancel,
   onRestart,
-  canRestart,
   restartPending,
   restartError,
-  isRunning,
 }: InstantTerminalPaneProps) {
-  const canonicalStream = useAppStore((s) => s.canonicalTerminalStream[threadId] ?? EMPTY_STREAM);
+  const shouldReadStream = mode !== 'live' || paneState == null;
+  const canonicalStream = useAppStore((s) =>
+    shouldReadStream ? (s.canonicalTerminalStream[threadId] ?? EMPTY_STREAM) : EMPTY_STREAM,
+  );
   const lastActivityAt = useAppStore((s) => s.lastActivityByThread[threadId] ?? null);
+  const lastEvent = canonicalStream[canonicalStream.length - 1]?.event;
+  const isRunning =
+    paneState != null
+      ? paneState === 'running' || paneState === 'starting'
+      : lastEvent?.kind === 'lifecycle' && lastEvent.message.includes('process exited')
+        ? false
+        : lastEvent?.kind !== 'done';
+  const canRestart = mode === 'live' && !isRunning;
   const { containerRef } = useInstantTerminalPane(threadId, mode, isRunning);
   const now = useSharedSecondNow();
 
@@ -134,7 +143,7 @@ export function InstantTerminalPane({
             size="icon-xs"
             className="text-muted"
             title="Close pane"
-            onClick={() => onClose(threadId)}
+            onClick={() => onClose(threadId, isRunning)}
           >
             <X size={12} />
           </Button>

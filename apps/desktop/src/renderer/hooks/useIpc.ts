@@ -13,18 +13,16 @@ const LAST_ACTIVITY_THROTTLE_MS = 500;
 
 export function useIpc() {
   const queryClient = useQueryClient();
-  const {
-    setPlan,
-    setReview,
-    setPipelinePhase,
-    touchLastActivity,
-    addNotification,
-    removeNotification,
-    mapProcessToThread,
-    setCurrentModel,
-    setInstantPaneState,
-    appendCanonicalEvents,
-  } = useAppStore();
+  const setPlan = useAppStore((state) => state.setPlan);
+  const setReview = useAppStore((state) => state.setReview);
+  const setPipelinePhase = useAppStore((state) => state.setPipelinePhase);
+  const touchLastActivity = useAppStore((state) => state.touchLastActivity);
+  const addNotification = useAppStore((state) => state.addNotification);
+  const removeNotification = useAppStore((state) => state.removeNotification);
+  const mapProcessToThread = useAppStore((state) => state.mapProcessToThread);
+  const setCurrentModel = useAppStore((state) => state.setCurrentModel);
+  const setInstantPaneState = useAppStore((state) => state.setInstantPaneState);
+  const appendCanonicalEvents = useAppStore((state) => state.appendCanonicalEvents);
 
   useEffect(() => {
     if (!window.shipcode?.on) return;

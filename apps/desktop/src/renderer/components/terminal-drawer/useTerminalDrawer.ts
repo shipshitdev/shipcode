@@ -1,13 +1,9 @@
-import type { GitHubIssueCacheRecord, TerminalEventRecord } from '@shipcode/shared';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import type { GitHubIssueCacheRecord, PlanRecord } from '@shipcode/shared';
+import { useQuery } from '@tanstack/react-query';
+import { useCallback, useRef, useState } from 'react';
+import { STABLE_APP_STATE_STALE_TIME } from '../../query-stale-times';
 import { useAppStore } from '../../stores/app-store';
-import {
-  CONSOLE_VISIBLE_STATUSES,
-  DEFAULT_HEIGHT,
-  EMPTY_STREAM,
-  MIN_HEIGHT,
-  PHASE_LABELS,
-} from './constants';
+import { CONSOLE_VISIBLE_STATUSES, DEFAULT_HEIGHT, MIN_HEIGHT } from './constants';
 
 export function useTerminalDrawer() {
   const toggleTerminal = useAppStore((s) => s.toggleTerminal);
@@ -36,10 +32,10 @@ export function useTerminalDrawer() {
     activeIssueMatch || runningTabs.find((issue) => issue.threadId != null) || null;
   const displayIssue = explicitIssue ?? fallbackIssue;
   const visibleTerminalThreadId = displayIssue?.threadId ?? null;
-  const canonicalStream = useAppStore((s) =>
+  const firstEventCreatedAt = useAppStore((s) =>
     visibleTerminalThreadId
-      ? (s.canonicalTerminalStream[visibleTerminalThreadId] ?? EMPTY_STREAM)
-      : EMPTY_STREAM,
+      ? (s.canonicalTerminalStream[visibleTerminalThreadId]?.[0]?.createdAt ?? null)
+      : null,
   );
   const activeThreadId = useAppStore((s) => s.activeThreadId);
   const pipelinePhase = useAppStore((s) =>
@@ -49,10 +45,18 @@ export function useTerminalDrawer() {
         ? s.pipelinePhase
         : (displayIssue.pipelineStatus as typeof s.pipelinePhase),
   );
+  const { data: displayThreadPlans = [] } = useQuery<PlanRecord[]>({
+    queryKey: ['terminal-drawer-plan-history', visibleTerminalThreadId],
+    queryFn: () => window.shipcode.invoke('plan:list', { threadId: visibleTerminalThreadId }),
+    enabled: !!visibleTerminalThreadId && displayIssue?.pipelineStatus === 'awaiting_approval',
+    staleTime: STABLE_APP_STATE_STALE_TIME,
+  });
+  const latestPlanStatus = displayThreadPlans[0]?.status ?? null;
+  const approvedAwaitingExecution =
+    displayIssue?.pipelineStatus === 'awaiting_approval' && latestPlanStatus === 'approved';
   const currentModel = useAppStore(
     (s) => (visibleTerminalThreadId ? s.currentModels[visibleTerminalThreadId] : null) ?? null,
   );
-  const hydrateCanonicalEvents = useAppStore((s) => s.hydrateCanonicalEvents);
   const setTerminalThread = useAppStore((s) => s.setTerminalThread);
   const selectIssue = useAppStore((s) => s.selectIssue);
   const [height, setHeight] = useState(DEFAULT_HEIGHT);
@@ -92,29 +96,6 @@ export function useTerminalDrawer() {
     setTerminalMaximized(!isMaximized);
   }, [height, isMaximized, setTerminalMaximized]);
 
-  useEffect(() => {
-    if (!visibleTerminalThreadId) return;
-    if (canonicalStream.length > 0) return;
-
-    let cancelled = false;
-    void window.shipcode
-      .invoke<TerminalEventRecord[]>('terminal:list', {
-        threadId: visibleTerminalThreadId,
-        limit: 2000,
-      })
-      .then((events) => {
-        if (cancelled || !Array.isArray(events) || events.length === 0) return;
-        hydrateCanonicalEvents(visibleTerminalThreadId, events);
-      })
-      .catch(() => {
-        // Best-effort hydration only.
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [canonicalStream.length, hydrateCanonicalEvents, visibleTerminalThreadId]);
-
   const handleRunningTabSelect = useCallback(
     (issue: GitHubIssueCacheRecord) => {
       setTerminalThread(issue.threadId ?? null);
@@ -124,23 +105,19 @@ export function useTerminalDrawer() {
   );
 
   return {
-    canonicalStream,
     currentModel,
     displayIssue,
     handleResizeMouseDown,
     handleRunningTabSelect,
+    approvedAwaitingExecution,
     isMaximized,
-    pendingLabel:
-      canonicalStream.length === 0 && displayIssue?.pipelineStatus
-        ? (PHASE_LABELS[displayIssue.pipelineStatus] ?? 'Working')
-        : null,
     pipelinePhase,
     resolvedHeight: isMaximized ? undefined : height,
     runningTabs,
     showEmptyState: displayIssue === null,
     startedAt:
-      canonicalStream[0]?.createdAt != null
-        ? new Date(canonicalStream[0].createdAt).toLocaleTimeString('en-US', {
+      firstEventCreatedAt != null
+        ? new Date(firstEventCreatedAt).toLocaleTimeString('en-US', {
             hour12: false,
             hour: '2-digit',
             minute: '2-digit',

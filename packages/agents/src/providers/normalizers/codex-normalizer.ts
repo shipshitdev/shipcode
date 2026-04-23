@@ -13,14 +13,8 @@
  */
 
 import type { TerminalEvent } from '../../terminal-events';
+import { stripAnsi, summarizeTerminalText } from '../output-summary';
 import { FENCE_ACTIONS, findOpeningFence, getDeferredFencePrefix } from './fence-suppression';
-
-/** Strip ANSI escape codes so JSON.parse works on PTY-colored output. */
-// biome-ignore lint/suspicious/noControlCharactersInRegex: intentional ANSI stripping
-const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]|\x1b\].*?(?:\x07|\x1b\\)/g;
-function stripAnsi(str: string): string {
-  return str.replace(ANSI_RE, '');
-}
 
 export class CodexNormalizer {
   private lineBuffer = '';
@@ -121,6 +115,9 @@ export class CodexNormalizer {
           kind: 'tool_end',
           name: 'Bash',
           exitCode: code,
+          ...(code !== 0
+            ? { outputSummary: summarizeTerminalText(item.aggregated_output as string | undefined) }
+            : {}),
         });
       }
       return;

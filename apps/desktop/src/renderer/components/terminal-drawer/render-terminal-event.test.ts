@@ -15,9 +15,14 @@ describe('renderTerminalEvent', () => {
     expect(
       renderTerminalEvent({ kind: 'tool_start', name: 'bash', summary: 'Running bash' }),
     ).toContain('Running bash');
-    expect(renderTerminalEvent({ kind: 'tool_end', name: 'bash', exitCode: 2 })).toContain(
-      '[exit 2]',
-    );
+    expect(
+      renderTerminalEvent({
+        kind: 'tool_end',
+        name: 'bash',
+        exitCode: 2,
+        outputSummary: 'TypeError: expected string, got undefined',
+      }),
+    ).toContain('TypeError: expected string, got undefined');
     expect(renderTerminalEvent({ kind: 'tool_end', name: 'bash', durationMs: 1500 })).toContain(
       '(1.5s)',
     );

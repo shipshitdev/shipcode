@@ -33,15 +33,14 @@ describe('InstantTerminalPane', () => {
         threadId="thread-live"
         title="Codex shell"
         mode="live"
+        paneState="running"
         onClose={vi.fn()}
         onSplitHorizontal={vi.fn()}
         onSplitVertical={vi.fn()}
         onCancel={vi.fn()}
         onRestart={vi.fn(async () => {})}
-        canRestart={false}
         restartPending={false}
         restartError={null}
-        isRunning
       />,
     );
 
@@ -72,15 +71,14 @@ describe('InstantTerminalPane', () => {
         threadId="thread-live"
         title="Codex shell"
         mode="live"
+        paneState="running"
         onClose={vi.fn()}
         onSplitHorizontal={vi.fn()}
         onSplitVertical={vi.fn()}
         onCancel={vi.fn()}
         onRestart={vi.fn(async () => {})}
-        canRestart={false}
         restartPending={false}
         restartError={null}
-        isRunning
       />,
     );
 

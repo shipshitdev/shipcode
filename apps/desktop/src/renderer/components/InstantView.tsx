@@ -1,7 +1,7 @@
 import type { Thread } from '@shipcode/shared';
-import { Button, cn, Plus, Terminal } from '@shipcode/ui';
+import { Button, cn, Plus, Terminal } from '@shipshitdev/ui';
 import { useCallback, useMemo, useState } from 'react';
-import { useAppStore } from '../stores/app-store';
+import { type InstantPaneMode, useAppStore } from '../stores/app-store';
 import { InstantTerminalPane } from './instant-terminal/InstantTerminalPane';
 
 function formatLivePaneTitle(cli: 'claude' | 'codex', prompt: string): string {
@@ -13,38 +13,14 @@ function formatLivePaneTitle(cli: 'claude' | 'codex', prompt: string): string {
 }
 
 export function InstantView() {
-  const {
-    instantPaneThreadIds,
-    instantSplitDirection,
-    instantPaneMetaByThread,
-    addInstantPane,
-    removeInstantPane,
-    openInstantFixModal,
-  } = useAppStore();
+  const instantPaneThreadIds = useAppStore((state) => state.instantPaneThreadIds);
+  const instantSplitDirection = useAppStore((state) => state.instantSplitDirection);
+  const instantPaneMetaByThread = useAppStore((state) => state.instantPaneMetaByThread);
+  const addInstantPane = useAppStore((state) => state.addInstantPane);
+  const removeInstantPane = useAppStore((state) => state.removeInstantPane);
+  const openInstantFixModal = useAppStore((state) => state.openInstantFixModal);
   const [restartingThreadId, setRestartingThreadId] = useState<string | null>(null);
   const [restartErrors, setRestartErrors] = useState<Record<string, string>>({});
-
-  const canonicalStream = useAppStore((s) => s.canonicalTerminalStream);
-
-  const isRunning = useCallback(
-    (threadId: string) => {
-      const metaState = instantPaneMetaByThread[threadId]?.state;
-      if (metaState) {
-        return metaState === 'running' || metaState === 'starting';
-      }
-      const stream = canonicalStream[threadId];
-      if (!stream || stream.length === 0) return true;
-      const lastEvent = stream[stream.length - 1];
-      if (
-        lastEvent?.event.kind === 'lifecycle' &&
-        lastEvent.event.message.includes('process exited')
-      ) {
-        return false;
-      }
-      return lastEvent.event.kind !== 'done';
-    },
-    [canonicalStream, instantPaneMetaByThread],
-  );
 
   const paneTitle = useCallback(
     (threadId: string) => {
@@ -58,14 +34,14 @@ export function InstantView() {
   }, []);
 
   const handleClose = useCallback(
-    (threadId: string) => {
+    (threadId: string, isRunning: boolean) => {
       const meta = instantPaneMetaByThread[threadId];
-      if (meta?.mode === 'live' && isRunning(threadId)) {
+      if (meta?.mode === 'live' && isRunning) {
         void window.shipcode.invoke('instant:cancel', { threadId });
       }
       removeInstantPane(threadId);
     },
-    [instantPaneMetaByThread, isRunning, removeInstantPane],
+    [instantPaneMetaByThread, removeInstantPane],
   );
 
   const handleRestart = useCallback(
@@ -166,16 +142,15 @@ export function InstantView() {
             key={threadId}
             threadId={threadId}
             title={paneTitle(threadId)}
-            mode={instantPaneMetaByThread[threadId]?.mode ?? 'replay'}
+            mode={(instantPaneMetaByThread[threadId]?.mode ?? 'replay') as InstantPaneMode}
+            paneState={instantPaneMetaByThread[threadId]?.state}
             onClose={handleClose}
             onSplitHorizontal={handleSplitHorizontal}
             onSplitVertical={handleSplitVertical}
             onCancel={handleCancel}
             onRestart={handleRestart}
-            canRestart={!isRunning(threadId) && instantPaneMetaByThread[threadId]?.mode === 'live'}
             restartPending={restartingThreadId === threadId}
             restartError={restartErrors[threadId] ?? null}
-            isRunning={isRunning(threadId)}
           />
         ))}
       </div>

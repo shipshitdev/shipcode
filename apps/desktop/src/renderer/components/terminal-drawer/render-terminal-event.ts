@@ -20,7 +20,9 @@ export function renderTerminalEvent(event: TerminalEvent): string | null {
       return `\x1b[2m\u2192 ${event.summary}\x1b[0m`;
     case 'tool_end':
       if (event.exitCode !== undefined && event.exitCode !== 0) {
-        return `\x1b[31m[exit ${event.exitCode}]\x1b[0m`;
+        return event.outputSummary
+          ? `\x1b[31m[exit ${event.exitCode}]\n${event.outputSummary}\x1b[0m`
+          : `\x1b[31m[exit ${event.exitCode}]\x1b[0m`;
       }
       if (event.durationMs !== undefined) {
         return `\x1b[2m(${(event.durationMs / 1000).toFixed(1)}s)\x1b[0m`;

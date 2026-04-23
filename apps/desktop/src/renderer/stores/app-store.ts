@@ -21,6 +21,38 @@ const AGENT_ACTIVE_STATUSES = new Set<IssuePipelineStatus>([
   'verifying',
   'shipping',
 ]);
+const MAX_CANONICAL_TERMINAL_EVENTS = 2000;
+
+function dedupeTerminalEvents(events: TerminalEventRecord[]): TerminalEventRecord[] {
+  return Array.from(new Map(events.map((event) => [event.id, event])).values());
+}
+
+function upsertTerminalEvents(
+  previous: TerminalEventRecord[],
+  incoming: TerminalEventRecord[],
+): TerminalEventRecord[] {
+  if (incoming.length === 0) return previous;
+
+  const merged = [...previous];
+  const indexById = new Map<string, number>();
+  previous.forEach((event, index) => {
+    indexById.set(event.id, index);
+  });
+
+  for (const event of incoming) {
+    const existingIndex = indexById.get(event.id);
+    if (existingIndex == null) {
+      indexById.set(event.id, merged.length);
+      merged.push(event);
+      continue;
+    }
+    merged[existingIndex] = event;
+  }
+
+  return merged.length > MAX_CANONICAL_TERMINAL_EVENTS
+    ? merged.slice(-MAX_CANONICAL_TERMINAL_EVENTS)
+    : merged;
+}
 
 export type ViewMode = 'overview' | 'project' | 'activity' | 'inbox' | 'costs' | 'skills';
 
@@ -398,19 +430,15 @@ export const useAppStore = create<AppState>((set, get) => ({
         event,
         createdAt: meta?.createdAt ?? new Date().toISOString(),
       };
-      const merged = [...prev, record];
-      const deduped = Array.from(new Map(merged.map((entry) => [entry.id, entry])).values());
-      const trimmed = deduped.length >= 2000 ? deduped.slice(-2000) : deduped;
+      const trimmed = upsertTerminalEvents(prev, [record]);
       return { canonicalTerminalStream: { ...s.canonicalTerminalStream, [threadId]: trimmed } };
     }),
   appendCanonicalEvents: (threadId, events) =>
     set((s) => {
+      if (events.length === 0) return s;
       const prev = s.canonicalTerminalStream[threadId] ?? [];
-      const merged =
-        prev.length + events.length > 2000
-          ? [...prev.slice(-(2000 - events.length)), ...events]
-          : [...prev, ...events];
-      return { canonicalTerminalStream: { ...s.canonicalTerminalStream, [threadId]: merged } };
+      const trimmed = upsertTerminalEvents(prev, events);
+      return { canonicalTerminalStream: { ...s.canonicalTerminalStream, [threadId]: trimmed } };
     }),
   hydrateCanonicalEvents: (threadId, events) =>
     set((s) => {
@@ -420,8 +448,11 @@ export const useAppStore = create<AppState>((set, get) => ({
           ? a.id.localeCompare(b.id)
           : a.createdAt.localeCompare(b.createdAt),
       );
-      const deduped = Array.from(new Map(merged.map((entry) => [entry.id, entry])).values());
-      const trimmed = deduped.length >= 2000 ? deduped.slice(-2000) : deduped;
+      const deduped = dedupeTerminalEvents(merged);
+      const trimmed =
+        deduped.length >= MAX_CANONICAL_TERMINAL_EVENTS
+          ? deduped.slice(-MAX_CANONICAL_TERMINAL_EVENTS)
+          : deduped;
       return { canonicalTerminalStream: { ...s.canonicalTerminalStream, [threadId]: trimmed } };
     }),
   touchLastActivity: (threadId) =>

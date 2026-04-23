@@ -61,6 +61,7 @@ describe('TerminalDrawerHeader', () => {
     render(
       <TerminalDrawerHeader
         activeProjectId={null}
+        approvedAwaitingExecution={false}
         currentModel="gpt-5.4"
         displayIssue={issue}
         ghosttyAvailable={false}
@@ -108,6 +109,7 @@ describe('TerminalDrawerHeader', () => {
     render(
       <TerminalDrawerHeader
         activeProjectId={null}
+        approvedAwaitingExecution={false}
         currentModel={null}
         displayIssue={issueA}
         ghosttyAvailable={false}
@@ -143,6 +145,7 @@ describe('TerminalDrawerHeader', () => {
     render(
       <TerminalDrawerHeader
         activeProjectId={null}
+        approvedAwaitingExecution={false}
         currentModel={null}
         displayIssue={issue}
         ghosttyAvailable={false}
@@ -174,5 +177,35 @@ describe('TerminalDrawerHeader', () => {
     const terminalItem = screen.getByText('Open in Terminal.app').closest('[role="menuitem"]');
     expect(ghosttyItem).toHaveAttribute('aria-disabled', 'true');
     expect(terminalItem).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('renders waiting-for-slot copy for approved execution waiters', () => {
+    const issue = makeIssue({ pipelineStatus: 'awaiting_approval' });
+
+    render(
+      <TerminalDrawerHeader
+        activeProjectId={null}
+        approvedAwaitingExecution
+        currentModel={null}
+        displayIssue={issue}
+        ghosttyAvailable={false}
+        isMaximized={false}
+        pipelinePhase="awaiting_approval"
+        runningTabs={[issue]}
+        startedAt={null}
+        terminalAvailable={false}
+        terminalThreadId={issue.threadId}
+        onNewClaudeSession={() => {}}
+        onNewCodexSession={() => {}}
+        onOpenInGhostty={() => {}}
+        onOpenInTerminalApp={() => {}}
+        onOpenIssue={() => {}}
+        onToggleMaximize={() => {}}
+        onToggleTerminal={() => {}}
+      />,
+    );
+
+    expect(screen.getByText('Waiting for slot')).toBeInTheDocument();
+    expect(screen.queryByText(/awaiting approval/i)).toBeNull();
   });
 });

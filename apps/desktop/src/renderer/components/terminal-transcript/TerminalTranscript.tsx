@@ -1,7 +1,7 @@
 import type { CanonicalTerminalEvent, TerminalEventRecord } from '@shipcode/shared';
 import { ERROR_PATTERNS } from '@shipcode/shared';
-import { Badge, Button, cn } from '@shipcode/ui';
-import { useEffect, useMemo, useRef } from 'react';
+import { Badge, Button, cn } from '@shipshitdev/ui';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 
 interface TerminalTranscriptProps {
   events: TerminalEventRecord[];
@@ -14,6 +14,7 @@ interface TerminalTranscriptProps {
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI formatting from persisted terminal lines
 const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]|\x1b\].*?(?:\x07|\x1b\\)/g;
+const DEFAULT_VISIBLE_EVENT_LIMIT = 300;
 
 function stripAnsi(value: string): string {
   return value.replace(ANSI_RE, '');
@@ -147,6 +148,7 @@ function TranscriptRow({
       );
     case 'tool_end': {
       const failed = typeof event.exitCode === 'number' && event.exitCode !== 0;
+      const outputSummary = failed ? event.outputSummary?.trim() : undefined;
       const detail = failed
         ? `Exit ${event.exitCode}`
         : typeof event.durationMs === 'number'
@@ -155,18 +157,32 @@ function TranscriptRow({
       return (
         <div
           className={cn(
-            'flex items-center justify-between rounded-lg border px-3 py-2',
+            'rounded-lg border px-3 py-2',
             failed ? 'border-danger/30 bg-danger/8' : 'border-border/60 bg-secondary/60',
           )}
         >
-          <TranscriptMeta createdAt={record.createdAt} compact={compact}>
-            <span className={cn('tracking-normal normal-case', failed && 'text-danger')}>
-              {failed ? 'Tool failed' : 'Tool finished'}
+          <div className="flex items-center justify-between gap-3">
+            <TranscriptMeta createdAt={record.createdAt} compact={compact}>
+              <span className={cn('tracking-normal normal-case', failed && 'text-danger')}>
+                {failed ? 'Tool failed' : 'Tool finished'}
+              </span>
+            </TranscriptMeta>
+            <span
+              className={cn('font-mono text-[11px]', failed ? 'text-danger' : 'text-secondary')}
+            >
+              {detail}
             </span>
-          </TranscriptMeta>
-          <span className={cn('font-mono text-[11px]', failed ? 'text-danger' : 'text-secondary')}>
-            {detail}
-          </span>
+          </div>
+          {outputSummary ? (
+            <pre
+              className={cn(
+                'mt-2 whitespace-pre-wrap break-words font-mono text-danger',
+                compact ? 'text-[10px] leading-4' : 'text-[11px] leading-5',
+              )}
+            >
+              {outputSummary}
+            </pre>
+          ) : null}
         </div>
       );
     }
@@ -298,6 +314,9 @@ function TranscriptRow({
   }
 }
 
+const MemoTranscriptRow = memo(TranscriptRow);
+MemoTranscriptRow.displayName = 'MemoTranscriptRow';
+
 export function TerminalTranscript({
   events,
   pendingLabel = null,
@@ -308,18 +327,43 @@ export function TerminalTranscript({
 }: TerminalTranscriptProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
+  const [showAllEvents, setShowAllEvents] = useState(false);
+  const dedupedEvents = useMemo(
+    () => Array.from(new Map(events.map((record) => [record.id, record])).values()),
+    [events],
+  );
 
-  const hasEvents = events.length > 0;
-  const scrollAnchor = hasEvents ? (events.at(-1)?.id ?? String(events.length)) : pendingLabel;
+  const hasEvents = dedupedEvents.length > 0;
+  const sourceKey = hasEvents
+    ? `${dedupedEvents[0]?.threadId ?? ''}:${dedupedEvents[0]?.id ?? ''}`
+    : 'empty';
+  const visibleEvents =
+    showAllEvents || dedupedEvents.length <= DEFAULT_VISIBLE_EVENT_LIMIT
+      ? dedupedEvents
+      : dedupedEvents.slice(-DEFAULT_VISIBLE_EVENT_LIMIT);
+  const hiddenEventCount = dedupedEvents.length - visibleEvents.length;
+  const scrollAnchor = hasEvents
+    ? (visibleEvents.at(-1)?.id ?? String(visibleEvents.length))
+    : pendingLabel;
   const rows = useMemo(
     () =>
-      events
+      visibleEvents
         .map((record) => (
-          <TranscriptRow key={record.id} record={record} compact={compact} onAction={onAction} />
+          <MemoTranscriptRow
+            key={record.id}
+            record={record}
+            compact={compact}
+            onAction={onAction}
+          />
         ))
         .filter(Boolean),
-    [compact, events, onAction],
+    [compact, onAction, visibleEvents],
   );
+
+  useEffect(() => {
+    void sourceKey;
+    setShowAllEvents(false);
+  }, [sourceKey]);
 
   useEffect(() => {
     const node = scrollRef.current;
@@ -336,12 +380,33 @@ export function TerminalTranscript({
         stickToBottomRef.current = node.scrollHeight - node.scrollTop - node.clientHeight < 48;
       }}
     >
-      <div
-        className={cn(
-          'mx-auto flex min-h-full w-full flex-col gap-3 p-4',
-          compact ? 'max-w-none p-3' : 'max-w-5xl',
-        )}
-      >
+      <div className={cn('flex min-h-full w-full flex-col gap-3', compact ? 'p-3' : 'px-4 py-4')}>
+        {hiddenEventCount > 0 ? (
+          <div className="flex justify-center">
+            <Button
+              variant="ghost"
+              size="xs"
+              className="rounded-full border border-border bg-primary/60 px-3 text-muted"
+              onClick={() => setShowAllEvents(true)}
+            >
+              Show {hiddenEventCount} older event{hiddenEventCount === 1 ? '' : 's'}
+            </Button>
+          </div>
+        ) : null}
+
+        {showAllEvents && dedupedEvents.length > DEFAULT_VISIBLE_EVENT_LIMIT ? (
+          <div className="flex justify-center">
+            <Button
+              variant="ghost"
+              size="xs"
+              className="rounded-full border border-border bg-primary/60 px-3 text-muted"
+              onClick={() => setShowAllEvents(false)}
+            >
+              Show latest {DEFAULT_VISIBLE_EVENT_LIMIT}
+            </Button>
+          </div>
+        ) : null}
+
         {hasEvents ? rows : null}
 
         {!hasEvents && pendingLabel ? (

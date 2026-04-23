@@ -12,10 +12,11 @@ import {
   PhaseChip,
   Plus,
   X,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
 
 interface TerminalDrawerHeaderProps {
   activeProjectId: string | null;
+  approvedAwaitingExecution?: boolean;
   currentModel: string | null;
   displayIssue: GitHubIssueCacheRecord | null;
   ghosttyAvailable: boolean;
@@ -35,6 +36,7 @@ interface TerminalDrawerHeaderProps {
 }
 
 export function TerminalDrawerHeader({
+  approvedAwaitingExecution = false,
   currentModel,
   displayIssue,
   ghosttyAvailable,
@@ -102,7 +104,16 @@ export function TerminalDrawerHeader({
               </Button>
             ))}
 
-          {pipelinePhase !== 'idle' && <PhaseChip status={pipelinePhase} className="shrink-0" />}
+          {pipelinePhase !== 'idle' && (
+            <PhaseChip
+              status={pipelinePhase}
+              label={approvedAwaitingExecution ? 'Waiting for slot' : undefined}
+              className={cn(
+                'shrink-0',
+                approvedAwaitingExecution && 'border-agent/25 bg-agent/10 text-agent',
+              )}
+            />
+          )}
 
           {currentModel && pipelinePhase !== 'idle' && (
             <span className="text-xs font-mono text-muted shrink-0 truncate max-w-[180px]">

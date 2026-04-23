@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { TerminalEvent } from '../terminal-events';
 import { executeViaOpenRouter } from './openrouter-execute';
 import type { OpenRouterChatResult, OpenRouterClient, OpenRouterToolCall } from './openrouter-http';
 import type { ProviderRequest } from './types';
@@ -127,6 +128,33 @@ describe('executeViaOpenRouter', () => {
 
     expect(res.exitCode).toBe(0);
     expect(res.tokensUsed).toEqual({ prompt: 300, completion: 80 });
+  });
+
+  it('emits failed tool summaries to the terminal stream', async () => {
+    const client = scriptedClient([
+      {
+        toolCalls: [toolCall('c1', 'notatool', {})],
+        finishReason: 'tool_calls',
+      },
+      { content: 'Done.', finishReason: 'stop' },
+    ]);
+    const events: TerminalEvent[] = [];
+
+    const res = await executeViaOpenRouter(req({ cwd: wt }), {
+      client,
+      model: 'openrouter/auto',
+      onTerminalEvent: (event) => events.push(event),
+    });
+
+    expect(res.exitCode).toBe(0);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        kind: 'tool_end',
+        name: 'notatool',
+        exitCode: 1,
+        outputSummary: "unknown tool 'notatool'",
+      }),
+    );
   });
 
   it('forwards reasoning effort into execute chat requests', async () => {

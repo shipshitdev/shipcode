@@ -32,6 +32,39 @@ describe('CodexNormalizer', () => {
     ]);
   });
 
+  it('includes a failure summary for failed command executions', () => {
+    const events = normalize([
+      JSON.stringify({
+        type: 'item.started',
+        item: { type: 'command_execution', command: 'bun test apps/api/src/reference-portals' },
+      }),
+      JSON.stringify({
+        type: 'item.completed',
+        item: {
+          type: 'command_execution',
+          exit_code: 1,
+          aggregated_output:
+            'FAIL apps/api/src/reference-portals/index.test.ts\nError: Cannot find module ./reference-portals.service',
+        },
+      }),
+    ]);
+
+    expect(events).toEqual([
+      {
+        kind: 'tool_start',
+        name: 'Bash',
+        summary: '$ bun test apps/api/src/reference-portals',
+      },
+      {
+        kind: 'tool_end',
+        name: 'Bash',
+        exitCode: 1,
+        outputSummary:
+          'FAIL apps/api/src/reference-portals/index.test.ts\nError: Cannot find module ./reference-portals.service',
+      },
+    ]);
+  });
+
   it('still suppresses duplicate agent_message text after deltas', () => {
     const events = normalize([
       JSON.stringify({
