@@ -218,7 +218,7 @@ describe('linked PR affordances', () => {
     view.cleanup();
   });
 
-  it('opens issue detail from the dedicated card action instead of the whole card surface', () => {
+  it('opens issue detail from the card surface and dedicated action', () => {
     const onClick = vi.fn();
 
     const view = renderIntoDom(
@@ -238,7 +238,7 @@ describe('linked PR affordances', () => {
       title.click();
     });
 
-    expect(onClick).not.toHaveBeenCalled();
+    expect(onClick).toHaveBeenCalledTimes(1);
 
     const button = view.container.querySelector('button[title="Open issue detail"]');
     if (!(button instanceof HTMLButtonElement)) {
@@ -249,11 +249,11 @@ describe('linked PR affordances', () => {
       button.click();
     });
 
-    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onClick).toHaveBeenCalledTimes(2);
     view.cleanup();
   });
 
-  it('opens issue detail from the dedicated list-row action only', () => {
+  it('opens issue detail from the list row surface and dedicated action', () => {
     const onIssueClick = vi.fn();
 
     const view = renderIntoDom(
@@ -279,7 +279,7 @@ describe('linked PR affordances', () => {
       title.click();
     });
 
-    expect(onIssueClick).not.toHaveBeenCalled();
+    expect(onIssueClick).toHaveBeenCalledTimes(1);
 
     const button = view.container.querySelector('button[title="Open issue detail"]');
     if (!(button instanceof HTMLButtonElement)) {
@@ -290,7 +290,7 @@ describe('linked PR affordances', () => {
       button.click();
     });
 
-    expect(onIssueClick).toHaveBeenCalledTimes(1);
+    expect(onIssueClick).toHaveBeenCalledTimes(2);
     view.cleanup();
   });
 

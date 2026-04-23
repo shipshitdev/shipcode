@@ -65,6 +65,7 @@ function DraggableListRow({
   const isActive = ACTIVE_STATUSES.includes(issue.pipelineStatus);
 
   return (
+    // biome-ignore lint/a11y/useSemanticElements: The row contains nested action buttons, so it cannot be a semantic button.
     <div
       ref={setNodeRef}
       className={cn(
@@ -97,7 +98,19 @@ function DraggableListRow({
         isDraggable ? 'cursor-grab' : 'cursor-default',
         activeId && activeId !== issue.id && 'pointer-events-none',
       )}
+      onClick={(event) => {
+        if (event.defaultPrevented || isDragging) return;
+        onIssueClick(issue);
+      }}
       {...(isDraggable ? { ...attributes, ...listeners } : {})}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.defaultPrevented || event.currentTarget !== event.target) return;
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        onIssueClick(issue);
+      }}
     >
       {isActive ? (
         <span className="relative flex h-2 w-2 shrink-0 items-center justify-center">

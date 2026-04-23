@@ -99,6 +99,7 @@ function DraggableCardComponent({
   const linkedPrLabel = issue.linkedPrNumber ? `PR #${issue.linkedPrNumber}` : null;
 
   return (
+    // biome-ignore lint/a11y/useSemanticElements: The card contains nested action buttons, so it cannot be a semantic button.
     <div
       ref={setNodeRef}
       className={cn(
@@ -136,8 +137,20 @@ function DraggableCardComponent({
             : 'border-agent/40 bg-agent/[0.03] hover:border-agent/60'),
         isDragging && 'opacity-50',
       )}
+      onClick={(event) => {
+        if (event.defaultPrevented || isDragging) return;
+        onClick(issue);
+      }}
       {...listeners}
       {...attributes}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.defaultPrevented || event.currentTarget !== event.target) return;
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        onClick(issue);
+      }}
     >
       {isActive && (
         <div
@@ -250,7 +263,7 @@ function DraggableCardComponent({
           </span>
         )}
       </div>
-      <div className="relative z-10 mt-1 line-clamp-2 text-[13px] font-medium leading-snug text-primary">
+      <div className="relative z-10 mt-1 w-full min-w-0 truncate text-[13px] font-medium leading-snug text-primary">
         {issue.title}
       </div>
       <div className="relative z-10 mt-auto flex flex-wrap items-center gap-1.5 pt-2">
@@ -389,7 +402,7 @@ export function DragOverlayCard({
       )}
     >
       <div className="font-mono text-[11px] text-muted">#{issue.issueNumber}</div>
-      <div className="mt-1 line-clamp-2 text-[13px] font-medium leading-snug text-primary">
+      <div className="mt-1 w-full min-w-0 truncate text-[13px] font-medium leading-snug text-primary">
         {issue.title}
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
