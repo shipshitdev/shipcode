@@ -28,7 +28,7 @@ describe('SettingsQueries', () => {
     expect(s.prdRewriteCli).toBe('claude');
     expect(s.prdRewriteClaudeModel).toBe('claude-sonnet-4-6');
     expect(s.prdRewriteCodexModel).toBe('gpt-5.4-mini');
-    expect(s.prdRewriteReasoningEffort).toBe('low');
+    expect(s.prdRewriteReasoningEffort).toBe('none');
     expect(s.githubPollingEnabled).toBe(false);
     expect(s.githubPollingIntervalMs).toBe(30000);
     expect(s.githubBotUsername).toBe('');

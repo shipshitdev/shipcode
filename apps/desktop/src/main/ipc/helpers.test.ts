@@ -13,18 +13,24 @@ describe('transitionThreadPhase', () => {
   } as const;
 
   const threadQueries = {
+    getById: vi.fn(),
+    recordFailure: vi.fn(),
     updateStatus: vi.fn(),
   };
   const githubIssueQueries = {
     getByThreadId: vi.fn(),
+    getByNumber: vi.fn(),
     updatePipelineStatus: vi.fn(),
     list: vi.fn(),
   };
   const queries = {
     threads: {
+      getById: threadQueries.getById,
+      recordFailure: threadQueries.recordFailure,
       updateStatus: threadQueries.updateStatus,
     },
     githubIssues: {
+      getByNumber: githubIssueQueries.getByNumber,
       getByThreadId: githubIssueQueries.getByThreadId,
       updatePipelineStatus: githubIssueQueries.updatePipelineStatus,
       list: githubIssueQueries.list,
@@ -40,10 +46,14 @@ describe('transitionThreadPhase', () => {
   });
 
   it('updates thread and linked issue state before emitting the canonical phase event', () => {
-    githubIssueQueries.getByThreadId.mockReturnValue({
-      id: 'issue-1',
+    threadQueries.getById.mockReturnValue({
+      id: 'thread-1',
       projectId: 'project-1',
+      githubIssueNumber: 18,
+      status: 'planning',
     });
+    githubIssueQueries.getByNumber.mockReturnValue({ id: 'issue-1', projectId: 'project-1' });
+    githubIssueQueries.getByThreadId.mockReturnValue({ id: 'issue-1', projectId: 'project-1' });
     githubIssueQueries.list.mockReturnValue([{ id: 'issue-1' }]);
 
     transitionThreadPhase(mainWindow as never, queries, emitter, {
@@ -51,11 +61,7 @@ describe('transitionThreadPhase', () => {
       phase: 'awaiting_approval',
     });
 
-    expect(threadQueries.updateStatus).toHaveBeenCalledWith(
-      'thread-1',
-      'awaiting_approval',
-      undefined,
-    );
+    expect(threadQueries.updateStatus).toHaveBeenCalledWith('thread-1', 'awaiting_approval');
     expect(githubIssueQueries.updatePipelineStatus).toHaveBeenCalledWith(
       'issue-1',
       'awaiting_approval',
@@ -72,6 +78,12 @@ describe('transitionThreadPhase', () => {
   });
 
   it('records the error message for failed transitions even without a linked issue', () => {
+    threadQueries.getById.mockReturnValue({
+      id: 'thread-2',
+      projectId: 'project-1',
+      githubIssueNumber: null,
+      status: 'executing',
+    });
     githubIssueQueries.getByThreadId.mockReturnValue(null);
 
     transitionThreadPhase(mainWindow as never, queries, emitter, {
@@ -80,7 +92,8 @@ describe('transitionThreadPhase', () => {
       errorMessage: 'boom',
     });
 
-    expect(threadQueries.updateStatus).toHaveBeenCalledWith('thread-2', 'failed', 'boom');
+    expect(threadQueries.recordFailure).toHaveBeenCalledWith('thread-2', 'executing', 'boom');
+    expect(threadQueries.updateStatus).not.toHaveBeenCalled();
     expect(githubIssueQueries.updatePipelineStatus).not.toHaveBeenCalled();
     expect(mainWindow.webContents.send).not.toHaveBeenCalled();
     expect(emitter.emit).toHaveBeenCalledWith({

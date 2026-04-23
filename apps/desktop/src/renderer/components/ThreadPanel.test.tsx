@@ -7,6 +7,7 @@ import {
   type ThreadPanelData,
 } from '@shipcode/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { Profiler, type ProfilerOnRenderCallback, StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -140,7 +141,10 @@ describe('ThreadPanel', () => {
   beforeEach(() => {
     cleanup();
     invokeMock.mockReset();
-    window.shipcode.invoke = invokeMock as unknown as typeof window.shipcode.invoke;
+    window.shipcode = {
+      invoke: invokeMock as unknown as typeof window.shipcode.invoke,
+      on: vi.fn(() => () => {}),
+    };
 
     useAppStore.setState({
       activeProjectId: project.id,
@@ -189,8 +193,9 @@ describe('ThreadPanel', () => {
     fireEvent.click(await screen.findByText(issue.title));
 
     let state = useAppStore.getState();
-    expect(state.activeIssue).toBeNull();
-    expect(state.issueDetailCollapsed).toBe(true);
+    expect(state.activeIssue?.id).toBe(issue.id);
+    expect(state.activeThreadId).toBe(issue.threadId);
+    expect(state.issueDetailCollapsed).toBe(false);
 
     fireEvent.click(await screen.findByRole('button', { name: /open issue detail/i }));
 

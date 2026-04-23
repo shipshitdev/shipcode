@@ -4,6 +4,12 @@ const onboardCommandMock = vi.fn();
 const runCommandMock = vi.fn();
 const startCommandMock = vi.fn();
 const statusCommandMock = vi.fn();
+const planCommandMock = vi.fn();
+const approveCommandMock = vi.fn();
+const reviewCommandMock = vi.fn();
+const retryCommandMock = vi.fn();
+const logsCommandMock = vi.fn();
+const prdCommandMock = vi.fn();
 const parseMock = vi.fn();
 
 const { commandCalls, resetCommanderMock } = vi.hoisted(() => {
@@ -36,6 +42,30 @@ vi.mock('./commands/start', () => ({
 
 vi.mock('./commands/status', () => ({
   statusCommand: statusCommandMock,
+}));
+
+vi.mock('./commands/plan', () => ({
+  planCommand: planCommandMock,
+}));
+
+vi.mock('./commands/approve', () => ({
+  approveCommand: approveCommandMock,
+}));
+
+vi.mock('./commands/review', () => ({
+  reviewCommand: reviewCommandMock,
+}));
+
+vi.mock('./commands/retry', () => ({
+  retryCommand: retryCommandMock,
+}));
+
+vi.mock('./commands/logs', () => ({
+  logsCommand: logsCommandMock,
+}));
+
+vi.mock('./commands/prd', () => ({
+  prdCommand: prdCommandMock,
 }));
 
 vi.mock('commander', () => {
@@ -108,6 +138,36 @@ describe('CLI entrypoint', () => {
         name: 'start',
         description: 'Interactive mode — prompt for issue number',
         action: startCommandMock,
+      },
+      {
+        name: 'plan <issue>',
+        description: 'Generate and review a plan (stops at awaiting_approval)',
+        action: planCommandMock,
+      },
+      {
+        name: 'approve <issue>',
+        description: 'Approve a plan and start execution',
+        action: approveCommandMock,
+      },
+      {
+        name: 'review <issue>',
+        description: 'Run plan + adversarial review, output findings',
+        action: reviewCommandMock,
+      },
+      {
+        name: 'retry <issue>',
+        description: 'Resume pipeline from last checkpoint',
+        action: retryCommandMock,
+      },
+      {
+        name: 'logs <issue>',
+        description: 'Show terminal events for an issue',
+        action: logsCommandMock,
+      },
+      {
+        name: 'prd <keywords...>',
+        description: 'Generate or enhance a PRD from keywords',
+        action: expect.any(Function),
       },
     ]);
   });

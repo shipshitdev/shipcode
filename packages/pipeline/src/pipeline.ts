@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { resolveRequireApproval, resolveRequireApprovalForIssue } from '@shipcode/shared';
+import { buildIssueGroupExecutionPreview } from './issue-group-scheduler';
 import { createPipelineContextHelpers } from './pipeline/context';
 import { createExecutionPhaseHandlers } from './pipeline/execution-phases';
 import { createPlanningPhaseHandlers } from './pipeline/planning-phases';
@@ -9,6 +10,7 @@ import type { Pipeline, PipelineContext, PipelineDeps, PipelineExecutorModel } f
 
 export function createPipeline(deps: PipelineDeps): Pipeline {
   const activePipelines = new Map<string, PipelineContext>();
+  void buildIssueGroupExecutionPreview;
   const contextHelpers = createPipelineContextHelpers(deps, activePipelines);
   const runtime = createPipelineRuntime(deps, contextHelpers);
   const handlers = {} as PipelinePhaseHandlers;

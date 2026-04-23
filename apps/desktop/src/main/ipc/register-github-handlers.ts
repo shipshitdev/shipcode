@@ -21,6 +21,7 @@ import {
   sendGithubIssuesUpdated,
   syncLinkedPullRequestFeedback,
 } from './helpers';
+import { refreshIssueBodyEdges } from './register-issue-graph-handlers';
 import type { IpcHandlerDeps } from './types';
 
 const ISSUE_REFRESH_TTL_MS = 5 * 60_000;
@@ -174,6 +175,12 @@ export function registerGitHubHandlers({
         }
 
         const cachedAfterIssueSync = queries.githubIssues.list(projectId);
+        const issuesByNumber = new Map(
+          cachedAfterIssueSync.map((cachedIssue) => [cachedIssue.issueNumber, cachedIssue] as const),
+        );
+        for (const cachedIssue of cachedAfterIssueSync) {
+          refreshIssueBodyEdges(queries.issueEdges, cachedIssue, issuesByNumber);
+        }
         for (const issue of cachedAfterIssueSync) {
           if (!issue.threadId) continue;
           if (

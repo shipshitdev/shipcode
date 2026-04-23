@@ -43,6 +43,7 @@ export { DashboardQueries } from './queries/dashboard';
 export type { DiffInsert } from './queries/diffs';
 export { DiffQueries } from './queries/diffs';
 export { GitHubIssueQueries } from './queries/github-issues';
+export { IssueEdgeQueries } from './queries/issue-edges';
 export { NotificationsQueries } from './queries/notifications';
 export { PlanQueries } from './queries/plans';
 export { ProjectQueries } from './queries/projects';

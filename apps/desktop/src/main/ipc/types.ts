@@ -6,6 +6,7 @@ import type {
   DashboardQueries,
   DiffQueries,
   GitHubIssueQueries,
+  IssueEdgeQueries,
   NotificationsQueries,
   PlanQueries,
   ProjectQueries,
@@ -30,6 +31,7 @@ export interface Queries {
   settings: SettingsQueries;
   verifications: VerificationQueries;
   githubIssues: GitHubIssueQueries;
+  issueEdges: IssueEdgeQueries;
   checkpoints: CheckpointQueries;
   activity: ActivityQueries;
   notifications: NotificationsQueries;
