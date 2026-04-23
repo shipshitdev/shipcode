@@ -65,11 +65,9 @@ export function useInstantTerminalPane(
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const writtenCountRef = useRef(0);
+  const lastWrittenEventIdRef = useRef<string | null>(null);
+  const streamRef = useRef<TerminalEventRecord[]>(EMPTY_STREAM);
   const [isReady, setIsReady] = useState(false);
-
-  const canonicalStream = useAppStore(
-    useCallback((s) => s.canonicalTerminalStream[threadId] ?? EMPTY_STREAM, [threadId]),
-  );
 
   const syncPtySize = useCallback(() => {
     if (mode !== 'live') return;
@@ -124,6 +122,8 @@ export function useInstantTerminalPane(
     termRef.current = term;
     fitRef.current = fit;
     writtenCountRef.current = 0;
+    lastWrittenEventIdRef.current = null;
+    streamRef.current = EMPTY_STREAM;
     setIsReady(true);
 
     return () => {
@@ -160,15 +160,36 @@ export function useInstantTerminalPane(
 
   // Write new events from the canonical stream
   useEffect(() => {
-    const term = termRef.current;
-    if (!term || !isReady) return;
+    if (!isReady) return;
 
-    const newEvents = canonicalStream.slice(writtenCountRef.current);
-    for (const record of newEvents) {
-      writeTerminalRecord(term, mode, record);
-    }
-    writtenCountRef.current = canonicalStream.length;
-  }, [canonicalStream, isReady, mode]);
+    const writeStream = (stream: TerminalEventRecord[]) => {
+      const term = termRef.current;
+      if (!term) return;
+
+      const lastWrittenEventId = lastWrittenEventIdRef.current;
+      const startIndex =
+        lastWrittenEventId == null
+          ? writtenCountRef.current
+          : stream.findIndex((record) => record.id === lastWrittenEventId) + 1;
+      const newEvents = stream.slice(Math.max(0, startIndex));
+      for (const record of newEvents) {
+        writeTerminalRecord(term, mode, record);
+      }
+      writtenCountRef.current = stream.length;
+      lastWrittenEventIdRef.current = stream.at(-1)?.id ?? lastWrittenEventIdRef.current;
+    };
+
+    const initialStream = useAppStore.getState().canonicalTerminalStream[threadId] ?? EMPTY_STREAM;
+    streamRef.current = initialStream;
+    writeStream(initialStream);
+
+    return useAppStore.subscribe((state) => {
+      const nextStream = state.canonicalTerminalStream[threadId] ?? EMPTY_STREAM;
+      if (nextStream === streamRef.current) return;
+      streamRef.current = nextStream;
+      writeStream(nextStream);
+    });
+  }, [isReady, mode, threadId]);
 
   // Theme sync on data-theme changes
   useEffect(() => {

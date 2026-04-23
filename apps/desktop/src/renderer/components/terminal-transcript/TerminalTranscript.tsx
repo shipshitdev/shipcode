@@ -317,6 +317,20 @@ function TranscriptRow({
 const MemoTranscriptRow = memo(TranscriptRow);
 MemoTranscriptRow.displayName = 'MemoTranscriptRow';
 
+function dedupeTranscriptEvents(events: TerminalEventRecord[]): TerminalEventRecord[] {
+  const seen = new Set<string>();
+  let hasDuplicate = false;
+  for (const event of events) {
+    if (seen.has(event.id)) {
+      hasDuplicate = true;
+      break;
+    }
+    seen.add(event.id);
+  }
+  if (!hasDuplicate) return events;
+  return Array.from(new Map(events.map((record) => [record.id, record])).values());
+}
+
 export function TerminalTranscript({
   events,
   pendingLabel = null,
@@ -328,19 +342,19 @@ export function TerminalTranscript({
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
   const [showAllEvents, setShowAllEvents] = useState(false);
-  const dedupedEvents = useMemo(
-    () => Array.from(new Map(events.map((record) => [record.id, record])).values()),
-    [events],
-  );
+  const dedupedEvents = useMemo(() => dedupeTranscriptEvents(events), [events]);
 
   const hasEvents = dedupedEvents.length > 0;
   const sourceKey = hasEvents
     ? `${dedupedEvents[0]?.threadId ?? ''}:${dedupedEvents[0]?.id ?? ''}`
     : 'empty';
-  const visibleEvents =
-    showAllEvents || dedupedEvents.length <= DEFAULT_VISIBLE_EVENT_LIMIT
-      ? dedupedEvents
-      : dedupedEvents.slice(-DEFAULT_VISIBLE_EVENT_LIMIT);
+  const visibleEvents = useMemo(
+    () =>
+      showAllEvents || dedupedEvents.length <= DEFAULT_VISIBLE_EVENT_LIMIT
+        ? dedupedEvents
+        : dedupedEvents.slice(-DEFAULT_VISIBLE_EVENT_LIMIT),
+    [dedupedEvents, showAllEvents],
+  );
   const hiddenEventCount = dedupedEvents.length - visibleEvents.length;
   const scrollAnchor = hasEvents
     ? (visibleEvents.at(-1)?.id ?? String(visibleEvents.length))

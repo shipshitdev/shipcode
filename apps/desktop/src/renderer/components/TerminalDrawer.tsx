@@ -59,15 +59,16 @@ function TerminalDrawerTranscript({
         ? 'Waiting for execution slot'
         : (PHASE_LABELS[displayIssue.pipelineStatus] ?? 'Working')
       : null;
+  const handleAction = useCallback(() => {
+    onOpenIssue(displayIssue);
+  }, [displayIssue, onOpenIssue]);
 
   return (
     <TerminalTranscript
       events={canonicalStream}
       pendingLabel={pendingLabel}
       emptyMessage="No console output yet."
-      onAction={() => {
-        onOpenIssue(displayIssue);
-      }}
+      onAction={handleAction}
     />
   );
 }

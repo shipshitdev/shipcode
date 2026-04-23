@@ -59,7 +59,7 @@ import {
   VerificationQueries,
 } from '@shipcode/db';
 import { createPipeline } from '@shipcode/pipeline';
-import { EXECUTION_PHASES, HEARTBEAT_TIMEOUT_MS } from '@shipcode/shared';
+import { clampError, EXECUTION_PHASES, HEARTBEAT_TIMEOUT_MS } from '@shipcode/shared';
 import { ChatNotificationService } from './chat-notification-service';
 import { registerIpcHandlers } from './ipc';
 import { transitionThreadPhase } from './ipc/helpers';
