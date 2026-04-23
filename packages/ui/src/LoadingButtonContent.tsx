@@ -19,20 +19,15 @@ export function LoadingButtonContent({
 }) {
   return (
     <span className={cn('inline-flex items-center justify-center gap-2', className)}>
-      <span
-        aria-hidden="true"
-        className="inline-flex shrink-0 items-center justify-center"
-        style={{ width: spinnerSize, height: spinnerSize }}
-      >
-        <Loader2
-          size={spinnerSize}
-          className={cn(
-            'transition-opacity',
-            loading ? 'animate-spin opacity-100' : 'opacity-0',
-            spinnerClassName,
-          )}
-        />
-      </span>
+      {loading ? (
+        <span
+          aria-hidden="true"
+          className="inline-flex shrink-0 items-center justify-center"
+          style={{ width: spinnerSize, height: spinnerSize }}
+        >
+          <Loader2 size={spinnerSize} className={cn('animate-spin', spinnerClassName)} />
+        </span>
+      ) : null}
       <span className={cn('inline-flex items-center gap-2', labelClassName)}>{children}</span>
     </span>
   );
