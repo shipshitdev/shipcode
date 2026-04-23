@@ -494,6 +494,7 @@ export function IssueDetailActions({
 
   const approvalSection = hasApprovalDecision ? (
     <ApprovalSection
+      key={thread?.id ?? 'approval'}
       approveError={approveError}
       canApprove={canApprove}
       isSubmitting={isSubmitting}
