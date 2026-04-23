@@ -1,8 +1,19 @@
+import type { TerminalEventRecord } from '@shipcode/shared';
 import { Badge, Button, Columns2, RefreshCw, Rows2, Square, X } from '@shipcode/ui';
+import { useEffect, useState } from 'react';
 import type { InstantPaneMode } from '../../stores/app-store';
 import { useAppStore } from '../../stores/app-store';
 import { TerminalTranscript } from '../terminal-transcript/TerminalTranscript';
 import { useInstantTerminalPane } from './useInstantTerminalPane';
+
+const EMPTY_STREAM: TerminalEventRecord[] = [];
+const QUIET_HINT_SECONDS = 15;
+const STALE_WARNING_SECONDS = 90;
+
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+}
 
 interface InstantTerminalPaneProps {
   threadId: string;
@@ -33,17 +44,53 @@ export function InstantTerminalPane({
   restartError,
   isRunning,
 }: InstantTerminalPaneProps) {
-  const canonicalStream = useAppStore((s) => s.canonicalTerminalStream[threadId] ?? []);
+  const canonicalStream = useAppStore((s) => s.canonicalTerminalStream[threadId] ?? EMPTY_STREAM);
+  const lastActivityAt = useAppStore((s) => s.lastActivityByThread[threadId] ?? null);
   const { containerRef } = useInstantTerminalPane(threadId, mode, isRunning);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    setNow(Date.now());
+    if (!isRunning) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(id);
+  }, [isRunning]);
+
+  const lastRecordAt =
+    canonicalStream.length > 0
+      ? Date.parse(canonicalStream[canonicalStream.length - 1].createdAt)
+      : NaN;
+  const quietSince =
+    typeof lastActivityAt === 'number'
+      ? lastActivityAt
+      : Number.isFinite(lastRecordAt)
+        ? lastRecordAt
+        : null;
+  const quietSeconds =
+    isRunning && quietSince != null ? Math.max(0, Math.floor((now - quietSince) / 1_000)) : null;
+  const showQuietHint = quietSeconds != null && quietSeconds >= QUIET_HINT_SECONDS;
+  const stale = quietSeconds != null && quietSeconds >= STALE_WARNING_SECONDS;
 
   return (
     <div className="flex flex-col border border-border rounded-lg overflow-hidden bg-secondary">
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-1.5 bg-elevated border-b border-border">
         <span className="flex-1 truncate text-xs text-secondary font-medium">{title}</span>
-        <Badge variant={isRunning ? 'default' : 'done'} className="text-[10px] px-1.5 py-0">
+        <Badge
+          variant={isRunning ? (stale ? 'warning' : 'default') : 'done'}
+          className="text-[10px] px-1.5 py-0"
+        >
           {isRunning ? 'Running' : 'Done'}
         </Badge>
+        {isRunning && showQuietHint ? (
+          <span
+            className={`font-mono text-[10px] tabular-nums ${stale ? 'text-warning' : 'text-muted'}`}
+          >
+            {stale
+              ? `No output ${formatDuration(quietSeconds)}`
+              : `Quiet ${formatDuration(quietSeconds)}`}
+          </span>
+        ) : null}
         <div className="flex items-center gap-0.5">
           <Button
             variant="ghost"
@@ -98,6 +145,12 @@ export function InstantTerminalPane({
           </Button>
         </div>
       </div>
+      {isRunning && stale && quietSeconds != null ? (
+        <div className="border-b border-warning/20 bg-warning/5 px-3 py-1.5 text-[11px] text-warning">
+          No output for {formatDuration(quietSeconds)}. The CLI may be thinking or waiting on a slow
+          tool call. Press Esc to interrupt if it stays stuck.
+        </div>
+      ) : null}
       {restartError && (
         <div className="border-b border-danger/20 bg-danger/5 px-3 py-1.5 text-[11px] text-danger">
           {restartError}
