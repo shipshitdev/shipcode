@@ -7,8 +7,8 @@ import {
   type ThreadPanelData,
 } from '@shipcode/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { StrictMode } from 'react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { Profiler, type ProfilerOnRenderCallback, StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '../stores/app-store';
 import { ThreadPanel } from './ThreadPanel';
@@ -19,7 +19,7 @@ vi.mock('electron-log/renderer', () => ({
   },
 }));
 
-function renderWithProviders() {
+function renderWithProviders(onRender?: ProfilerOnRenderCallback) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -31,9 +31,17 @@ function renderWithProviders() {
 
   return render(
     <StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <ThreadPanel />
-      </QueryClientProvider>
+      {onRender ? (
+        <Profiler id="thread-panel" onRender={onRender}>
+          <QueryClientProvider client={queryClient}>
+            <ThreadPanel />
+          </QueryClientProvider>
+        </Profiler>
+      ) : (
+        <QueryClientProvider client={queryClient}>
+          <ThreadPanel />
+        </QueryClientProvider>
+      )}
     </StrictMode>,
   );
 }
@@ -79,6 +87,7 @@ const panelData: ThreadPanelData = {
   project,
   settings: DEFAULT_SETTINGS,
   threads: [],
+  latestPlanStatusByThreadId: {},
   branches: [],
 };
 
@@ -162,7 +171,7 @@ describe('ThreadPanel', () => {
     expect(screen.getByRole('button', { name: /refresh board/i })).toBeInTheDocument();
   });
 
-  it('reopens the issue detail sidebar when clicking a board card while collapsed', async () => {
+  it('opens the issue detail sidebar from the explicit card action while collapsed', async () => {
     const issue = makeIssue();
 
     useAppStore.setState({
@@ -179,9 +188,58 @@ describe('ThreadPanel', () => {
 
     fireEvent.click(await screen.findByText(issue.title));
 
-    const state = useAppStore.getState();
+    let state = useAppStore.getState();
+    expect(state.activeIssue).toBeNull();
+    expect(state.issueDetailCollapsed).toBe(true);
+
+    fireEvent.click(await screen.findByRole('button', { name: /open issue detail/i }));
+
+    state = useAppStore.getState();
     expect(state.activeIssue?.id).toBe(issue.id);
     expect(state.activeThreadId).toBe(issue.threadId);
     expect(state.issueDetailCollapsed).toBe(false);
+  });
+
+  it('labels approved waiters as waiting for execution when the latest plan is approved', async () => {
+    const issue = makeIssue({ id: 'issue-slot-waiter', title: 'Approved waiter' });
+
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'thread-panel:get-data') {
+        return {
+          ...panelData,
+          latestPlanStatusByThreadId: { [issue.threadId as string]: 'approved' },
+        } satisfies ThreadPanelData;
+      }
+      if (channel === 'github:list-issues') return [issue];
+      return null;
+    });
+
+    renderWithProviders();
+
+    expect(await screen.findByText('Waiting For Execution')).toBeInTheDocument();
+    expect(await screen.findByText('Approved waiter')).toBeInTheDocument();
+  });
+
+  it('does not rerender on unrelated app-store updates', async () => {
+    const issue = makeIssue();
+    const onRender = vi.fn<ProfilerOnRenderCallback>();
+
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'thread-panel:get-data') return panelData;
+      if (channel === 'github:list-issues') return [issue];
+      return null;
+    });
+
+    renderWithProviders(onRender);
+
+    expect(await screen.findByText(issue.title)).toBeInTheDocument();
+
+    onRender.mockClear();
+
+    act(() => {
+      useAppStore.setState({ terminalVisible: true });
+    });
+
+    expect(onRender).not.toHaveBeenCalled();
   });
 });

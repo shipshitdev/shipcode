@@ -5,13 +5,14 @@ import type {
   Project,
   ResolvedPhaseModel,
   Thread,
-} from '@shipcode/shared';
+} from '../lib/shipcode';
 
 export interface KanbanBoardProps {
   issues: GitHubIssueCacheRecord[];
   project?: Project | null;
   settings?: AppSettings | null;
   threads?: Thread[];
+  approvedAwaitingExecutionIssueIds?: ReadonlySet<string>;
   readOnly?: boolean;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
   onRefresh: () => void;
@@ -65,4 +66,9 @@ export type IssueApprovalBadge = {
   label: string;
   title: string;
   source: 'app' | 'project' | 'issue';
+};
+
+export type IssueRevisionBadge = {
+  label: string;
+  title: string;
 };

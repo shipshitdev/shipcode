@@ -8,10 +8,10 @@ import {
   type Thread,
   type ThreadPanelData,
 } from '@shipcode/shared';
-import { KanbanBoard, RefreshCw } from '@shipcode/ui';
+import { Button, KanbanBoard, RefreshCw, X } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 import { ThreadPanelArchiveDialog } from './ThreadPanelArchiveDialog';
 
@@ -20,11 +20,21 @@ const DONE_PIPELINE_STATUSES: IssuePipelineStatus[] = ['completed', 'done'];
 
 export function ThreadPanel() {
   const queryClient = useQueryClient();
-  const { activeProjectId, selectIssue, activeIssue, setGithubIssues } = useAppStore();
+  const activeProjectId = useAppStore((state) => state.activeProjectId);
+  const selectedIssueNumber = useAppStore((state) => state.activeIssue?.issueNumber);
+  const selectIssue = useAppStore((state) => state.selectIssue);
+  const setGithubIssues = useAppStore((state) => state.setGithubIssues);
   const [isRefreshingBranches, setIsRefreshingBranches] = useState(false);
   const [archiveFeedback, setArchiveFeedback] = useState<{
     tone: 'pending' | 'success' | 'error';
     message: string;
+  } | null>(null);
+  const [doneUndo, setDoneUndo] = useState<{
+    issueId: string;
+    issueNumber: number;
+    previousStatus: IssuePipelineStatus;
+    previousState: GitHubIssueCacheRecord['state'];
+    undoing: boolean;
   } | null>(null);
 
   const { data: issuesData } = useQuery<GitHubIssueCacheRecord[]>({
@@ -60,6 +70,14 @@ export function ThreadPanel() {
     return () => clearTimeout(id);
   }, [archiveFeedback]);
 
+  useEffect(() => {
+    if (!doneUndo || doneUndo.undoing) return;
+    const id = setTimeout(() => {
+      setDoneUndo((current) => (current?.issueId === doneUndo.issueId ? null : current));
+    }, 8000);
+    return () => clearTimeout(id);
+  }, [doneUndo]);
+
   const { data: panelData } = useQuery<ThreadPanelData>({
     queryKey: ['thread-panel-data', activeProjectId],
     queryFn: () =>
@@ -72,8 +90,25 @@ export function ThreadPanel() {
   const project: Project | null = panelData?.project ?? null;
   const settings: AppSettings | undefined = panelData?.settings;
   const threads: Thread[] = panelData?.threads ?? [];
+  const latestPlanStatusByThreadId = panelData?.latestPlanStatusByThreadId ?? {};
   const branches: string[] = panelData?.branches ?? [];
-  const threadById = new Map(threads.map((thread) => [thread.id, thread] as const));
+  const threadById = useMemo(
+    () => new Map(threads.map((thread) => [thread.id, thread] as const)),
+    [threads],
+  );
+  const approvedAwaitingExecutionIssueIds = useMemo(() => {
+    const issueIds = new Set<string>();
+    for (const issue of issues) {
+      if (
+        issue.pipelineStatus === 'awaiting_approval' &&
+        issue.threadId &&
+        latestPlanStatusByThreadId[issue.threadId] === 'approved'
+      ) {
+        issueIds.add(issue.id);
+      }
+    }
+    return issueIds;
+  }, [issues, latestPlanStatusByThreadId]);
 
   // Optimistically flip a single issue's pipelineStatus in the local cache so
   // the card jumps to its new column instantly on drop, instead of waiting
@@ -165,10 +200,20 @@ export function ThreadPanel() {
     }
   };
 
-  const setPipelineStatusOptimistic = (id: string, status: IssuePipelineStatus) => {
+  const patchIssueOptimistic = (
+    id: string,
+    patch: Partial<Pick<GitHubIssueCacheRecord, 'pipelineStatus' | 'state'>>,
+  ) => {
     queryClient.setQueryData<GitHubIssueCacheRecord[]>(queryKey, (prev) =>
-      prev ? prev.map((i) => (i.id === id ? { ...i, pipelineStatus: status } : i)) : prev,
+      prev ? prev.map((issue) => (issue.id === id ? { ...issue, ...patch } : issue)) : prev,
     );
+    useAppStore.setState((state) => ({
+      githubIssues: state.githubIssues.map((issue) =>
+        issue.id === id ? { ...issue, ...patch } : issue,
+      ),
+      activeIssue:
+        state.activeIssue?.id === id ? { ...state.activeIssue, ...patch } : state.activeIssue,
+    }));
   };
 
   const repoUrl = githubRepoUrl(project?.gitRemote);
@@ -186,7 +231,7 @@ export function ThreadPanel() {
       <KanbanBoard
         issues={issues}
         onIssueClick={handleIssueClick}
-        selectedIssueNumber={activeIssue?.issueNumber}
+        selectedIssueNumber={selectedIssueNumber}
         onRefresh={() => activeProjectId && refreshIssues.mutate(activeProjectId)}
         baseBranch={project?.defaultBranch}
         branches={branches}
@@ -212,6 +257,7 @@ export function ThreadPanel() {
         project={project}
         settings={settings}
         threads={threads}
+        approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
         repoUrl={repoUrl}
         projectsUrl={projectsUrl}
         onOpenExternal={(url) =>
@@ -250,7 +296,7 @@ export function ThreadPanel() {
             });
         }}
         onStartPipeline={(issue) => {
-          setPipelineStatusOptimistic(issue.id, 'planning');
+          patchIssueOptimistic(issue.id, { pipelineStatus: 'planning' });
           window.shipcode
             .invoke('github:start-issue', {
               projectId: activeProjectId,
@@ -267,7 +313,7 @@ export function ThreadPanel() {
             });
         }}
         onRetry={(issue) => {
-          setPipelineStatusOptimistic(issue.id, 'todo');
+          patchIssueOptimistic(issue.id, { pipelineStatus: 'todo', state: 'open' });
           const request = issue.threadId
             ? window.shipcode.invoke('pipeline:retry', { threadId: issue.threadId })
             : window.shipcode.invoke('github:retry-issue', {
@@ -301,7 +347,20 @@ export function ThreadPanel() {
               : issue.linkedPrNumber != null || linkedThread?.status === 'completed'
                 ? 'completed'
                 : 'done';
-          setPipelineStatusOptimistic(issue.id, nextStatus);
+          const nextState: GitHubIssueCacheRecord['state'] =
+            nextStatus === 'done' ? 'closed' : issue.state;
+          patchIssueOptimistic(issue.id, { pipelineStatus: nextStatus, state: nextState });
+          setDoneUndo(
+            nextStatus === 'done'
+              ? {
+                  issueId: issue.id,
+                  issueNumber: issue.issueNumber,
+                  previousStatus: issue.pipelineStatus,
+                  previousState: issue.state,
+                  undoing: false,
+                }
+              : null,
+          );
           window.shipcode
             .invoke('github:mark-done', {
               projectId: activeProjectId,
@@ -309,6 +368,7 @@ export function ThreadPanel() {
             })
             .then(() => activeProjectId && refreshIssues.mutate(activeProjectId))
             .catch((err) => {
+              setDoneUndo((current) => (current?.issueId === issue.id ? null : current));
               if (activeProjectId) refreshIssues.mutate(activeProjectId);
               log.error('[threadpanel] close-issue failed', {
                 issueNumber: issue.issueNumber,
@@ -320,7 +380,7 @@ export function ThreadPanel() {
             });
         }}
         onRerun={(issue) => {
-          setPipelineStatusOptimistic(issue.id, 'planning');
+          patchIssueOptimistic(issue.id, { pipelineStatus: 'planning', state: 'open' });
           window.shipcode
             .invoke('github:start-issue', {
               projectId: activeProjectId,
@@ -350,15 +410,77 @@ export function ThreadPanel() {
         onClose={() => setArchiveConfirm(null)}
         onConfirm={handleArchiveConfirm}
       />
-      {archiveFeedback && (
-        <div className="absolute bottom-4 left-1/2 z-50 -translate-x-1/2 animate-in fade-in slide-in-from-bottom-2 duration-200">
+      <div className="pointer-events-none absolute bottom-4 left-1/2 z-50 flex -translate-x-1/2 flex-col items-center gap-2">
+        {doneUndo && (
+          <div className="pointer-events-auto flex items-center gap-3 rounded-lg border border-warning/30 bg-elevated px-3 py-2 shadow-lg">
+            <div className="min-w-0 text-xs text-secondary">
+              <div className="font-medium text-primary">Moved #{doneUndo.issueNumber} to Done</div>
+              <div className="truncate">
+                Reopen the issue and restore it to {doneUndo.previousStatus.replaceAll('_', ' ')}.
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="xs"
+              disabled={doneUndo.undoing}
+              onClick={() => {
+                if (!activeProjectId) return;
+                const target = doneUndo;
+                setDoneUndo((current) =>
+                  current?.issueId === target.issueId ? { ...current, undoing: true } : current,
+                );
+                patchIssueOptimistic(target.issueId, {
+                  pipelineStatus: target.previousStatus,
+                  state: target.previousState,
+                });
+                window.shipcode
+                  .invoke('github:reopen-issue', {
+                    projectId: activeProjectId,
+                    issueNumber: target.issueNumber,
+                  })
+                  .then(() => {
+                    setDoneUndo((current) =>
+                      current?.issueId === target.issueId ? null : current,
+                    );
+                    activeProjectId && refreshIssues.mutate(activeProjectId);
+                  })
+                  .catch((err) => {
+                    setDoneUndo((current) =>
+                      current?.issueId === target.issueId ? null : current,
+                    );
+                    activeProjectId && refreshIssues.mutate(activeProjectId);
+                    log.error('[threadpanel] undo mark-done failed', {
+                      issueNumber: target.issueNumber,
+                      err,
+                    });
+                    window.alert(
+                      `Failed to restore issue #${target.issueNumber}: ${err?.message ?? err}`,
+                    );
+                  });
+              }}
+            >
+              {doneUndo.undoing ? 'Undoing…' : 'Undo'}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="text-muted hover:bg-transparent hover:text-primary"
+              title="Dismiss undo"
+              aria-label="Dismiss undo"
+              onClick={() => setDoneUndo(null)}
+            >
+              <X size={12} />
+            </Button>
+          </div>
+        )}
+        {archiveFeedback && (
           <div
             className={
               archiveFeedback.tone === 'error'
-                ? 'flex items-center gap-2 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 shadow-lg text-xs text-danger'
+                ? 'pointer-events-auto flex items-center gap-2 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 shadow-lg text-xs text-danger'
                 : archiveFeedback.tone === 'pending'
-                  ? 'flex items-center gap-2 rounded-lg border border-border bg-elevated px-3 py-2 shadow-lg text-xs text-secondary'
-                  : 'flex items-center gap-2 rounded-lg border border-agent/30 bg-agent/10 px-3 py-2 shadow-lg text-xs text-agent'
+                  ? 'pointer-events-auto flex items-center gap-2 rounded-lg border border-border bg-elevated px-3 py-2 shadow-lg text-xs text-secondary'
+                  : 'pointer-events-auto flex items-center gap-2 rounded-lg border border-agent/30 bg-agent/10 px-3 py-2 shadow-lg text-xs text-agent'
             }
           >
             <RefreshCw
@@ -367,8 +489,8 @@ export function ThreadPanel() {
             />
             {archiveFeedback.message}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

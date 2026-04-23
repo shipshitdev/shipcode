@@ -1,7 +1,15 @@
 'use client';
 
-import { DndContext, type DragEndEvent, DragOverlay, type DragStartEvent } from '@dnd-kit/core';
-import type { GitHubIssueCacheRecord } from '@shipcode/shared';
+import {
+  DndContext,
+  type DragEndEvent,
+  DragOverlay,
+  type DragStartEvent,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
 import { RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DroppableColumn, StackedColumn } from './kanban-board/BoardColumns';
@@ -15,14 +23,16 @@ import {
   customCollisionDetection,
   resolveIssueApprovalBadge,
   resolveIssuePhaseChip,
-  resolveIssueRevisionLabel,
+  resolveIssueRevisionBadge,
 } from './kanban-board/utils';
+import type { GitHubIssueCacheRecord } from './lib/shipcode';
 
 export function KanbanBoard({
   issues,
   project,
   settings,
   threads = [],
+  approvedAwaitingExecutionIssueIds,
   readOnly = false,
   onIssueClick,
   onRefresh,
@@ -52,8 +62,18 @@ export function KanbanBoard({
     }
   };
 
+  const boardIssues = useMemo(
+    () => Array.from(new Map(issues.map((issue) => [issue.id, issue])).values()),
+    [issues],
+  );
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+    useSensor(KeyboardSensor),
+  );
   const [activeId, setActiveId] = useState<string | null>(null);
-  const activeIssue = issues.find((issue) => issue.id === activeId);
+  const activeIssue = boardIssues.find((issue) => issue.id === activeId);
   const [view, setView] = useState<'kanban' | 'list'>('kanban');
   const [sortOrder, setSortOrder] = useState<BoardSortOrder>('priority');
   const [approvalFilter, setApprovalFilter] = useState<'all' | 'needs-approval'>('all');
@@ -67,7 +87,7 @@ export function KanbanBoard({
   const issuePhaseChipById = useMemo(
     () =>
       new Map(
-        issues.map((issue) => [
+        boardIssues.map((issue) => [
           issue.id,
           resolveIssuePhaseChip(
             issue,
@@ -77,14 +97,14 @@ export function KanbanBoard({
           ),
         ]),
       ),
-    [issues, project, settings, threadById],
+    [boardIssues, project, settings, threadById],
   );
-  const issueRevisionLabelById = useMemo(
+  const issueRevisionBadgeById = useMemo(
     () =>
       new Map(
-        issues.map((issue) => [
+        boardIssues.map((issue) => [
           issue.id,
-          resolveIssueRevisionLabel(
+          resolveIssueRevisionBadge(
             issue,
             settings,
             project,
@@ -92,18 +112,23 @@ export function KanbanBoard({
           ),
         ]),
       ),
-    [issues, project, settings, threadById],
+    [boardIssues, project, settings, threadById],
   );
   const issueApprovalBadgeById = useMemo(
     () =>
       new Map(
-        issues.map((issue) => [issue.id, resolveIssueApprovalBadge(issue, settings, project)]),
+        boardIssues.map((issue) => [
+          issue.id,
+          approvedAwaitingExecutionIssueIds?.has(issue.id)
+            ? null
+            : resolveIssueApprovalBadge(issue, settings, project),
+        ]),
       ),
-    [issues, project, settings],
+    [approvedAwaitingExecutionIssueIds, boardIssues, project, settings],
   );
   const sortedIssues = useMemo(
-    () => [...issues].sort((a, b) => compareIssues(a, b, sortOrder)),
-    [issues, sortOrder],
+    () => [...boardIssues].sort((a, b) => compareIssues(a, b, sortOrder)),
+    [boardIssues, sortOrder],
   );
   const visibleIssues = useMemo(
     () =>
@@ -137,6 +162,7 @@ export function KanbanBoard({
   }, [showRefreshToast]);
 
   function getColumnForIssue(issue: GitHubIssueCacheRecord): ColumnKey {
+    if (approvedAwaitingExecutionIssueIds?.has(issue.id)) return 'agent';
     return COLUMNS.find((c) => c.statuses.includes(issue.pipelineStatus))?.key ?? 'todo';
   }
 
@@ -185,7 +211,7 @@ export function KanbanBoard({
     if (
       sourceColumn === 'agent' &&
       dropId === 'todo' &&
-      issue.pipelineStatus === 'queued' &&
+      (issue.pipelineStatus === 'queued' || issue.pipelineStatus === 'awaiting_approval') &&
       onRetry
     ) {
       onRetry(issue);
@@ -222,6 +248,7 @@ export function KanbanBoard({
         onProjectsClick={projectsUrl ? handleExternalClick(projectsUrl) : undefined}
       />
       <DndContext
+        sensors={sensors}
         collisionDetection={customCollisionDetection}
         onDragStart={readOnly ? undefined : handleDragStart}
         onDragEnd={readOnly ? undefined : handleDragEnd}
@@ -231,8 +258,9 @@ export function KanbanBoard({
             issues={visibleIssues}
             selectedIssueNumber={selectedIssueNumber}
             activeId={activeId}
-            issueRevisionLabelById={issueRevisionLabelById}
+            issueRevisionBadgeById={issueRevisionBadgeById}
             issueApprovalBadgeById={issueApprovalBadgeById}
+            approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
             onIssueClick={onIssueClick}
             onOpenPullRequest={onOpenPullRequest}
             onArchiveIssue={onArchiveIssue}
@@ -257,14 +285,17 @@ export function KanbanBoard({
                     rerunningId={rerunningId}
                     selectedIssueNumber={selectedIssueNumber}
                     issuePhaseChipById={issuePhaseChipById}
-                    issueRevisionLabelById={issueRevisionLabelById}
+                    issueRevisionBadgeById={issueRevisionBadgeById}
                     issueApprovalBadgeById={issueApprovalBadgeById}
+                    approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
                     readOnly={readOnly}
                   />
                 );
               }
-              const columnIssues = visibleIssues.filter((i) =>
-                col.statuses.includes(i.pipelineStatus),
+              const columnIssues = visibleIssues.filter((issue) =>
+                approvedAwaitingExecutionIssueIds?.has(issue.id)
+                  ? col.key === 'agent'
+                  : col.statuses.includes(issue.pipelineStatus),
               );
               return (
                 <DroppableColumn
@@ -281,8 +312,9 @@ export function KanbanBoard({
                   onArchiveAllDone={col.key === 'done' ? onArchiveAllDone : undefined}
                   onArchiveIssue={col.key === 'done' ? onArchiveIssue : undefined}
                   issuePhaseChipById={issuePhaseChipById}
-                  issueRevisionLabelById={issueRevisionLabelById}
+                  issueRevisionBadgeById={issueRevisionBadgeById}
                   issueApprovalBadgeById={issueApprovalBadgeById}
+                  approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
                   readOnly={readOnly}
                 />
               );
@@ -291,7 +323,12 @@ export function KanbanBoard({
         )}
         {!readOnly && (
           <DragOverlay dropAnimation={null}>
-            {activeIssue ? <DragOverlayCard issue={activeIssue} /> : null}
+            {activeIssue ? (
+              <DragOverlayCard
+                issue={activeIssue}
+                approvedAwaitingExecution={approvedAwaitingExecutionIssueIds?.has(activeIssue.id)}
+              />
+            ) : null}
           </DragOverlay>
         )}
       </DndContext>

@@ -1,27 +1,22 @@
 'use client';
 
 import { useDraggable } from '@dnd-kit/core';
-import type { GitHubIssueCacheRecord } from '@shipcode/shared';
-import { phaseToProgress } from '@shipcode/shared';
-import { Archive } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { formatProviderModelDisplay } from '../lib/model-display';
+import { Archive, PanelLeftOpen } from 'lucide-react';
+import { modelDisplay } from '../lib/model-display';
+import { useSharedSecondNow } from '../lib/second-ticker';
+import type { GitHubIssueCacheRecord } from '../lib/shipcode';
+import { phaseToProgress } from '../lib/shipcode';
 import { cn } from '../lib/utils';
 import { PhaseChip } from '../PhaseChip';
 import { Badge } from '../primitives/badge';
 import { Button } from '../primitives/button';
 import { ACTIVE_STATUSES, DRAGGABLE_STATUSES, PHASE_ELAPSED_STATUSES } from './constants';
-import type { IssueApprovalBadge, IssuePhaseChip } from './types';
+import type { IssueApprovalBadge, IssuePhaseChip, IssueRevisionBadge } from './types';
 import { dragOverlayBorderClass, formatPhaseElapsed } from './utils';
 
 function PhaseElapsed({ since }: { since: number }) {
-  const [label, setLabel] = useState(() => formatPhaseElapsed(since));
-
-  useEffect(() => {
-    setLabel(formatPhaseElapsed(since));
-    const id = setInterval(() => setLabel(formatPhaseElapsed(since)), 1000);
-    return () => clearInterval(id);
-  }, [since]);
+  const now = useSharedSecondNow();
+  const label = formatPhaseElapsed(since, now);
 
   return <span className="font-mono tabular-nums text-[10px] text-muted">{label}</span>;
 }
@@ -49,8 +44,9 @@ export function IssueExternalBlockers({ issue }: { issue: GitHubIssueCacheRecord
 interface DraggableCardProps {
   issue: GitHubIssueCacheRecord;
   phaseChip?: IssuePhaseChip | null;
-  revisionLabel?: string | null;
+  revisionBadge?: IssueRevisionBadge | null;
   approvalBadge?: IssueApprovalBadge | null;
+  approvedAwaitingExecution?: boolean;
   readOnly?: boolean;
   onClick: () => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
@@ -65,8 +61,9 @@ interface DraggableCardProps {
 export function DraggableCard({
   issue,
   phaseChip,
-  revisionLabel,
+  revisionBadge,
   approvalBadge,
+  approvedAwaitingExecution = false,
   readOnly = false,
   onClick,
   onRerun,
@@ -85,8 +82,10 @@ export function DraggableCard({
   });
 
   const isFailed = issue.pipelineStatus === 'failed';
-  const isAwaiting =
-    issue.pipelineStatus === 'awaiting_approval' || issue.pipelineStatus === 'clarifying';
+  const isClarifying = issue.pipelineStatus === 'clarifying';
+  const isAwaitingApproval =
+    issue.pipelineStatus === 'awaiting_approval' && !approvedAwaitingExecution;
+  const isAwaiting = isAwaitingApproval || isClarifying;
   const isActive = ACTIVE_STATUSES.includes(issue.pipelineStatus);
   const isTodo = issue.pipelineStatus === 'todo';
   const isCompleted = issue.pipelineStatus === 'completed';
@@ -99,8 +98,6 @@ export function DraggableCard({
   const linkedPrLabel = issue.linkedPrNumber ? `PR #${issue.linkedPrNumber}` : null;
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: dnd-kit's useDraggable provides keyboard accessibility via listeners/attributes spread below
-    // biome-ignore lint/a11y/useKeyWithClickEvents: dnd-kit KeyboardSensor handles activation; the onClick only forwards selection on pointer click
     <div
       ref={setNodeRef}
       className={cn(
@@ -121,8 +118,12 @@ export function DraggableCard({
             : 'border-done/35 bg-done/[0.045] opacity-70 hover:border-done/55 hover:bg-done/[0.06] hover:opacity-80'),
         isFailed &&
           (isSelected
-            ? 'border-danger bg-danger/[0.07]'
-            : 'border-danger/40 bg-danger/[0.04] hover:border-danger/60'),
+            ? 'border-danger/65 bg-danger/[0.09] opacity-85'
+            : 'border-danger/35 bg-danger/[0.045] opacity-70 hover:border-danger/55 hover:bg-danger/[0.06] hover:opacity-80'),
+        approvedAwaitingExecution &&
+          (isSelected
+            ? 'border-agent/65 bg-agent/[0.08]'
+            : 'border-agent/35 bg-agent/[0.04] hover:border-agent/55 hover:bg-agent/[0.055]'),
         isAwaiting &&
           (isSelected
             ? 'border-warning bg-warning/[0.07]'
@@ -136,10 +137,6 @@ export function DraggableCard({
       )}
       {...listeners}
       {...attributes}
-      onClick={(event) => {
-        event.stopPropagation();
-        onClick();
-      }}
     >
       {isActive && (
         <div
@@ -156,7 +153,13 @@ export function DraggableCard({
           <div
             className={cn(
               'absolute right-0 bottom-0 left-0 z-10 h-[3px] overflow-hidden rounded-b-md',
-              isCompleted ? 'bg-success/15' : isDone ? 'bg-done/15' : 'bg-agent/15',
+              isCompleted
+                ? 'bg-success/15'
+                : isDone
+                  ? 'bg-done/15'
+                  : approvedAwaitingExecution
+                    ? 'bg-agent/15'
+                    : 'bg-agent/15',
             )}
           >
             <div
@@ -166,10 +169,12 @@ export function DraggableCard({
                   ? 'bg-success'
                   : isDone
                     ? 'bg-done'
-                    : issue.pipelineStatus === 'awaiting_approval' ||
-                        issue.pipelineStatus === 'clarifying'
-                      ? 'bg-warning'
-                      : 'bg-agent',
+                    : approvedAwaitingExecution
+                      ? 'bg-agent'
+                      : issue.pipelineStatus === 'awaiting_approval' ||
+                          issue.pipelineStatus === 'clarifying'
+                        ? 'bg-warning'
+                        : 'bg-agent',
               )}
               style={{ width: `${phaseToProgress(issue.pipelineStatus)}%` }}
             />
@@ -178,21 +183,37 @@ export function DraggableCard({
             )}
           </div>
         )}
-      {isDoneState && onArchiveIssue && (
+      <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-1">
         <Button
           variant="ghost"
           size="icon-xs"
-          className="absolute top-1.5 right-1.5 z-10 text-muted/60 opacity-0 transition-opacity hover:bg-muted/10 hover:text-muted group-hover:opacity-100"
-          title="Archive issue"
+          className="text-muted/70 hover:bg-muted/10 hover:text-primary"
+          title="Open issue detail"
+          aria-label="Open issue detail"
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation();
-            onArchiveIssue(issue);
+            onClick();
           }}
         >
-          <Archive size={14} />
+          <PanelLeftOpen size={14} />
         </Button>
-      )}
+        {isDoneState && onArchiveIssue && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="text-muted/60 opacity-0 transition-opacity hover:bg-muted/10 hover:text-muted group-hover:opacity-100"
+            title="Archive issue"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onArchiveIssue(issue);
+            }}
+          >
+            <Archive size={14} />
+          </Button>
+        )}
+      </div>
       <div className="relative z-10 flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1.5">
           <span className="shrink-0 font-mono text-[11px] text-secondary">
@@ -235,21 +256,30 @@ export function DraggableCard({
         {phaseChip && isActive && (
           <Badge
             variant="default"
-            className="px-1.5 py-px text-[10px] font-medium normal-case tracking-normal"
-            title={`${phaseChip.phase} model ${phaseChip.model}${
-              phaseChip.effort ? ` (${phaseChip.effort})` : ''
+            className="whitespace-nowrap px-1.5 py-px text-[10px] font-medium normal-case tracking-normal"
+            title={`${phaseChip.phase} model: ${modelDisplay(phaseChip.model)}${
+              phaseChip.effort ? ` · ${phaseChip.effort}` : ''
             }`}
           >
-            {formatProviderModelDisplay(phaseChip.provider, phaseChip.model)}
+            {modelDisplay(phaseChip.model)}
             {phaseChip.effort ? ` · ${phaseChip.effort}` : ''}
           </Badge>
         )}
-        {revisionLabel ? (
-          <Badge variant="default" className="px-1.5 py-px text-[10px] font-medium">
-            {revisionLabel}
+        {revisionBadge ? (
+          <Badge
+            variant="default"
+            className="px-1.5 py-px text-[10px] font-medium"
+            title={revisionBadge.title}
+          >
+            {revisionBadge.label}
           </Badge>
         ) : null}
-        {approvalBadge ? (
+        {approvedAwaitingExecution ? (
+          <Badge variant="success" className="px-1.5 py-px text-[10px] font-medium">
+            Approved
+          </Badge>
+        ) : null}
+        {approvalBadge && !approvedAwaitingExecution ? (
           <Badge
             variant="warning"
             className="px-1.5 py-px text-[10px] font-medium"
@@ -326,45 +356,32 @@ export function DraggableCard({
               RETRY
             </Button>
           </span>
+        ) : approvedAwaitingExecution ? (
+          <PhaseChip
+            status={issue.pipelineStatus}
+            label="Waiting for slot"
+            className="border-agent/25 bg-agent/10 text-agent"
+          />
         ) : (
           <PhaseChip status={issue.pipelineStatus} />
-        )}
-        {!readOnly && (
-          <div className="ml-auto flex items-center gap-1.5">
-            <Button
-              variant="ghost"
-              className={cn(
-                'h-5 px-1.5 text-[10px] font-medium opacity-0 transition-all group-hover:opacity-100',
-                isFailed
-                  ? 'text-danger/60 hover:bg-danger/10 hover:text-danger'
-                  : isAwaiting
-                    ? 'text-warning/60 hover:bg-warning/10 hover:text-warning'
-                    : isActive
-                      ? 'text-agent/60 hover:bg-agent/10 hover:text-agent'
-                      : 'text-muted hover:bg-border/20 hover:text-primary',
-              )}
-              title="Open issue detail"
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation();
-                onClick();
-              }}
-            >
-              View
-            </Button>
-          </div>
         )}
       </div>
     </div>
   );
 }
 
-export function DragOverlayCard({ issue }: { issue: GitHubIssueCacheRecord }) {
+export function DragOverlayCard({
+  issue,
+  approvedAwaitingExecution = false,
+}: {
+  issue: GitHubIssueCacheRecord;
+  approvedAwaitingExecution?: boolean;
+}) {
   return (
     <div
       className={cn(
         'cursor-grabbing rounded-md border bg-secondary p-3 opacity-80 shadow-lg',
-        dragOverlayBorderClass(issue.pipelineStatus),
+        dragOverlayBorderClass(issue.pipelineStatus, approvedAwaitingExecution),
       )}
     >
       <div className="font-mono text-[11px] text-muted">#{issue.issueNumber}</div>
@@ -372,7 +389,11 @@ export function DragOverlayCard({ issue }: { issue: GitHubIssueCacheRecord }) {
         {issue.title}
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        <PhaseChip status={issue.pipelineStatus} />
+        <PhaseChip
+          status={issue.pipelineStatus}
+          label={approvedAwaitingExecution ? 'Waiting for slot' : undefined}
+          className={approvedAwaitingExecution ? 'border-agent/25 bg-agent/10 text-agent' : ''}
+        />
         <div className="ml-auto h-5" />
       </div>
     </div>

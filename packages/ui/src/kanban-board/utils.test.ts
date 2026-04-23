@@ -1,7 +1,15 @@
 import type { AppSettings, GitHubIssueCacheRecord, Project, Thread } from '@shipcode/shared';
 import { DEFAULT_SETTINGS } from '@shipcode/shared';
 import { describe, expect, it } from 'vitest';
-import { compareIssues, resolveIssueApprovalBadge, resolveIssuePhaseChip } from './utils';
+import {
+  compareIssues,
+  isApprovedAwaitingExecutionIssue,
+  issueMatchesColumn,
+  issueMatchesSection,
+  resolveIssueApprovalBadge,
+  resolveIssuePhaseChip,
+  resolveIssueRevisionBadge,
+} from './utils';
 
 function makeIssue(
   issueNumber: number,
@@ -106,6 +114,7 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     clarificationRound: 0,
     clarificationRequest: null,
     clarificationAnswers: [],
+    answeredClarification: null,
     verificationStatus: null,
     verificationRetries: 0,
     autonomous: true,
@@ -302,5 +311,68 @@ describe('resolveIssueApprovalBadge', () => {
     );
 
     expect(badge).toBeNull();
+  });
+});
+
+describe('resolveIssueRevisionBadge', () => {
+  it('shows the configured revision count before revisions start', () => {
+    const badge = resolveIssueRevisionBadge(
+      makeIssue(50, 'Revision count'),
+      SETTINGS,
+      makeProject(),
+      null,
+    );
+
+    expect(badge).toEqual({
+      label: '0',
+      title: 'Configured revisions: 0',
+    });
+  });
+
+  it('shows current revision progress once review rounds start', () => {
+    const badge = resolveIssueRevisionBadge(
+      makeIssue(51, 'Revision progress'),
+      { ...SETTINGS, revisionCount: 3 },
+      makeProject(),
+      makeThread({ reviewRound: 2 }),
+    );
+
+    expect(badge).toEqual({
+      label: '2/3',
+      title: 'Current revision: 2 of 3',
+    });
+  });
+});
+
+describe('approved-awaiting-execution helpers', () => {
+  it('flags approved awaiting-approval issues as execution-slot waiters', () => {
+    const issue = makeIssue(52, 'Waiting for execution');
+    issue.pipelineStatus = 'awaiting_approval';
+
+    expect(isApprovedAwaitingExecutionIssue(issue, new Set([issue.id]))).toBe(true);
+    expect(isApprovedAwaitingExecutionIssue(issue, new Set())).toBe(false);
+  });
+
+  it('routes approved waiters to the agent column and waiting-execution section', () => {
+    const issue = makeIssue(53, 'Approved waiter');
+    issue.pipelineStatus = 'awaiting_approval';
+    const approvedIds = new Set([issue.id]);
+
+    expect(issueMatchesColumn(issue, { key: 'agent', statuses: ['queued'] }, approvedIds)).toBe(
+      true,
+    );
+    expect(
+      issueMatchesColumn(issue, { key: 'human', statuses: ['awaiting_approval'] }, approvedIds),
+    ).toBe(false);
+    expect(
+      issueMatchesSection(
+        issue,
+        { key: 'waiting_execution', statuses: ['awaiting_approval'] },
+        approvedIds,
+      ),
+    ).toBe(true);
+    expect(
+      issueMatchesSection(issue, { key: 'awaiting', statuses: ['awaiting_approval'] }, approvedIds),
+    ).toBe(false);
   });
 });

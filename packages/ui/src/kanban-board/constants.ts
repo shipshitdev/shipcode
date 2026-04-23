@@ -1,4 +1,4 @@
-import type { IssuePipelineStatus } from '@shipcode/shared';
+import type { IssuePipelineStatus } from '../lib/shipcode';
 import type { BoardColumn, BoardSortOrder, ColumnKey } from './types';
 
 export const COLUMNS: BoardColumn[] = [
@@ -41,6 +41,12 @@ export const COLUMNS: BoardColumn[] = [
         droppable: false,
       },
       {
+        key: 'waiting_execution',
+        label: 'Waiting For Execution',
+        statuses: ['awaiting_approval'],
+        droppable: false,
+      },
+      {
         key: 'executing',
         label: 'Executing',
         statuses: ['executing'],
@@ -73,7 +79,7 @@ export const COLUMNS: BoardColumn[] = [
       },
       {
         key: 'awaiting',
-        label: 'Awaiting Approval',
+        label: 'Needs Approval',
         statuses: ['awaiting_approval'],
         droppable: false,
       },

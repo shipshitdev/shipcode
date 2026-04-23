@@ -5,7 +5,7 @@ import type {
   IssuePipelineStatus,
   Project,
   Thread,
-} from '@shipcode/shared';
+} from '../lib/shipcode';
 import {
   type ExecutorModel,
   formatProviderReasoningEffort,
@@ -17,11 +17,61 @@ import {
   resolveRequireApprovalStateForIssue,
   resolveRevisionCountForIssue,
   sanitizeResolvedModel,
-} from '@shipcode/shared';
+} from '../lib/shipcode';
 import { ACTIVE_STATUSES } from './constants';
-import type { BoardSortOrder, IssueApprovalBadge, IssuePhaseChip, RowTone } from './types';
+import type {
+  BoardColumn,
+  BoardSortOrder,
+  ColumnKey,
+  IssueApprovalBadge,
+  IssuePhaseChip,
+  IssueRevisionBadge,
+  PhaseSection,
+  RowTone,
+} from './types';
 
-export function dragOverlayBorderClass(status: IssuePipelineStatus): string {
+export function isApprovedAwaitingExecutionIssue(
+  issue: GitHubIssueCacheRecord,
+  approvedAwaitingExecutionIssueIds?: ReadonlySet<string>,
+): boolean {
+  return (
+    issue.pipelineStatus === 'awaiting_approval' &&
+    approvedAwaitingExecutionIssueIds?.has(issue.id) === true
+  );
+}
+
+export function issueMatchesColumn(
+  issue: GitHubIssueCacheRecord,
+  column: Pick<BoardColumn, 'key' | 'statuses'>,
+  approvedAwaitingExecutionIssueIds?: ReadonlySet<string>,
+): boolean {
+  if (isApprovedAwaitingExecutionIssue(issue, approvedAwaitingExecutionIssueIds)) {
+    return column.key === 'agent';
+  }
+  return column.statuses.includes(issue.pipelineStatus);
+}
+
+export function issueMatchesSection(
+  issue: GitHubIssueCacheRecord,
+  section: Pick<PhaseSection, 'key' | 'statuses'>,
+  approvedAwaitingExecutionIssueIds?: ReadonlySet<string>,
+): boolean {
+  const approvedAwaitingExecution = isApprovedAwaitingExecutionIssue(
+    issue,
+    approvedAwaitingExecutionIssueIds,
+  );
+  if (section.key === 'waiting_execution') return approvedAwaitingExecution;
+  if (section.key === 'awaiting') {
+    return issue.pipelineStatus === 'awaiting_approval' && !approvedAwaitingExecution;
+  }
+  return section.statuses.includes(issue.pipelineStatus);
+}
+
+export function dragOverlayBorderClass(
+  status: IssuePipelineStatus,
+  approvedAwaitingExecution = false,
+): string {
+  if (approvedAwaitingExecution) return 'border-agent';
   if (status === 'failed') return 'border-danger';
   if (status === 'awaiting_approval' || status === 'clarifying') return 'border-warning';
   return 'border-accent';
@@ -87,18 +137,25 @@ export function resolveIssuePhaseChip(
   };
 }
 
-export function resolveIssueRevisionLabel(
+export function resolveIssueRevisionBadge(
   issue: GitHubIssueCacheRecord,
   settings: AppSettings | null | undefined,
   project: Project | null | undefined,
   thread: Thread | null | undefined,
-): string | null {
+): IssueRevisionBadge | null {
   if (!settings) return null;
   const revisionCount = resolveRevisionCountForIssue(settings, project, issue);
   if (thread && revisionCount > 0 && thread.reviewRound > 0) {
-    return `Rev ${Math.min(thread.reviewRound, revisionCount)}/${revisionCount}`;
+    const currentRevision = Math.min(thread.reviewRound, revisionCount);
+    return {
+      label: `${currentRevision}/${revisionCount}`,
+      title: `Current revision: ${currentRevision} of ${revisionCount}`,
+    };
   }
-  return `Rev ${revisionCount}`;
+  return {
+    label: `${revisionCount}`,
+    title: `Configured revisions: ${revisionCount}`,
+  };
 }
 
 export function resolveIssueApprovalBadge(
@@ -126,8 +183,8 @@ export function resolveIssueApprovalBadge(
   };
 }
 
-export function formatPhaseElapsed(since: number): string {
-  const seconds = Math.max(0, Math.floor((Date.now() - since) / 1000));
+export function formatPhaseElapsed(since: number, now = Date.now()): string {
+  const seconds = Math.max(0, Math.floor((now - since) / 1000));
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
@@ -217,12 +274,24 @@ export function compareIssues(
   return a.title.localeCompare(b.title);
 }
 
-export function rowToneFor(status: IssuePipelineStatus): RowTone {
+export function rowToneFor(
+  status: IssuePipelineStatus,
+  approvedAwaitingExecution = false,
+): RowTone {
+  if (approvedAwaitingExecution) return 'agent';
   if (status === 'failed') return 'danger';
   if (status === 'awaiting_approval' || status === 'clarifying') return 'warning';
   if (status === 'completed') return 'success';
   if (status === 'done') return 'done';
   if (ACTIVE_STATUSES.includes(status)) return 'agent';
+  return 'default';
+}
+
+export function sectionToneFor(columnKey: ColumnKey, sectionKey: string): RowTone {
+  if (sectionKey === 'failed') return 'danger';
+  if (columnKey === 'human') return 'warning';
+  if (columnKey === 'agent') return 'agent';
+  if (columnKey === 'done') return sectionKey === 'completed' ? 'success' : 'done';
   return 'default';
 }
 

@@ -7,10 +7,13 @@ import {
   type GitHubIssueCacheRecord,
   type Project,
 } from '@shipcode/shared';
-import { act, type ReactElement } from 'react';
+import { act, type ComponentProps, type ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ActivePipelineCard } from '../ActivePipelineCard';
 import { KanbanBoard } from '../KanbanBoard';
+import { StackedColumn } from './BoardColumns';
+import { COLUMNS } from './constants';
 import { DraggableCard } from './IssueCardParts';
 import { IssueListView } from './IssueListView';
 
@@ -122,6 +125,10 @@ function renderIntoDom(element: ReactElement) {
   };
 }
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe('linked PR affordances', () => {
   it('renders the animated background layer only for active cards', () => {
     const activeView = renderIntoDom(
@@ -189,7 +196,7 @@ describe('linked PR affordances', () => {
         <IssueListView
           issues={[makeIssue()]}
           activeId={null}
-          issueRevisionLabelById={new Map()}
+          issueRevisionBadgeById={new Map()}
           issueApprovalBadgeById={new Map()}
           onIssueClick={onIssueClick}
           onOpenPullRequest={onOpenPullRequest}
@@ -208,6 +215,82 @@ describe('linked PR affordances', () => {
 
     expect(onOpenPullRequest).toHaveBeenCalledWith('https://github.com/acme/repo/pull/91');
     expect(onIssueClick).not.toHaveBeenCalled();
+    view.cleanup();
+  });
+
+  it('opens issue detail from the dedicated card action instead of the whole card surface', () => {
+    const onClick = vi.fn();
+
+    const view = renderIntoDom(
+      <DndContext>
+        <DraggableCard issue={makeIssue()} onClick={onClick} readOnly />
+      </DndContext>,
+    );
+
+    const title = Array.from(view.container.querySelectorAll('div')).find((element) =>
+      element.textContent?.includes('Add demo pipeline task'),
+    );
+    if (!(title instanceof HTMLDivElement)) {
+      throw new Error('Expected issue title block');
+    }
+
+    act(() => {
+      title.click();
+    });
+
+    expect(onClick).not.toHaveBeenCalled();
+
+    const button = view.container.querySelector('button[title="Open issue detail"]');
+    if (!(button instanceof HTMLButtonElement)) {
+      throw new Error('Expected issue detail button');
+    }
+
+    act(() => {
+      button.click();
+    });
+
+    expect(onClick).toHaveBeenCalledTimes(1);
+    view.cleanup();
+  });
+
+  it('opens issue detail from the dedicated list-row action only', () => {
+    const onIssueClick = vi.fn();
+
+    const view = renderIntoDom(
+      <DndContext>
+        <IssueListView
+          issues={[makeIssue()]}
+          activeId={null}
+          issueRevisionBadgeById={new Map()}
+          issueApprovalBadgeById={new Map()}
+          onIssueClick={onIssueClick}
+        />
+      </DndContext>,
+    );
+
+    const title = Array.from(view.container.querySelectorAll('span')).find((element) =>
+      element.textContent?.includes('Add demo pipeline task'),
+    );
+    if (!(title instanceof HTMLSpanElement)) {
+      throw new Error('Expected row title');
+    }
+
+    act(() => {
+      title.click();
+    });
+
+    expect(onIssueClick).not.toHaveBeenCalled();
+
+    const button = view.container.querySelector('button[title="Open issue detail"]');
+    if (!(button instanceof HTMLButtonElement)) {
+      throw new Error('Expected list-row detail button');
+    }
+
+    act(() => {
+      button.click();
+    });
+
+    expect(onIssueClick).toHaveBeenCalledTimes(1);
     view.cleanup();
   });
 
@@ -234,6 +317,34 @@ describe('linked PR affordances', () => {
     view.cleanup();
   });
 
+  it('renders approved slot waiters in the agent loop instead of approval-needed UI', () => {
+    const issue = makeIssue({
+      id: 'issue-slot-waiter',
+      issueNumber: 95,
+      title: 'Approved and waiting for execution',
+      pipelineStatus: 'awaiting_approval',
+      linkedPrNumber: null,
+      linkedPrUrl: null,
+      requireApprovalOverride: true,
+    });
+
+    const view = renderIntoDom(
+      <KanbanBoard
+        issues={[issue]}
+        project={makeProject()}
+        settings={{ ...SETTINGS, requireApproval: true }}
+        approvedAwaitingExecutionIssueIds={new Set([issue.id])}
+        onIssueClick={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(view.container.textContent).toContain('Waiting For Execution');
+    expect(view.container.textContent).toContain('Approved');
+    expect(view.container.textContent).toContain('Waiting for slot');
+    view.cleanup();
+  });
+
   it('renders an approval badge in list rows with a source tooltip', () => {
     const issue = makeIssue({ pipelineStatus: 'awaiting_approval' });
 
@@ -242,7 +353,7 @@ describe('linked PR affordances', () => {
         <IssueListView
           issues={[issue]}
           activeId={null}
-          issueRevisionLabelById={new Map()}
+          issueRevisionBadgeById={new Map()}
           issueApprovalBadgeById={
             new Map([
               [
@@ -312,6 +423,275 @@ describe('linked PR affordances', () => {
 
     expect(view.container.textContent).toContain('Needs human approval');
     expect(view.container.textContent).not.toContain('Auto-runs normally');
+    view.cleanup();
+  });
+
+  it('keeps approved slot waiters out of the needs-approval filter', () => {
+    const approvalIssue = makeIssue({
+      id: 'issue-approval',
+      issueNumber: 111,
+      title: 'Still waiting on me',
+      pipelineStatus: 'awaiting_approval',
+      linkedPrNumber: null,
+      linkedPrUrl: null,
+      requireApprovalOverride: true,
+    });
+    const approvedWaiter = makeIssue({
+      id: 'issue-slot-waiter',
+      issueNumber: 112,
+      title: 'Approved and waiting for slot',
+      pipelineStatus: 'awaiting_approval',
+      linkedPrNumber: null,
+      linkedPrUrl: null,
+      requireApprovalOverride: true,
+    });
+
+    const view = renderIntoDom(
+      <KanbanBoard
+        issues={[approvalIssue, approvedWaiter]}
+        project={makeProject()}
+        settings={{ ...SETTINGS, requireApproval: true }}
+        approvedAwaitingExecutionIssueIds={new Set([approvedWaiter.id])}
+        onIssueClick={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    const button = Array.from(view.container.querySelectorAll('button')).find((element) =>
+      element.textContent?.includes('Needs approval'),
+    );
+    if (!(button instanceof HTMLButtonElement)) {
+      throw new Error('Expected approval filter button');
+    }
+
+    act(() => {
+      button.click();
+    });
+
+    expect(view.container.textContent).toContain('Still waiting on me');
+    expect(view.container.textContent).not.toContain('Approved and waiting for slot');
+    view.cleanup();
+  });
+
+  it('deduplicates repeated issues before rendering cards', () => {
+    const view = renderIntoDom(
+      <KanbanBoard
+        issues={[
+          makeIssue({
+            id: 'issue-duplicate',
+            issueNumber: 201,
+            title: 'Old queued copy',
+            pipelineStatus: 'queued',
+            linkedPrNumber: null,
+            linkedPrUrl: null,
+          }),
+          makeIssue({
+            id: 'issue-duplicate',
+            issueNumber: 201,
+            title: 'Latest queued copy',
+            pipelineStatus: 'queued',
+            linkedPrNumber: null,
+            linkedPrUrl: null,
+          }),
+        ]}
+        onIssueClick={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(view.container.textContent).toContain('Latest queued copy');
+    expect(view.container.textContent).not.toContain('Old queued copy');
+    view.cleanup();
+  });
+
+  it('makes stacked section headers sticky and lets them collapse cards', () => {
+    const view = renderIntoDom(
+      <KanbanBoard
+        issues={[
+          makeIssue({
+            id: 'issue-executing',
+            issueNumber: 202,
+            title: 'Executing issue',
+            pipelineStatus: 'executing',
+            linkedPrNumber: null,
+            linkedPrUrl: null,
+          }),
+        ]}
+        onIssueClick={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    const executingHeader = Array.from(view.container.querySelectorAll('button')).find((element) =>
+      element.textContent?.includes('Executing'),
+    );
+    if (!(executingHeader instanceof HTMLButtonElement)) {
+      throw new Error('Expected Executing section header');
+    }
+
+    expect(executingHeader.className).toContain('sticky');
+    expect(executingHeader.className).toContain('top-0');
+    expect(executingHeader.className).toContain('bg-agent');
+    expect(executingHeader.getAttribute('aria-expanded')).toBe('true');
+    expect(view.container.textContent).toContain('Executing issue');
+
+    act(() => {
+      executingHeader.click();
+    });
+
+    expect(executingHeader.getAttribute('aria-expanded')).toBe('false');
+    expect(view.container.textContent).not.toContain('Executing issue');
+    view.cleanup();
+  });
+
+  it('keeps stacked columns rendering if metadata maps are temporarily missing', () => {
+    const agentColumn = COLUMNS.find((column) => column.key === 'agent');
+    if (!agentColumn) {
+      throw new Error('Expected agent column');
+    }
+
+    const view = renderIntoDom(
+      <DndContext>
+        <StackedColumn
+          {...({
+            column: agentColumn,
+            issues: [
+              makeIssue({
+                id: 'issue-executing',
+                issueNumber: 204,
+                title: 'Executing issue',
+                pipelineStatus: 'executing',
+                linkedPrNumber: null,
+                linkedPrUrl: null,
+              }),
+            ],
+            onIssueClick: vi.fn(),
+            issuePhaseChipById: undefined,
+            issueRevisionBadgeById: undefined,
+            issueApprovalBadgeById: undefined,
+          } as unknown as ComponentProps<typeof StackedColumn>)}
+        />
+      </DndContext>,
+    );
+
+    expect(view.container.textContent).toContain('Executing issue');
+    view.cleanup();
+  });
+
+  it('shares one second ticker across multiple elapsed cards', () => {
+    const setIntervalSpy = vi.spyOn(window, 'setInterval');
+    const clearIntervalSpy = vi.spyOn(window, 'clearInterval');
+    const startedAt = Date.now() - 5_000;
+
+    const view = renderIntoDom(
+      <>
+        <ActivePipelineCard
+          projectName="shipcode"
+          title="Planning issue"
+          phase="planning"
+          startedAt={startedAt}
+          onClick={vi.fn()}
+        />
+        <DndContext>
+          <DraggableCard
+            issue={makeIssue({
+              id: 'issue-executing',
+              issueNumber: 206,
+              title: 'Executing issue',
+              pipelineStatus: 'executing',
+              linkedPrNumber: null,
+              linkedPrUrl: null,
+              lastPhaseUpdate: new Date(startedAt).toISOString(),
+            })}
+            onClick={vi.fn()}
+            readOnly
+          />
+        </DndContext>
+      </>,
+    );
+
+    expect(setIntervalSpy).toHaveBeenCalledTimes(1);
+
+    view.cleanup();
+
+    expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('left-aligns wrapped stacked section labels', () => {
+    const humanColumn = COLUMNS.find((column) => column.key === 'human');
+    if (!humanColumn) {
+      throw new Error('Expected human column');
+    }
+
+    const view = renderIntoDom(
+      <DndContext>
+        <StackedColumn
+          {...({
+            column: humanColumn,
+            issues: [
+              makeIssue({
+                id: 'issue-awaiting',
+                issueNumber: 205,
+                title: 'Awaiting approval issue',
+                pipelineStatus: 'awaiting_approval',
+                linkedPrNumber: null,
+                linkedPrUrl: null,
+              }),
+            ],
+            onIssueClick: vi.fn(),
+          } as unknown as ComponentProps<typeof StackedColumn>)}
+        />
+      </DndContext>,
+    );
+
+    const awaitingHeader = Array.from(view.container.querySelectorAll('button')).find((element) =>
+      element.textContent?.includes('Needs Approval'),
+    );
+    if (!(awaitingHeader instanceof HTMLButtonElement)) {
+      throw new Error('Expected Needs Approval section header');
+    }
+
+    expect(awaitingHeader.className).toContain('text-left');
+    expect(awaitingHeader.firstElementChild?.className).toContain('flex-1');
+    expect(awaitingHeader.firstElementChild?.className).toContain('text-left');
+    expect(awaitingHeader.firstElementChild?.lastElementChild?.className).toContain('truncate');
+    view.cleanup();
+  });
+
+  it('keeps the active model badge on one line even with the issue-detail action present', () => {
+    const view = renderIntoDom(
+      <DndContext>
+        <DraggableCard
+          issue={makeIssue({
+            id: 'issue-active',
+            issueNumber: 203,
+            title: 'Active issue',
+            pipelineStatus: 'executing',
+            linkedPrNumber: null,
+            linkedPrUrl: null,
+          })}
+          phaseChip={{
+            phase: 'executor',
+            provider: 'codex',
+            model: 'gpt-5.4',
+            effort: 'medium',
+          }}
+          onClick={vi.fn()}
+          onCancel={vi.fn()}
+        />
+      </DndContext>,
+    );
+
+    const modelBadge = Array.from(view.container.querySelectorAll('span')).find((element) =>
+      element.textContent?.includes('GPT-5.4 · medium'),
+    );
+    if (!(modelBadge instanceof HTMLSpanElement)) {
+      throw new Error('Expected active model badge');
+    }
+
+    expect(modelBadge.className).toContain('whitespace-nowrap');
+    expect(modelBadge.getAttribute('title')).toBe('executor model: GPT-5.4 · medium');
+    expect(view.container.querySelector('button[title="Open issue detail"]')).toBeTruthy();
     view.cleanup();
   });
 });

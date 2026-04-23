@@ -1,9 +1,9 @@
 'use client';
 
 import { useDraggable, useDroppable } from '@dnd-kit/core';
-import type { GitHubIssueCacheRecord } from '@shipcode/shared';
-import { Archive, ChevronDown, ChevronRight, User } from 'lucide-react';
+import { Archive, ChevronDown, ChevronRight, PanelLeftOpen, User } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
+import type { GitHubIssueCacheRecord } from '../lib/shipcode';
 import { cn } from '../lib/utils';
 import { Badge } from '../primitives/badge';
 import { Button } from '../primitives/button';
@@ -16,29 +16,42 @@ import {
   LIST_COLUMN_LABEL,
 } from './constants';
 import { IssueExternalBlockers } from './IssueCardParts';
-import type { ColumnKey, IssueApprovalBadge, PhaseSection } from './types';
-import { formatDate, rowToneFor } from './utils';
+import type { ColumnKey, IssueApprovalBadge, IssueRevisionBadge, PhaseSection } from './types';
+import {
+  formatDate,
+  isApprovedAwaitingExecutionIssue,
+  issueMatchesColumn,
+  issueMatchesSection,
+  rowToneFor,
+  sectionToneFor,
+} from './utils';
+
+const EMPTY_REVISION_BADGE_MAP = new Map<string, IssueRevisionBadge | null>();
+const EMPTY_APPROVAL_BADGE_MAP = new Map<string, IssueApprovalBadge | null>();
+const EMPTY_APPROVED_AWAITING_EXECUTION = new Set<string>();
 
 interface DraggableListRowProps {
   issue: GitHubIssueCacheRecord;
-  revisionLabel?: string | null;
+  revisionBadge?: IssueRevisionBadge | null;
   approvalBadge?: IssueApprovalBadge | null;
   selectedIssueNumber?: number;
   activeId: string | null;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
   onOpenPullRequest?: (url: string) => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
+  approvedAwaitingExecution?: boolean;
 }
 
 function DraggableListRow({
   issue,
-  revisionLabel,
+  revisionBadge,
   approvalBadge,
   selectedIssueNumber,
   activeId,
   onIssueClick,
   onOpenPullRequest,
   onArchiveIssue,
+  approvedAwaitingExecution = false,
 }: DraggableListRowProps) {
   const isDoneState = issue.pipelineStatus === 'completed' || issue.pipelineStatus === 'done';
   const isDraggable = DRAGGABLE_STATUSES.includes(issue.pipelineStatus);
@@ -48,16 +61,14 @@ function DraggableListRow({
     disabled: !isDraggable,
   });
   const isSelected = selectedIssueNumber === issue.issueNumber;
-  const tone = rowToneFor(issue.pipelineStatus);
+  const tone = rowToneFor(issue.pipelineStatus, approvedAwaitingExecution);
   const isActive = ACTIVE_STATUSES.includes(issue.pipelineStatus);
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: dnd-kit's useDraggable provides keyboard accessibility via listeners/attributes spread below
-    // biome-ignore lint/a11y/useKeyWithClickEvents: dnd-kit KeyboardSensor handles activation; the onClick only forwards selection on pointer click
     <div
       ref={setNodeRef}
       className={cn(
-        'flex w-full items-center gap-3 rounded-md border-l-2 pl-3 pr-3 py-2 text-left text-sm transition-colors',
+        'group flex w-full items-center gap-3 rounded-md border-l-2 pl-3 pr-3 py-2 text-left text-sm transition-colors',
         tone === 'default' &&
           (isSelected
             ? 'border-transparent bg-accent/10 text-primary'
@@ -76,18 +87,17 @@ function DraggableListRow({
             : 'border-agent/60 bg-agent/[0.03] text-primary hover:bg-agent/[0.06]'),
         tone === 'danger' &&
           (isSelected
-            ? 'border-danger bg-danger/[0.08] text-primary'
-            : 'border-danger/60 bg-danger/[0.03] text-primary hover:bg-danger/[0.06]'),
+            ? 'border-danger bg-danger/[0.09] text-primary opacity-85'
+            : 'border-danger/55 bg-danger/[0.045] text-primary opacity-70 hover:bg-danger/[0.06] hover:opacity-80'),
         tone === 'warning' &&
           (isSelected
             ? 'border-warning bg-warning/[0.08] text-primary'
             : 'border-warning/60 bg-warning/[0.03] text-primary hover:bg-warning/[0.06]'),
         isDragging && 'opacity-40',
-        isDraggable ? 'cursor-grab' : 'cursor-pointer',
+        isDraggable ? 'cursor-grab' : 'cursor-default',
         activeId && activeId !== issue.id && 'pointer-events-none',
       )}
       {...(isDraggable ? { ...attributes, ...listeners } : {})}
-      onClick={!isDragging ? () => onIssueClick(issue) : undefined}
     >
       {isActive ? (
         <span className="relative flex h-2 w-2 shrink-0 items-center justify-center">
@@ -102,6 +112,7 @@ function DraggableListRow({
             tone === 'done' && 'bg-done',
             tone === 'danger' && 'bg-danger',
             tone === 'warning' && 'bg-warning',
+            tone === 'agent' && 'bg-agent',
             tone === 'default' && (issue.pipelineStatus === 'done' ? 'bg-done' : 'bg-text-muted'),
           )}
         />
@@ -132,12 +143,25 @@ function DraggableListRow({
       <span className="flex-1 truncate">{issue.title}</span>
       <span className="flex shrink-0 items-center gap-1">
         <IssueExternalBlockers issue={issue} />
-        {revisionLabel ? (
-          <Badge variant="default" className="px-1.5 py-px text-[10px] font-medium">
-            {revisionLabel}
+        {revisionBadge ? (
+          <Badge
+            variant="default"
+            className="px-1.5 py-px text-[10px] font-medium"
+            title={revisionBadge.title}
+          >
+            {revisionBadge.label}
           </Badge>
         ) : null}
-        {approvalBadge ? (
+        {approvedAwaitingExecution ? (
+          <>
+            <Badge variant="success" className="px-1.5 py-px text-[10px] font-medium">
+              Approved
+            </Badge>
+            <Badge className="border-agent/25 bg-agent/10 px-1.5 py-px text-[10px] font-medium text-agent">
+              Waiting for slot
+            </Badge>
+          </>
+        ) : approvalBadge ? (
           <Badge
             variant="warning"
             className="px-1.5 py-px text-[10px] font-medium"
@@ -152,21 +176,37 @@ function DraggableListRow({
         {issue.assignee ?? '—'}
       </span>
       <span className="shrink-0 text-xs text-muted">{formatDate(issue.fetchedAt)}</span>
-      {isDoneState && onArchiveIssue && (
+      <span className="flex shrink-0 items-center gap-1">
         <Button
           variant="ghost"
           size="icon-xs"
-          className="shrink-0 text-muted/50 opacity-0 transition-opacity hover:bg-muted/10 hover:text-muted group-hover:opacity-100"
-          title="Archive issue"
+          className="text-muted/70 hover:bg-muted/10 hover:text-primary"
+          title="Open issue detail"
+          aria-label="Open issue detail"
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation();
-            onArchiveIssue(issue);
+            onIssueClick(issue);
           }}
         >
-          <Archive size={12} />
+          <PanelLeftOpen size={12} />
         </Button>
-      )}
+        {isDoneState && onArchiveIssue && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="text-muted/50 opacity-0 transition-opacity hover:bg-muted/10 hover:text-muted group-hover:opacity-100"
+            title="Archive issue"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onArchiveIssue(issue);
+            }}
+          >
+            <Archive size={12} />
+          </Button>
+        )}
+      </span>
     </div>
   );
 }
@@ -175,59 +215,58 @@ interface ListSectionBlockProps {
   columnKey: ColumnKey;
   section: PhaseSection;
   issues: GitHubIssueCacheRecord[];
-  issueRevisionLabelById: Map<string, string | null>;
+  issueRevisionBadgeById: Map<string, IssueRevisionBadge | null>;
   issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
   selectedIssueNumber?: number;
   activeId: string | null;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
   onOpenPullRequest?: (url: string) => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
+  approvedAwaitingExecutionIssueIds?: ReadonlySet<string>;
 }
 
 function ListSectionBlock({
   columnKey,
   section,
   issues,
-  issueRevisionLabelById,
-  issueApprovalBadgeById,
+  issueRevisionBadgeById = EMPTY_REVISION_BADGE_MAP,
+  issueApprovalBadgeById = EMPTY_APPROVAL_BADGE_MAP,
   selectedIssueNumber,
   activeId,
   onIssueClick,
   onOpenPullRequest,
   onArchiveIssue,
+  approvedAwaitingExecutionIssueIds = EMPTY_APPROVED_AWAITING_EXECUTION,
 }: ListSectionBlockProps) {
   const count = issues.length;
   const empty = count === 0;
-  const tone: 'danger' | 'warning' | 'agent' | null =
-    section.key === 'failed' && !empty
-      ? 'danger'
-      : section.key === 'awaiting' && !empty
-        ? 'warning'
-        : columnKey === 'agent' && !empty
-          ? 'agent'
-          : null;
+  const tone = sectionToneFor(columnKey, section.key);
 
   return (
     <div>
       <div
         className={cn(
-          'flex items-center gap-1.5 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide',
-          empty && 'text-muted opacity-50',
-          !empty && !tone && 'text-secondary',
-          tone === 'agent' && 'text-agent',
-          tone === 'danger' && 'text-danger',
-          tone === 'warning' && 'text-warning',
+          'flex items-center gap-1.5 rounded-md border px-3 py-1 text-[10px] font-semibold uppercase tracking-wide',
+          tone === 'default' && 'border-border/60 bg-secondary/60 text-secondary',
+          tone === 'success' && 'border-success/20 bg-success/[0.08] text-success',
+          tone === 'done' && 'border-done/20 bg-done/[0.08] text-done',
+          tone === 'agent' && 'border-agent/20 bg-agent/[0.08] text-agent',
+          tone === 'danger' && 'border-danger/20 bg-danger/[0.08] text-danger',
+          tone === 'warning' && 'border-warning/20 bg-warning/[0.08] text-warning',
+          empty && 'opacity-60',
         )}
       >
         <span>{section.label}</span>
         <span
           className={cn(
-            'ml-1 min-w-[18px] rounded-full border border-transparent bg-tertiary px-1.5 py-px text-center text-[10px] font-medium',
-            empty && 'text-muted/70',
-            !empty && !tone && 'text-muted',
-            tone === 'agent' && 'border-agent/25 bg-agent/15 text-agent',
-            tone === 'danger' && 'border-danger/25 bg-danger/15 text-danger',
-            tone === 'warning' && 'border-warning/25 bg-warning/15 text-warning',
+            'ml-1 min-w-[18px] rounded-full border px-1.5 py-px text-center text-[10px] font-medium',
+            tone === 'default' && 'border-border/60 bg-tertiary text-muted',
+            tone === 'success' && 'border-success/20 bg-success/15 text-success',
+            tone === 'done' && 'border-done/20 bg-done/15 text-done',
+            tone === 'agent' && 'border-agent/20 bg-agent/15 text-agent',
+            tone === 'danger' && 'border-danger/20 bg-danger/15 text-danger',
+            tone === 'warning' && 'border-warning/20 bg-warning/15 text-warning',
+            empty && 'opacity-75',
           )}
         >
           {count}
@@ -239,8 +278,12 @@ function ListSectionBlock({
             <DraggableListRow
               key={issue.id}
               issue={issue}
-              revisionLabel={issueRevisionLabelById.get(issue.id) ?? null}
+              revisionBadge={issueRevisionBadgeById.get(issue.id) ?? null}
               approvalBadge={issueApprovalBadgeById.get(issue.id) ?? null}
+              approvedAwaitingExecution={isApprovedAwaitingExecutionIssue(
+                issue,
+                approvedAwaitingExecutionIssueIds,
+              )}
               selectedIssueNumber={selectedIssueNumber}
               activeId={activeId}
               onIssueClick={onIssueClick}
@@ -277,7 +320,7 @@ function DroppableListGroup({ dropId, children }: DroppableListGroupProps) {
 
 interface IssueListViewProps {
   issues: GitHubIssueCacheRecord[];
-  issueRevisionLabelById: Map<string, string | null>;
+  issueRevisionBadgeById: Map<string, IssueRevisionBadge | null>;
   issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
   selectedIssueNumber?: number;
   activeId: string | null;
@@ -285,11 +328,12 @@ interface IssueListViewProps {
   onOpenPullRequest?: (url: string) => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
   onArchiveAllDone?: () => void;
+  approvedAwaitingExecutionIssueIds?: ReadonlySet<string>;
 }
 
 export function IssueListView({
   issues,
-  issueRevisionLabelById,
+  issueRevisionBadgeById,
   issueApprovalBadgeById,
   selectedIssueNumber,
   activeId,
@@ -297,6 +341,7 @@ export function IssueListView({
   onOpenPullRequest,
   onArchiveIssue,
   onArchiveAllDone,
+  approvedAwaitingExecutionIssueIds = EMPTY_APPROVED_AWAITING_EXECUTION,
 }: IssueListViewProps) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
@@ -309,7 +354,7 @@ export function IssueListView({
       {COLUMNS.map((column) => {
         const label = LIST_COLUMN_LABEL[column.key];
         const columnIssues = issues.filter((issue) =>
-          column.statuses.includes(issue.pipelineStatus),
+          issueMatchesColumn(issue, column, approvedAwaitingExecutionIssueIds),
         );
         const isCollapsed = collapsed[column.key] ?? false;
         const dropId = LIST_COLUMN_DROP_ID[column.key];
@@ -354,10 +399,11 @@ export function IssueListView({
                         columnKey={column.key}
                         section={section}
                         issues={columnIssues.filter((issue) =>
-                          section.statuses.includes(issue.pipelineStatus),
+                          issueMatchesSection(issue, section, approvedAwaitingExecutionIssueIds),
                         )}
-                        issueRevisionLabelById={issueRevisionLabelById}
+                        issueRevisionBadgeById={issueRevisionBadgeById}
                         issueApprovalBadgeById={issueApprovalBadgeById}
+                        approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
                         selectedIssueNumber={selectedIssueNumber}
                         activeId={activeId}
                         onIssueClick={onIssueClick}
@@ -372,8 +418,12 @@ export function IssueListView({
                       <DraggableListRow
                         key={issue.id}
                         issue={issue}
-                        revisionLabel={issueRevisionLabelById.get(issue.id) ?? null}
+                        revisionBadge={issueRevisionBadgeById.get(issue.id) ?? null}
                         approvalBadge={issueApprovalBadgeById.get(issue.id) ?? null}
+                        approvedAwaitingExecution={isApprovedAwaitingExecutionIssue(
+                          issue,
+                          approvedAwaitingExecutionIssueIds,
+                        )}
                         selectedIssueNumber={selectedIssueNumber}
                         activeId={activeId}
                         onIssueClick={onIssueClick}

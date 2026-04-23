@@ -1,8 +1,9 @@
 'use client';
 
 import { useDroppable } from '@dnd-kit/core';
-import type { GitHubIssueCacheRecord } from '@shipcode/shared';
-import { Archive } from 'lucide-react';
+import { Archive, ChevronDown, ChevronRight } from 'lucide-react';
+import { useState } from 'react';
+import type { GitHubIssueCacheRecord } from '../lib/shipcode';
 import { cn } from '../lib/utils';
 import { Button } from '../primitives/button';
 import { COLUMN_DOT_CLASS } from './constants';
@@ -12,8 +13,39 @@ import type {
   ColumnKey,
   IssueApprovalBadge,
   IssuePhaseChip,
+  IssueRevisionBadge,
   PhaseSection,
+  RowTone,
 } from './types';
+import {
+  isApprovedAwaitingExecutionIssue,
+  issueMatchesColumn,
+  issueMatchesSection,
+  sectionToneFor,
+} from './utils';
+
+const SECTION_HEADER_CLASS: Record<RowTone, string> = {
+  default: 'border-border/60 bg-secondary/95 text-secondary',
+  success: 'border-success/20 bg-success/[0.08] text-success',
+  done: 'border-done/20 bg-done/[0.08] text-done',
+  agent: 'border-agent/20 bg-agent/[0.08] text-agent',
+  danger: 'border-danger/20 bg-danger/[0.08] text-danger',
+  warning: 'border-warning/20 bg-warning/[0.08] text-warning',
+};
+
+const SECTION_COUNT_CLASS: Record<RowTone, string> = {
+  default: 'border-border/60 bg-tertiary text-muted',
+  success: 'border-success/20 bg-success/15 text-success',
+  done: 'border-done/20 bg-done/15 text-done',
+  agent: 'border-agent/20 bg-agent/15 text-agent',
+  danger: 'border-danger/20 bg-danger/15 text-danger',
+  warning: 'border-warning/20 bg-warning/15 text-warning',
+};
+
+const EMPTY_PHASE_CHIP_MAP = new Map<string, IssuePhaseChip | null>();
+const EMPTY_REVISION_BADGE_MAP = new Map<string, IssueRevisionBadge | null>();
+const EMPTY_APPROVAL_BADGE_MAP = new Map<string, IssueApprovalBadge | null>();
+const EMPTY_APPROVED_AWAITING_EXECUTION = new Set<string>();
 
 interface DroppableColumnProps {
   id: string;
@@ -29,8 +61,9 @@ interface DroppableColumnProps {
   onArchiveAllDone?: () => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
   issuePhaseChipById: Map<string, IssuePhaseChip | null>;
-  issueRevisionLabelById: Map<string, string | null>;
+  issueRevisionBadgeById: Map<string, IssueRevisionBadge | null>;
   issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
+  approvedAwaitingExecutionIssueIds?: ReadonlySet<string>;
 }
 
 export function DroppableColumn({
@@ -46,9 +79,10 @@ export function DroppableColumn({
   selectedIssueNumber,
   onArchiveAllDone,
   onArchiveIssue,
-  issuePhaseChipById,
-  issueRevisionLabelById,
-  issueApprovalBadgeById,
+  issuePhaseChipById = EMPTY_PHASE_CHIP_MAP,
+  issueRevisionBadgeById = EMPTY_REVISION_BADGE_MAP,
+  issueApprovalBadgeById = EMPTY_APPROVAL_BADGE_MAP,
+  approvedAwaitingExecutionIssueIds = EMPTY_APPROVED_AWAITING_EXECUTION,
 }: DroppableColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id, disabled: !droppable || readOnly });
   const hasIssues = issues.length > 0;
@@ -96,8 +130,12 @@ export function DroppableColumn({
             key={issue.id}
             issue={issue}
             phaseChip={issuePhaseChipById.get(issue.id) ?? null}
-            revisionLabel={issueRevisionLabelById.get(issue.id) ?? null}
+            revisionBadge={issueRevisionBadgeById.get(issue.id) ?? null}
             approvalBadge={issueApprovalBadgeById.get(issue.id) ?? null}
+            approvedAwaitingExecution={isApprovedAwaitingExecutionIssue(
+              issue,
+              approvedAwaitingExecutionIssueIds,
+            )}
             onClick={() => onIssueClick(issue)}
             onStartPipeline={onStartPipeline}
             onOpenPullRequest={onOpenPullRequest}
@@ -115,6 +153,8 @@ interface SectionBlockProps {
   columnKey: ColumnKey;
   section: PhaseSection;
   issues: GitHubIssueCacheRecord[];
+  collapsed: boolean;
+  onToggle: () => void;
   readOnly?: boolean;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
@@ -124,14 +164,17 @@ interface SectionBlockProps {
   selectedIssueNumber?: number;
   rerunningId?: string | null;
   issuePhaseChipById: Map<string, IssuePhaseChip | null>;
-  issueRevisionLabelById: Map<string, string | null>;
+  issueRevisionBadgeById: Map<string, IssueRevisionBadge | null>;
   issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
+  approvedAwaitingExecutionIssueIds?: ReadonlySet<string>;
 }
 
 function SectionBlock({
   columnKey,
   section,
   issues,
+  collapsed,
+  onToggle,
   readOnly = false,
   onIssueClick,
   onRerun,
@@ -140,9 +183,10 @@ function SectionBlock({
   onArchiveIssue,
   selectedIssueNumber,
   rerunningId,
-  issuePhaseChipById,
-  issueRevisionLabelById,
-  issueApprovalBadgeById,
+  issuePhaseChipById = EMPTY_PHASE_CHIP_MAP,
+  issueRevisionBadgeById = EMPTY_REVISION_BADGE_MAP,
+  issueApprovalBadgeById = EMPTY_APPROVAL_BADGE_MAP,
+  approvedAwaitingExecutionIssueIds = EMPTY_APPROVED_AWAITING_EXECUTION,
 }: SectionBlockProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: `${columnKey}:${section.key}`,
@@ -150,44 +194,44 @@ function SectionBlock({
   });
   const count = issues.length;
   const empty = count === 0;
-  const tone: 'danger' | 'warning' | 'agent' | null =
-    section.key === 'failed' && !empty
-      ? 'danger'
-      : section.key === 'awaiting' && !empty
-        ? 'warning'
-        : columnKey === 'agent' && !empty
-          ? 'agent'
-          : null;
+  const tone = sectionToneFor(columnKey, section.key);
 
   return (
-    <div className="border-t border-border first:border-t-0">
-      <div
+    <div
+      ref={section.droppable ? setNodeRef : undefined}
+      className={cn(
+        'relative border-t border-border first:border-t-0',
+        section.droppable && isOver && 'bg-tertiary/40',
+      )}
+    >
+      <button
+        type="button"
+        aria-expanded={!collapsed}
         className={cn(
-          'flex items-center justify-between px-2 py-1 text-[10px] font-semibold uppercase tracking-wide',
-          empty && 'text-muted opacity-50',
-          !empty && !tone && 'text-secondary',
-          tone === 'agent' && 'text-agent',
-          tone === 'danger' && 'text-danger',
-          tone === 'warning' && 'text-warning',
+          'sticky top-0 z-10 flex w-full items-center justify-between gap-2 border-b border-transparent px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide backdrop-blur supports-[backdrop-filter]:bg-secondary/85',
+          'transition-colors',
+          SECTION_HEADER_CLASS[tone],
+          empty && 'opacity-60',
+          section.droppable && isOver && 'border-accent/50 bg-tertiary/95',
         )}
+        onClick={onToggle}
       >
-        <span>{section.label}</span>
+        <span className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
+          {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+          <span className="min-w-0 truncate">{section.label}</span>
+        </span>
         <span
           className={cn(
-            'min-w-[18px] rounded-full border border-transparent bg-tertiary px-1.5 py-px text-center text-[10px] font-medium',
-            empty && 'text-muted/70',
-            !empty && !tone && 'text-muted',
-            tone === 'agent' && 'border-agent/25 bg-agent/15 text-agent',
-            tone === 'danger' && 'border-danger/25 bg-danger/15 text-danger',
-            tone === 'warning' && 'border-warning/25 bg-warning/15 text-warning',
+            'min-w-[18px] rounded-full border px-1.5 py-px text-center text-[10px] font-medium',
+            SECTION_COUNT_CLASS[tone],
+            empty && 'opacity-75',
           )}
         >
           {count}
         </span>
-      </div>
-      {!empty && (
+      </button>
+      {!empty && !collapsed && (
         <div
-          ref={section.droppable ? setNodeRef : undefined}
           className={cn(
             'flex flex-col gap-1 p-1.5 pt-0',
             section.droppable &&
@@ -200,8 +244,12 @@ function SectionBlock({
               key={issue.id}
               issue={issue}
               phaseChip={issuePhaseChipById.get(issue.id) ?? null}
-              revisionLabel={issueRevisionLabelById.get(issue.id) ?? null}
+              revisionBadge={issueRevisionBadgeById.get(issue.id) ?? null}
               approvalBadge={issueApprovalBadgeById.get(issue.id) ?? null}
+              approvedAwaitingExecution={isApprovedAwaitingExecutionIssue(
+                issue,
+                approvedAwaitingExecutionIssueIds,
+              )}
               onClick={() => onIssueClick(issue)}
               onRerun={onRerun}
               onCancel={onCancel}
@@ -214,9 +262,8 @@ function SectionBlock({
           ))}
         </div>
       )}
-      {empty && section.droppable && !readOnly && (
+      {empty && section.droppable && !readOnly && !collapsed && (
         <div
-          ref={setNodeRef}
           className={cn(
             'mx-1.5 mb-1.5 min-h-[36px] rounded border border-dashed',
             isOver ? 'border-accent bg-tertiary' : 'border-border/50',
@@ -240,8 +287,9 @@ interface StackedColumnProps {
   selectedIssueNumber?: number;
   rerunningId?: string | null;
   issuePhaseChipById: Map<string, IssuePhaseChip | null>;
-  issueRevisionLabelById: Map<string, string | null>;
+  issueRevisionBadgeById: Map<string, IssueRevisionBadge | null>;
   issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
+  approvedAwaitingExecutionIssueIds?: ReadonlySet<string>;
 }
 
 export function StackedColumn({
@@ -256,12 +304,20 @@ export function StackedColumn({
   onArchiveIssue,
   selectedIssueNumber,
   rerunningId,
-  issuePhaseChipById,
-  issueRevisionLabelById,
-  issueApprovalBadgeById,
+  issuePhaseChipById = EMPTY_PHASE_CHIP_MAP,
+  issueRevisionBadgeById = EMPTY_REVISION_BADGE_MAP,
+  issueApprovalBadgeById = EMPTY_APPROVAL_BADGE_MAP,
+  approvedAwaitingExecutionIssueIds = EMPTY_APPROVED_AWAITING_EXECUTION,
 }: StackedColumnProps) {
-  const columnIssues = issues.filter((issue) => column.statuses.includes(issue.pipelineStatus));
+  const columnIssues = issues.filter((issue) =>
+    issueMatchesColumn(issue, column, approvedAwaitingExecutionIssueIds),
+  );
   const hasIssues = columnIssues.length > 0;
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+
+  const toggleSection = (key: string) => {
+    setCollapsedSections((current) => ({ ...current, [key]: !current[key] }));
+  };
 
   return (
     <div className="flex min-h-0 min-w-[180px] max-w-[280px] flex-[1.3] flex-col overflow-hidden rounded-md border border-border/40 bg-secondary">
@@ -300,7 +356,11 @@ export function StackedColumn({
             key={section.key}
             columnKey={column.key}
             section={section}
-            issues={columnIssues.filter((issue) => section.statuses.includes(issue.pipelineStatus))}
+            issues={columnIssues.filter((issue) =>
+              issueMatchesSection(issue, section, approvedAwaitingExecutionIssueIds),
+            )}
+            collapsed={collapsedSections[section.key] ?? false}
+            onToggle={() => toggleSection(section.key)}
             readOnly={readOnly}
             onIssueClick={onIssueClick}
             onRerun={onRerun}
@@ -310,8 +370,9 @@ export function StackedColumn({
             selectedIssueNumber={selectedIssueNumber}
             rerunningId={rerunningId}
             issuePhaseChipById={issuePhaseChipById}
-            issueRevisionLabelById={issueRevisionLabelById}
+            issueRevisionBadgeById={issueRevisionBadgeById}
             issueApprovalBadgeById={issueApprovalBadgeById}
+            approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
           />
         ))}
       </div>
