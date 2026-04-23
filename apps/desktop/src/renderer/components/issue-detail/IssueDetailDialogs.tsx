@@ -1,5 +1,13 @@
 import type { PlanRecord, ReviewRecord } from '@shipcode/shared';
-import { Button, Modal, ModalFooter, PlanViewer, ReviewViewer, X } from '@shipcode/ui';
+import {
+  Button,
+  LoadingButtonContent,
+  Modal,
+  ModalFooter,
+  PlanViewer,
+  ReviewViewer,
+  X,
+} from '@shipshitdev/ui';
 import { diagnosePlanParseFailure, resolveClientSidePlan } from './helpers';
 
 interface IssueDetailDialogsProps {
@@ -108,7 +116,7 @@ export function IssueDetailDialogs({
         {canApprove && fullScreenIsLatest && (
           <ModalFooter className="shrink-0 border-t border-border px-6 py-4">
             <Button onClick={handleApproveAndClose} disabled={isSubmitting}>
-              {isSubmitting ? 'Approving...' : 'Approve & Execute'}
+              <LoadingButtonContent loading={isSubmitting}>Approve & Execute</LoadingButtonContent>
             </Button>
           </ModalFooter>
         )}
@@ -155,7 +163,7 @@ export function IssueDetailDialogs({
             disabled={isSubmitting}
             className="bg-purple-600 text-white hover:bg-purple-700"
           >
-            {isSubmitting ? 'Marking...' : 'Mark As Done'}
+            <LoadingButtonContent loading={isSubmitting}>Mark As Done</LoadingButtonContent>
           </Button>
         </ModalFooter>
       </Modal>

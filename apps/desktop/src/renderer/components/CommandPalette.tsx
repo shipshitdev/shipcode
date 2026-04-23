@@ -1,4 +1,4 @@
-import type { GitHubIssueCacheRecord, Project } from '@shipcode/shared';
+import type { GitHubIssueCacheRecord, PlanRecord, Project } from '@shipcode/shared';
 import {
   CommandDialog,
   CommandEmpty,
@@ -7,7 +7,7 @@ import {
   CommandItem,
   CommandList,
   CommandShortcut,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { getShortcut } from '../data/shortcuts';
@@ -16,30 +16,28 @@ import { useAppStore } from '../stores/app-store';
 
 export function CommandPalette() {
   const queryClient = useQueryClient();
-  const {
-    commandPaletteOpen,
-    toggleCommandPalette,
-    openCreateIssueModal,
-    activeProjectId,
-    activeThreadId,
-    pipelinePhase,
-    toggleTerminal,
-    toggleSettings,
-    toggleSidebar,
-    toggleIssueDetail,
-    activeIssue,
-    openOverview,
-    openActivity,
-    openInbox,
-    openCosts,
-    openSkills,
-    openTerminalSessions,
-    setProjectTab,
-    selectProject,
-    openProjectSettingsModal,
-    openInstantFixModal,
-    navigateToIssue,
-  } = useAppStore();
+  const commandPaletteOpen = useAppStore((state) => state.commandPaletteOpen);
+  const toggleCommandPalette = useAppStore((state) => state.toggleCommandPalette);
+  const openCreateIssueModal = useAppStore((state) => state.openCreateIssueModal);
+  const activeProjectId = useAppStore((state) => state.activeProjectId);
+  const activeThreadId = useAppStore((state) => state.activeThreadId);
+  const pipelinePhase = useAppStore((state) => state.pipelinePhase);
+  const toggleTerminal = useAppStore((state) => state.toggleTerminal);
+  const toggleSettings = useAppStore((state) => state.toggleSettings);
+  const toggleSidebar = useAppStore((state) => state.toggleSidebar);
+  const toggleIssueDetail = useAppStore((state) => state.toggleIssueDetail);
+  const activeIssue = useAppStore((state) => state.activeIssue);
+  const openOverview = useAppStore((state) => state.openOverview);
+  const openActivity = useAppStore((state) => state.openActivity);
+  const openInbox = useAppStore((state) => state.openInbox);
+  const openCosts = useAppStore((state) => state.openCosts);
+  const openSkills = useAppStore((state) => state.openSkills);
+  const openTerminalSessions = useAppStore((state) => state.openTerminalSessions);
+  const setProjectTab = useAppStore((state) => state.setProjectTab);
+  const selectProject = useAppStore((state) => state.selectProject);
+  const openProjectSettingsModal = useAppStore((state) => state.openProjectSettingsModal);
+  const openInstantFixModal = useAppStore((state) => state.openInstantFixModal);
+  const navigateToIssue = useAppStore((state) => state.navigateToIssue);
 
   // Cross-project issue search — only fetches when palette is open
   const { data: allProjects = [] } = useQuery<Project[]>({
@@ -60,6 +58,15 @@ export function CommandPalette() {
       enabled: commandPaletteOpen,
     })),
   });
+  const { data: activeThreadPlans = [] } = useQuery<PlanRecord[]>({
+    queryKey: ['command-palette-plan-history', activeThreadId],
+    queryFn: () => window.shipcode.invoke('plan:list', { threadId: activeThreadId }),
+    staleTime: STABLE_APP_STATE_STALE_TIME,
+    enabled: commandPaletteOpen && !!activeThreadId && pipelinePhase === 'awaiting_approval',
+  });
+  const latestPlanStatus = activeThreadPlans[0]?.status ?? null;
+  const approvedAwaitingExecution =
+    pipelinePhase === 'awaiting_approval' && latestPlanStatus === 'approved';
 
   const allIssues = useMemo(() => {
     const result: Array<{ issue: GitHubIssueCacheRecord; project: Project }> = [];
@@ -157,7 +164,7 @@ export function CommandPalette() {
                 <span className="flex-1">Start Pipeline</span>
               </CommandItem>
             )}
-            {pipelinePhase === 'awaiting_approval' && (
+            {pipelinePhase === 'awaiting_approval' && !approvedAwaitingExecution && (
               <>
                 <CommandItem
                   onSelect={() =>
@@ -181,6 +188,11 @@ export function CommandPalette() {
                   <span className="flex-1">Reject Plan</span>
                 </CommandItem>
               </>
+            )}
+            {approvedAwaitingExecution && (
+              <CommandItem disabled>
+                <span className="flex-1">Waiting for execution slot</span>
+              </CommandItem>
             )}
             <CommandItem
               onSelect={() =>

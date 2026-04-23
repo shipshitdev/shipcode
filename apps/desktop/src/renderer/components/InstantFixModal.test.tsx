@@ -70,6 +70,9 @@ describe('InstantFixModal', () => {
     await waitFor(() => expect(startButton).not.toBeDisabled());
 
     const textarea = screen.getByPlaceholderText(/optional initial prompt for the live shell/i);
+    const scrollRegion = document.body.querySelector('[data-instant-fix-scroll-region]');
+    expect(scrollRegion).toContainElement(textarea);
+
     fireEvent.change(textarea, { target: { value: 'Inspect the failing tests' } });
     fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
 
@@ -78,7 +81,7 @@ describe('InstantFixModal', () => {
         projectId: 'project-1',
         cli: 'claude',
         modelId: null,
-        reasoningEffort: 'high',
+        reasoningEffort: DEFAULT_SETTINGS.executorReasoningEffort,
         initialPrompt: 'Inspect the failing tests',
         attachmentSessionId: undefined,
       });

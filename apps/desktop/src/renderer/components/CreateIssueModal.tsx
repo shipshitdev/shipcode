@@ -16,6 +16,7 @@ import {
   ImageIcon,
   Keycap,
   Label,
+  LoadingButtonContent,
   Modal,
   ModalFooter,
   Select,
@@ -25,7 +26,7 @@ import {
   SelectValue,
   Textarea,
   Trash2,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -66,14 +67,12 @@ function formatBytes(bytes: number): string {
 
 export function CreateIssueModal() {
   const queryClient = useQueryClient();
-  const {
-    createIssueModalOpen,
-    closeCreateIssueModal,
-    activeProjectId,
-    editingPrd,
-    selectIssue,
-    selectProject,
-  } = useAppStore();
+  const createIssueModalOpen = useAppStore((state) => state.createIssueModalOpen);
+  const closeCreateIssueModal = useAppStore((state) => state.closeCreateIssueModal);
+  const activeProjectId = useAppStore((state) => state.activeProjectId);
+  const editingPrd = useAppStore((state) => state.editingPrd);
+  const selectIssue = useAppStore((state) => state.selectIssue);
+  const selectProject = useAppStore((state) => state.selectProject);
   const [body, setBody] = useState('');
   const [estimatedComplexity, setEstimatedComplexity] = useState<PrdEstimatedComplexity>('medium');
   const [blastRadius, setBlastRadius] = useState<PrdBlastRadius>('contained');
@@ -377,13 +376,7 @@ export function CreateIssueModal() {
       ? !editBodyValid || submitting || enhancing
       : noProject || titleMissing || bodyIsEmpty || submitting || enhancing;
 
-  const submitLabel = submitting
-    ? mode === 'edit'
-      ? 'Saving...'
-      : 'Creating & planning...'
-    : mode === 'edit'
-      ? 'Save'
-      : 'Create Plan';
+  const submitLabel = mode === 'edit' ? 'Save' : 'Create Plan';
 
   const hasAttachments = attachments.length > 0;
 
@@ -392,166 +385,176 @@ export function CreateIssueModal() {
       open={createIssueModalOpen}
       onClose={handleClose}
       title={mode === 'edit' ? 'Edit PRD' : 'New Issue'}
-      className="max-w-[720px]"
+      className="max-w-[720px] max-h-[88vh] flex flex-col overflow-hidden p-0"
+      headerClassName="shrink-0 border-b border-border px-6 py-4"
       onKeyDown={handleKeyDown}
     >
-      <section
-        aria-label="Issue content"
-        className={cn(
-          'flex flex-col gap-3 transition-colors',
-          dragActive && 'rounded-lg ring-2 ring-accent/50 bg-accent/5',
-        )}
-        onDragOver={mode === 'create' ? handleDragOver : undefined}
-        onDragLeave={mode === 'create' ? handleDragLeave : undefined}
-        onDrop={mode === 'create' ? handleDrop : undefined}
+      <div
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-4"
+        data-create-issue-scroll-region
       >
-        {/* Notifications — above textarea */}
-        {mode === 'edit' && !editBodyValid && body.length > 0 && (
-          <div className="flex items-center gap-2 rounded-md border border-warning/30 bg-warning/10 px-2.5 py-2 text-xs text-warning">
-            <span className="min-w-0 flex-1">
-              Missing required sections: {missingSections.join(', ')}
-            </span>
-            <Button
-              variant="ghost"
-              size="xs"
-              className="shrink-0 text-warning hover:text-warning hover:bg-warning/20"
-              onClick={handleEnhance}
-              disabled={enhancing || submitting || bodyIsEmpty || hasAttachments}
-            >
-              {enhancing ? 'Formatting…' : 'Format'}
-            </Button>
-          </div>
-        )}
-
-        {clampedError && (
-          <div className="flex items-center gap-2 rounded-md border border-danger/30 bg-danger/10 px-2.5 py-2 text-xs text-danger">
-            <span className="min-w-0 flex-1">
-              <span className="line-clamp-1">{clampedError}</span>
-              <span className="ml-2 text-muted">(full trace in devtools console)</span>
-            </span>
-            <Button
-              variant="ghost"
-              size="xs"
-              className="shrink-0 text-danger hover:text-danger hover:bg-danger/20"
-              onClick={handleEnhance}
-              disabled={enhancing || submitting || bodyIsEmpty || hasAttachments}
-            >
-              Retry
-            </Button>
-          </div>
-        )}
-
-        {attachmentErrors.length > 0 && (
-          <div className="rounded-md border border-warning/30 bg-warning/10 px-2.5 py-2 text-xs text-warning">
-            {attachmentErrors.map((e) => (
-              <div key={e}>{e}</div>
-            ))}
-          </div>
-        )}
-
-        <Textarea
-          ref={bodyRef}
-          id="issue-body"
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          placeholder={mode === 'create' ? 'Describe what you want to build…' : 'PRD markdown...'}
-          rows={mode === 'create' ? 5 : 14}
-          className={
-            mode === 'edit' && editBodyValid
-              ? 'font-mono text-xs'
-              : mode === 'edit'
-                ? 'font-mono text-xs'
-                : 'text-[13px]'
-          }
-          disabled={enhancing}
-        />
-
-        {/* Project + Format row — below textarea in create mode */}
-        {mode === 'create' && projects.length > 0 && (
-          <div className="flex items-end gap-2">
-            <div className="flex flex-col gap-1 w-48">
-              <Label htmlFor="issue-project" className="text-xs text-secondary">
-                Project
-              </Label>
-              <Select
-                value={effectiveProjectId ?? ''}
-                onValueChange={(value) => setSelectedProjectId(value)}
+        <section
+          aria-label="Issue content"
+          className={cn(
+            'flex flex-col gap-4 transition-colors',
+            dragActive && 'rounded-xl ring-2 ring-accent/50 bg-accent/5',
+          )}
+          onDragOver={mode === 'create' ? handleDragOver : undefined}
+          onDragLeave={mode === 'create' ? handleDragLeave : undefined}
+          onDrop={mode === 'create' ? handleDrop : undefined}
+        >
+          {/* Notifications — above textarea */}
+          {mode === 'edit' && !editBodyValid && body.length > 0 && (
+            <div className="flex items-center gap-2 rounded-md border border-warning/30 bg-warning/10 px-2.5 py-2 text-xs text-warning">
+              <span className="min-w-0 flex-1">
+                Missing required sections: {missingSections.join(', ')}
+              </span>
+              <Button
+                variant="ghost"
+                size="xs"
+                className="shrink-0 text-warning hover:text-warning hover:bg-warning/20"
+                onClick={handleEnhance}
+                disabled={enhancing || submitting || bodyIsEmpty || hasAttachments}
               >
-                <SelectTrigger id="issue-project" className="bg-transparent">
-                  <SelectValue placeholder="Select a project..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {projects.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                <LoadingButtonContent loading={enhancing} className="gap-1" spinnerSize={10}>
+                  Format
+                </LoadingButtonContent>
+              </Button>
             </div>
+          )}
+
+          {clampedError && (
+            <div className="flex items-center gap-2 rounded-md border border-danger/30 bg-danger/10 px-2.5 py-2 text-xs text-danger">
+              <span className="min-w-0 flex-1">
+                <span className="line-clamp-1">{clampedError}</span>
+                <span className="ml-2 text-muted">(full trace in devtools console)</span>
+              </span>
+              <Button
+                variant="ghost"
+                size="xs"
+                className="shrink-0 text-danger hover:text-danger hover:bg-danger/20"
+                onClick={handleEnhance}
+                disabled={enhancing || submitting || bodyIsEmpty || hasAttachments}
+              >
+                <LoadingButtonContent loading={enhancing} className="gap-1" spinnerSize={10}>
+                  Retry
+                </LoadingButtonContent>
+              </Button>
+            </div>
+          )}
+
+          {attachmentErrors.length > 0 && (
+            <div className="rounded-md border border-warning/30 bg-warning/10 px-2.5 py-2 text-xs text-warning">
+              {attachmentErrors.map((e) => (
+                <div key={e}>{e}</div>
+              ))}
+            </div>
+          )}
+
+          <Textarea
+            ref={bodyRef}
+            id="issue-body"
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            placeholder={mode === 'create' ? 'Describe what you want to build…' : 'PRD markdown...'}
+            rows={mode === 'create' ? 5 : 14}
+            className={
+              mode === 'edit' && editBodyValid
+                ? 'font-mono text-xs'
+                : mode === 'edit'
+                  ? 'font-mono text-xs'
+                  : 'text-[13px]'
+            }
+            disabled={enhancing}
+          />
+
+          {/* Project + Format row — below textarea in create mode */}
+          {mode === 'create' && projects.length > 0 && (
+            <div className="flex items-end gap-2">
+              <div className="flex w-48 flex-col gap-1">
+                <Label htmlFor="issue-project" className="text-xs text-secondary">
+                  Project
+                </Label>
+                <Select
+                  value={effectiveProjectId ?? ''}
+                  onValueChange={(value) => setSelectedProjectId(value)}
+                >
+                  <SelectTrigger id="issue-project" className="bg-transparent">
+                    <SelectValue placeholder="Select a project..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                variant="secondary"
+                onClick={handleEnhance}
+                disabled={enhancing || submitting || bodyIsEmpty || hasAttachments}
+                title={
+                  hasAttachments
+                    ? 'Remove attachments before using Format (not yet supported with images)'
+                    : "Let AI structure your idea into a full PRD using this repo's writing-prds skill"
+                }
+              >
+                <LoadingButtonContent loading={enhancing}>Format</LoadingButtonContent>
+              </Button>
+            </div>
+          )}
+
+          {/* Format button for edit mode — no project selector needed */}
+          {mode === 'edit' && (
             <Button
               variant="secondary"
               onClick={handleEnhance}
               disabled={enhancing || submitting || bodyIsEmpty || hasAttachments}
+              className="self-start"
               title={
                 hasAttachments
                   ? 'Remove attachments before using Format (not yet supported with images)'
                   : "Let AI structure your idea into a full PRD using this repo's writing-prds skill"
               }
             >
-              {enhancing ? 'Formatting…' : 'Format'}
+              <LoadingButtonContent loading={enhancing}>Format</LoadingButtonContent>
             </Button>
-          </div>
-        )}
+          )}
 
-        {/* Format button for edit mode — no project selector needed */}
-        {mode === 'edit' && (
-          <Button
-            variant="secondary"
-            onClick={handleEnhance}
-            disabled={enhancing || submitting || bodyIsEmpty || hasAttachments}
-            className="self-start"
-            title={
-              hasAttachments
-                ? 'Remove attachments before using Format (not yet supported with images)'
-                : "Let AI structure your idea into a full PRD using this repo's writing-prds skill"
-            }
-          >
-            {enhancing ? 'Formatting…' : 'Format'}
-          </Button>
-        )}
-
-        {/* Staged attachments list */}
-        {hasAttachments && (
-          <div className="flex flex-col gap-1">
-            {attachments.map((a) => (
-              <div
-                key={a.originalPath}
-                className="flex items-center gap-2 rounded-md border border-border bg-tertiary/30 px-2.5 py-1.5 text-xs"
-              >
-                <ImageIcon className="h-3.5 w-3.5 shrink-0 text-muted" />
-                <span className="min-w-0 flex-1 truncate text-secondary" title={a.fileName}>
-                  {a.fileName}
-                </span>
-                <span className="shrink-0 text-muted">{formatBytes(a.sizeBytes)}</span>
-                <button
-                  type="button"
-                  aria-label={`Remove ${a.fileName}`}
-                  className="shrink-0 rounded p-0.5 text-muted transition-colors hover:text-danger"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void handleRemoveAttachment(a);
-                  }}
+          {/* Staged attachments list */}
+          {hasAttachments && (
+            <div className="flex flex-col gap-1">
+              {attachments.map((a) => (
+                <div
+                  key={a.originalPath}
+                  className="flex items-center gap-2 rounded-md border border-border bg-tertiary/30 px-2.5 py-1.5 text-xs"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+                  <ImageIcon className="h-3.5 w-3.5 shrink-0 text-muted" />
+                  <span className="min-w-0 flex-1 truncate text-secondary" title={a.fileName}>
+                    {a.fileName}
+                  </span>
+                  <span className="shrink-0 text-muted">{formatBytes(a.sizeBytes)}</span>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${a.fileName}`}
+                    className="shrink-0 rounded p-0.5 text-muted transition-colors hover:text-danger"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handleRemoveAttachment(a);
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
 
-      <ModalFooter className="items-center border-t border-border -mx-6 px-6 pt-4">
+      <ModalFooter className="shrink-0 items-center border-t border-border px-6 py-4 mt-0">
         {mode === 'create' && (
           <Label
             htmlFor="submit-another"
@@ -574,8 +577,10 @@ export function CreateIssueModal() {
           disabled={submitDisabled}
           aria-label={mode === 'edit' ? 'Save PRD' : undefined}
         >
-          <span>{submitLabel}</span>
-          <Keycap>⌘↩</Keycap>
+          <LoadingButtonContent loading={submitting}>
+            <span>{submitLabel}</span>
+            <Keycap>⌘↩</Keycap>
+          </LoadingButtonContent>
         </Button>
       </ModalFooter>
     </Modal>

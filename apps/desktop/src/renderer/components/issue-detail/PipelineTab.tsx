@@ -7,12 +7,17 @@ import type {
   ReasoningEffort,
   Thread,
 } from '@shipcode/shared';
-import { getSupportedReasoningEfforts, resolveProviderReasoningEffort } from '@shipcode/shared';
+import {
+  formatReasoningEffortLabel,
+  getSupportedReasoningEfforts,
+  resolveProviderReasoningEffort,
+} from '@shipcode/shared';
 import {
   Badge,
   Button,
   ExternalLink,
   Input,
+  LoadingButtonContent,
   MODEL_DISPLAY,
   Select,
   SelectContent,
@@ -23,7 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
   SideBySideDiffViewer,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
 import {
   formatProviderSelectionLabel,
   getModelOptions,
@@ -245,42 +250,40 @@ export function PipelineTab({
                     );
                     const effortSelectValue = phaseEffortSelectValues[phase];
                     const isInherited = effortSelectValue === '__inherit__';
+                    const displayedEffortValue = isInherited
+                      ? '__inherit__'
+                      : effortResolution.effective;
                     return (
                       <div className="flex flex-col gap-1">
                         <span className="text-[10px] uppercase tracking-wide text-muted">
                           {provider === 'claude' ? 'Thinking budget' : 'Effort'}
                         </span>
                         <Select
-                          value={effortSelectValue}
+                          value={displayedEffortValue}
                           onValueChange={(next) => onPhaseEffortChange(phase, next)}
                         >
                           <SelectTrigger className="h-6 w-full text-[11px]">
                             <SelectValue>
                               {isInherited ? (
                                 <InheritValueDisplay
-                                  detail={`inherit (${inheritedPhaseReasoningEfforts[phase]})`}
+                                  detail={`inherit (${formatReasoningEffortLabel(inheritedPhaseReasoningEfforts[phase])})`}
                                 />
                               ) : undefined}
                             </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="__inherit__">
-                              Inherit ({inheritedPhaseReasoningEfforts[phase]})
+                              {`Inherit (${formatReasoningEffortLabel(inheritedPhaseReasoningEfforts[phase])})`}
                             </SelectItem>
                             <SelectSeparator />
-                            {!isInherited && !effortResolution.exact ? (
-                              <SelectItem value={configuredEffort}>
-                                {`${configuredEffort} (maps to ${effortResolution.effective})`}
-                              </SelectItem>
-                            ) : null}
                             {supportedEfforts.map((effort) => (
                               <SelectItem key={effort} value={effort}>
-                                {effort}
+                                {formatReasoningEffortLabel(effort)}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
-                        {!isInherited && !effortResolution.exact ? (
+                        {!isInherited && !effortResolution.exact && provider !== 'claude' ? (
                           <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-300">
                             {effortResolution.message}
                           </div>
@@ -296,7 +299,13 @@ export function PipelineTab({
                   </Badge>
                   {phaseEffortSelectValues[phase] !== '__inherit__' ? (
                     <span className="text-[10px] text-muted">
-                      {currentPhaseReasoningEfforts[phase]}
+                      {formatReasoningEffortLabel(
+                        resolveProviderReasoningEffort(
+                          currentPhaseSelections[phase].provider,
+                          currentPhaseReasoningEfforts[phase],
+                          currentPhaseSelections[phase].modelId,
+                        ).effective,
+                      )}
                     </span>
                   ) : null}
                 </>
@@ -501,7 +510,9 @@ export function PipelineTab({
             {hasPrFeedbackBlockers && activeThreadId ? (
               <div className="flex justify-end">
                 <Button size="sm" variant="outline" onClick={onStabilizePr} disabled={isSubmitting}>
-                  {isSubmitting ? 'Starting...' : 'Run stabilization pass'}
+                  <LoadingButtonContent loading={isSubmitting}>
+                    Run stabilization pass
+                  </LoadingButtonContent>
                 </Button>
               </div>
             ) : null}

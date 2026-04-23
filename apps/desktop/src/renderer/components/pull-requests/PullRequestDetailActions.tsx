@@ -1,5 +1,5 @@
 import type { PullRequestState } from '@shipcode/shared';
-import { Button } from '@shipcode/ui';
+import { Button, LoadingButtonContent } from '@shipshitdev/ui';
 import { useState } from 'react';
 import { useAppStore } from '../../stores/app-store';
 
@@ -14,7 +14,8 @@ export function PullRequestDetailActions({
   prState: PullRequestState;
   hasUnresolvedComments: boolean;
 }) {
-  const { activeProjectId, setProjectTab } = useAppStore();
+  const activeProjectId = useAppStore((state) => state.activeProjectId);
+  const setProjectTab = useAppStore((state) => state.setProjectTab);
   const [isReviewing, setIsReviewing] = useState(false);
   const [isAddressing, setIsAddressing] = useState(false);
   const canReview = prState === 'OPEN';
@@ -82,7 +83,7 @@ export function PullRequestDetailActions({
     <div className="flex items-center gap-2">
       {canReview ? (
         <Button onClick={() => void handleAiReview()} disabled={isReviewing}>
-          {isReviewing ? 'Reviewing...' : 'Review'}
+          <LoadingButtonContent loading={isReviewing}>Review</LoadingButtonContent>
         </Button>
       ) : null}
       {canAddressComments ? (
@@ -91,7 +92,7 @@ export function PullRequestDetailActions({
           onClick={() => void handleAddressComments()}
           disabled={isAddressing}
         >
-          {isAddressing ? 'Addressing...' : 'Address Comments'}
+          <LoadingButtonContent loading={isAddressing}>Address Comments</LoadingButtonContent>
         </Button>
       ) : null}
     </div>

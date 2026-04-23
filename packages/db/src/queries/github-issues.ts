@@ -175,6 +175,10 @@ export class GitHubIssueQueries {
       .run(status, id);
   }
 
+  updateState(id: string, state: 'open' | 'closed'): void {
+    this.db.prepare('UPDATE github_issue_cache SET state = ? WHERE id = ?').run(state, id);
+  }
+
   resetToTodo(id: string): boolean {
     const result = this.db
       .prepare(

@@ -1,11 +1,11 @@
 import type { PullRequestDetailResponse } from '@shipcode/shared';
-import { Button, cn, ExternalLink, GitPullRequest, SideBySideDiffViewer } from '@shipcode/ui';
+import { Button, cn, ExternalLink, GitPullRequest, SideBySideDiffViewer } from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useAppStore } from '../../stores/app-store';
 import { PullRequestDetailActions } from './PullRequestDetailActions';
 
 export function PullRequestDetailPanel({ prNumber }: { prNumber: number }) {
-  const { activeProjectId } = useAppStore();
+  const activeProjectId = useAppStore((state) => state.activeProjectId);
 
   const { data: detail, isLoading } = useQuery<PullRequestDetailResponse>({
     queryKey: ['pr-detail', activeProjectId, prNumber],

@@ -1,25 +1,24 @@
 import type { ActivePipelineSummary } from '@shipcode/shared';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useMemo } from 'react';
+import { useSharedSecondNow } from '../../hooks/useSharedSecondNow';
 import { useAppStore } from '../../stores/app-store';
 
 export function PlanWaiting({ threadId }: { threadId: string }) {
   const lastActivity = useAppStore((state) => state.lastActivityByThread[threadId]);
-  const [, tick] = useState(0);
+  const now = useSharedSecondNow();
 
   const { data: running = [] } = useQuery<ActivePipelineSummary[]>({
     queryKey: ['dashboard', 'running'],
     queryFn: () => window.shipcode.invoke<ActivePipelineSummary[]>('pipeline:list-active'),
   });
 
-  useEffect(() => {
-    const id = setInterval(() => tick((value) => value + 1), 1000);
-    return () => clearInterval(id);
-  }, []);
-
-  const startedAt = running.find((pipeline) => pipeline.threadId === threadId)?.startedAt;
-  const sinceStart = startedAt ? Math.floor((Date.now() - startedAt) / 1000) : null;
-  const sinceOutput = lastActivity ? Math.floor((Date.now() - lastActivity) / 1000) : sinceStart;
+  const startedAt = useMemo(
+    () => running.find((pipeline) => pipeline.threadId === threadId)?.startedAt,
+    [running, threadId],
+  );
+  const sinceStart = startedAt ? Math.floor((now - startedAt) / 1000) : null;
+  const sinceOutput = lastActivity ? Math.floor((now - lastActivity) / 1000) : sinceStart;
   const stale = (sinceOutput ?? 0) >= 90;
 
   function formatDuration(seconds: number) {

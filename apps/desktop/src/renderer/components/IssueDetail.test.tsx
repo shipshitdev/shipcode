@@ -72,6 +72,7 @@ const makeThread = (overrides: Partial<Thread> = {}): Thread => {
     clarificationRound: 0,
     clarificationRequest: null,
     clarificationAnswers: [],
+    answeredClarification: null,
     verificationStatus: null,
     verificationRetries: 0,
     autonomous: false,
@@ -411,6 +412,114 @@ describe('IssueDetail', () => {
     });
   });
 
+  it('renders clarification content inside the issue detail scroll region', async () => {
+    const thread = makeThread({
+      status: 'clarifying',
+      clarificationRequest: {
+        id: 'clarify-2',
+        threadId: 'thread-1',
+        phase: 'plan',
+        summary: 'Need routing confirmation.',
+        questions: [
+          {
+            id: 'surface',
+            title: 'Public Surface',
+            prompt: 'Which app should host the public route?',
+            description: 'This changes the file list and deployment target.',
+            choices: [
+              {
+                id: 'app',
+                label: 'apps/app',
+                description: 'Keep delivery in the product surface.',
+              },
+            ],
+            allowFreeform: false,
+            freeformPlaceholder: null,
+          },
+        ],
+      },
+    });
+
+    useAppStore.setState({
+      activeThreadId: thread.id,
+      activeIssue: makeIssue({ threadId: thread.id, pipelineStatus: 'clarifying' }),
+      pipelinePhase: 'clarifying',
+    });
+
+    invokeMock.mockImplementation(async (channel, args) => {
+      if (channel === 'project:get') return makeProject();
+      if (channel === 'thread:get') return thread;
+      if (channel === 'plan:list') return [];
+      if (channel === 'review:list-by-plans') return {};
+      return args ?? null;
+    });
+
+    const { container } = renderWithProviders({ expanded: true });
+
+    const clarificationHeading = await screen.findByText('Answer these before planning continues');
+    const scrollRegion = container.querySelector('[data-issue-detail-scroll-region]');
+
+    expect(scrollRegion).not.toBeNull();
+    expect(scrollRegion?.contains(clarificationHeading)).toBe(true);
+  });
+
+  it('shows only the submitted clarification answers after planning resumes', async () => {
+    const thread = makeThread({
+      status: 'planning',
+      answeredClarification: {
+        request: {
+          id: 'clarify-3',
+          threadId: 'thread-1',
+          phase: 'plan',
+          summary: 'Need one decision before planning.',
+          questions: [
+            {
+              id: 'scope',
+              title: 'Scope',
+              prompt: 'Which scope should ShipCode plan for?',
+              description: null,
+              choices: [
+                { id: 'narrow', label: 'Narrow', description: 'Ship the smallest useful change.' },
+                { id: 'wide', label: 'Wide', description: 'Include adjacent cleanup too.' },
+              ],
+              allowFreeform: true,
+              freeformPlaceholder: null,
+            },
+          ],
+        },
+        answers: [
+          {
+            questionId: 'scope',
+            selectedChoiceId: 'wide',
+            freeformText: 'Include the auth migration too.',
+          },
+        ],
+      },
+    });
+
+    useAppStore.setState({
+      activeThreadId: thread.id,
+      activeIssue: makeIssue({ threadId: thread.id, pipelineStatus: 'planning' }),
+      pipelinePhase: 'planning',
+    });
+
+    invokeMock.mockImplementation(async (channel, args) => {
+      if (channel === 'project:get') return makeProject();
+      if (channel === 'thread:get') return thread;
+      if (channel === 'plan:list') return [];
+      if (channel === 'review:list-by-plans') return {};
+      return args ?? null;
+    });
+
+    renderWithProviders();
+
+    expect(await screen.findByText('Planning resumed with your answers')).toBeInTheDocument();
+    expect(screen.getByText('Wide')).toBeInTheDocument();
+    expect(screen.getByText('Include the auth migration too.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Resume planning' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Answer these before planning continues')).not.toBeInTheDocument();
+  });
+
   it('approves the plan when the dropdown defaults to Approve & Execute', async () => {
     const thread = makeThread();
     const plan = makePlan();
@@ -571,6 +680,60 @@ describe('IssueDetail', () => {
     expect(confirmButton).toBeInTheDocument();
   });
 
+  it('shows a clear approval error when the approve action races with a queued execution state', async () => {
+    const thread = makeThread();
+    const plan = makePlan();
+
+    useAppStore.setState({
+      activeThreadId: thread.id,
+      activeIssue: makeIssue({ threadId: thread.id, pipelineStatus: 'awaiting_approval' }),
+      pipelinePhase: 'awaiting_approval',
+    });
+
+    invokeMock.mockImplementation(async (channel, args) => {
+      if (channel === 'thread:get') return thread;
+      if (channel === 'plan:list') return [plan];
+      if (channel === 'review:list-by-plans') return {};
+      if (channel === 'pipeline:approve') {
+        throw new Error('Approval is already confirmed. Waiting for an execution slot.');
+      }
+      return args ?? null;
+    });
+
+    renderWithProviders();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm' }));
+
+    expect(
+      await screen.findByText(/Approval is already confirmed\. Waiting for an execution slot\./),
+    ).toBeInTheDocument();
+  });
+
+  it('shows waiting-for-execution messaging after a plan is already approved', async () => {
+    const thread = makeThread({ status: 'awaiting_approval' });
+    const plan = makePlan({ status: 'approved' });
+
+    useAppStore.setState({
+      activeThreadId: thread.id,
+      activeIssue: makeIssue({ threadId: thread.id, pipelineStatus: 'awaiting_approval' }),
+      pipelinePhase: 'awaiting_approval',
+    });
+
+    invokeMock.mockImplementation(async (channel, args) => {
+      if (channel === 'thread:get') return thread;
+      if (channel === 'plan:list') return [plan];
+      if (channel === 'review:list-by-plans') return {};
+      if (channel === 'pipeline:cancel') return undefined;
+      return args ?? null;
+    });
+
+    renderWithProviders();
+
+    expect(await screen.findByText('Waiting For Execution Slot')).toBeInTheDocument();
+    expect(screen.getByText(/Approval is already confirmed\./)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Confirm' })).not.toBeInTheDocument();
+  });
+
   it('renders plan history with human-readable labels instead of raw status enums', async () => {
     const thread = makeThread({ status: 'reviewing' });
     const latestPlan = makePlan();
@@ -688,7 +851,7 @@ describe('IssueDetail', () => {
       expect(historyTab).toHaveAttribute('data-state', 'active');
     });
 
-    expect(await screen.findByText('Awaiting approval')).toBeInTheDocument();
+    expect(await screen.findByText('Needs approval')).toBeInTheDocument();
     expect(screen.queryByText('Changes requested')).not.toBeInTheDocument();
     expect(screen.queryByText('request_changes')).not.toBeInTheDocument();
   });

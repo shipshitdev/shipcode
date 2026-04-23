@@ -99,7 +99,11 @@ describe('CreateIssueModal — image drop / attachment management', () => {
 
   it('renders the drop zone section in create mode', () => {
     renderWithProviders();
-    expect(screen.getByRole('region', { name: /issue content/i })).toBeInTheDocument();
+    const issueContent = screen.getByRole('region', { name: /issue content/i });
+    expect(issueContent).toBeInTheDocument();
+
+    const scrollRegion = document.body.querySelector('[data-create-issue-scroll-region]');
+    expect(scrollRegion).toContainElement(issueContent);
   });
 
   it('renders the drop zone section in edit mode without drag handlers', () => {

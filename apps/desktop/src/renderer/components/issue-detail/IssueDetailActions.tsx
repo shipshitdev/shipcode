@@ -6,17 +6,19 @@ import {
   ChevronUp,
   Copy,
   cn,
+  LoadingButtonContent,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
   Textarea,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
 import { getFailurePresentation, PIPELINE_PREVIEW_PHASES, safeErrorMessage } from './helpers';
 
 interface IssueDetailActionsProps {
   approveError: string | null;
+  approvedAwaitingExecution: boolean;
   canApprove: boolean;
   canRerun: boolean;
   canStartPipeline: boolean;
@@ -58,6 +60,7 @@ interface IssueDetailActionsProps {
 
 export function IssueDetailActions({
   approveError,
+  approvedAwaitingExecution,
   canApprove,
   canRerun,
   canStartPipeline,
@@ -94,6 +97,7 @@ export function IssueDetailActions({
     thread?.lastError ?? failingPhaseOutput,
     thread,
   );
+  const answeredClarification = thread?.answeredClarification ?? null;
   const previewPhases =
     effectiveRevisionCount > 0
       ? PIPELINE_PREVIEW_PHASES
@@ -136,7 +140,7 @@ export function IssueDetailActions({
 
       <div className="flex items-center gap-3">
         <Button size="sm" onClick={onStartPipeline} disabled={isSubmitting}>
-          {isSubmitting ? 'Starting…' : 'Start pipeline'}
+          <LoadingButtonContent loading={isSubmitting}>Start pipeline</LoadingButtonContent>
         </Button>
         <Button
           variant="link"
@@ -150,122 +154,197 @@ export function IssueDetailActions({
     </div>
   ) : null;
 
-  const clarificationSection = clarificationRequest ? (
-    <div className="rounded-lg border border-warning/35 bg-warning/[0.06] p-4 shadow-[0_1px_0_0_rgba(0,0,0,0.2)]">
-      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-warning">
-        Planner Input
-      </div>
-      <div className="mb-1.5 flex items-center gap-2">
-        <h4 className="text-[14px] font-semibold leading-snug text-primary">
-          Answer these before planning continues
-        </h4>
-        <Badge variant="warning" className="text-[10px]">
-          {clarificationRequest.questions.length}{' '}
-          {clarificationRequest.questions.length === 1 ? 'question' : 'questions'}
-        </Badge>
-      </div>
-      <p className="mb-4 text-[12px] leading-relaxed text-secondary">
-        {clarificationRequest.summary}
-      </p>
-
-      <div className="space-y-3">
-        {clarificationRequest.questions.map((question, index) => {
-          const answer = clarificationDraft[question.id] ?? {
-            selectedChoiceId: null,
-            freeformText: '',
-          };
-
-          return (
-            <div
-              key={question.id}
-              className="rounded-md border border-border/80 bg-secondary/80 p-3"
-            >
-              <div className="mb-1 flex items-center gap-2">
-                <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted">
-                  Q{index + 1}
-                </span>
-                <h5 className="text-[13px] font-semibold text-primary">{question.title}</h5>
-              </div>
-              <p className="text-[12px] leading-relaxed text-secondary">{question.prompt}</p>
-              {question.description && (
-                <p className="mt-1 text-[11px] leading-relaxed text-muted">
-                  {question.description}
-                </p>
-              )}
-
-              <div className="mt-3 flex flex-col gap-2">
-                {question.choices.map((choice) => {
-                  const selected = answer.selectedChoiceId === choice.id;
-                  return (
-                    <button
-                      key={choice.id}
-                      type="button"
-                      className={cn(
-                        'rounded-md border px-3 py-2 text-left transition-colors',
-                        selected
-                          ? 'border-warning/45 bg-warning/[0.08]'
-                          : 'border-border bg-primary/30 hover:border-warning/30 hover:bg-warning/[0.04]',
-                      )}
-                      onClick={() => onClarificationChoiceChange(question.id, choice.id)}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={cn(
-                            'h-2.5 w-2.5 rounded-full border',
-                            selected ? 'border-warning bg-warning' : 'border-border bg-transparent',
-                          )}
-                        />
-                        <span className="text-[12px] font-medium text-primary">{choice.label}</span>
-                        {choice.recommended && (
-                          <Badge variant="default" className="text-[9px] uppercase">
-                            Recommended
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="mt-1 pl-[18px] text-[11px] leading-relaxed text-secondary">
-                        {choice.description}
-                      </p>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {question.allowFreeform && (
-                <div className="mt-3">
-                  <Textarea
-                    value={answer.freeformText}
-                    onChange={(event) =>
-                      onClarificationFreeformChange(question.id, event.target.value)
-                    }
-                    placeholder={question.freeformPlaceholder ?? 'Add context if needed'}
-                    rows={3}
-                  />
-                </div>
-              )}
+  const clarificationSection =
+    clarificationRequest && thread?.status === 'clarifying' ? (
+      <section className="rounded-xl border border-warning/25 bg-warning/[0.04] p-4 shadow-[0_1px_0_0_rgba(0,0,0,0.18)]">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-warning">
+              Planner Input
             </div>
-          );
-        })}
-      </div>
+            <h4 className="text-[15px] font-semibold leading-snug text-primary">
+              Answer these before planning continues
+            </h4>
+            <p className="mt-2 max-w-4xl text-[12px] leading-relaxed text-secondary">
+              {clarificationRequest.summary}
+            </p>
+          </div>
+          <Badge variant="warning" className="shrink-0 text-[10px]">
+            {clarificationRequest.questions.length}{' '}
+            {clarificationRequest.questions.length === 1 ? 'question' : 'questions'}
+          </Badge>
+        </div>
 
-      {clarificationError && <p className="mt-3 text-[11px] text-danger">{clarificationError}</p>}
+        <div className="mt-5 overflow-hidden rounded-lg border border-warning/15 bg-primary/20">
+          {clarificationRequest.questions.map((question, index) => {
+            const answer = clarificationDraft[question.id] ?? {
+              selectedChoiceId: null,
+              freeformText: '',
+            };
 
-      <div className="mt-4 flex items-center gap-3">
-        <Button
-          size="sm"
-          onClick={onSubmitClarification}
-          disabled={isSubmitting || !canSubmitClarification}
-        >
-          {isSubmitting ? 'Submitting…' : 'Resume planning'}
-        </Button>
-        <p className="text-[11px] text-muted">
-          ShipCode will start a fresh planning pass with these answers folded into the prompt.
-        </p>
-      </div>
-    </div>
-  ) : null;
+            return (
+              <section
+                key={question.id}
+                className={cn('px-4 py-4', index > 0 && 'border-t border-warning/10')}
+              >
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-warning/80">
+                    Q{index + 1}
+                  </span>
+                  <h5 className="text-[13px] font-semibold text-primary/95">{question.title}</h5>
+                </div>
+                <p className="text-[12px] leading-relaxed text-secondary">{question.prompt}</p>
+                {question.description && (
+                  <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
+                    {question.description}
+                  </p>
+                )}
+
+                <div className="mt-3 flex flex-col gap-2">
+                  {question.choices.map((choice) => {
+                    const selected = answer.selectedChoiceId === choice.id;
+                    return (
+                      <button
+                        key={choice.id}
+                        type="button"
+                        className={cn(
+                          'rounded-md border px-3 py-2.5 text-left transition-colors',
+                          selected
+                            ? 'border-warning/45 bg-warning/[0.12]'
+                            : 'border-border/70 bg-secondary/35 hover:border-warning/30 hover:bg-warning/[0.05]',
+                        )}
+                        onClick={() => onClarificationChoiceChange(question.id, choice.id)}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={cn(
+                              'h-2.5 w-2.5 rounded-full border',
+                              selected
+                                ? 'border-warning bg-warning'
+                                : 'border-border bg-transparent',
+                            )}
+                          />
+                          <span className="text-[12px] font-medium text-primary">
+                            {choice.label}
+                          </span>
+                          {choice.recommended && (
+                            <Badge variant="default" className="text-[9px] uppercase">
+                              Recommended
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="mt-1 pl-[18px] text-[11px] leading-relaxed text-secondary">
+                          {choice.description}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {question.allowFreeform && (
+                  <div className="mt-3">
+                    <Textarea
+                      value={answer.freeformText}
+                      onChange={(event) =>
+                        onClarificationFreeformChange(question.id, event.target.value)
+                      }
+                      placeholder={question.freeformPlaceholder ?? 'Add context if needed'}
+                      rows={3}
+                    />
+                  </div>
+                )}
+              </section>
+            );
+          })}
+        </div>
+
+        {clarificationError && <p className="mt-3 text-[11px] text-danger">{clarificationError}</p>}
+
+        <div className="mt-4 flex items-center gap-3">
+          <Button
+            size="sm"
+            onClick={onSubmitClarification}
+            disabled={isSubmitting || !canSubmitClarification}
+          >
+            <LoadingButtonContent loading={isSubmitting}>Resume planning</LoadingButtonContent>
+          </Button>
+          <p className="text-[11px] text-muted">
+            ShipCode will start a fresh planning pass with these answers folded into the prompt.
+          </p>
+        </div>
+      </section>
+    ) : answeredClarification ? (
+      <section className="rounded-xl border border-agent/25 bg-agent/[0.04] p-4 shadow-[0_1px_0_0_rgba(0,0,0,0.18)]">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-agent">
+              Planner Input
+            </div>
+            <h4 className="text-[15px] font-semibold leading-snug text-primary">
+              Planning resumed with your answers
+            </h4>
+            <p className="mt-2 max-w-4xl text-[12px] leading-relaxed text-secondary">
+              These answers were folded into the current planning pass.
+            </p>
+          </div>
+          <Badge variant="success" className="shrink-0 text-[10px]">
+            Answered
+          </Badge>
+        </div>
+
+        <div className="mt-5 overflow-hidden rounded-lg border border-agent/15 bg-primary/20">
+          {answeredClarification.request.questions.map((question, index) => {
+            const answer = answeredClarification.answers.find(
+              (entry) => entry.questionId === question.id,
+            );
+            const selectedChoice =
+              answer?.selectedChoiceId != null
+                ? (question.choices.find((choice) => choice.id === answer.selectedChoiceId) ?? null)
+                : null;
+            const freeformText = answer?.freeformText?.trim() ?? '';
+
+            return (
+              <section
+                key={question.id}
+                className={cn('px-4 py-4', index > 0 && 'border-t border-agent/10')}
+              >
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-agent/80">
+                    Q{index + 1}
+                  </span>
+                  <h5 className="text-[13px] font-semibold text-primary/95">{question.title}</h5>
+                </div>
+
+                {selectedChoice ? (
+                  <div className="rounded-md border border-agent/20 bg-agent/[0.08] px-3 py-2.5">
+                    <div className="text-[12px] font-medium text-primary">
+                      {selectedChoice.label}
+                    </div>
+                    <p className="mt-1 text-[11px] leading-relaxed text-secondary">
+                      {selectedChoice.description}
+                    </p>
+                  </div>
+                ) : null}
+
+                {freeformText ? (
+                  <div className={cn(selectedChoice ? 'mt-3' : '')}>
+                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-agent/80">
+                      Note
+                    </p>
+                    <div className="rounded-md border border-border/70 bg-secondary/35 px-3 py-2.5 text-[12px] leading-relaxed whitespace-pre-wrap text-secondary">
+                      {freeformText}
+                    </div>
+                  </div>
+                ) : null}
+              </section>
+            );
+          })}
+        </div>
+      </section>
+    ) : null;
 
   const rerunSection = canRerun ? (
-    <div className="mb-5">
+    <div>
       {(thread?.lastError || failingPhaseOutput) && (
         <div className="mb-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2">
           <div className="mb-1 flex items-center justify-between">
@@ -328,7 +407,7 @@ export function IssueDetailActions({
           disabled={isSubmitting}
           className="flex-1 border-danger/40 text-danger hover:bg-danger/10 hover:border-danger"
         >
-          {isSubmitting ? 'Starting...' : retryButtonLabel}
+          <LoadingButtonContent loading={isSubmitting}>{retryButtonLabel}</LoadingButtonContent>
         </Button>
         <Button
           size="sm"
@@ -344,7 +423,7 @@ export function IssueDetailActions({
   ) : null;
 
   const approvalSection = hasApprovalDecision ? (
-    <div className="mb-5 rounded-md border border-border bg-secondary p-3">
+    <div className="rounded-md border border-border bg-secondary p-3">
       <div
         className={
           pendingAction === 'request_changes'
@@ -377,12 +456,12 @@ export function IssueDetailActions({
               !canApprove ? 'No plan content found - use Request Changes or Cancel' : undefined
             }
           >
-            {isSubmitting ? 'Approving...' : 'Confirm'}
+            <LoadingButtonContent loading={isSubmitting}>Confirm</LoadingButtonContent>
           </Button>
         )}
         {pendingAction === 'cancel' && (
           <Button size="sm" variant="destructive" onClick={onCancel} disabled={isSubmitting}>
-            {isSubmitting ? 'Cancelling...' : 'Confirm cancel'}
+            <LoadingButtonContent loading={isSubmitting}>Confirm cancel</LoadingButtonContent>
           </Button>
         )}
       </div>
@@ -401,7 +480,9 @@ export function IssueDetailActions({
               onClick={onReject}
               disabled={!feedback.trim() || isSubmitting}
             >
-              {isSubmitting ? 'Submitting...' : 'Resume planning with feedback'}
+              <LoadingButtonContent loading={isSubmitting}>
+                Resume planning with feedback
+              </LoadingButtonContent>
             </Button>
           </div>
         </div>
@@ -411,6 +492,28 @@ export function IssueDetailActions({
           {approveError} <span className="text-muted">(full trace in devtools console)</span>
         </p>
       )}
+    </div>
+  ) : approvedAwaitingExecution ? (
+    <div className="rounded-md border border-border bg-secondary p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <Badge variant="success" className="text-[10px]">
+              Approved
+            </Badge>
+            <Badge variant="warning" className="text-[10px]">
+              Waiting For Execution Slot
+            </Badge>
+          </div>
+          <p className="text-[12px] leading-relaxed text-secondary">
+            Approval is already confirmed. ShipCode will start execution as soon as the current
+            execution slot frees up.
+          </p>
+        </div>
+        <Button size="sm" variant="destructive" onClick={onCancel} disabled={isSubmitting}>
+          <LoadingButtonContent loading={isSubmitting}>Cancel</LoadingButtonContent>
+        </Button>
+      </div>
     </div>
   ) : null;
 

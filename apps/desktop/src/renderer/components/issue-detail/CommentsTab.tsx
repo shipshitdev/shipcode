@@ -1,5 +1,5 @@
 import type { GitHubIssueComment } from '@shipcode/shared';
-import { Button, RefreshCw, Textarea } from '@shipcode/ui';
+import { Button, LoadingButtonContent, RefreshCw, Textarea } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { timeAgo } from './helpers';
@@ -118,7 +118,7 @@ export function CommentsTab({
             onClick={() => void handlePost()}
             disabled={isPosting || !body.trim()}
           >
-            {isPosting ? 'Posting…' : 'Post Comment'}
+            <LoadingButtonContent loading={isPosting}>Post Comment</LoadingButtonContent>
           </Button>
         </div>
       </div>

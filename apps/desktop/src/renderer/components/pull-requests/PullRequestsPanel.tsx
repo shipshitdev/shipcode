@@ -1,5 +1,5 @@
 import type { PullRequestListFilter, PullRequestListItem } from '@shipcode/shared';
-import { Button, cn, GitPullRequest, RefreshCw } from '@shipcode/ui';
+import { Button, cn, GitPullRequest, RefreshCw } from '@shipshitdev/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useAppStore } from '../../stores/app-store';
@@ -12,7 +12,9 @@ const FILTERS: Array<{ value: PullRequestListFilter; label: string }> = [
 ];
 
 export function PullRequestsPanel() {
-  const { activeProjectId, activePrNumber, setActivePrNumber } = useAppStore();
+  const activeProjectId = useAppStore((state) => state.activeProjectId);
+  const activePrNumber = useAppStore((state) => state.activePrNumber);
+  const setActivePrNumber = useAppStore((state) => state.setActivePrNumber);
   const [filter, setFilter] = useState<PullRequestListFilter>('open');
   const queryClient = useQueryClient();
 

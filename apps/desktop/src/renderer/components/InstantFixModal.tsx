@@ -11,6 +11,7 @@ import {
   Button,
   cn,
   Keycap,
+  LoadingButtonContent,
   Modal,
   ModalFooter,
   Select,
@@ -20,7 +21,7 @@ import {
   SelectValue,
   Textarea,
   X,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
 import { type KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
@@ -29,13 +30,11 @@ import { getModelOptions, PROVIDER_DISPLAY } from './model-provider-options';
 const EMPTY_PROJECTS: Project[] = [];
 
 export function InstantFixModal() {
-  const {
-    instantFixModalOpen,
-    closeInstantFixModal,
-    addInstantPane,
-    openTerminalSessions,
-    instantFixModalDefaultCli,
-  } = useAppStore();
+  const instantFixModalOpen = useAppStore((state) => state.instantFixModalOpen);
+  const closeInstantFixModal = useAppStore((state) => state.closeInstantFixModal);
+  const addInstantPane = useAppStore((state) => state.addInstantPane);
+  const openTerminalSessions = useAppStore((state) => state.openTerminalSessions);
+  const instantFixModalDefaultCli = useAppStore((state) => state.instantFixModalDefaultCli);
 
   const [prompt, setPrompt] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -64,7 +63,7 @@ export function InstantFixModal() {
     enabled: instantFixModalOpen,
   });
 
-  const activeProjectId = useAppStore((s) => s.activeProjectId);
+  const activeProjectId = useAppStore((state) => state.activeProjectId);
   const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? null;
   const supportedEfforts = getSupportedReasoningEfforts(cli, modelId);
   const modelOptions = getModelOptions(cli);
@@ -238,176 +237,185 @@ export function InstantFixModal() {
       open={instantFixModalOpen}
       onClose={closeInstantFixModal}
       title="New Terminal Session"
+      className="max-w-[760px] max-h-[88vh] flex flex-col overflow-hidden p-0"
+      headerClassName="shrink-0 border-b border-border px-6 py-4"
       onKeyDown={handleKeyDown}
     >
-      <div className="flex flex-col gap-4">
-        {/* Prompt + drop zone */}
-        <section
-          aria-label="Prompt and file drop zone"
-          className={cn(
-            'rounded-lg border border-border transition-colors',
-            dragActive && 'border-accent bg-accent/5',
-          )}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        >
-          <Textarea
-            placeholder="Optional initial prompt for the live shell..."
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            rows={4}
-            autoFocus
-            className="border-0 focus-visible:ring-0 resize-none"
-          />
+      <div
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-4"
+        data-instant-fix-scroll-region
+      >
+        <div className="flex flex-col gap-5">
+          {/* Prompt + drop zone */}
+          <section
+            aria-label="Prompt and file drop zone"
+            className={cn(
+              'overflow-hidden rounded-xl border border-border bg-tertiary/10 transition-colors',
+              dragActive && 'border-accent bg-accent/5',
+            )}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <Textarea
+              placeholder="Optional initial prompt for the live shell..."
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              rows={4}
+              autoFocus
+              className="resize-none border-0 bg-transparent focus-visible:ring-0"
+            />
 
-          {/* Attachment previews */}
-          {attachments.length > 0 && (
-            <div className="flex flex-wrap gap-2 px-3 pb-2">
-              {attachments.map((att) => (
-                <div key={att.originalPath} className="relative group">
-                  <img
-                    src={`file://${att.stagedPath}`}
-                    alt={att.fileName}
-                    className="h-16 w-16 rounded border border-border object-cover"
-                  />
-                  <button
-                    type="button"
-                    title={`Remove ${att.fileName}`}
-                    aria-label={`Remove ${att.fileName}`}
-                    className="absolute -top-1.5 -right-1.5 hidden group-hover:flex h-4 w-4 items-center justify-center rounded-full bg-danger text-white"
-                    onClick={() => void removeAttachment(att)}
-                  >
-                    <X size={10} />
-                  </button>
-                </div>
-              ))}
+            {/* Attachment previews */}
+            {attachments.length > 0 && (
+              <div className="flex flex-wrap gap-2 px-3 pb-3">
+                {attachments.map((att) => (
+                  <div key={att.originalPath} className="group relative">
+                    <img
+                      src={`file://${att.stagedPath}`}
+                      alt={att.fileName}
+                      className="h-16 w-16 rounded border border-border object-cover"
+                    />
+                    <button
+                      type="button"
+                      title={`Remove ${att.fileName}`}
+                      aria-label={`Remove ${att.fileName}`}
+                      className="absolute -top-1.5 -right-1.5 hidden h-4 w-4 items-center justify-center rounded-full bg-danger text-white group-hover:flex"
+                      onClick={() => void removeAttachment(att)}
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Project + CLI + Model + Effort row */}
+          <div className="grid gap-3 md:grid-cols-4">
+            <Select
+              value={selectedProjectId ?? ''}
+              onValueChange={(value) => {
+                setSelectedProjectId(value);
+                if (settings) {
+                  const project = projects.find((p) => p.id === value) ?? null;
+                  const resolvedProvider = resolvePhaseModel(settings, project, 'executor');
+                  const nextModelId =
+                    resolvedProvider === cli
+                      ? resolvePhaseModelId(settings, project, 'executor')
+                      : null;
+                  setModelId(nextModelId);
+                  const nextEffort =
+                    resolvedProvider === cli
+                      ? resolveEffectivePhaseReasoningEffort(settings, project, 'executor')
+                      : 'high';
+                  const allowed = getSupportedReasoningEfforts(cli, nextModelId);
+                  setReasoningEffort(
+                    allowed.includes(nextEffort)
+                      ? nextEffort
+                      : (allowed[allowed.length - 1] ?? 'high'),
+                  );
+                }
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a project" />
+              </SelectTrigger>
+              <SelectContent>
+                {projects.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={cli}
+              onValueChange={(value) => {
+                const nextCli = value as 'claude' | 'codex';
+                setCli(nextCli);
+                if (settings) {
+                  const resolvedProvider = resolvePhaseModel(settings, selectedProject, 'executor');
+                  const nextModelId =
+                    resolvedProvider === nextCli
+                      ? resolvePhaseModelId(settings, selectedProject, 'executor')
+                      : null;
+                  setModelId(nextModelId);
+                  const nextEffort =
+                    resolvedProvider === nextCli
+                      ? resolveEffectivePhaseReasoningEffort(settings, selectedProject, 'executor')
+                      : 'high';
+                  const allowed = getSupportedReasoningEfforts(nextCli, nextModelId);
+                  setReasoningEffort(
+                    allowed.includes(nextEffort)
+                      ? nextEffort
+                      : (allowed[allowed.length - 1] ?? 'high'),
+                  );
+                } else {
+                  setModelId(null);
+                  setReasoningEffort('high');
+                }
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="claude">Claude</SelectItem>
+                <SelectItem value="codex">Codex</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={modelId ?? '__default__'}
+              onValueChange={(value) => setModelId(value === '__default__' ? null : value)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__default__">Default ({PROVIDER_DISPLAY[cli]})</SelectItem>
+                {modelOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={reasoningEffort}
+              onValueChange={(value) => setReasoningEffort(value as ReasoningEffort)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {supportedEfforts.map((effort) => (
+                  <SelectItem key={effort} value={effort}>
+                    {effort}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div className="rounded-md border border-danger/30 bg-danger/5 px-3 py-2 text-xs text-danger">
+              {error}
             </div>
           )}
-        </section>
-
-        {/* Project + CLI + Model + Effort row */}
-        <div className="grid gap-3 md:grid-cols-4">
-          <Select
-            value={selectedProjectId ?? ''}
-            onValueChange={(value) => {
-              setSelectedProjectId(value);
-              if (settings) {
-                const project = projects.find((p) => p.id === value) ?? null;
-                const resolvedProvider = resolvePhaseModel(settings, project, 'executor');
-                const nextModelId =
-                  resolvedProvider === cli
-                    ? resolvePhaseModelId(settings, project, 'executor')
-                    : null;
-                setModelId(nextModelId);
-                const nextEffort =
-                  resolvedProvider === cli
-                    ? resolveEffectivePhaseReasoningEffort(settings, project, 'executor')
-                    : 'high';
-                const allowed = getSupportedReasoningEfforts(cli, nextModelId);
-                setReasoningEffort(
-                  allowed.includes(nextEffort)
-                    ? nextEffort
-                    : (allowed[allowed.length - 1] ?? 'high'),
-                );
-              }
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select a project" />
-            </SelectTrigger>
-            <SelectContent>
-              {projects.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select
-            value={cli}
-            onValueChange={(value) => {
-              const nextCli = value as 'claude' | 'codex';
-              setCli(nextCli);
-              if (settings) {
-                const resolvedProvider = resolvePhaseModel(settings, selectedProject, 'executor');
-                const nextModelId =
-                  resolvedProvider === nextCli
-                    ? resolvePhaseModelId(settings, selectedProject, 'executor')
-                    : null;
-                setModelId(nextModelId);
-                const nextEffort =
-                  resolvedProvider === nextCli
-                    ? resolveEffectivePhaseReasoningEffort(settings, selectedProject, 'executor')
-                    : 'high';
-                const allowed = getSupportedReasoningEfforts(nextCli, nextModelId);
-                setReasoningEffort(
-                  allowed.includes(nextEffort)
-                    ? nextEffort
-                    : (allowed[allowed.length - 1] ?? 'high'),
-                );
-              } else {
-                setModelId(null);
-                setReasoningEffort('high');
-              }
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="claude">Claude</SelectItem>
-              <SelectItem value="codex">Codex</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select
-            value={modelId ?? '__default__'}
-            onValueChange={(value) => setModelId(value === '__default__' ? null : value)}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__default__">Default ({PROVIDER_DISPLAY[cli]})</SelectItem>
-              {modelOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select
-            value={reasoningEffort}
-            onValueChange={(value) => setReasoningEffort(value as ReasoningEffort)}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {supportedEfforts.map((effort) => (
-                <SelectItem key={effort} value={effort}>
-                  {effort}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </div>
-
-        {/* Error */}
-        {error && (
-          <div className="rounded-md border border-danger/30 bg-danger/5 px-3 py-2 text-xs text-danger">
-            {error}
-          </div>
-        )}
       </div>
 
-      <ModalFooter className="items-center">
+      <ModalFooter className="shrink-0 items-center border-t border-border px-6 py-4 mt-0">
         <Button variant="ghost" onClick={closeInstantFixModal}>
           Cancel
         </Button>
         <Button onClick={handleSubmit} disabled={!selectedProjectId || isSubmitting}>
-          <span>{isSubmitting ? 'Starting...' : 'Start Shell'}</span>
-          <Keycap>⌘↩</Keycap>
+          <LoadingButtonContent loading={isSubmitting}>
+            <span>Start Shell</span>
+            <Keycap>⌘↩</Keycap>
+          </LoadingButtonContent>
         </Button>
       </ModalFooter>
     </Modal>
