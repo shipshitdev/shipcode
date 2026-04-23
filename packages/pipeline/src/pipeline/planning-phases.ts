@@ -106,7 +106,15 @@ export function createPlanningPhaseHandlers({
     context.clarificationRound = 0;
     context.clarificationRequest = null;
     context.clarificationAnswers = [];
-    deps.threads.clearClarification(threadId);
+    const threads = deps.threads as typeof deps.threads & {
+      clearClarification?: (id: string) => void;
+      clearPendingClarification?: (id: string) => void;
+    };
+    if (typeof threads.clearPendingClarification === 'function') {
+      threads.clearPendingClarification(threadId);
+    } else {
+      threads.clearClarification?.(threadId);
+    }
   }
 
   function getRevisionCountForContext(context: ReturnType<typeof ensureContext>): number {

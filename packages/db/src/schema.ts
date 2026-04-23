@@ -946,3 +946,16 @@ export function migrateV32(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (32)`);
   });
 }
+
+export function migrateV33(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 33) return;
+
+  transaction(db, () => {
+    execAlterTablesIfMissing(db, ['ALTER TABLE threads ADD COLUMN answered_clarification TEXT']);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (33)`);
+  });
+}

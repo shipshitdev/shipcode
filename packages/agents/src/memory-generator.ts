@@ -1,10 +1,11 @@
 import { spawn } from 'node:child_process';
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { ContextFileInfo, ContextGeneratorCli } from '@shipcode/shared';
+import type { GeneratorCli, MemoryFileInfo, RepoMemoryStatus } from '@shipcode/shared';
 import { extractCliFailureMessage } from './cli-error';
 
 const MEMORY_DIR = '.agents/memory';
+const OBSOLETE_CONTEXT_DIR = '.agents/context';
 const MEMORY_FENCE_TAG = 'shipcode-memory';
 
 const GENERATED_MEMORY_FILES = [
@@ -40,10 +41,9 @@ const GENERATED_MEMORY_FILES = [
 
 type GeneratedMemoryFile = (typeof GENERATED_MEMORY_FILES)[number];
 
-export interface ContextGenerateResult {
+export interface MemoryGenerateResult {
   success: boolean;
   error?: string;
-  /** Which files were actually written (a subset if partial failure). */
   written: string[];
 }
 
@@ -55,11 +55,7 @@ function isCliResultEnvelope(value: unknown): value is { result: string } {
   );
 }
 
-/**
- * List the generated repo memory files for a project, reporting existence and
- * size.
- */
-export function listContextFiles(projectPath: string): ContextFileInfo[] {
+export function listMemoryFiles(projectPath: string): MemoryFileInfo[] {
   return GENERATED_MEMORY_FILES.map((file) => {
     try {
       const stat = statSync(join(projectPath, MEMORY_DIR, file.name));
@@ -75,12 +71,14 @@ export function listContextFiles(projectPath: string): ContextFileInfo[] {
   });
 }
 
-/**
- * Read one of the generated repo memory files.
- * Returns null if the file is missing or unreadable.
- * Validates the name to prevent path traversal.
- */
-export function readContextFile(projectPath: string, name: string): string | null {
+export function inspectRepoMemory(projectPath: string): RepoMemoryStatus {
+  return {
+    files: listMemoryFiles(projectPath),
+    hasObsoleteContextDirectory: hasObsoleteContextDirectory(projectPath),
+  };
+}
+
+export function readMemoryFile(projectPath: string, name: string): string | null {
   if (!GENERATED_MEMORY_FILES.some((entry) => entry.name === name)) {
     return null;
   }
@@ -91,18 +89,10 @@ export function readContextFile(projectPath: string, name: string): string | nul
   }
 }
 
-/**
- * Use the selected CLI to generate the canonical repo memory files from the
- * target repo's README, package.json, AGENTS.md, and CLAUDE.md. Writes
- * results to `<projectPath>/.agents/memory/`.
- *
- * The prompt is piped via stdin — never passed as argv — to avoid
- * Claude CLI's argparser rejecting YAML frontmatter (`---`) as a flag.
- */
-export async function generateContextFiles(
+export async function generateMemoryFiles(
   projectPath: string,
-  cli: ContextGeneratorCli = 'claude',
-): Promise<ContextGenerateResult> {
+  cli: GeneratorCli = 'claude',
+): Promise<MemoryGenerateResult> {
   const readSource = (filename: string): string | null => {
     try {
       return readFileSync(join(projectPath, filename), 'utf8');
@@ -111,21 +101,16 @@ export async function generateContextFiles(
     }
   };
 
-  const readmeContent = readSource('README.md');
-  const packageJsonContent = readSource('package.json');
-  const agentsMdContent = readSource('AGENTS.md');
-  const claudeMdContent = readSource('CLAUDE.md');
-
   const prompt = buildMemoryPrompt(
-    readmeContent,
-    packageJsonContent,
-    agentsMdContent,
-    claudeMdContent,
+    readSource('README.md'),
+    readSource('package.json'),
+    readSource('AGENTS.md'),
+    readSource('CLAUDE.md'),
   );
 
   let stdout: string;
   try {
-    stdout = await runContextCliWithStdin(cli, prompt, projectPath, 180_000);
+    stdout = await runMemoryCliWithStdin(cli, prompt, projectPath, 180_000);
   } catch (err) {
     return {
       success: false,
@@ -134,8 +119,6 @@ export async function generateContextFiles(
     };
   }
 
-  // `claude -p --output-format json` returns `{ session_id, result, ... }`.
-  // Unwrap to `result`, with a raw-stdout fallback for older CLI versions.
   let text = stdout;
   try {
     const envelope = JSON.parse(stdout) as unknown;
@@ -184,8 +167,6 @@ export async function generateContextFiles(
   };
 }
 
-// ─── Internal helpers ────────────────────────────────────────────────────────
-
 function buildMemoryPrompt(
   readmeContent: string | null,
   packageJsonContent: string | null,
@@ -231,10 +212,6 @@ with no YAML frontmatter. Encode newlines as \\n and quotes as \\".
 `;
 }
 
-/**
- * Extract and validate the `shipcode-memory` fenced block from a text blob.
- * Uses line-by-line parsing to avoid false-matching on embedded backtick sequences.
- */
 function extractGeneratedMemoryFiles(text: string): Record<string, string> {
   const openTag = `\`\`\`${MEMORY_FENCE_TAG}`;
   const lines = text.split('\n');
@@ -299,13 +276,16 @@ ${normalized}
 `;
 }
 
-/**
- * Spawn the selected context-generator CLI and pipe the prompt through stdin.
- * Claude requires stdin to avoid argparser issues with frontmatter. Codex
- * supports stdin via `exec -`, which keeps the prompt path symmetric.
- */
-function runContextCliWithStdin(
-  cli: ContextGeneratorCli,
+function hasObsoleteContextDirectory(projectPath: string): boolean {
+  try {
+    return statSync(join(projectPath, OBSOLETE_CONTEXT_DIR)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function runMemoryCliWithStdin(
+  cli: GeneratorCli,
   prompt: string,
   cwd: string,
   timeoutMs: number,

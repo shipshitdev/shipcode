@@ -385,11 +385,15 @@ export function registerProjectHandlers({
     }
 
     const git = new GitService(project.path);
+    const threads = queries.threads.list(projectId);
 
     return {
       project,
       settings: queries.settings.get(),
-      threads: queries.threads.list(projectId),
+      threads,
+      latestPlanStatusByThreadId: Object.fromEntries(
+        threads.map((thread) => [thread.id, queries.plans.getLatest(thread.id)?.status ?? null]),
+      ),
       branches: await git.listBranches(project.defaultBranch),
     };
   });

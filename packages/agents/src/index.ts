@@ -1,5 +1,9 @@
 export type { ContextGenerateResult } from './context-generator';
-export { generateContextFiles, listContextFiles, readContextFile } from './context-generator';
+export {
+  generateContextFiles,
+  listContextFiles,
+  readContextFile,
+} from './context-generator';
 export { loadRepoContext } from './context-loader';
 export { GhCli } from './github/gh-cli';
 export { IssuePoller } from './github/issue-poller';
@@ -22,6 +26,14 @@ export {
   parseGhProjectScope,
   validateOpenRouterModel,
 } from './health-check';
+export type { MemoryGenerateResult } from './memory-generator';
+export {
+  generateMemoryFiles,
+  inspectRepoMemory,
+  listMemoryFiles,
+  readMemoryFile,
+} from './memory-generator';
+export { loadRepoMemory } from './memory-loader';
 export type { EnhancePrdOptions, GeneratedPrd } from './prd-generator';
 export { buildPrdPrompt, enhancePrdDraft, extractPrd } from './prd-generator';
 export type { ManagedProcess } from './process-manager';

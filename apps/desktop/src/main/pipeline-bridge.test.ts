@@ -42,6 +42,7 @@ function makeThread(overrides: Record<string, unknown> = {}) {
     clarificationRound: 0,
     clarificationRequest: null,
     clarificationAnswers: [],
+    answeredClarification: null,
     verificationStatus: null,
     verificationRetries: 0,
     autonomous: false,

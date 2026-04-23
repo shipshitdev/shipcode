@@ -1,5 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import {
+  type AnsweredClarification,
+  answeredClarificationSchema,
   type ClarificationAnswer,
   type ClarificationRequest,
   clarificationAnswerSchema,
@@ -30,6 +32,7 @@ interface ThreadRow {
   clarification_round: number | null;
   clarification_request: string | null;
   clarification_answers: string | null;
+  answered_clarification: string | null;
   verification_status: string | null;
   verification_retries: number | null;
   autonomous: number | null;
@@ -188,6 +191,7 @@ export class ThreadQueries {
         `UPDATE threads
             SET clarification_request = ?,
                 clarification_answers = '[]',
+                answered_clarification = NULL,
                 clarification_round = ?,
                 updated_at = ${ISO_NOW_SQL}
           WHERE id = ?`,
@@ -206,12 +210,45 @@ export class ThreadQueries {
       .run(JSON.stringify(answers), id);
   }
 
+  resolveClarification(
+    id: string,
+    request: ClarificationRequest,
+    answers: ClarificationAnswer[],
+  ): void {
+    const snapshot: AnsweredClarification = { request, answers };
+    this.db
+      .prepare(
+        `UPDATE threads
+            SET clarification_request = NULL,
+                clarification_answers = '[]',
+                answered_clarification = ?,
+                clarification_round = 0,
+                updated_at = ${ISO_NOW_SQL}
+          WHERE id = ?`,
+      )
+      .run(JSON.stringify(snapshot), id);
+  }
+
+  clearPendingClarification(id: string): void {
+    this.db
+      .prepare(
+        `UPDATE threads
+            SET clarification_request = NULL,
+                clarification_answers = '[]',
+                clarification_round = 0,
+                updated_at = ${ISO_NOW_SQL}
+          WHERE id = ?`,
+      )
+      .run(id);
+  }
+
   clearClarification(id: string): void {
     this.db
       .prepare(
         `UPDATE threads
             SET clarification_request = NULL,
                 clarification_answers = '[]',
+                answered_clarification = NULL,
                 clarification_round = 0,
                 updated_at = ${ISO_NOW_SQL}
           WHERE id = ?`,
@@ -417,6 +454,7 @@ function mapThread(row: ThreadRow): Thread {
     clarificationRound: row.clarification_round ?? 0,
     clarificationRequest: parseClarificationRequest(row.clarification_request),
     clarificationAnswers: parseClarificationAnswers(row.clarification_answers),
+    answeredClarification: parseAnsweredClarification(row.answered_clarification),
     verificationStatus: row.verification_status ?? null,
     verificationRetries: row.verification_retries ?? 0,
     autonomous: !!row.autonomous,
@@ -458,5 +496,14 @@ function parseClarificationAnswers(value: string | null): ClarificationAnswer[] 
       .filter(Boolean);
   } catch {
     return [];
+  }
+}
+
+function parseAnsweredClarification(value: string | null): AnsweredClarification | null {
+  if (!value) return null;
+  try {
+    return answeredClarificationSchema.parse(JSON.parse(value));
+  } catch {
+    return null;
   }
 }

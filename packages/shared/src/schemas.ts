@@ -58,6 +58,11 @@ export const clarificationAnswerSchema = z.object({
   freeformText: z.string().nullable().optional().default(null),
 });
 
+export const answeredClarificationSchema = z.object({
+  request: clarificationRequestSchema,
+  answers: z.array(clarificationAnswerSchema),
+});
+
 export const reviewFindingSchema = z.object({
   id: z.string().min(1),
   severity: z.enum(['critical', 'major', 'minor', 'nit']),

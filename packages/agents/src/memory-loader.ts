@@ -11,13 +11,7 @@ const PRIORITY_MEMORY_FILES = [
   'do-dont.md',
 ];
 
-/**
- * Load repo memory from `<projectPath>/.agents/memory/` for prompt injection.
- * All markdown files in the folder are included, with `MEMORY.md` and the
- * generated core docs ordered first. YAML frontmatter is stripped before
- * injection.
- */
-export function loadRepoContext(projectPath: string): string {
+export function loadRepoMemory(projectPath: string): string {
   const memoryParts = loadMemoryParts(projectPath);
   if (memoryParts.length > 0) {
     return memoryParts.join('\n\n');
