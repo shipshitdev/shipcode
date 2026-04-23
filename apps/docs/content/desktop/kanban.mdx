@@ -26,6 +26,8 @@ Cards also show the effective revision count for that issue. If a run is already
 
 If the effective workflow for an issue requires a human approval gate before execution, the card also shows an `Approval` badge. Hover it to see whether that requirement comes from the app default, project override, or issue override.
 
+After you approve a run, it no longer stays under the human approval section. If execution slots are full, the board moves it into **Agent Loop → Waiting For Execution** so it is clear that approval is done and the runtime is only waiting for capacity.
+
 ## Drag to launch
 
 Drag any Todo card into **Planning** to start the pipeline on that issue. The drag honors the `agent:*` label on the GitHub issue and spawns the correct executor.
@@ -36,7 +38,7 @@ The Kanban component lives in [`packages/ui/src/KanbanBoard.tsx`](https://github
 
 Click the toggle in the Kanban header to switch to a flat list view. The list mirrors the same column structure as Planning / Reviewing / Executing / Verifying, plus the Done column's `Completed` and `Done` sub-sections. Use list view when you have more than a handful of concurrent runs and want a denser layout.
 
-The header also has a `Needs approval` filter. Enable it to show only issues whose effective workflow will pause for human approval before execution.
+The header also has a `Needs approval` filter. Enable it to show only issues whose effective workflow will pause for human approval before execution. Approved runs that are only waiting for execution capacity are excluded from this filter.
 
 ## Card actions
 

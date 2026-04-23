@@ -16,6 +16,8 @@ When multiple pipelines are running concurrently, the drawer title shows a dropd
 
 Before the dropdown (Session 25), the drawer used `#N` pill tabs that overflowed once you had more than 3–4 concurrent runs. The dropdown scales to as many runs as you have.
 
+If a run has already been approved but execution capacity is full, the drawer shows **Waiting for execution slot** instead of pretending it still needs approval. The internal thread phase is still `awaiting_approval`, but the drawer translates that into the real user-facing state.
+
 ## Stream coloring
 
 The terminal highlights output by agent and phase:

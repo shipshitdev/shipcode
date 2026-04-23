@@ -8,7 +8,7 @@ The component is [`apps/desktop/src/renderer/components/InboxView.tsx`](https://
 
 By default, the Inbox surfaces threads in these states:
 
-- `awaiting_approval` — pipeline paused after review, waiting for human sign-off because the effective approval setting for that run requires it
+- `awaiting_approval` / **Needs approval** — pipeline paused after review because the effective approval setting for that run requires a human sign-off before execution
 - `failed` — any phase errored out
 - `completed` — PR opened and ready for you to review/read
 - Verification-exhausted — verifier ran out of retries without passing
@@ -21,7 +21,6 @@ Items remain in the Inbox badge queue until you explicitly dismiss them.
 Each row shows:
 
 - Current phase / state
-- Explicit `Approval required` badge on `awaiting_approval` rows
 - Issue title
 - Time since last state change
 - Primary action button (View, Dismiss)
@@ -35,9 +34,9 @@ Clicking a row navigates you into the thread's project and opens the IssueDetail
 Use the controls at the top to:
 
 - Sort newest vs oldest
-- Toggle `Needs approval` to isolate only `awaiting_approval` rows
+- Toggle `Needs approval` to isolate only true human-approval gates
 
-When the `Needs approval` filter is enabled, Inbox hides failures, completed runs, and CI-blocked rows so you can focus only on work that is waiting on a human gate.
+When the `Needs approval` filter is enabled, Inbox hides failures, completed runs, and CI-blocked rows so you can focus only on work that is still waiting on a human decision. Once you approve a run, it leaves this filter even if execution has to wait for capacity.
 
 ## Related
 

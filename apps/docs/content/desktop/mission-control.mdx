@@ -27,7 +27,7 @@ Mission Control is the UI surface for the notifications system — the same engi
 
 | Event | Default | Description |
 |-------|---------|-------------|
-| `awaitingApproval` | on | Pipeline paused after review, waiting for human sign-off |
+| `awaitingApproval` | on | Run needs human approval before execution |
 | `failed` | on | Pipeline errored out |
 | `completed` | on | PR successfully opened and stays in Inbox until dismissed |
 | `verificationExhausted` | on | Verifier exhausted its retry budget without passing |
@@ -36,6 +36,6 @@ Toggles for OS notifications, badge counter, and notification sound all live in 
 
 ## Related
 
-- [Inbox](/desktop/inbox) — focused triage queue for unread items that need review (`awaiting_approval`, `failed`, `completed`, `verification_exhausted`, `ci_blocked`)
+- [Inbox](/desktop/inbox) — focused triage queue for unread items that need attention (`needs approval`, `failed`, `completed`, `verification_exhausted`, `ci_blocked`)
 - [Costs](/desktop/costs) — per-thread cost aggregation you can click through to
 - [Kanban Board](/desktop/kanban) — per-project phase view
