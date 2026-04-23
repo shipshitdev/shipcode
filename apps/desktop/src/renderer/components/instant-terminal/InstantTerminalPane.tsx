@@ -1,6 +1,7 @@
 import type { TerminalEventRecord } from '@shipcode/shared';
 import { Badge, Button, Columns2, RefreshCw, Rows2, Square, X } from '@shipcode/ui';
-import { useEffect, useState } from 'react';
+import { useMemo } from 'react';
+import { useSharedSecondNow } from '../../hooks/useSharedSecondNow';
 import type { InstantPaneMode } from '../../stores/app-store';
 import { useAppStore } from '../../stores/app-store';
 import { TerminalTranscript } from '../terminal-transcript/TerminalTranscript';
@@ -47,25 +48,19 @@ export function InstantTerminalPane({
   const canonicalStream = useAppStore((s) => s.canonicalTerminalStream[threadId] ?? EMPTY_STREAM);
   const lastActivityAt = useAppStore((s) => s.lastActivityByThread[threadId] ?? null);
   const { containerRef } = useInstantTerminalPane(threadId, mode, isRunning);
-  const [now, setNow] = useState(() => Date.now());
+  const now = useSharedSecondNow();
 
-  useEffect(() => {
-    setNow(Date.now());
-    if (!isRunning) return;
-    const id = window.setInterval(() => setNow(Date.now()), 1_000);
-    return () => window.clearInterval(id);
-  }, [isRunning]);
-
-  const lastRecordAt =
-    canonicalStream.length > 0
-      ? Date.parse(canonicalStream[canonicalStream.length - 1].createdAt)
-      : NaN;
-  const quietSince =
-    typeof lastActivityAt === 'number'
+  const quietSince = useMemo(() => {
+    const lastRecordAt =
+      canonicalStream.length > 0
+        ? Date.parse(canonicalStream[canonicalStream.length - 1].createdAt)
+        : NaN;
+    return typeof lastActivityAt === 'number'
       ? lastActivityAt
       : Number.isFinite(lastRecordAt)
         ? lastRecordAt
         : null;
+  }, [canonicalStream, lastActivityAt]);
   const quietSeconds =
     isRunning && quietSince != null ? Math.max(0, Math.floor((now - quietSince) / 1_000)) : null;
   const showQuietHint = quietSeconds != null && quietSeconds >= QUIET_HINT_SECONDS;
