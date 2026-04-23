@@ -5,22 +5,21 @@ import type {
   ExecutorModel,
   GitHubIssueCacheRecord,
   GitHubIssueComment,
+  IssuePipelineStatus,
   ReasoningEffort,
 } from '@shipcode/shared';
 import {
   clampError,
   deriveGithubIssueUrl,
   parseGithubProjectUrl,
-  resolveExecutorModelForIssue,
   SHIPCODE_DEFAULT_LABELS,
 } from '@shipcode/shared';
 import log, { logEvent } from '../logger.service';
+import { PipelineScheduler } from '../pipeline-scheduler';
 import {
   attachIssueToConfiguredProjectBoard,
-  resolveIssuePhaseModels,
   sendGithubIssuesUpdated,
   syncLinkedPullRequestFeedback,
-  transitionThreadPhase,
 } from './helpers';
 import type { IpcHandlerDeps } from './types';
 
@@ -45,6 +44,35 @@ function resolveCanonicalIssueThread(
   return queries.threads.getByProjectAndGithubIssue(issue.projectId, issue.issueNumber);
 }
 
+function resolveOpenIssuePipelineStatus(
+  issue: GitHubIssueCacheRecord,
+  thread: ReturnType<IpcHandlerDeps['queries']['threads']['getById']>,
+): IssuePipelineStatus {
+  if (thread) {
+    return thread.status === 'idle' ? 'todo' : (thread.status as IssuePipelineStatus);
+  }
+  return issue.linkedPrNumber != null ? 'completed' : 'todo';
+}
+
+function syncOpenIssueState(
+  queries: IpcHandlerDeps['queries'],
+  issue: GitHubIssueCacheRecord,
+): GitHubIssueCacheRecord | null {
+  const thread = resolveCanonicalIssueThread(queries, issue);
+  if (thread && issue.threadId !== thread.id) {
+    queries.githubIssues.linkThread(issue.id, thread.id);
+  }
+
+  queries.githubIssues.updateState(issue.id, 'open');
+  queries.githubIssues.updatePipelineStatus(
+    issue.id,
+    resolveOpenIssuePipelineStatus(issue, thread),
+  );
+  queries.githubIssues.clearArchivedAt(issue.id);
+
+  return queries.githubIssues.getByNumber(issue.projectId, issue.issueNumber);
+}
+
 export function registerGitHubHandlers({
   ipcMain,
   mainWindow,
@@ -54,6 +82,13 @@ export function registerGitHubHandlers({
   notificationService,
   chatNotificationService,
 }: IpcHandlerDeps): void {
+  const scheduler = new PipelineScheduler({
+    queries,
+    pipeline,
+    emitter,
+    getMainWindow: () => mainWindow,
+  });
+
   ipcMain.handle(
     'github:get-issue',
     (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
@@ -124,9 +159,7 @@ export function registerGitHubHandlers({
           if (record.state === 'closed') {
             queries.githubIssues.markDoneOnClose(record.id);
           } else if (record.state === 'open') {
-            queries.githubIssues.markReopenedOnOpen(record.id);
-            queries.githubIssues.reconcileCompletedFromEvidence(record.id);
-            queries.githubIssues.clearArchivedAt(record.id);
+            syncOpenIssueState(queries, record);
           }
 
           if (!existingIssue) {
@@ -211,6 +244,7 @@ export function registerGitHubHandlers({
       }
 
       try {
+        queries.githubIssues.updateState(issue.id, 'closed');
         queries.githubIssues.updatePipelineStatus(issue.id, 'done');
         queries.githubIssues.archiveIssues([issue.id]);
       } catch (err) {
@@ -237,12 +271,15 @@ export function registerGitHubHandlers({
       const hasCompletionEvidence = issue.linkedPrNumber != null || thread?.status === 'completed';
 
       if (issue.state === 'closed') {
+        queries.githubIssues.updateState(issue.id, 'closed');
         queries.githubIssues.updatePipelineStatus(issue.id, 'done');
       } else if (hasCompletionEvidence) {
+        queries.githubIssues.updateState(issue.id, 'open');
         queries.githubIssues.updatePipelineStatus(issue.id, 'completed');
       } else {
         const ghCli = new GhCli(project.path);
         await ghCli.closeIssue(issueNumber);
+        queries.githubIssues.updateState(issue.id, 'closed');
         queries.githubIssues.updatePipelineStatus(issue.id, 'done');
       }
 
@@ -264,6 +301,7 @@ export function registerGitHubHandlers({
         await ghCli.closeIssue(issueNumber);
       }
 
+      queries.githubIssues.updateState(issue.id, 'closed');
       queries.githubIssues.updatePipelineStatus(issue.id, 'done');
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
     },
@@ -283,8 +321,7 @@ export function registerGitHubHandlers({
         await ghCli.reopenIssue(issueNumber);
       }
 
-      queries.githubIssues.markReopenedOnOpen(issue.id);
-      queries.githubIssues.clearArchivedAt(issue.id);
+      syncOpenIssueState(queries, issue);
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
     },
   );
@@ -501,32 +538,6 @@ export function registerGitHubHandlers({
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
 
-      const reusableThread = resolveCanonicalIssueThread(queries, issue);
-      if (reusableThread && !['failed', 'completed', 'idle'].includes(reusableThread.status)) {
-        throw new Error(`Issue #${issueNumber} already has active thread`);
-      }
-
-      const settings = queries.settings.get();
-      const activeCount = pipeline.listActive().length;
-      if (activeCount >= settings.maxConcurrentPipelines) {
-        queries.githubIssues.updatePipelineStatus(issue.id, 'queued');
-        sendGithubIssuesUpdated(mainWindow, queries, projectId);
-        log.info(
-          `[pipeline] queued issue #${issue.issueNumber} (${activeCount}/${settings.maxConcurrentPipelines} slots used)`,
-        );
-        return;
-      }
-
-      queries.githubIssues.updatePipelineStatus(issue.id, 'planning');
-      const thread =
-        reusableThread ?? queries.threads.create(projectId, issue.body ?? issue.title, issue.title);
-      if (reusableThread) {
-        queries.threads.updateIssueContent(thread.id, issue.body ?? issue.title, issue.title);
-      }
-      queries.threads.setGithubIssue(thread.id, issue.issueNumber, project.gitRemote);
-      queries.githubIssues.linkThread(issue.id, thread.id);
-      sendGithubIssuesUpdated(mainWindow, queries, projectId);
-
       const issueUrl = deriveGithubIssueUrl(project.gitRemote, issue.issueNumber);
       const ghCliForAttach = new GhCli(project.path);
       await attachIssueToConfiguredProjectBoard(
@@ -536,50 +547,7 @@ export function registerGitHubHandlers({
         issueUrl,
         'github:start-issue',
       );
-
-      const phaseModels = resolveIssuePhaseModels(settings, project, issue);
-      const effectiveExecutorModel = resolveExecutorModelForIssue(settings, project, issue);
-      queries.threads.setPhaseModels(thread.id, {
-        ...phaseModels,
-        executorModel: effectiveExecutorModel,
-      });
-      queries.threads.resetFailureTracking(thread.id);
-      queries.plans.supersedeAll(thread.id);
-      queries.plans.supersedeAllForIssue(projectId, issueNumber, thread.id);
-
-      log.info(
-        `[pipeline] starting issue #${issue.issueNumber} "${issue.title}" (thread ${thread.id}${reusableThread ? ', reusing existing worktree' : ''}, executor: ${effectiveExecutorModel})`,
-      );
-      try {
-        await pipeline.startFromGitHubIssue(
-          thread.id,
-          project.path,
-          { number: issue.issueNumber, title: issue.title, body: issue.body, labels: issue.labels },
-          effectiveExecutorModel,
-          {
-            worktreePath: thread.worktreePath,
-            baseBranch: project.defaultBranch,
-            plannerModel: phaseModels.plannerModel,
-            reviewerModel: phaseModels.reviewerModel,
-            verifierModel: phaseModels.verifierModel,
-            plannerModelIdOverride: phaseModels.plannerModelId,
-            reviewerModelIdOverride: phaseModels.reviewerModelId,
-            executorModelIdOverride: phaseModels.executorModelId,
-            verifierModelIdOverride: phaseModels.verifierModelId,
-            plannerReasoningEffort: phaseModels.plannerReasoningEffort,
-            reviewerReasoningEffort: phaseModels.reviewerReasoningEffort,
-            executorReasoningEffort: phaseModels.executorReasoningEffort,
-            verifierReasoningEffort: phaseModels.verifierReasoningEffort,
-          },
-        );
-      } catch (err) {
-        transitionThreadPhase(mainWindow, queries, emitter, {
-          threadId: thread.id,
-          phase: 'failed',
-          errorMessage: clampError(err),
-        });
-        throw err;
-      }
+      await scheduler.startOrQueue(projectId, issueNumber);
     },
   );
 

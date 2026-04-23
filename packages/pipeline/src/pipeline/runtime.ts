@@ -3,6 +3,7 @@ import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, resolve, sep } from 'node:path';
 import type { ProviderPhase, ProviderRequest } from '@shipcode/agents';
 import { formatPlanComment, GhCli, loadRepoSetupContract } from '@shipcode/agents';
+import { syncThreadAndIssuePhase } from '../phase-sync';
 import type { PipelineContext, PipelineDeps, PipelineExecutorModel } from '../types';
 import type { PipelineContextHelpers, PipelineRuntime } from './shared';
 
@@ -376,23 +377,7 @@ export function createPipelineRuntime(
     phase: Parameters<typeof deps.threads.updateStatus>[1],
     error?: string,
   ) {
-    if (phase === 'failed') {
-      // Read BEFORE writing — the current status IS the active phase that failed
-      const current = deps.threads.getById(threadId);
-      const activePhase = current?.status ?? 'unknown';
-      deps.threads.recordFailure(threadId, activePhase, error);
-    } else if (error !== undefined) {
-      deps.threads.updateStatus(threadId, phase, error);
-    } else {
-      deps.threads.updateStatus(threadId, phase);
-    }
-    const thread = deps.threads.getById(threadId);
-    if (thread?.githubIssueNumber) {
-      const issue = deps.githubIssues.getByNumber(thread.projectId, thread.githubIssueNumber);
-      if (issue) {
-        deps.githubIssues.updatePipelineStatus(issue.id, phase === 'idle' ? 'todo' : phase);
-      }
-    }
+    syncThreadAndIssuePhase(deps.threads, deps.githubIssues, threadId, phase, error);
     deps.emitter.emit({ type: 'pipeline:phase', threadId, phase });
   }
 

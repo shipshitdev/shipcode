@@ -2,6 +2,25 @@ import type { IpcMain } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerGitHubHandlers } from './register-github-handlers';
 
+const { closeIssueMock, reopenIssueMock } = vi.hoisted(() => ({
+  closeIssueMock: vi.fn(),
+  reopenIssueMock: vi.fn(),
+}));
+
+vi.mock('@shipcode/agents', async () => {
+  const actual = await vi.importActual<typeof import('@shipcode/agents')>('@shipcode/agents');
+  class MockGhCli {
+    closeIssue = closeIssueMock;
+    reopenIssue = reopenIssueMock;
+    listAllIssues = vi.fn(async () => []);
+    archiveProjectItems = vi.fn(async () => undefined);
+  }
+  return {
+    ...actual,
+    GhCli: MockGhCli,
+  };
+});
+
 describe('registerGitHubHandlers', () => {
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
   const ipcMain = {
@@ -84,6 +103,7 @@ describe('registerGitHubHandlers', () => {
     clarificationRound: 0,
     clarificationRequest: null,
     clarificationAnswers: [],
+    answeredClarification: null,
     verificationStatus: null,
     verificationRetries: 0,
     autonomous: true,
@@ -108,6 +128,8 @@ describe('registerGitHubHandlers', () => {
   beforeEach(() => {
     handlers.clear();
     vi.clearAllMocks();
+    closeIssueMock.mockReset();
+    reopenIssueMock.mockReset();
   });
 
   it('reuses the existing issue thread and worktree on github:start-issue', async () => {
@@ -270,6 +292,68 @@ describe('registerGitHubHandlers', () => {
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('github:issues-updated', {
       projectId: 'project-1',
       issues: [refreshedIssue],
+    });
+  });
+
+  it('reopens a closed issue and restores awaiting approval from the linked thread state', async () => {
+    const closedIssue = {
+      ...baseIssue,
+      state: 'closed',
+      pipelineStatus: 'done',
+      threadId: reusableThread.id,
+    };
+    const restoredIssue = {
+      ...closedIssue,
+      state: 'open',
+      pipelineStatus: 'awaiting_approval',
+    };
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+      },
+      githubIssues: {
+        getByNumber: vi.fn().mockReturnValueOnce(closedIssue).mockReturnValue(restoredIssue),
+        updateState: vi.fn(),
+        updatePipelineStatus: vi.fn(),
+        clearArchivedAt: vi.fn(),
+        linkThread: vi.fn(),
+        list: vi.fn(() => [restoredIssue]),
+      },
+      threads: {
+        getById: vi.fn(() => ({ ...reusableThread, status: 'awaiting_approval' })),
+        getByProjectAndGithubIssue: vi.fn(() => ({
+          ...reusableThread,
+          status: 'awaiting_approval',
+        })),
+      },
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const reopenIssue = handlers.get('github:reopen-issue');
+    if (!reopenIssue) throw new Error('github:reopen-issue handler not registered');
+
+    await reopenIssue(undefined, { projectId: 'project-1', issueNumber: 42 });
+
+    expect(reopenIssueMock).toHaveBeenCalledWith(42);
+    expect(queries.githubIssues.updateState).toHaveBeenCalledWith(closedIssue.id, 'open');
+    expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
+      closedIssue.id,
+      'awaiting_approval',
+    );
+    expect(queries.githubIssues.clearArchivedAt).toHaveBeenCalledWith(closedIssue.id);
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('github:issues-updated', {
+      projectId: 'project-1',
+      issues: [restoredIssue],
     });
   });
 });

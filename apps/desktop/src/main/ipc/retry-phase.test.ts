@@ -20,6 +20,7 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     clarificationRound: 0,
     clarificationRequest: null,
     clarificationAnswers: [],
+    answeredClarification: null,
     verificationStatus: null,
     verificationRetries: 0,
     autonomous: true,

@@ -43,6 +43,14 @@ const RUNNING_PIPELINE_PHASES = [
 export class PipelineScheduler {
   constructor(private readonly deps: PipelineSchedulerDeps) {}
 
+  private _getRunningPipelineCount(): number {
+    const { pipeline } = this.deps;
+    if (typeof pipeline.listActiveInPhases === 'function') {
+      return pipeline.listActiveInPhases(RUNNING_PIPELINE_PHASES).length;
+    }
+    return pipeline.listActive().length;
+  }
+
   /**
    * Attempt to start a GitHub issue pipeline.
    *
@@ -50,7 +58,7 @@ export class PipelineScheduler {
    * Otherwise starts the pipeline immediately and returns `{ queued: false }`.
    */
   async startOrQueue(projectId: string, issueNumber: number): Promise<{ queued: boolean }> {
-    const { queries, pipeline } = this.deps;
+    const { queries } = this.deps;
 
     const project = queries.projects.getById(projectId);
     if (!project) throw new Error(`Project ${projectId} not found`);
@@ -59,7 +67,7 @@ export class PipelineScheduler {
     if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
 
     const settings = queries.settings.get();
-    const activeCount = pipeline.listActiveInPhases(RUNNING_PIPELINE_PHASES).length;
+    const activeCount = this._getRunningPipelineCount();
 
     if (activeCount >= settings.maxConcurrentPipelines) {
       queries.githubIssues.updatePipelineStatus(issue.id, 'queued');
@@ -79,10 +87,10 @@ export class PipelineScheduler {
    * Drains one queued issue if capacity allows.
    */
   onSlotFreed(): void {
-    const { queries, pipeline } = this.deps;
+    const { queries } = this.deps;
     try {
       const settings = queries.settings.get();
-      const activeCount = pipeline.listActiveInPhases(RUNNING_PIPELINE_PHASES).length;
+      const activeCount = this._getRunningPipelineCount();
       if (activeCount >= settings.maxConcurrentPipelines) return;
 
       const next = queries.githubIssues.getNextQueued();
@@ -91,57 +99,11 @@ export class PipelineScheduler {
       const project = queries.projects.getById(next.projectId);
       if (!project) return;
 
-      queries.githubIssues.updatePipelineStatus(next.id, 'planning');
-      const thread = queries.threads.create(next.projectId, next.body ?? next.title, next.title);
-      queries.threads.setGithubIssue(thread.id, next.issueNumber, project.gitRemote);
+      log.info(`[scheduler] auto-promoting #${next.issueNumber} "${next.title}"`);
 
-      const phaseModels = this._resolvePhaseModels(queries.settings.get(), project, next);
-      const effectiveExecutorModel = resolveExecutorModelForIssue(
-        queries.settings.get(),
-        project,
-        next,
-      );
-      queries.threads.setPhaseModels(thread.id, {
-        ...phaseModels,
-        executorModel: effectiveExecutorModel,
+      this._launch(next, project).catch((err) => {
+        log.error('[scheduler] auto-promote failed:', err);
       });
-      queries.githubIssues.linkThread(next.id, thread.id);
-      this._sendIssuesUpdated(next.projectId);
-
-      log.info(
-        `[scheduler] auto-promoting #${next.issueNumber} "${next.title}" (thread ${thread.id})`,
-      );
-
-      pipeline
-        .startFromGitHubIssue(
-          thread.id,
-          project.path,
-          { number: next.issueNumber, title: next.title, body: next.body, labels: next.labels },
-          effectiveExecutorModel,
-          {
-            baseBranch: project.defaultBranch,
-            plannerModel: phaseModels.plannerModel,
-            reviewerModel: phaseModels.reviewerModel,
-            verifierModel: phaseModels.verifierModel,
-            plannerModelIdOverride: phaseModels.plannerModelId,
-            reviewerModelIdOverride: phaseModels.reviewerModelId,
-            executorModelIdOverride: phaseModels.executorModelId,
-            verifierModelIdOverride: phaseModels.verifierModelId,
-            plannerReasoningEffort: phaseModels.plannerReasoningEffort,
-            reviewerReasoningEffort: phaseModels.reviewerReasoningEffort,
-            executorReasoningEffort: phaseModels.executorReasoningEffort,
-            verifierReasoningEffort: phaseModels.verifierReasoningEffort,
-          },
-        )
-        .catch((err) => {
-          const win = this.deps.getMainWindow();
-          transitionThreadPhase(win, queries, this.deps.emitter, {
-            threadId: thread.id,
-            phase: 'failed',
-            errorMessage: clampError(err),
-          });
-          log.error('[scheduler] auto-promote failed:', err);
-        });
     } catch (err) {
       log.error('[scheduler] slot-freed promotion error:', err);
     }
@@ -198,6 +160,10 @@ export class PipelineScheduler {
     const reusableThread = issue.threadId
       ? queries.threads.getById(issue.threadId)
       : queries.threads.getByProjectAndGithubIssue(issue.projectId, issue.issueNumber);
+
+    if (reusableThread && !['failed', 'completed', 'idle'].includes(reusableThread.status)) {
+      throw new Error(`Issue #${issue.issueNumber} already has active thread`);
+    }
 
     queries.githubIssues.updatePipelineStatus(issue.id, 'planning');
     const thread =

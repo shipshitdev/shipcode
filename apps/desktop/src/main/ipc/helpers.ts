@@ -1,10 +1,9 @@
 import fs from 'node:fs';
 import { DEFAULT_SKILLS, GhCli, inspectProjectSetup, StreamParser } from '@shipcode/agents';
-import type { PipelineEmitter } from '@shipcode/pipeline';
+import { type PipelineEmitter, syncThreadAndIssuePhase } from '@shipcode/pipeline';
 import type { ShipCodePlan } from '@shipcode/shared';
 import {
   clampError,
-  type IssuePipelineStatus,
   type PipelinePhase,
   parseGithubProjectUrl,
   resolveEffectivePhaseReasoningEffort,
@@ -212,10 +211,6 @@ type AttentionPhase = Extract<
   'clarifying' | 'awaiting_approval' | 'completed' | 'failed' | 'idle'
 >;
 
-function mapPhaseToIssueStatus(phase: AttentionPhase): IssuePipelineStatus {
-  return phase === 'idle' ? 'todo' : phase;
-}
-
 export function transitionThreadPhase(
   mainWindow: BrowserWindow,
   queries: Queries,
@@ -230,13 +225,16 @@ export function transitionThreadPhase(
     errorMessage?: string | null;
   },
 ) {
-  queries.threads.updateStatus(threadId, phase, errorMessage ?? undefined);
+  syncThreadAndIssuePhase(
+    queries.threads,
+    queries.githubIssues,
+    threadId,
+    phase,
+    errorMessage ?? undefined,
+  );
 
   const issue = queries.githubIssues.getByThreadId(threadId);
-  if (issue) {
-    queries.githubIssues.updatePipelineStatus(issue.id, mapPhaseToIssueStatus(phase));
-    sendGithubIssuesUpdated(mainWindow, queries, issue.projectId);
-  }
+  if (issue) sendGithubIssuesUpdated(mainWindow, queries, issue.projectId);
 
   emitter.emit({ type: 'pipeline:phase', threadId, phase });
 }

@@ -59,20 +59,13 @@ import {
   VerificationQueries,
 } from '@shipcode/db';
 import { createPipeline } from '@shipcode/pipeline';
-import {
-  clampError,
-  EXECUTION_PHASES,
-  HEARTBEAT_TIMEOUT_MS,
-  resolveEffectivePhaseReasoningEffortForIssue,
-  resolveExecutorModelForIssue,
-  resolvePhaseModelForIssue,
-  resolvePhaseModelIdForIssue,
-} from '@shipcode/shared';
+import { EXECUTION_PHASES, HEARTBEAT_TIMEOUT_MS } from '@shipcode/shared';
 import { ChatNotificationService } from './chat-notification-service';
 import { registerIpcHandlers } from './ipc';
 import { transitionThreadPhase } from './ipc/helpers';
 import { NotificationService } from './notification-service';
 import { createElectronEmitter } from './pipeline-bridge';
+import { PipelineScheduler } from './pipeline-scheduler';
 
 let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
@@ -176,47 +169,6 @@ function requireMainWindow(): BrowserWindow {
 function requirePipeline(): ReturnType<typeof createPipeline> {
   if (!pipeline) throw new Error('Pipeline not initialized');
   return pipeline;
-}
-
-function resolveIssuePhaseModels(
-  settings: ReturnType<SettingsQueries['get']>,
-  project: ReturnType<ProjectQueries['getById']>,
-  issue: import('@shipcode/shared').GitHubIssueCacheRecord,
-) {
-  return {
-    plannerModel: resolvePhaseModelForIssue(settings, project, issue, 'planner'),
-    reviewerModel: resolvePhaseModelForIssue(settings, project, issue, 'reviewer'),
-    verifierModel: resolvePhaseModelForIssue(settings, project, issue, 'verifier'),
-    executorModel: resolvePhaseModelForIssue(settings, project, issue, 'executor'),
-    plannerModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'planner'),
-    reviewerModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'reviewer'),
-    verifierModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'verifier'),
-    executorModelId: resolvePhaseModelIdForIssue(settings, project, issue, 'executor'),
-    plannerReasoningEffort: resolveEffectivePhaseReasoningEffortForIssue(
-      settings,
-      project,
-      issue,
-      'planner',
-    ),
-    reviewerReasoningEffort: resolveEffectivePhaseReasoningEffortForIssue(
-      settings,
-      project,
-      issue,
-      'reviewer',
-    ),
-    verifierReasoningEffort: resolveEffectivePhaseReasoningEffortForIssue(
-      settings,
-      project,
-      issue,
-      'verifier',
-    ),
-    executorReasoningEffort: resolveEffectivePhaseReasoningEffortForIssue(
-      settings,
-      project,
-      issue,
-      'executor',
-    ),
-  };
 }
 
 const DIST = path.join(__dirname, '..');
@@ -327,68 +279,17 @@ function createWindow() {
   pipeline = createPipeline(pipelineDeps as Parameters<typeof createPipeline>[0]);
   const activePipeline = requirePipeline();
 
+  const pipelineScheduler = new PipelineScheduler({
+    queries,
+    pipeline: activePipeline,
+    emitter,
+    getMainWindow: requireMainWindow,
+  });
+
   // Queue promotion: start the next queued issue when a pipeline slot opens.
   onPipelineTerminal = () => {
     try {
-      const settings = queries.settings.get();
-      const activeCount = activePipeline.listActive().length;
-      if (activeCount >= settings.maxConcurrentPipelines) return;
-
-      const next = queries.githubIssues.getNextQueued();
-      if (!next) return;
-
-      const project = queries.projects.getById(next.projectId);
-      if (!project) return;
-      const phaseModels = resolveIssuePhaseModels(settings, project, next);
-      const effectiveExecutorModel = resolveExecutorModelForIssue(settings, project, next);
-
-      queries.githubIssues.updatePipelineStatus(next.id, 'planning');
-      const thread = queries.threads.create(next.projectId, next.body ?? next.title, next.title);
-      queries.threads.setGithubIssue(thread.id, next.issueNumber, project.gitRemote);
-      queries.threads.setPhaseModels(thread.id, {
-        ...phaseModels,
-        executorModel: effectiveExecutorModel,
-      });
-      queries.githubIssues.linkThread(next.id, thread.id);
-      const win = requireMainWindow();
-      if (!win.isDestroyed()) {
-        win.webContents.send('github:issues-updated', {
-          projectId: next.projectId,
-          issues: queries.githubIssues.list(next.projectId),
-        });
-      }
-
-      log.info(`[queue] auto-promoting #${next.issueNumber} "${next.title}" (thread ${thread.id})`);
-
-      activePipeline
-        .startFromGitHubIssue(
-          thread.id,
-          project.path,
-          { number: next.issueNumber, title: next.title, body: next.body, labels: next.labels },
-          effectiveExecutorModel,
-          {
-            baseBranch: project.defaultBranch,
-            plannerModel: phaseModels.plannerModel,
-            reviewerModel: phaseModels.reviewerModel,
-            verifierModel: phaseModels.verifierModel,
-            plannerModelIdOverride: phaseModels.plannerModelId,
-            reviewerModelIdOverride: phaseModels.reviewerModelId,
-            executorModelIdOverride: phaseModels.executorModelId,
-            verifierModelIdOverride: phaseModels.verifierModelId,
-            plannerReasoningEffort: phaseModels.plannerReasoningEffort,
-            reviewerReasoningEffort: phaseModels.reviewerReasoningEffort,
-            executorReasoningEffort: phaseModels.executorReasoningEffort,
-            verifierReasoningEffort: phaseModels.verifierReasoningEffort,
-          },
-        )
-        .catch((err) => {
-          transitionThreadPhase(win, queries, emitter, {
-            threadId: thread.id,
-            phase: 'failed',
-            errorMessage: clampError(err),
-          });
-          log.error('[queue] auto-promote failed:', err);
-        });
+      pipelineScheduler.onSlotFreed();
     } catch (err) {
       log.error('[queue] promotion error:', err);
     }
