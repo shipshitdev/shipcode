@@ -99,8 +99,6 @@ export const PIPELINE_MAX_RETRIES = 3;
 
 export const HEARTBEAT_TIMEOUT_MS = 120_000;
 
-export const FILE_WATCH_DEBOUNCE_MS = 300;
-
 export const IGNORED_DIRECTORIES = [
   'node_modules',
   '.git',

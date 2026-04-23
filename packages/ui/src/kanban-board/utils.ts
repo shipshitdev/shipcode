@@ -218,7 +218,7 @@ export const customCollisionDetection: CollisionDetection = (
   return rectIntersection(args);
 };
 
-export function getIssuePriorityRank(issue: GitHubIssueCacheRecord): number {
+function getIssuePriorityRank(issue: GitHubIssueCacheRecord): number {
   const labels = issue.labels.map((label) => label.toLowerCase());
 
   if (

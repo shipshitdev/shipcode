@@ -7,8 +7,6 @@ import {
   clearPrdAttachmentSession,
   createPrdAttachmentSession,
   getPrdAttachmentSessionSummary,
-  PRD_ATTACHMENT_MAX_BYTES,
-  PRD_ATTACHMENT_MAX_COUNT,
   removePrdAttachment,
   stagePrdAttachments,
 } from './prd-attachments';
@@ -40,6 +38,8 @@ const WEBP_MAGIC = (() => {
 })();
 
 const createdSessions: string[] = [];
+const PRD_ATTACHMENT_MAX_COUNT = 6;
+const PRD_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
 
 function openSession(): string {
   const id = createPrdAttachmentSession('sender-1', 'project-1');

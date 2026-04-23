@@ -1,15 +1,9 @@
 // @vitest-environment jsdom
 
-import type {
-  GitHubIssueCacheRecord,
-  PlanReview,
-  ShipCodePlan,
-  VerificationResult,
-} from '@shipcode/shared';
+import type { PlanReview, ShipCodePlan, VerificationResult } from '@shipcode/shared';
 import { act, type ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { describe, expect, it, vi } from 'vitest';
-import { IssueCard } from './IssueCard';
 import { PipelineStatus } from './PipelineStatus';
 import { PlanViewer } from './PlanViewer';
 import { ReviewViewer } from './ReviewViewer';
@@ -38,48 +32,6 @@ function renderIntoDom(element: ReactElement) {
       });
       container.remove();
     },
-  };
-}
-
-function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssueCacheRecord {
-  return {
-    id: 'issue-1',
-    projectId: 'project-1',
-    issueNumber: 19,
-    title: 'Add skill registry view',
-    body: null,
-    labels: ['agent:claude', 'priority:high'],
-    assignee: null,
-    state: 'open',
-    pipelineStatus: 'executing',
-    threadId: null,
-    claimedAt: null,
-    claimedBy: null,
-    lastPhaseUpdate: null,
-    lastStatusLabel: null,
-    plannerModelOverride: null,
-    reviewerModelOverride: null,
-    executorModelOverride: null,
-    verifierModelOverride: null,
-    plannerModelIdOverride: null,
-    reviewerModelIdOverride: null,
-    executorModelIdOverride: null,
-    verifierModelIdOverride: null,
-    plannerReasoningEffortOverride: null,
-    reviewerReasoningEffortOverride: null,
-    executorReasoningEffortOverride: null,
-    verifierReasoningEffortOverride: null,
-    revisionCountOverride: null,
-    linkedPrNumber: null,
-    linkedPrUrl: null,
-    linkedPrIsDraft: false,
-    ciBlocked: false,
-    failingChecks: [],
-    unresolvedReviewComments: [],
-    unresolvedReviewCommentCount: 0,
-    prLastSyncAt: null,
-    fetchedAt: new Date('2026-04-16T00:00:00.000Z').toISOString(),
-    ...overrides,
   };
 }
 
@@ -154,27 +106,6 @@ const verification: VerificationResult = {
 };
 
 describe('root UI components', () => {
-  it('renders issue state and agent labels in the issue card', () => {
-    const onClick = vi.fn();
-    const view = renderIntoDom(<IssueCard issue={makeIssue()} onClick={onClick} />);
-
-    expect(view.container.textContent).toContain('#19');
-    expect(view.container.textContent).toContain('Add skill registry view');
-    expect(view.container.textContent).toContain('agent:claude');
-    expect(view.container.querySelector('.animate-pulse')).toBeTruthy();
-
-    const button = view.container.querySelector('button');
-    if (!(button instanceof HTMLButtonElement)) {
-      throw new Error('Expected issue card button');
-    }
-    act(() => {
-      button.click();
-    });
-
-    expect(onClick).toHaveBeenCalledTimes(1);
-    view.cleanup();
-  });
-
   it('renders active and completed phases and only emits clicks for enabled phases', () => {
     const onPhaseClick = vi.fn();
     const view = renderIntoDom(

@@ -11,7 +11,6 @@ import type {
   DashboardStats,
   DeveloperInfo,
   DiffRecord,
-  FileChange,
   GeneratorCli,
   GhAuthStatus,
   GitHubIssueCacheRecord,
@@ -522,7 +521,6 @@ export interface IpcStreamChannels {
   'pipeline:verification-exhausted': { threadId: string; retries: number };
   'plan:parsed': { threadId: string; plan: ShipCodePlan };
   'review:parsed': { threadId: string; review: PlanReview };
-  'files:changed': { projectId: string; changes: FileChange[] };
   'verification:parsed': { threadId: string; verification: VerificationResult };
   'terminal:event': TerminalEventRecord;
   'github:issues-updated': { projectId: string; issues: GitHubIssueCacheRecord[] };

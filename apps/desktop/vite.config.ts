@@ -10,7 +10,6 @@ const NATIVE_EXTERNALS = [
   'node:sqlite',
   'node-pty',
   'simple-git',
-  'chokidar',
   ...builtinModules,
   ...builtinModules.map((m) => `node:${m}`),
 ];

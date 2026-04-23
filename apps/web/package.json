@@ -12,12 +12,10 @@
     "clean": "rm -rf .next out"
   },
   "dependencies": {
-    "@shipcode/shared": "workspace:*",
     "@shipshitdev/ui": "workspace:*",
     "next": "16.2.4",
     "react": "19.2.5",
-    "react-dom": "19.2.5",
-    "lucide-react": "1.8.0"
+    "react-dom": "19.2.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.2.4",

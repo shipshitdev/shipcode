@@ -252,7 +252,7 @@ export interface GitHubIssueCacheRecord {
   fetchedAt: string;
 }
 
-export function isSyntheticResolvedModel(value: string | null | undefined): boolean {
+function isSyntheticResolvedModel(value: string | null | undefined): boolean {
   return value?.trim().toLowerCase() === '<synthetic>';
 }
 
@@ -498,7 +498,7 @@ export function resolveRequireApprovalStateForIssue(
   return { required: settings.requireApproval, source: 'app' };
 }
 
-export function resolvePhaseModel(
+function resolvePhaseModel(
   settings: AppSettings,
   project: Project | null | undefined,
   phase: ResolvedPhaseModel,
@@ -544,7 +544,7 @@ export function resolvePhaseReasoningEffort(
   );
 }
 
-export function resolvePhaseModelId(
+function resolvePhaseModelId(
   settings: AppSettings,
   project: Project | null | undefined,
   phase: ResolvedPhaseModel,
@@ -575,18 +575,6 @@ export function getIssueCardPhase(status: IssuePipelineStatus): ResolvedPhaseMod
       (descriptor.issueStatuses as readonly IssuePipelineStatus[]).includes(status),
     )?.key ?? null
   );
-}
-
-export function formatReasoningEffortLabel(effort: ReasoningEffort): string {
-  const labels: Record<ReasoningEffort, string> = {
-    none: 'None',
-    minimal: 'Minimal',
-    low: 'Low',
-    medium: 'Medium',
-    high: 'High',
-    xhigh: 'Max',
-  };
-  return labels[effort];
 }
 
 export function formatProviderReasoningEffort(

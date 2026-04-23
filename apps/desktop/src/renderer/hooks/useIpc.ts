@@ -5,7 +5,7 @@ import {
   type TerminalEventRecord,
 } from '@shipcode/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useAppStore } from '../stores/app-store';
 
 const TERMINAL_EVENT_BATCH_MS = 50;
@@ -263,11 +263,4 @@ export function useIpc() {
     appendCanonicalEvents,
     queryClient,
   ]);
-}
-
-export function useInvoke<T>(channel: string) {
-  return useCallback(
-    (args?: unknown): Promise<T> => window.shipcode.invoke<T>(channel, args),
-    [channel],
-  );
 }

@@ -12,8 +12,8 @@ import os from 'node:os';
 import path from 'node:path';
 import type { StagedPrdAttachment } from '@shipcode/shared';
 
-export const PRD_ATTACHMENT_MAX_COUNT = 6;
-export const PRD_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+const PRD_ATTACHMENT_MAX_COUNT = 6;
+const PRD_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 
 // ---------------------------------------------------------------------------
 // Magic byte detection

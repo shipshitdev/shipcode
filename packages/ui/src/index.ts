@@ -88,7 +88,6 @@ export { ShipCodeLogoMark } from './brand/ShipCodeLogoMark';
 export type { ShipCutLogoMarkProps } from './brand/ShipCutLogoMark';
 export { ShipCutLogoMark } from './brand/ShipCutLogoMark';
 export { DiffViewer } from './DiffViewer';
-export { IssueCard } from './IssueCard';
 export { KanbanBoard } from './KanbanBoard';
 export { LoadingButtonContent } from './LoadingButtonContent';
 export {

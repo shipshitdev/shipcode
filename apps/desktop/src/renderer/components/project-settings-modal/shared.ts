@@ -1,6 +1,5 @@
 import {
   type AppSettings,
-  type ContextGeneratorCli,
   type ExecutorModel,
   formatProviderReasoningEffort,
   formatReasoningEffortLabel,
@@ -26,7 +25,6 @@ export const PROJECT_TABS = [
   'context',
   'notifications',
 ] as const;
-export const PHASES: readonly ResolvedPhaseModel[] = PHASE_DESCRIPTORS.map((phase) => phase.key);
 
 export type ProjectTab = (typeof PROJECT_TABS)[number];
 export type PhaseKey = ResolvedPhaseModel;
@@ -95,14 +93,6 @@ export const EFFORT_OVERRIDE_KEYS = {
   executor: 'executorReasoningEffortOverride',
   verifier: 'verifierReasoningEffortOverride',
 } as const;
-
-export const CONTEXT_GENERATOR_OPTIONS: Array<{
-  value: ContextGeneratorCli;
-  label: string;
-}> = [
-  { value: 'claude', label: 'Claude CLI' },
-  { value: 'codex', label: 'Codex CLI' },
-] as const;
 
 export const PHASE_META: Array<{
   key: PhaseKey;

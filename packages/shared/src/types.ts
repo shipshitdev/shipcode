@@ -678,13 +678,6 @@ export interface OpenRouterModelValidation {
   message: string | null;
 }
 
-// === File Change Events ===
-
-export interface FileChange {
-  path: string;
-  type: 'add' | 'change' | 'unlink';
-}
-
 // === GitHub Types ===
 
 export interface GitHubIssue {
