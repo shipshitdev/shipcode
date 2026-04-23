@@ -50,6 +50,10 @@ describe('project setup detection', () => {
       'bun run test',
       'bun run build',
     ]);
+    expect(
+      draft.profiles.find((profile: { kind: string }) => profile.kind === 'bun')?.suggestedContract
+        .verifyCommands,
+    ).toEqual(['bun run typecheck', 'bun run test', 'bun run build']);
   });
 
   it('detects xcode repos conservatively', () => {
@@ -65,6 +69,10 @@ describe('project setup detection', () => {
     ]);
     expect(draft.suggestedContract.verifyCommands).toEqual([]);
     expect(draft.suggestedContract.testingContext).toMatch(/scheme and destination/i);
+    expect(
+      draft.profiles.find((profile: { kind: string }) => profile.kind === 'swiftpm')
+        ?.suggestedContract.verifyCommands,
+    ).toEqual(['swift test']);
   });
 
   it('prefers an existing valid setup contract over heuristics', () => {

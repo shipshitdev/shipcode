@@ -5,8 +5,6 @@ import type {
   AppSettings,
   ClarificationAnswer,
   CliProviderUsageMap,
-  ContextFileInfo,
-  ContextGeneratorCli,
   CostSummary,
   CostTaskSummary,
   DashboardOverview,
@@ -14,6 +12,7 @@ import type {
   DeveloperInfo,
   DiffRecord,
   FileChange,
+  GeneratorCli,
   GhAuthStatus,
   GitHubIssueCacheRecord,
   GitHubIssueComment,
@@ -37,6 +36,7 @@ import type {
   PullRequestListItem,
   ReasoningEffort,
   RecentTask,
+  RepoMemoryStatus,
   RepoSetupContract,
   ReviewRecord,
   ShipCodePlan,
@@ -389,13 +389,13 @@ export interface IpcInvokeChannels {
     result: undefined;
   };
 
-  // Repo context files (Phase 2)
-  'context:list': { args: { projectId: string }; result: ContextFileInfo[] };
-  'context:generate': {
-    args: { projectId: string; cli: ContextGeneratorCli };
+  // Repo memory files
+  'memory:list': { args: { projectId: string }; result: RepoMemoryStatus };
+  'memory:generate': {
+    args: { projectId: string; cli: GeneratorCli };
     result: { success: boolean; error?: string };
   };
-  'context:read': { args: { projectId: string; name: string }; result: { content: string | null } };
+  'memory:read': { args: { projectId: string; name: string }; result: { content: string | null } };
 
   // Mission Control dashboard
   'dashboard:get-overview': {

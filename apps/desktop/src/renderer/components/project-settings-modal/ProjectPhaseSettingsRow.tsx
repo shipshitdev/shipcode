@@ -2,6 +2,7 @@ import {
   type AppSettings,
   type ExecutorModel,
   formatProviderReasoningEffort,
+  formatReasoningEffortLabel,
   getSupportedReasoningEfforts,
   type IntegrationStatus,
   type OpenRouterModelValidation,
@@ -94,6 +95,8 @@ export function ProjectPhaseSettingsRow({
     effortOverride === null
       ? null
       : resolveProviderReasoningEffort(selectedProvider, effortOverride, selectedModelId);
+  const displayedEffortValue =
+    effortOverride === null ? INHERIT_VALUE : (effortResolution?.effective ?? effortOverride);
   const inheritedModelLabel = formatModelInheritanceLabel(
     effectiveProvider,
     inheritedModelId,
@@ -208,7 +211,7 @@ export function ProjectPhaseSettingsRow({
             {selectedProvider === 'claude' ? 'Thinking budget' : 'Effort'}
           </Label>
           <Select
-            value={effortOverride ?? INHERIT_VALUE}
+            value={displayedEffortValue}
             onValueChange={(next) => {
               setOverrides((current) => ({
                 ...current,
@@ -222,22 +225,19 @@ export function ProjectPhaseSettingsRow({
             <SelectTrigger>
               <SelectValue>
                 {effortOverride === null ? (
-                  <InheritValueDisplay detail={inheritedEffortResolution.effective} />
+                  <InheritValueDisplay
+                    detail={formatReasoningEffortLabel(inheritedEffortResolution.effective)}
+                  />
                 ) : undefined}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={INHERIT_VALUE}>
-                Inherit ({inheritedEffortResolution.effective})
+                Inherit ({formatReasoningEffortLabel(inheritedEffortResolution.effective)})
               </SelectItem>
-              {effortOverride && effortResolution && !effortResolution.exact ? (
-                <SelectItem value={effortOverride}>
-                  {`${effortOverride} (maps to ${effortResolution.effective})`}
-                </SelectItem>
-              ) : null}
               {supportedEfforts.map((effort) => (
                 <SelectItem key={effort} value={effort}>
-                  {effort}
+                  {formatReasoningEffortLabel(effort)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -285,18 +285,21 @@ export function ProjectPhaseSettingsRow({
           {providerWarning}
         </div>
       ) : null}
-      {effortOverride !== null && effortResolution && !effortResolution.exact ? (
+      {effortOverride !== null &&
+      effortResolution &&
+      !effortResolution.exact &&
+      selectedProvider !== 'claude' ? (
         <div className="mt-2 rounded-md border border-amber-500/20 bg-amber-500/10 px-2.5 py-2 text-[11px] text-amber-300">
           {effortResolution.message}
         </div>
       ) : null}
-      {effortOverride === null && !inheritedEffortResolution.exact ? (
+      {effortOverride === null &&
+      !inheritedEffortResolution.exact &&
+      effectiveProvider !== 'claude' ? (
         <div className="mt-2 rounded-md border border-amber-500/20 bg-amber-500/10 px-2.5 py-2 text-[11px] text-amber-300">
-          {`Inherited ${inheritedEffort} maps to ${formatProviderReasoningEffort(
-            effectiveProvider,
-            inheritedEffort,
-            inheritedModelId,
-          )} for ${PROVIDER_DISPLAY[effectiveProvider]}.`}
+          {`Current inherited ${PROVIDER_DISPLAY[effectiveProvider]} setting resolves to ${formatReasoningEffortLabel(
+            formatProviderReasoningEffort(effectiveProvider, inheritedEffort, inheritedModelId),
+          )}.`}
         </div>
       ) : null}
       {validationMessage ? (

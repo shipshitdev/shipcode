@@ -16,7 +16,7 @@ describe('model config presets', () => {
       reviewerModel: 'codex',
       executorModel: 'claude',
       verifierModel: 'claude',
-      plannerReasoningEffort: 'xhigh',
+      plannerReasoningEffort: 'high',
       reviewerReasoningEffort: 'high',
       executorReasoningEffort: 'medium',
       verifierReasoningEffort: 'high',

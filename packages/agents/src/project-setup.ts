@@ -20,6 +20,8 @@ const EMPTY_CONTRACT: RepoSetupContract = {
   testingContext: null,
 };
 
+type DetectedProfileWithoutSuggestion = Omit<DetectedProjectProfile, 'suggestedContract'>;
+
 function readTopLevelNames(projectPath: string): Set<string> {
   try {
     return new Set(fs.readdirSync(projectPath));
@@ -48,7 +50,7 @@ function packageRunner(
 function inferNodeProfile(
   projectPath: string,
   topLevel: Set<string>,
-): DetectedProjectProfile | null {
+): DetectedProfileWithoutSuggestion | null {
   if (!topLevel.has('package.json')) return null;
 
   const lockPreference: Array<{
@@ -86,12 +88,12 @@ function inferNodeProfile(
   };
 }
 
-function inferAppleProfiles(topLevel: Set<string>): DetectedProjectProfile[] {
+function inferAppleProfiles(topLevel: Set<string>): DetectedProfileWithoutSuggestion[] {
   const names = [...topLevel];
   const hasXcodeProject = names.some((name) => name.endsWith('.xcodeproj'));
   const hasWorkspace = names.some((name) => name.endsWith('.xcworkspace'));
   const hasSwiftPackage = topLevel.has('Package.swift');
-  const profiles: DetectedProjectProfile[] = [];
+  const profiles: DetectedProfileWithoutSuggestion[] = [];
 
   if (hasXcodeProject || hasWorkspace) {
     const evidence = names.filter(
@@ -118,7 +120,9 @@ function inferAppleProfiles(topLevel: Set<string>): DetectedProjectProfile[] {
   return profiles;
 }
 
-function chooseRecommendedProfile(profiles: DetectedProjectProfile[]): DetectedProjectProfile[] {
+function chooseRecommendedProfile(
+  profiles: DetectedProfileWithoutSuggestion[],
+): DetectedProfileWithoutSuggestion[] {
   const priority: DetectedProjectKind[] = [
     'xcode',
     'bun',
@@ -139,7 +143,7 @@ function chooseRecommendedProfile(profiles: DetectedProjectProfile[]): DetectedP
 
 function detectProfiles(projectPath: string): DetectedProjectProfile[] {
   const topLevel = readTopLevelNames(projectPath);
-  const profiles: DetectedProjectProfile[] = [];
+  const profiles: DetectedProfileWithoutSuggestion[] = [];
   const nodeProfile = inferNodeProfile(projectPath, topLevel);
   if (nodeProfile) profiles.push(nodeProfile);
   profiles.push(...inferAppleProfiles(topLevel));
@@ -151,7 +155,10 @@ function detectProfiles(projectPath: string): DetectedProjectProfile[] {
       evidence: ['No supported repo markers detected'],
     });
   }
-  return chooseRecommendedProfile(profiles);
+  return chooseRecommendedProfile(profiles).map((profile) => ({
+    ...profile,
+    suggestedContract: suggestContractForKind(projectPath, profile.kind),
+  }));
 }
 
 function readPackageScripts(packageJsonPath: string): Record<string, string> {
@@ -238,17 +245,13 @@ function detectSwiftPmContract(): RepoSetupContract {
   };
 }
 
-function suggestContract(
-  projectPath: string,
-  profiles: DetectedProjectProfile[],
-): RepoSetupContract {
-  const recommended = profiles.find((profile) => profile.recommended) ?? profiles[0];
-  switch (recommended?.kind) {
+function suggestContractForKind(projectPath: string, kind: DetectedProjectProfile['kind']) {
+  switch (kind) {
     case 'bun':
     case 'npm':
     case 'pnpm':
     case 'yarn':
-      return detectNodeContract(projectPath, recommended.kind);
+      return detectNodeContract(projectPath, kind);
     case 'xcode':
       return detectXcodeContract(projectPath);
     case 'swiftpm':
@@ -256,6 +259,12 @@ function suggestContract(
     default:
       return { ...EMPTY_CONTRACT };
   }
+}
+
+function suggestContract(profiles: DetectedProjectProfile[]): RepoSetupContract {
+  return (
+    profiles.find((profile) => profile.recommended)?.suggestedContract ?? { ...EMPTY_CONTRACT }
+  );
 }
 
 export function inspectProjectSetup(projectPath: string): ProjectSetupInspection {
@@ -292,7 +301,7 @@ export function detectProjectSetup(projectPath: string): ProjectSetupDraft {
   return {
     inspection,
     profiles,
-    suggestedContract: inspection.contract ?? suggestContract(projectPath, profiles),
+    suggestedContract: inspection.contract ?? suggestContract(profiles),
   };
 }
 

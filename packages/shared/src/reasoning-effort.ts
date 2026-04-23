@@ -14,7 +14,6 @@ const CLAUDE_REASONING_EFFORTS = [
   'none',
   'medium',
   'high',
-  'xhigh',
 ] as const satisfies readonly ReasoningEffort[];
 const OPENROUTER_ADAPTIVE_CLAUDE_EFFORTS = [
   'none',
@@ -35,12 +34,26 @@ const OPENROUTER_ADAPTIVE_CLAUDE_MODELS = new Set<string>([
 ]);
 
 const OPENROUTER_NO_REASONING_MODELS = new Set<string>([OPENROUTER_MODEL_IDS.qwen3CoderFree]);
+const REASONING_EFFORT_LABELS: Record<ReasoningEffort, string> = {
+  none: 'None',
+  minimal: 'Minimal',
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  xhigh: 'Max',
+};
+const CLAUDE_REASONING_SUPPORT_MESSAGE =
+  'Claude in ShipCode supports None, Medium, and High thinking budgets.';
 
 export interface ProviderReasoningEffortResolution {
   configured: ReasoningEffort;
   effective: ReasoningEffort;
   exact: boolean;
   message: string | null;
+}
+
+export function formatReasoningEffortLabel(effort: ReasoningEffort): string {
+  return REASONING_EFFORT_LABELS[effort];
 }
 
 export function normalizeReasoningModelId(
@@ -93,24 +106,21 @@ export function resolveProviderReasoningEffort(
           configured,
           effective: 'none',
           exact: false,
-          message:
-            'ShipCode currently uses Claude CLI thinking-token budgets. Minimal maps to no thinking.',
+          message: `${CLAUDE_REASONING_SUPPORT_MESSAGE} Using ${formatReasoningEffortLabel('none')}.`,
         };
       case 'low':
         return {
           configured,
           effective: 'none',
           exact: false,
-          message:
-            'ShipCode currently uses Claude CLI thinking-token budgets. Low maps to no thinking.',
+          message: `${CLAUDE_REASONING_SUPPORT_MESSAGE} Using ${formatReasoningEffortLabel('none')}.`,
         };
       case 'xhigh':
         return {
           configured,
           effective: 'high',
           exact: false,
-          message:
-            'ShipCode does not expose a distinct xhigh Claude CLI budget yet. xhigh maps to high.',
+          message: `${CLAUDE_REASONING_SUPPORT_MESSAGE} Using ${formatReasoningEffortLabel('high')}.`,
         };
       default:
         return { configured, effective: configured, exact: true, message: null };
@@ -167,6 +177,6 @@ export function formatProviderReasoningEffort(
   provider: ExecutorModel,
   configured: ReasoningEffort,
   modelId?: string | null,
-): string {
+): ReasoningEffort {
   return resolveProviderReasoningEffort(provider, configured, modelId).effective;
 }

@@ -1,5 +1,5 @@
 import type { Project } from '@shipcode/shared';
-import { Button, Input, Label } from '@shipcode/ui';
+import { Button, Input, Label, LoadingButtonContent } from '@shipcode/ui';
 
 export function ProjectSettingsGeneralTab({
   project,
@@ -69,7 +69,7 @@ export function ProjectSettingsGeneralTab({
             </div>
           </div>
           <Button variant="secondary" size="sm" onClick={onRelink} disabled={relinkPending}>
-            {relinkPending ? 'Locating...' : 'Change folder...'}
+            <LoadingButtonContent loading={relinkPending}>Change folder...</LoadingButtonContent>
           </Button>
         </div>
         <div className="font-mono text-xs text-secondary break-all">{project.path}</div>
@@ -127,7 +127,9 @@ export function ProjectSettingsGeneralTab({
                     : 'Add every cached issue to the board'
               }
             >
-              {syncPending ? 'Syncing...' : 'Sync existing issues to board'}
+              <LoadingButtonContent loading={syncPending}>
+                Sync existing issues to board
+              </LoadingButtonContent>
             </Button>
             {syncResult ? (
               <span className="text-[11px] text-muted">

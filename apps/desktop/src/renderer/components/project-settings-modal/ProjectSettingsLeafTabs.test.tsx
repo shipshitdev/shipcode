@@ -210,7 +210,7 @@ describe('project settings leaf tabs', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: 'Generating...' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Generate Memory' })).toBeDisabled();
   });
 
   it('renders general project state and forwards input and button actions', () => {
@@ -393,6 +393,9 @@ describe('project settings leaf tabs', () => {
       />,
     );
 
+    expect(screen.getByText('Runtime Capacity')).toBeInTheDocument();
+    expect(screen.getByText(/App Settings > Pipeline/)).toBeInTheDocument();
+    expect(screen.getByText(/1 execution slot/i)).toBeInTheDocument();
     expect(screen.getByText('Human Approval')).toBeInTheDocument();
     expect(screen.getByText('PRD Quality Gate')).toBeInTheDocument();
     expect(screen.getByText('Reset issue overrides on 2 issues.')).toBeInTheDocument();

@@ -7,6 +7,7 @@ import type {
 import {
   Button,
   FolderGit,
+  LoadingButtonContent,
   Select,
   SelectContent,
   SelectItem,
@@ -156,7 +157,7 @@ export function IntegrationsSettingsSection({
           </p>
         </div>
         <Button variant="secondary" onClick={onRefetch} disabled={integrationsFetching}>
-          {integrationsFetching ? 'Checking...' : 'Re-check'}
+          <LoadingButtonContent loading={integrationsFetching}>Re-check</LoadingButtonContent>
         </Button>
       </div>
 
@@ -303,7 +304,7 @@ export function IntegrationsSettingsSection({
                   </div>
                   <div className="grid gap-2 md:grid-cols-2">
                     {[
-                      ['awaitingApproval', 'Awaiting approval'],
+                      ['awaitingApproval', 'Needs approval'],
                       ['failed', 'Pipeline failed'],
                       ['ciBlocked', 'CI blocked'],
                       ['verificationExhausted', 'Verification exhausted'],

@@ -54,7 +54,8 @@ function makePhasePreset(
   return {
     provider,
     modelId,
-    reasoningEffort: DEFAULT_PHASE_EFFORTS[phase],
+    reasoningEffort: resolveProviderReasoningEffort(provider, DEFAULT_PHASE_EFFORTS[phase], modelId)
+      .effective,
   };
 }
 
@@ -77,7 +78,7 @@ export const MODEL_CONFIG_PRESETS: readonly ModelConfigPreset[] = [
     prdRewrite: {
       cli: 'claude',
       modelId: SHARED_PRD_MODELS.claude,
-      reasoningEffort: 'low',
+      reasoningEffort: 'none',
     },
   },
   {
@@ -109,7 +110,7 @@ export const MODEL_CONFIG_PRESETS: readonly ModelConfigPreset[] = [
     prdRewrite: {
       cli: 'claude',
       modelId: SHARED_PRD_MODELS.claude,
-      reasoningEffort: 'low',
+      reasoningEffort: 'none',
     },
   },
 ] as const;

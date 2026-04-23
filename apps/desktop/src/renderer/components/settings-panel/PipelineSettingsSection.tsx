@@ -2,6 +2,7 @@ import {
   type AppSettings,
   buildAppSettingsModelPresetPatch,
   type ExecutorModel,
+  formatReasoningEffortLabel,
   getSupportedReasoningEfforts,
   type IntegrationStatus,
   MODEL_CONFIG_PRESETS,
@@ -58,6 +59,7 @@ export function PipelineSettingsSection({
     prdRewriteProvider,
     prdRewriteModelValue,
   );
+  const prdRewriteDisplayedEffort = prdRewriteEffortResolution.effective;
   const normalizeEffort = (
     provider: ExecutorModel,
     effort: AppSettings['plannerReasoningEffort'],
@@ -275,7 +277,7 @@ export function PipelineSettingsSection({
               description="Reasoning setting for PRD rewrites."
             >
               <Select
-                value={settings.prdRewriteReasoningEffort}
+                value={prdRewriteDisplayedEffort}
                 onValueChange={(value) =>
                   onUpdate({
                     prdRewriteReasoningEffort: value as AppSettings['prdRewriteReasoningEffort'],
@@ -286,20 +288,15 @@ export function PipelineSettingsSection({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {!prdRewriteEffortResolution.exact && (
-                    <SelectItem value={settings.prdRewriteReasoningEffort}>
-                      {`${settings.prdRewriteReasoningEffort} (maps to ${prdRewriteEffortResolution.effective})`}
-                    </SelectItem>
-                  )}
                   {prdRewriteSupportedEfforts.map((effort) => (
                     <SelectItem key={effort} value={effort}>
-                      {effort}
+                      {formatReasoningEffortLabel(effort)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </SettingsRow>
-            {!prdRewriteEffortResolution.exact && (
+            {!prdRewriteEffortResolution.exact && prdRewriteProvider !== 'claude' && (
               <div className="mb-3 rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-300">
                 {prdRewriteEffortResolution.message}
               </div>

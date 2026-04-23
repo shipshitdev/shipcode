@@ -3,6 +3,7 @@ import {
   type ContextGeneratorCli,
   type ExecutorModel,
   formatProviderReasoningEffort,
+  formatReasoningEffortLabel,
   PHASE_DESCRIPTORS,
   type Project,
   type ResolvedPhaseModel,
@@ -19,6 +20,7 @@ export const INHERIT_VALUE = '__inherit__';
 export const PROJECT_TABS = [
   'general',
   'setup',
+  'pipeline',
   'models',
   'github',
   'context',
@@ -124,5 +126,7 @@ export function formatInheritedSummary(
   const provider = resolvePhaseModel(settings, projectDraft, phase);
   const model = resolvePhaseModelId(settings, projectDraft, phase);
   const effort = resolvePhaseReasoningEffort(settings, projectDraft, phase);
-  return `${PROVIDER_DISPLAY[provider]}${model ? ` / ${model}` : ''} / ${formatProviderReasoningEffort(provider, effort, model)}`;
+  return `${PROVIDER_DISPLAY[provider]}${model ? ` / ${model}` : ''} / ${formatReasoningEffortLabel(
+    formatProviderReasoningEffort(provider, effort, model),
+  )}`;
 }

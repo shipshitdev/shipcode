@@ -1,5 +1,5 @@
 import type { CliHealth, GhAuthStatus, SystemHealth } from '@shipcode/shared';
-import { Badge, Button } from '@shipcode/ui';
+import { Badge, Button, LoadingButtonContent } from '@shipcode/ui';
 import { useMutation } from '@tanstack/react-query';
 
 interface AuthResult extends SystemHealth {
@@ -97,7 +97,7 @@ export function StepAuthCheck({ authResult, onRecheck, isChecking }: Props) {
 
       <div className="flex gap-2 mt-2">
         <Button variant="secondary" onClick={onRecheck} disabled={isChecking}>
-          {isChecking ? 'Checking...' : 'Re-check'}
+          <LoadingButtonContent loading={isChecking}>Re-check</LoadingButtonContent>
         </Button>
       </div>
     </div>

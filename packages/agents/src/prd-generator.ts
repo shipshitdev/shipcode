@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import type { ContextGeneratorCli, ReasoningEffort } from '@shipcode/shared';
+import type { GeneratorCli, ReasoningEffort } from '@shipcode/shared';
 import { extractCliFailureMessage } from './cli-error';
 import {
   mapReasoningEffortToClaudeThinkingTokens,
@@ -20,7 +20,7 @@ export interface EnhancePrdOptions {
   /** Working directory (usually the project path). */
   cwd: string;
   /** Which CLI to use for PRD enhancement. Defaults to Claude. */
-  cli?: ContextGeneratorCli;
+  cli?: GeneratorCli;
   /** Optional explicit model selection for the selected CLI. */
   modelId?: string | null;
   /** Reasoning effort / thinking budget for the selected CLI. */
@@ -126,7 +126,7 @@ export async function enhancePrdDraft(opts: EnhancePrdOptions): Promise<Generate
  * used by `gh issue create --body-file -`.
  */
 function runPrdCliWithStdin(
-  cli: ContextGeneratorCli,
+  cli: GeneratorCli,
   prompt: string,
   cwd: string,
   timeoutMs: number,

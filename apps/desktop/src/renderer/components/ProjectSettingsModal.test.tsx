@@ -5,7 +5,7 @@ import {
   type Project,
 } from '@shipcode/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '../stores/app-store';
 import { ProjectSettingsModal } from './ProjectSettingsModal';
@@ -206,10 +206,10 @@ describe('ProjectSettingsModal', () => {
   };
 
   const contextFiles: ContextFileInfo[] = [
-    { name: 'GOAL.md', exists: true, size: 512 },
-    { name: 'TECH-STACK.md', exists: true, size: 256 },
-    { name: 'ARCHITECTURE.md', exists: false },
-    { name: 'CONSTRAINTS.md', exists: false },
+    { name: 'goal.md', exists: true, size: 512 },
+    { name: 'architecture.md', exists: true, size: 256 },
+    { name: 'constraints.md', exists: false },
+    { name: 'do-dont.md', exists: false },
   ];
 
   beforeEach(() => {
@@ -220,6 +220,7 @@ describe('ProjectSettingsModal', () => {
     useAppStore.setState({
       projectSettingsModalOpen: true,
       projectSettingsModalProjectId: project.id,
+      projectSettingsModalInitialTab: null,
     });
   });
 
@@ -232,7 +233,9 @@ describe('ProjectSettingsModal', () => {
       if (channel === 'project:get') return project;
       if (channel === 'settings:get') return DEFAULT_SETTINGS;
       if (channel === 'integrations:check') return integrations;
-      if (channel === 'context:list') return contextFiles;
+      if (channel === 'memory:list') {
+        return { files: contextFiles, hasObsoleteContextDirectory: false };
+      }
       return null;
     });
 
@@ -241,8 +244,94 @@ describe('ProjectSettingsModal', () => {
     expect(await screen.findByText('Project Settings')).toBeInTheDocument();
     expect(await screen.findByText('Repository folder')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'General' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Pipeline' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Models' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Context' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Memory' })).toBeInTheDocument();
     expect(screen.getByDisplayValue(project.githubProjectUrl ?? '')).toBeInTheDocument();
+
+    const scrollRegion = document.body.querySelector('[data-project-settings-scroll-region]');
+    expect(scrollRegion).toContainElement(screen.getByText('Repository folder'));
+  });
+
+  it('applies a clicked detected setup profile into the setup form', async () => {
+    useAppStore.setState({
+      projectSettingsModalOpen: true,
+      projectSettingsModalProjectId: project.id,
+      projectSettingsModalInitialTab: 'setup',
+    });
+
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'project:get') return project;
+      if (channel === 'settings:get') return DEFAULT_SETTINGS;
+      if (channel === 'integrations:check') return integrations;
+      if (channel === 'memory:list') {
+        return { files: contextFiles, hasObsoleteContextDirectory: false };
+      }
+      if (channel === 'project:get-setup') {
+        return {
+          inspection: {
+            status: 'missing',
+            path: '/tmp/shipcode/.shipcode/setup.json',
+            contract: null,
+            error: null,
+          },
+          profiles: [
+            {
+              kind: 'xcode',
+              label: 'Xcode',
+              recommended: true,
+              evidence: ['Demo.xcodeproj', 'Package.swift'],
+              suggestedContract: {
+                version: 1,
+                setupCommands: ['xcodebuild -resolvePackageDependencies'],
+                verifyCommands: [],
+                envFiles: [],
+                setupBeforeVerify: false,
+                testingContext: 'Detected an Xcode project.',
+              },
+            },
+            {
+              kind: 'swiftpm',
+              label: 'Swift Package Manager',
+              recommended: false,
+              evidence: ['Package.swift'],
+              suggestedContract: {
+                version: 1,
+                setupCommands: [],
+                verifyCommands: ['swift test'],
+                envFiles: [],
+                setupBeforeVerify: false,
+                testingContext: 'Detected a Swift Package Manager repo.',
+              },
+            },
+          ],
+          suggestedContract: {
+            version: 1,
+            setupCommands: ['xcodebuild -resolvePackageDependencies'],
+            verifyCommands: [],
+            envFiles: [],
+            setupBeforeVerify: false,
+            testingContext: 'Detected an Xcode project.',
+          },
+        };
+      }
+      return null;
+    });
+
+    renderWithProviders();
+
+    expect(await screen.findByText('Project Settings')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Setup commands')).toHaveValue(
+      'xcodebuild -resolvePackageDependencies',
+    );
+    expect(screen.getByLabelText('Verify commands')).toHaveValue('');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Swift Package Manager' }));
+
+    expect(screen.getByLabelText('Setup commands')).toHaveValue('');
+    expect(screen.getByLabelText('Verify commands')).toHaveValue('swift test');
+    expect(screen.getByLabelText('Testing context')).toHaveValue(
+      'Detected a Swift Package Manager repo.',
+    );
   });
 });

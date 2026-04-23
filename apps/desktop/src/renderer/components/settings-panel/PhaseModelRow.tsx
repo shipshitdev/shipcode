@@ -1,5 +1,6 @@
 import {
   type ExecutorModel,
+  formatReasoningEffortLabel,
   getSupportedReasoningEfforts,
   type OpenRouterModelCheck,
   type ReasoningEffort,
@@ -55,6 +56,7 @@ export function PhaseModelRow({
     reasoningEffortValue,
     resolvedModelId,
   );
+  const displayedEffortValue = effortResolution.effective;
   const supportedEfforts = getSupportedReasoningEfforts(provider, resolvedModelId);
   const openrouterModelOptions = getModelOptions('openrouter');
   const knownOpenRouterValues = new Set(openrouterModelOptions.map((option) => option.value));
@@ -146,27 +148,22 @@ export function PhaseModelRow({
         htmlFor={`${htmlFor}-reasoning`}
       >
         <Select
-          value={reasoningEffortValue}
+          value={displayedEffortValue}
           onValueChange={(value) => onReasoningEffortChange(value as ReasoningEffort)}
         >
           <SelectTrigger id={`${htmlFor}-reasoning`} className="w-[120px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {!effortResolution.exact && (
-              <SelectItem value={reasoningEffortValue}>
-                {`${reasoningEffortValue} (maps to ${effortResolution.effective})`}
-              </SelectItem>
-            )}
             {supportedEfforts.map((effort) => (
               <SelectItem key={effort} value={effort}>
-                {effort}
+                {formatReasoningEffortLabel(effort)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </SettingsRow>
-      {!effortResolution.exact && (
+      {!effortResolution.exact && provider !== 'claude' && (
         <div className="mb-3 rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-300">
           {effortResolution.message}
         </div>

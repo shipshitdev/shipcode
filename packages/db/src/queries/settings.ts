@@ -57,7 +57,7 @@ function readNullable(raw: string | undefined): string | null {
 const REASONING_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'] as const;
 const PROJECT_OPEN_TARGETS = ['cursor', 'finder', 'terminal', 'ghostty', 'vscode'] as const;
 const FONT_SIZES = [12, 13, 14, 15] as const;
-const CONTEXT_GENERATOR_CLIS = ['claude', 'codex'] as const;
+const GENERATOR_CLIS = ['claude', 'codex'] as const;
 const DEV_LOG_LEVELS = ['error', 'warn', 'info', 'debug'] as const;
 
 function isDevLogLevel(value: unknown): value is AppSettings['devLogLevel'] {
@@ -76,8 +76,8 @@ function isFontSize(value: unknown): value is AppSettings['fontSize'] {
   return typeof value === 'number' && (FONT_SIZES as readonly number[]).includes(value);
 }
 
-function isContextGeneratorCli(value: unknown): value is AppSettings['prdRewriteCli'] {
-  return typeof value === 'string' && (CONTEXT_GENERATOR_CLIS as readonly string[]).includes(value);
+function isGeneratorCli(value: unknown): value is AppSettings['prdRewriteCli'] {
+  return typeof value === 'string' && (GENERATOR_CLIS as readonly string[]).includes(value);
 }
 
 export class SettingsQueries {
@@ -117,7 +117,7 @@ export class SettingsQueries {
         (stored.reviewerModel as AppSettings['reviewerModel']) ?? DEFAULT_SETTINGS.reviewerModel,
       executorModel:
         (stored.executorModel as AppSettings['executorModel']) ?? DEFAULT_SETTINGS.executorModel,
-      prdRewriteCli: isContextGeneratorCli(stored.prdRewriteCli)
+      prdRewriteCli: isGeneratorCli(stored.prdRewriteCli)
         ? stored.prdRewriteCli
         : DEFAULT_SETTINGS.prdRewriteCli,
       prdRewriteClaudeModel:
@@ -267,7 +267,7 @@ export class SettingsQueries {
       }
     }
     if ('prdRewriteCli' in patch && patch.prdRewriteCli != null) {
-      if (!isContextGeneratorCli(patch.prdRewriteCli)) {
+      if (!isGeneratorCli(patch.prdRewriteCli)) {
         throw new Error('prdRewriteCli must be claude|codex');
       }
     }

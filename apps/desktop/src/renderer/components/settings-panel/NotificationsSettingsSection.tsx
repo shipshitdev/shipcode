@@ -51,7 +51,7 @@ export function NotificationsSettingsSection({
 
         <p className="mt-4 mb-1 text-xs uppercase tracking-wide text-muted">Notify me when</p>
 
-        <SettingsRow label="Awaiting approval" htmlFor="notify-awaiting-approval">
+        <SettingsRow label="Needs approval" htmlFor="notify-awaiting-approval">
           <Switch
             id="notify-awaiting-approval"
             checked={settings.notificationEvents.awaitingApproval}

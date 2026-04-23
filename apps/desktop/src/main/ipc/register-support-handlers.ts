@@ -9,11 +9,11 @@ import {
   checkGhAuth,
   checkSystemHealthWithAuth,
   enhancePrdDraft,
-  generateContextFiles,
-  listContextFiles,
-  readContextFile,
+  generateMemoryFiles,
+  inspectRepoMemory,
+  readMemoryFile,
 } from '@shipcode/agents';
-import { type ContextGeneratorCli, type ExecutorModel, providerDisplay } from '@shipcode/shared';
+import { type ExecutorModel, type GeneratorCli, providerDisplay } from '@shipcode/shared';
 import log, { logProcessOutput } from '../logger.service';
 import {
   clearPrdAttachmentSession,
@@ -156,22 +156,22 @@ export function registerSupportHandlers({
     clearPrdAttachmentSession(sessionId);
   });
 
-  ipcMain.handle('context:list', (_event, { projectId }: { projectId: string }) => {
+  ipcMain.handle('memory:list', (_event, { projectId }: { projectId: string }) => {
     const project = queries.projects.getById(projectId);
     if (!project) throw new Error(`Project ${projectId} not found`);
-    return listContextFiles(project.path);
+    return inspectRepoMemory(project.path);
   });
 
   ipcMain.handle(
-    'context:generate',
-    async (_event, { projectId, cli }: { projectId: string; cli: ContextGeneratorCli }) => {
+    'memory:generate',
+    async (_event, { projectId, cli }: { projectId: string; cli: GeneratorCli }) => {
       const project = queries.projects.getById(projectId);
       if (!project) throw new Error(`Project ${projectId} not found`);
       try {
-        const result = await generateContextFiles(project.path, cli);
+        const result = await generateMemoryFiles(project.path, cli);
         return { success: result.success, error: result.error };
       } catch (err) {
-        log.error('[context:generate]', err);
+        log.error('[memory:generate]', err);
         const short =
           err instanceof Error ? err.message.split('\n')[0].slice(0, 300) : 'Generation failed';
         return { success: false, error: short };
@@ -180,11 +180,11 @@ export function registerSupportHandlers({
   );
 
   ipcMain.handle(
-    'context:read',
+    'memory:read',
     (_event, { projectId, name }: { projectId: string; name: string }) => {
       const project = queries.projects.getById(projectId);
       if (!project) throw new Error(`Project ${projectId} not found`);
-      return { content: readContextFile(project.path, name) };
+      return { content: readMemoryFile(project.path, name) };
     },
   );
 

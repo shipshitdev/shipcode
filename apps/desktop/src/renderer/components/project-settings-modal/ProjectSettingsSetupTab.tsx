@@ -1,5 +1,5 @@
 import type { ProjectSetupDraft, ProjectSetupInspection, RepoSetupEnvFile } from '@shipcode/shared';
-import { Badge, Button, Checkbox, Input, Label, Textarea } from '@shipcode/ui';
+import { Button, Checkbox, Input, Label, LoadingButtonContent, Textarea } from '@shipcode/ui';
 import type { LocalEnvFile } from './setup-utils';
 
 export function ProjectSettingsSetupTab({
@@ -21,6 +21,7 @@ export function ProjectSettingsSetupTab({
   pathExists,
   submitError,
   onRedetect,
+  onApplyDetectedProfile,
   detectPending,
 }: {
   setupCommandsText: string;
@@ -41,6 +42,7 @@ export function ProjectSettingsSetupTab({
   pathExists: boolean;
   submitError: string | null;
   onRedetect: () => void;
+  onApplyDetectedProfile: (profile: ProjectSetupDraft['profiles'][number]) => void;
   detectPending: boolean;
 }) {
   if (!pathExists) {
@@ -71,20 +73,31 @@ export function ProjectSettingsSetupTab({
         <div className="mb-2 flex items-center justify-between gap-3">
           <div className="text-[12px] font-medium text-primary">Detected project profiles</div>
           <Button variant="secondary" size="sm" onClick={onRedetect} disabled={detectPending}>
-            {detectPending ? 'Detecting...' : 'Re-detect'}
+            <LoadingButtonContent loading={detectPending}>Re-detect</LoadingButtonContent>
           </Button>
         </div>
         <div className="flex flex-wrap gap-2">
           {detectedProfiles.map((profile: ProjectSetupDraft['profiles'][number]) => (
-            <Badge
+            <Button
               key={`${profile.kind}:${profile.evidence.join('|')}`}
-              variant={profile.recommended ? 'accent' : 'default'}
-              className="gap-1"
+              type="button"
+              variant="pill"
+              size="xs"
+              onClick={() => onApplyDetectedProfile(profile)}
+              className={
+                profile.recommended
+                  ? 'h-auto rounded-sm border-border-strong bg-accent/10 px-2 py-1 text-primary'
+                  : 'h-auto rounded-sm bg-hover px-2 py-1 text-primary'
+              }
             >
               {profile.label}
               {profile.recommended ? ' recommended' : ''}
-            </Badge>
+            </Button>
           ))}
+        </div>
+        <div className="mt-2 text-[11px] text-muted">
+          Click a detected profile to fill the commands below with that suggested setup. Nothing is
+          saved until you click Save.
         </div>
         <div className="mt-2 space-y-1 text-[11px] text-muted">
           {detectedProfiles.map((profile: ProjectSetupDraft['profiles'][number]) => (

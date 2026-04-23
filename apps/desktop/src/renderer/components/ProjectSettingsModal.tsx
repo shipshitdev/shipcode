@@ -1,13 +1,13 @@
 import {
   type AppSettings,
   buildProjectModelPresetOverrides,
-  type ContextFileInfo,
   clampError,
   type IntegrationStatus,
   type ModelConfigPresetKey,
   type OpenRouterModelValidation,
   type Project,
   type ProjectSetupDraft,
+  type RepoMemoryStatus,
   type RepoSetupContract,
   type RepoSetupEnvFile,
   validateGithubProjectUrl,
@@ -15,6 +15,7 @@ import {
 import {
   Button,
   Keycap,
+  LoadingButtonContent,
   Modal,
   ModalFooter,
   Tabs,
@@ -32,6 +33,7 @@ import { ProjectSettingsGeneralTab } from './project-settings-modal/ProjectSetti
 import { ProjectSettingsGitHubTab } from './project-settings-modal/ProjectSettingsGitHubTab';
 import { ProjectSettingsModelsTab } from './project-settings-modal/ProjectSettingsModelsTab';
 import { ProjectSettingsNotificationsTab } from './project-settings-modal/ProjectSettingsNotificationsTab';
+import { ProjectSettingsPipelineTab } from './project-settings-modal/ProjectSettingsPipelineTab';
 import { ProjectSettingsSetupTab } from './project-settings-modal/ProjectSettingsSetupTab';
 import {
   commandsToText,
@@ -52,12 +54,12 @@ import {
 
 export function ProjectSettingsModal() {
   const queryClient = useQueryClient();
-  const {
-    projectSettingsModalOpen,
-    projectSettingsModalProjectId,
-    projectSettingsModalInitialTab,
-    closeProjectSettingsModal,
-  } = useAppStore();
+  const projectSettingsModalOpen = useAppStore((state) => state.projectSettingsModalOpen);
+  const projectSettingsModalProjectId = useAppStore((state) => state.projectSettingsModalProjectId);
+  const projectSettingsModalInitialTab = useAppStore(
+    (state) => state.projectSettingsModalInitialTab,
+  );
+  const closeProjectSettingsModal = useAppStore((state) => state.closeProjectSettingsModal);
 
   const [activeTab, setActiveTab] = useState<ProjectTab>('general');
   const [urlInput, setUrlInput] = useState('');
@@ -115,7 +117,11 @@ export function ProjectSettingsModal() {
     staleTime: 30_000,
   });
 
-  const { data: projectSetup, refetch: refetchSetup } = useQuery<ProjectSetupDraft>({
+  const {
+    data: projectSetup,
+    refetch: refetchSetup,
+    isFetching: setupDetectPending,
+  } = useQuery<ProjectSetupDraft>({
     queryKey: ['project-setup', projectSettingsModalProjectId],
     queryFn: () =>
       window.shipcode.invoke('project:get-setup', {
@@ -236,6 +242,15 @@ export function ProjectSettingsModal() {
     (id: string) => setEnvFiles((prev) => prev.filter((file) => file.id !== id)),
     [],
   );
+
+  const applySetupContract = useCallback((contract: RepoSetupContract) => {
+    setSetupCommandsText(commandsToText(contract.setupCommands));
+    setVerifyCommandsText(commandsToText(contract.verifyCommands));
+    setTestingContext(contract.testingContext ?? '');
+    setSetupBeforeVerify(contract.setupBeforeVerify);
+    setEnvFiles(normalizeEnvFiles(contract.envFiles));
+    setSetupSaveError(null);
+  }, []);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -380,13 +395,13 @@ export function ProjectSettingsModal() {
     },
   });
 
-  const { data: contextFiles, refetch: refetchContext } = useQuery<ContextFileInfo[]>({
-    queryKey: ['context-files', projectSettingsModalProjectId],
+  const { data: memoryStatus, refetch: refetchContext } = useQuery<RepoMemoryStatus>({
+    queryKey: ['memory-files', projectSettingsModalProjectId],
     queryFn: () => {
       if (!projectSettingsModalProjectId) {
-        throw new Error('Missing project id for context files');
+        throw new Error('Missing project id for memory files');
       }
-      return window.shipcode.invoke<ContextFileInfo[]>('context:list', {
+      return window.shipcode.invoke<RepoMemoryStatus>('memory:list', {
         projectId: projectSettingsModalProjectId,
       });
     },
@@ -455,7 +470,7 @@ export function ProjectSettingsModal() {
     setContextError(null);
     try {
       const result = await window.shipcode.invoke<{ success: boolean; error?: string }>(
-        'context:generate',
+        'memory:generate',
         { projectId: projectSettingsModalProjectId, cli: contextGeneratorCli },
       );
       if (!result.success) setContextError(result.error ?? 'Generation failed');
@@ -530,24 +545,36 @@ export function ProjectSettingsModal() {
         if (!modalBusy) closeProjectSettingsModal();
       }}
       title="Project Settings"
-      className="max-w-[800px]"
+      className="max-w-[880px] h-[88vh] flex flex-col overflow-hidden p-0"
+      headerClassName="shrink-0 border-b border-border px-6 py-4"
       onKeyDown={handleKeyDown}
     >
       {!project || !settings || !projectDraft ? (
-        <div className="text-xs text-muted">Loading project…</div>
+        <div className="px-6 py-4 text-xs text-muted">Loading project…</div>
       ) : (
-        <div className="flex flex-col gap-4">
-          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as ProjectTab)}>
-            <TabsList className="mb-4">
-              <TabsTrigger value="general">General</TabsTrigger>
-              <TabsTrigger value="setup">Setup</TabsTrigger>
-              <TabsTrigger value="models">Models</TabsTrigger>
-              <TabsTrigger value="github">GitHub</TabsTrigger>
-              <TabsTrigger value="context">Context</TabsTrigger>
-              <TabsTrigger value="notifications">Notifications</TabsTrigger>
-            </TabsList>
+        <div className="flex min-h-0 flex-1 flex-col px-6 py-4">
+          <Tabs
+            value={activeTab}
+            onValueChange={(value) => setActiveTab(value as ProjectTab)}
+            className="flex min-h-0 flex-1 flex-col"
+          >
+            <div className="-mx-6 mb-4 flex shrink-0 overflow-x-auto px-6">
+              <TabsList className="min-w-max">
+                <TabsTrigger value="general">General</TabsTrigger>
+                <TabsTrigger value="setup">Setup</TabsTrigger>
+                <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
+                <TabsTrigger value="models">Models</TabsTrigger>
+                <TabsTrigger value="github">GitHub</TabsTrigger>
+                <TabsTrigger value="context">Memory</TabsTrigger>
+                <TabsTrigger value="notifications">Notifications</TabsTrigger>
+              </TabsList>
+            </div>
 
-            <TabsContent value="general" className="space-y-4">
+            <TabsContent
+              value="general"
+              className="mt-0 min-h-0 space-y-4 pr-1"
+              data-project-settings-scroll-region
+            >
               <ProjectSettingsGeneralTab
                 project={project}
                 urlInput={urlInput}
@@ -572,7 +599,11 @@ export function ProjectSettingsModal() {
               />
             </TabsContent>
 
-            <TabsContent value="setup" className="space-y-4">
+            <TabsContent
+              value="setup"
+              className="mt-0 min-h-0 space-y-4 pr-1"
+              data-project-settings-scroll-region
+            >
               <ProjectSettingsSetupTab
                 setupCommandsText={setupCommandsText}
                 setSetupCommandsText={setSetupCommandsText}
@@ -594,11 +625,34 @@ export function ProjectSettingsModal() {
                 onRedetect={() => {
                   void refetchSetup();
                 }}
-                detectPending={false}
+                onApplyDetectedProfile={(profile) => {
+                  applySetupContract(profile.suggestedContract);
+                }}
+                detectPending={setupDetectPending}
               />
             </TabsContent>
 
-            <TabsContent value="models" className="space-y-3">
+            <TabsContent
+              value="pipeline"
+              className="mt-0 min-h-0 space-y-4 pr-1"
+              data-project-settings-scroll-region
+            >
+              <ProjectSettingsPipelineTab
+                settings={settings}
+                overrides={overrides}
+                setOverrides={setOverrides}
+                onResetIssueOverrides={handleResetIssueOverrides}
+                issueOverrideResetPending={resetIssueOverridesMutation.isPending}
+                issueOverrideResetResult={issueOverrideResetResult}
+                issueOverrideResetError={issueOverrideResetError}
+              />
+            </TabsContent>
+
+            <TabsContent
+              value="models"
+              className="mt-0 min-h-0 space-y-3 pr-1"
+              data-project-settings-scroll-region
+            >
               <ProjectSettingsModelsTab
                 settings={settings}
                 projectDraft={projectDraft}
@@ -608,14 +662,14 @@ export function ProjectSettingsModal() {
                 modelValidation={modelValidation}
                 setModelValidation={setModelValidation}
                 onApplyPreset={handleApplyModelPreset}
-                onResetIssueOverrides={handleResetIssueOverrides}
-                issueOverrideResetPending={resetIssueOverridesMutation.isPending}
-                issueOverrideResetResult={issueOverrideResetResult}
-                issueOverrideResetError={issueOverrideResetError}
               />
             </TabsContent>
 
-            <TabsContent value="github" className="space-y-4">
+            <TabsContent
+              value="github"
+              className="mt-0 min-h-0 space-y-4 pr-1"
+              data-project-settings-scroll-region
+            >
               <ProjectSettingsGitHubTab
                 pathExists={pathExists}
                 projectId={projectSettingsModalProjectId ?? ''}
@@ -623,9 +677,13 @@ export function ProjectSettingsModal() {
               />
             </TabsContent>
 
-            <TabsContent value="context" className="space-y-4">
+            <TabsContent
+              value="context"
+              className="mt-0 min-h-0 space-y-4 pr-1"
+              data-project-settings-scroll-region
+            >
               <ProjectSettingsContextTab
-                contextFiles={contextFiles}
+                contextFiles={memoryStatus?.files}
                 contextGeneratorCli={contextGeneratorCli}
                 setContextGeneratorCli={setContextGeneratorCli}
                 contextGenerating={contextGenerating}
@@ -638,7 +696,11 @@ export function ProjectSettingsModal() {
               />
             </TabsContent>
 
-            <TabsContent value="notifications" className="space-y-4">
+            <TabsContent
+              value="notifications"
+              className="mt-0 min-h-0 space-y-4 pr-1"
+              data-project-settings-scroll-region
+            >
               <ProjectSettingsNotificationsTab
                 discordRouting={overrides.discordRouting}
                 discordWebhookUrlOverride={overrides.discordWebhookUrlOverride ?? ''}
@@ -669,14 +731,14 @@ export function ProjectSettingsModal() {
           </Tabs>
 
           {displayError && (
-            <div className="rounded-md border border-danger/30 bg-danger/10 px-2.5 py-2 text-xs text-danger">
+            <div className="mt-4 rounded-md border border-danger/30 bg-danger/10 px-2.5 py-2 text-xs text-danger">
               <span className="line-clamp-1">{displayError}</span>
             </div>
           )}
         </div>
       )}
 
-      <ModalFooter>
+      <ModalFooter className="shrink-0 border-t border-border px-6 py-4 mt-0">
         <Button variant="secondary" onClick={closeProjectSettingsModal} disabled={modalBusy}>
           Cancel
         </Button>
@@ -686,8 +748,10 @@ export function ProjectSettingsModal() {
           }}
           disabled={modalBusy || (touched && !validation.ok)}
         >
-          <span>{saveMutation.isPending || setupSaveMutation.isPending ? 'Saving…' : 'Save'}</span>
-          <Keycap>⌘↩</Keycap>
+          <LoadingButtonContent loading={saveMutation.isPending || setupSaveMutation.isPending}>
+            <span>Save</span>
+            <Keycap>⌘↩</Keycap>
+          </LoadingButtonContent>
         </Button>
       </ModalFooter>
     </Modal>

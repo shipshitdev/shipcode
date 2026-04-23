@@ -120,7 +120,7 @@ describe('onboarding leaf steps', () => {
     render(<StepAuthCheck authResult={authResult} onRecheck={vi.fn()} isChecking={true} />);
 
     expect(screen.getByText(/single-agent mode/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Checking...' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Re-check' })).toBeDisabled();
     expect(screen.getByText('@decod3rs')).toBeInTheDocument();
   });
 

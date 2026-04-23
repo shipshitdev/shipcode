@@ -6,7 +6,7 @@ import {
   SHIPCODE_METADATA_LABELS,
   SHIPCODE_STATUS_LABELS,
 } from '@shipcode/shared';
-import { Button } from '@shipcode/ui';
+import { Button, LoadingButtonContent } from '@shipcode/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
@@ -134,11 +134,11 @@ export function ProjectSettingsGitHubTab({
               onClick={() => syncMutation.mutate()}
               disabled={syncMutation.isPending || missingCount === 0}
             >
-              {syncMutation.isPending
-                ? 'Syncing…'
-                : missingCount === 0
+              <LoadingButtonContent loading={syncMutation.isPending}>
+                {missingCount === 0
                   ? 'All labels present'
                   : `Sync ${missingCount} missing label${missingCount === 1 ? '' : 's'}`}
+              </LoadingButtonContent>
             </Button>
 
             {syncMutation.isSuccess && syncMutation.data ? (

@@ -83,7 +83,7 @@ describe('PhaseModelRow', () => {
     expect(onOpenrouterModelChange).toHaveBeenCalledWith(null);
   });
 
-  it('shows claude reasoning remap guidance without openrouter fields', () => {
+  it('normalizes legacy claude efforts without exposing xhigh in the UI', () => {
     render(
       <PhaseModelRow
         label="Verifier"
@@ -91,7 +91,7 @@ describe('PhaseModelRow', () => {
         modelValue="claude"
         openrouterModelValue={null}
         resolvedModelId="claude-sonnet-4-6"
-        reasoningEffortValue="low"
+        reasoningEffortValue="xhigh"
         validProviders={['claude', 'codex']}
         onModelChange={vi.fn()}
         onOpenrouterModelChange={vi.fn()}
@@ -100,7 +100,8 @@ describe('PhaseModelRow', () => {
     );
 
     expect(screen.queryByText('OpenRouter model')).not.toBeInTheDocument();
-    expect(screen.getByText(/Low maps to no thinking/i)).toBeInTheDocument();
     expect(screen.getByText('Thinking budget')).toBeInTheDocument();
+    expect(screen.getByText('High')).toBeInTheDocument();
+    expect(screen.queryByText('xhigh')).not.toBeInTheDocument();
   });
 });

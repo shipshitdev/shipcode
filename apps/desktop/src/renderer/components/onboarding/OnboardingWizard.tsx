@@ -7,7 +7,7 @@ import type {
   SystemHealth,
 } from '@shipcode/shared';
 import { CURRENT_ONBOARDING_VERSION, DEFAULT_STATUS_LABEL_MAPPINGS } from '@shipcode/shared';
-import { Button, Card } from '@shipcode/ui';
+import { Button, Card, LoadingButtonContent } from '@shipcode/ui';
 import { useEffect, useState } from 'react';
 import { StepAuthCheck, useAuthCheck } from './StepAuthCheck';
 import { StepGitHubProject } from './StepGitHubProject';
@@ -166,7 +166,7 @@ export function OnboardingWizard({ onComplete }: Props) {
           <div className="flex-1" />
           {isLastStep ? (
             <Button onClick={handleFinish} disabled={saving}>
-              {saving ? 'Saving...' : 'Finish Setup'}
+              <LoadingButtonContent loading={saving}>Finish Setup</LoadingButtonContent>
             </Button>
           ) : (
             <Button onClick={handleNext} disabled={!canNext}>
