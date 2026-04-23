@@ -19,6 +19,7 @@
  */
 
 import { type AppSettings, normalizeReasoningModelId } from '@shipcode/shared';
+import { measurePromptPayload } from '../prompt-scope';
 import { StreamParser } from '../stream-parser';
 import { executeViaOpenRouter } from './openrouter-execute';
 import type { OpenRouterChatMessage } from './openrouter-http';
@@ -67,11 +68,17 @@ export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentPro
     supports,
 
     async generate(req: ProviderRequest): Promise<ProviderResponse> {
+      const promptTelemetry = {
+        phase: req.phase,
+        promptSize: measurePromptPayload(req.prompt),
+        ...(req.promptMaterialSummary ? { selectedMaterials: req.promptMaterialSummary } : {}),
+      };
       const apiKey = deps.getApiKey();
       if (!apiKey) {
         return {
           rawOutput: '',
           exitCode: 1,
+          promptTelemetry,
           providerError: {
             kind: 'auth',
             message: 'OPENROUTER_API_KEY is not set',
@@ -89,11 +96,12 @@ export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentPro
 
       // Execute phase runs the tool-call agent loop.
       if (req.phase === 'execute') {
-        return executeViaOpenRouter(req, {
+        const response = await executeViaOpenRouter(req, {
           client,
           model,
           onTerminalEvent: req.onTerminalEvent,
         });
+        return { ...response, promptTelemetry };
       }
 
       // Everything else is a single streaming chat completion whose
@@ -127,6 +135,7 @@ export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentPro
           rawOutput: result.content,
           exitCode: 0,
           resolvedModel: result.model ?? model,
+          promptTelemetry,
           tokensUsed: result.usage
             ? { prompt: result.usage.prompt_tokens, completion: result.usage.completion_tokens }
             : undefined,
@@ -150,6 +159,7 @@ export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentPro
               retryable: err.retryable,
             },
             resolvedModel: model,
+            promptTelemetry,
           };
         }
         return {
@@ -161,6 +171,7 @@ export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentPro
             retryable: false,
           },
           resolvedModel: model,
+          promptTelemetry,
         };
       }
     },

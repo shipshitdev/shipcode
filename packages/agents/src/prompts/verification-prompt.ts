@@ -1,5 +1,6 @@
 import type { ShipCodePlan } from '@shipcode/shared';
 import { VERIFICATION_FENCE_TAG } from '@shipcode/shared';
+import { buildScopedContext, type PromptMaterial } from '../prompt-scope';
 import {
   interpolateSkill,
   resolveSkill,
@@ -41,6 +42,12 @@ export interface VerificationPromptDeps {
 
 export interface VerificationPromptOptions {
   contextFiles?: string;
+  promptMaterials?: PromptMaterial[];
+}
+
+function withRepoContext(prompt: string, contextFiles: string, include: boolean): string {
+  if (!include || !contextFiles || prompt.includes(contextFiles)) return prompt;
+  return `${prompt}\n\n<repo_context>\n${contextFiles}\n</repo_context>`;
 }
 
 export function buildVerificationPrompt(
@@ -56,15 +63,21 @@ export function buildVerificationPrompt(
   if (fallbackUsed) {
     deps.onFallback?.('plan-verification', error);
   }
+  const semanticMaterials: PromptMaterial[] = [...(opts.promptMaterials ?? [])];
+  const scoped = buildScopedContext('verify', semanticMaterials, opts.contextFiles);
   const numbered = acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join('\n');
   const slots = [
     { key: 'PLAN_JSON', value: JSON.stringify(plan, null, 2) },
     { key: 'DIFF', value: diff },
     { key: 'ACCEPTANCE_CRITERIA', value: numbered },
-    { key: 'CONTEXT_FILES', value: opts.contextFiles ?? 'No extra files provided.' },
+    { key: 'CONTEXT_FILES', value: scoped.contextFiles },
     { key: 'OUTPUT_SCHEMA', value: VERIFICATION_OUTPUT_SCHEMA },
   ];
-  const result = interpolateSkill(skill.content, slots);
+  const result = withRepoContext(
+    interpolateSkill(skill.content, slots),
+    scoped.contextFiles,
+    Boolean(opts.promptMaterials?.length || opts.contextFiles),
+  );
   if (testOutput) {
     return `${result}\n\n<test_results>\n${testOutput}\n</test_results>\n\nIf test results above show failures, treat them as blockers. A clean test run is strong evidence that behavioral acceptance criteria are satisfied.`;
   }

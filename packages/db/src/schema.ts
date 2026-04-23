@@ -107,11 +107,31 @@ export function migrate(db: DatabaseSync): void {
       value TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS prompt_telemetry (
+      id TEXT PRIMARY KEY,
+      thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+      phase TEXT NOT NULL,
+      invocation_id TEXT NOT NULL,
+      attempt INTEGER,
+      provider TEXT,
+      model TEXT,
+      prompt_characters INTEGER NOT NULL,
+      prompt_bytes INTEGER NOT NULL,
+      prompt_lines INTEGER NOT NULL,
+      selected_materials TEXT,
+      prompt_tokens INTEGER,
+      completion_tokens INTEGER,
+      cost_usd REAL,
+      created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+    );
+
     CREATE INDEX IF NOT EXISTS idx_threads_project ON threads(project_id);
     CREATE INDEX IF NOT EXISTS idx_threads_status ON threads(status);
     CREATE INDEX IF NOT EXISTS idx_plans_thread ON plans(thread_id);
     CREATE INDEX IF NOT EXISTS idx_reviews_plan ON reviews(plan_id);
     CREATE INDEX IF NOT EXISTS idx_diffs_thread ON diffs(thread_id);
+    CREATE INDEX IF NOT EXISTS idx_prompt_telemetry_thread ON prompt_telemetry(thread_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_prompt_telemetry_invocation ON prompt_telemetry(thread_id, invocation_id);
   `);
 }
 
@@ -975,5 +995,41 @@ export function migrateV34(db: DatabaseSync): void {
     `);
 
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (34)`);
+  });
+}
+
+export function migrateV35(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 35) return;
+
+  transaction(db, () => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS prompt_telemetry (
+        id TEXT PRIMARY KEY,
+        thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+        phase TEXT NOT NULL,
+        invocation_id TEXT NOT NULL,
+        attempt INTEGER,
+        provider TEXT,
+        model TEXT,
+        prompt_characters INTEGER NOT NULL,
+        prompt_bytes INTEGER NOT NULL,
+        prompt_lines INTEGER NOT NULL,
+        selected_materials TEXT,
+        prompt_tokens INTEGER,
+        completion_tokens INTEGER,
+        cost_usd REAL,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_prompt_telemetry_thread
+        ON prompt_telemetry(thread_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_prompt_telemetry_invocation
+        ON prompt_telemetry(thread_id, invocation_id);
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (35)`);
   });
 }

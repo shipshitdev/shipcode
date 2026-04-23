@@ -180,6 +180,48 @@ export interface Thread {
   totalCostUsd: number;
 }
 
+export type PromptTelemetryPhase = 'plan' | 'review' | 'revision' | 'verify' | 'execute';
+
+export interface PromptTelemetryMaterialSummary {
+  count: number;
+  labels: string[];
+  kinds: string[];
+}
+
+export interface PromptTelemetryRecord {
+  id: string;
+  threadId: string;
+  phase: PromptTelemetryPhase;
+  invocationId: string;
+  attempt: number | null;
+  provider: string | null;
+  model: string | null;
+  promptCharacters: number;
+  promptBytes: number;
+  promptLines: number;
+  selectedMaterials: PromptTelemetryMaterialSummary | null;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  costUsd: number | null;
+  createdAt: string;
+}
+
+export interface PromptTelemetryInsert {
+  threadId: string;
+  phase: PromptTelemetryPhase;
+  invocationId: string;
+  attempt?: number | null;
+  provider?: string | null;
+  model?: string | null;
+  promptCharacters: number;
+  promptBytes: number;
+  promptLines: number;
+  selectedMaterials?: PromptTelemetryMaterialSummary | null;
+  promptTokens?: number | null;
+  completionTokens?: number | null;
+  costUsd?: number | null;
+}
+
 // === Terminal Types ===
 
 export interface ClarificationChoice {

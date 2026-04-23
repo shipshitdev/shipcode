@@ -4,7 +4,7 @@ export {
   listContextFiles,
   readContextFile,
 } from './context-generator';
-export { loadRepoContext } from './context-loader';
+export { loadRepoContext, loadStructuredRepoContext } from './context-loader';
 export { GhCli } from './github/gh-cli';
 export { IssuePoller } from './github/issue-poller';
 export { routeFromLabels } from './github/model-router';
@@ -44,11 +44,45 @@ export {
   writeProjectSetup,
 } from './project-setup';
 export type {
+  PromptMaterial,
+  PromptMaterialKind,
+  PromptMaterialSummary,
+  PromptPayloadSize,
+  PromptPhase,
+  PromptTelemetry,
+} from './prompt-scope';
+export {
+  buildScopedContext,
+  measurePromptPayload,
+  PROMPT_PHASES,
+  renderPromptMaterials,
+  selectPromptMaterials,
+  summarizePromptMaterials,
+} from './prompt-scope';
+export type {
   ExecutePromptContext,
   ExecutePromptDeps,
   ExecutePromptOptions,
 } from './prompts/execute-prompt';
 export { buildExecutionPrompt } from './prompts/execute-prompt';
+export type {
+  PhasePromptContextSlice,
+  PhasePromptPolicy,
+} from './prompts/phase-prompt-policy';
+export {
+  getPhasePromptPolicy,
+  resolvePhaseReasoningEffort,
+  selectPhasePromptMaterials,
+  toPipelinePromptScope,
+} from './prompts/phase-prompt-policy';
+export type {
+  PhasePromptTelemetry,
+  PhasePromptTelemetrySection,
+} from './prompts/phase-prompt-telemetry';
+export {
+  measurePhasePromptTelemetry,
+  toPersistedPromptTelemetryMaterials,
+} from './prompts/phase-prompt-telemetry';
 export { formatPlanComment } from './prompts/plan-comment';
 export type {
   PlanPromptContext,

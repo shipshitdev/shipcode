@@ -187,8 +187,9 @@ describe('ThreadPanel', () => {
     renderWithProviders();
 
     let state = useAppStore.getState();
-    expect(state.activeIssue).toBeNull();
-    expect(state.issueDetailCollapsed).toBe(true);
+    expect(state.activeIssue?.id).toBe(issue.id);
+    expect(state.activeThreadId).toBe(issue.threadId);
+    expect(state.issueDetailCollapsed).toBe(false);
 
     fireEvent.click(await screen.findByRole('button', { name: /open issue detail/i }));
 

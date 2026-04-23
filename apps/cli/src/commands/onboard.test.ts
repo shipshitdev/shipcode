@@ -1,5 +1,5 @@
 import { SHIPCODE_DEFAULT_LABELS } from '@shipcode/shared';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type ExecCallback = (error: Error | null, result?: { stdout: string; stderr: string }) => void;
 
@@ -75,12 +75,14 @@ import { onboardCommand } from './onboard';
 describe('onboardCommand', () => {
   const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
   const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const originalOpenRouterApiKey = process.env.OPENROUTER_API_KEY;
   vi.spyOn(process, 'exit').mockImplementation((code?: string | number | null) => {
     throw new Error(`process.exit:${code ?? ''}`);
   });
 
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.OPENROUTER_API_KEY;
     getDatabaseMock.mockReturnValue({});
     checkSystemHealthMock.mockResolvedValue({
       git: { available: true },
@@ -122,6 +124,15 @@ describe('onboardCommand', () => {
         callback(null, { stdout: '', stderr: '' });
       },
     );
+  });
+
+  afterAll(() => {
+    if (originalOpenRouterApiKey === undefined) {
+      delete process.env.OPENROUTER_API_KEY;
+      return;
+    }
+
+    process.env.OPENROUTER_API_KEY = originalOpenRouterApiKey;
   });
 
   it('fails fast when required CLIs are missing', async () => {

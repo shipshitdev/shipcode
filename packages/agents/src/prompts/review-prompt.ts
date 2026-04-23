@@ -1,5 +1,6 @@
 import type { ShipCodePlan } from '@shipcode/shared';
 import { REVIEW_FENCE_TAG } from '@shipcode/shared';
+import { buildScopedContext, type PromptMaterial } from '../prompt-scope';
 import {
   interpolateSkill,
   resolveSkill,
@@ -40,7 +41,13 @@ export interface ReviewPromptDeps {
 
 export interface ReviewPromptOptions {
   contextFiles?: string;
+  promptMaterials?: PromptMaterial[];
   autonomous?: boolean;
+}
+
+function withRepoContext(prompt: string, contextFiles: string): string {
+  if (!contextFiles || prompt.includes(contextFiles)) return prompt;
+  return `${prompt}\n\n<repo_context>\n${contextFiles}\n</repo_context>`;
 }
 
 export function buildReviewPrompt(
@@ -57,11 +64,17 @@ export function buildReviewPrompt(
   if (fallbackUsed) {
     deps.onFallback?.('adversarial-review', error);
   }
-  return interpolateSkill(skill.content, [
+  const semanticMaterials: PromptMaterial[] = [...(opts.promptMaterials ?? [])];
+  const scoped = buildScopedContext('review', semanticMaterials, opts.contextFiles);
+  const prompt = interpolateSkill(skill.content, [
     { key: 'PLAN_JSON', value: JSON.stringify(plan, null, 2) },
     { key: 'TARGET_LABEL', value: `plan ${plan.id}` },
     { key: 'AUTONOMOUS', value: opts.autonomous ? 'yes' : 'no' },
-    { key: 'CONTEXT_FILES', value: opts.contextFiles ?? 'No extra files provided.' },
+    { key: 'CONTEXT_FILES', value: scoped.contextFiles },
     { key: 'OUTPUT_SCHEMA', value: REVIEW_OUTPUT_SCHEMA },
   ]);
+  return withRepoContext(
+    prompt,
+    opts.contextFiles?.trim() ? opts.contextFiles : scoped.contextFiles,
+  );
 }

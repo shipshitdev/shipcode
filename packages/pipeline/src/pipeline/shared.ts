@@ -1,4 +1,4 @@
-import type { ProviderPhase, SkillValidationError } from '@shipcode/agents';
+import type { PromptMaterial, ProviderPhase, SkillValidationError } from '@shipcode/agents';
 import type {
   ClarificationRequest,
   GitHubPrCheckSummary,
@@ -60,6 +60,7 @@ export interface PipelineRuntime {
     context: PipelineContext,
     phase: ProviderPhase,
     prompt: string,
+    promptMaterials: PromptMaterial[],
     phaseHints: {
       maxTurns?: number;
       reasoningEffort?: PipelineContext['plannerReasoningEffort'];

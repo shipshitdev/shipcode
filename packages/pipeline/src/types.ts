@@ -1,15 +1,19 @@
 import type {
   LoadedRepoSetupContract,
   ProcessManager,
+  PromptMaterial,
+  PromptMaterialSummary,
   ProviderRegistry,
   TerminalEvent,
 } from '@shipcode/agents';
+import type { PhasePromptTelemetry } from '@shipcode/agents/source';
 import type {
   CheckpointQueries,
   DiffQueries,
   GitHubIssueQueries,
   PlanQueries,
   ProjectQueries,
+  PromptTelemetryQueries,
   ReviewQueries,
   SettingsQueries,
   SkillsQueries,
@@ -32,6 +36,19 @@ import type {
 
 // Temporary alias while pipeline adopts the shared executor-model type directly.
 export type PipelineExecutorModel = ExecutorModel;
+export type PipelinePromptPhase = 'plan' | 'review' | 'revision' | 'verify' | 'execute';
+export interface PipelinePromptScope {
+  phase: PipelinePromptPhase;
+  allowedContextSlices: readonly ('repoContextFiles' | 'testingContext')[];
+  allowedMaterialKinds: readonly PromptMaterial['kind'][];
+  defaultReasoningEffort: ReasoningEffort;
+}
+
+export interface PromptTelemetryPersistenceDiagnostic {
+  phase: PipelinePromptPhase;
+  message: string;
+  nonFatal: true;
+}
 
 // Typed event contract -- both desktop and CLI adapters must handle these
 export type PipelineEvent =
@@ -165,6 +182,13 @@ export interface PipelineContext {
    * Read once from `<projectPath>/.agents/memory/` at pipeline start.
    */
   repoContext: string | null;
+  repoPromptMaterials: PromptMaterial[] | null;
+  phasePromptScopes: Record<PipelinePromptPhase, PipelinePromptScope>;
+  phaseReasoningOverrides: Partial<Record<PipelinePromptPhase, ReasoningEffort>>;
+  phaseReasoningEfforts: Record<PipelinePromptPhase, ReasoningEffort>;
+  promptMaterialSummaries: Partial<Record<PipelinePromptPhase, PromptMaterialSummary>>;
+  promptTelemetry: PhasePromptTelemetry[];
+  promptTelemetryDiagnostics: PromptTelemetryPersistenceDiagnostic[];
   /**
    * Optional repo-owned setup contract loaded from `.shipcode/setup.json`.
    * `repoSetupLoaded` distinguishes "no file exists" from "not read yet".
@@ -217,6 +241,7 @@ export interface PipelineDeps {
   /** Per-phase prompt skill overrides (project + global). The pipeline passes
    *  this into every prompt builder so resolveSkill walks the tier chain. */
   skills: SkillsQueries;
+  promptTelemetry?: PromptTelemetryQueries;
 }
 
 export interface Pipeline {

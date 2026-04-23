@@ -52,6 +52,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     },
   ) {
     const executorModelOverride = options?.executorModelOverride ?? null;
+    const settings = deps.settings.get();
 
     let baseBranch = options?.baseBranch ?? '';
     let forkPointSha = '';
@@ -100,25 +101,18 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       githubIssueNumber: issue.number,
       githubIssueTitle: issue.title,
       githubRepo: null,
-      plannerModel:
-        options?.plannerModel ?? (deps.settings.get().plannerModel as PipelineExecutorModel),
-      reviewerModel:
-        options?.reviewerModel ?? (deps.settings.get().reviewerModel as PipelineExecutorModel),
-      verifierModel:
-        options?.verifierModel ?? (deps.settings.get().verifierModel as PipelineExecutorModel),
+      plannerModel: options?.plannerModel ?? (settings.plannerModel as PipelineExecutorModel),
+      reviewerModel: options?.reviewerModel ?? (settings.reviewerModel as PipelineExecutorModel),
+      verifierModel: options?.verifierModel ?? (settings.verifierModel as PipelineExecutorModel),
       executorModel,
       plannerModelIdOverride: options?.plannerModelIdOverride ?? null,
       reviewerModelIdOverride: options?.reviewerModelIdOverride ?? null,
       executorModelIdOverride: options?.executorModelIdOverride ?? null,
       verifierModelIdOverride: options?.verifierModelIdOverride ?? null,
-      plannerReasoningEffort:
-        options?.plannerReasoningEffort ?? deps.settings.get().plannerReasoningEffort,
-      reviewerReasoningEffort:
-        options?.reviewerReasoningEffort ?? deps.settings.get().reviewerReasoningEffort,
-      executorReasoningEffort:
-        options?.executorReasoningEffort ?? deps.settings.get().executorReasoningEffort,
-      verifierReasoningEffort:
-        options?.verifierReasoningEffort ?? deps.settings.get().verifierReasoningEffort,
+      plannerReasoningEffort: options?.plannerReasoningEffort ?? settings.plannerReasoningEffort,
+      reviewerReasoningEffort: options?.reviewerReasoningEffort ?? settings.reviewerReasoningEffort,
+      executorReasoningEffort: options?.executorReasoningEffort ?? settings.executorReasoningEffort,
+      verifierReasoningEffort: options?.verifierReasoningEffort ?? settings.verifierReasoningEffort,
       executorModelOverride,
       baseBranch,
       forkPointSha,
@@ -127,7 +121,6 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       verifiedSha: null,
     });
 
-    const settings = deps.settings.get();
     const thread = deps.threads.getById(threadId);
     const project = thread ? deps.projects.getById(thread.projectId) : null;
     const cachedIssue =

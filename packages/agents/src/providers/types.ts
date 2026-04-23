@@ -24,6 +24,7 @@
  */
 
 import type { AgentType, ClarificationRequest, ReasoningEffort } from '@shipcode/shared';
+import type { PromptMaterialSummary, PromptTelemetry } from '../prompt-scope';
 import type { TerminalEvent } from '../terminal-events';
 
 export type ProviderPhase = 'plan' | 'review' | 'revision' | 'verify' | 'execute';
@@ -75,6 +76,7 @@ export interface ProviderRequest {
   signal: AbortSignal;
   /** Phase-specific hints (see ProviderPhaseHints). */
   phaseHints?: ProviderPhaseHints;
+  promptMaterialSummary?: PromptMaterialSummary;
   /**
    * The threadId this provider call is attributed to. Used by telemetry
    * (Tier 3) to persist resolved-model + token usage against the thread.
@@ -126,6 +128,7 @@ export interface ProviderResponse {
   resolvedModel?: string;
   tokensUsed?: { prompt: number; completion: number };
   costUsd?: number;
+  promptTelemetry?: PromptTelemetry;
   clarificationRequest?: ClarificationRequest;
 }
 

@@ -1,4 +1,5 @@
 import type { ShipCodePlan } from '@shipcode/shared';
+import { buildScopedContext, type PromptMaterial } from '../prompt-scope';
 import {
   interpolateSkill,
   resolveSkill,
@@ -17,7 +18,13 @@ export interface ExecutePromptDeps {
 
 export interface ExecutePromptOptions {
   contextFiles?: string;
+  promptMaterials?: PromptMaterial[];
   testingContext?: string | null;
+}
+
+function withRepoContext(prompt: string, contextFiles: string, include: boolean): string {
+  if (!include || !contextFiles || prompt.includes(contextFiles)) return prompt;
+  return `${prompt}\n\n<repo_context>\n${contextFiles}\n</repo_context>`;
 }
 
 /** TDD protocol block — appended after skill interpolation when testCommand is configured. */
@@ -59,11 +66,17 @@ export function buildExecutionPrompt(
   if (fallbackUsed) {
     deps.onFallback?.('plan-execution', error);
   }
-  let prompt = interpolateSkill(skill.content, [
-    { key: 'APPROVED_PLAN', value: JSON.stringify(plan, null, 2) },
-    { key: 'TESTING_CONTEXT', value: opts.testingContext ?? '' },
-    { key: 'CONTEXT_FILES', value: opts.contextFiles ?? 'No extra files provided.' },
-  ]);
+  const semanticMaterials: PromptMaterial[] = [...(opts.promptMaterials ?? [])];
+  const scoped = buildScopedContext('execute', semanticMaterials, opts.contextFiles);
+  let prompt = withRepoContext(
+    interpolateSkill(skill.content, [
+      { key: 'APPROVED_PLAN', value: JSON.stringify(plan, null, 2) },
+      { key: 'TESTING_CONTEXT', value: opts.testingContext ?? '' },
+      { key: 'CONTEXT_FILES', value: scoped.contextFiles },
+    ]),
+    scoped.contextFiles,
+    Boolean(opts.promptMaterials?.length || opts.contextFiles),
+  );
 
   // Inject TDD protocol when test command is configured
   if (opts.testingContext) {

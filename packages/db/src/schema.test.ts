@@ -14,6 +14,7 @@ import {
   migrateV31,
   migrateV33,
   migrateV34,
+  migrateV35,
 } from './schema';
 import { asRow } from './utils';
 
@@ -477,5 +478,38 @@ describe('migrateV34', () => {
   it('is idempotent', () => {
     migrateV34(db);
     expect(() => migrateV34(db)).not.toThrow();
+  });
+});
+
+describe('migrateV35', () => {
+  let db: DatabaseSync;
+
+  beforeEach(() => {
+    db = new DatabaseSync(':memory:');
+    migrate(db);
+    migrateV2(db);
+    migrateV3(db);
+    migrateV29(db);
+    migrateV30(db);
+    migrateV31(db);
+    migrateV33(db);
+    migrateV34(db);
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('creates prompt telemetry storage for upgraded databases', () => {
+    db.exec('DROP TABLE IF EXISTS prompt_telemetry');
+
+    migrateV35(db);
+
+    expect(tableExists(db, 'prompt_telemetry')).toBe(true);
+  });
+
+  it('is idempotent', () => {
+    migrateV35(db);
+    expect(() => migrateV35(db)).not.toThrow();
   });
 });
