@@ -6,6 +6,7 @@ import { transitionThreadPhase } from './ipc/helpers';
 import { registerDeveloperHandlers } from './ipc/register-developer-handlers';
 import { registerGitHubHandlers } from './ipc/register-github-handlers';
 import { registerInstantHandlers } from './ipc/register-instant-handlers';
+import { registerIssueGraphHandlers } from './ipc/register-issue-graph-handlers';
 import { registerPipelineHandlers } from './ipc/register-pipeline-handlers';
 import { registerPullRequestHandlers } from './ipc/register-pr-handlers';
 import { registerProjectHandlers } from './ipc/register-project-handlers';
@@ -82,6 +83,7 @@ export function registerIpcHandlers(
 
   registerProjectHandlers(deps);
   registerGitHubHandlers(deps);
+  registerIssueGraphHandlers(deps);
   registerPipelineHandlers(deps);
   registerSkillsHandlers(deps);
   registerSupportHandlers(deps);

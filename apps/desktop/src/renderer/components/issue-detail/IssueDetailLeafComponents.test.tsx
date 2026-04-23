@@ -2,6 +2,7 @@
 
 import type { ActivePipelineSummary, ActivityEntry } from '@shipcode/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '../../stores/app-store';
@@ -28,26 +29,29 @@ afterEach(() => {
 
 describe('issue-detail leaf components', () => {
   beforeEach(() => {
-    window.shipcode.invoke = vi.fn(async (channel: string) => {
-      if (channel === 'pipeline:list-active') {
-        return [
-          {
-            threadId: 'thread-1',
-            projectId: 'project-1',
-            projectName: 'ShipCode',
-            threadTitle: 'Fix the board',
-            phase: 'planning',
-            startedAt: Date.now() - 120_000,
-            activeProcessId: 'process-1',
-            githubIssueNumber: 42,
-            modelProvider: 'claude',
-            model: 'claude',
-            reasoningEffort: 'high',
-          },
-        ] satisfies ActivePipelineSummary[];
-      }
-      return null;
-    }) as typeof window.shipcode.invoke;
+    window.shipcode = {
+      invoke: vi.fn(async (channel: string) => {
+        if (channel === 'pipeline:list-active') {
+          return [
+            {
+              threadId: 'thread-1',
+              projectId: 'project-1',
+              projectName: 'ShipCode',
+              threadTitle: 'Fix the board',
+              phase: 'planning',
+              startedAt: Date.now() - 120_000,
+              activeProcessId: 'process-1',
+              githubIssueNumber: 42,
+              modelProvider: 'claude',
+              model: 'claude',
+              reasoningEffort: 'high',
+            },
+          ] satisfies ActivePipelineSummary[];
+        }
+        return null;
+      }) as typeof window.shipcode.invoke,
+      on: vi.fn(() => () => {}),
+    };
 
     useAppStore.setState({
       lastActivityByThread: {

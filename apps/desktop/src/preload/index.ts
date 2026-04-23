@@ -106,5 +106,5 @@ const on: ShipCodeAPI['on'] = ((channel: string, callback: (...args: unknown[]) 
   };
 }) as ShipCodeAPI['on'];
 
-const api: ShipCodeAPI = { invoke, on };
+const api = Object.freeze({ invoke, on }) satisfies ShipCodeAPI;
 contextBridge.exposeInMainWorld('shipcode', api);

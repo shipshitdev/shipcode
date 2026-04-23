@@ -48,6 +48,7 @@ import {
   DiffQueries,
   GitHubIssueQueries,
   getDatabase,
+  IssueEdgeQueries,
   NotificationsQueries,
   PlanQueries,
   ProjectQueries,
@@ -59,10 +60,16 @@ import {
   VerificationQueries,
 } from '@shipcode/db';
 import { createPipeline } from '@shipcode/pipeline';
-import { HEARTBEAT_TIMEOUT_MS } from '@shipcode/shared';
+import {
+  clampError,
+  EXECUTION_PHASES,
+  HEARTBEAT_TIMEOUT_MS,
+  type PipelinePhase,
+} from '@shipcode/shared';
 import { ChatNotificationService } from './chat-notification-service';
 import { registerIpcHandlers } from './ipc';
 import { transitionThreadPhase } from './ipc/helpers';
+import { notifyIssueGraphPipelinePhaseChange } from './ipc/register-issue-graph-handlers';
 import { NotificationService } from './notification-service';
 import { createElectronEmitter } from './pipeline-bridge';
 import { PipelineScheduler } from './pipeline-scheduler';
@@ -213,6 +220,7 @@ function createWindow() {
     settings: new SettingsQueries(db),
     verifications: new VerificationQueries(db),
     githubIssues: new GitHubIssueQueries(db),
+    issueEdges: new IssueEdgeQueries(db),
     checkpoints: new CheckpointQueries(db),
     activity: new ActivityQueries(db),
     notifications: new NotificationsQueries(db),
@@ -236,7 +244,7 @@ function createWindow() {
 
   // Initialize pipeline state machine.
   // onPipelineTerminal is set after pipeline is created (late-binding).
-  let onPipelineTerminal: (() => void) | undefined;
+  let onPipelineTerminal: ((event: { threadId: string; phase: PipelinePhase }) => void) | undefined;
   let onExecutionSlotFreed: (() => void) | undefined;
   const emitter = createElectronEmitter(mainWindow, {
     activity: queries.activity,
@@ -244,7 +252,7 @@ function createWindow() {
     threads: queries.threads,
     notifications: notificationService,
     chatNotifications: chatNotificationService,
-    onPipelineTerminal: () => onPipelineTerminal?.(),
+    onPipelineTerminal: (event) => onPipelineTerminal?.(event),
     onExecutionSlotFreed: () => onExecutionSlotFreed?.(),
   });
 
@@ -287,8 +295,9 @@ function createWindow() {
   });
 
   // Queue promotion: start the next queued issue when a pipeline slot opens.
-  onPipelineTerminal = () => {
+  onPipelineTerminal = (event) => {
     try {
+      notifyIssueGraphPipelinePhaseChange(event);
       pipelineScheduler.onSlotFreed();
     } catch (err) {
       log.error('[queue] promotion error:', err);
@@ -305,7 +314,7 @@ function createWindow() {
   setTimeout(() => {
     const settings = queries.settings.get();
     for (let i = 0; i < settings.maxConcurrentPipelines; i++) {
-      onPipelineTerminal?.();
+      onPipelineTerminal?.({ threadId: '', phase: 'idle' });
     }
     // Also drain any threads that were approved pre-restart and waiting for execution.
     pipelineScheduler.drainExecutionQueue();

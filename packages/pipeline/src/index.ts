@@ -1,3 +1,8 @@
+export {
+  buildIssueGroupExecutionPreview,
+  createIssueGroupRunState,
+  IssueGroupSchedulerError,
+} from './issue-group-scheduler';
 export { mapPhaseToIssuePipelineStatus, syncThreadAndIssuePhase } from './phase-sync';
 export { createPipeline } from './pipeline';
 export type {

@@ -17,7 +17,7 @@ interface EmitterDeps {
   threads: ThreadQueries;
   notifications: NotificationService;
   chatNotifications: ChatNotificationService;
-  onPipelineTerminal?: () => void;
+  onPipelineTerminal?: (event: { threadId: string; phase: PipelinePhase }) => void;
   onExecutionSlotFreed?: () => void;
 }
 
@@ -431,7 +431,7 @@ export function createElectronEmitter(
           event.phase === 'idle')
       ) {
         try {
-          deps.onPipelineTerminal?.();
+          deps.onPipelineTerminal?.({ threadId: event.threadId, phase: event.phase });
         } catch (err) {
           log.error('[pipeline-bridge] queue promotion error:', err);
         }
