@@ -91,9 +91,9 @@ function ProviderWindowBar({
         : null;
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex items-baseline justify-between gap-2 text-[10px] text-secondary">
-        <span className="truncate">{window.label}</span>
-        <span className="shrink-0 tabular-nums text-muted">
+      <div className="flex min-w-0 items-baseline justify-between gap-3 text-[10px] text-secondary">
+        <span className="min-w-0 shrink truncate">{window.label}</span>
+        <span className="min-w-0 max-w-[72%] truncate text-right tabular-nums text-muted">
           {left == null ? '—' : `${left}% left`}
           {window.resetDescription ? ` · ${window.resetDescription}` : ''}
         </span>
@@ -121,12 +121,12 @@ function ProviderDetailRow({
   return (
     <div
       className={cn(
-        'flex flex-col gap-2 rounded-md border px-2.5 py-2',
+        'flex flex-col gap-2 overflow-hidden rounded-md border px-2.5 py-2',
         status.state === 'blocked'
           ? 'border-danger/25 bg-danger/5'
           : status.state === 'warning'
             ? 'border-warning/25 bg-warning/5'
-            : 'border-border/80 bg-secondary/40',
+            : 'border-border/80 bg-primary/40',
       )}
     >
       <div className="flex items-center gap-2">
@@ -230,8 +230,12 @@ function ProviderStatusBadge({
           </span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" sideOffset={6} className="w-[320px] bg-elevated p-2 shadow-lg">
-        <div className="mb-2 flex items-start justify-between gap-2 px-1">
+      <PopoverContent
+        align="end"
+        sideOffset={6}
+        className="w-[calc(100vw-24px)] max-w-[520px] rounded-xl bg-primary p-4 shadow-2xl shadow-black/40"
+      >
+        <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <div className="text-[11px] font-medium text-primary">CLI availability</div>
             <div className="text-[10px] text-muted">

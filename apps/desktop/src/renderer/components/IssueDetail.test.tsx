@@ -242,6 +242,10 @@ describe('IssueDetail', () => {
     await waitFor(() => {
       expect(prdTab).toHaveAttribute('data-state', 'active');
     });
+    expect(screen.getByText('Issue brief')).toBeInTheDocument();
+    expect(screen.getByText('GitHub issue #42 source content')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Refresh issue from GitHub' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit issue body' })).toBeInTheDocument();
     expect(screen.getByText('Spec body')).toBeInTheDocument();
     expect(screen.getByText('first item')).toBeInTheDocument();
     expect(screen.getByText('Start pipeline')).toBeInTheDocument();
@@ -1126,12 +1130,12 @@ describe('IssueDetail', () => {
     expect(startButton.compareDocumentPosition(prdTab)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
-  it('uses panel toggle icons and distinct close behavior', async () => {
+  it('uses full-size toggle action and distinct close behavior', async () => {
     invokeMock.mockResolvedValue([]);
 
     renderWithProviders();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Expand detail' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open full size' }));
     expect(useAppStore.getState().issueDetailExpanded).toBe(true);
     expect(useAppStore.getState().activeIssue?.id).toBe('issue-1');
 
@@ -1139,13 +1143,13 @@ describe('IssueDetail', () => {
     expect(useAppStore.getState().activeIssue).toBeNull();
   });
 
-  it('expanded layout removes Back to board and uses collapse-to-sidebar control', async () => {
+  it('expanded layout removes Back to board and uses return-to-sidebar control', async () => {
     invokeMock.mockResolvedValue([]);
 
     renderWithProviders({ expanded: true });
 
     expect(screen.queryByText('Back to board')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Collapse to sidebar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Return to sidebar' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Close issue detail' })).toBeInTheDocument();
   });
 

@@ -40,8 +40,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   LoadingButtonContent,
-  PanelLeftClose,
-  PanelLeftOpen,
+  Maximize2,
+  Minimize2,
   PhaseChip,
   X,
 } from '@shipshitdev/ui';
@@ -983,10 +983,10 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         size="icon-xs"
         className="text-muted"
         onClick={toggleIssueDetailExpanded}
-        title={expanded ? 'Collapse to sidebar' : 'Expand detail'}
-        aria-label={expanded ? 'Collapse to sidebar' : 'Expand detail'}
+        title={expanded ? 'Return to sidebar' : 'Open full size'}
+        aria-label={expanded ? 'Return to sidebar' : 'Open full size'}
       >
-        {expanded ? <PanelLeftClose size={13} /> : <PanelLeftOpen size={13} />}
+        {expanded ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
       </Button>
     </div>
   );

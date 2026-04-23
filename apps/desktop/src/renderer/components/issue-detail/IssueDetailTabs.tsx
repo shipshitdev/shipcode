@@ -10,16 +10,7 @@ import type {
   ReviewRecord,
   Thread,
 } from '@shipcode/shared';
-import {
-  Button,
-  cn,
-  Pencil,
-  RefreshCw,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@shipshitdev/ui';
+import { cn, Tabs, TabsContent, TabsList, TabsTrigger } from '@shipshitdev/ui';
 import { CommentsTab } from './CommentsTab';
 import { CostsTab } from './CostsTab';
 import { DiffTab } from './DiffTab';
@@ -174,33 +165,16 @@ export function IssueDetailTabs({
             </TabsTrigger>
           ))}
         </TabsList>
-        {activeTab === 'prd' && (
-          <div className="ml-auto flex shrink-0 items-center gap-1 pr-4">
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={onRefreshFromGithub}
-              disabled={isRefreshingFromGithub}
-              title="Re-fetch issue from GitHub"
-              aria-label="Refresh issue from GitHub"
-            >
-              <RefreshCw size={12} className={isRefreshingFromGithub ? 'animate-spin' : ''} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={onEditPrd}
-              title="Edit issue body"
-              aria-label="Edit issue body"
-            >
-              <Pencil size={13} />
-            </Button>
-          </div>
-        )}
       </div>
 
       <TabsContent value="prd" className={cn('mt-0', !expanded && 'p-4')}>
-        <PrdTab activeIssue={activeIssue} expanded={expanded} />
+        <PrdTab
+          activeIssue={activeIssue}
+          expanded={expanded}
+          isRefreshingFromGithub={isRefreshingFromGithub}
+          onEditPrd={onEditPrd}
+          onRefreshFromGithub={onRefreshFromGithub}
+        />
       </TabsContent>
 
       <TabsContent value="comments" className={cn('mt-0', !expanded && 'p-4')}>

@@ -132,7 +132,7 @@ export function decodePhaseOption(value: string): {
   return { provider, modelId: modelIdRaw === '__default__' ? null : modelIdRaw };
 }
 
-export function resolveRawPlanText(raw: string): string {
+function resolveRawPlanText(raw: string): string {
   const lines = raw.split('\n');
   for (let i = lines.length - 1; i >= 0; i--) {
     // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping ANSI codes
