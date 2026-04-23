@@ -254,7 +254,7 @@ interface PtyProbeOptions {
   periodicEnterMs?: number | null;
   settleAfterStopMs?: number;
   stopOnSubstrings?: string[];
-  sendOnSubstrings?: Record<string, string>;
+  sendOnSubstrings?: Record<string, string | { keys: string; delayMs?: number }>;
 }
 
 interface ClaudeAuthDetails {
@@ -309,11 +309,6 @@ function firstNumber(pattern: RegExp, text: string): number | null {
   return match?.[1] ? parseNumericText(match[1]) : null;
 }
 
-function firstLineMatching(pattern: RegExp, text: string): string | null {
-  const match = pattern.exec(text);
-  return match?.[0] ?? null;
-}
-
 function percentLeftFromLine(line: string | null): number | null {
   if (!line) return null;
   const match = /([0-9]{1,3})%\s+left/i.exec(line);
@@ -324,7 +319,7 @@ function percentLeftFromLine(line: string | null): number | null {
 
 function resetStringFromLine(line: string | null): string | null {
   if (!line) return null;
-  const match = /resets?\s+(.+)/i.exec(line);
+  const match = /resets?\s+([^)│┃\n]+)/i.exec(line);
   return match?.[1]?.trim() || null;
 }
 
@@ -483,16 +478,23 @@ async function runPtyProbe(options: PtyProbeOptions): Promise<string> {
     let lastEnterAt = Date.now();
     let stopDetectedAt: number | null = null;
     const triggeredSends = new Set<string>();
+    const pendingSendTimers = new Set<NodeJS.Timeout>();
     const normalizedStopNeedles = stopOnSubstrings.map((value) => normalizeForSearch(value));
-    const normalizedSendNeedles = Object.entries(sendOnSubstrings).map(([needle, keys]) => ({
-      needle: normalizeForSearch(needle),
-      keys,
-    }));
+    const normalizedSendNeedles = Object.entries(sendOnSubstrings).map(([needle, spec]) => {
+      const send = typeof spec === 'string' ? { keys: spec } : spec;
+      return {
+        needle: normalizeForSearch(needle),
+        keys: send.keys,
+        delayMs: send.delayMs ?? 0,
+      };
+    });
 
     const cleanup = () => {
       clearTimeout(initialTimer);
       clearTimeout(timeoutTimer);
       clearInterval(tickTimer);
+      for (const timer of pendingSendTimers) clearTimeout(timer);
+      pendingSendTimers.clear();
     };
 
     const finish = (text: string) => {
@@ -521,13 +523,21 @@ async function runPtyProbe(options: PtyProbeOptions): Promise<string> {
       }
     };
 
-    const initialTimer = setTimeout(() => {
-      if (!initialInput) return;
+    const writeKeys = (keys: string) => {
       try {
-        proc.write(initialInput);
+        proc.write(keys);
+        lastEnterAt = Date.now();
+        if (keys.trim()) {
+          lastOutputAt = Date.now();
+        }
       } catch {
         // Ignore write races on early exit.
       }
+    };
+
+    const initialTimer = setTimeout(() => {
+      if (!initialInput) return;
+      writeKeys(initialInput);
     }, initialDelayMs);
 
     const timeoutTimer = setTimeout(() => {
@@ -574,10 +584,14 @@ async function runPtyProbe(options: PtyProbeOptions): Promise<string> {
       for (const item of normalizedSendNeedles) {
         if (triggeredSends.has(item.needle) || !normalizedTail.includes(item.needle)) continue;
         triggeredSends.add(item.needle);
-        try {
-          proc.write(item.keys);
-        } catch {
-          // Ignore write races on exit.
+        if (item.delayMs > 0) {
+          const timer = setTimeout(() => {
+            pendingSendTimers.delete(timer);
+            if (!settled) writeKeys(item.keys);
+          }, item.delayMs);
+          pendingSendTimers.add(timer);
+        } else {
+          writeKeys(item.keys);
         }
       }
 
@@ -632,8 +646,8 @@ export function parseCodexStatusText(
   const normalizedVersion = version ? (version.match(/\d+\.\d+[\w.-]*/)?.[0] ?? version) : null;
   const clean = stripAnsiCodes(stdout);
   const creditsRemaining = firstNumber(/Credits:\s*([0-9][0-9., ]*)/i, clean);
-  const sessionLine = firstLineMatching(/5h limit[^\n]*/i, clean);
-  const weeklyLine = firstLineMatching(/Weekly limit[^\n]*/i, clean);
+  const sessionLine = firstCodexLimitBlock(clean, '5h limit');
+  const weeklyLine = firstCodexLimitBlock(clean, 'Weekly limit');
   const windows = [
     toWindow(
       'session',
@@ -660,6 +674,29 @@ export function parseCodexStatusText(
     creditsRemaining,
     windows,
   };
+}
+
+function firstCodexLimitBlock(text: string, label: '5h limit' | 'Weekly limit'): string | null {
+  const labelPattern = new RegExp(escapeRegex(label), 'i');
+  const nextBlockPattern = /\s(?:5h limit|Weekly limit|GPT-[\w.-]+(?:-[\w.-]+)* limit):/gi;
+  const lines = text.split('\n');
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const labelMatch = labelPattern.exec(line);
+    if (!labelMatch) continue;
+    const nextLine = lines[index + 1] ?? '';
+    let segment = line.slice(labelMatch.index);
+    nextBlockPattern.lastIndex = label.length;
+    const nextBlock = nextBlockPattern.exec(segment);
+    if (nextBlock) {
+      segment = segment.slice(0, nextBlock.index);
+    }
+    if (!/resets?/i.test(segment) && /resets?/i.test(nextLine)) {
+      segment = `${segment} ${nextLine}`;
+    }
+    return segment;
+  }
+  return null;
 }
 
 export function parseClaudeUsageText(
@@ -815,13 +852,14 @@ async function probeCodexUsage(
     timeoutMs: Math.min(CLI_USAGE_TIMEOUT_MS, 12_000),
     rows: 70,
     cols: 220,
-    initialInput: '/status\n',
+    initialInput: '/status\r',
     initialDelayMs: 1_750,
-    idleTimeoutMs: 2_000,
+    idleTimeoutMs: 4_000,
     periodicEnterMs: 750,
     settleAfterStopMs: 500,
     stopOnSubstrings: ['Credits:', '5h limit', 'Weekly limit'],
     sendOnSubstrings: {
+      'refresh requested': { keys: '/status\r', delayMs: 1_500 },
       'Do you trust the contents of this directory?': '\r\n',
       'Yes, continue': '\r\n',
       'Press enter to continue': '\r\n',

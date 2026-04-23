@@ -98,6 +98,10 @@ beforeEach(() => {
   mockMkdir.mockResolvedValue(undefined);
 });
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 function createMockPty(text: string) {
   let onData: ((chunk: string) => void) | null = null;
   let onExit: ((event: { exitCode: number }) => void) | null = null;
@@ -125,6 +129,43 @@ function createMockPty(text: string) {
       onData = handler;
       // Auto-flush after both handlers are registered (simulates CLI startup output)
       queueMicrotask(() => flush());
+    }),
+    onExit: vi.fn((handler: (event: { exitCode: number }) => void) => {
+      onExit = handler;
+    }),
+  };
+}
+
+function createCodexRefreshPty() {
+  let onData: ((chunk: string) => void) | null = null;
+  let onExit: ((event: { exitCode: number }) => void) | null = null;
+  let killed = false;
+  let statusWrites = 0;
+
+  const emit = (text: string, exit = false) => {
+    queueMicrotask(() => {
+      if (killed) return;
+      onData?.(text);
+      if (exit) onExit?.({ exitCode: 0 });
+    });
+  };
+
+  return {
+    write: vi.fn((keys: string) => {
+      if (!keys.includes('/status')) return;
+      statusWrites += 1;
+      if (statusWrites === 1) {
+        emit('Limits: refresh requested; run /status again shortly.');
+        return;
+      }
+      emit('5h limit 88% left resets in 4h 49m\nWeekly limit 64% left resets in 2d', true);
+    }),
+    kill: vi.fn(() => {
+      killed = true;
+      onExit?.({ exitCode: 0 });
+    }),
+    onData: vi.fn((handler: (chunk: string) => void) => {
+      onData = handler;
     }),
     onExit: vi.fn((handler: (event: { exitCode: number }) => void) => {
       onExit = handler;
@@ -556,6 +597,61 @@ describe('parseCodexStatusText', () => {
     ]);
   });
 
+  it('maps current boxed codex status text into session and weekly windows', () => {
+    const status = parseCodexStatusText(
+      `
+      │  5h limit:                    [██████████████░░░░░░] 71% left (resets 12:01) │
+      │  Weekly limit:                [███████████████░░░░░] 74% left                │
+      │                               (resets 21:02 on 28 Apr)                       │
+      │  GPT-5.3-Codex-Spark limit:                                                  │
+      │  5h limit:                    [████████████████████] 100% left               │
+      │                               (resets 15:58)                                 │
+      `,
+      '2026-04-23T10:15:00.000Z',
+      'codex-cli 0.122.0',
+    );
+
+    expect(status.available).toBe(true);
+    expect(status.version).toBe('0.122.0');
+    expect(status.windows).toEqual([
+      expect.objectContaining({
+        key: 'session',
+        label: 'Session',
+        leftPercent: 71,
+        resetDescription: '12:01',
+      }),
+      expect.objectContaining({
+        key: 'weekly',
+        label: 'Weekly',
+        leftPercent: 74,
+        resetDescription: '21:02 on 28 Apr',
+      }),
+    ]);
+  });
+
+  it('does not let a wrapped codex status row leak into the reset text', () => {
+    const status = parseCodexStatusText(
+      `
+      5h limit: [█████████████░░░░░░░] 66% left (resets 12:01) Weekly limit: [██████████████░░░░░░] 73% left (resets 21:02 on 28 Apr)
+      `,
+      '2026-04-23T10:15:00.000Z',
+      'codex-cli 0.123.0',
+    );
+
+    expect(status.windows).toEqual([
+      expect.objectContaining({
+        key: 'session',
+        leftPercent: 66,
+        resetDescription: '12:01',
+      }),
+      expect.objectContaining({
+        key: 'weekly',
+        leftPercent: 73,
+        resetDescription: '21:02 on 28 Apr',
+      }),
+    ]);
+  });
+
   it('strips binary name prefix from version string', () => {
     const full = parseCodexStatusText('', undefined, 'codex-cli 0.121.0');
     expect(full.version).toBe('0.121.0');
@@ -616,6 +712,49 @@ describe('checkCliProviderUsage', () => {
     expect(result.codex.creditsRemaining).toBe(54.72);
     expect(result.codex.windows).toEqual(
       expect.arrayContaining([expect.objectContaining({ key: 'session', leftPercent: 98 })]),
+    );
+  });
+
+  it('retries codex status when the CLI refreshes limits on the first request', async () => {
+    vi.useFakeTimers();
+    execRouted({
+      'which claude': { stdout: '/usr/local/bin/claude\n' },
+      'which codex': { stdout: '/usr/local/bin/codex\n' },
+      'claude --version': { stdout: '1.0.88\n' },
+      'codex --version': { stdout: '0.122.0\n' },
+      'claude auth status': {
+        stdout: JSON.stringify({
+          loggedIn: true,
+          email: 'vincent@shipshit.dev',
+          subscriptionType: 'max',
+        }),
+      },
+    });
+    let codexPty!: ReturnType<typeof createCodexRefreshPty>;
+    mockPtySpawn.mockImplementation((command: string) => {
+      if (command.includes('claude')) {
+        return createMockPty(`
+          Current session
+          99% left
+          Resets in 4h 49m
+        `);
+      }
+      codexPty = createCodexRefreshPty();
+      return codexPty;
+    });
+
+    const resultPromise = checkCliProviderUsage({ force: true });
+    await vi.advanceTimersByTimeAsync(1_750);
+    await vi.advanceTimersByTimeAsync(1_500);
+    const result = await resultPromise;
+
+    const statusWrites = codexPty.write.mock.calls.filter((call) => call[0] === '/status\r');
+    expect(statusWrites).toHaveLength(2);
+    expect(result.codex.windows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'session', leftPercent: 88 }),
+        expect.objectContaining({ key: 'weekly', leftPercent: 64 }),
+      ]),
     );
   });
 
