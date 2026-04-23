@@ -15,11 +15,12 @@ const ISSUE_EDGES_SCHEMA_SQL = `
     project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     source_issue_id TEXT NOT NULL REFERENCES github_issue_cache(id) ON DELETE CASCADE,
     target_issue_id TEXT NOT NULL REFERENCES github_issue_cache(id) ON DELETE CASCADE,
-    edge_type TEXT NOT NULL,
-    origin TEXT NOT NULL,
+    edge_type TEXT NOT NULL CHECK (edge_type IN ('blocks', 'depends_on', 'reference')),
+    origin TEXT NOT NULL CHECK (origin IN ('body', 'manual')),
     source_body_issue_id TEXT REFERENCES github_issue_cache(id) ON DELETE CASCADE,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    CHECK (source_issue_id <> target_issue_id)
   );
 
   CREATE INDEX IF NOT EXISTS idx_issue_edges_project ON issue_edges(project_id);
@@ -132,6 +133,9 @@ export class IssueEdgeQueries {
         .run(projectId, sourceBodyIssueId);
 
       for (const edge of edges) {
+        if (edge.sourceIssueId === edge.targetIssueId) {
+          continue;
+        }
         this.db
           .prepare(
             `INSERT OR IGNORE INTO issue_edges (
@@ -164,6 +168,10 @@ export class IssueEdgeQueries {
     targetIssueId: string;
     edgeType: IssueGraphEdgeType;
   }): IssueGraphEdgeRecord {
+    if (input.sourceIssueId === input.targetIssueId) {
+      throw new Error('Cannot create a self edge');
+    }
+
     const existing = this.findExistingManualEdge(
       input.projectId,
       input.sourceIssueId,

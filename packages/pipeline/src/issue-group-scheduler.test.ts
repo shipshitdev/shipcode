@@ -83,4 +83,20 @@ describe('createIssueGroupRunState', () => {
     expect(state.getBlockedIssueIds()).toEqual(['issue-3']);
     expect(state.markIssueCompleted('issue-2', true)).toEqual(['issue-3']);
   });
+
+  it('preserves preview order when returning ready issues', () => {
+    const state = createIssueGroupRunState({
+      selectedIssueIds: ['issue-4', 'issue-2', 'issue-1', 'issue-3'],
+      nodes,
+      edges: [
+        { sourceIssueId: 'issue-1', targetIssueId: 'issue-3', edgeType: 'blocks' },
+        { sourceIssueId: 'issue-2', targetIssueId: 'issue-4', edgeType: 'depends_on' },
+        { sourceIssueId: 'issue-3', targetIssueId: 'issue-4', edgeType: 'blocks' },
+      ],
+    });
+
+    expect(state.getReadyIssueIds()).toEqual(['issue-1', 'issue-2']);
+    expect(state.markIssueCompleted('issue-2', true)).toEqual([]);
+    expect(state.markIssueCompleted('issue-1', true)).toEqual(['issue-3']);
+  });
 });

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ProjectIssueGraph } from '@shipcode/shared';
 import {
   Alert,
@@ -48,6 +48,14 @@ export function ProjectGraphTab() {
     () => (graph ? buildIssueFlowGraph(graph) : { nodes: [], edges: [] as Edge[] }),
     [graph],
   );
+
+  useEffect(() => {
+    if (!activeProjectId) return;
+    return window.shipcode.on('github:issues-updated', ({ projectId }) => {
+      if (projectId !== activeProjectId) return;
+      void queryClient.invalidateQueries({ queryKey: ['issue-graph', activeProjectId] });
+    });
+  }, [activeProjectId, queryClient]);
 
   const refreshGraph = (nextGraph: ProjectIssueGraph) => {
     queryClient.setQueryData(['issue-graph', activeProjectId], nextGraph);
@@ -140,6 +148,7 @@ export function ProjectGraphTab() {
             fitView
             selectionOnDrag
             selectionMode={SelectionMode.Partial}
+            deleteKeyCode={['Backspace', 'Delete']}
             onNodeClick={handleNodeClick}
             onSelectionChange={({ nodes }) => {
               setSelectedIssueIds(nodes.map((node) => node.id));

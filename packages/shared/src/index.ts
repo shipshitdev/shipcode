@@ -5,6 +5,7 @@ export * from './format-token-count';
 export * from './github-labels';
 export * from './github-url';
 export * from './ipc-channels';
+// Issue graph contracts are shared by DB, pipeline, main-process IPC, and renderer code.
 export * from './issue-graph';
 export * from './model-catalog';
 export * from './model-config-presets';

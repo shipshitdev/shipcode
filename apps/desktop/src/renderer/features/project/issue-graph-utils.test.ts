@@ -56,6 +56,26 @@ describe('buildIssueFlowGraph', () => {
     expect(flowGraph.nodes.every((node) => Number.isFinite(node.position.x))).toBe(true);
     expect(flowGraph.nodes.every((node) => Number.isFinite(node.position.y))).toBe(true);
   });
+
+  it('renders reference edges as dashed secondary links', () => {
+    const flowGraph = buildIssueFlowGraph({
+      ...graph,
+      edges: [
+        {
+          ...graph.edges[0],
+          id: 'edge-ref',
+          edgeType: 'reference',
+        },
+      ],
+    });
+
+    expect(flowGraph.edges[0]).toEqual(
+      expect.objectContaining({
+        label: 'reference',
+        style: expect.objectContaining({ strokeDasharray: '6 4', opacity: 0.55 }),
+      }),
+    );
+  });
 });
 
 describe('formatPreviewGroups', () => {

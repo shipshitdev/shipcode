@@ -50,6 +50,17 @@ describe('parseIssueBodyDependencyEdges', () => {
     ]);
   });
 
+  it('parses multiple issue references inside one explicit dependency clause', () => {
+    expect(parseIssueBodyDependencyEdges(42, 'Depends on #7, #8 and #9.\nBlocks #10, #11.'))
+      .toEqual([
+        { sourceIssueNumber: 7, targetIssueNumber: 42, edgeType: 'depends_on' },
+        { sourceIssueNumber: 8, targetIssueNumber: 42, edgeType: 'depends_on' },
+        { sourceIssueNumber: 9, targetIssueNumber: 42, edgeType: 'depends_on' },
+        { sourceIssueNumber: 42, targetIssueNumber: 10, edgeType: 'blocks' },
+        { sourceIssueNumber: 42, targetIssueNumber: 11, edgeType: 'blocks' },
+      ]);
+  });
+
   it('parses bare references as visualization-only edges', () => {
     expect(parseIssueBodyDependencyEdges(42, 'Related: #7 and see #8 for context.')).toEqual([
       { sourceIssueNumber: 42, targetIssueNumber: 7, edgeType: 'reference' },
@@ -73,5 +84,13 @@ describe('parseIssueBodyDependencyEdges', () => {
       { sourceIssueNumber: 7, targetIssueNumber: 42, edgeType: 'depends_on' },
       { sourceIssueNumber: 42, targetIssueNumber: 8, edgeType: 'reference' },
     ]);
+  });
+
+  it('does not emit duplicate bare references when a multi-reference hard clause already covers them', () => {
+    expect(parseIssueBodyDependencyEdges(42, 'Blocks #7, #8 and see #7 plus #8 for context.'))
+      .toEqual([
+        { sourceIssueNumber: 42, targetIssueNumber: 7, edgeType: 'blocks' },
+        { sourceIssueNumber: 42, targetIssueNumber: 8, edgeType: 'blocks' },
+      ]);
   });
 });

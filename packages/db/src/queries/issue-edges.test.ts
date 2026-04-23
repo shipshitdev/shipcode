@@ -125,4 +125,31 @@ describe('IssueEdgeQueries', () => {
       [2, 3, 'depends_on', 'body'],
     ]);
   });
+
+  it('skips self-edges when replacing parsed body edges', () => {
+    const issue1 = createIssue(1);
+
+    issueEdges.replaceBodyEdges(projectId, issue1.id, [
+      {
+        sourceIssueId: issue1.id,
+        targetIssueId: issue1.id,
+        edgeType: 'blocks',
+      },
+    ]);
+
+    expect(issueEdges.loadProjectGraph(projectId).edges).toEqual([]);
+  });
+
+  it('rejects manual self-edges', () => {
+    const issue1 = createIssue(1);
+
+    expect(() =>
+      issueEdges.createManualEdge({
+        projectId,
+        sourceIssueId: issue1.id,
+        targetIssueId: issue1.id,
+        edgeType: 'blocks',
+      }),
+    ).toThrow(/self edge/i);
+  });
 });

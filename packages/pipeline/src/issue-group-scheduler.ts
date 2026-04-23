@@ -42,6 +42,9 @@ export function buildIssueGroupExecutionPreview(
 export function createIssueGroupRunState(input: RunStateInput) {
   const preview = buildIssueGroupExecutionPreview(input);
   const selection = new Set(preview.issueOrder);
+  const previewIndexByIssueId = new Map(
+    preview.issueOrder.map((issueId, index) => [issueId, index] as const),
+  );
   const hardEdges = filterRelevantHardEdges(selection, input.edges);
   const pendingPrerequisiteCounts = new Map<string, number>();
   const dependentsByIssueId = new Map<string, string[]>();
@@ -62,14 +65,20 @@ export function createIssueGroupRunState(input: RunStateInput) {
     dependentsByIssueId.get(edge.sourceIssueId)?.push(edge.targetIssueId);
   }
 
+  const sortByPreviewOrder = (issueIds: Iterable<string>) =>
+    [...issueIds].sort(
+      (a, b) => (previewIndexByIssueId.get(a) ?? Number.MAX_SAFE_INTEGER) -
+        (previewIndexByIssueId.get(b) ?? Number.MAX_SAFE_INTEGER),
+    );
+
   return {
     getReadyIssueIds(): string[] {
-      return [...ready].sort();
+      return sortByPreviewOrder(ready);
     },
     getBlockedIssueIds(): string[] {
-      return [...selection]
-        .filter((issueId) => !ready.has(issueId) && !completedIssues.has(issueId))
-        .sort();
+      return sortByPreviewOrder(
+        [...selection].filter((issueId) => !ready.has(issueId) && !completedIssues.has(issueId)),
+      );
     },
     markIssueCompleted(issueId: string, succeeded: boolean): string[] {
       ready.delete(issueId);
@@ -87,7 +96,7 @@ export function createIssueGroupRunState(input: RunStateInput) {
         }
       }
 
-      return newlyReady.sort();
+      return sortByPreviewOrder(newlyReady);
     },
   };
 }

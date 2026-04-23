@@ -96,10 +96,14 @@ export function registerIssueGraphHandlers({
       _event,
       { projectId, selectedIssueIds }: { projectId: string; selectedIssueIds: string[] },
     ) => {
+      if (selectedIssueIds.length === 0) {
+        throw new Error('Select at least one issue to run');
+      }
+
       const graph = queries.issueEdges.loadProjectGraph(projectId);
       const preview = buildPreview(graph, selectedIssueIds);
       const runState = createIssueGroupRunState({
-        selectedIssueIds,
+        selectedIssueIds: preview.issueOrder,
         nodes: graph.nodes.map((node) => ({ issueId: node.issueId, issueNumber: node.issueNumber })),
         edges: graph.edges.map((edge) => ({
           sourceIssueId: edge.sourceIssueId,
@@ -107,18 +111,21 @@ export function registerIssueGraphHandlers({
           edgeType: edge.edgeType,
         })),
       });
-      const runId = `group-${Date.now()}-${selectedIssueIds.join('-')}`;
+      const runId = `group-${Date.now()}-${preview.issueOrder.join('-')}`;
       const startedIssueIds = new Set<string>();
+      const issuesById = new Map(
+        queries.githubIssues.list(projectId).map((issue) => [issue.id, issue] as const),
+      );
 
       activeGroupedRuns.set(runId, {
         projectId,
-        selectedIssueIds,
+        selectedIssueIds: preview.issueOrder,
         runState,
         startedIssueIds,
       });
 
       for (const issueId of runState.getReadyIssueIds()) {
-        const issue = queries.githubIssues.list(projectId).find((entry) => entry.id === issueId);
+        const issue = issuesById.get(issueId);
         if (!issue) continue;
         startedIssueIds.add(issueId);
         await scheduler.startOrQueue(projectId, issue.issueNumber);

@@ -22,6 +22,11 @@ const ACTIVE_PIPELINE_STATUSES = new Set<IssuePipelineStatus>([
   'verifying',
   'shipping',
 ]);
+const EDGE_STYLES = {
+  blocks: { stroke: 'rgba(37, 99, 235, 0.85)', strokeWidth: 1.6 },
+  depends_on: { stroke: 'rgba(217, 119, 6, 0.85)', strokeWidth: 1.6 },
+  reference: { stroke: 'rgba(148, 163, 184, 0.9)', strokeDasharray: '6 4', opacity: 0.55 },
+} as const;
 
 export function buildIssueFlowGraph(graph: ProjectIssueGraph): {
   nodes: Array<Node<IssueGraphNodeData>>;
@@ -49,10 +54,7 @@ export function buildIssueFlowGraph(graph: ProjectIssueGraph): {
     animated:
       ACTIVE_PIPELINE_STATUSES.has(nodeById.get(edge.sourceIssueId)?.pipelineStatus ?? 'todo') ||
       ACTIVE_PIPELINE_STATUSES.has(nodeById.get(edge.targetIssueId)?.pipelineStatus ?? 'todo'),
-    style:
-      edge.edgeType === 'reference'
-        ? { strokeDasharray: '6 4', opacity: 0.55 }
-        : undefined,
+    style: EDGE_STYLES[edge.edgeType],
   }));
 
   return {

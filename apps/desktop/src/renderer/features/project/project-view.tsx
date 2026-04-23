@@ -6,10 +6,11 @@ import { ThreadPanel } from '../../components/ThreadPanel';
 import { ProjectGraphTab } from './project-graph-tab';
 
 type TabIcon = React.ComponentType<{ size?: number; className?: string }>;
+const GRAPH_TAB = 'graph' as ProjectTab;
 
 const PROJECT_TABS: Array<{ value: ProjectTab; label: string; icon: TabIcon }> = [
   { value: 'issues', label: 'Issues', icon: LayoutList },
-  { value: 'graph' as ProjectTab, label: 'Graph', icon: Workflow },
+  { value: GRAPH_TAB, label: 'Graph', icon: Workflow },
   { value: 'pull-requests', label: 'Pull Requests', icon: GitPullRequest },
   { value: 'sessions', label: 'Sessions', icon: Terminal },
 ];
@@ -40,7 +41,7 @@ export function ProjectView() {
       <div className="flex flex-1 min-h-0 min-w-0 flex-col">
         {projectTab === 'issues' ? (
           <ThreadPanel />
-        ) : projectTab === ('graph' as ProjectTab) ? (
+        ) : projectTab === GRAPH_TAB ? (
           <ProjectGraphTab />
         ) : projectTab === 'pull-requests' ? (
           <PullRequestsPanel />

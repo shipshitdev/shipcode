@@ -213,7 +213,7 @@ export function registerGitHubHandlers({
           elapsedMs: Date.now() - startedAt,
           force,
         });
-        mainWindow.webContents.send('github:issues-updated', { projectId, issues: refreshed });
+        sendGithubIssuesUpdated(mainWindow, queries, projectId);
         return refreshed;
       })();
 

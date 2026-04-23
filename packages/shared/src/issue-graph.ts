@@ -47,6 +47,9 @@ export interface ProjectIssueGraph {
 const DEPENDS_ON_PATTERN = /\bdepends\s+on\b[\s:]*#(\d+)\b/gi;
 const BLOCKS_PATTERN = /\bblocks\b[\s:]*#(\d+)\b/gi;
 const ISSUE_REFERENCE_PATTERN = /(^|[^\w])#(\d+)\b/g;
+const DEPENDS_ON_CLAUSE_PATTERN = /\bdepends\s+on\b([^.\n\r]*)/gi;
+const BLOCKS_CLAUSE_PATTERN = /\bblocks\b([^.\n\r]*)/gi;
+const CLAUSE_REFERENCE_PATTERN = /#(\d+)\b/g;
 
 export function normalizeIssueDependencyEdge(
   input: ParsedIssueDependencyInput,
@@ -87,12 +90,28 @@ export function parseIssueBodyDependencyEdges(
     edges.set(`${edge.edgeType}:${edge.sourceIssueNumber}:${edge.targetIssueNumber}`, edge);
   };
 
-  for (const match of body.matchAll(DEPENDS_ON_PATTERN)) {
-    pushHardEdge(Number.parseInt(match[1] ?? '', 10), 'depends_on');
-  }
-  for (const match of body.matchAll(BLOCKS_PATTERN)) {
-    pushHardEdge(Number.parseInt(match[1] ?? '', 10), 'blocks');
-  }
+  const pushHardEdgesFromClause = (
+    pattern: RegExp,
+    fallbackPattern: RegExp,
+    edgeType: 'blocks' | 'depends_on',
+  ) => {
+    let matchedClause = false;
+    for (const match of body.matchAll(pattern)) {
+      matchedClause = true;
+      for (const referenceMatch of (match[1] ?? '').matchAll(CLAUSE_REFERENCE_PATTERN)) {
+        pushHardEdge(Number.parseInt(referenceMatch[1] ?? '', 10), edgeType);
+      }
+    }
+
+    if (!matchedClause) {
+      for (const match of body.matchAll(fallbackPattern)) {
+        pushHardEdge(Number.parseInt(match[1] ?? '', 10), edgeType);
+      }
+    }
+  };
+
+  pushHardEdgesFromClause(DEPENDS_ON_CLAUSE_PATTERN, DEPENDS_ON_PATTERN, 'depends_on');
+  pushHardEdgesFromClause(BLOCKS_CLAUSE_PATTERN, BLOCKS_PATTERN, 'blocks');
 
   for (const match of body.matchAll(ISSUE_REFERENCE_PATTERN)) {
     const referencedIssueNumber = Number.parseInt(match[2] ?? '', 10);

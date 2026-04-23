@@ -28,6 +28,7 @@ export function IssueGraphNode({ data, selected }: NodeProps) {
       className={cn(
         'min-w-[220px] rounded-xl border px-3 py-2 shadow-sm transition-shadow',
         STATUS_STYLES[payload.pipelineStatus],
+        payload.state === 'closed' && 'opacity-75',
         selected && 'ring-2 ring-agent/50 shadow-lg',
       )}
     >
