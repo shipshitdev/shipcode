@@ -1,12 +1,28 @@
+import fs from 'node:fs';
+import { checkDesktopApps } from '@shipcode/agents';
 import type { Project } from '@shipcode/shared';
 import type { IpcMain } from 'electron';
+import { shell } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { registerProjectHandlers } from './register-project-handlers';
 
 const handlers = new Map<string, (...args: unknown[]) => unknown>();
 
-const { createIssueMock } = vi.hoisted(() => ({
+const { createIssueMock, execMock, execFileMock } = vi.hoisted(() => ({
   createIssueMock: vi.fn(),
+  execMock: vi.fn((_command: string, optionsOrCallback?: unknown, maybeCallback?: unknown) => {
+    const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback;
+    if (typeof callback === 'function') {
+      callback(null, '', '');
+    }
+  }),
+  execFileMock: vi.fn(
+    (_file: string, _args: string[], optionsOrCallback?: unknown, maybeCallback?: unknown) => {
+      const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback;
+      if (typeof callback === 'function') {
+        callback(null, '', '');
+      }
+    },
+  ),
 }));
 
 vi.mock('electron', () => ({
@@ -34,6 +50,17 @@ vi.mock('@shipcode/agents', () => ({
   validateOpenRouterModel: vi.fn(),
   writeProjectSetup: vi.fn(),
 }));
+
+vi.mock('node:child_process', () => ({
+  default: {
+    exec: execMock,
+    execFile: execFileMock,
+  },
+  exec: execMock,
+  execFile: execFileMock,
+}));
+
+const { registerProjectHandlers } = await import('./register-project-handlers');
 
 vi.mock('@shipcode/git', () => ({
   GitService: class {
@@ -99,6 +126,131 @@ describe('registerProjectHandlers', () => {
   beforeEach(() => {
     handlers.clear();
     vi.clearAllMocks();
+  });
+
+  function registerOpenPathHandler(project: Project = baseProject) {
+    const queries = {
+      projects: {
+        getById: vi.fn(() => project),
+      },
+      settings: {
+        get: vi.fn(() => ({ projectOpenTarget: 'cursor' })),
+      },
+    };
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+    });
+
+    const openPath = handlers.get('project:open-path');
+    if (!openPath) throw new Error('project:open-path handler not registered');
+    return { openPath, queries };
+  }
+
+  function makeDesktopApps() {
+    return {
+      cursor: {
+        key: 'cursor',
+        label: 'Cursor',
+        available: true,
+        path: '/Applications/Cursor.app',
+        error: null,
+      },
+      finder: {
+        key: 'finder',
+        label: 'Finder',
+        available: true,
+        path: '/System/Library/CoreServices/Finder.app',
+        error: null,
+      },
+      terminal: {
+        key: 'terminal',
+        label: 'Terminal',
+        available: true,
+        path: '/System/Applications/Utilities/Terminal.app',
+        error: null,
+      },
+      ghostty: {
+        key: 'ghostty',
+        label: 'Ghostty',
+        available: true,
+        path: '/Applications/Ghostty.app',
+        error: null,
+      },
+      vscode: {
+        key: 'vscode',
+        label: 'Visual Studio Code',
+        available: true,
+        path: '/Applications/Visual Studio Code.app',
+        error: null,
+      },
+    } as const;
+  }
+
+  async function withDarwin<T>(callback: () => Promise<T>): Promise<T> {
+    const platform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'darwin' });
+    try {
+      return await callback();
+    } finally {
+      Object.defineProperty(process, 'platform', { value: platform });
+    }
+  }
+
+  it('opens the project in Terminal.app at the project path', async () => {
+    await withDarwin(async () => {
+      const project = { ...baseProject, path: "/tmp/ShipCode's Worktree" };
+      const existsSpy = vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+      vi.mocked(checkDesktopApps).mockResolvedValue(makeDesktopApps() as never);
+
+      const { openPath } = registerOpenPathHandler(project);
+
+      await openPath(undefined, { projectId: project.id, target: 'terminal' });
+
+      expect(execFileMock).toHaveBeenCalledTimes(1);
+      expect(execFileMock).toHaveBeenCalledWith(
+        'osascript',
+        expect.arrayContaining([
+          'tell application "Terminal"',
+          'activate',
+          expect.stringContaining("do script \"cd '/tmp/ShipCode'"),
+          'end tell',
+        ]),
+        { timeout: 10_000 },
+        expect.any(Function),
+      );
+      expect(shell.openPath).not.toHaveBeenCalled();
+      existsSpy.mockRestore();
+    });
+  });
+
+  it('opens the project in Ghostty with an explicit working directory', async () => {
+    await withDarwin(async () => {
+      const project = { ...baseProject, path: '/tmp/ShipCode Worktree' };
+      const existsSpy = vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+      vi.mocked(checkDesktopApps).mockResolvedValue(makeDesktopApps() as never);
+
+      const { openPath } = registerOpenPathHandler(project);
+
+      await openPath(undefined, { projectId: project.id, target: 'ghostty' });
+
+      expect(execFileMock).toHaveBeenCalledTimes(1);
+      expect(execFileMock).toHaveBeenCalledWith(
+        'open',
+        ['-na', 'Ghostty', '--args', '--working-directory=/tmp/ShipCode Worktree'],
+        { timeout: 10_000 },
+        expect.any(Function),
+      );
+      expect(shell.openPath).not.toHaveBeenCalled();
+      existsSpy.mockRestore();
+    });
   });
 
   it('seeds a starter issue on first GitHub-backed project import', async () => {

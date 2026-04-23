@@ -1,4 +1,4 @@
-import { exec } from 'node:child_process';
+import { exec, execFile } from 'node:child_process';
 import fs from 'node:fs';
 import { promisify } from 'node:util';
 import {
@@ -28,6 +28,7 @@ import { enrichProjectPath, enrichProjectPaths, sendGithubIssuesUpdated } from '
 import type { IpcHandlerDeps } from './types';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const PROJECT_OPEN_TARGET_ORDER: ProjectOpenTarget[] = [
   'cursor',
   'finder',
@@ -177,12 +178,41 @@ async function openProjectPath(projectPath: string, target: ProjectOpenTarget): 
   }
 
   const appName = PROJECT_OPEN_APP_NAMES[target];
-  await execAsync(
-    `open -a "${appName.replace(/"/g, '\\"')}" "${projectPath.replace(/"/g, '\\"')}"`,
-    {
+  if (target === 'terminal') {
+    const shellCommand = `cd ${quoteForShell(projectPath)}`;
+    await execFileAsync(
+      'osascript',
+      [
+        '-e',
+        'tell application "Terminal"',
+        '-e',
+        'activate',
+        '-e',
+        `do script ${quoteForAppleScript(shellCommand)}`,
+        '-e',
+        'end tell',
+      ],
+      { timeout: 10_000 },
+    );
+    return;
+  }
+
+  if (target === 'ghostty') {
+    await execFileAsync('open', ['-na', appName, '--args', `--working-directory=${projectPath}`], {
       timeout: 10_000,
-    },
-  );
+    });
+    return;
+  }
+
+  await execFileAsync('open', ['-a', appName, projectPath], { timeout: 10_000 });
+}
+
+function quoteForShell(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function quoteForAppleScript(value: string): string {
+  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
 
 export function registerProjectHandlers({
