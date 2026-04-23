@@ -16,7 +16,7 @@ const TELEGRAM_TOKEN_RE = /^\d+:[A-Za-z0-9_-]{20,}$/;
 function kindLabel(kind: NotificationKind): string {
   switch (kind) {
     case 'awaiting_approval':
-      return 'Awaiting approval';
+      return 'Needs approval';
     case 'failed':
       return 'Target project failed';
     case 'completed':

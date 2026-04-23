@@ -55,6 +55,7 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     clarificationRound: 0,
     clarificationRequest: null,
     clarificationAnswers: [],
+    answeredClarification: null,
     verificationStatus: null,
     verificationRetries: 0,
     autonomous: false,
@@ -191,5 +192,33 @@ describe('NotificationService', () => {
     );
     expect(webContentsSendMock).toHaveBeenCalledWith('notification:fire', record);
     expect(notificationShowMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('fires approval-needed notifications with direct copy', () => {
+    const thread = makeThread({ status: 'awaiting_approval', title: 'Review pricing page' });
+    const record = makeNotificationRecord({
+      id: 'approval-1',
+      kind: 'awaiting_approval',
+      title: 'Approval needed',
+      body: 'Review pricing page is waiting for approval before execution',
+    });
+    (notificationQueries.create as ReturnType<typeof vi.fn>).mockReturnValue(record);
+
+    const service = new NotificationService(
+      mainWindow,
+      notificationQueries,
+      settingsQueries,
+      activityQueries,
+    );
+    service.fire('awaiting_approval', thread);
+
+    expect(notificationQueries.create).toHaveBeenCalledWith({
+      threadId: thread.id,
+      projectId: thread.projectId,
+      kind: 'awaiting_approval',
+      title: 'Approval needed',
+      body: 'Review pricing page is waiting for approval before execution',
+    });
+    expect(webContentsSendMock).toHaveBeenCalledWith('notification:fire', record);
   });
 });

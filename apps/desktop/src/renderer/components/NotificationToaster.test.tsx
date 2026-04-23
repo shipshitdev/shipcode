@@ -125,8 +125,8 @@ describe('NotificationToaster', () => {
     const sticky = makeNotification({
       id: 'sticky-1',
       kind: 'awaiting_approval',
-      title: 'Awaiting approval',
-      body: 'Review required.',
+      title: 'Approval needed',
+      body: 'Review required before execution.',
     });
     const transient = makeNotification({
       id: 'transient-1',
@@ -147,7 +147,7 @@ describe('NotificationToaster', () => {
 
     renderWithProviders();
 
-    expect(screen.getByText('Awaiting approval')).toBeInTheDocument();
+    expect(screen.getByText('Approval needed')).toBeInTheDocument();
     expect(screen.getByText('Build failed')).toBeInTheDocument();
 
     await act(async () => {
@@ -155,7 +155,7 @@ describe('NotificationToaster', () => {
     });
 
     expect(screen.queryByText('Build failed')).not.toBeInTheDocument();
-    expect(screen.getByText('Awaiting approval')).toBeInTheDocument();
+    expect(screen.getByText('Approval needed')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
 

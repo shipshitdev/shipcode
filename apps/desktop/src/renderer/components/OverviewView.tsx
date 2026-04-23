@@ -233,6 +233,7 @@ export function OverviewView() {
                       projectName={row.projectName}
                       title={row.threadTitle}
                       phase={row.phase}
+                      approvedAwaitingExecution={row.approvedAwaitingExecution}
                       startedAt={row.startedAt}
                       issueNumber={row.githubIssueNumber}
                       modelProvider={row.modelProvider}
@@ -277,32 +278,40 @@ export function OverviewView() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {activitySlice.map((entry) => (
-                          <TableRow
-                            key={entry.id}
-                            className="cursor-pointer hover:bg-hover"
-                            onClick={() => {
-                              if (entry.projectId && entry.threadId) {
-                                handleRowClick(entry.projectId, entry.threadId);
-                              }
-                            }}
-                          >
-                            <TableCell className="w-px whitespace-nowrap pr-2 align-top pt-2.5">
-                              <span className="inline-flex items-center justify-center rounded border border-border bg-tertiary px-1 py-0.5 text-[9px] uppercase text-secondary">
-                                {entry.actor}
-                              </span>
-                            </TableCell>
-                            <TableCell className="max-w-0 w-full">
-                              <div className="truncate text-[12px] text-primary">{entry.title}</div>
-                              <div className="truncate text-[11px] text-muted">
-                                {entry.subtitle || '–'}
-                              </div>
-                            </TableCell>
-                            <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-muted">
-                              {timeAgo(entry.createdAt)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                        {activitySlice.map((entry) => {
+                          const clickable = entry.projectId !== null && entry.threadId !== null;
+                          const projectId = entry.projectId;
+                          const threadId = entry.threadId;
+
+                          return (
+                            <TableRow
+                              key={entry.id}
+                              className={clickable ? 'cursor-pointer hover:bg-hover' : undefined}
+                              onClick={() => {
+                                if (projectId && threadId) {
+                                  handleRowClick(projectId, threadId);
+                                }
+                              }}
+                            >
+                              <TableCell className="w-px whitespace-nowrap pr-2 align-top pt-2.5">
+                                <span className="inline-flex items-center justify-center rounded border border-border bg-tertiary px-1 py-0.5 text-[9px] uppercase text-secondary">
+                                  {entry.actor}
+                                </span>
+                              </TableCell>
+                              <TableCell className="max-w-0 w-full">
+                                <div className="truncate text-[12px] text-primary">
+                                  {entry.title}
+                                </div>
+                                <div className="truncate text-[11px] text-muted">
+                                  {entry.subtitle || '–'}
+                                </div>
+                              </TableCell>
+                              <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-muted">
+                                {timeAgo(entry.createdAt)}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   )}

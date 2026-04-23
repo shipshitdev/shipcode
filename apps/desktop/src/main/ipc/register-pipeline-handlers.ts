@@ -49,6 +49,7 @@ export function registerPipelineHandlers({
   ): ActivePipelineSummary => {
     const thread = queries.threads.getById(summary.threadId);
     const project = thread ? queries.projects.getById(thread.projectId) : null;
+    const latestPlanStatus = thread ? (queries.plans.getLatest(thread.id)?.status ?? null) : null;
     const settings = queries.settings.get();
     const phasePresentation =
       thread != null
@@ -61,6 +62,8 @@ export function registerPipelineHandlers({
       projectName: project?.name ?? 'Unknown project',
       threadTitle: thread?.title ?? summary.threadId,
       phase: summary.phase,
+      approvedAwaitingExecution:
+        summary.phase === 'awaiting_approval' && latestPlanStatus === 'approved',
       startedAt: summary.startedAt,
       activeProcessId: summary.activeProcessId,
       githubIssueNumber: thread?.githubIssueNumber ?? null,
@@ -209,7 +212,11 @@ export function registerPipelineHandlers({
       const project = queries.projects.getById(thread.projectId);
       if (!project) throw new Error(`Project ${thread.projectId} not found`);
 
-      queries.threads.setClarificationAnswers(threadId, normalizedAnswers);
+      queries.threads.resolveClarification(
+        threadId,
+        thread.clarificationRequest,
+        normalizedAnswers,
+      );
       emitter.emit({
         type: 'terminal:event',
         threadId,
@@ -241,15 +248,29 @@ export function registerPipelineHandlers({
 
   ipcMain.handle('pipeline:approve', async (_event, { threadId }: { threadId: string }) => {
     const thread = queries.threads.getById(threadId);
-    if (!thread || thread.status !== 'awaiting_approval') return;
+    if (!thread) throw new Error(`Thread ${threadId} not found`);
 
     const latestPlan = queries.plans.getLatest(threadId);
+    if (!latestPlan) throw new Error('No plan available to approve');
+    if (thread.status !== 'awaiting_approval') {
+      throw new Error(
+        `This task is no longer awaiting approval. Current status: ${thread.status}.`,
+      );
+    }
+    if (latestPlan.status === 'approved') {
+      throw new Error('Approval is already confirmed. Waiting for an execution slot.');
+    }
+    if (latestPlan.status !== 'awaiting_approval') {
+      throw new Error(
+        `This plan is no longer awaiting approval. Current plan status: ${latestPlan.status}.`,
+      );
+    }
+
     const structured = latestPlan?.structured ?? tryParsePlan(latestPlan?.rawOutput ?? '');
     if (structured) {
-      if (!latestPlan?.structured && latestPlan) {
+      if (!latestPlan.structured) {
         queries.plans.updateStructured(latestPlan.id, structured);
       }
-      if (!latestPlan) throw new Error('No plan available to approve');
       queries.plans.updateStatus(latestPlan.id, 'approved');
 
       const project = queries.projects.getById(thread.projectId);
@@ -272,12 +293,14 @@ export function registerPipelineHandlers({
       notificationService.dismissByThread(threadId);
       await pipeline.startExecution(threadId, structured);
     } else {
+      const errorMessage = 'No plan available to approve';
       notificationService.dismissByThread(threadId);
       transitionThreadPhase(mainWindow, queries, emitter, {
         threadId,
         phase: 'failed',
-        errorMessage: 'No plan available to approve',
+        errorMessage,
       });
+      throw new Error(errorMessage);
     }
   });
 

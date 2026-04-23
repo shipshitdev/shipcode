@@ -1,11 +1,20 @@
-// === Context File Types ===
+// === Repo Memory Types ===
 
-export interface ContextFileInfo {
+export interface MemoryFileInfo {
   name: string;
   exists: boolean;
   size?: number;
   updatedAt?: string;
 }
+
+export interface RepoMemoryStatus {
+  files: MemoryFileInfo[];
+  hasObsoleteContextDirectory: boolean;
+}
+
+// Back-compat aliases for the generated repo-memory tooling surface used by
+// the desktop context tab and agents package.
+export type ContextFileInfo = MemoryFileInfo;
 
 // === Plan Types ===
 
@@ -145,6 +154,7 @@ export interface Thread {
   clarificationRound: number;
   clarificationRequest: ClarificationRequest | null;
   clarificationAnswers: ClarificationAnswer[];
+  answeredClarification: AnsweredClarification | null;
   verificationStatus: string | null;
   verificationRetries: number;
   autonomous: boolean;
@@ -204,11 +214,22 @@ export interface ClarificationAnswer {
   freeformText: string | null;
 }
 
+export interface AnsweredClarification {
+  request: ClarificationRequest;
+  answers: ClarificationAnswer[];
+}
+
 export type CanonicalTerminalEvent =
   | { kind: 'text'; content: string }
   | { kind: 'thinking'; content: string }
   | { kind: 'tool_start'; name: string; summary: string }
-  | { kind: 'tool_end'; name: string; durationMs?: number; exitCode?: number }
+  | {
+      kind: 'tool_end';
+      name: string;
+      durationMs?: number;
+      exitCode?: number;
+      outputSummary?: string;
+    }
   | { kind: 'turn_start'; turn: number }
   | {
       kind: 'turn_end';
@@ -277,7 +298,8 @@ export type AgentType = 'claude' | 'codex' | 'gh' | 'openrouter';
  */
 export type ExecutorModel = 'claude' | 'codex' | 'openrouter';
 export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
-export type ContextGeneratorCli = 'claude' | 'codex';
+export type GeneratorCli = 'claude' | 'codex';
+export type ContextGeneratorCli = GeneratorCli;
 export type RevisionCount = 0 | 1 | 2 | 3 | 4 | 5;
 
 export type AgentState = 'starting' | 'running' | 'idle' | 'errored' | 'exited';
@@ -359,7 +381,7 @@ export interface AppSettings {
   reviewerModel: AgentType;
   verifierModel: AgentType;
   executorModel: AgentType;
-  prdRewriteCli: ContextGeneratorCli;
+  prdRewriteCli: GeneratorCli;
   prdRewriteClaudeModel: string | null;
   prdRewriteCodexModel: string | null;
   prdRewriteReasoningEffort: ReasoningEffort;
@@ -465,6 +487,7 @@ export interface DetectedProjectProfile {
   label: string;
   recommended: boolean;
   evidence: string[];
+  suggestedContract: RepoSetupContract;
 }
 
 export interface ProjectSetupInspection {
@@ -905,6 +928,7 @@ export interface ThreadPanelData {
   project: Project | null;
   settings: AppSettings;
   threads: Thread[];
+  latestPlanStatusByThreadId: Record<string, PlanStatus | null>;
   branches: string[];
 }
 
@@ -991,6 +1015,7 @@ export interface ActivePipelineSummary {
   projectName: string;
   threadTitle: string;
   phase: PipelinePhase;
+  approvedAwaitingExecution?: boolean;
   startedAt: number;
   activeProcessId: string | null;
   githubIssueNumber: number | null;

@@ -48,6 +48,21 @@ function placeholders(n: number): string {
   return Array(n).fill('?').join(',');
 }
 
+function awaitingHumanApprovalWhere(alias: string): string {
+  return `${alias}.kind = 'pipeline'
+    AND ${alias}.status = 'awaiting_approval'
+    AND COALESCE(
+      (
+        SELECT p.status
+          FROM plans p
+         WHERE p.thread_id = ${alias}.id
+         ORDER BY p.version DESC
+         LIMIT 1
+      ),
+      ''
+    ) != 'approved'`;
+}
+
 export class DashboardQueries {
   constructor(private db: DatabaseSync) {}
 
@@ -89,7 +104,7 @@ export class DashboardQueries {
     const pendingApprovalProjectRows = this.db
       .prepare(
         `SELECT project_id, COUNT(*) as n FROM threads
-         WHERE status = 'awaiting_approval'
+         WHERE ${awaitingHumanApprovalWhere('threads')}
          GROUP BY project_id`,
       )
       .all() as Array<{ project_id: string; n: number }>;
@@ -117,12 +132,14 @@ export class DashboardQueries {
       )
       .get() as { n: number };
 
-    // Pending approvals = awaiting_approval count. Stale = in that state for >24h.
-    const pendingApprovals = blockedRow.n;
+    // Pending approvals = only threads still waiting on a human sign-off.
+    const pendingApprovalsRow = this.db
+      .prepare(`SELECT COUNT(*) as n FROM threads WHERE ${awaitingHumanApprovalWhere('threads')}`)
+      .get() as { n: number };
     const staleRow = this.db
       .prepare(
         `SELECT COUNT(*) as n FROM threads
-       WHERE kind = 'pipeline' AND status = 'awaiting_approval'
+       WHERE ${awaitingHumanApprovalWhere('threads')}
          AND julianday('now') - julianday(updated_at) > 1.0`,
       )
       .get() as { n: number };
@@ -152,7 +169,7 @@ export class DashboardQueries {
       tasksInProgress: tasksInProgressRow.n,
       tasksOpen: tasksOpenRow.n,
       tasksBlocked: blockedRow.n,
-      pendingApprovals,
+      pendingApprovals: pendingApprovalsRow.n,
       staleApprovals: staleRow.n,
       shippedLast7d: shippedRow.n,
       failedLast7d: failedRow.n,

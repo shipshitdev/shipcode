@@ -47,7 +47,7 @@ const KIND_BADGE_VARIANT: Record<NotificationKind, BadgeVariant> = {
 };
 
 const KIND_LABEL: Record<NotificationKind, string> = {
-  awaiting_approval: 'Awaiting approval',
+  awaiting_approval: 'Needs approval',
   failed: 'Failed',
   completed: 'Completed',
   verification_exhausted: 'Retries exhausted',
@@ -56,7 +56,10 @@ const KIND_LABEL: Record<NotificationKind, string> = {
 
 export function InboxView() {
   const queryClient = useQueryClient();
-  const { removeNotification, clearNotifications, selectProject, selectIssue } = useAppStore();
+  const removeNotification = useAppStore((state) => state.removeNotification);
+  const clearNotifications = useAppStore((state) => state.clearNotifications);
+  const selectProject = useAppStore((state) => state.selectProject);
+  const selectIssue = useAppStore((state) => state.selectIssue);
 
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [showOnlyApprovalRequired, setShowOnlyApprovalRequired] = useState(false);
@@ -181,11 +184,6 @@ export function InboxView() {
       <TableCell className="w-[1%] whitespace-nowrap align-top">
         <div className="flex items-center gap-1.5">
           <Badge variant={KIND_BADGE_VARIANT[n.kind]}>{KIND_LABEL[n.kind]}</Badge>
-          {n.kind === 'awaiting_approval' ? (
-            <Badge variant="default" title="This issue pauses before execution for human approval">
-              Approval required
-            </Badge>
-          ) : null}
         </div>
       </TableCell>
       <TableCell className="w-[1%] whitespace-nowrap align-top text-[11px] text-muted">

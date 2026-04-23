@@ -61,6 +61,7 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     clarificationRound: 0,
     clarificationRequest: null,
     clarificationAnswers: [],
+    answeredClarification: null,
     verificationStatus: null,
     verificationRetries: 0,
     autonomous: false,
@@ -115,6 +116,12 @@ describe('ChatNotificationService', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(fetch).toHaveBeenCalledTimes(2);
+    const discordBody = JSON.parse(
+      ((fetch as ReturnType<typeof vi.fn>).mock.calls[0][1] as RequestInit).body as string,
+    ) as {
+      content?: string;
+    };
+    expect(discordBody.content).toContain('ShipCode: Needs approval');
     expect(setSettingsMock).toHaveBeenCalledTimes(2);
   });
 

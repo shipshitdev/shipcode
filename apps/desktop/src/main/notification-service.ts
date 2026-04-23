@@ -14,8 +14,8 @@ function buildCopy(kind: NotificationKind, thread: Thread): { title: string; bod
   switch (kind) {
     case 'awaiting_approval':
       return {
-        title: 'Plan ready for review',
-        body: `${label} — tap to approve or request changes`,
+        title: 'Approval needed',
+        body: `${label} is waiting for approval before execution`,
       };
     case 'failed':
       return {

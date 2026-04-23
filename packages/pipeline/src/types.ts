@@ -162,7 +162,7 @@ export interface PipelineContext {
   startedAt: number;
   /**
    * Pre-loaded repo context string for injection into phase prompts.
-   * Read once from `<projectPath>/.agents/context/` at pipeline start.
+   * Read once from `<projectPath>/.agents/memory/` at pipeline start.
    */
   repoContext: string | null;
   /**
@@ -195,6 +195,7 @@ export interface ActivePipelineSummary {
   threadId: string;
   projectPath: string;
   phase: PipelinePhase;
+  approvedAwaitingExecution?: boolean;
   startedAt: number;
   activeProcessId: string | null;
 }

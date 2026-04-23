@@ -37,6 +37,7 @@ function makeThread(overrides: Record<string, unknown> = {}) {
     clarificationRound: 0,
     clarificationRequest: null,
     clarificationAnswers: [],
+    answeredClarification: null,
     verificationStatus: null,
     verificationRetries: 0,
     autonomous: false,
@@ -83,7 +84,9 @@ describe('registerPipelineHandlers', () => {
       updateStatus: ReturnType<typeof vi.fn>;
       resetFailureTracking: ReturnType<typeof vi.fn>;
       setClarificationAnswers: ReturnType<typeof vi.fn>;
+      resolveClarification: ReturnType<typeof vi.fn>;
       clearClarification: ReturnType<typeof vi.fn>;
+      clearPendingClarification: ReturnType<typeof vi.fn>;
       setPhaseModels: ReturnType<typeof vi.fn>;
     };
     plans: {
@@ -160,7 +163,9 @@ describe('registerPipelineHandlers', () => {
         updateStatus: vi.fn(),
         resetFailureTracking: vi.fn(),
         setClarificationAnswers: vi.fn(),
+        resolveClarification: vi.fn(),
         clearClarification: vi.fn(),
+        clearPendingClarification: vi.fn(),
         setPhaseModels: vi.fn(),
       },
       plans: {
@@ -300,26 +305,51 @@ describe('registerPipelineHandlers', () => {
       expect(notificationService.dismissByThread).toHaveBeenCalledWith('thread-1');
     });
 
-    it('does nothing for a thread not in awaiting_approval', async () => {
+    it('throws for a thread not in awaiting_approval', async () => {
       queries.threads.getById.mockReturnValue(makeThread({ status: 'executing' }));
 
       const handler = handlers.get('pipeline:approve');
       if (!handler) throw new Error('pipeline:approve handler not registered');
 
-      await handler(undefined, { threadId: 'thread-1' });
-
+      await expect(handler(undefined, { threadId: 'thread-1' })).rejects.toThrow(
+        'This task is no longer awaiting approval. Current status: executing.',
+      );
       expect(pipeline.startExecution).not.toHaveBeenCalled();
     });
 
-    it('does nothing when thread is not found', async () => {
+    it('throws when thread is not found', async () => {
       queries.threads.getById.mockReturnValue(null);
 
       const handler = handlers.get('pipeline:approve');
       if (!handler) throw new Error('pipeline:approve handler not registered');
 
-      await handler(undefined, { threadId: 'thread-missing' });
+      await expect(handler(undefined, { threadId: 'thread-missing' })).rejects.toThrow(
+        'Thread thread-missing not found',
+      );
 
       expect(pipeline.startExecution).not.toHaveBeenCalled();
+    });
+
+    it('throws when approval is already confirmed and waiting for execution', async () => {
+      queries.plans.getLatest.mockReturnValue({
+        id: 'plan-1',
+        threadId: 'thread-1',
+        version: 1,
+        rawOutput: `\`\`\`shipcode-plan\n${PLAN_JSON}\n\`\`\``,
+        structured: JSON.parse(PLAN_JSON),
+        status: 'approved',
+        createdAt: new Date().toISOString(),
+      });
+
+      const handler = handlers.get('pipeline:approve');
+      if (!handler) throw new Error('pipeline:approve handler not registered');
+
+      await expect(handler(undefined, { threadId: 'thread-1' })).rejects.toThrow(
+        'Approval is already confirmed. Waiting for an execution slot.',
+      );
+
+      expect(pipeline.startExecution).not.toHaveBeenCalled();
+      expect(queries.plans.updateStatus).not.toHaveBeenCalledWith('plan-1', 'approved');
     });
   });
 
@@ -361,9 +391,11 @@ describe('registerPipelineHandlers', () => {
         answers: [{ questionId: 'scope', selectedChoiceId: 'wide', freeformText: null }],
       });
 
-      expect(queries.threads.setClarificationAnswers).toHaveBeenCalledWith('thread-1', [
-        { questionId: 'scope', selectedChoiceId: 'wide', freeformText: null },
-      ]);
+      expect(queries.threads.resolveClarification).toHaveBeenCalledWith(
+        'thread-1',
+        clarificationRequest,
+        [{ questionId: 'scope', selectedChoiceId: 'wide', freeformText: null }],
+      );
       expect(emitter.emit).toHaveBeenCalledWith({
         type: 'terminal:event',
         threadId: 'thread-1',
@@ -422,6 +454,35 @@ describe('registerPipelineHandlers', () => {
 
       const result = handler(undefined, undefined) as Array<{ phase: string }>;
       expect(result[0].phase).toBe('awaiting_approval');
+    });
+
+    it('marks approved awaiting_approval threads as waiting for execution', () => {
+      queries.plans.getLatest.mockReturnValue({
+        id: 'plan-1',
+        threadId: 'thread-1',
+        version: 3,
+        rawOutput: '',
+        structured: null,
+        status: 'approved',
+        createdAt: new Date().toISOString(),
+      });
+      pipeline.listActive.mockReturnValue([
+        {
+          threadId: 'thread-1',
+          projectPath: '/tmp/project',
+          phase: 'awaiting_approval',
+          startedAt: Date.now(),
+          activeProcessId: null,
+        },
+      ]);
+
+      const handler = handlers.get('pipeline:list-active');
+      if (!handler) throw new Error('pipeline:list-active handler not registered');
+
+      const result = handler(undefined, undefined) as Array<{
+        approvedAwaitingExecution?: boolean;
+      }>;
+      expect(result[0].approvedAwaitingExecution).toBe(true);
     });
   });
 });

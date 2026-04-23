@@ -62,11 +62,11 @@ describe('InboxView', () => {
     window.shipcode.on = vi.fn(() => () => {}) as typeof window.shipcode.on;
   });
 
-  it('shows an explicit approval-required badge for awaiting approval notifications', async () => {
+  it('labels approval-gated notifications without a redundant secondary badge', async () => {
     renderWithProviders();
 
-    expect(await screen.findByText('Approval required')).toBeInTheDocument();
-    expect(screen.getByText('Awaiting approval')).toBeInTheDocument();
+    expect(await screen.findByText('Needs approval')).toBeInTheDocument();
+    expect(screen.queryByText('Approval required')).not.toBeInTheDocument();
   });
 
   it('filters inbox rows down to approval-gated notifications', async () => {

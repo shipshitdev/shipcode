@@ -264,15 +264,13 @@ function ProviderStatusBadge({
 
 export function Titlebar() {
   const queryClient = useQueryClient();
-  const {
-    settingsVisible,
-    toggleSettings,
-    activeProjectId,
-    sidebarCollapsed,
-    toggleSidebar,
-    terminalVisible,
-    toggleTerminal,
-  } = useAppStore();
+  const settingsVisible = useAppStore((state) => state.settingsVisible);
+  const toggleSettings = useAppStore((state) => state.toggleSettings);
+  const activeProjectId = useAppStore((state) => state.activeProjectId);
+  const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
+  const toggleSidebar = useAppStore((state) => state.toggleSidebar);
+  const terminalVisible = useAppStore((state) => state.terminalVisible);
+  const toggleTerminal = useAppStore((state) => state.toggleTerminal);
 
   const { data: activeProject } = useQuery<Project | null>({
     queryKey: ['project', activeProjectId],

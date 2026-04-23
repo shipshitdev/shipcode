@@ -63,7 +63,8 @@ function groupByDay(entries: ActivityEntry[]): { label: string; entries: Activit
 
 export function ActivityView() {
   const queryClient = useQueryClient();
-  const { selectProject, selectThread } = useAppStore();
+  const selectProject = useAppStore((state) => state.selectProject);
+  const selectThread = useAppStore((state) => state.selectThread);
   const [page, setPage] = useState(1);
 
   const {

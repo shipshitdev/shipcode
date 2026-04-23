@@ -2,11 +2,13 @@ import type { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from '../test-helpers';
 import { DashboardQueries } from './dashboard';
+import { PlanQueries } from './plans';
 import { ProjectQueries } from './projects';
 import { ThreadQueries } from './threads';
 
 describe('DashboardQueries', () => {
   let db: DatabaseSync;
+  let plans: PlanQueries;
   let projects: ProjectQueries;
   let threads: ThreadQueries;
   let dashboard: DashboardQueries;
@@ -14,6 +16,7 @@ describe('DashboardQueries', () => {
 
   beforeEach(() => {
     db = createTestDb();
+    plans = new PlanQueries(db);
     projects = new ProjectQueries(db);
     threads = new ThreadQueries(db);
     dashboard = new DashboardQueries(db);
@@ -147,5 +150,19 @@ describe('DashboardQueries', () => {
 
     const stats = dashboard.getStats();
     expect(stats.pendingApprovalsByProject).toEqual({});
+  });
+
+  it('excludes approved execution-slot waiters from approval counts', () => {
+    const t = threads.create(projectId, 'slot wait', 'Slot Wait');
+    db.prepare(`UPDATE threads SET status = 'awaiting_approval' WHERE id = ?`).run(t.id);
+    const plan = plans.create(t.id, 'raw plan', null, 1);
+    plans.updateStatus(plan.id, 'approved');
+
+    const stats = dashboard.getStats();
+
+    expect(stats.tasksBlocked).toBe(1);
+    expect(stats.pendingApprovals).toBe(0);
+    expect(stats.pendingApprovalsByProject).toEqual({});
+    expect(stats.staleApprovals).toBe(0);
   });
 });

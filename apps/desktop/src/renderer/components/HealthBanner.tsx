@@ -6,7 +6,8 @@ import { useAppStore } from '../stores/app-store';
 
 export function HealthBanner() {
   const queryClient = useQueryClient();
-  const { systemHealth, setSystemHealth } = useAppStore();
+  const systemHealth = useAppStore((state) => state.systemHealth);
+  const setSystemHealth = useAppStore((state) => state.setSystemHealth);
   const [canRunAuthCheck, setCanRunAuthCheck] = useState(false);
 
   const { data } = useQuery<SystemHealth>({
