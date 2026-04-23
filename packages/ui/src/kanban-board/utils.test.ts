@@ -315,7 +315,7 @@ describe('resolveIssueApprovalBadge', () => {
 });
 
 describe('resolveIssueRevisionBadge', () => {
-  it('shows the configured revision count before revisions start', () => {
+  it('hides the badge when zero revisions are configured and no thread exists', () => {
     const badge = resolveIssueRevisionBadge(
       makeIssue(50, 'Revision count'),
       SETTINGS,
@@ -323,23 +323,49 @@ describe('resolveIssueRevisionBadge', () => {
       null,
     );
 
+    expect(badge).toBeNull();
+  });
+
+  it('shows configured revision count before a thread starts when revisions are enabled', () => {
+    const badge = resolveIssueRevisionBadge(
+      makeIssue(51, 'Revision count'),
+      { ...SETTINGS, revisionCount: 3 },
+      makeProject(),
+      null,
+    );
+
     expect(badge).toEqual({
-      label: '0',
-      title: 'Configured revisions: 0',
+      label: '3',
+      title: 'Configured revisions: 3',
+      variant: 'default',
     });
   });
 
-  it('shows current revision progress once review rounds start', () => {
+  it('shows the current plan version once a thread exists', () => {
     const badge = resolveIssueRevisionBadge(
-      makeIssue(51, 'Revision progress'),
+      makeIssue(52, 'Revision progress'),
       { ...SETTINGS, revisionCount: 3 },
       makeProject(),
       makeThread({ reviewRound: 2 }),
     );
 
     expect(badge).toEqual({
-      label: '2/3',
-      title: 'Current revision: 2 of 3',
+      label: 'v3',
+      title: 'Plan version 3; configured revisions: 3',
+      variant: 'default',
+    });
+  });
+
+  it('tones the plan version badge by issue status', () => {
+    const issue = makeIssue(53, 'Failed revision progress');
+    issue.pipelineStatus = 'failed';
+
+    const badge = resolveIssueRevisionBadge(issue, SETTINGS, makeProject(), makeThread());
+
+    expect(badge).toEqual({
+      label: 'v1',
+      title: 'Plan version 1; no revisions configured',
+      variant: 'danger',
     });
   });
 });

@@ -145,17 +145,35 @@ export function resolveIssueRevisionBadge(
 ): IssueRevisionBadge | null {
   if (!settings) return null;
   const revisionCount = resolveRevisionCountForIssue(settings, project, issue);
-  if (thread && revisionCount > 0 && thread.reviewRound > 0) {
-    const currentRevision = Math.min(thread.reviewRound, revisionCount);
+
+  if (thread) {
+    const version = Math.max(1, (thread.reviewRound ?? 0) + 1);
     return {
-      label: `${currentRevision}/${revisionCount}`,
-      title: `Current revision: ${currentRevision} of ${revisionCount}`,
+      label: `v${version}`,
+      title:
+        revisionCount > 0
+          ? `Plan version ${version}; configured revisions: ${revisionCount}`
+          : `Plan version ${version}; no revisions configured`,
+      variant: badgeVariantForIssueStatus(issue.pipelineStatus),
     };
   }
+
+  if (revisionCount <= 0) return null;
+
   return {
     label: `${revisionCount}`,
     title: `Configured revisions: ${revisionCount}`,
+    variant: badgeVariantForIssueStatus(issue.pipelineStatus),
   };
+}
+
+function badgeVariantForIssueStatus(status: IssuePipelineStatus): IssueRevisionBadge['variant'] {
+  if (status === 'failed') return 'danger';
+  if (status === 'awaiting_approval' || status === 'clarifying') return 'warning';
+  if (status === 'completed') return 'success';
+  if (status === 'done') return 'done';
+  if (ACTIVE_STATUSES.includes(status)) return 'info';
+  return 'default';
 }
 
 export function resolveIssueApprovalBadge(

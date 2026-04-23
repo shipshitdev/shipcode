@@ -158,7 +158,7 @@ function DraggableListRow({
         <IssueExternalBlockers issue={issue} />
         {revisionBadge ? (
           <Badge
-            variant="default"
+            variant={revisionBadge.variant}
             className="px-1.5 py-px text-[10px] font-medium"
             title={revisionBadge.title}
           >

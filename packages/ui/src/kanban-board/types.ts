@@ -71,4 +71,5 @@ export type IssueApprovalBadge = {
 export type IssueRevisionBadge = {
   label: string;
   title: string;
+  variant: 'default' | 'done' | 'success' | 'warning' | 'danger' | 'info' | 'accent';
 };
