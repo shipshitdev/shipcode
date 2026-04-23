@@ -13,7 +13,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
 import type { Dispatch, SetStateAction } from 'react';
 import { ProjectPhaseSettingsRow } from './ProjectPhaseSettingsRow';
 import { PHASE_META, type PhaseKey, type ProjectOverrideState } from './shared';

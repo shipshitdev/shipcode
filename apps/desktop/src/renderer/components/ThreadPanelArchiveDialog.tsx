@@ -1,4 +1,4 @@
-import { Button, Modal, ModalFooter } from '@shipcode/ui';
+import { Button, Modal, ModalFooter } from '@shipshitdev/ui';
 
 interface ThreadPanelArchiveDialogProps {
   count?: number;

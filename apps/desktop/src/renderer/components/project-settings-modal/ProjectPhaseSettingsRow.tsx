@@ -20,7 +20,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
 import type { Dispatch, SetStateAction } from 'react';
 import {
   formatModelInheritanceLabel,

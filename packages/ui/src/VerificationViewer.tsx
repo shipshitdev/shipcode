@@ -1,4 +1,4 @@
-import type { VerificationResult } from '@shipcode/shared';
+import type { VerificationResult } from './lib/shipcode';
 import { cn } from './lib/utils';
 import { Badge } from './primitives/badge';
 

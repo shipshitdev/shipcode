@@ -7,7 +7,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
 
 export function ProjectSettingsNotificationsTab({
   discordRouting,

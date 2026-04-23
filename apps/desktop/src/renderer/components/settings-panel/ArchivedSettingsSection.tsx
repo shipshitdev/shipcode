@@ -1,5 +1,5 @@
 import type { GitHubIssueCacheRecord, Project } from '@shipcode/shared';
-import { Button, Tabs, TabsContent, TabsList, TabsTrigger } from '@shipcode/ui';
+import { Button, Tabs, TabsContent, TabsList, TabsTrigger } from '@shipshitdev/ui';
 
 export function ArchivedSettingsSection({
   archivedProjects,

@@ -118,6 +118,23 @@ export interface StatusLabelMapping {
   [pipelineStatus: string]: string;
 }
 
+export interface GitHubPrCheckSummary {
+  name: string;
+  status: 'pending' | 'success' | 'failed';
+  conclusion: string | null;
+  detailsUrl: string | null;
+  workflowName: string | null;
+}
+
+export interface GitHubPrReviewCommentSummary {
+  author: string | null;
+  body: string;
+  url: string;
+  createdAt: string;
+  path: string | null;
+  line: number | null;
+}
+
 export interface Project {
   id?: string;
   name?: string;
@@ -156,15 +173,43 @@ export interface AppSettings {
 
 export interface Thread {
   id: string;
+  projectId?: string;
+  kind?: 'pipeline' | 'instant';
+  title?: string;
+  prompt?: string;
+  status?: ThreadStatus;
+  worktreeBranch?: string | null;
+  worktreePath?: string | null;
   plannerModel: string;
   reviewerModel: string;
   executorModel: string;
   verifierModel: string;
+  clarificationRound?: number;
+  clarificationRequest?: unknown | null;
+  clarificationAnswers?: unknown[];
+  answeredClarification?: unknown | null;
+  verificationStatus?: string | null;
+  verificationRetries?: number;
+  autonomous?: boolean;
+  baseBranch?: string | null;
+  forkPointSha?: string | null;
+  githubIssueNumber?: number | null;
+  githubPrNumber?: number | null;
+  githubRepo?: string | null;
+  lastError?: string | null;
+  failurePhase?: string | null;
+  failureCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
   plannerResolvedModel: string | null;
   reviewerResolvedModel: string | null;
+  revisorResolvedModel?: string | null;
   executorResolvedModel: string | null;
   verifierResolvedModel: string | null;
   reviewRound: number;
+  totalTokensPrompt?: number;
+  totalTokensCompletion?: number;
+  totalCostUsd?: number;
 }
 
 export interface GitHubIssueCacheRecord {
@@ -200,8 +245,8 @@ export interface GitHubIssueCacheRecord {
   linkedPrUrl: string | null;
   linkedPrIsDraft: boolean;
   ciBlocked: boolean;
-  failingChecks: unknown[];
-  unresolvedReviewComments: unknown[];
+  failingChecks: GitHubPrCheckSummary[];
+  unresolvedReviewComments: GitHubPrReviewCommentSummary[];
   unresolvedReviewCommentCount: number;
   prLastSyncAt: string | null;
   fetchedAt: string;

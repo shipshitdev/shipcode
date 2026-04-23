@@ -2,6 +2,7 @@
 
 import { useDraggable } from '@dnd-kit/core';
 import { Archive, PanelLeftOpen } from 'lucide-react';
+import { memo } from 'react';
 import { modelDisplay } from '../lib/model-display';
 import { useSharedSecondNow } from '../lib/second-ticker';
 import type { GitHubIssueCacheRecord } from '../lib/shipcode';
@@ -48,7 +49,7 @@ interface DraggableCardProps {
   approvalBadge?: IssueApprovalBadge | null;
   approvedAwaitingExecution?: boolean;
   readOnly?: boolean;
-  onClick: () => void;
+  onClick: (issue: GitHubIssueCacheRecord) => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
   onCancel?: (issue: GitHubIssueCacheRecord) => void;
   onStartPipeline?: (issue: GitHubIssueCacheRecord) => void;
@@ -58,7 +59,7 @@ interface DraggableCardProps {
   isRerunning?: boolean;
 }
 
-export function DraggableCard({
+function DraggableCardComponent({
   issue,
   phaseChip,
   revisionBadge,
@@ -193,7 +194,7 @@ export function DraggableCard({
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation();
-            onClick();
+            onClick(issue);
           }}
         >
           <PanelLeftOpen size={14} />
@@ -369,6 +370,9 @@ export function DraggableCard({
     </div>
   );
 }
+
+export const DraggableCard = memo(DraggableCardComponent);
+DraggableCard.displayName = 'DraggableCard';
 
 export function DragOverlayCard({
   issue,

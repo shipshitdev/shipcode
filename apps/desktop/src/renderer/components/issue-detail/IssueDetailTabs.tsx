@@ -19,7 +19,7 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
 import { CommentsTab } from './CommentsTab';
 import { CostsTab } from './CostsTab';
 import { DiffTab } from './DiffTab';

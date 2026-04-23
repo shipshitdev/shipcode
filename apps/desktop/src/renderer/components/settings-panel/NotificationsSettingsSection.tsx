@@ -1,5 +1,5 @@
 import type { AppSettings } from '@shipcode/shared';
-import { SettingsRow, Switch } from '@shipcode/ui';
+import { SettingsRow, Switch } from '@shipshitdev/ui';
 
 export function NotificationsSettingsSection({
   settings,

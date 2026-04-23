@@ -1,4 +1,4 @@
-import { ShipCodeLogoMark } from '@shipcode/ui';
+import { ShipCodeLogoMark } from '@shipshitdev/ui';
 import { Navbar } from 'nextra-theme-docs';
 
 const config = {

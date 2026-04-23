@@ -1,5 +1,5 @@
 import type { CliHealth, GhAuthStatus, SystemHealth } from '@shipcode/shared';
-import { Badge, Button, LoadingButtonContent } from '@shipcode/ui';
+import { Badge, Button, LoadingButtonContent } from '@shipshitdev/ui';
 import { useMutation } from '@tanstack/react-query';
 
 interface AuthResult extends SystemHealth {

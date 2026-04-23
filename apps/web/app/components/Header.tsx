@@ -1,6 +1,6 @@
 'use client';
 
-import { ShipCodeLogoMark } from '@shipcode/ui';
+import { ShipCodeLogoMark } from '@shipshitdev/ui';
 import { useEffect, useState } from 'react';
 
 export function Header() {

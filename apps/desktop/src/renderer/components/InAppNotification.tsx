@@ -1,4 +1,4 @@
-import { Button, cn, X } from '@shipcode/ui';
+import { Button, cn, X } from '@shipshitdev/ui';
 import type { ReactNode } from 'react';
 
 type InAppNotificationTone = 'default' | 'success' | 'warning' | 'danger';

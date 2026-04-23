@@ -23,7 +23,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
 import { useAppStore } from '../stores/app-store';

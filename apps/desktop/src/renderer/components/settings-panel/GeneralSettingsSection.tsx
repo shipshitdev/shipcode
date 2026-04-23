@@ -8,7 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
   SettingsRow,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
 
 export function GeneralSettingsSection({
   settings,

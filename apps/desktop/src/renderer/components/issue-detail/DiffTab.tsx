@@ -1,5 +1,5 @@
 import type { DiffRecord } from '@shipcode/shared';
-import { Button, Maximize2, Modal, SideBySideDiffViewer, X } from '@shipcode/ui';
+import { Button, Maximize2, Modal, SideBySideDiffViewer, X } from '@shipshitdev/ui';
 import { useState } from 'react';
 
 export function DiffTab({ diffs, expanded }: { diffs: DiffRecord[]; expanded: boolean }) {

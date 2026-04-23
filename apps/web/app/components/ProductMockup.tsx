@@ -1,9 +1,9 @@
 'use client';
 
-import type { GitHubIssueCacheRecord, Thread } from '@shipcode/shared';
+import type { GitHubIssueCacheRecord, Thread } from '@shipshitdev/ui';
 import dynamic from 'next/dynamic';
 
-const KanbanBoard = dynamic(() => import('@shipcode/ui').then((module) => module.KanbanBoard), {
+const KanbanBoard = dynamic(() => import('@shipshitdev/ui').then((module) => module.KanbanBoard), {
   ssr: false,
 });
 

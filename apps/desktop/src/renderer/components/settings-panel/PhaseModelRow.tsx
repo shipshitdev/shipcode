@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
   SettingsRow,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
 import { getModelOptions, PROVIDER_DISPLAY } from '../model-provider-options';
 
 export function PhaseModelRow({

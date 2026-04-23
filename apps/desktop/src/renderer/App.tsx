@@ -1,6 +1,6 @@
 import type { AppSettings, GitHubIssueCacheRecord, Project } from '@shipcode/shared';
 import { CURRENT_ONBOARDING_VERSION } from '@shipcode/shared';
-import { OverlayPanel } from '@shipcode/ui';
+import { OverlayPanel } from '@shipshitdev/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef } from 'react';
 import { ActivityView } from './components/ActivityView';

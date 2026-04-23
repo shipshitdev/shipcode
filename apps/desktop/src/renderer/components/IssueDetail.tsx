@@ -44,7 +44,7 @@ import {
   PanelLeftOpen,
   PhaseChip,
   X,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';

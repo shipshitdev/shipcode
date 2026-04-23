@@ -1,6 +1,6 @@
 'use client';
 
-import { Button } from '@shipcode/ui';
+import { Button } from '@shipshitdev/ui';
 import { useState } from 'react';
 
 const INSTALL_COMMAND = `brew tap shipshitdev/shipcode

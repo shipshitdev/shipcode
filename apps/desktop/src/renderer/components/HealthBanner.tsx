@@ -1,5 +1,5 @@
 import type { AppSettings, GhAuthStatus, SystemHealth } from '@shipcode/shared';
-import { Alert, AlertDescription, Button } from '@shipcode/ui';
+import { Alert, AlertDescription, Button } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useAppStore } from '../stores/app-store';

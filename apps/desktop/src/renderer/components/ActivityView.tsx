@@ -9,7 +9,7 @@ import {
   TableBody,
   TableCell,
   TableRow,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useAppStore } from '../stores/app-store';

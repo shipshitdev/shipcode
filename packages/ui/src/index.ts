@@ -1,26 +1,33 @@
-// Icons — re-exported from lucide-react so apps import via @shipcode/ui
+// Icons — re-exported from lucide-react so apps import via @shipshitdev/ui
 
-export { sanitizeResolvedModel } from '@shipcode/shared';
 export {
   Activity,
+  AlertCircle,
   Archive,
   ArrowRight,
   ArrowUpDown,
   Bell,
   Bot,
+  Briefcase,
+  Building2,
+  Captions,
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
   CircleCheck,
   CircleDot,
+  Clock3,
   Code2,
   Columns2,
   Copy,
   DollarSign,
+  Download,
   ExternalLink,
   FilePlus,
+  Film,
   Folder,
   FolderGit,
   FolderOpen,
@@ -36,7 +43,9 @@ export {
   ListTodo,
   Loader2,
   Lock,
+  Mail,
   Maximize2,
+  MessagesSquare,
   Minimize2,
   MoreHorizontal,
   PackageCheck,
@@ -47,16 +56,26 @@ export {
   Pencil,
   Pin,
   PinOff,
+  Play,
   Plus,
   RefreshCw,
   Rows2,
+  Scissors,
   Search,
+  Send,
   Settings,
+  Settings2,
+  SlidersHorizontal,
   Sparkles,
   Square,
+  Target,
   Terminal,
   Trash2,
+  Upload,
+  UserRound,
+  Video,
   Wand2,
+  WandSparkles,
   Workflow,
   Wrench,
   X,
@@ -66,6 +85,8 @@ export type { ActivePipelineCardProps } from './ActivePipelineCard';
 export { ActivePipelineCard } from './ActivePipelineCard';
 export type { ShipCodeLogoMarkProps } from './brand/ShipCodeLogoMark';
 export { ShipCodeLogoMark } from './brand/ShipCodeLogoMark';
+export type { ShipCutLogoMarkProps } from './brand/ShipCutLogoMark';
+export { ShipCutLogoMark } from './brand/ShipCutLogoMark';
 export { DiffViewer } from './DiffViewer';
 export { IssueCard } from './IssueCard';
 export { KanbanBoard } from './KanbanBoard';
@@ -79,6 +100,25 @@ export {
   PROVIDER_DISPLAY,
   providerDisplay,
 } from './lib/model-display';
+export type {
+  AgentType,
+  AppSettings,
+  DiffRecord,
+  ExecutorModel,
+  GitHubIssueCacheRecord,
+  IssuePipelineStatus,
+  PipelinePhase,
+  PlanReview,
+  Project,
+  ResolvedPhaseModel,
+  ReviewFinding,
+  ShipCodePlan,
+  StatusLabelMapping,
+  Thread,
+  ThreadStatus,
+  VerificationResult,
+} from './lib/shipcode';
+export { phaseToProgress, sanitizeResolvedModel } from './lib/shipcode';
 export type { StatusBadgeVariant } from './lib/status-variant';
 export { getStatusBadgeVariant } from './lib/status-variant';
 export { cn } from './lib/utils';
@@ -154,6 +194,9 @@ export {
   SelectValue,
 } from './primitives/select';
 export { SettingsRow } from './primitives/settings-row';
+export { Skeleton } from './primitives/skeleton';
+export type { StatCardProps, StatCardTone } from './primitives/stat-card';
+export { StatCard } from './primitives/stat-card';
 export { Switch } from './primitives/switch';
 export {
   Table,

@@ -1,5 +1,5 @@
-import type { ShipCodePlan } from '@shipcode/shared';
 import { Square } from 'lucide-react';
+import type { ShipCodePlan } from './lib/shipcode';
 import { Badge } from './primitives/badge';
 
 interface PlanViewerProps {

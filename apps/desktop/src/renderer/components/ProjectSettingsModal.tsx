@@ -22,7 +22,7 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';

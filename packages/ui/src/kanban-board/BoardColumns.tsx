@@ -2,7 +2,7 @@
 
 import { useDroppable } from '@dnd-kit/core';
 import { Archive, ChevronDown, ChevronRight } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { GitHubIssueCacheRecord } from '../lib/shipcode';
 import { cn } from '../lib/utils';
 import { Button } from '../primitives/button';
@@ -136,7 +136,7 @@ export function DroppableColumn({
               issue,
               approvedAwaitingExecutionIssueIds,
             )}
-            onClick={() => onIssueClick(issue)}
+            onClick={onIssueClick}
             onStartPipeline={onStartPipeline}
             onOpenPullRequest={onOpenPullRequest}
             isSelected={issue.issueNumber === selectedIssueNumber}
@@ -250,7 +250,7 @@ function SectionBlock({
                 issue,
                 approvedAwaitingExecutionIssueIds,
               )}
-              onClick={() => onIssueClick(issue)}
+              onClick={onIssueClick}
               onRerun={onRerun}
               onCancel={onCancel}
               onOpenPullRequest={onOpenPullRequest}
@@ -309,15 +309,31 @@ export function StackedColumn({
   issueApprovalBadgeById = EMPTY_APPROVAL_BADGE_MAP,
   approvedAwaitingExecutionIssueIds = EMPTY_APPROVED_AWAITING_EXECUTION,
 }: StackedColumnProps) {
-  const columnIssues = issues.filter((issue) =>
-    issueMatchesColumn(issue, column, approvedAwaitingExecutionIssueIds),
+  const columnIssues = useMemo(
+    () =>
+      issues.filter((issue) =>
+        issueMatchesColumn(issue, column, approvedAwaitingExecutionIssueIds),
+      ),
+    [approvedAwaitingExecutionIssueIds, column, issues],
+  );
+  const sectionIssuesByKey = useMemo(
+    () =>
+      new Map(
+        (column.sections ?? []).map((section) => [
+          section.key,
+          columnIssues.filter((issue) =>
+            issueMatchesSection(issue, section, approvedAwaitingExecutionIssueIds),
+          ),
+        ]),
+      ),
+    [approvedAwaitingExecutionIssueIds, column.sections, columnIssues],
   );
   const hasIssues = columnIssues.length > 0;
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
 
-  const toggleSection = (key: string) => {
+  const toggleSection = useCallback((key: string) => {
     setCollapsedSections((current) => ({ ...current, [key]: !current[key] }));
-  };
+  }, []);
 
   return (
     <div className="flex min-h-0 min-w-[180px] max-w-[280px] flex-[1.3] flex-col overflow-hidden rounded-md border border-border/40 bg-secondary">
@@ -356,9 +372,7 @@ export function StackedColumn({
             key={section.key}
             columnKey={column.key}
             section={section}
-            issues={columnIssues.filter((issue) =>
-              issueMatchesSection(issue, section, approvedAwaitingExecutionIssueIds),
-            )}
+            issues={sectionIssuesByKey.get(section.key) ?? []}
             collapsed={collapsedSections[section.key] ?? false}
             onToggle={() => toggleSection(section.key)}
             readOnly={readOnly}

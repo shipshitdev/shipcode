@@ -10,7 +10,7 @@ import {
   PhaseChip,
   PlanViewer,
   ReviewViewer,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
 import {
   diagnosePlanParseFailure,
   getPlanStatusPresentation,

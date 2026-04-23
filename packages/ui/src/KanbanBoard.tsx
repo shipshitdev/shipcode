@@ -137,6 +137,20 @@ export function KanbanBoard({
         : sortedIssues,
     [approvalFilter, issueApprovalBadgeById, sortedIssues],
   );
+  const visibleIssuesByColumn = useMemo(
+    () =>
+      new Map(
+        COLUMNS.filter((column) => !column.sections).map((column) => [
+          column.key,
+          visibleIssues.filter((issue) =>
+            approvedAwaitingExecutionIssueIds?.has(issue.id)
+              ? column.key === 'agent'
+              : column.statuses.includes(issue.pipelineStatus),
+          ),
+        ]),
+      ),
+    [approvedAwaitingExecutionIssueIds, visibleIssues],
+  );
 
   const handleRerun = useCallback(
     (issue: GitHubIssueCacheRecord) => {
@@ -292,11 +306,7 @@ export function KanbanBoard({
                   />
                 );
               }
-              const columnIssues = visibleIssues.filter((issue) =>
-                approvedAwaitingExecutionIssueIds?.has(issue.id)
-                  ? col.key === 'agent'
-                  : col.statuses.includes(issue.pipelineStatus),
-              );
+              const columnIssues = visibleIssuesByColumn.get(col.key) ?? [];
               return (
                 <DroppableColumn
                   key={col.key}

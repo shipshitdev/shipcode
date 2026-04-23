@@ -1,5 +1,5 @@
 import type { AppSettings } from '@shipcode/shared';
-import { Input, SettingsRow, Switch } from '@shipcode/ui';
+import { Input, SettingsRow, Switch } from '@shipshitdev/ui';
 
 export function GithubSettingsSection({
   settings,

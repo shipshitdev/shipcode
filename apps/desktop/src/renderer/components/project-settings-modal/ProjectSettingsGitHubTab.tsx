@@ -6,7 +6,7 @@ import {
   SHIPCODE_METADATA_LABELS,
   SHIPCODE_STATUS_LABELS,
 } from '@shipcode/shared';
-import { Button, LoadingButtonContent } from '@shipcode/ui';
+import { Button, LoadingButtonContent } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 

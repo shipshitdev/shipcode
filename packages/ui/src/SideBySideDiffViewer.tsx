@@ -1,7 +1,7 @@
 'use client';
 
-import type { DiffRecord } from '@shipcode/shared';
 import { useMemo, useState } from 'react';
+import type { DiffRecord } from './lib/shipcode';
 import { cn } from './lib/utils';
 import { Badge } from './primitives/badge';
 

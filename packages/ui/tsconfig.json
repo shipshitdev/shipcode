@@ -4,6 +4,7 @@
     "jsx": "react-jsx",
     "outDir": "./dist",
     "rootDir": "./src",
+    "ignoreDeprecations": "6.0",
     "noEmit": true
   },
   "include": ["src"]

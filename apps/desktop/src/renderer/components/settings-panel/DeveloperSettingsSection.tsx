@@ -11,7 +11,7 @@ import {
   SelectValue,
   SettingsRow,
   Terminal,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 

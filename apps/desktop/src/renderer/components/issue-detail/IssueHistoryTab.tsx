@@ -1,5 +1,5 @@
 import type { ActivityEntry } from '@shipcode/shared';
-import { Badge } from '@shipcode/ui';
+import { Badge } from '@shipshitdev/ui';
 import { timeAgo } from './helpers';
 
 export function IssueHistoryTab({

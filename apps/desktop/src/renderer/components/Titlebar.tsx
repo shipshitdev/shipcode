@@ -20,7 +20,7 @@ import {
   Settings,
   Terminal,
   X,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';

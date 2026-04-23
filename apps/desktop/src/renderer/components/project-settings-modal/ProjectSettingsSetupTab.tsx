@@ -1,5 +1,5 @@
 import type { ProjectSetupDraft, ProjectSetupInspection, RepoSetupEnvFile } from '@shipcode/shared';
-import { Button, Checkbox, Input, Label, LoadingButtonContent, Textarea } from '@shipcode/ui';
+import { Button, Checkbox, Input, Label, LoadingButtonContent, Textarea } from '@shipshitdev/ui';
 import type { LocalEnvFile } from './setup-utils';
 
 export function ProjectSettingsSetupTab({

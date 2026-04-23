@@ -8,7 +8,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
 import type { ContextGeneratorCli } from './shared';
 
 export function ProjectSettingsContextTab({

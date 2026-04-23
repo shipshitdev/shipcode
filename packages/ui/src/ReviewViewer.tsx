@@ -1,4 +1,4 @@
-import type { PlanReview, ReviewFinding } from '@shipcode/shared';
+import type { PlanReview, ReviewFinding } from './lib/shipcode';
 import { cn } from './lib/utils';
 import { Badge } from './primitives/badge';
 

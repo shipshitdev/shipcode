@@ -1,4 +1,4 @@
-import type { IssuePipelineStatus, ThreadStatus } from '@shipcode/shared';
+import type { IssuePipelineStatus, ThreadStatus } from './shipcode';
 
 export type StatusBadgeVariant = 'default' | 'done' | 'success' | 'warning' | 'danger' | 'accent';
 

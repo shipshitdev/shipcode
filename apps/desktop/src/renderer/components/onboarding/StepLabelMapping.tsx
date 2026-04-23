@@ -1,5 +1,5 @@
 import type { StatusLabelMapping } from '@shipcode/shared';
-import { StatusMappingEditor } from '@shipcode/ui';
+import { StatusMappingEditor } from '@shipshitdev/ui';
 
 interface Props {
   mappings: StatusLabelMapping;

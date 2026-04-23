@@ -1,4 +1,4 @@
-import type { GitHubIssueCacheRecord } from '@shipcode/shared';
+import type { GitHubIssueCacheRecord } from './lib/shipcode';
 import { getStatusBadgeVariant } from './lib/status-variant';
 import { Badge } from './primitives/badge';
 

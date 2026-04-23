@@ -1,5 +1,5 @@
-import type { PipelinePhase } from '@shipcode/shared';
 import { Check, X } from 'lucide-react';
+import type { PipelinePhase } from './lib/shipcode';
 import { cn } from './lib/utils';
 import { Button } from './primitives/button';
 

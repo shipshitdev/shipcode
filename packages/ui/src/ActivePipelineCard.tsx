@@ -1,9 +1,9 @@
 'use client';
 
-import { type ExecutorModel, type PipelinePhase, phaseToProgress } from '@shipcode/shared';
 import type { KeyboardEvent } from 'react';
 import { modelDisplay } from './lib/model-display';
 import { useSharedSecondNow } from './lib/second-ticker';
+import { type ExecutorModel, type PipelinePhase, phaseToProgress } from './lib/shipcode';
 import { cn } from './lib/utils';
 import { PhaseChip } from './PhaseChip';
 import { Badge } from './primitives/badge';

@@ -1,5 +1,5 @@
-import type { StatusLabelMapping } from '@shipcode/shared';
 import { ArrowRight } from 'lucide-react';
+import type { StatusLabelMapping } from './lib/shipcode';
 import { Button } from './primitives/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './primitives/select';
 

@@ -1,5 +1,5 @@
 import type { GitHubIssueCacheRecord } from '@shipcode/shared';
-import { cn } from '@shipcode/ui';
+import { cn } from '@shipshitdev/ui';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { PRD_PROSE_CLASSES } from './helpers';

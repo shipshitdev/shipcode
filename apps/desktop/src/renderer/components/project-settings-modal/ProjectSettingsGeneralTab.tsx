@@ -1,5 +1,5 @@
 import type { Project } from '@shipcode/shared';
-import { Button, Input, Label, LoadingButtonContent } from '@shipcode/ui';
+import { Button, Input, Label, LoadingButtonContent } from '@shipshitdev/ui';
 
 export function ProjectSettingsGeneralTab({
   project,

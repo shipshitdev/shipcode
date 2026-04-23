@@ -17,7 +17,7 @@ import {
   TableCell,
   TableRow,
   X,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { NOTIFICATIONS_STALE_TIME } from '../query-stale-times';

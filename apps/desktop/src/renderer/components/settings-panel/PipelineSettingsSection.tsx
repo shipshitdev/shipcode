@@ -30,7 +30,7 @@ import {
   TabsList,
   TabsTrigger,
   Textarea,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
 import { getModelOptions } from '../model-provider-options';
 import { PhaseModelRow } from './PhaseModelRow';
 

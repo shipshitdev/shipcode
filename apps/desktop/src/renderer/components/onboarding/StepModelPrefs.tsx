@@ -1,5 +1,5 @@
 import type { AgentType } from '@shipcode/shared';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shipcode/ui';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shipshitdev/ui';
 
 interface Props {
   plannerModel: AgentType;

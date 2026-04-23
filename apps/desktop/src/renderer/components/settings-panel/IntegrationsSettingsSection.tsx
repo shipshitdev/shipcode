@@ -19,7 +19,7 @@ import {
   TabsList,
   TabsTrigger,
   Terminal,
-} from '@shipcode/ui';
+} from '@shipshitdev/ui';
 import { useState } from 'react';
 import { StatusPill } from './StatusPill';
 
