@@ -1,6 +1,6 @@
 {
   "name": "@shipshitdev/ui",
-  "version": "0.4.7",
+  "version": "0.4.8",
   "private": false,
   "description": "Shared Shipshit.dev React UI components used across ShipCode side projects.",
   "type": "module",

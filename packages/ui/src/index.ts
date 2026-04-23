@@ -209,6 +209,7 @@ export {
   TableRow,
 } from './primitives/table';
 export { Tabs, TabsContent, TabsList, TabsTrigger } from './primitives/tabs';
+export type { TextareaProps } from './primitives/textarea';
 export { Textarea } from './primitives/textarea';
 export { ReviewViewer } from './ReviewViewer';
 export { SideBySideDiffViewer } from './SideBySideDiffViewer';
