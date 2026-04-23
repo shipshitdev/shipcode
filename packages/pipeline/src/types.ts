@@ -193,6 +193,7 @@ export interface PipelineContext {
 
 export interface ActivePipelineSummary {
   threadId: string;
+  projectId: string | null;
   projectPath: string;
   phase: PipelinePhase;
   approvedAwaitingExecution?: boolean;

@@ -6,6 +6,8 @@
  * Asserts the thread lands on awaiting_approval with the current
  * default workflow (0 revisions + approval required).
  */
+
+import type { EventEmitter as NodeEventEmitter } from 'node:events';
 import type { AgentProvider, ProcessManager } from '@shipcode/agents';
 import {
   createClaudeCliProvider,
@@ -32,11 +34,24 @@ vi.mock('@shipcode/git', () => {
 const { mockExecSync } = vi.hoisted(() => ({ mockExecSync: vi.fn() }));
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:child_process')>();
+  const { EventEmitter } = await import('node:events');
   return {
     ...actual,
     execFileSync: vi.fn((command: string, args: string[] = [], options?: object) =>
       mockExecSync([command, ...args].join(' '), options),
     ),
+    spawn: vi.fn(() => {
+      const proc = new EventEmitter() as NodeEventEmitter & {
+        stdin: { write: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn> };
+        stdout: NodeEventEmitter;
+        stderr: NodeEventEmitter;
+      };
+      proc.stdin = { write: vi.fn(), end: vi.fn() };
+      proc.stdout = new EventEmitter();
+      proc.stderr = new EventEmitter();
+      queueMicrotask(() => proc.emit('close', 0));
+      return proc;
+    }),
   };
 });
 

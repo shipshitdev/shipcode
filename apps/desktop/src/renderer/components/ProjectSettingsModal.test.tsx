@@ -5,7 +5,7 @@ import {
   type Project,
 } from '@shipcode/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '../stores/app-store';
 import { ProjectSettingsModal } from './ProjectSettingsModal';
@@ -333,5 +333,66 @@ describe('ProjectSettingsModal', () => {
     expect(screen.getByLabelText('Testing context')).toHaveValue(
       'Detected a Swift Package Manager repo.',
     );
+  });
+
+  it('saves a renamed project through project:set-name', async () => {
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'project:get') return project;
+      if (channel === 'settings:get') return DEFAULT_SETTINGS;
+      if (channel === 'integrations:check') return integrations;
+      if (channel === 'memory:list') {
+        return { files: contextFiles, hasObsoleteContextDirectory: false };
+      }
+      if (channel === 'project:set-name') return { ...project, name: 'Gateway Remastered' };
+      if (channel === 'project:set-github-project-url') return project;
+      if (channel === 'project:set-notification-routing') return project;
+      if (channel === 'project:set-notify-github-user') return project;
+      if (channel === 'project:set-model-overrides') return project;
+      return null;
+    });
+
+    renderWithProviders();
+
+    fireEvent.change(await screen.findByLabelText('Name'), {
+      target: { value: 'Gateway Remastered' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('project:set-name', {
+        projectId: project.id,
+        name: 'Gateway Remastered',
+      });
+    });
+  });
+
+  it('disables board sync after a failed attach result', async () => {
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'project:get') return project;
+      if (channel === 'settings:get') return DEFAULT_SETTINGS;
+      if (channel === 'integrations:check') return integrations;
+      if (channel === 'memory:list') {
+        return { files: contextFiles, hasObsoleteContextDirectory: false };
+      }
+      if (channel === 'github:sync-to-project-board') {
+        return {
+          attached: 0,
+          alreadyPresent: 0,
+          failed: 1,
+          errors: ['#20: resource not found'],
+        };
+      }
+      return null;
+    });
+
+    renderWithProviders();
+
+    const syncButton = await screen.findByRole('button', { name: 'Sync existing issues to board' });
+    fireEvent.click(syncButton);
+
+    await waitFor(() => {
+      expect(screen.getByText(/#20: resource not found/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Sync existing issues to board' })).toBeDisabled();
+    });
   });
 });

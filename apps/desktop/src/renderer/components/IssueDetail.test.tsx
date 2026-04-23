@@ -6,6 +6,7 @@ import {
   type PlanRecord,
   type ReviewRecord,
   type Thread,
+  type VerificationRecord,
 } from '@shipcode/shared';
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -140,6 +141,25 @@ const makeReview = (overrides: Partial<ReviewRecord> = {}): ReviewRecord => ({
   confidence: 'high',
   rawOutput: '',
   structured: null,
+  createdAt: new Date().toISOString(),
+  ...overrides,
+});
+
+const makeVerification = (overrides: Partial<VerificationRecord> = {}): VerificationRecord => ({
+  id: 'verification-1',
+  threadId: 'thread-1',
+  planId: 'plan-1',
+  rawOutput: 'raw',
+  structured: {
+    threadId: 'thread-1',
+    planId: 'plan-1',
+    result: 'failed',
+    summary: 'Needs changes',
+    criteriaResults: [],
+    issues: [{ severity: 'blocker', description: 'Fix it' }],
+  },
+  result: 'failed',
+  retryCount: 0,
   createdAt: new Date().toISOString(),
   ...overrides,
 });
@@ -359,6 +379,39 @@ describe('IssueDetail', () => {
       projectId: 'project-1',
       issueNumber: 42,
     });
+  });
+
+  it('surfaces execution retry copy when the latest verification failed with structured findings', async () => {
+    const thread = makeThread({
+      status: 'failed',
+      worktreePath: '/tmp/project',
+      worktreeBranch: 'ship/42-test',
+    });
+    const verification = makeVerification();
+
+    useAppStore.setState({
+      activeThreadId: thread.id,
+      activeIssue: makeIssue({ threadId: thread.id, pipelineStatus: 'failed' }),
+      pipelinePhase: 'failed',
+    });
+
+    invokeMock.mockImplementation(async (channel, args) => {
+      if (channel === 'project:get') return makeProject();
+      if (channel === 'thread:get') return thread;
+      if (channel === 'plan:list') return [makePlan({ status: 'approved' })];
+      if (channel === 'review:list-by-plans') return {};
+      if (channel === 'verification:get') return verification;
+      if (channel === 'pipeline:retry') return undefined;
+      if (channel === 'github:list-issues')
+        return [makeIssue({ threadId: thread.id, pipelineStatus: 'failed' })];
+      if (channel === 'thread:list') return [thread];
+      return args ?? null;
+    });
+
+    renderWithProviders();
+
+    expect(await screen.findByRole('button', { name: 'Resume execution' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Resume verification' })).not.toBeInTheDocument();
   });
 
   it('renders clarification questions and resumes planning with submitted answers', async () => {

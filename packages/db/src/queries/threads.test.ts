@@ -1,18 +1,21 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from '../test-helpers';
+import { PlanQueries } from './plans';
 import { ProjectQueries } from './projects';
 import { ThreadQueries } from './threads';
 
 describe('ThreadQueries', () => {
   let db: DatabaseSync;
   let projects: ProjectQueries;
+  let plans: PlanQueries;
   let threads: ThreadQueries;
   let projectId: string;
 
   beforeEach(() => {
     db = createTestDb();
     projects = new ProjectQueries(db);
+    plans = new PlanQueries(db);
     threads = new ThreadQueries(db);
     projectId = projects.add('/tmp/test-project').id;
   });
@@ -116,6 +119,43 @@ describe('ThreadQueries', () => {
     expect(threads.getById(t.id)?.reviewRound).toBe(1);
     threads.incrementReviewRound(t.id);
     expect(threads.getById(t.id)?.reviewRound).toBe(2);
+  });
+
+  it('listAwaitingWithApprovedPlans() returns execution waiters oldest first', () => {
+    const older = threads.create(projectId, 'older', 'Older waiter');
+    const newer = threads.create(projectId, 'newer', 'Newer waiter');
+    const rejected = threads.create(projectId, 'rejected', 'Rejected waiter');
+    const executing = threads.create(projectId, 'executing', 'Executing');
+
+    for (const thread of [older, newer, rejected]) {
+      threads.updateStatus(thread.id, 'awaiting_approval');
+    }
+    threads.updateStatus(executing.id, 'executing');
+
+    const structuredPlan = { steps: [] } as never;
+    const olderPlan = plans.create(older.id, 'older plan', structuredPlan, 1);
+    plans.updateStatus(olderPlan.id, 'approved');
+    const newerPlan = plans.create(newer.id, 'newer plan', structuredPlan, 1);
+    plans.updateStatus(newerPlan.id, 'approved');
+    const rejectedPlan = plans.create(rejected.id, 'rejected plan', structuredPlan, 1);
+    plans.updateStatus(rejectedPlan.id, 'rejected');
+    const executingPlan = plans.create(executing.id, 'executing plan', structuredPlan, 1);
+    plans.updateStatus(executingPlan.id, 'approved');
+
+    db.prepare('UPDATE threads SET updated_at = ? WHERE id = ?').run(
+      '2026-04-17T08:00:00.000Z',
+      newer.id,
+    );
+    db.prepare('UPDATE threads SET updated_at = ? WHERE id = ?').run(
+      '2026-04-17T07:00:00.000Z',
+      older.id,
+    );
+
+    expect(threads.listAwaitingWithApprovedPlans().map((thread) => thread.id)).toEqual([
+      older.id,
+      newer.id,
+    ]);
+    expect(threads.getAwaitingWithApprovedPlan()?.id).toBe(older.id);
   });
 
   it('setGithubIssue() and setGithubPr()', () => {

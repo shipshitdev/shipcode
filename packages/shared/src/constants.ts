@@ -86,7 +86,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   testCommand: null,
   testingContext: null,
   maxConcurrentPipelines: 3,
-  maxConcurrentExecutions: 1,
+  maxConcurrentExecutions: 3,
   instantDefaultPanes: 1,
   devLogLevel: 'debug',
 };

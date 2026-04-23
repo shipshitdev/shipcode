@@ -3,6 +3,7 @@
 import {
   DEFAULT_SETTINGS,
   type GitHubIssueCacheRecord,
+  type IntegrationStatus,
   type PlanRecord,
   type Project,
 } from '@shipcode/shared';
@@ -101,6 +102,108 @@ const makeProject = (overrides: Partial<Project> = {}): Project => ({
   ...overrides,
 });
 
+const integrations: IntegrationStatus = {
+  system: {
+    claude: {
+      available: true,
+      version: 'claude 1.0.0',
+      path: '/usr/local/bin/claude',
+      error: null,
+      authenticated: true,
+    },
+    codex: {
+      available: true,
+      version: 'codex 1.0.0',
+      path: '/usr/local/bin/codex',
+      error: null,
+      authenticated: true,
+    },
+    git: {
+      available: true,
+      version: 'git version 2.43.0',
+      path: '/usr/bin/git',
+      error: null,
+      authenticated: false,
+    },
+    gh: {
+      available: true,
+      version: 'gh version 2.40.1',
+      path: '/usr/local/bin/gh',
+      error: null,
+      authenticated: false,
+    },
+  },
+  ghAuth: {
+    installed: true,
+    authenticated: true,
+    username: 'decod3rs',
+    version: '2.40.1',
+    error: null,
+    hasProjectScope: true,
+  },
+  openrouter: {
+    enabled: false,
+    keyPresent: false,
+    authStatus: 'missing_key',
+    message: 'OPENROUTER_API_KEY is not set',
+    label: null,
+    modelChecks: [],
+  },
+  discord: {
+    enabled: false,
+    configured: false,
+    destinationConfigured: false,
+    validationStatus: 'missing',
+    message: 'Discord webhook URL is not configured',
+    lastDeliveryStatus: null,
+  },
+  telegram: {
+    enabled: false,
+    configured: false,
+    destinationConfigured: false,
+    validationStatus: 'missing',
+    message: 'Telegram bot token is not configured',
+    lastDeliveryStatus: null,
+  },
+  desktopApps: {
+    cursor: {
+      key: 'cursor',
+      label: 'Cursor',
+      available: true,
+      path: '/Applications/Cursor.app',
+      error: null,
+    },
+    finder: {
+      key: 'finder',
+      label: 'Finder',
+      available: true,
+      path: '/System/Library/CoreServices/Finder.app',
+      error: null,
+    },
+    terminal: {
+      key: 'terminal',
+      label: 'Terminal',
+      available: true,
+      path: '/System/Applications/Utilities/Terminal.app',
+      error: null,
+    },
+    ghostty: {
+      key: 'ghostty',
+      label: 'Ghostty',
+      available: false,
+      path: null,
+      error: 'Ghostty is not installed',
+    },
+    vscode: {
+      key: 'vscode',
+      label: 'Visual Studio Code',
+      available: true,
+      path: '/Applications/Visual Studio Code.app',
+      error: null,
+    },
+  },
+};
+
 describe('TerminalDrawer', () => {
   const originalResizeObserver = globalThis.ResizeObserver;
 
@@ -116,7 +219,7 @@ describe('TerminalDrawer', () => {
     });
     (window as typeof window & { shipcode: typeof window.shipcode }).shipcode = {
       invoke: vi.fn(async (channel: string) => {
-        if (channel === 'integrations:check') return Promise.resolve(undefined);
+        if (channel === 'integrations:check') return integrations;
         return null;
       }) as unknown as typeof window.shipcode.invoke,
       on: vi.fn(() => () => {}) as unknown as typeof window.shipcode.on,
@@ -300,7 +403,7 @@ describe('TerminalDrawer', () => {
 
   it('starts a selected CLI shell directly from the header button', async () => {
     const invoke = vi.fn(async (channel: string) => {
-      if (channel === 'integrations:check') return undefined;
+      if (channel === 'integrations:check') return integrations;
       if (channel === 'settings:get') return DEFAULT_SETTINGS;
       if (channel === 'project:get') return makeProject();
       if (channel === 'instant:shell-start') return { threadId: 'thread-codex' };
@@ -363,7 +466,7 @@ describe('TerminalDrawer', () => {
 
   it('shows waiting-for-execution copy for approved slot waiters', async () => {
     const invoke = vi.fn(async (channel: string) => {
-      if (channel === 'integrations:check') return undefined;
+      if (channel === 'integrations:check') return integrations;
       if (channel === 'plan:list') {
         return [
           {

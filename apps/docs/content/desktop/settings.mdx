@@ -97,7 +97,7 @@ Human approval resolves through inheritance:
 - optional issue override in Issue Detail
 - Mentioning "human approval" inside an issue body or PRD does **not** change runtime behavior by itself
 
-Once a run is approved, ShipCode can still delay execution if all execution slots are full. The UI treats that as **Waiting For Execution**, not **Needs approval**.
+Once a run is approved, ShipCode can still delay execution if that project's execution slots are full. The UI treats that as **Waiting For Execution**, not **Needs approval**.
 
 Approval decisions are made by the pipeline runtime, not by prompt text. For GitHub issue runs, the engine starts in autonomous mode and the effective inherited approval setting decides whether planning pauses before execution.
 

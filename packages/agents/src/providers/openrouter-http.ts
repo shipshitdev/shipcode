@@ -598,7 +598,11 @@ function anySignal(signals: AbortSignal[]): AbortSignal {
   return controller.signal;
 }
 
-// Exported for unit testing
+/**
+ * Exported for unit testing.
+ *
+ * @knipignore
+ */
 export const _internals = {
   computeBackoffMs,
   parseRetryAfter,

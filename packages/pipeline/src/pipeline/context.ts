@@ -291,6 +291,7 @@ export function createPipelineContextHelpers(
       const thread = deps.threads.getById(context.threadId);
       return {
         threadId: context.threadId,
+        projectId: context.projectId ?? thread?.projectId ?? null,
         projectPath: context.projectPath,
         phase: (thread?.status ?? 'idle') as import('@shipcode/shared').PipelinePhase,
         startedAt: context.startedAt,

@@ -112,7 +112,28 @@ describe('getRetryAction', () => {
     ).toBe('execute');
   });
 
-  it('restarts verification when the latest verification failed for the current plan', () => {
+  it('restarts execution when the latest verification failed with structured findings for the current plan', () => {
+    thread = makeThread({ worktreePath: '/tmp/project', worktreeBranch: 'ship/1-test' });
+    expect(
+      getRetryAction(
+        thread,
+        makePlan(),
+        makeVerification({
+          result: 'failed',
+          structured: {
+            threadId: 'thread-1',
+            planId: 'plan-1',
+            result: 'failed',
+            summary: 'Not OK',
+            criteriaResults: [],
+            issues: [],
+          },
+        }),
+      ),
+    ).toBe('execute');
+  });
+
+  it('restarts verification when the latest verification failed without structured findings for the current plan', () => {
     thread = makeThread({ worktreePath: '/tmp/project', worktreeBranch: 'ship/1-test' });
     expect(getRetryAction(thread, makePlan(), makeVerification({ result: 'failed' }))).toBe(
       'verify',

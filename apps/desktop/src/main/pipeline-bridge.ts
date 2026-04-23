@@ -437,7 +437,7 @@ export function createElectronEmitter(
         }
       }
 
-      // 5b. Promote next execution-queued pipeline if an execution slot opened.
+      // 5b. Promote next execution-queued pipeline if a project execution slot opened.
       // Only terminal phases free an execution slot — awaiting_approval frees a
       // planning slot, not an execution slot.
       if (

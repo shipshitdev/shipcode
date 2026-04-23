@@ -1,7 +1,6 @@
 import {
   type AppSettings,
   type GitHubIssueCacheRecord,
-  githubProjectsUrl,
   githubRepoUrl,
   type IssuePipelineStatus,
   type Project,
@@ -217,7 +216,7 @@ export function ThreadPanel() {
   };
 
   const repoUrl = githubRepoUrl(project?.gitRemote);
-  const projectsUrl = githubProjectsUrl(project?.gitRemote, project?.githubProjectUrl);
+  const projectsUrl = project?.githubProjectUrl?.trim() ? project.githubProjectUrl.trim() : null;
   const handleIssueClick = (issue: GitHubIssueCacheRecord) => {
     selectIssue(issue);
     const store = useAppStore.getState();

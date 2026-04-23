@@ -959,3 +959,21 @@ export function migrateV33(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (33)`);
   });
 }
+
+export function migrateV34(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 34) return;
+
+  transaction(db, () => {
+    db.exec(`
+      UPDATE settings
+         SET value = '3'
+       WHERE key = 'maxConcurrentExecutions'
+         AND trim(value) = '1'
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (34)`);
+  });
+}

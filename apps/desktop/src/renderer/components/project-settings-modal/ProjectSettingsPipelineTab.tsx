@@ -40,7 +40,7 @@ export function ProjectSettingsPipelineTab({
           <div>
             <div className="text-[13px] font-medium text-primary">Runtime Capacity</div>
             <div className="text-[11px] text-muted">
-              Concurrency is app-wide. Change it in App Settings &gt; Pipeline.
+              Pipeline starts are app-wide. Execution slots are per project.
             </div>
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -51,12 +51,13 @@ export function ProjectSettingsPipelineTab({
             <div className="rounded-full border border-agent/30 bg-agent/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-agent">
               {settings.maxConcurrentExecutions} execution slot
               {settings.maxConcurrentExecutions === 1 ? '' : 's'}
+              /project
             </div>
           </div>
         </div>
         <div className="text-[11px] text-muted">
           Approved issues move to <span className="text-primary">Waiting For Execution</span> until
-          one of those execution slots opens.
+          one of this project's execution slots opens.
         </div>
       </div>
 

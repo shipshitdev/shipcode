@@ -26,7 +26,7 @@ Cards also show the effective revision count for that issue. If a run is already
 
 If the effective workflow for an issue requires a human approval gate before execution, the card also shows an `Approval` badge. Hover it to see whether that requirement comes from the app default, project override, or issue override.
 
-After you approve a run, it no longer stays under the human approval section. If execution slots are full, the board moves it into **Agent Loop → Waiting For Execution** so it is clear that approval is done and the runtime is only waiting for capacity.
+After you approve a run, it no longer stays under the human approval section. If that project's execution slots are full, the board moves it into **Agent Loop → Waiting For Execution** so it is clear that approval is done and the runtime is only waiting for capacity.
 
 ## Drag to launch
 
@@ -55,4 +55,4 @@ Click a card to open the Issue Detail overlay, which shows:
 
 ## Header quick-links
 
-The Kanban header has a `board` button that opens the project's GitHub Projects v2 board in your browser. By default it links to `https://github.com/<owner>/<repo>/projects`; you can override it to a real Projects v2 URL from [Project Settings](/desktop/project-settings).
+The Kanban header always shows a `repo` button for the repository itself. It only shows the `board` button when the project has a GitHub Projects URL configured in [Project Settings](/desktop/project-settings).

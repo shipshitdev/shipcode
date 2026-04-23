@@ -3,7 +3,7 @@ import type { ProcessManager } from '../process-manager';
 import { _internals, createClaudeCliProvider, createCodexCliProvider } from './cli-provider';
 import type { ProviderRequest } from './types';
 
-const { buildClaudeArgs, buildCodexArgs } = _internals;
+const { buildClaudeArgs, buildCodexArgs, buildCodexPrompt, stripCodexProtocol } = _internals;
 
 // Base request helper — only the phase + prompt vary per test.
 function req(overrides: Partial<ProviderRequest> = {}): ProviderRequest {
@@ -134,7 +134,7 @@ describe('buildCodexArgs', () => {
       '-c',
       'model_reasoning_effort=high',
       'exec',
-      'PROMPT',
+      expect.stringContaining('PROMPT'),
       '--sandbox',
       'read-only',
       '--json',
@@ -149,7 +149,7 @@ describe('buildCodexArgs', () => {
       '-c',
       'model_reasoning_effort=high',
       'exec',
-      'PROMPT',
+      expect.stringContaining('PROMPT'),
       '--sandbox',
       'read-only',
       '--json',
@@ -177,7 +177,7 @@ describe('buildCodexArgs', () => {
       '-c',
       'model_reasoning_effort=high',
       'exec',
-      'PROMPT',
+      expect.stringContaining('PROMPT'),
       '--sandbox',
       'read-only',
       '--json',
@@ -191,7 +191,7 @@ describe('buildCodexArgs', () => {
       '-c',
       'model_reasoning_effort=high',
       'exec',
-      'PROMPT',
+      expect.stringContaining('PROMPT'),
       '--sandbox',
       'read-only',
       '--json',
@@ -205,7 +205,7 @@ describe('buildCodexArgs', () => {
       '-c',
       'model_reasoning_effort=high',
       'exec',
-      'PROMPT',
+      expect.stringContaining('PROMPT'),
       '--sandbox',
       'read-only',
       '--json',
@@ -221,7 +221,7 @@ describe('buildCodexArgs', () => {
       '-c',
       'model_reasoning_effort=xhigh',
       'exec',
-      'PROMPT',
+      expect.stringContaining('PROMPT'),
       '--sandbox',
       'read-only',
       '--json',
@@ -237,11 +237,61 @@ describe('buildCodexArgs', () => {
       '-c',
       'model_reasoning_effort=none',
       'exec',
-      'PROMPT',
+      expect.stringContaining('PROMPT'),
       '--sandbox',
       'read-only',
       '--json',
     ]);
+  });
+});
+
+describe('buildCodexPrompt', () => {
+  it('adds a structured-output guardrail for non-execute phases', () => {
+    const prompt = buildCodexPrompt(req({ phase: 'plan' }));
+
+    expect(prompt).toContain('Do not run shell commands, inspect files, or use tools');
+    expect(prompt).toContain('Return only the requested fenced shipcode-* JSON block');
+    expect(prompt).toContain('PROMPT');
+  });
+
+  it('leaves execute prompts unchanged', () => {
+    expect(buildCodexPrompt(req({ phase: 'execute' }))).toBe('PROMPT');
+  });
+});
+
+describe('stripCodexProtocol', () => {
+  it('can suppress command transcripts for structured phases', () => {
+    const raw = [
+      JSON.stringify({
+        item: {
+          type: 'command_execution',
+          command: 'rg ENOENT',
+          aggregated_output: 'throw new Error("ENOENT")',
+          exit_code: 0,
+        },
+      }),
+      JSON.stringify({
+        item: {
+          type: 'agent_message',
+          text: 'no valid plan here',
+        },
+      }),
+    ].join('\n');
+
+    expect(stripCodexProtocol(raw, { includeCommandOutput: false })).toBe('no valid plan here');
+  });
+
+  it('keeps command transcripts for execute phases', () => {
+    const raw = JSON.stringify({
+      item: {
+        type: 'command_execution',
+        command: 'bun test',
+        aggregated_output: 'ok',
+        exit_code: 0,
+      },
+    });
+
+    expect(stripCodexProtocol(raw, { includeCommandOutput: true })).toBe('$ bun test\nok');
   });
 });
 
@@ -371,7 +421,7 @@ describe('createCodexCliProvider', () => {
       '-c',
       'model_reasoning_effort=high',
       'exec',
-      'PROMPT',
+      expect.stringContaining('PROMPT'),
       '--sandbox',
       'read-only',
       '--json',
@@ -397,6 +447,34 @@ describe('createCodexCliProvider', () => {
 
     await trigger('exit', 'proc-1', 0);
     await promise;
+  });
+
+  it('omits command execution output from non-execute rawOutput', async () => {
+    const { pm, trigger } = createMockProcessManager();
+    const provider = createCodexCliProvider(pm);
+
+    const promise = provider.generate(req({ phase: 'plan' }));
+    await new Promise((r) => setImmediate(r));
+
+    await trigger(
+      'output',
+      'proc-1',
+      [
+        JSON.stringify({
+          item: {
+            type: 'command_execution',
+            command: 'rg ENOENT',
+            aggregated_output: 'source mentions ENOENT',
+            exit_code: 0,
+          },
+        }),
+        JSON.stringify({ item: { type: 'agent_message', text: 'planner text' } }),
+      ].join('\n'),
+    );
+    await trigger('exit', 'proc-1', 0);
+
+    const result = await promise;
+    expect(result.rawOutput).toBe('planner text');
   });
 
   it('codex provider supports all non-gh pipeline phases', () => {

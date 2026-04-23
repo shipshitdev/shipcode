@@ -62,6 +62,7 @@ export function ProjectSettingsModal() {
   const closeProjectSettingsModal = useAppStore((state) => state.closeProjectSettingsModal);
 
   const [activeTab, setActiveTab] = useState<ProjectTab>('general');
+  const [nameInput, setNameInput] = useState('');
   const [urlInput, setUrlInput] = useState('');
   const [touched, setTouched] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -145,6 +146,7 @@ export function ProjectSettingsModal() {
     }
 
     setUrlInput(project?.githubProjectUrl ?? '');
+    setNameInput(project?.name ?? '');
     setOverrides({
       plannerModelOverride: project?.plannerModelOverride ?? null,
       reviewerModelOverride: project?.reviewerModelOverride ?? null,
@@ -187,6 +189,7 @@ export function ProjectSettingsModal() {
     project?.discordRouting,
     project?.discordWebhookUrlOverride,
     project?.githubProjectUrl,
+    project?.name,
     project?.notifyGithubUser,
     project?.plannerModelIdOverride,
     project?.plannerModelOverride,
@@ -216,6 +219,8 @@ export function ProjectSettingsModal() {
   }, [projectSettingsModalOpen, projectSetup]);
 
   const validation = useMemo(() => validateGithubProjectUrl(urlInput), [urlInput]);
+  const normalizedName = nameInput.trim();
+  const nameError = normalizedName.length === 0 ? 'Project name is required' : null;
   const showInlineError = touched && !validation.ok;
   const projectDraft = useMemo(() => buildProjectDraft(project, overrides), [project, overrides]);
 
@@ -255,6 +260,10 @@ export function ProjectSettingsModal() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!projectSettingsModalProjectId) return null;
+      await window.shipcode.invoke<Project>('project:set-name', {
+        projectId: projectSettingsModalProjectId,
+        name: normalizedName,
+      });
       await window.shipcode.invoke<Project>('project:set-github-project-url', {
         projectId: projectSettingsModalProjectId,
         url: validation.ok ? validation.value : null,
@@ -347,6 +356,8 @@ export function ProjectSettingsModal() {
     onSuccess: (updated) => {
       if (!updated) return;
       setRelinkError(null);
+      setSyncResult(null);
+      setSyncError(null);
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
       queryClient.invalidateQueries({ queryKey: ['projects-archived'] });
@@ -412,6 +423,10 @@ export function ProjectSettingsModal() {
     setSubmitError(null);
     setSetupSaveError(null);
     setTouched(true);
+    if (nameError) {
+      setActiveTab('general');
+      return;
+    }
     if (!validation.ok) {
       setActiveTab('general');
       return;
@@ -484,8 +499,13 @@ export function ProjectSettingsModal() {
 
   const inputMatchesSaved = urlInput === (project?.githubProjectUrl ?? '');
   const hasSavedUrl = !!project?.githubProjectUrl;
+  const syncLocked = !!syncError || (syncResult?.failed ?? 0) > 0;
   const canSync =
-    hasSavedUrl && inputMatchesSaved && !syncMutation.isPending && !saveMutation.isPending;
+    hasSavedUrl &&
+    inputMatchesSaved &&
+    !syncLocked &&
+    !syncMutation.isPending &&
+    !saveMutation.isPending;
   const modalBusy = saveMutation.isPending || setupSaveMutation.isPending || contextGenerating;
   const pathExists = project?.pathExists !== false;
   const contextCliUnavailableReason =
@@ -577,9 +597,12 @@ export function ProjectSettingsModal() {
             >
               <ProjectSettingsGeneralTab
                 project={project}
+                nameInput={nameInput}
+                setNameInput={setNameInput}
                 urlInput={urlInput}
                 setUrlInput={setUrlInput}
                 setTouched={setTouched}
+                nameError={nameError}
                 showInlineError={showInlineError}
                 validationOk={validation.ok}
                 validationReason={validation.ok ? null : validation.reason}
@@ -590,6 +613,7 @@ export function ProjectSettingsModal() {
                   relinkMutation.mutate();
                 }}
                 canSync={canSync}
+                syncLocked={syncLocked}
                 syncPending={syncMutation.isPending}
                 syncResult={syncResult}
                 syncError={syncError}
@@ -746,7 +770,7 @@ export function ProjectSettingsModal() {
           onClick={() => {
             void handleSave();
           }}
-          disabled={modalBusy || (touched && !validation.ok)}
+          disabled={modalBusy || !!nameError || (touched && !validation.ok)}
         >
           <LoadingButtonContent loading={saveMutation.isPending || setupSaveMutation.isPending}>
             <span>Save</span>

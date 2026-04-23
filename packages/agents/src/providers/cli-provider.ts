@@ -206,7 +206,20 @@ function buildCodexArgs(req: ProviderRequest): string[] {
   // Default to high reasoning so thinking output is always visible in the terminal.
   const effort = mapReasoningEffortToCodex(req.phaseHints?.reasoningEffort, req.modelHint);
   topLevelFlags.push('-c', `model_reasoning_effort=${effort}`);
-  return [...topLevelFlags, 'exec', req.prompt, '--sandbox', sandbox, '--json'];
+  return [...topLevelFlags, 'exec', buildCodexPrompt(req), '--sandbox', sandbox, '--json'];
+}
+
+function buildCodexPrompt(req: ProviderRequest): string {
+  if (req.phase === 'execute') return req.prompt;
+
+  return [
+    'ShipCode structured-output mode.',
+    'Do not run shell commands, inspect files, or use tools in this phase.',
+    'Use only the prompt content below.',
+    'Return only the requested fenced shipcode-* JSON block. Do not include prose or any other fenced blocks.',
+    '',
+    req.prompt,
+  ].join('\n');
 }
 
 export function createClaudeCliProvider(processManager: ProcessManager): AgentProvider {
@@ -269,12 +282,17 @@ export function createCodexCliProvider(processManager: ProcessManager): AgentPro
     async generate(req: ProviderRequest): Promise<ProviderResponse> {
       const args = buildCodexArgs(req);
       const result = await runCli(processManager, 'codex', args, req.cwd, req.signal, req.threadId);
-      const parser = new StreamParser();
-      parser.feed(result.rawOutput);
-      const usage = parser.extractUsage();
-      const clarification = parser.extractClarificationRequest();
+      const rawOutput = stripCodexProtocol(result.rawOutput, {
+        includeCommandOutput: req.phase === 'execute',
+      });
+      const usageParser = new StreamParser();
+      usageParser.feed(result.rawOutput);
+      const usage = usageParser.extractUsage();
+      const outputParser = new StreamParser();
+      outputParser.feed(rawOutput);
+      const clarification = outputParser.extractClarificationRequest();
       return {
-        rawOutput: stripCodexProtocol(result.rawOutput),
+        rawOutput,
         exitCode: result.exitCode,
         resolvedModel: 'codex',
         ...(usage
@@ -314,7 +332,8 @@ export function createCodexCliProvider(processManager: ProcessManager): AgentPro
  * NDJSON is unreadable, so we extract agent messages and command
  * output into a plain-text summary.
  */
-function stripCodexProtocol(raw: string): string {
+function stripCodexProtocol(raw: string, options: { includeCommandOutput?: boolean } = {}): string {
+  const includeCommandOutput = options.includeCommandOutput ?? true;
   const lines: string[] = [];
   for (const line of raw.split('\n')) {
     const trimmed = line.trim();
@@ -336,7 +355,7 @@ function stripCodexProtocol(raw: string): string {
     }
     if (item.type === 'agent_message' && typeof item.text === 'string') {
       lines.push(item.text);
-    } else if (item.type === 'command_execution') {
+    } else if (item.type === 'command_execution' && includeCommandOutput) {
       const cmd = item.command as string | undefined;
       const output =
         typeof item.aggregated_output === 'string'
@@ -351,9 +370,14 @@ function stripCodexProtocol(raw: string): string {
   return lines.join('\n');
 }
 
-// Exported for unit testing (snapshot regression against pipeline.ts).
+/**
+ * Exported for unit testing (snapshot regression against pipeline.ts).
+ *
+ * @knipignore
+ */
 export const _internals = {
   buildClaudeArgs,
   buildCodexArgs,
+  buildCodexPrompt,
   stripCodexProtocol,
 };

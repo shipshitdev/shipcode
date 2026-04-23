@@ -393,12 +393,19 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     () => normalizedThreadPlanHistory[0] ?? null,
     [normalizedThreadPlanHistory],
   );
+  const failedLatestStructuredVerification =
+    latestVerification?.planId === latestPlan?.id &&
+    latestVerification?.result === 'failed' &&
+    !!latestVerification?.structured;
   const retryAction = useMemo(() => {
     if (!thread) return null;
     const structuredPlan = latestPlan?.structured ?? null;
     if (!structuredPlan) return 'plan' as const;
     if (!thread.worktreePath) return 'review' as const;
     if (latestVerification && latestVerification.planId === latestPlan?.id) {
+      if (latestVerification.result === 'failed' && latestVerification.structured) {
+        return 'execute' as const;
+      }
       if (latestVerification.result === 'failed') return 'verify' as const;
       if (latestVerification.result === 'passed') return 'commit_and_push' as const;
     }
@@ -418,7 +425,9 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     retryAction === 'review'
       ? 'Retry will resume from review using the latest structured plan.'
       : retryAction === 'execute'
-        ? 'Retry will resume from execution using the latest structured plan.'
+        ? failedLatestStructuredVerification
+          ? 'Retry will resume from execution using the current worktree and latest verification feedback.'
+          : 'Retry will resume from execution using the latest structured plan.'
         : retryAction === 'verify'
           ? 'Retry will resume from verification using the current worktree.'
           : retryAction === 'commit_and_push'

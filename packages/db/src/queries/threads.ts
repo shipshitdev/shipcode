@@ -385,9 +385,9 @@ export class ThreadQueries {
     ).map(mapThread);
   }
 
-  /** Find the oldest thread in awaiting_approval whose latest plan is approved (execution-queued). */
-  getAwaitingWithApprovedPlan(): Thread | null {
-    const row = this.db
+  /** Find awaiting_approval threads whose latest plan is approved (execution-queued), oldest first. */
+  listAwaitingWithApprovedPlans(): Thread[] {
+    const rows = this.db
       .prepare(
         `SELECT t.* FROM threads t
          INNER JOIN plans p ON p.thread_id = t.id
@@ -395,10 +395,15 @@ export class ThreadQueries {
            AND p.version = (SELECT MAX(p2.version) FROM plans p2 WHERE p2.thread_id = t.id)
          WHERE t.status = 'awaiting_approval'
          ORDER BY t.updated_at ASC
-         LIMIT 1`,
+        `,
       )
-      .get();
-    return row ? mapThread(asRow<ThreadRow>(row)) : null;
+      .all();
+    return asRows<ThreadRow>(rows).map(mapThread);
+  }
+
+  /** Find the oldest thread in awaiting_approval whose latest plan is approved (execution-queued). */
+  getAwaitingWithApprovedPlan(): Thread | null {
+    return this.listAwaitingWithApprovedPlans()[0] ?? null;
   }
 
   getStuck(thresholdMs: number): Thread[] {

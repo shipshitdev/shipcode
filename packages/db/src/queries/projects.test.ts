@@ -72,6 +72,22 @@ describe('ProjectQueries', () => {
     expect(updated.defaultBranch).toBe('develop');
   });
 
+  it('updateName() persists a manual project name', () => {
+    const p = projects.add('/tmp/a');
+    projects.updateName(p.id, 'Acme Dashboard');
+    expect(projects.getById(p.id)?.name).toBe('Acme Dashboard');
+  });
+
+  it('updatePath() preserves a manually renamed project', () => {
+    const p = projects.add('/tmp/old-name');
+    projects.updateName(p.id, 'Customer Portal');
+    projects.updatePath(p.id, '/tmp/new-folder');
+
+    const updated = projects.getById(p.id);
+    expect(updated?.path).toBe('/tmp/new-folder');
+    expect(updated?.name).toBe('Customer Portal');
+  });
+
   it('new projects default githubProjectUrl to null', () => {
     const p = projects.add('/tmp/gp-default');
     expect(p.githubProjectUrl).toBeNull();

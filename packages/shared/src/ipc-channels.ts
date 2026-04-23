@@ -90,6 +90,7 @@ export interface IpcInvokeChannels {
   'project:pin': { args: { projectId: string; pinned: boolean }; result: undefined };
   'project:archive': { args: { projectId: string }; result: undefined };
   'project:unarchive': { args: { projectId: string }; result: undefined };
+  'project:set-name': { args: { projectId: string; name: string }; result: Project };
   'project:relink-path': { args: { projectId: string; path: string }; result: Project };
   'project:set-default-branch': { args: { projectId: string; branch: string }; result: Project };
   'project:set-github-project-url': {

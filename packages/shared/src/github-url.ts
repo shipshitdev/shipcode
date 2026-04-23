@@ -52,7 +52,7 @@ export function githubIssuesUrl(remote: string | null | undefined): string | nul
 }
 
 /**
- * GitHub Projects URL for the Kanban "board" quick-link.
+ * GitHub Projects URL helper.
  *
  * - If a non-empty `override` is provided (a per-project GitHub Projects v2
  *   URL), return it verbatim (trimmed). This is the user's hand-picked board.

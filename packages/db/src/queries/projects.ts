@@ -368,16 +368,21 @@ export class ProjectQueries {
       .run(branch, id);
   }
 
-  updatePath(id: string, projectPath: string): void {
-    const name = path.basename(projectPath);
+  updateName(id: string, name: string): void {
     this.db
-      .prepare(`UPDATE projects SET path = ?, name = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`)
-      .run(projectPath, name, id);
+      .prepare(`UPDATE projects SET name = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`)
+      .run(name, id);
+  }
+
+  updatePath(id: string, projectPath: string): void {
+    this.db
+      .prepare(`UPDATE projects SET path = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`)
+      .run(projectPath, id);
   }
 
   /**
    * Set the per-project GitHub Projects v2 URL override. Pass `null` to clear
-   * (falls back to the repo Projects tab). Callers must validate the URL
+   * (which hides the Kanban `board` quick-link). Callers must validate the URL
    * with `validateGithubProjectUrl` before reaching this query — the DB layer
    * trusts what it gets.
    */

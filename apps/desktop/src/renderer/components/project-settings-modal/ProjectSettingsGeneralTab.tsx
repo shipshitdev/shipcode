@@ -3,9 +3,12 @@ import { Button, Input, Label, LoadingButtonContent } from '@shipshitdev/ui';
 
 export function ProjectSettingsGeneralTab({
   project,
+  nameInput,
+  setNameInput,
   urlInput,
   setUrlInput,
   setTouched,
+  nameError,
   showInlineError,
   validationOk,
   validationReason,
@@ -13,6 +16,7 @@ export function ProjectSettingsGeneralTab({
   relinkError,
   onRelink,
   canSync,
+  syncLocked,
   syncPending,
   syncResult,
   syncError,
@@ -21,9 +25,12 @@ export function ProjectSettingsGeneralTab({
   onSync,
 }: {
   project: Project;
+  nameInput: string;
+  setNameInput: (value: string) => void;
   urlInput: string;
   setUrlInput: (value: string) => void;
   setTouched: (value: boolean) => void;
+  nameError: string | null;
   showInlineError: boolean;
   validationOk: boolean;
   validationReason: string | null;
@@ -31,6 +38,7 @@ export function ProjectSettingsGeneralTab({
   relinkError: string | null;
   onRelink: () => void;
   canSync: boolean;
+  syncLocked: boolean;
   syncPending: boolean;
   syncResult: { attached: number; alreadyPresent: number; failed: number; errors: string[] } | null;
   syncError: string | null;
@@ -42,8 +50,19 @@ export function ProjectSettingsGeneralTab({
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-3">
         <div className="flex flex-col gap-1">
-          <Label className="text-xs text-secondary">Name</Label>
-          <div className="text-[13px] text-primary">{project.name}</div>
+          <Label htmlFor="project-name" className="text-xs text-secondary">
+            Name
+          </Label>
+          <Input
+            id="project-name"
+            value={nameInput}
+            onChange={(e) => setNameInput(e.target.value)}
+            placeholder={project.name}
+            className={nameError ? 'border-danger' : undefined}
+            autoComplete="off"
+            spellCheck={false}
+          />
+          {nameError ? <p className="text-[11px] text-danger">{nameError}</p> : null}
         </div>
 
         <div className="flex flex-col gap-1">
@@ -102,8 +121,8 @@ export function ProjectSettingsGeneralTab({
           spellCheck={false}
         />
         <p className="text-[11px] text-muted">
-          Leave blank to open the repo Projects tab. Paste a full GitHub Projects v2 URL to link the
-          Kanban <span className="font-mono">board</span> button to the real board.
+          Leave blank to hide the Kanban <span className="font-mono">board</span> button. Paste a
+          full GitHub Projects v2 URL to link it to the real board.
         </p>
         {showInlineError && !validationOk ? (
           <p className="text-[11px] text-danger">{validationReason}</p>
@@ -124,7 +143,9 @@ export function ProjectSettingsGeneralTab({
                   ? 'Save a board URL first'
                   : !inputMatchesSaved
                     ? 'Save your changes before syncing'
-                    : 'Add every cached issue to the board'
+                    : syncLocked
+                      ? 'Board sync is disabled after a failed attach. Fix the repo or board config, then reopen Project Settings to retry.'
+                      : 'Add every cached issue to the board'
               }
             >
               <LoadingButtonContent loading={syncPending}>

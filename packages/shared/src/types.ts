@@ -85,8 +85,7 @@ export interface Project {
    * Optional override for the Kanban `board` quick-link. GitHub Projects v2
    * live under a user/org (`/users/<name>/projects/<n>` or `/orgs/<name>/projects/<n>`)
    * and can span multiple repos, so we can't derive this from `gitRemote` alone.
-   * When null, the Kanban header falls back to `${repoBase}/projects` (the
-   * repo's Projects tab that lists linked boards).
+   * When null, the Kanban header hides the `board` quick-link.
    */
   githubProjectUrl: string | null;
   plannerModelOverride: AgentType | null;
@@ -440,8 +439,8 @@ export interface AppSettings {
   testingContext: string | null;
   /** Max concurrent pipeline runs. New starts queue when limit is reached. */
   maxConcurrentPipelines: number;
-  /** Max concurrent pipelines in execution phases (executing/testing/verifying/shipping).
-   *  Approved pipelines wait in awaiting_approval until an execution slot opens. */
+  /** Max concurrent pipelines per project in execution phases (executing/testing/verifying/shipping).
+   *  Approved pipelines wait in awaiting_approval until a project execution slot opens. */
   maxConcurrentExecutions: number;
   /** Default number of terminal panes when opening the Instant view. */
   instantDefaultPanes: 1 | 2 | 4;

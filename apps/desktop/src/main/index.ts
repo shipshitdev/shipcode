@@ -59,7 +59,7 @@ import {
   VerificationQueries,
 } from '@shipcode/db';
 import { createPipeline } from '@shipcode/pipeline';
-import { clampError, EXECUTION_PHASES, HEARTBEAT_TIMEOUT_MS } from '@shipcode/shared';
+import { HEARTBEAT_TIMEOUT_MS } from '@shipcode/shared';
 import { ChatNotificationService } from './chat-notification-service';
 import { registerIpcHandlers } from './ipc';
 import { transitionThreadPhase } from './ipc/helpers';
@@ -296,37 +296,9 @@ function createWindow() {
   };
 
   // Execution queue promotion: start the next approved-but-waiting thread
-  // when an execution slot opens (pipeline reaches completed/failed/idle).
+  // when a project execution slot opens (pipeline reaches completed/failed/idle).
   onExecutionSlotFreed = () => {
-    try {
-      const settings = queries.settings.get();
-      const executingCount = activePipeline.listActiveInPhases(EXECUTION_PHASES).length;
-      if (executingCount >= settings.maxConcurrentExecutions) return;
-
-      const thread = queries.threads.getAwaitingWithApprovedPlan();
-      if (!thread) return;
-
-      const latestPlan = queries.plans.getLatest(thread.id);
-      if (!latestPlan?.structured) return;
-
-      const project = queries.projects.getById(thread.projectId);
-      if (!project) return;
-
-      activePipeline.rehydrateContext(thread.id, project.path);
-
-      log.info(`[execution-queue] promoting thread ${thread.id} "${thread.title}"`);
-
-      activePipeline.startExecution(thread.id, latestPlan.structured).catch((err) => {
-        transitionThreadPhase(requireMainWindow(), queries, emitter, {
-          threadId: thread.id,
-          phase: 'failed',
-          errorMessage: clampError(err),
-        });
-        log.error('[execution-queue] promotion failed:', err);
-      });
-    } catch (err) {
-      log.error('[execution-queue] drain error:', err);
-    }
+    pipelineScheduler.onExecutionSlotFreed();
   };
 
   // Startup: promote any queued items from a previous session.
@@ -336,9 +308,7 @@ function createWindow() {
       onPipelineTerminal?.();
     }
     // Also drain any threads that were approved pre-restart and waiting for execution.
-    for (let i = 0; i < settings.maxConcurrentExecutions; i++) {
-      onExecutionSlotFreed?.();
-    }
+    pipelineScheduler.drainExecutionQueue();
   }, 0);
 
   // Apply persisted log level (default is 'debug' from logger.service.ts init)

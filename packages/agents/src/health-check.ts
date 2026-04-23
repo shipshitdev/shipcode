@@ -1418,6 +1418,9 @@ export async function checkIntegrationStatus(
   }
 }
 
+/**
+ * @knipignore
+ */
 export function __resetHealthCheckCachesForTests(): void {
   systemHealthCache = null;
   systemHealthInFlight = null;

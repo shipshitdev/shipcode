@@ -21,6 +21,8 @@ import {
 } from '@shipcode/shared';
 import type { PipelineHelperEnv } from './shared';
 
+const NO_VALID_PLAN_REASON = 'Plan generation failed — no valid shipcode-plan block was produced.';
+
 /**
  * Scan a PRD (issue body / prompt) for required section headings.
  * Returns the list of section names that are MISSING.
@@ -370,23 +372,7 @@ export function createPlanningPhaseHandlers({
           enterClarifying(threadId, context, clarificationRequest);
         } else {
           deps.plans.create(threadId, result.raw, null, nextVersion);
-          const detectedError = parser.detectError();
-          const rawSnippet =
-            detectedError?.match ??
-            parser
-              .getRawOutput()
-              .trim()
-              .split('\n')
-              .filter(Boolean)
-              .slice(-3)
-              .join(' ')
-              .slice(0, 300);
-          const reason = rawSnippet?.trimStart().startsWith('{') ? '' : rawSnippet;
-          emitPhase(
-            threadId,
-            'failed',
-            reason || 'Plan generation failed — no structured plan was produced.',
-          );
+          emitPhase(threadId, 'failed', NO_VALID_PLAN_REASON);
           activePipelines.delete(threadId);
         }
       } catch (error) {

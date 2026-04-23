@@ -214,6 +214,7 @@ describe('project settings leaf tabs', () => {
   });
 
   it('renders general project state and forwards input and button actions', () => {
+    const setNameInput = vi.fn();
     const setUrlInput = vi.fn();
     const setTouched = vi.fn();
     const onRelink = vi.fn();
@@ -222,9 +223,12 @@ describe('project settings leaf tabs', () => {
     render(
       <ProjectSettingsGeneralTab
         project={makeProject()}
+        nameInput="ShipCode"
+        setNameInput={setNameInput}
         urlInput="https://github.com/orgs/shipshitdev/projects/1"
         setUrlInput={setUrlInput}
         setTouched={setTouched}
+        nameError={null}
         showInlineError={true}
         validationOk={false}
         validationReason="Not a valid project URL"
@@ -232,14 +236,15 @@ describe('project settings leaf tabs', () => {
         relinkError="Folder lookup failed"
         onRelink={onRelink}
         canSync={true}
+        syncLocked={false}
         syncPending={false}
         syncResult={{
           attached: 2,
           alreadyPresent: 1,
-          failed: 1,
-          errors: ['Issue #19 failed'],
+          failed: 0,
+          errors: [],
         }}
-        syncError="Sync partially failed"
+        syncError={null}
         hasSavedUrl={true}
         inputMatchesSaved={true}
         onSync={onSync}
@@ -249,10 +254,11 @@ describe('project settings leaf tabs', () => {
     expect(screen.getByText(/This path is missing\./)).toBeInTheDocument();
     expect(screen.getByText('Folder lookup failed')).toBeInTheDocument();
     expect(screen.getByText('Not a valid project URL')).toBeInTheDocument();
-    expect(screen.getByText(/Attached 2, already present 1, failed 1/)).toBeInTheDocument();
-    expect(screen.getByText(/Issue #19 failed/)).toBeInTheDocument();
-    expect(screen.getByText('Sync partially failed')).toBeInTheDocument();
+    expect(screen.getByText(/Attached 2, already present 1/)).toBeInTheDocument();
 
+    fireEvent.change(screen.getByLabelText('Name'), {
+      target: { value: 'Gateway Remastered' },
+    });
     fireEvent.change(screen.getByLabelText('GitHub Projects board URL'), {
       target: { value: 'https://github.com/orgs/shipshitdev/projects/2' },
     });
@@ -261,10 +267,53 @@ describe('project settings leaf tabs', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Change folder...' }));
     fireEvent.click(screen.getByRole('button', { name: 'Sync existing issues to board' }));
 
+    expect(setNameInput).toHaveBeenCalledWith('Gateway Remastered');
     expect(setUrlInput).toHaveBeenCalledWith('https://github.com/orgs/shipshitdev/projects/2');
     expect(setTouched).toHaveBeenCalledWith(true);
     expect(onRelink).toHaveBeenCalledTimes(1);
     expect(onSync).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables board sync after a failed attach result', () => {
+    render(
+      <ProjectSettingsGeneralTab
+        project={makeProject()}
+        nameInput="ShipCode"
+        setNameInput={vi.fn()}
+        urlInput="https://github.com/orgs/shipshitdev/projects/1"
+        setUrlInput={vi.fn()}
+        setTouched={vi.fn()}
+        nameError={null}
+        showInlineError={false}
+        validationOk={true}
+        validationReason={null}
+        relinkPending={false}
+        relinkError={null}
+        onRelink={vi.fn()}
+        canSync={false}
+        syncLocked={true}
+        syncPending={false}
+        syncResult={{
+          attached: 0,
+          alreadyPresent: 0,
+          failed: 1,
+          errors: ['#20: resource not found'],
+        }}
+        syncError={null}
+        hasSavedUrl={true}
+        inputMatchesSaved={true}
+        onSync={vi.fn()}
+      />,
+    );
+
+    const syncButton = screen.getByRole('button', { name: 'Sync existing issues to board' });
+    expect(syncButton).toBeDisabled();
+    expect(syncButton).toHaveAttribute(
+      'title',
+      'Board sync is disabled after a failed attach. Fix the repo or board config, then reopen Project Settings to retry.',
+    );
+    expect(screen.getByText(/Attached 0, already present 0, failed 1/)).toBeInTheDocument();
+    expect(screen.getByText(/#20: resource not found/)).toBeInTheDocument();
   });
 
   it('renders detected setup profiles as apply buttons', () => {
@@ -394,8 +443,8 @@ describe('project settings leaf tabs', () => {
     );
 
     expect(screen.getByText('Runtime Capacity')).toBeInTheDocument();
-    expect(screen.getByText(/App Settings > Pipeline/)).toBeInTheDocument();
-    expect(screen.getByText(/1 execution slot/i)).toBeInTheDocument();
+    expect(screen.getByText(/Execution slots are per project/)).toBeInTheDocument();
+    expect(screen.getByText(/3 execution slots\/project/i)).toBeInTheDocument();
     expect(screen.getByText('Human Approval')).toBeInTheDocument();
     expect(screen.getByText('PRD Quality Gate')).toBeInTheDocument();
     expect(screen.getByText('Reset issue overrides on 2 issues.')).toBeInTheDocument();

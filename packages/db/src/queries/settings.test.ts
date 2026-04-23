@@ -28,7 +28,7 @@ describe('SettingsQueries', () => {
     expect(s.prdRewriteCli).toBe('claude');
     expect(s.prdRewriteClaudeModel).toBe('claude-sonnet-4-6');
     expect(s.prdRewriteCodexModel).toBe('gpt-5.4-mini');
-    expect(s.prdRewriteReasoningEffort).toBe('low');
+    expect(s.prdRewriteReasoningEffort).toBe('none');
     expect(s.githubPollingEnabled).toBe(false);
     expect(s.githubPollingIntervalMs).toBe(30000);
     expect(s.githubBotUsername).toBe('');
@@ -197,6 +197,24 @@ describe('SettingsQueries', () => {
     it('rejects values outside 1–10 in set()', () => {
       expect(() => settings.set({ maxConcurrentPipelines: 0 })).toThrow('maxConcurrentPipelines');
       expect(() => settings.set({ maxConcurrentPipelines: 11 })).toThrow('maxConcurrentPipelines');
+    });
+  });
+
+  describe('maxConcurrentExecutions', () => {
+    it('returns the default of 3 when not set', () => {
+      expect(settings.get().maxConcurrentExecutions).toBe(3);
+    });
+
+    it('round-trips a valid value', () => {
+      settings.set({ maxConcurrentExecutions: 5 });
+      expect(settings.get().maxConcurrentExecutions).toBe(5);
+    });
+
+    it('rejects values outside 1–10 in set()', () => {
+      expect(() => settings.set({ maxConcurrentExecutions: 0 })).toThrow('maxConcurrentExecutions');
+      expect(() => settings.set({ maxConcurrentExecutions: 11 })).toThrow(
+        'maxConcurrentExecutions',
+      );
     });
   });
 

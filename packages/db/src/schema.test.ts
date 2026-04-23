@@ -12,6 +12,8 @@ import {
   migrateV29,
   migrateV30,
   migrateV31,
+  migrateV33,
+  migrateV34,
 } from './schema';
 import { asRow } from './utils';
 
@@ -427,5 +429,53 @@ describe('migrateV31', () => {
   it('is idempotent', () => {
     migrateV31(db);
     expect(() => migrateV31(db)).not.toThrow();
+  });
+});
+
+describe('migrateV34', () => {
+  let db: DatabaseSync;
+
+  beforeEach(() => {
+    db = new DatabaseSync(':memory:');
+    migrate(db);
+    migrateV2(db);
+    migrateV3(db);
+    migrateV29(db);
+    migrateV30(db);
+    migrateV31(db);
+    migrateV33(db);
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('upgrades the legacy default maxConcurrentExecutions from 1 to 3', () => {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('maxConcurrentExecutions', '1')").run();
+
+    migrateV34(db);
+
+    const row = db
+      .prepare('SELECT value FROM settings WHERE key = ?')
+      .get('maxConcurrentExecutions') as { value: string } | undefined;
+
+    expect(row?.value).toBe('3');
+  });
+
+  it('preserves explicit maxConcurrentExecutions values other than 1', () => {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('maxConcurrentExecutions', '5')").run();
+
+    migrateV34(db);
+
+    const row = db
+      .prepare('SELECT value FROM settings WHERE key = ?')
+      .get('maxConcurrentExecutions') as { value: string } | undefined;
+
+    expect(row?.value).toBe('5');
+  });
+
+  it('is idempotent', () => {
+    migrateV34(db);
+    expect(() => migrateV34(db)).not.toThrow();
   });
 });

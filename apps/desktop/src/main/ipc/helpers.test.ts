@@ -14,18 +14,22 @@ describe('transitionThreadPhase', () => {
 
   const threadQueries = {
     updateStatus: vi.fn(),
+    getById: vi.fn(),
   };
   const githubIssueQueries = {
     getByThreadId: vi.fn(),
+    getByNumber: vi.fn(),
     updatePipelineStatus: vi.fn(),
     list: vi.fn(),
   };
   const queries = {
     threads: {
       updateStatus: threadQueries.updateStatus,
+      getById: threadQueries.getById,
     },
     githubIssues: {
       getByThreadId: githubIssueQueries.getByThreadId,
+      getByNumber: githubIssueQueries.getByNumber,
       updatePipelineStatus: githubIssueQueries.updatePipelineStatus,
       list: githubIssueQueries.list,
     },
@@ -40,7 +44,16 @@ describe('transitionThreadPhase', () => {
   });
 
   it('updates thread and linked issue state before emitting the canonical phase event', () => {
+    threadQueries.getById.mockReturnValue({
+      projectId: 'project-1',
+      githubIssueNumber: 42,
+      status: 'planning',
+    });
     githubIssueQueries.getByThreadId.mockReturnValue({
+      id: 'issue-1',
+      projectId: 'project-1',
+    });
+    githubIssueQueries.getByNumber.mockReturnValue({
       id: 'issue-1',
       projectId: 'project-1',
     });
@@ -51,11 +64,7 @@ describe('transitionThreadPhase', () => {
       phase: 'awaiting_approval',
     });
 
-    expect(threadQueries.updateStatus).toHaveBeenCalledWith(
-      'thread-1',
-      'awaiting_approval',
-      undefined,
-    );
+    expect(threadQueries.updateStatus).toHaveBeenCalledWith('thread-1', 'awaiting_approval');
     expect(githubIssueQueries.updatePipelineStatus).toHaveBeenCalledWith(
       'issue-1',
       'awaiting_approval',
@@ -72,6 +81,11 @@ describe('transitionThreadPhase', () => {
   });
 
   it('records the error message for failed transitions even without a linked issue', () => {
+    threadQueries.getById.mockReturnValue({
+      projectId: 'project-1',
+      githubIssueNumber: null,
+      status: 'executing',
+    });
     githubIssueQueries.getByThreadId.mockReturnValue(null);
 
     transitionThreadPhase(mainWindow as never, queries, emitter, {

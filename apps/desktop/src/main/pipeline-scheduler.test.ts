@@ -6,6 +6,15 @@ vi.mock('electron', () => ({
   BrowserWindow: class {},
 }));
 
+vi.mock('./logger.service', () => ({
+  default: {
+    debug: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  },
+}));
+
 function makeIssue(overrides: Record<string, unknown> = {}) {
   return {
     id: 'issue-1',
@@ -80,6 +89,7 @@ function makeProject(overrides: Record<string, unknown> = {}) {
 function makeBaseSettings(overrides: Record<string, unknown> = {}) {
   return {
     maxConcurrentPipelines: 3,
+    maxConcurrentExecutions: 3,
     plannerModel: 'claude',
     reviewerModel: 'codex',
     verifierModel: 'claude',
@@ -110,6 +120,8 @@ describe('PipelineScheduler', () => {
   let pipeline: {
     listActive: ReturnType<typeof vi.fn>;
     listActiveInPhases: ReturnType<typeof vi.fn>;
+    rehydrateContext: ReturnType<typeof vi.fn>;
+    startExecution: ReturnType<typeof vi.fn>;
     startFromGitHubIssue: ReturnType<typeof vi.fn>;
   };
   let mainWindow: ReturnType<typeof makeMainWindow>;
@@ -118,10 +130,11 @@ describe('PipelineScheduler', () => {
   function makeQueries(settingsOverrides: Record<string, unknown> = {}) {
     return {
       projects: {
-        getById: vi.fn(() => makeProject() as ReturnType<typeof makeProject> | null),
+        getById: vi.fn((_id?: string) => makeProject() as ReturnType<typeof makeProject> | null),
       },
       threads: {
         getById: vi.fn(() => null),
+        listAwaitingWithApprovedPlans: vi.fn(() => [] as unknown[]),
         getByProjectAndGithubIssue: vi.fn(() => null),
         create: vi.fn(() => ({
           id: 'thread-new',
@@ -148,6 +161,7 @@ describe('PipelineScheduler', () => {
         get: vi.fn(() => makeBaseSettings(settingsOverrides)),
       },
       plans: {
+        getLatest: vi.fn(() => null as unknown),
         supersedeAll: vi.fn(),
         supersedeAllForIssue: vi.fn(),
       },
@@ -160,6 +174,8 @@ describe('PipelineScheduler', () => {
     pipeline = {
       listActive: vi.fn(() => []),
       listActiveInPhases: vi.fn(() => []),
+      rehydrateContext: vi.fn(),
+      startExecution: vi.fn(async () => undefined),
       startFromGitHubIssue: vi.fn(async () => undefined),
     };
     mainWindow = makeMainWindow();
@@ -286,6 +302,143 @@ describe('PipelineScheduler', () => {
       scheduler.onSlotFreed();
 
       expect(queries.githubIssues.linkThread).toHaveBeenCalledWith('issue-queued', 'thread-new');
+    });
+  });
+
+  describe('onExecutionSlotFreed', () => {
+    const makeThread = (overrides: Record<string, unknown> = {}) => ({
+      id: 'thread-1',
+      projectId: 'project-1',
+      title: 'Approved waiter',
+      prompt: 'prompt',
+      status: 'awaiting_approval',
+      worktreePath: null,
+      worktreeBranch: null,
+      githubIssueNumber: 42,
+      githubRepo: 'acme/repo',
+      autonomous: true,
+      reviewRound: 0,
+      clarificationRound: 0,
+      clarificationRequest: null,
+      clarificationAnswers: [],
+      verificationRetries: 0,
+      baseBranch: 'main',
+      forkPointSha: '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      ...overrides,
+    });
+
+    const approvedPlan = {
+      id: 'plan-1',
+      threadId: 'thread-1',
+      version: 1,
+      rawOutput: '',
+      structured: { steps: [] },
+      status: 'approved',
+      createdAt: new Date().toISOString(),
+    };
+
+    it('promotes an approved waiter when the project has execution capacity', () => {
+      queries.threads.listAwaitingWithApprovedPlans.mockReturnValue([makeThread()]);
+      queries.plans.getLatest.mockReturnValue(approvedPlan);
+
+      const promoted = scheduler.onExecutionSlotFreed();
+
+      expect(promoted).toBe(true);
+      expect(pipeline.rehydrateContext).toHaveBeenCalledWith('thread-1', '/tmp/project');
+      expect(pipeline.startExecution).toHaveBeenCalledWith('thread-1', approvedPlan.structured);
+    });
+
+    it('does not promote when that project is already at its execution cap', () => {
+      queries.settings.get.mockReturnValue(makeBaseSettings({ maxConcurrentExecutions: 3 }));
+      queries.threads.listAwaitingWithApprovedPlans.mockReturnValue([makeThread()]);
+      queries.plans.getLatest.mockReturnValue(approvedPlan);
+      pipeline.listActiveInPhases.mockReturnValue([
+        {
+          threadId: 'a',
+          projectId: 'project-1',
+          projectPath: '/tmp/project',
+          phase: 'executing',
+          startedAt: Date.now(),
+          activeProcessId: null,
+        },
+        {
+          threadId: 'b',
+          projectId: 'project-1',
+          projectPath: '/tmp/project',
+          phase: 'testing',
+          startedAt: Date.now(),
+          activeProcessId: null,
+        },
+        {
+          threadId: 'c',
+          projectId: 'project-1',
+          projectPath: '/tmp/project',
+          phase: 'verifying',
+          startedAt: Date.now(),
+          activeProcessId: null,
+        },
+      ]);
+
+      const promoted = scheduler.onExecutionSlotFreed();
+
+      expect(promoted).toBe(false);
+      expect(pipeline.startExecution).not.toHaveBeenCalled();
+    });
+
+    it('skips a full project and promotes the next project with capacity', () => {
+      const fullProjectThread = makeThread({ id: 'thread-full', projectId: 'project-1' });
+      const openProjectThread = makeThread({
+        id: 'thread-open',
+        projectId: 'project-2',
+        title: 'Open project waiter',
+      });
+      queries.threads.listAwaitingWithApprovedPlans.mockReturnValue([
+        fullProjectThread,
+        openProjectThread,
+      ]);
+      queries.projects.getById.mockImplementation((id?: string) =>
+        id === 'project-2'
+          ? makeProject({ id: 'project-2', path: '/tmp/project-2' })
+          : makeProject(),
+      );
+      queries.plans.getLatest.mockReturnValue({
+        ...approvedPlan,
+        threadId: 'thread-open',
+      });
+      pipeline.listActiveInPhases.mockReturnValue([
+        {
+          threadId: 'a',
+          projectId: 'project-1',
+          projectPath: '/tmp/project',
+          phase: 'executing',
+          startedAt: Date.now(),
+          activeProcessId: null,
+        },
+        {
+          threadId: 'b',
+          projectId: 'project-1',
+          projectPath: '/tmp/project',
+          phase: 'testing',
+          startedAt: Date.now(),
+          activeProcessId: null,
+        },
+        {
+          threadId: 'c',
+          projectId: 'project-1',
+          projectPath: '/tmp/project',
+          phase: 'verifying',
+          startedAt: Date.now(),
+          activeProcessId: null,
+        },
+      ]);
+
+      const promoted = scheduler.onExecutionSlotFreed();
+
+      expect(promoted).toBe(true);
+      expect(pipeline.rehydrateContext).toHaveBeenCalledWith('thread-open', '/tmp/project-2');
+      expect(pipeline.startExecution).toHaveBeenCalledWith('thread-open', approvedPlan.structured);
     });
   });
 });

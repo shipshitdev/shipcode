@@ -139,7 +139,10 @@ describe('registerPipelineHandlers', () => {
 
   let pipeline: {
     listActive: ReturnType<typeof vi.fn>;
+    startReview: ReturnType<typeof vi.fn>;
     startExecution: ReturnType<typeof vi.fn>;
+    startVerification: ReturnType<typeof vi.fn>;
+    startCommitAndPush: ReturnType<typeof vi.fn>;
     rehydrateContext: ReturnType<typeof vi.fn>;
     startPlanGeneration: ReturnType<typeof vi.fn>;
     getContext: ReturnType<typeof vi.fn>;
@@ -247,7 +250,10 @@ describe('registerPipelineHandlers', () => {
 
     pipeline = {
       listActive: vi.fn(() => []),
+      startReview: vi.fn(async () => undefined),
       startExecution: vi.fn(async () => undefined),
+      startVerification: vi.fn(async () => undefined),
+      startCommitAndPush: vi.fn(async () => undefined),
       rehydrateContext: vi.fn(),
       startPlanGeneration: vi.fn(async () => undefined),
       getContext: vi.fn(() => ({})),
@@ -483,6 +489,62 @@ describe('registerPipelineHandlers', () => {
         approvedAwaitingExecution?: boolean;
       }>;
       expect(result[0].approvedAwaitingExecution).toBe(true);
+    });
+  });
+
+  describe('pipeline:retry', () => {
+    it('resumes from execution when the latest verification failed with structured findings', async () => {
+      queries.threads.getById.mockReturnValue(makeThread({ status: 'failed' }));
+      queries.verifications.getLatest.mockReturnValue({
+        id: 'verification-1',
+        threadId: 'thread-1',
+        planId: 'plan-1',
+        rawOutput: 'raw',
+        structured: {
+          threadId: 'thread-1',
+          planId: 'plan-1',
+          result: 'failed',
+          summary: 'Needs changes',
+          criteriaResults: [],
+          issues: [],
+        },
+        result: 'failed',
+        retryCount: 0,
+        createdAt: new Date().toISOString(),
+      });
+
+      const handler = handlers.get('pipeline:retry');
+      if (!handler) throw new Error('pipeline:retry handler not registered');
+
+      await handler(undefined, { threadId: 'thread-1' });
+
+      expect(pipeline.startExecution).toHaveBeenCalledWith(
+        'thread-1',
+        expect.objectContaining({ objective: 'Test plan' }),
+      );
+      expect(pipeline.startVerification).not.toHaveBeenCalled();
+    });
+
+    it('re-runs verification when the latest verification failed without structured findings', async () => {
+      queries.threads.getById.mockReturnValue(makeThread({ status: 'failed' }));
+      queries.verifications.getLatest.mockReturnValue({
+        id: 'verification-1',
+        threadId: 'thread-1',
+        planId: 'plan-1',
+        rawOutput: 'raw',
+        structured: null,
+        result: 'failed',
+        retryCount: 0,
+        createdAt: new Date().toISOString(),
+      });
+
+      const handler = handlers.get('pipeline:retry');
+      if (!handler) throw new Error('pipeline:retry handler not registered');
+
+      await handler(undefined, { threadId: 'thread-1' });
+
+      expect(pipeline.startVerification).toHaveBeenCalledWith('thread-1');
+      expect(pipeline.startExecution).not.toHaveBeenCalled();
     });
   });
 });

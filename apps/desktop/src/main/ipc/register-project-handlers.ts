@@ -404,6 +404,24 @@ export function registerProjectHandlers({
     queries.projects.unarchive(projectId);
   });
 
+  ipcMain.handle(
+    'project:set-name',
+    async (_event, { projectId, name }: { projectId: string; name: string }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+
+      const trimmed = name.trim();
+      if (!trimmed) {
+        throw new Error('Project name is required');
+      }
+
+      queries.projects.updateName(projectId, trimmed);
+      const updated = enrichProjectPath(queries.projects.getById(projectId));
+      if (!updated) throw new Error(`Project ${projectId} not found after name update`);
+      return updated;
+    },
+  );
+
   ipcMain.handle('thread:list', (_event, { projectId }: { projectId: string }) => {
     return queries.threads.list(projectId);
   });

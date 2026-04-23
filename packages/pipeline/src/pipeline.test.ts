@@ -18,6 +18,7 @@ import {
   type PlanRecord,
   type Project,
   type Thread,
+  type VerificationRecord,
 } from '@shipcode/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPipeline } from './pipeline';
@@ -244,6 +245,20 @@ function makePlanRecord(overrides: Partial<PlanRecord> = {}): PlanRecord {
     rawOutput: '',
     structured: JSON.parse(PLAN_JSON),
     status: 'pending_review',
+    createdAt: '',
+    ...overrides,
+  };
+}
+
+function makeVerificationRecord(overrides: Partial<VerificationRecord> = {}): VerificationRecord {
+  return {
+    id: 'verification-1',
+    threadId: 't1',
+    planId: 'plan-1',
+    rawOutput: verificationBlock(VERIFICATION_FAILED_JSON),
+    structured: JSON.parse(VERIFICATION_FAILED_JSON),
+    result: 'failed',
+    retryCount: 0,
     createdAt: '',
     ...overrides,
   };
@@ -602,7 +617,26 @@ describe('createPipeline', () => {
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
         'planning',
-        'some random output without a plan block',
+        'Plan generation failed — no valid shipcode-plan block was produced.',
+      );
+    });
+
+    it('exit 0 + no valid plan does not classify incidental ENOENT as the failure', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+
+      await mock.trigger(
+        'output',
+        'proc-1',
+        'source excerpt: throw new Error("ENOENT") without a plan block',
+      );
+      await mock.trigger('exit', 'proc-1', 0);
+      await flush();
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        'planning',
+        'Plan generation failed — no valid shipcode-plan block was produced.',
       );
     });
 
@@ -1103,6 +1137,58 @@ describe('createPipeline', () => {
         }),
       );
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'completed');
+    });
+
+    it('feeds structured verification failures back into the next execution prompt', async () => {
+      const projectDir = makeTempProject();
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', {
+        projectPath: projectDir,
+        worktreePath: projectDir,
+        baseBranch: 'main',
+      });
+      vi.mocked(mock.deps.verifications.getLatest).mockReturnValue(makeVerificationRecord());
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+
+      const executeCall = vi.mocked(mock.deps.processManager.spawn).mock.calls[0];
+      expect(executeCall[2][1]).toContain('<previous_verification_failure>');
+      expect(executeCall[2][1]).toContain('Summary: Not OK');
+      expect(executeCall[2][1]).toContain('[blocker] broke');
+    });
+
+    it('keeps successful test output in the verification prompt after autonomous execution', async () => {
+      const projectDir = makeTempProject();
+      vi.mocked(mock.deps.settings.get).mockReturnValue({
+        ...DEFAULT_SETTINGS,
+        testCommand: `printf 'typecheck ok\\ntests ok\\n'`,
+      });
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git diff')) return 'some diff';
+        if (cmd.startsWith('git status')) return '';
+        if (cmd.startsWith('git rev-parse')) return 'headsha123';
+        return '';
+      });
+
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', {
+        projectPath: projectDir,
+        worktreePath: projectDir,
+        autonomous: true,
+        baseBranch: 'main',
+        forkPointSha: 'abc123',
+      });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+      await mock.trigger('exit', 'proc-1', 0);
+      await flush();
+      await flush();
+
+      expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(2);
+      const verifyCall = vi.mocked(mock.deps.processManager.spawn).mock.calls[1];
+      expect(verifyCall[2][1]).toContain('<test_results>');
+      expect(verifyCall[2][1]).toContain('typecheck ok');
+      expect(verifyCall[2][1]).toContain('tests ok');
     });
   });
 
@@ -1909,20 +1995,17 @@ describe('createPipeline', () => {
   // ─── execution concurrency gate ───────────────────────────────────
 
   describe('execution concurrency gate', () => {
-    it('blocks execution when maxConcurrentExecutions is reached', async () => {
-      // Default maxConcurrentExecutions is 1 via DEFAULT_SETTINGS
-
-      // One pipeline already executing
+    it('blocks execution when the project maxConcurrentExecutions is reached', async () => {
       mock.deps.threads.getById = vi.fn((id: string) => ({
         id,
         projectId: 'project-1',
-        status: id === 't-existing' ? 'executing' : 'awaiting_approval',
+        status: id === 't-new' ? 'awaiting_approval' : 'executing',
       })) as never;
 
       const pipeline = createPipeline(mock.deps);
-      // Seed the existing executing pipeline into active map
-      pipeline.initializeContext('t-existing', { projectPath: '/proj' });
-      // Seed the candidate pipeline
+      pipeline.initializeContext('t-existing-1', { projectPath: '/proj' });
+      pipeline.initializeContext('t-existing-2', { projectPath: '/proj' });
+      pipeline.initializeContext('t-existing-3', { projectPath: '/proj' });
       pipeline.initializeContext('t-new', { projectPath: '/proj' });
 
       const plan = { steps: [] } as never;
@@ -1938,13 +2021,7 @@ describe('createPipeline', () => {
       });
     });
 
-    it('allows execution when under maxConcurrentExecutions limit', async () => {
-      // Raise limit to 2 so one executing pipeline doesn't block
-      mock.deps.settings.get = vi.fn(() => ({
-        ...DEFAULT_SETTINGS,
-        maxConcurrentExecutions: 2,
-      })) as never;
-
+    it('allows execution when under the project maxConcurrentExecutions limit', async () => {
       mock.deps.threads.getById = vi.fn((id: string) => ({
         id,
         projectId: 'project-1',
@@ -1959,6 +2036,31 @@ describe('createPipeline', () => {
       await pipeline.startExecution('t-new', plan);
 
       // Should have emitted executing (gate passed), not awaiting_approval
+      const phaseEvents = mock.emittedEvents.filter(
+        (e: PipelineEvent) => e.type === 'pipeline:phase' && e.threadId === 't-new',
+      );
+      expect(phaseEvents[phaseEvents.length - 1]).toMatchObject({
+        type: 'pipeline:phase',
+        phase: 'executing',
+      });
+    });
+
+    it('does not let executions from another project consume this project slot', async () => {
+      mock.deps.threads.getById = vi.fn((id: string) => ({
+        id,
+        projectId: id.startsWith('other-') ? 'project-2' : 'project-1',
+        status: id === 't-new' ? 'awaiting_approval' : 'executing',
+      })) as never;
+
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('other-1', { projectPath: '/other' });
+      pipeline.initializeContext('other-2', { projectPath: '/other' });
+      pipeline.initializeContext('other-3', { projectPath: '/other' });
+      pipeline.initializeContext('t-new', { projectPath: '/proj' });
+
+      const plan = { steps: [] } as never;
+      await pipeline.startExecution('t-new', plan);
+
       const phaseEvents = mock.emittedEvents.filter(
         (e: PipelineEvent) => e.type === 'pipeline:phase' && e.threadId === 't-new',
       );

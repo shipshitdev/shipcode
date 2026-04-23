@@ -37,17 +37,83 @@ export function createExecutionPhaseHandlers({
     runShellCommand,
   } = runtime;
 
+  function isSameProject(
+    summary: ReturnType<typeof contextHelpers.listActive>[number],
+    context: NonNullable<ReturnType<typeof activePipelines.get>>,
+  ) {
+    if (context.projectId) return summary.projectId === context.projectId;
+    return summary.projectPath === context.projectPath;
+  }
+
+  function formatVerificationRetryFeedback(threadId: string, planRecordId: string | null): string {
+    const latestVerification = deps.verifications.getLatest(threadId);
+    const structured = latestVerification?.structured;
+    if (
+      !planRecordId ||
+      !latestVerification ||
+      latestVerification.planId !== planRecordId ||
+      latestVerification.result !== 'failed' ||
+      !structured
+    ) {
+      return '';
+    }
+
+    const compact = (value: string) => value.replace(/\s+/g, ' ').trim();
+    const failedCriteria = structured.criteriaResults
+      .filter((criterion) => !criterion.passed)
+      .slice(0, 5)
+      .map((criterion) => `- ${compact(criterion.criterion)}: ${compact(criterion.evidence)}`)
+      .join('\n');
+    const issues = structured.issues
+      .slice(0, 10)
+      .map((issue) =>
+        [
+          '-',
+          `[${issue.severity}]`,
+          issue.filePath ? `${issue.filePath}:` : null,
+          compact(issue.description),
+        ]
+          .filter(Boolean)
+          .join(' '),
+      )
+      .join('\n');
+
+    const lines = [
+      '',
+      '',
+      '<previous_verification_failure>',
+      'Verification failed on the previous attempt. Address these findings before finishing.',
+      '',
+      `Summary: ${compact(structured.summary)}`,
+    ];
+
+    if (failedCriteria) {
+      lines.push('', 'Failed criteria:', failedCriteria);
+    }
+
+    if (issues) {
+      lines.push('', 'Issues:', issues);
+    }
+
+    lines.push('</previous_verification_failure>');
+    return lines.join('\n');
+  }
+
   async function startExecution(threadId: string, plan: ShipCodePlan) {
+    const context = activePipelines.get(threadId);
+    if (!context) return;
+
     const settings = deps.settings.get();
-    const executingCount = contextHelpers.listActiveInPhases(EXECUTION_PHASES).length;
+    const executingCount = contextHelpers
+      .listActiveInPhases(EXECUTION_PHASES)
+      .filter((summary) => summary.threadId !== threadId && isSameProject(summary, context)).length;
     if (executingCount >= settings.maxConcurrentExecutions) {
-      // Execution slots full — stay in awaiting_approval until a slot frees
+      // Project execution slots full — stay in awaiting_approval until a slot frees.
       emitPhase(threadId, 'awaiting_approval');
       return;
     }
 
-    const context = activePipelines.get(threadId);
-    if (!context) return;
+    emitPhase(threadId, 'executing');
 
     if (context.repoContext === null) {
       context.repoContext = loadRepoContext(context.worktreePath ?? context.projectPath);
@@ -83,8 +149,6 @@ export function createExecutionPhaseHandlers({
         return;
       }
     }
-
-    emitPhase(threadId, 'executing');
 
     const preparation = await prepareWorktree(context, 'execute');
     if (!preparation.ok) {
@@ -134,6 +198,11 @@ export function createExecutionPhaseHandlers({
     }
 
     const skill = skillCallSite(context);
+    const latestPlanRecord = deps.plans.getLatest(threadId);
+    const verificationFeedback = formatVerificationRetryFeedback(
+      threadId,
+      latestPlanRecord?.id ?? null,
+    );
     const testFeedback =
       context.testOutput && context.testRetries > 0
         ? `\n\n<previous_test_failure>\nTests failed on the previous attempt. Fix these issues before finishing:\n\n${context.testOutput}\n</previous_test_failure>`
@@ -146,6 +215,7 @@ export function createExecutionPhaseHandlers({
         contextFiles: context.repoContext ?? undefined,
         testingContext: getTestingContext(context),
       }) +
+      verificationFeedback +
       testFeedback +
       stabilizationFeedback;
 
@@ -261,7 +331,6 @@ export function createExecutionPhaseHandlers({
     }
 
     context.testRetries = 0;
-    context.testOutput = null;
     handlers.startVerification(threadId);
   }
 

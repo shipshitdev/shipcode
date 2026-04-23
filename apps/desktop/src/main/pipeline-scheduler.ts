@@ -1,6 +1,7 @@
 import type { GitHubIssueCacheRecord } from '@shipcode/shared';
 import {
   clampError,
+  EXECUTION_PHASES,
   resolveEffectivePhaseReasoningEffortForIssue,
   resolveExecutorModelForIssue,
   resolvePhaseModelForIssue,
@@ -49,6 +50,14 @@ export class PipelineScheduler {
       return pipeline.listActiveInPhases(RUNNING_PIPELINE_PHASES).length;
     }
     return pipeline.listActive().length;
+  }
+
+  private _getRunningExecutionCountForProject(projectId: string, projectPath: string): number {
+    return this.deps.pipeline
+      .listActiveInPhases(EXECUTION_PHASES)
+      .filter((summary) =>
+        summary.projectId ? summary.projectId === projectId : summary.projectPath === projectPath,
+      ).length;
   }
 
   /**
@@ -106,6 +115,58 @@ export class PipelineScheduler {
       });
     } catch (err) {
       log.error('[scheduler] slot-freed promotion error:', err);
+    }
+  }
+
+  /**
+   * Called when an execution slot frees up. Execution capacity is scoped per project,
+   * so a full project must not block an older waiter from another project.
+   */
+  onExecutionSlotFreed(): boolean {
+    const { queries, pipeline, emitter, getMainWindow } = this.deps;
+    try {
+      const settings = queries.settings.get();
+      const candidates = queries.threads.listAwaitingWithApprovedPlans();
+
+      for (const thread of candidates) {
+        const project = queries.projects.getById(thread.projectId);
+        if (!project) continue;
+
+        const executingCount = this._getRunningExecutionCountForProject(project.id, project.path);
+        if (executingCount >= settings.maxConcurrentExecutions) continue;
+
+        const latestPlan = queries.plans.getLatest(thread.id);
+        if (!latestPlan?.structured) continue;
+
+        pipeline.rehydrateContext(thread.id, project.path);
+
+        log.info(`[execution-queue] promoting thread ${thread.id} "${thread.title}"`);
+
+        pipeline.startExecution(thread.id, latestPlan.structured).catch((err) => {
+          transitionThreadPhase(getMainWindow(), queries, emitter, {
+            threadId: thread.id,
+            phase: 'failed',
+            errorMessage: clampError(err),
+          });
+          log.error('[execution-queue] promotion failed:', err);
+        });
+        return true;
+      }
+    } catch (err) {
+      log.error('[execution-queue] drain error:', err);
+    }
+
+    return false;
+  }
+
+  drainExecutionQueue(): void {
+    try {
+      const candidateCount = this.deps.queries.threads.listAwaitingWithApprovedPlans().length;
+      for (let i = 0; i < candidateCount; i++) {
+        if (!this.onExecutionSlotFreed()) return;
+      }
+    } catch (err) {
+      log.error('[execution-queue] startup drain error:', err);
     }
   }
 

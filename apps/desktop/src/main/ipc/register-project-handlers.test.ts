@@ -231,6 +231,41 @@ describe('registerProjectHandlers', () => {
     });
   });
 
+  it('updates a project name through project:set-name', async () => {
+    const updatedProject = { ...baseProject, name: 'Gateway Remastered' };
+    const queries = {
+      projects: {
+        getById: vi.fn().mockReturnValueOnce(baseProject).mockReturnValueOnce(updatedProject),
+        updateName: vi.fn(),
+      },
+      settings: {
+        get: vi.fn(() => ({ projectOpenTarget: 'cursor' })),
+      },
+    };
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+    });
+
+    const setName = handlers.get('project:set-name');
+    if (!setName) throw new Error('project:set-name handler not registered');
+
+    const result = (await setName(undefined, {
+      projectId: baseProject.id,
+      name: '  Gateway Remastered  ',
+    })) as Project;
+
+    expect(queries.projects.updateName).toHaveBeenCalledWith(baseProject.id, 'Gateway Remastered');
+    expect(result.name).toBe('Gateway Remastered');
+  });
+
   it('opens the project in Ghostty with an explicit working directory', async () => {
     await withDarwin(async () => {
       const project = { ...baseProject, path: '/tmp/ShipCode Worktree' };

@@ -114,9 +114,9 @@ export function PipelineSettingsSection({
               />
             </SettingsRow>
             <SettingsRow
-              label="Max concurrent executions"
+              label="Max concurrent executions per project"
               htmlFor="max-concurrent-executions"
-              description="How many pipelines can execute at once. Approved pipelines wait until a slot opens."
+              description="How many pipelines can execute at once for each project. Approved pipelines wait until that project's slot opens."
             >
               <Input
                 id="max-concurrent-executions"

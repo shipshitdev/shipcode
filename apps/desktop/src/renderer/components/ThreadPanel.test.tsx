@@ -186,8 +186,6 @@ describe('ThreadPanel', () => {
 
     renderWithProviders();
 
-    fireEvent.click(await screen.findByText(issue.title));
-
     let state = useAppStore.getState();
     expect(state.activeIssue).toBeNull();
     expect(state.issueDetailCollapsed).toBe(true);
@@ -241,5 +239,40 @@ describe('ThreadPanel', () => {
     });
 
     expect(onRender).not.toHaveBeenCalled();
+  });
+
+  it('hides the board quick-link when no GitHub Projects URL is configured', async () => {
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'thread-panel:get-data') return panelData;
+      if (channel === 'github:list-issues') return [makeIssue()];
+      return null;
+    });
+
+    renderWithProviders();
+
+    expect(await screen.findByText('Ship your first change with ShipCode')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'repo' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'board' })).not.toBeInTheDocument();
+  });
+
+  it('shows the board quick-link when a GitHub Projects URL is configured', async () => {
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'thread-panel:get-data') {
+        return {
+          ...panelData,
+          project: {
+            ...project,
+            githubProjectUrl: 'https://github.com/orgs/shipshitdev/projects/1',
+          },
+        } satisfies ThreadPanelData;
+      }
+      if (channel === 'github:list-issues') return [makeIssue()];
+      return null;
+    });
+
+    renderWithProviders();
+
+    expect(await screen.findByText('Ship your first change with ShipCode')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'board' })).toBeInTheDocument();
   });
 });

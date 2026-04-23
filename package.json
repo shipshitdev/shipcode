@@ -21,6 +21,7 @@
     "coverage:summary": "node scripts/coverage-summary.mjs",
     "deploy:web": "bun run sync:docs && vercel deploy --cwd apps/web --prod --yes",
     "deps:update": "bunx npm-check-updates -u --deep && bun install",
+    "deadcode": "bunx knip --production --include files,exports,dependencies,unlisted,unresolved --no-progress",
     "dev": "turbo run dev --filter=@shipcode/desktop",
     "dev:all": "turbo run dev",
     "dev:desktop": "turbo run dev --filter=@shipcode/desktop",

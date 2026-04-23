@@ -1,0 +1,28 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
+  "tags": ["-knipignore"],
+  "ignoreFiles": [
+    ".agents/skills/**/references/**/*.ts",
+    ".claude/skills/**/references/**/*.ts",
+    ".codex/skills/**/references/**/*.ts",
+    "apps/desktop/postcss.config.mjs",
+    "apps/desktop/src/preload/index.ts",
+    "apps/desktop/src/renderer/test/setup.ts",
+    "apps/web/app/test/setup.ts",
+    "apps/docs/content/**/_meta.tsx",
+    "packages/db/src/test-helpers.ts",
+    "packages/ui/src/test/setup.ts",
+    "packages/ui/src/vendor/radix-compose-refs.ts",
+    "scripts/build-skill-defaults.ts",
+    "scripts/coverage-summary.mjs",
+    "vitest.coverage.ts"
+  ],
+  "workspaces": {
+    "apps/cli": {
+      "ignoreDependencies": ["nanoid", "node-pty", "simple-git", "zod"]
+    },
+    "apps/desktop": {
+      "ignoreDependencies": ["nanoid", "node-pty", "simple-git"]
+    }
+  }
+}

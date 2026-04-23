@@ -4,6 +4,10 @@ Shared React UI components for Shipshit.dev projects.
 
 This package is the common UI surface used by ShipCode, ShipCut, ShipLead, and future side projects. It ships typed React components, Lucide icon re-exports, and a small set of Shipshit.dev product primitives.
 
+For the component boundary rules and extraction backlog, see [COMPONENT_TAXONOMY.md](./COMPONENT_TAXONOMY.md).
+
+Current status: this package is the cross-project base, but it is not yet a clean full replacement for product UI packages such as `@genfeedai/ui`. It currently exposes only the root `"."` package export and still includes some ShipCode-specific compatibility exports. The target split is documented in the taxonomy.
+
 ## Install
 
 ```bash
@@ -22,13 +26,12 @@ React and React DOM are peer dependencies:
 ## Usage
 
 ```tsx
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, ShipCodeLogoMark } from '@shipshitdev/ui';
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@shipshitdev/ui';
 
 export function Example() {
   return (
     <Card>
       <CardHeader>
-        <ShipCodeLogoMark className="size-8" />
         <CardTitle>Ship fast</CardTitle>
       </CardHeader>
       <CardContent className="flex items-center gap-2">
@@ -82,7 +85,29 @@ The package publishes ESM, CJS, and TypeScript declarations:
 }
 ```
 
+Planned exports:
+
+- `@shipshitdev/ui/primitives`
+- `@shipshitdev/ui/common`
+- `@shipshitdev/ui/design`
+- `@shipshitdev/ui/workflows`
+- `@shipshitdev/ui/code`
+- `@shipshitdev/ui/brand`
+- `@shipshitdev/ui/shipcode`
+- `@shipshitdev/ui/styles.css`
+
+These subpaths are not implemented yet in `0.4.8`.
+
 ## Component Groups
+
+The target package shape is:
+
+- `primitives/` - low-level Radix/Tailwind primitives.
+- `common/` - reusable product UI patterns.
+- `design/` - tokens, themes, and visual utilities.
+- `workflows/` - reusable workflow surfaces such as kanban boards and activity feeds.
+- `code/` - developer/code-review UI.
+- `shipcode/` - ShipCode-only UI kept out of generic categories.
 
 Primitives:
 
@@ -95,19 +120,29 @@ Primitives:
 - `StatCard`, `Switch`, `Table`
 - `Tabs`, `Textarea`
 
-Product components:
+Common / workflow candidates:
+
+- `IssueCard`, `KanbanBoard`
+- `LoadingButtonContent`
+- `OverlayPanel`
+- `Pagination`
+- `SettingsRow`
+- `StatCard`
+
+ShipCode-specific components currently exported for compatibility:
 
 - `ActivePipelineCard`
 - `DiffViewer`, `SideBySideDiffViewer`
-- `IssueCard`, `KanbanBoard`
 - `PhaseChip`, `PipelineStatus`
 - `PlanViewer`, `ReviewViewer`, `VerificationViewer`
 - `StatusMappingEditor`
 
-Brand marks:
+Product logo marks currently exported for compatibility:
 
 - `ShipCodeLogoMark`
 - `ShipCutLogoMark`
+
+These are not part of the target shared base contract. Product logos should live in their owning monorepos, e.g. GenFeed logos stay in GenFeed and ShipLead logos stay in ShipLead.
 
 Utilities:
 

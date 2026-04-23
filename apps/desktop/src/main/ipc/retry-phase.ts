@@ -18,6 +18,9 @@ export function getRetryAction(
 
   const verification = latestVerification;
   if (verification && verification.planId === latestPlan?.id) {
+    if (verification.result === 'failed' && verification.structured) {
+      return 'execute';
+    }
     if (verification.result === 'failed') {
       return 'verify';
     }
