@@ -42,6 +42,13 @@ export function IssueExternalBlockers({ issue }: { issue: GitHubIssueCacheRecord
   );
 }
 
+const ACTION_BADGE_CLASS =
+  'absolute inset-0 inline-flex h-auto items-center justify-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide opacity-0 transition-opacity group-hover:opacity-100';
+const PLAN_ACTION_BADGE_CLASS =
+  'border-agent/25 bg-agent/10 text-agent hover:border-agent/35 hover:bg-agent/15 hover:text-agent';
+const DANGER_ACTION_BADGE_CLASS =
+  'border-danger/30 bg-danger/15 text-danger hover:border-danger/40 hover:bg-danger/20 hover:text-danger';
+
 interface DraggableCardProps {
   issue: GitHubIssueCacheRecord;
   phaseChip?: IssuePhaseChip | null;
@@ -320,7 +327,7 @@ function DraggableCardComponent({
             <Button
               variant="ghost"
               size="xs"
-              className="absolute inset-0 h-auto rounded px-1.5 py-0.5 text-[10px] font-medium text-agent/70 opacity-0 transition-opacity hover:bg-agent/10 hover:text-agent group-hover:opacity-100"
+              className={cn(ACTION_BADGE_CLASS, PLAN_ACTION_BADGE_CLASS)}
               title="Start planning"
               onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => {
@@ -339,7 +346,7 @@ function DraggableCardComponent({
             <Button
               variant="ghost"
               size="xs"
-              className="absolute inset-0 h-auto rounded px-1.5 py-0.5 text-[10px] font-medium text-danger/70 opacity-0 transition-opacity hover:bg-danger/10 hover:text-danger group-hover:opacity-100"
+              className={cn(ACTION_BADGE_CLASS, DANGER_ACTION_BADGE_CLASS)}
               title="Cancel pipeline"
               onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => {
@@ -358,7 +365,7 @@ function DraggableCardComponent({
             <Button
               variant="ghost"
               size="xs"
-              className="absolute inset-0 h-auto rounded px-1.5 py-0.5 text-[10px] font-medium text-danger/70 opacity-0 transition-opacity hover:bg-danger/10 hover:text-danger disabled:opacity-60 group-hover:opacity-100"
+              className={cn(ACTION_BADGE_CLASS, DANGER_ACTION_BADGE_CLASS, 'disabled:opacity-60')}
               title="Retry pipeline"
               disabled={isRerunning}
               onPointerDown={(event) => event.stopPropagation()}

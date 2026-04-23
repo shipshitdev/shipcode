@@ -294,6 +294,33 @@ describe('linked PR affordances', () => {
     view.cleanup();
   });
 
+  it('styles hover actions with the same badge geometry as status chips', () => {
+    const view = renderIntoDom(
+      <DndContext>
+        <DraggableCard
+          issue={makeIssue({ pipelineStatus: 'todo' })}
+          onClick={vi.fn()}
+          onStartPipeline={vi.fn()}
+        />
+      </DndContext>,
+    );
+
+    const planButton = view.container.querySelector('button[title="Start planning"]');
+    if (!(planButton instanceof HTMLButtonElement)) {
+      throw new Error('Expected plan action button');
+    }
+
+    expect(planButton.className).toContain('rounded-md');
+    expect(planButton.className).toContain('border');
+    expect(planButton.className).toContain('px-1.5');
+    expect(planButton.className).toContain('py-0.5');
+    expect(planButton.className).toContain('text-[10px]');
+    expect(planButton.className).toContain('uppercase');
+    expect(planButton.className).toContain('tracking-wide');
+    expect(planButton.className).toContain('border-agent/25');
+    view.cleanup();
+  });
+
   it('renders an approval badge on cards with a source tooltip', () => {
     const view = renderIntoDom(
       <DndContext>
