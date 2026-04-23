@@ -1,4 +1,4 @@
-import type { ClarificationRequest, Thread } from '@shipcode/shared';
+import type { ClarificationAnswer, ClarificationRequest, Thread } from '@shipcode/shared';
 import {
   Badge,
   Button,
@@ -14,7 +14,16 @@ import {
   SelectValue,
   Textarea,
 } from '@shipshitdev/ui';
+import { useEffect, useMemo, useState } from 'react';
 import { getFailurePresentation, PIPELINE_PREVIEW_PHASES, safeErrorMessage } from './helpers';
+
+type ClarificationDraft = Record<
+  string,
+  {
+    selectedChoiceId: string | null;
+    freeformText: string;
+  }
+>;
 
 interface IssueDetailActionsProps {
   approveError: string | null;
@@ -22,22 +31,11 @@ interface IssueDetailActionsProps {
   canApprove: boolean;
   canRerun: boolean;
   canStartPipeline: boolean;
-  canSubmitClarification: boolean;
   effectiveRevisionCount: number;
-  clarificationDraft: Record<
-    string,
-    {
-      selectedChoiceId: string | null;
-      freeformText: string;
-    }
-  >;
-  clarificationError: string | null;
   clarificationRequest: ClarificationRequest | null;
   failingPhaseOutput: string | null;
-  feedback: string;
   hasApprovalDecision: boolean;
   isSubmitting: boolean;
-  pendingAction: 'approve' | 'request_changes' | 'cancel';
   requireApproval: boolean;
   retryButtonLabel: string;
   retrySummary: string | null;
@@ -45,17 +43,218 @@ interface IssueDetailActionsProps {
   thread: Thread | null | undefined;
   onApprove: () => void;
   onCancel: () => void;
-  onClarificationChoiceChange: (questionId: string, choiceId: string) => void;
-  onClarificationFreeformChange: (questionId: string, value: string) => void;
   onEditPrd: () => void;
-  onFeedbackChange: (value: string) => void;
   onMarkAsDone: () => void;
-  onPendingActionChange: (value: 'approve' | 'request_changes' | 'cancel') => void;
-  onReject: () => void;
+  onReject: (feedback: string) => void;
   onRerun: () => void;
   onShowRawOutputChange: (show: boolean) => void;
   onStartPipeline: () => void;
-  onSubmitClarification: () => void;
+  onSubmitClarification: (answers: ClarificationAnswer[]) => Promise<void>;
+}
+
+function buildClarificationDraft(
+  request: ClarificationRequest,
+  thread: Thread | null | undefined,
+): ClarificationDraft {
+  return Object.fromEntries(
+    request.questions.map((question) => {
+      const existing = thread?.clarificationAnswers.find(
+        (answer) => answer.questionId === question.id,
+      );
+      return [
+        question.id,
+        {
+          selectedChoiceId:
+            existing?.selectedChoiceId ??
+            question.choices.find((choice) => choice.recommended)?.id ??
+            null,
+          freeformText: existing?.freeformText ?? '',
+        },
+      ];
+    }),
+  );
+}
+
+function ClarificationSection({
+  isSubmitting,
+  request,
+  thread,
+  onSubmitClarification,
+}: {
+  isSubmitting: boolean;
+  request: ClarificationRequest;
+  thread: Thread;
+  onSubmitClarification: (answers: ClarificationAnswer[]) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState<ClarificationDraft>(() =>
+    buildClarificationDraft(request, thread),
+  );
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDraft(buildClarificationDraft(request, thread));
+    setError(null);
+  }, [request, thread]);
+
+  const canSubmit = useMemo(
+    () =>
+      request.questions.every((question) => {
+        const answer = draft[question.id];
+        const hasChoice = !!answer?.selectedChoiceId;
+        const hasFreeform = !!answer?.freeformText.trim();
+        return hasChoice || (question.allowFreeform && hasFreeform);
+      }),
+    [draft, request.questions],
+  );
+
+  const handleChoiceChange = (questionId: string, choiceId: string) => {
+    setDraft((current) => ({
+      ...current,
+      [questionId]: {
+        selectedChoiceId: choiceId,
+        freeformText: current[questionId]?.freeformText ?? '',
+      },
+    }));
+    setError(null);
+  };
+
+  const handleFreeformChange = (questionId: string, value: string) => {
+    setDraft((current) => ({
+      ...current,
+      [questionId]: {
+        selectedChoiceId: current[questionId]?.selectedChoiceId ?? null,
+        freeformText: value,
+      },
+    }));
+    setError(null);
+  };
+
+  const handleSubmit = async () => {
+    setError(null);
+    try {
+      const answers: ClarificationAnswer[] = request.questions.map((question) => {
+        const answer = draft[question.id];
+        const freeformText = answer?.freeformText.trim();
+        return {
+          questionId: question.id,
+          selectedChoiceId: answer?.selectedChoiceId ?? null,
+          freeformText: freeformText ? freeformText : null,
+        };
+      });
+      await onSubmitClarification(answers);
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : String(submitError));
+    }
+  };
+
+  return (
+    <section className="rounded-xl border border-warning/25 bg-warning/[0.04] p-4 shadow-[0_1px_0_0_rgba(0,0,0,0.18)]">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-warning">
+            Planner Input
+          </div>
+          <h4 className="text-[15px] font-semibold leading-snug text-primary">
+            Answer these before planning continues
+          </h4>
+          <p className="mt-2 max-w-4xl text-[12px] leading-relaxed text-secondary">
+            {request.summary}
+          </p>
+        </div>
+        <Badge variant="warning" className="shrink-0 text-[10px]">
+          {request.questions.length} {request.questions.length === 1 ? 'question' : 'questions'}
+        </Badge>
+      </div>
+
+      <div className="mt-5 overflow-hidden rounded-lg border border-warning/15 bg-primary/20">
+        {request.questions.map((question, index) => {
+          const answer = draft[question.id] ?? {
+            selectedChoiceId: null,
+            freeformText: '',
+          };
+
+          return (
+            <section
+              key={question.id}
+              className={cn('px-4 py-4', index > 0 && 'border-t border-warning/10')}
+            >
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-warning/80">
+                  Q{index + 1}
+                </span>
+                <h5 className="text-[13px] font-semibold text-primary/95">{question.title}</h5>
+              </div>
+              <p className="text-[12px] leading-relaxed text-secondary">{question.prompt}</p>
+              {question.description && (
+                <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
+                  {question.description}
+                </p>
+              )}
+
+              <div className="mt-3 flex flex-col gap-2">
+                {question.choices.map((choice) => {
+                  const selected = answer.selectedChoiceId === choice.id;
+                  return (
+                    <button
+                      key={choice.id}
+                      type="button"
+                      className={cn(
+                        'rounded-md border px-3 py-2.5 text-left transition-colors',
+                        selected
+                          ? 'border-warning/45 bg-warning/[0.12]'
+                          : 'border-border/70 bg-secondary/35 hover:border-warning/30 hover:bg-warning/[0.05]',
+                      )}
+                      onClick={() => handleChoiceChange(question.id, choice.id)}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={cn(
+                            'h-2.5 w-2.5 rounded-full border',
+                            selected ? 'border-warning bg-warning' : 'border-border bg-transparent',
+                          )}
+                        />
+                        <span className="text-[12px] font-medium text-primary">{choice.label}</span>
+                        {choice.recommended && (
+                          <Badge variant="default" className="text-[9px] uppercase">
+                            Recommended
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="mt-1 pl-[18px] text-[11px] leading-relaxed text-secondary">
+                        {choice.description}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {question.allowFreeform && (
+                <div className="mt-3">
+                  <Textarea
+                    value={answer.freeformText}
+                    onChange={(event) => handleFreeformChange(question.id, event.target.value)}
+                    placeholder={question.freeformPlaceholder ?? 'Add context if needed'}
+                    rows={3}
+                  />
+                </div>
+              )}
+            </section>
+          );
+        })}
+      </div>
+
+      {error && <p className="mt-3 text-[11px] text-danger">{error}</p>}
+
+      <div className="mt-4 flex items-center gap-3">
+        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || !canSubmit}>
+          <LoadingButtonContent loading={isSubmitting}>Resume planning</LoadingButtonContent>
+        </Button>
+        <p className="text-[11px] text-muted">
+          ShipCode will start a fresh planning pass with these answers folded into the prompt.
+        </p>
+      </div>
+    </section>
+  );
 }
 
 export function IssueDetailActions({
@@ -64,16 +263,11 @@ export function IssueDetailActions({
   canApprove,
   canRerun,
   canStartPipeline,
-  canSubmitClarification,
   effectiveRevisionCount,
-  clarificationDraft,
-  clarificationError,
   clarificationRequest,
   failingPhaseOutput,
-  feedback,
   hasApprovalDecision,
   isSubmitting,
-  pendingAction,
   requireApproval,
   retryButtonLabel,
   retrySummary,
@@ -81,12 +275,8 @@ export function IssueDetailActions({
   thread,
   onApprove,
   onCancel,
-  onClarificationChoiceChange,
-  onClarificationFreeformChange,
   onEditPrd,
-  onFeedbackChange,
   onMarkAsDone,
-  onPendingActionChange,
   onReject,
   onRerun,
   onShowRawOutputChange,
@@ -156,123 +346,12 @@ export function IssueDetailActions({
 
   const clarificationSection =
     clarificationRequest && thread?.status === 'clarifying' ? (
-      <section className="rounded-xl border border-warning/25 bg-warning/[0.04] p-4 shadow-[0_1px_0_0_rgba(0,0,0,0.18)]">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-warning">
-              Planner Input
-            </div>
-            <h4 className="text-[15px] font-semibold leading-snug text-primary">
-              Answer these before planning continues
-            </h4>
-            <p className="mt-2 max-w-4xl text-[12px] leading-relaxed text-secondary">
-              {clarificationRequest.summary}
-            </p>
-          </div>
-          <Badge variant="warning" className="shrink-0 text-[10px]">
-            {clarificationRequest.questions.length}{' '}
-            {clarificationRequest.questions.length === 1 ? 'question' : 'questions'}
-          </Badge>
-        </div>
-
-        <div className="mt-5 overflow-hidden rounded-lg border border-warning/15 bg-primary/20">
-          {clarificationRequest.questions.map((question, index) => {
-            const answer = clarificationDraft[question.id] ?? {
-              selectedChoiceId: null,
-              freeformText: '',
-            };
-
-            return (
-              <section
-                key={question.id}
-                className={cn('px-4 py-4', index > 0 && 'border-t border-warning/10')}
-              >
-                <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-warning/80">
-                    Q{index + 1}
-                  </span>
-                  <h5 className="text-[13px] font-semibold text-primary/95">{question.title}</h5>
-                </div>
-                <p className="text-[12px] leading-relaxed text-secondary">{question.prompt}</p>
-                {question.description && (
-                  <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
-                    {question.description}
-                  </p>
-                )}
-
-                <div className="mt-3 flex flex-col gap-2">
-                  {question.choices.map((choice) => {
-                    const selected = answer.selectedChoiceId === choice.id;
-                    return (
-                      <button
-                        key={choice.id}
-                        type="button"
-                        className={cn(
-                          'rounded-md border px-3 py-2.5 text-left transition-colors',
-                          selected
-                            ? 'border-warning/45 bg-warning/[0.12]'
-                            : 'border-border/70 bg-secondary/35 hover:border-warning/30 hover:bg-warning/[0.05]',
-                        )}
-                        onClick={() => onClarificationChoiceChange(question.id, choice.id)}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={cn(
-                              'h-2.5 w-2.5 rounded-full border',
-                              selected
-                                ? 'border-warning bg-warning'
-                                : 'border-border bg-transparent',
-                            )}
-                          />
-                          <span className="text-[12px] font-medium text-primary">
-                            {choice.label}
-                          </span>
-                          {choice.recommended && (
-                            <Badge variant="default" className="text-[9px] uppercase">
-                              Recommended
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="mt-1 pl-[18px] text-[11px] leading-relaxed text-secondary">
-                          {choice.description}
-                        </p>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {question.allowFreeform && (
-                  <div className="mt-3">
-                    <Textarea
-                      value={answer.freeformText}
-                      onChange={(event) =>
-                        onClarificationFreeformChange(question.id, event.target.value)
-                      }
-                      placeholder={question.freeformPlaceholder ?? 'Add context if needed'}
-                      rows={3}
-                    />
-                  </div>
-                )}
-              </section>
-            );
-          })}
-        </div>
-
-        {clarificationError && <p className="mt-3 text-[11px] text-danger">{clarificationError}</p>}
-
-        <div className="mt-4 flex items-center gap-3">
-          <Button
-            size="sm"
-            onClick={onSubmitClarification}
-            disabled={isSubmitting || !canSubmitClarification}
-          >
-            <LoadingButtonContent loading={isSubmitting}>Resume planning</LoadingButtonContent>
-          </Button>
-          <p className="text-[11px] text-muted">
-            ShipCode will start a fresh planning pass with these answers folded into the prompt.
-          </p>
-        </div>
-      </section>
+      <ClarificationSection
+        isSubmitting={isSubmitting}
+        request={clarificationRequest}
+        thread={thread}
+        onSubmitClarification={onSubmitClarification}
+      />
     ) : answeredClarification ? (
       <section className="rounded-xl border border-agent/25 bg-agent/[0.04] p-4 shadow-[0_1px_0_0_rgba(0,0,0,0.18)]">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -423,76 +502,14 @@ export function IssueDetailActions({
   ) : null;
 
   const approvalSection = hasApprovalDecision ? (
-    <div className="rounded-md border border-border bg-secondary p-3">
-      <div
-        className={
-          pendingAction === 'request_changes'
-            ? 'mb-3 flex items-center gap-2'
-            : 'flex items-center gap-2'
-        }
-      >
-        <Select
-          value={pendingAction}
-          onValueChange={(value) =>
-            onPendingActionChange(value as 'approve' | 'request_changes' | 'cancel')
-          }
-          disabled={isSubmitting}
-        >
-          <SelectTrigger className="h-8 w-48 text-[12px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="approve">Approve &amp; Execute</SelectItem>
-            <SelectItem value="request_changes">Request Changes</SelectItem>
-            <SelectItem value="cancel">Cancel pipeline</SelectItem>
-          </SelectContent>
-        </Select>
-        {pendingAction === 'approve' && (
-          <Button
-            size="sm"
-            onClick={onApprove}
-            disabled={isSubmitting || !canApprove}
-            title={
-              !canApprove ? 'No plan content found - use Request Changes or Cancel' : undefined
-            }
-          >
-            <LoadingButtonContent loading={isSubmitting}>Confirm</LoadingButtonContent>
-          </Button>
-        )}
-        {pendingAction === 'cancel' && (
-          <Button size="sm" variant="destructive" onClick={onCancel} disabled={isSubmitting}>
-            <LoadingButtonContent loading={isSubmitting}>Confirm cancel</LoadingButtonContent>
-          </Button>
-        )}
-      </div>
-      {pendingAction === 'request_changes' && (
-        <div className="flex flex-col gap-2">
-          <Textarea
-            value={feedback}
-            onChange={(event) => onFeedbackChange(event.target.value)}
-            placeholder="Tell the planner what to change before the next pass..."
-            rows={4}
-          />
-          <div className="flex justify-end">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={onReject}
-              disabled={!feedback.trim() || isSubmitting}
-            >
-              <LoadingButtonContent loading={isSubmitting}>
-                Resume planning with feedback
-              </LoadingButtonContent>
-            </Button>
-          </div>
-        </div>
-      )}
-      {approveError && (
-        <p className="mt-2 text-[11px] text-danger">
-          {approveError} <span className="text-muted">(full trace in devtools console)</span>
-        </p>
-      )}
-    </div>
+    <ApprovalSection
+      approveError={approveError}
+      canApprove={canApprove}
+      isSubmitting={isSubmitting}
+      onApprove={onApprove}
+      onCancel={onCancel}
+      onReject={onReject}
+    />
   ) : approvedAwaitingExecution ? (
     <div className="rounded-md border border-border bg-secondary p-3">
       <div className="flex items-start justify-between gap-3">

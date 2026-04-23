@@ -75,10 +75,6 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
   const prevIssueSelectionKeyRef = useRef<string | null>(null);
   const [fullScreenPlanId, setFullScreenPlanId] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState('');
-  const [pendingAction, setPendingAction] = useState<'approve' | 'request_changes' | 'cancel'>(
-    'approve',
-  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRefreshingFromGithub, setIsRefreshingFromGithub] = useState(false);
   const [isTogglingState, setIsTogglingState] = useState(false);
@@ -88,16 +84,6 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [showMarkAsDoneConfirm, setShowMarkAsDoneConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState<IssueDetailTab>('prd');
-  const [clarificationDraft, setClarificationDraft] = useState<
-    Record<
-      string,
-      {
-        selectedChoiceId: string | null;
-        freeformText: string;
-      }
-    >
-  >({});
-  const [clarificationError, setClarificationError] = useState<string | null>(null);
   const [phaseModelValidation, setPhaseModelValidation] = useState<
     Partial<
       Record<'planner' | 'reviewer' | 'executor' | 'verifier', OpenRouterModelValidation | null>
@@ -388,43 +374,6 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     setShowAllPlanRuns(false);
   }, [issueSelectionKey]);
 
-  const clarificationRequestKey = thread?.clarificationRequest
-    ? `${thread.id}:${thread.clarificationRequest.id}`
-    : null;
-  const prevClarificationRequestKeyRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (prevClarificationRequestKeyRef.current === clarificationRequestKey) return;
-    prevClarificationRequestKeyRef.current = clarificationRequestKey;
-
-    if (!thread?.clarificationRequest) {
-      setClarificationDraft({});
-      setClarificationError(null);
-      return;
-    }
-
-    setClarificationDraft(
-      Object.fromEntries(
-        thread.clarificationRequest.questions.map((question) => {
-          const existing = thread.clarificationAnswers.find(
-            (answer) => answer.questionId === question.id,
-          );
-          return [
-            question.id,
-            {
-              selectedChoiceId:
-                existing?.selectedChoiceId ??
-                question.choices.find((choice) => choice.recommended)?.id ??
-                null,
-              freeformText: existing?.freeformText ?? '',
-            },
-          ];
-        }),
-      ),
-    );
-    setClarificationError(null);
-  }, [clarificationRequestKey, thread]);
-
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -492,15 +441,6 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     !!latestPlan &&
     latestPlan.status !== 'approved';
   const canApprove = hasApprovalDecision && !!(latestPlan?.structured || latestPlan?.rawOutput);
-  const canSubmitClarification =
-    !!thread?.clarificationRequest &&
-    thread.clarificationRequest.questions.every((question) => {
-      const answer = clarificationDraft[question.id];
-      const hasChoice = !!answer?.selectedChoiceId;
-      const hasFreeform = !!answer?.freeformText.trim();
-      return hasChoice || (question.allowFreeform && hasFreeform);
-    });
-
   if (!activeIssue) return null;
 
   const refreshIssueState = async () => {
@@ -589,16 +529,15 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     }
   };
 
-  const handleReject = async () => {
-    if (!activeThreadId || !feedback.trim()) return;
+  const handleReject = async (feedback: string) => {
+    const trimmedFeedback = feedback.trim();
+    if (!activeThreadId || !trimmedFeedback) return;
     setIsSubmitting(true);
     try {
       await window.shipcode.invoke('pipeline:reject', {
         threadId: activeThreadId,
-        feedback: feedback.trim(),
+        feedback: trimmedFeedback,
       });
-      setFeedback('');
-      setPendingAction('approve');
       await refreshIssueState();
     } finally {
       setIsSubmitting(false);
@@ -616,51 +555,15 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     }
   };
 
-  const handleClarificationChoiceChange = (questionId: string, choiceId: string) => {
-    setClarificationDraft((current) => ({
-      ...current,
-      [questionId]: {
-        selectedChoiceId: choiceId,
-        freeformText: current[questionId]?.freeformText ?? '',
-      },
-    }));
-    setClarificationError(null);
-  };
-
-  const handleClarificationFreeformChange = (questionId: string, value: string) => {
-    setClarificationDraft((current) => ({
-      ...current,
-      [questionId]: {
-        selectedChoiceId: current[questionId]?.selectedChoiceId ?? null,
-        freeformText: value,
-      },
-    }));
-    setClarificationError(null);
-  };
-
-  const handleSubmitClarification = async () => {
+  const handleSubmitClarification = async (answers: ClarificationAnswer[]) => {
     if (!activeThreadId || !thread?.clarificationRequest) return;
     setIsSubmitting(true);
-    setClarificationError(null);
     try {
-      const answers: ClarificationAnswer[] = thread.clarificationRequest.questions.map(
-        (question) => {
-          const draft = clarificationDraft[question.id];
-          const freeformText = draft?.freeformText.trim();
-          return {
-            questionId: question.id,
-            selectedChoiceId: draft?.selectedChoiceId ?? null,
-            freeformText: freeformText ? freeformText : null,
-          };
-        },
-      );
       await window.shipcode.invoke('pipeline:answer-clarification', {
         threadId: activeThreadId,
         answers,
       });
       await refreshIssueState();
-    } catch (error) {
-      setClarificationError(error instanceof Error ? error.message : String(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -1293,16 +1196,11 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       canApprove,
       canRerun,
       canStartPipeline,
-      canSubmitClarification,
       effectiveRevisionCount,
-      clarificationDraft,
-      clarificationError,
       clarificationRequest: thread?.clarificationRequest ?? null,
       failingPhaseOutput,
-      feedback,
       hasApprovalDecision,
       isSubmitting,
-      pendingAction,
       requireApproval: effectiveRequireApproval,
       retryButtonLabel,
       retrySummary,
@@ -1310,17 +1208,13 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       thread,
       onApprove: () => void handleApprove(),
       onCancel: () => void handleCancel(),
-      onClarificationChoiceChange: handleClarificationChoiceChange,
-      onClarificationFreeformChange: handleClarificationFreeformChange,
       onEditPrd: handleEditPrd,
-      onFeedbackChange: setFeedback,
       onMarkAsDone: () => setShowMarkAsDoneConfirm(true),
-      onPendingActionChange: setPendingAction,
-      onReject: () => void handleReject(),
+      onReject: (nextFeedback) => void handleReject(nextFeedback),
       onRerun: () => void handleRerun(),
       onShowRawOutputChange: setShowRawOutput,
       onStartPipeline: () => void handleStartPipeline(),
-      onSubmitClarification: () => void handleSubmitClarification(),
+      onSubmitClarification: handleSubmitClarification,
     });
 
   const detailTabs = (
