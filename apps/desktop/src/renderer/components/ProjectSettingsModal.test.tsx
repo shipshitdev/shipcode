@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import {
   type ContextFileInfo,
   DEFAULT_SETTINGS,
@@ -243,10 +245,11 @@ describe('ProjectSettingsModal', () => {
 
     expect(await screen.findByText('Project Settings')).toBeInTheDocument();
     expect(await screen.findByText('Repository folder')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'General' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Pipeline' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Models' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Memory' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'General' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pipeline' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Models' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Memory' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Back to project' })).not.toBeInTheDocument();
     expect(screen.getByDisplayValue(project.githubProjectUrl ?? '')).toBeInTheDocument();
 
     const scrollRegion = document.body.querySelector('[data-project-settings-scroll-region]');

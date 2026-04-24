@@ -6,8 +6,7 @@ import {
   Button,
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
+  cn,
   Loader2,
 } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -21,15 +20,22 @@ import {
   ReactFlow,
   SelectionMode,
 } from '@xyflow/react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import '@xyflow/react/dist/style.css';
 import { useAppStore } from '../../stores/app-store';
 import { IssueGraphNode } from './issue-graph-node';
 import { buildIssueFlowGraph, formatPreviewGroups } from './issue-graph-utils';
 
 const nodeTypes = { issueGraphNode: IssueGraphNode };
+const deleteKeyCode = ['Backspace', 'Delete'];
 
-export function ProjectGraphTab() {
+function sameSelectedIssueIds(previous: string[], next: string[]) {
+  return (
+    previous.length === next.length && previous.every((issueId, index) => issueId === next[index])
+  );
+}
+
+export function ProjectGraphTab({ embedded = false }: { embedded?: boolean }) {
   const queryClient = useQueryClient();
   const activeProjectId = useAppStore((state) => state.activeProjectId);
   const selectIssue = useAppStore((state) => state.selectIssue);
@@ -57,9 +63,12 @@ export function ProjectGraphTab() {
     });
   }, [activeProjectId, queryClient]);
 
-  const refreshGraph = (nextGraph: ProjectIssueGraph) => {
-    queryClient.setQueryData(['issue-graph', activeProjectId], nextGraph);
-  };
+  const refreshGraph = useCallback(
+    (nextGraph: ProjectIssueGraph) => {
+      queryClient.setQueryData(['issue-graph', activeProjectId], nextGraph);
+    },
+    [activeProjectId, queryClient],
+  );
 
   const createEdge = useMutation({
     mutationFn: (input: { sourceIssueId: string; targetIssueId: string }) =>
@@ -112,18 +121,48 @@ export function ProjectGraphTab() {
     },
   });
 
-  const handleNodeClick: NodeMouseHandler = (_event, node) => {
-    const issue = graph?.nodes.find((entry) => entry.issueId === node.id);
-    if (!issue) return;
-    const cachedIssue = useAppStore
-      .getState()
-      .githubIssues.find((entry) => entry.id === issue.issueId);
-    if (!cachedIssue) return;
-    selectIssue(cachedIssue);
-    if (useAppStore.getState().issueDetailCollapsed) {
-      useAppStore.getState().toggleIssueDetail();
-    }
-  };
+  const handleNodeClick: NodeMouseHandler = useCallback(
+    (_event, node) => {
+      const issue = graph?.nodes.find((entry) => entry.issueId === node.id);
+      if (!issue) return;
+      const cachedIssue = useAppStore
+        .getState()
+        .githubIssues.find((entry) => entry.id === issue.issueId);
+      if (!cachedIssue) return;
+      selectIssue(cachedIssue);
+      if (useAppStore.getState().issueDetailCollapsed) {
+        useAppStore.getState().toggleIssueDetail();
+      }
+    },
+    [graph, selectIssue],
+  );
+
+  const handleSelectionChange = useCallback(({ nodes }: { nodes: Array<{ id: string }> }) => {
+    const nextIssueIds = nodes.map((node) => node.id);
+    setSelectedIssueIds((previous) =>
+      sameSelectedIssueIds(previous, nextIssueIds) ? previous : nextIssueIds,
+    );
+  }, []);
+
+  const handleConnect = useCallback(
+    (connection: Connection) => {
+      if (!connection.source || !connection.target) return;
+      createEdge.mutate({
+        sourceIssueId: connection.source,
+        targetIssueId: connection.target,
+      });
+    },
+    [createEdge.mutate],
+  );
+
+  const handleEdgesDelete = useCallback(
+    (edges: Edge[]) => {
+      for (const edge of edges) {
+        deleteEdge.mutate(edge.id);
+      }
+    },
+    [deleteEdge.mutate],
+  );
 
   if (!activeProjectId) {
     return (
@@ -151,95 +190,92 @@ export function ProjectGraphTab() {
   }
 
   return (
-    <div className="grid flex-1 min-h-0 min-w-0 gap-4 bg-primary px-4 py-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-      <Card className="min-h-[520px] min-w-0 overflow-hidden">
-        <CardContent className="h-full min-h-[520px] p-0">
+    <div
+      className={cn(
+        'flex flex-1 min-h-0 min-w-0 bg-primary',
+        embedded ? 'h-full p-3' : 'px-4 py-4',
+      )}
+    >
+      <Card className="min-h-[520px] min-w-0 flex-1 overflow-hidden bg-primary">
+        <CardContent className="relative h-full min-h-[520px] p-0">
+          {selectedIssueIds.length > 0 || previewGroups.length > 0 || previewError ? (
+            <div className="pointer-events-none absolute right-3 top-3 z-10 w-[min(360px,calc(100%-24px))]">
+              <div className="pointer-events-auto rounded-md border border-border bg-secondary/95 p-3 shadow-lg shadow-black/30 backdrop-blur">
+                <div className="flex items-center gap-2">
+                  <Badge variant="info">{selectedIssueIds.length} selected</Badge>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="ml-auto"
+                    disabled={selectedIssueIds.length === 0 || previewRun.isPending}
+                    onClick={() => previewRun.mutate(selectedIssueIds)}
+                  >
+                    Preview order
+                  </Button>
+                </div>
+
+                {previewError ? (
+                  <Alert variant="destructive" className="mt-3">
+                    <AlertDescription>{previewError}</AlertDescription>
+                  </Alert>
+                ) : null}
+
+                {previewGroups.length > 0 ? (
+                  <div className="mt-3 space-y-2">
+                    <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
+                      {formatPreviewGroups(graph, previewGroups).map((line) => (
+                        <div
+                          key={line}
+                          className="rounded-md border border-border bg-primary px-2.5 py-2 text-xs text-primary"
+                        >
+                          {line}
+                        </div>
+                      ))}
+                    </div>
+                    <Button
+                      className="w-full"
+                      disabled={confirmRun.isPending}
+                      onClick={() => confirmRun.mutate()}
+                    >
+                      Start grouped run
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
           <ReactFlow
+            className="shipcode-issue-graph"
             nodes={flowGraph.nodes}
             edges={flowGraph.edges}
             nodeTypes={nodeTypes}
+            colorMode="dark"
             fitView
             selectionOnDrag
             selectionMode={SelectionMode.Partial}
-            deleteKeyCode={['Backspace', 'Delete']}
+            deleteKeyCode={deleteKeyCode}
             onNodeClick={handleNodeClick}
-            onSelectionChange={({ nodes }) => {
-              setSelectedIssueIds(nodes.map((node) => node.id));
-            }}
-            onConnect={(connection: Connection) => {
-              if (!connection.source || !connection.target) return;
-              createEdge.mutate({
-                sourceIssueId: connection.source,
-                targetIssueId: connection.target,
-              });
-            }}
-            onEdgesDelete={(edges) => {
-              for (const edge of edges) {
-                deleteEdge.mutate(edge.id);
-              }
-            }}
+            onSelectionChange={handleSelectionChange}
+            onConnect={handleConnect}
+            onEdgesDelete={handleEdgesDelete}
           >
-            <MiniMap pannable zoomable />
+            <MiniMap
+              pannable
+              zoomable
+              maskColor="rgba(5, 6, 7, 0.68)"
+              nodeColor="var(--bg-elevated)"
+              nodeStrokeColor="var(--border-strong)"
+              style={{ backgroundColor: 'var(--bg-secondary)' }}
+            />
             <Controls />
-            <Background gap={16} size={1} />
+            <Background
+              color="rgba(244, 244, 245, 0.26)"
+              bgColor="var(--bg-primary)"
+              gap={20}
+              size={1}
+            />
           </ReactFlow>
-        </CardContent>
-      </Card>
-
-      <Card className="min-h-0">
-        <CardHeader className="space-y-2">
-          <div className="flex items-center justify-between">
-            <CardTitle>Grouped Run</CardTitle>
-            <Badge variant="info">{selectedIssueIds.length} selected</Badge>
-          </div>
-          <div className="text-xs text-secondary">
-            Drag to lasso-select issues, connect nodes to add a local `blocks` edge, and delete
-            edges with Backspace.
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <Button
-            className="w-full"
-            disabled={selectedIssueIds.length === 0 || previewRun.isPending}
-            onClick={() => previewRun.mutate(selectedIssueIds)}
-          >
-            Preview Execution Order
-          </Button>
-
-          {previewError ? (
-            <Alert variant="destructive">
-              <AlertDescription>{previewError}</AlertDescription>
-            </Alert>
-          ) : null}
-
-          {previewGroups.length > 0 ? (
-            <div className="space-y-2">
-              <div className="text-xs font-medium uppercase tracking-[0.18em] text-secondary">
-                Preview
-              </div>
-              <div className="space-y-2">
-                {formatPreviewGroups(graph, previewGroups).map((line) => (
-                  <div
-                    key={line}
-                    className="rounded-lg border border-border bg-secondary/40 px-3 py-2 text-sm text-primary"
-                  >
-                    {line}
-                  </div>
-                ))}
-              </div>
-              <Button
-                className="w-full"
-                disabled={confirmRun.isPending}
-                onClick={() => confirmRun.mutate()}
-              >
-                Start Grouped Run
-              </Button>
-            </div>
-          ) : (
-            <div className="rounded-lg border border-dashed border-border px-3 py-4 text-sm text-secondary">
-              Preview order appears here before dispatch.
-            </div>
-          )}
         </CardContent>
       </Card>
     </div>

@@ -409,6 +409,30 @@ export interface GitState {
   modifiedCount: number;
 }
 
+export type GitWorktreeKind = 'main' | 'shipcode';
+
+export interface GitWorktreeSummary {
+  id: string;
+  kind: GitWorktreeKind;
+  path: string;
+  branch: string;
+  commitHash: string;
+  isDirty: boolean;
+  untrackedCount: number;
+  stagedCount: number;
+  modifiedCount: number;
+  threadId: string | null;
+  issueNumber: number | null;
+  title: string | null;
+  status: ThreadStatus | null;
+}
+
+export interface GitVisualizerData {
+  project: Project;
+  branches: string[];
+  worktrees: GitWorktreeSummary[];
+}
+
 // === Settings ===
 
 export interface AppSettings {

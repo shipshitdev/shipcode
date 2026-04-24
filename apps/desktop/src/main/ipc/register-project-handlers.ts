@@ -16,9 +16,14 @@ import { GitService, WorktreeManager } from '@shipcode/git';
 import type {
   AppSettings,
   DesktopAppHealthMap,
+  DiffRecord,
+  GitVisualizerData,
+  GitWorktreeSummary,
   OnboardingRepo,
+  Project,
   ProjectOpenTarget,
   ShipCodePlan,
+  Thread,
 } from '@shipcode/shared';
 import { clampError, parseGithubRemote, validateGithubProjectUrl } from '@shipcode/shared';
 import { dialog, shell } from 'electron';
@@ -71,6 +76,174 @@ function buildStarterIssueBody(repoFullName: string): string {
     `- prefer the smallest diff that still demonstrates the ShipCode workflow`,
     `- if there is any uncertainty, bias toward docs or UI copy over code-heavy work`,
   ].join('\n');
+}
+
+function stripDiffPathQuotes(value: string): string {
+  if (value.startsWith('"') && value.endsWith('"') && value.length >= 2) {
+    return value.slice(1, -1);
+  }
+  return value;
+}
+
+function normalizeDiffPath(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const unquoted = stripDiffPathQuotes(value.trim());
+  if (unquoted === '/dev/null') return null;
+  if (unquoted.startsWith('a/') || unquoted.startsWith('b/')) {
+    return unquoted.slice(2);
+  }
+  return unquoted;
+}
+
+function parseDiffGitHeader(line: string): { beforePath: string | null; afterPath: string | null } {
+  const match = /^diff --git "?a\/(.+?)"? "?b\/(.+?)"?$/.exec(line);
+  if (!match) {
+    return { beforePath: null, afterPath: null };
+  }
+  return {
+    beforePath: normalizeDiffPath(`a/${match[1]}`),
+    afterPath: normalizeDiffPath(`b/${match[2]}`),
+  };
+}
+
+function parseDiffRecords(diff: string, threadId: string): DiffRecord[] {
+  const normalized = diff.trim();
+  if (!normalized) return [];
+
+  const now = new Date().toISOString();
+  const sections = normalized
+    .split(/^diff --git /m)
+    .map((section, index) => (index === 0 ? section : `diff --git ${section}`))
+    .filter((section) => section.trim().startsWith('diff --git '));
+
+  return sections.map((section, index) => {
+    const lines = section.split('\n');
+    const header = parseDiffGitHeader(lines[0] ?? '');
+
+    let action: DiffRecord['action'] = 'modify';
+    let beforePath = header.beforePath;
+    let afterPath = header.afterPath;
+    let beforeHash: string | null = null;
+    let afterHash: string | null = null;
+
+    for (const line of lines) {
+      if (line.startsWith('new file mode ')) {
+        action = 'create';
+        continue;
+      }
+      if (line.startsWith('deleted file mode ')) {
+        action = 'delete';
+        continue;
+      }
+      if (line.startsWith('rename from ')) {
+        action = 'rename';
+        beforePath = normalizeDiffPath(line.slice('rename from '.length));
+        continue;
+      }
+      if (line.startsWith('rename to ')) {
+        action = 'rename';
+        afterPath = normalizeDiffPath(line.slice('rename to '.length));
+        continue;
+      }
+      if (line.startsWith('index ')) {
+        const match = /^index ([0-9a-f]+)\.\.([0-9a-f]+)/i.exec(line);
+        if (match) {
+          beforeHash = match[1];
+          afterHash = match[2];
+        }
+        continue;
+      }
+      if (line.startsWith('--- ')) {
+        beforePath = normalizeDiffPath(line.slice(4));
+        continue;
+      }
+      if (line.startsWith('+++ ')) {
+        afterPath = normalizeDiffPath(line.slice(4));
+      }
+    }
+
+    const filePath =
+      action === 'delete'
+        ? (beforePath ?? afterPath ?? 'changes.patch')
+        : (afterPath ?? beforePath ?? 'changes.patch');
+
+    return {
+      id: `${threadId}:${index}:${filePath}`,
+      threadId,
+      filePath,
+      action,
+      diffContent: section,
+      beforeHash,
+      afterHash,
+      createdAt: now,
+    };
+  });
+}
+
+async function buildGitVisualizerData(
+  project: Project,
+  queries: IpcHandlerDeps['queries'],
+): Promise<GitVisualizerData> {
+  const settings = queries.settings.get();
+  const git = new GitService(project.path);
+  const manager = new WorktreeManager(project.path, {
+    worktreeRoot: settings.worktreeRoot,
+  });
+  const threads = queries.threads.list(project.id);
+  const threadByWorktreePath = new Map(
+    threads
+      .filter((thread): thread is Thread & { worktreePath: string } => !!thread.worktreePath)
+      .map((thread) => [thread.worktreePath, thread]),
+  );
+  const threadByBranch = new Map(
+    threads
+      .filter((thread): thread is Thread & { worktreeBranch: string } => !!thread.worktreeBranch)
+      .map((thread) => [thread.worktreeBranch, thread]),
+  );
+
+  const shipcodeWorktrees = await manager.list();
+  const entries: Array<{ kind: GitWorktreeSummary['kind']; path: string; branch: string | null }> =
+    [
+      { kind: 'main', path: project.path, branch: null },
+      ...shipcodeWorktrees.map((worktree) => ({
+        kind: 'shipcode' as const,
+        path: worktree.path,
+        branch: worktree.branch,
+      })),
+    ];
+
+  const worktrees = await Promise.all(
+    entries.map(async (entry) => {
+      const status = await git.getStatus(entry.path);
+      const thread =
+        entry.kind === 'shipcode'
+          ? (threadByWorktreePath.get(entry.path) ?? threadByBranch.get(entry.branch ?? ''))
+          : null;
+      const issue = thread ? queries.githubIssues.getByThreadId(thread.id) : null;
+
+      return {
+        id: entry.kind === 'main' ? `main:${project.id}` : `worktree:${entry.path}`,
+        kind: entry.kind,
+        path: entry.path,
+        branch: entry.branch ?? status.branch,
+        commitHash: status.commitHash,
+        isDirty: status.isDirty,
+        untrackedCount: status.untrackedCount,
+        stagedCount: status.stagedCount,
+        modifiedCount: status.modifiedCount,
+        threadId: thread?.id ?? null,
+        issueNumber: issue?.issueNumber ?? thread?.githubIssueNumber ?? null,
+        title: issue?.title ?? thread?.title ?? null,
+        status: thread?.status ?? null,
+      } satisfies GitWorktreeSummary;
+    }),
+  );
+
+  return {
+    project,
+    branches: await git.listBranches(project.defaultBranch),
+    worktrees,
+  };
 }
 
 async function resolveGithubRepoIdentity(
@@ -651,6 +824,30 @@ export function registerProjectHandlers({
         await git.fetch();
       }
       return git.listBranches(project.defaultBranch);
+    },
+  );
+
+  ipcMain.handle('git:visualizer-data', async (_event, { projectId }: { projectId: string }) => {
+    const project = enrichProjectPath(queries.projects.getById(projectId));
+    if (!project) throw new Error(`Project ${projectId} not found`);
+    return buildGitVisualizerData(project, queries);
+  });
+
+  ipcMain.handle(
+    'git:worktree-diff',
+    async (_event, { projectId, worktreePath }: { projectId: string; worktreePath: string }) => {
+      const project = enrichProjectPath(queries.projects.getById(projectId));
+      if (!project) throw new Error(`Project ${projectId} not found`);
+
+      const data = await buildGitVisualizerData(project, queries);
+      const worktree = data.worktrees.find((entry) => entry.path === worktreePath);
+      if (!worktree) {
+        throw new Error('Worktree not found for this project');
+      }
+
+      const git = new GitService(project.path);
+      const diff = await git.getDiffAgainstHead(worktree.path);
+      return parseDiffRecords(diff, worktree.threadId ?? worktree.id);
     },
   );
 

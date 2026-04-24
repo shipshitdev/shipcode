@@ -8,7 +8,7 @@ import {
 } from '@shipcode/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Profiler, type ProfilerOnRenderCallback, StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '../stores/app-store';
@@ -190,17 +190,14 @@ describe('ThreadPanel', () => {
 
     renderWithProviders();
 
-    let state = useAppStore.getState();
-    expect(state.activeIssue?.id).toBe(issue.id);
-    expect(state.activeThreadId).toBe(issue.threadId);
-    expect(state.issueDetailCollapsed).toBe(false);
-
     fireEvent.click(await screen.findByRole('button', { name: /open issue detail/i }));
 
-    state = useAppStore.getState();
-    expect(state.activeIssue?.id).toBe(issue.id);
-    expect(state.activeThreadId).toBe(issue.threadId);
-    expect(state.issueDetailCollapsed).toBe(false);
+    await waitFor(() => {
+      const state = useAppStore.getState();
+      expect(state.activeIssue?.id).toBe(issue.id);
+      expect(state.activeThreadId).toBe(issue.threadId);
+      expect(state.issueDetailCollapsed).toBe(false);
+    });
   });
 
   it('labels approved waiters as waiting for execution when the latest plan is approved', async () => {

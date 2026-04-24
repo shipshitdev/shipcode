@@ -13,15 +13,17 @@ import {
   validateGithubProjectUrl,
 } from '@shipcode/shared';
 import {
+  Bell,
   Button,
+  Code2,
+  FolderGit,
   Keycap,
   LoadingButtonContent,
   Modal,
   ModalFooter,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
+  Settings,
+  Terminal,
+  Workflow,
 } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
@@ -51,6 +53,45 @@ import {
   type ProjectOverrideState,
   type ProjectTab,
 } from './project-settings-modal/shared';
+import { SettingsNavigation, type SettingsNavigationItem } from './SettingsNavigation';
+
+const PROJECT_SETTINGS_SECTIONS = [
+  {
+    key: 'general',
+    label: 'General',
+    icon: <Settings size={14} />,
+  },
+  {
+    key: 'setup',
+    label: 'Setup',
+    icon: <Terminal size={14} />,
+  },
+  {
+    key: 'pipeline',
+    label: 'Pipeline',
+    icon: <Workflow size={14} />,
+  },
+  {
+    key: 'models',
+    label: 'Models',
+    icon: <Code2 size={14} />,
+  },
+  {
+    key: 'github',
+    label: 'GitHub',
+    icon: <FolderGit size={14} />,
+  },
+  {
+    key: 'context',
+    label: 'Memory',
+    icon: <Code2 size={14} />,
+  },
+  {
+    key: 'notifications',
+    label: 'Notifications',
+    icon: <Bell size={14} />,
+  },
+] satisfies readonly SettingsNavigationItem<ProjectTab>[];
 
 export function ProjectSettingsModal() {
   const queryClient = useQueryClient();
@@ -565,200 +606,174 @@ export function ProjectSettingsModal() {
         if (!modalBusy) closeProjectSettingsModal();
       }}
       title="Project Settings"
-      className="max-w-[880px] h-[88vh] flex flex-col overflow-hidden p-0"
+      className="max-w-[1040px] h-[88vh] flex flex-col overflow-hidden p-0"
       headerClassName="shrink-0 border-b border-border px-6 py-4"
       onKeyDown={handleKeyDown}
     >
       {!project || !settings || !projectDraft ? (
         <div className="px-6 py-4 text-xs text-muted">Loading project…</div>
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col px-6 py-4">
-          <Tabs
-            value={activeTab}
-            onValueChange={(value) => setActiveTab(value as ProjectTab)}
-            className="flex min-h-0 flex-1 flex-col"
-          >
-            <div className="-mx-6 mb-4 flex shrink-0 overflow-x-auto px-6">
-              <TabsList className="min-w-max">
-                <TabsTrigger value="general">General</TabsTrigger>
-                <TabsTrigger value="setup">Setup</TabsTrigger>
-                <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
-                <TabsTrigger value="models">Models</TabsTrigger>
-                <TabsTrigger value="github">GitHub</TabsTrigger>
-                <TabsTrigger value="context">Memory</TabsTrigger>
-                <TabsTrigger value="notifications">Notifications</TabsTrigger>
-              </TabsList>
+        <div className="flex min-h-0 flex-1">
+          <SettingsNavigation
+            items={PROJECT_SETTINGS_SECTIONS}
+            activeKey={activeTab}
+            onSelect={setActiveTab}
+            className="w-[220px] min-w-[220px]"
+          />
+
+          <div className="flex min-w-0 flex-1 flex-col bg-primary">
+            <div
+              className="min-h-0 flex-1 overflow-y-auto px-8 py-6"
+              data-project-settings-scroll-region
+            >
+              <div className="max-w-2xl">
+                <h3 className="mb-5">
+                  {PROJECT_SETTINGS_SECTIONS.find((section) => section.key === activeTab)?.label}
+                </h3>
+
+                {activeTab === 'general' && (
+                  <ProjectSettingsGeneralTab
+                    project={project}
+                    nameInput={nameInput}
+                    setNameInput={setNameInput}
+                    urlInput={urlInput}
+                    setUrlInput={setUrlInput}
+                    setTouched={setTouched}
+                    nameError={nameError}
+                    showInlineError={showInlineError}
+                    validationOk={validation.ok}
+                    validationReason={validation.ok ? null : validation.reason}
+                    relinkPending={relinkMutation.isPending}
+                    relinkError={relinkError}
+                    onRelink={() => {
+                      setRelinkError(null);
+                      relinkMutation.mutate();
+                    }}
+                    canSync={canSync}
+                    syncLocked={syncLocked}
+                    syncPending={syncMutation.isPending}
+                    syncResult={syncResult}
+                    syncError={syncError}
+                    hasSavedUrl={hasSavedUrl}
+                    inputMatchesSaved={inputMatchesSaved}
+                    onSync={handleSync}
+                  />
+                )}
+
+                {activeTab === 'setup' && (
+                  <ProjectSettingsSetupTab
+                    setupCommandsText={setupCommandsText}
+                    setSetupCommandsText={setSetupCommandsText}
+                    verifyCommandsText={verifyCommandsText}
+                    setVerifyCommandsText={setVerifyCommandsText}
+                    testingContext={testingContext}
+                    setTestingContext={setTestingContext}
+                    setupBeforeVerify={setupBeforeVerify}
+                    setSetupBeforeVerify={setSetupBeforeVerify}
+                    envFiles={envFiles}
+                    addEnvFile={addEnvFile}
+                    updateEnvFile={updateEnvFile}
+                    removeEnvFile={removeEnvFile}
+                    detectedProfiles={detectedProfiles}
+                    inspection={setupInspection}
+                    projectPath={project.path}
+                    pathExists={pathExists}
+                    submitError={setupSaveError}
+                    onRedetect={() => {
+                      void refetchSetup();
+                    }}
+                    onApplyDetectedProfile={(profile) => {
+                      applySetupContract(profile.suggestedContract);
+                    }}
+                    detectPending={setupDetectPending}
+                  />
+                )}
+
+                {activeTab === 'pipeline' && (
+                  <ProjectSettingsPipelineTab
+                    settings={settings}
+                    overrides={overrides}
+                    setOverrides={setOverrides}
+                    onResetIssueOverrides={handleResetIssueOverrides}
+                    issueOverrideResetPending={resetIssueOverridesMutation.isPending}
+                    issueOverrideResetResult={issueOverrideResetResult}
+                    issueOverrideResetError={issueOverrideResetError}
+                  />
+                )}
+
+                {activeTab === 'models' && (
+                  <ProjectSettingsModelsTab
+                    settings={settings}
+                    projectDraft={projectDraft}
+                    overrides={overrides}
+                    setOverrides={setOverrides}
+                    integrationStatus={integrationStatus}
+                    modelValidation={modelValidation}
+                    setModelValidation={setModelValidation}
+                    onApplyPreset={handleApplyModelPreset}
+                  />
+                )}
+
+                {activeTab === 'github' && (
+                  <ProjectSettingsGitHubTab
+                    pathExists={pathExists}
+                    projectId={projectSettingsModalProjectId ?? ''}
+                    isActive={activeTab === 'github'}
+                  />
+                )}
+
+                {activeTab === 'context' && (
+                  <ProjectSettingsContextTab
+                    contextFiles={memoryStatus?.files}
+                    contextGeneratorCli={contextGeneratorCli}
+                    setContextGeneratorCli={setContextGeneratorCli}
+                    contextGenerating={contextGenerating}
+                    contextCliUnavailableReason={contextCliUnavailableReason}
+                    contextError={contextError}
+                    cliOptions={contextCliOptions}
+                    onGenerateContext={() => {
+                      void handleGenerateContext();
+                    }}
+                  />
+                )}
+
+                {activeTab === 'notifications' && (
+                  <ProjectSettingsNotificationsTab
+                    discordRouting={overrides.discordRouting}
+                    discordWebhookUrlOverride={overrides.discordWebhookUrlOverride ?? ''}
+                    telegramRouting={overrides.telegramRouting}
+                    telegramChatIdOverride={overrides.telegramChatIdOverride ?? ''}
+                    notifyGithubUser={notifyGithubUser}
+                    onDiscordRoutingChange={(value) =>
+                      setOverrides((current) => ({ ...current, discordRouting: value }))
+                    }
+                    onDiscordWebhookChange={(value) =>
+                      setOverrides((current) => ({
+                        ...current,
+                        discordWebhookUrlOverride: value || null,
+                      }))
+                    }
+                    onTelegramRoutingChange={(value) =>
+                      setOverrides((current) => ({ ...current, telegramRouting: value }))
+                    }
+                    onTelegramChatIdChange={(value) =>
+                      setOverrides((current) => ({
+                        ...current,
+                        telegramChatIdOverride: value || null,
+                      }))
+                    }
+                    onNotifyGithubUserChange={setNotifyGithubUser}
+                  />
+                )}
+              </div>
             </div>
 
-            <TabsContent
-              value="general"
-              className="mt-0 min-h-0 space-y-4 pr-1"
-              data-project-settings-scroll-region
-            >
-              <ProjectSettingsGeneralTab
-                project={project}
-                nameInput={nameInput}
-                setNameInput={setNameInput}
-                urlInput={urlInput}
-                setUrlInput={setUrlInput}
-                setTouched={setTouched}
-                nameError={nameError}
-                showInlineError={showInlineError}
-                validationOk={validation.ok}
-                validationReason={validation.ok ? null : validation.reason}
-                relinkPending={relinkMutation.isPending}
-                relinkError={relinkError}
-                onRelink={() => {
-                  setRelinkError(null);
-                  relinkMutation.mutate();
-                }}
-                canSync={canSync}
-                syncLocked={syncLocked}
-                syncPending={syncMutation.isPending}
-                syncResult={syncResult}
-                syncError={syncError}
-                hasSavedUrl={hasSavedUrl}
-                inputMatchesSaved={inputMatchesSaved}
-                onSync={handleSync}
-              />
-            </TabsContent>
-
-            <TabsContent
-              value="setup"
-              className="mt-0 min-h-0 space-y-4 pr-1"
-              data-project-settings-scroll-region
-            >
-              <ProjectSettingsSetupTab
-                setupCommandsText={setupCommandsText}
-                setSetupCommandsText={setSetupCommandsText}
-                verifyCommandsText={verifyCommandsText}
-                setVerifyCommandsText={setVerifyCommandsText}
-                testingContext={testingContext}
-                setTestingContext={setTestingContext}
-                setupBeforeVerify={setupBeforeVerify}
-                setSetupBeforeVerify={setSetupBeforeVerify}
-                envFiles={envFiles}
-                addEnvFile={addEnvFile}
-                updateEnvFile={updateEnvFile}
-                removeEnvFile={removeEnvFile}
-                detectedProfiles={detectedProfiles}
-                inspection={setupInspection}
-                projectPath={project.path}
-                pathExists={pathExists}
-                submitError={setupSaveError}
-                onRedetect={() => {
-                  void refetchSetup();
-                }}
-                onApplyDetectedProfile={(profile) => {
-                  applySetupContract(profile.suggestedContract);
-                }}
-                detectPending={setupDetectPending}
-              />
-            </TabsContent>
-
-            <TabsContent
-              value="pipeline"
-              className="mt-0 min-h-0 space-y-4 pr-1"
-              data-project-settings-scroll-region
-            >
-              <ProjectSettingsPipelineTab
-                settings={settings}
-                overrides={overrides}
-                setOverrides={setOverrides}
-                onResetIssueOverrides={handleResetIssueOverrides}
-                issueOverrideResetPending={resetIssueOverridesMutation.isPending}
-                issueOverrideResetResult={issueOverrideResetResult}
-                issueOverrideResetError={issueOverrideResetError}
-              />
-            </TabsContent>
-
-            <TabsContent
-              value="models"
-              className="mt-0 min-h-0 space-y-3 pr-1"
-              data-project-settings-scroll-region
-            >
-              <ProjectSettingsModelsTab
-                settings={settings}
-                projectDraft={projectDraft}
-                overrides={overrides}
-                setOverrides={setOverrides}
-                integrationStatus={integrationStatus}
-                modelValidation={modelValidation}
-                setModelValidation={setModelValidation}
-                onApplyPreset={handleApplyModelPreset}
-              />
-            </TabsContent>
-
-            <TabsContent
-              value="github"
-              className="mt-0 min-h-0 space-y-4 pr-1"
-              data-project-settings-scroll-region
-            >
-              <ProjectSettingsGitHubTab
-                pathExists={pathExists}
-                projectId={projectSettingsModalProjectId ?? ''}
-                isActive={activeTab === 'github'}
-              />
-            </TabsContent>
-
-            <TabsContent
-              value="context"
-              className="mt-0 min-h-0 space-y-4 pr-1"
-              data-project-settings-scroll-region
-            >
-              <ProjectSettingsContextTab
-                contextFiles={memoryStatus?.files}
-                contextGeneratorCli={contextGeneratorCli}
-                setContextGeneratorCli={setContextGeneratorCli}
-                contextGenerating={contextGenerating}
-                contextCliUnavailableReason={contextCliUnavailableReason}
-                contextError={contextError}
-                cliOptions={contextCliOptions}
-                onGenerateContext={() => {
-                  void handleGenerateContext();
-                }}
-              />
-            </TabsContent>
-
-            <TabsContent
-              value="notifications"
-              className="mt-0 min-h-0 space-y-4 pr-1"
-              data-project-settings-scroll-region
-            >
-              <ProjectSettingsNotificationsTab
-                discordRouting={overrides.discordRouting}
-                discordWebhookUrlOverride={overrides.discordWebhookUrlOverride ?? ''}
-                telegramRouting={overrides.telegramRouting}
-                telegramChatIdOverride={overrides.telegramChatIdOverride ?? ''}
-                notifyGithubUser={notifyGithubUser}
-                onDiscordRoutingChange={(value) =>
-                  setOverrides((current) => ({ ...current, discordRouting: value }))
-                }
-                onDiscordWebhookChange={(value) =>
-                  setOverrides((current) => ({
-                    ...current,
-                    discordWebhookUrlOverride: value || null,
-                  }))
-                }
-                onTelegramRoutingChange={(value) =>
-                  setOverrides((current) => ({ ...current, telegramRouting: value }))
-                }
-                onTelegramChatIdChange={(value) =>
-                  setOverrides((current) => ({
-                    ...current,
-                    telegramChatIdOverride: value || null,
-                  }))
-                }
-                onNotifyGithubUserChange={setNotifyGithubUser}
-              />
-            </TabsContent>
-          </Tabs>
-
-          {displayError && (
-            <div className="mt-4 rounded-md border border-danger/30 bg-danger/10 px-2.5 py-2 text-xs text-danger">
-              <span className="line-clamp-1">{displayError}</span>
-            </div>
-          )}
+            {displayError && (
+              <div className="mx-8 mb-4 rounded-md border border-danger/30 bg-danger/10 px-2.5 py-2 text-xs text-danger">
+                <span className="line-clamp-1">{displayError}</span>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

@@ -16,12 +16,12 @@ import {
 } from '@shipcode/shared';
 import {
   Input,
-  Label,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SettingsRow,
 } from '@shipshitdev/ui';
 import type { Dispatch, SetStateAction } from 'react';
 import {
@@ -126,146 +126,146 @@ export function ProjectPhaseSettingsRow({
       ? { available: true, message: null }
       : assessCliModelAvailability(integrationStatus, selectedProvider, selectedModelId);
 
+  const inheritDescription = `Inherit currently uses ${formatInheritedSummary(
+    settings,
+    projectDraft,
+    phase,
+  )}.`;
+  const providerSelectId = `project-${phase}-provider`;
+  const modelSelectId = `project-${phase}-model`;
+  const effortSelectId = `project-${phase}-effort`;
+  const customModelId = `project-${phase}-custom-openrouter-model`;
+
   return (
-    <div className="rounded-md border border-border bg-secondary/50 p-3">
-      <div className="mb-3">
-        <div className="text-[13px] font-medium text-primary">{label}</div>
-        <div className="text-[11px] text-muted">
-          Inherit currently uses {formatInheritedSummary(settings, projectDraft, phase)}.
-        </div>
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-3">
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-[11px] text-secondary">Provider</Label>
-          <Select
-            value={providerOverride ?? INHERIT_VALUE}
-            onValueChange={(next) => {
-              setOverrides((current) => ({
-                ...current,
-                [providerKey]: next === INHERIT_VALUE ? null : (next as ExecutorModel),
-                [modelIdKey]: null,
-                [effortKey]:
-                  next === INHERIT_VALUE || current[effortKey] === null
-                    ? current[effortKey]
-                    : (resolveProviderReasoningEffort(
-                        next as ExecutorModel,
-                        current[effortKey],
-                        null,
-                      ).effective as Project['plannerReasoningEffortOverride']),
-              }));
-              setModelValidation((current) => ({ ...current, [phase]: null }));
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue>
-                {providerOverride === null ? (
-                  <InheritValueDisplay detail={PROVIDER_DISPLAY[effectiveProvider]} />
-                ) : undefined}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={INHERIT_VALUE}>
-                Inherit ({PROVIDER_DISPLAY[effectiveProvider]})
+    <section>
+      <div className="mb-2 text-[13px] font-medium text-primary">{label}</div>
+      <SettingsRow label="Provider" htmlFor={providerSelectId} description={inheritDescription}>
+        <Select
+          value={providerOverride ?? INHERIT_VALUE}
+          onValueChange={(next) => {
+            setOverrides((current) => ({
+              ...current,
+              [providerKey]: next === INHERIT_VALUE ? null : (next as ExecutorModel),
+              [modelIdKey]: null,
+              [effortKey]:
+                next === INHERIT_VALUE || current[effortKey] === null
+                  ? current[effortKey]
+                  : (resolveProviderReasoningEffort(next as ExecutorModel, current[effortKey], null)
+                      .effective as Project['plannerReasoningEffortOverride']),
+            }));
+            setModelValidation((current) => ({ ...current, [phase]: null }));
+          }}
+        >
+          <SelectTrigger id={providerSelectId} className="w-[180px]">
+            <SelectValue>
+              {providerOverride === null ? (
+                <InheritValueDisplay detail={PROVIDER_DISPLAY[effectiveProvider]} />
+              ) : undefined}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={INHERIT_VALUE}>
+              Inherit ({PROVIDER_DISPLAY[effectiveProvider]})
+            </SelectItem>
+            {validProviders.map((provider) => (
+              <SelectItem key={provider} value={provider}>
+                {PROVIDER_DISPLAY[provider]}
               </SelectItem>
-              {validProviders.map((provider) => (
-                <SelectItem key={provider} value={provider}>
-                  {PROVIDER_DISPLAY[provider]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+            ))}
+          </SelectContent>
+        </Select>
+      </SettingsRow>
 
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-[11px] text-secondary">Model</Label>
-          <Select
-            value={modelIdOverride ?? INHERIT_VALUE}
-            onValueChange={(next) => {
-              const nextModelId = next === INHERIT_VALUE ? null : next;
-              setOverrides((current) => ({
-                ...current,
-                [modelIdKey]: nextModelId,
-                [effortKey]:
-                  current[effortKey] === null
-                    ? null
-                    : (resolveProviderReasoningEffort(
-                        selectedProvider,
-                        current[effortKey],
-                        nextModelId,
-                      ).effective as Project['plannerReasoningEffortOverride']),
-              }));
-              setModelValidation((current) => ({ ...current, [phase]: null }));
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue>
-                {modelIdOverride === null ? (
-                  <InheritValueDisplay detail={inheritedModelLabel} />
-                ) : undefined}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={INHERIT_VALUE}>Inherit ({inheritedModelLabel})</SelectItem>
-              {modelIdOverride && !knownModelValues.has(modelIdOverride) ? (
-                <SelectItem value={modelIdOverride} disabled={!cliModelAvailability.available}>
-                  {modelIdOverride}
-                  {!cliModelAvailability.available ? ' (Unavailable)' : ''}
-                </SelectItem>
-              ) : null}
-              {modelOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-[11px] text-secondary">
-            {selectedProvider === 'claude' ? 'Thinking budget' : 'Effort'}
-          </Label>
-          <Select
-            value={displayedEffortValue}
-            onValueChange={(next) => {
-              setOverrides((current) => ({
-                ...current,
-                [effortKey]:
-                  next === INHERIT_VALUE
-                    ? null
-                    : (next as Project['plannerReasoningEffortOverride']),
-              }));
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue>
-                {effortOverride === null ? (
-                  <InheritValueDisplay
-                    detail={formatReasoningEffortLabel(inheritedEffortResolution.effective)}
-                  />
-                ) : undefined}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={INHERIT_VALUE}>
-                Inherit ({formatReasoningEffortLabel(inheritedEffortResolution.effective)})
+      <SettingsRow label="Model" htmlFor={modelSelectId}>
+        <Select
+          value={modelIdOverride ?? INHERIT_VALUE}
+          onValueChange={(next) => {
+            const nextModelId = next === INHERIT_VALUE ? null : next;
+            setOverrides((current) => ({
+              ...current,
+              [modelIdKey]: nextModelId,
+              [effortKey]:
+                current[effortKey] === null
+                  ? null
+                  : (resolveProviderReasoningEffort(
+                      selectedProvider,
+                      current[effortKey],
+                      nextModelId,
+                    ).effective as Project['plannerReasoningEffortOverride']),
+            }));
+            setModelValidation((current) => ({ ...current, [phase]: null }));
+          }}
+        >
+          <SelectTrigger id={modelSelectId} className="w-[220px]">
+            <SelectValue>
+              {modelIdOverride === null ? (
+                <InheritValueDisplay detail={inheritedModelLabel} />
+              ) : undefined}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={INHERIT_VALUE}>Inherit ({inheritedModelLabel})</SelectItem>
+            {modelIdOverride && !knownModelValues.has(modelIdOverride) ? (
+              <SelectItem value={modelIdOverride} disabled={!cliModelAvailability.available}>
+                {modelIdOverride}
+                {!cliModelAvailability.available ? ' (Unavailable)' : ''}
               </SelectItem>
-              {supportedEfforts.map((effort) => (
-                <SelectItem key={effort} value={effort}>
-                  {formatReasoningEffortLabel(effort)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+            ) : null}
+            {modelOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </SettingsRow>
+
+      <SettingsRow
+        label={selectedProvider === 'claude' ? 'Thinking budget' : 'Effort'}
+        htmlFor={effortSelectId}
+      >
+        <Select
+          value={displayedEffortValue}
+          onValueChange={(next) => {
+            setOverrides((current) => ({
+              ...current,
+              [effortKey]:
+                next === INHERIT_VALUE ? null : (next as Project['plannerReasoningEffortOverride']),
+            }));
+          }}
+        >
+          <SelectTrigger id={effortSelectId} className="w-[140px]">
+            <SelectValue>
+              {effortOverride === null ? (
+                <InheritValueDisplay
+                  detail={formatReasoningEffortLabel(inheritedEffortResolution.effective)}
+                />
+              ) : undefined}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={INHERIT_VALUE}>
+              Inherit ({formatReasoningEffortLabel(inheritedEffortResolution.effective)})
+            </SelectItem>
+            {supportedEfforts.map((effort) => (
+              <SelectItem key={effort} value={effort}>
+                {formatReasoningEffortLabel(effort)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </SettingsRow>
 
       {selectedProvider === 'openrouter' && phase !== 'executor' ? (
-        <div className="mt-3 flex flex-col gap-1.5">
-          <Label className="text-[11px] text-secondary">Custom OpenRouter model slug</Label>
+        <SettingsRow
+          label="Custom OpenRouter slug"
+          htmlFor={customModelId}
+          description="Enter a slug directly to override the curated presets for this project."
+        >
           <Input
+            id={customModelId}
             key={`${phase}-${modelIdOverride ?? ''}`}
+            className="w-[260px]"
             placeholder="e.g. anthropic/claude-sonnet-4.6"
             defaultValue={modelIdOverride ?? ''}
             onBlur={async (e) => {
@@ -290,10 +290,7 @@ export function ProjectPhaseSettingsRow({
               setModelValidation((current) => ({ ...current, [phase]: validation }));
             }}
           />
-          <p className="text-[11px] text-muted">
-            Enter a slug directly to override the curated presets for this project.
-          </p>
-        </div>
+        </SettingsRow>
       ) : null}
 
       {providerWarning ? (
@@ -328,6 +325,6 @@ export function ProjectPhaseSettingsRow({
           {validationMessage}
         </div>
       ) : null}
-    </div>
+    </section>
   );
 }

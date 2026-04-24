@@ -4,20 +4,20 @@ import { Handle, type NodeProps, Position } from '@xyflow/react';
 import type { IssueGraphNodeData } from './issue-graph-utils';
 
 const STATUS_STYLES: Record<IssuePipelineStatus, string> = {
-  todo: 'border-border bg-secondary/50',
-  queued: 'border-accent/40 bg-accent/10',
-  planning: 'border-agent/40 bg-agent/10',
-  clarifying: 'border-warning/40 bg-warning/10',
-  reviewing: 'border-agent/40 bg-agent/10',
-  revising: 'border-agent/40 bg-agent/10',
-  awaiting_approval: 'border-warning/40 bg-warning/10',
-  executing: 'border-success/40 bg-success/10',
-  testing: 'border-success/40 bg-success/10',
-  verifying: 'border-success/40 bg-success/10',
-  shipping: 'border-success/40 bg-success/10',
-  completed: 'border-success/40 bg-success/10',
-  done: 'border-success/40 bg-success/10',
-  failed: 'border-danger/40 bg-danger/10',
+  todo: 'border-border-strong bg-elevated',
+  queued: 'border-info/60 bg-elevated',
+  planning: 'border-agent/60 bg-elevated',
+  clarifying: 'border-warning/60 bg-elevated',
+  reviewing: 'border-agent/60 bg-elevated',
+  revising: 'border-agent/60 bg-elevated',
+  awaiting_approval: 'border-warning/60 bg-elevated',
+  executing: 'border-success/60 bg-elevated',
+  testing: 'border-success/60 bg-elevated',
+  verifying: 'border-success/60 bg-elevated',
+  shipping: 'border-success/60 bg-elevated',
+  completed: 'border-success/60 bg-elevated',
+  done: 'border-success/60 bg-elevated',
+  failed: 'border-danger/60 bg-elevated',
 };
 
 export function IssueGraphNode({ data, selected }: NodeProps) {
@@ -26,7 +26,7 @@ export function IssueGraphNode({ data, selected }: NodeProps) {
   return (
     <div
       className={cn(
-        'min-w-[220px] rounded-xl border px-3 py-2 shadow-sm transition-shadow',
+        'min-w-[220px] rounded-xl border px-3 py-2 shadow-sm shadow-black/25 transition-shadow',
         STATUS_STYLES[payload.pipelineStatus],
         payload.state === 'closed' && 'opacity-75',
         selected && 'ring-2 ring-agent/50 shadow-lg',

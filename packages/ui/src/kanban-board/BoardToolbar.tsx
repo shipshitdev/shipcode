@@ -1,6 +1,6 @@
 'use client';
 
-import { Columns3, ExternalLink, LayoutList, RefreshCw } from 'lucide-react';
+import { Columns3, ExternalLink, LayoutList, RefreshCw, Workflow } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button } from '../primitives/button';
 import {
@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from '../primitives/select';
 import { BOARD_SORT_LABELS } from './constants';
-import type { BoardSortOrder } from './types';
+import type { BoardSortOrder, BoardView } from './types';
 
 interface BoardToolbarProps {
   baseBranch?: string;
@@ -24,8 +24,9 @@ interface BoardToolbarProps {
   refreshingBranches: boolean;
   sortOrder: BoardSortOrder;
   onSortOrderChange: (order: BoardSortOrder) => void;
-  view: 'kanban' | 'list';
-  onViewChange: (view: 'kanban' | 'list') => void;
+  view: BoardView;
+  onViewChange: (view: BoardView) => void;
+  graphEnabled?: boolean;
   approvalFilter: 'all' | 'needs-approval';
   onApprovalFilterChange: (filter: 'all' | 'needs-approval') => void;
   refreshing: boolean;
@@ -47,6 +48,7 @@ export function BoardToolbar({
   onSortOrderChange,
   view,
   onViewChange,
+  graphEnabled = false,
   approvalFilter,
   onApprovalFilterChange,
   refreshing,
@@ -183,6 +185,20 @@ export function BoardToolbar({
           >
             <LayoutList size={14} />
           </Button>
+          {graphEnabled && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className={cn(
+                'rounded-none border-l border-border text-muted',
+                view === 'graph' && 'bg-accent/15 text-accent',
+              )}
+              onClick={() => onViewChange('graph')}
+              title="Graph view"
+            >
+              <Workflow size={14} />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon-sm"

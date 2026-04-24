@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 
-import type { DiffRecord, StatusLabelMapping } from '@shipcode/shared';
+import type { DiffRecord, GitWorktreeSummary, StatusLabelMapping } from '@shipcode/shared';
 import { act, type ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { describe, expect, it, vi } from 'vitest';
 import { ActivePipelineCard } from './ActivePipelineCard';
 import { DiffViewer } from './DiffViewer';
+import { GitVisualizer } from './GitVisualizer';
 import { LoadingButtonContent } from './LoadingButtonContent';
 import { Alert, AlertDescription, AlertTitle } from './primitives/alert';
 import { Button } from './primitives/button';
@@ -106,6 +107,39 @@ index 1111111..2222222 100644
   },
 ];
 
+const worktrees: GitWorktreeSummary[] = [
+  {
+    id: 'main:project-1',
+    kind: 'main',
+    path: '/repo/shipcode',
+    branch: 'develop',
+    commitHash: '1234567890abcdef',
+    isDirty: true,
+    untrackedCount: 1,
+    stagedCount: 0,
+    modifiedCount: 2,
+    threadId: null,
+    issueNumber: null,
+    title: null,
+    status: null,
+  },
+  {
+    id: 'worktree:/tmp/shipcode/46',
+    kind: 'shipcode',
+    path: '/tmp/shipcode/46',
+    branch: 'ship/46-bootstrap',
+    commitHash: 'abcdef1234567890',
+    isDirty: false,
+    untrackedCount: 0,
+    stagedCount: 0,
+    modifiedCount: 0,
+    threadId: 'thread-46',
+    issueNumber: 46,
+    title: 'Bootstrap visualizer',
+    status: 'completed',
+  },
+];
+
 const mappings: StatusLabelMapping = {
   todo: '',
   queued: 'status:queued',
@@ -187,6 +221,42 @@ describe('UI component regression coverage', () => {
 
     view.rerender(<SideBySideDiffViewer diffs={[]} />);
     expect(view.container.textContent).toContain('No changes to display');
+    view.cleanup();
+  });
+
+  it('renders the read-only git visualizer and switches worktrees', () => {
+    const onSelectWorktree = vi.fn();
+    const onRefresh = vi.fn();
+    const view = renderIntoDom(
+      <GitVisualizer
+        worktrees={worktrees}
+        branches={['develop', 'ship/46-bootstrap']}
+        selectedWorktreePath="/repo/shipcode"
+        diffs={sideBySideDiffRecords}
+        onSelectWorktree={onSelectWorktree}
+        onRefresh={onRefresh}
+      />,
+    );
+
+    expect(view.container.textContent).toContain('Git Visualizer');
+    expect(view.container.textContent).toContain('2 worktrees');
+    expect(view.container.textContent).toContain('develop');
+    expect(view.container.textContent).toContain('#46 Bootstrap visualizer');
+    expect(view.container.textContent).toContain('2 modified, 1 untracked');
+    expect(view.container.textContent).toContain('2 files');
+
+    const worktreeButton = Array.from(view.container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('ship/46-bootstrap'),
+    );
+    if (!(worktreeButton instanceof HTMLButtonElement)) {
+      throw new Error('Expected worktree button');
+    }
+
+    act(() => {
+      worktreeButton.click();
+    });
+
+    expect(onSelectWorktree).toHaveBeenCalledWith('/tmp/shipcode/46');
     view.cleanup();
   });
 

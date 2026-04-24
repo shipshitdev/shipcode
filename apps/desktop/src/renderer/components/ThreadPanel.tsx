@@ -12,6 +12,7 @@ import { Button, RefreshCw, X } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
 import { useEffect, useMemo, useState } from 'react';
+import { ProjectGraphTab } from '../features/project/project-graph-tab';
 import { useAppStore } from '../stores/app-store';
 import { ThreadPanelArchiveDialog } from './ThreadPanelArchiveDialog';
 
@@ -338,6 +339,7 @@ export function ThreadPanel() {
           ).length;
           setArchiveConfirm({ type: 'all', count: doneCount });
         }}
+        graphContent={<ProjectGraphTab embedded />}
         onMarkDone={(issue) => {
           if (!activeProjectId) return;
           const linkedThread = issue.threadId ? threadById.get(issue.threadId) : null;

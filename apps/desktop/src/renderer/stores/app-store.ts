@@ -56,7 +56,7 @@ function upsertTerminalEvents(
 
 export type ViewMode = 'overview' | 'project' | 'activity' | 'inbox' | 'costs' | 'skills';
 
-export type ProjectTab = 'issues' | 'pull-requests' | 'sessions';
+export type ProjectTab = 'issues' | 'git' | 'pull-requests' | 'sessions';
 export type InstantPaneMode = 'replay' | 'live';
 export type SettingsSection =
   | 'general'

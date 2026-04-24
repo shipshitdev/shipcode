@@ -17,7 +17,7 @@ import { BoardToolbar } from './kanban-board/BoardToolbar';
 import { COLUMNS } from './kanban-board/constants';
 import { DragOverlayCard } from './kanban-board/IssueCardParts';
 import { IssueListView } from './kanban-board/IssueListView';
-import type { BoardSortOrder, ColumnKey, KanbanBoardProps } from './kanban-board/types';
+import type { BoardSortOrder, BoardView, ColumnKey, KanbanBoardProps } from './kanban-board/types';
 import {
   compareIssues,
   customCollisionDetection,
@@ -54,6 +54,7 @@ export function KanbanBoard({
   onOpenPullRequest,
   onArchiveIssue,
   onArchiveAllDone,
+  graphContent,
 }: KanbanBoardProps) {
   const handleExternalClick = (url: string) => (event: React.MouseEvent<HTMLAnchorElement>) => {
     if (onOpenExternal) {
@@ -74,7 +75,7 @@ export function KanbanBoard({
   );
   const [activeId, setActiveId] = useState<string | null>(null);
   const activeIssue = boardIssues.find((issue) => issue.id === activeId);
-  const [view, setView] = useState<'kanban' | 'list'>('kanban');
+  const [view, setView] = useState<BoardView>('kanban');
   const [sortOrder, setSortOrder] = useState<BoardSortOrder>('priority');
   const [approvalFilter, setApprovalFilter] = useState<'all' | 'needs-approval'>('all');
   const [refreshing, setRefreshing] = useState(false);
@@ -251,6 +252,7 @@ export function KanbanBoard({
         onSortOrderChange={setSortOrder}
         view={view}
         onViewChange={setView}
+        graphEnabled={!!graphContent}
         approvalFilter={approvalFilter}
         onApprovalFilterChange={setApprovalFilter}
         refreshing={refreshing}
@@ -261,43 +263,69 @@ export function KanbanBoard({
         onRepoClick={repoUrl ? handleExternalClick(repoUrl) : undefined}
         onProjectsClick={projectsUrl ? handleExternalClick(projectsUrl) : undefined}
       />
-      <DndContext
-        sensors={sensors}
-        collisionDetection={customCollisionDetection}
-        onDragStart={readOnly ? undefined : handleDragStart}
-        onDragEnd={readOnly ? undefined : handleDragEnd}
-      >
-        {view === 'list' && (
-          <IssueListView
-            issues={visibleIssues}
-            selectedIssueNumber={selectedIssueNumber}
-            activeId={activeId}
-            issueRevisionBadgeById={issueRevisionBadgeById}
-            issueApprovalBadgeById={issueApprovalBadgeById}
-            approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
-            onIssueClick={onIssueClick}
-            onOpenPullRequest={onOpenPullRequest}
-            onArchiveIssue={onArchiveIssue}
-            onArchiveAllDone={onArchiveAllDone}
-          />
-        )}
-        {view === 'kanban' && (
-          <div className="flex min-h-0 flex-1 gap-0.5 overflow-x-auto overflow-y-hidden p-3 px-2">
-            {COLUMNS.map((col) => {
-              if (col.sections) {
+      {view === 'graph' && graphContent ? (
+        <div className="min-h-0 flex-1">{graphContent}</div>
+      ) : (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={customCollisionDetection}
+          onDragStart={readOnly ? undefined : handleDragStart}
+          onDragEnd={readOnly ? undefined : handleDragEnd}
+        >
+          {view === 'list' && (
+            <IssueListView
+              issues={visibleIssues}
+              selectedIssueNumber={selectedIssueNumber}
+              activeId={activeId}
+              issueRevisionBadgeById={issueRevisionBadgeById}
+              issueApprovalBadgeById={issueApprovalBadgeById}
+              approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
+              onIssueClick={onIssueClick}
+              onOpenPullRequest={onOpenPullRequest}
+              onArchiveIssue={onArchiveIssue}
+              onArchiveAllDone={onArchiveAllDone}
+            />
+          )}
+          {view !== 'list' && (
+            <div className="flex min-h-0 flex-1 gap-0.5 overflow-x-auto overflow-y-hidden p-3 px-2">
+              {COLUMNS.map((col) => {
+                if (col.sections) {
+                  return (
+                    <StackedColumn
+                      key={col.key}
+                      column={col}
+                      issues={visibleIssues}
+                      onIssueClick={onIssueClick}
+                      onRerun={handleRerun}
+                      onCancel={onCancel}
+                      onOpenPullRequest={onOpenPullRequest}
+                      onArchiveAllDone={col.key === 'done' ? onArchiveAllDone : undefined}
+                      onArchiveIssue={col.key === 'done' ? onArchiveIssue : undefined}
+                      rerunningId={rerunningId}
+                      selectedIssueNumber={selectedIssueNumber}
+                      issuePhaseChipById={issuePhaseChipById}
+                      issueRevisionBadgeById={issueRevisionBadgeById}
+                      issueApprovalBadgeById={issueApprovalBadgeById}
+                      approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
+                      readOnly={readOnly}
+                    />
+                  );
+                }
+                const columnIssues = visibleIssuesByColumn.get(col.key) ?? [];
                 return (
-                  <StackedColumn
+                  <DroppableColumn
                     key={col.key}
-                    column={col}
-                    issues={visibleIssues}
+                    id={col.key}
+                    columnKey={col.key}
+                    label={col.label}
+                    issues={columnIssues}
+                    droppable={!!col.droppable}
                     onIssueClick={onIssueClick}
-                    onRerun={handleRerun}
-                    onCancel={onCancel}
+                    selectedIssueNumber={selectedIssueNumber}
+                    onStartPipeline={col.key === 'todo' ? onStartPipeline : undefined}
                     onOpenPullRequest={onOpenPullRequest}
                     onArchiveAllDone={col.key === 'done' ? onArchiveAllDone : undefined}
                     onArchiveIssue={col.key === 'done' ? onArchiveIssue : undefined}
-                    rerunningId={rerunningId}
-                    selectedIssueNumber={selectedIssueNumber}
                     issuePhaseChipById={issuePhaseChipById}
                     issueRevisionBadgeById={issueRevisionBadgeById}
                     issueApprovalBadgeById={issueApprovalBadgeById}
@@ -305,43 +333,21 @@ export function KanbanBoard({
                     readOnly={readOnly}
                   />
                 );
-              }
-              const columnIssues = visibleIssuesByColumn.get(col.key) ?? [];
-              return (
-                <DroppableColumn
-                  key={col.key}
-                  id={col.key}
-                  columnKey={col.key}
-                  label={col.label}
-                  issues={columnIssues}
-                  droppable={!!col.droppable}
-                  onIssueClick={onIssueClick}
-                  selectedIssueNumber={selectedIssueNumber}
-                  onStartPipeline={col.key === 'todo' ? onStartPipeline : undefined}
-                  onOpenPullRequest={onOpenPullRequest}
-                  onArchiveAllDone={col.key === 'done' ? onArchiveAllDone : undefined}
-                  onArchiveIssue={col.key === 'done' ? onArchiveIssue : undefined}
-                  issuePhaseChipById={issuePhaseChipById}
-                  issueRevisionBadgeById={issueRevisionBadgeById}
-                  issueApprovalBadgeById={issueApprovalBadgeById}
-                  approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
-                  readOnly={readOnly}
+              })}
+            </div>
+          )}
+          {!readOnly && (
+            <DragOverlay dropAnimation={null}>
+              {activeIssue ? (
+                <DragOverlayCard
+                  issue={activeIssue}
+                  approvedAwaitingExecution={approvedAwaitingExecutionIssueIds?.has(activeIssue.id)}
                 />
-              );
-            })}
-          </div>
-        )}
-        {!readOnly && (
-          <DragOverlay dropAnimation={null}>
-            {activeIssue ? (
-              <DragOverlayCard
-                issue={activeIssue}
-                approvedAwaitingExecution={approvedAwaitingExecutionIssueIds?.has(activeIssue.id)}
-              />
-            ) : null}
-          </DragOverlay>
-        )}
-      </DndContext>
+              ) : null}
+            </DragOverlay>
+          )}
+        </DndContext>
+      )}
 
       {showRefreshToast && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">

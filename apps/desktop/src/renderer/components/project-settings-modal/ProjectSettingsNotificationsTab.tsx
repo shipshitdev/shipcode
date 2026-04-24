@@ -1,12 +1,12 @@
 import type { ProjectNotificationRoutingMode } from '@shipcode/shared';
 import {
   Input,
-  Label,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SettingsRow,
 } from '@shipshitdev/ui';
 
 export function ProjectSettingsNotificationsTab({
@@ -33,98 +33,95 @@ export function ProjectSettingsNotificationsTab({
   onNotifyGithubUserChange: (value: string) => void;
 }) {
   return (
-    <div className="space-y-4">
-      <div className="rounded-md border border-border bg-secondary/30 p-3">
-        <div className="text-[12px] font-medium text-primary">About notifications</div>
-        <p className="mt-1 text-[11px] text-muted">
-          GitHub's built-in integrations forward issue events to Discord and Slack automatically.
-          The routing below is for ShipCode pipeline events (plan started, execution failed, etc.)
-          that don't create GitHub activity.
-        </p>
+    <div className="space-y-6">
+      <div className="text-xs text-muted">
+        GitHub's built-in integrations forward issue events to Discord and Slack automatically. The
+        routing below is for ShipCode pipeline events (plan started, execution failed, etc.) that
+        don't create GitHub activity.
       </div>
 
-      <div className="rounded-md border border-border bg-secondary/30 p-3">
-        <div className="mb-2 text-[12px] font-medium text-primary">Chat routing overrides</div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label className="text-xs text-secondary">Discord routing</Label>
-            <Select
-              value={discordRouting}
-              onValueChange={(value) =>
-                onDiscordRoutingChange(value as ProjectNotificationRoutingMode)
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="inherit">Inherit global default</SelectItem>
-                <SelectItem value="disabled">Disable for this project</SelectItem>
-                <SelectItem value="custom">Use custom webhook</SelectItem>
-              </SelectContent>
-            </Select>
-            {discordRouting === 'custom' ? (
-              <Input
-                value={discordWebhookUrlOverride}
-                onChange={(e) => onDiscordWebhookChange(e.target.value)}
-                placeholder="https://discord.com/api/webhooks/..."
-                autoComplete="off"
-                spellCheck={false}
-              />
-            ) : null}
-          </div>
+      <section>
+        <SettingsRow label="Discord routing">
+          <Select
+            value={discordRouting}
+            onValueChange={(value) =>
+              onDiscordRoutingChange(value as ProjectNotificationRoutingMode)
+            }
+          >
+            <SelectTrigger className="w-[220px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="inherit">Inherit global default</SelectItem>
+              <SelectItem value="disabled">Disable for this project</SelectItem>
+              <SelectItem value="custom">Use custom webhook</SelectItem>
+            </SelectContent>
+          </Select>
+        </SettingsRow>
 
-          <div className="space-y-2">
-            <Label className="text-xs text-secondary">Telegram routing</Label>
-            <Select
-              value={telegramRouting}
-              onValueChange={(value) =>
-                onTelegramRoutingChange(value as ProjectNotificationRoutingMode)
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="inherit">Inherit global default</SelectItem>
-                <SelectItem value="disabled">Disable for this project</SelectItem>
-                <SelectItem value="custom">Use custom chat ID</SelectItem>
-              </SelectContent>
-            </Select>
-            {telegramRouting === 'custom' ? (
-              <Input
-                value={telegramChatIdOverride}
-                onChange={(e) => onTelegramChatIdChange(e.target.value)}
-                placeholder="-1001234567890"
-                autoComplete="off"
-                spellCheck={false}
-              />
-            ) : null}
-          </div>
-        </div>
-      </div>
+        {discordRouting === 'custom' ? (
+          <SettingsRow label="Discord webhook URL">
+            <Input
+              className="w-[320px]"
+              value={discordWebhookUrlOverride}
+              onChange={(e) => onDiscordWebhookChange(e.target.value)}
+              placeholder="https://discord.com/api/webhooks/..."
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </SettingsRow>
+        ) : null}
 
-      <div className="rounded-md border border-border bg-secondary/30 p-3">
-        <div className="mb-2 text-[12px] font-medium text-primary">Issue rewrite @mention</div>
-        <div className="space-y-2">
-          <Label htmlFor="notify-github-user" className="text-xs text-secondary">
-            Additional recipient
-          </Label>
+        <SettingsRow label="Telegram routing">
+          <Select
+            value={telegramRouting}
+            onValueChange={(value) =>
+              onTelegramRoutingChange(value as ProjectNotificationRoutingMode)
+            }
+          >
+            <SelectTrigger className="w-[220px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="inherit">Inherit global default</SelectItem>
+              <SelectItem value="disabled">Disable for this project</SelectItem>
+              <SelectItem value="custom">Use custom chat ID</SelectItem>
+            </SelectContent>
+          </Select>
+        </SettingsRow>
+
+        {telegramRouting === 'custom' ? (
+          <SettingsRow label="Telegram chat ID">
+            <Input
+              className="w-[220px]"
+              value={telegramChatIdOverride}
+              onChange={(e) => onTelegramChatIdChange(e.target.value)}
+              placeholder="-1001234567890"
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </SettingsRow>
+        ) : null}
+      </section>
+
+      <section>
+        <SettingsRow
+          label="Issue rewrite @mention"
+          htmlFor="notify-github-user"
+          description="Tagged on every issue rewrite alongside the issue author. Leave blank to only tag the author."
+        >
           <Input
             id="notify-github-user"
             type="text"
+            className="w-[220px]"
             value={notifyGithubUser}
             onChange={(e) => onNotifyGithubUserChange(e.target.value)}
             placeholder="github-handle"
             autoComplete="off"
             spellCheck={false}
           />
-          <p className="text-[11px] text-muted">
-            Tagged on every issue rewrite alongside the issue author. Leave blank to only tag the
-            author.
-          </p>
-        </div>
-      </div>
+        </SettingsRow>
+      </section>
     </div>
   );
 }

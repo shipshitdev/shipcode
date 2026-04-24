@@ -1,5 +1,5 @@
 import type { Project } from '@shipcode/shared';
-import { Button, Input, Label, LoadingButtonContent } from '@shipshitdev/ui';
+import { Button, Input, LoadingButtonContent, SettingsRow } from '@shipshitdev/ui';
 
 export function ProjectSettingsGeneralTab({
   project,
@@ -47,50 +47,43 @@ export function ProjectSettingsGeneralTab({
   onSync: () => void;
 }) {
   return (
-    <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="project-name" className="text-xs text-secondary">
-            Name
-          </Label>
-          <Input
-            id="project-name"
-            value={nameInput}
-            onChange={(e) => setNameInput(e.target.value)}
-            placeholder={project.name}
-            className={nameError ? 'border-danger' : undefined}
-            autoComplete="off"
-            spellCheck={false}
-          />
-          {nameError ? <p className="text-[11px] text-danger">{nameError}</p> : null}
-        </div>
+    <div className="space-y-6">
+      <section>
+        <SettingsRow label="Name" htmlFor="project-name">
+          <div className="flex w-[260px] flex-col gap-1">
+            <Input
+              id="project-name"
+              value={nameInput}
+              onChange={(e) => setNameInput(e.target.value)}
+              placeholder={project.name}
+              className={nameError ? 'border-danger' : undefined}
+              autoComplete="off"
+              spellCheck={false}
+            />
+            {nameError ? <p className="text-[11px] text-danger">{nameError}</p> : null}
+          </div>
+        </SettingsRow>
 
-        <div className="flex flex-col gap-1">
-          <Label className="text-xs text-secondary">Git remote</Label>
-          <div className="truncate font-mono text-xs text-secondary">
+        <SettingsRow label="Git remote">
+          <div className="max-w-[320px] truncate font-mono text-xs text-secondary">
             {project.gitRemote ?? '(no remote)'}
           </div>
-        </div>
+        </SettingsRow>
 
-        <div className="flex flex-col gap-1">
-          <Label className="text-xs text-secondary">Default branch</Label>
+        <SettingsRow label="Default branch">
           <div className="font-mono text-xs text-secondary">{project.defaultBranch}</div>
-        </div>
-      </div>
+        </SettingsRow>
+      </section>
 
-      <div className="rounded-md border border-border bg-secondary/30 p-3">
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <div>
-            <div className="text-[12px] font-medium text-primary">Repository folder</div>
-            <div className="text-[11px] text-muted">
-              If you moved this repo on disk, relink the existing project instead of creating a
-              duplicate.
-            </div>
-          </div>
+      <section>
+        <SettingsRow
+          label="Repository folder"
+          description="If you moved this repo on disk, relink the existing project instead of creating a duplicate."
+        >
           <Button variant="secondary" size="sm" onClick={onRelink} disabled={relinkPending}>
             <LoadingButtonContent loading={relinkPending}>Change folder...</LoadingButtonContent>
           </Button>
-        </div>
+        </SettingsRow>
         <div className="font-mono text-xs text-secondary break-all">{project.path}</div>
         {project.pathExists === false ? (
           <div className="mt-2 rounded-md border border-warning/30 bg-warning/10 px-2.5 py-2 text-[11px] text-warning">
@@ -103,62 +96,65 @@ export function ProjectSettingsGeneralTab({
             <span className="line-clamp-2">{relinkError}</span>
           </div>
         ) : null}
-      </div>
+      </section>
 
-      <div className="flex flex-col gap-1">
-        <Label htmlFor="github-project-url" className="text-xs text-secondary">
-          GitHub Projects board URL
-        </Label>
-        <Input
-          id="github-project-url"
-          type="url"
-          value={urlInput}
-          onChange={(e) => setUrlInput(e.target.value)}
-          onBlur={() => setTouched(true)}
-          placeholder="https://github.com/orgs/your-org/projects/1"
-          className={showInlineError ? 'border-danger' : undefined}
-          autoComplete="off"
-          spellCheck={false}
-        />
-        <p className="text-[11px] text-muted">
-          Leave blank to hide the Kanban <span className="font-mono">board</span> button. Paste a
-          full GitHub Projects v2 URL to link it to the real board.
-        </p>
-        {showInlineError && !validationOk ? (
-          <p className="text-[11px] text-danger">{validationReason}</p>
-        ) : null}
-      </div>
-
-      <div className="rounded-md border border-border bg-secondary/30 p-3">
-        <div className="mb-2 text-[12px] font-medium text-primary">Board sync</div>
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={onSync}
-              disabled={!canSync}
-              title={
-                !hasSavedUrl
-                  ? 'Save a board URL first'
-                  : !inputMatchesSaved
-                    ? 'Save your changes before syncing'
-                    : syncLocked
-                      ? 'Board sync is disabled after a failed attach. Fix the repo or board config, then reopen Project Settings to retry.'
-                      : 'Add every cached issue to the board'
-              }
-            >
-              <LoadingButtonContent loading={syncPending}>
-                Sync existing issues to board
-              </LoadingButtonContent>
-            </Button>
-            {syncResult ? (
-              <span className="text-[11px] text-muted">
-                Attached {syncResult.attached}, already present {syncResult.alreadyPresent}
-                {syncResult.failed > 0 ? `, failed ${syncResult.failed}` : ''}
-              </span>
+      <section>
+        <SettingsRow
+          label="GitHub Projects board URL"
+          htmlFor="github-project-url"
+          description="Leave blank to hide the Kanban board button. Paste a full GitHub Projects v2 URL to link it to the real board."
+        >
+          <div className="flex w-[320px] flex-col gap-1">
+            <Input
+              id="github-project-url"
+              type="url"
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              onBlur={() => setTouched(true)}
+              placeholder="https://github.com/orgs/your-org/projects/1"
+              className={showInlineError ? 'border-danger' : undefined}
+              autoComplete="off"
+              spellCheck={false}
+            />
+            {showInlineError && !validationOk ? (
+              <p className="text-[11px] text-danger">{validationReason}</p>
             ) : null}
           </div>
+        </SettingsRow>
+      </section>
+
+      <section>
+        <SettingsRow
+          label="Board sync"
+          description="Add every cached issue to the linked GitHub Projects board."
+        >
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onSync}
+            disabled={!canSync}
+            title={
+              !hasSavedUrl
+                ? 'Save a board URL first'
+                : !inputMatchesSaved
+                  ? 'Save your changes before syncing'
+                  : syncLocked
+                    ? 'Board sync is disabled after a failed attach. Fix the repo or board config, then reopen Project Settings to retry.'
+                    : 'Add every cached issue to the board'
+            }
+          >
+            <LoadingButtonContent loading={syncPending}>
+              Sync existing issues to board
+            </LoadingButtonContent>
+          </Button>
+        </SettingsRow>
+        <div className="flex flex-col gap-2">
+          {syncResult ? (
+            <span className="text-[11px] text-muted">
+              Attached {syncResult.attached}, already present {syncResult.alreadyPresent}
+              {syncResult.failed > 0 ? `, failed ${syncResult.failed}` : ''}
+            </span>
+          ) : null}
 
           {syncError ? (
             <div className="rounded-md border border-danger/30 bg-danger/10 px-2.5 py-2 text-[11px] text-danger">
@@ -184,7 +180,7 @@ export function ProjectSettingsGeneralTab({
             </div>
           ) : null}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

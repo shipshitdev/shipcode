@@ -3,6 +3,7 @@ export { ActivePipelineCard } from './ActivePipelineCard';
 export type { ShipCodeLogoMarkProps } from './brand/ShipCodeLogoMark';
 export { ShipCodeLogoMark } from './brand/ShipCodeLogoMark';
 export { DiffViewer } from './DiffViewer';
+export { GitVisualizer } from './GitVisualizer';
 export { KanbanBoard } from './KanbanBoard';
 export { PhaseChip } from './PhaseChip';
 export { PipelineStatus } from './PipelineStatus';

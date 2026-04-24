@@ -208,8 +208,96 @@
 	::-webkit-scrollbar-thumb { background: var(--bg-hover); border-radius: 4px; }
 	::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
-	button, [role="button"] { cursor: pointer; }
-	button:disabled, [role="button"][aria-disabled="true"] { cursor: not-allowed; }
+	button,
+	a[href],
+	[role="button"],
+	[role="link"],
+	[role="menuitem"],
+	[role="menuitemcheckbox"],
+	[role="menuitemradio"],
+	[role="option"],
+	[role="tab"],
+	[role="switch"],
+	[role="checkbox"] {
+		cursor: pointer;
+	}
+
+	button:disabled,
+	a[aria-disabled="true"],
+	[role="button"][aria-disabled="true"],
+	[role="link"][aria-disabled="true"],
+	[role="menuitem"][aria-disabled="true"],
+	[role="menuitemcheckbox"][aria-disabled="true"],
+	[role="menuitemradio"][aria-disabled="true"],
+	[role="option"][aria-disabled="true"],
+	[role="tab"][aria-disabled="true"],
+	[role="switch"][aria-disabled="true"],
+	[role="checkbox"][aria-disabled="true"],
+	[data-disabled],
+	[data-disabled="true"] {
+		cursor: not-allowed;
+	}
 
 	*:focus { outline: none; }
+}
+
+.shipcode-issue-graph {
+	background: var(--bg-primary);
+	color: var(--text-primary);
+}
+
+.shipcode-issue-graph .react-flow__pane,
+.shipcode-issue-graph .react-flow__renderer,
+.shipcode-issue-graph .react-flow__viewport {
+	background: var(--bg-primary);
+}
+
+.shipcode-issue-graph .react-flow__controls {
+	overflow: hidden;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: var(--bg-secondary);
+	box-shadow: 0 8px 24px rgb(0 0 0 / 0.32);
+}
+
+.shipcode-issue-graph .react-flow__controls-button {
+	border-bottom: 1px solid var(--border);
+	background: var(--bg-secondary);
+	color: var(--text-secondary);
+}
+
+.shipcode-issue-graph .react-flow__controls-button:hover {
+	background: var(--bg-hover);
+	color: var(--text-primary);
+}
+
+.shipcode-issue-graph .react-flow__controls-button svg {
+	fill: currentColor;
+}
+
+.shipcode-issue-graph .react-flow__minimap {
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: var(--bg-secondary);
+	box-shadow: 0 8px 24px rgb(0 0 0 / 0.32);
+}
+
+.shipcode-issue-graph .react-flow__minimap-mask {
+	fill: rgb(5 6 7 / 0.68);
+}
+
+.shipcode-issue-graph .react-flow__minimap-node {
+	fill: var(--bg-elevated);
+	stroke: var(--border-strong);
+}
+
+.shipcode-issue-graph .react-flow__edge-textbg {
+	fill: var(--bg-elevated);
+	stroke: var(--border);
+}
+
+.shipcode-issue-graph .react-flow__edge-text {
+	fill: var(--text-secondary);
+	font-size: 11px;
+	font-weight: 500;
 }

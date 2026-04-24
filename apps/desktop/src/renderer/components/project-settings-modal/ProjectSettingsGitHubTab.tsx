@@ -6,7 +6,7 @@ import {
   SHIPCODE_METADATA_LABELS,
   SHIPCODE_STATUS_LABELS,
 } from '@shipcode/shared';
-import { Button, LoadingButtonContent } from '@shipshitdev/ui';
+import { Button, LoadingButtonContent, SettingsRow } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
@@ -92,12 +92,9 @@ export function ProjectSettingsGitHubTab({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-md border border-border bg-secondary/30 p-3">
-        <div className="text-[12px] font-medium text-primary">Label management</div>
-        <p className="mt-1 text-[11px] text-muted">
-          ShipCode uses these labels to route issues to agents and track pipeline status. Sync to
-          create any missing labels in your repo.
-        </p>
+      <div className="text-xs text-muted">
+        ShipCode uses these labels to route issues to agents and track pipeline status. Sync to
+        create any missing labels in your repo.
       </div>
 
       {isLoading ? (
@@ -127,7 +124,10 @@ export function ProjectSettingsGitHubTab({
             />
           </div>
 
-          <div className="flex items-center gap-3">
+          <SettingsRow
+            label="Label sync"
+            description="Create any missing ShipCode labels in the connected GitHub repo."
+          >
             <Button
               variant="secondary"
               size="sm"
@@ -140,16 +140,16 @@ export function ProjectSettingsGitHubTab({
                   : `Sync ${missingCount} missing label${missingCount === 1 ? '' : 's'}`}
               </LoadingButtonContent>
             </Button>
+          </SettingsRow>
 
-            {syncMutation.isSuccess && syncMutation.data ? (
-              <span className="text-[11px] text-muted">
-                Created {syncMutation.data.created.length}
-                {syncMutation.data.failed.length > 0
-                  ? `, ${syncMutation.data.failed.length} failed`
-                  : ''}
-              </span>
-            ) : null}
-          </div>
+          {syncMutation.isSuccess && syncMutation.data ? (
+            <div className="text-[11px] text-muted">
+              Created {syncMutation.data.created.length}
+              {syncMutation.data.failed.length > 0
+                ? `, ${syncMutation.data.failed.length} failed`
+                : ''}
+            </div>
+          ) : null}
 
           {syncMutation.isError ? (
             <div className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-[12px] text-danger">

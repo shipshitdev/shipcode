@@ -1,16 +1,15 @@
-import { Button, cn, GitPullRequest, LayoutList, Terminal, Workflow } from '@shipshitdev/ui';
+import { Button, cn, GitPullRequest, LayoutList, Terminal } from '@shipshitdev/ui';
 import { InstantView } from '../../components/InstantView';
 import { PullRequestsPanel } from '../../components/pull-requests/PullRequestsPanel';
 import { ThreadPanel } from '../../components/ThreadPanel';
 import { type ProjectTab, useAppStore } from '../../stores/app-store';
-import { ProjectGraphTab } from './project-graph-tab';
+import { ProjectGitVisualizer } from './project-git-visualizer';
 
 type TabIcon = React.ComponentType<{ size?: number; className?: string }>;
-const GRAPH_TAB = 'graph' as ProjectTab;
 
 const PROJECT_TABS: Array<{ value: ProjectTab; label: string; icon: TabIcon }> = [
   { value: 'issues', label: 'Issues', icon: LayoutList },
-  { value: GRAPH_TAB, label: 'Graph', icon: Workflow },
+  { value: 'git', label: 'Git', icon: GitPullRequest },
   { value: 'pull-requests', label: 'Pull Requests', icon: GitPullRequest },
   { value: 'sessions', label: 'Sessions', icon: Terminal },
 ];
@@ -41,8 +40,8 @@ export function ProjectView() {
       <div className="flex flex-1 min-h-0 min-w-0 flex-col">
         {projectTab === 'issues' ? (
           <ThreadPanel />
-        ) : projectTab === GRAPH_TAB ? (
-          <ProjectGraphTab />
+        ) : projectTab === 'git' ? (
+          <ProjectGitVisualizer />
         ) : projectTab === 'pull-requests' ? (
           <PullRequestsPanel />
         ) : (

@@ -16,6 +16,7 @@ import type {
   GitHubIssueCacheRecord,
   GitHubIssueComment,
   GitState,
+  GitVisualizerData,
   InstantFixScope,
   IntegrationStatus,
   NotificationRecord,
@@ -179,6 +180,11 @@ export interface IpcInvokeChannels {
   'git:commit': { args: { projectId: string; message: string }; result: string };
   'git:push': { args: { projectId: string }; result: undefined };
   'git:list-branches': { args: { projectId: string; fetch?: boolean }; result: string[] };
+  'git:visualizer-data': { args: { projectId: string }; result: GitVisualizerData };
+  'git:worktree-diff': {
+    args: { projectId: string; worktreePath: string };
+    result: DiffRecord[];
+  };
 
   'settings:get': { args: undefined; result: AppSettings };
   'settings:set': { args: Partial<AppSettings>; result: undefined };

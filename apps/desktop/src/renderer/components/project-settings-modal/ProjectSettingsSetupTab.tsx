@@ -1,5 +1,13 @@
 import type { ProjectSetupDraft, ProjectSetupInspection, RepoSetupEnvFile } from '@shipcode/shared';
-import { Button, Checkbox, Input, Label, LoadingButtonContent, Textarea } from '@shipshitdev/ui';
+import {
+  Button,
+  Checkbox,
+  Input,
+  Label,
+  LoadingButtonContent,
+  SettingsRow,
+  Textarea,
+} from '@shipshitdev/ui';
 import type { LocalEnvFile } from './setup-utils';
 
 export function ProjectSettingsSetupTab({
@@ -69,14 +77,16 @@ export function ProjectSettingsSetupTab({
         </div>
       ) : null}
 
-      <div className="rounded-md border border-border bg-secondary/30 p-3">
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <div className="text-[12px] font-medium text-primary">Detected project profiles</div>
+      <section>
+        <SettingsRow
+          label="Detected project profiles"
+          description="Click a detected profile to fill the commands below with that suggested setup. Nothing is saved until you click Save."
+        >
           <Button variant="secondary" size="sm" onClick={onRedetect} disabled={detectPending}>
             <LoadingButtonContent loading={detectPending}>Re-detect</LoadingButtonContent>
           </Button>
-        </div>
-        <div className="flex flex-wrap gap-2">
+        </SettingsRow>
+        <div className="mt-3 flex flex-wrap gap-2">
           {detectedProfiles.map((profile: ProjectSetupDraft['profiles'][number]) => (
             <Button
               key={`${profile.kind}:${profile.evidence.join('|')}`}
@@ -95,10 +105,6 @@ export function ProjectSettingsSetupTab({
             </Button>
           ))}
         </div>
-        <div className="mt-2 text-[11px] text-muted">
-          Click a detected profile to fill the commands below with that suggested setup. Nothing is
-          saved until you click Save.
-        </div>
         <div className="mt-2 space-y-1 text-[11px] text-muted">
           {detectedProfiles.map((profile: ProjectSetupDraft['profiles'][number]) => (
             <div key={`${profile.kind}:evidence`}>
@@ -106,7 +112,7 @@ export function ProjectSettingsSetupTab({
             </div>
           ))}
         </div>
-      </div>
+      </section>
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="flex flex-col gap-1">
@@ -210,23 +216,26 @@ export function ProjectSettingsSetupTab({
         </div>
       </div>
 
-      <label className="flex items-center gap-2 text-[12px] text-secondary">
+      <SettingsRow
+        label="Setup before verification"
+        htmlFor="setup-before-verify"
+        description="Rerun setup commands before verification commands."
+      >
         <Checkbox
+          id="setup-before-verify"
           checked={setupBeforeVerify}
           onCheckedChange={(checked) => setSetupBeforeVerify(checked === true)}
         />
-        Rerun setup commands before verification commands
-      </label>
+      </SettingsRow>
 
-      <div className="rounded-md border border-border bg-secondary/30 p-3">
-        <div className="text-[12px] font-medium text-primary">Target file</div>
-        <div className="mt-1 font-mono text-[11px] text-secondary">
+      <SettingsRow
+        label="Target file"
+        description="Setup is stored in the repo, not in ShipCode's database."
+      >
+        <div className="max-w-[360px] truncate font-mono text-[11px] text-secondary">
           {inspection?.path ?? `${projectPath}/.shipcode/setup.json`}
         </div>
-        <div className="mt-1 text-[11px] text-muted">
-          Setup is stored in the repo, not in ShipCode's database.
-        </div>
-      </div>
+      </SettingsRow>
 
       {submitError ? (
         <div className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-[12px] text-danger">

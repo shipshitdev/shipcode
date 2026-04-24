@@ -1,9 +1,6 @@
 import {
   Archive,
   Bell,
-  Button,
-  ChevronLeft,
-  cn,
   FolderGit,
   Globe,
   Keyboard,
@@ -14,6 +11,7 @@ import {
 import type { ReactNode } from 'react';
 import type { SettingsSection } from '../stores/app-store';
 import { useAppStore } from '../stores/app-store';
+import { SettingsNavigation } from './SettingsNavigation';
 
 const SECTIONS: { key: SettingsSection; label: string; icon: ReactNode }[] = [
   {
@@ -64,36 +62,12 @@ export function SettingsSidebar() {
   const toggleSettings = useAppStore((state) => state.toggleSettings);
 
   return (
-    <aside className="flex w-[256px] min-w-[256px] flex-col border-r border-border bg-primary">
-      <div className="px-2 pt-2 pb-1">
-        <Button
-          variant="ghost"
-          className="h-auto w-full justify-start gap-2 px-3 py-2 text-[13px] font-normal text-secondary app-region-no-drag"
-          onClick={toggleSettings}
-        >
-          <span className="shrink-0 text-muted">
-            <ChevronLeft size={14} />
-          </span>
-          Back to app
-        </Button>
-      </div>
-
-      <div className="mt-1 px-2">
-        {SECTIONS.map(({ key, label, icon }) => (
-          <Button
-            variant="ghost"
-            key={key}
-            className={cn(
-              'h-auto w-full justify-start gap-2 px-3 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
-              settingsSection === key && 'bg-tertiary text-primary',
-            )}
-            onClick={() => setSettingsSection(key)}
-          >
-            <span className="shrink-0 text-muted">{icon}</span>
-            {label}
-          </Button>
-        ))}
-      </div>
-    </aside>
+    <SettingsNavigation
+      items={SECTIONS}
+      activeKey={settingsSection}
+      onSelect={setSettingsSection}
+      backLabel="Back to app"
+      onBack={toggleSettings}
+    />
   );
 }

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type {
   AppSettings,
   GitHubIssueCacheRecord,
@@ -6,6 +7,8 @@ import type {
   ResolvedPhaseModel,
   Thread,
 } from '../lib/shipcode';
+
+export type BoardView = 'kanban' | 'list' | 'graph';
 
 export interface KanbanBoardProps {
   issues: GitHubIssueCacheRecord[];
@@ -34,6 +37,7 @@ export interface KanbanBoardProps {
   onOpenPullRequest?: (url: string) => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
   onArchiveAllDone?: () => void;
+  graphContent?: ReactNode;
 }
 
 export type ColumnKey = 'todo' | 'agent' | 'human' | 'done';

@@ -13,6 +13,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  SettingsRow,
 } from '@shipshitdev/ui';
 import type { Dispatch, SetStateAction } from 'react';
 import { ProjectPhaseSettingsRow } from './ProjectPhaseSettingsRow';
@@ -40,19 +41,16 @@ export function ProjectSettingsModelsTab({
   onApplyPreset: (preset: ModelConfigPresetKey) => void;
 }) {
   return (
-    <div className="space-y-3">
-      <div className="text-[11px] text-muted">
+    <div className="space-y-6">
+      <div className="text-xs text-muted">
         Project model overrides shadow the global defaults for this repo only. Leave any field on
         inherit to keep using the global phase setting.
       </div>
 
-      <div className="rounded-md border border-border bg-secondary/40 p-3">
-        <div className="mb-3">
-          <div className="text-[13px] font-medium text-primary">Model Presets</div>
-          <div className="text-[11px] text-muted">
-            Apply explicit project overrides for Claude, Codex, or the current Hybrid layout.
-          </div>
-        </div>
+      <SettingsRow
+        label="Model Presets"
+        description="Apply explicit project overrides for Claude, Codex, or the current Hybrid layout."
+      >
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="secondary" size="sm">
@@ -73,9 +71,9 @@ export function ProjectSettingsModelsTab({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
+      </SettingsRow>
 
-      <div className="text-[11px] text-muted">
+      <div className="text-xs text-muted">
         Workflow order here is Planner → Reviewer → Executor → Verifier. Clarifying and Awaiting
         Approval are human checkpoints, so they do not have model rows.
       </div>

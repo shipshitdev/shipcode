@@ -9,9 +9,10 @@ export class GitService {
     this.git = simpleGit(projectPath);
   }
 
-  async getStatus(): Promise<GitState> {
-    const status: StatusResult = await this.git.status();
-    const log = await this.git.log({ maxCount: 1 });
+  async getStatus(worktreePath?: string): Promise<GitState> {
+    const git = worktreePath ? simpleGit(worktreePath) : this.git;
+    const status: StatusResult = await git.status();
+    const log = await git.log({ maxCount: 1 });
 
     return {
       branch: status.current ?? 'HEAD',
@@ -26,6 +27,11 @@ export class GitService {
   async getDiff(worktreePath?: string): Promise<string> {
     const git = worktreePath ? simpleGit(worktreePath) : this.git;
     return git.diff();
+  }
+
+  async getDiffAgainstHead(worktreePath?: string): Promise<string> {
+    const git = worktreePath ? simpleGit(worktreePath) : this.git;
+    return git.diff(['HEAD']);
   }
 
   async getDiffStat(worktreePath?: string): Promise<string> {
