@@ -1,8 +1,10 @@
 import {
   type AppSettings,
+  assessCliModelAvailability,
   type ExecutorModel,
   formatProviderReasoningEffort,
   formatReasoningEffortLabel,
+  getCapabilitySupportedReasoningEfforts,
   getSupportedReasoningEfforts,
   type IntegrationStatus,
   type OpenRouterModelValidation,
@@ -81,8 +83,8 @@ export function ProjectPhaseSettingsRow({
   const selectedProvider = asExecutorModel(providerOverride) ?? effectiveProvider;
   const selectedModelId =
     modelIdOverride ?? (selectedProvider === effectiveProvider ? inheritedModelId : null);
-  const inheritedModelOptions = getModelOptions(effectiveProvider);
-  const modelOptions = getModelOptions(selectedProvider);
+  const inheritedModelOptions = getModelOptions(effectiveProvider, integrationStatus);
+  const modelOptions = getModelOptions(selectedProvider, integrationStatus);
   const knownModelValues = new Set<string>(modelOptions.map((option) => option.value));
   const inheritedEffort = resolvePhaseReasoningEffort(settings, projectDraft, phase);
   const inheritedEffortResolution = resolveProviderReasoningEffort(
@@ -90,7 +92,14 @@ export function ProjectPhaseSettingsRow({
     inheritedEffort,
     inheritedModelId,
   );
-  const supportedEfforts = getSupportedReasoningEfforts(selectedProvider, selectedModelId);
+  const supportedEfforts =
+    selectedProvider === 'openrouter'
+      ? getSupportedReasoningEfforts(selectedProvider, selectedModelId)
+      : getCapabilitySupportedReasoningEfforts(
+          integrationStatus,
+          selectedProvider,
+          selectedModelId,
+        );
   const effortResolution =
     effortOverride === null
       ? null
@@ -112,6 +121,10 @@ export function ProjectPhaseSettingsRow({
     modelValidation[phase] && modelValidation[phase]?.status !== 'valid'
       ? modelValidation[phase]?.message
       : null;
+  const cliModelAvailability =
+    selectedProvider === 'openrouter'
+      ? { available: true, message: null }
+      : assessCliModelAvailability(integrationStatus, selectedProvider, selectedModelId);
 
   return (
     <div className="rounded-md border border-border bg-secondary/50 p-3">
@@ -195,7 +208,10 @@ export function ProjectPhaseSettingsRow({
             <SelectContent>
               <SelectItem value={INHERIT_VALUE}>Inherit ({inheritedModelLabel})</SelectItem>
               {modelIdOverride && !knownModelValues.has(modelIdOverride) ? (
-                <SelectItem value={modelIdOverride}>{modelIdOverride}</SelectItem>
+                <SelectItem value={modelIdOverride} disabled={!cliModelAvailability.available}>
+                  {modelIdOverride}
+                  {!cliModelAvailability.available ? ' (Unavailable)' : ''}
+                </SelectItem>
               ) : null}
               {modelOptions.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
@@ -283,6 +299,11 @@ export function ProjectPhaseSettingsRow({
       {providerWarning ? (
         <div className="mt-3 rounded-md border border-amber-500/20 bg-amber-500/10 px-2.5 py-2 text-[11px] text-amber-300">
           {providerWarning}
+        </div>
+      ) : null}
+      {!cliModelAvailability.available ? (
+        <div className="mt-3 rounded-md border border-red-500/20 bg-red-500/10 px-2.5 py-2 text-[11px] text-red-300">
+          {cliModelAvailability.message}
         </div>
       ) : null}
       {effortOverride !== null &&

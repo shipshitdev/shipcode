@@ -8,7 +8,7 @@ import {
   resolvePhaseModelIdForIssue,
 } from '@shipcode/shared';
 import type { BrowserWindow } from 'electron';
-import { transitionThreadPhase } from './ipc/helpers';
+import { assertCliPhaseModelsSupported, transitionThreadPhase } from './ipc/helpers';
 import type { IpcHandlerDeps } from './ipc/types';
 import log from './logger.service';
 
@@ -241,6 +241,8 @@ export class PipelineScheduler {
     this._sendIssuesUpdated(issue.projectId);
 
     const phaseModels = this._resolvePhaseModels(settings, project, issue);
+    await assertCliPhaseModelsSupported(phaseModels);
+
     const effectiveExecutorModel = resolveExecutorModelForIssue(settings, project, issue);
     queries.threads.setPhaseModels(thread.id, {
       ...phaseModels,

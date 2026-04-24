@@ -4,14 +4,13 @@ import type {
   GitHubIssueCacheRecord,
   PipelinePhase,
 } from '@shipcode/shared';
-import { formatTokenCount, sanitizeResolvedModel } from '@shipcode/shared';
+import { formatTokenCount, modelDisplay, sanitizeResolvedModel } from '@shipcode/shared';
 import {
   Button,
   Card,
   CardContent,
   cn,
   Loader2,
-  modelDisplay,
   Pagination,
   Table,
   TableBody,

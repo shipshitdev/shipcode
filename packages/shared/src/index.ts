@@ -1,4 +1,5 @@
 export * from './branches';
+export * from './cli-model-capabilities';
 export * from './constants';
 export * from './errors';
 export * from './format-token-count';

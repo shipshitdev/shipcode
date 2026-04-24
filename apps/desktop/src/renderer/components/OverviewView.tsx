@@ -6,8 +6,8 @@ import type {
   GitHubIssueCacheRecord,
   RecentTask,
 } from '@shipcode/shared';
+import { ActivePipelineCard, PhaseChip } from '@shipcode/ui';
 import {
-  ActivePipelineCard,
   Bell,
   Bot,
   Button,
@@ -16,7 +16,6 @@ import {
   ListTodo,
   PackageCheck,
   Pagination,
-  PhaseChip,
   Table,
   TableBody,
   TableCell,

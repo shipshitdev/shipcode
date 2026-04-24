@@ -10,6 +10,7 @@ import {
 } from '@shipcode/shared';
 import { logEvent } from '../logger.service';
 import {
+  assertCliPhaseModelsSupported,
   resolveIssuePhaseModels,
   resolveProjectPhaseModels,
   transitionThreadPhase,
@@ -132,6 +133,7 @@ export function registerPipelineHandlers({
     if (!project) throw new Error(`Project ${thread.projectId} not found`);
     const settings = queries.settings.get();
     const phaseModels = resolveProjectPhaseModels(settings, project);
+    await assertCliPhaseModelsSupported(phaseModels);
     queries.threads.setPhaseModels(threadId, phaseModels);
 
     pipeline.initializeContext(threadId, {

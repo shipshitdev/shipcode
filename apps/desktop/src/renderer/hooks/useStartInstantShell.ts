@@ -1,6 +1,7 @@
 import {
   type AppSettings,
-  getSupportedReasoningEfforts,
+  getCapabilitySupportedReasoningEfforts,
+  type IntegrationStatus,
   type Project,
   type ReasoningEffort,
   resolveEffectivePhaseReasoningEffort,
@@ -30,9 +31,10 @@ export function useStartInstantShell() {
 
       setStartingCli(cli);
       try {
-        const [settings, activeProject] = await Promise.all([
+        const [settings, activeProject, integrationStatus] = await Promise.all([
           window.shipcode.invoke<AppSettings>('settings:get'),
           window.shipcode.invoke<Project | null>('project:get', { projectId: activeProjectId }),
+          window.shipcode.invoke<IntegrationStatus>('integrations:check'),
         ]);
         const resolvedProvider = resolvePhaseModel(settings, activeProject, 'executor');
         const resolvedModelId =
@@ -43,7 +45,11 @@ export function useStartInstantShell() {
           resolvedProvider === cli
             ? resolveEffectivePhaseReasoningEffort(settings, activeProject, 'executor')
             : 'high';
-        const supportedEfforts = getSupportedReasoningEfforts(cli, resolvedModelId);
+        const supportedEfforts = getCapabilitySupportedReasoningEfforts(
+          integrationStatus,
+          cli,
+          resolvedModelId,
+        );
         const reasoningEffort: ReasoningEffort = supportedEfforts.includes(resolvedEffort)
           ? resolvedEffort
           : (supportedEfforts[supportedEfforts.length - 1] ?? 'high');

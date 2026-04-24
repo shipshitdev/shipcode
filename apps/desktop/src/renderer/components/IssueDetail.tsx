@@ -28,6 +28,7 @@ import {
   resolveRevisionCountForIssue,
   sanitizeResolvedModel,
 } from '@shipcode/shared';
+import { PhaseChip } from '@shipcode/ui';
 import {
   Archive,
   Badge,
@@ -42,7 +43,6 @@ import {
   LoadingButtonContent,
   Maximize2,
   Minimize2,
-  PhaseChip,
   X,
 } from '@shipshitdev/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';

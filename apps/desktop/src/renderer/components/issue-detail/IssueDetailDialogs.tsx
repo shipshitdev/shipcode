@@ -1,13 +1,6 @@
 import type { PlanRecord, ReviewRecord } from '@shipcode/shared';
-import {
-  Button,
-  LoadingButtonContent,
-  Modal,
-  ModalFooter,
-  PlanViewer,
-  ReviewViewer,
-  X,
-} from '@shipshitdev/ui';
+import { PlanViewer, ReviewViewer } from '@shipcode/ui';
+import { Button, LoadingButtonContent, Modal, ModalFooter, X } from '@shipshitdev/ui';
 import { diagnosePlanParseFailure, resolveClientSidePlan } from './helpers';
 
 interface IssueDetailDialogsProps {

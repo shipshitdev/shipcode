@@ -7,6 +7,8 @@ import type {
   AppSettings,
   ChatIntegrationHealth,
   CliHealth,
+  CliModelCapabilities,
+  CliModelCapabilityOption,
   CliProviderUsageMap,
   CliProviderUsageProvider,
   CliProviderUsageState,
@@ -20,9 +22,15 @@ import type {
   OpenRouterModelCheck,
   OpenRouterModelValidation,
   ProjectOpenTarget,
+  ReasoningEffort,
   SystemHealth,
 } from '@shipcode/shared';
-import { normalizeReasoningModelId, OPENROUTER_API_BASE } from '@shipcode/shared';
+import {
+  fallbackCliModelCapabilities,
+  getSupportedReasoningEfforts,
+  normalizeReasoningModelId,
+  OPENROUTER_API_BASE,
+} from '@shipcode/shared';
 import * as pty from 'node-pty';
 
 const execAsync = promisify(exec);
@@ -32,6 +40,10 @@ const SYSTEM_HEALTH_TTL_MS = 30_000;
 const SYSTEM_HEALTH_WITH_AUTH_TTL_MS = 30_000;
 const PROVIDER_USAGE_TTL_MS = 60_000;
 const INTEGRATION_STATUS_TTL_MS = 30_000;
+const CLI_MODEL_CAPABILITIES_TTL_MS = 30_000;
+const CLI_MODEL_CATALOG_TIMEOUT_MS = 10_000;
+const CLI_MODEL_CATALOG_MAX_BUFFER = 10_000_000;
+const REASONING_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'] as const;
 
 interface TimedCacheEntry<T> {
   value: T;
@@ -46,6 +58,11 @@ let systemHealthCache: TimedCacheEntry<SystemHealth> | null = null;
 let systemHealthInFlight: Promise<SystemHealth> | null = null;
 let systemHealthWithAuthCache: TimedCacheEntry<SystemHealth> | null = null;
 let systemHealthWithAuthInFlight: Promise<SystemHealth> | null = null;
+let cliModelCapabilitiesCache: TimedCacheEntry<
+  Record<'claude' | 'codex', CliModelCapabilities>
+> | null = null;
+let cliModelCapabilitiesInFlight: Promise<Record<'claude' | 'codex', CliModelCapabilities>> | null =
+  null;
 const providerUsageCache = new Map<
   CliProviderUsageProvider,
   TimedCacheEntry<CliProviderUsageStatus>
@@ -209,6 +226,10 @@ function buildIntegrationStatusCacheKey(settings: AppSettings): string {
     openrouterExecutorModel: settings.openrouterExecutorModel,
     openrouterVerifierModel: settings.openrouterVerifierModel,
   });
+}
+
+function isReasoningEffort(value: unknown): value is ReasoningEffort {
+  return typeof value === 'string' && (REASONING_EFFORTS as readonly string[]).includes(value);
 }
 
 function summarizeExecFailure(error: unknown): string {
@@ -1362,6 +1383,127 @@ export async function checkSystemHealthWithAuth(options: CacheOptions = {}): Pro
   }
 }
 
+interface CodexDebugModelsResponse {
+  models?: Array<{
+    slug?: unknown;
+    display_name?: unknown;
+    description?: unknown;
+    default_reasoning_level?: unknown;
+    supported_reasoning_levels?: Array<{ effort?: unknown }> | unknown;
+    visibility?: unknown;
+  }>;
+}
+
+export function parseCodexDebugModels(
+  stdout: string,
+  checkedAt = new Date().toISOString(),
+): CliModelCapabilities {
+  const parsed = JSON.parse(stdout) as CodexDebugModelsResponse;
+  const models = Array.isArray(parsed.models) ? parsed.models : [];
+  const options: CliModelCapabilityOption[] = [];
+
+  for (const model of models) {
+    const value = typeof model.slug === 'string' ? model.slug.trim() : '';
+    if (!value || model.visibility === 'hide') continue;
+
+    const supportedRaw = Array.isArray(model.supported_reasoning_levels)
+      ? model.supported_reasoning_levels
+      : [];
+    const supported = supportedRaw.map((entry) => entry.effort).filter(isReasoningEffort);
+    const fallbackEfforts = getSupportedReasoningEfforts('codex', value);
+    const defaultReasoningEffort = isReasoningEffort(model.default_reasoning_level)
+      ? model.default_reasoning_level
+      : (supported[0] ?? fallbackEfforts[0] ?? null);
+
+    options.push({
+      value,
+      label:
+        typeof model.display_name === 'string' && model.display_name.trim()
+          ? model.display_name.trim()
+          : value,
+      description:
+        typeof model.description === 'string' && model.description.trim()
+          ? model.description.trim()
+          : null,
+      defaultReasoningEffort,
+      supportedReasoningEfforts: supported.length > 0 ? supported : [...fallbackEfforts],
+    });
+  }
+
+  return {
+    provider: 'codex',
+    source: 'catalog',
+    models: options,
+    error: null,
+    checkedAt,
+  };
+}
+
+export async function checkCodexModelCapabilities(): Promise<CliModelCapabilities> {
+  const checkedAt = new Date().toISOString();
+  try {
+    const { stdout } = await execAsync('codex debug models', {
+      timeout: CLI_MODEL_CATALOG_TIMEOUT_MS,
+      maxBuffer: CLI_MODEL_CATALOG_MAX_BUFFER,
+    });
+    const capabilities = parseCodexDebugModels(stdout, checkedAt);
+    if (capabilities.models.length > 0) return capabilities;
+    return {
+      ...fallbackCliModelCapabilities('codex', checkedAt),
+      error:
+        'Codex model catalog returned no selectable models; using conservative ShipCode presets.',
+    };
+  } catch (error) {
+    return {
+      ...fallbackCliModelCapabilities('codex', checkedAt),
+      error: `Codex model catalog unavailable: ${summarizeExecFailure(error)}`,
+    };
+  }
+}
+
+export async function checkClaudeModelCapabilities(): Promise<CliModelCapabilities> {
+  const checkedAt = new Date().toISOString();
+  try {
+    await execAsync('claude --help', {
+      timeout: CLI_MODEL_CATALOG_TIMEOUT_MS,
+      maxBuffer: 512_000,
+    });
+    return fallbackCliModelCapabilities('claude', checkedAt);
+  } catch (error) {
+    return {
+      provider: 'claude',
+      source: 'unavailable',
+      models: [],
+      error: `Claude CLI unavailable: ${summarizeExecFailure(error)}`,
+      checkedAt,
+    };
+  }
+}
+
+export async function checkCliModelCapabilities(
+  options: CacheOptions = {},
+): Promise<Record<'claude' | 'codex', CliModelCapabilities>> {
+  const cached = getFreshCachedValue(cliModelCapabilitiesCache, CLI_MODEL_CAPABILITIES_TTL_MS);
+  if (!options.force && cached) return cached;
+  if (cliModelCapabilitiesInFlight) return cliModelCapabilitiesInFlight;
+
+  cliModelCapabilitiesInFlight = (async () => {
+    const [claude, codex] = await Promise.all([
+      checkClaudeModelCapabilities(),
+      checkCodexModelCapabilities(),
+    ]);
+    const result = { claude, codex };
+    cliModelCapabilitiesCache = createTimedCacheEntry(result);
+    return result;
+  })();
+
+  try {
+    return await cliModelCapabilitiesInFlight;
+  } finally {
+    cliModelCapabilitiesInFlight = null;
+  }
+}
+
 export async function checkCliProviderUsage(
   options: CacheOptions = {},
 ): Promise<CliProviderUsageMap> {
@@ -1391,8 +1533,9 @@ export async function checkIntegrationStatus(
   }
 
   const run = (async () => {
-    const [system, ghAuth, openrouter, desktopApps] = await Promise.all([
+    const [system, modelCapabilities, ghAuth, openrouter, desktopApps] = await Promise.all([
       checkSystemHealthWithAuth(options),
+      checkCliModelCapabilities(options),
       checkGhAuth(),
       checkOpenRouterHealth(settings),
       checkDesktopApps(),
@@ -1400,6 +1543,7 @@ export async function checkIntegrationStatus(
 
     const result = {
       system,
+      modelCapabilities,
       ghAuth,
       openrouter,
       discord: checkDiscordHealth(settings),
@@ -1426,6 +1570,8 @@ export function __resetHealthCheckCachesForTests(): void {
   systemHealthInFlight = null;
   systemHealthWithAuthCache = null;
   systemHealthWithAuthInFlight = null;
+  cliModelCapabilitiesCache = null;
+  cliModelCapabilitiesInFlight = null;
   providerUsageCache.clear();
   providerUsageInFlight.clear();
   integrationStatusCache.clear();

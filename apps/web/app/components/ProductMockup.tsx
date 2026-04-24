@@ -1,9 +1,9 @@
 'use client';
 
-import type { GitHubIssueCacheRecord, Thread } from '@shipshitdev/ui';
+import type { GitHubIssueCacheRecord, Thread } from '@shipcode/shared';
 import dynamic from 'next/dynamic';
 
-const KanbanBoard = dynamic(() => import('@shipshitdev/ui').then((module) => module.KanbanBoard), {
+const KanbanBoard = dynamic(() => import('@shipcode/ui').then((module) => module.KanbanBoard), {
   ssr: false,
 });
 
@@ -184,6 +184,7 @@ const threadDefaults = {
   clarificationRound: 0,
   clarificationRequest: null,
   clarificationAnswers: [],
+  answeredClarification: null,
   verificationStatus: null,
   verificationRetries: 0,
   autonomous: true,

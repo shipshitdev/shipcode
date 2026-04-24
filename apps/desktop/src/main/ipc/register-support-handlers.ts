@@ -15,6 +15,7 @@ import {
 } from '@shipcode/agents';
 import { type ExecutorModel, type GeneratorCli, providerDisplay } from '@shipcode/shared';
 import log, { logProcessOutput } from '../logger.service';
+import { assertPrdRewriteModelSupported } from './helpers';
 import {
   clearPrdAttachmentSession,
   createPrdAttachmentSession,
@@ -96,6 +97,15 @@ export function registerSupportHandlers({
       }
 
       const settings = queries.settings.get();
+      const modelId =
+        settings.prdRewriteCli === 'claude'
+          ? settings.prdRewriteClaudeModel
+          : settings.prdRewriteCodexModel;
+      await assertPrdRewriteModelSupported(
+        settings.prdRewriteCli,
+        modelId,
+        settings.prdRewriteReasoningEffort,
+      );
 
       const skillPath = path.join(project.path, '.agents', 'skills', 'writing-prds', 'SKILL.md');
       let skillContent: string;
@@ -115,10 +125,7 @@ export function registerSupportHandlers({
           skillContent,
           cwd: project.path,
           cli: settings.prdRewriteCli,
-          modelId:
-            settings.prdRewriteCli === 'claude'
-              ? settings.prdRewriteClaudeModel
-              : settings.prdRewriteCodexModel,
+          modelId,
           reasoningEffort: settings.prdRewriteReasoningEffort,
         });
       } catch (err) {

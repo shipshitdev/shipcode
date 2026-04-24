@@ -1,5 +1,6 @@
 import type { CostTaskSummary, Thread } from '@shipcode/shared';
-import { Badge, MODEL_DISPLAY } from '@shipshitdev/ui';
+import { MODEL_DISPLAY } from '@shipcode/shared';
+import { Badge } from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
 import { timeAgo } from './helpers';
 

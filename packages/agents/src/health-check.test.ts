@@ -34,6 +34,7 @@ import {
   checkSystemHealthWithAuth,
   parseClaudeAuthStatusOutput,
   parseClaudeUsageText,
+  parseCodexDebugModels,
   parseCodexStatusText,
   parseGhProjectScope,
   validateOpenRouterModel,
@@ -227,6 +228,42 @@ describe('checkCodexAuth', () => {
     mockAccess.mockRejectedValue(new Error('ENOENT'));
     const result = await checkCodexAuth();
     expect(result).toBe(false);
+  });
+});
+
+describe('parseCodexDebugModels', () => {
+  it('maps visible Codex catalog models and supported reasoning efforts', () => {
+    const result = parseCodexDebugModels(
+      JSON.stringify({
+        models: [
+          {
+            slug: 'gpt-5.4',
+            display_name: 'GPT-5.4',
+            description: 'Everyday coding',
+            default_reasoning_level: 'medium',
+            supported_reasoning_levels: [{ effort: 'low' }, { effort: 'medium' }],
+            visibility: 'list',
+          },
+          {
+            slug: 'gpt-5.5',
+            display_name: 'GPT-5.5',
+            default_reasoning_level: 'high',
+            supported_reasoning_levels: [{ effort: 'low' }, { effort: 'xhigh' }],
+            visibility: 'list',
+          },
+          {
+            slug: 'codex-auto-review',
+            display_name: 'Codex Auto Review',
+            visibility: 'hide',
+          },
+        ],
+      }),
+      '2026-04-24T00:00:00.000Z',
+    );
+
+    expect(result.source).toBe('catalog');
+    expect(result.models.map((model) => model.value)).toEqual(['gpt-5.4', 'gpt-5.5']);
+    expect(result.models[1].supportedReasoningEfforts).toEqual(['low', 'xhigh']);
   });
 });
 

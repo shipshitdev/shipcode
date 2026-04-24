@@ -1,14 +1,16 @@
 import {
   type AppSettings,
+  assessCliModelAvailability,
   buildAppSettingsModelPresetPatch,
   type ExecutorModel,
   formatReasoningEffortLabel,
-  getSupportedReasoningEfforts,
+  getCapabilitySupportedReasoningEfforts,
   type IntegrationStatus,
   MODEL_CONFIG_PRESETS,
   type ModelConfigPresetKey,
   resolveProviderReasoningEffort,
 } from '@shipcode/shared';
+import { StatusMappingEditor } from '@shipcode/ui';
 import {
   Button,
   ChevronDown,
@@ -23,7 +25,6 @@ import {
   SelectTrigger,
   SelectValue,
   SettingsRow,
-  StatusMappingEditor,
   Switch,
   Tabs,
   TabsContent,
@@ -43,9 +44,9 @@ export function PipelineSettingsSection({
   integrationStatus: IntegrationStatus | undefined;
   onUpdate: (patch: Partial<AppSettings>) => void;
 }) {
-  const openrouterModelOptions = getModelOptions('openrouter');
+  const openrouterModelOptions = getModelOptions('openrouter', integrationStatus);
   const prdRewriteProvider = settings.prdRewriteCli as Extract<ExecutorModel, 'claude' | 'codex'>;
-  const prdRewriteModelOptions = getModelOptions(prdRewriteProvider);
+  const prdRewriteModelOptions = getModelOptions(prdRewriteProvider, integrationStatus);
   const prdRewriteModelValue =
     prdRewriteProvider === 'claude'
       ? settings.prdRewriteClaudeModel
@@ -55,11 +56,17 @@ export function PipelineSettingsSection({
     settings.prdRewriteReasoningEffort,
     prdRewriteModelValue,
   );
-  const prdRewriteSupportedEfforts = getSupportedReasoningEfforts(
+  const prdRewriteSupportedEfforts = getCapabilitySupportedReasoningEfforts(
+    integrationStatus,
     prdRewriteProvider,
     prdRewriteModelValue,
   );
   const prdRewriteDisplayedEffort = prdRewriteEffortResolution.effective;
+  const prdRewriteModelAvailability = assessCliModelAvailability(
+    integrationStatus,
+    prdRewriteProvider,
+    prdRewriteModelValue,
+  );
   const normalizeEffort = (
     provider: ExecutorModel,
     effort: AppSettings['plannerReasoningEffort'],
@@ -262,6 +269,18 @@ export function PipelineSettingsSection({
                   <SelectItem value="__default__">
                     {prdRewriteProvider === 'claude' ? 'Claude default' : 'Codex default'}
                   </SelectItem>
+                  {prdRewriteModelValue &&
+                  !prdRewriteModelOptions.some(
+                    (option) => option.value === prdRewriteModelValue,
+                  ) ? (
+                    <SelectItem
+                      value={prdRewriteModelValue}
+                      disabled={!prdRewriteModelAvailability.available}
+                    >
+                      {prdRewriteModelValue}
+                      {!prdRewriteModelAvailability.available ? ' (Unavailable)' : ''}
+                    </SelectItem>
+                  ) : null}
                   {prdRewriteModelOptions.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       {option.label}
@@ -299,6 +318,11 @@ export function PipelineSettingsSection({
             {!prdRewriteEffortResolution.exact && prdRewriteProvider !== 'claude' && (
               <div className="mb-3 rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-300">
                 {prdRewriteEffortResolution.message}
+              </div>
+            )}
+            {!prdRewriteModelAvailability.available && (
+              <div className="mb-3 rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-[11px] text-red-300">
+                {prdRewriteModelAvailability.message}
               </div>
             )}
 
@@ -431,6 +455,7 @@ export function PipelineSettingsSection({
                   ? (integrationStatus?.openrouter.message ?? 'OpenRouter is not ready.')
                   : null
               }
+              integrationStatus={integrationStatus}
             />
             <PhaseModelRow
               label="Reviewer model"
@@ -478,6 +503,7 @@ export function PipelineSettingsSection({
                   ? (integrationStatus?.openrouter.message ?? 'OpenRouter is not ready.')
                   : null
               }
+              integrationStatus={integrationStatus}
             />
             <PhaseModelRow
               label="Executor model"
@@ -525,6 +551,7 @@ export function PipelineSettingsSection({
                   ? (integrationStatus?.openrouter.message ?? 'OpenRouter is not ready.')
                   : null
               }
+              integrationStatus={integrationStatus}
             />
             <PhaseModelRow
               label="Verifier model"
@@ -572,6 +599,7 @@ export function PipelineSettingsSection({
                   ? (integrationStatus?.openrouter.message ?? 'OpenRouter is not ready.')
                   : null
               }
+              integrationStatus={integrationStatus}
             />
           </section>
         </TabsContent>

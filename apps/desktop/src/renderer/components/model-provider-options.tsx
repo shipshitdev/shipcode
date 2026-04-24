@@ -1,8 +1,8 @@
 import {
-  CLAUDE_MODEL_OPTIONS,
-  CODEX_MODEL_OPTIONS,
   type ExecutorModel,
+  getCapabilityModelOptions,
   getKnownModelLabel,
+  type IntegrationStatus,
   OPENROUTER_MODEL_OPTIONS,
 } from '@shipcode/shared';
 
@@ -14,19 +14,23 @@ export const PROVIDER_DISPLAY: Record<ExecutorModel, string> = {
 
 export function getModelOptions(
   provider: ExecutorModel,
+  integrationStatus?: IntegrationStatus,
 ): ReadonlyArray<{ value: string; label: string }> {
-  if (provider === 'claude') return CLAUDE_MODEL_OPTIONS;
-  if (provider === 'codex') return CODEX_MODEL_OPTIONS;
+  if (provider === 'claude' || provider === 'codex') {
+    return getCapabilityModelOptions(integrationStatus, provider);
+  }
   return OPENROUTER_MODEL_OPTIONS;
 }
 
 export function formatProviderSelectionLabel(
   provider: ExecutorModel,
   modelId: string | null,
+  integrationStatus?: IntegrationStatus,
 ): string {
   const providerLabel = PROVIDER_DISPLAY[provider];
   const modelLabel = modelId
-    ? (getModelOptions(provider).find((option) => option.value === modelId)?.label ?? modelId)
+    ? (getModelOptions(provider, integrationStatus).find((option) => option.value === modelId)
+        ?.label ?? modelId)
     : `${providerLabel} default`;
   return `${providerLabel} / ${modelLabel}`;
 }

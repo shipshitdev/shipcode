@@ -5,6 +5,7 @@ import {
   resolveProviderReasoningEffort,
 } from '@shipcode/shared';
 import log from '../logger.service';
+import { assertPrdRewriteModelSupported } from './helpers';
 import { getPrdAttachmentSessionSummary } from './prd-attachments';
 import type { IpcHandlerDeps } from './types';
 
@@ -116,7 +117,7 @@ export function registerInstantHandlers({
   // --- instant:run ---
   ipcMain.handle(
     'instant:run',
-    (
+    async (
       _event,
       args: {
         projectId?: string;
@@ -129,6 +130,12 @@ export function registerInstantHandlers({
         customSystemPrompt?: string;
       },
     ) => {
+      await assertPrdRewriteModelSupported(
+        args.cli,
+        args.modelId ?? null,
+        args.reasoningEffort ?? 'high',
+      );
+
       // 1. Resolve cwd and projectId
       let cwd: string;
       let projectId: string;
@@ -234,7 +241,7 @@ export function registerInstantHandlers({
 
   ipcMain.handle(
     'instant:shell-start',
-    (
+    async (
       _event,
       args: {
         projectId: string;
@@ -245,6 +252,12 @@ export function registerInstantHandlers({
         attachmentSessionId?: string;
       },
     ) => {
+      await assertPrdRewriteModelSupported(
+        args.cli,
+        args.modelId ?? null,
+        args.reasoningEffort ?? 'high',
+      );
+
       const project = queries.projects.getById(args.projectId);
       if (!project) throw new Error(`Project not found: ${args.projectId}`);
 

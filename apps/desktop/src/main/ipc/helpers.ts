@@ -1,11 +1,22 @@
 import fs from 'node:fs';
-import { DEFAULT_SKILLS, GhCli, inspectProjectSetup, StreamParser } from '@shipcode/agents';
+import {
+  checkCliModelCapabilities,
+  DEFAULT_SKILLS,
+  GhCli,
+  inspectProjectSetup,
+  StreamParser,
+} from '@shipcode/agents';
 import { type PipelineEmitter, syncThreadAndIssuePhase } from '@shipcode/pipeline';
 import type { ShipCodePlan } from '@shipcode/shared';
 import {
+  assessCliSelectionAvailabilityFromCapabilities,
   clampError,
+  DEFAULT_SETTINGS,
+  type ExecutorModel,
+  type GeneratorCli,
   type PipelinePhase,
   parseGithubProjectUrl,
+  type ReasoningEffort,
   resolveEffectivePhaseReasoningEffort,
   resolveEffectivePhaseReasoningEffortForIssue,
   resolvePhaseModel,
@@ -103,6 +114,71 @@ export function resolveIssuePhaseModels(
       'executor',
     ),
   };
+}
+
+type PhaseModels = ReturnType<typeof resolveProjectPhaseModels>;
+
+export async function assertCliPhaseModelsSupported(phaseModels: PhaseModels): Promise<void> {
+  const capabilities = await checkCliModelCapabilities();
+  const phases = [
+    {
+      label: 'Planner',
+      provider: phaseModels.plannerModel,
+      modelId: phaseModels.plannerModelId,
+      effort: phaseModels.plannerReasoningEffort ?? DEFAULT_SETTINGS.plannerReasoningEffort,
+    },
+    {
+      label: 'Reviewer',
+      provider: phaseModels.reviewerModel,
+      modelId: phaseModels.reviewerModelId,
+      effort: phaseModels.reviewerReasoningEffort ?? DEFAULT_SETTINGS.reviewerReasoningEffort,
+    },
+    {
+      label: 'Executor',
+      provider: phaseModels.executorModel,
+      modelId: phaseModels.executorModelId,
+      effort: phaseModels.executorReasoningEffort ?? DEFAULT_SETTINGS.executorReasoningEffort,
+    },
+    {
+      label: 'Verifier',
+      provider: phaseModels.verifierModel,
+      modelId: phaseModels.verifierModelId,
+      effort: phaseModels.verifierReasoningEffort ?? DEFAULT_SETTINGS.verifierReasoningEffort,
+    },
+  ] satisfies Array<{
+    label: string;
+    provider: ExecutorModel;
+    modelId: string | null;
+    effort: ReasoningEffort;
+  }>;
+
+  for (const phase of phases) {
+    if (phase.provider === 'openrouter') continue;
+    const selection = assessCliSelectionAvailabilityFromCapabilities(
+      capabilities,
+      phase.provider,
+      phase.modelId,
+      phase.effort,
+    );
+    if (!selection.available) throw new Error(`${phase.label}: ${selection.message}`);
+  }
+}
+
+export async function assertPrdRewriteModelSupported(
+  cli: GeneratorCli,
+  modelId: string | null,
+  effort: ReasoningEffort,
+): Promise<void> {
+  const capabilities = await checkCliModelCapabilities();
+  const selection = assessCliSelectionAvailabilityFromCapabilities(
+    capabilities,
+    cli,
+    modelId,
+    effort ?? DEFAULT_SETTINGS.prdRewriteReasoningEffort,
+  );
+  if (!selection.available) {
+    throw new Error(selection.message ?? `${cli} model selection is unavailable`);
+  }
 }
 
 export function tryParsePlan(rawOutput: string): ShipCodePlan | null {

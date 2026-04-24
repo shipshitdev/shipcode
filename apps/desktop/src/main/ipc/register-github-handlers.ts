@@ -17,6 +17,7 @@ import {
 import log, { logEvent } from '../logger.service';
 import { PipelineScheduler } from '../pipeline-scheduler';
 import {
+  assertPrdRewriteModelSupported,
   attachIssueToConfiguredProjectBoard,
   sendGithubIssuesUpdated,
   syncLinkedPullRequestFeedback,
@@ -866,6 +867,15 @@ export function registerGitHubHandlers({
       const issue = await ghCli.getIssue(issueNumber);
 
       const settings = queries.settings.get();
+      const modelId =
+        settings.prdRewriteCli === 'claude'
+          ? settings.prdRewriteClaudeModel
+          : settings.prdRewriteCodexModel;
+      await assertPrdRewriteModelSupported(
+        settings.prdRewriteCli,
+        modelId,
+        settings.prdRewriteReasoningEffort,
+      );
       const skillPath = path.join(project.path, 'skills', 'writing-prds', 'SKILL.md');
       let skillContent: string;
       try {
@@ -883,10 +893,7 @@ export function registerGitHubHandlers({
         skillContent,
         cwd: project.path,
         cli: settings.prdRewriteCli,
-        modelId:
-          settings.prdRewriteCli === 'claude'
-            ? settings.prdRewriteClaudeModel
-            : settings.prdRewriteCodexModel,
+        modelId,
         reasoningEffort: settings.prdRewriteReasoningEffort,
       });
 

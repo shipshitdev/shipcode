@@ -266,7 +266,7 @@ describe('PipelineScheduler', () => {
       expect(pipeline.startFromGitHubIssue).not.toHaveBeenCalled();
     });
 
-    it('promotes the next queued issue when a slot is free', () => {
+    it('promotes the next queued issue when a slot is free', async () => {
       pipeline.listActiveInPhases.mockReturnValue([
         { threadId: 'a', phase: 'executing', startedAt: Date.now(), activeProcessId: null },
         { threadId: 'b', phase: 'awaiting_approval', startedAt: Date.now(), activeProcessId: null },
@@ -277,6 +277,7 @@ describe('PipelineScheduler', () => {
       );
 
       scheduler.onSlotFreed();
+      await new Promise((resolve) => setImmediate(resolve));
 
       expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith('issue-2', 'planning');
       expect(queries.threads.create).toHaveBeenCalled();

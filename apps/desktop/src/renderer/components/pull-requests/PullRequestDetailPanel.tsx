@@ -1,5 +1,6 @@
 import type { PullRequestDetailResponse } from '@shipcode/shared';
-import { Button, cn, ExternalLink, GitPullRequest, SideBySideDiffViewer } from '@shipshitdev/ui';
+import { SideBySideDiffViewer } from '@shipcode/ui';
+import { Button, cn, ExternalLink, GitPullRequest } from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useAppStore } from '../../stores/app-store';
 import { PullRequestDetailActions } from './PullRequestDetailActions';

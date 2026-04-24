@@ -7,7 +7,8 @@ import {
   type Thread,
   type ThreadPanelData,
 } from '@shipcode/shared';
-import { Button, KanbanBoard, RefreshCw, X } from '@shipshitdev/ui';
+import { KanbanBoard } from '@shipcode/ui';
+import { Button, RefreshCw, X } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
 import { useEffect, useMemo, useState } from 'react';

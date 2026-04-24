@@ -193,6 +193,10 @@ export function IntegrationsSettingsSection({
                   : null;
               const versionLine = getCliVersionLine(cli.version);
               const Icon = key === 'claude' ? Sparkles : key === 'codex' ? Terminal : FolderGit;
+              const modelCapabilities =
+                key === 'claude' || key === 'codex'
+                  ? integrationStatus.modelCapabilities?.[key]
+                  : null;
 
               return (
                 <div key={key} className="rounded-md border border-border bg-secondary/40 p-3">
@@ -236,6 +240,19 @@ export function IntegrationsSettingsSection({
                       <div>
                         Path: <code>{cli.path}</code>
                       </div>
+                    ) : null}
+                    {modelCapabilities ? (
+                      <div>
+                        Models:{' '}
+                        <code>
+                          {modelCapabilities.models.length > 0
+                            ? modelCapabilities.models.map((model) => model.value).join(', ')
+                            : 'none reported'}
+                        </code>
+                      </div>
+                    ) : null}
+                    {modelCapabilities?.error ? (
+                      <div className="text-amber-300">{modelCapabilities.error}</div>
                     ) : null}
                     {key === 'gh' && integrationStatus.ghAuth.username ? (
                       <div>

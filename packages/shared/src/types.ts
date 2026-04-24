@@ -591,6 +591,24 @@ export interface CliHealth {
   authenticated: boolean;
 }
 
+export type CliModelCapabilitySource = 'catalog' | 'fallback' | 'unavailable';
+
+export interface CliModelCapabilityOption {
+  value: string;
+  label: string;
+  description: string | null;
+  defaultReasoningEffort: ReasoningEffort | null;
+  supportedReasoningEfforts: ReasoningEffort[];
+}
+
+export interface CliModelCapabilities {
+  provider: GeneratorCli;
+  source: CliModelCapabilitySource;
+  models: CliModelCapabilityOption[];
+  error: string | null;
+  checkedAt: string;
+}
+
 export type CliProviderUsageProvider = 'claude' | 'codex';
 export type CliProviderUsageState = 'unknown' | 'ready' | 'warning' | 'blocked';
 export type CliProviderUsageWindowKey = 'session' | 'weekly' | 'model';
@@ -706,6 +724,7 @@ export interface ChatIntegrationHealth {
 
 export interface IntegrationStatus {
   system: SystemHealth;
+  modelCapabilities?: Record<GeneratorCli, CliModelCapabilities>;
   ghAuth: GhAuthStatus;
   openrouter: OpenRouterHealth;
   discord: ChatIntegrationHealth;

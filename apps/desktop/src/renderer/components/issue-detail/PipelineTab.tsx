@@ -8,17 +8,20 @@ import type {
   Thread,
 } from '@shipcode/shared';
 import {
+  assessCliModelAvailability,
   formatReasoningEffortLabel,
+  getCapabilitySupportedReasoningEfforts,
   getSupportedReasoningEfforts,
+  MODEL_DISPLAY,
   resolveProviderReasoningEffort,
 } from '@shipcode/shared';
+import { SideBySideDiffViewer } from '@shipcode/ui';
 import {
   Badge,
   Button,
   ExternalLink,
   Input,
   LoadingButtonContent,
-  MODEL_DISPLAY,
   Select,
   SelectContent,
   SelectGroup,
@@ -27,7 +30,6 @@ import {
   SelectSeparator,
   SelectTrigger,
   SelectValue,
-  SideBySideDiffViewer,
 } from '@shipshitdev/ui';
 import {
   formatProviderSelectionLabel,
@@ -152,6 +154,7 @@ export function PipelineTab({
                             detail={`project default (${formatProviderSelectionLabel(
                               projectDefaultPhaseSelections[phase].provider,
                               projectDefaultPhaseSelections[phase].modelId,
+                              integrationStatus,
                             )})`}
                           />
                         ) : undefined}
@@ -162,6 +165,7 @@ export function PipelineTab({
                         {`Inherit project default (${formatProviderSelectionLabel(
                           projectDefaultPhaseSelections[phase].provider,
                           projectDefaultPhaseSelections[phase].modelId,
+                          integrationStatus,
                         )})`}
                       </SelectItem>
                       <SelectSeparator />
@@ -171,6 +175,12 @@ export function PipelineTab({
                           selectedSelection.provider === providerOption
                             ? selectedSelection.modelId
                             : null;
+                        const modelOptions = getModelOptions(providerOption, integrationStatus);
+                        const selectedModelAvailability = assessCliModelAvailability(
+                          integrationStatus,
+                          providerOption,
+                          selectedModelId,
+                        );
                         return (
                           <SelectGroup key={providerOption}>
                             <SelectLabel>{PROVIDER_DISPLAY[providerOption]}</SelectLabel>
@@ -178,16 +188,16 @@ export function PipelineTab({
                               {PROVIDER_DISPLAY[providerOption]} default
                             </SelectItem>
                             {selectedModelId &&
-                            !getModelOptions(providerOption).some(
-                              (option) => option.value === selectedModelId,
-                            ) ? (
+                            !modelOptions.some((option) => option.value === selectedModelId) ? (
                               <SelectItem
                                 value={encodePhaseOption(providerOption, selectedModelId)}
+                                disabled={!selectedModelAvailability.available}
                               >
                                 {selectedModelId}
+                                {!selectedModelAvailability.available ? ' (Unavailable)' : ''}
                               </SelectItem>
                             ) : null}
-                            {getModelOptions(providerOption).map((option) => (
+                            {modelOptions.map((option) => (
                               <SelectItem
                                 key={option.value}
                                 value={encodePhaseOption(providerOption, option.value)}
@@ -230,6 +240,20 @@ export function PipelineTab({
                     </div>
                   ) : null}
 
+                  {(() => {
+                    const selection = currentPhaseSelections[phase];
+                    const availability = assessCliModelAvailability(
+                      integrationStatus,
+                      selection.provider,
+                      selection.modelId,
+                    );
+                    return availability.available ? null : (
+                      <div className="rounded-md border border-red-500/20 bg-red-500/10 px-2 py-1.5 text-[11px] text-red-300">
+                        {availability.message}
+                      </div>
+                    );
+                  })()}
+
                   {phaseModelValidation[phase] &&
                   phaseModelValidation[phase]?.status !== 'valid' ? (
                     <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-300">
@@ -241,7 +265,14 @@ export function PipelineTab({
                   {(() => {
                     const provider = currentPhaseSelections[phase].provider;
                     const modelId = currentPhaseSelections[phase].modelId;
-                    const supportedEfforts = getSupportedReasoningEfforts(provider, modelId);
+                    const supportedEfforts =
+                      provider === 'openrouter'
+                        ? getSupportedReasoningEfforts(provider, modelId)
+                        : getCapabilitySupportedReasoningEfforts(
+                            integrationStatus,
+                            provider,
+                            modelId,
+                          );
                     const configuredEffort = currentPhaseReasoningEfforts[phase];
                     const effortResolution = resolveProviderReasoningEffort(
                       provider,

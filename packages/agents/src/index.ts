@@ -11,8 +11,11 @@ export { routeFromLabels } from './github/model-router';
 export type { CacheOptions, OpenRouterAuthStatus } from './health-check';
 export {
   checkClaudeAuth,
+  checkClaudeModelCapabilities,
+  checkCliModelCapabilities,
   checkCliProviderUsage,
   checkCodexAuth,
+  checkCodexModelCapabilities,
   checkDesktopApps,
   checkGhAuth,
   checkIntegrationStatus,
@@ -22,6 +25,7 @@ export {
   checkSystemHealthWithAuth,
   parseClaudeAuthStatusOutput,
   parseClaudeUsageText,
+  parseCodexDebugModels,
   parseCodexStatusText,
   parseGhProjectScope,
   validateOpenRouterModel,

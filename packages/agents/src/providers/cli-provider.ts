@@ -306,7 +306,7 @@ export function createCodexCliProvider(processManager: ProcessManager): AgentPro
       return {
         rawOutput,
         exitCode: result.exitCode,
-        resolvedModel: 'codex',
+        resolvedModel: req.modelHint ?? 'codex',
         promptTelemetry,
         ...(usage
           ? {

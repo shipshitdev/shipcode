@@ -1,4 +1,5 @@
 import type { GitHubIssueCacheRecord, PipelinePhase } from '@shipcode/shared';
+import { PhaseChip } from '@shipcode/ui';
 import {
   Button,
   ChevronDown,
@@ -10,7 +11,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   Ghost,
-  PhaseChip,
   Sparkles,
   Terminal,
   X,

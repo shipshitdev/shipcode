@@ -1,7 +1,9 @@
 import {
   type ExecutorModel,
   formatReasoningEffortLabel,
+  getCapabilitySupportedReasoningEfforts,
   getSupportedReasoningEfforts,
+  type IntegrationStatus,
   type OpenRouterModelCheck,
   type ReasoningEffort,
   resolveProviderReasoningEffort,
@@ -31,6 +33,7 @@ export function PhaseModelRow({
   disabledProviders,
   warningMessage,
   modelCheck,
+  integrationStatus,
 }: {
   label: string;
   htmlFor: string;
@@ -45,6 +48,7 @@ export function PhaseModelRow({
   disabledProviders?: Partial<Record<ExecutorModel, string>>;
   warningMessage?: string | null;
   modelCheck?: OpenRouterModelCheck | null;
+  integrationStatus?: IntegrationStatus;
 }) {
   const provider = modelValue as ExecutorModel;
   const modelCheckMessage =
@@ -57,8 +61,11 @@ export function PhaseModelRow({
     resolvedModelId,
   );
   const displayedEffortValue = effortResolution.effective;
-  const supportedEfforts = getSupportedReasoningEfforts(provider, resolvedModelId);
-  const openrouterModelOptions = getModelOptions('openrouter');
+  const supportedEfforts =
+    provider === 'openrouter'
+      ? getSupportedReasoningEfforts(provider, resolvedModelId)
+      : getCapabilitySupportedReasoningEfforts(integrationStatus, provider, resolvedModelId);
+  const openrouterModelOptions = getModelOptions('openrouter', integrationStatus);
   const knownOpenRouterValues = new Set(openrouterModelOptions.map((option) => option.value));
   const openrouterSelection = openrouterModelValue ?? '__default__';
 

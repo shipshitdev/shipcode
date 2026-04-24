@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import '@testing-library/jest-dom/vitest';
 import {
   DEFAULT_SETTINGS,
   type GitHubIssueCacheRecord,
@@ -22,29 +23,24 @@ vi.mock('./ThreadPanelArchiveDialog', () => ({
   ThreadPanelArchiveDialog: () => null,
 }));
 
-vi.mock('@shipshitdev/ui', async () => {
-  const actual = await vi.importActual<typeof import('@shipshitdev/ui')>('@shipshitdev/ui');
-  return {
-    ...actual,
-    KanbanBoard: ({
-      issues,
-      onMarkDone,
-    }: {
-      issues: GitHubIssueCacheRecord[];
-      onMarkDone?: (issue: GitHubIssueCacheRecord) => void;
-    }) => (
-      <div>
-        <div>{issues[0]?.title ?? 'Loading issues'}</div>
-        {issues[0] ? (
-          <button type="button" onClick={() => onMarkDone?.(issues[0])}>
-            Trigger mark done
-          </button>
-        ) : null}
-      </div>
-    ),
-    RefreshCw: () => <svg data-testid="refresh-icon" />,
-  };
-});
+vi.mock('@shipcode/ui', () => ({
+  KanbanBoard: ({
+    issues,
+    onMarkDone,
+  }: {
+    issues: GitHubIssueCacheRecord[];
+    onMarkDone?: (issue: GitHubIssueCacheRecord) => void;
+  }) => (
+    <div>
+      <div>{issues[0]?.title ?? 'Loading issues'}</div>
+      {issues[0] ? (
+        <button type="button" onClick={() => onMarkDone?.(issues[0])}>
+          Trigger mark done
+        </button>
+      ) : null}
+    </div>
+  ),
+}));
 
 import { ThreadPanel } from './ThreadPanel';
 
@@ -200,7 +196,10 @@ describe('ThreadPanel undo done move', () => {
   beforeEach(() => {
     cleanup();
     invokeMock.mockReset();
-    window.shipcode.invoke = invokeMock as unknown as typeof window.shipcode.invoke;
+    window.shipcode = {
+      invoke: invokeMock as unknown as typeof window.shipcode.invoke,
+      on: vi.fn(() => () => {}) as unknown as typeof window.shipcode.on,
+    };
 
     useAppStore.setState({
       activeProjectId: project.id,

@@ -1,4 +1,5 @@
 import type { PipelinePhase, PlanRecord, ReviewRecord } from '@shipcode/shared';
+import { PhaseChip, PlanViewer, ReviewViewer } from '@shipcode/ui';
 import {
   Badge,
   Button,
@@ -7,9 +8,6 @@ import {
   ChevronUp,
   cn,
   Maximize2,
-  PhaseChip,
-  PlanViewer,
-  ReviewViewer,
 } from '@shipshitdev/ui';
 import {
   diagnosePlanParseFailure,

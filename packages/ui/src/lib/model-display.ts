@@ -6,4 +6,4 @@ export {
   modelDisplay,
   PROVIDER_DISPLAY,
   providerDisplay,
-} from './shipcode';
+} from '@shipcode/shared';

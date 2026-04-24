@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   CLAUDE_MODEL_OPTIONS,
-  CODEX_MODEL_OPTIONS,
+  CODEX_FALLBACK_MODEL_OPTIONS,
   getKnownModelLabel,
-  getKnownModelOptions,
   OPENROUTER_MODEL_IDS,
-  OPENROUTER_MODEL_OPTIONS,
   PINNED_MODEL_DEFAULTS,
 } from './model-catalog';
 
@@ -28,10 +26,12 @@ describe('model-catalog', () => {
     });
   });
 
-  it('returns curated provider options from the shared registry', () => {
-    expect(getKnownModelOptions('claude')).toEqual(CLAUDE_MODEL_OPTIONS);
-    expect(getKnownModelOptions('codex')).toEqual(CODEX_MODEL_OPTIONS);
-    expect(getKnownModelOptions('openrouter')).toEqual(OPENROUTER_MODEL_OPTIONS);
+  it('keeps Claude curated options and Codex fallback options separate', () => {
+    expect(CLAUDE_MODEL_OPTIONS.map((option) => option.value)).toContain('claude-sonnet-4-6');
+    expect(CODEX_FALLBACK_MODEL_OPTIONS.map((option) => option.value)).toEqual([
+      'gpt-5.4',
+      'gpt-5.4-mini',
+    ]);
   });
 
   it('normalizes friendly labels for provider aliases and upstream slugs', () => {
