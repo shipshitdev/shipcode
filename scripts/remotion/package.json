@@ -7,16 +7,20 @@
     "render": "remotion render Launch out/shipcode-launch.mp4",
     "render:gif": "remotion render Launch out/shipcode-launch.gif --codec=gif --width=960 --every-nth-frame=2"
   },
+  "sideEffects": [
+    "*.css"
+  ],
   "dependencies": {
-    "@remotion/cli": "4.0.448",
-    "@remotion/tailwind-v4": "4.0.323",
+    "@remotion/cli": "4.0.451",
+    "@remotion/tailwind-v4": "4.0.451",
     "react": "19.2.5",
     "react-dom": "19.2.5",
-    "remotion": "4.0.448"
+    "remotion": "4.0.451"
   },
   "devDependencies": {
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
+    "tailwindcss": "4.2.4",
     "typescript": "6.0.3"
   }
 }

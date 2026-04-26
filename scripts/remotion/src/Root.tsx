@@ -1,3 +1,4 @@
+import './tailwind.css';
 import { Composition } from 'remotion';
 import { Launch } from './compositions/Launch';
 

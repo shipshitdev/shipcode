@@ -1,10 +1,8 @@
 # ShipCode
 
-Autonomous AI coding pipeline. GitHub issues in, pull requests out.
+[![ShipCode launch video](docs/launch.gif)](https://github.com/shipshitdev/shipcode/releases/download/v0.1.0/shipcode-launch.mp4)
 
-> Launch video coming soon — Remotion project at `scripts/remotion/`. Render with
-> `bun run video:render && bun run video:gif` once `@remotion/tailwind-v4` styling
-> is wired up correctly.
+Autonomous AI coding pipeline. GitHub issues in, pull requests out.
 
 Label a GitHub issue with `agent:claude` or `agent:codex`, and ShipCode handles the rest: plan, adversarial review, implement, verify, and ship a PR. No human gates until the PR is created.
 
