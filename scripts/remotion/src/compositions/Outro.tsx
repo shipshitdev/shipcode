@@ -27,7 +27,7 @@ export const Outro: React.FC = () => {
           <span className="text-[#6b7280]">$</span> brew install --cask shipcode
         </div>
         <div className="rounded-xl border border-[#2a2a35] bg-[#13131c] px-8 py-5 font-mono text-2xl text-white">
-          <span className="text-[#6b7280]">$</span> npx shipcode
+          <span className="text-[#6b7280]">$</span> npx @shipshitdev/shipcode
         </div>
         <div className="mt-4 text-lg text-[#6b7280]">GitHub issues in. Pull requests out.</div>
       </div>

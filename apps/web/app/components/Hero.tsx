@@ -17,8 +17,8 @@ export function Hero() {
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-secondary md:text-xl">
             Install the desktop app with Homebrew or run the same pipeline instantly with{' '}
-            <code>npx shipcode</code>. ShipCode plans with Opus, critiques with Codex, executes in
-            isolated worktrees, and verifies before it opens the PR.
+            <code>npx @shipshitdev/shipcode</code>. ShipCode plans with Opus, critiques with Codex,
+            executes in isolated worktrees, and verifies before it opens the PR.
           </p>
         </div>
 

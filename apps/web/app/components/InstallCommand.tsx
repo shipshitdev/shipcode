@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 const COMMANDS = {
   desktop: `brew tap shipshitdev/tap\nbrew install --cask shipcode`,
-  cli: `npx shipcode onboard\nnpx shipcode run 42`,
+  cli: `npx @shipshitdev/shipcode onboard\nnpx @shipshitdev/shipcode run 42`,
 } as const;
 
 type InstallMode = keyof typeof COMMANDS;

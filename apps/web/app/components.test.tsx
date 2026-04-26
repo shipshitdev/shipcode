@@ -127,8 +127,8 @@ brew install --cask shipcode`);
       button.click();
     });
 
-    expect(writeText).toHaveBeenLastCalledWith(`npx shipcode onboard
-npx shipcode run 42`);
+    expect(writeText).toHaveBeenLastCalledWith(`npx @shipshitdev/shipcode onboard
+npx @shipshitdev/shipcode run 42`);
     view.cleanup();
     vi.useRealTimers();
   });

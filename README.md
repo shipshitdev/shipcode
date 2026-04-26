@@ -1,8 +1,10 @@
 # ShipCode
 
-[![ShipCode launch video](docs/launch.gif)](https://github.com/shipshitdev/shipcode/releases/download/v0.1.0/shipcode-launch.mp4)
-
 Autonomous AI coding pipeline. GitHub issues in, pull requests out.
+
+> Launch video coming soon — Remotion project at `scripts/remotion/`. Render with
+> `bun run video:render && bun run video:gif` once `@remotion/tailwind-v4` styling
+> is wired up correctly.
 
 Label a GitHub issue with `agent:claude` or `agent:codex`, and ShipCode handles the rest: plan, adversarial review, implement, verify, and ship a PR. No human gates until the PR is created.
 
@@ -10,7 +12,7 @@ Label a GitHub issue with `agent:claude` or `agent:codex`, and ShipCode handles 
 
 ```bash
 brew install --cask shipshitdev/tap/shipcode   # macOS desktop app
-npx shipcode                                    # CLI
+npx @shipshitdev/shipcode                      # CLI
 ```
 
 > macOS users: the v0.1.0 build is unsigned. After install, run
@@ -49,7 +51,7 @@ Turborepo monorepo with Electron desktop app:
 apps/
   web/              Marketing site (Next.js + Tailwind)
   desktop/          Electron + Vite + React 19
-  cli/              CLI tool (published as 'shipcode' on npm)
+  cli/              CLI tool (published as '@shipshitdev/shipcode' on npm)
   docs/             Documentation (Nextra)
 packages/
   shared/           Types, schemas, constants
@@ -79,11 +81,11 @@ brew install --cask shipcode
 **CLI (Node.js >= 22.5.0):**
 
 ```bash
-npx shipcode onboard
-npx shipcode run 42
+npx @shipshitdev/shipcode onboard
+npx @shipshitdev/shipcode run 42
 
-# Optional global install
-npm install -g shipcode
+# Optional global install (exposes `shipcode` on $PATH)
+npm install -g @shipshitdev/shipcode
 ```
 
 **From source:**

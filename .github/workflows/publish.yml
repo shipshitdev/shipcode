@@ -241,5 +241,5 @@ jobs:
         # No NODE_AUTH_TOKEN. Authentication happens via OIDC — the npm
         # registry verifies the GitHub Actions ID token against the
         # Trusted Publisher config on the package. One-time setup at
-        # https://www.npmjs.com/package/shipcode/access
+        # https://www.npmjs.com/package/@shipshitdev/shipcode/access
         # (Repository: shipshitdev/shipcode, Workflow: publish.yml).
