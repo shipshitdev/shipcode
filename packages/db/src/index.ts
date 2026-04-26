@@ -1,7 +1,20 @@
+import { createRequire } from 'node:module';
 import path from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import type { DatabaseSync } from 'node:sqlite';
 
 export type { PromptTelemetryInsert, PromptTelemetryRecord } from '@shipcode/shared';
+
+// Lazy-load node:sqlite so the CLI's Node version guard can fire before this
+// throws ERR_UNKNOWN_BUILTIN_MODULE on Node < 22.5. ESM static imports hoist
+// before any user code, so we use createRequire deferred to first call.
+const _require = createRequire(import.meta.url);
+let _DatabaseSyncCtor: typeof DatabaseSync | null = null;
+function loadDatabaseSync(): typeof DatabaseSync {
+  if (_DatabaseSyncCtor) return _DatabaseSyncCtor;
+  const mod = _require('node:sqlite') as { DatabaseSync: typeof DatabaseSync };
+  _DatabaseSyncCtor = mod.DatabaseSync;
+  return _DatabaseSyncCtor;
+}
 
 import {
   migrate,
@@ -69,7 +82,8 @@ export function getDatabase(dataDir: string): DatabaseSync {
   if (db) return db;
 
   const dbPath = path.join(dataDir, 'shipcode.db');
-  db = new DatabaseSync(dbPath, { enableForeignKeyConstraints: true });
+  const Ctor = loadDatabaseSync();
+  db = new Ctor(dbPath, { enableForeignKeyConstraints: true });
 
   db.exec('PRAGMA journal_mode = WAL');
   db.exec('PRAGMA busy_timeout = 5000');

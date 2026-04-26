@@ -1,6 +1,6 @@
 {
   "name": "shipcode",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Autonomous AI coding pipeline. GitHub issues in, pull requests out.",
   "type": "module",
   "main": "./dist/index.js",
@@ -22,7 +22,8 @@
     "test": "vitest run",
     "coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "postinstall": "node -e \"try{require('node-pty')}catch(e){console.warn('[shipcode] node-pty not loadable; terminal features disabled')}\""
   },
   "dependencies": {
     "commander": "14.0.3",

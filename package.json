@@ -36,7 +36,10 @@
     "postinstall": "sh scripts/fix-node-pty-permissions.sh && sh scripts/setup-git-hooks.sh",
     "sync:docs": "sh scripts/sync-docs-to-web.sh",
     "test": "turbo run test",
-    "typecheck": "turbo run typecheck"
+    "typecheck": "turbo run typecheck",
+    "video:render": "cd scripts/remotion && bunx remotion render Launch out/shipcode-launch.mp4",
+    "video:gif": "cd scripts/remotion && bunx remotion render Launch out/shipcode-launch.gif --codec=gif --width=960 --every-nth-frame=2",
+    "video:studio": "cd scripts/remotion && bunx remotion studio"
   },
   "workspaces": [
     "apps/*",

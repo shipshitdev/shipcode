@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 env:
-  BUN_VERSION: "1.3.12"
+  BUN_VERSION: "1.3.13"
   NODE_VERSION: "22"
 
 permissions:

@@ -1,8 +1,20 @@
 # ShipCode
 
+[![ShipCode launch video](docs/launch.gif)](https://github.com/shipshitdev/shipcode/releases/download/v0.1.0/shipcode-launch.mp4)
+
 Autonomous AI coding pipeline. GitHub issues in, pull requests out.
 
 Label a GitHub issue with `agent:claude` or `agent:codex`, and ShipCode handles the rest: plan, adversarial review, implement, verify, and ship a PR. No human gates until the PR is created.
+
+## Install
+
+```bash
+brew install --cask shipshitdev/tap/shipcode   # macOS desktop app
+npx shipcode                                    # CLI
+```
+
+> macOS users: the v0.1.0 build is unsigned. After install, run
+> `xattr -cr "/Applications/ShipCode.app"` once to clear the Gatekeeper quarantine.
 
 ## How it works
 

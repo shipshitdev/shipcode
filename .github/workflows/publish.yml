@@ -148,10 +148,18 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   update-homebrew-cask:
-    if: ${{ inputs.build_macos && inputs.update_homebrew && secrets.HOMEBREW_TAP_TOKEN != '' }}
+    if: ${{ inputs.build_macos && inputs.update_homebrew }}
     needs: build-desktop-macos
     runs-on: ubuntu-latest
     steps:
+      - name: Verify HOMEBREW_TAP_TOKEN secret
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "::error::HOMEBREW_TAP_TOKEN repository secret not set"
+            exit 1
+          fi
       - name: Checkout tap repo
         uses: actions/checkout@v4
         with:
@@ -178,6 +186,14 @@ jobs:
           fi
           if [ -n "$INTEL_FILE" ]; then
             echo "intel_sha=$(shasum -a 256 "$INTEL_FILE" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Verify both SHA256 outputs present
+        run: |
+          if [ -z "${{ steps.sha.outputs.arm_sha }}" ]; then
+            echo "::error::no arm64 dmg found in release artifacts"; exit 1
+          fi
+          if [ -z "${{ steps.sha.outputs.intel_sha }}" ]; then
+            echo "::error::no x64 dmg found in release artifacts"; exit 1
           fi
       - name: Update cask version and SHA256
         run: |
