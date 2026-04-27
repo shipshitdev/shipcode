@@ -62,6 +62,9 @@ const makeIssue = (overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
   unresolvedReviewCommentCount: 0,
   prLastSyncAt: null,
   fetchedAt: new Date().toISOString(),
+  priorityRank: null,
+  priorityRaw: null,
+  priorityFetchedAt: null,
   ...overrides,
 });
 

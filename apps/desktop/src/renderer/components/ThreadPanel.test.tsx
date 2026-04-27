@@ -131,6 +131,9 @@ function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
     unresolvedReviewCommentCount: 0,
     prLastSyncAt: null,
     fetchedAt: '2026-04-22T10:00:00.000Z',
+    priorityRank: null,
+    priorityRaw: null,
+    priorityFetchedAt: null,
     ...overrides,
   };
 }

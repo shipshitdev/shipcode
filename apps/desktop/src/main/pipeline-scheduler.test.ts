@@ -48,6 +48,9 @@ function makeIssue(overrides: Record<string, unknown> = {}) {
     unresolvedReviewCommentCount: 0,
     prLastSyncAt: null,
     fetchedAt: new Date().toISOString(),
+    priorityRank: null,
+    priorityRaw: null,
+    priorityFetchedAt: null,
     ...overrides,
   };
 }
