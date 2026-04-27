@@ -1,6 +1,6 @@
 # ShipCode
 
-[![ShipCode launch video](docs/launch.gif)](https://github.com/shipshitdev/shipcode/releases/download/v0.1.0/shipcode-launch.mp4)
+> [Watch the launch video (MP4)](https://github.com/shipshitdev/shipcode/releases/download/v0.1.0/shipcode-launch.mp4)
 
 Autonomous AI coding pipeline. GitHub issues in, pull requests out.
 
