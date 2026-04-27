@@ -213,14 +213,28 @@ function buildCodexArgs(req: ProviderRequest): string[] {
 function buildCodexPrompt(req: ProviderRequest): string {
   if (req.phase === 'execute') return req.prompt;
 
-  return [
+  // Plan and revision phases need to ground their output in the real repo
+  // (per plan-generation skill: walk codebase, cite real file paths, reuse
+  // real helpers). The sandbox is already read-only, so file reads are safe.
+  // Review and verify phases analyze provided text and stay prompt-only to
+  // keep token spend predictable.
+  const allowInspection = req.phase === 'plan' || req.phase === 'revision';
+
+  const lines = [
     'ShipCode structured-output mode.',
-    'Do not run shell commands, inspect files, or use tools in this phase.',
-    'Use only the prompt content below.',
+    ...(allowInspection
+      ? [
+          'You may read files in the working directory to ground your output, but do not run shell commands beyond read-only inspection.',
+        ]
+      : [
+          'Do not run shell commands, inspect files, or use tools in this phase.',
+          'Use only the prompt content below.',
+        ]),
     'Return only the requested fenced shipcode-* JSON block. Do not include prose or any other fenced blocks.',
     '',
     req.prompt,
-  ].join('\n');
+  ];
+  return lines.join('\n');
 }
 
 export function createClaudeCliProvider(processManager: ProcessManager): AgentProvider {

@@ -219,6 +219,8 @@ export interface ActivePipelineSummary {
   threadId: string;
   projectId: string | null;
   projectPath: string;
+  /** Absolute worktree path the pipeline is operating in, if any. */
+  worktreePath: string | null;
   phase: PipelinePhase;
   approvedAwaitingExecution?: boolean;
   startedAt: number;

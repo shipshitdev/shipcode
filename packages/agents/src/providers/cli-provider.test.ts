@@ -246,12 +246,34 @@ describe('buildCodexArgs', () => {
 });
 
 describe('buildCodexPrompt', () => {
-  it('adds a structured-output guardrail for non-execute phases', () => {
+  it('lets plan phase ground output in repo (read-only inspection allowed)', () => {
     const prompt = buildCodexPrompt(req({ phase: 'plan' }));
 
-    expect(prompt).toContain('Do not run shell commands, inspect files, or use tools');
+    expect(prompt).toContain('ShipCode structured-output mode');
+    expect(prompt).toContain('You may read files in the working directory');
+    expect(prompt).not.toContain('Do not run shell commands, inspect files, or use tools');
     expect(prompt).toContain('Return only the requested fenced shipcode-* JSON block');
     expect(prompt).toContain('PROMPT');
+  });
+
+  it('lets revision phase ground output in repo (read-only inspection allowed)', () => {
+    const prompt = buildCodexPrompt(req({ phase: 'revision' }));
+
+    expect(prompt).toContain('You may read files in the working directory');
+    expect(prompt).not.toContain('Do not run shell commands, inspect files, or use tools');
+  });
+
+  it('keeps prompt-only guardrail for review phase', () => {
+    const prompt = buildCodexPrompt(req({ phase: 'review' }));
+
+    expect(prompt).toContain('Do not run shell commands, inspect files, or use tools');
+    expect(prompt).toContain('Use only the prompt content below');
+  });
+
+  it('keeps prompt-only guardrail for verify phase', () => {
+    const prompt = buildCodexPrompt(req({ phase: 'verify' }));
+
+    expect(prompt).toContain('Do not run shell commands, inspect files, or use tools');
   });
 
   it('leaves execute prompts unchanged', () => {

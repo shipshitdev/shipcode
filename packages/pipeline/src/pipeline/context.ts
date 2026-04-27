@@ -368,6 +368,7 @@ export function createPipelineContextHelpers(
         threadId: context.threadId,
         projectId: context.projectId ?? thread?.projectId ?? null,
         projectPath: context.projectPath,
+        worktreePath: context.worktreePath ?? null,
         phase: (thread?.status ?? 'idle') as import('@shipcode/shared').PipelinePhase,
         startedAt: context.startedAt,
         activeProcessId: context.activeProcessId,

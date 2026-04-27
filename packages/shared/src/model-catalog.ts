@@ -6,6 +6,7 @@ export interface KnownModelOption<T extends string = string> {
 export const CLAUDE_MODEL_IDS = {
   sonnet46: 'claude-sonnet-4-6',
   opus46: 'claude-opus-4-6',
+  opus47: 'claude-opus-4-7',
   haiku45: 'claude-haiku-4-5-20251001',
 } as const;
 
@@ -33,6 +34,7 @@ export type OpenRouterModelId = (typeof OPENROUTER_MODEL_IDS)[keyof typeof OPENR
 export const CLAUDE_MODEL_OPTIONS = [
   { value: CLAUDE_MODEL_IDS.sonnet46, label: 'Sonnet 4.6' },
   { value: CLAUDE_MODEL_IDS.opus46, label: 'Opus 4.6' },
+  { value: CLAUDE_MODEL_IDS.opus47, label: 'Opus 4.7' },
   { value: CLAUDE_MODEL_IDS.haiku45, label: 'Haiku 4.5' },
 ] as const satisfies readonly KnownModelOption<ClaudeModelId>[];
 
