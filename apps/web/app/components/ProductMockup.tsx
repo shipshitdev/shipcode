@@ -33,6 +33,9 @@ const issueDefaults = {
   unresolvedReviewCommentCount: 0,
   prLastSyncAt: null,
   fetchedAt: now,
+  priorityRank: null,
+  priorityRaw: null,
+  priorityFetchedAt: null,
 };
 
 const issues: GitHubIssueCacheRecord[] = [
