@@ -125,7 +125,8 @@ export class ProcessManager extends EventEmitter {
       });
     } catch (err) {
       // Spawn failed (e.g. binary not found, alias instead of real path).
-      // Emit error as output + synthetic exit so pipeline handles it gracefully.
+      // Drop the env cache so the next spawn re-hydrates PATH from a fresh login shell.
+      cachedEnv = null;
       const errorMsg = `Failed to spawn ${command} (resolved: ${resolvedCommand}): ${err instanceof Error ? err.message : err}`;
       const managed: ManagedProcess = {
         id,
@@ -139,11 +140,13 @@ export class ProcessManager extends EventEmitter {
       };
       this.processes.set(id, managed);
 
-      // Defer events so callers can attach listeners first
+      // Defer events so callers can attach listeners first, then drop the
+      // entry so the registry does not pin failed-spawn records forever.
       queueMicrotask(() => {
         this.emit('output', id, `\x1b[31mError: ${errorMsg}\x1b[0m\r\n`);
         this.emit('stateChange', id, type, 'exited');
         this.emit('exit', id, 127);
+        this.processes.delete(id);
       });
 
       return managed;
@@ -171,6 +174,11 @@ export class ProcessManager extends EventEmitter {
       managed.exitCode = exitCode;
       this.updateState(id, 'exited');
       this.emit('exit', id, exitCode);
+      // Drop after synchronous listeners observe the terminal state.
+      // Anyone holding a reference to `managed` keeps it; we just stop
+      // pinning it in the registry. Long autonomous loops would otherwise
+      // accumulate one entry per phase forever.
+      queueMicrotask(() => this.processes.delete(id));
     });
 
     return managed;
@@ -211,6 +219,68 @@ export class ProcessManager extends EventEmitter {
   killAll(): void {
     for (const [id] of this.processes) {
       this.kill(id);
+    }
+  }
+
+  /**
+   * Kill every active process and wait for each pty to actually exit. Sends
+   * SIGHUP first; escalates to SIGKILL after `graceMs` for any holdouts.
+   * Resolves once all ptys have emitted `exit` (or after a final 1s
+   * post-SIGKILL cap). Use during app shutdown so claude/codex children
+   * don't outlive the Electron main process.
+   */
+  async killAllAndWait(graceMs = 5000): Promise<void> {
+    const pending = Array.from(this.processes.values()).filter((p) => p.state !== 'exited');
+    if (pending.length === 0) return;
+
+    const waitForExit = (id: string): Promise<void> =>
+      new Promise<void>((resolve) => {
+        const proc = this.processes.get(id);
+        if (!proc || proc.state === 'exited') {
+          resolve();
+          return;
+        }
+        const handler = (exitedId: string) => {
+          if (exitedId === id) {
+            this.off('exit', handler);
+            resolve();
+          }
+        };
+        this.on('exit', handler);
+      });
+
+    const exitPromises = pending.map((p) => waitForExit(p.id));
+
+    for (const proc of pending) {
+      try {
+        proc.pty.kill();
+      } catch {
+        // ignore — pty may already be dead
+      }
+    }
+
+    const timeoutSentinel = Symbol('timeout');
+    const timeout = new Promise<typeof timeoutSentinel>((resolve) =>
+      setTimeout(() => resolve(timeoutSentinel), graceMs),
+    );
+
+    const result = await Promise.race([Promise.all(exitPromises), timeout]);
+
+    if (result === timeoutSentinel) {
+      for (const proc of pending) {
+        const cur = this.processes.get(proc.id);
+        if (cur && cur.state !== 'exited') {
+          try {
+            proc.pty.kill('SIGKILL');
+          } catch {
+            // ignore
+          }
+        }
+      }
+      await Promise.race([
+        Promise.all(exitPromises),
+        new Promise<void>((resolve) => setTimeout(resolve, 1000)),
+      ]);
     }
   }
 

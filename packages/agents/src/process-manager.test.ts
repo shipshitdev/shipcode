@@ -1,0 +1,167 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { mockPtySpawn } = vi.hoisted(() => ({
+  mockPtySpawn: vi.fn(),
+}));
+
+vi.mock('node-pty', () => ({ spawn: mockPtySpawn }));
+vi.mock('node:child_process', () => ({
+  execFileSync: vi.fn(() => ''),
+}));
+
+import { ProcessManager } from './process-manager';
+
+interface MockPty {
+  onData: (cb: (data: string) => void) => void;
+  onExit: (cb: ({ exitCode }: { exitCode: number }) => void) => void;
+  kill: () => void;
+  write: () => void;
+  resize: () => void;
+  __exit: (code: number) => void;
+}
+
+function createMockPty(): MockPty {
+  let exitCb: ((arg: { exitCode: number }) => void) | null = null;
+  return {
+    onData: vi.fn(),
+    onExit: (cb) => {
+      exitCb = cb;
+    },
+    kill: vi.fn(),
+    write: vi.fn(),
+    resize: vi.fn(),
+    __exit: (code: number) => exitCb?.({ exitCode: code }),
+  };
+}
+
+async function flushMicrotasks(): Promise<void> {
+  await new Promise<void>((resolve) => queueMicrotask(resolve));
+}
+
+describe('ProcessManager registry hygiene', () => {
+  let manager: ProcessManager;
+
+  beforeEach(() => {
+    manager = new ProcessManager();
+    mockPtySpawn.mockReset();
+  });
+
+  afterEach(() => {
+    manager.removeAllListeners();
+  });
+
+  it('drops exited processes from the registry after the exit event drains', async () => {
+    const pty = createMockPty();
+    mockPtySpawn.mockReturnValueOnce(pty);
+
+    const proc = manager.spawn('claude', 'claude', [], '/tmp');
+    expect(manager.get(proc.id)).toBeDefined();
+
+    pty.__exit(0);
+    expect(manager.get(proc.id)).toBeDefined();
+
+    await flushMicrotasks();
+    expect(manager.get(proc.id)).toBeUndefined();
+    expect(manager.listActive()).toHaveLength(0);
+  });
+
+  it('does not leak across many spawn/exit cycles', async () => {
+    for (let i = 0; i < 25; i++) {
+      const pty = createMockPty();
+      mockPtySpawn.mockReturnValueOnce(pty);
+      const proc = manager.spawn('claude', 'claude', [], '/tmp');
+      pty.__exit(0);
+      // Synchronous handlers can still observe the entry; cleanup defers.
+      expect(manager.get(proc.id)).toBeDefined();
+    }
+    await flushMicrotasks();
+    expect(manager.listActive()).toHaveLength(0);
+    expect(manager['processes'].size).toBe(0);
+  });
+
+  it('drops failed-to-spawn processes from the registry', async () => {
+    mockPtySpawn.mockImplementationOnce(() => {
+      throw new Error('binary not found');
+    });
+
+    const failed = manager.spawn('claude', 'claude', [], '/tmp');
+    expect(failed.state).toBe('exited');
+
+    await flushMicrotasks();
+    expect(manager.get(failed.id)).toBeUndefined();
+  });
+
+  it('killAllAndWait resolves only after every pty emits exit', async () => {
+    const ptyA = createMockPty();
+    const ptyB = createMockPty();
+    mockPtySpawn.mockReturnValueOnce(ptyA).mockReturnValueOnce(ptyB);
+
+    manager.spawn('claude', 'claude', [], '/tmp');
+    manager.spawn('codex', 'codex', [], '/tmp');
+
+    let resolved = false;
+    const done = manager.killAllAndWait(5000).then(() => {
+      resolved = true;
+    });
+
+    await flushMicrotasks();
+    expect(resolved).toBe(false);
+    expect(ptyA.kill).toHaveBeenCalled();
+    expect(ptyB.kill).toHaveBeenCalled();
+
+    ptyA.__exit(0);
+    await flushMicrotasks();
+    expect(resolved).toBe(false);
+
+    ptyB.__exit(0);
+    await done;
+    expect(resolved).toBe(true);
+    expect(manager.listActive()).toHaveLength(0);
+  });
+
+  it('killAllAndWait returns immediately when no processes are active', async () => {
+    await expect(manager.killAllAndWait(5000)).resolves.toBeUndefined();
+  });
+
+  it('killAllAndWait escalates to SIGKILL after grace period', async () => {
+    vi.useFakeTimers();
+    try {
+      const pty = createMockPty();
+      mockPtySpawn.mockReturnValueOnce(pty);
+      manager.spawn('claude', 'claude', [], '/tmp');
+
+      const done = manager.killAllAndWait(50);
+      // First kill: no signal arg = SIGHUP default
+      expect(pty.kill).toHaveBeenCalledTimes(1);
+      expect(pty.kill).toHaveBeenLastCalledWith();
+
+      await vi.advanceTimersByTimeAsync(60);
+      // Escalation to SIGKILL
+      expect(pty.kill).toHaveBeenCalledTimes(2);
+      expect(pty.kill).toHaveBeenLastCalledWith('SIGKILL');
+
+      // Final 1s cap before resolve.
+      pty.__exit(137);
+      await done;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('exposes exited state synchronously to exit listeners before cleanup', () => {
+    const pty = createMockPty();
+    mockPtySpawn.mockReturnValueOnce(pty);
+
+    manager.spawn('claude', 'claude', [], '/tmp');
+
+    let observedDuringEvent: ReturnType<typeof manager.get> | undefined;
+    manager.once('exit', (id: string) => {
+      observedDuringEvent = manager.get(id);
+    });
+
+    pty.__exit(7);
+    expect(observedDuringEvent).toBeDefined();
+    expect(observedDuringEvent?.exitCode).toBe(7);
+    expect(observedDuringEvent?.state).toBe('exited');
+  });
+});
