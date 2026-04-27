@@ -102,7 +102,7 @@ describe('enhancePrdDraft', () => {
         '3',
         '--dangerously-skip-permissions',
         '--disallowedTools',
-        'Edit,Write,Bash,NotebookEdit',
+        'Edit,Write,Bash,NotebookEdit,Read,Glob,Grep,Task,WebSearch,WebFetch',
       ],
       expect.objectContaining({ cwd: '/repo', stdio: ['pipe', 'pipe', 'pipe'] }),
     );

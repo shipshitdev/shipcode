@@ -155,8 +155,11 @@ function runPrdCliWithStdin(
                 : (['--max-thinking-tokens', String(thinkingTokens)] as string[]);
             })(),
             '--dangerously-skip-permissions',
+            // PRD enhance is a pure text transform. Disallow ALL tools so the
+            // model answers in a single turn instead of burning turns on
+            // Read/Glob/Grep exploration and hitting `--max-turns`.
             '--disallowedTools',
-            'Edit,Write,Bash,NotebookEdit',
+            'Edit,Write,Bash,NotebookEdit,Read,Glob,Grep,Task,WebSearch,WebFetch',
           ]
         : [
             '-a',
