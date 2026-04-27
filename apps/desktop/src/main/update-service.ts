@@ -102,6 +102,22 @@ export class UpdateService {
         },
       }).finally(() => clearTimeout(timeout));
 
+      if (response.status === 404) {
+        // Repo has no published stable release yet (pre-release state).
+        // Treat as up-to-date rather than surfacing an error to the user.
+        this.update({
+          latest: null,
+          hasUpdate: false,
+          releaseUrl: null,
+          releaseTag: null,
+          publishedAt: null,
+          state: 'up-to-date',
+          checkedAt: new Date().toISOString(),
+          error: null,
+        });
+        return this.status;
+      }
+
       if (!response.ok) {
         throw new Error(`GitHub API returned ${response.status}`);
       }
