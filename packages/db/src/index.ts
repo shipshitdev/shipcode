@@ -54,6 +54,8 @@ import {
   migrateV33,
   migrateV34,
   migrateV35,
+  migrateV36,
+  migrateV37,
 } from './schema';
 
 export { ActivityQueries } from './queries/activity';
@@ -125,6 +127,8 @@ export function getDatabase(dataDir: string): DatabaseSync {
   migrateV33(db);
   migrateV34(db);
   migrateV35(db);
+  migrateV36(db);
+  migrateV37(db);
 
   // Startup cleanup: reset unclaimed queued issues to todo on every launch.
   // An unclaimed queued issue has no active worker holding it — it's stale state
