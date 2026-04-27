@@ -7,7 +7,9 @@ export type { PromptTelemetryInsert, PromptTelemetryRecord } from '@shipcode/sha
 // Lazy-load node:sqlite so the CLI's Node version guard can fire before this
 // throws ERR_UNKNOWN_BUILTIN_MODULE on Node < 22.5. ESM static imports hoist
 // before any user code, so we use createRequire deferred to first call.
-const _require = createRequire(import.meta.url);
+// When bundled as CJS (Electron main), import.meta.url is rewritten to
+// `{}.url` (undefined); fall back to __filename in that case.
+const _require = createRequire(typeof __filename === 'string' ? __filename : import.meta.url);
 let _DatabaseSyncCtor: typeof DatabaseSync | null = null;
 function loadDatabaseSync(): typeof DatabaseSync {
   if (_DatabaseSyncCtor) return _DatabaseSyncCtor;
