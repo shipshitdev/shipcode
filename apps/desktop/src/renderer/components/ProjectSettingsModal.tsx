@@ -145,6 +145,17 @@ export function ProjectSettingsModal() {
     staleTime: STABLE_APP_STATE_STALE_TIME,
   });
 
+  const { data: branches } = useQuery<string[]>({
+    queryKey: ['git-branches', projectSettingsModalProjectId],
+    queryFn: () =>
+      window.shipcode.invoke<string[]>('git:list-branches', {
+        projectId: projectSettingsModalProjectId ?? '',
+        fetch: false,
+      }),
+    enabled: !!projectSettingsModalProjectId && projectSettingsModalOpen,
+    staleTime: STABLE_APP_STATE_STALE_TIME,
+  });
+
   const { data: settings } = useQuery<AppSettings>({
     queryKey: ['settings'],
     queryFn: () => window.shipcode.invoke('settings:get'),
@@ -381,6 +392,62 @@ export function ProjectSettingsModal() {
       log.error('[ProjectSettingsModal] sync failed', err);
       setSyncResult(null);
       setSyncError(clampError(err));
+    },
+  });
+
+  const setDefaultBranchMutation = useMutation({
+    mutationFn: async (branch: string) => {
+      if (!projectSettingsModalProjectId) throw new Error('No project selected');
+      return window.shipcode.invoke<Project>('project:set-default-branch', {
+        projectId: projectSettingsModalProjectId,
+        branch,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project', projectSettingsModalProjectId] });
+      queryClient.invalidateQueries({
+        queryKey: ['thread-panel-data', projectSettingsModalProjectId],
+      });
+    },
+    onError: (err: unknown) => {
+      log.error('[ProjectSettingsModal] set default branch failed', err);
+      setSubmitError(clampError(err));
+    },
+  });
+
+  const refreshBranchesMutation = useMutation({
+    mutationFn: async () => {
+      if (!projectSettingsModalProjectId) throw new Error('No project selected');
+      return window.shipcode.invoke<string[]>('git:list-branches', {
+        projectId: projectSettingsModalProjectId,
+        fetch: true,
+      });
+    },
+    onSuccess: (fresh) => {
+      queryClient.setQueryData(['git-branches', projectSettingsModalProjectId], fresh);
+    },
+    onError: (err: unknown) => {
+      log.error('[ProjectSettingsModal] refresh branches failed', err);
+    },
+  });
+
+  const refreshGitRemoteMutation = useMutation({
+    mutationFn: async () => {
+      if (!projectSettingsModalProjectId) throw new Error('No project selected');
+      return window.shipcode.invoke<{ project: Project; remote: string | null; changed: boolean }>(
+        'project:refresh-git-remote',
+        { projectId: projectSettingsModalProjectId },
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project', projectSettingsModalProjectId] });
+      queryClient.invalidateQueries({
+        queryKey: ['thread-panel-data', projectSettingsModalProjectId],
+      });
+    },
+    onError: (err: unknown) => {
+      log.error('[ProjectSettingsModal] refresh git remote failed', err);
+      setSubmitError(clampError(err));
     },
   });
 
@@ -657,6 +724,13 @@ export function ProjectSettingsModal() {
                     hasSavedUrl={hasSavedUrl}
                     inputMatchesSaved={inputMatchesSaved}
                     onSync={handleSync}
+                    branches={branches ?? []}
+                    onSetDefaultBranch={(branch) => setDefaultBranchMutation.mutate(branch)}
+                    setDefaultBranchPending={setDefaultBranchMutation.isPending}
+                    onRefreshBranches={() => refreshBranchesMutation.mutate()}
+                    refreshBranchesPending={refreshBranchesMutation.isPending}
+                    onRefreshGitRemote={() => refreshGitRemoteMutation.mutate()}
+                    refreshGitRemotePending={refreshGitRemoteMutation.isPending}
                   />
                 )}
 

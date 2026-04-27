@@ -248,6 +248,13 @@ describe('project settings leaf tabs', () => {
         hasSavedUrl={true}
         inputMatchesSaved={true}
         onSync={onSync}
+        branches={[]}
+        onSetDefaultBranch={vi.fn()}
+        setDefaultBranchPending={false}
+        onRefreshBranches={vi.fn()}
+        refreshBranchesPending={false}
+        onRefreshGitRemote={vi.fn()}
+        refreshGitRemotePending={false}
       />,
     );
 
@@ -303,6 +310,13 @@ describe('project settings leaf tabs', () => {
         hasSavedUrl={true}
         inputMatchesSaved={true}
         onSync={vi.fn()}
+        branches={[]}
+        onSetDefaultBranch={vi.fn()}
+        setDefaultBranchPending={false}
+        onRefreshBranches={vi.fn()}
+        refreshBranchesPending={false}
+        onRefreshGitRemote={vi.fn()}
+        refreshGitRemotePending={false}
       />,
     );
 

@@ -368,6 +368,12 @@ export class ProjectQueries {
       .run(branch, id);
   }
 
+  updateGitRemote(id: string, remote: string | null): void {
+    this.db
+      .prepare(`UPDATE projects SET git_remote = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`)
+      .run(remote, id);
+  }
+
   updateName(id: string, name: string): void {
     this.db
       .prepare(`UPDATE projects SET name = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`)

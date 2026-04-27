@@ -98,6 +98,10 @@ export interface IpcInvokeChannels {
   'project:set-name': { args: { projectId: string; name: string }; result: Project };
   'project:relink-path': { args: { projectId: string; path: string }; result: Project };
   'project:set-default-branch': { args: { projectId: string; branch: string }; result: Project };
+  'project:refresh-git-remote': {
+    args: { projectId: string };
+    result: { project: Project; remote: string | null; changed: boolean };
+  };
   'project:set-github-project-url': {
     args: { projectId: string; url: string | null };
     result: Project;

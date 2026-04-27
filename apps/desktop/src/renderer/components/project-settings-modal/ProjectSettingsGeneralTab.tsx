@@ -1,5 +1,19 @@
 import type { Project } from '@shipcode/shared';
-import { Button, Input, LoadingButtonContent, SettingsRow } from '@shipshitdev/ui';
+import {
+  Button,
+  Input,
+  LoadingButtonContent,
+  RefreshCw,
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+  SettingsRow,
+} from '@shipshitdev/ui';
 
 export function ProjectSettingsGeneralTab({
   project,
@@ -23,6 +37,13 @@ export function ProjectSettingsGeneralTab({
   hasSavedUrl,
   inputMatchesSaved,
   onSync,
+  branches,
+  onSetDefaultBranch,
+  setDefaultBranchPending,
+  onRefreshBranches,
+  refreshBranchesPending,
+  onRefreshGitRemote,
+  refreshGitRemotePending,
 }: {
   project: Project;
   nameInput: string;
@@ -45,7 +66,19 @@ export function ProjectSettingsGeneralTab({
   hasSavedUrl: boolean;
   inputMatchesSaved: boolean;
   onSync: () => void;
+  branches: string[];
+  onSetDefaultBranch: (branch: string) => void;
+  setDefaultBranchPending: boolean;
+  onRefreshBranches: () => void;
+  refreshBranchesPending: boolean;
+  onRefreshGitRemote: () => void;
+  refreshGitRemotePending: boolean;
 }) {
+  const localBranches = branches.filter((branch) => !branch.includes('/'));
+  const remoteBranches = branches.filter((branch) => branch.includes('/'));
+  const hasBranches = branches.length > 0;
+  const branchValue =
+    hasBranches && branches.includes(project.defaultBranch) ? project.defaultBranch : undefined;
   return (
     <div className="space-y-6">
       <section>
@@ -65,13 +98,81 @@ export function ProjectSettingsGeneralTab({
         </SettingsRow>
 
         <SettingsRow label="Git remote">
-          <div className="max-w-[320px] truncate font-mono text-xs text-secondary">
-            {project.gitRemote ?? '(no remote)'}
+          <div className="flex items-center gap-2">
+            <div className="max-w-[280px] truncate font-mono text-xs text-secondary">
+              {project.gitRemote ?? '(no remote)'}
+            </div>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              title="Re-read origin URL from local git config"
+              disabled={refreshGitRemotePending}
+              onClick={onRefreshGitRemote}
+            >
+              <RefreshCw size={14} className={refreshGitRemotePending ? 'animate-spin' : ''} />
+            </Button>
           </div>
         </SettingsRow>
 
         <SettingsRow label="Default branch">
-          <div className="font-mono text-xs text-secondary">{project.defaultBranch}</div>
+          {hasBranches ? (
+            <div className="flex items-center gap-2">
+              <Select
+                value={branchValue}
+                onValueChange={onSetDefaultBranch}
+                disabled={setDefaultBranchPending}
+              >
+                <SelectTrigger className="h-8 w-[240px] gap-1 font-mono text-xs">
+                  <SelectValue placeholder={project.defaultBranch} />
+                </SelectTrigger>
+                <SelectContent>
+                  {localBranches.length > 0 && (
+                    <SelectGroup>
+                      <SelectLabel>Local</SelectLabel>
+                      {localBranches.map((branch) => (
+                        <SelectItem key={branch} value={branch} className="font-mono text-xs">
+                          {branch}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  )}
+                  {localBranches.length > 0 && remoteBranches.length > 0 && <SelectSeparator />}
+                  {remoteBranches.length > 0 && (
+                    <SelectGroup>
+                      <SelectLabel>Remote</SelectLabel>
+                      {remoteBranches.map((branch) => (
+                        <SelectItem key={branch} value={branch} className="font-mono text-xs">
+                          {branch}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  )}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                title="Refresh branches"
+                disabled={refreshBranchesPending}
+                onClick={onRefreshBranches}
+              >
+                <RefreshCw size={14} className={refreshBranchesPending ? 'animate-spin' : ''} />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <div className="font-mono text-xs text-secondary">{project.defaultBranch}</div>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                title="Load branches"
+                disabled={refreshBranchesPending}
+                onClick={onRefreshBranches}
+              >
+                <RefreshCw size={14} className={refreshBranchesPending ? 'animate-spin' : ''} />
+              </Button>
+            </div>
+          )}
         </SettingsRow>
       </section>
 

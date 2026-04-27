@@ -963,6 +963,24 @@ export function registerProjectHandlers({
   );
 
   ipcMain.handle(
+    'project:refresh-git-remote',
+    async (_event, { projectId }: { projectId: string }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+
+      const git = new GitService(project.path);
+      const remote = await git.getRemoteUrl();
+      const changed = remote !== project.gitRemote;
+      if (changed) {
+        queries.projects.updateGitRemote(projectId, remote);
+      }
+      const updated = enrichProjectPath(queries.projects.getById(projectId));
+      if (!updated) throw new Error(`Project ${projectId} not found after remote refresh`);
+      return { project: updated, remote, changed };
+    },
+  );
+
+  ipcMain.handle(
     'project:set-github-project-url',
     async (_event, { projectId, url }: { projectId: string; url: string | null }) => {
       const project = queries.projects.getById(projectId);

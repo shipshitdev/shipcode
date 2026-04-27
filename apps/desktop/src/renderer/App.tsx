@@ -1,6 +1,5 @@
 import type { AppSettings, GitHubIssueCacheRecord, Project } from '@shipcode/shared';
 import { CURRENT_ONBOARDING_VERSION } from '@shipcode/shared';
-import { OverlayPanel } from '@shipshitdev/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef } from 'react';
 import { ActivityView } from './components/ActivityView';
@@ -255,68 +254,58 @@ export function App() {
       <ProjectPathBanner project={activeProject ?? null} />
       <div className="flex flex-1 overflow-hidden">
         {!hideSidebarForReader && (settingsVisible ? <SettingsSidebar /> : <ProjectSidebar />)}
-        {/* Content column: upper region (views + issue-detail overlay) stacked
-            above a full-width terminal. Terminal lives outside the overlay's
-            relative container so the right detail panel never clips it. */}
+        {/* Center column — main view above, terminal below. Right detail
+            panel is a sibling (not nested), so the terminal sits BETWEEN
+            the sidebar and the detail panel (Cursor-style) and resizes as
+            either flank opens or closes. */}
         <div className="flex flex-col flex-1 overflow-hidden min-h-0">
-          {hideMainContentForTerminal ? (
-            <div className="flex flex-1 overflow-hidden min-h-0">
-              <TerminalDrawer />
+          {!hideMainContentForTerminal && (
+            <div className="flex flex-1 overflow-hidden min-h-0 bg-primary">
+              {hasActiveIssue && issueDetailExpanded ? (
+                <IssueDetail expanded={true} />
+              ) : settingsVisible ? (
+                <SettingsPanel />
+              ) : viewMode === 'activity' ? (
+                <ActivityView />
+              ) : viewMode === 'costs' ? (
+                <CostsView />
+              ) : viewMode === 'skills' ? (
+                <SkillsView />
+              ) : viewMode === 'inbox' ? (
+                <InboxView />
+              ) : showOverview ? (
+                <OverviewView />
+              ) : showMissingProject && activeProject ? (
+                <ProjectMissingView project={activeProject} />
+              ) : (
+                <ProjectView />
+              )}
             </div>
-          ) : (
-            <>
-              {/* Upper region — main view + right-side issue detail overlay */}
-              <div className="relative flex flex-1 overflow-hidden min-h-0">
-                <div
-                  className={
-                    hasActiveIssue && issueDetailExpanded
-                      ? 'hidden'
-                      : 'flex flex-1 overflow-hidden bg-primary'
-                  }
-                >
-                  {settingsVisible ? (
-                    <SettingsPanel />
-                  ) : viewMode === 'activity' ? (
-                    <ActivityView />
-                  ) : viewMode === 'costs' ? (
-                    <CostsView />
-                  ) : viewMode === 'skills' ? (
-                    <SkillsView />
-                  ) : viewMode === 'inbox' ? (
-                    <InboxView />
-                  ) : showOverview ? (
-                    <OverviewView />
-                  ) : showMissingProject && activeProject ? (
-                    <ProjectMissingView project={activeProject} />
-                  ) : (
-                    <ProjectView />
-                  )}
-                </div>
-                {/* Expanded issue detail takes over the upper region entirely */}
-                {hasActiveIssue && issueDetailExpanded && (
-                  <div className="flex-1 overflow-hidden">
-                    <IssueDetail expanded={true} />
-                  </div>
-                )}
-                {/* Right panel — full height of upper region only, no longer
-                    overlapping the terminal. */}
-                {hasActiveIssue && !issueDetailExpanded && !issueDetailCollapsed && (
-                  <OverlayPanel
-                    width={issueDetailWidth}
-                    minWidth={ISSUE_DETAIL_MIN_WIDTH}
-                    maxWidth={ISSUE_DETAIL_MAX_WIDTH}
-                    onResizeStart={handleIssueDetailResizeMouseDown}
-                    resizeHandleLabel="Resize issue detail panel"
-                  >
-                    <IssueDetail expanded={false} />
-                  </OverlayPanel>
-                )}
-              </div>
-              {/* Terminal — full content width, sibling of the upper region */}
-              {terminalVisible && <TerminalDrawer />}
-            </>
           )}
+          {terminalVisible && <TerminalDrawer />}
         </div>
+        {/* Right detail panel — full row height, flanks both the upper
+            view and the terminal. Hidden when expanded (it takes over the
+            center column instead) or when collapsed. */}
+        {hasActiveIssue && !issueDetailExpanded && !issueDetailCollapsed && (
+          <div
+            data-slot="overlay-panel"
+            className="pointer-events-auto relative flex h-full flex-shrink-0 flex-col overflow-hidden border-l border-border bg-primary shadow-[-16px_0_40px_rgba(0,0,0,0.35)]"
+            style={{
+              width: issueDetailWidth,
+              minWidth: ISSUE_DETAIL_MIN_WIDTH,
+              maxWidth: ISSUE_DETAIL_MAX_WIDTH,
+            }}
+          >
+            <button
+              type="button"
+              aria-label="Resize issue detail panel"
+              className="absolute inset-y-0 left-0 z-10 w-1 -translate-x-1/2 cursor-col-resize transition-colors hover:bg-accent/20 active:bg-accent/30"
+              onMouseDown={handleIssueDetailResizeMouseDown}
+            />
+            <IssueDetail expanded={false} />
+          </div>
+        )}
       </div>
       <CommandPalette />
       <CreateIssueModal />
