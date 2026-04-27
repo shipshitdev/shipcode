@@ -110,4 +110,96 @@ export class GitService {
       date: entry.date,
     }));
   }
+
+  /** Stage explicit paths only — no `add('.')`. Used by auto-commit splitter. */
+  async addPaths(paths: string[], worktreePath?: string): Promise<void> {
+    if (paths.length === 0) return;
+    const git = worktreePath ? simpleGit(worktreePath) : this.git;
+    await git.add(paths);
+  }
+
+  /** Mixed reset to clear the index without touching the working tree. */
+  async resetIndex(worktreePath?: string): Promise<void> {
+    const git = worktreePath ? simpleGit(worktreePath) : this.git;
+    await git.reset(['--mixed']);
+  }
+
+  /** Commit whatever is currently staged. Does NOT call add('.') first. */
+  async commitStaged(message: string, worktreePath?: string): Promise<string> {
+    const git = worktreePath ? simpleGit(worktreePath) : this.git;
+    const result = await git.commit(message);
+    return result.commit;
+  }
+
+  /** Names of files currently in the staging area. */
+  async getStagedFiles(worktreePath?: string): Promise<string[]> {
+    const git = worktreePath ? simpleGit(worktreePath) : this.git;
+    const raw = await git.diff(['--cached', '--name-only']);
+    return raw
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+  }
+
+  /** Force-delete a local branch. */
+  async deleteLocalBranch(branch: string, worktreePath?: string): Promise<void> {
+    const git = worktreePath ? simpleGit(worktreePath) : this.git;
+    await git.branch(['-D', branch]);
+  }
+
+  /** Delete a remote branch via push --delete. */
+  async deleteRemoteBranch(branch: string, remote = 'origin'): Promise<void> {
+    await this.git.push([remote, '--delete', branch]);
+  }
+
+  /**
+   * Batch-check dirty state across many worktree paths.
+   * Returns Map<path, isDirty>.
+   */
+  async getDirtyWorktrees(paths: string[]): Promise<Map<string, boolean>> {
+    const out = new Map<string, boolean>();
+    await Promise.all(
+      paths.map(async (p) => {
+        try {
+          const status = await simpleGit(p).status();
+          out.set(p, !status.isClean());
+        } catch {
+          out.set(p, true);
+        }
+      }),
+    );
+    return out;
+  }
+
+  /** Full status for a worktree — used by auto-commit to enumerate dirty set. */
+  async getRawStatus(worktreePath?: string): Promise<StatusResult> {
+    const git = worktreePath ? simpleGit(worktreePath) : this.git;
+    return git.status();
+  }
+
+  /**
+   * Local branches with metadata used by cleanup-analyzer.
+   * Detects remote-tracking via `git for-each-ref` upstream-shortname.
+   */
+  async listLocalBranchesWithMeta(): Promise<
+    Array<{ name: string; hasRemote: boolean; lastCommitDate: string }>
+  > {
+    const raw = await this.git.raw([
+      'for-each-ref',
+      '--format=%(refname:short)\t%(upstream:short)\t%(committerdate:iso-strict)',
+      'refs/heads',
+    ]);
+    return raw
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .map((line) => {
+        const [name, upstream, date] = line.split('\t');
+        return {
+          name,
+          hasRemote: !!upstream && upstream.length > 0,
+          lastCommitDate: date ?? '',
+        };
+      });
+  }
 }
