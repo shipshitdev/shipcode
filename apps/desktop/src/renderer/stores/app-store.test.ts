@@ -39,6 +39,9 @@ const makeIssue = (overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
   unresolvedReviewCommentCount: 0,
   prLastSyncAt: null,
   fetchedAt: new Date().toISOString(),
+  priorityRank: null,
+  priorityRaw: null,
+  priorityFetchedAt: null,
   ...overrides,
 });
 
@@ -155,6 +158,21 @@ describe('app-store', () => {
       expect(state.activeThreadId).toBe('thread-2');
       expect(state.terminalThreadId).toBe('thread-2');
       expect(state.terminalVisible).toBe(true);
+    });
+
+    it('keeps the terminal pinned to the prior thread when the detail panel closes', () => {
+      useAppStore
+        .getState()
+        .selectIssue(makeIssue({ threadId: 'thread-3', pipelineStatus: 'executing' }));
+      expect(useAppStore.getState().terminalThreadId).toBe('thread-3');
+
+      useAppStore.getState().selectIssue(null);
+
+      const state = useAppStore.getState();
+      expect(state.activeIssue).toBeNull();
+      expect(state.activeThreadId).toBeNull();
+      // Console stays pinned so its output remains visible after closing detail.
+      expect(state.terminalThreadId).toBe('thread-3');
     });
   });
 

@@ -89,6 +89,15 @@ export const DEFAULT_SETTINGS: AppSettings = {
   maxConcurrentExecutions: 3,
   instantDefaultPanes: 1,
   devLogLevel: 'debug',
+  autoCommitEnabled: true,
+  autoCommitModel: 'openrouter/auto',
+  autoCommitMode: 'split',
+  cleanupCriteria: {
+    worktreeMergedPr: true,
+    worktreeClosedPr: true,
+    localBranchNoRemote: true,
+    worktreeNoPrCleanTree: false,
+  },
 };
 
 export const CURRENT_ONBOARDING_VERSION = 1;

@@ -66,7 +66,8 @@ export type SettingsSection =
   | 'pipeline'
   | 'shortcuts'
   | 'archived'
-  | 'developer';
+  | 'developer'
+  | 'auto-commit';
 
 interface AppState {
   // Selection
@@ -343,7 +344,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentVerification: null,
       pipelinePhase: 'idle',
       terminalEvents: [],
-      terminalThreadId: issue?.threadId ?? null,
+      // Console is decoupled from the detail panel: closing detail (issue=null)
+      // must keep the current console pin so the user can still read output.
+      // Switching to another issue re-pins the console to that thread.
+      terminalThreadId: issue ? (issue.threadId ?? null) : s.terminalThreadId,
       // Keep expanded mode when switching between issues; reset when closing.
       issueDetailExpanded: issue ? s.issueDetailExpanded : false,
       terminalMaximized: issue ? s.terminalMaximized : false,

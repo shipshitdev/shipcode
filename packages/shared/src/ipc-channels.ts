@@ -3,7 +3,10 @@ import type {
   ActivityEntry,
   AgentState,
   AppSettings,
+  AutoCommitResult,
   ClarificationAnswer,
+  CleanupAnalyzeResult,
+  CleanupApplyResult,
   CliProviderUsageMap,
   CostSummary,
   CostTaskSummary,
@@ -44,6 +47,7 @@ import type {
   TerminalEventRecord,
   Thread,
   ThreadPanelData,
+  UpdateStatus,
   VerificationRecord,
   VerificationResult,
   WritingPrdsSkillInfo,
@@ -184,6 +188,18 @@ export interface IpcInvokeChannels {
   'git:worktree-diff': {
     args: { projectId: string; worktreePath: string };
     result: DiffRecord[];
+  };
+  'git:auto-commit': {
+    args: { projectId: string; worktreePath: string };
+    result: AutoCommitResult;
+  };
+  'git:cleanup-analyze': {
+    args: { projectId: string };
+    result: CleanupAnalyzeResult;
+  };
+  'git:cleanup-apply': {
+    args: { projectId: string; itemIds: string[] };
+    result: CleanupApplyResult;
   };
 
   'settings:get': { args: undefined; result: AppSettings };
@@ -516,6 +532,11 @@ export interface IpcInvokeChannels {
   'developer:open-devtools': { args: undefined; result: undefined };
   'developer:open-log-directory': { args: undefined; result: undefined };
   'developer:set-log-level': { args: { level: AppSettings['devLogLevel'] }; result: undefined };
+
+  // Auto-update version checking (notify-only; install via brew)
+  'update:get-status': { args: undefined; result: UpdateStatus };
+  'update:check-now': { args: undefined; result: UpdateStatus };
+  'update:dismiss': { args: undefined; result: undefined };
 }
 
 // === Streaming Channels (send/on) ===
@@ -537,6 +558,7 @@ export interface IpcStreamChannels {
   'notification:focus-thread': { threadId: string; projectId: string | null };
   'activity:appended': ActivityEntry;
   'dashboard:invalidate': { kinds: Array<'stats' | 'activity' | 'running' | 'recent'> };
+  'update:status-changed': UpdateStatus;
 }
 
 export type IpcInvokeChannel = keyof IpcInvokeChannels;

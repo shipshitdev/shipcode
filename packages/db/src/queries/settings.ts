@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type {
   AppSettings,
+  CleanupCriteria,
   IntegrationDeliveryStatus,
   NotificationEventToggles,
 } from '@shipcode/shared';
@@ -59,6 +60,21 @@ const PROJECT_OPEN_TARGETS = ['cursor', 'finder', 'terminal', 'ghostty', 'vscode
 const FONT_SIZES = [12, 13, 14, 15] as const;
 const GENERATOR_CLIS = ['claude', 'codex'] as const;
 const DEV_LOG_LEVELS = ['error', 'warn', 'info', 'debug'] as const;
+const AUTO_COMMIT_MODES = ['split', 'single'] as const;
+
+function isAutoCommitMode(value: unknown): value is AppSettings['autoCommitMode'] {
+  return typeof value === 'string' && (AUTO_COMMIT_MODES as readonly string[]).includes(value);
+}
+
+function parseCleanupCriteria(raw: string | undefined): CleanupCriteria {
+  if (!raw) return { ...DEFAULT_SETTINGS.cleanupCriteria };
+  try {
+    const parsed = JSON.parse(raw) as Partial<CleanupCriteria>;
+    return { ...DEFAULT_SETTINGS.cleanupCriteria, ...parsed };
+  } catch {
+    return { ...DEFAULT_SETTINGS.cleanupCriteria };
+  }
+}
 
 function isDevLogLevel(value: unknown): value is AppSettings['devLogLevel'] {
   return typeof value === 'string' && (DEV_LOG_LEVELS as readonly string[]).includes(value);
@@ -221,6 +237,12 @@ export class SettingsQueries {
       devLogLevel: isDevLogLevel(stored.devLogLevel)
         ? stored.devLogLevel
         : DEFAULT_SETTINGS.devLogLevel,
+      autoCommitEnabled: parseBool(stored.autoCommitEnabled, DEFAULT_SETTINGS.autoCommitEnabled),
+      autoCommitModel: stored.autoCommitModel || DEFAULT_SETTINGS.autoCommitModel,
+      autoCommitMode: isAutoCommitMode(stored.autoCommitMode)
+        ? stored.autoCommitMode
+        : DEFAULT_SETTINGS.autoCommitMode,
+      cleanupCriteria: parseCleanupCriteria(stored.cleanupCriteria),
     };
   }
 
@@ -277,6 +299,30 @@ export class SettingsQueries {
     if ('devLogLevel' in patch && patch.devLogLevel != null) {
       if (!isDevLogLevel(patch.devLogLevel)) {
         throw new Error('devLogLevel must be error|warn|info|debug');
+      }
+    }
+    if ('autoCommitMode' in patch && patch.autoCommitMode != null) {
+      if (!isAutoCommitMode(patch.autoCommitMode)) {
+        throw new Error('autoCommitMode must be split|single');
+      }
+    }
+    if ('autoCommitModel' in patch && patch.autoCommitModel != null) {
+      if (typeof patch.autoCommitModel !== 'string' || patch.autoCommitModel.trim() === '') {
+        throw new Error('autoCommitModel must be a non-empty string');
+      }
+    }
+    if ('cleanupCriteria' in patch && patch.cleanupCriteria != null) {
+      const c = patch.cleanupCriteria;
+      const required: (keyof CleanupCriteria)[] = [
+        'worktreeMergedPr',
+        'worktreeClosedPr',
+        'localBranchNoRemote',
+        'worktreeNoPrCleanTree',
+      ];
+      for (const k of required) {
+        if (typeof c[k] !== 'boolean') {
+          throw new Error(`cleanupCriteria.${k} must be boolean`);
+        }
       }
     }
 
