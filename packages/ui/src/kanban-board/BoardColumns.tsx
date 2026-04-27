@@ -13,6 +13,7 @@ import type {
   ColumnKey,
   IssueApprovalBadge,
   IssuePhaseChip,
+  IssuePriorityBadge,
   IssueRevisionBadge,
   PhaseSection,
   RowTone,
@@ -45,6 +46,7 @@ const SECTION_COUNT_CLASS: Record<RowTone, string> = {
 const EMPTY_PHASE_CHIP_MAP = new Map<string, IssuePhaseChip | null>();
 const EMPTY_REVISION_BADGE_MAP = new Map<string, IssueRevisionBadge | null>();
 const EMPTY_APPROVAL_BADGE_MAP = new Map<string, IssueApprovalBadge | null>();
+const EMPTY_PRIORITY_BADGE_MAP = new Map<string, IssuePriorityBadge | null>();
 const EMPTY_APPROVED_AWAITING_EXECUTION = new Set<string>();
 
 interface DroppableColumnProps {
@@ -63,6 +65,7 @@ interface DroppableColumnProps {
   issuePhaseChipById: Map<string, IssuePhaseChip | null>;
   issueRevisionBadgeById: Map<string, IssueRevisionBadge | null>;
   issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
+  issuePriorityBadgeById: Map<string, IssuePriorityBadge | null>;
   approvedAwaitingExecutionIssueIds?: ReadonlySet<string>;
 }
 
@@ -82,6 +85,7 @@ export function DroppableColumn({
   issuePhaseChipById = EMPTY_PHASE_CHIP_MAP,
   issueRevisionBadgeById = EMPTY_REVISION_BADGE_MAP,
   issueApprovalBadgeById = EMPTY_APPROVAL_BADGE_MAP,
+  issuePriorityBadgeById = EMPTY_PRIORITY_BADGE_MAP,
   approvedAwaitingExecutionIssueIds = EMPTY_APPROVED_AWAITING_EXECUTION,
 }: DroppableColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id, disabled: !droppable || readOnly });
@@ -132,6 +136,7 @@ export function DroppableColumn({
             phaseChip={issuePhaseChipById.get(issue.id) ?? null}
             revisionBadge={issueRevisionBadgeById.get(issue.id) ?? null}
             approvalBadge={issueApprovalBadgeById.get(issue.id) ?? null}
+            priorityBadge={issuePriorityBadgeById.get(issue.id) ?? null}
             approvedAwaitingExecution={isApprovedAwaitingExecutionIssue(
               issue,
               approvedAwaitingExecutionIssueIds,
@@ -166,6 +171,7 @@ interface SectionBlockProps {
   issuePhaseChipById: Map<string, IssuePhaseChip | null>;
   issueRevisionBadgeById: Map<string, IssueRevisionBadge | null>;
   issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
+  issuePriorityBadgeById: Map<string, IssuePriorityBadge | null>;
   approvedAwaitingExecutionIssueIds?: ReadonlySet<string>;
 }
 
@@ -186,6 +192,7 @@ function SectionBlock({
   issuePhaseChipById = EMPTY_PHASE_CHIP_MAP,
   issueRevisionBadgeById = EMPTY_REVISION_BADGE_MAP,
   issueApprovalBadgeById = EMPTY_APPROVAL_BADGE_MAP,
+  issuePriorityBadgeById = EMPTY_PRIORITY_BADGE_MAP,
   approvedAwaitingExecutionIssueIds = EMPTY_APPROVED_AWAITING_EXECUTION,
 }: SectionBlockProps) {
   const { setNodeRef, isOver } = useDroppable({
@@ -246,6 +253,7 @@ function SectionBlock({
               phaseChip={issuePhaseChipById.get(issue.id) ?? null}
               revisionBadge={issueRevisionBadgeById.get(issue.id) ?? null}
               approvalBadge={issueApprovalBadgeById.get(issue.id) ?? null}
+              priorityBadge={issuePriorityBadgeById.get(issue.id) ?? null}
               approvedAwaitingExecution={isApprovedAwaitingExecutionIssue(
                 issue,
                 approvedAwaitingExecutionIssueIds,
@@ -289,6 +297,7 @@ interface StackedColumnProps {
   issuePhaseChipById: Map<string, IssuePhaseChip | null>;
   issueRevisionBadgeById: Map<string, IssueRevisionBadge | null>;
   issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
+  issuePriorityBadgeById: Map<string, IssuePriorityBadge | null>;
   approvedAwaitingExecutionIssueIds?: ReadonlySet<string>;
 }
 
@@ -307,6 +316,7 @@ export function StackedColumn({
   issuePhaseChipById = EMPTY_PHASE_CHIP_MAP,
   issueRevisionBadgeById = EMPTY_REVISION_BADGE_MAP,
   issueApprovalBadgeById = EMPTY_APPROVAL_BADGE_MAP,
+  issuePriorityBadgeById = EMPTY_PRIORITY_BADGE_MAP,
   approvedAwaitingExecutionIssueIds = EMPTY_APPROVED_AWAITING_EXECUTION,
 }: StackedColumnProps) {
   const columnIssues = useMemo(
@@ -386,6 +396,7 @@ export function StackedColumn({
             issuePhaseChipById={issuePhaseChipById}
             issueRevisionBadgeById={issueRevisionBadgeById}
             issueApprovalBadgeById={issueApprovalBadgeById}
+            issuePriorityBadgeById={issuePriorityBadgeById}
             approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
           />
         ))}

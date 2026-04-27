@@ -12,8 +12,13 @@ import { PhaseChip } from '../PhaseChip';
 import { Badge } from '../primitives/badge';
 import { Button } from '../primitives/button';
 import { ACTIVE_STATUSES, DRAGGABLE_STATUSES, PHASE_ELAPSED_STATUSES } from './constants';
-import type { IssueApprovalBadge, IssuePhaseChip, IssueRevisionBadge } from './types';
-import { dragOverlayBorderClass, formatPhaseElapsed } from './utils';
+import type {
+  IssueApprovalBadge,
+  IssuePhaseChip,
+  IssuePriorityBadge,
+  IssueRevisionBadge,
+} from './types';
+import { dragOverlayBorderClass, formatPhaseElapsed, resolveIssuePriorityBadge } from './utils';
 
 function PhaseElapsed({ since }: { since: number }) {
   const now = useSharedSecondNow();
@@ -54,6 +59,7 @@ interface DraggableCardProps {
   phaseChip?: IssuePhaseChip | null;
   revisionBadge?: IssueRevisionBadge | null;
   approvalBadge?: IssueApprovalBadge | null;
+  priorityBadge?: IssuePriorityBadge | null;
   approvedAwaitingExecution?: boolean;
   readOnly?: boolean;
   onClick: (issue: GitHubIssueCacheRecord) => void;
@@ -71,6 +77,7 @@ function DraggableCardComponent({
   phaseChip,
   revisionBadge,
   approvalBadge,
+  priorityBadge,
   approvedAwaitingExecution = false,
   readOnly = false,
   onClick,
@@ -274,6 +281,15 @@ function DraggableCardComponent({
         {issue.title}
       </div>
       <div className="relative z-10 mt-auto flex flex-wrap items-center gap-1.5 pt-2">
+        {priorityBadge ? (
+          <Badge
+            variant={priorityBadge.variant}
+            className="px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide"
+            title={priorityBadge.title}
+          >
+            {priorityBadge.label}
+          </Badge>
+        ) : null}
         {phaseChip && isActive && (
           <Badge
             variant="default"
@@ -401,6 +417,7 @@ export function DragOverlayCard({
   issue: GitHubIssueCacheRecord;
   approvedAwaitingExecution?: boolean;
 }) {
+  const priorityBadge = resolveIssuePriorityBadge(issue);
   return (
     <div
       className={cn(
@@ -413,6 +430,15 @@ export function DragOverlayCard({
         {issue.title}
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        {priorityBadge ? (
+          <Badge
+            variant={priorityBadge.variant}
+            className="px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide"
+            title={priorityBadge.title}
+          >
+            {priorityBadge.label}
+          </Badge>
+        ) : null}
         <PhaseChip
           status={issue.pipelineStatus}
           label={approvedAwaitingExecution ? 'Waiting for slot' : undefined}

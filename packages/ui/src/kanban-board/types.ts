@@ -77,3 +77,10 @@ export type IssueRevisionBadge = {
   title: string;
   variant: 'default' | 'done' | 'success' | 'warning' | 'danger' | 'info' | 'accent';
 };
+
+export type IssuePriorityBadge = {
+  label: string;
+  title: string;
+  variant: 'default' | 'warning' | 'info' | 'accent';
+  rank: 'p0' | 'p1' | 'p2' | 'p3' | null;
+};

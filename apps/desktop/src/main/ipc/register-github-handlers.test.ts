@@ -2,22 +2,26 @@ import type { IpcMain } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerGitHubHandlers } from './register-github-handlers';
 
-const { closeIssueMock, reopenIssueMock } = vi.hoisted(() => ({
-  closeIssueMock: vi.fn(),
-  reopenIssueMock: vi.fn(),
-}));
+const { closeIssueMock, reopenIssueMock, listAllIssuesMock, fetchProjectPrioritiesMock } =
+  vi.hoisted(() => ({
+    closeIssueMock: vi.fn(),
+    reopenIssueMock: vi.fn(),
+    listAllIssuesMock: vi.fn(async () => [] as Array<unknown>),
+    fetchProjectPrioritiesMock: vi.fn(),
+  }));
 
 vi.mock('@shipcode/agents', async () => {
   const actual = await vi.importActual<typeof import('@shipcode/agents')>('@shipcode/agents');
   class MockGhCli {
     closeIssue = closeIssueMock;
     reopenIssue = reopenIssueMock;
-    listAllIssues = vi.fn(async () => []);
+    listAllIssues = listAllIssuesMock;
     archiveProjectItems = vi.fn(async () => undefined);
   }
   return {
     ...actual,
     GhCli: MockGhCli,
+    fetchProjectPriorities: fetchProjectPrioritiesMock,
   };
 });
 
@@ -84,6 +88,9 @@ describe('registerGitHubHandlers', () => {
     unresolvedReviewCommentCount: 0,
     prLastSyncAt: null,
     fetchedAt: new Date().toISOString(),
+    priorityRank: null,
+    priorityRaw: null,
+    priorityFetchedAt: null,
   };
 
   const reusableThread = {
@@ -130,6 +137,10 @@ describe('registerGitHubHandlers', () => {
     vi.clearAllMocks();
     closeIssueMock.mockReset();
     reopenIssueMock.mockReset();
+    listAllIssuesMock.mockReset();
+    listAllIssuesMock.mockImplementation(async () => []);
+    fetchProjectPrioritiesMock.mockReset();
+    fetchProjectPrioritiesMock.mockResolvedValue(new Map());
   });
 
   it('reuses the existing issue thread and worktree on github:start-issue', async () => {
@@ -354,6 +365,167 @@ describe('registerGitHubHandlers', () => {
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('github:issues-updated', {
       projectId: 'project-1',
       issues: [restoredIssue],
+    });
+  });
+
+  describe('github:refresh-issues priority sync', () => {
+    const projectWithBoard = {
+      ...baseProject,
+      // os.tmpdir() always exists, satisfies fs.existsSync() check.
+      path: '/tmp',
+      githubProjectUrl: 'https://github.com/orgs/acme/projects/1',
+    };
+
+    const projectWithoutBoard = {
+      ...baseProject,
+      path: '/tmp',
+      githubProjectUrl: null,
+    };
+
+    function buildQueries(project: typeof projectWithBoard | typeof projectWithoutBoard) {
+      const cachedAfterUpsert = [{ ...baseIssue, fetchedAt: new Date().toISOString() }];
+      return {
+        projects: { getById: vi.fn(() => project) },
+        githubIssues: {
+          list: vi
+            .fn()
+            // First call: cache check (empty so we proceed past TTL gate).
+            .mockReturnValueOnce([])
+            // Subsequent calls: post-upsert + final list-for-broadcast.
+            .mockReturnValue(cachedAfterUpsert),
+          getByNumber: vi.fn(() => baseIssue),
+          upsert: vi.fn(() => baseIssue),
+          markDoneOnClose: vi.fn(),
+          updateState: vi.fn(),
+          updatePipelineStatus: vi.fn(),
+          clearArchivedAt: vi.fn(),
+          linkThread: vi.fn(),
+          setPriority: vi.fn(),
+        },
+        issueEdges: {
+          replaceBodyEdges: vi.fn(),
+        },
+        threads: {
+          getById: vi.fn(() => null),
+          getByProjectAndGithubIssue: vi.fn(() => null),
+        },
+      };
+    }
+
+    it('calls setPriority for each issue when githubProjectUrl is set', async () => {
+      const queries = buildQueries(projectWithBoard);
+      fetchProjectPrioritiesMock.mockResolvedValue(
+        new Map([[42, { rank: 'p0' as const, raw: 'P0' }]]),
+      );
+      listAllIssuesMock.mockResolvedValue([]);
+
+      registerGitHubHandlers({
+        ipcMain,
+        mainWindow: mainWindow as never,
+        queries: queries as never,
+        pipeline: {} as never,
+        emitter: { emit: vi.fn() } as never,
+        notificationService: {} as never,
+        chatNotificationService: {} as never,
+        processManager: {} as never,
+      });
+
+      const refresh = handlers.get('github:refresh-issues');
+      if (!refresh) throw new Error('github:refresh-issues handler not registered');
+      await refresh(undefined, { projectId: 'project-1', force: true });
+
+      expect(fetchProjectPrioritiesMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cwd: '/tmp',
+          projectUrl: projectWithBoard.githubProjectUrl,
+        }),
+      );
+      expect(queries.githubIssues.setPriority).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: baseIssue.id,
+          rank: 'p0',
+          raw: 'P0',
+        }),
+      );
+    });
+
+    it('does NOT call fetchProjectPriorities when githubProjectUrl is null', async () => {
+      const queries = buildQueries(projectWithoutBoard);
+      listAllIssuesMock.mockResolvedValue([]);
+
+      registerGitHubHandlers({
+        ipcMain,
+        mainWindow: mainWindow as never,
+        queries: queries as never,
+        pipeline: {} as never,
+        emitter: { emit: vi.fn() } as never,
+        notificationService: {} as never,
+        chatNotificationService: {} as never,
+        processManager: {} as never,
+      });
+
+      const refresh = handlers.get('github:refresh-issues');
+      if (!refresh) throw new Error('github:refresh-issues handler not registered');
+      await refresh(undefined, { projectId: 'project-1', force: true });
+
+      expect(fetchProjectPrioritiesMock).not.toHaveBeenCalled();
+      expect(queries.githubIssues.setPriority).not.toHaveBeenCalled();
+    });
+
+    it('swallows fetchProjectPriorities errors so refresh still completes', async () => {
+      const queries = buildQueries(projectWithBoard);
+      fetchProjectPrioritiesMock.mockRejectedValue(new Error('boom'));
+      listAllIssuesMock.mockResolvedValue([]);
+
+      registerGitHubHandlers({
+        ipcMain,
+        mainWindow: mainWindow as never,
+        queries: queries as never,
+        pipeline: {} as never,
+        emitter: { emit: vi.fn() } as never,
+        notificationService: {} as never,
+        chatNotificationService: {} as never,
+        processManager: {} as never,
+      });
+
+      const refresh = handlers.get('github:refresh-issues');
+      if (!refresh) throw new Error('github:refresh-issues handler not registered');
+
+      // Should resolve without throwing despite the GraphQL failure.
+      await expect(refresh(undefined, { projectId: 'project-1', force: true })).resolves.toEqual(
+        expect.any(Array),
+      );
+      expect(queries.githubIssues.setPriority).not.toHaveBeenCalled();
+    });
+
+    it('writes null priority for issues missing from the priorities map', async () => {
+      const queries = buildQueries(projectWithBoard);
+      // Empty priority map — the issue is on the project but has no Priority field set.
+      fetchProjectPrioritiesMock.mockResolvedValue(new Map());
+      listAllIssuesMock.mockResolvedValue([]);
+
+      registerGitHubHandlers({
+        ipcMain,
+        mainWindow: mainWindow as never,
+        queries: queries as never,
+        pipeline: {} as never,
+        emitter: { emit: vi.fn() } as never,
+        notificationService: {} as never,
+        chatNotificationService: {} as never,
+        processManager: {} as never,
+      });
+
+      const refresh = handlers.get('github:refresh-issues');
+      if (!refresh) throw new Error('github:refresh-issues handler not registered');
+      await refresh(undefined, { projectId: 'project-1', force: true });
+
+      expect(queries.githubIssues.setPriority).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: baseIssue.id,
+          rank: null,
+          raw: null,
+        }),
+      );
     });
   });
 });

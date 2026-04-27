@@ -5,6 +5,8 @@ export { ShipCodeLogoMark } from './brand/ShipCodeLogoMark';
 export { DiffViewer } from './DiffViewer';
 export { GitVisualizer } from './GitVisualizer';
 export { KanbanBoard } from './KanbanBoard';
+export type { IssuePriorityBadge } from './kanban-board/types';
+export { resolveIssuePriorityBadge } from './kanban-board/utils';
 export { PhaseChip } from './PhaseChip';
 export { PipelineStatus } from './PipelineStatus';
 export { PlanViewer } from './PlanViewer';

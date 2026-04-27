@@ -16,7 +16,13 @@ import {
   LIST_COLUMN_LABEL,
 } from './constants';
 import { IssueExternalBlockers } from './IssueCardParts';
-import type { ColumnKey, IssueApprovalBadge, IssueRevisionBadge, PhaseSection } from './types';
+import type {
+  ColumnKey,
+  IssueApprovalBadge,
+  IssuePriorityBadge,
+  IssueRevisionBadge,
+  PhaseSection,
+} from './types';
 import {
   formatDate,
   isApprovedAwaitingExecutionIssue,
@@ -28,12 +34,14 @@ import {
 
 const EMPTY_REVISION_BADGE_MAP = new Map<string, IssueRevisionBadge | null>();
 const EMPTY_APPROVAL_BADGE_MAP = new Map<string, IssueApprovalBadge | null>();
+const EMPTY_PRIORITY_BADGE_MAP = new Map<string, IssuePriorityBadge | null>();
 const EMPTY_APPROVED_AWAITING_EXECUTION = new Set<string>();
 
 interface DraggableListRowProps {
   issue: GitHubIssueCacheRecord;
   revisionBadge?: IssueRevisionBadge | null;
   approvalBadge?: IssueApprovalBadge | null;
+  priorityBadge?: IssuePriorityBadge | null;
   selectedIssueNumber?: number;
   activeId: string | null;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
@@ -46,6 +54,7 @@ function DraggableListRow({
   issue,
   revisionBadge,
   approvalBadge,
+  priorityBadge,
   selectedIssueNumber,
   activeId,
   onIssueClick,
@@ -155,6 +164,15 @@ function DraggableListRow({
       </div>
       <span className="flex-1 truncate">{issue.title}</span>
       <span className="flex shrink-0 items-center gap-1">
+        {priorityBadge ? (
+          <Badge
+            variant={priorityBadge.variant}
+            className="px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide"
+            title={priorityBadge.title}
+          >
+            {priorityBadge.label}
+          </Badge>
+        ) : null}
         <IssueExternalBlockers issue={issue} />
         {revisionBadge ? (
           <Badge
@@ -230,6 +248,7 @@ interface ListSectionBlockProps {
   issues: GitHubIssueCacheRecord[];
   issueRevisionBadgeById: Map<string, IssueRevisionBadge | null>;
   issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
+  issuePriorityBadgeById: Map<string, IssuePriorityBadge | null>;
   selectedIssueNumber?: number;
   activeId: string | null;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
@@ -244,6 +263,7 @@ function ListSectionBlock({
   issues,
   issueRevisionBadgeById = EMPTY_REVISION_BADGE_MAP,
   issueApprovalBadgeById = EMPTY_APPROVAL_BADGE_MAP,
+  issuePriorityBadgeById = EMPTY_PRIORITY_BADGE_MAP,
   selectedIssueNumber,
   activeId,
   onIssueClick,
@@ -293,6 +313,7 @@ function ListSectionBlock({
               issue={issue}
               revisionBadge={issueRevisionBadgeById.get(issue.id) ?? null}
               approvalBadge={issueApprovalBadgeById.get(issue.id) ?? null}
+              priorityBadge={issuePriorityBadgeById.get(issue.id) ?? null}
               approvedAwaitingExecution={isApprovedAwaitingExecutionIssue(
                 issue,
                 approvedAwaitingExecutionIssueIds,
@@ -335,6 +356,7 @@ interface IssueListViewProps {
   issues: GitHubIssueCacheRecord[];
   issueRevisionBadgeById: Map<string, IssueRevisionBadge | null>;
   issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
+  issuePriorityBadgeById: Map<string, IssuePriorityBadge | null>;
   selectedIssueNumber?: number;
   activeId: string | null;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
@@ -348,6 +370,7 @@ export function IssueListView({
   issues,
   issueRevisionBadgeById,
   issueApprovalBadgeById,
+  issuePriorityBadgeById,
   selectedIssueNumber,
   activeId,
   onIssueClick,
@@ -416,6 +439,7 @@ export function IssueListView({
                         )}
                         issueRevisionBadgeById={issueRevisionBadgeById}
                         issueApprovalBadgeById={issueApprovalBadgeById}
+                        issuePriorityBadgeById={issuePriorityBadgeById}
                         approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
                         selectedIssueNumber={selectedIssueNumber}
                         activeId={activeId}
@@ -433,6 +457,7 @@ export function IssueListView({
                         issue={issue}
                         revisionBadge={issueRevisionBadgeById.get(issue.id) ?? null}
                         approvalBadge={issueApprovalBadgeById.get(issue.id) ?? null}
+                        priorityBadge={issuePriorityBadgeById.get(issue.id) ?? null}
                         approvedAwaitingExecution={isApprovedAwaitingExecutionIssue(
                           issue,
                           approvedAwaitingExecutionIssueIds,

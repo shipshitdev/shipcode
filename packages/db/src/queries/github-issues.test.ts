@@ -560,4 +560,58 @@ describe('GitHubIssueQueries', () => {
       expect(visible[0].pipelineStatus).toBe('todo');
     });
   });
+
+  describe('priority', () => {
+    it('setPriority() round-trips rank, raw, and fetchedAt', () => {
+      const r = issues.upsert(makeIssue({ issueNumber: 50 }));
+      const fetchedAt = '2026-04-27T09:00:00.000Z';
+      issues.setPriority({ id: r.id, rank: 'p0', raw: 'P0', fetchedAt });
+
+      const fresh = issues.getByNumber(projectId, 50);
+      expect(fresh).not.toBeNull();
+      expect(fresh?.priorityRank).toBe('p0');
+      expect(fresh?.priorityRaw).toBe('P0');
+      expect(fresh?.priorityFetchedAt).toBe(fetchedAt);
+    });
+
+    it('setPriority() with rank=null preserves raw (unknown option)', () => {
+      const r = issues.upsert(makeIssue({ issueNumber: 51 }));
+      issues.setPriority({
+        id: r.id,
+        rank: null,
+        raw: 'Icebox',
+        fetchedAt: '2026-04-27T09:00:00.000Z',
+      });
+
+      const fresh = issues.getByNumber(projectId, 51);
+      expect(fresh?.priorityRank).toBeNull();
+      expect(fresh?.priorityRaw).toBe('Icebox');
+    });
+
+    it('upsert() after setPriority() does NOT clear priority columns', () => {
+      const r = issues.upsert(makeIssue({ issueNumber: 52 }));
+      issues.setPriority({
+        id: r.id,
+        rank: 'p1',
+        raw: 'High',
+        fetchedAt: '2026-04-27T09:00:00.000Z',
+      });
+
+      // Simulate a subsequent issue refresh that re-upserts the row.
+      issues.upsert(makeIssue({ issueNumber: 52, title: 'Updated title' }));
+
+      const fresh = issues.getByNumber(projectId, 52);
+      expect(fresh?.title).toBe('Updated title');
+      expect(fresh?.priorityRank).toBe('p1');
+      expect(fresh?.priorityRaw).toBe('High');
+    });
+
+    it('toRecord() defaults priority columns to null when never set', () => {
+      issues.upsert(makeIssue({ issueNumber: 53 }));
+      const fresh = issues.getByNumber(projectId, 53);
+      expect(fresh?.priorityRank).toBeNull();
+      expect(fresh?.priorityRaw).toBeNull();
+      expect(fresh?.priorityFetchedAt).toBeNull();
+    });
+  });
 });

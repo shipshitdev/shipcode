@@ -25,6 +25,7 @@ import type {
   ColumnKey,
   IssueApprovalBadge,
   IssuePhaseChip,
+  IssuePriorityBadge,
   IssueRevisionBadge,
   PhaseSection,
   RowTone,
@@ -176,6 +177,56 @@ function badgeVariantForIssueStatus(status: IssuePipelineStatus): IssueRevisionB
   return 'default';
 }
 
+/**
+ * Resolve the visible Priority chip from synced GitHub Projects v2 data.
+ * P0 uses `warning` (not `danger`) so it does not collide with the red
+ * Failed-status chip. Unknown options ride along as raw text in `accent`.
+ */
+export function resolveIssuePriorityBadge(
+  issue: GitHubIssueCacheRecord,
+): IssuePriorityBadge | null {
+  if (!issue.priorityRank && !issue.priorityRaw) return null;
+  const raw = issue.priorityRaw ?? '';
+  if (issue.priorityRank === 'p0') {
+    return {
+      label: 'P0',
+      variant: 'warning',
+      title: `Priority P0 — ${raw || 'critical'}`,
+      rank: 'p0',
+    };
+  }
+  if (issue.priorityRank === 'p1') {
+    return {
+      label: 'P1',
+      variant: 'info',
+      title: `Priority P1 — ${raw || 'high'}`,
+      rank: 'p1',
+    };
+  }
+  if (issue.priorityRank === 'p2') {
+    return {
+      label: 'P2',
+      variant: 'default',
+      title: `Priority P2 — ${raw || 'medium'}`,
+      rank: 'p2',
+    };
+  }
+  if (issue.priorityRank === 'p3') {
+    return {
+      label: 'P3',
+      variant: 'default',
+      title: `Priority P3 — ${raw || 'low'}`,
+      rank: 'p3',
+    };
+  }
+  return {
+    label: raw,
+    variant: 'accent',
+    title: `Priority — ${raw} (uncategorized)`,
+    rank: null,
+  };
+}
+
 export function resolveIssueApprovalBadge(
   issue: GitHubIssueCacheRecord,
   settings: AppSettings | null | undefined,
@@ -219,6 +270,14 @@ export const customCollisionDetection: CollisionDetection = (
 };
 
 function getIssuePriorityRank(issue: GitHubIssueCacheRecord): number {
+  // Synced GitHub Projects v2 Priority field is the source of truth. Label
+  // fallback below is retained for one release to support repos that haven't
+  // configured a Projects v2 Priority field yet.
+  if (issue.priorityRank === 'p0') return 0;
+  if (issue.priorityRank === 'p1') return 1;
+  if (issue.priorityRank === 'p2') return 2;
+  if (issue.priorityRank === 'p3') return 3;
+
   const labels = issue.labels.map((label) => label.toLowerCase());
 
   if (

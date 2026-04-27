@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { enhancePrdDraft, GhCli } from '@shipcode/agents';
+import { enhancePrdDraft, fetchProjectPriorities, GhCli } from '@shipcode/agents';
 import type {
   ExecutorModel,
   GitHubIssueCacheRecord,
@@ -183,6 +183,28 @@ export function registerGitHubHandlers({
         );
         for (const cachedIssue of cachedAfterIssueSync) {
           refreshIssueBodyEdges(queries.issueEdges, cachedIssue, issuesByNumber);
+        }
+
+        if (project.githubProjectUrl) {
+          try {
+            const priorities = await fetchProjectPriorities({
+              cwd: project.path,
+              projectUrl: project.githubProjectUrl,
+              onWarn: (msg, err) => log.warn(msg, err),
+            });
+            const now = new Date().toISOString();
+            for (const cachedIssue of cachedAfterIssueSync) {
+              const p = priorities.get(cachedIssue.issueNumber) ?? { rank: null, raw: null };
+              queries.githubIssues.setPriority({
+                id: cachedIssue.id,
+                rank: p.rank,
+                raw: p.raw,
+                fetchedAt: now,
+              });
+            }
+          } catch (err) {
+            log.warn('[github:refresh-issues] priority sync failed', err);
+          }
         }
         for (const issue of cachedAfterIssueSync) {
           if (!issue.threadId) continue;

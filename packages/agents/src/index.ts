@@ -1,3 +1,9 @@
+export type {
+  AutoCommitGenerateInput,
+  AutoCommitGenerateResult,
+  CommitGroup,
+} from './auto-commit';
+export { generateCommitGroups, parseAndValidate } from './auto-commit';
 export type { ContextGenerateResult } from './context-generator';
 export {
   generateContextFiles,
@@ -8,6 +14,12 @@ export { loadRepoContext, loadStructuredRepoContext } from './context-loader';
 export { GhCli } from './github/gh-cli';
 export { IssuePoller } from './github/issue-poller';
 export { routeFromLabels } from './github/model-router';
+export type {
+  FetchProjectPrioritiesOptions,
+  IssuePriority,
+  PriorityRank,
+} from './github/project-priority';
+export { fetchProjectPriorities, normalizePriorityOption } from './github/project-priority';
 export type { CacheOptions, OpenRouterAuthStatus } from './health-check';
 export {
   checkClaudeAuth,

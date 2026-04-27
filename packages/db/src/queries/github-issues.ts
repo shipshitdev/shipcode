@@ -51,6 +51,9 @@ interface GitHubIssueCacheRow {
   pr_last_sync_at: string | null;
   fetched_at: string;
   archived_at: string | null;
+  priority_rank: string | null;
+  priority_raw: string | null;
+  priority_fetched_at: string | null;
 }
 
 export class GitHubIssueQueries {
@@ -119,6 +122,9 @@ export class GitHubIssueQueries {
       | 'unresolvedReviewCommentCount'
       | 'prLastSyncAt'
       | 'fetchedAt'
+      | 'priorityRank'
+      | 'priorityRaw'
+      | 'priorityFetchedAt'
     >,
   ): GitHubIssueCacheRecord {
     const existing = this.getByNumber(record.projectId, record.issueNumber);
@@ -165,6 +171,27 @@ export class GitHubIssueQueries {
       );
     }
     return created;
+  }
+
+  /**
+   * Write the synced GitHub Projects v2 Priority field for a single issue.
+   * Kept separate from upsert() so unrelated refresh paths cannot wipe the
+   * priority on every fetch — only the dedicated priority-sync second pass
+   * touches these columns.
+   */
+  setPriority(opts: {
+    id: string;
+    rank: 'p0' | 'p1' | 'p2' | 'p3' | null;
+    raw: string | null;
+    fetchedAt: string;
+  }): void {
+    this.db
+      .prepare(
+        `UPDATE github_issue_cache
+           SET priority_rank = ?, priority_raw = ?, priority_fetched_at = ?
+         WHERE id = ?`,
+      )
+      .run(opts.rank, opts.raw, opts.fetchedAt, opts.id);
   }
 
   updatePipelineStatus(id: string, status: IssuePipelineStatus): void {
@@ -615,6 +642,15 @@ export class GitHubIssueQueries {
       unresolvedReviewCommentCount: row.unresolved_review_comment_count ?? 0,
       prLastSyncAt: toIsoUtc(row.pr_last_sync_at),
       fetchedAt: toIsoUtc(row.fetched_at) ?? row.fetched_at,
+      priorityRank:
+        row.priority_rank === 'p0' ||
+        row.priority_rank === 'p1' ||
+        row.priority_rank === 'p2' ||
+        row.priority_rank === 'p3'
+          ? row.priority_rank
+          : null,
+      priorityRaw: row.priority_raw ?? null,
+      priorityFetchedAt: toIsoUtc(row.priority_fetched_at),
     };
   }
 }

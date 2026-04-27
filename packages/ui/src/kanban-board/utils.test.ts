@@ -8,6 +8,7 @@ import {
   issueMatchesSection,
   resolveIssueApprovalBadge,
   resolveIssuePhaseChip,
+  resolveIssuePriorityBadge,
   resolveIssueRevisionBadge,
 } from './utils';
 
@@ -53,6 +54,9 @@ function makeIssue(
     unresolvedReviewCommentCount: 0,
     prLastSyncAt: null,
     fetchedAt: new Date('2026-04-13T12:00:00.000Z').toISOString(),
+    priorityRank: null,
+    priorityRaw: null,
+    priorityFetchedAt: null,
   };
 }
 
@@ -164,6 +168,27 @@ describe('compareIssues', () => {
     const sorted = [...issues].sort((a, b) => compareIssues(a, b, 'priority'));
 
     expect(sorted.map((issue) => issue.issueNumber)).toEqual([3, 8, 20, 12]);
+  });
+
+  it('priorityRank from project field beats labels', () => {
+    // Issue #5 has labels saying p3 but project field says p0 — rank wins.
+    const fieldP0: GitHubIssueCacheRecord = {
+      ...makeIssue(5, 'Project P0 (label says low)', ['priority:p3']),
+      priorityRank: 'p0',
+      priorityRaw: 'P0',
+      priorityFetchedAt: '2026-04-27T00:00:00.000Z',
+    };
+    // Issue #2 has only label-based priority
+    const labelP0 = makeIssue(2, 'Label P0', ['priority:p0']);
+    // Issue #99 has nothing
+    const noPriority = makeIssue(99, 'No priority');
+
+    const sorted = [fieldP0, labelP0, noPriority].sort((a, b) => compareIssues(a, b, 'priority'));
+
+    // Both should rank ahead of noPriority. Field-based and label-based P0 are tied
+    // at rank 0; tie-break is then descending by issue number.
+    expect(sorted[0].issueNumber).toBe(5);
+    expect(sorted[sorted.length - 1].issueNumber).toBe(99);
   });
 
   it('sorts title mode alphabetically and breaks ties by newest issue number', () => {
@@ -400,5 +425,49 @@ describe('approved-awaiting-execution helpers', () => {
     expect(
       issueMatchesSection(issue, { key: 'awaiting', statuses: ['awaiting_approval'] }, approvedIds),
     ).toBe(false);
+  });
+});
+
+describe('resolveIssuePriorityBadge', () => {
+  function withPriority(
+    rank: 'p0' | 'p1' | 'p2' | 'p3' | null,
+    raw: string | null,
+  ): GitHubIssueCacheRecord {
+    return {
+      ...makeIssue(1, 'Issue'),
+      priorityRank: rank,
+      priorityRaw: raw,
+      priorityFetchedAt: '2026-04-27T00:00:00.000Z',
+    };
+  }
+
+  it('returns null when no priority data is present', () => {
+    expect(resolveIssuePriorityBadge(makeIssue(1, 'Issue'))).toBeNull();
+  });
+
+  it('renders P0 with warning variant', () => {
+    const badge = resolveIssuePriorityBadge(withPriority('p0', 'P0'));
+    expect(badge).not.toBeNull();
+    expect(badge?.label).toBe('P0');
+    expect(badge?.variant).toBe('warning');
+    expect(badge?.rank).toBe('p0');
+  });
+
+  it('renders P1 with info variant', () => {
+    const badge = resolveIssuePriorityBadge(withPriority('p1', 'High'));
+    expect(badge?.label).toBe('P1');
+    expect(badge?.variant).toBe('info');
+  });
+
+  it('renders P2 and P3 with default variant', () => {
+    expect(resolveIssuePriorityBadge(withPriority('p2', 'Medium'))?.variant).toBe('default');
+    expect(resolveIssuePriorityBadge(withPriority('p3', 'Low'))?.variant).toBe('default');
+  });
+
+  it('renders unknown raw option with accent variant and verbatim label', () => {
+    const badge = resolveIssuePriorityBadge(withPriority(null, 'Icebox'));
+    expect(badge?.label).toBe('Icebox');
+    expect(badge?.variant).toBe('accent');
+    expect(badge?.rank).toBeNull();
   });
 });

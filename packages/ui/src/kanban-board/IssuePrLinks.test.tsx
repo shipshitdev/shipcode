@@ -56,6 +56,9 @@ function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
     unresolvedReviewCommentCount: 0,
     prLastSyncAt: null,
     fetchedAt: new Date('2026-04-14T00:00:00.000Z').toISOString(),
+    priorityRank: null,
+    priorityRaw: null,
+    priorityFetchedAt: null,
     ...overrides,
   };
 }
@@ -209,6 +212,7 @@ describe('linked PR affordances', () => {
           activeId={null}
           issueRevisionBadgeById={new Map()}
           issueApprovalBadgeById={new Map()}
+          issuePriorityBadgeById={new Map()}
           onIssueClick={onIssueClick}
           onOpenPullRequest={onOpenPullRequest}
         />
@@ -274,6 +278,7 @@ describe('linked PR affordances', () => {
           activeId={null}
           issueRevisionBadgeById={new Map()}
           issueApprovalBadgeById={new Map()}
+          issuePriorityBadgeById={new Map()}
           onIssueClick={onIssueClick}
         />
       </DndContext>,
@@ -421,6 +426,7 @@ describe('linked PR affordances', () => {
               ],
             ])
           }
+          issuePriorityBadgeById={new Map()}
           onIssueClick={vi.fn()}
         />
       </DndContext>,
@@ -767,6 +773,7 @@ describe('linked PR affordances', () => {
           issuePhaseChipById={new Map()}
           issueRevisionBadgeById={new Map()}
           issueApprovalBadgeById={new Map()}
+          issuePriorityBadgeById={new Map()}
         />
         <StackedColumn
           {...({
@@ -781,6 +788,79 @@ describe('linked PR affordances', () => {
     const columns = Array.from(view.container.children);
     expect(columns[0]?.className).toContain('min-w-[240px]');
     expect(columns[1]?.className).toContain('min-w-[280px]');
+    view.cleanup();
+  });
+});
+
+describe('priority badge rendering', () => {
+  it('DraggableCard renders P0 badge with warning variant', () => {
+    const view = renderIntoDom(
+      <DndContext>
+        <DraggableCard
+          issue={makeIssue({
+            priorityRank: 'p0',
+            priorityRaw: 'P0',
+            priorityFetchedAt: '2026-04-27T00:00:00.000Z',
+          })}
+          onClick={vi.fn()}
+          priorityBadge={{
+            label: 'P0',
+            title: 'Priority P0 — P0',
+            variant: 'warning',
+            rank: 'p0',
+          }}
+          readOnly
+        />
+      </DndContext>,
+    );
+
+    const badges = Array.from(view.container.querySelectorAll('span'));
+    const p0Badge = badges.find((el) => el.textContent === 'P0');
+    expect(p0Badge).toBeTruthy();
+    expect(p0Badge?.getAttribute('title')).toContain('P0');
+    view.cleanup();
+  });
+
+  it('DraggableCard renders unknown raw priority with accent variant', () => {
+    const view = renderIntoDom(
+      <DndContext>
+        <DraggableCard
+          issue={makeIssue({
+            priorityRank: null,
+            priorityRaw: 'Icebox',
+            priorityFetchedAt: '2026-04-27T00:00:00.000Z',
+          })}
+          onClick={vi.fn()}
+          priorityBadge={{
+            label: 'Icebox',
+            title: 'Priority — Icebox (uncategorized)',
+            variant: 'accent',
+            rank: null,
+          }}
+          readOnly
+        />
+      </DndContext>,
+    );
+
+    const badges = Array.from(view.container.querySelectorAll('span'));
+    const icebox = badges.find((el) => el.textContent === 'Icebox');
+    expect(icebox).toBeTruthy();
+    expect(icebox?.getAttribute('title')).toContain('uncategorized');
+    view.cleanup();
+  });
+
+  it('DraggableCard does not render a badge when no priority data', () => {
+    const view = renderIntoDom(
+      <DndContext>
+        <DraggableCard issue={makeIssue()} onClick={vi.fn()} readOnly />
+      </DndContext>,
+    );
+
+    const badges = Array.from(view.container.querySelectorAll('span'));
+    const looksLikePriority = badges.find((el) =>
+      ['P0', 'P1', 'P2', 'P3', 'Icebox'].includes(el.textContent ?? ''),
+    );
+    expect(looksLikePriority).toBeUndefined();
     view.cleanup();
   });
 });

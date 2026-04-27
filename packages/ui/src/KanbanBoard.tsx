@@ -23,6 +23,7 @@ import {
   customCollisionDetection,
   resolveIssueApprovalBadge,
   resolveIssuePhaseChip,
+  resolveIssuePriorityBadge,
   resolveIssueRevisionBadge,
 } from './kanban-board/utils';
 import type { GitHubIssueCacheRecord } from './lib/shipcode';
@@ -126,6 +127,10 @@ export function KanbanBoard({
         ]),
       ),
     [approvedAwaitingExecutionIssueIds, boardIssues, project, settings],
+  );
+  const issuePriorityBadgeById = useMemo(
+    () => new Map(boardIssues.map((issue) => [issue.id, resolveIssuePriorityBadge(issue)])),
+    [boardIssues],
   );
   const sortedIssues = useMemo(
     () => [...boardIssues].sort((a, b) => compareIssues(a, b, sortOrder)),
@@ -279,6 +284,7 @@ export function KanbanBoard({
               activeId={activeId}
               issueRevisionBadgeById={issueRevisionBadgeById}
               issueApprovalBadgeById={issueApprovalBadgeById}
+              issuePriorityBadgeById={issuePriorityBadgeById}
               approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
               onIssueClick={onIssueClick}
               onOpenPullRequest={onOpenPullRequest}
@@ -306,6 +312,7 @@ export function KanbanBoard({
                       issuePhaseChipById={issuePhaseChipById}
                       issueRevisionBadgeById={issueRevisionBadgeById}
                       issueApprovalBadgeById={issueApprovalBadgeById}
+                      issuePriorityBadgeById={issuePriorityBadgeById}
                       approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
                       readOnly={readOnly}
                     />
@@ -329,6 +336,7 @@ export function KanbanBoard({
                     issuePhaseChipById={issuePhaseChipById}
                     issueRevisionBadgeById={issueRevisionBadgeById}
                     issueApprovalBadgeById={issueApprovalBadgeById}
+                    issuePriorityBadgeById={issuePriorityBadgeById}
                     approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
                     readOnly={readOnly}
                   />

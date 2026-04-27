@@ -512,6 +512,67 @@ export interface AppSettings {
   instantDefaultPanes: 1 | 2 | 4;
   /** Persisted log level for the electron-log file transport. Console stays at 'info'. */
   devLogLevel: 'error' | 'warn' | 'info' | 'debug';
+  // Auto-commit (Git tab "Auto-commit" button)
+  autoCommitEnabled: boolean;
+  autoCommitModel: string;
+  autoCommitMode: 'split' | 'single';
+  // Branch / worktree cleanup criteria (Git tab "Cleanup" button)
+  cleanupCriteria: CleanupCriteria;
+}
+
+export interface CleanupCriteria {
+  worktreeMergedPr: boolean;
+  worktreeClosedPr: boolean;
+  localBranchNoRemote: boolean;
+  worktreeNoPrCleanTree: boolean;
+}
+
+export type CleanupItem =
+  | {
+      id: string;
+      kind: 'worktree-merged-pr';
+      worktreePath: string;
+      branch: string;
+      prNumber: number;
+      prUrl: string;
+      dirty: boolean;
+    }
+  | {
+      id: string;
+      kind: 'worktree-closed-pr';
+      worktreePath: string;
+      branch: string;
+      prNumber: number;
+      prUrl: string;
+      dirty: boolean;
+    }
+  | {
+      id: string;
+      kind: 'local-branch-no-remote';
+      branch: string;
+      lastCommitDate: string;
+    }
+  | {
+      id: string;
+      kind: 'remote-branch-merged';
+      branch: string;
+      prNumber: number;
+    };
+
+export interface AutoCommitResult {
+  commits: Array<{ sha: string; message: string }>;
+  fallbackUsed: boolean;
+  partialFailure?: { groupIndex: number; error: string };
+}
+
+export interface CleanupAnalyzeResult {
+  items: CleanupItem[];
+  protectedBranches: string[];
+}
+
+export interface CleanupApplyResult {
+  succeeded: string[];
+  failed: Array<{ itemId: string; error: string }>;
 }
 
 export interface DeveloperInfo {
@@ -526,6 +587,20 @@ export interface DeveloperInfo {
     git: string | null;
     gh: string | null;
   };
+}
+
+export type UpdateCheckState = 'idle' | 'checking' | 'available' | 'up-to-date' | 'error';
+
+export interface UpdateStatus {
+  current: string;
+  latest: string | null;
+  hasUpdate: boolean;
+  releaseUrl: string | null;
+  releaseTag: string | null;
+  publishedAt: string | null;
+  checkedAt: string | null;
+  state: UpdateCheckState;
+  error: string | null;
 }
 
 export interface RepoSetupEnvFile {
@@ -878,6 +953,14 @@ export interface GitHubIssueCacheRecord {
   unresolvedReviewCommentCount: number;
   prLastSyncAt: string | null;
   fetchedAt: string;
+  // GitHub Projects v2 single-select Priority field, synced via the configured
+  // project board. priorityRank is the normalized bucket; priorityRaw is the
+  // verbatim option name (so unknown options like "Icebox" round-trip).
+  // priorityFetchedAt distinguishes "we know it has no priority" (timestamp +
+  // null rank/raw) from "we never asked" (all null).
+  priorityRank: 'p0' | 'p1' | 'p2' | 'p3' | null;
+  priorityRaw: string | null;
+  priorityFetchedAt: string | null;
 }
 
 export type IssuePipelineStatus =

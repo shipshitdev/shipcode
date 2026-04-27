@@ -1033,3 +1033,48 @@ export function migrateV35(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (35)`);
   });
 }
+
+export function migrateV36(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 36) return;
+
+  transaction(db, () => {
+    // Persist GitHub Projects v2 "Priority" single-select field per issue.
+    // priority_rank is the normalized bucket ('p0'..'p3'); priority_raw is
+    // the original option name (e.g. "Critical", "Icebox") so we never
+    // lose source semantics. priority_fetched_at distinguishes
+    // "we know it has no priority" from "we never asked".
+    execAlterTableIfMissing(db, 'ALTER TABLE github_issue_cache ADD COLUMN priority_rank TEXT');
+    execAlterTableIfMissing(db, 'ALTER TABLE github_issue_cache ADD COLUMN priority_raw TEXT');
+    execAlterTableIfMissing(
+      db,
+      'ALTER TABLE github_issue_cache ADD COLUMN priority_fetched_at TEXT',
+    );
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (36)`);
+  });
+}
+
+export function migrateV37(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 37) return;
+
+  transaction(db, () => {
+    // Cover foreign-key columns whose parent rows can be deleted via ON
+    // DELETE CASCADE. SQLite does not auto-index FK columns, so an unindexed
+    // FK forces a full child-table scan on every parent delete. Harmless at
+    // current sizes; turns into a real penalty on long-running installs.
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_verifications_plan ON verifications(plan_id);
+      CREATE INDEX IF NOT EXISTS idx_github_issues_thread ON github_issue_cache(thread_id);
+      CREATE INDEX IF NOT EXISTS idx_notifications_project ON notifications(project_id);
+      CREATE INDEX IF NOT EXISTS idx_pipeline_checkpoints_project ON pipeline_checkpoints(project_id);
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (37)`);
+  });
+}
