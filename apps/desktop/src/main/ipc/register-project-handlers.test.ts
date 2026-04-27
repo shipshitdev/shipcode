@@ -26,6 +26,7 @@ const { createIssueMock, execMock, execFileMock } = vi.hoisted(() => ({
 }));
 
 vi.mock('electron', () => ({
+  app: undefined,
   dialog: {},
   shell: {
     openPath: vi.fn(),
