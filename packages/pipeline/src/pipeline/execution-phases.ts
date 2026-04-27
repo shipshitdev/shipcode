@@ -453,7 +453,11 @@ export function createExecutionPhaseHandlers({
     const cwd = context.worktreePath ?? context.projectPath;
     const latestPlan = deps.plans.getLatest(threadId);
     if (!latestPlan?.structured) {
-      emitPhase(threadId, 'failed');
+      emitPhase(
+        threadId,
+        'failed',
+        'Verification cannot start: structured plan missing for this thread.',
+      );
       activePipelines.delete(threadId);
       return;
     }
@@ -496,7 +500,11 @@ export function createExecutionPhaseHandlers({
     if (!diff.trim()) {
       deps.diffs.replaceForThread(threadId, []);
       deps.verifications.create(threadId, latestPlan.id, 'No changes detected', null);
-      emitPhase(threadId, 'failed');
+      emitPhase(
+        threadId,
+        'failed',
+        'Verification skipped: executor produced no file changes (empty diff vs. fork point).',
+      );
       activePipelines.delete(threadId);
       return;
     }
@@ -561,17 +569,26 @@ export function createExecutionPhaseHandlers({
               threadId,
               retries: context.verificationRetries,
             });
-            emitPhase(threadId, 'failed');
+            emitPhase(
+              threadId,
+              'failed',
+              `Verification failed: retries exhausted (${context.verificationRetries}/${MAX_VERIFICATION_RETRIES}).`,
+            );
             activePipelines.delete(threadId);
           }
         } else {
           deps.verifications.create(threadId, latestPlan.id, parser.getRawOutput(), null);
-          emitPhase(threadId, 'failed');
+          emitPhase(
+            threadId,
+            'failed',
+            'Verification output could not be parsed — verifier did not emit a shipcode-verify block.',
+          );
           activePipelines.delete(threadId);
         }
-      } catch {
+      } catch (err) {
         if (!context.cancelled) {
-          emitPhase(threadId, 'failed');
+          const message = err instanceof Error ? err.message : String(err);
+          emitPhase(threadId, 'failed', `Verification error: ${message}`);
           activePipelines.delete(threadId);
         }
       }
@@ -590,7 +607,11 @@ export function createExecutionPhaseHandlers({
         encoding: 'utf-8',
       }).trim();
       if (context.verifiedSha && context.verifiedSha !== currentHead) {
-        emitPhase(threadId, 'failed');
+        emitPhase(
+          threadId,
+          'failed',
+          'Commit aborted: HEAD moved after verification (verifiedSha mismatch).',
+        );
         activePipelines.delete(threadId);
         return;
       }
@@ -600,7 +621,11 @@ export function createExecutionPhaseHandlers({
         encoding: 'utf-8',
       });
       if (!ahead.trim()) {
-        emitPhase(threadId, 'failed');
+        emitPhase(
+          threadId,
+          'failed',
+          'Commit aborted: no commits ahead of fork point — nothing to push.',
+        );
         activePipelines.delete(threadId);
         return;
       }
@@ -612,7 +637,7 @@ export function createExecutionPhaseHandlers({
       execFileSync('git', ['push', 'origin', branch, '--set-upstream'], { cwd, encoding: 'utf-8' });
 
       handlers.startShipping(threadId);
-    } catch {
+    } catch (firstErr) {
       try {
         const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
           cwd,
@@ -623,8 +648,14 @@ export function createExecutionPhaseHandlers({
           encoding: 'utf-8',
         });
         handlers.startShipping(threadId);
-      } catch {
-        emitPhase(threadId, 'failed');
+      } catch (secondErr) {
+        const message = secondErr instanceof Error ? secondErr.message : String(secondErr);
+        const firstMessage = firstErr instanceof Error ? firstErr.message : String(firstErr);
+        emitPhase(
+          threadId,
+          'failed',
+          `Commit and push failed (both attempts). first=${firstMessage.slice(0, 120)} retry=${message.slice(0, 120)}`,
+        );
         activePipelines.delete(threadId);
       }
     }
@@ -784,8 +815,9 @@ export function createExecutionPhaseHandlers({
       }
 
       emitPhase(threadId, 'completed');
-    } catch {
-      emitPhase(threadId, 'failed');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      emitPhase(threadId, 'failed', `Shipping failed: ${message}`);
     }
     activePipelines.delete(threadId);
   }

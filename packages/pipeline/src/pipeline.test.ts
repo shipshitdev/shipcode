@@ -837,7 +837,7 @@ describe('createPipeline', () => {
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
         expect.any(String),
-        undefined,
+        expect.any(String),
       );
       expect(pipeline.getContext('t1')).toBeUndefined();
     });
@@ -854,7 +854,7 @@ describe('createPipeline', () => {
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
         expect.any(String),
-        undefined,
+        expect.any(String),
       );
     });
 
@@ -966,7 +966,7 @@ describe('createPipeline', () => {
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
         expect.any(String),
-        undefined,
+        expect.any(String),
       );
       expect(pipeline.getContext('t1')).toBeUndefined();
     });
@@ -1233,7 +1233,7 @@ describe('createPipeline', () => {
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
         expect.any(String),
-        undefined,
+        expect.any(String),
       );
       expect(pipeline.getContext('t1')).toBeUndefined();
     });
@@ -1259,7 +1259,7 @@ describe('createPipeline', () => {
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
         expect.any(String),
-        undefined,
+        expect.any(String),
       );
       expect(mock.deps.diffs.replaceForThread).toHaveBeenCalledWith('t1', []);
     });
@@ -1379,7 +1379,7 @@ describe('createPipeline', () => {
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
         expect.any(String),
-        undefined,
+        expect.any(String),
       );
       expect(pipeline.getContext('t1')).toBeUndefined();
     });
@@ -1463,7 +1463,7 @@ describe('createPipeline', () => {
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
         expect.any(String),
-        undefined,
+        expect.any(String),
       );
       expect(pipeline.getContext('t1')).toBeUndefined();
 
@@ -1505,7 +1505,7 @@ describe('createPipeline', () => {
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
         expect.any(String),
-        undefined,
+        expect.any(String),
       );
       expect(pipeline.getContext('t1')).toBeUndefined();
     });
@@ -1526,7 +1526,7 @@ describe('createPipeline', () => {
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
         expect.any(String),
-        undefined,
+        expect.any(String),
       );
       expect(pipeline.getContext('t1')).toBeUndefined();
     });
@@ -1571,7 +1571,7 @@ describe('createPipeline', () => {
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
         expect.any(String),
-        undefined,
+        expect.any(String),
       );
       expect(pipeline.getContext('t1')).toBeUndefined();
     });
@@ -1685,7 +1685,7 @@ describe('createPipeline', () => {
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
         expect.any(String),
-        undefined,
+        expect.any(String),
       );
     });
   });

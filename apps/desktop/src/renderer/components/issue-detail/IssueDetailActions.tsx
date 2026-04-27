@@ -532,59 +532,61 @@ export function IssueDetailActions({
 
   const rerunSection = canRerun ? (
     <div>
-      {(thread?.lastError || failingPhaseOutput) && (
-        <div className="mb-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2">
-          <div className="mb-1 flex items-center justify-between">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-danger">
-              {failurePresentation.label}
-            </p>
-            <div className="flex items-center gap-2">
+      <div className="mb-3 rounded-md border border-danger/30 bg-danger/10 px-3 py-2">
+        <div className="mb-1 flex items-center justify-between">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-danger">
+            {failurePresentation.label}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="text-danger/60 hover:bg-danger/10 hover:text-danger"
+              onClick={() =>
+                navigator.clipboard.writeText(
+                  [thread?.lastError, failingPhaseOutput].filter(Boolean).join('\n\n'),
+                )
+              }
+              title="Copy to clipboard"
+            >
+              <Copy size={13} />
+            </Button>
+            {failingPhaseOutput && (
               <Button
                 variant="ghost"
                 size="icon-xs"
                 className="text-danger/60 hover:bg-danger/10 hover:text-danger"
-                onClick={() =>
-                  navigator.clipboard.writeText(
-                    [thread?.lastError, failingPhaseOutput].filter(Boolean).join('\n\n'),
-                  )
-                }
-                title="Copy to clipboard"
+                title={showRawOutput ? 'Hide raw output' : 'Show raw output'}
+                aria-label={showRawOutput ? 'Hide raw output' : 'Show raw output'}
+                onClick={() => onShowRawOutputChange(!showRawOutput)}
               >
-                <Copy size={13} />
+                {showRawOutput ? (
+                  <ChevronUp size={16} strokeWidth={2.25} />
+                ) : (
+                  <ChevronDown size={16} strokeWidth={2.25} />
+                )}
               </Button>
-              {failingPhaseOutput && (
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  className="text-danger/60 hover:bg-danger/10 hover:text-danger"
-                  title={showRawOutput ? 'Hide raw output' : 'Show raw output'}
-                  aria-label={showRawOutput ? 'Hide raw output' : 'Show raw output'}
-                  onClick={() => onShowRawOutputChange(!showRawOutput)}
-                >
-                  {showRawOutput ? (
-                    <ChevronUp size={16} strokeWidth={2.25} />
-                  ) : (
-                    <ChevronDown size={16} strokeWidth={2.25} />
-                  )}
-                </Button>
-              )}
-            </div>
+            )}
           </div>
-          {failurePresentation.detail && (
-            <p className="mb-2 text-[11px] text-danger/70">{failurePresentation.detail}</p>
-          )}
-          {thread?.lastError && (
-            <p className="text-[12px] text-danger/80 break-words">
-              {stripAnsi(safeErrorMessage(thread.lastError))}
-            </p>
-          )}
-          {showRawOutput && failingPhaseOutput && (
-            <pre className="mt-2 max-h-[200px] overflow-y-auto border-t border-danger/20 pt-2 text-[11px] text-danger/70 whitespace-pre-wrap break-words">
-              {stripAnsi(failingPhaseOutput)}
-            </pre>
-          )}
         </div>
-      )}
+        {failurePresentation.detail && (
+          <p className="mb-2 text-[11px] text-danger/70">{failurePresentation.detail}</p>
+        )}
+        {thread?.lastError ? (
+          <p className="text-[12px] text-danger/80 break-words">
+            {stripAnsi(safeErrorMessage(thread.lastError))}
+          </p>
+        ) : !failingPhaseOutput ? (
+          <p className="text-[12px] text-danger/70 italic break-words">
+            No error message captured. Check the Pipeline tab terminal output for details.
+          </p>
+        ) : null}
+        {showRawOutput && failingPhaseOutput && (
+          <pre className="mt-2 max-h-[200px] overflow-y-auto border-t border-danger/20 pt-2 text-[11px] text-danger/70 whitespace-pre-wrap break-words">
+            {stripAnsi(failingPhaseOutput)}
+          </pre>
+        )}
+      </div>
       {retrySummary ? <p className="mb-3 text-[11px] text-muted">{retrySummary}</p> : null}
       <div className="flex gap-2">
         <Button

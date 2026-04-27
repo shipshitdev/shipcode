@@ -474,7 +474,11 @@ export function createPlanningPhaseHandlers({
         if (result.success && result.data && latestPlan) {
           const latestStructuredPlan = latestPlan.structured;
           if (!latestStructuredPlan) {
-            emitPhase(threadId, 'failed');
+            emitPhase(
+              threadId,
+              'failed',
+              'Review aborted: latest plan record has no structured plan.',
+            );
             activePipelines.delete(threadId);
             return;
           }
@@ -590,14 +594,22 @@ export function createPlanningPhaseHandlers({
               }
             }
           } else {
-            emitPhase(threadId, 'failed');
+            emitPhase(
+              threadId,
+              'failed',
+              `Review failed: reviewer returned an unexpected decision (${result.data.decision ?? 'unknown'}).`,
+            );
             activePipelines.delete(threadId);
           }
         } else {
           if (latestPlan) {
             deps.reviews.create(latestPlan.id, parser.getRawOutput(), null);
           }
-          emitPhase(threadId, 'failed');
+          emitPhase(
+            threadId,
+            'failed',
+            'Review output could not be parsed — reviewer did not emit a shipcode-review block.',
+          );
           activePipelines.delete(threadId);
         }
       } catch (error) {
@@ -673,7 +685,11 @@ export function createPlanningPhaseHandlers({
         } else {
           deps.plans.supersedeAll(threadId);
           deps.plans.create(threadId, result.raw, null, plan.version + 1);
-          emitPhase(threadId, 'failed');
+          emitPhase(
+            threadId,
+            'failed',
+            'Revision output could not be parsed — revisor did not emit a shipcode-plan block.',
+          );
           activePipelines.delete(threadId);
         }
       } catch (error) {
