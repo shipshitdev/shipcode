@@ -1,14 +1,32 @@
-import type { DiffRecord, GitVisualizerData } from '@shipcode/shared';
+import type {
+  AppSettings,
+  AutoCommitResult,
+  DiffRecord,
+  GitVisualizerData,
+} from '@shipcode/shared';
 import { GitVisualizer } from '@shipcode/ui';
-import { Alert, AlertDescription, Loader2 } from '@shipshitdev/ui';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { Alert, AlertDescription, Button, Loader2, Sparkles, Trash2 } from '@shipshitdev/ui';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { CleanupModal } from '../../components/CleanupModal';
+import { STABLE_APP_STATE_STALE_TIME } from '../../query-stale-times';
 import { useAppStore } from '../../stores/app-store';
 
 export function ProjectGitVisualizer() {
   const queryClient = useQueryClient();
   const activeProjectId = useAppStore((state) => state.activeProjectId);
   const [selectedWorktreePath, setSelectedWorktreePath] = useState<string | null>(null);
+  const [autoCommitMessage, setAutoCommitMessage] = useState<{
+    tone: 'success' | 'error';
+    text: string;
+  } | null>(null);
+  const [cleanupOpen, setCleanupOpen] = useState(false);
+
+  const { data: settings } = useQuery<AppSettings>({
+    queryKey: ['settings'],
+    queryFn: () => window.shipcode.invoke('settings:get'),
+    staleTime: STABLE_APP_STATE_STALE_TIME,
+  });
 
   const {
     data,
@@ -49,6 +67,41 @@ export function ProjectGitVisualizer() {
     staleTime: 2_000,
   });
 
+  const selectedWorktree = useMemo(
+    () => data?.worktrees.find((w) => w.path === selectedWorktreePath) ?? null,
+    [data?.worktrees, selectedWorktreePath],
+  );
+
+  const autoCommit = useMutation({
+    mutationFn: () =>
+      window.shipcode.invoke<AutoCommitResult>('git:auto-commit', {
+        projectId: activeProjectId,
+        worktreePath: selectedWorktreePath,
+      }),
+    onSuccess: (result) => {
+      const created = result.commits.length;
+      if (result.partialFailure) {
+        setAutoCommitMessage({
+          tone: 'error',
+          text: `Committed ${created} of ${result.partialFailure.groupIndex + 1} groups, then failed: ${result.partialFailure.error}`,
+        });
+      } else {
+        setAutoCommitMessage({
+          tone: 'success',
+          text: `Created ${created} commit${created === 1 ? '' : 's'}${result.fallbackUsed ? ' (single-commit fallback)' : ''}.`,
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ['git-visualizer-data', activeProjectId] });
+      queryClient.invalidateQueries({ queryKey: ['git-worktree-diff', activeProjectId] });
+    },
+    onError: (err) => {
+      setAutoCommitMessage({
+        tone: 'error',
+        text: err instanceof Error ? err.message : 'Auto-commit failed.',
+      });
+    },
+  });
+
   if (!activeProjectId) {
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-secondary">
@@ -78,6 +131,47 @@ export function ProjectGitVisualizer() {
     );
   }
 
+  const autoCommitDisabled =
+    !settings?.autoCommitEnabled ||
+    autoCommit.isPending ||
+    !selectedWorktree ||
+    !selectedWorktree.isDirty;
+
+  const headerActions = (
+    <>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => autoCommit.mutate()}
+        disabled={autoCommitDisabled}
+        title={
+          !settings?.autoCommitEnabled
+            ? 'Enable auto-commit in Settings'
+            : !selectedWorktree?.isDirty
+              ? 'Worktree clean'
+              : 'AI-generated split commits'
+        }
+      >
+        {autoCommit.isPending ? (
+          <Loader2 className="animate-spin" size={13} />
+        ) : (
+          <Sparkles size={13} />
+        )}
+        Auto-commit
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => setCleanupOpen(true)}
+        disabled={autoCommit.isPending}
+        title="Cleanup worktrees & branches"
+      >
+        <Trash2 size={13} />
+        Cleanup
+      </Button>
+    </>
+  );
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {diffError ? (
@@ -85,6 +179,14 @@ export function ProjectGitVisualizer() {
           <AlertDescription>
             {diffError instanceof Error ? diffError.message : 'Unable to load worktree diff.'}
           </AlertDescription>
+        </Alert>
+      ) : null}
+      {autoCommitMessage ? (
+        <Alert
+          variant={autoCommitMessage.tone === 'error' ? 'destructive' : 'default'}
+          className="m-3 mb-0 shrink-0"
+        >
+          <AlertDescription>{autoCommitMessage.text}</AlertDescription>
         </Alert>
       ) : null}
       <GitVisualizer
@@ -99,7 +201,16 @@ export function ProjectGitVisualizer() {
           queryClient.invalidateQueries({ queryKey: ['git-visualizer-data', activeProjectId] });
           queryClient.invalidateQueries({ queryKey: ['git-worktree-diff', activeProjectId] });
         }}
+        headerActions={headerActions}
       />
+      {settings ? (
+        <CleanupModal
+          open={cleanupOpen}
+          onClose={() => setCleanupOpen(false)}
+          projectId={activeProjectId}
+          criteria={settings.cleanupCriteria}
+        />
+      ) : null}
     </div>
   );
 }

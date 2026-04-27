@@ -16,6 +16,19 @@ interface TerminalTranscriptProps {
 const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]|\x1b\].*?(?:\x07|\x1b\\)/g;
 const DEFAULT_VISIBLE_EVENT_LIMIT = 300;
 
+const ERROR_LINE_RE = /(^|\s)(error|fatal|panic|exception|traceback|posix_spawnp failed)\b/i;
+const EXIT_NONZERO_RE = /\bexit(?:ed)?[^\d]+(?:code\s*)?([1-9]\d*)\b/i;
+const WARNING_LINE_RE = /(^|\s)(warn(?:ing)?|deprecat(?:ed|ion))\b/i;
+
+type ConsoleSeverity = 'error' | 'warning' | 'info';
+
+function classifyConsoleLine(content: string): ConsoleSeverity {
+  if (ERROR_LINE_RE.test(content)) return 'error';
+  if (EXIT_NONZERO_RE.test(content)) return 'error';
+  if (WARNING_LINE_RE.test(content)) return 'warning';
+  return 'info';
+}
+
 function stripAnsi(value: string): string {
   return value.replace(ANSI_RE, '');
 }
@@ -92,16 +105,37 @@ function TranscriptRow({
           )}
         </div>
       );
-    case 'lifecycle':
+    case 'lifecycle': {
+      const lifecycleText = stripAnsi(event.message);
+      const lifecycleSeverity = classifyConsoleLine(lifecycleText);
       return (
-        <div className="rounded-lg border border-border/70 bg-primary/40 px-3 py-2">
+        <div
+          className={cn(
+            'rounded-lg border px-3 py-2',
+            lifecycleSeverity === 'error'
+              ? 'border-danger/30 bg-danger/8'
+              : lifecycleSeverity === 'warning'
+                ? 'border-warning/30 bg-warning/8'
+                : 'border-border/70 bg-primary/40',
+          )}
+        >
           <TranscriptMeta createdAt={record.createdAt} compact={compact}>
-            <span className="tracking-normal text-secondary normal-case">
-              {stripAnsi(event.message)}
+            <span
+              className={cn(
+                'tracking-normal normal-case',
+                lifecycleSeverity === 'error'
+                  ? 'text-danger'
+                  : lifecycleSeverity === 'warning'
+                    ? 'text-warning'
+                    : 'text-secondary',
+              )}
+            >
+              {lifecycleText}
             </span>
           </TranscriptMeta>
         </div>
       );
+    }
     case 'turn_start':
       return (
         <div className="flex items-center gap-3 py-1">
@@ -223,18 +257,27 @@ function TranscriptRow({
       const isRateLimited = ERROR_PATTERNS.some(
         ({ pattern, type }) => type === 'rate_limited' && pattern.test(content),
       );
+      const severity: ConsoleSeverity = isRateLimited ? 'error' : classifyConsoleLine(content);
       return (
         <div
           className={cn(
             'rounded-xl border px-4 py-3',
-            isRateLimited ? 'border-danger/30 bg-danger/8' : 'border-border/60 bg-secondary/60',
+            severity === 'error'
+              ? 'border-danger/30 bg-danger/8'
+              : severity === 'warning'
+                ? 'border-warning/30 bg-warning/8'
+                : 'border-border/60 bg-secondary/60',
           )}
         >
           <TranscriptMeta createdAt={record.createdAt} compact={compact}>
             <span
               className={cn(
                 'tracking-normal normal-case',
-                isRateLimited ? 'text-danger' : 'text-secondary',
+                severity === 'error'
+                  ? 'text-danger'
+                  : severity === 'warning'
+                    ? 'text-warning'
+                    : 'text-secondary',
               )}
             >
               Console
@@ -244,7 +287,11 @@ function TranscriptRow({
             className={cn(
               'mt-2 whitespace-pre-wrap break-words font-mono',
               compact ? 'text-[10px] leading-4' : 'text-[11px] leading-5',
-              isRateLimited ? 'text-danger' : 'text-secondary',
+              severity === 'error'
+                ? 'text-danger'
+                : severity === 'warning'
+                  ? 'text-warning'
+                  : 'text-secondary',
             )}
           >
             {content}

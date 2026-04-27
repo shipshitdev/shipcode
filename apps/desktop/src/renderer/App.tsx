@@ -23,6 +23,7 @@ import { SettingsSidebar } from './components/SettingsSidebar';
 import { SkillsView } from './components/SkillsView';
 import { TerminalDrawer } from './components/TerminalDrawer';
 import { Titlebar } from './components/Titlebar';
+import { UpdateBanner } from './components/UpdateBanner';
 import { useGlobalKeyboard } from './hooks/useGlobalKeyboard';
 import { useIpc } from './hooks/useIpc';
 import { STABLE_APP_STATE_STALE_TIME } from './query-stale-times';
@@ -249,69 +250,71 @@ export function App() {
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       <Titlebar />
+      <UpdateBanner />
       <HealthBanner />
       <ProjectPathBanner project={activeProject ?? null} />
       <div className="flex flex-1 overflow-hidden">
         {!hideSidebarForReader && (settingsVisible ? <SettingsSidebar /> : <ProjectSidebar />)}
-        {/* Content: left column (views + terminal) | right panel (issue detail, full-height) */}
-        <div className="relative flex flex-1 overflow-hidden min-h-0">
-          {/* Left column — main views stacked above terminal */}
-          <div className="flex flex-col flex-1 overflow-hidden min-h-0">
-            {hideMainContentForTerminal ? (
-              <div className="flex flex-1 overflow-hidden min-h-0">
-                <TerminalDrawer />
-              </div>
-            ) : (
-              <>
-                <div className="flex flex-1 overflow-hidden min-h-0">
-                  {/* Main view — hidden when issue detail is expanded full-screen */}
-                  <div
-                    className={
-                      hasActiveIssue && issueDetailExpanded
-                        ? 'hidden'
-                        : 'flex flex-1 overflow-hidden bg-primary'
-                    }
-                  >
-                    {settingsVisible ? (
-                      <SettingsPanel />
-                    ) : viewMode === 'activity' ? (
-                      <ActivityView />
-                    ) : viewMode === 'costs' ? (
-                      <CostsView />
-                    ) : viewMode === 'skills' ? (
-                      <SkillsView />
-                    ) : viewMode === 'inbox' ? (
-                      <InboxView />
-                    ) : showOverview ? (
-                      <OverviewView />
-                    ) : showMissingProject && activeProject ? (
-                      <ProjectMissingView project={activeProject} />
-                    ) : (
-                      <ProjectView />
-                    )}
-                  </div>
-                  {/* Expanded issue detail takes over the left column entirely */}
-                  {hasActiveIssue && issueDetailExpanded && (
-                    <div className="flex-1 overflow-hidden">
-                      <IssueDetail expanded={true} />
-                    </div>
+        {/* Content column: upper region (views + issue-detail overlay) stacked
+            above a full-width terminal. Terminal lives outside the overlay's
+            relative container so the right detail panel never clips it. */}
+        <div className="flex flex-col flex-1 overflow-hidden min-h-0">
+          {hideMainContentForTerminal ? (
+            <div className="flex flex-1 overflow-hidden min-h-0">
+              <TerminalDrawer />
+            </div>
+          ) : (
+            <>
+              {/* Upper region — main view + right-side issue detail overlay */}
+              <div className="relative flex flex-1 overflow-hidden min-h-0">
+                <div
+                  className={
+                    hasActiveIssue && issueDetailExpanded
+                      ? 'hidden'
+                      : 'flex flex-1 overflow-hidden bg-primary'
+                  }
+                >
+                  {settingsVisible ? (
+                    <SettingsPanel />
+                  ) : viewMode === 'activity' ? (
+                    <ActivityView />
+                  ) : viewMode === 'costs' ? (
+                    <CostsView />
+                  ) : viewMode === 'skills' ? (
+                    <SkillsView />
+                  ) : viewMode === 'inbox' ? (
+                    <InboxView />
+                  ) : showOverview ? (
+                    <OverviewView />
+                  ) : showMissingProject && activeProject ? (
+                    <ProjectMissingView project={activeProject} />
+                  ) : (
+                    <ProjectView />
                   )}
                 </div>
-                {terminalVisible && <TerminalDrawer />}
-              </>
-            )}
-          </div>
-          {/* Right panel — full height, spans over the terminal */}
-          {hasActiveIssue && !issueDetailExpanded && !issueDetailCollapsed && (
-            <OverlayPanel
-              width={issueDetailWidth}
-              minWidth={ISSUE_DETAIL_MIN_WIDTH}
-              maxWidth={ISSUE_DETAIL_MAX_WIDTH}
-              onResizeStart={handleIssueDetailResizeMouseDown}
-              resizeHandleLabel="Resize issue detail panel"
-            >
-              <IssueDetail expanded={false} />
-            </OverlayPanel>
+                {/* Expanded issue detail takes over the upper region entirely */}
+                {hasActiveIssue && issueDetailExpanded && (
+                  <div className="flex-1 overflow-hidden">
+                    <IssueDetail expanded={true} />
+                  </div>
+                )}
+                {/* Right panel — full height of upper region only, no longer
+                    overlapping the terminal. */}
+                {hasActiveIssue && !issueDetailExpanded && !issueDetailCollapsed && (
+                  <OverlayPanel
+                    width={issueDetailWidth}
+                    minWidth={ISSUE_DETAIL_MIN_WIDTH}
+                    maxWidth={ISSUE_DETAIL_MAX_WIDTH}
+                    onResizeStart={handleIssueDetailResizeMouseDown}
+                    resizeHandleLabel="Resize issue detail panel"
+                  >
+                    <IssueDetail expanded={false} />
+                  </OverlayPanel>
+                )}
+              </div>
+              {/* Terminal — full content width, sibling of the upper region */}
+              {terminalVisible && <TerminalDrawer />}
+            </>
           )}
         </div>
       </div>

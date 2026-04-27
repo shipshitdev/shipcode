@@ -5,6 +5,7 @@ import {
   Globe,
   Keyboard,
   Settings,
+  Sparkles,
   Workflow,
   Wrench,
 } from '@shipshitdev/ui';
@@ -38,6 +39,11 @@ const SECTIONS: { key: SettingsSection; label: string; icon: ReactNode }[] = [
     key: 'pipeline',
     label: 'Pipeline',
     icon: <Workflow size={14} />,
+  },
+  {
+    key: 'auto-commit',
+    label: 'Auto-commit',
+    icon: <Sparkles size={14} />,
   },
   {
     key: 'shortcuts',

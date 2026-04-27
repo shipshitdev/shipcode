@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 import { ArchivedSettingsSection } from './settings-panel/ArchivedSettingsSection';
+import { AutoCommitSettingsSection } from './settings-panel/AutoCommitSettingsSection';
 import { DeveloperSettingsSection } from './settings-panel/DeveloperSettingsSection';
 import { GeneralSettingsSection } from './settings-panel/GeneralSettingsSection';
 import { GithubSettingsSection } from './settings-panel/GithubSettingsSection';
@@ -153,6 +154,9 @@ export function SettingsPanel() {
         )}
         {settingsSection === 'developer' && (
           <DeveloperSettingsSection settings={settings} onUpdate={update} />
+        )}
+        {settingsSection === 'auto-commit' && (
+          <AutoCommitSettingsSection settings={settings} onUpdate={update} />
         )}
       </div>
     </div>

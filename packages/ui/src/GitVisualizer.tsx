@@ -1,6 +1,7 @@
 'use client';
 
 import { GitBranch, GitCommitHorizontal, GitCompareArrows, RefreshCw } from 'lucide-react';
+import type { ReactNode } from 'react';
 import type { DiffRecord, GitWorktreeSummary } from './lib/shipcode';
 import { cn } from './lib/utils';
 import { Badge } from './primitives/badge';
@@ -16,6 +17,7 @@ export interface GitVisualizerProps {
   diffLoading?: boolean;
   onSelectWorktree: (path: string) => void;
   onRefresh?: () => void;
+  headerActions?: ReactNode;
   className?: string;
 }
 
@@ -51,6 +53,7 @@ export function GitVisualizer({
   diffLoading = false,
   onSelectWorktree,
   onRefresh,
+  headerActions,
   className,
 }: GitVisualizerProps) {
   const selectedWorktree =
@@ -162,6 +165,9 @@ export function GitVisualizer({
               <Badge variant={diffs.length > 0 ? 'warning' : 'success'}>
                 {diffs.length} file{diffs.length === 1 ? '' : 's'}
               </Badge>
+              {headerActions ? (
+                <div className="flex shrink-0 items-center gap-1">{headerActions}</div>
+              ) : null}
             </>
           ) : (
             <div className="text-sm text-secondary">No worktrees found.</div>

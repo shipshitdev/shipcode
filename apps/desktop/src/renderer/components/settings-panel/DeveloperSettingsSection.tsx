@@ -1,9 +1,11 @@
-import type { AppSettings, DeveloperInfo } from '@shipcode/shared';
+import type { AppSettings, DeveloperInfo, UpdateStatus } from '@shipcode/shared';
 import {
   Button,
   Check,
   Copy,
+  ExternalLink,
   FolderOpen,
+  RefreshCw,
   Select,
   SelectContent,
   SelectItem,
@@ -12,8 +14,8 @@ import {
   SettingsRow,
   Terminal,
 } from '@shipshitdev/ui';
-import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
 
 export function DeveloperSettingsSection({
   settings,
@@ -24,11 +26,34 @@ export function DeveloperSettingsSection({
 }) {
   const [isCopied, setIsCopied] = useState(false);
 
+  const queryClient = useQueryClient();
+
   const { data: info } = useQuery<DeveloperInfo>({
     queryKey: ['developer-info'],
     queryFn: () => window.shipcode.invoke('developer:get-info'),
     staleTime: Number.POSITIVE_INFINITY,
   });
+
+  const { data: updateStatus } = useQuery<UpdateStatus>({
+    queryKey: ['update-status'],
+    queryFn: () => window.shipcode.invoke('update:get-status'),
+    staleTime: 30_000,
+  });
+
+  useEffect(() => {
+    if (!window.shipcode?.on) return;
+    const unsub = window.shipcode.on('update:status-changed', (next: UpdateStatus) => {
+      queryClient.setQueryData(['update-status'], next);
+    });
+    return unsub;
+  }, [queryClient]);
+
+  const checkForUpdates = useMutation({
+    mutationFn: () => window.shipcode.invoke('update:check-now'),
+    onSuccess: (next) => queryClient.setQueryData(['update-status'], next),
+  });
+
+  const openExternal = (url: string) => window.shipcode.invoke('shell:open-external', { url });
 
   const handleCopyDiagnostics = async () => {
     if (!info) return;
@@ -68,6 +93,68 @@ export function DeveloperSettingsSection({
         <SettingsRow label="Node">
           <span className="text-sm text-secondary">{info?.nodeVersion ?? '...'}</span>
         </SettingsRow>
+      </section>
+
+      <section className="mb-8">
+        <h4 className="mb-3 text-secondary">Updates</h4>
+        <SettingsRow
+          label="Latest release"
+          description={
+            updateStatus?.error
+              ? `Last check failed: ${updateStatus.error}`
+              : updateStatus?.checkedAt
+                ? `Checked ${new Date(updateStatus.checkedAt).toLocaleString()}`
+                : 'No check yet — click Check now.'
+          }
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-secondary">
+              {updateStatus?.latest
+                ? updateStatus.hasUpdate
+                  ? `v${updateStatus.latest} available`
+                  : `v${updateStatus.latest} (up to date)`
+                : '—'}
+            </span>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => checkForUpdates.mutate()}
+              disabled={checkForUpdates.isPending || updateStatus?.state === 'checking'}
+            >
+              <RefreshCw
+                size={14}
+                className={
+                  checkForUpdates.isPending || updateStatus?.state === 'checking'
+                    ? 'mr-1.5 animate-spin'
+                    : 'mr-1.5'
+                }
+              />
+              Check now
+            </Button>
+            {updateStatus?.releaseUrl && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() =>
+                  updateStatus.releaseUrl ? void openExternal(updateStatus.releaseUrl) : undefined
+                }
+              >
+                <ExternalLink size={14} className="mr-1.5" />
+                Release notes
+              </Button>
+            )}
+          </div>
+        </SettingsRow>
+        {updateStatus?.hasUpdate && (
+          <SettingsRow
+            label="Upgrade"
+            description="ShipCode installs via Homebrew. Run this in your terminal."
+          >
+            <code className="rounded bg-tertiary px-2 py-1 font-mono text-xs text-secondary">
+              brew upgrade --cask shipcode
+            </code>
+          </SettingsRow>
+        )}
       </section>
 
       <section className="mb-8">

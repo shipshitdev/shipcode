@@ -28,7 +28,7 @@ import {
   resolveRevisionCountForIssue,
   sanitizeResolvedModel,
 } from '@shipcode/shared';
-import { PhaseChip } from '@shipcode/ui';
+import { PhaseChip, resolveIssuePriorityBadge } from '@shipcode/ui';
 import {
   Archive,
   Badge,
@@ -1159,8 +1159,18 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         ))}
     </div>
   );
+  const issuePriorityBadge = resolveIssuePriorityBadge(activeIssue);
   const issueBadges = (
     <div className="flex flex-wrap gap-1.5">
+      {issuePriorityBadge ? (
+        <Badge
+          variant={issuePriorityBadge.variant}
+          className="text-[11px] font-semibold uppercase tracking-wide"
+          title={issuePriorityBadge.title}
+        >
+          {issuePriorityBadge.label}
+        </Badge>
+      ) : null}
       {activeIssue.assignee && (
         <Badge variant="default" className="text-[11px]">
           {activeIssue.assignee}
@@ -1208,6 +1218,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       effectiveRevisionCount,
       clarificationRequest: thread?.clarificationRequest ?? null,
       failingPhaseOutput,
+      githubIssueUrl,
       hasApprovalDecision,
       isSubmitting,
       requireApproval: effectiveRequireApproval,
@@ -1219,6 +1230,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       onCancel: () => void handleCancel(),
       onEditPrd: handleEditPrd,
       onMarkAsDone: () => setShowMarkAsDoneConfirm(true),
+      onOpenOnGithub: () => void handleOpenOnGithub(),
       onReject: (nextFeedback) => void handleReject(nextFeedback),
       onRerun: () => void handleRerun(),
       onShowRawOutputChange: setShowRawOutput,

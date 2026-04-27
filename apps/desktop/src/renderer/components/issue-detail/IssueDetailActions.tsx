@@ -6,6 +6,7 @@ import {
   ChevronUp,
   Copy,
   cn,
+  ExternalLink,
   LoadingButtonContent,
   Select,
   SelectContent,
@@ -15,7 +16,12 @@ import {
   Textarea,
 } from '@shipshitdev/ui';
 import { useMemo, useState } from 'react';
-import { getFailurePresentation, PIPELINE_PREVIEW_PHASES, safeErrorMessage } from './helpers';
+import {
+  getFailurePresentation,
+  PIPELINE_PREVIEW_PHASES,
+  safeErrorMessage,
+  stripAnsi,
+} from './helpers';
 
 type ClarificationDraft = Record<
   string,
@@ -34,6 +40,7 @@ interface IssueDetailActionsProps {
   effectiveRevisionCount: number;
   clarificationRequest: ClarificationRequest | null;
   failingPhaseOutput: string | null;
+  githubIssueUrl: string | null;
   hasApprovalDecision: boolean;
   isSubmitting: boolean;
   requireApproval: boolean;
@@ -45,6 +52,7 @@ interface IssueDetailActionsProps {
   onCancel: () => void;
   onEditPrd: () => void;
   onMarkAsDone: () => void;
+  onOpenOnGithub: () => void;
   onReject: (feedback: string) => void;
   onRerun: () => void;
   onShowRawOutputChange: (show: boolean) => void;
@@ -363,6 +371,7 @@ export function IssueDetailActions({
   effectiveRevisionCount,
   clarificationRequest,
   failingPhaseOutput,
+  githubIssueUrl,
   hasApprovalDecision,
   isSubmitting,
   requireApproval,
@@ -374,6 +383,7 @@ export function IssueDetailActions({
   onCancel,
   onEditPrd,
   onMarkAsDone,
+  onOpenOnGithub,
   onReject,
   onRerun,
   onShowRawOutputChange,
@@ -565,12 +575,12 @@ export function IssueDetailActions({
           )}
           {thread?.lastError && (
             <p className="text-[12px] text-danger/80 break-words">
-              {safeErrorMessage(thread.lastError)}
+              {stripAnsi(safeErrorMessage(thread.lastError))}
             </p>
           )}
           {showRawOutput && failingPhaseOutput && (
             <pre className="mt-2 max-h-[200px] overflow-y-auto border-t border-danger/20 pt-2 text-[11px] text-danger/70 whitespace-pre-wrap break-words">
-              {failingPhaseOutput}
+              {stripAnsi(failingPhaseOutput)}
             </pre>
           )}
         </div>
@@ -596,6 +606,17 @@ export function IssueDetailActions({
           Mark As Done
         </Button>
       </div>
+      {githubIssueUrl && (
+        <Button
+          variant="link"
+          size="xs"
+          onClick={onOpenOnGithub}
+          className="mt-2 h-auto gap-1 px-0 text-[11px] text-muted hover:text-primary"
+        >
+          <ExternalLink size={11} />
+          View issue on GitHub
+        </Button>
+      )}
     </div>
   ) : null;
 
