@@ -50,6 +50,9 @@ const makeIssue = (overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
   unresolvedReviewCommentCount: 0,
   prLastSyncAt: null,
   fetchedAt: new Date().toISOString(),
+  priorityRank: null,
+  priorityRaw: null,
+  priorityFetchedAt: null,
   ...overrides,
 });
 
@@ -93,11 +96,12 @@ describe('useIpc terminal scoping', () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
     });
-    return render(
+    const view = render(
       <QueryClientProvider client={queryClient}>
         <TestHarness />
       </QueryClientProvider>,
     );
+    return { ...view, queryClient };
   }
 
   it('ignores github issue updates for non-selected projects', () => {
@@ -238,5 +242,36 @@ describe('useIpc terminal scoping', () => {
     });
 
     expect(useAppStore.getState().currentModels['thread-1']).toBe('Codex / GPT-5.4');
+  });
+
+  it('invalidates plan-history queries when phase event fires for the active thread', () => {
+    useAppStore.setState({
+      activeThreadId: 'thread-1',
+      activeIssue: currentIssue,
+      githubIssues: [currentIssue],
+    });
+
+    const { queryClient } = renderHarness();
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+
+    listeners.get('pipeline:phase')?.({ phase: 'executing', threadId: 'thread-1' });
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['plan-history', 'thread-1'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['issue-plan-history'] });
+  });
+
+  it('invalidates plan-history queries when plan:parsed event fires', () => {
+    useAppStore.setState({ activeThreadId: 'thread-1' });
+
+    const { queryClient } = renderHarness();
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+
+    listeners.get('plan:parsed')?.({
+      threadId: 'thread-1',
+      plan: { steps: [], objective: 'x', files: [], acceptanceCriteria: [] },
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['plan-history', 'thread-1'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['issue-plan-history'] });
   });
 });

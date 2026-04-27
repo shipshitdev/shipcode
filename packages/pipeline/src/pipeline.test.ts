@@ -233,6 +233,9 @@ function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
     unresolvedReviewCommentCount: 0,
     prLastSyncAt: null,
     fetchedAt: '',
+    priorityRank: null,
+    priorityRaw: null,
+    priorityFetchedAt: null,
     ...overrides,
   };
 }
@@ -619,6 +622,24 @@ describe('createPipeline', () => {
         'planning',
         'Plan generation failed — no valid shipcode-plan block was produced.',
       );
+    });
+
+    it('exit 0 + no valid plan → never emits an executing phase', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      requireContext(pipeline).autonomous = true;
+      await flush();
+
+      await mock.trigger('output', 'proc-1', 'some random output without a plan block');
+      await mock.trigger('exit', 'proc-1', 0);
+      await flush();
+
+      const executingEvents = mock.emittedEvents.filter(
+        (e: PipelineEvent) =>
+          e.type === 'pipeline:phase' && e.threadId === 't1' && e.phase === 'executing',
+      );
+      expect(executingEvents).toHaveLength(0);
+      expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(1);
     });
 
     it('exit 0 + no valid plan does not classify incidental ENOENT as the failure', async () => {
@@ -2098,6 +2119,62 @@ describe('createPipeline', () => {
         type: 'pipeline:phase',
         phase: 'executing',
       });
+    });
+
+    it('refuses to execute when latest plan record has null structured', async () => {
+      mock.deps.plans.getLatest = vi.fn(() => ({
+        id: 'plan-null',
+        threadId: 't-null',
+        version: 1,
+        rawOutput: '',
+        structured: null,
+        status: 'draft' as const,
+        createdAt: '',
+      })) as never;
+
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t-null', { projectPath: '/proj' });
+
+      const plan = { steps: [] } as never;
+      await pipeline.startExecution('t-null', plan);
+
+      const phaseEvents = mock.emittedEvents.filter(
+        (e: PipelineEvent) => e.type === 'pipeline:phase' && e.threadId === 't-null',
+      );
+      const last = phaseEvents[phaseEvents.length - 1];
+      expect(last).toMatchObject({ type: 'pipeline:phase', phase: 'failed' });
+      expect(phaseEvents.some((e) => e.type === 'pipeline:phase' && e.phase === 'executing')).toBe(
+        false,
+      );
+    });
+
+    it('refuses to execute when latest plan record is superseded', async () => {
+      mock.deps.plans.getLatest = vi.fn(() => ({
+        id: 'plan-old',
+        threadId: 't-stale',
+        version: 1,
+        rawOutput: '',
+        structured: JSON.parse(PLAN_JSON),
+        status: 'superseded' as const,
+        createdAt: '',
+      })) as never;
+
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t-stale', { projectPath: '/proj' });
+
+      const plan = { steps: [] } as never;
+      await pipeline.startExecution('t-stale', plan);
+
+      const phaseEvents = mock.emittedEvents.filter(
+        (e: PipelineEvent) => e.type === 'pipeline:phase' && e.threadId === 't-stale',
+      );
+      const last = phaseEvents[phaseEvents.length - 1];
+      expect(last).toMatchObject({ type: 'pipeline:phase', phase: 'failed' });
+      expect(phaseEvents.some((e) => e.type === 'pipeline:phase' && e.phase === 'executing')).toBe(
+        false,
+      );
+      // Executor must not spawn when guard halts the pipeline.
+      expect(mock.deps.processManager.spawn).not.toHaveBeenCalled();
     });
   });
 

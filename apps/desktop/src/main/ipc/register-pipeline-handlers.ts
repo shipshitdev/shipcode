@@ -268,7 +268,17 @@ export function registerPipelineHandlers({
       );
     }
 
-    const structured = latestPlan?.structured ?? tryParsePlan(latestPlan?.rawOutput ?? '');
+    let structured = latestPlan.structured;
+    if (!structured) {
+      structured = tryParsePlan(latestPlan.rawOutput ?? '');
+      if (structured) {
+        logEvent('pipeline:plan-parse-fallback', {
+          threadId,
+          planId: latestPlan.id,
+          source: 'pipeline:approve',
+        });
+      }
+    }
     if (structured) {
       if (!latestPlan.structured) {
         queries.plans.updateStructured(latestPlan.id, structured);
@@ -354,7 +364,17 @@ export function registerPipelineHandlers({
     }
 
     const latestPlan = queries.plans.getLatest(threadId);
-    const structured = latestPlan?.structured ?? tryParsePlan(latestPlan?.rawOutput ?? '');
+    let structured = latestPlan?.structured ?? null;
+    if (!structured && latestPlan) {
+      structured = tryParsePlan(latestPlan.rawOutput ?? '');
+      if (structured) {
+        logEvent('pipeline:plan-parse-fallback', {
+          threadId,
+          planId: latestPlan.id,
+          source: 'pipeline:stabilize',
+        });
+      }
+    }
     if (!structured) {
       throw new Error('No approved plan found for stabilization');
     }
@@ -415,7 +435,17 @@ export function registerPipelineHandlers({
     });
 
     const latestPlan = queries.plans.getLatest(threadId);
-    const structured = latestPlan?.structured ?? tryParsePlan(latestPlan?.rawOutput ?? '');
+    let structured = latestPlan?.structured ?? null;
+    if (!structured && latestPlan) {
+      structured = tryParsePlan(latestPlan.rawOutput ?? '');
+      if (structured) {
+        logEvent('pipeline:plan-parse-fallback', {
+          threadId,
+          planId: latestPlan.id,
+          source: 'pipeline:retry',
+        });
+      }
+    }
     if (structured) {
       if (!latestPlan?.structured && latestPlan) {
         queries.plans.updateStructured(latestPlan.id, structured);

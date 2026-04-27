@@ -55,6 +55,16 @@ export function useIpc() {
       terminalFlushTimer = setTimeout(flushPendingTerminalEvents, TERMINAL_EVENT_BATCH_MS);
     };
 
+    const invalidatePlanQueriesForThread = (threadId: string) => {
+      // Plan history list is otherwise polled only while phase is in
+      // PLAN_MUTATING_PHASES (planning|reviewing|revising). When the pipeline
+      // jumps planning→executing inside a single tick, polling stops before
+      // the new plan version is fetched. Invalidate explicitly so the UI
+      // never shows a stale SUPERSEDED v1 while the pipeline executes v2.
+      queryClient.invalidateQueries({ queryKey: ['plan-history', threadId] });
+      queryClient.invalidateQueries({ queryKey: ['issue-plan-history'] });
+    };
+
     unsubscribers.push(
       window.shipcode.on('pipeline:phase', (data) => {
         const store = useAppStore.getState();
@@ -89,6 +99,7 @@ export function useIpc() {
         }
         if (data.threadId === store.activeThreadId) {
           setPipelinePhase(data.phase);
+          invalidatePlanQueriesForThread(data.threadId);
         }
         if (data.phase !== 'idle' && data.phase !== 'planning') {
           focusThreadIfSelectedProject();
@@ -122,6 +133,7 @@ export function useIpc() {
         if (data.threadId === useAppStore.getState().activeThreadId) {
           setPlan(data.plan);
         }
+        invalidatePlanQueriesForThread(data.threadId);
       }),
     );
 

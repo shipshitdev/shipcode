@@ -131,6 +131,35 @@ export function createExecutionPhaseHandlers({
     const context = activePipelines.get(threadId);
     if (!context) return;
 
+    // Defense-in-depth: every direct caller already passes a parsed
+    // ShipCodePlan, but the DB record is the source of truth. Halt at the
+    // boundary if the latest plan is missing, unparseable, or no longer
+    // current — never run the executor with partial / stale data.
+    const executionGatePlan = deps.plans.getLatest(threadId);
+    if (!executionGatePlan) {
+      emitPhase(threadId, 'failed', 'Refusing to execute: no plan record found for this thread.');
+      activePipelines.delete(threadId);
+      return;
+    }
+    if (executionGatePlan.structured === null) {
+      emitPhase(
+        threadId,
+        'failed',
+        'Refusing to execute: latest plan has no parsed structured output.',
+      );
+      activePipelines.delete(threadId);
+      return;
+    }
+    if (executionGatePlan.status === 'superseded' || executionGatePlan.status === 'rejected') {
+      emitPhase(
+        threadId,
+        'failed',
+        `Refusing to execute: latest plan is ${executionGatePlan.status}.`,
+      );
+      activePipelines.delete(threadId);
+      return;
+    }
+
     const settings = deps.settings.get();
     const executingCount = contextHelpers
       .listActiveInPhases(EXECUTION_PHASES)
