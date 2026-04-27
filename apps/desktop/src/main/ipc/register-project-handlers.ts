@@ -27,8 +27,10 @@ import type {
 } from '@shipcode/shared';
 import { clampError, parseGithubRemote, validateGithubProjectUrl } from '@shipcode/shared';
 import { dialog, shell } from 'electron';
+import { runAutoCommitWorkflow, runCleanupAnalyze, runCleanupApply } from '../git-workflows';
 import log from '../logger.service';
 import { isSafeExternalUrl } from '../security';
+import { isWorktreeLocked, withWorktreeLock } from '../worktree-locks';
 import { enrichProjectPath, enrichProjectPaths, sendGithubIssuesUpdated } from './helpers';
 import type { IpcHandlerDeps } from './types';
 
@@ -848,6 +850,85 @@ export function registerProjectHandlers({
       const git = new GitService(project.path);
       const diff = await git.getDiffAgainstHead(worktree.path);
       return parseDiffRecords(diff, worktree.threadId ?? worktree.id);
+    },
+  );
+
+  ipcMain.handle(
+    'git:auto-commit',
+    async (_event, { projectId, worktreePath }: { projectId: string; worktreePath: string }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+      const apiKey = process.env.OPENROUTER_API_KEY;
+      if (!apiKey) throw new Error('OPENROUTER_API_KEY is not set');
+      if (isWorktreeLocked(worktreePath)) {
+        throw new Error('Auto-commit already running for this worktree');
+      }
+      // Refuse if any pipeline is currently active in this worktree.
+      const activeForWorktree = pipeline.listActive().find((s) => s.worktreePath === worktreePath);
+      if (activeForWorktree) {
+        throw new Error('Pipeline is active in this worktree — cannot auto-commit');
+      }
+      const settings = queries.settings.get();
+      const controller = new AbortController();
+      try {
+        return await withWorktreeLock(worktreePath, () =>
+          runAutoCommitWorkflow({
+            project,
+            worktreePath,
+            apiKey,
+            model: settings.autoCommitModel,
+            mode: settings.autoCommitMode,
+            signal: controller.signal,
+          }),
+        );
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        log.warn(`[git:auto-commit] failed: ${message}`);
+        throw new Error(clampError(message));
+      }
+    },
+  );
+
+  ipcMain.handle('git:cleanup-analyze', async (_event, { projectId }: { projectId: string }) => {
+    const project = queries.projects.getById(projectId);
+    if (!project) throw new Error(`Project ${projectId} not found`);
+    const settings = queries.settings.get();
+    try {
+      return await runCleanupAnalyze({
+        project,
+        criteria: settings.cleanupCriteria,
+        activeSummaries: pipeline.listActive(),
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      log.warn(`[git:cleanup-analyze] failed: ${message}`);
+      throw new Error(clampError(message));
+    }
+  });
+
+  ipcMain.handle(
+    'git:cleanup-apply',
+    async (_event, { projectId, itemIds }: { projectId: string; itemIds: string[] }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+      const settings = queries.settings.get();
+      try {
+        const analyzed = await runCleanupAnalyze({
+          project,
+          criteria: settings.cleanupCriteria,
+          activeSummaries: pipeline.listActive(),
+        });
+        return await runCleanupApply({
+          project,
+          items: analyzed.items,
+          itemIds,
+          lockFor: withWorktreeLock,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        log.warn(`[git:cleanup-apply] failed: ${message}`);
+        throw new Error(clampError(message));
+      }
     },
   );
 

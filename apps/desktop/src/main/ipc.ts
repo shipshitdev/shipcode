@@ -15,6 +15,7 @@ import { registerSupportHandlers } from './ipc/register-support-handlers';
 import type { Queries } from './ipc/types';
 import log, { logEvent } from './logger.service';
 import type { NotificationService } from './notification-service';
+import type { UpdateService } from './update-service';
 
 export function registerIpcHandlers(
   ipcMain: IpcMain,
@@ -25,6 +26,7 @@ export function registerIpcHandlers(
   emitter: PipelineEmitter,
   notificationService: NotificationService,
   chatNotificationService: ChatNotificationService,
+  updateService: UpdateService,
 ): void {
   for (const thread of queries.threads.getOrphaned()) {
     transitionThreadPhase(mainWindow, queries, emitter, {
@@ -89,5 +91,5 @@ export function registerIpcHandlers(
   registerSupportHandlers(deps);
   registerInstantHandlers(deps);
   registerPullRequestHandlers(deps);
-  registerDeveloperHandlers(deps);
+  registerDeveloperHandlers(deps, updateService);
 }

@@ -73,11 +73,13 @@ import { notifyIssueGraphPipelinePhaseChange } from './ipc/register-issue-graph-
 import { NotificationService } from './notification-service';
 import { createElectronEmitter } from './pipeline-bridge';
 import { PipelineScheduler } from './pipeline-scheduler';
+import { UpdateService } from './update-service';
 
 let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
 let pipeline: ReturnType<typeof createPipeline> | null = null;
 let threadQueries: ThreadQueries | null = null;
+let updateService: UpdateService | null = null;
 let confirmQuit = false;
 let quitConfirmationInFlight = false;
 
@@ -323,6 +325,11 @@ function createWindow() {
   // Apply persisted log level (default is 'debug' from logger.service.ts init)
   log.transports.file.level = queries.settings.get().devLogLevel;
 
+  // Update service: poll GitHub releases for newer ShipCode builds.
+  // Notify-only — install via `brew upgrade --cask shipcode`.
+  updateService = new UpdateService(mainWindow);
+  updateService.start();
+
   // Register IPC handlers
   registerIpcHandlers(
     ipcMain,
@@ -333,6 +340,7 @@ function createWindow() {
     emitter,
     notificationService,
     chatNotificationService,
+    updateService,
   );
 
   // Watchdog: reset threads stuck in active phases (handles renderer refresh + crash scenarios).
@@ -396,6 +404,8 @@ function createWindow() {
 
   mainWindow.on('closed', () => {
     clearInterval(watchdogTimer);
+    updateService?.stop();
+    updateService = null;
     mainWindow = null;
     processManager?.killAll();
     closeDatabase();
@@ -470,23 +480,31 @@ app.on('window-all-closed', () => {
 // Kill all agent subprocesses before the Electron main process exits (Cmd+Q,
 // force-quit, etc.) so claude/codex don't keep running as orphans.
 // If pipelines are running and the quit has not been confirmed, show a dialog first.
+let killInFlight = false;
 app.on('before-quit', async (event) => {
-  if (confirmQuit) {
-    processManager?.killAll();
-    return;
+  // Second pass after we re-trigger via app.exit() — let it through.
+  if (killInFlight) return;
+
+  if (!confirmQuit) {
+    const active = pipeline?.listActive() ?? [];
+    if (active.length > 0) {
+      event.preventDefault();
+      if (!(await confirmQuitForActivePipelines(threadQueries))) return;
+      confirmQuit = true;
+    }
   }
 
-  const active = pipeline?.listActive() ?? [];
-  if (active.length === 0) {
-    processManager?.killAll();
-    return;
-  }
-
+  // Synchronous killAll() returns before pty children actually die, so the
+  // Electron process exits while claude/codex orphans linger. Block quit until
+  // all ptys emit `exit` (or SIGKILL escalation lands).
   event.preventDefault();
-  if (await confirmQuitForActivePipelines(threadQueries)) {
-    confirmQuit = true;
-    app.quit(); // re-triggers before-quit; confirmQuit=true lets it pass through
+  killInFlight = true;
+  try {
+    await processManager?.killAllAndWait(5000);
+  } catch (err) {
+    log.error('[main] killAllAndWait failed during quit:', err);
   }
+  app.exit(0);
 });
 
 app.on('activate', () => {
