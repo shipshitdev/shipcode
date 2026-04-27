@@ -254,6 +254,10 @@ export function resolveFailingPhaseOutput({
     case 'reviewing':
     case 'revising':
       return reviewOutput ?? planOutput;
+    case 'executing':
+      // Executor raw transcript not persisted; never fall back to planner
+      // output here — it would render the plan JSON as the failure body.
+      return null;
     case 'testing':
     case 'verifying':
       return verificationOutput ?? planOutput;

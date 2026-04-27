@@ -22,6 +22,52 @@ import {
 import { parseUnifiedDiff } from './diff-parser';
 import type { PipelineHelperEnv } from './shared';
 
+// Extract a short, human-readable error from an executor transcript.
+// The previous heuristic only dropped the snippet when the joined last
+// 3 lines started with `{`, which let backtick-fenced shipcode-plan
+// blocks leak into `lastError` and dump the plan JSON onto the failure
+// panel.
+export function extractExecutionErrorSnippet(rawOutput: string): string {
+  const lines = rawOutput.split('\n');
+  const tail = lines.slice(-30);
+
+  // 1) Reverse-scan for a structured streaming error event from claude/codex.
+  for (let i = tail.length - 1; i >= 0; i--) {
+    const trimmed = tail[i].trim();
+    if (!trimmed.startsWith('{')) continue;
+    try {
+      const obj = JSON.parse(trimmed) as Record<string, unknown>;
+      if (typeof obj.error === 'string' && obj.error.trim()) {
+        return obj.error.trim().slice(0, 280);
+      }
+      if (
+        obj.type === 'result' &&
+        (obj.is_error === true || obj.subtype === 'error') &&
+        typeof obj.result === 'string' &&
+        obj.result.trim()
+      ) {
+        return obj.result.trim().slice(0, 280);
+      }
+    } catch {
+      /* skip */
+    }
+  }
+
+  // 2) Reverse-scan for a plain-text error line. Skip JSON objects, code
+  // fences, shipcode-plan markers, and bare structural punctuation.
+  for (let i = tail.length - 1; i >= 0; i--) {
+    const trimmed = tail[i].trim();
+    if (!trimmed) continue;
+    if (trimmed.startsWith('{') || trimmed.startsWith('}')) continue;
+    if (trimmed.startsWith('[') || trimmed.startsWith(']')) continue;
+    if (trimmed.startsWith('```')) continue;
+    if (/^["'][a-zA-Z_]+["']\s*:/.test(trimmed)) continue; // looks like a JSON field
+    return trimmed.slice(0, 280);
+  }
+
+  return '';
+}
+
 export function createExecutionPhaseHandlers({
   deps,
   contextHelpers,
@@ -305,13 +351,7 @@ export function createExecutionPhaseHandlers({
             activePipelines.delete(threadId);
           }
         } else {
-          const rawErrSnippet = response.rawOutput
-            .trim()
-            .split('\n')
-            .slice(-3)
-            .join(' ')
-            .slice(0, 300);
-          const errSnippet = rawErrSnippet.trimStart().startsWith('{') ? '' : rawErrSnippet;
+          const errSnippet = extractExecutionErrorSnippet(response.rawOutput);
           emitPhase(
             threadId,
             'failed',

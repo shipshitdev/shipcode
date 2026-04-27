@@ -183,6 +183,17 @@ describe('resolveFailingPhaseOutput', () => {
       }),
     ).toBe('verification transcript');
   });
+
+  it('returns null for executing failures so the planner JSON is not dumped on the failure panel', () => {
+    expect(
+      resolveFailingPhaseOutput({
+        thread: { status: 'failed', failurePhase: 'executing' },
+        latestPlanRawOutput: '```shipcode-plan\n{"id":"plan-1"}\n```',
+        latestReviewRawOutput: 'review transcript',
+        latestVerificationRawOutput: null,
+      }),
+    ).toBeNull();
+  });
 });
 
 describe('clampTextBlock', () => {
