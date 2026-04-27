@@ -12,7 +12,10 @@ mac:
     - dmg
     - zip
   category: public.app-category.developer-tools
-  hardenedRuntime: true
+  identity: null
+  hardenedRuntime: false
+  gatekeeperAssess: false
+afterPack: scripts/ad-hoc-sign.cjs
 linux:
   target:
     - AppImage
