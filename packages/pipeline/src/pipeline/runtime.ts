@@ -8,6 +8,7 @@ import {
   measurePhasePromptTelemetry,
   toPersistedPromptTelemetryMaterials,
 } from '@shipcode/agents/source';
+import { isRealGithubIssueNumber } from '@shipcode/shared';
 import { syncThreadAndIssuePhase } from '../phase-sync';
 import type { PipelineContext, PipelineDeps, PipelineExecutorModel } from '../types';
 import type { PipelineContextHelpers, PipelineRuntime } from './shared';
@@ -533,7 +534,7 @@ export function createPipelineRuntime(
     context: PipelineContext,
     plan: import('@shipcode/shared').ShipCodePlan,
   ): Promise<void> {
-    if (!context.githubIssueNumber) return;
+    if (!isRealGithubIssueNumber(context.githubIssueNumber)) return;
     try {
       const ghCli = new GhCli(context.projectPath);
       await ghCli.addIssueComment(context.githubIssueNumber, formatPlanComment(plan));

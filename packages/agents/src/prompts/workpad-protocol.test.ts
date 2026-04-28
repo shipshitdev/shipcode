@@ -34,4 +34,21 @@ describe('buildWorkpadProtocol', () => {
     const out = buildWorkpadProtocol({ issueNumber: 1 });
     expect(out).toMatch(/never produce a second.*comment on the same issue/i);
   });
+
+  it('returns empty string when issueNumber is null', () => {
+    expect(buildWorkpadProtocol({ issueNumber: null })).toBe('');
+  });
+
+  it('returns empty string when issueNumber is undefined', () => {
+    expect(buildWorkpadProtocol({ issueNumber: undefined })).toBe('');
+  });
+
+  it('returns empty string for zero', () => {
+    expect(buildWorkpadProtocol({ issueNumber: 0 })).toBe('');
+  });
+
+  it('returns empty string for negative sentinels (quick tasks)', () => {
+    expect(buildWorkpadProtocol({ issueNumber: -1 })).toBe('');
+    expect(buildWorkpadProtocol({ issueNumber: -42 })).toBe('');
+  });
 });

@@ -4,6 +4,7 @@ export * from './cli-model-capabilities';
 export * from './constants';
 export * from './errors';
 export * from './format-token-count';
+export * from './github-issue-utils';
 export * from './github-labels';
 export * from './github-url';
 export * from './ipc-channels';

@@ -1,12 +1,15 @@
+import { isRealGithubIssueNumber } from '@shipcode/shared';
+
 export const WORKPAD_MARKER = '## ShipCode Workpad';
 
 export const WORKPAD_SECTIONS = ['Plan', 'Acceptance Criteria', 'Validation', 'Notes'] as const;
 
 export interface WorkpadProtocolContext {
-  issueNumber: number;
+  issueNumber: number | null | undefined;
 }
 
 export function buildWorkpadProtocol({ issueNumber }: WorkpadProtocolContext): string {
+  if (!isRealGithubIssueNumber(issueNumber)) return '';
   const sectionList = WORKPAD_SECTIONS.map((s) => `### ${s}`).join('\n');
   return `
 
