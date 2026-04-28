@@ -1,5 +1,7 @@
 import { exec, execFile } from 'node:child_process';
 import fs from 'node:fs';
+import fsp from 'node:fs/promises';
+import path from 'node:path';
 import { promisify } from 'node:util';
 import {
   checkCliProviderUsage,
@@ -15,6 +17,8 @@ import {
 import { GitService, WorktreeManager } from '@shipcode/git';
 import type {
   AppSettings,
+  CodeFileContent,
+  CodeTreeEntry,
   DesktopAppHealthMap,
   DiffRecord,
   GitVisualizerData,
@@ -885,6 +889,185 @@ export function registerProjectHandlers({
         const message = err instanceof Error ? err.message : String(err);
         log.warn(`[git:auto-commit] failed: ${message}`);
         throw new Error(clampError(message));
+      }
+    },
+  );
+
+  const CODE_TREE_IGNORE = new Set([
+    '.git',
+    'node_modules',
+    '.turbo',
+    '.next',
+    '.vite',
+    '.cache',
+    'dist',
+    'build',
+    'out',
+    'coverage',
+    '.DS_Store',
+  ]);
+  const CODE_FILE_MAX_BYTES = 512 * 1024;
+
+  function resolveWithinWorktree(worktreePath: string, relativePath: string): string {
+    const normalizedWorktree = path.resolve(worktreePath);
+    const target = path.resolve(normalizedWorktree, relativePath);
+    if (target !== normalizedWorktree && !target.startsWith(`${normalizedWorktree}${path.sep}`)) {
+      throw new Error('Path escapes worktree');
+    }
+    return target;
+  }
+
+  async function assertWorktreeBelongsToProject(
+    project: Project,
+    worktreePath: string,
+  ): Promise<void> {
+    const normalizedWorktree = path.resolve(worktreePath);
+    const projectPath = path.resolve(project.path);
+    if (normalizedWorktree === projectPath) return;
+    const data = await buildGitVisualizerData(project, queries);
+    const known = data.worktrees.some((w) => path.resolve(w.path) === normalizedWorktree);
+    if (!known) {
+      throw new Error('Worktree not associated with this project');
+    }
+  }
+
+  ipcMain.handle(
+    'code:list-tree',
+    async (
+      _event,
+      {
+        projectId,
+        worktreePath,
+        relativePath,
+      }: { projectId: string; worktreePath: string; relativePath?: string },
+    ): Promise<CodeTreeEntry[]> => {
+      const project = enrichProjectPath(queries.projects.getById(projectId));
+      if (!project) throw new Error(`Project ${projectId} not found`);
+      await assertWorktreeBelongsToProject(project, worktreePath);
+
+      const dirPath = resolveWithinWorktree(worktreePath, relativePath ?? '.');
+      const dirStat = await fsp.stat(dirPath).catch(() => null);
+      if (!dirStat?.isDirectory()) {
+        throw new Error('Not a directory');
+      }
+
+      const git = new GitService(project.path);
+      const status = await git.getStatus(worktreePath).catch(() => null);
+      const isDirty = status?.isDirty ?? false;
+
+      let modifiedSet = new Set<string>();
+      if (isDirty) {
+        try {
+          const diff = await git.getDiffStat(worktreePath);
+          modifiedSet = new Set(
+            diff
+              .split('\n')
+              .map((line) => line.split('|')[0]?.trim())
+              .filter((p): p is string => Boolean(p && !p.startsWith(' '))),
+          );
+        } catch {
+          modifiedSet = new Set();
+        }
+      }
+
+      const entries = await fsp.readdir(dirPath, { withFileTypes: true });
+      const result: CodeTreeEntry[] = [];
+      for (const entry of entries) {
+        if (CODE_TREE_IGNORE.has(entry.name)) continue;
+        const entryRelative = path.join(relativePath ?? '', entry.name).replace(/\\/g, '/');
+        const isFile = entry.isFile();
+        let sizeBytes: number | null = null;
+        if (isFile) {
+          try {
+            const stat = await fsp.stat(path.join(dirPath, entry.name));
+            sizeBytes = stat.size;
+          } catch {
+            sizeBytes = null;
+          }
+        }
+        result.push({
+          name: entry.name,
+          relativePath: entryRelative,
+          type: isFile ? 'file' : 'dir',
+          sizeBytes,
+          isModified: isFile && modifiedSet.has(entryRelative),
+        });
+      }
+
+      return result.sort((a, b) => {
+        if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+    },
+  );
+
+  ipcMain.handle(
+    'code:read-file',
+    async (
+      _event,
+      {
+        projectId,
+        worktreePath,
+        relativePath,
+      }: { projectId: string; worktreePath: string; relativePath: string },
+    ): Promise<CodeFileContent> => {
+      const project = enrichProjectPath(queries.projects.getById(projectId));
+      if (!project) throw new Error(`Project ${projectId} not found`);
+      await assertWorktreeBelongsToProject(project, worktreePath);
+
+      const filePath = resolveWithinWorktree(worktreePath, relativePath);
+      const stat = await fsp.stat(filePath);
+      if (!stat.isFile()) throw new Error('Not a file');
+
+      const buffer = await fsp.readFile(filePath);
+      const looksBinary = buffer.subarray(0, Math.min(buffer.length, 4096)).includes(0);
+      if (looksBinary) {
+        return {
+          relativePath,
+          content: '',
+          isBinary: true,
+          sizeBytes: stat.size,
+          truncated: false,
+        };
+      }
+      const truncated = buffer.length > CODE_FILE_MAX_BYTES;
+      const slice = truncated ? buffer.subarray(0, CODE_FILE_MAX_BYTES) : buffer;
+      return {
+        relativePath,
+        content: slice.toString('utf8'),
+        isBinary: false,
+        sizeBytes: stat.size,
+        truncated,
+      };
+    },
+  );
+
+  ipcMain.handle(
+    'code:file-diff',
+    async (
+      _event,
+      {
+        projectId,
+        worktreePath,
+        relativePath,
+      }: { projectId: string; worktreePath: string; relativePath: string },
+    ): Promise<DiffRecord | null> => {
+      const project = enrichProjectPath(queries.projects.getById(projectId));
+      if (!project) throw new Error(`Project ${projectId} not found`);
+      await assertWorktreeBelongsToProject(project, worktreePath);
+      resolveWithinWorktree(worktreePath, relativePath);
+
+      try {
+        const { stdout } = await execFileAsync('git', ['diff', 'HEAD', '--', relativePath], {
+          cwd: worktreePath,
+          maxBuffer: 8 * 1024 * 1024,
+        });
+        const records = parseDiffRecords(stdout, projectId);
+        return records[0] ?? null;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        log.warn(`[code:file-diff] failed: ${message}`);
+        return null;
       }
     },
   );

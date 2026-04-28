@@ -54,9 +54,16 @@ function upsertTerminalEvents(
     : merged;
 }
 
-export type ViewMode = 'overview' | 'project' | 'activity' | 'inbox' | 'costs' | 'skills';
+export type ViewMode =
+  | 'overview'
+  | 'project'
+  | 'activity'
+  | 'inbox'
+  | 'costs'
+  | 'skills'
+  | 'automations';
 
-export type ProjectTab = 'issues' | 'git' | 'pull-requests' | 'sessions';
+export type ProjectTab = 'issues' | 'git' | 'code' | 'pull-requests' | 'sessions' | 'insights';
 export type InstantPaneMode = 'replay' | 'live';
 export type SettingsSection =
   | 'general'
@@ -129,6 +136,8 @@ interface AppState {
   projectSettingsModalOpen: boolean;
   projectSettingsModalProjectId: string | null;
   projectSettingsModalInitialTab: string | null;
+  createAutomationModalOpen: boolean;
+  editingAutomationId: string | null;
 
   // Project tab
   projectTab: ProjectTab;
@@ -154,6 +163,7 @@ interface AppState {
   openInbox: () => void;
   openCosts: () => void;
   openSkills: () => void;
+  openAutomations: () => void;
   selectProject: (id: string | null) => void;
   selectThread: (id: string | null) => void;
   selectIssue: (issue: GitHubIssueCacheRecord | null) => void;
@@ -197,6 +207,8 @@ interface AppState {
   closeCreateIssueModal: () => void;
   openProjectSettingsModal: (projectId: string, initialTab?: string) => void;
   closeProjectSettingsModal: () => void;
+  openCreateAutomationModal: (id?: string) => void;
+  closeCreateAutomationModal: () => void;
 
   // Cross-project navigation
   navigateToIssue: (projectId: string, issue: GitHubIssueCacheRecord) => void;
@@ -255,6 +267,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   projectSettingsModalOpen: false,
   projectSettingsModalProjectId: null,
   projectSettingsModalInitialTab: null,
+  createAutomationModalOpen: false,
+  editingAutomationId: null,
   projectTab: 'issues' as ProjectTab,
   activePrNumber: null,
   instantPaneThreadIds: [],
@@ -307,6 +321,16 @@ export const useAppStore = create<AppState>((set, get) => ({
   openSkills: () =>
     set({
       viewMode: 'skills',
+      activeIssue: null,
+      issueDetailExpanded: false,
+      terminalMaximized: false,
+      currentPlan: null,
+      currentReview: null,
+      currentVerification: null,
+    }),
+  openAutomations: () =>
+    set({
+      viewMode: 'automations',
       activeIssue: null,
       issueDetailExpanded: false,
       terminalMaximized: false,
@@ -500,6 +524,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       projectSettingsModalProjectId: null,
       projectSettingsModalInitialTab: null,
     }),
+  openCreateAutomationModal: (id) =>
+    set({
+      createAutomationModalOpen: true,
+      editingAutomationId: id ?? null,
+      commandPaletteOpen: false,
+    }),
+  closeCreateAutomationModal: () =>
+    set({ createAutomationModalOpen: false, editingAutomationId: null }),
   // Cross-project navigation
   navigateToIssue: (projectId, issue) =>
     set((s) => ({
