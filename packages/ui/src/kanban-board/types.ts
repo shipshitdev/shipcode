@@ -17,7 +17,9 @@ export interface KanbanBoardProps {
   threads?: Thread[];
   approvedAwaitingExecutionIssueIds?: ReadonlySet<string>;
   readOnly?: boolean;
+  keyboardShortcutsEnabled?: boolean;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
+  onCommentIssue?: (issue: GitHubIssueCacheRecord) => void;
   onRefresh: () => void;
   onStartPipeline?: (issue: GitHubIssueCacheRecord) => void;
   onRetry?: (issue: GitHubIssueCacheRecord) => void;

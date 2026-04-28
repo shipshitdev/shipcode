@@ -66,6 +66,7 @@ interface DroppableColumnProps {
   issueBranchNameById?: Map<string, string>;
   branchCopyIssueId?: string | null;
   branchCopyStatus?: 'copied' | 'error' | null;
+  focusedIssueId?: string | null;
   issuePhaseChipById: Map<string, IssuePhaseChip | null>;
   issueRevisionBadgeById: Map<string, IssueRevisionBadge | null>;
   issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
@@ -90,6 +91,7 @@ export function DroppableColumn({
   issueBranchNameById,
   branchCopyIssueId,
   branchCopyStatus,
+  focusedIssueId,
   issuePhaseChipById = EMPTY_PHASE_CHIP_MAP,
   issueRevisionBadgeById = EMPTY_REVISION_BADGE_MAP,
   issueApprovalBadgeById = EMPTY_APPROVAL_BADGE_MAP,
@@ -156,6 +158,7 @@ export function DroppableColumn({
             branchName={issueBranchNameById?.get(issue.id) ?? null}
             branchCopyState={branchCopyIssueId === issue.id ? branchCopyStatus : null}
             isSelected={issue.issueNumber === selectedIssueNumber}
+            isKeyboardFocused={issue.id === focusedIssueId}
             onArchiveIssue={onArchiveIssue}
             readOnly={readOnly}
           />
@@ -183,6 +186,7 @@ interface SectionBlockProps {
   issueBranchNameById?: Map<string, string>;
   branchCopyIssueId?: string | null;
   branchCopyStatus?: 'copied' | 'error' | null;
+  focusedIssueId?: string | null;
   issuePhaseChipById: Map<string, IssuePhaseChip | null>;
   issueRevisionBadgeById: Map<string, IssueRevisionBadge | null>;
   issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
@@ -208,6 +212,7 @@ function SectionBlock({
   issueBranchNameById,
   branchCopyIssueId,
   branchCopyStatus,
+  focusedIssueId,
   issuePhaseChipById = EMPTY_PHASE_CHIP_MAP,
   issueRevisionBadgeById = EMPTY_REVISION_BADGE_MAP,
   issueApprovalBadgeById = EMPTY_APPROVAL_BADGE_MAP,
@@ -285,6 +290,7 @@ function SectionBlock({
               branchName={issueBranchNameById?.get(issue.id) ?? null}
               branchCopyState={branchCopyIssueId === issue.id ? branchCopyStatus : null}
               isSelected={issue.issueNumber === selectedIssueNumber}
+              isKeyboardFocused={issue.id === focusedIssueId}
               isRerunning={issue.id === rerunningId}
               onArchiveIssue={columnKey === 'done' ? onArchiveIssue : undefined}
               readOnly={readOnly}
@@ -320,6 +326,7 @@ interface StackedColumnProps {
   issueBranchNameById?: Map<string, string>;
   branchCopyIssueId?: string | null;
   branchCopyStatus?: 'copied' | 'error' | null;
+  focusedIssueId?: string | null;
   issuePhaseChipById: Map<string, IssuePhaseChip | null>;
   issueRevisionBadgeById: Map<string, IssueRevisionBadge | null>;
   issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
@@ -343,6 +350,7 @@ export function StackedColumn({
   issueBranchNameById,
   branchCopyIssueId,
   branchCopyStatus,
+  focusedIssueId,
   issuePhaseChipById = EMPTY_PHASE_CHIP_MAP,
   issueRevisionBadgeById = EMPTY_REVISION_BADGE_MAP,
   issueApprovalBadgeById = EMPTY_APPROVAL_BADGE_MAP,
@@ -427,6 +435,7 @@ export function StackedColumn({
             issueBranchNameById={issueBranchNameById}
             branchCopyIssueId={branchCopyIssueId}
             branchCopyStatus={branchCopyStatus}
+            focusedIssueId={focusedIssueId}
             issuePhaseChipById={issuePhaseChipById}
             issueRevisionBadgeById={issueRevisionBadgeById}
             issueApprovalBadgeById={issueApprovalBadgeById}

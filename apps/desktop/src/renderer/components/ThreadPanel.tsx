@@ -23,7 +23,12 @@ export function ThreadPanel() {
   const queryClient = useQueryClient();
   const activeProjectId = useAppStore((state) => state.activeProjectId);
   const selectedIssueNumber = useAppStore((state) => state.activeIssue?.issueNumber);
+  const commandPaletteOpen = useAppStore((state) => state.commandPaletteOpen);
+  const createIssueModalOpen = useAppStore((state) => state.createIssueModalOpen);
+  const projectSettingsModalOpen = useAppStore((state) => state.projectSettingsModalOpen);
+  const settingsVisible = useAppStore((state) => state.settingsVisible);
   const selectIssue = useAppStore((state) => state.selectIssue);
+  const requestCommentComposer = useAppStore((state) => state.requestCommentComposer);
   const setGithubIssues = useAppStore((state) => state.setGithubIssues);
   const [isRefreshingBranches, setIsRefreshingBranches] = useState(false);
   const [archiveFeedback, setArchiveFeedback] = useState<{
@@ -226,12 +231,23 @@ export function ThreadPanel() {
       store.toggleIssueDetail();
     }
   };
+  const handleIssueComment = (issue: GitHubIssueCacheRecord) => {
+    handleIssueClick(issue);
+    requestCommentComposer(issue.id);
+  };
 
   return (
     <div className="relative flex flex-1 min-h-0 min-w-0 flex-col bg-primary">
       <KanbanBoard
         issues={issues}
         onIssueClick={handleIssueClick}
+        onCommentIssue={handleIssueComment}
+        keyboardShortcutsEnabled={
+          !commandPaletteOpen &&
+          !createIssueModalOpen &&
+          !projectSettingsModalOpen &&
+          !settingsVisible
+        }
         selectedIssueNumber={selectedIssueNumber}
         onRefresh={() => activeProjectId && refreshIssues.mutate(activeProjectId)}
         baseBranch={project?.defaultBranch}

@@ -17,7 +17,7 @@ export function useGlobalKeyboard() {
         window.alert(error instanceof Error ? error.message : `Failed to start ${cli} shell`);
       });
     };
-    const actions: Record<ShortcutId, () => void> = {
+    const actions: Partial<Record<ShortcutId, () => void>> = {
       'command-palette': toggleCommandPalette,
       'toggle-terminal': toggleTerminal,
       'toggle-sidebar': toggleSidebar,
@@ -36,9 +36,10 @@ export function useGlobalKeyboard() {
       }
 
       for (const shortcut of SHORTCUTS) {
+        if (shortcut.scope === 'board') continue;
         if (matchesShortcut(e, shortcut.combo)) {
           e.preventDefault();
-          actions[shortcut.id]();
+          actions[shortcut.id]?.();
           return;
         }
       }

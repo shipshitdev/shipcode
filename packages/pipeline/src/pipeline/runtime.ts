@@ -4,6 +4,13 @@ import { dirname, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 import type { PromptMaterial, ProviderPhase, ProviderRequest } from '@shipcode/agents';
 import { formatPlanComment, GhCli, loadRepoSetupContract } from '@shipcode/agents';
+import {
+  measurePhasePromptTelemetry,
+  toPersistedPromptTelemetryMaterials,
+} from '@shipcode/agents/source';
+import { syncThreadAndIssuePhase } from '../phase-sync';
+import type { PipelineContext, PipelineDeps, PipelineExecutorModel } from '../types';
+import type { PipelineContextHelpers, PipelineRuntime } from './shared';
 
 const execFileAsync = promisify(execFile);
 
@@ -27,14 +34,6 @@ async function readGhAuthToken(): Promise<string | null> {
     return null;
   }
 }
-
-import {
-  measurePhasePromptTelemetry,
-  toPersistedPromptTelemetryMaterials,
-} from '@shipcode/agents/source';
-import { syncThreadAndIssuePhase } from '../phase-sync';
-import type { PipelineContext, PipelineDeps, PipelineExecutorModel } from '../types';
-import type { PipelineContextHelpers, PipelineRuntime } from './shared';
 
 export function createPipelineRuntime(
   deps: PipelineDeps,

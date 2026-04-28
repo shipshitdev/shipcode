@@ -11,7 +11,7 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { RefreshCw } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DroppableColumn, StackedColumn } from './kanban-board/BoardColumns';
 import { BoardToolbar } from './kanban-board/BoardToolbar';
 import { COLUMNS } from './kanban-board/constants';
@@ -21,12 +21,98 @@ import type { BoardSortOrder, BoardView, ColumnKey, KanbanBoardProps } from './k
 import {
   compareIssues,
   customCollisionDetection,
+  issueMatchesColumn,
+  issueMatchesSection,
   resolveIssueApprovalBadge,
   resolveIssuePhaseChip,
   resolveIssuePriorityBadge,
   resolveIssueRevisionBadge,
 } from './kanban-board/utils';
 import { formatIssueBranch, type GitHubIssueCacheRecord } from './lib/shipcode';
+
+type KeyboardFocusColumn = {
+  key: ColumnKey;
+  issues: GitHubIssueCacheRecord[];
+};
+
+function isEditableKeyboardTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tagName = target.tagName;
+  return (
+    tagName === 'INPUT' ||
+    tagName === 'TEXTAREA' ||
+    tagName === 'SELECT' ||
+    target.isContentEditable ||
+    target.closest('[contenteditable="true"]') !== null
+  );
+}
+
+function firstFocusableIssueId(columns: KeyboardFocusColumn[]): string | null {
+  for (const column of columns) {
+    const issue = column.issues[0];
+    if (issue) return issue.id;
+  }
+  return null;
+}
+
+function findFocusedPosition(columns: KeyboardFocusColumn[], issueId: string | null) {
+  if (!issueId) return null;
+  for (let columnIndex = 0; columnIndex < columns.length; columnIndex += 1) {
+    const issueIndex = columns[columnIndex].issues.findIndex((issue) => issue.id === issueId);
+    if (issueIndex >= 0) return { columnIndex, issueIndex };
+  }
+  return null;
+}
+
+function adjacentColumnIssueId(
+  columns: KeyboardFocusColumn[],
+  columnIndex: number,
+  issueIndex: number,
+  direction: -1 | 1,
+): string | null {
+  for (
+    let nextColumnIndex = columnIndex + direction;
+    nextColumnIndex >= 0 && nextColumnIndex < columns.length;
+    nextColumnIndex += direction
+  ) {
+    const issues = columns[nextColumnIndex].issues;
+    if (issues.length === 0) continue;
+    return issues[Math.min(issueIndex, issues.length - 1)]?.id ?? null;
+  }
+  return null;
+}
+
+function moveFocusedIssueId(
+  columns: KeyboardFocusColumn[],
+  currentIssueId: string | null,
+  key: 'j' | 'k' | 'h' | 'l',
+): string | null {
+  const firstIssueId = firstFocusableIssueId(columns);
+  if (!firstIssueId) return null;
+
+  const position = findFocusedPosition(columns, currentIssueId);
+  if (!position) return firstIssueId;
+
+  const currentColumn = columns[position.columnIndex];
+  if (key === 'j') {
+    return (
+      currentColumn.issues[Math.min(position.issueIndex + 1, currentColumn.issues.length - 1)]
+        ?.id ?? currentIssueId
+    );
+  }
+  if (key === 'k') {
+    return currentColumn.issues[Math.max(position.issueIndex - 1, 0)]?.id ?? currentIssueId;
+  }
+
+  return (
+    adjacentColumnIssueId(
+      columns,
+      position.columnIndex,
+      position.issueIndex,
+      key === 'h' ? -1 : 1,
+    ) ?? currentIssueId
+  );
+}
 
 export function KanbanBoard({
   issues,
@@ -35,7 +121,9 @@ export function KanbanBoard({
   threads = [],
   approvedAwaitingExecutionIssueIds,
   readOnly = false,
+  keyboardShortcutsEnabled,
   onIssueClick,
+  onCommentIssue,
   onRefresh,
   onStartPipeline,
   onRetry,
@@ -76,6 +164,7 @@ export function KanbanBoard({
   );
   const [activeId, setActiveId] = useState<string | null>(null);
   const activeIssue = boardIssues.find((issue) => issue.id === activeId);
+  const boardRootRef = useRef<HTMLDivElement | null>(null);
   const [view, setView] = useState<BoardView>('kanban');
   const [sortOrder, setSortOrder] = useState<BoardSortOrder>('priority');
   const [approvalFilter, setApprovalFilter] = useState<'all' | 'needs-approval'>('all');
@@ -86,7 +175,10 @@ export function KanbanBoard({
     branchName: string;
     status: 'copied' | 'error';
   } | null>(null);
+  const [keyboardActionToast, setKeyboardActionToast] = useState<string | null>(null);
+  const [focusedIssueId, setFocusedIssueId] = useState<string | null>(null);
   const [rerunningId, setRerunningId] = useState<string | null>(null);
+  const shortcutsEnabled = keyboardShortcutsEnabled ?? !readOnly;
   const threadById = useMemo(
     () => new Map(threads.map((thread) => [thread.id, thread])),
     [threads],
@@ -176,6 +268,34 @@ export function KanbanBoard({
       ),
     [approvedAwaitingExecutionIssueIds, visibleIssues],
   );
+  const keyboardFocusColumns = useMemo<KeyboardFocusColumn[]>(
+    () =>
+      COLUMNS.map((column) => {
+        if (!column.sections) {
+          return { key: column.key, issues: visibleIssuesByColumn.get(column.key) ?? [] };
+        }
+
+        return {
+          key: column.key,
+          issues: column.sections.flatMap((section) =>
+            visibleIssues.filter(
+              (issue) =>
+                issueMatchesColumn(issue, column, approvedAwaitingExecutionIssueIds) &&
+                issueMatchesSection(issue, section, approvedAwaitingExecutionIssueIds),
+            ),
+          ),
+        };
+      }),
+    [approvedAwaitingExecutionIssueIds, visibleIssues, visibleIssuesByColumn],
+  );
+  const focusedIssue = useMemo(() => {
+    if (!focusedIssueId) return null;
+    for (const column of keyboardFocusColumns) {
+      const issue = column.issues.find((candidate) => candidate.id === focusedIssueId);
+      if (issue) return issue;
+    }
+    return null;
+  }, [focusedIssueId, keyboardFocusColumns]);
 
   const handleRerun = useCallback(
     (issue: GitHubIssueCacheRecord) => {
@@ -207,6 +327,28 @@ export function KanbanBoard({
   );
 
   useEffect(() => {
+    if (view !== 'kanban' || readOnly) {
+      setFocusedIssueId(null);
+      return;
+    }
+
+    setFocusedIssueId((current) => {
+      if (findFocusedPosition(keyboardFocusColumns, current)) return current;
+      return firstFocusableIssueId(keyboardFocusColumns);
+    });
+  }, [keyboardFocusColumns, readOnly, view]);
+
+  useEffect(() => {
+    if (view !== 'kanban' || !focusedIssueId) return;
+    const root = boardRootRef.current;
+    if (!root) return;
+    const focusedCard = Array.from(root.querySelectorAll<HTMLElement>('[data-issue-card-id]')).find(
+      (card) => card.dataset.issueCardId === focusedIssueId,
+    );
+    focusedCard?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  }, [focusedIssueId, view]);
+
+  useEffect(() => {
     if (!showRefreshToast) return;
     const id = setTimeout(() => setShowRefreshToast(false), 2000);
     return () => clearTimeout(id);
@@ -217,6 +359,73 @@ export function KanbanBoard({
     const id = setTimeout(() => setBranchCopyToast(null), 2000);
     return () => clearTimeout(id);
   }, [branchCopyToast]);
+
+  useEffect(() => {
+    if (!keyboardActionToast) return;
+    const id = setTimeout(() => setKeyboardActionToast(null), 2000);
+    return () => clearTimeout(id);
+  }, [keyboardActionToast]);
+
+  useEffect(() => {
+    if (!shortcutsEnabled || view !== 'kanban') return;
+
+    const handler = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        isEditableKeyboardTarget(event.target)
+      ) {
+        return;
+      }
+
+      const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+      if (key === 'j' || key === 'k' || key === 'h' || key === 'l') {
+        event.preventDefault();
+        setFocusedIssueId((current) => moveFocusedIssueId(keyboardFocusColumns, current, key));
+        return;
+      }
+
+      if (!focusedIssue) return;
+      if (key === 'Enter') {
+        event.preventDefault();
+        onIssueClick(focusedIssue);
+        return;
+      }
+      if (key === 'c') {
+        event.preventDefault();
+        (onCommentIssue ?? onIssueClick)(focusedIssue);
+        return;
+      }
+      if (key !== 'e') return;
+
+      event.preventDefault();
+      if (focusedIssue.pipelineStatus === 'todo' && onStartPipeline && !readOnly) {
+        onStartPipeline(focusedIssue);
+        return;
+      }
+      if (focusedIssue.pipelineStatus === 'failed' && onRerun && !readOnly) {
+        handleRerun(focusedIssue);
+        return;
+      }
+      setKeyboardActionToast('Pipeline can only start from Todo cards.');
+    };
+
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [
+    focusedIssue,
+    handleRerun,
+    keyboardFocusColumns,
+    onCommentIssue,
+    onIssueClick,
+    onRerun,
+    onStartPipeline,
+    readOnly,
+    shortcutsEnabled,
+    view,
+  ]);
 
   function getColumnForIssue(issue: GitHubIssueCacheRecord): ColumnKey {
     if (approvedAwaitingExecutionIssueIds?.has(issue.id)) return 'agent';
@@ -283,7 +492,7 @@ export function KanbanBoard({
   }
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
+    <div ref={boardRootRef} className="relative flex h-full min-h-0 flex-col overflow-hidden">
       <BoardToolbar
         baseBranch={baseBranch}
         branches={branches}
@@ -350,6 +559,7 @@ export function KanbanBoard({
                       issueBranchNameById={issueBranchNameById}
                       branchCopyIssueId={branchCopyToast?.issueId ?? null}
                       branchCopyStatus={branchCopyToast?.status ?? null}
+                      focusedIssueId={focusedIssueId}
                       issuePhaseChipById={issuePhaseChipById}
                       issueRevisionBadgeById={issueRevisionBadgeById}
                       issueApprovalBadgeById={issueApprovalBadgeById}
@@ -378,6 +588,7 @@ export function KanbanBoard({
                     issueBranchNameById={issueBranchNameById}
                     branchCopyIssueId={branchCopyToast?.issueId ?? null}
                     branchCopyStatus={branchCopyToast?.status ?? null}
+                    focusedIssueId={focusedIssueId}
                     issuePhaseChipById={issuePhaseChipById}
                     issueRevisionBadgeById={issueRevisionBadgeById}
                     issueApprovalBadgeById={issueApprovalBadgeById}
@@ -421,6 +632,13 @@ export function KanbanBoard({
             ) : (
               <span className="text-danger">Clipboard write failed</span>
             )}
+          </div>
+        </div>
+      )}
+      {keyboardActionToast && (
+        <div className="absolute bottom-4 left-1/2 z-50 -translate-x-1/2 animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div className="rounded-lg border border-warning/30 bg-elevated px-3 py-2 text-xs text-warning shadow-lg">
+            {keyboardActionToast}
           </div>
         </div>
       )}

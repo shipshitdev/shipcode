@@ -1,19 +1,22 @@
 import type { GitHubIssueComment } from '@shipcode/shared';
 import { Button, LoadingButtonContent, RefreshCw, Textarea } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { timeAgo } from './helpers';
 
 export function CommentsTab({
   projectId,
   issueNumber,
+  focusComposerRequestId,
 }: {
   projectId: string;
   issueNumber: number;
+  focusComposerRequestId?: number | null;
 }) {
   const queryClient = useQueryClient();
   const [body, setBody] = useState('');
   const [isPosting, setIsPosting] = useState(false);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
   const {
     data: comments = [],
@@ -56,6 +59,11 @@ export function CommentsTab({
       setIsPosting(false);
     }
   };
+
+  useEffect(() => {
+    if (focusComposerRequestId == null) return;
+    composerRef.current?.focus();
+  }, [focusComposerRequestId]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -106,6 +114,7 @@ export function CommentsTab({
 
       <div className="mt-auto flex flex-col gap-2">
         <Textarea
+          ref={composerRef}
           value={body}
           onChange={(event) => setBody(event.target.value)}
           placeholder="Write a comment…"

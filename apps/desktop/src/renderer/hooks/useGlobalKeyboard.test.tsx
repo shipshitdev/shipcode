@@ -66,6 +66,8 @@ describe('useGlobalKeyboard', () => {
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', metaKey: true }));
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', metaKey: false }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'j' }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e' }));
 
     expect(toggleCommandPalette).not.toHaveBeenCalled();
     expect(toggleTerminal).not.toHaveBeenCalled();

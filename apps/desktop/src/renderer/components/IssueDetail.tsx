@@ -73,6 +73,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const activeProjectId = useAppStore((state) => state.activeProjectId);
   const selectIssue = useAppStore((state) => state.selectIssue);
   const pipelinePhase = useAppStore((state) => state.pipelinePhase);
+  const commentComposerRequest = useAppStore((state) => state.commentComposerRequest);
   const openEditPrdModal = useAppStore((state) => state.openEditPrdModal);
   const toggleIssueDetailExpanded = useAppStore((state) => state.toggleIssueDetailExpanded);
   const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
@@ -383,6 +384,11 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     setExpandedPlanId(null);
     setShowAllPlanRuns(false);
   }, [issueSelectionKey]);
+
+  useEffect(() => {
+    if (!activeIssue || commentComposerRequest?.issueId !== activeIssue.id) return;
+    setActiveTab('comments');
+  }, [activeIssue, commentComposerRequest]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -1370,6 +1376,9 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         void handleStabilizePr();
       }}
       projectId={activeProjectId ?? ''}
+      commentComposerRequestId={
+        commentComposerRequest?.issueId === activeIssue.id ? commentComposerRequest.requestId : null
+      }
     />
   );
 

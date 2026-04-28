@@ -62,6 +62,7 @@ interface IssueDetailTabsProps {
   thread: Thread | null | undefined;
   threadPhase: PipelinePhase | 'idle';
   projectId: string;
+  commentComposerRequestId?: number | null;
   onEditPrd: () => void;
   onActiveTabChange: (tab: IssueDetailTab) => void;
   onFullScreenPlan: (planId: string | null) => void;
@@ -120,6 +121,7 @@ export function IssueDetailTabs({
   thread,
   threadPhase,
   projectId,
+  commentComposerRequestId,
   onEditPrd,
   onActiveTabChange,
   onFullScreenPlan,
@@ -178,7 +180,11 @@ export function IssueDetailTabs({
       </TabsContent>
 
       <TabsContent value="comments" className={cn('mt-0', !expanded && 'p-4')}>
-        <CommentsTab projectId={projectId} issueNumber={activeIssue.issueNumber} />
+        <CommentsTab
+          projectId={projectId}
+          issueNumber={activeIssue.issueNumber}
+          focusComposerRequestId={commentComposerRequestId}
+        />
       </TabsContent>
 
       <TabsContent value="history" className={cn('mt-0', !expanded && 'p-4')}>

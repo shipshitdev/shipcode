@@ -72,6 +72,7 @@ interface DraggableCardProps {
   branchName?: string | null;
   branchCopyState?: 'copied' | 'error' | null;
   isSelected?: boolean;
+  isKeyboardFocused?: boolean;
   isRerunning?: boolean;
 }
 
@@ -93,6 +94,7 @@ function DraggableCardComponent({
   branchName,
   branchCopyState,
   isSelected,
+  isKeyboardFocused,
   isRerunning,
 }: DraggableCardProps) {
   const draggable = !readOnly && DRAGGABLE_STATUSES.includes(issue.pipelineStatus);
@@ -155,8 +157,11 @@ function DraggableCardComponent({
           (isSelected
             ? 'border-agent/70 bg-agent/[0.06]'
             : 'border-agent/40 bg-agent/[0.03] hover:border-agent/60'),
+        isKeyboardFocused && 'border-accent/80 ring-2 ring-accent/70',
         isDragging && 'opacity-50',
       )}
+      data-issue-card-id={issue.id}
+      data-keyboard-focused={isKeyboardFocused ? 'true' : undefined}
       onClick={(event) => {
         if (event.defaultPrevented || isDragging) return;
         onClick(issue);

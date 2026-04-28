@@ -35,6 +35,18 @@ describe('shortcuts', () => {
       label: 'New Codex Shell',
       glyph: '⇧⌘X',
     });
+    expect(getShortcut('board-focus-next')).toMatchObject({
+      label: 'Next Card',
+      category: 'Board',
+      scope: 'board',
+      glyph: 'J',
+    });
+    expect(getShortcut('board-start-focused')).toMatchObject({
+      label: 'Start Focused Card',
+      category: 'Board',
+      scope: 'board',
+      glyph: 'E',
+    });
 
     expect(() => getShortcut('unknown-shortcut' as never)).toThrow('Unknown shortcut id');
   });

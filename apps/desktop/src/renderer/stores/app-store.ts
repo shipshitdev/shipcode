@@ -85,6 +85,7 @@ interface AppState {
   issueDetailExpanded: boolean;
   issueDetailCollapsed: boolean;
   issueDetailWidth: number;
+  commentComposerRequest: { issueId: string; requestId: number } | null;
 
   // Live data
   currentPlan: ShipCodePlan | null;
@@ -189,6 +190,7 @@ interface AppState {
   toggleIssueDetailExpanded: () => void;
   toggleIssueDetail: () => void;
   setIssueDetailWidth: (width: number) => void;
+  requestCommentComposer: (issueId: string) => void;
   toggleCommandPalette: () => void;
   openCreateIssueModal: () => void;
   openEditPrdModal: (issueNumber: number, body: string, labels: string[]) => void;
@@ -233,6 +235,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   issueDetailExpanded: false,
   issueDetailCollapsed: false,
   issueDetailWidth: 480,
+  commentComposerRequest: null,
   currentPlan: null,
   currentReview: null,
   pipelinePhase: 'idle',
@@ -467,6 +470,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   toggleIssueDetailExpanded: () => set((s) => ({ issueDetailExpanded: !s.issueDetailExpanded })),
   toggleIssueDetail: () => set((s) => ({ issueDetailCollapsed: !s.issueDetailCollapsed })),
   setIssueDetailWidth: (width) => set({ issueDetailWidth: width }),
+  requestCommentComposer: (issueId) =>
+    set((s) => ({
+      commentComposerRequest: {
+        issueId,
+        requestId: (s.commentComposerRequest?.requestId ?? 0) + 1,
+      },
+    })),
   toggleCommandPalette: () => set((s) => ({ commandPaletteOpen: !s.commandPaletteOpen })),
   openCreateIssueModal: () =>
     set({ createIssueModalOpen: true, editingPrd: null, commandPaletteOpen: false }),
