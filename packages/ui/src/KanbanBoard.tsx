@@ -28,7 +28,23 @@ import {
   resolveIssuePriorityBadge,
   resolveIssueRevisionBadge,
 } from './kanban-board/utils';
-import { formatIssueBranch, type GitHubIssueCacheRecord } from './lib/shipcode';
+import {
+  formatIssueBranch,
+  type GitHubIssueCacheRecord,
+  type IssuePipelineStatus,
+} from './lib/shipcode';
+import { cn } from './lib/utils';
+
+const ACTIVE_STATUSES: readonly IssuePipelineStatus[] = [
+  'planning',
+  'clarifying',
+  'reviewing',
+  'revising',
+  'executing',
+  'testing',
+  'verifying',
+  'shipping',
+] as const;
 
 type KeyboardFocusColumn = {
   key: ColumnKey;
@@ -165,6 +181,10 @@ export function KanbanBoard({
   const [activeId, setActiveId] = useState<string | null>(null);
   const activeIssue = boardIssues.find((issue) => issue.id === activeId);
   const boardRootRef = useRef<HTMLDivElement | null>(null);
+  const isAnyActive = useMemo(
+    () => boardIssues.some((i) => ACTIVE_STATUSES.includes(i.pipelineStatus)),
+    [boardIssues],
+  );
   const [view, setView] = useState<BoardView>('kanban');
   const [sortOrder, setSortOrder] = useState<BoardSortOrder>('priority');
   const [approvalFilter, setApprovalFilter] = useState<'all' | 'needs-approval'>('all');
@@ -492,7 +512,13 @@ export function KanbanBoard({
   }
 
   return (
-    <div ref={boardRootRef} className="relative flex h-full min-h-0 flex-col overflow-hidden">
+    <div
+      ref={boardRootRef}
+      className={cn(
+        'relative flex h-full min-h-0 flex-col overflow-hidden rounded-sm',
+        isAnyActive && 'ring-2 ring-yellow-400/70 [animation:ring-pulse_1.5s_ease-in-out_infinite]',
+      )}
+    >
       <BoardToolbar
         baseBranch={baseBranch}
         branches={branches}
