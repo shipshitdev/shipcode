@@ -36,6 +36,7 @@ const issueDefaults = {
   priorityRank: null,
   priorityRaw: null,
   priorityFetchedAt: null,
+  isQuickMode: false,
 };
 
 const issues: GitHubIssueCacheRecord[] = [
@@ -194,6 +195,7 @@ const threadDefaults = {
   baseBranch: 'develop',
   forkPointSha: null,
   githubRepo: 'shipshitdev/shipcode',
+  automationId: null,
   lastError: null,
   createdAt: now,
   updatedAt: now,

@@ -107,6 +107,7 @@ const awaitingApprovalThread: Thread = {
   githubIssueNumber: 18,
   githubPrNumber: null,
   githubRepo: 'shipshitdev/shipcode',
+  automationId: null,
   lastError: null,
   failurePhase: null,
   failureCount: 0,
@@ -172,6 +173,7 @@ function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
     priorityRank: null,
     priorityRaw: null,
     priorityFetchedAt: null,
+    isQuickMode: false,
     ...overrides,
   };
 }

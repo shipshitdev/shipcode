@@ -11,6 +11,7 @@ import type {
 import {
   clampError,
   deriveGithubIssueUrl,
+  isRealGithubIssueNumber,
   parseGithubProjectUrl,
   SHIPCODE_DEFAULT_LABELS,
 } from '@shipcode/shared';
@@ -34,6 +35,12 @@ const issueCommentsCache = new Map<
   { comments: GitHubIssueComment[]; cachedAtMs: number }
 >();
 const issueCommentsInFlight = new Map<string, Promise<GitHubIssueComment[]>>();
+
+function assertRealGithubIssue(issue: GitHubIssueCacheRecord, action: string): void {
+  if (issue.isQuickMode || !isRealGithubIssueNumber(issue.issueNumber)) {
+    throw new Error(`Quick tasks have no GitHub issue: cannot ${action}`);
+  }
+}
 
 function resolveCanonicalIssueThread(
   queries: IpcHandlerDeps['queries'],
@@ -261,6 +268,7 @@ export function registerGitHubHandlers({
 
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in project ${projectId}`);
+      assertRealGithubIssue(issue, 'archive');
 
       const ghCli = new GhCli(project.path);
       if (issue.state !== 'closed') {
@@ -298,6 +306,7 @@ export function registerGitHubHandlers({
       if (!project) throw new Error(`Project ${projectId} not found`);
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in project ${projectId}`);
+      assertRealGithubIssue(issue, 'mark done on GitHub');
 
       const thread = issue.threadId ? queries.threads.getById(issue.threadId) : null;
       const hasCompletionEvidence = issue.linkedPrNumber != null || thread?.status === 'completed';
@@ -327,6 +336,7 @@ export function registerGitHubHandlers({
 
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in project ${projectId}`);
+      assertRealGithubIssue(issue, 'close on GitHub');
 
       const ghCli = new GhCli(project.path);
       if (issue.state !== 'closed') {
@@ -347,6 +357,7 @@ export function registerGitHubHandlers({
 
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in project ${projectId}`);
+      assertRealGithubIssue(issue, 'reopen on GitHub');
 
       const ghCli = new GhCli(project.path);
       if (issue.state !== 'open') {
@@ -364,7 +375,9 @@ export function registerGitHubHandlers({
       const project = queries.projects.getById(projectId);
       if (!project) throw new Error(`Project ${projectId} not found`);
 
-      const doneIssues = queries.githubIssues.listCompleted(projectId);
+      const doneIssues = queries.githubIssues
+        .listCompleted(projectId)
+        .filter((i) => !i.isQuickMode && isRealGithubIssueNumber(i.issueNumber));
       const ghCli = new GhCli(project.path);
       const succeededIds: string[] = [];
       let failedCount = 0;
@@ -469,6 +482,10 @@ export function registerGitHubHandlers({
       const project = queries.projects.getById(projectId);
       if (!project) throw new Error(`Project ${projectId} not found`);
 
+      const cachedIssue = queries.githubIssues.getByNumber(projectId, issueNumber);
+      if (!cachedIssue) throw new Error(`Issue #${issueNumber} not found in project ${projectId}`);
+      assertRealGithubIssue(cachedIssue, 'edit on GitHub');
+
       const ghCli = new GhCli(project.path);
       await ghCli.editIssue({ issueNumber, title, body, labels });
 
@@ -500,7 +517,9 @@ export function registerGitHubHandlers({
         throw new Error('No GitHub Projects v2 URL set. Paste a board URL above and save first.');
       }
 
-      const issues = queries.githubIssues.list(projectId);
+      const issues = queries.githubIssues
+        .list(projectId)
+        .filter((i) => !i.isQuickMode && isRealGithubIssueNumber(i.issueNumber));
       const ghCli = new GhCli(project.path);
 
       let attached = 0;
@@ -569,6 +588,11 @@ export function registerGitHubHandlers({
 
       const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
       if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
+
+      if (issue.isQuickMode || !isRealGithubIssueNumber(issue.issueNumber)) {
+        await scheduler.startQuickTaskOrQueue(projectId, issueNumber);
+        return;
+      }
 
       const issueUrl = deriveGithubIssueUrl(project.gitRemote, issue.issueNumber);
       const ghCliForAttach = new GhCli(project.path);
@@ -834,6 +858,9 @@ export function registerGitHubHandlers({
     ) => {
       const project = queries.projects.getById(projectId);
       if (!project) throw new Error(`Project ${projectId} not found`);
+      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
+      if (!issue) throw new Error(`Issue #${issueNumber} not found in project ${projectId}`);
+      assertRealGithubIssue(issue, 'comment on GitHub');
       const ghCli = new GhCli(project.path);
       await ghCli.addIssueComment(issueNumber, body);
       issueCommentsCache.delete(`${projectId}:${issueNumber}`);
@@ -863,6 +890,9 @@ export function registerGitHubHandlers({
 
       const project = queries.projects.getById(projectId);
       if (!project) throw new Error(`Project ${projectId} not found`);
+      const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
+      if (!issue) throw new Error(`Issue #${issueNumber} not found in project ${projectId}`);
+      assertRealGithubIssue(issue, 'list comments from GitHub');
       const request = (async () => {
         const ghCli = new GhCli(project.path);
         const comments = await ghCli.listIssueComments(issueNumber);
@@ -884,6 +914,10 @@ export function registerGitHubHandlers({
     async (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {
       const project = queries.projects.getById(projectId);
       if (!project) throw new Error(`Project ${projectId} not found`);
+
+      const cachedIssue = queries.githubIssues.getByNumber(projectId, issueNumber);
+      if (!cachedIssue) throw new Error(`Issue #${issueNumber} not found in project ${projectId}`);
+      assertRealGithubIssue(cachedIssue, 'rewrite PRD on GitHub');
 
       const ghCli = new GhCli(project.path);
       const issue = await ghCli.getIssue(issueNumber);

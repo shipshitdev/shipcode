@@ -29,6 +29,7 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     githubIssueNumber: 42,
     githubPrNumber: null,
     githubRepo: 'shipshitdev/shipcode',
+    automationId: null,
     lastError: null,
     failurePhase: null,
     failureCount: 0,

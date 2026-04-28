@@ -15,6 +15,7 @@ import {
   EXECUTION_PHASES,
   type GitHubPrCheckSummary,
   type GitHubPrReviewCommentSummary,
+  isRealGithubIssueNumber,
   MAX_TEST_RETRIES,
   MAX_VERIFICATION_RETRIES,
   type ShipCodePlan,
@@ -234,7 +235,7 @@ export function createExecutionPhaseHandlers({
           worktreeRoot: appSettings.worktreeRoot,
           branchFormat: appSettings.worktreeBranchFormat,
         });
-        const worktree = context.githubIssueNumber
+        const worktree = isRealGithubIssueNumber(context.githubIssueNumber)
           ? await worktreeManager.create(
               context.githubIssueNumber,
               context.githubIssueTitle ?? '',
@@ -469,7 +470,9 @@ export function createExecutionPhaseHandlers({
       if (dirty.trim()) {
         execFileSync('git', ['add', '-A'], { cwd, encoding: 'utf-8' });
         const title = context.githubIssueTitle ?? 'Apply plan changes';
-        const issueRef = context.githubIssueNumber ? ` (#${context.githubIssueNumber})` : '';
+        const issueRef = isRealGithubIssueNumber(context.githubIssueNumber)
+          ? ` (#${context.githubIssueNumber})`
+          : '';
         execFileSync('git', ['commit', '--no-verify', '-m', `${title}${issueRef}`], {
           cwd,
           encoding: 'utf-8',
@@ -667,7 +670,9 @@ export function createExecutionPhaseHandlers({
 
     emitPhase(threadId, 'shipping');
 
-    if (!context.githubIssueNumber) {
+    if (!isRealGithubIssueNumber(context.githubIssueNumber)) {
+      // Quick tasks (negative sentinel) and pipelines without an issue
+      // skip PR shipping. Branch is left on disk for manual follow-up.
       emitPhase(threadId, 'completed');
       activePipelines.delete(threadId);
       return;

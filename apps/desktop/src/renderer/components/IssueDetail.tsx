@@ -718,9 +718,10 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     openEditPrdModal(activeIssue.issueNumber, activeIssue.body ?? '', activeIssue.labels);
   };
 
-  const githubIssueUrl = activeIssue
-    ? deriveGithubIssueUrl(activeProject?.gitRemote ?? null, activeIssue.issueNumber)
-    : null;
+  const githubIssueUrl =
+    activeIssue && !activeIssue.isQuickMode
+      ? deriveGithubIssueUrl(activeProject?.gitRemote ?? null, activeIssue.issueNumber)
+      : null;
 
   const handleOpenOnGithub = async () => {
     if (!githubIssueUrl) return;
@@ -1115,7 +1116,9 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       : null);
   const issueIdentityLinks = (
     <div className="flex flex-wrap items-center gap-1.5 pr-16">
-      {githubIssueUrl ? (
+      {activeIssue.isQuickMode ? (
+        <span className="font-mono text-xs text-muted">Quick</span>
+      ) : githubIssueUrl ? (
         <Button
           variant="ghost"
           size="xs"

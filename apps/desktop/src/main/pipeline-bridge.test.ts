@@ -51,6 +51,7 @@ function makeThread(overrides: Record<string, unknown> = {}) {
     githubIssueNumber: 42,
     githubPrNumber: null,
     githubRepo: null,
+    automationId: null,
     lastError: null,
     failurePhase: null,
     failureCount: 0,

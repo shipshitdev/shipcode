@@ -204,6 +204,55 @@ describe('CreateIssueModal — image drop / attachment management', () => {
     });
   });
 
+  it('toggling Quick mode hides PRD textarea and shows single-line input', async () => {
+    renderWithProviders();
+
+    expect(document.getElementById('issue-body')).toBeInTheDocument();
+
+    const toggle = screen.getByRole('checkbox', {
+      name: /quick mode \(skip prd, no github issue\)/i,
+    });
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(document.getElementById('issue-body')).toBeNull();
+    });
+
+    const quickInput = screen.getByPlaceholderText(/describe the fix in one line/i);
+    expect(quickInput).toBeInTheDocument();
+    expect((quickInput as HTMLInputElement).tagName).toBe('INPUT');
+  });
+
+  it('Enter key submits quick-task and invokes pipeline:create-quick-task', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'project:list-visible')
+        return [{ id: 'project-1', name: 'Test Project', path: '/tmp/repo' }];
+      if (channel === 'pipeline:create-quick-task') {
+        return { issue: { id: 'i-quick', issueNumber: -1, isQuickMode: true } };
+      }
+      return null;
+    });
+
+    renderWithProviders();
+
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: /quick mode \(skip prd, no github issue\)/i }),
+    );
+
+    const quickInput = await screen.findByPlaceholderText(/describe the fix in one line/i);
+    fireEvent.change(quickInput, { target: { value: 'Fix auth middleware off-by-one' } });
+    fireEvent.keyDown(quickInput, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('pipeline:create-quick-task', {
+        projectId: 'project-1',
+        text: 'Fix auth middleware off-by-one',
+      });
+    });
+
+    expect(invokeMock).not.toHaveBeenCalledWith('github:create-issue', expect.anything());
+  });
+
   it('disables Format button when attachments are present', async () => {
     renderWithProviders();
 

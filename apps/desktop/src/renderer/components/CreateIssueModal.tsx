@@ -14,6 +14,7 @@ import {
   Checkbox,
   cn,
   ImageIcon,
+  Input,
   Keycap,
   Label,
   LoadingButtonContent,
@@ -80,7 +81,10 @@ export function CreateIssueModal() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitAnother, setSubmitAnother] = useState(false);
+  const [isQuickMode, setIsQuickMode] = useState(false);
+  const [quickText, setQuickText] = useState('');
   const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const quickInputRef = useRef<HTMLInputElement>(null);
 
   // Local project selection — defaults to activeProjectId when modal opens
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -217,6 +221,8 @@ export function CreateIssueModal() {
   useEffect(() => {
     if (!createIssueModalOpen) return;
     setSelectedProjectId(activeProjectId);
+    setIsQuickMode(false);
+    setQuickText('');
     if (mode === 'edit' && editingPrd) {
       const metadata = readPrdIssueMetadata(editingPrd.body ?? '', editingPrd.labels);
       setBody(metadata.cleanBody);
@@ -231,6 +237,12 @@ export function CreateIssueModal() {
     }
     setTimeout(() => bodyRef.current?.focus(), 50);
   }, [createIssueModalOpen, mode, editingPrd, activeProjectId]);
+
+  useEffect(() => {
+    if (createIssueModalOpen && isQuickMode) {
+      setTimeout(() => quickInputRef.current?.focus(), 50);
+    }
+  }, [createIssueModalOpen, isQuickMode]);
 
   const handleClose = useCallback(() => {
     void clearAttachmentSession();
@@ -280,6 +292,30 @@ export function CreateIssueModal() {
   };
 
   const handleSubmit = async () => {
+    if (mode === 'create' && isQuickMode) {
+      const trimmed = quickText.trim();
+      if (!trimmed || !effectiveProjectId) return;
+      setSubmitting(true);
+      setError(null);
+      try {
+        const { issue } = await window.shipcode.invoke<{ issue: GitHubIssueCacheRecord }>(
+          'pipeline:create-quick-task',
+          { projectId: effectiveProjectId, text: trimmed },
+        );
+        await queryClient.invalidateQueries({ queryKey: ['github-issues'] });
+        if (effectiveProjectId !== activeProjectId) {
+          selectProject(effectiveProjectId);
+        }
+        selectIssue(issue);
+        closeCreateIssueModal();
+      } catch (err) {
+        log.error('[CreateIssueModal] quick-task submit failed', err);
+        setError(clampError(err));
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
     if (mode === 'edit') {
       if (!editBodyValid) return;
     } else {
@@ -371,12 +407,15 @@ export function CreateIssueModal() {
   // Submit disabled logic differs by mode.
   const noProject = !effectiveProjectId;
   const titleMissing = mode === 'create' && !derivedTitle;
+  const quickTextEmpty = quickText.trim().length === 0;
   const submitDisabled =
     mode === 'edit'
       ? !editBodyValid || submitting || enhancing
-      : noProject || titleMissing || bodyIsEmpty || submitting || enhancing;
+      : isQuickMode
+        ? noProject || quickTextEmpty || submitting
+        : noProject || titleMissing || bodyIsEmpty || submitting || enhancing;
 
-  const submitLabel = mode === 'edit' ? 'Save' : 'Create Plan';
+  const submitLabel = mode === 'edit' ? 'Save' : isQuickMode ? 'Run Quick Task' : 'Create Plan';
 
   const hasAttachments = attachments.length > 0;
 
@@ -429,17 +468,75 @@ export function CreateIssueModal() {
                 <span className="line-clamp-1">{clampedError}</span>
                 <span className="ml-2 text-muted">(full trace in devtools console)</span>
               </span>
-              <Button
-                variant="ghost"
-                size="xs"
-                className="shrink-0 text-danger hover:text-danger hover:bg-danger/20"
-                onClick={handleEnhance}
-                disabled={enhancing || submitting || bodyIsEmpty || hasAttachments}
-              >
-                <LoadingButtonContent loading={enhancing} className="gap-1" spinnerSize={10}>
-                  Retry
-                </LoadingButtonContent>
-              </Button>
+              {!isQuickMode && (
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  className="shrink-0 text-danger hover:text-danger hover:bg-danger/20"
+                  onClick={handleEnhance}
+                  disabled={enhancing || submitting || bodyIsEmpty || hasAttachments}
+                >
+                  <LoadingButtonContent loading={enhancing} className="gap-1" spinnerSize={10}>
+                    Retry
+                  </LoadingButtonContent>
+                </Button>
+              )}
+            </div>
+          )}
+
+          {mode === 'create' && (
+            <Label
+              htmlFor="quick-mode-toggle"
+              className="flex cursor-pointer items-center gap-2 self-start rounded-md border border-border bg-tertiary/40 px-3 py-2 text-[13px] font-medium text-secondary transition-colors hover:bg-hover hover:text-primary"
+            >
+              <Checkbox
+                id="quick-mode-toggle"
+                checked={isQuickMode}
+                onCheckedChange={(checked) => setIsQuickMode(checked === true)}
+                disabled={submitting || enhancing}
+                aria-label="Quick mode (skip PRD, no GitHub issue)"
+              />
+              Quick mode (skip PRD, no GitHub issue)
+            </Label>
+          )}
+
+          {mode === 'create' && isQuickMode && (
+            <div className="flex flex-col gap-2">
+              <Input
+                ref={quickInputRef}
+                value={quickText}
+                onChange={(e) => setQuickText(e.target.value)}
+                placeholder="Describe the fix in one line…"
+                disabled={submitting}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && !submitDisabled) {
+                    e.preventDefault();
+                    void handleSubmit();
+                  }
+                }}
+              />
+              {projects.length > 0 && (
+                <div className="flex w-48 flex-col gap-1">
+                  <Label htmlFor="quick-project" className="text-xs text-secondary">
+                    Project
+                  </Label>
+                  <Select
+                    value={effectiveProjectId ?? ''}
+                    onValueChange={(value) => setSelectedProjectId(value)}
+                  >
+                    <SelectTrigger id="quick-project" className="bg-transparent">
+                      <SelectValue placeholder="Select a project..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {projects.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
           )}
 
@@ -451,25 +548,29 @@ export function CreateIssueModal() {
             </div>
           )}
 
-          <Textarea
-            ref={bodyRef}
-            id="issue-body"
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder={mode === 'create' ? 'Describe what you want to build…' : 'PRD markdown...'}
-            rows={mode === 'create' ? 5 : 14}
-            className={
-              mode === 'edit' && editBodyValid
-                ? 'font-mono text-xs'
-                : mode === 'edit'
+          {!isQuickMode && (
+            <Textarea
+              ref={bodyRef}
+              id="issue-body"
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder={
+                mode === 'create' ? 'Describe what you want to build…' : 'PRD markdown...'
+              }
+              rows={mode === 'create' ? 5 : 14}
+              className={
+                mode === 'edit' && editBodyValid
                   ? 'font-mono text-xs'
-                  : 'text-[13px]'
-            }
-            disabled={enhancing}
-          />
+                  : mode === 'edit'
+                    ? 'font-mono text-xs'
+                    : 'text-[13px]'
+              }
+              disabled={enhancing}
+            />
+          )}
 
           {/* Project + Format row — below textarea in create mode */}
-          {mode === 'create' && projects.length > 0 && (
+          {mode === 'create' && !isQuickMode && projects.length > 0 && (
             <div className="flex items-end gap-2">
               <div className="flex w-48 flex-col gap-1">
                 <Label htmlFor="issue-project" className="text-xs text-secondary">
@@ -555,7 +656,7 @@ export function CreateIssueModal() {
       </div>
 
       <ModalFooter className="shrink-0 items-center border-t border-border px-6 py-4 mt-0">
-        {mode === 'create' && (
+        {mode === 'create' && !isQuickMode && (
           <Label
             htmlFor="submit-another"
             className="mr-auto flex cursor-pointer items-center gap-2 rounded-md border border-border bg-tertiary/40 px-3 py-2 text-[13px] font-medium text-secondary transition-colors hover:bg-hover hover:text-primary"
@@ -579,7 +680,7 @@ export function CreateIssueModal() {
         >
           <LoadingButtonContent loading={submitting}>
             <span>{submitLabel}</span>
-            <Keycap>⌘↩</Keycap>
+            <Keycap>{isQuickMode ? '↩' : '⌘↩'}</Keycap>
           </LoadingButtonContent>
         </Button>
       </ModalFooter>

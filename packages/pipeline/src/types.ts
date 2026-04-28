@@ -57,7 +57,12 @@ export type PipelineEvent =
   | {
       type: 'pipeline:start-context';
       threadId: string;
-      source: 'github:start-issue' | 'pipeline:start' | 'pipeline:retry' | 'pipeline:approve';
+      source:
+        | 'github:start-issue'
+        | 'pipeline:start'
+        | 'pipeline:retry'
+        | 'pipeline:approve'
+        | 'automation:tick';
       projectPath: string;
       githubIssueNumber: number | null;
       autonomous: boolean;
@@ -304,6 +309,45 @@ export interface Pipeline {
       executorReasoningEffort?: ReasoningEffort;
       verifierReasoningEffort?: ReasoningEffort;
     },
+  ) => Promise<void>;
+  /**
+   * Entry path for Quick Mode tasks. Same flow as startFromGitHubIssue but
+   * without a real GitHub issue: the cache row holds a negative sentinel
+   * issueNumber and there is no workpad protocol or PR shipping.
+   */
+  startFromQuickTask: (
+    threadId: string,
+    projectPath: string,
+    task: { issueNumber: number; title: string; text: string },
+    executorModel: PipelineExecutorModel,
+    options?: {
+      baseBranch?: string;
+      worktreePath?: string | null;
+      executorModelOverride?: string | null;
+      plannerModel?: PipelineExecutorModel;
+      reviewerModel?: PipelineExecutorModel;
+      verifierModel?: PipelineExecutorModel;
+      plannerModelIdOverride?: string | null;
+      reviewerModelIdOverride?: string | null;
+      executorModelIdOverride?: string | null;
+      verifierModelIdOverride?: string | null;
+      plannerReasoningEffort?: ReasoningEffort;
+      reviewerReasoningEffort?: ReasoningEffort;
+      executorReasoningEffort?: ReasoningEffort;
+      verifierReasoningEffort?: ReasoningEffort;
+    },
+  ) => Promise<void>;
+  /**
+   * Entry path for cron-driven automation runs. Synthesizes an approved
+   * plan in-place and skips planner + reviewer phases — the executor reads
+   * the prompt directly. Caller MUST have already invoked initializeContext
+   * with the seed (projectPath, models, autonomous=true).
+   */
+  startFromAutomation: (
+    threadId: string,
+    prompt: string,
+    projectPath: string,
+    automationName: string,
   ) => Promise<void>;
   initializeContext: (
     threadId: string,

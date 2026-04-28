@@ -23,7 +23,8 @@
     "@shipcode/db": "workspace:*",
     "@shipcode/git": "workspace:*",
     "@shipcode/shared": "workspace:*",
-    "liquidjs": "10.25.5"
+    "liquidjs": "10.25.5",
+    "nanoid": "^5.1.9"
   },
   "devDependencies": {
     "typescript": "6.0.3",

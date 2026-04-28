@@ -12,6 +12,10 @@ import {
 import { nanoid } from 'nanoid';
 import { asRow, asRows } from '../utils';
 
+function isUniqueViolation(err: unknown): boolean {
+  return err instanceof Error && /UNIQUE constraint failed/i.test(err.message);
+}
+
 interface GitHubIssueCacheRow {
   id: string;
   project_id: string;
@@ -54,6 +58,7 @@ interface GitHubIssueCacheRow {
   priority_rank: string | null;
   priority_raw: string | null;
   priority_fetched_at: string | null;
+  is_quick_mode: number | null;
 }
 
 export class GitHubIssueQueries {
@@ -125,6 +130,7 @@ export class GitHubIssueQueries {
       | 'priorityRank'
       | 'priorityRaw'
       | 'priorityFetchedAt'
+      | 'isQuickMode'
     >,
   ): GitHubIssueCacheRecord {
     const existing = this.getByNumber(record.projectId, record.issueNumber);
@@ -171,6 +177,62 @@ export class GitHubIssueQueries {
       );
     }
     return created;
+  }
+
+  /**
+   * Insert a synthetic Quick-mode row with a per-project negative sentinel
+   * `issue_number` (-1, -2, …). Wraps the read-then-insert in BEGIN IMMEDIATE
+   * and retries on UNIQUE collisions so concurrent quick-task creates don't
+   * race for the same sentinel.
+   */
+  insertQuickTask(args: {
+    projectId: string;
+    title: string;
+    body: string;
+    threadId: string;
+  }): GitHubIssueCacheRecord {
+    let lastErr: unknown = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        this.db.exec('BEGIN IMMEDIATE');
+        const min = (
+          this.db
+            .prepare(
+              'SELECT COALESCE(MIN(issue_number), 0) AS min FROM github_issue_cache WHERE project_id = ?',
+            )
+            .get(args.projectId) as { min: number }
+        ).min;
+        const issueNumber = Math.min(min, 0) - 1;
+        const id = nanoid();
+        this.db
+          .prepare(
+            `INSERT INTO github_issue_cache (
+               id, project_id, issue_number, title, body, labels, assignee, state,
+               pipeline_status, thread_id, is_quick_mode
+             ) VALUES (?, ?, ?, ?, ?, '[]', NULL, 'open', 'queued', ?, 1)`,
+          )
+          .run(id, args.projectId, issueNumber, args.title, args.body, args.threadId);
+        this.db.exec('COMMIT');
+        const created = this.getByNumber(args.projectId, issueNumber);
+        if (!created) {
+          throw new Error(`Quick task row vanished after insert: ${args.projectId}#${issueNumber}`);
+        }
+        return created;
+      } catch (err) {
+        try {
+          this.db.exec('ROLLBACK');
+        } catch {
+          // already rolled back
+        }
+        lastErr = err;
+        if (!isUniqueViolation(err)) throw err;
+      }
+    }
+    throw new Error(
+      `insertQuickTask: failed to allocate sentinel after 5 attempts (last: ${
+        lastErr instanceof Error ? lastErr.message : String(lastErr)
+      })`,
+    );
   }
 
   /**
@@ -651,6 +713,7 @@ export class GitHubIssueQueries {
           : null,
       priorityRaw: row.priority_raw ?? null,
       priorityFetchedAt: toIsoUtc(row.priority_fetched_at),
+      isQuickMode: !!row.is_quick_mode,
     };
   }
 }

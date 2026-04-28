@@ -55,6 +55,7 @@ const makeIssue = (overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
   priorityRank: null,
   priorityRaw: null,
   priorityFetchedAt: null,
+  isQuickMode: false,
   ...overrides,
 });
 
@@ -85,6 +86,7 @@ const makeThread = (overrides: Partial<Thread> = {}): Thread => {
     githubIssueNumber: 42,
     githubPrNumber: null,
     githubRepo: null,
+    automationId: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     plannerResolvedModel: null,
@@ -1350,5 +1352,65 @@ describe('deriveGithubIssueUrl', () => {
     expect(deriveGithubIssueUrl('  git@github.com:owner/repo.git  ', 2)).toBe(
       'https://github.com/owner/repo/issues/2',
     );
+  });
+});
+
+describe('IssueDetail — quick mode hides GitHub UI', () => {
+  const invokeMock = vi.fn<(channel: string, args?: unknown) => Promise<unknown>>();
+
+  beforeEach(() => {
+    cleanup();
+    invokeMock.mockReset();
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'project:get') return makeProject();
+      return [];
+    });
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: vi.fn(),
+    });
+    window.shipcode = {
+      invoke: invokeMock as typeof window.shipcode.invoke,
+      on: vi.fn(() => () => {}) as typeof window.shipcode.on,
+    };
+
+    useAppStore.setState({
+      activeProjectId: 'project-1',
+      activeThreadId: null,
+      activeIssue: makeIssue({ issueNumber: -1, isQuickMode: true }),
+      sidebarCollapsed: false,
+      terminalVisible: false,
+      settingsVisible: false,
+      currentPlan: null,
+      currentReview: null,
+      pipelinePhase: 'idle',
+      systemHealth: null,
+      currentVerification: null,
+      githubIssues: [],
+      agentOutputs: {},
+      commandPaletteOpen: false,
+      createIssueModalOpen: false,
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('shows "Quick" chip instead of #-1 and hides GitHub open button', async () => {
+    renderWithProviders();
+
+    expect(await screen.findByText('Quick')).toBeInTheDocument();
+    expect(screen.queryByText(/^#-1$/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /open this issue on github/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('does not render Comments tab for quick tasks', async () => {
+    renderWithProviders();
+
+    await screen.findByText('Quick');
+    expect(screen.queryByRole('tab', { name: /comments/i })).not.toBeInTheDocument();
   });
 });

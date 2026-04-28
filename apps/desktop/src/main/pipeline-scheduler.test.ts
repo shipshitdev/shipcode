@@ -15,6 +15,38 @@ vi.mock('./logger.service', () => ({
   },
 }));
 
+vi.mock('node:fs', async (importActual) => {
+  const actual = (await importActual()) as typeof import('node:fs');
+  return {
+    ...actual,
+    default: { ...actual, existsSync: vi.fn(() => true) },
+    existsSync: vi.fn(() => true),
+  };
+});
+
+vi.mock('./ipc/helpers', async (importActual) => {
+  const actual = (await importActual()) as typeof import('./ipc/helpers');
+  return {
+    ...actual,
+    resolveProjectPhaseModels: vi.fn(() => ({
+      plannerModel: 'claude',
+      reviewerModel: 'codex',
+      verifierModel: 'claude',
+      executorModel: 'claude',
+      plannerModelId: null,
+      reviewerModelId: null,
+      executorModelId: null,
+      verifierModelId: null,
+      plannerReasoningEffort: 'high',
+      reviewerReasoningEffort: 'high',
+      executorReasoningEffort: 'high',
+      verifierReasoningEffort: 'high',
+    })),
+    assertCliPhaseModelsSupported: vi.fn(async () => undefined),
+    transitionThreadPhase: vi.fn(),
+  };
+});
+
 function makeIssue(overrides: Record<string, unknown> = {}) {
   return {
     id: 'issue-1',
@@ -51,6 +83,7 @@ function makeIssue(overrides: Record<string, unknown> = {}) {
     priorityRank: null,
     priorityRaw: null,
     priorityFetchedAt: null,
+    isQuickMode: false,
     ...overrides,
   };
 }
@@ -126,6 +159,8 @@ describe('PipelineScheduler', () => {
     rehydrateContext: ReturnType<typeof vi.fn>;
     startExecution: ReturnType<typeof vi.fn>;
     startFromGitHubIssue: ReturnType<typeof vi.fn>;
+    startFromAutomation: ReturnType<typeof vi.fn>;
+    initializeContext: ReturnType<typeof vi.fn>;
   };
   let mainWindow: ReturnType<typeof makeMainWindow>;
   let scheduler: PipelineScheduler;
@@ -151,7 +186,13 @@ describe('PipelineScheduler', () => {
         updateIssueContent: vi.fn(),
         setGithubIssue: vi.fn(),
         setPhaseModels: vi.fn(),
+        setAutomationId: vi.fn(),
         resetFailureTracking: vi.fn(),
+      },
+      automations: {
+        getById: vi.fn(() => null as unknown),
+        recordRunStarted: vi.fn(),
+        recordRunFinished: vi.fn(),
       },
       githubIssues: {
         getByNumber: vi.fn(() => makeIssue() as ReturnType<typeof makeIssue> | null),
@@ -180,6 +221,8 @@ describe('PipelineScheduler', () => {
       rehydrateContext: vi.fn(),
       startExecution: vi.fn(async () => undefined),
       startFromGitHubIssue: vi.fn(async () => undefined),
+      startFromAutomation: vi.fn(async () => undefined),
+      initializeContext: vi.fn(),
     };
     mainWindow = makeMainWindow();
     scheduler = new PipelineScheduler({
@@ -320,6 +363,7 @@ describe('PipelineScheduler', () => {
       worktreeBranch: null,
       githubIssueNumber: 42,
       githubRepo: 'acme/repo',
+      automationId: null,
       autonomous: true,
       reviewRound: 0,
       clarificationRound: 0,
@@ -443,6 +487,75 @@ describe('PipelineScheduler', () => {
       expect(promoted).toBe(true);
       expect(pipeline.rehydrateContext).toHaveBeenCalledWith('thread-open', '/tmp/project-2');
       expect(pipeline.startExecution).toHaveBeenCalledWith('thread-open', approvedPlan.structured);
+    });
+  });
+
+  describe('startOrQueueAutomation', () => {
+    const automation = {
+      id: 'auto-1',
+      projectId: 'project-1',
+      name: 'Hourly smoke',
+      prompt: 'List 3 files',
+      cronExpr: '0 * * * *',
+      enabled: true,
+      executorProvider: null,
+      executorModelId: null,
+      executorReasoningEffort: null,
+      lastStartedAt: null,
+      lastCompletedAt: null,
+      lastStatus: null,
+      nextRunAt: null,
+      runCount: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    it('launches the automation when capacity is available', async () => {
+      pipeline.listActiveInPhases.mockReturnValue([]);
+      queries.automations.getById.mockReturnValue(automation);
+
+      const result = await scheduler.startOrQueueAutomation('auto-1');
+
+      expect(result.queued).toBe(false);
+      expect(pipeline.startFromAutomation).toHaveBeenCalledWith(
+        'thread-new',
+        automation.prompt,
+        '/tmp/project',
+        automation.name,
+      );
+      expect(queries.automations.recordRunStarted).toHaveBeenCalledWith('auto-1', 'thread-new');
+    });
+
+    it('queues the automation in-memory when at capacity', async () => {
+      pipeline.listActiveInPhases.mockReturnValue([
+        { threadId: 'a', phase: 'executing', startedAt: Date.now(), activeProcessId: null },
+        { threadId: 'b', phase: 'planning', startedAt: Date.now(), activeProcessId: null },
+        { threadId: 'c', phase: 'reviewing', startedAt: Date.now(), activeProcessId: null },
+      ]);
+      queries.settings.get.mockReturnValue(makeBaseSettings({ maxConcurrentPipelines: 3 }));
+      queries.automations.getById.mockReturnValue(automation);
+
+      const result = await scheduler.startOrQueueAutomation('auto-1');
+
+      expect(result.queued).toBe(true);
+      expect(pipeline.startFromAutomation).not.toHaveBeenCalled();
+      expect(queries.automations.recordRunStarted).not.toHaveBeenCalled();
+    });
+
+    it('does not enqueue duplicates of the same automation id', async () => {
+      pipeline.listActiveInPhases.mockReturnValue([
+        { threadId: 'a', phase: 'executing', startedAt: Date.now(), activeProcessId: null },
+        { threadId: 'b', phase: 'planning', startedAt: Date.now(), activeProcessId: null },
+        { threadId: 'c', phase: 'reviewing', startedAt: Date.now(), activeProcessId: null },
+      ]);
+      queries.settings.get.mockReturnValue(makeBaseSettings({ maxConcurrentPipelines: 3 }));
+      queries.automations.getById.mockReturnValue(automation);
+
+      const r1 = await scheduler.startOrQueueAutomation('auto-1');
+      const r2 = await scheduler.startOrQueueAutomation('auto-1');
+
+      expect(r1.queued).toBe(true);
+      expect(r2.queued).toBe(true);
     });
   });
 });

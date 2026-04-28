@@ -1,6 +1,11 @@
 import { execFileSync } from 'node:child_process';
 import { buildWorkpadProtocol } from '@shipcode/agents';
-import { resolveRequireApproval, resolveRequireApprovalForIssue } from '@shipcode/shared';
+import {
+  resolveRequireApproval,
+  resolveRequireApprovalForIssue,
+  type ShipCodePlan,
+} from '@shipcode/shared';
+import { nanoid } from 'nanoid';
 import { createPipelineContextHelpers } from './pipeline/context';
 import { createExecutionPhaseHandlers } from './pipeline/execution-phases';
 import { createPlanningPhaseHandlers } from './pipeline/planning-phases';
@@ -157,6 +162,175 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     );
   }
 
+  async function startFromQuickTask(
+    threadId: string,
+    projectPath: string,
+    task: { issueNumber: number; title: string; text: string },
+    executorModel: PipelineExecutorModel,
+    options?: {
+      baseBranch?: string;
+      worktreePath?: string | null;
+      executorModelOverride?: string | null;
+      plannerModel?: PipelineExecutorModel;
+      reviewerModel?: PipelineExecutorModel;
+      verifierModel?: PipelineExecutorModel;
+      plannerModelIdOverride?: string | null;
+      reviewerModelIdOverride?: string | null;
+      executorModelIdOverride?: string | null;
+      verifierModelIdOverride?: string | null;
+      plannerReasoningEffort?: PipelineContext['plannerReasoningEffort'];
+      reviewerReasoningEffort?: PipelineContext['reviewerReasoningEffort'];
+      executorReasoningEffort?: PipelineContext['executorReasoningEffort'];
+      verifierReasoningEffort?: PipelineContext['verifierReasoningEffort'];
+    },
+  ) {
+    const executorModelOverride = options?.executorModelOverride ?? null;
+    const settings = deps.settings.get();
+
+    let baseBranch = options?.baseBranch ?? '';
+    let forkPointSha = '';
+
+    if (!baseBranch) {
+      try {
+        baseBranch = execFileSync('git', ['symbolic-ref', 'refs/remotes/origin/HEAD', '--short'], {
+          cwd: projectPath,
+          encoding: 'utf-8',
+        })
+          .trim()
+          .replace('origin/', '');
+      } catch {
+        baseBranch = 'main';
+      }
+    }
+
+    try {
+      forkPointSha = execFileSync('git', ['rev-parse', baseBranch], {
+        cwd: projectPath,
+        encoding: 'utf-8',
+      }).trim();
+    } catch {
+      forkPointSha = '';
+    }
+
+    deps.threads.updateAutonomousFields(threadId, {
+      autonomous: true,
+      reviewRound: 0,
+      executorModel,
+      baseBranch,
+      forkPointSha,
+    });
+    deps.threads.clearClarification(threadId);
+
+    contextHelpers.ensureContext(threadId, {
+      projectPath,
+      worktreePath: options?.worktreePath ?? null,
+      retryCount: 0,
+      autonomous: true,
+      reviewRound: 0,
+      clarificationRound: 0,
+      clarificationRequest: null,
+      clarificationAnswers: [],
+      verificationRetries: 0,
+      // Quick tasks have no real GH issue. Pipeline guards check this with
+      // isRealGithubIssueNumber, so leaving null skips workpad / PR / comments.
+      githubIssueNumber: null,
+      githubIssueTitle: task.title,
+      githubRepo: null,
+      plannerModel: options?.plannerModel ?? (settings.plannerModel as PipelineExecutorModel),
+      reviewerModel: options?.reviewerModel ?? (settings.reviewerModel as PipelineExecutorModel),
+      verifierModel: options?.verifierModel ?? (settings.verifierModel as PipelineExecutorModel),
+      executorModel,
+      plannerModelIdOverride: options?.plannerModelIdOverride ?? null,
+      reviewerModelIdOverride: options?.reviewerModelIdOverride ?? null,
+      executorModelIdOverride: options?.executorModelIdOverride ?? null,
+      verifierModelIdOverride: options?.verifierModelIdOverride ?? null,
+      plannerReasoningEffort: options?.plannerReasoningEffort ?? settings.plannerReasoningEffort,
+      reviewerReasoningEffort: options?.reviewerReasoningEffort ?? settings.reviewerReasoningEffort,
+      executorReasoningEffort: options?.executorReasoningEffort ?? settings.executorReasoningEffort,
+      verifierReasoningEffort: options?.verifierReasoningEffort ?? settings.verifierReasoningEffort,
+      executorModelOverride,
+      baseBranch,
+      forkPointSha,
+      activeProcessId: null,
+      cancelled: false,
+      verifiedSha: null,
+    });
+
+    const project =
+      deps.threads.getById(threadId)?.projectId != null
+        ? deps.projects.getById(deps.threads.getById(threadId)!.projectId!)
+        : null;
+    const requireApproval = project
+      ? resolveRequireApproval(settings, project)
+      : settings.requireApproval;
+
+    deps.emitter.emit({
+      type: 'pipeline:start-context',
+      threadId,
+      source: 'github:start-issue',
+      projectPath,
+      githubIssueNumber: null,
+      autonomous: true,
+      requireApproval,
+      reviewRound: 0,
+    });
+
+    const prompt = `Quick task: ${task.title}\n\n${task.text}`;
+    await handlers.startPlanGeneration(
+      threadId,
+      prompt,
+      projectPath,
+      options?.worktreePath ?? null,
+    );
+  }
+
+  async function startFromAutomation(
+    threadId: string,
+    prompt: string,
+    projectPath: string,
+    automationName: string,
+  ) {
+    deps.emitter.emit({
+      type: 'pipeline:start-context',
+      threadId,
+      source: 'automation:tick',
+      projectPath,
+      githubIssueNumber: null,
+      autonomous: true,
+      requireApproval: false,
+      reviewRound: 0,
+    });
+
+    // Synthesize a complete approved plan so the executor gate (which
+    // requires `structured !== null` and `status !== rejected/superseded`)
+    // passes without running planner/reviewer phases. Trivial-but-valid
+    // values are required for every ShipCodePlan field.
+    const synthesizedPlan: ShipCodePlan = {
+      id: nanoid(),
+      threadId,
+      version: 1,
+      objective: `Automation: ${automationName}`,
+      files: [],
+      steps: [
+        {
+          order: 1,
+          description: prompt,
+          files: [],
+          rationale: 'Automation prompt — executed directly without plan/review.',
+        },
+      ],
+      acceptanceCriteria: ['Executor completes the automation prompt without errors.'],
+      outOfScope: [],
+      estimatedComplexity: 'medium',
+      dependencies: [],
+    };
+
+    const planRecord = deps.plans.create(threadId, '<automation-synthesized>', synthesizedPlan, 1);
+    deps.plans.updateStatus(planRecord.id, 'approved');
+
+    await handlers.startExecution(threadId, synthesizedPlan);
+  }
+
   function cancel(threadId: string) {
     const context = activePipelines.get(threadId);
     if (context) {
@@ -186,6 +360,8 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     startShipping: handlers.startShipping,
     startStabilization: handlers.startStabilization,
     startFromGitHubIssue,
+    startFromQuickTask,
+    startFromAutomation,
     initializeContext: contextHelpers.ensureContext,
     cancel,
     getContext: (threadId: string) => activePipelines.get(threadId),

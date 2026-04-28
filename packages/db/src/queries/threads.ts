@@ -41,6 +41,7 @@ interface ThreadRow {
   github_issue_number: number | null;
   github_pr_number: number | null;
   github_repo: string | null;
+  automation_id: string | null;
   last_error: string | null;
   failure_phase: string | null;
   failure_count: number;
@@ -272,6 +273,19 @@ export class ThreadQueries {
       .run(issueNumber, repo, id);
   }
 
+  /**
+   * Stamp `github_issue_number` without touching `github_repo`. Used by quick
+   * mode to link a thread to its synthetic negative-sentinel cache row, where
+   * there is no GitHub repo association.
+   */
+  setGithubIssueNumber(id: string, issueNumber: number): void {
+    this.db
+      .prepare(
+        `UPDATE threads SET github_issue_number = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
+      )
+      .run(issueNumber, id);
+  }
+
   updateIssueContent(id: string, prompt: string, title: string): void {
     this.db
       .prepare(
@@ -288,6 +302,12 @@ export class ThreadQueries {
     this.db
       .prepare(`UPDATE threads SET github_pr_number = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`)
       .run(prNumber, id);
+  }
+
+  setAutomationId(id: string, automationId: string | null): void {
+    this.db
+      .prepare(`UPDATE threads SET automation_id = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`)
+      .run(automationId, id);
   }
 
   setPhaseModels(
@@ -468,6 +488,7 @@ function mapThread(row: ThreadRow): Thread {
     githubIssueNumber: row.github_issue_number ?? null,
     githubPrNumber: row.github_pr_number ?? null,
     githubRepo: row.github_repo ?? null,
+    automationId: row.automation_id ?? null,
     lastError: row.last_error ?? null,
     failurePhase: row.failure_phase ?? null,
     failureCount: row.failure_count ?? 0,

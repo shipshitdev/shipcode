@@ -1,4 +1,9 @@
-import type { ActivityQueries, TerminalEventQueries, ThreadQueries } from '@shipcode/db';
+import type {
+  ActivityQueries,
+  AutomationQueries,
+  TerminalEventQueries,
+  ThreadQueries,
+} from '@shipcode/db';
 import type { PipelineEmitter, PipelineEvent } from '@shipcode/pipeline';
 import {
   type ActivityKind,
@@ -15,6 +20,7 @@ interface EmitterDeps {
   activity: ActivityQueries;
   terminalEvents: TerminalEventQueries;
   threads: ThreadQueries;
+  automations: AutomationQueries;
   notifications: NotificationService;
   chatNotifications: ChatNotificationService;
   onPipelineTerminal?: (event: { threadId: string; phase: PipelinePhase }) => void;
@@ -448,6 +454,21 @@ export function createElectronEmitter(
           deps.onExecutionSlotFreed?.();
         } catch (err) {
           log.error('[pipeline-bridge] execution-queue promotion error:', err);
+        }
+      }
+
+      // 5c. Record automation run finish on terminal phases.
+      if (
+        event.type === 'pipeline:phase' &&
+        (event.phase === 'completed' || event.phase === 'failed')
+      ) {
+        try {
+          const thread = deps.threads.getById(event.threadId);
+          if (thread?.automationId) {
+            deps.automations.recordRunFinished(thread.automationId, event.phase);
+          }
+        } catch (err) {
+          log.error('[pipeline-bridge] automation finish-record error:', err);
         }
       }
 

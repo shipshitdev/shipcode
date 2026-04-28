@@ -91,6 +91,7 @@ describe('registerGitHubHandlers', () => {
     priorityRank: null,
     priorityRaw: null,
     priorityFetchedAt: null,
+    isQuickMode: false,
   };
 
   const reusableThread = {
@@ -119,6 +120,7 @@ describe('registerGitHubHandlers', () => {
     githubIssueNumber: 42,
     githubPrNumber: null,
     githubRepo: 'acme/repo',
+    automationId: null,
     lastError: 'Verification commands failed after 2 attempt(s).',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),

@@ -177,6 +177,7 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     githubIssueNumber: 42,
     githubPrNumber: null,
     githubRepo: null,
+    automationId: null,
     lastError: null,
     failurePhase: null,
     failureCount: 0,
@@ -236,6 +237,7 @@ function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
     priorityRank: null,
     priorityRaw: null,
     priorityFetchedAt: null,
+    isQuickMode: false,
     ...overrides,
   };
 }
@@ -1874,6 +1876,58 @@ describe('createPipeline', () => {
         }),
       );
       expect(pipeline.getContext('t1')?.worktreePath).toBe('/worktree');
+    });
+  });
+
+  // ─── startFromAutomation ───────────────────────────────────────────
+
+  describe('startFromAutomation', () => {
+    it('synthesizes an approved plan and emits automation:tick start-context', async () => {
+      const pipeline = createPipeline(mock.deps);
+
+      await pipeline.startFromAutomation('t1', 'List 3 files', '/proj', 'Smoke');
+
+      expect(mock.deps.emitter.emit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'pipeline:start-context',
+          threadId: 't1',
+          source: 'automation:tick',
+          projectPath: '/proj',
+          autonomous: true,
+          requireApproval: false,
+        }),
+      );
+
+      expect(mock.deps.plans.create).toHaveBeenCalledWith(
+        't1',
+        '<automation-synthesized>',
+        expect.objectContaining({
+          objective: 'Automation: Smoke',
+          steps: [
+            expect.objectContaining({
+              order: 1,
+              description: 'List 3 files',
+            }),
+          ],
+          acceptanceCriteria: expect.arrayContaining([expect.any(String)]),
+        }),
+        1,
+      );
+
+      expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'approved');
+    });
+
+    it('passes the synthesized plan to executor (skipping plan/review)', async () => {
+      const pipeline = createPipeline(mock.deps);
+
+      await pipeline.startFromAutomation('t1', 'Run smoke', '/proj', 'Daily');
+
+      // The executor was invoked with a structured plan payload that matches
+      // the synthesized plan (objective starts with "Automation:").
+      const planArg = (mock.deps.plans.create as ReturnType<typeof vi.fn>).mock.calls[0][2] as {
+        objective: string;
+      };
+      expect(planArg.objective).toBe('Automation: Daily');
     });
   });
 

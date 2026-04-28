@@ -139,7 +139,9 @@ export function IssueDetailTabs({
 }: IssueDetailTabsProps) {
   const orderedTabs: Array<{ value: IssueDetailTab; label: string }> = [
     { value: 'prd', label: 'Issue' },
-    { value: 'comments', label: 'Comments' },
+    ...(activeIssue.isQuickMode
+      ? []
+      : ([{ value: 'comments' as const, label: 'Comments' }] as const)),
     {
       value: 'history',
       label: `Plans${normalizedPlanHistory.length > 0 ? ` (${normalizedPlanHistory.length})` : ''}`,

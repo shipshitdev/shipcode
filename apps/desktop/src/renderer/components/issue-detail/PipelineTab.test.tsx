@@ -47,6 +47,7 @@ function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
     priorityRank: null,
     priorityRaw: null,
     priorityFetchedAt: null,
+    isQuickMode: false,
     ...overrides,
   };
 }
@@ -78,6 +79,7 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     githubIssueNumber: 42,
     githubPrNumber: null,
     githubRepo: 'acme/repo',
+    automationId: null,
     lastError: null,
     failurePhase: null,
     failureCount: 0,

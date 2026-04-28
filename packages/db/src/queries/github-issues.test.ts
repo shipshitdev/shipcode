@@ -614,4 +614,61 @@ describe('GitHubIssueQueries', () => {
       expect(fresh?.priorityFetchedAt).toBeNull();
     });
   });
+
+  describe('insertQuickTask', () => {
+    it('creates a synthetic row with negative sentinel issue_number', () => {
+      const threads = new ThreadQueries(db);
+      const thread = threads.create(projectId, 'fix off-by-one', 'fix off-by-one');
+      const issue = issues.insertQuickTask({
+        projectId,
+        title: 'fix off-by-one',
+        body: 'fix off-by-one',
+        threadId: thread.id,
+      });
+      expect(issue.issueNumber).toBe(-1);
+      expect(issue.isQuickMode).toBe(true);
+      expect(issue.threadId).toBe(thread.id);
+      expect(issue.pipelineStatus).toBe('queued');
+      expect(issue.title).toBe('fix off-by-one');
+    });
+
+    it('allocates sequential negative sentinels per project', () => {
+      const threads = new ThreadQueries(db);
+      const t1 = threads.create(projectId, 'a', 'a');
+      const t2 = threads.create(projectId, 'b', 'b');
+      const t3 = threads.create(projectId, 'c', 'c');
+      const a = issues.insertQuickTask({ projectId, title: 'a', body: 'a', threadId: t1.id });
+      const b = issues.insertQuickTask({ projectId, title: 'b', body: 'b', threadId: t2.id });
+      const c = issues.insertQuickTask({ projectId, title: 'c', body: 'c', threadId: t3.id });
+      expect([a.issueNumber, b.issueNumber, c.issueNumber]).toEqual([-1, -2, -3]);
+    });
+
+    it('does not collide with existing positive issue numbers', () => {
+      issues.upsert(makeIssue({ issueNumber: 5 }));
+      const threads = new ThreadQueries(db);
+      const thread = threads.create(projectId, 'x', 'x');
+      const quick = issues.insertQuickTask({
+        projectId,
+        title: 'x',
+        body: 'x',
+        threadId: thread.id,
+      });
+      expect(quick.issueNumber).toBe(-1);
+    });
+
+    it('continues from existing minimum when called sequentially', () => {
+      const threads = new ThreadQueries(db);
+      const t1 = threads.create(projectId, 'a', 'a');
+      issues.insertQuickTask({ projectId, title: 'a', body: 'a', threadId: t1.id });
+      issues.insertQuickTask({
+        projectId,
+        title: 'b',
+        body: 'b',
+        threadId: threads.create(projectId, 'b', 'b').id,
+      });
+      const t3 = threads.create(projectId, 'c', 'c');
+      const c = issues.insertQuickTask({ projectId, title: 'c', body: 'c', threadId: t3.id });
+      expect(c.issueNumber).toBe(-3);
+    });
+  });
 });

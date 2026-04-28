@@ -1,4 +1,4 @@
-import type { ActivePipelineSummary } from '@shipcode/shared';
+import type { ActivePipelineSummary, HeatmapQueryArgs } from '@shipcode/shared';
 import {
   clarificationAnswerSchema,
   resolveExecutorModelForIssue,
@@ -658,5 +658,13 @@ export function registerPipelineHandlers({
   // it cost, and how a run failed without scraping the terminal log.
   ipcMain.handle('pipeline-steps:list-by-thread', (_event, { threadId }: { threadId: string }) => {
     return queries.pipelineSteps.listByThread(threadId);
+  });
+
+  // GitHub-style contribution heatmap (cost / tokens / runs / PRs). One IPC
+  // serves three surfaces: global Costs dashboard, per-project Insights tab,
+  // and per-issue CostsTab embedded mini-heatmap. Scope discriminates which
+  // filter applies — see HeatmapQueries for semantics.
+  ipcMain.handle('activity-heatmap:query', (_event, args: HeatmapQueryArgs) => {
+    return queries.heatmap.byScope(args);
   });
 }

@@ -1,8 +1,10 @@
 import type { ProcessManager } from '@shipcode/agents';
 import type { Pipeline, PipelineEmitter } from '@shipcode/pipeline';
 import type { BrowserWindow, IpcMain } from 'electron';
+import type { AutomationSchedulerLike } from './automation-scheduler';
 import type { ChatNotificationService } from './chat-notification-service';
 import { transitionThreadPhase } from './ipc/helpers';
+import { registerAutomationHandlers } from './ipc/register-automation-handlers';
 import { registerDeveloperHandlers } from './ipc/register-developer-handlers';
 import { registerGitHubHandlers } from './ipc/register-github-handlers';
 import { registerInstantHandlers } from './ipc/register-instant-handlers';
@@ -10,6 +12,7 @@ import { registerIssueGraphHandlers } from './ipc/register-issue-graph-handlers'
 import { registerPipelineHandlers } from './ipc/register-pipeline-handlers';
 import { registerPullRequestHandlers } from './ipc/register-pr-handlers';
 import { registerProjectHandlers } from './ipc/register-project-handlers';
+import { registerQuickTaskHandlers } from './ipc/register-quick-task-handlers';
 import { registerSkillsHandlers } from './ipc/register-skills-handlers';
 import { registerSupportHandlers } from './ipc/register-support-handlers';
 import type { Queries } from './ipc/types';
@@ -27,6 +30,7 @@ export function registerIpcHandlers(
   notificationService: NotificationService,
   chatNotificationService: ChatNotificationService,
   updateService: UpdateService,
+  automationScheduler: AutomationSchedulerLike,
 ): void {
   for (const thread of queries.threads.getOrphaned()) {
     transitionThreadPhase(mainWindow, queries, emitter, {
@@ -87,9 +91,11 @@ export function registerIpcHandlers(
   registerGitHubHandlers(deps);
   registerIssueGraphHandlers(deps);
   registerPipelineHandlers(deps);
+  registerQuickTaskHandlers(deps);
   registerSkillsHandlers(deps);
   registerSupportHandlers(deps);
   registerInstantHandlers(deps);
   registerPullRequestHandlers(deps);
+  registerAutomationHandlers(deps, automationScheduler);
   registerDeveloperHandlers(deps, updateService);
 }

@@ -290,7 +290,7 @@ function DraggableCardComponent({
       >
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <span className="shrink-0 font-mono text-[11px] text-secondary">
-            #{issue.issueNumber}
+            {issue.isQuickMode ? 'Quick' : `#${issue.issueNumber}`}
           </span>
           {linkedPrLabel &&
             (issue.linkedPrUrl && onOpenPullRequest ? (
@@ -470,7 +470,9 @@ export function DragOverlayCard({
         dragOverlayBorderClass(issue.pipelineStatus, approvedAwaitingExecution),
       )}
     >
-      <div className="font-mono text-[11px] text-muted">#{issue.issueNumber}</div>
+      <div className="font-mono text-[11px] text-muted">
+        {issue.isQuickMode ? 'Quick' : `#${issue.issueNumber}`}
+      </div>
       <div className="mt-1 line-clamp-2 w-full min-w-0 text-[13px] font-medium leading-snug text-primary">
         {issue.title}
       </div>

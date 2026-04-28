@@ -3,6 +3,7 @@ import { CURRENT_ONBOARDING_VERSION } from '@shipcode/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef } from 'react';
 import { ActivityView } from './components/ActivityView';
+import { AutomationsView } from './components/AutomationsView';
 import { CommandPalette } from './components/CommandPalette';
 import { CostsView } from './components/CostsView';
 import { CreateIssueModal } from './components/CreateIssueModal';
@@ -23,6 +24,7 @@ import { SkillsView } from './components/SkillsView';
 import { TerminalDrawer } from './components/TerminalDrawer';
 import { Titlebar } from './components/Titlebar';
 import { UpdateBanner } from './components/UpdateBanner';
+import { CreateAutomationModal } from './features/automations/create-automation-modal';
 import { useGlobalKeyboard } from './hooks/useGlobalKeyboard';
 import { useIpc } from './hooks/useIpc';
 import { STABLE_APP_STATE_STALE_TIME } from './query-stale-times';
@@ -271,6 +273,8 @@ export function App() {
                 <CostsView />
               ) : viewMode === 'skills' ? (
                 <SkillsView />
+              ) : viewMode === 'automations' ? (
+                <AutomationsView />
               ) : viewMode === 'inbox' ? (
                 <InboxView />
               ) : showOverview ? (
@@ -309,6 +313,7 @@ export function App() {
       </div>
       <CommandPalette />
       <CreateIssueModal />
+      <CreateAutomationModal />
       <ProjectSettingsModal />
       <NotificationToaster />
     </div>

@@ -214,6 +214,7 @@ function createSmokeDeps() {
           priorityRank: null,
           priorityRaw: null,
           priorityFetchedAt: null,
+          isQuickMode: false,
         }),
       ),
       updatePipelineStatus: vi.fn(),

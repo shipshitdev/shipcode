@@ -64,6 +64,7 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     githubIssueNumber: 42,
     githubPrNumber: 101,
     githubRepo: 'owner/repo',
+    automationId: null,
     lastError: null,
     failurePhase: null,
     failureCount: 0,

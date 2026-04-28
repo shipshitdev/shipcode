@@ -1,4 +1,5 @@
-import type { GitHubIssueCacheRecord } from '@shipcode/shared';
+import fs from 'node:fs';
+import type { ExecutorModel, GitHubIssueCacheRecord } from '@shipcode/shared';
 import {
   clampError,
   EXECUTION_PHASES,
@@ -8,7 +9,11 @@ import {
   resolvePhaseModelIdForIssue,
 } from '@shipcode/shared';
 import type { BrowserWindow } from 'electron';
-import { assertCliPhaseModelsSupported, transitionThreadPhase } from './ipc/helpers';
+import {
+  assertCliPhaseModelsSupported,
+  resolveProjectPhaseModels,
+  transitionThreadPhase,
+} from './ipc/helpers';
 import type { IpcHandlerDeps } from './ipc/types';
 import log from './logger.service';
 
@@ -42,6 +47,14 @@ const RUNNING_PIPELINE_PHASES = [
  * testable.
  */
 export class PipelineScheduler {
+  /**
+   * In-memory FIFO queue for automations that fired while all pipeline
+   * slots were occupied. Drained one at a time by `onSlotFreed`.
+   * Lost on app restart by design — automation cron resumes from
+   * `next_run_at` so a missed tick is simply skipped.
+   */
+  private pendingAutomations: string[] = [];
+
   constructor(private readonly deps: PipelineSchedulerDeps) {}
 
   private _getRunningPipelineCount(): number {
@@ -92,6 +105,43 @@ export class PipelineScheduler {
   }
 
   /**
+   * Quick Mode entry: synthetic cache row already exists with negative
+   * sentinel issueNumber + thread linked. Behaves like startOrQueue but
+   * dispatches via `pipeline.startFromQuickTask` so the workpad / PR /
+   * gh CLI paths stay disabled.
+   */
+  async startQuickTaskOrQueue(
+    projectId: string,
+    issueNumber: number,
+  ): Promise<{ queued: boolean }> {
+    const { queries } = this.deps;
+
+    const project = queries.projects.getById(projectId);
+    if (!project) throw new Error(`Project ${projectId} not found`);
+
+    const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
+    if (!issue) throw new Error(`Quick task ${issueNumber} not found in cache`);
+    if (!issue.isQuickMode) {
+      throw new Error(`Issue #${issueNumber} is not a quick task — use startOrQueue`);
+    }
+
+    const settings = queries.settings.get();
+    const activeCount = this._getRunningPipelineCount();
+
+    if (activeCount >= settings.maxConcurrentPipelines) {
+      queries.githubIssues.updatePipelineStatus(issue.id, 'queued');
+      this._sendIssuesUpdated(projectId);
+      log.info(
+        `[scheduler] queued quick task ${issueNumber} (${activeCount}/${settings.maxConcurrentPipelines} slots used)`,
+      );
+      return { queued: true };
+    }
+
+    await this._launchQuickTask(issue, project);
+    return { queued: false };
+  }
+
+  /**
    * Called when a pipeline slot frees up (clarifying, awaiting_approval, completed, failed, idle).
    * Drains one queued issue if capacity allows.
    */
@@ -102,6 +152,18 @@ export class PipelineScheduler {
       const activeCount = this._getRunningPipelineCount();
       if (activeCount >= settings.maxConcurrentPipelines) return;
 
+      // Drain one pending automation before queued issues — automations
+      // already fired their cron tick and should not wait behind issues
+      // that can simply re-queue.
+      const pendingAutomationId = this.pendingAutomations.shift();
+      if (pendingAutomationId) {
+        log.info(`[scheduler] auto-promoting automation ${pendingAutomationId}`);
+        this._launchAutomation(pendingAutomationId).catch((err) => {
+          log.error('[scheduler] automation promote failed:', err);
+        });
+        return;
+      }
+
       const next = queries.githubIssues.getNextQueued();
       if (!next) return;
 
@@ -110,12 +172,37 @@ export class PipelineScheduler {
 
       log.info(`[scheduler] auto-promoting #${next.issueNumber} "${next.title}"`);
 
-      this._launch(next, project).catch((err) => {
+      const launch = next.isQuickMode
+        ? this._launchQuickTask(next, project)
+        : this._launch(next, project);
+      launch.catch((err) => {
         log.error('[scheduler] auto-promote failed:', err);
       });
     } catch (err) {
       log.error('[scheduler] slot-freed promotion error:', err);
     }
+  }
+
+  /**
+   * Cron-driven entry: tries to launch an automation now or queues it
+   * in-memory if pipeline slots are full. Called by AutomationScheduler.
+   */
+  async startOrQueueAutomation(automationId: string): Promise<{ queued: boolean }> {
+    const settings = this.deps.queries.settings.get();
+    const activeCount = this._getRunningPipelineCount();
+
+    if (activeCount >= settings.maxConcurrentPipelines) {
+      if (!this.pendingAutomations.includes(automationId)) {
+        this.pendingAutomations.push(automationId);
+      }
+      log.info(
+        `[scheduler] queued automation ${automationId} (${activeCount}/${settings.maxConcurrentPipelines} slots used)`,
+      );
+      return { queued: true };
+    }
+
+    await this._launchAutomation(automationId);
+    return { queued: false };
   }
 
   /**
@@ -281,6 +368,181 @@ export class PipelineScheduler {
         phase: 'failed',
         errorMessage: clampError(err),
       });
+      throw err;
+    }
+  }
+
+  private async _launchQuickTask(
+    issue: GitHubIssueCacheRecord,
+    project: NonNullable<ReturnType<PipelineSchedulerDeps['queries']['projects']['getById']>>,
+  ): Promise<void> {
+    const { queries, pipeline, emitter, getMainWindow } = this.deps;
+    const settings = queries.settings.get();
+
+    if (!issue.threadId) {
+      throw new Error(`Quick task ${issue.issueNumber} has no linked thread`);
+    }
+    const thread = queries.threads.getById(issue.threadId);
+    if (!thread) {
+      throw new Error(`Quick task ${issue.issueNumber}: thread ${issue.threadId} missing`);
+    }
+
+    queries.githubIssues.updatePipelineStatus(issue.id, 'planning');
+    this._sendIssuesUpdated(issue.projectId);
+
+    const phaseModels = this._resolvePhaseModels(settings, project, issue);
+    await assertCliPhaseModelsSupported(phaseModels);
+
+    const effectiveExecutorModel = resolveExecutorModelForIssue(settings, project, issue);
+    queries.threads.setPhaseModels(thread.id, {
+      ...phaseModels,
+      executorModel: effectiveExecutorModel,
+    });
+    queries.threads.resetFailureTracking(thread.id);
+    queries.plans.supersedeAll(thread.id);
+
+    try {
+      await pipeline.startFromQuickTask(
+        thread.id,
+        project.path,
+        {
+          issueNumber: issue.issueNumber,
+          title: issue.title,
+          text: issue.body ?? issue.title,
+        },
+        effectiveExecutorModel,
+        {
+          worktreePath: thread.worktreePath,
+          baseBranch: project.defaultBranch,
+          plannerModel: phaseModels.plannerModel,
+          reviewerModel: phaseModels.reviewerModel,
+          verifierModel: phaseModels.verifierModel,
+          plannerModelIdOverride: phaseModels.plannerModelId,
+          reviewerModelIdOverride: phaseModels.reviewerModelId,
+          executorModelIdOverride: phaseModels.executorModelId,
+          verifierModelIdOverride: phaseModels.verifierModelId,
+          plannerReasoningEffort: phaseModels.plannerReasoningEffort,
+          reviewerReasoningEffort: phaseModels.reviewerReasoningEffort,
+          executorReasoningEffort: phaseModels.executorReasoningEffort,
+          verifierReasoningEffort: phaseModels.verifierReasoningEffort,
+        },
+      );
+    } catch (err) {
+      const win = getMainWindow();
+      transitionThreadPhase(win, queries, emitter, {
+        threadId: thread.id,
+        phase: 'failed',
+        errorMessage: clampError(err),
+      });
+      throw err;
+    }
+  }
+
+  private async _launchAutomation(automationId: string): Promise<void> {
+    const { queries, pipeline, emitter, getMainWindow } = this.deps;
+
+    const automation = queries.automations.getById(automationId);
+    if (!automation) {
+      log.warn(`[automation] missing automation ${automationId}`);
+      return;
+    }
+    if (!automation.enabled) {
+      log.info(`[automation] skipping disabled automation ${automationId}`);
+      return;
+    }
+
+    const project = queries.projects.getById(automation.projectId);
+    if (!project) {
+      log.warn(`[automation] project ${automation.projectId} not found`);
+      queries.automations.recordRunFinished(automation.id, 'failed');
+      return;
+    }
+    if (!fs.existsSync(project.path)) {
+      log.warn(`[automation] project path missing: ${project.path}`);
+      queries.automations.recordRunFinished(automation.id, 'failed');
+      return;
+    }
+
+    const settings = queries.settings.get();
+    const phaseModels = resolveProjectPhaseModels(settings, project);
+
+    // Per-automation override beats project default beats global default.
+    const mergedPhaseModels = {
+      ...phaseModels,
+      executorModel:
+        (automation.executorProvider as ExecutorModel | null) ??
+        (phaseModels.executorModel as ExecutorModel),
+      executorModelId: automation.executorModelId ?? phaseModels.executorModelId,
+      executorReasoningEffort:
+        automation.executorReasoningEffort ?? phaseModels.executorReasoningEffort,
+    };
+
+    try {
+      await assertCliPhaseModelsSupported(mergedPhaseModels);
+    } catch (err) {
+      log.error('[automation] CLI phase model unsupported:', err);
+      queries.automations.recordRunFinished(automation.id, 'failed');
+      return;
+    }
+
+    const thread = queries.threads.create(
+      project.id,
+      automation.prompt,
+      `[Auto] ${automation.name}`,
+    );
+    queries.threads.setAutomationId(thread.id, automation.id);
+    queries.threads.setPhaseModels(thread.id, mergedPhaseModels);
+
+    pipeline.initializeContext(thread.id, {
+      projectPath: project.path,
+      worktreePath: null,
+      retryCount: 0,
+      autonomous: true,
+      reviewRound: 0,
+      clarificationRound: 0,
+      clarificationRequest: null,
+      clarificationAnswers: [],
+      verificationRetries: 0,
+      githubIssueNumber: null,
+      githubIssueTitle: null,
+      githubRepo: null,
+      plannerModel: mergedPhaseModels.plannerModel,
+      reviewerModel: mergedPhaseModels.reviewerModel,
+      verifierModel: mergedPhaseModels.verifierModel,
+      executorModel: mergedPhaseModels.executorModel,
+      plannerModelIdOverride: mergedPhaseModels.plannerModelId,
+      reviewerModelIdOverride: mergedPhaseModels.reviewerModelId,
+      executorModelIdOverride: mergedPhaseModels.executorModelId,
+      verifierModelIdOverride: mergedPhaseModels.verifierModelId,
+      plannerReasoningEffort: mergedPhaseModels.plannerReasoningEffort,
+      reviewerReasoningEffort: mergedPhaseModels.reviewerReasoningEffort,
+      executorReasoningEffort: mergedPhaseModels.executorReasoningEffort,
+      verifierReasoningEffort: mergedPhaseModels.verifierReasoningEffort,
+      executorModelOverride: null,
+      baseBranch: project.defaultBranch,
+      forkPointSha: '',
+      activeProcessId: null,
+      cancelled: false,
+      verifiedSha: null,
+    });
+
+    queries.automations.recordRunStarted(automation.id, thread.id);
+
+    try {
+      await pipeline.startFromAutomation(
+        thread.id,
+        automation.prompt,
+        project.path,
+        automation.name,
+      );
+    } catch (err) {
+      const win = getMainWindow();
+      transitionThreadPhase(win, queries, emitter, {
+        threadId: thread.id,
+        phase: 'failed',
+        errorMessage: clampError(err),
+      });
+      queries.automations.recordRunFinished(automation.id, 'failed');
       throw err;
     }
   }

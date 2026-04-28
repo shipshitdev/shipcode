@@ -57,6 +57,7 @@ function makeIssue(
     priorityRank: null,
     priorityRaw: null,
     priorityFetchedAt: null,
+    isQuickMode: false,
   };
 }
 
@@ -127,6 +128,7 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     githubIssueNumber: 42,
     githubPrNumber: null,
     githubRepo: null,
+    automationId: null,
     lastError: null,
     failurePhase: null,
     failureCount: 0,

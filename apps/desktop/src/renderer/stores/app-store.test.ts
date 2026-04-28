@@ -42,6 +42,7 @@ const makeIssue = (overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
   priorityRank: null,
   priorityRaw: null,
   priorityFetchedAt: null,
+  isQuickMode: false,
   ...overrides,
 });
 

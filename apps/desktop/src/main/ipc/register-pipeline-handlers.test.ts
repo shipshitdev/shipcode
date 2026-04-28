@@ -46,6 +46,7 @@ function makeThread(overrides: Record<string, unknown> = {}) {
     githubIssueNumber: 42,
     githubPrNumber: null,
     githubRepo: 'acme/repo',
+    automationId: null,
     lastError: null,
     failurePhase: null,
     failureCount: 0,

@@ -38,6 +38,9 @@ import {
   migrateV35,
   migrateV36,
   migrateV37,
+  migrateV38,
+  migrateV39,
+  migrateV40,
 } from './schema';
 import { asRow } from './utils';
 
@@ -675,5 +678,96 @@ describe('migrateV37', () => {
       .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
       .get() as { version: number };
     expect(row.version).toBeGreaterThanOrEqual(37);
+  });
+});
+
+describe('migrateV40', () => {
+  let db: DatabaseSync;
+
+  beforeEach(() => {
+    db = new DatabaseSync(':memory:');
+    migrate(db);
+    migrateV2(db);
+    migrateV3(db);
+    migrateV4(db);
+    migrateV5(db);
+    migrateV6(db);
+    migrateV7(db);
+    migrateV8(db);
+    migrateV9(db);
+    migrateV10(db);
+    migrateV11(db);
+    migrateV12(db);
+    migrateV13(db);
+    migrateV14(db);
+    migrateV15(db);
+    migrateV16(db);
+    migrateV17(db);
+    migrateV18(db);
+    migrateV19(db);
+    migrateV20(db);
+    migrateV21(db);
+    migrateV22(db);
+    migrateV23(db);
+    migrateV24(db);
+    migrateV25(db);
+    migrateV26(db);
+    migrateV27(db);
+    migrateV28(db);
+    migrateV29(db);
+    migrateV30(db);
+    migrateV31(db);
+    migrateV32(db);
+    migrateV33(db);
+    migrateV34(db);
+    migrateV35(db);
+    migrateV36(db);
+    migrateV37(db);
+    migrateV38(db);
+    migrateV39(db);
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  function columnExists(table: string, column: string): boolean {
+    const rows = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+    return rows.some((r) => r.name === column);
+  }
+
+  it('adds is_quick_mode column to github_issue_cache', () => {
+    expect(columnExists('github_issue_cache', 'is_quick_mode')).toBe(false);
+    migrateV40(db);
+    expect(columnExists('github_issue_cache', 'is_quick_mode')).toBe(true);
+  });
+
+  it('defaults is_quick_mode to 0 for existing rows', () => {
+    db.prepare(
+      `INSERT INTO projects (id, name, path, created_at, updated_at)
+       VALUES ('p1', 'p', '/p', datetime('now'), datetime('now'))`,
+    ).run();
+    db.prepare(
+      `INSERT INTO github_issue_cache (id, project_id, issue_number, title)
+       VALUES ('i1', 'p1', 7, 't')`,
+    ).run();
+    migrateV40(db);
+    const row = db
+      .prepare('SELECT is_quick_mode FROM github_issue_cache WHERE id = ?')
+      .get('i1') as { is_quick_mode: number };
+    expect(row.is_quick_mode).toBe(0);
+  });
+
+  it('is idempotent', () => {
+    migrateV40(db);
+    expect(() => migrateV40(db)).not.toThrow();
+  });
+
+  it('bumps schema_version to 40', () => {
+    migrateV40(db);
+    const row = db
+      .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+      .get() as { version: number };
+    expect(row.version).toBeGreaterThanOrEqual(40);
   });
 });

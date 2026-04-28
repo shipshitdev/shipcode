@@ -280,4 +280,21 @@ describe('ThreadQueries', () => {
       expect(updated.totalCostUsd).toBe(0);
     });
   });
+
+  describe('setGithubIssueNumber', () => {
+    it('updates github_issue_number without touching repo', () => {
+      const t = threads.create(projectId, 'p', 'T');
+      threads.setGithubIssue(t.id, 5, 'owner/repo');
+      threads.setGithubIssueNumber(t.id, -3);
+      const updated = threads.getById(t.id);
+      expect(updated?.githubIssueNumber).toBe(-3);
+      expect(updated?.githubRepo).toBe('owner/repo');
+    });
+
+    it('accepts negative sentinels for quick tasks', () => {
+      const t = threads.create(projectId, 'p', 'T');
+      threads.setGithubIssueNumber(t.id, -1);
+      expect(threads.getById(t.id)?.githubIssueNumber).toBe(-1);
+    });
+  });
 });

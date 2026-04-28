@@ -1120,3 +1120,71 @@ export function migrateV38(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (38)`);
   });
 }
+
+export function migrateV39(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 39) return;
+
+  transaction(db, () => {
+    // Automations: scheduled AI tasks per project (cron-driven). Each tick
+    // synthesizes an approved plan and runs the executor + verifier phases
+    // unattended. last_started_at / last_completed_at / last_status track
+    // run lifecycle without losing thread history (threads.automation_id
+    // SET NULL on delete preserves prior runs in sessions list).
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS automations (
+        id                          TEXT PRIMARY KEY,
+        project_id                  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        name                        TEXT NOT NULL,
+        prompt                      TEXT NOT NULL,
+        cron_expr                   TEXT NOT NULL,
+        enabled                     INTEGER NOT NULL DEFAULT 1,
+        executor_provider           TEXT,
+        executor_model_id           TEXT,
+        executor_reasoning_effort   TEXT,
+        last_started_at             TEXT,
+        last_completed_at           TEXT,
+        last_status                 TEXT,
+        next_run_at                 TEXT,
+        run_count                   INTEGER NOT NULL DEFAULT 0,
+        created_at                  TEXT NOT NULL,
+        updated_at                  TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_automations_project_id
+        ON automations(project_id);
+      CREATE INDEX IF NOT EXISTS idx_automations_next_run
+        ON automations(next_run_at) WHERE enabled = 1;
+
+      ALTER TABLE threads ADD COLUMN automation_id TEXT
+        REFERENCES automations(id) ON DELETE SET NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_threads_automation_id
+        ON threads(automation_id);
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (39)`);
+  });
+}
+
+export function migrateV40(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 40) return;
+
+  transaction(db, () => {
+    // Quick Mode: synthetic github_issue_cache rows for tasks created without
+    // a real GitHub issue. Marker column lets handlers/UI skip GH-specific
+    // actions for these rows. Sentinel issue_number is allocated negative
+    // per project (see GitHubIssueQueries.insertQuickTask).
+    execAlterTableIfMissing(
+      db,
+      'ALTER TABLE github_issue_cache ADD COLUMN is_quick_mode INTEGER NOT NULL DEFAULT 0',
+    );
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (40)`);
+  });
+}
