@@ -1,3 +1,4 @@
+export * from './branch-name';
 export * from './branches';
 export * from './cli-model-capabilities';
 export * from './constants';

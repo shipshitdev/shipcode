@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { formatIssueBranch as formatIssueBranchShared, slugifyIssueTitle } from '@shipcode/shared';
 import { resolveWorktreeParent } from '@shipcode/shared/worktree-path';
 import { type SimpleGit, simpleGit } from 'simple-git';
 
@@ -18,15 +19,7 @@ export interface WorktreeManagerOptions {
   branchFormat?: string;
 }
 
-const DEFAULT_BRANCH_FORMAT = 'ship/{id}-{slug}';
-
-function slugify(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 48);
-}
+const slugify = slugifyIssueTitle;
 
 /** ShipCode-managed branch prefixes for list() filtering. */
 const SHIPCODE_BRANCH_RE = /^(shipcode\/|ship\/\d+)/;
@@ -43,12 +36,7 @@ export class WorktreeManager {
 
   /** Build branch name for an issue-based worktree. */
   private formatIssueBranch(issueNumber: number, title: string): string {
-    const format = this.options.branchFormat || DEFAULT_BRANCH_FORMAT;
-    const slug = slugify(title);
-    let branch = format.replace(/\{id\}/g, String(issueNumber)).replace(/\{slug\}/g, slug);
-    // Clean up trailing dashes from empty slug
-    branch = branch.replace(/-$/, '');
-    return branch;
+    return formatIssueBranchShared(issueNumber, title, this.options.branchFormat ?? null);
   }
 
   /** Build directory name for an issue-based worktree. */

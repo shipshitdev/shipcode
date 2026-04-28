@@ -327,19 +327,90 @@ export function createPipelineRuntime(
       ? { maxTurns: 1, ...phaseHints }
       : phaseHints;
 
-    const response = await provider.generate({
-      phase,
-      prompt,
-      cwd,
-      projectPath: context.projectPath,
-      signal: context.abort.signal,
-      phaseHints: mergedHints,
-      promptMaterialSummary: context.promptMaterialSummaries[phase],
-      modelHint: modelHint ?? undefined,
-      threadId: context.threadId,
-      onTerminalEvent: (event) =>
-        deps.emitter.emit({ type: 'terminal:event', threadId: context.threadId, event }),
-    });
+    // Lifecycle envelope: start a pipeline_step_log row before generation so
+    // a crashed run still leaves a 'started' breadcrumb. The completion path
+    // below flips it to completed/failed/aborted with tokens + cost.
+    const stepRow = (() => {
+      try {
+        return (
+          deps.pipelineSteps?.start({
+            threadId: context.threadId,
+            phase,
+            attempt: context.promptTelemetry.length + 1,
+            provider: provider.id,
+            requestedModel: modelHint ?? agent,
+          }) ?? null
+        );
+      } catch (error) {
+        console.error('[pipeline] pipeline step start failed:', error);
+        return null;
+      }
+    })();
+
+    let response: Awaited<ReturnType<typeof provider.generate>>;
+    try {
+      // Defense in depth: only assert workspace shape when running inside a
+      // worktree. Plan/review for issues that haven't materialized a
+      // worktree yet still spawn at the project root and skip the check.
+      const workspaceRoot = context.worktreePath ? deps.settings.get().worktreeRoot : undefined;
+      response = await provider.generate({
+        phase,
+        prompt,
+        cwd,
+        projectPath: context.projectPath,
+        signal: context.abort.signal,
+        phaseHints: mergedHints,
+        promptMaterialSummary: context.promptMaterialSummaries[phase],
+        modelHint: modelHint ?? undefined,
+        threadId: context.threadId,
+        ...(workspaceRoot !== undefined ? { workspaceRoot } : {}),
+        onTerminalEvent: (event) =>
+          deps.emitter.emit({ type: 'terminal:event', threadId: context.threadId, event }),
+      });
+    } catch (error) {
+      if (stepRow && deps.pipelineSteps) {
+        const message = error instanceof Error ? error.message : String(error);
+        const aborted = context.abort.signal.aborted || /abort/i.test(message);
+        try {
+          deps.pipelineSteps.complete(stepRow.id, {
+            status: aborted ? 'aborted' : 'failed',
+            errorKind: aborted ? 'aborted' : 'unknown',
+            errorMessage: message.slice(0, 500),
+          });
+        } catch (logError) {
+          console.error('[pipeline] pipeline step complete (throw path) failed:', logError);
+        }
+      }
+      throw error;
+    }
+
+    if (stepRow && deps.pipelineSteps) {
+      try {
+        if (response.exitCode === 0) {
+          deps.pipelineSteps.complete(stepRow.id, {
+            status: 'completed',
+            resolvedModel: response.resolvedModel ?? null,
+            promptTokens: response.tokensUsed?.prompt ?? null,
+            completionTokens: response.tokensUsed?.completion ?? null,
+            costUsd: response.costUsd ?? null,
+          });
+        } else {
+          const kind = response.providerError?.kind;
+          const status = kind === 'aborted' ? 'aborted' : 'failed';
+          deps.pipelineSteps.complete(stepRow.id, {
+            status,
+            resolvedModel: response.resolvedModel ?? null,
+            errorKind: kind ?? 'unknown',
+            errorMessage: response.providerError?.message?.slice(0, 500) ?? null,
+            promptTokens: response.tokensUsed?.prompt ?? null,
+            completionTokens: response.tokensUsed?.completion ?? null,
+            costUsd: response.costUsd ?? null,
+          });
+        }
+      } catch (logError) {
+        console.error('[pipeline] pipeline step complete failed:', logError);
+      }
+    }
 
     const promptTelemetry = measurePhasePromptTelemetry({
       phase,

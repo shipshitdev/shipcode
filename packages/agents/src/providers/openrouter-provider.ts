@@ -154,7 +154,7 @@ export function createOpenRouterProvider(deps: OpenRouterProviderDeps): AgentPro
             rawOutput: '',
             exitCode: 1,
             providerError: {
-              kind: err.kind === 'aborted' ? 'network' : err.kind,
+              kind: err.kind,
               message: err.message,
               retryable: err.retryable,
             },

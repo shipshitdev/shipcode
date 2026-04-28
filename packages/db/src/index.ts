@@ -56,6 +56,7 @@ import {
   migrateV35,
   migrateV36,
   migrateV37,
+  migrateV38,
 } from './schema';
 
 export { ActivityQueries } from './queries/activity';
@@ -68,6 +69,7 @@ export { GitHubIssueQueries } from './queries/github-issues';
 // Issue graph persistence backs the project-level dependency view.
 export { IssueEdgeQueries } from './queries/issue-edges';
 export { NotificationsQueries } from './queries/notifications';
+export { PipelineStepQueries } from './queries/pipeline-steps';
 export { PlanQueries } from './queries/plans';
 export { ProjectQueries } from './queries/projects';
 export { PromptTelemetryQueries } from './queries/prompt-telemetry';
@@ -129,6 +131,7 @@ export function getDatabase(dataDir: string): DatabaseSync {
   migrateV35(db);
   migrateV36(db);
   migrateV37(db);
+  migrateV38(db);
 
   // Startup cleanup: reset unclaimed queued issues to todo on every launch.
   // An unclaimed queued issue has no active worker holding it — it's stale state

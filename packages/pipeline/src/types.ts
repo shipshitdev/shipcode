@@ -11,6 +11,7 @@ import type {
   CheckpointQueries,
   DiffQueries,
   GitHubIssueQueries,
+  PipelineStepQueries,
   PlanQueries,
   ProjectQueries,
   PromptTelemetryQueries,
@@ -244,6 +245,13 @@ export interface PipelineDeps {
    *  this into every prompt builder so resolveSkill walks the tier chain. */
   skills: SkillsQueries;
   promptTelemetry?: PromptTelemetryQueries;
+  /**
+   * Lifecycle envelope for individual provider invocations. When provided,
+   * the runtime emits one started -> completed/failed/aborted row per phase
+   * attempt so the UI / debug tools can correlate token + cost + error
+   * across the whole pipeline.
+   */
+  pipelineSteps?: PipelineStepQueries;
 }
 
 export interface Pipeline {

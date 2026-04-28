@@ -14,19 +14,18 @@
 
 import type { TerminalEvent } from '../../terminal-events';
 import { stripAnsi, summarizeTerminalText } from '../output-summary';
-import { FENCE_ACTIONS, findOpeningFence, getDeferredFencePrefix } from './fence-suppression';
+import { FenceStateMachine } from './fence-suppression';
 
 export class CodexNormalizer {
   private lineBuffer = '';
-  private fenceSuppressed = false;
-  private deferredFencePrefix = '';
-  private suppressedFenceCarry = '';
+  private readonly fence: FenceStateMachine;
   /** Track item IDs that received delta events (for dedup). */
   private deltaItemIds = new Set<string>();
   private readonly onEvent: (event: TerminalEvent) => void;
 
   constructor(onEvent: (event: TerminalEvent) => void) {
     this.onEvent = onEvent;
+    this.fence = new FenceStateMachine(onEvent);
   }
 
   /**
@@ -49,7 +48,7 @@ export class CodexNormalizer {
       try {
         event = JSON.parse(stripAnsi(line));
       } catch {
-        if (!this.fenceSuppressed) {
+        if (!this.fence.isSuppressing) {
           this.onEvent({ kind: 'raw', content: line });
         }
         newlineIdx = this.lineBuffer.indexOf('\n');
@@ -83,7 +82,7 @@ export class CodexNormalizer {
         const itemId = event.item_id as string | undefined;
         if (itemId) this.deltaItemIds.add(itemId);
 
-        this.emitTextFragment(delta.text);
+        this.fence.feed(delta.text);
       }
       return;
     }
@@ -103,7 +102,7 @@ export class CodexNormalizer {
       if (itemId && this.deltaItemIds.has(itemId)) return; // Already streamed via deltas
 
       const text = item.text as string | undefined;
-      if (text) this.emitTextFragment(text);
+      if (text) this.fence.feed(text);
       return;
     }
 
@@ -125,7 +124,7 @@ export class CodexNormalizer {
 
     // Response completed → done with usage
     if (event.type === 'response.completed') {
-      this.flushDeferredFencePrefix();
+      this.fence.flush();
       const response = event.response as Record<string, unknown> | undefined;
       const usage = response?.usage as
         | { input_tokens?: number; completion_tokens?: number }
@@ -137,60 +136,5 @@ export class CodexNormalizer {
           : undefined,
       });
     }
-  }
-
-  private flushDeferredFencePrefix(): void {
-    if (!this.fenceSuppressed && this.deferredFencePrefix) {
-      this.onEvent({ kind: 'text', content: this.deferredFencePrefix });
-      this.deferredFencePrefix = '';
-    }
-  }
-
-  private emitTextFragment(fragment: string): void {
-    let remaining = this.deferredFencePrefix + fragment;
-    this.deferredFencePrefix = '';
-
-    while (remaining) {
-      if (this.fenceSuppressed) {
-        remaining = this.consumeSuppressedFragment(remaining);
-        continue;
-      }
-
-      const openingFence = findOpeningFence(remaining);
-      if (!openingFence) {
-        const deferredPrefix = getDeferredFencePrefix(remaining);
-        const visibleText = deferredPrefix ? remaining.slice(0, -deferredPrefix.length) : remaining;
-        if (visibleText) {
-          this.onEvent({ kind: 'text', content: visibleText });
-        }
-        this.deferredFencePrefix = deferredPrefix;
-        return;
-      }
-
-      const visibleText = remaining.slice(0, openingFence.index);
-      if (visibleText) {
-        this.onEvent({ kind: 'text', content: visibleText });
-      }
-
-      this.fenceSuppressed = true;
-      this.suppressedFenceCarry = '';
-      const action = FENCE_ACTIONS[openingFence.tag];
-      this.onEvent({ kind: 'action', label: action.label, action: action.action });
-      remaining = remaining.slice(openingFence.index + openingFence.length);
-    }
-  }
-
-  private consumeSuppressedFragment(fragment: string): string {
-    const combined = this.suppressedFenceCarry + fragment;
-    const closingFenceIndex = combined.indexOf('```');
-
-    if (closingFenceIndex === -1) {
-      this.suppressedFenceCarry = combined.slice(-2);
-      return '';
-    }
-
-    this.fenceSuppressed = false;
-    this.suppressedFenceCarry = '';
-    return combined.slice(closingFenceIndex + 3);
   }
 }

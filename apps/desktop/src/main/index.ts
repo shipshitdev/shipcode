@@ -50,6 +50,7 @@ import {
   getDatabase,
   IssueEdgeQueries,
   NotificationsQueries,
+  PipelineStepQueries,
   PlanQueries,
   ProjectQueries,
   ReviewQueries,
@@ -65,6 +66,7 @@ import {
   EXECUTION_PHASES,
   HEARTBEAT_TIMEOUT_MS,
   type PipelinePhase,
+  PROCESS_STALL_TIMEOUT_MS,
 } from '@shipcode/shared';
 import { ChatNotificationService } from './chat-notification-service';
 import { registerIpcHandlers } from './ipc';
@@ -230,6 +232,7 @@ function createWindow() {
     costs: new CostsQueries(db),
     skills: new SkillsQueries(db),
     terminalEvents: new TerminalEventQueries(db),
+    pipelineSteps: new PipelineStepQueries(db),
   };
   threadQueries = queries.threads;
 
@@ -285,6 +288,7 @@ function createWindow() {
     settings: queries.settings,
     providers,
     skills: queries.skills,
+    pipelineSteps: queries.pipelineSteps,
   };
   pipeline = createPipeline(pipelineDeps as Parameters<typeof createPipeline>[0]);
   const activePipeline = requirePipeline();
@@ -345,6 +349,9 @@ function createWindow() {
 
   // Watchdog: reset threads stuck in active phases (handles renderer refresh + crash scenarios).
   // HEARTBEAT_TIMEOUT_MS = 120s. Fires every 30s; skips threads that are live in activePipelines.
+  // Also kills agent ptys whose stdout has gone silent for PROCESS_STALL_TIMEOUT_MS — a hung
+  // claude/codex child can outlive its phase and pin a thread in 'executing' indefinitely
+  // without tripping the heartbeat watchdog above.
   const watchdogTimer = setInterval(() => {
     try {
       const activeIds = new Set(activePipeline.listActive().map((s) => s.threadId));
@@ -357,6 +364,21 @@ function createWindow() {
           errorMessage: errorMsg,
         });
         log.info(`[watchdog] reset stuck thread ${thread.id} → failed`);
+      }
+
+      const stalledIds = processManager?.killStalled(PROCESS_STALL_TIMEOUT_MS) ?? [];
+      for (const procId of stalledIds) {
+        const proc = processManager?.get(procId);
+        const tid = proc?.threadId;
+        log.warn(
+          `[watchdog] killed stalled ${proc?.type ?? 'process'} ${procId} (thread=${tid ?? 'n/a'})`,
+        );
+        if (!tid) continue;
+        transitionThreadPhase(requireMainWindow(), queries, emitter, {
+          threadId: tid,
+          phase: 'failed',
+          errorMessage: `Agent process stalled — no output for ${Math.round(PROCESS_STALL_TIMEOUT_MS / 1000)}s. Killed by watchdog.`,
+        });
       }
     } catch (err) {
       log.error('[watchdog] error during stuck-thread check:', err);

@@ -222,6 +222,60 @@ export interface PromptTelemetryInsert {
   costUsd?: number | null;
 }
 
+// === Pipeline step log ===
+//
+// A row per provider invocation captures the lifecycle envelope around a
+// single phase attempt: who ran it (provider+model), when it started/ended,
+// what the outcome was (status + error kind + message), and what it cost.
+// Designed to be the join key correlating `pipeline:phase`, `terminal:event`,
+// `pipeline:model-resolved`, and `prompt_telemetry` rows for a given attempt.
+
+export type PipelineStepStatus =
+  | 'started'
+  | 'completed'
+  | 'failed'
+  | 'aborted'
+  | 'clarification_requested';
+
+export type PipelineStepPhase = PromptTelemetryPhase;
+
+export interface PipelineStepRecord {
+  id: string;
+  threadId: string;
+  phase: PipelineStepPhase;
+  attempt: number;
+  provider: string | null;
+  requestedModel: string | null;
+  resolvedModel: string | null;
+  status: PipelineStepStatus;
+  errorKind: string | null;
+  errorMessage: string | null;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  costUsd: number | null;
+  startedAt: string;
+  completedAt: string | null;
+  durationMs: number | null;
+}
+
+export interface PipelineStepInsert {
+  threadId: string;
+  phase: PipelineStepPhase;
+  attempt: number;
+  provider?: string | null;
+  requestedModel?: string | null;
+}
+
+export interface PipelineStepCompletionUpdate {
+  status: Exclude<PipelineStepStatus, 'started'>;
+  resolvedModel?: string | null;
+  errorKind?: string | null;
+  errorMessage?: string | null;
+  promptTokens?: number | null;
+  completionTokens?: number | null;
+  costUsd?: number | null;
+}
+
 // === Terminal Types ===
 
 export interface ClarificationChoice {

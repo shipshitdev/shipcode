@@ -13,6 +13,7 @@ import {
   DiffQueries,
   GitHubIssueQueries,
   getDatabase,
+  PipelineStepQueries,
   PlanQueries,
   ProjectQueries,
   ReviewQueries,
@@ -66,6 +67,7 @@ export function createCliContext(cwd: string): CliContext {
   const skills = new SkillsQueries(db);
   const checkpoints = new CheckpointQueries(db);
   const terminalEvents = new TerminalEventQueries(db);
+  const pipelineSteps = new PipelineStepQueries(db);
 
   let project = projects.list().find((p) => p.path === cwd);
   if (!project) {
@@ -99,6 +101,7 @@ export function createCliContext(cwd: string): CliContext {
     settings,
     providers,
     skills,
+    pipelineSteps,
   } as Parameters<typeof createPipeline>[0];
 
   return {

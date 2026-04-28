@@ -293,6 +293,6 @@ describe('executeViaOpenRouter', () => {
       model: 'openrouter/auto',
     });
     expect(res.exitCode).toBe(1);
-    expect(res.providerError?.kind).toBe('network');
+    expect(res.providerError?.kind).toBe('aborted');
   });
 });

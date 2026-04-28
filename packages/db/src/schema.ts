@@ -1078,3 +1078,45 @@ export function migrateV37(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (37)`);
   });
 }
+
+export function migrateV38(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 38) return;
+
+  transaction(db, () => {
+    // Lifecycle envelope around each provider invocation. One row per phase
+    // attempt. Captures status, timing, error class, and resolved model so
+    // any downstream debugger / dashboard can correlate `pipeline:phase`,
+    // `terminal:event`, `pipeline:model-resolved`, and `prompt_telemetry`
+    // rows for a single run via this row's id.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS pipeline_step_log (
+        id TEXT PRIMARY KEY,
+        thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+        phase TEXT NOT NULL,
+        attempt INTEGER NOT NULL,
+        provider TEXT,
+        requested_model TEXT,
+        resolved_model TEXT,
+        status TEXT NOT NULL,
+        error_kind TEXT,
+        error_message TEXT,
+        prompt_tokens INTEGER,
+        completion_tokens INTEGER,
+        cost_usd REAL,
+        started_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        completed_at TEXT,
+        duration_ms INTEGER
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_pipeline_step_log_thread
+        ON pipeline_step_log(thread_id, started_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_pipeline_step_log_thread_phase
+        ON pipeline_step_log(thread_id, phase, attempt);
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (38)`);
+  });
+}

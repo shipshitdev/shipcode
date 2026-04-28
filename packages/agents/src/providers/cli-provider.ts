@@ -38,6 +38,7 @@ async function runCli(
   cwd: string,
   signal: AbortSignal,
   threadId?: string,
+  workspaceRoot?: string | null,
 ): Promise<CliRunResult> {
   if (signal.aborted) {
     return { rawOutput: '', exitCode: 130 };
@@ -45,7 +46,14 @@ async function runCli(
 
   let process: ReturnType<ProcessManager['spawn']>;
   try {
-    process = processManager.spawn(agentId, agentId, args, cwd, threadId);
+    process = processManager.spawn(
+      agentId,
+      agentId,
+      args,
+      cwd,
+      threadId,
+      workspaceRoot !== undefined ? { workspaceRoot } : {},
+    );
   } catch (err) {
     // ProcessManager synthesizes an exit event for missing binaries etc.
     // but if spawn() throws synchronously, surface that as exit 127.
@@ -255,6 +263,7 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
         req.cwd,
         req.signal,
         req.threadId,
+        req.workspaceRoot,
       );
       const parser = new StreamParser();
       parser.feed(result.rawOutput);
@@ -283,7 +292,7 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
               },
             }
           : result.exitCode === 130
-            ? { providerError: { kind: 'network' as const, message: 'aborted', retryable: false } }
+            ? { providerError: { kind: 'aborted' as const, message: 'aborted', retryable: false } }
             : {}),
       };
     },
@@ -307,7 +316,15 @@ export function createCodexCliProvider(processManager: ProcessManager): AgentPro
         ...(req.promptMaterialSummary ? { selectedMaterials: req.promptMaterialSummary } : {}),
       };
       const args = buildCodexArgs(req);
-      const result = await runCli(processManager, 'codex', args, req.cwd, req.signal, req.threadId);
+      const result = await runCli(
+        processManager,
+        'codex',
+        args,
+        req.cwd,
+        req.signal,
+        req.threadId,
+        req.workspaceRoot,
+      );
       const rawOutput = stripCodexProtocol(result.rawOutput, {
         includeCommandOutput: req.phase === 'execute',
       });
@@ -317,10 +334,13 @@ export function createCodexCliProvider(processManager: ProcessManager): AgentPro
       const outputParser = new StreamParser();
       outputParser.feed(rawOutput);
       const clarification = outputParser.extractClarificationRequest();
+      const ndjsonParser = new StreamParser();
+      ndjsonParser.feed(result.rawOutput);
+      const resolvedModel = ndjsonParser.extractCodexModel() ?? req.modelHint ?? 'codex';
       return {
         rawOutput,
         exitCode: result.exitCode,
-        resolvedModel: req.modelHint ?? 'codex',
+        resolvedModel,
         promptTelemetry,
         ...(usage
           ? {
@@ -340,7 +360,7 @@ export function createCodexCliProvider(processManager: ProcessManager): AgentPro
               },
             }
           : result.exitCode === 130
-            ? { providerError: { kind: 'network' as const, message: 'aborted', retryable: false } }
+            ? { providerError: { kind: 'aborted' as const, message: 'aborted', retryable: false } }
             : {}),
       };
     },

@@ -412,7 +412,7 @@ describe('createClaudeCliProvider', () => {
 
     const result = await promise;
     expect(result.exitCode).toBe(130);
-    expect(result.providerError?.kind).toBe('network');
+    expect(result.providerError?.kind).toBe('aborted');
     expect(result.providerError?.message).toBe('aborted');
   });
 
@@ -507,5 +507,47 @@ describe('createCodexCliProvider', () => {
     expect(provider.supports.has('revision')).toBe(true);
     expect(provider.supports.has('verify')).toBe(true);
     expect(provider.supports.has('execute')).toBe(true);
+  });
+
+  it('extracts resolvedModel from response.completed NDJSON event', async () => {
+    const { pm, trigger } = createMockProcessManager();
+    const provider = createCodexCliProvider(pm);
+
+    const promise = provider.generate(req({ phase: 'plan' }));
+    await new Promise((r) => setImmediate(r));
+
+    await trigger(
+      'output',
+      'proc-1',
+      [
+        JSON.stringify({ type: 'thread.started', thread_id: 't1' }),
+        JSON.stringify({ item: { type: 'agent_message', text: 'planner text' } }),
+        JSON.stringify({
+          type: 'response.completed',
+          response: {
+            model: 'gpt-5.4-high',
+            usage: { input_tokens: 12, completion_tokens: 7 },
+          },
+        }),
+      ].join('\n'),
+    );
+    await trigger('exit', 'proc-1', 0);
+
+    const result = await promise;
+    expect(result.resolvedModel).toBe('gpt-5.4-high');
+  });
+
+  it('falls back to modelHint when codex output has no model field', async () => {
+    const { pm, trigger } = createMockProcessManager();
+    const provider = createCodexCliProvider(pm);
+
+    const promise = provider.generate(req({ phase: 'plan', modelHint: 'gpt-5.4-mini' }));
+    await new Promise((r) => setImmediate(r));
+
+    await trigger('output', 'proc-1', 'plain text without ndjson model events\n');
+    await trigger('exit', 'proc-1', 0);
+
+    const result = await promise;
+    expect(result.resolvedModel).toBe('gpt-5.4-mini');
   });
 });

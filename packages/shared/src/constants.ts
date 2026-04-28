@@ -108,6 +108,15 @@ export const PIPELINE_MAX_RETRIES = 3;
 
 export const HEARTBEAT_TIMEOUT_MS = 120_000;
 
+/**
+ * Default stdout-silence threshold for ProcessManager.killStalled.
+ * If an agent pty has not emitted a single chunk for this long, the
+ * watchdog assumes the agent is hung and kills it. 5 minutes is long
+ * enough for slow tool calls (codex sandbox, npm install) but short
+ * enough to recover before the user gives up.
+ */
+export const PROCESS_STALL_TIMEOUT_MS = 300_000;
+
 export const IGNORED_DIRECTORIES = [
   'node_modules',
   '.git',

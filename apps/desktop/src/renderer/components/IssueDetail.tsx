@@ -16,6 +16,7 @@ import type {
 } from '@shipcode/shared';
 import {
   deriveGithubIssueUrl,
+  formatIssueBranch,
   resolveEffectivePhaseReasoningEffort,
   resolveExecutorModelForIssue,
   resolvePhaseModel,
@@ -33,8 +34,10 @@ import {
   Archive,
   Badge,
   Button,
+  Check,
   CircleCheck,
   CircleDot,
+  Copy,
   cn,
   DropdownMenu,
   DropdownMenuContent,
@@ -83,6 +86,13 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const [showRawOutput, setShowRawOutput] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [showMarkAsDoneConfirm, setShowMarkAsDoneConfirm] = useState(false);
+  const [branchCopyState, setBranchCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
+  const branchCopyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (branchCopyResetRef.current) clearTimeout(branchCopyResetRef.current);
+    };
+  }, []);
   const [activeTab, setActiveTab] = useState<IssueDetailTab>('prd');
   const [phaseModelValidation, setPhaseModelValidation] = useState<
     Partial<
@@ -710,6 +720,24 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     if (!githubIssueUrl) return;
     await window.shipcode.invoke('shell:open-external', { url: githubIssueUrl });
   };
+  const issueBranchName = activeIssue
+    ? formatIssueBranch(
+        activeIssue.issueNumber,
+        activeIssue.title ?? '',
+        settings?.worktreeBranchFormat ?? null,
+      )
+    : null;
+  const handleCopyBranchName = async () => {
+    if (!issueBranchName) return;
+    if (branchCopyResetRef.current) clearTimeout(branchCopyResetRef.current);
+    try {
+      await navigator.clipboard.writeText(issueBranchName);
+      setBranchCopyState('copied');
+    } catch {
+      setBranchCopyState('error');
+    }
+    branchCopyResetRef.current = setTimeout(() => setBranchCopyState('idle'), 1500);
+  };
   const handleOpenPullRequest = async () => {
     if (!linkedPrUrl) return;
     await window.shipcode.invoke('shell:open-external', { url: linkedPrUrl });
@@ -1094,6 +1122,37 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       ) : (
         <span className="font-mono text-xs text-muted">#{activeIssue.issueNumber}</span>
       )}
+      {issueBranchName ? (
+        <Button
+          variant="ghost"
+          size="xs"
+          onClick={() => void handleCopyBranchName()}
+          className={cn(
+            'h-5 gap-1 px-1.5 font-mono text-[11px] hover:bg-secondary',
+            branchCopyState === 'copied'
+              ? 'text-success hover:text-success'
+              : branchCopyState === 'error'
+                ? 'text-danger hover:text-danger'
+                : 'text-muted hover:text-primary',
+          )}
+          title={
+            branchCopyState === 'copied'
+              ? 'Copied!'
+              : branchCopyState === 'error'
+                ? 'Clipboard write failed'
+                : `Copy branch name (${issueBranchName})`
+          }
+          aria-label="Copy branch name"
+          data-testid="copy-branch-name"
+        >
+          {branchCopyState === 'copied' ? (
+            <Check className="h-3 w-3" />
+          ) : (
+            <Copy className="h-3 w-3" />
+          )}
+          <span className="max-w-[14ch] truncate">{issueBranchName}</span>
+        </Button>
+      ) : null}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button

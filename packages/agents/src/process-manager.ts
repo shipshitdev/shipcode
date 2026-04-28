@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import type { AgentState, AgentType } from '@shipcode/shared';
+import { assertWorkspaceSafe } from '@shipcode/shared/worktree-path';
 import { nanoid } from 'nanoid';
 import * as pty from 'node-pty';
 
@@ -81,6 +82,14 @@ export type ManagedProcessOutputMode = 'normalized' | 'raw';
 
 export interface ManagedProcessSpawnOptions {
   outputMode?: ManagedProcessOutputMode;
+  /**
+   * When provided, the spawn site asserts `cwd` is a safe agent workspace
+   * (absolute, basename matches `[A-Za-z0-9._-]+`, lives under the configured
+   * workspaceRoot). Defense-in-depth — see `assertWorkspaceSafe`. Pipeline
+   * worktree spawns opt in; instant terminals at the project root do not.
+   * `null` matches the AppSettings default; `''` means project-local mode.
+   */
+  workspaceRoot?: string | null;
 }
 
 export interface ManagedProcess {
@@ -92,6 +101,12 @@ export interface ManagedProcess {
   exitCode: number | null;
   threadId?: string;
   outputMode: ManagedProcessOutputMode;
+  /**
+   * Wall-clock time (ms since epoch) of the last lifecycle event observed
+   * for this process — set on spawn and refreshed on every stdout chunk.
+   * `killStalled` reads this to decide whether the pty has gone silent.
+   */
+  lastEventAt: number;
 }
 
 export class ProcessManager extends EventEmitter {
@@ -107,6 +122,14 @@ export class ProcessManager extends EventEmitter {
   ): ManagedProcess {
     const id = nanoid();
     const outputMode = options.outputMode ?? 'normalized';
+
+    // Defense in depth: when the caller declares a workspaceRoot policy,
+    // assert the cwd before pty.spawn. A mismatch here means the pipeline
+    // is about to run an agent in the wrong directory — fail loud, never
+    // continue.
+    if (options.workspaceRoot !== undefined) {
+      assertWorkspaceSafe({ workspacePath: cwd, workspaceRoot: options.workspaceRoot });
+    }
 
     if (!cachedEnv) {
       cachedEnv = getShellEnv();
@@ -137,6 +160,7 @@ export class ProcessManager extends EventEmitter {
         exitCode: 127,
         threadId,
         outputMode,
+        lastEventAt: Date.now(),
       };
       this.processes.set(id, managed);
 
@@ -161,12 +185,14 @@ export class ProcessManager extends EventEmitter {
       cwd,
       exitCode: null,
       outputMode,
+      lastEventAt: Date.now(),
     };
 
     this.processes.set(id, managed);
     this.updateState(id, 'running');
 
     ptyProcess.onData((data: string) => {
+      managed.lastEventAt = Date.now();
       this.emit('output', id, data);
     });
 
@@ -282,6 +308,34 @@ export class ProcessManager extends EventEmitter {
         new Promise<void>((resolve) => setTimeout(resolve, 1000)),
       ]);
     }
+  }
+
+  /**
+   * Kill any active process whose pty has emitted no stdout for at least
+   * `stallTimeoutMs`. Returns the IDs of processes that were killed so the
+   * caller (typically the pipeline watchdog) can transition the matching
+   * threads to a failed state with a "stalled" reason.
+   *
+   * Pass 0 to disable — a no-op that returns an empty array. SIGHUP first;
+   * `cleanup()` / pty exit handler will drop the entry from the registry
+   * once the process actually dies. Idempotent: a stalled process whose
+   * pty is already exited is skipped.
+   */
+  killStalled(stallTimeoutMs: number): string[] {
+    if (!Number.isFinite(stallTimeoutMs) || stallTimeoutMs <= 0) return [];
+    const now = Date.now();
+    const killed: string[] = [];
+    for (const proc of this.processes.values()) {
+      if (proc.state === 'exited') continue;
+      if (now - proc.lastEventAt < stallTimeoutMs) continue;
+      try {
+        proc.pty.kill();
+      } catch {
+        // pty may already be dead — exit handler will fire either way.
+      }
+      killed.push(proc.id);
+    }
+    return killed;
   }
 
   cleanup(processId: string): void {

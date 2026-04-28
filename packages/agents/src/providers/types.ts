@@ -67,6 +67,16 @@ export interface ProviderRequest {
    * forgot to create a worktree. All other phases can ignore this.
    */
   projectPath: string;
+  /**
+   * The configured workspace root (matches `AppSettings.worktreeRoot`).
+   * When set, the CLI provider asserts the spawn cwd is a safe workspace
+   * before launching the agent (basename + prefix check). Omit to disable
+   * the check (e.g. instant terminals running at the project root).
+   *   - `null`/undefined  → use default ~/.shipcode/worktrees
+   *   - `''`              → project-local mode (skip prefix check)
+   *   - absolute / `~/x`  → custom worktree root
+   */
+  workspaceRoot?: string | null;
   /** Explicit model override. Takes precedence over settings defaults. */
   modelHint?: string;
   /**
@@ -96,6 +106,7 @@ export type ProviderErrorKind =
   | 'rate_limit'
   | 'network'
   | 'not_found'
+  | 'aborted'
   | 'tool_loop_overflow'
   | 'unexpected_stop'
   | 'binary_missing'

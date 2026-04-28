@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { buildWorkpadProtocol } from '@shipcode/agents';
 import { resolveRequireApproval, resolveRequireApprovalForIssue } from '@shipcode/shared';
 import { createPipelineContextHelpers } from './pipeline/context';
 import { createExecutionPhaseHandlers } from './pipeline/execution-phases';
@@ -145,7 +146,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       reviewRound: 0,
     });
 
-    const prompt = `GitHub Issue #${issue.number}: ${issue.title}\n\n${issue.body ?? ''}`;
+    const prompt =
+      `GitHub Issue #${issue.number}: ${issue.title}\n\n${issue.body ?? ''}` +
+      buildWorkpadProtocol({ issueNumber: issue.number });
     await handlers.startPlanGeneration(
       threadId,
       prompt,

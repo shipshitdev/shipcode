@@ -99,7 +99,7 @@ export async function executeViaOpenRouter(
     return {
       rawOutput: '',
       exitCode: 1,
-      providerError: { kind: 'network', message: 'aborted before start', retryable: false },
+      providerError: { kind: 'aborted', message: 'aborted before start', retryable: false },
     };
   }
 
@@ -134,7 +134,7 @@ export async function executeViaOpenRouter(
       return {
         rawOutput: '',
         exitCode: 1,
-        providerError: { kind: 'network', message: 'aborted', retryable: false },
+        providerError: { kind: 'aborted', message: 'aborted', retryable: false },
         resolvedModel: lastResolvedModel,
         tokensUsed: { prompt: totalPromptTokens, completion: totalCompletionTokens },
       };
@@ -161,7 +161,7 @@ export async function executeViaOpenRouter(
           rawOutput: '',
           exitCode: 1,
           providerError: {
-            kind: err.kind === 'aborted' ? 'network' : err.kind,
+            kind: err.kind,
             message: err.message,
             retryable: err.retryable,
           },

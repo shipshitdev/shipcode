@@ -245,7 +245,7 @@ describe('createOpenRouterProvider', () => {
     expect(res.providerError?.retryable).toBe(true);
   });
 
-  it('maps aborted kind to network (so pipeline cancel handling stays uniform)', async () => {
+  it('surfaces aborted kind through the provider boundary', async () => {
     const abortedStub = {
       chat: vi.fn(async () => {
         throw new OpenRouterError('aborted', 'cancelled', false);
@@ -260,7 +260,7 @@ describe('createOpenRouterProvider', () => {
 
     const res = await provider.generate(req({ phase: 'plan' }));
     expect(res.exitCode).toBe(1);
-    expect(res.providerError?.kind).toBe('network');
+    expect(res.providerError?.kind).toBe('aborted');
   });
 
   it('output is StreamParser-compatible for all Tier 1 phases', async () => {

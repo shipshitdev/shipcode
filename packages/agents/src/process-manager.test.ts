@@ -148,6 +148,107 @@ describe('ProcessManager registry hygiene', () => {
     }
   });
 
+  it('asserts workspaceSafe when workspaceRoot opt is set', () => {
+    const pty = createMockPty();
+    mockPtySpawn.mockReturnValueOnce(pty);
+
+    expect(() =>
+      manager.spawn('claude', 'claude', [], '/etc/passwd', undefined, {
+        workspaceRoot: '/tmp/wt',
+      }),
+    ).toThrow(/under workspaceRoot|basename/i);
+    // pty.spawn must NOT have been invoked when assertion fails.
+    expect(mockPtySpawn).not.toHaveBeenCalled();
+  });
+
+  it('skips workspaceSafe assertion when workspaceRoot opt is omitted', () => {
+    const pty = createMockPty();
+    mockPtySpawn.mockReturnValueOnce(pty);
+
+    // Even with a sketchy cwd, no assertion runs without the opt.
+    expect(() => manager.spawn('claude', 'claude', [], '/anywhere/at/all')).not.toThrow();
+    expect(mockPtySpawn).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes workspaceSafe assertion for a worktree under root', () => {
+    const pty = createMockPty();
+    mockPtySpawn.mockReturnValueOnce(pty);
+
+    expect(() =>
+      manager.spawn('claude', 'claude', [], '/tmp/wt/proj/t-01', undefined, {
+        workspaceRoot: '/tmp/wt',
+      }),
+    ).not.toThrow();
+    expect(mockPtySpawn).toHaveBeenCalledTimes(1);
+  });
+
+  it('killStalled returns empty array and is a no-op when threshold is 0', () => {
+    const pty = createMockPty();
+    mockPtySpawn.mockReturnValueOnce(pty);
+    manager.spawn('claude', 'claude', [], '/tmp');
+    expect(manager.killStalled(0)).toEqual([]);
+    expect(pty.kill).not.toHaveBeenCalled();
+  });
+
+  it('killStalled returns empty array when threshold is negative or NaN', () => {
+    const pty = createMockPty();
+    mockPtySpawn.mockReturnValueOnce(pty);
+    manager.spawn('claude', 'claude', [], '/tmp');
+    expect(manager.killStalled(-1)).toEqual([]);
+    expect(manager.killStalled(Number.NaN)).toEqual([]);
+    expect(pty.kill).not.toHaveBeenCalled();
+  });
+
+  it('killStalled kills processes whose lastEventAt is older than threshold', () => {
+    vi.useFakeTimers();
+    try {
+      const idlePty = createMockPty();
+      mockPtySpawn.mockReturnValueOnce(idlePty);
+      const idle = manager.spawn('claude', 'claude', [], '/tmp');
+
+      // Advance well past the threshold without emitting any output.
+      vi.advanceTimersByTime(60_000);
+
+      const killed = manager.killStalled(30_000);
+      expect(killed).toEqual([idle.id]);
+      expect(idlePty.kill).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('killStalled spares processes that emitted output recently', () => {
+    vi.useFakeTimers();
+    try {
+      const activePty = createMockPty();
+      const dataCbHolder: { cb: ((d: string) => void) | null } = { cb: null };
+      activePty.onData = (cb: (d: string) => void) => {
+        dataCbHolder.cb = cb;
+      };
+      mockPtySpawn.mockReturnValueOnce(activePty);
+      manager.spawn('claude', 'claude', [], '/tmp');
+
+      vi.advanceTimersByTime(45_000);
+      // Refresh lastEventAt by emitting a chunk just before the check.
+      dataCbHolder.cb?.('chunk');
+
+      const killed = manager.killStalled(30_000);
+      expect(killed).toEqual([]);
+      expect(activePty.kill).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('killStalled skips already-exited processes', async () => {
+    const pty = createMockPty();
+    mockPtySpawn.mockReturnValueOnce(pty);
+    manager.spawn('claude', 'claude', [], '/tmp');
+    pty.__exit(0);
+    await flushMicrotasks();
+    expect(manager.killStalled(0.001)).toEqual([]);
+  });
+
   it('exposes exited state synchronously to exit listeners before cleanup', () => {
     const pty = createMockPty();
     mockPtySpawn.mockReturnValueOnce(pty);

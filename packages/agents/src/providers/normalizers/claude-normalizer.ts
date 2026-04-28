@@ -11,7 +11,7 @@
  */
 
 import type { TerminalEvent } from '../../terminal-events';
-import { FENCE_ACTIONS, findOpeningFence, getDeferredFencePrefix } from './fence-suppression';
+import { FenceStateMachine } from './fence-suppression';
 
 function formatToolCall(name: string, input: Record<string, unknown>): string {
   switch (name) {
@@ -38,13 +38,12 @@ function formatToolCall(name: string, input: Record<string, unknown>): string {
 
 export class ClaudeNormalizer {
   private lineBuffer = '';
-  private fenceSuppressed = false;
-  private deferredFencePrefix = '';
-  private suppressedFenceCarry = '';
+  private readonly fence: FenceStateMachine;
   private readonly onEvent: (event: TerminalEvent) => void;
 
   constructor(onEvent: (event: TerminalEvent) => void) {
     this.onEvent = onEvent;
+    this.fence = new FenceStateMachine(onEvent);
   }
 
   /**
@@ -70,7 +69,7 @@ export class ClaudeNormalizer {
       } catch {
         // Not JSON — could be ANSI escape or raw text leaking from PTY.
         // Forward as raw so it's not lost.
-        if (!this.fenceSuppressed) {
+        if (!this.fence.isSuppressing) {
           this.onEvent({ kind: 'raw', content: line });
         }
         newlineIdx = this.lineBuffer.indexOf('\n');
@@ -88,7 +87,7 @@ export class ClaudeNormalizer {
 
     // Result line → done event
     if (event.type === 'result') {
-      this.flushDeferredFencePrefix();
+      this.fence.flush();
       const usage = event.usage as { input_tokens?: number; output_tokens?: number } | undefined;
       const cost = event.total_cost_usd as number | undefined;
       this.onEvent({
@@ -112,7 +111,7 @@ export class ClaudeNormalizer {
           continue;
         }
         if (c.type === 'text' && typeof c.text === 'string') {
-          this.emitTextFragment(c.text);
+          this.fence.feed(c.text);
         } else if (c.type === 'tool_use') {
           const name = c.name as string;
           const input = (c.input ?? {}) as Record<string, unknown>;
@@ -124,60 +123,5 @@ export class ClaudeNormalizer {
         }
       }
     }
-  }
-
-  private flushDeferredFencePrefix(): void {
-    if (!this.fenceSuppressed && this.deferredFencePrefix) {
-      this.onEvent({ kind: 'text', content: this.deferredFencePrefix });
-      this.deferredFencePrefix = '';
-    }
-  }
-
-  private emitTextFragment(fragment: string): void {
-    let remaining = this.deferredFencePrefix + fragment;
-    this.deferredFencePrefix = '';
-
-    while (remaining) {
-      if (this.fenceSuppressed) {
-        remaining = this.consumeSuppressedFragment(remaining);
-        continue;
-      }
-
-      const openingFence = findOpeningFence(remaining);
-      if (!openingFence) {
-        const deferredPrefix = getDeferredFencePrefix(remaining);
-        const visibleText = deferredPrefix ? remaining.slice(0, -deferredPrefix.length) : remaining;
-        if (visibleText) {
-          this.onEvent({ kind: 'text', content: visibleText });
-        }
-        this.deferredFencePrefix = deferredPrefix;
-        return;
-      }
-
-      const visibleText = remaining.slice(0, openingFence.index);
-      if (visibleText) {
-        this.onEvent({ kind: 'text', content: visibleText });
-      }
-
-      this.fenceSuppressed = true;
-      this.suppressedFenceCarry = '';
-      const action = FENCE_ACTIONS[openingFence.tag];
-      this.onEvent({ kind: 'action', label: action.label, action: action.action });
-      remaining = remaining.slice(openingFence.index + openingFence.length);
-    }
-  }
-
-  private consumeSuppressedFragment(fragment: string): string {
-    const combined = this.suppressedFenceCarry + fragment;
-    const closingFenceIndex = combined.indexOf('```');
-
-    if (closingFenceIndex === -1) {
-      this.suppressedFenceCarry = combined.slice(-2);
-      return '';
-    }
-
-    this.fenceSuppressed = false;
-    this.suppressedFenceCarry = '';
-    return combined.slice(closingFenceIndex + 3);
   }
 }

@@ -411,4 +411,54 @@ describe('StreamParser', () => {
       expect(parser.extractModel()).toBeNull();
     });
   });
+
+  describe('extractCodexModel', () => {
+    it('extracts the model from response.completed', () => {
+      parser.feed(
+        [
+          JSON.stringify({ type: 'thread.started', thread_id: 't1' }),
+          JSON.stringify({
+            type: 'response.completed',
+            response: { model: 'gpt-5.4-high', usage: { input_tokens: 10, completion_tokens: 5 } },
+          }),
+          '',
+        ].join('\n'),
+      );
+
+      expect(parser.extractCodexModel()).toBe('gpt-5.4-high');
+    });
+
+    it('falls back to thread.started.model when response.completed is missing', () => {
+      parser.feed(`${JSON.stringify({ type: 'thread.started', model: 'gpt-5.4' })}\n`);
+
+      expect(parser.extractCodexModel()).toBe('gpt-5.4');
+    });
+
+    it('falls back to session.created.model when present', () => {
+      parser.feed(`${JSON.stringify({ type: 'session.created', model: 'gpt-5.4-mini' })}\n`);
+
+      expect(parser.extractCodexModel()).toBe('gpt-5.4-mini');
+    });
+
+    it('returns null when no codex model events are present', () => {
+      parser.feed('hello world\n');
+
+      expect(parser.extractCodexModel()).toBeNull();
+    });
+
+    it('prefers response.completed over thread.started when both appear', () => {
+      parser.feed(
+        [
+          JSON.stringify({ type: 'thread.started', model: 'gpt-5.4' }),
+          JSON.stringify({
+            type: 'response.completed',
+            response: { model: 'gpt-5.4-high' },
+          }),
+          '',
+        ].join('\n'),
+      );
+
+      expect(parser.extractCodexModel()).toBe('gpt-5.4-high');
+    });
+  });
 });

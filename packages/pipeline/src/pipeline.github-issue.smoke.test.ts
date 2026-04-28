@@ -314,6 +314,25 @@ describe('startFromGitHubIssue — smoke', () => {
     );
   });
 
+  it('seeds the planner prompt with the workpad protocol marker', async () => {
+    const pipeline = createPipeline(smoke.deps);
+    const issue = { number: 42, title: 'Fix the bug', body: 'It crashes', labels: [] };
+
+    await pipeline.startFromGitHubIssue('t-smoke', '/proj', issue, 'claude');
+
+    const spawnMock = smoke.deps.processManager.spawn as unknown as {
+      mock: { calls: unknown[][] };
+    };
+    expect(spawnMock.mock.calls.length).toBeGreaterThan(0);
+    const allArgs = spawnMock.mock.calls
+      .flatMap((call) => (Array.isArray(call[2]) ? (call[2] as unknown[]) : []))
+      .filter((a): a is string => typeof a === 'string');
+    const combined = allArgs.join('\n');
+    expect(combined).toContain('## ShipCode Workpad');
+    expect(combined).toContain('workpad_protocol');
+    expect(combined).toContain('issue #42');
+  });
+
   it('sets autonomous=true and seeds context fields from the issue', async () => {
     const pipeline = createPipeline(smoke.deps);
     const issue = { number: 42, title: 'Fix the bug', body: 'Details here', labels: [] };

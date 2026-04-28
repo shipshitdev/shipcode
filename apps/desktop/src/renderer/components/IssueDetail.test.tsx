@@ -1232,6 +1232,69 @@ describe('IssueDetail', () => {
       expect(invokeMock).not.toHaveBeenCalledWith('notification:dismiss', expect.anything());
     });
   });
+
+  it('copies the formatted issue branch name to the clipboard', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'settings:get') return { worktreeBranchFormat: 'ship/{id}-{slug}' };
+      return [];
+    });
+
+    useAppStore.setState({
+      activeIssue: makeIssue({ issueNumber: 42, title: 'Issue title' }),
+    });
+
+    renderWithProviders();
+
+    const copyButton = await screen.findByTestId('copy-branch-name');
+    expect(copyButton).toHaveAttribute('title', 'Copy branch name (ship/42-issue-title)');
+
+    fireEvent.click(copyButton);
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith('ship/42-issue-title');
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('copy-branch-name')).toHaveAttribute('title', 'Copied!');
+    });
+  });
+
+  it('honors a custom worktreeBranchFormat from settings when copying the branch name', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'settings:get') return { worktreeBranchFormat: 'feat/{id}-{slug}' };
+      return [];
+    });
+
+    useAppStore.setState({
+      activeIssue: makeIssue({ issueNumber: 7, title: 'Add foo bar' }),
+    });
+
+    renderWithProviders();
+
+    const copyButton = await screen.findByTestId('copy-branch-name');
+    await waitFor(() => {
+      expect(screen.getByTestId('copy-branch-name')).toHaveAttribute(
+        'title',
+        'Copy branch name (feat/7-add-foo-bar)',
+      );
+    });
+    fireEvent.click(copyButton);
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith('feat/7-add-foo-bar');
+    });
+  });
 });
 
 describe('deriveGithubIssueUrl', () => {

@@ -124,6 +124,12 @@ export type {
   VerificationPromptOptions,
 } from './prompts/verification-prompt';
 export { buildVerificationPrompt } from './prompts/verification-prompt';
+export type { WorkpadProtocolContext } from './prompts/workpad-protocol';
+export {
+  buildWorkpadProtocol,
+  WORKPAD_MARKER,
+  WORKPAD_SECTIONS,
+} from './prompts/workpad-protocol';
 export * from './providers';
 export { ClaudeNormalizer } from './providers/normalizers/claude-normalizer';
 export { CodexNormalizer } from './providers/normalizers/codex-normalizer';
