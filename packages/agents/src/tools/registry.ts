@@ -11,6 +11,7 @@
  */
 
 import { editTool } from './edit';
+import { githubGraphqlTool } from './github-graphql';
 import { globTool } from './glob';
 import { grepTool } from './grep';
 import { readTool } from './read';
@@ -31,6 +32,7 @@ const ALL_TOOLS: ReadonlyArray<Tool<unknown>> = [
   globTool as unknown as Tool<unknown>,
   grepTool as unknown as Tool<unknown>,
   shellReadOnlyTool as unknown as Tool<unknown>,
+  githubGraphqlTool as unknown as Tool<unknown>,
 ];
 
 const BY_NAME = new Map<string, Tool<unknown>>(ALL_TOOLS.map((t) => [t.name, t]));

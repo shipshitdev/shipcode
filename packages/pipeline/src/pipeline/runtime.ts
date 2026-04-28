@@ -1,8 +1,33 @@
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, resolve, sep } from 'node:path';
+import { promisify } from 'node:util';
 import type { PromptMaterial, ProviderPhase, ProviderRequest } from '@shipcode/agents';
 import { formatPlanComment, GhCli, loadRepoSetupContract } from '@shipcode/agents';
+
+const execFileAsync = promisify(execFile);
+
+/**
+ * Read the orchestrator-side GitHub token via `gh auth token`. Spawns
+ * from the desktop process — the credential never reaches the worktree
+ * filesystem or the agent transcript. Returns null when `gh` is not
+ * authenticated.
+ *
+ * Symphony §10.5: orchestrator owns the credential. We currently
+ * piggyback on `gh` because ShipCode does not yet have first-class
+ * per-project credential storage; swap this to read from project
+ * settings when that lands (#75 follow-up).
+ */
+async function readGhAuthToken(): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync('gh', ['auth', 'token']);
+    const token = stdout.trim();
+    return token.length > 0 ? token : null;
+  } catch {
+    return null;
+  }
+}
+
 import {
   measurePhasePromptTelemetry,
   toPersistedPromptTelemetryMaterials,
@@ -364,6 +389,21 @@ export function createPipelineRuntime(
         modelHint: modelHint ?? undefined,
         threadId: context.threadId,
         ...(workspaceRoot !== undefined ? { workspaceRoot } : {}),
+        githubGraphql: {
+          // Token read happens at tool-call time, not now — captures
+          // rotation during a long-running pipeline.
+          getToken: () => readGhAuthToken(),
+          getDefaultRepo: async () => {
+            try {
+              const { githubRepoFullName } = await new GhCli(context.projectPath).getRepoMetadata();
+              const [owner, repo] = githubRepoFullName.split('/');
+              if (!owner || !repo) return null;
+              return { owner, repo };
+            } catch {
+              return null;
+            }
+          },
+        },
         onTerminalEvent: (event) =>
           deps.emitter.emit({ type: 'terminal:event', threadId: context.threadId, event }),
       });

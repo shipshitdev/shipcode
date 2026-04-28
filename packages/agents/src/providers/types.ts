@@ -26,6 +26,7 @@
 import type { AgentType, ClarificationRequest, ReasoningEffort } from '@shipcode/shared';
 import type { PromptMaterialSummary, PromptTelemetry } from '../prompt-scope';
 import type { TerminalEvent } from '../terminal-events';
+import type { GithubGraphqlDeps } from '../tools/types';
 
 export type ProviderPhase = 'plan' | 'review' | 'revision' | 'verify' | 'execute';
 
@@ -99,6 +100,13 @@ export interface ProviderRequest {
    * can render a unified stream regardless of backend.
    */
   onTerminalEvent?: (event: TerminalEvent) => void;
+  /**
+   * Orchestrator-supplied deps for the `github_graphql` tool. Plumbed
+   * by `runProviderPhase` from the project's stored credential. When
+   * omitted (e.g. project has no GH auth), the tool itself returns a
+   * structured `auth_missing` error.
+   */
+  githubGraphql?: GithubGraphqlDeps;
 }
 
 export type ProviderErrorKind =

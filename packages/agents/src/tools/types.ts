@@ -29,6 +29,30 @@ export interface ToolContext {
   signal: AbortSignal;
   /** Thread ID for logging / audit; tools must not write to DB directly. */
   threadId: string;
+  /**
+   * Orchestrator-supplied dependencies for the `github_graphql` tool.
+   * When omitted, the tool returns a structured `auth_missing` error
+   * (Symphony §10.5: orchestrator owns the credential, agent never
+   * sees the token).
+   */
+  githubGraphql?: GithubGraphqlDeps;
+}
+
+/**
+ * Per-call deps the orchestrator injects for the github_graphql tool.
+ * Token reads happen at call time (not session start) so a rotation
+ * during a long pipeline is picked up.
+ */
+export interface GithubGraphqlDeps {
+  getToken(): Promise<string | null> | string | null;
+  getDefaultRepo?(): Promise<GithubRepoCoords | null> | GithubRepoCoords | null;
+  /** Override for tests. Defaults to global `fetch`. */
+  fetch?: typeof fetch;
+}
+
+export interface GithubRepoCoords {
+  owner: string;
+  repo: string;
 }
 
 export type ToolResult =

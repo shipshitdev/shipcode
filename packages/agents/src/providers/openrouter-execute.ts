@@ -107,6 +107,7 @@ export async function executeViaOpenRouter(
     worktreePath: req.cwd,
     signal: req.signal,
     threadId: req.threadId,
+    ...(req.githubGraphql ? { githubGraphql: req.githubGraphql } : {}),
   };
 
   const tools = getToolSchemas();
