@@ -263,16 +263,16 @@ describe('grepTool', () => {
 // ─── registry / dispatcher ───────────────────────────────────────────
 
 describe('tool registry', () => {
-  it('getToolSchemas returns all 6 tools', () => {
+  it('getToolSchemas returns all registered tools', () => {
     const names = getToolSchemas()
       .map((tool) => tool.function.name)
       .sort();
-    expect(names).toEqual(['edit', 'glob', 'grep', 'read', 'shell', 'write']);
+    expect(names).toEqual(['edit', 'github_graphql', 'glob', 'grep', 'read', 'shell', 'write']);
   });
 
   it('getToolSchemas returns OpenAI function-calling schemas', () => {
     const schemas = getToolSchemas();
-    expect(schemas).toHaveLength(6);
+    expect(schemas).toHaveLength(7);
     for (const s of schemas) {
       expect(s.type).toBe('function');
       expect(s.function.name).toBeTruthy();
