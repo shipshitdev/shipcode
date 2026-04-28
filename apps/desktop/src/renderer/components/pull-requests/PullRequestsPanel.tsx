@@ -20,11 +20,13 @@ export function PullRequestsPanel() {
 
   const { data: pullRequests = [], isLoading } = useQuery<PullRequestListItem[]>({
     queryKey: ['pull-requests', activeProjectId, filter],
-    queryFn: () =>
-      window.shipcode.invoke('github:list-prs', {
-        projectId: activeProjectId!,
+    queryFn: () => {
+      if (!activeProjectId) return Promise.resolve([]);
+      return window.shipcode.invoke('github:list-prs', {
+        projectId: activeProjectId,
         filter,
-      }),
+      });
+    },
     enabled: !!activeProjectId,
     staleTime: 5 * 60_000,
     refetchOnWindowFocus: true,

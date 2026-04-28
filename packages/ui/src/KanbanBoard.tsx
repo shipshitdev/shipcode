@@ -26,7 +26,7 @@ import {
   resolveIssuePriorityBadge,
   resolveIssueRevisionBadge,
 } from './kanban-board/utils';
-import type { GitHubIssueCacheRecord } from './lib/shipcode';
+import { formatIssueBranch, type GitHubIssueCacheRecord } from './lib/shipcode';
 
 export function KanbanBoard({
   issues,
@@ -81,6 +81,11 @@ export function KanbanBoard({
   const [approvalFilter, setApprovalFilter] = useState<'all' | 'needs-approval'>('all');
   const [refreshing, setRefreshing] = useState(false);
   const [showRefreshToast, setShowRefreshToast] = useState(false);
+  const [branchCopyToast, setBranchCopyToast] = useState<{
+    issueId: string;
+    branchName: string;
+    status: 'copied' | 'error';
+  } | null>(null);
   const [rerunningId, setRerunningId] = useState<string | null>(null);
   const threadById = useMemo(
     () => new Map(threads.map((thread) => [thread.id, thread])),
@@ -132,6 +137,20 @@ export function KanbanBoard({
     () => new Map(boardIssues.map((issue) => [issue.id, resolveIssuePriorityBadge(issue)])),
     [boardIssues],
   );
+  const issueBranchNameById = useMemo(
+    () =>
+      new Map(
+        boardIssues.map((issue) => [
+          issue.id,
+          formatIssueBranch(
+            issue.issueNumber,
+            issue.title ?? '',
+            settings?.worktreeBranchFormat ?? null,
+          ),
+        ]),
+      ),
+    [boardIssues, settings?.worktreeBranchFormat],
+  );
   const sortedIssues = useMemo(
     () => [...boardIssues].sort((a, b) => compareIssues(a, b, sortOrder)),
     [boardIssues, sortOrder],
@@ -175,11 +194,29 @@ export function KanbanBoard({
     setTimeout(() => setRefreshing(false), 600);
   }, [onRefresh]);
 
+  const handleCopyBranchName = useCallback(
+    async (issue: GitHubIssueCacheRecord, branchName: string) => {
+      try {
+        await navigator.clipboard.writeText(branchName);
+        setBranchCopyToast({ issueId: issue.id, branchName, status: 'copied' });
+      } catch {
+        setBranchCopyToast({ issueId: issue.id, branchName, status: 'error' });
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     if (!showRefreshToast) return;
     const id = setTimeout(() => setShowRefreshToast(false), 2000);
     return () => clearTimeout(id);
   }, [showRefreshToast]);
+
+  useEffect(() => {
+    if (!branchCopyToast) return;
+    const id = setTimeout(() => setBranchCopyToast(null), 2000);
+    return () => clearTimeout(id);
+  }, [branchCopyToast]);
 
   function getColumnForIssue(issue: GitHubIssueCacheRecord): ColumnKey {
     if (approvedAwaitingExecutionIssueIds?.has(issue.id)) return 'agent';
@@ -305,10 +342,14 @@ export function KanbanBoard({
                       onRerun={handleRerun}
                       onCancel={onCancel}
                       onOpenPullRequest={onOpenPullRequest}
+                      onCopyBranchName={handleCopyBranchName}
                       onArchiveAllDone={col.key === 'done' ? onArchiveAllDone : undefined}
                       onArchiveIssue={col.key === 'done' ? onArchiveIssue : undefined}
                       rerunningId={rerunningId}
                       selectedIssueNumber={selectedIssueNumber}
+                      issueBranchNameById={issueBranchNameById}
+                      branchCopyIssueId={branchCopyToast?.issueId ?? null}
+                      branchCopyStatus={branchCopyToast?.status ?? null}
                       issuePhaseChipById={issuePhaseChipById}
                       issueRevisionBadgeById={issueRevisionBadgeById}
                       issueApprovalBadgeById={issueApprovalBadgeById}
@@ -331,8 +372,12 @@ export function KanbanBoard({
                     selectedIssueNumber={selectedIssueNumber}
                     onStartPipeline={col.key === 'todo' ? onStartPipeline : undefined}
                     onOpenPullRequest={onOpenPullRequest}
+                    onCopyBranchName={handleCopyBranchName}
                     onArchiveAllDone={col.key === 'done' ? onArchiveAllDone : undefined}
                     onArchiveIssue={col.key === 'done' ? onArchiveIssue : undefined}
+                    issueBranchNameById={issueBranchNameById}
+                    branchCopyIssueId={branchCopyToast?.issueId ?? null}
+                    branchCopyStatus={branchCopyToast?.status ?? null}
                     issuePhaseChipById={issuePhaseChipById}
                     issueRevisionBadgeById={issueRevisionBadgeById}
                     issueApprovalBadgeById={issueApprovalBadgeById}
@@ -362,6 +407,20 @@ export function KanbanBoard({
           <div className="flex items-center gap-2 rounded-lg border border-border bg-elevated px-3 py-2 shadow-lg text-xs text-secondary">
             <RefreshCw size={12} className="text-muted" />
             Board refreshed
+          </div>
+        </div>
+      )}
+      {branchCopyToast && (
+        <div className="absolute bottom-4 left-1/2 z-50 -translate-x-1/2 animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-elevated px-3 py-2 text-xs text-secondary shadow-lg">
+            {branchCopyToast.status === 'copied' ? (
+              <>
+                <span className="text-success">Copied</span>
+                <span className="font-mono text-muted">{branchCopyToast.branchName}</span>
+              </>
+            ) : (
+              <span className="text-danger">Clipboard write failed</span>
+            )}
           </div>
         </div>
       )}

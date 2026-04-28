@@ -35,10 +35,6 @@ const ALL_TOOLS: ReadonlyArray<Tool<unknown>> = [
 
 const BY_NAME = new Map<string, Tool<unknown>>(ALL_TOOLS.map((t) => [t.name, t]));
 
-function listTools(): ReadonlyArray<Tool<unknown>> {
-  return ALL_TOOLS;
-}
-
 export function getToolSchemas(): OpenAIFunctionSchema[] {
   return ALL_TOOLS.map(toOpenAISchema);
 }

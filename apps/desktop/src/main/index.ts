@@ -62,8 +62,6 @@ import {
 } from '@shipcode/db';
 import { createPipeline } from '@shipcode/pipeline';
 import {
-  clampError,
-  EXECUTION_PHASES,
   HEARTBEAT_TIMEOUT_MS,
   type PipelinePhase,
   PROCESS_STALL_TIMEOUT_MS,

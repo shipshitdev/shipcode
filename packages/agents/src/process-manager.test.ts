@@ -76,6 +76,7 @@ describe('ProcessManager registry hygiene', () => {
     }
     await flushMicrotasks();
     expect(manager.listActive()).toHaveLength(0);
+    // biome-ignore lint/complexity/useLiteralKeys: private registry inspection is intentional in this leak test.
     expect(manager['processes'].size).toBe(0);
   });
 

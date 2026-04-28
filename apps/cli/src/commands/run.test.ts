@@ -44,6 +44,7 @@ vi.mock('@shipcode/db', () => ({
   GitHubIssueQueries: class {},
   CheckpointQueries: class {},
   TerminalEventQueries: class {},
+  PipelineStepQueries: class {},
   SettingsQueries: class {
     get = settingsGetMock;
   },

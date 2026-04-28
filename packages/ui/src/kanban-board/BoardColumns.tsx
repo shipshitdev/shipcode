@@ -59,9 +59,13 @@ interface DroppableColumnProps {
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
   onStartPipeline?: (issue: GitHubIssueCacheRecord) => void;
   onOpenPullRequest?: (url: string) => void;
+  onCopyBranchName?: (issue: GitHubIssueCacheRecord, branchName: string) => void;
   selectedIssueNumber?: number;
   onArchiveAllDone?: () => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
+  issueBranchNameById?: Map<string, string>;
+  branchCopyIssueId?: string | null;
+  branchCopyStatus?: 'copied' | 'error' | null;
   issuePhaseChipById: Map<string, IssuePhaseChip | null>;
   issueRevisionBadgeById: Map<string, IssueRevisionBadge | null>;
   issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
@@ -79,9 +83,13 @@ export function DroppableColumn({
   onIssueClick,
   onStartPipeline,
   onOpenPullRequest,
+  onCopyBranchName,
   selectedIssueNumber,
   onArchiveAllDone,
   onArchiveIssue,
+  issueBranchNameById,
+  branchCopyIssueId,
+  branchCopyStatus,
   issuePhaseChipById = EMPTY_PHASE_CHIP_MAP,
   issueRevisionBadgeById = EMPTY_REVISION_BADGE_MAP,
   issueApprovalBadgeById = EMPTY_APPROVAL_BADGE_MAP,
@@ -144,6 +152,9 @@ export function DroppableColumn({
             onClick={onIssueClick}
             onStartPipeline={onStartPipeline}
             onOpenPullRequest={onOpenPullRequest}
+            onCopyBranchName={onCopyBranchName}
+            branchName={issueBranchNameById?.get(issue.id) ?? null}
+            branchCopyState={branchCopyIssueId === issue.id ? branchCopyStatus : null}
             isSelected={issue.issueNumber === selectedIssueNumber}
             onArchiveIssue={onArchiveIssue}
             readOnly={readOnly}
@@ -165,9 +176,13 @@ interface SectionBlockProps {
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
   onCancel?: (issue: GitHubIssueCacheRecord) => void;
   onOpenPullRequest?: (url: string) => void;
+  onCopyBranchName?: (issue: GitHubIssueCacheRecord, branchName: string) => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
   selectedIssueNumber?: number;
   rerunningId?: string | null;
+  issueBranchNameById?: Map<string, string>;
+  branchCopyIssueId?: string | null;
+  branchCopyStatus?: 'copied' | 'error' | null;
   issuePhaseChipById: Map<string, IssuePhaseChip | null>;
   issueRevisionBadgeById: Map<string, IssueRevisionBadge | null>;
   issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
@@ -186,9 +201,13 @@ function SectionBlock({
   onRerun,
   onCancel,
   onOpenPullRequest,
+  onCopyBranchName,
   onArchiveIssue,
   selectedIssueNumber,
   rerunningId,
+  issueBranchNameById,
+  branchCopyIssueId,
+  branchCopyStatus,
   issuePhaseChipById = EMPTY_PHASE_CHIP_MAP,
   issueRevisionBadgeById = EMPTY_REVISION_BADGE_MAP,
   issueApprovalBadgeById = EMPTY_APPROVAL_BADGE_MAP,
@@ -262,6 +281,9 @@ function SectionBlock({
               onRerun={onRerun}
               onCancel={onCancel}
               onOpenPullRequest={onOpenPullRequest}
+              onCopyBranchName={onCopyBranchName}
+              branchName={issueBranchNameById?.get(issue.id) ?? null}
+              branchCopyState={branchCopyIssueId === issue.id ? branchCopyStatus : null}
               isSelected={issue.issueNumber === selectedIssueNumber}
               isRerunning={issue.id === rerunningId}
               onArchiveIssue={columnKey === 'done' ? onArchiveIssue : undefined}
@@ -290,10 +312,14 @@ interface StackedColumnProps {
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
   onCancel?: (issue: GitHubIssueCacheRecord) => void;
   onOpenPullRequest?: (url: string) => void;
+  onCopyBranchName?: (issue: GitHubIssueCacheRecord, branchName: string) => void;
   onArchiveAllDone?: () => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
   selectedIssueNumber?: number;
   rerunningId?: string | null;
+  issueBranchNameById?: Map<string, string>;
+  branchCopyIssueId?: string | null;
+  branchCopyStatus?: 'copied' | 'error' | null;
   issuePhaseChipById: Map<string, IssuePhaseChip | null>;
   issueRevisionBadgeById: Map<string, IssueRevisionBadge | null>;
   issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
@@ -309,10 +335,14 @@ export function StackedColumn({
   onRerun,
   onCancel,
   onOpenPullRequest,
+  onCopyBranchName,
   onArchiveAllDone,
   onArchiveIssue,
   selectedIssueNumber,
   rerunningId,
+  issueBranchNameById,
+  branchCopyIssueId,
+  branchCopyStatus,
   issuePhaseChipById = EMPTY_PHASE_CHIP_MAP,
   issueRevisionBadgeById = EMPTY_REVISION_BADGE_MAP,
   issueApprovalBadgeById = EMPTY_APPROVAL_BADGE_MAP,
@@ -390,9 +420,13 @@ export function StackedColumn({
             onRerun={onRerun}
             onCancel={onCancel}
             onOpenPullRequest={onOpenPullRequest}
+            onCopyBranchName={onCopyBranchName}
             onArchiveIssue={onArchiveIssue}
             selectedIssueNumber={selectedIssueNumber}
             rerunningId={rerunningId}
+            issueBranchNameById={issueBranchNameById}
+            branchCopyIssueId={branchCopyIssueId}
+            branchCopyStatus={branchCopyStatus}
             issuePhaseChipById={issuePhaseChipById}
             issueRevisionBadgeById={issueRevisionBadgeById}
             issueApprovalBadgeById={issueApprovalBadgeById}

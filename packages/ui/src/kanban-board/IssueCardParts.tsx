@@ -1,7 +1,7 @@
 'use client';
 
 import { useDraggable } from '@dnd-kit/core';
-import { Archive, PanelLeftOpen } from 'lucide-react';
+import { Archive, Check, Copy, PanelLeftOpen } from 'lucide-react';
 import { memo } from 'react';
 import { modelDisplay } from '../lib/model-display';
 import { useSharedSecondNow } from '../lib/second-ticker';
@@ -67,7 +67,10 @@ interface DraggableCardProps {
   onCancel?: (issue: GitHubIssueCacheRecord) => void;
   onStartPipeline?: (issue: GitHubIssueCacheRecord) => void;
   onOpenPullRequest?: (url: string) => void;
+  onCopyBranchName?: (issue: GitHubIssueCacheRecord, branchName: string) => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
+  branchName?: string | null;
+  branchCopyState?: 'copied' | 'error' | null;
   isSelected?: boolean;
   isRerunning?: boolean;
 }
@@ -85,7 +88,10 @@ function DraggableCardComponent({
   onCancel,
   onStartPipeline,
   onOpenPullRequest,
+  onCopyBranchName,
   onArchiveIssue,
+  branchName,
+  branchCopyState,
   isSelected,
   isRerunning,
 }: DraggableCardProps) {
@@ -212,6 +218,35 @@ function DraggableCardComponent({
           </div>
         )}
       <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-1">
+        {branchName && onCopyBranchName && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className={cn(
+              'text-muted/60 opacity-0 transition-opacity hover:bg-muted/10 group-hover:opacity-100',
+              branchCopyState === 'copied'
+                ? 'text-success hover:text-success'
+                : branchCopyState === 'error'
+                  ? 'text-danger hover:text-danger'
+                  : 'hover:text-primary',
+            )}
+            title={
+              branchCopyState === 'copied'
+                ? 'Copied!'
+                : branchCopyState === 'error'
+                  ? 'Clipboard write failed'
+                  : `Copy branch name (${branchName})`
+            }
+            aria-label={`Copy branch name for issue #${issue.issueNumber}`}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onCopyBranchName(issue, branchName);
+            }}
+          >
+            {branchCopyState === 'copied' ? <Check size={14} /> : <Copy size={14} />}
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="icon-xs"
@@ -242,7 +277,12 @@ function DraggableCardComponent({
           </Button>
         )}
       </div>
-      <div className="relative z-10 flex min-w-0 items-center justify-between gap-2 pr-7">
+      <div
+        className={cn(
+          'relative z-10 flex min-w-0 items-center justify-between gap-2',
+          branchName && onCopyBranchName ? 'pr-12' : 'pr-7',
+        )}
+      >
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <span className="shrink-0 font-mono text-[11px] text-secondary">
             #{issue.issueNumber}

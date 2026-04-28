@@ -34,7 +34,7 @@ export function UpdateBanner() {
     setTimeout(() => setCopied(false), 1500);
   };
 
-  if (!status || !status.hasUpdate || !status.latest) return null;
+  if (!status?.hasUpdate || !status.latest) return null;
   if (dismissedTag && status.releaseTag === dismissedTag) return null;
 
   return (

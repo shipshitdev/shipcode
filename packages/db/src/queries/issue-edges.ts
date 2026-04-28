@@ -1,10 +1,9 @@
 import type { DatabaseSync } from 'node:sqlite';
-import {
-  ISO_NOW_SQL,
-  type IssueGraphEdgeRecord,
-  type IssueGraphEdgeType,
-  type IssueGraphNodeRecord,
-  type ProjectIssueGraph,
+import type {
+  IssueGraphEdgeRecord,
+  IssueGraphEdgeType,
+  IssueGraphNodeRecord,
+  ProjectIssueGraph,
 } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
 import { asRow, asRows, transaction } from '../utils';

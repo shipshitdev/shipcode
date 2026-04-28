@@ -15,10 +15,9 @@ export default log;
 let cachedEventsLogPath: string | null = null;
 function getEventsLogPath(): string {
   if (cachedEventsLogPath) return cachedEventsLogPath;
-  const dir =
-    app && app.isPackaged
-      ? path.join(app.getPath('userData'), 'logs')
-      : path.resolve(__dirname, '..', '..', 'logs');
+  const dir = app?.isPackaged
+    ? path.join(app.getPath('userData'), 'logs')
+    : path.resolve(__dirname, '..', '..', 'logs');
   cachedEventsLogPath = path.join(dir, 'events.log');
   return cachedEventsLogPath;
 }

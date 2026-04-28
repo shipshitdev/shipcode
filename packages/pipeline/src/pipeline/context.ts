@@ -1,7 +1,6 @@
 import type { SkillValidationError } from '@shipcode/agents';
 import { resolvePhaseReasoningEffort, toPipelinePromptScope } from '@shipcode/agents/source';
 import {
-  resolvePhaseModel,
   resolvePhaseModelForIssue,
   resolvePhaseModelIdForIssue,
   resolveProviderReasoningEffort,

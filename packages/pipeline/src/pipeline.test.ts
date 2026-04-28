@@ -1202,11 +1202,13 @@ describe('createPipeline', () => {
 
       await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
       await mock.trigger('exit', 'proc-1', 0);
-      await flush();
-      await flush();
+      const spawnMock = vi.mocked(mock.deps.processManager.spawn);
+      for (let i = 0; i < 10 && spawnMock.mock.calls.length < 2; i++) {
+        await flush();
+      }
 
-      expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(2);
-      const verifyCall = vi.mocked(mock.deps.processManager.spawn).mock.calls[1];
+      expect(spawnMock).toHaveBeenCalledTimes(2);
+      const verifyCall = spawnMock.mock.calls[1];
       expect(verifyCall[2][1]).toContain('<test_results>');
       expect(verifyCall[2][1]).toContain('typecheck ok');
       expect(verifyCall[2][1]).toContain('tests ok');
