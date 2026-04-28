@@ -1,13 +1,101 @@
-import type { CostTaskSummary, Thread } from '@shipcode/shared';
+import type {
+  CostTaskSummary,
+  PipelineStepPhase,
+  PipelineStepRecord,
+  PipelineStepStatus,
+  Thread,
+} from '@shipcode/shared';
 import { MODEL_DISPLAY } from '@shipcode/shared';
 import { Badge } from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { timeAgo } from './helpers';
 
 function formatCost(usd: number): string {
   if (usd === 0) return '$0.00';
   if (usd < 0.005) return '< $0.01';
   return `$${usd.toFixed(2)}`;
+}
+
+const STEP_STATUS_VARIANT: Record<PipelineStepStatus, 'success' | 'danger' | 'default'> = {
+  started: 'default',
+  completed: 'success',
+  failed: 'danger',
+  aborted: 'danger',
+  clarification_requested: 'default',
+};
+
+const STEP_PHASE_LABEL: Record<PipelineStepPhase, string> = {
+  plan: 'Plan',
+  review: 'Review',
+  revision: 'Revision',
+  execute: 'Execute',
+  verify: 'Verify',
+};
+
+function formatDuration(ms: number | null): string {
+  if (ms == null) return '—';
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+  return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
+}
+
+function StepAttempts({ threadId }: { threadId: string }) {
+  const { data: steps = [], isLoading } = useQuery<PipelineStepRecord[]>({
+    queryKey: ['pipeline-steps', threadId],
+    queryFn: () => window.shipcode.invoke('pipeline-steps:list-by-thread', { threadId }),
+  });
+
+  if (isLoading) {
+    return <p className="px-3 py-2 text-[11px] text-muted">Loading attempts…</p>;
+  }
+  if (steps.length === 0) {
+    return <p className="px-3 py-2 text-[11px] text-muted">No attempts recorded.</p>;
+  }
+
+  return (
+    <div className="divide-y divide-border bg-tertiary/30">
+      {steps.map((step) => {
+        const phaseLabel = STEP_PHASE_LABEL[step.phase] ?? step.phase;
+        const tokens = (step.promptTokens ?? 0) + (step.completionTokens ?? 0);
+        const modelLabel = step.resolvedModel
+          ? (MODEL_DISPLAY[step.resolvedModel as keyof typeof MODEL_DISPLAY] ?? step.resolvedModel)
+          : (step.requestedModel ?? '—');
+        return (
+          <div key={step.id} className="flex items-start gap-3 px-6 py-2">
+            <Badge variant={STEP_STATUS_VARIANT[step.status]} className="mt-0.5 text-[10px]">
+              {step.status}
+            </Badge>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-baseline gap-2">
+                <span className="text-[11px] font-medium text-primary">
+                  {phaseLabel} · attempt {step.attempt}
+                </span>
+                <span className="text-[10px] text-muted">{modelLabel}</span>
+                {step.provider && <span className="text-[10px] text-muted">({step.provider})</span>}
+              </div>
+              <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[10px] text-muted">
+                <span>{formatDuration(step.durationMs)}</span>
+                {tokens > 0 && (
+                  <span>{tokens >= 1000 ? `${Math.round(tokens / 1000)}k` : tokens} tok</span>
+                )}
+                {step.costUsd != null && step.costUsd > 0 && (
+                  <span>{formatCost(step.costUsd)}</span>
+                )}
+              </div>
+              {step.errorMessage && (
+                <p className="mt-1 text-[10px] text-danger">
+                  {step.errorKind ? `${step.errorKind}: ` : ''}
+                  {step.errorMessage}
+                </p>
+              )}
+            </div>
+            <span className="shrink-0 text-[10px] text-muted">{timeAgo(step.startedAt)}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function formatTokens(prompt: number, completion: number): string {
@@ -33,6 +121,7 @@ export function CostsTab({
 
   const totalCost = tasks.reduce((sum, t) => sum + t.costUsd, 0);
   const totalTokens = tasks.reduce((sum, t) => sum + t.tokensPrompt + t.tokensCompletion, 0);
+  const [expandedThreadId, setExpandedThreadId] = useState<string | null>(null);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -74,41 +163,60 @@ export function CostsTab({
           </h4>
           <div className="overflow-hidden rounded-md border border-border bg-secondary/20">
             <div className="divide-y divide-border">
-              {tasks.map((task, index) => (
-                <div key={task.threadId} className="flex items-center gap-3 px-3 py-2.5">
-                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border bg-tertiary text-[10px] font-medium text-muted">
-                    {tasks.length - index}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge
-                        variant={
-                          task.phase === 'completed'
-                            ? 'success'
-                            : task.phase === 'failed'
-                              ? 'danger'
-                              : 'default'
-                        }
-                        className="text-[10px]"
+              {tasks.map((task, index) => {
+                const isExpanded = expandedThreadId === task.threadId;
+                return (
+                  <div key={task.threadId}>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedThreadId(isExpanded ? null : task.threadId)}
+                      aria-expanded={isExpanded}
+                      className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-secondary/40"
+                    >
+                      <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border bg-tertiary text-[10px] font-medium text-muted">
+                        {tasks.length - index}
+                      </span>
+                      <span
+                        aria-hidden="true"
+                        className="shrink-0 select-none text-[10px] text-muted"
                       >
-                        {task.phase}
-                      </Badge>
-                      <span className="text-[12px] font-medium text-primary">
-                        {formatCost(task.costUsd)}
+                        {isExpanded ? '▾' : '▸'}
                       </span>
-                      <span className="text-[10px] text-muted">
-                        {formatTokens(task.tokensPrompt, task.tokensCompletion)}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge
+                            variant={
+                              task.phase === 'completed'
+                                ? 'success'
+                                : task.phase === 'failed'
+                                  ? 'danger'
+                                  : 'default'
+                            }
+                            className="text-[10px]"
+                          >
+                            {task.phase}
+                          </Badge>
+                          <span className="text-[12px] font-medium text-primary">
+                            {formatCost(task.costUsd)}
+                          </span>
+                          <span className="text-[10px] text-muted">
+                            {formatTokens(task.tokensPrompt, task.tokensCompletion)}
+                          </span>
+                        </div>
+                        {task.model && (
+                          <p className="mt-0.5 text-[10px] text-muted">
+                            {MODEL_DISPLAY[task.model] ?? task.model}
+                          </p>
+                        )}
+                      </div>
+                      <span className="shrink-0 text-[10px] text-muted">
+                        {timeAgo(task.updatedAt)}
                       </span>
-                    </div>
-                    {task.model && (
-                      <p className="mt-0.5 text-[10px] text-muted">
-                        {MODEL_DISPLAY[task.model] ?? task.model}
-                      </p>
-                    )}
+                    </button>
+                    {isExpanded && <StepAttempts threadId={task.threadId} />}
                   </div>
-                  <span className="shrink-0 text-[10px] text-muted">{timeAgo(task.updatedAt)}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 

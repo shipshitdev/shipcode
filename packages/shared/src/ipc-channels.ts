@@ -28,6 +28,7 @@ import type {
   PipelineCheckpoint,
   PipelineModelResolvedEvent,
   PipelinePhase,
+  PipelineStepRecord,
   PlanRecord,
   PlanReview,
   Project,
@@ -451,6 +452,10 @@ export interface IpcInvokeChannels {
   'costs:list-for-issue': {
     args: { projectId: string; issueNumber: number };
     result: CostTaskSummary[];
+  };
+  'pipeline-steps:list-by-thread': {
+    args: { threadId: string };
+    result: PipelineStepRecord[];
   };
 
   // Active pipelines listing (for Running Agents panel)

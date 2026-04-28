@@ -652,4 +652,11 @@ export function registerPipelineHandlers({
       return queries.costs.listTasksForIssue(projectId, issueNumber);
     },
   );
+
+  // Per-attempt provider invocation log. Drives the "Attempts" sub-table in
+  // the issue Costs tab so users can see which model served each phase, what
+  // it cost, and how a run failed without scraping the terminal log.
+  ipcMain.handle('pipeline-steps:list-by-thread', (_event, { threadId }: { threadId: string }) => {
+    return queries.pipelineSteps.listByThread(threadId);
+  });
 }

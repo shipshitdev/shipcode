@@ -8,6 +8,7 @@ import type {
   GitHubIssueQueries,
   IssueEdgeQueries,
   NotificationsQueries,
+  PipelineStepQueries,
   PlanQueries,
   ProjectQueries,
   ReviewQueries,
@@ -39,6 +40,7 @@ export interface Queries {
   costs: CostsQueries;
   skills: SkillsQueries;
   terminalEvents: TerminalEventQueries;
+  pipelineSteps: PipelineStepQueries;
 }
 
 export interface IpcHandlerDeps {
