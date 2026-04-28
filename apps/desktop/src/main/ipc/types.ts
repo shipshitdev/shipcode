@@ -1,11 +1,13 @@
 import type { ProcessManager } from '@shipcode/agents';
 import type {
   ActivityQueries,
+  AutomationQueries,
   CheckpointQueries,
   CostsQueries,
   DashboardQueries,
   DiffQueries,
   GitHubIssueQueries,
+  HeatmapQueries,
   IssueEdgeQueries,
   NotificationsQueries,
   PipelineStepQueries,
@@ -32,9 +34,11 @@ export interface Queries {
   settings: SettingsQueries;
   verifications: VerificationQueries;
   githubIssues: GitHubIssueQueries;
+  heatmap: HeatmapQueries;
   issueEdges: IssueEdgeQueries;
   checkpoints: CheckpointQueries;
   activity: ActivityQueries;
+  automations: AutomationQueries;
   notifications: NotificationsQueries;
   dashboard: DashboardQueries;
   costs: CostsQueries;

@@ -22,6 +22,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useAppStore } from '../stores/app-store';
+import { ActivityHeatmap } from './heatmap/ActivityHeatmap';
 
 function formatCost(usd: number): string {
   if (usd === 0) return '$0.00';
@@ -219,6 +220,15 @@ export function CostsView() {
                   value={displayValue(data.avgCostPerTask, data.avgTokensPerTask)}
                 />
               </div>
+
+              {/* Activity heatmap — daily cost / tokens / runs / PRs across all projects. */}
+              <section className="rounded-xl border border-border bg-elevated p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-primary">Activity</h3>
+                  <p className="text-[11px] text-muted">All projects</p>
+                </div>
+                <ActivityHeatmap scope="global" surface="global" />
+              </section>
 
               {/* By project */}
               <section>

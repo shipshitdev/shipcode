@@ -4,12 +4,16 @@ import type {
   AgentState,
   AppSettings,
   AutoCommitResult,
+  Automation,
   ClarificationAnswer,
   CleanupAnalyzeResult,
   CleanupApplyResult,
   CliProviderUsageMap,
+  CodeFileContent,
+  CodeTreeEntry,
   CostSummary,
   CostTaskSummary,
+  CreateAutomationInput,
   DashboardOverview,
   DashboardStats,
   DeveloperInfo,
@@ -20,6 +24,8 @@ import type {
   GitHubIssueComment,
   GitState,
   GitVisualizerData,
+  HeatmapDayRecord,
+  HeatmapQueryArgs,
   InstantFixScope,
   IntegrationStatus,
   NotificationRecord,
@@ -48,6 +54,7 @@ import type {
   TerminalEventRecord,
   Thread,
   ThreadPanelData,
+  UpdateAutomationInput,
   UpdateStatus,
   VerificationRecord,
   VerificationResult,
@@ -161,6 +168,10 @@ export interface IpcInvokeChannels {
     result: { restored: true; checkpoint: PipelineCheckpoint };
   };
 
+  'pipeline:create-quick-task': {
+    args: { projectId: string; text: string };
+    result: { issue: GitHubIssueCacheRecord };
+  };
   'pipeline:start': { args: { threadId: string }; result: undefined };
   'pipeline:retry': { args: { threadId: string }; result: undefined };
   'pipeline:answer-clarification': {
@@ -198,6 +209,19 @@ export interface IpcInvokeChannels {
     args: { projectId: string; worktreePath: string };
     result: AutoCommitResult;
   };
+  'code:list-tree': {
+    args: { projectId: string; worktreePath: string; relativePath?: string };
+    result: CodeTreeEntry[];
+  };
+  'code:read-file': {
+    args: { projectId: string; worktreePath: string; relativePath: string };
+    result: CodeFileContent;
+  };
+  'code:file-diff': {
+    args: { projectId: string; worktreePath: string; relativePath: string };
+    result: DiffRecord | null;
+  };
+
   'git:cleanup-analyze': {
     args: { projectId: string };
     result: CleanupAnalyzeResult;
@@ -457,6 +481,10 @@ export interface IpcInvokeChannels {
     args: { threadId: string };
     result: PipelineStepRecord[];
   };
+  'activity-heatmap:query': {
+    args: HeatmapQueryArgs;
+    result: HeatmapDayRecord[];
+  };
 
   // Active pipelines listing (for Running Agents panel)
   'pipeline:list-active': { args: undefined; result: ActivePipelineSummary[] };
@@ -546,6 +574,22 @@ export interface IpcInvokeChannels {
   'update:get-status': { args: undefined; result: UpdateStatus };
   'update:check-now': { args: undefined; result: UpdateStatus };
   'update:dismiss': { args: undefined; result: undefined };
+
+  // Automations: scheduled AI tasks per project (cron-driven)
+  'automations:list-all': { args: undefined; result: Automation[] };
+  'automations:list': { args: { projectId: string }; result: Automation[] };
+  'automations:get': { args: { id: string }; result: Automation | null };
+  'automations:create': { args: CreateAutomationInput; result: Automation };
+  'automations:update': {
+    args: { id: string } & UpdateAutomationInput;
+    result: Automation;
+  };
+  'automations:delete': { args: { id: string }; result: undefined };
+  'automations:set-enabled': {
+    args: { id: string; enabled: boolean };
+    result: Automation;
+  };
+  'automations:run-now': { args: { id: string }; result: { queued: boolean } };
 }
 
 // === Streaming Channels (send/on) ===

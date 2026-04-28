@@ -9,6 +9,7 @@ import { MODEL_DISPLAY } from '@shipcode/shared';
 import { Badge } from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
+import { ActivityHeatmap } from '../heatmap/ActivityHeatmap';
 import { timeAgo } from './helpers';
 
 function formatCost(usd: number): string {
@@ -156,6 +157,28 @@ export function CostsTab({
               </span>
             </div>
           </div>
+
+          {/* Per-thread mini-heatmap — collapsed by default to keep the rest
+              of the CostsTab visible without scrolling. */}
+          {thread?.id && (
+            <details className="mb-4 rounded-md border border-border bg-secondary/20 px-3 py-2">
+              <summary className="cursor-pointer text-[11px] font-medium uppercase tracking-wide text-secondary">
+                Activity (last 90 days)
+              </summary>
+              <div className="mt-3">
+                <ActivityHeatmap
+                  scope="thread"
+                  surface="issue"
+                  threadId={thread.id}
+                  defaultRange={90}
+                  defaultMetric="costUsd"
+                  allowedMetrics={['costUsd']}
+                  showMetricToggle={false}
+                  showRangePicker={false}
+                />
+              </div>
+            </details>
+          )}
 
           {/* Per-run breakdown */}
           <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-secondary">

@@ -41,6 +41,7 @@ import {
 } from '@shipcode/agents';
 import {
   ActivityQueries,
+  AutomationQueries,
   CheckpointQueries,
   CostsQueries,
   closeDatabase,
@@ -48,6 +49,7 @@ import {
   DiffQueries,
   GitHubIssueQueries,
   getDatabase,
+  HeatmapQueries,
   IssueEdgeQueries,
   NotificationsQueries,
   PipelineStepQueries,
@@ -66,6 +68,7 @@ import {
   type PipelinePhase,
   PROCESS_STALL_TIMEOUT_MS,
 } from '@shipcode/shared';
+import { AutomationScheduler } from './automation-scheduler';
 import { ChatNotificationService } from './chat-notification-service';
 import { registerIpcHandlers } from './ipc';
 import { transitionThreadPhase } from './ipc/helpers';
@@ -222,9 +225,11 @@ function createWindow() {
     settings: new SettingsQueries(db),
     verifications: new VerificationQueries(db),
     githubIssues: new GitHubIssueQueries(db),
+    heatmap: new HeatmapQueries(db),
     issueEdges: new IssueEdgeQueries(db),
     checkpoints: new CheckpointQueries(db),
     activity: new ActivityQueries(db),
+    automations: new AutomationQueries(db),
     notifications: new NotificationsQueries(db),
     dashboard: new DashboardQueries(db),
     costs: new CostsQueries(db),
@@ -253,6 +258,7 @@ function createWindow() {
     activity: queries.activity,
     terminalEvents: queries.terminalEvents,
     threads: queries.threads,
+    automations: queries.automations,
     notifications: notificationService,
     chatNotifications: chatNotificationService,
     onPipelineTerminal: (event) => onPipelineTerminal?.(event),
@@ -297,6 +303,12 @@ function createWindow() {
     emitter,
     getMainWindow: requireMainWindow,
   });
+
+  const automationScheduler = new AutomationScheduler({
+    automations: queries.automations,
+    pipelineScheduler,
+  });
+  automationScheduler.start();
 
   // Queue promotion: start the next queued issue when a pipeline slot opens.
   onPipelineTerminal = (event) => {
@@ -343,6 +355,7 @@ function createWindow() {
     notificationService,
     chatNotificationService,
     updateService,
+    automationScheduler,
   );
 
   // Watchdog: reset threads stuck in active phases (handles renderer refresh + crash scenarios).

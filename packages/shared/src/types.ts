@@ -116,6 +116,50 @@ export interface Project {
   updatedAt: string;
 }
 
+// === Automation Types ===
+
+export type AutomationLastStatus = 'running' | 'completed' | 'failed';
+
+export interface Automation {
+  id: string;
+  projectId: string;
+  name: string;
+  prompt: string;
+  cronExpr: string;
+  enabled: boolean;
+  executorProvider: AgentType | null;
+  executorModelId: string | null;
+  executorReasoningEffort: ReasoningEffort | null;
+  lastStartedAt: string | null;
+  lastCompletedAt: string | null;
+  lastStatus: AutomationLastStatus | null;
+  nextRunAt: string | null;
+  runCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateAutomationInput {
+  projectId: string;
+  name: string;
+  prompt: string;
+  cronExpr: string;
+  enabled?: boolean;
+  executorProvider?: AgentType | null;
+  executorModelId?: string | null;
+  executorReasoningEffort?: ReasoningEffort | null;
+}
+
+export interface UpdateAutomationInput {
+  name?: string;
+  prompt?: string;
+  cronExpr?: string;
+  enabled?: boolean;
+  executorProvider?: AgentType | null;
+  executorModelId?: string | null;
+  executorReasoningEffort?: ReasoningEffort | null;
+}
+
 // === Thread Types ===
 
 export type PipelinePhase =
@@ -162,6 +206,7 @@ export interface Thread {
   githubIssueNumber: number | null;
   githubPrNumber: number | null;
   githubRepo: string | null;
+  automationId: string | null;
   lastError: string | null;
   failurePhase: string | null;
   failureCount: number;
@@ -437,6 +482,48 @@ export interface ReviewRecord {
   rawOutput: string;
   structured: PlanReview | null;
   createdAt: string;
+}
+
+// === Activity Heatmap Types ===
+
+export type HeatmapMetric = 'costUsd' | 'tokens' | 'runs' | 'prsOpened';
+export type HeatmapRange = 30 | 90 | 365;
+export type HeatmapScope = 'global' | 'project' | 'thread';
+
+export interface HeatmapDayRecord {
+  /** ISO date `YYYY-MM-DD` (UTC). */
+  date: string;
+  costUsd: number;
+  tokens: number;
+  runs: number;
+  prsOpened: number;
+}
+
+export interface HeatmapQueryArgs {
+  scope: HeatmapScope;
+  rangeDays: HeatmapRange;
+  projectId?: string;
+  threadId?: string;
+}
+
+// === Code Browse Types ===
+
+export type CodeEntryType = 'file' | 'dir';
+
+export interface CodeTreeEntry {
+  name: string;
+  relativePath: string;
+  type: CodeEntryType;
+  sizeBytes: number | null;
+  isModified: boolean;
+}
+
+export interface CodeFileContent {
+  relativePath: string;
+  content: string;
+  isBinary: boolean;
+  sizeBytes: number;
+  truncated: boolean;
 }
 
 // === Diff Types ===
@@ -1015,6 +1102,10 @@ export interface GitHubIssueCacheRecord {
   priorityRank: 'p0' | 'p1' | 'p2' | 'p3' | null;
   priorityRaw: string | null;
   priorityFetchedAt: string | null;
+  // Quick mode: synthetic local-only task with negative sentinel `issueNumber`
+  // and no real GitHub issue. Pipeline runs against raw text; PR/comment paths
+  // must skip these rows.
+  isQuickMode: boolean;
 }
 
 export type IssuePipelineStatus =
