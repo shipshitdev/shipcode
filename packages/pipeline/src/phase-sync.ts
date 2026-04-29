@@ -1,8 +1,13 @@
 import type { GitHubIssueQueries, ThreadQueries } from '@shipcode/db';
-import type { IssuePipelineStatus, PipelinePhase } from '@shipcode/shared';
+import {
+  ISSUE_PIPELINE_STATUS,
+  type IssuePipelineStatus,
+  PIPELINE_PHASE,
+  type PipelinePhase,
+} from '@shipcode/shared';
 
 export function mapPhaseToIssuePipelineStatus(phase: PipelinePhase): IssuePipelineStatus {
-  return phase === 'idle' ? 'todo' : phase;
+  return phase === PIPELINE_PHASE.idle ? ISSUE_PIPELINE_STATUS.todo : phase;
 }
 
 export function syncThreadAndIssuePhase(
@@ -12,7 +17,7 @@ export function syncThreadAndIssuePhase(
   phase: PipelinePhase,
   errorMessage?: string,
 ): void {
-  if (phase === 'failed') {
+  if (phase === PIPELINE_PHASE.failed) {
     const current = threads.getById(threadId);
     const activePhase = current?.status ?? 'unknown';
     if (typeof threads.recordFailure === 'function') {

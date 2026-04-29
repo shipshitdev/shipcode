@@ -67,7 +67,7 @@ describe('ActivityHeatmap', () => {
   it('renders the metric and range toggles', async () => {
     renderWithProviders(<ActivityHeatmap scope="global" surface="global" />);
     await waitFor(() => expect(invokeMock).toHaveBeenCalled());
-    expect(screen.getByRole('tab', { name: 'Cost', selected: true })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Tokens', selected: true })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '90 days', selected: true })).toBeInTheDocument();
   });
 
@@ -110,9 +110,21 @@ describe('ActivityHeatmap', () => {
     renderWithProviders(<ActivityHeatmap scope="global" surface="global" defaultRange={30} />);
     await waitFor(() => expect(invokeMock).toHaveBeenCalledTimes(1));
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Tokens' }));
-    expect(screen.getByRole('tab', { name: 'Tokens', selected: true })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Runs' }));
+    expect(screen.getByRole('tab', { name: 'Runs', selected: true })).toBeInTheDocument();
     expect(invokeMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses the strongest green bucket for flat non-zero usage', async () => {
+    invokeMock.mockImplementation(async (_channel: string, args: HeatmapQueryArgs) => {
+      return buildRange(args.rangeDays, (date) =>
+        makeRecord(date, { costUsd: 1, tokens: 100, runs: 1 }),
+      );
+    });
+    renderWithProviders(<ActivityHeatmap scope="global" surface="global" defaultRange={30} />);
+
+    const usageCells = await screen.findAllByLabelText(/100 tokens/);
+    expect(usageCells[0]?.className).toContain('bg-[var(--heatmap-4)]');
   });
 
   it('refires the IPC when range changes', async () => {
@@ -148,8 +160,8 @@ describe('ActivityHeatmap', () => {
       return buildRange(args.rangeDays);
     });
     renderWithProviders(<ActivityHeatmap scope="global" surface="global" defaultRange={30} />);
-    const grid = await screen.findByRole('grid');
-    expect(grid).toBeInTheDocument();
+    const heatmap = await screen.findByRole('region', { name: /Activity heatmap/ });
+    expect(heatmap).toBeInTheDocument();
     // No "1 PR" / "$1.00" cells — every day is zero.
     expect(screen.queryByLabelText(/\$1\.00/)).toBeNull();
   });

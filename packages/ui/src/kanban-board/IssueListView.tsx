@@ -3,7 +3,7 @@
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { Archive, ChevronDown, ChevronRight, PanelLeftOpen, User } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
-import type { GitHubIssueCacheRecord } from '../lib/shipcode';
+import { type GitHubIssueCacheRecord, ISSUE_PIPELINE_STATUS } from '../lib/shipcode';
 import { cn } from '../lib/utils';
 import { Badge } from '../primitives/badge';
 import { Button } from '../primitives/button';
@@ -62,7 +62,9 @@ function DraggableListRow({
   onArchiveIssue,
   approvedAwaitingExecution = false,
 }: DraggableListRowProps) {
-  const isDoneState = issue.pipelineStatus === 'completed' || issue.pipelineStatus === 'done';
+  const isDoneState =
+    issue.pipelineStatus === ISSUE_PIPELINE_STATUS.completed ||
+    issue.pipelineStatus === ISSUE_PIPELINE_STATUS.done;
   const isDraggable = DRAGGABLE_STATUSES.includes(issue.pipelineStatus);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: issue.id,
@@ -135,7 +137,8 @@ function DraggableListRow({
             tone === 'danger' && 'bg-danger',
             tone === 'warning' && 'bg-warning',
             tone === 'agent' && 'bg-agent',
-            tone === 'default' && (issue.pipelineStatus === 'done' ? 'bg-done' : 'bg-text-muted'),
+            tone === 'default' &&
+              (issue.pipelineStatus === ISSUE_PIPELINE_STATUS.done ? 'bg-done' : 'bg-text-muted'),
           )}
         />
       )}

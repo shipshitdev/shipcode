@@ -47,6 +47,17 @@ vi.mock('node:child_process', async (importOriginal) => {
   };
 });
 
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...actual,
+    default: {
+      ...actual,
+      existsSync: vi.fn(() => true),
+    },
+  };
+});
+
 const PLAN_JSON = JSON.stringify({
   id: 'p1',
   threadId: 't1',
@@ -622,7 +633,7 @@ describe('createPipeline', () => {
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
         'planning',
-        'Plan generation failed — no valid shipcode-plan block was produced.',
+        'Plan output could not be parsed — No shipcode-plan fenced block found',
       );
     });
 
@@ -659,7 +670,7 @@ describe('createPipeline', () => {
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
         'planning',
-        'Plan generation failed — no valid shipcode-plan block was produced.',
+        'Plan output could not be parsed — No shipcode-plan fenced block found',
       );
     });
 

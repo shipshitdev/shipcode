@@ -5,7 +5,7 @@ import type {
   PipelineStepStatus,
   Thread,
 } from '@shipcode/shared';
-import { MODEL_DISPLAY } from '@shipcode/shared';
+import { MODEL_DISPLAY, PIPELINE_PHASE } from '@shipcode/shared';
 import { Badge } from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -209,9 +209,9 @@ export function CostsTab({
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge
                             variant={
-                              task.phase === 'completed'
+                              task.phase === PIPELINE_PHASE.completed
                                 ? 'success'
-                                : task.phase === 'failed'
+                                : task.phase === PIPELINE_PHASE.failed
                                   ? 'danger'
                                   : 'default'
                             }

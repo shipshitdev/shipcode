@@ -13,4 +13,10 @@ export { PlanViewer } from './PlanViewer';
 export { ReviewViewer } from './ReviewViewer';
 export { SideBySideDiffViewer } from './SideBySideDiffViewer';
 export { StatusMappingEditor } from './StatusMappingEditor';
+export {
+  languageFromFilePath,
+  SyntaxHighlightedCode,
+  SyntaxHighlightedLine,
+  useSyntaxHighlightedLines,
+} from './SyntaxHighlightedCode';
 export { VerificationViewer } from './VerificationViewer';

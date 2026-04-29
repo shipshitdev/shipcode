@@ -105,7 +105,45 @@ export function compactArtifact(text: string): string {
 
 export function tryExtractJson(text: string): string | null {
   const clean = stripAnsi(text);
-  const jsonRegex = /\{[\s\S]*?"(?:objective|planId|criteriaResults)"[\s\S]*?\}/;
-  const match = clean.match(jsonRegex);
-  return match ? match[0] : null;
+  const marker = clean.search(/"(?:objective|planId|criteriaResults)"/);
+  if (marker === -1) return null;
+
+  const start = clean.lastIndexOf('{', marker);
+  if (start === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = start; index < clean.length; index++) {
+    const char = clean[index];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (char === '\\' && inString) {
+      escaped = true;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) continue;
+
+    if (char === '{') {
+      depth++;
+    } else if (char === '}') {
+      depth--;
+      if (depth === 0) {
+        return clean.slice(start, index + 1);
+      }
+    }
+  }
+
+  return null;
 }

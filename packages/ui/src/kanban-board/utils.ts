@@ -10,6 +10,7 @@ import {
   type ExecutorModel,
   formatProviderReasoningEffort,
   getIssueCardPhase,
+  ISSUE_PIPELINE_STATUS,
   resolveExecutorModelForIssue,
   resolvePhaseModelForIssue,
   resolvePhaseModelIdForIssue,
@@ -36,7 +37,7 @@ export function isApprovedAwaitingExecutionIssue(
   approvedAwaitingExecutionIssueIds?: ReadonlySet<string>,
 ): boolean {
   return (
-    issue.pipelineStatus === 'awaiting_approval' &&
+    issue.pipelineStatus === ISSUE_PIPELINE_STATUS.awaitingApproval &&
     approvedAwaitingExecutionIssueIds?.has(issue.id) === true
   );
 }
@@ -63,7 +64,9 @@ export function issueMatchesSection(
   );
   if (section.key === 'waiting_execution') return approvedAwaitingExecution;
   if (section.key === 'awaiting') {
-    return issue.pipelineStatus === 'awaiting_approval' && !approvedAwaitingExecution;
+    return (
+      issue.pipelineStatus === ISSUE_PIPELINE_STATUS.awaitingApproval && !approvedAwaitingExecution
+    );
   }
   return section.statuses.includes(issue.pipelineStatus);
 }
@@ -73,8 +76,13 @@ export function dragOverlayBorderClass(
   approvedAwaitingExecution = false,
 ): string {
   if (approvedAwaitingExecution) return 'border-agent';
-  if (status === 'failed') return 'border-danger';
-  if (status === 'awaiting_approval' || status === 'clarifying') return 'border-warning';
+  if (status === ISSUE_PIPELINE_STATUS.failed) return 'border-danger';
+  if (
+    status === ISSUE_PIPELINE_STATUS.awaitingApproval ||
+    status === ISSUE_PIPELINE_STATUS.clarifying
+  ) {
+    return 'border-warning';
+  }
   return 'border-accent';
 }
 
@@ -169,10 +177,15 @@ export function resolveIssueRevisionBadge(
 }
 
 function badgeVariantForIssueStatus(status: IssuePipelineStatus): IssueRevisionBadge['variant'] {
-  if (status === 'failed') return 'danger';
-  if (status === 'awaiting_approval' || status === 'clarifying') return 'warning';
-  if (status === 'completed') return 'success';
-  if (status === 'done') return 'done';
+  if (status === ISSUE_PIPELINE_STATUS.failed) return 'danger';
+  if (
+    status === ISSUE_PIPELINE_STATUS.awaitingApproval ||
+    status === ISSUE_PIPELINE_STATUS.clarifying
+  ) {
+    return 'warning';
+  }
+  if (status === ISSUE_PIPELINE_STATUS.completed) return 'success';
+  if (status === ISSUE_PIPELINE_STATUS.done) return 'done';
   if (ACTIVE_STATUSES.includes(status)) return 'info';
   return 'default';
 }
@@ -233,7 +246,12 @@ export function resolveIssueApprovalBadge(
   project: Project | null | undefined,
 ): IssueApprovalBadge | null {
   if (!settings) return null;
-  if (issue.pipelineStatus === 'completed' || issue.pipelineStatus === 'done') return null;
+  if (
+    issue.pipelineStatus === ISSUE_PIPELINE_STATUS.completed ||
+    issue.pipelineStatus === ISSUE_PIPELINE_STATUS.done
+  ) {
+    return null;
+  }
 
   const approval = resolveRequireApprovalStateForIssue(settings, project, issue);
   if (!approval.required) return null;
@@ -356,10 +374,15 @@ export function rowToneFor(
   approvedAwaitingExecution = false,
 ): RowTone {
   if (approvedAwaitingExecution) return 'agent';
-  if (status === 'failed') return 'danger';
-  if (status === 'awaiting_approval' || status === 'clarifying') return 'warning';
-  if (status === 'completed') return 'success';
-  if (status === 'done') return 'done';
+  if (status === ISSUE_PIPELINE_STATUS.failed) return 'danger';
+  if (
+    status === ISSUE_PIPELINE_STATUS.awaitingApproval ||
+    status === ISSUE_PIPELINE_STATUS.clarifying
+  ) {
+    return 'warning';
+  }
+  if (status === ISSUE_PIPELINE_STATUS.completed) return 'success';
+  if (status === ISSUE_PIPELINE_STATUS.done) return 'done';
   if (ACTIVE_STATUSES.includes(status)) return 'agent';
   return 'default';
 }

@@ -1,4 +1,5 @@
 import type { IssuePipelineStatus, ProjectIssueGraph } from '@shipcode/shared';
+import { ISSUE_PIPELINE_STATUS } from '@shipcode/shared';
 import type { Edge, Node } from '@xyflow/react';
 // @ts-expect-error dagre does not ship types in this workspace.
 import dagre from 'dagre';
@@ -14,13 +15,13 @@ export interface IssueGraphNodeData extends Record<string, unknown> {
 const NODE_WIDTH = 220;
 const NODE_HEIGHT = 88;
 const ACTIVE_PIPELINE_STATUSES = new Set<IssuePipelineStatus>([
-  'planning',
-  'reviewing',
-  'revising',
-  'executing',
-  'testing',
-  'verifying',
-  'shipping',
+  ISSUE_PIPELINE_STATUS.planning,
+  ISSUE_PIPELINE_STATUS.reviewing,
+  ISSUE_PIPELINE_STATUS.revising,
+  ISSUE_PIPELINE_STATUS.executing,
+  ISSUE_PIPELINE_STATUS.testing,
+  ISSUE_PIPELINE_STATUS.verifying,
+  ISSUE_PIPELINE_STATUS.shipping,
 ]);
 const EDGE_STYLES = {
   blocks: { stroke: 'rgba(37, 99, 235, 0.85)', strokeWidth: 1.6 },

@@ -3,6 +3,7 @@ import {
   type CostSummary,
   type CostTaskSummary,
   type ExecutorModel,
+  PIPELINE_PHASE,
   type PipelinePhase,
   toIsoUtc,
 } from '@shipcode/shared';
@@ -33,21 +34,21 @@ function resolveProviderAndModel(row: TaskCostRow): {
   model: string | null;
 } {
   switch (row.phase as PipelinePhase) {
-    case 'planning':
-    case 'clarifying':
+    case PIPELINE_PHASE.planning:
+    case PIPELINE_PHASE.clarifying:
       return { provider: row.planner_model as ExecutorModel, model: row.planner_resolved_model };
-    case 'reviewing':
+    case PIPELINE_PHASE.reviewing:
       return { provider: row.reviewer_model as ExecutorModel, model: row.reviewer_resolved_model };
-    case 'revising':
+    case PIPELINE_PHASE.revising:
       return { provider: row.planner_model as ExecutorModel, model: row.revisor_resolved_model };
-    case 'awaiting_approval':
-    case 'executing':
-    case 'testing':
+    case PIPELINE_PHASE.awaitingApproval:
+    case PIPELINE_PHASE.executing:
+    case PIPELINE_PHASE.testing:
       return { provider: row.executor_model as ExecutorModel, model: row.executor_resolved_model };
-    case 'verifying':
-    case 'shipping':
+    case PIPELINE_PHASE.verifying:
+    case PIPELINE_PHASE.shipping:
       return { provider: row.verifier_model as ExecutorModel, model: row.verifier_resolved_model };
-    case 'completed':
+    case PIPELINE_PHASE.completed:
       if (row.verifier_resolved_model) {
         return {
           provider: row.verifier_model as ExecutorModel,
@@ -70,8 +71,8 @@ function resolveProviderAndModel(row: TaskCostRow): {
         return { provider: row.planner_model as ExecutorModel, model: row.revisor_resolved_model };
       }
       return { provider: row.planner_model as ExecutorModel, model: row.planner_resolved_model };
-    case 'failed':
-    case 'idle':
+    case PIPELINE_PHASE.failed:
+    case PIPELINE_PHASE.idle:
       if (row.executor_resolved_model) {
         return {
           provider: row.executor_model as ExecutorModel,
@@ -101,8 +102,8 @@ export class CostsQueries {
   constructor(private db: DatabaseSync) {}
 
   private listTaskRows(limit: number, offset: number, projectId?: string | null): TaskCostRow[] {
-    const where = [`t.status != 'idle'`];
-    const args: Array<string | number> = [];
+    const where = [`t.status != ?`];
+    const args: Array<string | number> = [PIPELINE_PHASE.idle];
     if (projectId) {
       where.push(`t.project_id = ?`);
       args.push(projectId);
@@ -163,9 +164,13 @@ export class CostsQueries {
            COALESCE(SUM(total_cost_usd), 0) as total_cost_all_time,
            COALESCE(SUM(total_tokens_prompt), 0) as total_tokens,
            COUNT(*) as task_count
-         FROM threads WHERE status != 'idle'`,
+         FROM threads WHERE status != ?`,
       )
-      .get() as { total_cost_all_time: number; total_tokens: number; task_count: number };
+      .get(PIPELINE_PHASE.idle) as {
+      total_cost_all_time: number;
+      total_tokens: number;
+      task_count: number;
+    };
 
     const cost7dRow = this.db
       .prepare(
@@ -173,10 +178,10 @@ export class CostsQueries {
            COALESCE(SUM(total_cost_usd), 0) as cost,
            COALESCE(SUM(total_tokens_prompt + total_tokens_completion), 0) as tokens
          FROM threads
-         WHERE status != 'idle'
+         WHERE status != ?
            AND julianday('now') - julianday(updated_at) <= 7.0`,
       )
-      .get() as { cost: number; tokens: number };
+      .get(PIPELINE_PHASE.idle) as { cost: number; tokens: number };
 
     const projectRows = this.db
       .prepare(
@@ -189,11 +194,11 @@ export class CostsQueries {
            COUNT(*) as task_count
          FROM threads t
          INNER JOIN projects p ON p.id = t.project_id
-         WHERE t.status != 'idle'
+         WHERE t.status != ?
          GROUP BY t.project_id
          ORDER BY cost DESC`,
       )
-      .all() as Array<{
+      .all(PIPELINE_PHASE.idle) as Array<{
       project_id: string;
       project_name: string;
       cost: number;
@@ -248,16 +253,16 @@ export class CostsQueries {
            p.name as project_name
          FROM threads t
          INNER JOIN projects p ON p.id = t.project_id
-         WHERE t.project_id = ? AND t.github_issue_number = ? AND t.status != 'idle'
+         WHERE t.project_id = ? AND t.github_issue_number = ? AND t.status != ?
          ORDER BY t.updated_at DESC`,
       )
-      .all(projectId, issueNumber) as TaskCostRow[];
+      .all(projectId, issueNumber, PIPELINE_PHASE.idle) as TaskCostRow[];
     return rows.map((row) => this.mapTaskRow(row));
   }
 
   countTasks(projectId?: string | null): number {
-    const where = [`status != 'idle'`];
-    const args: Array<string> = [];
+    const where = [`status != ?`];
+    const args: Array<string> = [PIPELINE_PHASE.idle];
     if (projectId) {
       where.push(`project_id = ?`);
       args.push(projectId);

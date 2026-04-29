@@ -1,4 +1,5 @@
 import type { PipelinePhase, PlanRecord, ReviewRecord } from '@shipcode/shared';
+import { PIPELINE_PHASE } from '@shipcode/shared';
 import { PhaseChip, PlanViewer, ReviewViewer } from '@shipcode/ui';
 import {
   Badge,
@@ -251,7 +252,7 @@ export function PlanHistoryTab({
       !isPlanHistoryLoading &&
       normalizedThreadPlanHistory.length === 0 &&
       normalizedPlanHistory.length === 0 &&
-      threadPhase !== 'failed' ? (
+      threadPhase !== PIPELINE_PHASE.failed ? (
         expanded ? (
           <PlanWaiting threadId={activeThreadId} />
         ) : (

@@ -8,6 +8,7 @@ import type { PipelineEmitter, PipelineEvent } from '@shipcode/pipeline';
 import {
   type ActivityKind,
   formatResolvedModelDisplay,
+  PIPELINE_PHASE,
   type PipelinePhase,
   type Thread,
 } from '@shipcode/shared';
@@ -44,58 +45,72 @@ function formatTimestampPrefix(isoLike: string): string {
 const PHASE_ACTIVITY: Partial<
   Record<PipelinePhase, { kind: ActivityKind; title: (t: Thread) => string; subtitle?: string }>
 > = {
-  planning: {
+  [PIPELINE_PHASE.planning]: {
     kind: 'pipeline_started',
     title: (t) => `${t.title} — planning started`,
     subtitle: 'Claude is drafting the plan',
   },
-  clarifying: {
+  [PIPELINE_PHASE.clarifying]: {
     kind: 'phase_change',
     title: (t) => `${t.title} — clarification needed`,
     subtitle: 'Waiting for your answer before planning continues',
   },
-  reviewing: {
+  [PIPELINE_PHASE.reviewing]: {
     kind: 'phase_change',
     title: (t) => `${t.title} — in review`,
     subtitle: 'Codex is reviewing the plan',
   },
-  revising: {
+  [PIPELINE_PHASE.revising]: {
     kind: 'phase_change',
     title: (t) => `${t.title} — revising`,
     subtitle: 'Claude is revising the plan',
   },
-  awaiting_approval: {
+  [PIPELINE_PHASE.awaitingApproval]: {
     kind: 'phase_change',
     title: (t) => `${t.title} — awaiting approval`,
     subtitle: 'Needs your approval',
   },
-  executing: {
+  [PIPELINE_PHASE.executing]: {
     kind: 'phase_change',
     title: (t) => `${t.title} — executing`,
     subtitle: 'Claude is implementing',
   },
-  testing: {
+  [PIPELINE_PHASE.testing]: {
     kind: 'phase_change',
     title: (t) => `${t.title} — running tests`,
     subtitle: 'Executing test command',
   },
-  verifying: {
+  [PIPELINE_PHASE.verifying]: {
     kind: 'phase_change',
     title: (t) => `${t.title} — verifying`,
     subtitle: 'Running verification',
   },
-  shipping: {
+  [PIPELINE_PHASE.shipping]: {
     kind: 'phase_change',
     title: (t) => `${t.title} — shipping`,
     subtitle: 'Committing and pushing',
   },
-  completed: {
+  [PIPELINE_PHASE.completed]: {
     kind: 'pipeline_completed',
     title: (t) => `${t.title} — completed`,
     subtitle: 'PR ready',
   },
-  failed: { kind: 'pipeline_failed', title: (t) => `${t.title} — failed` },
+  [PIPELINE_PHASE.failed]: { kind: 'pipeline_failed', title: (t) => `${t.title} — failed` },
 };
+
+const SLOT_FREEING_PHASES = new Set<PipelinePhase>([
+  PIPELINE_PHASE.clarifying,
+  PIPELINE_PHASE.awaitingApproval,
+  PIPELINE_PHASE.completed,
+  PIPELINE_PHASE.failed,
+  PIPELINE_PHASE.idle,
+]);
+
+const TERMINAL_PHASES = new Set<PipelinePhase>([
+  PIPELINE_PHASE.completed,
+  PIPELINE_PHASE.failed,
+  PIPELINE_PHASE.idle,
+]);
 
 export function createElectronEmitter(
   mainWindow: BrowserWindow,
@@ -194,8 +209,8 @@ export function createElectronEmitter(
     if (!thread) return;
 
     if (event.type === 'pipeline:phase') {
-      // Ignore 'idle' — it's the cancel/reset state and would flood the feed.
-      if (event.phase === 'idle') {
+      // Ignore idle as a normal phase — it is the cancel/reset state.
+      if (event.phase === PIPELINE_PHASE.idle) {
         deps.activity.create({
           threadId: thread.id,
           projectId: thread.projectId,
@@ -216,9 +231,9 @@ export function createElectronEmitter(
         projectId: thread.projectId,
         kind: meta.kind,
         actor:
-          event.phase === 'reviewing'
+          event.phase === PIPELINE_PHASE.reviewing
             ? 'codex'
-            : event.phase === 'completed' || event.phase === 'clarifying'
+            : event.phase === PIPELINE_PHASE.completed || event.phase === PIPELINE_PHASE.clarifying
               ? 'system'
               : 'claude',
         title: meta.title(thread),
@@ -342,7 +357,7 @@ export function createElectronEmitter(
             kind: 'lifecycle',
             message: `${formatTimestampPrefix(new Date().toISOString())} phase: \x1b[36m${event.phase}\x1b[0m`,
           });
-          if (event.phase === 'planning') {
+          if (event.phase === PIPELINE_PHASE.planning) {
             logEvent('terminal:phase-persisted', {
               threadId: event.threadId,
               createdAt: record.createdAt,
@@ -406,17 +421,17 @@ export function createElectronEmitter(
       // 4. Fire phase-based notifications.
       if (event.type === 'pipeline:phase' && thread) {
         try {
-          if (event.phase === 'planning') {
+          if (event.phase === PIPELINE_PHASE.planning) {
             deps.notifications.dismissByThread(thread.id);
           }
 
-          if (event.phase === 'awaiting_approval') {
+          if (event.phase === PIPELINE_PHASE.awaitingApproval) {
             deps.notifications.fire('awaiting_approval', thread);
             deps.chatNotifications.fire('awaiting_approval', thread);
-          } else if (event.phase === 'failed') {
+          } else if (event.phase === PIPELINE_PHASE.failed) {
             deps.notifications.fire('failed', thread);
             deps.chatNotifications.fire('failed', thread);
-          } else if (event.phase === 'completed') {
+          } else if (event.phase === PIPELINE_PHASE.completed) {
             deps.notifications.fire('completed', thread);
             deps.chatNotifications.fire('completed', thread);
           }
@@ -428,14 +443,7 @@ export function createElectronEmitter(
       // 5. Promote next queued issue if a pipeline slot opened up.
       // clarifying/awaiting_approval are included: the slot becomes available
       // while the human responds, so the next queued issue can start in parallel.
-      if (
-        event.type === 'pipeline:phase' &&
-        (event.phase === 'clarifying' ||
-          event.phase === 'awaiting_approval' ||
-          event.phase === 'completed' ||
-          event.phase === 'failed' ||
-          event.phase === 'idle')
-      ) {
+      if (event.type === 'pipeline:phase' && SLOT_FREEING_PHASES.has(event.phase)) {
         try {
           deps.onPipelineTerminal?.({ threadId: event.threadId, phase: event.phase });
         } catch (err) {
@@ -446,10 +454,7 @@ export function createElectronEmitter(
       // 5b. Promote next execution-queued pipeline if a project execution slot opened.
       // Only terminal phases free an execution slot — awaiting_approval frees a
       // planning slot, not an execution slot.
-      if (
-        event.type === 'pipeline:phase' &&
-        (event.phase === 'completed' || event.phase === 'failed' || event.phase === 'idle')
-      ) {
+      if (event.type === 'pipeline:phase' && TERMINAL_PHASES.has(event.phase)) {
         try {
           deps.onExecutionSlotFreed?.();
         } catch (err) {
@@ -460,7 +465,7 @@ export function createElectronEmitter(
       // 5c. Record automation run finish on terminal phases.
       if (
         event.type === 'pipeline:phase' &&
-        (event.phase === 'completed' || event.phase === 'failed')
+        (event.phase === PIPELINE_PHASE.completed || event.phase === PIPELINE_PHASE.failed)
       ) {
         try {
           const thread = deps.threads.getById(event.threadId);
@@ -475,9 +480,7 @@ export function createElectronEmitter(
       // 6. Tell the renderer to refresh dashboard queries.
       // Terminal phases flush immediately; all other events are throttled to
       // at most once per 2 s to reduce renderer churn during EXECUTE.
-      const isTerminalPhase =
-        event.type === 'pipeline:phase' &&
-        (event.phase === 'completed' || event.phase === 'failed' || event.phase === 'idle');
+      const isTerminalPhase = event.type === 'pipeline:phase' && TERMINAL_PHASES.has(event.phase);
       if (isTerminalPhase) {
         if (_dashboardThrottleTimer !== null) {
           clearTimeout(_dashboardThrottleTimer);

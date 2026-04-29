@@ -2,7 +2,9 @@ import {
   type AppSettings,
   type GitHubIssueCacheRecord,
   githubRepoUrl,
+  ISSUE_PIPELINE_STATUS,
   type IssuePipelineStatus,
+  PIPELINE_PHASE,
   type Project,
   type Thread,
   type ThreadPanelData,
@@ -17,7 +19,10 @@ import { useAppStore } from '../stores/app-store';
 import { ThreadPanelArchiveDialog } from './ThreadPanelArchiveDialog';
 
 const EMPTY_ISSUES: GitHubIssueCacheRecord[] = [];
-const DONE_PIPELINE_STATUSES: IssuePipelineStatus[] = ['completed', 'done'];
+const DONE_PIPELINE_STATUSES: IssuePipelineStatus[] = [
+  ISSUE_PIPELINE_STATUS.completed,
+  ISSUE_PIPELINE_STATUS.done,
+];
 
 export function ThreadPanel() {
   const queryClient = useQueryClient();
@@ -106,7 +111,7 @@ export function ThreadPanel() {
     const issueIds = new Set<string>();
     for (const issue of issues) {
       if (
-        issue.pipelineStatus === 'awaiting_approval' &&
+        issue.pipelineStatus === ISSUE_PIPELINE_STATUS.awaitingApproval &&
         issue.threadId &&
         latestPlanStatusByThreadId[issue.threadId] === 'approved'
       ) {
@@ -313,7 +318,7 @@ export function ThreadPanel() {
             });
         }}
         onStartPipeline={(issue) => {
-          patchIssueOptimistic(issue.id, { pipelineStatus: 'planning' });
+          patchIssueOptimistic(issue.id, { pipelineStatus: ISSUE_PIPELINE_STATUS.planning });
           window.shipcode
             .invoke('github:start-issue', {
               projectId: activeProjectId,
@@ -330,7 +335,10 @@ export function ThreadPanel() {
             });
         }}
         onRetry={(issue) => {
-          patchIssueOptimistic(issue.id, { pipelineStatus: 'todo', state: 'open' });
+          patchIssueOptimistic(issue.id, {
+            pipelineStatus: ISSUE_PIPELINE_STATUS.todo,
+            state: 'open',
+          });
           const request = issue.threadId
             ? window.shipcode.invoke('pipeline:retry', { threadId: issue.threadId })
             : window.shipcode.invoke('github:retry-issue', {
@@ -361,15 +369,15 @@ export function ThreadPanel() {
           const linkedThread = issue.threadId ? threadById.get(issue.threadId) : null;
           const nextStatus: IssuePipelineStatus =
             issue.state === 'closed'
-              ? 'done'
-              : issue.linkedPrNumber != null || linkedThread?.status === 'completed'
-                ? 'completed'
-                : 'done';
+              ? ISSUE_PIPELINE_STATUS.done
+              : issue.linkedPrNumber != null || linkedThread?.status === PIPELINE_PHASE.completed
+                ? ISSUE_PIPELINE_STATUS.completed
+                : ISSUE_PIPELINE_STATUS.done;
           const nextState: GitHubIssueCacheRecord['state'] =
-            nextStatus === 'done' ? 'closed' : issue.state;
+            nextStatus === ISSUE_PIPELINE_STATUS.done ? 'closed' : issue.state;
           patchIssueOptimistic(issue.id, { pipelineStatus: nextStatus, state: nextState });
           setDoneUndo(
-            nextStatus === 'done'
+            nextStatus === ISSUE_PIPELINE_STATUS.done
               ? {
                   issueId: issue.id,
                   issueNumber: issue.issueNumber,
@@ -398,7 +406,10 @@ export function ThreadPanel() {
             });
         }}
         onRerun={(issue) => {
-          patchIssueOptimistic(issue.id, { pipelineStatus: 'planning', state: 'open' });
+          patchIssueOptimistic(issue.id, {
+            pipelineStatus: ISSUE_PIPELINE_STATUS.planning,
+            state: 'open',
+          });
           window.shipcode
             .invoke('github:start-issue', {
               projectId: activeProjectId,

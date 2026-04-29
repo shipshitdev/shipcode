@@ -65,6 +65,7 @@ import {
 import { createPipeline } from '@shipcode/pipeline';
 import {
   HEARTBEAT_TIMEOUT_MS,
+  PIPELINE_PHASE,
   type PipelinePhase,
   PROCESS_STALL_TIMEOUT_MS,
 } from '@shipcode/shared';
@@ -330,7 +331,7 @@ function createWindow() {
   setTimeout(() => {
     const settings = queries.settings.get();
     for (let i = 0; i < settings.maxConcurrentPipelines; i++) {
-      onPipelineTerminal?.({ threadId: '', phase: 'idle' });
+      onPipelineTerminal?.({ threadId: '', phase: PIPELINE_PHASE.idle });
     }
     // Also drain any threads that were approved pre-restart and waiting for execution.
     pipelineScheduler.drainExecutionQueue();
@@ -371,7 +372,7 @@ function createWindow() {
         const errorMsg = 'Pipeline timed out — process was likely interrupted by an app refresh.';
         transitionThreadPhase(requireMainWindow(), queries, emitter, {
           threadId: thread.id,
-          phase: 'failed',
+          phase: PIPELINE_PHASE.failed,
           errorMessage: errorMsg,
         });
         log.info(`[watchdog] reset stuck thread ${thread.id} → failed`);
@@ -387,7 +388,7 @@ function createWindow() {
         if (!tid) continue;
         transitionThreadPhase(requireMainWindow(), queries, emitter, {
           threadId: tid,
-          phase: 'failed',
+          phase: PIPELINE_PHASE.failed,
           errorMessage: `Agent process stalled — no output for ${Math.round(PROCESS_STALL_TIMEOUT_MS / 1000)}s. Killed by watchdog.`,
         });
       }

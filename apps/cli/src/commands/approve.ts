@@ -1,4 +1,5 @@
 import { createPipeline } from '@shipcode/pipeline';
+import { PIPELINE_PHASE } from '@shipcode/shared';
 import { createCliContext } from '../context';
 import { requireOnboarding } from './guard';
 
@@ -25,7 +26,7 @@ export async function approveCommand(issueNumber: string) {
     process.exit(1);
   }
 
-  if (thread.status !== 'awaiting_approval') {
+  if (thread.status !== PIPELINE_PHASE.awaitingApproval) {
     console.error(
       `Thread is in "${thread.status}" state, not "awaiting_approval". Cannot approve.`,
     );

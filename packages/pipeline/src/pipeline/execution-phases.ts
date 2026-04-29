@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
 import {
   buildExecutionPrompt,
   buildPRBody,
@@ -18,6 +19,7 @@ import {
   isRealGithubIssueNumber,
   MAX_TEST_RETRIES,
   MAX_VERIFICATION_RETRIES,
+  PIPELINE_PHASE,
   type ShipCodePlan,
 } from '@shipcode/shared';
 import { parseUnifiedDiff } from './diff-parser';
@@ -228,7 +230,7 @@ export function createExecutionPhaseHandlers({
       return;
     }
 
-    if (!context.worktreePath) {
+    if (!context.worktreePath || !fs.existsSync(context.worktreePath)) {
       try {
         const appSettings = deps.settings.get();
         const worktreeManager = new WorktreeManager(context.projectPath, {
@@ -279,13 +281,13 @@ export function createExecutionPhaseHandlers({
       if (
         !latest ||
         latest.commitSha !== commitSha ||
-        latest.phase !== 'executing' ||
+        latest.phase !== PIPELINE_PHASE.executing ||
         latest.reason !== reason
       ) {
         deps.checkpoints.create({
           threadId,
           projectId: context.projectId,
-          phase: 'executing',
+          phase: PIPELINE_PHASE.executing,
           reason,
           label,
           branch,

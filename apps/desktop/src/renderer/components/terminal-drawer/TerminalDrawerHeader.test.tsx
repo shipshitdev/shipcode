@@ -4,6 +4,7 @@ import type { GitHubIssueCacheRecord } from '@shipcode/shared';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { TerminalDrawerTarget } from './constants';
 import { TerminalDrawerHeader } from './TerminalDrawerHeader';
 
 function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssueCacheRecord {
@@ -52,6 +53,19 @@ function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
   };
 }
 
+function issueTarget(issue: GitHubIssueCacheRecord): TerminalDrawerTarget {
+  if (!issue.threadId) throw new Error('Test issue must have a threadId');
+  return {
+    kind: 'issue',
+    threadId: issue.threadId,
+    projectId: issue.projectId,
+    title: issue.title,
+    label: `#${issue.issueNumber}`,
+    phase: issue.pipelineStatus as TerminalDrawerTarget['phase'],
+    issue,
+  };
+}
+
 afterEach(() => {
   cleanup();
 });
@@ -68,11 +82,11 @@ describe('TerminalDrawerHeader', () => {
         activeProjectId={null}
         approvedAwaitingExecution={false}
         currentModel="gpt-5.4"
-        displayIssue={issue}
+        displayTarget={issueTarget(issue)}
         ghosttyAvailable={false}
         isMaximized={false}
         pipelinePhase="executing"
-        runningTabs={[issue]}
+        runningTargets={[issueTarget(issue)]}
         startedAt="2m 10s"
         terminalAvailable={false}
         terminalThreadId={issue.threadId}
@@ -80,7 +94,7 @@ describe('TerminalDrawerHeader', () => {
         onNewCodexSession={() => {}}
         onOpenInGhostty={() => {}}
         onOpenInTerminalApp={() => {}}
-        onOpenIssue={onOpenIssue}
+        onOpenTarget={onOpenIssue}
         onToggleMaximize={onToggleMaximize}
         onToggleTerminal={onToggleTerminal}
       />,
@@ -96,7 +110,7 @@ describe('TerminalDrawerHeader', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Expand terminal' }));
     fireEvent.click(screen.getByRole('button', { name: 'Close terminal' }));
 
-    expect(onOpenIssue).toHaveBeenCalledWith(issue);
+    expect(onOpenIssue).toHaveBeenCalledWith(issueTarget(issue));
     expect(onToggleMaximize).toHaveBeenCalledTimes(1);
     expect(onToggleTerminal).toHaveBeenCalledTimes(1);
   });
@@ -116,11 +130,11 @@ describe('TerminalDrawerHeader', () => {
         activeProjectId={null}
         approvedAwaitingExecution={false}
         currentModel={null}
-        displayIssue={issueA}
+        displayTarget={issueTarget(issueA)}
         ghosttyAvailable={false}
         isMaximized={true}
         pipelinePhase="idle"
-        runningTabs={[issueA, issueB]}
+        runningTargets={[issueTarget(issueA), issueTarget(issueB)]}
         startedAt={null}
         terminalAvailable={false}
         terminalThreadId={issueA.threadId}
@@ -128,7 +142,7 @@ describe('TerminalDrawerHeader', () => {
         onNewCodexSession={() => {}}
         onOpenInGhostty={() => {}}
         onOpenInTerminalApp={() => {}}
-        onOpenIssue={onOpenIssue}
+        onOpenTarget={onOpenIssue}
         onToggleMaximize={vi.fn()}
         onToggleTerminal={vi.fn()}
       />,
@@ -141,7 +155,7 @@ describe('TerminalDrawerHeader', () => {
     });
 
     fireEvent.click(screen.getByText('Retry pipeline'));
-    expect(onOpenIssue).toHaveBeenCalledWith(issueB);
+    expect(onOpenIssue).toHaveBeenCalledWith(issueTarget(issueB));
   });
 
   it('renders direct CLI shell buttons and disables unavailable external terminals', async () => {
@@ -154,11 +168,11 @@ describe('TerminalDrawerHeader', () => {
         activeProjectId="project-1"
         approvedAwaitingExecution={false}
         currentModel={null}
-        displayIssue={issue}
+        displayTarget={issueTarget(issue)}
         ghosttyAvailable={false}
         isMaximized={false}
         pipelinePhase="idle"
-        runningTabs={[issue]}
+        runningTargets={[issueTarget(issue)]}
         startedAt={null}
         terminalAvailable={false}
         terminalThreadId={issue.threadId}
@@ -166,7 +180,7 @@ describe('TerminalDrawerHeader', () => {
         onNewCodexSession={onNewCodexSession}
         onOpenInGhostty={() => {}}
         onOpenInTerminalApp={() => {}}
-        onOpenIssue={() => {}}
+        onOpenTarget={() => {}}
         onToggleMaximize={() => {}}
         onToggleTerminal={() => {}}
       />,
@@ -193,11 +207,11 @@ describe('TerminalDrawerHeader', () => {
         activeProjectId={null}
         approvedAwaitingExecution
         currentModel={null}
-        displayIssue={issue}
+        displayTarget={issueTarget(issue)}
         ghosttyAvailable={false}
         isMaximized={false}
         pipelinePhase="awaiting_approval"
-        runningTabs={[issue]}
+        runningTargets={[issueTarget(issue)]}
         startedAt={null}
         terminalAvailable={false}
         terminalThreadId={issue.threadId}
@@ -205,7 +219,7 @@ describe('TerminalDrawerHeader', () => {
         onNewCodexSession={() => {}}
         onOpenInGhostty={() => {}}
         onOpenInTerminalApp={() => {}}
-        onOpenIssue={() => {}}
+        onOpenTarget={() => {}}
         onToggleMaximize={() => {}}
         onToggleTerminal={() => {}}
       />,
@@ -213,5 +227,43 @@ describe('TerminalDrawerHeader', () => {
 
     expect(screen.getByText('Waiting for slot')).toBeInTheDocument();
     expect(screen.queryByText(/awaiting approval/i)).toBeNull();
+  });
+
+  it('renders automation thread context without an issue detail action', () => {
+    const target: TerminalDrawerTarget = {
+      kind: 'thread',
+      threadId: 'thread-auto',
+      projectId: 'project-1',
+      title: '[Auto] clean',
+      label: 'Automation',
+      phase: 'testing',
+    };
+
+    render(
+      <TerminalDrawerHeader
+        activeProjectId="project-1"
+        approvedAwaitingExecution={false}
+        currentModel="gpt-5.4"
+        displayTarget={target}
+        ghosttyAvailable={false}
+        isMaximized={false}
+        pipelinePhase="testing"
+        runningTargets={[target]}
+        startedAt="21:26:15"
+        terminalAvailable={false}
+        terminalThreadId={target.threadId}
+        onNewClaudeSession={() => {}}
+        onNewCodexSession={() => {}}
+        onOpenInGhostty={() => {}}
+        onOpenInTerminalApp={() => {}}
+        onOpenTarget={vi.fn()}
+        onToggleMaximize={() => {}}
+        onToggleTerminal={() => {}}
+      />,
+    );
+
+    expect(screen.getByText('Automation')).toBeInTheDocument();
+    expect(screen.getByText('[Auto] clean')).toBeInTheDocument();
+    expect(screen.queryByTitle(/Open issue detail/)).toBeNull();
   });
 });

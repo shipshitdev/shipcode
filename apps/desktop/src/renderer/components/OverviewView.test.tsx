@@ -215,4 +215,61 @@ describe('OverviewView', () => {
     expect(card?.textContent).toContain('Waiting for slot');
     expect(card?.textContent?.toLowerCase()).not.toContain('awaiting approval');
   });
+
+  it('opens and pins the terminal when a synthetic automation card is clicked', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'dashboard:get-overview') {
+        return {
+          stats: {
+            agentsRunning: 1,
+            runningByPhase: { testing: 1 },
+            agentsRunningByProject: { 'project-1': 1 },
+            pendingApprovalsByProject: {},
+            tasksInProgress: 1,
+            tasksOpen: 1,
+            tasksBlocked: 0,
+            pendingApprovals: 0,
+            staleApprovals: 0,
+            shippedLast7d: 0,
+            failedLast7d: 0,
+          },
+          running: [
+            {
+              threadId: 'thread-auto',
+              projectId: 'project-1',
+              projectName: 'shipcode',
+              threadTitle: '[Auto] clean',
+              phase: 'testing',
+              startedAt: Date.now() - 60_000,
+              activeProcessId: 'process-auto',
+              githubIssueNumber: null,
+              modelProvider: 'claude',
+              model: 'claude-sonnet-4-6',
+              reasoningEffort: 'medium',
+            },
+          ],
+          activity: [],
+          activityTotal: 0,
+          recent: [],
+          recentTotal: 0,
+        } satisfies DashboardOverview;
+      }
+
+      if (channel === 'github:list-issues') return [];
+
+      return null;
+    });
+
+    renderWithProviders();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Open \[Auto\] clean/i }));
+
+    await waitFor(() => {
+      const state = useAppStore.getState();
+      expect(state.activeProjectId).toBe('project-1');
+      expect(state.activeThreadId).toBe('thread-auto');
+      expect(state.terminalThreadId).toBe('thread-auto');
+      expect(state.terminalVisible).toBe(true);
+    });
+  });
 });

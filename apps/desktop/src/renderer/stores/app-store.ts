@@ -11,15 +11,16 @@ import type {
   TerminalEventRecord,
   VerificationResult,
 } from '@shipcode/shared';
+import { ISSUE_PIPELINE_STATUS, PIPELINE_PHASE } from '@shipcode/shared';
 import { create } from 'zustand';
 
 const AGENT_ACTIVE_STATUSES = new Set<IssuePipelineStatus>([
-  'planning',
-  'reviewing',
-  'revising',
-  'executing',
-  'verifying',
-  'shipping',
+  ISSUE_PIPELINE_STATUS.planning,
+  ISSUE_PIPELINE_STATUS.reviewing,
+  ISSUE_PIPELINE_STATUS.revising,
+  ISSUE_PIPELINE_STATUS.executing,
+  ISSUE_PIPELINE_STATUS.verifying,
+  ISSUE_PIPELINE_STATUS.shipping,
 ]);
 const MAX_CANONICAL_TERMINAL_EVENTS = 2000;
 
@@ -250,7 +251,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   commentComposerRequest: null,
   currentPlan: null,
   currentReview: null,
-  pipelinePhase: 'idle',
+  pipelinePhase: PIPELINE_PHASE.idle,
   systemHealth: null,
   currentVerification: null,
   githubIssues: [],
@@ -348,7 +349,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentPlan: null,
       currentReview: null,
       currentVerification: null,
-      pipelinePhase: 'idle',
+      pipelinePhase: PIPELINE_PHASE.idle,
       viewMode: 'project',
       projectTab: 'issues' as ProjectTab,
       githubIssues: [],
@@ -359,7 +360,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentPlan: null,
       currentReview: null,
       currentVerification: null,
-      pipelinePhase: 'idle',
+      pipelinePhase: PIPELINE_PHASE.idle,
       viewMode: 'project',
     }),
   selectIssue: (issue) =>
@@ -369,7 +370,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentPlan: null,
       currentReview: null,
       currentVerification: null,
-      pipelinePhase: 'idle',
+      pipelinePhase: PIPELINE_PHASE.idle,
       terminalEvents: [],
       // Console is decoupled from the detail panel: closing detail (issue=null)
       // must keep the current console pin so the user can still read output.
@@ -406,7 +407,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setReview: (review) => set({ currentReview: review }),
   setPipelinePhase: (phase) =>
     set((s) =>
-      phase === 'idle'
+      phase === PIPELINE_PHASE.idle
         ? { pipelinePhase: phase }
         : {
             pipelinePhase: phase,
@@ -543,7 +544,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentPlan: null,
       currentReview: null,
       currentVerification: null,
-      pipelinePhase: 'idle',
+      pipelinePhase: PIPELINE_PHASE.idle,
       terminalEvents: [],
       terminalThreadId: issue.threadId ?? null,
       issueDetailExpanded: s.issueDetailExpanded,

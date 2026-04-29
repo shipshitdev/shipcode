@@ -29,7 +29,12 @@ import type {
   ShipCodePlan,
   Thread,
 } from '@shipcode/shared';
-import { clampError, parseGithubRemote, validateGithubProjectUrl } from '@shipcode/shared';
+import {
+  clampError,
+  PIPELINE_PHASE,
+  parseGithubRemote,
+  validateGithubProjectUrl,
+} from '@shipcode/shared';
 import { dialog, shell } from 'electron';
 import { runAutoCommitWorkflow, runCleanupAnalyze, runCleanupApply } from '../git-workflows';
 import log from '../logger.service';
@@ -680,7 +685,7 @@ export function registerProjectHandlers({
         });
       }
 
-      mainWindow.webContents.send('pipeline:phase', { threadId, phase: 'idle' });
+      mainWindow.webContents.send('pipeline:phase', { threadId, phase: PIPELINE_PHASE.idle });
       return { restored: true as const, checkpoint };
     },
   );

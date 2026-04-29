@@ -162,19 +162,22 @@ export interface UpdateAutomationInput {
 
 // === Thread Types ===
 
-export type PipelinePhase =
-  | 'idle'
-  | 'planning'
-  | 'clarifying'
-  | 'reviewing'
-  | 'revising'
-  | 'awaiting_approval'
-  | 'executing'
-  | 'testing'
-  | 'verifying'
-  | 'shipping'
-  | 'completed'
-  | 'failed';
+export const PIPELINE_PHASE = {
+  idle: 'idle',
+  planning: 'planning',
+  clarifying: 'clarifying',
+  reviewing: 'reviewing',
+  revising: 'revising',
+  awaitingApproval: 'awaiting_approval',
+  executing: 'executing',
+  testing: 'testing',
+  verifying: 'verifying',
+  shipping: 'shipping',
+  completed: 'completed',
+  failed: 'failed',
+} as const;
+
+export type PipelinePhase = (typeof PIPELINE_PHASE)[keyof typeof PIPELINE_PHASE];
 
 export type ThreadStatus = PipelinePhase;
 export type ThreadKind = 'pipeline' | 'instant';
@@ -1108,21 +1111,25 @@ export interface GitHubIssueCacheRecord {
   isQuickMode: boolean;
 }
 
+export const ISSUE_PIPELINE_STATUS = {
+  todo: 'todo',
+  queued: 'queued',
+  planning: PIPELINE_PHASE.planning,
+  clarifying: PIPELINE_PHASE.clarifying,
+  reviewing: PIPELINE_PHASE.reviewing,
+  revising: PIPELINE_PHASE.revising,
+  awaitingApproval: PIPELINE_PHASE.awaitingApproval,
+  executing: PIPELINE_PHASE.executing,
+  testing: PIPELINE_PHASE.testing,
+  verifying: PIPELINE_PHASE.verifying,
+  shipping: PIPELINE_PHASE.shipping,
+  completed: PIPELINE_PHASE.completed,
+  done: 'done',
+  failed: PIPELINE_PHASE.failed,
+} as const;
+
 export type IssuePipelineStatus =
-  | 'todo'
-  | 'queued'
-  | 'planning'
-  | 'clarifying'
-  | 'reviewing'
-  | 'revising'
-  | 'awaiting_approval'
-  | 'executing'
-  | 'testing'
-  | 'verifying'
-  | 'shipping'
-  | 'completed'
-  | 'done'
-  | 'failed';
+  (typeof ISSUE_PIPELINE_STATUS)[keyof typeof ISSUE_PIPELINE_STATUS];
 
 // === Verification Types ===
 

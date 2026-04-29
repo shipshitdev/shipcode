@@ -1,6 +1,7 @@
 import type { ActivePipelineSummary, HeatmapQueryArgs } from '@shipcode/shared';
 import {
   clarificationAnswerSchema,
+  PIPELINE_PHASE,
   resolveExecutorModelForIssue,
   resolveRequireApproval,
   resolveRequireApprovalForIssue,
@@ -64,7 +65,7 @@ export function registerPipelineHandlers({
       threadTitle: thread?.title ?? summary.threadId,
       phase: summary.phase,
       approvedAwaitingExecution:
-        summary.phase === 'awaiting_approval' && latestPlanStatus === 'approved',
+        summary.phase === PIPELINE_PHASE.awaitingApproval && latestPlanStatus === 'approved',
       startedAt: summary.startedAt,
       activeProcessId: summary.activeProcessId,
       githubIssueNumber: thread?.githubIssueNumber ?? null,
@@ -182,7 +183,7 @@ export function registerPipelineHandlers({
       },
     ) => {
       const thread = queries.threads.getById(threadId);
-      if (!thread || thread.status !== 'clarifying') return;
+      if (!thread || thread.status !== PIPELINE_PHASE.clarifying) return;
       if (!thread.clarificationRequest) {
         throw new Error('No pending clarification request found for this task');
       }
@@ -254,7 +255,7 @@ export function registerPipelineHandlers({
 
     const latestPlan = queries.plans.getLatest(threadId);
     if (!latestPlan) throw new Error('No plan available to approve');
-    if (thread.status !== 'awaiting_approval') {
+    if (thread.status !== PIPELINE_PHASE.awaitingApproval) {
       throw new Error(
         `This task is no longer awaiting approval. Current status: ${thread.status}.`,
       );
@@ -262,7 +263,7 @@ export function registerPipelineHandlers({
     if (latestPlan.status === 'approved') {
       throw new Error('Approval is already confirmed. Waiting for an execution slot.');
     }
-    if (latestPlan.status !== 'awaiting_approval') {
+    if (latestPlan.status !== PIPELINE_PHASE.awaitingApproval) {
       throw new Error(
         `This plan is no longer awaiting approval. Current plan status: ${latestPlan.status}.`,
       );
@@ -309,7 +310,7 @@ export function registerPipelineHandlers({
       notificationService.dismissByThread(threadId);
       transitionThreadPhase(mainWindow, queries, emitter, {
         threadId,
-        phase: 'failed',
+        phase: PIPELINE_PHASE.failed,
         errorMessage,
       });
       throw new Error(errorMessage);
@@ -549,7 +550,7 @@ export function registerPipelineHandlers({
     });
     transitionThreadPhase(mainWindow, queries, emitter, {
       threadId,
-      phase: 'awaiting_approval',
+      phase: PIPELINE_PHASE.awaitingApproval,
     });
   });
 

@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import type { DiffRecord } from './lib/shipcode';
 import { cn } from './lib/utils';
 import { Badge } from './primitives/badge';
+import { useSyntaxHighlightedLines } from './SyntaxHighlightedCode';
 
 interface SideBySideDiffViewerProps {
   diffs: DiffRecord[];
@@ -127,6 +128,10 @@ export function SideBySideDiffViewer({ diffs, className }: SideBySideDiffViewerP
     () => (activeDiff?.diffContent ? parseSideBySideLines(activeDiff.diffContent) : []),
     [activeDiff?.diffContent],
   );
+  const leftLines = useMemo(() => parsedLines.map((line) => line.leftText), [parsedLines]);
+  const rightLines = useMemo(() => parsedLines.map((line) => line.rightText), [parsedLines]);
+  const leftHighlightedLines = useSyntaxHighlightedLines(leftLines, activeDiff?.filePath);
+  const rightHighlightedLines = useSyntaxHighlightedLines(rightLines, activeDiff?.filePath);
 
   if (diffs.length === 0) {
     return (
@@ -229,7 +234,11 @@ export function SideBySideDiffViewer({ diffs, className }: SideBySideDiffViewerP
                             line.type === 'context' && 'text-secondary',
                           )}
                         >
-                          {line.leftText || (line.leftNum === null && isRemoved ? '' : '\u00A0')}
+                          {line.leftText
+                            ? leftHighlightedLines[i]
+                            : line.leftNum === null && isRemoved
+                              ? ''
+                              : '\u00A0'}
                         </td>
 
                         {/* Right side (new) */}
@@ -250,7 +259,11 @@ export function SideBySideDiffViewer({ diffs, className }: SideBySideDiffViewerP
                             line.type === 'context' && 'text-secondary',
                           )}
                         >
-                          {line.rightText || (line.rightNum === null && isRemoved ? '' : '\u00A0')}
+                          {line.rightText
+                            ? rightHighlightedLines[i]
+                            : line.rightNum === null && isRemoved
+                              ? ''
+                              : '\u00A0'}
                         </td>
                       </tr>
                     );

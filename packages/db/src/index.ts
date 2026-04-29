@@ -2,6 +2,8 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 
+import { ISSUE_PIPELINE_STATUS } from '@shipcode/shared';
+
 export type { PromptTelemetryInsert, PromptTelemetryRecord } from '@shipcode/shared';
 
 // Lazy-load node:sqlite so the CLI's Node version guard can fire before this
@@ -143,12 +145,12 @@ export function getDatabase(dataDir: string): DatabaseSync {
   // An unclaimed queued issue has no active worker holding it — it's stale state
   // from a crash, restart, or interrupted pipeline. V22 migration only cleared
   // issues without thread_id; this catches the remainder on every startup.
-  db.exec(`
+  db.prepare(`
     UPDATE github_issue_cache
-       SET pipeline_status = 'todo', last_phase_update = NULL
-     WHERE pipeline_status = 'queued'
+       SET pipeline_status = ?, last_phase_update = NULL
+     WHERE pipeline_status = ?
        AND claimed_at IS NULL
-  `);
+  `).run(ISSUE_PIPELINE_STATUS.todo, ISSUE_PIPELINE_STATUS.queued);
 
   return db;
 }

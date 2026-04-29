@@ -1,4 +1,5 @@
 import type { IssuePipelineStatus } from '@shipcode/shared';
+import { ISSUE_PIPELINE_STATUS } from '@shipcode/shared';
 import { Badge, cn } from '@shipshitdev/ui';
 import { Handle, type NodeProps, Position } from '@xyflow/react';
 import type { IssueGraphNodeData } from './issue-graph-utils';
@@ -39,7 +40,7 @@ export function IssueGraphNode({ data, selected }: NodeProps) {
           <div className="line-clamp-2 text-sm font-medium text-primary">{payload.title}</div>
         </div>
         <Badge
-          variant={payload.pipelineStatus === 'failed' ? 'danger' : 'info'}
+          variant={payload.pipelineStatus === ISSUE_PIPELINE_STATUS.failed ? 'danger' : 'info'}
           className="text-[10px]"
         >
           {payload.pipelineStatus}

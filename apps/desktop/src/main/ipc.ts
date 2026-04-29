@@ -1,5 +1,6 @@
 import type { ProcessManager } from '@shipcode/agents';
 import type { Pipeline, PipelineEmitter } from '@shipcode/pipeline';
+import { PIPELINE_PHASE } from '@shipcode/shared';
 import type { BrowserWindow, IpcMain } from 'electron';
 import type { AutomationSchedulerLike } from './automation-scheduler';
 import type { ChatNotificationService } from './chat-notification-service';
@@ -35,7 +36,7 @@ export function registerIpcHandlers(
   for (const thread of queries.threads.getOrphaned()) {
     transitionThreadPhase(mainWindow, queries, emitter, {
       threadId: thread.id,
-      phase: 'failed',
+      phase: PIPELINE_PHASE.failed,
       errorMessage: thread.lastError,
     });
     log.info(`[startup] reset orphaned thread ${thread.id} → failed`);

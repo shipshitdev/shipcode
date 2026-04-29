@@ -1,9 +1,65 @@
-import type { GitHubIssueCacheRecord, PlanRecord } from '@shipcode/shared';
+import type {
+  ActivePipelineSummary,
+  GitHubIssueCacheRecord,
+  PipelinePhase,
+  PlanRecord,
+  Thread,
+} from '@shipcode/shared';
+import { PIPELINE_PHASE } from '@shipcode/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useRef, useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../../query-stale-times';
 import { useAppStore } from '../../stores/app-store';
-import { CONSOLE_VISIBLE_STATUSES, DEFAULT_HEIGHT, MIN_HEIGHT } from './constants';
+import {
+  CONSOLE_VISIBLE_STATUSES,
+  DEFAULT_HEIGHT,
+  MIN_HEIGHT,
+  type TerminalDrawerTarget,
+} from './constants';
+
+function issueTarget(issue: GitHubIssueCacheRecord): TerminalDrawerTarget | null {
+  if (!issue.threadId) return null;
+  return {
+    kind: 'issue',
+    threadId: issue.threadId,
+    projectId: issue.projectId,
+    title: issue.title,
+    label: `#${issue.issueNumber}`,
+    phase: issue.pipelineStatus as PipelinePhase,
+    issue,
+  };
+}
+
+function activeSummaryTarget(summary: ActivePipelineSummary): TerminalDrawerTarget {
+  return {
+    kind: 'thread',
+    threadId: summary.threadId,
+    projectId: summary.projectId,
+    title: summary.threadTitle,
+    label: summary.githubIssueNumber != null ? `#${summary.githubIssueNumber}` : 'Automation',
+    phase: summary.phase,
+    summary,
+  };
+}
+
+function threadTarget(thread: Thread): TerminalDrawerTarget {
+  return {
+    kind: 'thread',
+    threadId: thread.id,
+    projectId: thread.projectId,
+    title: thread.title,
+    label:
+      thread.githubIssueNumber != null
+        ? `#${thread.githubIssueNumber}`
+        : thread.automationId
+          ? 'Automation'
+          : thread.kind === 'instant'
+            ? 'Session'
+            : 'Thread',
+    phase: thread.status,
+    thread,
+  };
+}
 
 export function useTerminalDrawer() {
   const toggleTerminal = useAppStore((s) => s.toggleTerminal);
@@ -14,24 +70,57 @@ export function useTerminalDrawer() {
   const githubIssues = useAppStore((s) => s.githubIssues);
   const activeIssue = useAppStore((s) => s.activeIssue);
   const scopedIssues = githubIssues.filter((issue) => issue.projectId === activeProjectId);
-  const runningTabs = scopedIssues.filter((issue) =>
-    CONSOLE_VISIBLE_STATUSES.has(issue.pipelineStatus),
+  const { data: activePipelines = [] } = useQuery<ActivePipelineSummary[]>({
+    queryKey: ['pipeline-list-active'],
+    queryFn: async () => {
+      const result = await window.shipcode.invoke<ActivePipelineSummary[]>('pipeline:list-active');
+      return Array.isArray(result) ? result : [];
+    },
+    refetchInterval: 2_000,
+  });
+  const issueTargets = scopedIssues
+    .map(issueTarget)
+    .filter((target): target is TerminalDrawerTarget => target !== null);
+  const runningIssueTargets = issueTargets.filter((target) =>
+    CONSOLE_VISIBLE_STATUSES.has(target.phase),
   );
+  const issueThreadIds = new Set(issueTargets.map((target) => target.threadId));
+  const syntheticActiveTargets = activePipelines
+    .filter((summary) => summary.projectId === activeProjectId)
+    .filter((summary) => !issueThreadIds.has(summary.threadId))
+    .map(activeSummaryTarget);
+  const runningTargets = [...runningIssueTargets, ...syntheticActiveTargets];
   const scopedActiveIssue = activeIssue?.projectId === activeProjectId ? activeIssue : null;
-  const explicitIssue =
+  const explicitTarget =
     terminalThreadId != null
-      ? (scopedIssues.find((issue) => issue.threadId === terminalThreadId) ??
-        (scopedActiveIssue?.threadId === terminalThreadId ? scopedActiveIssue : null))
+      ? (issueTargets.find((target) => target.threadId === terminalThreadId) ??
+        (scopedActiveIssue?.threadId === terminalThreadId
+          ? issueTarget(scopedActiveIssue)
+          : null) ??
+        syntheticActiveTargets.find((target) => target.threadId === terminalThreadId) ??
+        null)
+      : null;
+  const { data: explicitThread = null } = useQuery<Thread | null>({
+    queryKey: ['terminal-drawer-thread', terminalThreadId],
+    queryFn: () => {
+      if (!terminalThreadId) return null;
+      return window.shipcode.invoke<Thread | null>('thread:get', { threadId: terminalThreadId });
+    },
+    enabled: !!terminalThreadId && explicitTarget == null,
+    staleTime: STABLE_APP_STATE_STALE_TIME,
+  });
+  const explicitThreadTarget =
+    explicitThread && explicitThread.projectId === activeProjectId
+      ? threadTarget(explicitThread)
       : null;
   const activeIssueMatch =
     scopedActiveIssue?.threadId != null
-      ? (scopedIssues.find((issue) => issue.threadId === scopedActiveIssue.threadId) ??
-        scopedActiveIssue)
+      ? (issueTargets.find((target) => target.threadId === scopedActiveIssue.threadId) ??
+        issueTarget(scopedActiveIssue))
       : null;
-  const fallbackIssue =
-    activeIssueMatch || runningTabs.find((issue) => issue.threadId != null) || null;
-  const displayIssue = explicitIssue ?? fallbackIssue;
-  const visibleTerminalThreadId = displayIssue?.threadId ?? null;
+  const fallbackTarget = activeIssueMatch || runningTargets[0] || null;
+  const displayTarget = explicitTarget ?? explicitThreadTarget ?? fallbackTarget;
+  const visibleTerminalThreadId = displayTarget?.threadId ?? null;
   const firstEventCreatedAt = useAppStore((s) =>
     visibleTerminalThreadId
       ? (s.canonicalTerminalStream[visibleTerminalThreadId]?.[0]?.createdAt ?? null)
@@ -39,21 +128,21 @@ export function useTerminalDrawer() {
   );
   const activeThreadId = useAppStore((s) => s.activeThreadId);
   const pipelinePhase = useAppStore((s) =>
-    displayIssue == null
-      ? 'idle'
-      : displayIssue.threadId === activeThreadId
+    displayTarget == null
+      ? PIPELINE_PHASE.idle
+      : displayTarget.threadId === activeThreadId
         ? s.pipelinePhase
-        : (displayIssue.pipelineStatus as typeof s.pipelinePhase),
+        : displayTarget.phase,
   );
   const { data: displayThreadPlans = [] } = useQuery<PlanRecord[]>({
     queryKey: ['terminal-drawer-plan-history', visibleTerminalThreadId],
     queryFn: () => window.shipcode.invoke('plan:list', { threadId: visibleTerminalThreadId }),
-    enabled: !!visibleTerminalThreadId && displayIssue?.pipelineStatus === 'awaiting_approval',
+    enabled: !!visibleTerminalThreadId && displayTarget?.phase === PIPELINE_PHASE.awaitingApproval,
     staleTime: STABLE_APP_STATE_STALE_TIME,
   });
   const latestPlanStatus = displayThreadPlans[0]?.status ?? null;
   const approvedAwaitingExecution =
-    displayIssue?.pipelineStatus === 'awaiting_approval' && latestPlanStatus === 'approved';
+    displayTarget?.phase === PIPELINE_PHASE.awaitingApproval && latestPlanStatus === 'approved';
   const currentModel = useAppStore(
     (s) => (visibleTerminalThreadId ? s.currentModels[visibleTerminalThreadId] : null) ?? null,
   );
@@ -96,25 +185,27 @@ export function useTerminalDrawer() {
     setTerminalMaximized(!isMaximized);
   }, [height, isMaximized, setTerminalMaximized]);
 
-  const handleRunningTabSelect = useCallback(
-    (issue: GitHubIssueCacheRecord) => {
-      setTerminalThread(issue.threadId ?? null);
-      selectIssue(issue);
+  const handleRunningTargetSelect = useCallback(
+    (target: TerminalDrawerTarget) => {
+      setTerminalThread(target.threadId);
+      if (target.kind === 'issue') {
+        selectIssue(target.issue);
+      }
     },
     [selectIssue, setTerminalThread],
   );
 
   return {
     currentModel,
-    displayIssue,
+    displayTarget,
     handleResizeMouseDown,
-    handleRunningTabSelect,
+    handleRunningTargetSelect,
     approvedAwaitingExecution,
     isMaximized,
     pipelinePhase,
     resolvedHeight: isMaximized ? undefined : height,
-    runningTabs,
-    showEmptyState: displayIssue === null,
+    runningTargets,
+    showEmptyState: displayTarget === null,
     startedAt:
       firstEventCreatedAt != null
         ? new Date(firstEventCreatedAt).toLocaleTimeString('en-US', {

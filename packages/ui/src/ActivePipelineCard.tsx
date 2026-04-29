@@ -3,20 +3,25 @@
 import type { KeyboardEvent } from 'react';
 import { modelDisplay } from './lib/model-display';
 import { useSharedSecondNow } from './lib/second-ticker';
-import { type ExecutorModel, type PipelinePhase, phaseToProgress } from './lib/shipcode';
+import {
+  type ExecutorModel,
+  PIPELINE_PHASE,
+  type PipelinePhase,
+  phaseToProgress,
+} from './lib/shipcode';
 import { cn } from './lib/utils';
 import { PhaseChip } from './PhaseChip';
 import { Badge } from './primitives/badge';
 import { Button } from './primitives/button';
 
 const AGENT_ACTIVE_PHASES = new Set<PipelinePhase>([
-  'planning',
-  'reviewing',
-  'revising',
-  'executing',
-  'testing',
-  'verifying',
-  'shipping',
+  PIPELINE_PHASE.planning,
+  PIPELINE_PHASE.reviewing,
+  PIPELINE_PHASE.revising,
+  PIPELINE_PHASE.executing,
+  PIPELINE_PHASE.testing,
+  PIPELINE_PHASE.verifying,
+  PIPELINE_PHASE.shipping,
 ]);
 
 function formatElapsed(since: number, now: number): string {
@@ -64,7 +69,8 @@ export function ActivePipelineCard({
   className,
 }: ActivePipelineCardProps) {
   const isHumanBlocked =
-    phase === 'clarifying' || (phase === 'awaiting_approval' && !approvedAwaitingExecution);
+    phase === PIPELINE_PHASE.clarifying ||
+    (phase === PIPELINE_PHASE.awaitingApproval && !approvedAwaitingExecution);
   const isAgentActive = AGENT_ACTIVE_PHASES.has(phase);
   const progress = phaseToProgress(phase);
 

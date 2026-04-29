@@ -5,7 +5,9 @@ import {
   type GitHubPrCheckSummary,
   type GitHubPrReviewCommentSummary,
   ISO_NOW_SQL,
+  ISSUE_PIPELINE_STATUS,
   type IssuePipelineStatus,
+  PIPELINE_PHASE,
   type ReasoningEffort,
   toIsoUtc,
 } from '@shipcode/shared';
@@ -272,17 +274,17 @@ export class GitHubIssueQueries {
     const result = this.db
       .prepare(
         `UPDATE github_issue_cache
-           SET pipeline_status = 'todo', last_phase_update = NULL
+           SET pipeline_status = ?, last_phase_update = NULL
          WHERE id = ?
            AND linked_pr_number IS NULL
            AND NOT EXISTS (
              SELECT 1
              FROM threads
              WHERE threads.id = github_issue_cache.thread_id
-               AND threads.status = 'completed'
+               AND threads.status = ?
            )`,
       )
-      .run(id);
+      .run(ISSUE_PIPELINE_STATUS.todo, id, PIPELINE_PHASE.completed);
     return Number(result.changes) > 0;
   }
 
@@ -290,21 +292,30 @@ export class GitHubIssueQueries {
     const result = this.db
       .prepare(
         `UPDATE github_issue_cache
-           SET pipeline_status = 'completed', last_phase_update = ${ISO_NOW_SQL}
+           SET pipeline_status = ?, last_phase_update = ${ISO_NOW_SQL}
          WHERE id = ?
            AND state = 'open'
-           AND pipeline_status IN ('todo','queued','awaiting_approval','failed','done')
+           AND pipeline_status IN (?, ?, ?, ?, ?)
            AND (
              linked_pr_number IS NOT NULL
              OR EXISTS (
                SELECT 1
                FROM threads
                WHERE threads.id = github_issue_cache.thread_id
-                 AND threads.status = 'completed'
+                 AND threads.status = ?
              )
            )`,
       )
-      .run(id);
+      .run(
+        ISSUE_PIPELINE_STATUS.completed,
+        id,
+        ISSUE_PIPELINE_STATUS.todo,
+        ISSUE_PIPELINE_STATUS.queued,
+        ISSUE_PIPELINE_STATUS.awaitingApproval,
+        ISSUE_PIPELINE_STATUS.failed,
+        ISSUE_PIPELINE_STATUS.done,
+        PIPELINE_PHASE.completed,
+      );
     return Number(result.changes) > 0;
   }
 
@@ -323,11 +334,19 @@ export class GitHubIssueQueries {
     const result = this.db
       .prepare(
         `UPDATE github_issue_cache
-           SET pipeline_status = 'done', last_phase_update = ${ISO_NOW_SQL}
+           SET pipeline_status = ?, last_phase_update = ${ISO_NOW_SQL}
          WHERE id = ?
-           AND pipeline_status IN ('todo','queued','awaiting_approval','failed','completed')`,
+           AND pipeline_status IN (?, ?, ?, ?, ?)`,
       )
-      .run(id);
+      .run(
+        ISSUE_PIPELINE_STATUS.done,
+        id,
+        ISSUE_PIPELINE_STATUS.todo,
+        ISSUE_PIPELINE_STATUS.queued,
+        ISSUE_PIPELINE_STATUS.awaitingApproval,
+        ISSUE_PIPELINE_STATUS.failed,
+        ISSUE_PIPELINE_STATUS.completed,
+      );
     return Number(result.changes) > 0;
   }
 
@@ -348,10 +367,10 @@ export class GitHubIssueQueries {
                      SELECT 1
                      FROM threads
                      WHERE threads.id = github_issue_cache.thread_id
-                       AND threads.status = 'completed'
+                       AND threads.status = ?
                    )
-                 THEN 'completed'
-                 ELSE 'todo'
+                 THEN ?
+                 ELSE ?
                END,
                last_phase_update = CASE
                  WHEN linked_pr_number IS NOT NULL
@@ -359,15 +378,23 @@ export class GitHubIssueQueries {
                      SELECT 1
                      FROM threads
                      WHERE threads.id = github_issue_cache.thread_id
-                       AND threads.status = 'completed'
+                       AND threads.status = ?
                    )
                  THEN ${ISO_NOW_SQL}
                  ELSE NULL
                END
          WHERE id = ?
-           AND pipeline_status IN ('completed','done')`,
+           AND pipeline_status IN (?, ?)`,
       )
-      .run(id);
+      .run(
+        PIPELINE_PHASE.completed,
+        ISSUE_PIPELINE_STATUS.completed,
+        ISSUE_PIPELINE_STATUS.todo,
+        PIPELINE_PHASE.completed,
+        id,
+        ISSUE_PIPELINE_STATUS.completed,
+        ISSUE_PIPELINE_STATUS.done,
+      );
     return Number(result.changes) > 0;
   }
 
@@ -387,9 +414,9 @@ export class GitHubIssueQueries {
   releaseClaim(id: string): void {
     this.db
       .prepare(
-        "UPDATE github_issue_cache SET claimed_at = NULL, claimed_by = NULL, pipeline_status = 'queued', last_phase_update = NULL WHERE id = ?",
+        'UPDATE github_issue_cache SET claimed_at = NULL, claimed_by = NULL, pipeline_status = ?, last_phase_update = NULL WHERE id = ?',
       )
-      .run(id);
+      .run(ISSUE_PIPELINE_STATUS.queued, id);
   }
 
   getStale(olderThanMs: number): GitHubIssueCacheRecord[] {
@@ -405,9 +432,9 @@ export class GitHubIssueQueries {
   getRequeued(projectId: string): GitHubIssueCacheRecord[] {
     const rows = this.db
       .prepare(
-        "SELECT * FROM github_issue_cache WHERE project_id = ? AND pipeline_status = 'queued' AND claimed_at IS NULL ORDER BY fetched_at ASC",
+        'SELECT * FROM github_issue_cache WHERE project_id = ? AND pipeline_status = ? AND claimed_at IS NULL ORDER BY fetched_at ASC',
       )
-      .all(projectId);
+      .all(projectId, ISSUE_PIPELINE_STATUS.queued);
     return asRows<GitHubIssueCacheRow>(rows).map((r) => this.toRecord(r));
   }
 
@@ -416,13 +443,13 @@ export class GitHubIssueQueries {
       .prepare(
         `SELECT gic.* FROM github_issue_cache gic
            JOIN projects p ON p.id = gic.project_id
-          WHERE gic.pipeline_status = 'queued'
+          WHERE gic.pipeline_status = ?
             AND gic.archived_at IS NULL
             AND p.archived = 0
           ORDER BY gic.last_phase_update ASC
           LIMIT 1`,
       )
-      .get();
+      .get(ISSUE_PIPELINE_STATUS.queued);
     return row ? this.toRecord(asRow<GitHubIssueCacheRow>(row)) : null;
   }
 

@@ -31,20 +31,9 @@ import {
 import {
   formatIssueBranch,
   type GitHubIssueCacheRecord,
-  type IssuePipelineStatus,
+  ISSUE_PIPELINE_STATUS,
 } from './lib/shipcode';
 import { cn } from './lib/utils';
-
-const ACTIVE_STATUSES: readonly IssuePipelineStatus[] = [
-  'planning',
-  'clarifying',
-  'reviewing',
-  'revising',
-  'executing',
-  'testing',
-  'verifying',
-  'shipping',
-] as const;
 
 type KeyboardFocusColumn = {
   key: ColumnKey;
@@ -181,10 +170,6 @@ export function KanbanBoard({
   const [activeId, setActiveId] = useState<string | null>(null);
   const activeIssue = boardIssues.find((issue) => issue.id === activeId);
   const boardRootRef = useRef<HTMLDivElement | null>(null);
-  const isAnyActive = useMemo(
-    () => boardIssues.some((i) => ACTIVE_STATUSES.includes(i.pipelineStatus)),
-    [boardIssues],
-  );
   const [view, setView] = useState<BoardView>('kanban');
   const [sortOrder, setSortOrder] = useState<BoardSortOrder>('priority');
   const [approvalFilter, setApprovalFilter] = useState<'all' | 'needs-approval'>('all');
@@ -197,6 +182,7 @@ export function KanbanBoard({
   } | null>(null);
   const [keyboardActionToast, setKeyboardActionToast] = useState<string | null>(null);
   const [focusedIssueId, setFocusedIssueId] = useState<string | null>(null);
+  const [keyboardActivated, setKeyboardActivated] = useState(false);
   const [rerunningId, setRerunningId] = useState<string | null>(null);
   const shortcutsEnabled = keyboardShortcutsEnabled ?? !readOnly;
   const threadById = useMemo(
@@ -349,14 +335,17 @@ export function KanbanBoard({
   useEffect(() => {
     if (view !== 'kanban' || readOnly) {
       setFocusedIssueId(null);
+      setKeyboardActivated(false);
       return;
     }
+
+    if (!keyboardActivated) return;
 
     setFocusedIssueId((current) => {
       if (findFocusedPosition(keyboardFocusColumns, current)) return current;
       return firstFocusableIssueId(keyboardFocusColumns);
     });
-  }, [keyboardFocusColumns, readOnly, view]);
+  }, [keyboardActivated, keyboardFocusColumns, readOnly, view]);
 
   useEffect(() => {
     if (view !== 'kanban' || !focusedIssueId) return;
@@ -400,9 +389,17 @@ export function KanbanBoard({
         return;
       }
 
-      const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+      const raw = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+      const arrowMap: Record<string, 'j' | 'k' | 'h' | 'l'> = {
+        ArrowDown: 'j',
+        ArrowUp: 'k',
+        ArrowLeft: 'h',
+        ArrowRight: 'l',
+      };
+      const key = arrowMap[raw] ?? raw;
       if (key === 'j' || key === 'k' || key === 'h' || key === 'l') {
         event.preventDefault();
+        setKeyboardActivated(true);
         setFocusedIssueId((current) => moveFocusedIssueId(keyboardFocusColumns, current, key));
         return;
       }
@@ -421,11 +418,15 @@ export function KanbanBoard({
       if (key !== 'e') return;
 
       event.preventDefault();
-      if (focusedIssue.pipelineStatus === 'todo' && onStartPipeline && !readOnly) {
+      if (
+        focusedIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.todo &&
+        onStartPipeline &&
+        !readOnly
+      ) {
         onStartPipeline(focusedIssue);
         return;
       }
-      if (focusedIssue.pipelineStatus === 'failed' && onRerun && !readOnly) {
+      if (focusedIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.failed && onRerun && !readOnly) {
         handleRerun(focusedIssue);
         return;
       }
@@ -475,7 +476,7 @@ export function KanbanBoard({
     if (
       sourceColumn === 'human' &&
       dropId === 'agent:planning' &&
-      issue.pipelineStatus === 'failed' &&
+      issue.pipelineStatus === ISSUE_PIPELINE_STATUS.failed &&
       (onRerun ?? onStartPipeline)
     ) {
       (onRerun ?? onStartPipeline)?.(issue);
@@ -485,9 +486,9 @@ export function KanbanBoard({
     if (
       sourceColumn === 'human' &&
       dropId === 'todo' &&
-      (issue.pipelineStatus === 'failed' ||
-        issue.pipelineStatus === 'clarifying' ||
-        issue.pipelineStatus === 'awaiting_approval') &&
+      (issue.pipelineStatus === ISSUE_PIPELINE_STATUS.failed ||
+        issue.pipelineStatus === ISSUE_PIPELINE_STATUS.clarifying ||
+        issue.pipelineStatus === ISSUE_PIPELINE_STATUS.awaitingApproval) &&
       onRetry
     ) {
       onRetry(issue);
@@ -497,7 +498,8 @@ export function KanbanBoard({
     if (
       sourceColumn === 'agent' &&
       dropId === 'todo' &&
-      (issue.pipelineStatus === 'queued' || issue.pipelineStatus === 'awaiting_approval') &&
+      (issue.pipelineStatus === ISSUE_PIPELINE_STATUS.queued ||
+        issue.pipelineStatus === ISSUE_PIPELINE_STATUS.awaitingApproval) &&
       onRetry
     ) {
       onRetry(issue);
@@ -514,10 +516,7 @@ export function KanbanBoard({
   return (
     <div
       ref={boardRootRef}
-      className={cn(
-        'relative flex h-full min-h-0 flex-col overflow-hidden rounded-sm',
-        isAnyActive && 'ring-2 ring-yellow-400/70 [animation:ring-pulse_1.5s_ease-in-out_infinite]',
-      )}
+      className={cn('relative flex h-full min-h-0 flex-col overflow-hidden rounded-sm')}
     >
       <BoardToolbar
         baseBranch={baseBranch}

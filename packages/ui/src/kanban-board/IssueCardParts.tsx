@@ -6,7 +6,7 @@ import { memo } from 'react';
 import { modelDisplay } from '../lib/model-display';
 import { useSharedSecondNow } from '../lib/second-ticker';
 import type { GitHubIssueCacheRecord } from '../lib/shipcode';
-import { phaseToProgress } from '../lib/shipcode';
+import { ISSUE_PIPELINE_STATUS, phaseToProgress } from '../lib/shipcode';
 import { cn } from '../lib/utils';
 import { PhaseChip } from '../PhaseChip';
 import { Badge } from '../primitives/badge';
@@ -104,15 +104,15 @@ function DraggableCardComponent({
     disabled: !draggable,
   });
 
-  const isFailed = issue.pipelineStatus === 'failed';
-  const isClarifying = issue.pipelineStatus === 'clarifying';
+  const isFailed = issue.pipelineStatus === ISSUE_PIPELINE_STATUS.failed;
+  const isClarifying = issue.pipelineStatus === ISSUE_PIPELINE_STATUS.clarifying;
   const isAwaitingApproval =
-    issue.pipelineStatus === 'awaiting_approval' && !approvedAwaitingExecution;
+    issue.pipelineStatus === ISSUE_PIPELINE_STATUS.awaitingApproval && !approvedAwaitingExecution;
   const isAwaiting = isAwaitingApproval || isClarifying;
   const isActive = ACTIVE_STATUSES.includes(issue.pipelineStatus);
-  const isTodo = issue.pipelineStatus === 'todo';
-  const isCompleted = issue.pipelineStatus === 'completed';
-  const isDone = issue.pipelineStatus === 'done';
+  const isTodo = issue.pipelineStatus === ISSUE_PIPELINE_STATUS.todo;
+  const isCompleted = issue.pipelineStatus === ISSUE_PIPELINE_STATUS.completed;
+  const isDone = issue.pipelineStatus === ISSUE_PIPELINE_STATUS.done;
   const isDoneState = isCompleted || isDone;
   const showPhaseElapsed =
     PHASE_ELAPSED_STATUSES.includes(issue.pipelineStatus) && !!issue.lastPhaseUpdate;
@@ -186,9 +186,9 @@ function DraggableCardComponent({
           <span className="absolute inset-0 animate-slide-progress-card bg-gradient-to-r from-transparent via-white/[0.08] to-transparent" />
         </div>
       )}
-      {issue.pipelineStatus !== 'todo' &&
-        issue.pipelineStatus !== 'queued' &&
-        issue.pipelineStatus !== 'failed' && (
+      {issue.pipelineStatus !== ISSUE_PIPELINE_STATUS.todo &&
+        issue.pipelineStatus !== ISSUE_PIPELINE_STATUS.queued &&
+        issue.pipelineStatus !== ISSUE_PIPELINE_STATUS.failed && (
           <div
             className={cn(
               'absolute right-0 bottom-0 left-0 z-10 h-[3px] overflow-hidden rounded-b-md',
@@ -210,8 +210,8 @@ function DraggableCardComponent({
                     ? 'bg-done'
                     : approvedAwaitingExecution
                       ? 'bg-agent'
-                      : issue.pipelineStatus === 'awaiting_approval' ||
-                          issue.pipelineStatus === 'clarifying'
+                      : issue.pipelineStatus === ISSUE_PIPELINE_STATUS.awaitingApproval ||
+                          issue.pipelineStatus === ISSUE_PIPELINE_STATUS.clarifying
                         ? 'bg-warning'
                         : 'bg-agent',
               )}

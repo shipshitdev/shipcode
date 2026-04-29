@@ -1,4 +1,4 @@
-import type { IssuePipelineStatus } from '../lib/shipcode';
+import { ISSUE_PIPELINE_STATUS, type IssuePipelineStatus } from '../lib/shipcode';
 import type { BoardColumn, BoardSortOrder, ColumnKey } from './types';
 
 export const COLUMNS: BoardColumn[] = [
@@ -6,62 +6,62 @@ export const COLUMNS: BoardColumn[] = [
     key: 'todo',
     label: 'Todo',
     droppable: true,
-    statuses: ['todo'],
+    statuses: [ISSUE_PIPELINE_STATUS.todo],
   },
   {
     key: 'agent',
     label: 'Agent Loop',
     statuses: [
-      'queued',
-      'planning',
-      'reviewing',
-      'revising',
-      'executing',
-      'testing',
-      'verifying',
-      'shipping',
+      ISSUE_PIPELINE_STATUS.queued,
+      ISSUE_PIPELINE_STATUS.planning,
+      ISSUE_PIPELINE_STATUS.reviewing,
+      ISSUE_PIPELINE_STATUS.revising,
+      ISSUE_PIPELINE_STATUS.executing,
+      ISSUE_PIPELINE_STATUS.testing,
+      ISSUE_PIPELINE_STATUS.verifying,
+      ISSUE_PIPELINE_STATUS.shipping,
     ],
     sections: [
       {
         key: 'queued',
         label: 'Queued',
-        statuses: ['queued'],
+        statuses: [ISSUE_PIPELINE_STATUS.queued],
         droppable: false,
       },
       {
         key: 'planning',
         label: 'Planning',
-        statuses: ['planning'],
+        statuses: [ISSUE_PIPELINE_STATUS.planning],
         droppable: true,
       },
       {
         key: 'reviewing',
         label: 'Reviewing',
-        statuses: ['reviewing', 'revising'],
+        statuses: [ISSUE_PIPELINE_STATUS.reviewing, ISSUE_PIPELINE_STATUS.revising],
         droppable: false,
       },
       {
         key: 'waiting_execution',
         label: 'Waiting For Execution',
-        statuses: ['awaiting_approval'],
+        statuses: [ISSUE_PIPELINE_STATUS.awaitingApproval],
         droppable: false,
       },
       {
         key: 'executing',
         label: 'Executing',
-        statuses: ['executing'],
+        statuses: [ISSUE_PIPELINE_STATUS.executing],
         droppable: false,
       },
       {
         key: 'testing',
         label: 'Testing',
-        statuses: ['testing'],
+        statuses: [ISSUE_PIPELINE_STATUS.testing],
         droppable: false,
       },
       {
         key: 'verifying',
         label: 'Verifying',
-        statuses: ['verifying', 'shipping'],
+        statuses: [ISSUE_PIPELINE_STATUS.verifying, ISSUE_PIPELINE_STATUS.shipping],
         droppable: false,
       },
     ],
@@ -69,24 +69,28 @@ export const COLUMNS: BoardColumn[] = [
   {
     key: 'human',
     label: 'Human',
-    statuses: ['clarifying', 'awaiting_approval', 'failed'],
+    statuses: [
+      ISSUE_PIPELINE_STATUS.clarifying,
+      ISSUE_PIPELINE_STATUS.awaitingApproval,
+      ISSUE_PIPELINE_STATUS.failed,
+    ],
     sections: [
       {
         key: 'clarifying',
         label: 'Clarifying',
-        statuses: ['clarifying'],
+        statuses: [ISSUE_PIPELINE_STATUS.clarifying],
         droppable: false,
       },
       {
         key: 'awaiting',
         label: 'Needs Approval',
-        statuses: ['awaiting_approval'],
+        statuses: [ISSUE_PIPELINE_STATUS.awaitingApproval],
         droppable: false,
       },
       {
         key: 'failed',
         label: 'Failed',
-        statuses: ['failed'],
+        statuses: [ISSUE_PIPELINE_STATUS.failed],
         droppable: false,
       },
     ],
@@ -95,18 +99,18 @@ export const COLUMNS: BoardColumn[] = [
     key: 'done',
     label: 'Done',
     droppable: false,
-    statuses: ['completed', 'done'],
+    statuses: [ISSUE_PIPELINE_STATUS.completed, ISSUE_PIPELINE_STATUS.done],
     sections: [
       {
         key: 'completed',
         label: 'Completed',
-        statuses: ['completed'],
+        statuses: [ISSUE_PIPELINE_STATUS.completed],
         droppable: false,
       },
       {
         key: 'done',
         label: 'Done',
-        statuses: ['done'],
+        statuses: [ISSUE_PIPELINE_STATUS.done],
         droppable: true,
       },
     ],
@@ -121,33 +125,33 @@ export const COLUMN_DOT_CLASS: Record<ColumnKey, string> = {
 };
 
 export const DRAGGABLE_STATUSES: IssuePipelineStatus[] = [
-  'todo',
-  'queued',
-  'completed',
-  'failed',
-  'awaiting_approval',
+  ISSUE_PIPELINE_STATUS.todo,
+  ISSUE_PIPELINE_STATUS.queued,
+  ISSUE_PIPELINE_STATUS.completed,
+  ISSUE_PIPELINE_STATUS.failed,
+  ISSUE_PIPELINE_STATUS.awaitingApproval,
 ];
 
 export const ACTIVE_STATUSES: IssuePipelineStatus[] = [
-  'planning',
-  'reviewing',
-  'revising',
-  'executing',
-  'testing',
-  'verifying',
-  'shipping',
+  ISSUE_PIPELINE_STATUS.planning,
+  ISSUE_PIPELINE_STATUS.reviewing,
+  ISSUE_PIPELINE_STATUS.revising,
+  ISSUE_PIPELINE_STATUS.executing,
+  ISSUE_PIPELINE_STATUS.testing,
+  ISSUE_PIPELINE_STATUS.verifying,
+  ISSUE_PIPELINE_STATUS.shipping,
 ];
 
 export const PHASE_ELAPSED_STATUSES: IssuePipelineStatus[] = [
-  'planning',
-  'clarifying',
-  'reviewing',
-  'revising',
-  'awaiting_approval',
-  'executing',
-  'testing',
-  'verifying',
-  'shipping',
+  ISSUE_PIPELINE_STATUS.planning,
+  ISSUE_PIPELINE_STATUS.clarifying,
+  ISSUE_PIPELINE_STATUS.reviewing,
+  ISSUE_PIPELINE_STATUS.revising,
+  ISSUE_PIPELINE_STATUS.awaitingApproval,
+  ISSUE_PIPELINE_STATUS.executing,
+  ISSUE_PIPELINE_STATUS.testing,
+  ISSUE_PIPELINE_STATUS.verifying,
+  ISSUE_PIPELINE_STATUS.shipping,
 ];
 
 export const LIST_COLUMN_LABEL: Record<ColumnKey, string> = {

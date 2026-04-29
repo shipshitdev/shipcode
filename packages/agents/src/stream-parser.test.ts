@@ -182,13 +182,11 @@ describe('StreamParser', () => {
       expect(result.error).toContain('schema validation failed');
     });
 
-    it('returns failure when nested fallback JSON is truncated by regex', () => {
-      // With nested objects, the non-greedy regex truncates the JSON
+    it('falls back to raw JSON extraction when no fence is present (nested)', () => {
       parser.feed(`Here is the plan: ${JSON.stringify(VALID_PLAN)}`);
       const result = parser.extractPlan();
-      expect(result.success).toBe(false);
-      expect(result.data).toBeNull();
-      expect(result.error).toBeDefined();
+      expect(result.success).toBe(true);
+      expect(result.data?.files[0]?.path).toBe('src/foo.ts');
     });
 
     it('handles fenced block with extra whitespace after tag', () => {

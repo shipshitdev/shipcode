@@ -74,8 +74,8 @@ export function AutomationsView() {
   });
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      <header className="flex items-start justify-between border-b border-secondary px-6 py-5">
+    <div className="flex flex-1 flex-col overflow-hidden min-w-0">
+      <header className="flex items-start justify-between border-b border-border px-6 py-5">
         <div>
           <h1 className="text-lg font-semibold text-primary">Automations</h1>
           <p className="text-[13px] text-secondary">
@@ -159,8 +159,7 @@ function AutomationCard({
               <span
                 className={cn(
                   'rounded-full border px-2 py-0.5 text-[10px] font-medium',
-                  STATUS_COLOR[automation.lastStatus] ??
-                    'bg-tertiary text-secondary border-secondary',
+                  STATUS_COLOR[automation.lastStatus] ?? 'bg-tertiary text-secondary border-border',
                 )}
               >
                 {automation.lastStatus}

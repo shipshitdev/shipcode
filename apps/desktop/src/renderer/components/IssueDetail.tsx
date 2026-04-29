@@ -5,6 +5,7 @@ import type {
   DiffRecord,
   ExecutorModel,
   IntegrationStatus,
+  IssuePipelineStatus,
   OpenRouterModelValidation,
   PipelineCheckpoint,
   PipelinePhase,
@@ -17,6 +18,8 @@ import type {
 import {
   deriveGithubIssueUrl,
   formatIssueBranch,
+  ISSUE_PIPELINE_STATUS,
+  PIPELINE_PHASE,
   resolveEffectivePhaseReasoningEffort,
   resolveExecutorModelForIssue,
   resolvePhaseModel,
@@ -64,7 +67,18 @@ import { IssueDetailTabs } from './issue-detail/IssueDetailTabs';
 import type { IssueDetailTab } from './issue-detail/tab-types';
 
 const INHERIT_EXECUTOR_VALUE = '__inherit__';
-const PLAN_MUTATING_PHASES: PipelinePhase[] = ['planning', 'reviewing', 'revising'];
+const PLAN_MUTATING_PHASES: PipelinePhase[] = [
+  PIPELINE_PHASE.planning,
+  PIPELINE_PHASE.reviewing,
+  PIPELINE_PHASE.revising,
+];
+const EXECUTOR_EDITABLE_STATUSES = new Set<IssuePipelineStatus>([
+  ISSUE_PIPELINE_STATUS.todo,
+  ISSUE_PIPELINE_STATUS.queued,
+  ISSUE_PIPELINE_STATUS.failed,
+  ISSUE_PIPELINE_STATUS.completed,
+  ISSUE_PIPELINE_STATUS.done,
+]);
 
 export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const queryClient = useQueryClient();
@@ -117,7 +131,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const shouldPollThread =
     !!activeThreadId &&
     (ACTIVE_PHASES.includes(pipelinePhase as PipelinePhase) ||
-      pipelinePhase === 'awaiting_approval' ||
+      pipelinePhase === PIPELINE_PHASE.awaitingApproval ||
       ACTIVE_PHASES.includes(activeIssue?.pipelineStatus as PipelinePhase));
 
   // Fetch thread data if issue is linked
@@ -131,7 +145,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const shouldPollLiveThread =
     !!activeThreadId &&
     (ACTIVE_PHASES.includes(currentPipelinePhase as PipelinePhase) ||
-      currentPipelinePhase === 'awaiting_approval');
+      currentPipelinePhase === PIPELINE_PHASE.awaitingApproval);
   const shouldPollPlanData =
     !!activeThreadId && PLAN_MUTATING_PHASES.includes(currentPipelinePhase as PipelinePhase);
   const shouldLoadHistoryTab = activeTab === 'history';
@@ -214,7 +228,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const latestThreadPlanId = normalizedThreadPlanHistory[0]?.id ?? null;
   const reviewPlanIds = useMemo(() => {
     const ids = new Set<string>();
-    if (thread?.status === 'failed' && latestThreadPlanId) ids.add(latestThreadPlanId);
+    if (thread?.status === PIPELINE_PHASE.failed && latestThreadPlanId) ids.add(latestThreadPlanId);
     if (activeTab === 'history' && expandedPlanId) ids.add(expandedPlanId);
     if (fullScreenPlanId) ids.add(fullScreenPlanId);
     return Array.from(ids);
@@ -259,7 +273,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const { data: latestVerification } = useQuery<VerificationRecord | null>({
     queryKey: ['verification', activeThreadId],
     queryFn: () => window.shipcode.invoke('verification:get', { threadId: activeThreadId }),
-    enabled: !!activeThreadId && thread?.status === 'failed',
+    enabled: !!activeThreadId && thread?.status === PIPELINE_PHASE.failed,
   });
 
   useEffect(() => {
@@ -455,14 +469,19 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const canStartPipeline =
     !activeThreadId &&
     !!activeProjectId &&
-    activeIssue?.pipelineStatus !== 'completed' &&
-    activeIssue?.pipelineStatus !== 'done';
-  const canRerun = !!activeIssue && activeIssue.pipelineStatus === 'failed' && !!activeProjectId;
+    activeIssue?.pipelineStatus !== ISSUE_PIPELINE_STATUS.completed &&
+    activeIssue?.pipelineStatus !== ISSUE_PIPELINE_STATUS.done;
+  const canRerun =
+    !!activeIssue &&
+    activeIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.failed &&
+    !!activeProjectId;
   const approvedAwaitingExecution =
-    !!activeThreadId && threadPhase === 'awaiting_approval' && latestPlan?.status === 'approved';
+    !!activeThreadId &&
+    threadPhase === PIPELINE_PHASE.awaitingApproval &&
+    latestPlan?.status === 'approved';
   const hasApprovalDecision =
     !!activeThreadId &&
-    threadPhase === 'awaiting_approval' &&
+    threadPhase === PIPELINE_PHASE.awaitingApproval &&
     !!latestPlan &&
     latestPlan.status !== 'approved';
   const canApprove = hasApprovalDecision && !!(latestPlan?.structured || latestPlan?.rawOutput);
@@ -788,8 +807,9 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   // Executor is locked in once the pipeline is mid-loop. It's editable
   // before the run starts (todo/queued) and after terminal states where
   // the user will kick off a new run (failed/completed/done).
-  const EXECUTOR_EDITABLE_STATUSES = new Set(['todo', 'queued', 'failed', 'completed', 'done']);
-  const executorEditable = EXECUTOR_EDITABLE_STATUSES.has(activeIssue?.pipelineStatus ?? 'todo');
+  const executorEditable = EXECUTOR_EDITABLE_STATUSES.has(
+    activeIssue?.pipelineStatus ?? ISSUE_PIPELINE_STATUS.todo,
+  );
   const effectivePhaseProviders = {
     planner: settings
       ? resolvePhaseModelForIssue(settings, activeProject, activeIssue, 'planner')
@@ -1001,7 +1021,8 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
   const headerButtons = (
     <div className="absolute right-3 top-3 flex items-center gap-0.5">
-      {(activeIssue.pipelineStatus === 'completed' || activeIssue.pipelineStatus === 'done') && (
+      {(activeIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.completed ||
+        activeIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.done) && (
         <Button
           variant="ghost"
           size="icon-xs"
@@ -1036,9 +1057,12 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   );
 
   const headerStatus =
-    activeThreadId && threadPhase !== 'idle' ? threadPhase : activeIssue.pipelineStatus;
+    activeThreadId && threadPhase !== PIPELINE_PHASE.idle
+      ? threadPhase
+      : activeIssue.pipelineStatus;
   const headerStatusAnimated =
-    ACTIVE_PHASES.includes(threadPhase as PipelinePhase) || threadPhase === 'awaiting_approval';
+    ACTIVE_PHASES.includes(threadPhase as PipelinePhase) ||
+    threadPhase === PIPELINE_PHASE.awaitingApproval;
 
   const issueStatusChip = (
     <PhaseChip

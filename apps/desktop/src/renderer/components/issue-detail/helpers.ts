@@ -5,7 +5,7 @@ import type {
   ReviewRecord,
   ShipCodePlan,
 } from '@shipcode/shared';
-import { shipCodePlanSchema } from '@shipcode/shared';
+import { PIPELINE_PHASE, shipCodePlanSchema } from '@shipcode/shared';
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI formatting from persisted terminal lines
 const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]|\x1b\].*?(?:\x07|\x1b\\)/g;
@@ -15,14 +15,14 @@ export function stripAnsi(value: string): string {
 }
 
 export const ACTIVE_PHASES: PipelinePhase[] = [
-  'planning',
-  'clarifying',
-  'reviewing',
-  'revising',
-  'executing',
-  'testing',
-  'verifying',
-  'shipping',
+  PIPELINE_PHASE.planning,
+  PIPELINE_PHASE.clarifying,
+  PIPELINE_PHASE.reviewing,
+  PIPELINE_PHASE.revising,
+  PIPELINE_PHASE.executing,
+  PIPELINE_PHASE.testing,
+  PIPELINE_PHASE.verifying,
+  PIPELINE_PHASE.shipping,
 ];
 
 export const PIPELINE_PREVIEW_PHASES = [
@@ -66,45 +66,45 @@ export function getPlanStatusPresentation(
     case 'approved':
       return {
         label: 'AI approved',
-        phaseStatus: 'completed',
+        phaseStatus: PIPELINE_PHASE.completed,
         style: 'phase-chip',
       };
     case 'awaiting_approval':
       return {
         label: 'Needs approval',
-        phaseStatus: 'reviewing',
+        phaseStatus: PIPELINE_PHASE.reviewing,
         style: 'phase-chip',
       };
     case 'rejected':
       if (review?.decision === 'request_changes') {
         return {
           label: 'AI requested changes',
-          phaseStatus: 'revising',
+          phaseStatus: PIPELINE_PHASE.revising,
           style: 'phase-chip',
         };
       }
       return {
         label: 'AI rejected',
-        phaseStatus: 'failed',
+        phaseStatus: PIPELINE_PHASE.failed,
         style: 'phase-chip',
       };
     case 'superseded':
       return {
         label: 'Superseded',
-        phaseStatus: 'idle',
+        phaseStatus: PIPELINE_PHASE.idle,
         style: 'badge',
         badgeVariant: 'default',
       };
     case 'pending_review':
       return {
         label: 'AI reviewing',
-        phaseStatus: 'reviewing',
+        phaseStatus: PIPELINE_PHASE.reviewing,
         style: 'phase-chip',
       };
     default:
       return {
         label: 'Plan drafted',
-        phaseStatus: 'planning',
+        phaseStatus: PIPELINE_PHASE.planning,
         style: 'phase-chip',
       };
   }
@@ -245,21 +245,21 @@ export function resolveFailingPhaseOutput({
     ? latestVerificationRawOutput
     : null;
 
-  if (!thread || thread.status !== 'failed') return planOutput;
+  if (!thread || thread.status !== PIPELINE_PHASE.failed) return planOutput;
 
   switch (thread.failurePhase) {
-    case 'planning':
-    case 'clarifying':
+    case PIPELINE_PHASE.planning:
+    case PIPELINE_PHASE.clarifying:
       return planOutput;
-    case 'reviewing':
-    case 'revising':
+    case PIPELINE_PHASE.reviewing:
+    case PIPELINE_PHASE.revising:
       return reviewOutput ?? planOutput;
-    case 'executing':
+    case PIPELINE_PHASE.executing:
       // Executor raw transcript not persisted; never fall back to planner
       // output here — it would render the plan JSON as the failure body.
       return null;
-    case 'testing':
-    case 'verifying':
+    case PIPELINE_PHASE.testing:
+    case PIPELINE_PHASE.verifying:
       return verificationOutput ?? planOutput;
     default:
       return verificationOutput ?? reviewOutput ?? planOutput;

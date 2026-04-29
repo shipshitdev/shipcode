@@ -1,4 +1,5 @@
 import type { GitHubIssueCacheRecord, PlanRecord, Project } from '@shipcode/shared';
+import { PIPELINE_PHASE } from '@shipcode/shared';
 import {
   CommandDialog,
   CommandEmpty,
@@ -63,11 +64,12 @@ export function CommandPalette() {
     queryKey: ['command-palette-plan-history', activeThreadId],
     queryFn: () => window.shipcode.invoke('plan:list', { threadId: activeThreadId }),
     staleTime: STABLE_APP_STATE_STALE_TIME,
-    enabled: commandPaletteOpen && !!activeThreadId && pipelinePhase === 'awaiting_approval',
+    enabled:
+      commandPaletteOpen && !!activeThreadId && pipelinePhase === PIPELINE_PHASE.awaitingApproval,
   });
   const latestPlanStatus = activeThreadPlans[0]?.status ?? null;
   const approvedAwaitingExecution =
-    pipelinePhase === 'awaiting_approval' && latestPlanStatus === 'approved';
+    pipelinePhase === PIPELINE_PHASE.awaitingApproval && latestPlanStatus === 'approved';
 
   const allIssues = useMemo(() => {
     const result: Array<{ issue: GitHubIssueCacheRecord; project: Project }> = [];
@@ -161,7 +163,7 @@ export function CommandPalette() {
 
         {activeThreadId && (
           <CommandGroup heading="Pipeline">
-            {pipelinePhase === 'idle' && (
+            {pipelinePhase === PIPELINE_PHASE.idle && (
               <CommandItem
                 onSelect={() =>
                   runAction(() =>
@@ -172,7 +174,7 @@ export function CommandPalette() {
                 <span className="flex-1">Start Pipeline</span>
               </CommandItem>
             )}
-            {pipelinePhase === 'awaiting_approval' && !approvedAwaitingExecution && (
+            {pipelinePhase === PIPELINE_PHASE.awaitingApproval && !approvedAwaitingExecution && (
               <>
                 <CommandItem
                   onSelect={() =>

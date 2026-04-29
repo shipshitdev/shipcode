@@ -191,6 +191,11 @@ describe('KanbanBoard keyboard navigation', () => {
       />,
     );
 
+    // No focus ring before first keyboard interaction
+    expect(view.container.querySelector('[data-keyboard-focused="true"]')).toBeNull();
+
+    // First nav key activates keyboard mode and focuses first card
+    pressKey('j');
     expect(focusedCard(view.container).textContent).toContain('Todo top');
 
     pressKey('j');
@@ -227,6 +232,9 @@ describe('KanbanBoard keyboard navigation', () => {
       />,
     );
 
+    // Activate keyboard nav first
+    pressKey('j');
+
     pressKey('Enter');
     pressKey('c');
     pressKey('e');
@@ -252,12 +260,17 @@ describe('KanbanBoard keyboard navigation', () => {
       />,
     );
 
+    // Activate keyboard nav first
+    pressKey('j');
+    expect(focusedCard(view.container).textContent).toContain('Todo top');
+
     const input = document.createElement('input');
     document.body.appendChild(input);
     input.focus();
 
     pressKey('j', input);
 
+    // Focus should not have moved while input focused
     expect(focusedCard(view.container).textContent).toContain('Todo top');
 
     input.remove();
@@ -284,6 +297,9 @@ describe('KanbanBoard keyboard navigation', () => {
         onRefresh={vi.fn()}
       />,
     );
+
+    // Activate keyboard nav to focus the card
+    pressKey('j');
 
     pressKey('e');
 

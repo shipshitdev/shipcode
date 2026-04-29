@@ -5,7 +5,7 @@ import type {
   GitVisualizerData,
   GitWorktreeSummary,
 } from '@shipcode/shared';
-import { SideBySideDiffViewer } from '@shipcode/ui';
+import { SideBySideDiffViewer, SyntaxHighlightedCode } from '@shipcode/ui';
 import {
   Button,
   ChevronDown,
@@ -211,9 +211,7 @@ function FileViewer({
                   {formatSize(file.sizeBytes)}.
                 </div>
               )}
-              <pre className="whitespace-pre p-3 font-mono text-[11px] leading-[1.45] text-primary">
-                {file.content}
-              </pre>
+              <SyntaxHighlightedCode code={file.content} filePath={relativePath} className="p-3" />
             </>
           )
         ) : diffLoading ? (

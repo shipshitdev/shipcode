@@ -1,7 +1,9 @@
 import {
   formatResolvedModelDisplay,
   type GitHubIssueCacheRecord,
+  ISSUE_PIPELINE_STATUS,
   type IssuePipelineStatus,
+  PIPELINE_PHASE,
   type TerminalEventRecord,
 } from '@shipcode/shared';
 import { useQueryClient } from '@tanstack/react-query';
@@ -77,8 +79,8 @@ export function useIpc() {
           if (maybeSelectedProjectThread) {
             const latest = useAppStore.getState();
             if (latest.activeProjectId !== selectedProjectId) return;
-            if (data.phase === 'planning') latest.openTerminal();
-            if (data.phase !== 'idle') latest.setTerminalThread(data.threadId);
+            if (data.phase === PIPELINE_PHASE.planning) latest.openTerminal();
+            if (data.phase !== PIPELINE_PHASE.idle) latest.setTerminalThread(data.threadId);
             return;
           }
           void window.shipcode
@@ -87,26 +89,32 @@ export function useIpc() {
               const latest = useAppStore.getState();
               if (latest.activeProjectId !== selectedProjectId) return;
               if (thread?.projectId !== selectedProjectId) return;
-              if (data.phase === 'planning') latest.openTerminal();
-              if (data.phase !== 'idle') latest.setTerminalThread(data.threadId);
+              if (
+                data.phase === PIPELINE_PHASE.planning ||
+                (thread?.automationId && data.phase !== PIPELINE_PHASE.idle)
+              ) {
+                latest.openTerminal();
+              }
+              if (data.phase !== PIPELINE_PHASE.idle) latest.setTerminalThread(data.threadId);
             })
             .catch(() => {
               // Best-effort focus only.
             });
         };
-        if (data.phase === 'planning') {
+        if (data.phase === PIPELINE_PHASE.planning) {
           focusThreadIfSelectedProject();
         }
         if (data.threadId === store.activeThreadId) {
           setPipelinePhase(data.phase);
           invalidatePlanQueriesForThread(data.threadId);
         }
-        if (data.phase !== 'idle' && data.phase !== 'planning') {
+        if (data.phase !== PIPELINE_PHASE.idle && data.phase !== PIPELINE_PHASE.planning) {
           focusThreadIfSelectedProject();
         }
 
         if (store.activeProjectId) {
-          const mappedStatus: IssuePipelineStatus = data.phase === 'idle' ? 'todo' : data.phase;
+          const mappedStatus: IssuePipelineStatus =
+            data.phase === PIPELINE_PHASE.idle ? ISSUE_PIPELINE_STATUS.todo : data.phase;
           queryClient.setQueryData<GitHubIssueCacheRecord[]>(
             ['github-issues', store.activeProjectId],
             (prev) =>

@@ -26,7 +26,7 @@ interface ActivityHeatmapProps {
   className?: string;
 }
 
-const ALL_METRICS: HeatmapMetric[] = ['costUsd', 'prsOpened', 'tokens', 'runs'];
+const ALL_METRICS: HeatmapMetric[] = ['tokens', 'runs', 'prsOpened', 'costUsd'];
 const ALL_RANGES: HeatmapRange[] = [30, 90, 365];
 
 const METRIC_LABEL: Record<HeatmapMetric, string> = {
@@ -45,7 +45,7 @@ const RANGE_LABEL: Record<HeatmapRange, string> = {
 const DAY_LABEL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
 function storageKey(surface: HeatmapSurface, kind: 'metric' | 'range'): string {
-  return `heatmap.${surface}.${kind}`;
+  return `heatmap.v2.${surface}.${kind}`;
 }
 
 function readStored<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
@@ -90,8 +90,9 @@ function formatMetric(value: number, metric: HeatmapMetric): string {
  * Quantile thresholds across non-zero values. Returns [t1, t2, t3, t4] —
  * a value v lands in bucket k where v <= tk (k=1..4). Values <= 0 → bucket 0.
  *
- * Quartile points are picked at indices 25/50/75/100% of the sorted positives,
- * deduped so flat ranges don't waste buckets.
+ * Quartile points are picked at indices 25/50/75/100% of the sorted positives.
+ * `bucketFor` treats the max threshold first so flat non-zero ranges still
+ * render as visibly active instead of getting stuck in the faintest bucket.
  */
 function quantileThresholds(values: number[]): [number, number, number, number] {
   const positives = values.filter((v) => v > 0).sort((a, b) => a - b);
@@ -109,6 +110,7 @@ function quantileThresholds(values: number[]): [number, number, number, number] 
 
 function bucketFor(value: number, thresholds: [number, number, number, number]): 0 | 1 | 2 | 3 | 4 {
   if (value <= 0) return 0;
+  if (value >= thresholds[3]) return 4;
   if (value <= thresholds[0]) return 1;
   if (value <= thresholds[1]) return 2;
   if (value <= thresholds[2]) return 3;
@@ -116,11 +118,17 @@ function bucketFor(value: number, thresholds: [number, number, number, number]):
 }
 
 const BUCKET_CLASS: Record<0 | 1 | 2 | 3 | 4, string> = {
-  0: 'bg-tertiary border border-border/50',
-  1: 'bg-success/20',
-  2: 'bg-success/40',
-  3: 'bg-success/65',
-  4: 'bg-success',
+  0: 'border border-border/70 bg-[var(--heatmap-empty)]',
+  1: 'border border-black/15 bg-[var(--heatmap-1)]',
+  2: 'border border-black/15 bg-[var(--heatmap-2)]',
+  3: 'border border-black/15 bg-[var(--heatmap-3)]',
+  4: 'border border-black/15 bg-[var(--heatmap-4)]',
+};
+
+const CELL_SIZE_CLASS: Record<HeatmapRange, string> = {
+  30: 'h-3.5 w-3.5',
+  90: 'h-3 w-3',
+  365: 'h-2.5 w-2.5',
 };
 
 interface WeekCell {
@@ -168,15 +176,18 @@ export function ActivityHeatmap({
   projectId,
   threadId,
   defaultRange = 90,
-  defaultMetric = 'costUsd',
+  defaultMetric = 'tokens',
   allowedMetrics = ALL_METRICS,
   allowedRanges = ALL_RANGES,
   showMetricToggle = true,
   showRangePicker = true,
   className,
 }: ActivityHeatmapProps) {
+  const resolvedDefaultMetric = allowedMetrics.includes(defaultMetric)
+    ? defaultMetric
+    : (allowedMetrics[0] ?? 'tokens');
   const [metric, setMetric] = useState<HeatmapMetric>(() =>
-    readStored<HeatmapMetric>(storageKey(surface, 'metric'), allowedMetrics, defaultMetric),
+    readStored<HeatmapMetric>(storageKey(surface, 'metric'), allowedMetrics, resolvedDefaultMetric),
   );
   const [range, setRange] = useState<HeatmapRange>(() => {
     const stored = readStored<string>(
@@ -214,7 +225,7 @@ export function ActivityHeatmap({
   );
 
   const totalActive = data.reduce((sum, r) => sum + (metricValue(r, metric) > 0 ? 1 : 0), 0);
-  const showLegendGradient = totalActive > 0;
+  const cellSizeClass = CELL_SIZE_CLASS[range];
 
   return (
     <div className={cn('flex flex-col gap-3', className)}>
@@ -274,14 +285,15 @@ export function ActivityHeatmap({
       <div className="flex gap-1.5">
         <div className="flex flex-col justify-between py-0.5 text-[9px] leading-none text-muted">
           {DAY_LABEL.map((d, i) => (
-            <span key={d} className={cn('h-2.5', i % 2 === 1 ? 'opacity-100' : 'opacity-0')}>
+            <span key={d} className={cn(cellSizeClass, i % 2 === 1 ? 'opacity-100' : 'opacity-0')}>
               {d}
             </span>
           ))}
         </div>
-        <div
+        <section
+          aria-busy={isLoading}
+          aria-label={`Activity heatmap, ${METRIC_LABEL[metric]}, last ${range} days, ${totalActive} active days`}
           title={`Activity heatmap, ${METRIC_LABEL[metric]}, last ${range} days`}
-          data-busy={isLoading}
           className="flex flex-1 gap-[3px] overflow-x-auto"
         >
           {weeks.map((week) => {
@@ -293,7 +305,7 @@ export function ActivityHeatmap({
                     return (
                       <div
                         key={`pad-${cell.dayKey}`}
-                        className="h-2.5 w-2.5 rounded-[2px] bg-transparent"
+                        className={cn(cellSizeClass, 'rounded-[2px] bg-transparent')}
                         aria-hidden="true"
                       />
                     );
@@ -308,7 +320,8 @@ export function ActivityHeatmap({
                       title={`${formatTooltipDate(cell.record.date)} — ${formatMetric(value, metric)}`}
                       aria-label={`${formatTooltipDate(cell.record.date)}: ${formatMetric(value, metric)}`}
                       className={cn(
-                        'h-2.5 w-2.5 rounded-[2px] focus:outline-none focus:ring-1 focus:ring-accent',
+                        cellSizeClass,
+                        'rounded-[2px] transition-[background-color,border-color,box-shadow] hover:ring-1 hover:ring-accent/60 focus:outline-none focus:ring-1 focus:ring-accent',
                         BUCKET_CLASS[bucket],
                       )}
                     />
@@ -317,18 +330,18 @@ export function ActivityHeatmap({
               </div>
             );
           })}
-        </div>
+        </section>
       </div>
 
       <div className="flex items-center justify-end gap-1.5 text-[10px] text-muted">
         <span>Less</span>
-        {showLegendGradient ? (
-          ([0, 1, 2, 3, 4] as const).map((b) => (
-            <span key={b} className={cn('h-2.5 w-2.5 rounded-[2px]', BUCKET_CLASS[b])} />
-          ))
-        ) : (
-          <span className={cn('h-2.5 w-2.5 rounded-[2px]', BUCKET_CLASS[0])} />
-        )}
+        {([0, 1, 2, 3, 4] as const).map((b) => (
+          <span
+            key={b}
+            className={cn('h-2.5 w-2.5 rounded-[2px]', BUCKET_CLASS[b])}
+            aria-hidden="true"
+          />
+        ))}
         <span>More</span>
       </div>
     </div>

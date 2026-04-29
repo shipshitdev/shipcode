@@ -1,4 +1,9 @@
-import type { IssuePipelineStatus, PipelinePhase } from './types';
+import {
+  ISSUE_PIPELINE_STATUS,
+  type IssuePipelineStatus,
+  PIPELINE_PHASE,
+  type PipelinePhase,
+} from './types';
 
 /**
  * Maps a pipeline phase/status to a deterministic progress percentage (0–100).
@@ -7,21 +12,21 @@ import type { IssuePipelineStatus, PipelinePhase } from './types';
  */
 export function phaseToProgress(phase: PipelinePhase | IssuePipelineStatus): number {
   const MAP: Record<string, number> = {
-    idle: 0,
-    todo: 0,
-    queued: 2,
-    planning: 12,
-    clarifying: 20,
-    reviewing: 28,
-    revising: 38,
-    awaiting_approval: 48,
-    executing: 72,
-    testing: 82,
-    verifying: 90,
-    shipping: 96,
-    completed: 92,
-    done: 100,
-    failed: 0,
+    [PIPELINE_PHASE.idle]: 0,
+    [ISSUE_PIPELINE_STATUS.todo]: 0,
+    [ISSUE_PIPELINE_STATUS.queued]: 2,
+    [PIPELINE_PHASE.planning]: 12,
+    [PIPELINE_PHASE.clarifying]: 20,
+    [PIPELINE_PHASE.reviewing]: 28,
+    [PIPELINE_PHASE.revising]: 38,
+    [PIPELINE_PHASE.awaitingApproval]: 48,
+    [PIPELINE_PHASE.executing]: 72,
+    [PIPELINE_PHASE.testing]: 82,
+    [PIPELINE_PHASE.verifying]: 90,
+    [PIPELINE_PHASE.shipping]: 96,
+    [PIPELINE_PHASE.completed]: 92,
+    [ISSUE_PIPELINE_STATUS.done]: 100,
+    [PIPELINE_PHASE.failed]: 0,
   };
   return MAP[phase] ?? 0;
 }

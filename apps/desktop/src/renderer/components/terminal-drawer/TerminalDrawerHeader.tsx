@@ -1,4 +1,4 @@
-import type { GitHubIssueCacheRecord, PipelinePhase } from '@shipcode/shared';
+import { PIPELINE_PHASE, type PipelinePhase } from '@shipcode/shared';
 import { PhaseChip } from '@shipcode/ui';
 import {
   Button,
@@ -16,16 +16,17 @@ import {
   X,
 } from '@shipshitdev/ui';
 import type { ReactNode } from 'react';
+import type { TerminalDrawerTarget } from './constants';
 
 interface TerminalDrawerHeaderProps {
   activeProjectId: string | null;
   approvedAwaitingExecution?: boolean;
   currentModel: string | null;
-  displayIssue: GitHubIssueCacheRecord | null;
+  displayTarget: TerminalDrawerTarget | null;
   ghosttyAvailable: boolean;
   isMaximized: boolean;
   pipelinePhase: PipelinePhase;
-  runningTabs: GitHubIssueCacheRecord[];
+  runningTargets: TerminalDrawerTarget[];
   startedAt: string | null;
   terminalAvailable: boolean;
   terminalThreadId: string | null;
@@ -33,7 +34,7 @@ interface TerminalDrawerHeaderProps {
   onNewCodexSession: () => void;
   onOpenInGhostty: () => void;
   onOpenInTerminalApp: () => void;
-  onOpenIssue: (issue: GitHubIssueCacheRecord) => void;
+  onOpenTarget: (target: TerminalDrawerTarget) => void;
   onToggleMaximize: () => void;
   onToggleTerminal: () => void;
 }
@@ -56,11 +57,11 @@ export function TerminalDrawerHeader({
   activeProjectId,
   approvedAwaitingExecution = false,
   currentModel,
-  displayIssue,
+  displayTarget,
   ghosttyAvailable,
   isMaximized,
   pipelinePhase,
-  runningTabs,
+  runningTargets,
   startedAt,
   terminalAvailable,
   terminalThreadId,
@@ -68,7 +69,7 @@ export function TerminalDrawerHeader({
   onNewCodexSession,
   onOpenInGhostty,
   onOpenInTerminalApp,
-  onOpenIssue,
+  onOpenTarget,
   onToggleMaximize,
   onToggleTerminal,
 }: TerminalDrawerHeaderProps) {
@@ -82,8 +83,8 @@ export function TerminalDrawerHeader({
         </div>
 
         <div className="flex items-center gap-2 min-w-0 overflow-hidden border-l border-border pl-3">
-          {displayIssue &&
-            (runningTabs.length > 1 ? (
+          {displayTarget &&
+            (runningTargets.length > 1 ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -91,38 +92,45 @@ export function TerminalDrawerHeader({
                     size="xs"
                     className="h-auto min-w-0 gap-1.5 px-1 py-0 text-xs font-normal text-secondary hover:bg-transparent hover:text-primary"
                   >
-                    <span className="font-mono text-muted">#{displayIssue.issueNumber}</span>
-                    <span className="truncate max-w-[240px]">{displayIssue.title}</span>
+                    <span className="font-mono text-muted">{displayTarget.label}</span>
+                    <span className="truncate max-w-[240px]">{displayTarget.title}</span>
                     <ChevronDown size={11} className="text-muted shrink-0" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" side="top">
-                  {runningTabs.map((issue) => (
+                  {runningTargets.map((target) => (
                     <DropdownMenuItem
-                      key={issue.threadId}
-                      onSelect={() => onOpenIssue(issue)}
-                      className={cn(issue.threadId === terminalThreadId && 'bg-hover text-primary')}
+                      key={target.threadId}
+                      onSelect={() => onOpenTarget(target)}
+                      className={cn(
+                        target.threadId === terminalThreadId && 'bg-hover text-primary',
+                      )}
                     >
-                      <span className="font-mono text-muted text-xs">#{issue.issueNumber}</span>
-                      <span className="truncate max-w-[280px]">{issue.title}</span>
+                      <span className="font-mono text-muted text-xs">{target.label}</span>
+                      <span className="truncate max-w-[280px]">{target.title}</span>
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
-            ) : (
+            ) : displayTarget.kind === 'issue' ? (
               <Button
                 variant="ghost"
                 size="xs"
-                onClick={() => onOpenIssue(displayIssue)}
+                onClick={() => onOpenTarget(displayTarget)}
                 className="h-auto min-w-0 gap-1.5 px-1 py-0 text-xs font-normal text-secondary hover:bg-transparent hover:text-primary"
-                title={`Open issue detail for #${displayIssue.issueNumber}`}
+                title={`Open issue detail for ${displayTarget.label}`}
               >
-                <span className="font-mono text-muted">#{displayIssue.issueNumber}</span>
-                <span className="truncate hover:text-primary">{displayIssue.title}</span>
+                <span className="font-mono text-muted">{displayTarget.label}</span>
+                <span className="truncate hover:text-primary">{displayTarget.title}</span>
               </Button>
+            ) : (
+              <div className="flex h-auto min-w-0 items-center gap-1.5 px-1 py-0 text-xs font-normal text-secondary">
+                <span className="font-mono text-muted">{displayTarget.label}</span>
+                <span className="truncate">{displayTarget.title}</span>
+              </div>
             ))}
 
-          {pipelinePhase !== 'idle' && (
+          {pipelinePhase !== PIPELINE_PHASE.idle && (
             <PhaseChip
               status={pipelinePhase}
               label={approvedAwaitingExecution ? 'Waiting for slot' : undefined}
@@ -133,7 +141,7 @@ export function TerminalDrawerHeader({
             />
           )}
 
-          {currentModel && pipelinePhase !== 'idle' && (
+          {currentModel && pipelinePhase !== PIPELINE_PHASE.idle && (
             <span className="text-xs font-mono text-muted shrink-0 truncate max-w-[180px]">
               {currentModel}
             </span>

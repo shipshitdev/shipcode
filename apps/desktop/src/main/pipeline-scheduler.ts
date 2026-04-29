@@ -1,8 +1,10 @@
 import fs from 'node:fs';
-import type { ExecutorModel, GitHubIssueCacheRecord } from '@shipcode/shared';
+import type { ExecutorModel, GitHubIssueCacheRecord, PipelinePhase } from '@shipcode/shared';
 import {
   clampError,
   EXECUTION_PHASES,
+  ISSUE_PIPELINE_STATUS,
+  PIPELINE_PHASE,
   resolveEffectivePhaseReasoningEffortForIssue,
   resolveExecutorModelForIssue,
   resolvePhaseModelForIssue,
@@ -25,14 +27,20 @@ export interface PipelineSchedulerDeps {
 }
 
 const RUNNING_PIPELINE_PHASES = [
-  'planning',
-  'reviewing',
-  'revising',
-  'executing',
-  'testing',
-  'verifying',
-  'shipping',
+  PIPELINE_PHASE.planning,
+  PIPELINE_PHASE.reviewing,
+  PIPELINE_PHASE.revising,
+  PIPELINE_PHASE.executing,
+  PIPELINE_PHASE.testing,
+  PIPELINE_PHASE.verifying,
+  PIPELINE_PHASE.shipping,
 ] as const;
+
+const REUSABLE_THREAD_STATUSES = new Set<PipelinePhase>([
+  PIPELINE_PHASE.failed,
+  PIPELINE_PHASE.completed,
+  PIPELINE_PHASE.idle,
+]);
 
 /**
  * PipelineScheduler manages a global cap on concurrently-running pipelines.
@@ -92,7 +100,7 @@ export class PipelineScheduler {
     const activeCount = this._getRunningPipelineCount();
 
     if (activeCount >= settings.maxConcurrentPipelines) {
-      queries.githubIssues.updatePipelineStatus(issue.id, 'queued');
+      queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.queued);
       this._sendIssuesUpdated(projectId);
       log.info(
         `[scheduler] queued issue #${issueNumber} (${activeCount}/${settings.maxConcurrentPipelines} slots used)`,
@@ -129,7 +137,7 @@ export class PipelineScheduler {
     const activeCount = this._getRunningPipelineCount();
 
     if (activeCount >= settings.maxConcurrentPipelines) {
-      queries.githubIssues.updatePipelineStatus(issue.id, 'queued');
+      queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.queued);
       this._sendIssuesUpdated(projectId);
       log.info(
         `[scheduler] queued quick task ${issueNumber} (${activeCount}/${settings.maxConcurrentPipelines} slots used)`,
@@ -232,7 +240,7 @@ export class PipelineScheduler {
         pipeline.startExecution(thread.id, latestPlan.structured).catch((err) => {
           transitionThreadPhase(getMainWindow(), queries, emitter, {
             threadId: thread.id,
-            phase: 'failed',
+            phase: PIPELINE_PHASE.failed,
             errorMessage: clampError(err),
           });
           log.error('[execution-queue] promotion failed:', err);
@@ -309,13 +317,13 @@ export class PipelineScheduler {
       ? queries.threads.getById(issue.threadId)
       : queries.threads.getByProjectAndGithubIssue(issue.projectId, issue.issueNumber);
 
-    if (reusableThread && !['failed', 'completed', 'idle'].includes(reusableThread.status)) {
+    if (reusableThread && !REUSABLE_THREAD_STATUSES.has(reusableThread.status)) {
       throw new Error(`Issue #${issue.issueNumber} already has active thread`);
     }
 
-    queries.githubIssues.updatePipelineStatus(issue.id, 'planning');
+    queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.planning);
     const thread =
-      reusableThread && ['failed', 'completed', 'idle'].includes(reusableThread.status)
+      reusableThread && REUSABLE_THREAD_STATUSES.has(reusableThread.status)
         ? reusableThread
         : queries.threads.create(issue.projectId, issue.body ?? issue.title, issue.title);
 
@@ -365,7 +373,7 @@ export class PipelineScheduler {
       const win = getMainWindow();
       transitionThreadPhase(win, queries, emitter, {
         threadId: thread.id,
-        phase: 'failed',
+        phase: PIPELINE_PHASE.failed,
         errorMessage: clampError(err),
       });
       throw err;
@@ -387,7 +395,7 @@ export class PipelineScheduler {
       throw new Error(`Quick task ${issue.issueNumber}: thread ${issue.threadId} missing`);
     }
 
-    queries.githubIssues.updatePipelineStatus(issue.id, 'planning');
+    queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.planning);
     this._sendIssuesUpdated(issue.projectId);
 
     const phaseModels = this._resolvePhaseModels(settings, project, issue);
@@ -431,7 +439,7 @@ export class PipelineScheduler {
       const win = getMainWindow();
       transitionThreadPhase(win, queries, emitter, {
         threadId: thread.id,
-        phase: 'failed',
+        phase: PIPELINE_PHASE.failed,
         errorMessage: clampError(err),
       });
       throw err;
@@ -539,7 +547,7 @@ export class PipelineScheduler {
       const win = getMainWindow();
       transitionThreadPhase(win, queries, emitter, {
         threadId: thread.id,
-        phase: 'failed',
+        phase: PIPELINE_PHASE.failed,
         errorMessage: clampError(err),
       });
       queries.automations.recordRunFinished(automation.id, 'failed');

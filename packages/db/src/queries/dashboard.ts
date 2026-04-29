@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import {
   type DashboardStats,
+  PIPELINE_PHASE,
   type PipelinePhase,
   type RecentTask,
   toIsoUtc,
@@ -9,30 +10,33 @@ import { asRows } from '../utils';
 
 // Phases that represent active work (agent running or waiting on action).
 const ACTIVE_PHASES: PipelinePhase[] = [
-  'planning',
-  'clarifying',
-  'reviewing',
-  'revising',
-  'awaiting_approval',
-  'executing',
-  'testing',
-  'verifying',
-  'shipping',
+  PIPELINE_PHASE.planning,
+  PIPELINE_PHASE.clarifying,
+  PIPELINE_PHASE.reviewing,
+  PIPELINE_PHASE.revising,
+  PIPELINE_PHASE.awaitingApproval,
+  PIPELINE_PHASE.executing,
+  PIPELINE_PHASE.testing,
+  PIPELINE_PHASE.verifying,
+  PIPELINE_PHASE.shipping,
 ];
 
 // Phases where an agent CLI process is actively running (vs waiting for user).
 const AGENT_RUNNING_PHASES: PipelinePhase[] = [
-  'planning',
-  'reviewing',
-  'revising',
-  'executing',
-  'testing',
-  'verifying',
-  'shipping',
+  PIPELINE_PHASE.planning,
+  PIPELINE_PHASE.reviewing,
+  PIPELINE_PHASE.revising,
+  PIPELINE_PHASE.executing,
+  PIPELINE_PHASE.testing,
+  PIPELINE_PHASE.verifying,
+  PIPELINE_PHASE.shipping,
 ];
 
 // Phases where the user is blocked waiting for input / failure recovery.
-const BLOCKED_PHASES: PipelinePhase[] = ['clarifying', 'awaiting_approval'];
+const BLOCKED_PHASES: PipelinePhase[] = [
+  PIPELINE_PHASE.clarifying,
+  PIPELINE_PHASE.awaitingApproval,
+];
 
 interface RecentTaskRow {
   thread_id: string;
@@ -50,7 +54,7 @@ function placeholders(n: number): string {
 
 function awaitingHumanApprovalWhere(alias: string): string {
   return `${alias}.kind = 'pipeline'
-    AND ${alias}.status = 'awaiting_approval'
+    AND ${alias}.status = '${PIPELINE_PHASE.awaitingApproval}'
     AND COALESCE(
       (
         SELECT p.status
@@ -128,9 +132,9 @@ export class DashboardQueries {
 
     const tasksOpenRow = this.db
       .prepare(
-        `SELECT COUNT(*) as n FROM threads WHERE kind = 'pipeline' AND status NOT IN ('completed', 'failed', 'idle')`,
+        `SELECT COUNT(*) as n FROM threads WHERE kind = 'pipeline' AND status NOT IN (?, ?, ?)`,
       )
-      .get() as { n: number };
+      .get(PIPELINE_PHASE.completed, PIPELINE_PHASE.failed, PIPELINE_PHASE.idle) as { n: number };
 
     // Pending approvals = only threads still waiting on a human sign-off.
     const pendingApprovalsRow = this.db
@@ -148,18 +152,18 @@ export class DashboardQueries {
     const shippedRow = this.db
       .prepare(
         `SELECT COUNT(*) as n FROM threads
-       WHERE kind = 'pipeline' AND status = 'completed'
+       WHERE kind = 'pipeline' AND status = ?
          AND julianday('now') - julianday(updated_at) <= 7.0`,
       )
-      .get() as { n: number };
+      .get(PIPELINE_PHASE.completed) as { n: number };
 
     const failedRow = this.db
       .prepare(
         `SELECT COUNT(*) as n FROM threads
-       WHERE kind = 'pipeline' AND status = 'failed'
+       WHERE kind = 'pipeline' AND status = ?
          AND julianday('now') - julianday(updated_at) <= 7.0`,
       )
-      .get() as { n: number };
+      .get(PIPELINE_PHASE.failed) as { n: number };
 
     return {
       agentsRunning: agentsRunningRow.n,
@@ -189,11 +193,11 @@ export class DashboardQueries {
          p.name as project_name
        FROM threads t
        INNER JOIN projects p ON p.id = t.project_id
-      WHERE t.kind = 'pipeline' AND t.status != 'idle'
+      WHERE t.kind = 'pipeline' AND t.status != ?
        ORDER BY t.updated_at DESC
        LIMIT ? OFFSET ?`,
       )
-      .all(limit, offset);
+      .all(PIPELINE_PHASE.idle, limit, offset);
 
     return asRows<RecentTaskRow>(rows).map((row) => ({
       threadId: row.thread_id,
@@ -208,10 +212,8 @@ export class DashboardQueries {
 
   countRecentTasks(): number {
     const row = this.db
-      .prepare(
-        `SELECT COUNT(*) as n FROM threads t WHERE t.kind = 'pipeline' AND t.status != 'idle'`,
-      )
-      .get() as { n: number };
+      .prepare(`SELECT COUNT(*) as n FROM threads t WHERE t.kind = 'pipeline' AND t.status != ?`)
+      .get(PIPELINE_PHASE.idle) as { n: number };
     return row.n;
   }
 }

@@ -13,6 +13,7 @@ import {
 } from '@shipcode/agents';
 import {
   type ClarificationRequest,
+  clampTextBlock,
   MAX_CLARIFICATION_ROUNDS,
   PIPELINE_MAX_RETRIES,
   type PlanRecord,
@@ -26,6 +27,11 @@ import {
 import type { PipelineHelperEnv } from './shared';
 
 const NO_VALID_PLAN_REASON = 'Plan generation failed — no valid shipcode-plan block was produced.';
+
+function formatPlanParseFailure(error?: string): string {
+  if (!error) return NO_VALID_PLAN_REASON;
+  return `Plan output could not be parsed — ${clampTextBlock(error.split('\n')[0] ?? error, 280)}`;
+}
 
 /**
  * Scan a PRD (issue body / prompt) for required section headings.
@@ -406,7 +412,7 @@ export function createPlanningPhaseHandlers({
           enterClarifying(threadId, context, clarificationRequest);
         } else {
           deps.plans.create(threadId, result.raw, null, nextVersion);
-          emitPhase(threadId, 'failed', NO_VALID_PLAN_REASON);
+          emitPhase(threadId, 'failed', formatPlanParseFailure(result.error));
           activePipelines.delete(threadId);
         }
       } catch (error) {

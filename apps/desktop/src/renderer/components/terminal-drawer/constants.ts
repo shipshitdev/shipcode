@@ -1,31 +1,60 @@
+import {
+  type ActivePipelineSummary,
+  type GitHubIssueCacheRecord,
+  PIPELINE_PHASE,
+  type PipelinePhase,
+  type Thread,
+} from '@shipcode/shared';
+
 const EMPTY_STREAM: never[] = [];
 
 export const MIN_HEIGHT = 120;
 export const DEFAULT_HEIGHT = 250;
 
-export const CONSOLE_VISIBLE_STATUSES = new Set([
-  'clarifying',
-  'awaiting_approval',
-  'planning',
-  'reviewing',
-  'revising',
-  'executing',
-  'testing',
-  'verifying',
-  'shipping',
+export const CONSOLE_VISIBLE_STATUSES = new Set<PipelinePhase>([
+  PIPELINE_PHASE.clarifying,
+  PIPELINE_PHASE.awaitingApproval,
+  PIPELINE_PHASE.planning,
+  PIPELINE_PHASE.reviewing,
+  PIPELINE_PHASE.revising,
+  PIPELINE_PHASE.executing,
+  PIPELINE_PHASE.testing,
+  PIPELINE_PHASE.verifying,
+  PIPELINE_PHASE.shipping,
 ]);
 
 // Map pipeline phase to a readable pending label while output is still empty.
-export const PHASE_LABELS: Record<string, string> = {
-  planning: 'Thinking',
-  clarifying: 'Waiting for clarification',
-  reviewing: 'Reviewing',
-  revising: 'Thinking',
-  awaiting_approval: 'Needs approval',
-  executing: 'Working',
-  testing: 'Running tests',
-  verifying: 'Verifying',
-  shipping: 'Shipping',
+export const PHASE_LABELS: Partial<Record<PipelinePhase, string>> = {
+  [PIPELINE_PHASE.planning]: 'Thinking',
+  [PIPELINE_PHASE.clarifying]: 'Waiting for clarification',
+  [PIPELINE_PHASE.reviewing]: 'Reviewing',
+  [PIPELINE_PHASE.revising]: 'Thinking',
+  [PIPELINE_PHASE.awaitingApproval]: 'Needs approval',
+  [PIPELINE_PHASE.executing]: 'Working',
+  [PIPELINE_PHASE.testing]: 'Running tests',
+  [PIPELINE_PHASE.verifying]: 'Verifying',
+  [PIPELINE_PHASE.shipping]: 'Shipping',
 };
+
+export type TerminalDrawerTarget =
+  | {
+      kind: 'issue';
+      threadId: string;
+      projectId: string;
+      title: string;
+      label: string;
+      phase: PipelinePhase;
+      issue: GitHubIssueCacheRecord;
+    }
+  | {
+      kind: 'thread';
+      threadId: string;
+      projectId: string;
+      title: string;
+      label: string;
+      phase: PipelinePhase;
+      thread?: Thread;
+      summary?: ActivePipelineSummary;
+    };
 
 export { EMPTY_STREAM };

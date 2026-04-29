@@ -31,6 +31,12 @@
 	--danger: #ef4444;
 	--info: #3b82f6;
 
+	--heatmap-empty: #151b23;
+	--heatmap-1: #0e4429;
+	--heatmap-2: #006d32;
+	--heatmap-3: #26a641;
+	--heatmap-4: #39d353;
+
 	/* Agent activity — distinct from any human-action status. Used for
 	 * "currently being worked on by an AI agent" states (planning, reviewing,
 	 * revising, executing, verifying, shipping). Sky-400 differentiates agent
@@ -72,6 +78,11 @@
 	--warning: #d97706;
 	--danger: #dc2626;
 	--info: #2563eb;
+	--heatmap-empty: #ebedf0;
+	--heatmap-1: #9be9a8;
+	--heatmap-2: #40c463;
+	--heatmap-3: #30a14e;
+	--heatmap-4: #216e39;
 	--agent: #0284c7;
 	--done: #7c3aed;
 
@@ -300,14 +311,4 @@
 	fill: var(--text-secondary);
 	font-size: 11px;
 	font-weight: 500;
-}
-
-@keyframes ring-pulse {
-	0%,
-	100% {
-		--tw-ring-opacity: 0.7;
-	}
-	50% {
-		--tw-ring-opacity: 0.25;
-	}
 }

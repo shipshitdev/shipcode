@@ -1,15 +1,17 @@
 import { sanitizeResolvedModel } from './model-identifiers';
 import { formatProviderReasoningEffort, resolveProviderReasoningEffort } from './reasoning-effort';
-import type {
-  AppSettings,
-  ExecutorModel,
-  GitHubIssueCacheRecord,
-  IssuePipelineStatus,
-  PipelinePhase,
-  Project,
-  ReasoningEffort,
-  RevisionCount,
-  Thread,
+import {
+  type AppSettings,
+  type ExecutorModel,
+  type GitHubIssueCacheRecord,
+  ISSUE_PIPELINE_STATUS,
+  type IssuePipelineStatus,
+  PIPELINE_PHASE,
+  type PipelinePhase,
+  type Project,
+  type ReasoningEffort,
+  type RevisionCount,
+  type Thread,
 } from './types';
 
 export const RESOLVED_PHASE_MODELS = ['planner', 'reviewer', 'executor', 'verifier'] as const;
@@ -161,7 +163,14 @@ export const PHASE_DESCRIPTORS: readonly ResolvedPhaseDescriptor[] = [
     issueModelOverrideKey: 'plannerModelOverride',
     issueModelIdOverrideKey: 'plannerModelIdOverride',
     issueReasoningEffortOverrideKey: 'plannerReasoningEffortOverride',
-    issueStatuses: ['todo', 'queued', 'planning', 'clarifying', 'revising', 'awaiting_approval'],
+    issueStatuses: [
+      ISSUE_PIPELINE_STATUS.todo,
+      ISSUE_PIPELINE_STATUS.queued,
+      ISSUE_PIPELINE_STATUS.planning,
+      ISSUE_PIPELINE_STATUS.clarifying,
+      ISSUE_PIPELINE_STATUS.revising,
+      ISSUE_PIPELINE_STATUS.awaitingApproval,
+    ],
   },
   {
     key: 'reviewer',
@@ -176,7 +185,7 @@ export const PHASE_DESCRIPTORS: readonly ResolvedPhaseDescriptor[] = [
     issueModelOverrideKey: 'reviewerModelOverride',
     issueModelIdOverrideKey: 'reviewerModelIdOverride',
     issueReasoningEffortOverrideKey: 'reviewerReasoningEffortOverride',
-    issueStatuses: ['reviewing'],
+    issueStatuses: [ISSUE_PIPELINE_STATUS.reviewing],
   },
   {
     key: 'executor',
@@ -191,7 +200,7 @@ export const PHASE_DESCRIPTORS: readonly ResolvedPhaseDescriptor[] = [
     issueModelOverrideKey: 'executorModelOverride',
     issueModelIdOverrideKey: 'executorModelIdOverride',
     issueReasoningEffortOverrideKey: 'executorReasoningEffortOverride',
-    issueStatuses: ['executing', 'testing'],
+    issueStatuses: [ISSUE_PIPELINE_STATUS.executing, ISSUE_PIPELINE_STATUS.testing],
   },
   {
     key: 'verifier',
@@ -206,7 +215,7 @@ export const PHASE_DESCRIPTORS: readonly ResolvedPhaseDescriptor[] = [
     issueModelOverrideKey: 'verifierModelOverride',
     issueModelIdOverrideKey: 'verifierModelIdOverride',
     issueReasoningEffortOverrideKey: 'verifierReasoningEffortOverride',
-    issueStatuses: ['verifying', 'shipping'],
+    issueStatuses: [ISSUE_PIPELINE_STATUS.verifying, ISSUE_PIPELINE_STATUS.shipping],
   },
 ] as const;
 
@@ -409,17 +418,21 @@ export function getIssueCardPhase(
 
 export function getPipelineCardPhase(status: PipelinePhase): ResolvedPhaseModel | null {
   if (
-    status === 'planning' ||
-    status === 'clarifying' ||
-    status === 'revising' ||
-    status === 'awaiting_approval'
+    status === PIPELINE_PHASE.planning ||
+    status === PIPELINE_PHASE.clarifying ||
+    status === PIPELINE_PHASE.revising ||
+    status === PIPELINE_PHASE.awaitingApproval
   ) {
     return 'planner';
   }
 
-  if (status === 'reviewing') return 'reviewer';
-  if (status === 'executing' || status === 'testing') return 'executor';
-  if (status === 'verifying' || status === 'shipping') return 'verifier';
+  if (status === PIPELINE_PHASE.reviewing) return 'reviewer';
+  if (status === PIPELINE_PHASE.executing || status === PIPELINE_PHASE.testing) {
+    return 'executor';
+  }
+  if (status === PIPELINE_PHASE.verifying || status === PIPELINE_PHASE.shipping) {
+    return 'verifier';
+  }
 
   return null;
 }

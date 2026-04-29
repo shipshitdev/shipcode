@@ -276,12 +276,31 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     });
 
     const prompt = `Quick task: ${task.title}\n\n${task.text}`;
-    await handlers.startPlanGeneration(
+
+    const synthesizedPlan: ShipCodePlan = {
+      id: nanoid(),
       threadId,
-      prompt,
-      projectPath,
-      options?.worktreePath ?? null,
-    );
+      version: 1,
+      objective: `Quick: ${task.title}`,
+      files: [],
+      steps: [
+        {
+          order: 1,
+          description: prompt,
+          files: [],
+          rationale: 'Quick task — executed directly without plan/review.',
+        },
+      ],
+      acceptanceCriteria: ['Executor completes the quick task without errors.'],
+      outOfScope: [],
+      estimatedComplexity: 'low',
+      dependencies: [],
+    };
+
+    const planRecord = deps.plans.create(threadId, '<quick-task-synthesized>', synthesizedPlan, 1);
+    deps.plans.updateStatus(planRecord.id, 'approved');
+
+    await handlers.startExecution(threadId, synthesizedPlan);
   }
 
   async function startFromAutomation(

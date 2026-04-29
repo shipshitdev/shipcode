@@ -11,7 +11,9 @@ import type {
 import {
   clampError,
   deriveGithubIssueUrl,
+  ISSUE_PIPELINE_STATUS,
   isRealGithubIssueNumber,
+  PIPELINE_PHASE,
   parseGithubProjectUrl,
   SHIPCODE_DEFAULT_LABELS,
 } from '@shipcode/shared';
@@ -58,9 +60,13 @@ function resolveOpenIssuePipelineStatus(
   thread: ReturnType<IpcHandlerDeps['queries']['threads']['getById']>,
 ): IssuePipelineStatus {
   if (thread) {
-    return thread.status === 'idle' ? 'todo' : (thread.status as IssuePipelineStatus);
+    return thread.status === PIPELINE_PHASE.idle
+      ? ISSUE_PIPELINE_STATUS.todo
+      : (thread.status as IssuePipelineStatus);
   }
-  return issue.linkedPrNumber != null ? 'completed' : 'todo';
+  return issue.linkedPrNumber != null
+    ? ISSUE_PIPELINE_STATUS.completed
+    : ISSUE_PIPELINE_STATUS.todo;
 }
 
 function syncOpenIssueState(
@@ -285,7 +291,7 @@ export function registerGitHubHandlers({
 
       try {
         queries.githubIssues.updateState(issue.id, 'closed');
-        queries.githubIssues.updatePipelineStatus(issue.id, 'done');
+        queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.done);
         queries.githubIssues.archiveIssues([issue.id]);
       } catch (err) {
         log.error('[github:archive-issue] DB archive failed after GitHub close:', err);
@@ -309,19 +315,20 @@ export function registerGitHubHandlers({
       assertRealGithubIssue(issue, 'mark done on GitHub');
 
       const thread = issue.threadId ? queries.threads.getById(issue.threadId) : null;
-      const hasCompletionEvidence = issue.linkedPrNumber != null || thread?.status === 'completed';
+      const hasCompletionEvidence =
+        issue.linkedPrNumber != null || thread?.status === PIPELINE_PHASE.completed;
 
       if (issue.state === 'closed') {
         queries.githubIssues.updateState(issue.id, 'closed');
-        queries.githubIssues.updatePipelineStatus(issue.id, 'done');
+        queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.done);
       } else if (hasCompletionEvidence) {
         queries.githubIssues.updateState(issue.id, 'open');
-        queries.githubIssues.updatePipelineStatus(issue.id, 'completed');
+        queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.completed);
       } else {
         const ghCli = new GhCli(project.path);
         await ghCli.closeIssue(issueNumber);
         queries.githubIssues.updateState(issue.id, 'closed');
-        queries.githubIssues.updatePipelineStatus(issue.id, 'done');
+        queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.done);
       }
 
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
@@ -344,7 +351,7 @@ export function registerGitHubHandlers({
       }
 
       queries.githubIssues.updateState(issue.id, 'closed');
-      queries.githubIssues.updatePipelineStatus(issue.id, 'done');
+      queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.done);
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
     },
   );
@@ -614,9 +621,13 @@ export function registerGitHubHandlers({
       if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
 
       const thread = resolveCanonicalIssueThread(queries, issue);
-      if (thread && thread.status !== 'idle' && thread.status !== 'completed') {
+      if (
+        thread &&
+        thread.status !== PIPELINE_PHASE.idle &&
+        thread.status !== PIPELINE_PHASE.completed
+      ) {
         pipeline.cancel(thread.id);
-        queries.threads.updateStatus(thread.id, 'idle');
+        queries.threads.updateStatus(thread.id, PIPELINE_PHASE.idle);
       }
 
       if (!queries.githubIssues.resetToTodo(issue.id)) {

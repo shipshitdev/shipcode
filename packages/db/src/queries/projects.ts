@@ -1,6 +1,12 @@
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
-import { type AgentType, ISO_NOW_SQL, type Project, toIsoUtc } from '@shipcode/shared';
+import {
+  type AgentType,
+  ISO_NOW_SQL,
+  ISSUE_PIPELINE_STATUS,
+  type Project,
+  toIsoUtc,
+} from '@shipcode/shared';
 import { nanoid } from 'nanoid';
 import { asRow, asRows } from '../utils';
 
@@ -123,12 +129,12 @@ export class ProjectQueries {
       this.db
         .prepare(
           `UPDATE github_issue_cache
-             SET pipeline_status = 'todo', last_phase_update = NULL
+             SET pipeline_status = ?, last_phase_update = NULL
            WHERE project_id = ?
-             AND pipeline_status = 'queued'
+             AND pipeline_status = ?
              AND claimed_at IS NULL`,
         )
-        .run(existing.id);
+        .run(ISSUE_PIPELINE_STATUS.todo, existing.id, ISSUE_PIPELINE_STATUS.queued);
       const restored = this.getById(existing.id);
       if (!restored) {
         throw new Error(`Failed to load restored project: ${existing.id}`);
@@ -248,12 +254,12 @@ export class ProjectQueries {
     this.db
       .prepare(
         `UPDATE github_issue_cache
-           SET pipeline_status = 'todo', last_phase_update = NULL
+           SET pipeline_status = ?, last_phase_update = NULL
          WHERE project_id = ?
-           AND pipeline_status = 'queued'
+           AND pipeline_status = ?
            AND claimed_at IS NULL`,
       )
-      .run(id);
+      .run(ISSUE_PIPELINE_STATUS.todo, id, ISSUE_PIPELINE_STATUS.queued);
   }
 
   /** Stable path for instant fix threads. The project is hidden from the sidebar. */

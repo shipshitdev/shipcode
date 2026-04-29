@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import {
+  type ActivePipelineSummary,
   DEFAULT_SETTINGS,
   type GitHubIssueCacheRecord,
   type IntegrationStatus,
@@ -371,6 +372,59 @@ describe('TerminalDrawer', () => {
       expect(useAppStore.getState().canonicalTerminalStream['thread-1']).toHaveLength(1);
     });
     expect(await screen.findByText('persisted output')).toBeInTheDocument();
+  });
+
+  it('shows output for a running automation thread without a GitHub issue card', async () => {
+    const automationRun: ActivePipelineSummary = {
+      threadId: 'thread-auto',
+      projectId: 'project-1',
+      projectName: 'shipcode',
+      threadTitle: '[Auto] clean',
+      phase: 'testing',
+      startedAt: Date.now() - 120_000,
+      activeProcessId: 'process-auto',
+      githubIssueNumber: null,
+      modelProvider: 'claude',
+      model: 'claude-sonnet-4-6',
+      reasoningEffort: 'medium',
+    };
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'integrations:check') return integrations;
+      if (channel === 'pipeline:list-active') return [automationRun];
+      return null;
+    });
+
+    (window as typeof window & { shipcode: typeof window.shipcode }).shipcode = {
+      invoke: invoke as unknown as typeof window.shipcode.invoke,
+      on: vi.fn(() => () => {}) as unknown as typeof window.shipcode.on,
+    };
+
+    useAppStore.setState({
+      activeProjectId: 'project-1',
+      activeThreadId: 'thread-auto',
+      activeIssue: null,
+      terminalThreadId: 'thread-auto',
+      pipelinePhase: 'testing',
+      githubIssues: [],
+      currentModels: { 'thread-auto': 'gpt-5.4' },
+      canonicalTerminalStream: {
+        'thread-auto': [
+          {
+            id: 'event-auto-1',
+            threadId: 'thread-auto',
+            event: { kind: 'text', content: 'running tests for automation' },
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      },
+    });
+
+    renderWithProviders();
+
+    expect(await screen.findByText('Automation')).toBeInTheDocument();
+    expect(screen.getByText('[Auto] clean')).toBeInTheDocument();
+    expect(screen.getByText('running tests for automation')).toBeInTheDocument();
+    expect(screen.queryByText('No issue selected for this project')).not.toBeInTheDocument();
   });
 
   it('filters the terminal dropdown to running issues in the selected project only', async () => {

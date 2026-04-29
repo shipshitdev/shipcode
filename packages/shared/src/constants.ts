@@ -1,5 +1,5 @@
 import { PINNED_MODEL_DEFAULTS } from './model-catalog';
-import type { AppSettings } from './types';
+import { type AppSettings, PIPELINE_PHASE } from './types';
 
 export const DEFAULT_STATUS_LABEL_MAPPINGS: Record<string, string> = {
   todo: '',
@@ -102,7 +102,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
 
 export const CURRENT_ONBOARDING_VERSION = 1;
 
-export const EXECUTION_PHASES = ['executing', 'testing', 'verifying', 'shipping'] as const;
+export const EXECUTION_PHASES = [
+  PIPELINE_PHASE.executing,
+  PIPELINE_PHASE.testing,
+  PIPELINE_PHASE.verifying,
+  PIPELINE_PHASE.shipping,
+] as const;
 
 export const PIPELINE_MAX_RETRIES = 3;
 

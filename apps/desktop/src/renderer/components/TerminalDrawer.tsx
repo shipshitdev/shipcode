@@ -1,14 +1,10 @@
-import type {
-  GitHubIssueCacheRecord,
-  IntegrationStatus,
-  TerminalEventRecord,
-} from '@shipcode/shared';
+import type { IntegrationStatus, TerminalEventRecord } from '@shipcode/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect } from 'react';
 import { useStartInstantShell } from '../hooks/useStartInstantShell';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
-import { EMPTY_STREAM, PHASE_LABELS } from './terminal-drawer/constants';
+import { EMPTY_STREAM, PHASE_LABELS, type TerminalDrawerTarget } from './terminal-drawer/constants';
 import { TerminalDrawerEmptyState } from './terminal-drawer/TerminalDrawerEmptyState';
 import { TerminalDrawerHeader } from './terminal-drawer/TerminalDrawerHeader';
 import { useTerminalDrawer } from './terminal-drawer/useTerminalDrawer';
@@ -16,16 +12,16 @@ import { TerminalTranscript } from './terminal-transcript/TerminalTranscript';
 
 interface TerminalDrawerTranscriptProps {
   approvedAwaitingExecution: boolean;
-  displayIssue: GitHubIssueCacheRecord;
+  displayTarget: TerminalDrawerTarget;
   terminalThreadId: string;
-  onOpenIssue: (issue: GitHubIssueCacheRecord) => void;
+  onOpenTarget: (target: TerminalDrawerTarget) => void;
 }
 
 function TerminalDrawerTranscript({
   approvedAwaitingExecution,
-  displayIssue,
+  displayTarget,
   terminalThreadId,
-  onOpenIssue,
+  onOpenTarget,
 }: TerminalDrawerTranscriptProps) {
   const canonicalStream = useAppStore(
     (state) => state.canonicalTerminalStream[terminalThreadId] ?? EMPTY_STREAM,
@@ -55,21 +51,21 @@ function TerminalDrawerTranscript({
   }, [canonicalStream.length, hydrateCanonicalEvents, terminalThreadId]);
 
   const pendingLabel =
-    canonicalStream.length === 0 && displayIssue.pipelineStatus
+    canonicalStream.length === 0 && displayTarget.phase
       ? approvedAwaitingExecution
         ? 'Waiting for execution slot'
-        : (PHASE_LABELS[displayIssue.pipelineStatus] ?? 'Working')
+        : (PHASE_LABELS[displayTarget.phase] ?? 'Working')
       : null;
   const handleAction = useCallback(() => {
-    onOpenIssue(displayIssue);
-  }, [displayIssue, onOpenIssue]);
+    onOpenTarget(displayTarget);
+  }, [displayTarget, onOpenTarget]);
 
   return (
     <TerminalTranscript
       events={canonicalStream}
       pendingLabel={pendingLabel}
       emptyMessage="No console output yet."
-      onAction={handleAction}
+      onAction={displayTarget.kind === 'issue' ? handleAction : undefined}
     />
   );
 }
@@ -78,13 +74,13 @@ export function TerminalDrawer() {
   const {
     approvedAwaitingExecution,
     currentModel,
-    displayIssue,
+    displayTarget,
     handleResizeMouseDown,
-    handleRunningTabSelect,
+    handleRunningTargetSelect,
     isMaximized,
     pipelinePhase,
     resolvedHeight,
-    runningTabs,
+    runningTargets,
     showEmptyState,
     startedAt,
     terminalThreadId,
@@ -163,12 +159,12 @@ export function TerminalDrawer() {
       <TerminalDrawerHeader
         activeProjectId={activeProjectId}
         currentModel={currentModel}
-        displayIssue={displayIssue}
+        displayTarget={displayTarget}
         ghosttyAvailable={ghosttyAvailable}
         approvedAwaitingExecution={approvedAwaitingExecution}
         isMaximized={isMaximized}
         pipelinePhase={pipelinePhase}
-        runningTabs={runningTabs}
+        runningTargets={runningTargets}
         startedAt={startedAt}
         terminalAvailable={terminalAvailable}
         terminalThreadId={terminalThreadId}
@@ -176,19 +172,19 @@ export function TerminalDrawer() {
         onNewCodexSession={handleNewCodexSession}
         onOpenInGhostty={handleOpenInGhostty}
         onOpenInTerminalApp={handleOpenInTerminalApp}
-        onOpenIssue={handleRunningTabSelect}
+        onOpenTarget={handleRunningTargetSelect}
         onToggleMaximize={toggleMaximize}
         onToggleTerminal={toggleTerminal}
       />
       <div className="relative flex-1 overflow-hidden min-h-0">
         {showEmptyState ? (
           <TerminalDrawerEmptyState />
-        ) : displayIssue && terminalThreadId ? (
+        ) : displayTarget && terminalThreadId ? (
           <TerminalDrawerTranscript
             approvedAwaitingExecution={approvedAwaitingExecution}
-            displayIssue={displayIssue}
+            displayTarget={displayTarget}
             terminalThreadId={terminalThreadId}
-            onOpenIssue={handleRunningTabSelect}
+            onOpenTarget={handleRunningTargetSelect}
           />
         ) : (
           <TerminalDrawerEmptyState />

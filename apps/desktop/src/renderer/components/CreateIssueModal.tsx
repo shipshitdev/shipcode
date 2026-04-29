@@ -484,22 +484,6 @@ export function CreateIssueModal() {
             </div>
           )}
 
-          {mode === 'create' && (
-            <Label
-              htmlFor="quick-mode-toggle"
-              className="flex cursor-pointer items-center gap-2 self-start rounded-md border border-border bg-tertiary/40 px-3 py-2 text-[13px] font-medium text-secondary transition-colors hover:bg-hover hover:text-primary"
-            >
-              <Checkbox
-                id="quick-mode-toggle"
-                checked={isQuickMode}
-                onCheckedChange={(checked) => setIsQuickMode(checked === true)}
-                disabled={submitting || enhancing}
-                aria-label="Quick mode (skip PRD, no GitHub issue)"
-              />
-              Quick mode (skip PRD, no GitHub issue)
-            </Label>
-          )}
-
           {mode === 'create' && isQuickMode && (
             <div className="flex flex-col gap-2">
               <Input
@@ -656,19 +640,36 @@ export function CreateIssueModal() {
       </div>
 
       <ModalFooter className="shrink-0 items-center border-t border-border px-6 py-4 mt-0">
-        {mode === 'create' && !isQuickMode && (
-          <Label
-            htmlFor="submit-another"
-            className="mr-auto flex cursor-pointer items-center gap-2 rounded-md border border-border bg-tertiary/40 px-3 py-2 text-[13px] font-medium text-secondary transition-colors hover:bg-hover hover:text-primary"
-          >
-            <Checkbox
-              id="submit-another"
-              checked={submitAnother}
-              onCheckedChange={(checked) => setSubmitAnother(checked === true)}
-              disabled={submitting || enhancing}
-            />
-            Submit another
-          </Label>
+        {mode === 'create' && (
+          <div className="mr-auto flex items-center gap-3">
+            <Label
+              htmlFor="quick-mode-toggle"
+              className="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-tertiary/40 px-3 py-2 text-[13px] font-medium text-secondary transition-colors hover:bg-hover hover:text-primary"
+            >
+              <Checkbox
+                id="quick-mode-toggle"
+                checked={isQuickMode}
+                onCheckedChange={(checked) => setIsQuickMode(checked === true)}
+                disabled={submitting || enhancing}
+                aria-label="Quick mode (skip PRD, no GitHub issue)"
+              />
+              Quick
+            </Label>
+            {!isQuickMode && (
+              <Label
+                htmlFor="submit-another"
+                className="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-tertiary/40 px-3 py-2 text-[13px] font-medium text-secondary transition-colors hover:bg-hover hover:text-primary"
+              >
+                <Checkbox
+                  id="submit-another"
+                  checked={submitAnother}
+                  onCheckedChange={(checked) => setSubmitAnother(checked === true)}
+                  disabled={submitting || enhancing}
+                />
+                Submit another
+              </Label>
+            )}
+          </div>
         )}
         <Button variant="secondary" onClick={handleClose} disabled={submitting || enhancing}>
           Cancel

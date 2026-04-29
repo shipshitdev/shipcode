@@ -2,6 +2,7 @@ import type { DiffRecord } from './lib/shipcode';
 import { cn } from './lib/utils';
 import { Badge } from './primitives/badge';
 import { Button } from './primitives/button';
+import { useSyntaxHighlightedLines } from './SyntaxHighlightedCode';
 
 interface DiffViewerProps {
   diffs: DiffRecord[];
@@ -36,6 +37,15 @@ const actionVariant = (action: string) => {
 };
 
 export function DiffViewer({ diffs, activeFile, onFileSelect }: DiffViewerProps) {
+  const activeDiff = diffs.find((d) => d.filePath === activeFile) ?? diffs[0];
+  const diffLines = activeDiff?.diffContent?.split('\n') ?? [];
+  const codeLines = diffLines.map((line) => {
+    if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('@@')) return line;
+    if (line.startsWith('+') || line.startsWith('-') || line.startsWith(' ')) return line.slice(1);
+    return line;
+  });
+  const highlightedLines = useSyntaxHighlightedLines(codeLines, activeDiff?.filePath);
+
   if (diffs.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-muted">
@@ -43,8 +53,6 @@ export function DiffViewer({ diffs, activeFile, onFileSelect }: DiffViewerProps)
       </div>
     );
   }
-
-  const activeDiff = diffs.find((d) => d.filePath === activeFile) ?? diffs[0];
 
   return (
     <div>
@@ -76,10 +84,11 @@ export function DiffViewer({ diffs, activeFile, onFileSelect }: DiffViewerProps)
           </div>
           <pre className="font-mono text-xs leading-relaxed overflow-x-auto py-2 bg-secondary rounded-b-md">
             {activeDiff.diffContent
-              ? activeDiff.diffContent.split('\n').map((line, i) => {
+              ? diffLines.map((line, i) => {
                   const isAdded = line.startsWith('+') && !line.startsWith('+++');
                   const isRemoved = line.startsWith('-') && !line.startsWith('---');
                   const isHunk = line.startsWith('@@');
+                  const prefix = isAdded ? '+' : isRemoved ? '-' : line.startsWith(' ') ? ' ' : '';
 
                   return (
                     <div
@@ -92,7 +101,14 @@ export function DiffViewer({ diffs, activeFile, onFileSelect }: DiffViewerProps)
                         isHunk && 'text-accent font-semibold',
                       )}
                     >
-                      {line}
+                      {isAdded || isRemoved || line.startsWith(' ') ? (
+                        <>
+                          <span>{prefix}</span>
+                          {highlightedLines[i]}
+                        </>
+                      ) : (
+                        line
+                      )}
                     </div>
                   );
                 })

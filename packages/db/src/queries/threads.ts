@@ -7,6 +7,7 @@ import {
   clarificationAnswerSchema,
   clarificationRequestSchema,
   ISO_NOW_SQL,
+  PIPELINE_PHASE,
   type Thread,
   type ThreadKind,
   type ThreadStatus,
@@ -14,6 +15,16 @@ import {
 } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
 import { asRow, asRows } from '../utils';
+
+const STUCK_THREAD_PHASES: ThreadStatus[] = [
+  PIPELINE_PHASE.planning,
+  PIPELINE_PHASE.reviewing,
+  PIPELINE_PHASE.revising,
+  PIPELINE_PHASE.executing,
+  PIPELINE_PHASE.testing,
+  PIPELINE_PHASE.verifying,
+  PIPELINE_PHASE.shipping,
+];
 
 interface ThreadRow {
   id: string;
@@ -125,9 +136,9 @@ export class ThreadQueries {
   recordFailure(id: string, failurePhase: string, lastError?: string): void {
     this.db
       .prepare(
-        `UPDATE threads SET status = 'failed', last_error = ?, failure_phase = ?, failure_count = failure_count + 1, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
+        `UPDATE threads SET status = ?, last_error = ?, failure_phase = ?, failure_count = failure_count + 1, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
       )
-      .run(lastError ?? null, failurePhase, id);
+      .run(PIPELINE_PHASE.failed, lastError ?? null, failurePhase, id);
   }
 
   resetFailureTracking(id: string): void {
@@ -389,9 +400,9 @@ export class ThreadQueries {
   hasActivePipeline(projectId: string): boolean {
     const row = this.db
       .prepare(
-        "SELECT 1 FROM threads WHERE project_id = ? AND status IN ('planning', 'reviewing', 'revising', 'executing', 'testing', 'verifying', 'shipping') LIMIT 1",
+        `SELECT 1 FROM threads WHERE project_id = ? AND status IN (${Array(STUCK_THREAD_PHASES.length).fill('?').join(',')}) LIMIT 1`,
       )
-      .get(projectId);
+      .get(projectId, ...STUCK_THREAD_PHASES);
     return !!row;
   }
 
@@ -399,9 +410,9 @@ export class ThreadQueries {
     return asRows<ThreadRow>(
       this.db
         .prepare(
-          "SELECT * FROM threads WHERE status IN ('planning', 'reviewing', 'revising', 'executing', 'testing', 'verifying', 'shipping')",
+          `SELECT * FROM threads WHERE status IN (${Array(STUCK_THREAD_PHASES.length).fill('?').join(',')})`,
         )
-        .all(),
+        .all(...STUCK_THREAD_PHASES),
     ).map(mapThread);
   }
 
@@ -413,11 +424,11 @@ export class ThreadQueries {
          INNER JOIN plans p ON p.thread_id = t.id
            AND p.status = 'approved'
            AND p.version = (SELECT MAX(p2.version) FROM plans p2 WHERE p2.thread_id = t.id)
-         WHERE t.status = 'awaiting_approval'
+         WHERE t.status = ?
          ORDER BY t.updated_at ASC
         `,
       )
-      .all();
+      .all(PIPELINE_PHASE.awaitingApproval);
     return asRows<ThreadRow>(rows).map(mapThread);
   }
 
@@ -431,10 +442,10 @@ export class ThreadQueries {
     const rows = this.db
       .prepare(
         `SELECT * FROM threads
-         WHERE status IN ('planning', 'reviewing', 'revising', 'executing', 'testing', 'verifying', 'shipping')
+         WHERE status IN (${Array(STUCK_THREAD_PHASES.length).fill('?').join(',')})
            AND updated_at <= datetime('now', '-' || ? || ' seconds')`,
       )
-      .all(thresholdSec);
+      .all(...STUCK_THREAD_PHASES, thresholdSec);
     return asRows<ThreadRow>(rows).map(mapThread);
   }
 

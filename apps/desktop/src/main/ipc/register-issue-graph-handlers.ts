@@ -1,7 +1,16 @@
 import type { IssueEdgeQueries } from '@shipcode/db';
 import { buildIssueGroupExecutionPreview, createIssueGroupRunState } from '@shipcode/pipeline';
-import type { GitHubIssueCacheRecord, PipelinePhase, ProjectIssueGraph } from '@shipcode/shared';
-import { parseIssueBodyDependencyEdges } from '@shipcode/shared';
+import type {
+  GitHubIssueCacheRecord,
+  IssuePipelineStatus,
+  PipelinePhase,
+  ProjectIssueGraph,
+} from '@shipcode/shared';
+import {
+  ISSUE_PIPELINE_STATUS,
+  PIPELINE_PHASE,
+  parseIssueBodyDependencyEdges,
+} from '@shipcode/shared';
 import { PipelineScheduler } from '../pipeline-scheduler';
 import { sendGithubIssuesUpdated } from './helpers';
 import type { IpcHandlerDeps } from './types';
@@ -19,6 +28,12 @@ let runtimeDeps: {
 } | null = null;
 
 const activeGroupedRuns = new Map<string, ActiveIssueGroupRun>();
+
+const ISSUE_GROUP_TERMINAL_STATUSES = new Set<IssuePipelineStatus>([
+  ISSUE_PIPELINE_STATUS.completed,
+  ISSUE_PIPELINE_STATUS.done,
+  ISSUE_PIPELINE_STATUS.failed,
+]);
 
 export function registerIssueGraphHandlers({
   ipcMain,
@@ -138,7 +153,10 @@ export function notifyIssueGraphPipelinePhaseChange(input: {
   threadId: string;
   phase: PipelinePhase;
 }): void {
-  if (!runtimeDeps || (input.phase !== 'completed' && input.phase !== 'failed')) {
+  if (
+    !runtimeDeps ||
+    (input.phase !== PIPELINE_PHASE.completed && input.phase !== PIPELINE_PHASE.failed)
+  ) {
     return;
   }
   const deps = runtimeDeps;
@@ -156,7 +174,7 @@ export function notifyIssueGraphPipelinePhaseChange(input: {
 
     const newlyReadyIssueIds = run.runState.markIssueCompleted(
       completedIssue.id,
-      input.phase === 'completed',
+      input.phase === PIPELINE_PHASE.completed,
     );
 
     for (const issueId of newlyReadyIssueIds) {
@@ -174,7 +192,7 @@ export function notifyIssueGraphPipelinePhaseChange(input: {
         const issue = deps.queries.githubIssues
           .list(run.projectId)
           .find((entry) => entry.id === issueId);
-        return issue ? ['completed', 'done', 'failed'].includes(issue.pipelineStatus) : true;
+        return issue ? ISSUE_GROUP_TERMINAL_STATUSES.has(issue.pipelineStatus) : true;
       })
     ) {
       activeGroupedRuns.delete(runId);

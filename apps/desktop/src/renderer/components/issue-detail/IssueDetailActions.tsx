@@ -1,4 +1,5 @@
 import type { ClarificationAnswer, ClarificationRequest, Thread } from '@shipcode/shared';
+import { PIPELINE_PHASE } from '@shipcode/shared';
 import {
   Badge,
   Button,
@@ -452,7 +453,7 @@ export function IssueDetailActions({
   ) : null;
 
   const clarificationSection =
-    clarificationRequest && thread?.status === 'clarifying' ? (
+    clarificationRequest && thread?.status === PIPELINE_PHASE.clarifying ? (
       <ClarificationSection
         key={`${thread.id}:${clarificationRequest.id}`}
         isSubmitting={isSubmitting}

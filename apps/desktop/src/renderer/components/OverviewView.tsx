@@ -100,6 +100,8 @@ export function OverviewView() {
   const selectThread = useAppStore((s) => s.selectThread);
   const selectIssue = useAppStore((s) => s.selectIssue);
   const setGithubIssues = useAppStore((s) => s.setGithubIssues);
+  const setTerminalThread = useAppStore((s) => s.setTerminalThread);
+  const openTerminal = useAppStore((s) => s.openTerminal);
   const openActivity = useAppStore((s) => s.openActivity);
   const openInbox = useAppStore((s) => s.openInbox);
 
@@ -136,6 +138,8 @@ export function OverviewView() {
   const handleRowClick = async (projectId: string, threadId: string) => {
     selectProject(projectId);
     selectThread(threadId);
+    setTerminalThread(threadId);
+    openTerminal();
     try {
       const issues = await window.shipcode.invoke<GitHubIssueCacheRecord[]>('github:list-issues', {
         projectId,
