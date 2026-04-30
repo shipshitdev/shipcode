@@ -3,6 +3,7 @@ export * from './branches';
 export * from './cli-model-capabilities';
 export * from './constants';
 export * from './errors';
+export * from './format-cost';
 export * from './format-relative-time';
 export * from './format-token-count';
 export * from './github-issue-utils';
