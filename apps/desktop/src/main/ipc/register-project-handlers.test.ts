@@ -145,7 +145,7 @@ describe('registerProjectHandlers', () => {
         getById: vi.fn(() => project),
       },
       settings: {
-        get: vi.fn(() => ({ projectOpenTarget: 'cursor' })),
+        get: vi.fn(() => ({ projectOpenTarget: 'cursor', terminalOpenTarget: 'terminal' })),
       },
     };
 
