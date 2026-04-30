@@ -1,10 +1,11 @@
-import type {
-  AgentType,
-  Automation,
-  CreateAutomationInput,
-  Project,
-  ReasoningEffort,
-  UpdateAutomationInput,
+import {
+  type AgentType,
+  type Automation,
+  type CreateAutomationInput,
+  clampError,
+  type Project,
+  type ReasoningEffort,
+  type UpdateAutomationInput,
 } from '@shipcode/shared';
 import {
   Button,
@@ -52,12 +53,6 @@ const REASONING_OPTIONS: Array<{ value: 'inherit' | ReasoningEffort; label: stri
   { value: 'high', label: 'High' },
   { value: 'xhigh', label: 'Extra high' },
 ];
-
-function clampError(err: unknown): string {
-  if (err instanceof Error) return err.message.split('\n')[0].slice(0, 280);
-  if (typeof err === 'string') return err.split('\n')[0].slice(0, 280);
-  return 'Unknown error';
-}
 
 function presetForCron(cron: string): string {
   const found = PRESETS.find((p) => p.cron === cron);

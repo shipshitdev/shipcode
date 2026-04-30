@@ -1,6 +1,7 @@
 import {
   bodyHasRequiredPrdSections,
   buildPrdMetadataLabels,
+  clampError,
   type GitHubIssueCacheRecord,
   ISSUE_PIPELINE_STATUS,
   PRD_REQUIRED_HEADINGS,
@@ -48,17 +49,6 @@ function deriveTitleFromBody(body: string): string {
   const heading = lines.find((l) => l.startsWith('# '));
   const raw = heading ? heading.replace(/^#\s+/, '').replace(/^PRD:\s*/i, '') : (lines[0] ?? '');
   return raw.slice(0, 80).trim();
-}
-
-/**
- * Clamp an error message to a single line + 280 chars so we never dump
- * multi-KB stderr (or an echoed prompt) into the renderer. The full error
- * still goes to the devtools console via `console.error` in the caller.
- */
-function clampError(err: unknown): string {
-  if (err instanceof Error) return err.message.split('\n')[0].slice(0, 280);
-  if (typeof err === 'string') return err.split('\n')[0].slice(0, 280);
-  return 'Unknown error';
 }
 
 function formatBytes(bytes: number): string {
