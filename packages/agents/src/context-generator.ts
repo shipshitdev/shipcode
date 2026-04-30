@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ContextFileInfo, ContextGeneratorCli } from '@shipcode/shared';
-import { extractCliFailureMessage } from './cli-error';
+import { extractCliFailureMessage, formatCliSpawnFailure } from './cli-error';
 import { shellExecEnv } from './health-check';
 
 const MEMORY_DIR = '.agents/memory';
@@ -358,7 +358,7 @@ function runContextCliWithStdin(
 
     proc.on('error', (err) => {
       clearTimeout(timer);
-      reject(new Error(`${label} spawn failed: ${err.message.split('\n')[0].slice(0, 200)}`));
+      reject(new Error(formatCliSpawnFailure(label, err.message)));
     });
 
     proc.on('close', (code) => {

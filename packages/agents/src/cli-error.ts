@@ -59,3 +59,7 @@ export function extractCliFailureMessage(stdout: string, stderr: string): string
   const message = stderrMessage || extractStdoutMessage(stdout) || 'no stderr';
   return message.slice(0, 300);
 }
+
+export function formatCliSpawnFailure(label: string, stderrMessage: string): string {
+  return `${label} spawn failed: ${stderrMessage.split('\n')[0].slice(0, 200)}`;
+}

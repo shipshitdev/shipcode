@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import type { GeneratorCli, ReasoningEffort } from '@shipcode/shared';
-import { extractCliFailureMessage } from './cli-error';
+import { extractCliFailureMessage, formatCliSpawnFailure } from './cli-error';
 import { shellExecEnv } from './health-check';
 import {
   mapReasoningEffortToClaudeThinkingTokens,
@@ -193,7 +193,7 @@ function runPrdCliWithStdin(
     proc.on('error', (err) => {
       clearTimeout(timer);
       // ENOENT etc — surface a short message, never echo the prompt.
-      reject(new Error(`${label} spawn failed: ${err.message.split('\n')[0].slice(0, 200)}`));
+      reject(new Error(formatCliSpawnFailure(label, err.message)));
     });
 
     proc.on('close', (code) => {
