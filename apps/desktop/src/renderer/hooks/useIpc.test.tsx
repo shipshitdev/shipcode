@@ -1,4 +1,9 @@
-import type { GitHubIssueCacheRecord, Thread } from '@shipcode/shared';
+import {
+  DEFAULT_SETTINGS,
+  type GitHubIssueCacheRecord,
+  type Thread,
+  type ThreadPanelData,
+} from '@shipcode/shared';
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
@@ -54,6 +59,49 @@ const makeIssue = (overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
   priorityRaw: null,
   priorityFetchedAt: null,
   isQuickMode: false,
+  ...overrides,
+});
+
+const makeThread = (overrides: Partial<Thread> = {}): Thread => ({
+  id: 'thread-1',
+  projectId: 'project-1',
+  kind: 'pipeline',
+  title: 'Issue',
+  prompt: 'Body',
+  status: 'planning',
+  worktreeBranch: null,
+  worktreePath: null,
+  plannerModel: 'claude',
+  reviewerModel: 'claude',
+  verifierModel: 'claude',
+  executorModel: 'claude',
+  reviewRound: 0,
+  clarificationRound: 0,
+  clarificationRequest: null,
+  clarificationAnswers: [],
+  answeredClarification: null,
+  verificationStatus: null,
+  verificationRetries: 0,
+  autonomous: true,
+  baseBranch: 'main',
+  forkPointSha: null,
+  githubIssueNumber: null,
+  githubPrNumber: null,
+  githubRepo: null,
+  automationId: null,
+  lastError: null,
+  failurePhase: null,
+  failureCount: 0,
+  createdAt: '2026-04-22T10:00:00.000Z',
+  updatedAt: '2026-04-22T10:00:00.000Z',
+  plannerResolvedModel: null,
+  reviewerResolvedModel: null,
+  revisorResolvedModel: null,
+  executorResolvedModel: null,
+  verifierResolvedModel: null,
+  totalTokensPrompt: 0,
+  totalTokensCompletion: 0,
+  totalCostUsd: 0,
   ...overrides,
 });
 
@@ -183,6 +231,29 @@ describe('useIpc terminal scoping', () => {
       'github:list-issues',
       expect.objectContaining({ projectId: 'project-1' }),
     );
+  });
+
+  it('updates cached thread-panel data so automation cards move live', () => {
+    invokeMock.mockResolvedValue(null);
+    const automationThread = makeThread({
+      id: 'automation-thread-1',
+      title: '[Auto] Nightly cleanup',
+      automationId: 'automation-1',
+      status: 'planning',
+    });
+    const { queryClient } = renderHarness();
+    queryClient.setQueryData<ThreadPanelData>(['thread-panel-data', 'project-1'], {
+      project: null,
+      settings: DEFAULT_SETTINGS,
+      threads: [automationThread],
+      latestPlanStatusByThreadId: {},
+      branches: [],
+    });
+
+    listeners.get('pipeline:phase')?.({ phase: 'executing', threadId: automationThread.id });
+
+    const panelData = queryClient.getQueryData<ThreadPanelData>(['thread-panel-data', 'project-1']);
+    expect(panelData?.threads[0]?.status).toBe('executing');
   });
 
   it('batches raw terminal events before hydrating the canonical stream', () => {

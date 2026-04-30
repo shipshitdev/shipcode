@@ -267,7 +267,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     deps.emitter.emit({
       type: 'pipeline:start-context',
       threadId,
-      source: 'github:start-issue',
+      source: 'quick-task:start',
       projectPath,
       githubIssueNumber: null,
       autonomous: true,

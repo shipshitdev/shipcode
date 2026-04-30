@@ -9,11 +9,11 @@ import {
   type Thread,
   type ThreadPanelData,
 } from '@shipcode/shared';
-import { KanbanBoard } from '@shipcode/ui';
+import { AUTOMATION_ISSUE_NUMBER_BASE, isAutomationIssue, KanbanBoard } from '@shipcode/ui';
 import { Button, RefreshCw, X } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ProjectGraphTab } from '../features/project/project-graph-tab';
 import { useAppStore } from '../stores/app-store';
 import { ThreadPanelArchiveDialog } from './ThreadPanelArchiveDialog';
@@ -23,6 +23,67 @@ const DONE_PIPELINE_STATUSES: IssuePipelineStatus[] = [
   ISSUE_PIPELINE_STATUS.completed,
   ISSUE_PIPELINE_STATUS.done,
 ];
+const KANBAN_FLASH_MS = 1600;
+
+function automationIssueNumber(threadId: string): number {
+  let hash = 0;
+  for (let i = 0; i < threadId.length; i += 1) {
+    hash = (hash * 33 + threadId.charCodeAt(i)) % 900_000_000;
+  }
+  return AUTOMATION_ISSUE_NUMBER_BASE - hash;
+}
+
+function pipelineStatusFromThread(thread: Thread): IssuePipelineStatus {
+  return thread.status === PIPELINE_PHASE.idle ? ISSUE_PIPELINE_STATUS.todo : thread.status;
+}
+
+function automationThreadToIssue(thread: Thread, projectId: string): GitHubIssueCacheRecord {
+  const timestamp = thread.updatedAt || thread.createdAt;
+
+  return {
+    id: `automation:${thread.id}`,
+    projectId,
+    issueNumber: automationIssueNumber(thread.id),
+    title: thread.title || 'Automation run',
+    body: thread.prompt || null,
+    labels: [],
+    assignee: null,
+    state: 'open',
+    pipelineStatus: pipelineStatusFromThread(thread),
+    threadId: thread.id,
+    claimedAt: null,
+    claimedBy: null,
+    lastPhaseUpdate: timestamp,
+    lastStatusLabel: null,
+    plannerModelOverride: null,
+    reviewerModelOverride: null,
+    executorModelOverride: null,
+    verifierModelOverride: null,
+    plannerModelIdOverride: null,
+    reviewerModelIdOverride: null,
+    executorModelIdOverride: null,
+    verifierModelIdOverride: null,
+    plannerReasoningEffortOverride: null,
+    reviewerReasoningEffortOverride: null,
+    executorReasoningEffortOverride: null,
+    verifierReasoningEffortOverride: null,
+    revisionCountOverride: null,
+    requireApprovalOverride: false,
+    linkedPrNumber: thread.githubPrNumber,
+    linkedPrUrl: null,
+    linkedPrIsDraft: false,
+    ciBlocked: false,
+    failingChecks: [],
+    unresolvedReviewComments: [],
+    unresolvedReviewCommentCount: 0,
+    prLastSyncAt: null,
+    fetchedAt: thread.createdAt,
+    priorityRank: null,
+    priorityRaw: null,
+    priorityFetchedAt: null,
+    isQuickMode: false,
+  };
+}
 
 export function ThreadPanel() {
   const queryClient = useQueryClient();
@@ -32,10 +93,17 @@ export function ThreadPanel() {
   const createIssueModalOpen = useAppStore((state) => state.createIssueModalOpen);
   const projectSettingsModalOpen = useAppStore((state) => state.projectSettingsModalOpen);
   const settingsVisible = useAppStore((state) => state.settingsVisible);
+  const activeAutomationThreadId = useAppStore((state) => state.activeAutomationThreadId);
   const selectIssue = useAppStore((state) => state.selectIssue);
+  const selectAutomationThread = useAppStore((state) => state.selectAutomationThread);
+  const setTerminalThread = useAppStore((state) => state.setTerminalThread);
+  const openTerminal = useAppStore((state) => state.openTerminal);
   const requestCommentComposer = useAppStore((state) => state.requestCommentComposer);
   const setGithubIssues = useAppStore((state) => state.setGithubIssues);
   const pendingCreatedIssues = useAppStore((state) => state.pendingCreatedIssues);
+  const previousTaskStatusById = useRef(new Map<string, IssuePipelineStatus>());
+  const flashTimeoutsByIssueId = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const [flashingIssueIds, setFlashingIssueIds] = useState<ReadonlySet<string>>(new Set());
   const [isRefreshingBranches, setIsRefreshingBranches] = useState(false);
   const [archiveFeedback, setArchiveFeedback] = useState<{
     tone: 'pending' | 'success' | 'error';
@@ -118,6 +186,25 @@ export function ThreadPanel() {
     () => new Map(threads.map((thread) => [thread.id, thread] as const)),
     [threads],
   );
+  const boardIssues = useMemo(() => {
+    if (!activeProjectId) return issues;
+    const issueThreadIds = new Set(
+      issues.flatMap((issue) => (issue.threadId ? [issue.threadId] : [])),
+    );
+    const automationIssues = threads
+      .filter(
+        (thread) =>
+          thread.kind === 'pipeline' &&
+          thread.automationId !== null &&
+          !issueThreadIds.has(thread.id),
+      )
+      .map((thread) => automationThreadToIssue(thread, activeProjectId));
+
+    return automationIssues.length > 0 ? [...automationIssues, ...issues] : issues;
+  }, [activeProjectId, issues, threads]);
+  const selectedBoardIssueNumber = activeAutomationThreadId
+    ? automationIssueNumber(activeAutomationThreadId)
+    : selectedIssueNumber;
   const approvedAwaitingExecutionIssueIds = useMemo(() => {
     const issueIds = new Set<string>();
     for (const issue of issues) {
@@ -131,6 +218,51 @@ export function ThreadPanel() {
     }
     return issueIds;
   }, [issues, latestPlanStatusByThreadId]);
+
+  useEffect(() => {
+    const tracked = new Map<string, IssuePipelineStatus>();
+    for (const issue of boardIssues) {
+      if (issue.isQuickMode || isAutomationIssue(issue)) {
+        tracked.set(issue.id, issue.pipelineStatus);
+      }
+    }
+
+    const changedIds: string[] = [];
+    for (const [issueId, status] of tracked) {
+      if (previousTaskStatusById.current.get(issueId) !== status) {
+        changedIds.push(issueId);
+      }
+    }
+    previousTaskStatusById.current = tracked;
+    if (changedIds.length === 0) return;
+
+    setFlashingIssueIds((current) => new Set([...current, ...changedIds]));
+
+    for (const issueId of changedIds) {
+      const existing = flashTimeoutsByIssueId.current.get(issueId);
+      if (existing) clearTimeout(existing);
+
+      const timeout = setTimeout(() => {
+        flashTimeoutsByIssueId.current.delete(issueId);
+        setFlashingIssueIds((current) => {
+          if (!current.has(issueId)) return current;
+          const next = new Set(current);
+          next.delete(issueId);
+          return next;
+        });
+      }, KANBAN_FLASH_MS);
+      flashTimeoutsByIssueId.current.set(issueId, timeout);
+    }
+  }, [boardIssues]);
+
+  useEffect(() => {
+    return () => {
+      for (const timeout of flashTimeoutsByIssueId.current.values()) {
+        clearTimeout(timeout);
+      }
+      flashTimeoutsByIssueId.current.clear();
+    };
+  }, []);
 
   // Optimistically flip a single issue's pipelineStatus in the local cache so
   // the card jumps to its new column instantly on drop, instead of waiting
@@ -241,6 +373,17 @@ export function ThreadPanel() {
   const repoUrl = githubRepoUrl(project?.gitRemote);
   const projectsUrl = project?.githubProjectUrl?.trim() ? project.githubProjectUrl.trim() : null;
   const handleIssueClick = (issue: GitHubIssueCacheRecord) => {
+    if (isAutomationIssue(issue) && issue.threadId) {
+      selectAutomationThread(issue.threadId);
+      setTerminalThread(issue.threadId);
+      openTerminal();
+      const store = useAppStore.getState();
+      if (store.issueDetailCollapsed) {
+        store.toggleIssueDetail();
+      }
+      return;
+    }
+
     selectIssue(issue);
     const store = useAppStore.getState();
     if (store.issueDetailCollapsed) {
@@ -249,13 +392,14 @@ export function ThreadPanel() {
   };
   const handleIssueComment = (issue: GitHubIssueCacheRecord) => {
     handleIssueClick(issue);
+    if (isAutomationIssue(issue)) return;
     requestCommentComposer(issue.id);
   };
 
   return (
     <div className="relative flex flex-1 min-h-0 min-w-0 flex-col bg-primary">
       <KanbanBoard
-        issues={issues}
+        issues={boardIssues}
         onIssueClick={handleIssueClick}
         onCommentIssue={handleIssueComment}
         keyboardShortcutsEnabled={
@@ -264,7 +408,7 @@ export function ThreadPanel() {
           !projectSettingsModalOpen &&
           !settingsVisible
         }
-        selectedIssueNumber={selectedIssueNumber}
+        selectedIssueNumber={selectedBoardIssueNumber}
         onRefresh={() => activeProjectId && refreshIssues.mutate(activeProjectId)}
         baseBranch={project?.defaultBranch}
         branches={branches}
@@ -291,6 +435,7 @@ export function ThreadPanel() {
         settings={settings}
         threads={threads}
         approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
+        flashingIssueIds={flashingIssueIds}
         repoUrl={repoUrl}
         projectsUrl={projectsUrl}
         onOpenExternal={(url) =>

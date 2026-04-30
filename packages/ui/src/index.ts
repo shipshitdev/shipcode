@@ -6,7 +6,11 @@ export { DiffViewer } from './DiffViewer';
 export { GitVisualizer } from './GitVisualizer';
 export { KanbanBoard } from './KanbanBoard';
 export type { IssuePriorityBadge } from './kanban-board/types';
-export { resolveIssuePriorityBadge } from './kanban-board/utils';
+export {
+  AUTOMATION_ISSUE_NUMBER_BASE,
+  isAutomationIssue,
+  resolveIssuePriorityBadge,
+} from './kanban-board/utils';
 export type { PageHeaderProps } from './PageHeader';
 export { PageHeader } from './PageHeader';
 export { PhaseChip } from './PhaseChip';

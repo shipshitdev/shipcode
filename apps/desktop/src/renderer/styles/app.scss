@@ -56,6 +56,21 @@
 	100% { transform: translateX(500%); }
 }
 
+@keyframes card-flash {
+	0% {
+		box-shadow: 0 0 0 2px color-mix(in srgb, var(--agent) 70%, transparent), 0 0 22px color-mix(in srgb, var(--agent) 35%, transparent);
+		background-color: color-mix(in srgb, var(--agent) 12%, var(--bg-elevated));
+	}
+	65% {
+		box-shadow: 0 0 0 2px color-mix(in srgb, var(--agent) 35%, transparent), 0 0 12px color-mix(in srgb, var(--agent) 18%, transparent);
+		background-color: color-mix(in srgb, var(--agent) 6%, var(--bg-elevated));
+	}
+	100% {
+		box-shadow: none;
+		background-color: inherit;
+	}
+}
+
 [data-theme="light"] {
 	--bg-primary: #f6f4ef;
 	--bg-secondary: #efeae1;
@@ -162,9 +177,14 @@
 	animation: slide-progress 3.4s linear infinite;
 }
 
+@utility animate-card-flash {
+	animation: card-flash 1.45s ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
 	.animate-slide-progress,
-	.animate-slide-progress-card {
+	.animate-slide-progress-card,
+	.animate-card-flash {
 		animation: none !important;
 		transform: none !important;
 	}

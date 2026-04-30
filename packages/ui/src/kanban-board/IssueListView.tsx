@@ -34,6 +34,7 @@ import type {
 import {
   formatDate,
   isApprovedAwaitingExecutionIssue,
+  isAutomationIssue,
   isIssueCreating,
   issueMatchesColumn,
   issueMatchesSection,
@@ -75,7 +76,16 @@ function DraggableListRow({
     issue.pipelineStatus === ISSUE_PIPELINE_STATUS.completed ||
     issue.pipelineStatus === ISSUE_PIPELINE_STATUS.done;
   const isCreating = isIssueCreating(issue);
-  const isDraggable = !isCreating && DRAGGABLE_STATUSES.includes(issue.pipelineStatus);
+  const isAutomation = isAutomationIssue(issue);
+  const referenceLabel = isCreating
+    ? 'Creating'
+    : issue.isQuickMode
+      ? 'Quick'
+      : isAutomation
+        ? 'Auto'
+        : `#${issue.issueNumber}`;
+  const isDraggable =
+    !isCreating && !isAutomation && DRAGGABLE_STATUSES.includes(issue.pipelineStatus);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: issue.id,
     data: issue,
@@ -155,9 +165,7 @@ function DraggableListRow({
         />
       )}
       <div className="flex shrink-0 items-center gap-1.5">
-        <span className="font-mono text-xs text-secondary">
-          {isCreating ? 'Creating' : issue.isQuickMode ? 'Quick' : `#${issue.issueNumber}`}
-        </span>
+        <span className="font-mono text-xs text-secondary">{referenceLabel}</span>
         {issue.linkedPrNumber &&
           (issue.linkedPrUrl && onOpenPullRequest ? (
             <Button
@@ -247,7 +255,7 @@ function DraggableListRow({
             <PanelLeftOpen size={12} />
           </Button>
         )}
-        {isDoneState && onArchiveIssue && (
+        {isDoneState && onArchiveIssue && !isAutomation && (
           <Button
             variant="ghost"
             size="icon-xs"
@@ -417,6 +425,7 @@ export function IssueListView({
         const columnIssues = issues.filter((issue) =>
           issueMatchesColumn(issue, column, approvedAwaitingExecutionIssueIds),
         );
+        const hasArchivableIssues = columnIssues.some((issue) => !isAutomationIssue(issue));
         const isCollapsed = collapsed[column.key] ?? false;
         const dropId = LIST_COLUMN_DROP_ID[column.key];
 
@@ -438,7 +447,7 @@ export function IssueListView({
                   ({columnIssues.length})
                 </span>
               </Button>
-              {column.key === 'done' && onArchiveAllDone && columnIssues.length > 0 && (
+              {column.key === 'done' && onArchiveAllDone && hasArchivableIssues && (
                 <Button
                   variant="ghost"
                   size="icon-xs"

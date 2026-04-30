@@ -1999,6 +1999,55 @@ describe('createPipeline', () => {
 
   // ─── startFromAutomation ───────────────────────────────────────────
 
+  describe('startFromQuickTask', () => {
+    it('synthesizes an approved plan and emits quick-task:start start-context', async () => {
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.includes('symbolic-ref')) return 'origin/main';
+        if (cmd.includes('rev-parse')) return 'sha789';
+        return '';
+      });
+      const pipeline = createPipeline(mock.deps);
+
+      await pipeline.startFromQuickTask(
+        't1',
+        '/proj',
+        {
+          issueNumber: -1,
+          title: 'Tighten quick flow',
+          text: 'Make quick task telemetry explicit.',
+        },
+        'claude',
+      );
+
+      expect(mock.deps.emitter.emit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'pipeline:start-context',
+          threadId: 't1',
+          source: 'quick-task:start',
+          projectPath: '/proj',
+          githubIssueNumber: null,
+          autonomous: true,
+        }),
+      );
+
+      expect(mock.deps.plans.create).toHaveBeenCalledWith(
+        't1',
+        '<quick-task-synthesized>',
+        expect.objectContaining({
+          objective: 'Quick: Tighten quick flow',
+          steps: [
+            expect.objectContaining({
+              order: 1,
+              description: 'Quick task: Tighten quick flow\n\nMake quick task telemetry explicit.',
+            }),
+          ],
+        }),
+        1,
+      );
+      expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'approved');
+    });
+  });
+
   describe('startFromAutomation', () => {
     it('synthesizes an approved plan and emits automation:tick start-context', async () => {
       const pipeline = createPipeline(mock.deps);

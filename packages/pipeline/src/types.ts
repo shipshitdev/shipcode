@@ -60,6 +60,7 @@ export type PipelineEvent =
       threadId: string;
       source:
         | 'github:start-issue'
+        | 'quick-task:start'
         | 'pipeline:start'
         | 'pipeline:retry'
         | 'pipeline:approve'

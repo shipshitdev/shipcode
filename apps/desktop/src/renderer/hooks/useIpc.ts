@@ -5,6 +5,8 @@ import {
   type IssuePipelineStatus,
   PIPELINE_PHASE,
   type TerminalEventRecord,
+  type Thread,
+  type ThreadPanelData,
 } from '@shipcode/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
@@ -67,6 +69,58 @@ export function useIpc() {
       queryClient.invalidateQueries({ queryKey: ['issue-plan-history'] });
     };
 
+    const updateThreadPanelThreadStatus = (
+      projectId: string,
+      threadId: string,
+      phase: Thread['status'],
+    ) => {
+      queryClient.setQueryData<ThreadPanelData>(['thread-panel-data', projectId], (prev) => {
+        if (!prev) return prev;
+        let changed = false;
+        const updatedAt = new Date().toISOString();
+        const threads = prev.threads.map((thread) => {
+          if (thread.id !== threadId) return thread;
+          changed = true;
+          return { ...thread, status: phase, updatedAt };
+        });
+        return changed ? { ...prev, threads } : prev;
+      });
+    };
+
+    const upsertThreadPanelThread = (
+      projectId: string,
+      thread: Thread,
+      phase: Thread['status'],
+    ) => {
+      queryClient.setQueryData<ThreadPanelData>(['thread-panel-data', projectId], (prev) => {
+        if (!prev) return prev;
+        const updatedThread: Thread = {
+          ...thread,
+          status: phase,
+          updatedAt: new Date().toISOString(),
+        };
+        const existingIndex = prev.threads.findIndex((candidate) => candidate.id === thread.id);
+        if (existingIndex < 0) {
+          return { ...prev, threads: [updatedThread, ...prev.threads] };
+        }
+        const threads = [...prev.threads];
+        threads[existingIndex] = { ...threads[existingIndex], ...updatedThread };
+        return { ...prev, threads };
+      });
+    };
+
+    const isThreadRecord = (value: unknown): value is Thread => {
+      return (
+        typeof value === 'object' &&
+        value !== null &&
+        typeof (value as Thread).id === 'string' &&
+        typeof (value as Thread).projectId === 'string' &&
+        typeof (value as Thread).status === 'string' &&
+        typeof (value as Thread).title === 'string' &&
+        typeof (value as Thread).prompt === 'string'
+      );
+    };
+
     unsubscribers.push(
       window.shipcode.on('pipeline:phase', (data) => {
         const store = useAppStore.getState();
@@ -88,10 +142,18 @@ export function useIpc() {
             .then((thread) => {
               const latest = useAppStore.getState();
               if (latest.activeProjectId !== selectedProjectId) return;
-              if (thread?.projectId !== selectedProjectId) return;
+              const threadProjectId =
+                typeof thread === 'object' && thread !== null
+                  ? (thread as Partial<Thread>).projectId
+                  : null;
+              if (threadProjectId !== selectedProjectId) return;
+              const fullThread = isThreadRecord(thread) ? thread : null;
+              if (fullThread) {
+                upsertThreadPanelThread(selectedProjectId, fullThread, data.phase);
+              }
               if (
                 data.phase === PIPELINE_PHASE.planning ||
-                (thread?.automationId && data.phase !== PIPELINE_PHASE.idle)
+                (fullThread?.automationId && data.phase !== PIPELINE_PHASE.idle)
               ) {
                 latest.openTerminal();
               }
@@ -115,6 +177,7 @@ export function useIpc() {
         if (store.activeProjectId) {
           const mappedStatus: IssuePipelineStatus =
             data.phase === PIPELINE_PHASE.idle ? ISSUE_PIPELINE_STATUS.todo : data.phase;
+          updateThreadPanelThreadStatus(store.activeProjectId, data.threadId, data.phase);
           queryClient.setQueryData<GitHubIssueCacheRecord[]>(
             ['github-issues', store.activeProjectId],
             (prev) =>

@@ -21,6 +21,7 @@ import type { BoardSortOrder, BoardView, ColumnKey, KanbanBoardProps } from './k
 import {
   compareIssues,
   customCollisionDetection,
+  isAutomationIssue,
   isIssueCreating,
   issueMatchesColumn,
   issueMatchesSection,
@@ -126,6 +127,7 @@ export function KanbanBoard({
   settings,
   threads = [],
   approvedAwaitingExecutionIssueIds,
+  flashingIssueIds,
   readOnly = false,
   keyboardShortcutsEnabled,
   onIssueClick,
@@ -241,7 +243,7 @@ export function KanbanBoard({
       new Map(
         boardIssues.map((issue) => [
           issue.id,
-          isIssueCreating(issue)
+          isIssueCreating(issue) || isAutomationIssue(issue)
             ? ''
             : formatIssueBranch(
                 issue.issueNumber,
@@ -431,12 +433,18 @@ export function KanbanBoard({
       if (
         focusedIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.todo &&
         onStartPipeline &&
-        !readOnly
+        !readOnly &&
+        !isAutomationIssue(focusedIssue)
       ) {
         onStartPipeline(focusedIssue);
         return;
       }
-      if (focusedIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.failed && onRerun && !readOnly) {
+      if (
+        focusedIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.failed &&
+        onRerun &&
+        !readOnly &&
+        !isAutomationIssue(focusedIssue)
+      ) {
         handleRerun(focusedIssue);
         return;
       }
@@ -600,6 +608,7 @@ export function KanbanBoard({
                       issueApprovalBadgeById={issueApprovalBadgeById}
                       issuePriorityBadgeById={issuePriorityBadgeById}
                       approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
+                      flashingIssueIds={flashingIssueIds}
                       readOnly={readOnly}
                     />
                   );
@@ -629,6 +638,7 @@ export function KanbanBoard({
                     issueApprovalBadgeById={issueApprovalBadgeById}
                     issuePriorityBadgeById={issuePriorityBadgeById}
                     approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
+                    flashingIssueIds={flashingIssueIds}
                     readOnly={readOnly}
                   />
                 );

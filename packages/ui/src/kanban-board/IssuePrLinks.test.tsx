@@ -173,6 +173,32 @@ describe('linked PR affordances', () => {
     inactiveView.cleanup();
   });
 
+  it('labels automation cards, flashes them, and hides GitHub-only actions', () => {
+    const view = renderIntoDom(
+      <DndContext>
+        <DraggableCard
+          issue={makeIssue({
+            id: 'automation:thread-1',
+            issueNumber: -1_000_001,
+            title: '[Auto] Nightly cleanup',
+            pipelineStatus: 'completed',
+            linkedPrNumber: null,
+            linkedPrUrl: null,
+          })}
+          isFlashing
+          onClick={vi.fn()}
+          onArchiveIssue={vi.fn()}
+        />
+      </DndContext>,
+    );
+
+    expect(view.container.textContent).toContain('Auto');
+    const card = view.container.querySelector('[data-issue-card-id="automation:thread-1"]');
+    expect(card?.className).toContain('animate-card-flash');
+    expect(view.container.querySelector('button[title="Archive issue"]')).toBeNull();
+    view.cleanup();
+  });
+
   it('opens the linked PR from a done card without triggering card selection', () => {
     const onClick = vi.fn();
     const onOpenPullRequest = vi.fn();

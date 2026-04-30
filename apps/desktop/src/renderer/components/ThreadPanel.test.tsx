@@ -4,6 +4,7 @@ import {
   DEFAULT_SETTINGS,
   type GitHubIssueCacheRecord,
   type Project,
+  type Thread,
   type ThreadPanelData,
 } from '@shipcode/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -139,6 +140,51 @@ function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
   };
 }
 
+function makeThread(overrides: Partial<Thread> = {}): Thread {
+  return {
+    id: 'thread-1',
+    projectId: project.id,
+    kind: 'pipeline',
+    title: 'Ship your first change with ShipCode',
+    prompt: 'Fix it',
+    status: 'executing',
+    worktreeBranch: null,
+    worktreePath: null,
+    plannerModel: 'claude',
+    reviewerModel: 'claude',
+    verifierModel: 'claude',
+    executorModel: 'claude',
+    reviewRound: 0,
+    clarificationRound: 0,
+    clarificationRequest: null,
+    clarificationAnswers: [],
+    answeredClarification: null,
+    verificationStatus: null,
+    verificationRetries: 0,
+    autonomous: true,
+    baseBranch: 'main',
+    forkPointSha: null,
+    githubIssueNumber: null,
+    githubPrNumber: null,
+    githubRepo: null,
+    automationId: null,
+    lastError: null,
+    failurePhase: null,
+    failureCount: 0,
+    createdAt: '2026-04-22T10:00:00.000Z',
+    updatedAt: '2026-04-22T10:00:00.000Z',
+    plannerResolvedModel: null,
+    reviewerResolvedModel: null,
+    revisorResolvedModel: null,
+    executorResolvedModel: null,
+    verifierResolvedModel: null,
+    totalTokensPrompt: 0,
+    totalTokensCompletion: 0,
+    totalCostUsd: 0,
+    ...overrides,
+  };
+}
+
 describe('ThreadPanel', () => {
   const invokeMock = vi.fn<(channel: string, args?: unknown) => Promise<unknown>>();
 
@@ -222,6 +268,42 @@ describe('ThreadPanel', () => {
 
     expect(await screen.findByText('Waiting For Execution')).toBeInTheDocument();
     expect(await screen.findByText('Approved waiter')).toBeInTheDocument();
+  });
+
+  it('renders automation runs as Kanban cards and opens their run detail', async () => {
+    const automationThread = makeThread({
+      id: 'automation-thread-1',
+      title: '[Auto] Nightly cleanup',
+      prompt: 'Run the nightly cleanup task.',
+      status: 'executing',
+      automationId: 'automation-1',
+    });
+
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'thread-panel:get-data') {
+        return {
+          ...panelData,
+          threads: [automationThread],
+        } satisfies ThreadPanelData;
+      }
+      if (channel === 'github:list-issues') return [];
+      return null;
+    });
+
+    renderWithProviders();
+
+    const title = await screen.findByText('[Auto] Nightly cleanup');
+    expect(screen.getByText('Auto')).toBeInTheDocument();
+
+    fireEvent.click(title);
+
+    await waitFor(() => {
+      const state = useAppStore.getState();
+      expect(state.activeAutomationThreadId).toBe(automationThread.id);
+      expect(state.activeThreadId).toBe(automationThread.id);
+      expect(state.terminalThreadId).toBe(automationThread.id);
+      expect(state.terminalVisible).toBe(true);
+    });
   });
 
   it('does not rerender on unrelated app-store updates', async () => {

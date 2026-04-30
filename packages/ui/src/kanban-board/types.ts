@@ -16,6 +16,7 @@ export interface KanbanBoardProps {
   settings?: AppSettings | null;
   threads?: Thread[];
   approvedAwaitingExecutionIssueIds?: ReadonlySet<string>;
+  flashingIssueIds?: ReadonlySet<string>;
   readOnly?: boolean;
   keyboardShortcutsEnabled?: boolean;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;

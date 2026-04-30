@@ -20,6 +20,7 @@ import type {
 } from './types';
 import {
   isApprovedAwaitingExecutionIssue,
+  isAutomationIssue,
   issueMatchesColumn,
   issueMatchesSection,
   sectionToneFor,
@@ -72,6 +73,7 @@ interface DroppableColumnProps {
   issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
   issuePriorityBadgeById: Map<string, IssuePriorityBadge | null>;
   approvedAwaitingExecutionIssueIds?: ReadonlySet<string>;
+  flashingIssueIds?: ReadonlySet<string>;
 }
 
 export function DroppableColumn({
@@ -97,9 +99,11 @@ export function DroppableColumn({
   issueApprovalBadgeById = EMPTY_APPROVAL_BADGE_MAP,
   issuePriorityBadgeById = EMPTY_PRIORITY_BADGE_MAP,
   approvedAwaitingExecutionIssueIds = EMPTY_APPROVED_AWAITING_EXECUTION,
+  flashingIssueIds,
 }: DroppableColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id, disabled: !droppable || readOnly });
   const hasIssues = issues.length > 0;
+  const hasArchivableIssues = issues.some((issue) => !isAutomationIssue(issue));
 
   return (
     <div
@@ -115,7 +119,7 @@ export function DroppableColumn({
           {label}
         </span>
         <div className="flex items-center gap-1">
-          {onArchiveAllDone && issues.length > 0 && (
+          {onArchiveAllDone && hasArchivableIssues && (
             <Button
               variant="ghost"
               size="icon-xs"
@@ -161,6 +165,7 @@ export function DroppableColumn({
             isKeyboardFocused={issue.id === focusedIssueId}
             onArchiveIssue={onArchiveIssue}
             readOnly={readOnly}
+            isFlashing={flashingIssueIds?.has(issue.id) ?? false}
           />
         ))}
       </div>
@@ -192,6 +197,7 @@ interface SectionBlockProps {
   issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
   issuePriorityBadgeById: Map<string, IssuePriorityBadge | null>;
   approvedAwaitingExecutionIssueIds?: ReadonlySet<string>;
+  flashingIssueIds?: ReadonlySet<string>;
 }
 
 function SectionBlock({
@@ -218,6 +224,7 @@ function SectionBlock({
   issueApprovalBadgeById = EMPTY_APPROVAL_BADGE_MAP,
   issuePriorityBadgeById = EMPTY_PRIORITY_BADGE_MAP,
   approvedAwaitingExecutionIssueIds = EMPTY_APPROVED_AWAITING_EXECUTION,
+  flashingIssueIds,
 }: SectionBlockProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: `${columnKey}:${section.key}`,
@@ -294,6 +301,7 @@ function SectionBlock({
               isRerunning={issue.id === rerunningId}
               onArchiveIssue={columnKey === 'done' ? onArchiveIssue : undefined}
               readOnly={readOnly}
+              isFlashing={flashingIssueIds?.has(issue.id) ?? false}
             />
           ))}
         </div>
@@ -332,6 +340,7 @@ interface StackedColumnProps {
   issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
   issuePriorityBadgeById: Map<string, IssuePriorityBadge | null>;
   approvedAwaitingExecutionIssueIds?: ReadonlySet<string>;
+  flashingIssueIds?: ReadonlySet<string>;
 }
 
 export function StackedColumn({
@@ -356,6 +365,7 @@ export function StackedColumn({
   issueApprovalBadgeById = EMPTY_APPROVAL_BADGE_MAP,
   issuePriorityBadgeById = EMPTY_PRIORITY_BADGE_MAP,
   approvedAwaitingExecutionIssueIds = EMPTY_APPROVED_AWAITING_EXECUTION,
+  flashingIssueIds,
 }: StackedColumnProps) {
   const columnIssues = useMemo(
     () =>
@@ -377,6 +387,7 @@ export function StackedColumn({
     [approvedAwaitingExecutionIssueIds, column.sections, columnIssues],
   );
   const hasIssues = columnIssues.length > 0;
+  const hasArchivableIssues = columnIssues.some((issue) => !isAutomationIssue(issue));
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
 
   const toggleSection = useCallback((key: string) => {
@@ -391,7 +402,7 @@ export function StackedColumn({
           {column.label}
         </span>
         <div className="flex items-center gap-1">
-          {onArchiveAllDone && column.key === 'done' && columnIssues.length > 0 && (
+          {onArchiveAllDone && column.key === 'done' && hasArchivableIssues && (
             <Button
               variant="ghost"
               size="icon-xs"
@@ -441,6 +452,7 @@ export function StackedColumn({
             issueApprovalBadgeById={issueApprovalBadgeById}
             issuePriorityBadgeById={issuePriorityBadgeById}
             approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
+            flashingIssueIds={flashingIssueIds}
           />
         ))}
       </div>

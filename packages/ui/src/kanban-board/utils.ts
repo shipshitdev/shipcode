@@ -46,6 +46,12 @@ export function isIssueCreating(issue: GitHubIssueCacheRecord): boolean {
   return issue.syncState === 'creating';
 }
 
+export const AUTOMATION_ISSUE_NUMBER_BASE = -1_000_000;
+
+export function isAutomationIssue(issue: GitHubIssueCacheRecord): boolean {
+  return !issue.isQuickMode && issue.issueNumber <= AUTOMATION_ISSUE_NUMBER_BASE;
+}
+
 export function issueMatchesColumn(
   issue: GitHubIssueCacheRecord,
   column: Pick<BoardColumn, 'key' | 'statuses'>,
@@ -156,6 +162,7 @@ export function resolveIssueRevisionBadge(
   project: Project | null | undefined,
   thread: Thread | null | undefined,
 ): IssueRevisionBadge | null {
+  if (isAutomationIssue(issue)) return null;
   if (!settings) return null;
   const revisionCount = resolveRevisionCountForIssue(settings, project, issue);
 
@@ -249,6 +256,7 @@ export function resolveIssueApprovalBadge(
   settings: AppSettings | null | undefined,
   project: Project | null | undefined,
 ): IssueApprovalBadge | null {
+  if (isAutomationIssue(issue)) return null;
   if (!settings) return null;
   if (
     issue.pipelineStatus === ISSUE_PIPELINE_STATUS.completed ||
