@@ -14,8 +14,7 @@ export type ShortcutId =
   | 'toggle-terminal'
   | 'toggle-sidebar'
   | 'toggle-issue-detail'
-  | 'new-claude-shell'
-  | 'new-codex-shell'
+  | 'open-project-terminal'
   | 'new-issue'
   | 'board-focus-next'
   | 'board-focus-previous'
@@ -85,20 +84,12 @@ export const SHORTCUTS: ShortcutDef[] = [
     combo: { meta: true, key: 'j' },
   },
   {
-    id: 'new-claude-shell',
-    label: 'New Claude Shell',
-    description: 'Start a Claude CLI shell in the current project',
+    id: 'open-project-terminal',
+    label: 'Open Terminal',
+    description: 'Open the configured terminal in the current project',
     category: 'Navigation',
-    glyph: '⇧⌘C',
-    combo: { meta: true, shift: true, key: 'c' },
-  },
-  {
-    id: 'new-codex-shell',
-    label: 'New Codex Shell',
-    description: 'Start a Codex CLI shell in the current project',
-    category: 'Navigation',
-    glyph: '⇧⌘X',
-    combo: { meta: true, shift: true, key: 'x' },
+    glyph: '⇧⌘T',
+    combo: { meta: true, shift: true, key: 't' },
   },
   {
     id: 'new-issue',

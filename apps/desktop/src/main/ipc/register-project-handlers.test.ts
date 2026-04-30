@@ -427,6 +427,30 @@ describe('registerProjectHandlers', () => {
     });
   });
 
+  it('opens the configured terminal target when requested as the default terminal', async () => {
+    await withDarwin(async () => {
+      const project = { ...baseProject, path: '/tmp/ShipCode Worktree' };
+      const existsSpy = vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+      vi.mocked(checkDesktopApps).mockResolvedValue(makeDesktopApps() as never);
+
+      const { openPath, queries } = registerOpenPathHandler(project);
+      queries.settings.get.mockReturnValue({
+        projectOpenTarget: 'cursor',
+        terminalOpenTarget: 'ghostty',
+      });
+
+      await openPath(undefined, { projectId: project.id, target: 'default-terminal' });
+
+      expect(execFileMock).toHaveBeenCalledWith(
+        'open',
+        ['-na', 'Ghostty', '--args', '--working-directory=/tmp/ShipCode Worktree'],
+        { timeout: 10_000 },
+        expect.any(Function),
+      );
+      existsSpy.mockRestore();
+    });
+  });
+
   it('seeds a starter issue on first GitHub-backed project import', async () => {
     let project = { ...baseProject };
     let issues: Array<{ issueNumber: number; title: string }> = [];

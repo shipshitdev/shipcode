@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 
-import { DEFAULT_SETTINGS, type Thread } from '@shipcode/shared';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Profiler } from 'react';
@@ -10,35 +9,23 @@ import { InstantView } from './InstantView';
 
 vi.mock('./instant-terminal/InstantTerminalPane', () => ({
   InstantTerminalPane: ({
-    threadId,
     title,
-    mode,
-    paneState,
-    restartPending,
-    restartError,
-    onRestart,
+    onClose,
   }: {
     threadId: string;
     title: string;
     mode: 'live' | 'replay';
     paneState?: string;
-    restartPending: boolean;
-    restartError: string | null;
-    onRestart: (threadId: string) => void;
-  }) => {
-    const canRestart = mode === 'live' && paneState === 'exited';
-    return (
-      <div>
-        <span>{title}</span>
-        {canRestart ? (
-          <button type="button" onClick={() => void onRestart(threadId)} disabled={restartPending}>
-            Restart shell
-          </button>
-        ) : null}
-        {restartError ? <span>{restartError}</span> : null}
-      </div>
-    );
-  },
+    onClose: (threadId: string, isRunning: boolean) => void;
+    onCancel: (threadId: string) => void;
+  }) => (
+    <div>
+      <span>{title}</span>
+      <button type="button" onClick={() => onClose('thread-live', false)}>
+        Close pane
+      </button>
+    </div>
+  ),
 }));
 
 afterEach(() => {
@@ -56,19 +43,7 @@ describe('InstantView', () => {
       on: vi.fn(() => () => {}) as unknown as typeof window.shipcode.on,
     };
 
-    invokeMock.mockImplementation(async (channel: string) => {
-      if (channel === 'thread:get') {
-        return {
-          id: 'thread-live',
-          projectId: 'project-1',
-          prompt: 'Pick up where we left off',
-        } satisfies Partial<Thread>;
-      }
-      if (channel === 'instant:shell-start') {
-        return { threadId: 'thread-restarted' };
-      }
-      return null;
-    });
+    invokeMock.mockResolvedValue(null);
 
     useAppStore.setState({
       activeProjectId: 'project-1',
@@ -85,16 +60,7 @@ describe('InstantView', () => {
     } as never);
   });
 
-  it('starts Claude and Codex shells directly from the empty state', async () => {
-    invokeMock.mockImplementation(async (channel: string, args?: unknown) => {
-      if (channel === 'settings:get') return DEFAULT_SETTINGS;
-      if (channel === 'project:get') return null;
-      if (channel === 'instant:shell-start') {
-        const cli = (args as { cli: 'claude' | 'codex' }).cli;
-        return { threadId: `thread-${cli}` };
-      }
-      return null;
-    });
+  it('opens the configured terminal from the empty state', async () => {
     useAppStore.setState({
       activeProjectId: 'project-1',
       instantPaneThreadIds: [],
@@ -104,54 +70,25 @@ describe('InstantView', () => {
 
     render(<InstantView />);
 
-    expect(screen.queryByText('New Terminal Session')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Claude CLI/i }));
+    expect(screen.queryByRole('button', { name: /Claude CLI/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Codex CLI/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Terminal' }));
 
     await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith('instant:shell-start', {
+      expect(invokeMock).toHaveBeenCalledWith('project:open-path', {
         projectId: 'project-1',
-        cli: 'claude',
-        modelId: null,
-        reasoningEffort: 'medium',
+        target: 'default-terminal',
       });
     });
-    expect(useAppStore.getState().instantPaneThreadIds).toEqual(['thread-claude']);
-
-    fireEvent.click(screen.getByRole('button', { name: /Codex/i }));
-
-    await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith('instant:shell-start', {
-        projectId: 'project-1',
-        cli: 'codex',
-        modelId: null,
-        reasoningEffort: 'high',
-      });
-    });
-    expect(useAppStore.getState().instantPaneThreadIds).toEqual(['thread-claude', 'thread-codex']);
+    expect(invokeMock).not.toHaveBeenCalledWith('instant:shell-start', expect.anything());
   });
 
-  it('restarts a finished live shell into a fresh pane', async () => {
+  it('keeps existing session panes visible', () => {
     render(<InstantView />);
 
-    fireEvent.click(screen.getByRole('button', { name: /restart shell/i }));
-
-    await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith('thread:get', { threadId: 'thread-live' });
-      expect(invokeMock).toHaveBeenCalledWith('instant:shell-start', {
-        projectId: 'project-1',
-        cli: 'claude',
-        initialPrompt: 'Pick up where we left off',
-      });
-    });
-
-    expect(useAppStore.getState().instantPaneThreadIds).toEqual(['thread-restarted']);
-    expect(useAppStore.getState().instantPaneMetaByThread['thread-live']).toBeUndefined();
-    expect(useAppStore.getState().instantPaneMetaByThread['thread-restarted']).toEqual({
-      mode: 'live',
-      cli: 'claude',
-      title: 'Claude • Pick up where we left off',
-      state: 'running',
-    });
+    expect(screen.getByText('Claude shell')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Terminal' })).toBeInTheDocument();
   });
 
   it('does not rerender the sessions grid when unrelated terminal streams update', () => {

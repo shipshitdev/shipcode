@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { getShortcut, matchesShortcut, SHORTCUTS, type ShortcutId } from '../data/shortcuts';
 import { useAppStore } from '../stores/app-store';
-import { type InstantShellCli, useStartInstantShell } from './useStartInstantShell';
+import { useOpenProjectTerminal } from './useOpenProjectTerminal';
 
 export function useGlobalKeyboard() {
   const toggleCommandPalette = useAppStore((s) => s.toggleCommandPalette);
@@ -9,12 +9,12 @@ export function useGlobalKeyboard() {
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const toggleIssueDetail = useAppStore((s) => s.toggleIssueDetail);
   const openCreateIssueModal = useAppStore((s) => s.openCreateIssueModal);
-  const { startInstantShell } = useStartInstantShell();
+  const { openProjectTerminal } = useOpenProjectTerminal();
 
   useEffect(() => {
-    const startShell = (cli: InstantShellCli) => {
-      void startInstantShell(cli).catch((error) => {
-        window.alert(error instanceof Error ? error.message : `Failed to start ${cli} shell`);
+    const openTerminal = () => {
+      void openProjectTerminal().catch((error) => {
+        window.alert(error instanceof Error ? error.message : 'Failed to open terminal');
       });
     };
     const actions: Partial<Record<ShortcutId, () => void>> = {
@@ -22,8 +22,7 @@ export function useGlobalKeyboard() {
       'toggle-terminal': toggleTerminal,
       'toggle-sidebar': toggleSidebar,
       'toggle-issue-detail': toggleIssueDetail,
-      'new-claude-shell': () => startShell('claude'),
-      'new-codex-shell': () => startShell('codex'),
+      'open-project-terminal': openTerminal,
       'new-issue': openCreateIssueModal,
     };
 
@@ -53,6 +52,6 @@ export function useGlobalKeyboard() {
     toggleSidebar,
     toggleIssueDetail,
     openCreateIssueModal,
-    startInstantShell,
+    openProjectTerminal,
   ]);
 }

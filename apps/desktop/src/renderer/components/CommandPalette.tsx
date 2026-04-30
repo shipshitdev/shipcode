@@ -12,7 +12,7 @@ import {
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { getShortcut } from '../data/shortcuts';
-import { type InstantShellCli, useStartInstantShell } from '../hooks/useStartInstantShell';
+import { useOpenProjectTerminal } from '../hooks/useOpenProjectTerminal';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 
@@ -39,7 +39,7 @@ export function CommandPalette() {
   const selectProject = useAppStore((state) => state.selectProject);
   const openProjectSettingsModal = useAppStore((state) => state.openProjectSettingsModal);
   const navigateToIssue = useAppStore((state) => state.navigateToIssue);
-  const { startInstantShell } = useStartInstantShell();
+  const { openProjectTerminal } = useOpenProjectTerminal();
 
   // Cross-project issue search — only fetches when palette is open
   const { data: allProjects = [] } = useQuery<Project[]>({
@@ -107,10 +107,10 @@ export function CommandPalette() {
     close();
     fn();
   };
-  const runShellAction = (cli: InstantShellCli) => {
+  const runOpenTerminalAction = () => {
     runAction(() => {
-      void startInstantShell(cli).catch((error) => {
-        window.alert(error instanceof Error ? error.message : `Failed to start ${cli} shell`);
+      void openProjectTerminal().catch((error) => {
+        window.alert(error instanceof Error ? error.message : 'Failed to open terminal');
       });
     });
   };
@@ -217,13 +217,9 @@ export function CommandPalette() {
         )}
 
         <CommandGroup heading="Quick Actions">
-          <CommandItem disabled={!activeProjectId} onSelect={() => runShellAction('claude')}>
-            <span className="flex-1">New Claude Shell</span>
-            <CommandShortcut>{getShortcut('new-claude-shell').glyph}</CommandShortcut>
-          </CommandItem>
-          <CommandItem disabled={!activeProjectId} onSelect={() => runShellAction('codex')}>
-            <span className="flex-1">New Codex Shell</span>
-            <CommandShortcut>{getShortcut('new-codex-shell').glyph}</CommandShortcut>
+          <CommandItem disabled={!activeProjectId} onSelect={runOpenTerminalAction}>
+            <span className="flex-1">Open Terminal</span>
+            <CommandShortcut>{getShortcut('open-project-terminal').glyph}</CommandShortcut>
           </CommandItem>
         </CommandGroup>
 

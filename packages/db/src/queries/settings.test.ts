@@ -37,6 +37,7 @@ describe('SettingsQueries', () => {
     expect(s.onboardingVersion).toBe(0);
     expect(s.worktreeRoot).toBeNull();
     expect(s.projectOpenTarget).toBe('cursor');
+    expect(s.terminalOpenTarget).toBe('terminal');
     expect(s.updateTrack).toBe('master');
   });
 
@@ -92,6 +93,7 @@ describe('SettingsQueries', () => {
       fontSize: 15,
       terminalScrollback: 5000,
       projectOpenTarget: 'finder',
+      terminalOpenTarget: 'ghostty',
       prdRewriteCli: 'codex',
       prdRewriteClaudeModel: 'claude-opus-4-6',
       prdRewriteCodexModel: 'gpt-5.4',
@@ -104,6 +106,7 @@ describe('SettingsQueries', () => {
     expect(s.fontSize).toBe(15);
     expect(s.terminalScrollback).toBe(5000);
     expect(s.projectOpenTarget).toBe('finder');
+    expect(s.terminalOpenTarget).toBe('ghostty');
     expect(s.prdRewriteCli).toBe('codex');
     expect(s.prdRewriteClaudeModel).toBe('claude-opus-4-6');
     expect(s.prdRewriteCodexModel).toBe('gpt-5.4');
@@ -141,6 +144,7 @@ describe('SettingsQueries', () => {
       autoPickupEnabled: true,
       onboardingVersion: 3,
       projectOpenTarget: 'vscode',
+      terminalOpenTarget: 'terminal',
     });
     const s = settings.get();
     expect(s.theme).toBe('light');
@@ -159,11 +163,18 @@ describe('SettingsQueries', () => {
     expect(s.onboardingVersion).toBe(3);
     expect(typeof s.onboardingVersion).toBe('number');
     expect(s.projectOpenTarget).toBe('vscode');
+    expect(s.terminalOpenTarget).toBe('terminal');
   });
 
   it('rejects invalid project opener values', () => {
     expect(() => settings.set({ projectOpenTarget: 'zed' as unknown as 'cursor' })).toThrow(
       /projectOpenTarget/,
+    );
+  });
+
+  it('rejects invalid terminal opener values', () => {
+    expect(() => settings.set({ terminalOpenTarget: 'cursor' as unknown as 'terminal' })).toThrow(
+      /terminalOpenTarget/,
     );
   });
 

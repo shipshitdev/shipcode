@@ -83,17 +83,12 @@ describe('TerminalDrawerHeader', () => {
         approvedAwaitingExecution={false}
         currentModel="gpt-5.4"
         displayTarget={issueTarget(issue)}
-        ghosttyAvailable={false}
         isMaximized={false}
         pipelinePhase="executing"
         runningTargets={[issueTarget(issue)]}
         startedAt="2m 10s"
-        terminalAvailable={false}
         terminalThreadId={issue.threadId}
-        onNewClaudeSession={() => {}}
-        onNewCodexSession={() => {}}
-        onOpenInGhostty={() => {}}
-        onOpenInTerminalApp={() => {}}
+        onOpenProjectTerminal={() => {}}
         onOpenTarget={onOpenIssue}
         onToggleMaximize={onToggleMaximize}
         onToggleTerminal={onToggleTerminal}
@@ -131,17 +126,12 @@ describe('TerminalDrawerHeader', () => {
         approvedAwaitingExecution={false}
         currentModel={null}
         displayTarget={issueTarget(issueA)}
-        ghosttyAvailable={false}
         isMaximized={true}
         pipelinePhase="idle"
         runningTargets={[issueTarget(issueA), issueTarget(issueB)]}
         startedAt={null}
-        terminalAvailable={false}
         terminalThreadId={issueA.threadId}
-        onNewClaudeSession={() => {}}
-        onNewCodexSession={() => {}}
-        onOpenInGhostty={() => {}}
-        onOpenInTerminalApp={() => {}}
+        onOpenProjectTerminal={() => {}}
         onOpenTarget={onOpenIssue}
         onToggleMaximize={vi.fn()}
         onToggleTerminal={vi.fn()}
@@ -158,10 +148,9 @@ describe('TerminalDrawerHeader', () => {
     expect(onOpenIssue).toHaveBeenCalledWith(issueTarget(issueB));
   });
 
-  it('renders direct CLI shell buttons and disables unavailable external terminals', async () => {
+  it('renders one configured terminal opener action', () => {
     const issue = makeIssue();
-    const onNewClaudeSession = vi.fn();
-    const onNewCodexSession = vi.fn();
+    const onOpenProjectTerminal = vi.fn();
 
     render(
       <TerminalDrawerHeader
@@ -169,34 +158,23 @@ describe('TerminalDrawerHeader', () => {
         approvedAwaitingExecution={false}
         currentModel={null}
         displayTarget={issueTarget(issue)}
-        ghosttyAvailable={false}
         isMaximized={false}
         pipelinePhase="idle"
         runningTargets={[issueTarget(issue)]}
         startedAt={null}
-        terminalAvailable={false}
         terminalThreadId={issue.threadId}
-        onNewClaudeSession={onNewClaudeSession}
-        onNewCodexSession={onNewCodexSession}
-        onOpenInGhostty={() => {}}
-        onOpenInTerminalApp={() => {}}
+        onOpenProjectTerminal={onOpenProjectTerminal}
         onOpenTarget={() => {}}
         onToggleMaximize={() => {}}
         onToggleTerminal={() => {}}
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'New Claude shell' }));
-    fireEvent.click(screen.getByRole('button', { name: 'New Codex shell' }));
+    expect(screen.queryByRole('button', { name: /claude/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /codex/i })).not.toBeInTheDocument();
 
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Open external terminal' }));
-    const ghosttyItem = screen.getByText('Open in Ghostty').closest('[role="menuitem"]');
-    const terminalItem = screen.getByText('Open in Terminal.app').closest('[role="menuitem"]');
-    expect(ghosttyItem).toHaveAttribute('aria-disabled', 'true');
-    expect(terminalItem).toHaveAttribute('aria-disabled', 'true');
-
-    expect(onNewClaudeSession).toHaveBeenCalledTimes(1);
-    expect(onNewCodexSession).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Terminal' }));
+    expect(onOpenProjectTerminal).toHaveBeenCalledTimes(1);
   });
 
   it('renders waiting-for-slot copy for approved execution waiters', () => {
@@ -208,17 +186,12 @@ describe('TerminalDrawerHeader', () => {
         approvedAwaitingExecution
         currentModel={null}
         displayTarget={issueTarget(issue)}
-        ghosttyAvailable={false}
         isMaximized={false}
         pipelinePhase="awaiting_approval"
         runningTargets={[issueTarget(issue)]}
         startedAt={null}
-        terminalAvailable={false}
         terminalThreadId={issue.threadId}
-        onNewClaudeSession={() => {}}
-        onNewCodexSession={() => {}}
-        onOpenInGhostty={() => {}}
-        onOpenInTerminalApp={() => {}}
+        onOpenProjectTerminal={() => {}}
         onOpenTarget={() => {}}
         onToggleMaximize={() => {}}
         onToggleTerminal={() => {}}
@@ -245,17 +218,12 @@ describe('TerminalDrawerHeader', () => {
         approvedAwaitingExecution={false}
         currentModel="gpt-5.4"
         displayTarget={target}
-        ghosttyAvailable={false}
         isMaximized={false}
         pipelinePhase="testing"
         runningTargets={[target]}
         startedAt="21:26:15"
-        terminalAvailable={false}
         terminalThreadId={target.threadId}
-        onNewClaudeSession={() => {}}
-        onNewCodexSession={() => {}}
-        onOpenInGhostty={() => {}}
-        onOpenInTerminalApp={() => {}}
+        onOpenProjectTerminal={() => {}}
         onOpenTarget={vi.fn()}
         onToggleMaximize={() => {}}
         onToggleTerminal={() => {}}

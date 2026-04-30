@@ -35,12 +35,7 @@ describe('InstantTerminalPane', () => {
         mode="live"
         paneState="running"
         onClose={vi.fn()}
-        onSplitHorizontal={vi.fn()}
-        onSplitVertical={vi.fn()}
         onCancel={vi.fn()}
-        onRestart={vi.fn(async () => {})}
-        restartPending={false}
-        restartError={null}
       />,
     );
 
@@ -73,12 +68,7 @@ describe('InstantTerminalPane', () => {
         mode="live"
         paneState="running"
         onClose={vi.fn()}
-        onSplitHorizontal={vi.fn()}
-        onSplitVertical={vi.fn()}
         onCancel={vi.fn()}
-        onRestart={vi.fn(async () => {})}
-        restartPending={false}
-        restartError={null}
       />,
     );
 

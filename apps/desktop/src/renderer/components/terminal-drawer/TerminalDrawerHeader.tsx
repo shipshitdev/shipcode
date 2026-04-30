@@ -4,18 +4,14 @@ import {
   Button,
   ChevronDown,
   ChevronUp,
-  Code2,
   cn,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  Ghost,
-  Sparkles,
   Terminal,
   X,
 } from '@shipshitdev/ui';
-import type { ReactNode } from 'react';
 import type { TerminalDrawerTarget } from './constants';
 
 interface TerminalDrawerHeaderProps {
@@ -23,34 +19,15 @@ interface TerminalDrawerHeaderProps {
   approvedAwaitingExecution?: boolean;
   currentModel: string | null;
   displayTarget: TerminalDrawerTarget | null;
-  ghosttyAvailable: boolean;
   isMaximized: boolean;
   pipelinePhase: PipelinePhase;
   runningTargets: TerminalDrawerTarget[];
   startedAt: string | null;
-  terminalAvailable: boolean;
   terminalThreadId: string | null;
-  onNewClaudeSession: () => void;
-  onNewCodexSession: () => void;
-  onOpenInGhostty: () => void;
-  onOpenInTerminalApp: () => void;
+  onOpenProjectTerminal: () => void;
   onOpenTarget: (target: TerminalDrawerTarget) => void;
   onToggleMaximize: () => void;
   onToggleTerminal: () => void;
-}
-
-function MenuLogo({ children, className }: { children: ReactNode; className: string }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={cn(
-        'flex h-5 w-5 shrink-0 items-center justify-center rounded-[6px] border bg-primary/70',
-        className,
-      )}
-    >
-      {children}
-    </span>
-  );
 }
 
 export function TerminalDrawerHeader({
@@ -58,17 +35,12 @@ export function TerminalDrawerHeader({
   approvedAwaitingExecution = false,
   currentModel,
   displayTarget,
-  ghosttyAvailable,
   isMaximized,
   pipelinePhase,
   runningTargets,
   startedAt,
-  terminalAvailable,
   terminalThreadId,
-  onNewClaudeSession,
-  onNewCodexSession,
-  onOpenInGhostty,
-  onOpenInTerminalApp,
+  onOpenProjectTerminal,
   onOpenTarget,
   onToggleMaximize,
   onToggleTerminal,
@@ -155,53 +127,15 @@ export function TerminalDrawerHeader({
         <Button
           variant="ghost"
           size="xs"
-          className="h-6 gap-1 px-2 text-warning hover:bg-warning/10 hover:text-warning"
+          className="h-6 gap-1 px-2"
           disabled={!activeProjectId}
-          onClick={onNewClaudeSession}
-          title="New Claude shell"
-          aria-label="New Claude shell"
+          onClick={onOpenProjectTerminal}
+          title="Open Terminal"
+          aria-label="Open Terminal"
         >
-          <Sparkles size={13} />
-          <span className="hidden sm:inline">Claude</span>
+          <Terminal size={13} />
+          <span className="hidden sm:inline">Terminal</span>
         </Button>
-        <Button
-          variant="ghost"
-          size="xs"
-          className="h-6 gap-1 px-2 text-agent hover:bg-agent/10 hover:text-agent"
-          disabled={!activeProjectId}
-          onClick={onNewCodexSession}
-          title="New Codex shell"
-          aria-label="New Codex shell"
-        >
-          <Code2 size={13} />
-          <span className="hidden sm:inline">Codex</span>
-        </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              title="Open external terminal"
-              aria-label="Open external terminal"
-            >
-              <Terminal size={14} />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" side="top">
-            <DropdownMenuItem onSelect={onOpenInGhostty} disabled={!ghosttyAvailable}>
-              <MenuLogo className="border-accent/25 text-accent">
-                <Ghost size={13} />
-              </MenuLogo>
-              <span>Open in Ghostty</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={onOpenInTerminalApp} disabled={!terminalAvailable}>
-              <MenuLogo className="border-success/25 text-success">
-                <Terminal size={13} />
-              </MenuLogo>
-              <span>Open in Terminal.app</span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
 
         <Button
           variant="ghost"

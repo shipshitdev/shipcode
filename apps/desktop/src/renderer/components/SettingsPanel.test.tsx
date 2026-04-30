@@ -380,9 +380,11 @@ describe('SettingsPanel', () => {
     fireEvent.mouseDown(ideTab, { button: 0 });
     fireEvent.click(ideTab);
 
-    expect(await screen.findByText('Project opener')).toBeInTheDocument();
+    expect(await screen.findByText('Terminal opener')).toBeInTheDocument();
+    expect(screen.getByLabelText('Default terminal')).toBeInTheDocument();
+    expect(screen.getByText('Project opener')).toBeInTheDocument();
     expect(screen.getByLabelText('Default app')).toBeInTheDocument();
     expect(screen.getByText('Visual Studio Code')).toBeInTheDocument();
-    expect(screen.getByText('Ghostty')).toBeInTheDocument();
+    expect(screen.getAllByText('Ghostty').length).toBeGreaterThan(0);
   });
 });
