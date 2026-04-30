@@ -115,7 +115,7 @@ export interface IpcInvokeChannels {
     result: Project;
   };
   'project:open-path': {
-    args: { projectId: string; target: ProjectOpenTarget | 'default' };
+    args: { projectId: string; target: ProjectOpenTarget | 'default' | 'default-terminal' };
     result: undefined;
   };
   'project:set-model-overrides': {

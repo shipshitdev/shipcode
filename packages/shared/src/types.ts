@@ -594,6 +594,7 @@ export interface AppSettings {
   defaultWorktreeEnabled: boolean;
   terminalScrollback: number;
   projectOpenTarget: ProjectOpenTarget;
+  terminalOpenTarget: TerminalOpenTarget;
   plannerModel: AgentType;
   reviewerModel: AgentType;
   verifierModel: AgentType;
@@ -925,6 +926,7 @@ export interface WritingPrdsSkillInfo {
 }
 
 export type ProjectOpenTarget = 'cursor' | 'finder' | 'terminal' | 'ghostty' | 'vscode';
+export type TerminalOpenTarget = Extract<ProjectOpenTarget, 'terminal' | 'ghostty'>;
 
 export interface DesktopAppHealth {
   key: ProjectOpenTarget;

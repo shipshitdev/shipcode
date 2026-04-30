@@ -57,6 +57,7 @@ function readNullable(raw: string | undefined): string | null {
 
 const REASONING_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'] as const;
 const PROJECT_OPEN_TARGETS = ['cursor', 'finder', 'terminal', 'ghostty', 'vscode'] as const;
+const TERMINAL_OPEN_TARGETS = ['terminal', 'ghostty'] as const;
 const FONT_SIZES = [12, 13, 14, 15] as const;
 const GENERATOR_CLIS = ['claude', 'codex'] as const;
 const DEV_LOG_LEVELS = ['error', 'warn', 'info', 'debug'] as const;
@@ -91,6 +92,10 @@ function isReasoningEffort(value: unknown): value is AppSettings['plannerReasoni
 
 function isProjectOpenTarget(value: unknown): value is AppSettings['projectOpenTarget'] {
   return typeof value === 'string' && (PROJECT_OPEN_TARGETS as readonly string[]).includes(value);
+}
+
+function isTerminalOpenTarget(value: unknown): value is AppSettings['terminalOpenTarget'] {
+  return typeof value === 'string' && (TERMINAL_OPEN_TARGETS as readonly string[]).includes(value);
 }
 
 function isFontSize(value: unknown): value is AppSettings['fontSize'] {
@@ -132,6 +137,9 @@ export class SettingsQueries {
       projectOpenTarget: isProjectOpenTarget(stored.projectOpenTarget)
         ? stored.projectOpenTarget
         : DEFAULT_SETTINGS.projectOpenTarget,
+      terminalOpenTarget: isTerminalOpenTarget(stored.terminalOpenTarget)
+        ? stored.terminalOpenTarget
+        : DEFAULT_SETTINGS.terminalOpenTarget,
       plannerModel:
         (stored.plannerModel as AppSettings['plannerModel']) ?? DEFAULT_SETTINGS.plannerModel,
       reviewerModel:
@@ -289,6 +297,11 @@ export class SettingsQueries {
     if ('projectOpenTarget' in patch && patch.projectOpenTarget != null) {
       if (!isProjectOpenTarget(patch.projectOpenTarget)) {
         throw new Error('projectOpenTarget must be cursor|finder|terminal|ghostty|vscode');
+      }
+    }
+    if ('terminalOpenTarget' in patch && patch.terminalOpenTarget != null) {
+      if (!isTerminalOpenTarget(patch.terminalOpenTarget)) {
+        throw new Error('terminalOpenTarget must be terminal|ghostty');
       }
     }
     if ('fontSize' in patch && patch.fontSize != null) {

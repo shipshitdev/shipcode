@@ -77,6 +77,7 @@ export function IntegrationsSettingsSection({
     ghostty: 'Ghostty',
     vscode: 'Visual Studio Code',
   };
+  const terminalOpenTargets: AppSettings['terminalOpenTarget'][] = ['terminal', 'ghostty'];
   const getDesktopApp = (target: ProjectOpenTarget): DesktopAppHealth =>
     integrationStatus?.desktopApps?.[target] ?? {
       key: target,
@@ -85,6 +86,69 @@ export function IntegrationsSettingsSection({
       path: null,
       error: null,
     };
+  const terminalOpenerSection = (
+    <section className="mb-6 rounded-md border border-border bg-secondary/40 p-3">
+      <div className="mb-3">
+        <div className="text-[13px] font-medium text-primary">Terminal opener</div>
+        <div className="text-[11px] text-muted">
+          Choose the terminal ShipCode opens from Sessions and the console drawer.
+        </div>
+      </div>
+
+      <div className="mb-4 flex max-w-[260px] flex-col gap-1.5">
+        <label htmlFor="terminal-open-target" className="text-[11px] text-secondary">
+          Default terminal
+        </label>
+        <Select
+          value={settings.terminalOpenTarget}
+          onValueChange={(value) =>
+            onUpdate({ terminalOpenTarget: value as AppSettings['terminalOpenTarget'] })
+          }
+        >
+          <SelectTrigger id="terminal-open-target">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {terminalOpenTargets.map((target) => {
+              const app = getDesktopApp(target);
+              return (
+                <SelectItem key={target} value={target} disabled={!app.available}>
+                  {app.label}
+                  {!app.available ? ' (Unavailable)' : ''}
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        {terminalOpenTargets.map((target) => {
+          const app = getDesktopApp(target);
+          return (
+            <div key={target} className="rounded-md border border-border bg-primary/40 p-3">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-[140px] text-[13px] font-medium text-primary">
+                  {app.label}
+                </div>
+                <StatusPill tone={app.available ? 'success' : 'neutral'}>
+                  {app.available ? 'Available' : 'Unavailable'}
+                </StatusPill>
+              </div>
+              <div className="mt-2 space-y-1 text-[12px] text-secondary">
+                {app.path ? (
+                  <div>
+                    Path: <code>{app.path}</code>
+                  </div>
+                ) : null}
+                {app.error ? <div className="text-amber-300">{app.error}</div> : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
   const projectOpenerSection = (
     <section className="mb-6 rounded-md border border-border bg-secondary/40 p-3">
       <div className="mb-3">
@@ -503,6 +567,7 @@ export function IntegrationsSettingsSection({
           </TabsContent>
 
           <TabsContent value="ide" className="mt-0">
+            {terminalOpenerSection}
             {projectOpenerSection}
           </TabsContent>
         </Tabs>

@@ -1,5 +1,5 @@
 import { type AgentState, formatDurationSeconds, type TerminalEventRecord } from '@shipcode/shared';
-import { Badge, Button, Columns2, RefreshCw, Rows2, Square, X } from '@shipshitdev/ui';
+import { Badge, Button, Square, X } from '@shipshitdev/ui';
 import { useMemo } from 'react';
 import { useSharedSecondNow } from '../../hooks/useSharedSecondNow';
 import type { InstantPaneMode } from '../../stores/app-store';
@@ -17,12 +17,7 @@ interface InstantTerminalPaneProps {
   mode: InstantPaneMode;
   paneState?: AgentState;
   onClose: (threadId: string, isRunning: boolean) => void;
-  onSplitHorizontal: () => void;
-  onSplitVertical: () => void;
   onCancel: (threadId: string) => void;
-  onRestart: (threadId: string) => void;
-  restartPending: boolean;
-  restartError: string | null;
 }
 
 export function InstantTerminalPane({
@@ -31,12 +26,7 @@ export function InstantTerminalPane({
   mode,
   paneState,
   onClose,
-  onSplitHorizontal,
-  onSplitVertical,
   onCancel,
-  onRestart,
-  restartPending,
-  restartError,
 }: InstantTerminalPaneProps) {
   const shouldReadStream = mode !== 'live' || paneState == null;
   const canonicalStream = useAppStore((s) =>
@@ -50,7 +40,6 @@ export function InstantTerminalPane({
       : lastEvent?.kind === 'lifecycle' && lastEvent.message.includes('process exited')
         ? false
         : lastEvent?.kind !== 'done';
-  const canRestart = mode === 'live' && !isRunning;
   const { containerRef } = useInstantTerminalPane(threadId, mode, isRunning);
   const now = useSharedSecondNow();
 
@@ -91,24 +80,6 @@ export function InstantTerminalPane({
           </span>
         ) : null}
         <div className="flex items-center gap-0.5">
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className="text-muted"
-            title="Split right"
-            onClick={onSplitHorizontal}
-          >
-            <Columns2 size={12} />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className="text-muted"
-            title="Split down"
-            onClick={onSplitVertical}
-          >
-            <Rows2 size={12} />
-          </Button>
           {isRunning && (
             <Button
               variant="ghost"
@@ -118,19 +89,6 @@ export function InstantTerminalPane({
               onClick={() => onCancel(threadId)}
             >
               <Square size={12} />
-            </Button>
-          )}
-          {canRestart && (
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="text-muted"
-              title="Restart shell"
-              aria-label="Restart shell"
-              disabled={restartPending}
-              onClick={() => void onRestart(threadId)}
-            >
-              <RefreshCw size={12} className={restartPending ? 'animate-spin' : undefined} />
             </Button>
           )}
           <Button
@@ -150,11 +108,6 @@ export function InstantTerminalPane({
           a slow tool call. Press Esc to interrupt if it stays stuck.
         </div>
       ) : null}
-      {restartError && (
-        <div className="border-b border-danger/20 bg-danger/5 px-3 py-1.5 text-[11px] text-danger">
-          {restartError}
-        </div>
-      )}
       {mode === 'live' ? (
         <div ref={containerRef} className="flex-1 min-h-0" />
       ) : (

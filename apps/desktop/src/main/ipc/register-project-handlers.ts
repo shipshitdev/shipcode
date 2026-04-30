@@ -27,10 +27,12 @@ import type {
   Project,
   ProjectOpenTarget,
   ShipCodePlan,
+  TerminalOpenTarget,
   Thread,
 } from '@shipcode/shared';
 import {
   clampError,
+  DEFAULT_SETTINGS,
   PIPELINE_PHASE,
   parseGithubRemote,
   validateGithubProjectUrl,
@@ -53,6 +55,7 @@ const PROJECT_OPEN_TARGET_ORDER: ProjectOpenTarget[] = [
   'ghostty',
   'vscode',
 ];
+const TERMINAL_OPEN_TARGET_ORDER: TerminalOpenTarget[] = ['terminal', 'ghostty'];
 
 const PROJECT_OPEN_APP_NAMES: Record<ProjectOpenTarget, string> = {
   cursor: 'Cursor',
@@ -415,8 +418,21 @@ async function ensureStarterIssue({
 function resolveProjectOpenTarget(
   settings: AppSettings,
   desktopApps: DesktopAppHealthMap,
-  requested: ProjectOpenTarget | 'default',
+  requested: ProjectOpenTarget | 'default' | 'default-terminal',
 ): ProjectOpenTarget {
+  if (requested === 'default-terminal') {
+    const preferred = settings.terminalOpenTarget ?? DEFAULT_SETTINGS.terminalOpenTarget;
+    if (desktopApps[preferred].available) {
+      return preferred;
+    }
+
+    const fallback = TERMINAL_OPEN_TARGET_ORDER.find((target) => desktopApps[target].available);
+    if (!fallback) {
+      throw new Error('No supported terminal app is available');
+    }
+    return fallback;
+  }
+
   if (requested !== 'default') {
     return requested;
   }
@@ -889,7 +905,10 @@ export function registerProjectHandlers({
     'project:open-path',
     async (
       _event,
-      { projectId, target }: { projectId: string; target: ProjectOpenTarget | 'default' },
+      {
+        projectId,
+        target,
+      }: { projectId: string; target: ProjectOpenTarget | 'default' | 'default-terminal' },
     ) => {
       const project = queries.projects.getById(projectId);
       if (!project) throw new Error(`Project ${projectId} not found`);

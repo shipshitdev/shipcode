@@ -39,6 +39,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultWorktreeEnabled: true,
   terminalScrollback: 10_000,
   projectOpenTarget: 'cursor',
+  terminalOpenTarget: 'terminal',
   plannerModel: 'claude',
   reviewerModel: 'codex',
   verifierModel: 'claude',
