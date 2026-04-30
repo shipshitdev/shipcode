@@ -1,4 +1,4 @@
-import type { ActivityEntry } from '@shipcode/shared';
+import { type ActivityEntry, formatRelativeTime } from '@shipcode/shared';
 import { PageHeader } from '@shipcode/ui';
 import {
   Button,
@@ -16,19 +16,6 @@ import { useEffect, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 
 const PAGE_SIZE = 25;
-
-function timeAgo(input: string | number): string {
-  const t = typeof input === 'number' ? input : new Date(input).getTime();
-  const diff = Math.max(0, Date.now() - t);
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  return `${d}d ago`;
-}
 
 function dayLabel(isoStr: string): string {
   const date = new Date(isoStr);
@@ -160,7 +147,7 @@ export function ActivityView() {
                                 )}
                               </TableCell>
                               <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-muted">
-                                {timeAgo(entry.createdAt)}
+                                {formatRelativeTime(entry.createdAt)}
                               </TableCell>
                             </TableRow>
                           );

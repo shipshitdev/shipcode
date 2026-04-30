@@ -1,10 +1,11 @@
-import type {
-  ActivePipelineSummary,
-  ActivityEntry,
-  DashboardOverview,
-  DashboardStats,
-  GitHubIssueCacheRecord,
-  RecentTask,
+import {
+  type ActivePipelineSummary,
+  type ActivityEntry,
+  type DashboardOverview,
+  type DashboardStats,
+  formatRelativeTime,
+  type GitHubIssueCacheRecord,
+  type RecentTask,
 } from '@shipcode/shared';
 import { ActivePipelineCard, PageHeader, PhaseChip } from '@shipcode/ui';
 import {
@@ -26,19 +27,6 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
-
-function timeAgo(input: string | number): string {
-  const t = typeof input === 'number' ? input : new Date(input).getTime();
-  const diff = Math.max(0, Date.now() - t);
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  return `${d}d ago`;
-}
 
 interface StatCardProps {
   label: string;
@@ -305,7 +293,7 @@ export function OverviewView() {
                                 </div>
                               </TableCell>
                               <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-muted">
-                                {timeAgo(entry.createdAt)}
+                                {formatRelativeTime(entry.createdAt)}
                               </TableCell>
                             </TableRow>
                           );
@@ -374,7 +362,7 @@ export function OverviewView() {
                               </div>
                             </TableCell>
                             <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-muted align-top pt-2.5">
-                              {timeAgo(task.updatedAt)}
+                              {formatRelativeTime(task.updatedAt)}
                             </TableCell>
                           </TableRow>
                         ))}
