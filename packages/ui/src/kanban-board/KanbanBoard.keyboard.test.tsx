@@ -134,6 +134,11 @@ function renderIntoDom(element: ReactElement) {
 
   return {
     container,
+    rerender: (nextElement: ReactElement) => {
+      act(() => {
+        root.render(nextElement);
+      });
+    },
     cleanup: () => {
       act(() => {
         root.unmount();
@@ -191,12 +196,10 @@ describe('KanbanBoard keyboard navigation', () => {
       />,
     );
 
-    // No focus ring before first keyboard interaction
-    expect(view.container.querySelector('[data-keyboard-focused="true"]')).toBeNull();
-
-    // First nav key activates keyboard mode and focuses first card
-    pressKey('j');
     expect(focusedCard(view.container).textContent).toContain('Todo top');
+
+    pressKey('j');
+    expect(focusedCard(view.container).textContent).toContain('Todo bottom');
 
     pressKey('j');
     expect(focusedCard(view.container).textContent).toContain('Todo bottom');
@@ -232,9 +235,6 @@ describe('KanbanBoard keyboard navigation', () => {
       />,
     );
 
-    // Activate keyboard nav first
-    pressKey('j');
-
     pressKey('Enter');
     pressKey('c');
     pressKey('e');
@@ -260,8 +260,6 @@ describe('KanbanBoard keyboard navigation', () => {
       />,
     );
 
-    // Activate keyboard nav first
-    pressKey('j');
     expect(focusedCard(view.container).textContent).toContain('Todo top');
 
     const input = document.createElement('input');
@@ -298,13 +296,76 @@ describe('KanbanBoard keyboard navigation', () => {
       />,
     );
 
-    // Activate keyboard nav to focus the card
-    pressKey('j');
-
     pressKey('e');
 
     expect(onStartPipeline).not.toHaveBeenCalled();
     expect(view.container.textContent).toContain('Pipeline can only start from Todo cards.');
+
+    view.cleanup();
+  });
+
+  it('keeps focus when the focused card remains visible and resets when it disappears', () => {
+    const todoBottom = makeIssue({ id: 'todo-bottom', issueNumber: 9, title: 'Todo bottom' });
+    const todoTop = makeIssue({ id: 'todo-top', issueNumber: 10, title: 'Todo top' });
+    const agentQueued = makeIssue({
+      id: 'agent-queued',
+      issueNumber: 8,
+      title: 'Agent queued',
+      pipelineStatus: 'queued',
+      threadId: 'thread-8',
+    });
+    const commonProps = {
+      project: makeProject(),
+      settings: DEFAULT_SETTINGS as AppSettings,
+      onIssueClick: vi.fn(),
+      onRefresh: vi.fn(),
+    };
+    const view = renderIntoDom(
+      <KanbanBoard issues={[todoBottom, todoTop, agentQueued]} {...commonProps} />,
+    );
+
+    expect(focusedCard(view.container).textContent).toContain('Todo top');
+    pressKey('j');
+    expect(focusedCard(view.container).textContent).toContain('Todo bottom');
+
+    view.rerender(<KanbanBoard issues={[todoBottom, agentQueued]} {...commonProps} />);
+    expect(focusedCard(view.container).textContent).toContain('Todo bottom');
+
+    view.rerender(<KanbanBoard issues={[agentQueued]} {...commonProps} />);
+    expect(focusedCard(view.container).textContent).toContain('Agent queued');
+
+    view.cleanup();
+  });
+
+  it('does not move focus or trigger board actions when shortcuts are disabled', () => {
+    const issue = makeIssue({ id: 'todo-top', issueNumber: 10, title: 'Todo top' });
+    const onIssueClick = vi.fn();
+    const onCommentIssue = vi.fn();
+    const onStartPipeline = vi.fn();
+    const view = renderIntoDom(
+      <KanbanBoard
+        issues={[issue, makeIssue({ id: 'todo-bottom', issueNumber: 9, title: 'Todo bottom' })]}
+        project={makeProject()}
+        settings={DEFAULT_SETTINGS as AppSettings}
+        keyboardShortcutsEnabled={false}
+        onIssueClick={onIssueClick}
+        onCommentIssue={onCommentIssue}
+        onStartPipeline={onStartPipeline}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(focusedCard(view.container).textContent).toContain('Todo top');
+
+    pressKey('j');
+    pressKey('Enter');
+    pressKey('c');
+    pressKey('e');
+
+    expect(focusedCard(view.container).textContent).toContain('Todo top');
+    expect(onIssueClick).not.toHaveBeenCalled();
+    expect(onCommentIssue).not.toHaveBeenCalled();
+    expect(onStartPipeline).not.toHaveBeenCalled();
 
     view.cleanup();
   });

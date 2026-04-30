@@ -31,19 +31,31 @@ describe('shortcuts', () => {
       label: 'Open Terminal',
       glyph: '⇧⌘T',
     });
-    expect(getShortcut('board-focus-next')).toMatchObject({
-      label: 'Next Card',
-      category: 'Board',
-      scope: 'board',
-      glyph: 'J',
-    });
-    expect(getShortcut('board-start-focused')).toMatchObject({
-      label: 'Start Focused Card',
-      category: 'Board',
-      scope: 'board',
-      glyph: 'E',
-    });
 
     expect(() => getShortcut('unknown-shortcut' as never)).toThrow('Unknown shortcut id');
+  });
+
+  it('registers every board-scoped shortcut for the help surface', () => {
+    const boardShortcuts = [
+      ['board-focus-next', 'Next Card', 'J', 'j'],
+      ['board-focus-previous', 'Previous Card', 'K', 'k'],
+      ['board-focus-left', 'Previous Column', 'H', 'h'],
+      ['board-focus-right', 'Next Column', 'L', 'l'],
+      ['board-open-focused', 'Open Focused Card', 'Enter', 'Enter'],
+      ['board-start-focused', 'Start Focused Card', 'E', 'e'],
+      ['board-comment-focused', 'Comment on Focused Card', 'C', 'c'],
+    ] as const;
+
+    expect(boardShortcuts.map(([id]) => getShortcut(id))).toEqual(
+      boardShortcuts.map(([, label, glyph, key]) =>
+        expect.objectContaining({
+          label,
+          category: 'Board',
+          scope: 'board',
+          glyph,
+          combo: { key },
+        }),
+      ),
+    );
   });
 });

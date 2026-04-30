@@ -187,7 +187,6 @@ export function KanbanBoard({
   } | null>(null);
   const [keyboardActionToast, setKeyboardActionToast] = useState<string | null>(null);
   const [focusedIssueId, setFocusedIssueId] = useState<string | null>(null);
-  const [keyboardActivated, setKeyboardActivated] = useState(false);
   const [rerunningId, setRerunningId] = useState<string | null>(null);
   const shortcutsEnabled = keyboardShortcutsEnabled ?? !readOnly;
   const threadById = useMemo(
@@ -367,17 +366,14 @@ export function KanbanBoard({
   useEffect(() => {
     if (view !== 'kanban' || readOnly) {
       setFocusedIssueId(null);
-      setKeyboardActivated(false);
       return;
     }
-
-    if (!keyboardActivated) return;
 
     setFocusedIssueId((current) => {
       if (findFocusedPosition(keyboardFocusColumns, current)) return current;
       return firstFocusableIssueId(keyboardFocusColumns);
     });
-  }, [keyboardActivated, keyboardFocusColumns, readOnly, view]);
+  }, [keyboardFocusColumns, readOnly, view]);
 
   useEffect(() => {
     if (view !== 'kanban' || !focusedIssueId) return;
@@ -431,7 +427,6 @@ export function KanbanBoard({
       const key = arrowMap[raw] ?? raw;
       if (key === 'j' || key === 'k' || key === 'h' || key === 'l') {
         event.preventDefault();
-        setKeyboardActivated(true);
         setFocusedIssueId((current) => moveFocusedIssueId(keyboardFocusColumns, current, key));
         return;
       }
