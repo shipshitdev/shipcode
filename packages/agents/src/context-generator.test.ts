@@ -6,9 +6,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mockSpawn = vi.hoisted(() => vi.fn());
 
-vi.mock('node:child_process', () => ({
-  spawn: mockSpawn,
-}));
+vi.mock('node:child_process', () => {
+  const mod = {
+    exec: vi.fn(),
+    execFileSync: vi.fn(() => ''),
+    spawn: mockSpawn,
+  };
+  return { ...mod, default: mod };
+});
 
 import { generateContextFiles } from './context-generator';
 

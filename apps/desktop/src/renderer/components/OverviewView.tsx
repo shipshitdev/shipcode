@@ -6,7 +6,7 @@ import type {
   GitHubIssueCacheRecord,
   RecentTask,
 } from '@shipcode/shared';
-import { ActivePipelineCard, PhaseChip } from '@shipcode/ui';
+import { ActivePipelineCard, PageHeader, PhaseChip } from '@shipcode/ui';
 import {
   Bell,
   Bot,
@@ -26,7 +26,6 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
-import { PageHeader } from './PageHeader';
 
 function timeAgo(input: string | number): string {
   const t = typeof input === 'number' ? input : new Date(input).getTime();

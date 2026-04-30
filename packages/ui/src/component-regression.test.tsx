@@ -8,6 +8,7 @@ import { ActivePipelineCard } from './ActivePipelineCard';
 import { DiffViewer } from './DiffViewer';
 import { GitVisualizer } from './GitVisualizer';
 import { LoadingButtonContent } from './LoadingButtonContent';
+import { PageHeader } from './PageHeader';
 import { Alert, AlertDescription, AlertTitle } from './primitives/alert';
 import { Button } from './primitives/button';
 import {
@@ -397,6 +398,21 @@ describe('UI component regression coverage', () => {
     expect(document.body.textContent).toContain('Modal content');
     expect(document.body.querySelector('button[title="Close"]')).not.toBeNull();
     expect(onClose).not.toHaveBeenCalled();
+    view.cleanup();
+  });
+
+  it('renders the shared page header with subtitle and actions', () => {
+    const view = renderIntoDom(
+      <PageHeader
+        title="Automations"
+        subtitle="Scheduled tasks for autonomous maintenance."
+        actions={<Button size="sm">New automation</Button>}
+      />,
+    );
+
+    expect(view.container.querySelector('header')?.textContent).toContain('Automations');
+    expect(view.container.textContent).toContain('Scheduled tasks for autonomous maintenance.');
+    expect(view.container.textContent).toContain('New automation');
     view.cleanup();
   });
 

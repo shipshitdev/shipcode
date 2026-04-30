@@ -3,12 +3,25 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockExecFileAsync = vi.hoisted(() => vi.fn());
 const mockSpawn = vi.hoisted(() => vi.fn());
+const mockShellEnv = vi.hoisted(() => ({ BUN_INSTALL: '/mock/bun', PATH: '/mock/bin' }));
 vi.mock('node:child_process', async () => {
   const { promisify } = await import('node:util');
   const fn = vi.fn();
   Object.assign(fn, { [promisify.custom]: mockExecFileAsync });
-  return { execFile: fn, spawn: mockSpawn };
+  const mod = {
+    exec: vi.fn(),
+    execFile: fn,
+    execFileSync: vi.fn(() => ''),
+    spawn: mockSpawn,
+  };
+  return { ...mod, default: mod };
 });
+vi.mock('../health-check', () => ({
+  shellExecEnv: () => mockShellEnv,
+}));
+
+const ghExecOptions = { cwd: '/test/repo', env: mockShellEnv };
+const ghSpawnOptions = { cwd: '/test/repo', env: mockShellEnv, stdio: ['pipe', 'pipe', 'pipe'] };
 
 import { GhCli } from './gh-cli';
 
@@ -103,7 +116,7 @@ describe('GhCli', () => {
           '--limit',
           '50',
         ],
-        { cwd: '/test/repo' },
+        ghExecOptions,
       );
     });
 
@@ -160,7 +173,7 @@ describe('GhCli', () => {
       expect(mockExecFileAsync).toHaveBeenCalledWith(
         'gh',
         expect.arrayContaining(['--limit', '200']),
-        { cwd: '/test/repo' },
+        ghExecOptions,
       );
     });
 
@@ -283,7 +296,7 @@ describe('GhCli', () => {
       expect(mockExecFileAsync).toHaveBeenCalledWith(
         'gh',
         ['issue', 'view', '42', '--json', 'number,title,body,labels,assignees,author,state,url'],
-        { cwd: '/test/repo' },
+        ghExecOptions,
       );
     });
 
@@ -382,7 +395,7 @@ describe('GhCli', () => {
           '--limit',
           '1',
         ],
-        { cwd: '/test/repo' },
+        ghExecOptions,
       );
     });
 
@@ -409,7 +422,7 @@ describe('GhCli', () => {
       expect(mockSpawn).toHaveBeenCalledWith(
         'gh',
         ['pr', 'edit', '9', '--title', 'Updated title', '--body-file', '-'],
-        { cwd: '/test/repo', stdio: ['pipe', 'pipe', 'pipe'] },
+        ghSpawnOptions,
       );
       expect(fake.stdinWrites).toEqual(['New body']);
     });
@@ -435,7 +448,7 @@ describe('GhCli', () => {
       expect(mockExecFileAsync).toHaveBeenLastCalledWith(
         'gh',
         ['issue', 'edit', '42', '--add-label', 'blocked:ci'],
-        { cwd: '/test/repo' },
+        ghExecOptions,
       );
     });
 
@@ -458,7 +471,7 @@ describe('GhCli', () => {
       expect(mockExecFileAsync).toHaveBeenLastCalledWith(
         'gh',
         ['issue', 'edit', '42', '--remove-label', 'blocked:ci'],
-        { cwd: '/test/repo' },
+        ghExecOptions,
       );
     });
   });
@@ -482,7 +495,7 @@ describe('GhCli', () => {
       expect(mockSpawn).toHaveBeenCalledWith(
         'gh',
         ['issue', 'edit', '42', '--title', 'Updated title', '--body-file', '-'],
-        { cwd: '/test/repo', stdio: ['pipe', 'pipe', 'pipe'] },
+        ghSpawnOptions,
       );
       expect(mockExecFileAsync).toHaveBeenCalledTimes(1);
     });
@@ -606,7 +619,7 @@ describe('GhCli', () => {
           '--url',
           'https://github.com/shipshitdev/shipcode/issues/42',
         ],
-        { cwd: '/test/repo' },
+        ghExecOptions,
       );
     });
 
@@ -662,10 +675,11 @@ describe('GhCli', () => {
       fake.complete(0);
       await promise;
 
-      expect(mockSpawn).toHaveBeenCalledWith('gh', ['issue', 'comment', '42', '--body-file', '-'], {
-        cwd: '/test/repo',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
+      expect(mockSpawn).toHaveBeenCalledWith(
+        'gh',
+        ['issue', 'comment', '42', '--body-file', '-'],
+        ghSpawnOptions,
+      );
       expect(fake.stdinWrites).toEqual(['Hello world']);
     });
   });
@@ -757,7 +771,7 @@ describe('GhCli', () => {
       expect(mockExecFileAsync).toHaveBeenCalledWith(
         'gh',
         ['repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner'],
-        { cwd: '/test/repo' },
+        ghExecOptions,
       );
     });
   });
@@ -779,7 +793,7 @@ describe('GhCli', () => {
       expect(mockExecFileAsync).toHaveBeenCalledWith(
         'gh',
         ['label', 'list', '--limit', '200', '--json', 'name,color,description'],
-        { cwd: '/test/repo' },
+        ghExecOptions,
       );
     });
 
@@ -828,7 +842,7 @@ describe('GhCli', () => {
           '--description',
           'Route to Claude.',
         ],
-        { cwd: '/test/repo' },
+        ghExecOptions,
       );
     });
 
@@ -935,7 +949,7 @@ describe('GhCli', () => {
       expect(mockSpawn).toHaveBeenCalledWith(
         'gh',
         ['issue', 'edit', '42', '--body-file', '-'],
-        expect.objectContaining({ cwd: '/test/repo', stdio: ['pipe', 'pipe', 'pipe'] }),
+        expect.objectContaining(ghSpawnOptions),
       );
       expect(stdinWrites).toEqual([body]);
       expect(isStdinEnded()).toBe(true);

@@ -2,6 +2,15 @@ import type { IpcMain } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerGitHubHandlers } from './register-github-handlers';
 
+vi.mock('../logger.service', () => ({
+  default: {
+    error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  },
+  logEvent: vi.fn(),
+}));
+
 const { closeIssueMock, reopenIssueMock, listAllIssuesMock, fetchProjectPrioritiesMock } =
   vi.hoisted(() => ({
     closeIssueMock: vi.fn(),
@@ -402,6 +411,7 @@ describe('registerGitHubHandlers', () => {
           updatePipelineStatus: vi.fn(),
           clearArchivedAt: vi.fn(),
           linkThread: vi.fn(),
+          reconcileCompletedFromEvidence: vi.fn(() => null),
           setPriority: vi.fn(),
         },
         issueEdges: {

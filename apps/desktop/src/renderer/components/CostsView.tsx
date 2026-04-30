@@ -5,6 +5,7 @@ import type {
   PipelinePhase,
 } from '@shipcode/shared';
 import { formatTokenCount, modelDisplay, sanitizeResolvedModel } from '@shipcode/shared';
+import { PageHeader } from '@shipcode/ui';
 import {
   Button,
   Card,
@@ -23,7 +24,6 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 import { ActivityHeatmap } from './heatmap/ActivityHeatmap';
-import { PageHeader } from './PageHeader';
 
 function formatCost(usd: number): string {
   if (usd === 0) return '$0.00';

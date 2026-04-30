@@ -1,5 +1,5 @@
 import type { Automation, Project, Thread } from '@shipcode/shared';
-import { PhaseChip } from '@shipcode/ui';
+import { PageHeader, PhaseChip } from '@shipcode/ui';
 import {
   Button,
   Card,
@@ -15,7 +15,6 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Cron } from 'croner';
 import { useState } from 'react';
-import { PageHeader } from '../../components/PageHeader';
 import { useAppStore } from '../../stores/app-store';
 
 function describeCron(expr: string): string {

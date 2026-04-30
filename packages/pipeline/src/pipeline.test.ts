@@ -1323,7 +1323,7 @@ describe('createPipeline', () => {
       await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
       await mock.trigger('exit', 'proc-1', 0);
       const spawnMock = vi.mocked(mock.deps.processManager.spawn);
-      for (let i = 0; i < 10 && spawnMock.mock.calls.length < 2; i++) {
+      for (let i = 0; i < 100 && spawnMock.mock.calls.length < 2; i++) {
         await flush();
       }
 

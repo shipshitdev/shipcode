@@ -5,6 +5,7 @@ import {
   type NotificationRecord,
   type Thread,
 } from '@shipcode/shared';
+import { PageHeader } from '@shipcode/ui';
 import {
   ArrowUpDown,
   Badge,
@@ -22,7 +23,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { NOTIFICATIONS_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
-import { PageHeader } from './PageHeader';
 
 type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info' | 'accent';
 

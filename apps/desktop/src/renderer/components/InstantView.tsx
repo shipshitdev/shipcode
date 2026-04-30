@@ -1,11 +1,11 @@
 import type { Thread } from '@shipcode/shared';
+import { PageHeader } from '@shipcode/ui';
 import { Button, Code2, cn, Sparkles, Terminal } from '@shipshitdev/ui';
 import { useCallback, useMemo, useState } from 'react';
 import { getShortcut } from '../data/shortcuts';
 import { type InstantShellCli, useStartInstantShell } from '../hooks/useStartInstantShell';
 import { type InstantPaneMode, useAppStore } from '../stores/app-store';
 import { InstantTerminalPane } from './instant-terminal/InstantTerminalPane';
-import { PageHeader } from './PageHeader';
 
 function formatLivePaneTitle(cli: 'claude' | 'codex', prompt: string): string {
   const trimmedPrompt = prompt.trim();

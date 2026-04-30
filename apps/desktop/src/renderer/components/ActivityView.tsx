@@ -1,4 +1,5 @@
 import type { ActivityEntry } from '@shipcode/shared';
+import { PageHeader } from '@shipcode/ui';
 import {
   Button,
   Card,
@@ -13,7 +14,6 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
-import { PageHeader } from './PageHeader';
 
 const PAGE_SIZE = 25;
 
