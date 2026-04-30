@@ -192,12 +192,14 @@ export class GitService {
       const configuredPath = (await git.raw(['config', '--get', 'core.hooksPath']).catch(() => ''))
         .trim()
         .replace(/^"(.*)"$/, '$1');
-      const hookPath = configuredPath
-        ? path.join(
-            path.isAbsolute(configuredPath) ? configuredPath : path.join(root, configuredPath),
-            'pre-commit',
-          )
+      const gitPath = configuredPath
+        ? ''
         : (await git.raw(['rev-parse', '--git-path', 'hooks/pre-commit'])).trim();
+      const hookPath = configuredPath
+        ? path.resolve(root, configuredPath, 'pre-commit')
+        : gitPath
+          ? path.resolve(root, gitPath)
+          : '';
       if (!hookPath || !fs.existsSync(hookPath)) return null;
       return hookPath;
     } catch {

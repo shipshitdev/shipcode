@@ -45,6 +45,9 @@ function materializeStdinArgsForLegacySpawn(args: string[], stdin?: string): str
   if (promptFlagIndex !== -1 && args[promptFlagIndex + 1] === '-') {
     return args.map((arg, index) => (index === promptFlagIndex + 1 ? stdin : arg));
   }
+  if (promptFlagIndex !== -1) {
+    return [...args.slice(0, promptFlagIndex + 1), stdin, ...args.slice(promptFlagIndex + 1)];
+  }
   const execIndex = args.indexOf('exec');
   if (execIndex !== -1 && args[execIndex + 1] === '-') {
     return args.map((arg, index) => (index === execIndex + 1 ? stdin : arg));
@@ -169,7 +172,6 @@ function buildClaudeCommand(req: ProviderRequest): CliCommand {
       );
       const args = [
         '-p',
-        '-',
         ...modelArgs,
         '--output-format',
         'stream-json',
@@ -194,7 +196,6 @@ function buildClaudeCommand(req: ProviderRequest): CliCommand {
       // Execution: full tool surface, no JSON wrapping, no turn limit.
       const execArgs = [
         '-p',
-        '-',
         ...modelArgs,
         '--allowedTools',
         'Edit,Write,Bash,Glob,Grep,Read',
@@ -220,7 +221,6 @@ function buildClaudeCommand(req: ProviderRequest): CliCommand {
       return {
         args: [
           '-p',
-          '-',
           ...modelArgs,
           '--output-format',
           'json',
@@ -488,5 +488,6 @@ export const _internals = {
   buildCodexArgs,
   buildCodexStdin,
   buildCodexPrompt,
+  materializeStdinArgsForLegacySpawn,
   stripCodexProtocol,
 };

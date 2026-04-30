@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mainGitMock = {
@@ -10,11 +11,14 @@ const mainGitMock = {
   branch: vi.fn(),
   branchLocal: vi.fn(),
   raw: vi.fn(),
+  revparse: vi.fn(),
   getRemotes: vi.fn(),
   fetch: vi.fn(),
 };
 
 const worktreeGitMock = {
+  raw: vi.fn(),
+  revparse: vi.fn(),
   diff: vi.fn(),
   add: vi.fn(),
   commit: vi.fn(),
@@ -96,5 +100,43 @@ describe('GitService', () => {
     const git = new GitService('/repo/project');
 
     await expect(git.getRemoteUrl()).resolves.toBe('https://github.com/shipshitdev/shipcode.git');
+  });
+
+  it('resolves relative git hook paths against the repository root', async () => {
+    worktreeGitMock.revparse.mockResolvedValueOnce('/repo/project\n');
+    worktreeGitMock.raw.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'config') throw new Error('unset');
+      if (args[0] === 'rev-parse') return '.git/hooks/pre-commit\n';
+      return '';
+    });
+    const existsSpy = vi
+      .spyOn(fs, 'existsSync')
+      .mockImplementation((candidate) => candidate === '/repo/project/.git/hooks/pre-commit');
+
+    const git = new GitService('/repo/project');
+
+    try {
+      await expect(git.getPreCommitHookPath('/tmp/worktree')).resolves.toBe(
+        '/repo/project/.git/hooks/pre-commit',
+      );
+    } finally {
+      existsSpy.mockRestore();
+    }
+  });
+
+  it('resolves relative core.hooksPath values against the repository root', async () => {
+    mainGitMock.revparse.mockResolvedValueOnce('/repo/project\n');
+    mainGitMock.raw.mockResolvedValueOnce('.githooks\n');
+    const existsSpy = vi
+      .spyOn(fs, 'existsSync')
+      .mockImplementation((candidate) => candidate === '/repo/project/.githooks/pre-commit');
+
+    const git = new GitService('/repo/project');
+
+    try {
+      await expect(git.getPreCommitHookPath()).resolves.toBe('/repo/project/.githooks/pre-commit');
+    } finally {
+      existsSpy.mockRestore();
+    }
   });
 });

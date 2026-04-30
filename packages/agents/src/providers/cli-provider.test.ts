@@ -9,6 +9,7 @@ const {
   buildCodexArgs,
   buildCodexStdin,
   buildCodexPrompt,
+  materializeStdinArgsForLegacySpawn,
   stripCodexProtocol,
 } = _internals;
 
@@ -29,10 +30,9 @@ function req(overrides: Partial<ProviderRequest> = {}): ProviderRequest {
 // These lock the provider arg lists while keeping the full prompt in stdin.
 
 describe('buildClaudeArgs', () => {
-  it('plan phase uses stdin prompt placeholder', () => {
+  it('plan phase uses stdin prompt mode', () => {
     expect(buildClaudeArgs(req({ phase: 'plan' }))).toEqual([
       '-p',
-      '-',
       '--output-format',
       'stream-json',
       '--verbose',
@@ -46,10 +46,9 @@ describe('buildClaudeArgs', () => {
     ]);
   });
 
-  it('revision phase uses stdin prompt placeholder', () => {
+  it('revision phase uses stdin prompt mode', () => {
     expect(buildClaudeArgs(req({ phase: 'revision' }))).toEqual([
       '-p',
-      '-',
       '--output-format',
       'stream-json',
       '--verbose',
@@ -63,10 +62,9 @@ describe('buildClaudeArgs', () => {
     ]);
   });
 
-  it('verify phase uses stdin prompt placeholder', () => {
+  it('verify phase uses stdin prompt mode', () => {
     expect(buildClaudeArgs(req({ phase: 'verify' }))).toEqual([
       '-p',
-      '-',
       '--output-format',
       'stream-json',
       '--verbose',
@@ -80,10 +78,9 @@ describe('buildClaudeArgs', () => {
     ]);
   });
 
-  it('execute phase uses stdin prompt placeholder', () => {
+  it('execute phase uses stdin prompt mode', () => {
     expect(buildClaudeArgs(req({ phase: 'execute' }))).toEqual([
       '-p',
-      '-',
       '--allowedTools',
       'Edit,Write,Bash,Glob,Grep,Read',
       '--max-thinking-tokens',
@@ -97,7 +94,6 @@ describe('buildClaudeArgs', () => {
       buildClaudeArgs(req({ phase: 'plan', phaseHints: { reasoningEffort: 'xhigh' } })),
     ).toEqual([
       '-p',
-      '-',
       '--output-format',
       'stream-json',
       '--verbose',
@@ -116,7 +112,6 @@ describe('buildClaudeArgs', () => {
       buildClaudeArgs(req({ phase: 'plan', phaseHints: { reasoningEffort: 'none' } })),
     ).toEqual([
       '-p',
-      '-',
       '--output-format',
       'stream-json',
       '--verbose',
@@ -130,6 +125,12 @@ describe('buildClaudeArgs', () => {
 
   it('keeps the Claude prompt in stdin', () => {
     expect(buildClaudeStdin(req({ phase: 'plan' }))).toBe('PROMPT');
+  });
+
+  it('materializes Claude stdin after -p only for legacy spawn managers', () => {
+    expect(materializeStdinArgsForLegacySpawn(['-p', '--output-format', 'json'], 'PROMPT')).toEqual(
+      ['-p', 'PROMPT', '--output-format', 'json'],
+    );
   });
 });
 
@@ -388,7 +389,8 @@ describe('createClaudeCliProvider', () => {
 
     expect(spawnCalls).toHaveLength(1);
     expect(spawnCalls[0].command).toBe('claude');
-    expect(spawnCalls[0].args[1]).toBe('-');
+    expect(spawnCalls[0].args[0]).toBe('-p');
+    expect(spawnCalls[0].args[1]).not.toBe('-');
     expect(spawnCalls[0].stdin).toBe('PROMPT');
     expect(spawnCalls[0].args).toContain('--disallowedTools');
     expect(spawnCalls[0].cwd).toBe('/tmp/wt');
