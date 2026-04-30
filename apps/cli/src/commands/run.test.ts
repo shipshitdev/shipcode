@@ -68,6 +68,18 @@ vi.mock('@shipcode/agents', () => ({
   createProviderRegistry: vi.fn((providers) => providers),
 }));
 
+vi.mock('@shipcode/agents/source', () => ({
+  ProcessManager: class {},
+  GhCli: class {
+    getIssue = getIssueMock;
+  },
+  routeFromLabels: routeFromLabelsMock,
+  createClaudeCliProvider: vi.fn(() => ({ id: 'claude' })),
+  createCodexCliProvider: vi.fn(() => ({ id: 'codex' })),
+  createOpenRouterProvider: vi.fn(() => ({ id: 'openrouter' })),
+  createProviderRegistry: vi.fn((providers) => providers),
+}));
+
 vi.mock('@shipcode/pipeline', () => ({
   createPipeline: vi.fn(() => ({
     startFromGitHubIssue: startFromGitHubIssueMock,

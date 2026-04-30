@@ -1,4 +1,4 @@
-import type { ProcessManager } from '@shipcode/agents';
+import type { ProcessManager } from '@shipcode/agents/source';
 import type { Pipeline, PipelineEmitter } from '@shipcode/pipeline';
 import { PIPELINE_PHASE } from '@shipcode/shared';
 import type { BrowserWindow, IpcMain } from 'electron';

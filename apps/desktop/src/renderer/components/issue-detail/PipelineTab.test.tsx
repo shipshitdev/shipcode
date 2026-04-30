@@ -157,7 +157,9 @@ function renderPipelineTab(diffs: DiffRecord[]) {
       }}
       requireApprovalSelectValue="__inherit__"
       revisionCountSelectValue="__inherit__"
+      taskGraph={null}
       thread={makeThread()}
+      githubIssueUrl="https://github.com/acme/repo/issues/42"
       onPhaseAgentChange={vi.fn()}
       onPhaseEffortChange={vi.fn()}
       onRequireApprovalChange={vi.fn()}

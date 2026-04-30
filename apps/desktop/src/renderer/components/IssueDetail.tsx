@@ -12,6 +12,7 @@ import type {
   PlanRecord,
   Project,
   ReviewRecord,
+  TaskGraphWithNodes,
   Thread,
   VerificationRecord,
 } from '@shipcode/shared';
@@ -267,6 +268,19 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     queryFn: () => window.shipcode.invoke('diff:list', { threadId: activeThreadId }),
     enabled: !!activeThreadId && shouldLoadPipelineTab,
     refetchInterval: shouldPollLiveThread && shouldLoadPipelineTab ? 15_000 : false,
+  });
+
+  const { data: taskGraph = null } = useQuery<TaskGraphWithNodes | null>({
+    queryKey: ['task-graph', activeThreadId],
+    queryFn: async () => {
+      if (!activeThreadId) throw new Error('Missing active thread id');
+      const graph = await window.shipcode.invoke('task-graph:get-latest', {
+        threadId: activeThreadId,
+      });
+      return graph && Array.isArray(graph.nodes) ? graph : null;
+    },
+    enabled: !!activeThreadId && shouldLoadPipelineTab,
+    refetchInterval: shouldPollLiveThread && shouldLoadPipelineTab ? 5_000 : false,
   });
 
   // Fetch latest verification for the thread
@@ -1367,8 +1381,10 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       planRunGroups={resolvedPlanRunGroups}
       projectDefaultPhaseSelections={projectDefaultPhaseSelections}
       runNumberByThreadId={runNumberByThreadId}
+      taskGraph={taskGraph}
       thread={thread}
       threadPhase={threadPhase}
+      githubIssueUrl={githubIssueUrl}
       onEditPrd={handleEditPrd}
       onActiveTabChange={setActiveTab}
       onFullScreenPlan={setFullScreenPlanId}

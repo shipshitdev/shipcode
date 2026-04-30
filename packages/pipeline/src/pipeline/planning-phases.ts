@@ -11,7 +11,7 @@ import {
   StreamParser,
   selectPromptMaterials,
   summarizePromptMaterials,
-} from '@shipcode/agents';
+} from '@shipcode/agents/source';
 import {
   type AnsweredClarification,
   type ClarificationRequest,
@@ -27,10 +27,18 @@ import {
   type ShipCodePlan,
 } from '@shipcode/shared';
 import type { TaskGraphWithNodes } from '@shipcode/shared/source';
+import { computeRetryDelayMs } from '../retry-scheduler';
 import type { PipelineContext } from '../types';
+import { renderWorkflowPromptTemplate } from '../workflow-prompt';
 import type { PipelineHelperEnv } from './shared';
 
 const NO_VALID_PLAN_REASON = 'Plan generation failed — no valid shipcode-plan block was produced.';
+
+function clearRetryTimer(context: PipelineContext): void {
+  if (!context.retryTimer) return;
+  clearTimeout(context.retryTimer);
+  context.retryTimer = null;
+}
 
 function formatPlanParseFailure(error?: string): string {
   if (!error) return NO_VALID_PLAN_REASON;
@@ -105,13 +113,12 @@ export function createPlanningPhaseHandlers({
 
   function ensureRepoPromptMaterials(context: ReturnType<typeof ensureContext>): PromptMaterial[] {
     if (context.repoPromptMaterials === null) {
-      context.repoPromptMaterials = [
+      const materials = [
         ...loadStructuredRepoContext(context.worktreePath ?? context.projectPath),
         ...loadCodeReviewGraphContext(context.projectPath),
       ];
-      context.repoContext = context.repoPromptMaterials
-        .map((material) => material.content)
-        .join('\n\n');
+      context.repoPromptMaterials = materials;
+      context.repoContext = materials.map((material) => material.content).join('\n\n');
     }
     return context.repoPromptMaterials;
   }
@@ -289,14 +296,16 @@ export function createPlanningPhaseHandlers({
     worktreePath: string | null,
   ) {
     const context = ensureContext(threadId, { projectPath, worktreePath });
+    clearRetryTimer(context);
 
     if (context.repoPromptMaterials === null) {
-      context.repoPromptMaterials = [
+      const materials = [
         ...loadStructuredRepoContext(worktreePath ?? projectPath),
         ...loadCodeReviewGraphContext(projectPath),
       ];
+      context.repoPromptMaterials = materials;
       context.repoContext =
-        context.repoPromptMaterials.map((material) => material.content).join('\n\n') ||
+        materials.map((material) => material.content).join('\n\n') ||
         loadRepoContext(worktreePath ?? projectPath);
     }
     try {
@@ -342,18 +351,31 @@ export function createPlanningPhaseHandlers({
       ...ensureRepoPromptMaterials(context),
     ];
     rememberMaterialSummary(context, 'plan', planMaterials);
-    const planPrompt =
-      buildPlanPrompt(
-        prompt,
+    let workflowPlanPrompt: string | null;
+    try {
+      workflowPlanPrompt = renderWorkflowPromptTemplate(context, deps, 'plan');
+    } catch (error) {
+      emitPhase(
         threadId,
-        skill.context,
-        skill.deps,
-        {
-          promptMaterials: planMaterials,
-          clarificationContext: clarificationContext ?? undefined,
-        },
-        getVerifyCommands(context).join(' && ') || null,
-      ) +
+        'failed',
+        `WORKFLOW.md template render error: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      activePipelines.delete(threadId);
+      return;
+    }
+    const planPrompt =
+      (workflowPlanPrompt ??
+        buildPlanPrompt(
+          prompt,
+          threadId,
+          skill.context,
+          skill.deps,
+          {
+            promptMaterials: planMaterials,
+            clarificationContext: clarificationContext ?? undefined,
+          },
+          getVerifyCommands(context).join(' && ') || null,
+        )) +
       buildRepoSetupPlannerNote(context) +
       (previousAttempt ? buildPreviousAttemptContext(previousAttempt) : '');
 
@@ -398,7 +420,16 @@ export function createPlanningPhaseHandlers({
             if (context.retryCount < PIPELINE_MAX_RETRIES) {
               context.retryCount++;
               context.previousPlanRawOutput = response.rawOutput;
-              handlers.startPlanGeneration(threadId, prompt, projectPath, worktreePath);
+              const delayMs = computeRetryDelayMs({
+                reason: 'failure',
+                attempt: context.retryCount,
+                maxRetryBackoffMs: context.workflowPolicy.agent.maxRetryBackoffMs,
+              });
+              context.retryTimer = setTimeout(() => {
+                context.retryTimer = null;
+                if (context.cancelled || !activePipelines.has(threadId)) return;
+                void handlers.startPlanGeneration(threadId, prompt, projectPath, worktreePath);
+              }, delayMs);
             } else {
               let cliError: string | null = null;
               for (const line of parser
@@ -488,10 +519,24 @@ export function createPlanningPhaseHandlers({
       ...ensureRepoPromptMaterials(context),
     ];
     rememberMaterialSummary(context, 'review', reviewMaterials);
-    const reviewPromptText = buildReviewPrompt(plan, skill.context, skill.deps, {
-      autonomous: context.autonomous,
-      promptMaterials: reviewMaterials,
-    });
+    let workflowReviewPrompt: string | null;
+    try {
+      workflowReviewPrompt = renderWorkflowPromptTemplate(context, deps, 'review', { plan });
+    } catch (error) {
+      emitPhase(
+        threadId,
+        'failed',
+        `WORKFLOW.md template render error: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      activePipelines.delete(threadId);
+      return;
+    }
+    const reviewPromptText =
+      workflowReviewPrompt ??
+      buildReviewPrompt(plan, skill.context, skill.deps, {
+        autonomous: context.autonomous,
+        promptMaterials: reviewMaterials,
+      });
 
     void (async () => {
       try {
@@ -697,17 +742,23 @@ export function createPlanningPhaseHandlers({
     rememberMaterialSummary(context, 'revision', revisionMaterials);
     let revisionPrompt: string;
     try {
-      revisionPrompt = buildRevisionPrompt(
-        plan,
-        reviewFeedback,
-        threadId,
-        skill.context,
-        skill.deps,
-        getVerifyCommands(context).join(' && ') || null,
-        { promptMaterials: revisionMaterials },
-      );
+      revisionPrompt =
+        renderWorkflowPromptTemplate(context, deps, 'revision', { plan }) ??
+        buildRevisionPrompt(
+          plan,
+          reviewFeedback,
+          threadId,
+          skill.context,
+          skill.deps,
+          getVerifyCommands(context).join(' && ') || null,
+          { promptMaterials: revisionMaterials },
+        );
     } catch (error) {
-      emitPhase(threadId, 'failed', error instanceof Error ? error.message : String(error));
+      emitPhase(
+        threadId,
+        'failed',
+        `WORKFLOW.md template render error: ${error instanceof Error ? error.message : String(error)}`,
+      );
       activePipelines.delete(threadId);
       return;
     }

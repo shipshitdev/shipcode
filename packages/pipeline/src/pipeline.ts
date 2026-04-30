@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { buildWorkpadProtocol } from '@shipcode/agents';
+import { buildWorkpadProtocol } from '@shipcode/agents/source';
 import {
   resolveRequireApproval,
   resolveRequireApprovalForIssue,
@@ -354,6 +354,10 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     const context = activePipelines.get(threadId);
     if (context) {
       context.cancelled = true;
+      if (context.retryTimer) {
+        clearTimeout(context.retryTimer);
+        context.retryTimer = null;
+      }
       try {
         context.abort.abort();
       } catch {

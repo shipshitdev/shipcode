@@ -5,6 +5,7 @@ import type {
   OpenRouterModelValidation,
   PipelineCheckpoint,
   ReasoningEffort,
+  TaskGraphWithNodes,
   Thread,
 } from '@shipcode/shared';
 import {
@@ -15,7 +16,7 @@ import {
   MODEL_DISPLAY,
   resolveProviderReasoningEffort,
 } from '@shipcode/shared';
-import { SideBySideDiffViewer } from '@shipcode/ui';
+import { SideBySideDiffViewer, TaskGraphViewer } from '@shipcode/ui';
 import {
   Badge,
   Button,
@@ -64,7 +65,9 @@ export function PipelineTab({
   requireApprovalSelectValue,
   projectDefaultPhaseSelections,
   revisionCountSelectValue,
+  taskGraph,
   thread,
+  githubIssueUrl,
   onPhaseAgentChange,
   onPhaseEffortChange,
   onRequireApprovalChange,
@@ -96,7 +99,9 @@ export function PipelineTab({
   requireApprovalSelectValue: string;
   projectDefaultPhaseSelections: Record<PhaseKey, PhaseSelection>;
   revisionCountSelectValue: string;
+  taskGraph: TaskGraphWithNodes | null;
   thread: Thread | null | undefined;
+  githubIssueUrl: string | null;
   onPhaseAgentChange: (phase: PhaseKey, value: string) => void;
   onPhaseEffortChange: (phase: PhaseKey, effort: string) => void;
   onRequireApprovalChange: (value: string) => void;
@@ -105,6 +110,11 @@ export function PipelineTab({
   onRestoreCheckpoint: (checkpoint: PipelineCheckpoint) => void;
   onStabilizePr: () => void;
 }) {
+  const getTaskIssueUrl = githubIssueUrl
+    ? (issueNumber: number) =>
+        githubIssueUrl.replace(/\/issues\/\d+(?:[#?].*)?$/, `/issues/${issueNumber}`)
+    : undefined;
+
   return (
     <>
       <div className="mb-5">
@@ -444,6 +454,18 @@ export function PipelineTab({
               </div>
             ) : null}
           </div>
+        </div>
+      ) : null}
+
+      {taskGraph ? (
+        <div className="mb-5">
+          <TaskGraphViewer
+            graph={taskGraph}
+            getIssueUrl={getTaskIssueUrl}
+            onOpenIssue={(url) => {
+              void window.shipcode.invoke('shell:open-external', { url });
+            }}
+          />
         </div>
       ) : null}
 

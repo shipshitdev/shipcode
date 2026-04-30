@@ -1,12 +1,12 @@
 import type {
   LoadedRepoSetupContract,
+  PhasePromptTelemetry,
   ProcessManager,
   PromptMaterial,
   PromptMaterialSummary,
   ProviderRegistry,
   TerminalEvent,
-} from '@shipcode/agents';
-import type { PhasePromptTelemetry } from '@shipcode/agents/source';
+} from '@shipcode/agents/source';
 import type {
   CheckpointQueries,
   DiffQueries,
@@ -36,6 +36,7 @@ import type {
   VerificationResult,
 } from '@shipcode/shared';
 import type { TaskGraphWithNodes, TaskNodeStatus } from '@shipcode/shared/source';
+import type { WorkflowLoadWarning, WorkflowPolicy } from './workflow-loader';
 
 // Temporary alias while pipeline adopts the shared executor-model type directly.
 export type PipelineExecutorModel = ExecutorModel;
@@ -147,6 +148,11 @@ export type PipelineEvent =
       reason: string;
     }
   | {
+      type: 'workflow:warning';
+      threadId: string;
+      warning: WorkflowLoadWarning;
+    }
+  | {
       /**
        * Canonical terminal event emitted by providers and the test phase.
        * The renderer reads these instead of parsing raw agent output.
@@ -167,6 +173,7 @@ export interface PipelineContext {
   projectId: string | null;
   worktreePath: string | null;
   retryCount: number;
+  retryTimer: ReturnType<typeof setTimeout> | null;
   autonomous: boolean;
   reviewRound: number;
   clarificationRound: number;
@@ -217,6 +224,8 @@ export interface PipelineContext {
    */
   repoSetupContract: LoadedRepoSetupContract | null;
   repoSetupLoaded: boolean;
+  workflowPolicy: WorkflowPolicy;
+  workflowWarningEmitted: boolean;
   /**
    * Per-run AbortController. Providers honor `abort.signal` to cancel
    * in-flight work (subprocess kill OR HTTP abort). cancel(threadId)

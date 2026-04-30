@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { loadWorkflowPolicy } from '@shipcode/pipeline';
 import type { ExecutorModel, GitHubIssueCacheRecord, PipelinePhase } from '@shipcode/shared';
 import {
   clampError,
@@ -81,6 +82,14 @@ export class PipelineScheduler {
       ).length;
   }
 
+  private _getProjectPipelineCap(projectPath: string): number {
+    const settings = this.deps.queries.settings.get();
+    return Math.min(
+      settings.maxConcurrentPipelines,
+      loadWorkflowPolicy(projectPath).agent.maxConcurrentAgents,
+    );
+  }
+
   /**
    * Attempt to start a GitHub issue pipeline.
    *
@@ -96,14 +105,14 @@ export class PipelineScheduler {
     const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
     if (!issue) throw new Error(`Issue #${issueNumber} not found in cache`);
 
-    const settings = queries.settings.get();
     const activeCount = this._getRunningPipelineCount();
+    const pipelineCap = this._getProjectPipelineCap(project.path);
 
-    if (activeCount >= settings.maxConcurrentPipelines) {
+    if (activeCount >= pipelineCap) {
       queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.queued);
       this._sendIssuesUpdated(projectId);
       log.info(
-        `[scheduler] queued issue #${issueNumber} (${activeCount}/${settings.maxConcurrentPipelines} slots used)`,
+        `[scheduler] queued issue #${issueNumber} (${activeCount}/${pipelineCap} slots used)`,
       );
       return { queued: true };
     }
@@ -133,14 +142,14 @@ export class PipelineScheduler {
       throw new Error(`Issue #${issueNumber} is not a quick task — use startOrQueue`);
     }
 
-    const settings = queries.settings.get();
     const activeCount = this._getRunningPipelineCount();
+    const pipelineCap = this._getProjectPipelineCap(project.path);
 
-    if (activeCount >= settings.maxConcurrentPipelines) {
+    if (activeCount >= pipelineCap) {
       queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.queued);
       this._sendIssuesUpdated(projectId);
       log.info(
-        `[scheduler] queued quick task ${issueNumber} (${activeCount}/${settings.maxConcurrentPipelines} slots used)`,
+        `[scheduler] queued quick task ${issueNumber} (${activeCount}/${pipelineCap} slots used)`,
       );
       return { queued: true };
     }
@@ -156,15 +165,19 @@ export class PipelineScheduler {
   onSlotFreed(): void {
     const { queries } = this.deps;
     try {
-      const settings = queries.settings.get();
       const activeCount = this._getRunningPipelineCount();
-      if (activeCount >= settings.maxConcurrentPipelines) return;
 
       // Drain one pending automation before queued issues — automations
       // already fired their cron tick and should not wait behind issues
       // that can simply re-queue.
       const pendingAutomationId = this.pendingAutomations.shift();
       if (pendingAutomationId) {
+        const automation = queries.automations.getById(pendingAutomationId);
+        const project = automation ? queries.projects.getById(automation.projectId) : null;
+        if (project && activeCount >= this._getProjectPipelineCap(project.path)) {
+          this.pendingAutomations.unshift(pendingAutomationId);
+          return;
+        }
         log.info(`[scheduler] auto-promoting automation ${pendingAutomationId}`);
         this._launchAutomation(pendingAutomationId).catch((err) => {
           log.error('[scheduler] automation promote failed:', err);
@@ -177,6 +190,7 @@ export class PipelineScheduler {
 
       const project = queries.projects.getById(next.projectId);
       if (!project) return;
+      if (activeCount >= this._getProjectPipelineCap(project.path)) return;
 
       log.info(`[scheduler] auto-promoting #${next.issueNumber} "${next.title}"`);
 
@@ -196,20 +210,27 @@ export class PipelineScheduler {
    * in-memory if pipeline slots are full. Called by AutomationScheduler.
    */
   async startOrQueueAutomation(automationId: string): Promise<{ queued: boolean }> {
-    if (this.deps.queries.threads.hasActiveForAutomation(automationId)) {
+    const { queries } = this.deps;
+    const automation = queries.automations.getById(automationId);
+    const project = automation ? queries.projects.getById(automation.projectId) : null;
+
+    if (queries.threads.hasActiveForAutomation(automationId)) {
       log.info(`[scheduler] skipping automation ${automationId} — already has an active pipeline`);
       return { queued: false };
     }
 
-    const settings = this.deps.queries.settings.get();
+    const settings = queries.settings.get();
     const activeCount = this._getRunningPipelineCount();
+    const pipelineCap = project
+      ? this._getProjectPipelineCap(project.path)
+      : settings.maxConcurrentPipelines;
 
-    if (activeCount >= settings.maxConcurrentPipelines) {
+    if (activeCount >= pipelineCap) {
       if (!this.pendingAutomations.includes(automationId)) {
         this.pendingAutomations.push(automationId);
       }
       log.info(
-        `[scheduler] queued automation ${automationId} (${activeCount}/${settings.maxConcurrentPipelines} slots used)`,
+        `[scheduler] queued automation ${automationId} (${activeCount}/${pipelineCap} slots used)`,
       );
       return { queued: true };
     }
@@ -233,7 +254,11 @@ export class PipelineScheduler {
         if (!project) continue;
 
         const executingCount = this._getRunningExecutionCountForProject(project.id, project.path);
-        if (executingCount >= settings.maxConcurrentExecutions) continue;
+        const maxConcurrentExecutions = Math.min(
+          settings.maxConcurrentExecutions,
+          loadWorkflowPolicy(project.path).agent.maxConcurrentAgents,
+        );
+        if (executingCount >= maxConcurrentExecutions) continue;
 
         const latestPlan = queries.plans.getLatest(thread.id);
         if (!latestPlan?.structured) continue;

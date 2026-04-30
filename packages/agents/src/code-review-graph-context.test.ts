@@ -11,14 +11,23 @@ describe('loadCodeReviewGraphContext', () => {
     vi.mocked(execFileSync).mockReset();
   });
 
-  it('returns a plan-only repo graph prompt material when code-review-graph status exists', () => {
-    vi.mocked(execFileSync).mockReturnValue('Nodes: 10\nEdges: 20\nFiles: 3\n');
+  it('returns repo graph prompt material when code-review-graph status exists', () => {
+    vi.mocked(execFileSync)
+      .mockReturnValueOnce('Nodes: 10\nEdges: 20\nFiles: 3\n')
+      .mockReturnValueOnce('Changed files: 2\nHigh impact nodes: 1\n');
 
     const materials = loadCodeReviewGraphContext('/repo');
 
-    expect(execFileSync).toHaveBeenCalledWith(
+    expect(execFileSync).toHaveBeenNthCalledWith(
+      1,
       'uvx',
       ['code-review-graph', 'status', '--repo', '/repo'],
+      expect.objectContaining({ timeout: 4000 }),
+    );
+    expect(execFileSync).toHaveBeenNthCalledWith(
+      2,
+      'uvx',
+      ['code-review-graph', 'detect-changes', '--brief', '--repo', '/repo'],
       expect.objectContaining({ timeout: 4000 }),
     );
     expect(materials).toEqual([
@@ -28,6 +37,22 @@ describe('loadCodeReviewGraphContext', () => {
         content: expect.stringContaining('Nodes: 10'),
       }),
     ]);
+    expect(materials[0]?.content).toContain('Changed files: 2');
+  });
+
+  it('keeps status context when change impact lookup fails', () => {
+    vi.mocked(execFileSync).mockImplementation((_, args) => {
+      if (Array.isArray(args) && args.includes('detect-changes')) {
+        throw new Error('no diff base');
+      }
+      return 'Nodes: 10\nEdges: 20\nFiles: 3\n';
+    });
+
+    const materials = loadCodeReviewGraphContext('/repo');
+
+    expect(materials).toHaveLength(1);
+    expect(materials[0]?.content).toContain('Nodes: 10');
+    expect(materials[0]?.content).not.toContain('Current change impact');
   });
 
   it('silently skips projects without an available graph', () => {

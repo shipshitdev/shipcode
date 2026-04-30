@@ -1,3 +1,4 @@
+import type { PlanReview, ShipCodePlan } from '@shipcode/shared';
 import { Liquid, type LiquidError } from 'liquidjs';
 
 /**
@@ -29,7 +30,12 @@ export interface TemplateContext {
     number: number;
     prior_failure_reason?: string;
   };
-  phase: 'plan' | 'review' | 'execute' | 'verify';
+  phase: 'plan' | 'review' | 'revision' | 'execute' | 'verify';
+  plan?: ShipCodePlan;
+  review?: PlanReview;
+  diff?: string;
+  acceptanceCriteria?: string[];
+  testOutput?: string | null;
 }
 
 /**

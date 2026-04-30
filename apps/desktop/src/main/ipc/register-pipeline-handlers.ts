@@ -79,6 +79,10 @@ export function registerPipelineHandlers({
     return queries.verifications.getLatest(threadId);
   });
 
+  ipcMain.handle('task-graph:get-latest', (_event, { threadId }: { threadId: string }) => {
+    return queries.taskGraphs?.getLatestByThread(threadId) ?? null;
+  });
+
   ipcMain.handle(
     'terminal:list',
     (_event, { threadId, limit }: { threadId: string; limit?: number }) => {

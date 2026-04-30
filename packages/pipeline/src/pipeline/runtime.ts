@@ -2,13 +2,18 @@ import { execFile, spawn } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
-import type { PromptMaterial, ProviderPhase, ProviderRequest } from '@shipcode/agents';
-import { formatPlanComment, GhCli, loadRepoSetupContract, shellExecEnv } from '@shipcode/agents';
 import {
+  formatPlanComment,
+  GhCli,
+  loadRepoSetupContract,
   measurePhasePromptTelemetry,
+  type PromptMaterial,
+  type ProviderPhase,
+  type ProviderRequest,
+  shellExecEnv,
   toPersistedPromptTelemetryMaterials,
 } from '@shipcode/agents/source';
-import { isRealGithubIssueNumber } from '@shipcode/shared';
+import { type GitHubStatusLabel, isRealGithubIssueNumber } from '@shipcode/shared';
 import {
   formatTaskGraphChecklist,
   formatTaskNodeIssueBody,
@@ -616,6 +621,7 @@ export function createPipelineRuntime(
     try {
       const ghCli = new GhCli(context.projectPath);
       const graphForComment = await ensureTaskNodeIssues(context, ghCli, graph);
+      await syncTaskNodeIssueStatuses(context, ghCli, graphForComment);
       await ghCli.upsertIssueCommentByMarker(
         context.githubIssueNumber,
         TASK_GRAPH_COMMENT_MARKER,
@@ -655,6 +661,44 @@ export function createPipelineRuntime(
     }
 
     return latestGraph;
+  }
+
+  async function syncTaskNodeIssueStatuses(
+    context: PipelineContext,
+    ghCli: GhCli,
+    graph: TaskGraphWithNodes,
+  ): Promise<void> {
+    if (graph.mode !== 'github-subissues' || !isRealGithubIssueNumber(context.githubIssueNumber)) {
+      return;
+    }
+
+    for (const node of graph.nodes) {
+      if (!isRealGithubIssueNumber(node.githubIssueNumber)) continue;
+      const statusLabel: GitHubStatusLabel =
+        node.status === 'completed'
+          ? 'status:done'
+          : node.status === 'failed' || node.status === 'blocked'
+            ? 'status:failed'
+            : node.status === 'running'
+              ? 'status:in-progress'
+              : 'status:queued';
+
+      try {
+        await ghCli.setStatusLabel(node.githubIssueNumber, statusLabel);
+      } catch (error) {
+        console.error('[pipeline] Failed to sync task issue status label:', error);
+      }
+
+      try {
+        if (node.status === 'completed') {
+          await ghCli.closeIssue(node.githubIssueNumber);
+        } else {
+          await ghCli.reopenIssue(node.githubIssueNumber);
+        }
+      } catch (error) {
+        console.error('[pipeline] Failed to sync task issue open state:', error);
+      }
+    }
   }
 
   return {

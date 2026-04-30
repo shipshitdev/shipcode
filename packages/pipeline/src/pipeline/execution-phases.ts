@@ -10,7 +10,7 @@ import {
   StreamParser,
   selectPromptMaterials,
   summarizePromptMaterials,
-} from '@shipcode/agents';
+} from '@shipcode/agents/source';
 import { WorktreeManager } from '@shipcode/git';
 import {
   EXECUTION_PHASES,
@@ -27,6 +27,7 @@ import {
   formatTaskGraphExecutionContract,
   type TaskNodeRecord,
 } from '@shipcode/shared/source';
+import { renderWorkflowPromptTemplate } from '../workflow-prompt';
 import { parseUnifiedDiff } from './diff-parser';
 import type { PipelineHelperEnv } from './shared';
 
@@ -216,10 +217,14 @@ export function createExecutionPhaseHandlers({
     }
 
     const settings = deps.settings.get();
+    const maxConcurrentExecutions = Math.min(
+      settings.maxConcurrentExecutions,
+      context.workflowPolicy.agent.maxConcurrentAgents,
+    );
     const executingCount = contextHelpers
       .listActiveInPhases(EXECUTION_PHASES)
       .filter((summary) => summary.threadId !== threadId && isSameProject(summary, context)).length;
-    if (executingCount >= settings.maxConcurrentExecutions) {
+    if (executingCount >= maxConcurrentExecutions) {
       // Project execution slots full — stay in awaiting_approval until a slot frees.
       emitPhase(threadId, 'awaiting_approval');
       return;
@@ -380,11 +385,26 @@ export function createExecutionPhaseHandlers({
     ];
     rememberMaterialSummary(context, 'execute', executeMaterials);
     const executionPlan = activeTaskNode ? buildTaskNodePlan(plan, activeTaskNode) : plan;
+    let workflowExecutionPrompt: string | null;
+    try {
+      workflowExecutionPrompt = renderWorkflowPromptTemplate(context, deps, 'execute', {
+        plan: executionPlan,
+      });
+    } catch (error) {
+      emitPhase(
+        threadId,
+        'failed',
+        `WORKFLOW.md template render error: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      activePipelines.delete(threadId);
+      return;
+    }
     const executionPrompt =
-      buildExecutionPrompt(executionPlan, skill.context, skill.deps, {
-        promptMaterials: executeMaterials,
-        testingContext: getTestingContext(context),
-      }) +
+      (workflowExecutionPrompt ??
+        buildExecutionPrompt(executionPlan, skill.context, skill.deps, {
+          promptMaterials: executeMaterials,
+          testingContext: getTestingContext(context),
+        })) +
       formatTaskGraphExecutionContract(taskGraph, { activeNode: activeTaskNode }) +
       verificationFeedback +
       testFeedback +
@@ -601,15 +621,33 @@ export function createExecutionPhaseHandlers({
         : []),
     ];
     rememberMaterialSummary(context, 'verify', verifyMaterials);
-    const verificationPrompt = buildVerificationPrompt(
-      plan,
-      diff,
-      plan.acceptanceCriteria,
-      skill.context,
-      skill.deps,
-      context.testOutput ?? null,
-      { promptMaterials: verifyMaterials },
-    );
+    let verificationPrompt: string;
+    try {
+      verificationPrompt =
+        renderWorkflowPromptTemplate(context, deps, 'verify', {
+          plan,
+          diff,
+          acceptanceCriteria: plan.acceptanceCriteria,
+          testOutput: context.testOutput,
+        }) ??
+        buildVerificationPrompt(
+          plan,
+          diff,
+          plan.acceptanceCriteria,
+          skill.context,
+          skill.deps,
+          context.testOutput ?? null,
+          { promptMaterials: verifyMaterials },
+        );
+    } catch (error) {
+      emitPhase(
+        threadId,
+        'failed',
+        `WORKFLOW.md template render error: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      activePipelines.delete(threadId);
+      return;
+    }
 
     void (async () => {
       try {

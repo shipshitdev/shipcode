@@ -1,6 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PipelineScheduler } from './pipeline-scheduler';
 
+const { loadWorkflowPolicyMock } = vi.hoisted(() => ({
+  loadWorkflowPolicyMock: vi.fn(() => ({
+    agent: { maxConcurrentAgents: 10, maxRetryBackoffMs: 300_000 },
+  })),
+}));
+
+vi.mock('@shipcode/pipeline', async (importActual) => {
+  const actual = (await importActual()) as typeof import('@shipcode/pipeline');
+  return {
+    ...actual,
+    loadWorkflowPolicy: loadWorkflowPolicyMock,
+  };
+});
+
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp/shipcode') },
   BrowserWindow: class {},
@@ -215,6 +229,9 @@ describe('PipelineScheduler', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    loadWorkflowPolicyMock.mockReturnValue({
+      agent: { maxConcurrentAgents: 10, maxRetryBackoffMs: 300_000 },
+    });
     queries = makeQueries();
     pipeline = {
       listActive: vi.fn(() => []),
@@ -286,6 +303,22 @@ describe('PipelineScheduler', () => {
       const result = await scheduler.startOrQueue('project-1', 42);
 
       expect(result.queued).toBe(true);
+    });
+
+    it('queues when WORKFLOW.md agent.max_concurrent_agents lowers the dispatch cap', async () => {
+      loadWorkflowPolicyMock.mockReturnValue({
+        agent: { maxConcurrentAgents: 1, maxRetryBackoffMs: 300_000 },
+      });
+      pipeline.listActiveInPhases.mockReturnValue([
+        { threadId: 'a', phase: 'executing', startedAt: Date.now(), activeProcessId: null },
+      ]);
+      queries.settings.get.mockReturnValue(makeBaseSettings({ maxConcurrentPipelines: 3 }));
+
+      const result = await scheduler.startOrQueue('project-1', 42);
+
+      expect(result.queued).toBe(true);
+      expect(pipeline.startFromGitHubIssue).not.toHaveBeenCalled();
+      expect(loadWorkflowPolicyMock).toHaveBeenCalledWith('/tmp/project');
     });
   });
 

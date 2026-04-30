@@ -3,17 +3,26 @@ import type { PromptMaterial } from './prompt-scope';
 
 const DEFAULT_TIMEOUT_MS = 4_000;
 const MAX_STATUS_CHARS = 2_000;
+const MAX_CHANGE_IMPACT_CHARS = 2_000;
 
 export interface CodeReviewGraphContextOptions {
   timeoutMs?: number;
+  includeChangeImpact?: boolean;
+  changeBase?: string;
 }
 
 export function loadCodeReviewGraphContext(
   projectPath: string,
   options: CodeReviewGraphContextOptions = {},
 ): PromptMaterial[] {
-  const status = readCodeReviewGraphStatus(projectPath, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const status = readCodeReviewGraphStatus(projectPath, timeoutMs);
   if (!status) return [];
+
+  const changeImpact =
+    options.includeChangeImpact === false
+      ? null
+      : readCodeReviewGraphChangeImpact(projectPath, timeoutMs, options.changeBase);
 
   return [
     {
@@ -28,6 +37,18 @@ export function loadCodeReviewGraphContext(
         '```text',
         status,
         '```',
+        ...(changeImpact
+          ? [
+              '',
+              '## Current change impact',
+              '',
+              'Use this only as an extra signal when the worktree already has changes; absence of impact does not mean the issue is small.',
+              '',
+              '```text',
+              changeImpact,
+              '```',
+            ]
+          : []),
       ].join('\n'),
     },
   ];
@@ -40,11 +61,34 @@ function readCodeReviewGraphStatus(projectPath: string, timeoutMs: number): stri
       timeout: timeoutMs,
       stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
-    if (!output) return null;
-    return output.length > MAX_STATUS_CHARS
-      ? `${output.slice(0, MAX_STATUS_CHARS).trimEnd()}\n... truncated ...`
-      : output;
+    return clampOutput(output, MAX_STATUS_CHARS);
   } catch {
     return null;
   }
+}
+
+function readCodeReviewGraphChangeImpact(
+  projectPath: string,
+  timeoutMs: number,
+  base?: string,
+): string | null {
+  try {
+    const args = ['code-review-graph', 'detect-changes', '--brief', '--repo', projectPath];
+    if (base) args.push('--base', base);
+    const output = execFileSync('uvx', args, {
+      encoding: 'utf-8',
+      timeout: timeoutMs,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    return clampOutput(output, MAX_CHANGE_IMPACT_CHARS);
+  } catch {
+    return null;
+  }
+}
+
+function clampOutput(output: string, maxChars: number): string | null {
+  if (!output) return null;
+  return output.length > maxChars
+    ? `${output.slice(0, maxChars).trimEnd()}\n... truncated ...`
+    : output;
 }

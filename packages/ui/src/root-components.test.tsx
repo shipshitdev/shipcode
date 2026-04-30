@@ -1,12 +1,18 @@
 // @vitest-environment jsdom
 
-import type { PlanReview, ShipCodePlan, VerificationResult } from '@shipcode/shared';
+import type {
+  PlanReview,
+  ShipCodePlan,
+  TaskGraphWithNodes,
+  VerificationResult,
+} from '@shipcode/shared';
 import { act, type ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { describe, expect, it, vi } from 'vitest';
 import { PipelineStatus } from './PipelineStatus';
 import { PlanViewer } from './PlanViewer';
 import { ReviewViewer } from './ReviewViewer';
+import { TaskGraphViewer } from './TaskGraphViewer';
 import { VerificationViewer } from './VerificationViewer';
 
 (
@@ -105,6 +111,77 @@ const verification: VerificationResult = {
   ],
 };
 
+const taskGraph: TaskGraphWithNodes = {
+  id: 'graph-1',
+  threadId: 'thread-1',
+  planId: 'plan-1',
+  mode: 'github-subissues',
+  status: 'active',
+  riskScore: 0.72,
+  assessment: {
+    mode: 'github-subissues',
+    shouldDecompose: true,
+    riskScore: 0.72,
+    reasons: ['Cross-surface task: backend, frontend', '5 touched files'],
+    suggestedNodeCount: 2,
+    surfaces: ['backend', 'frontend'],
+  },
+  createdAt: '2026-04-30T00:00:00.000Z',
+  updatedAt: '2026-04-30T00:00:00.000Z',
+  nodes: [
+    {
+      id: 'node-1',
+      graphId: 'graph-1',
+      stableKey: 'T1',
+      order: 1,
+      title: 'Persist graph state',
+      description: 'Write task graph rows',
+      status: 'completed',
+      files: ['packages/db/src/queries/task-graphs.ts'],
+      acceptanceCriteria: ['Graph rows are persisted'],
+      surfaces: ['database', 'backend'],
+      agentRole: 'database',
+      suggestedExecutorModel: 'claude',
+      suggestedReasoningEffort: 'high',
+      githubIssueNumber: 42,
+      startedAt: '2026-04-30T00:01:00.000Z',
+      completedAt: '2026-04-30T00:02:00.000Z',
+      createdAt: '2026-04-30T00:00:00.000Z',
+      updatedAt: '2026-04-30T00:02:00.000Z',
+    },
+    {
+      id: 'node-2',
+      graphId: 'graph-1',
+      stableKey: 'T2',
+      order: 2,
+      title: 'Render graph status',
+      description: 'Expose node progress in the renderer',
+      status: 'ready',
+      files: ['apps/desktop/src/renderer/components/IssueDetail.tsx'],
+      acceptanceCriteria: ['Graph status is visible'],
+      surfaces: ['frontend'],
+      agentRole: 'frontend',
+      suggestedExecutorModel: null,
+      suggestedReasoningEffort: 'medium',
+      githubIssueNumber: null,
+      startedAt: null,
+      completedAt: null,
+      createdAt: '2026-04-30T00:00:00.000Z',
+      updatedAt: '2026-04-30T00:00:00.000Z',
+    },
+  ],
+  edges: [
+    {
+      id: 'edge-1',
+      graphId: 'graph-1',
+      sourceNodeId: 'node-1',
+      targetNodeId: 'node-2',
+      edgeType: 'depends_on',
+      createdAt: '2026-04-30T00:00:00.000Z',
+    },
+  ],
+};
+
 describe('root UI components', () => {
   it('renders active and completed phases and only emits clicks for enabled phases', () => {
     const onPhaseClick = vi.fn();
@@ -189,6 +266,37 @@ describe('root UI components', () => {
     expect(view.container.textContent).toContain('No minimum threshold configured yet.');
     expect(view.container.textContent).toContain('Coverage is below the floor in one package.');
     expect(view.container.textContent).toContain('packages/ui/src/PipelineStatus.tsx');
+    view.cleanup();
+  });
+
+  it('renders task graph progress and opens linked child issues', () => {
+    const onOpenIssue = vi.fn();
+    const view = renderIntoDom(
+      <TaskGraphViewer
+        graph={taskGraph}
+        getIssueUrl={(issueNumber) => `https://github.com/shipcode/shipcode/issues/${issueNumber}`}
+        onOpenIssue={onOpenIssue}
+      />,
+    );
+
+    expect(view.container.textContent).toContain('Task Graph');
+    expect(view.container.textContent).toContain('GitHub sub-issues');
+    expect(view.container.textContent).toContain('1/2');
+    expect(view.container.textContent).toContain('Persist graph state');
+    expect(view.container.textContent).toContain('Render graph status');
+
+    const issueButton = Array.from(view.container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('#42'),
+    );
+    if (!(issueButton instanceof HTMLButtonElement)) {
+      throw new Error('Expected child issue button');
+    }
+
+    act(() => {
+      issueButton.click();
+    });
+
+    expect(onOpenIssue).toHaveBeenCalledWith('https://github.com/shipcode/shipcode/issues/42');
     view.cleanup();
   });
 });

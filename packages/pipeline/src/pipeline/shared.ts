@@ -1,4 +1,4 @@
-import type { PromptMaterial, ProviderPhase, SkillValidationError } from '@shipcode/agents';
+import type { PromptMaterial, ProviderPhase, SkillValidationError } from '@shipcode/agents/source';
 import type {
   ClarificationRequest,
   GitHubPrCheckSummary,

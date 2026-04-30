@@ -1,3 +1,4 @@
+import type { TaskGraphWithNodes } from './task-graph';
 import type {
   ActivePipelineSummary,
   ActivityEntry,
@@ -194,6 +195,8 @@ export interface IpcInvokeChannels {
   'plan:update': { args: { planId: string; structured: ShipCodePlan }; result: undefined };
 
   'review:get': { args: { planId: string }; result: ReviewRecord | null };
+
+  'task-graph:get-latest': { args: { threadId: string }; result: TaskGraphWithNodes | null };
 
   'diff:list': { args: { threadId: string }; result: DiffRecord[] };
 

@@ -58,6 +58,9 @@ export function createCliEmitter(): PipelineEmitter {
         case 'skill:fallback':
           console.log(`[${timestamp}] Skill fallback: ${event.phase} (${event.reason})`);
           break;
+        case 'workflow:warning':
+          console.log(`[${timestamp}] WORKFLOW.md warning: ${event.warning.message}`);
+          break;
         case 'terminal:event':
         case 'pipeline:output':
           break;

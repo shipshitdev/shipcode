@@ -178,6 +178,9 @@ export function createElectronEmitter(
       case 'skill:fallback':
         logEvent('skill:fallback', event);
         return;
+      case 'workflow:warning':
+        logEvent('workflow:warning', event);
+        return;
       case 'terminal:event':
         logEvent('terminal:event', {
           threadId: event.threadId,

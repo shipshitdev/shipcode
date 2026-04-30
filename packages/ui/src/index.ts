@@ -25,4 +25,6 @@ export {
   SyntaxHighlightedLine,
   useSyntaxHighlightedLines,
 } from './SyntaxHighlightedCode';
+export type { TaskGraphViewerProps } from './TaskGraphViewer';
+export { TaskGraphViewer } from './TaskGraphViewer';
 export { VerificationViewer } from './VerificationViewer';

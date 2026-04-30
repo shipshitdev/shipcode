@@ -41,7 +41,7 @@ import {
   createOpenRouterProvider,
   createProviderRegistry,
   ProcessManager,
-} from '@shipcode/agents';
+} from '@shipcode/agents/source';
 import {
   ActivityQueries,
   AutomationQueries,

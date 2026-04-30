@@ -1,11 +1,15 @@
-import type { SkillValidationError } from '@shipcode/agents';
-import { resolvePhaseReasoningEffort, toPipelinePromptScope } from '@shipcode/agents/source';
+import {
+  resolvePhaseReasoningEffort,
+  type SkillValidationError,
+  toPipelinePromptScope,
+} from '@shipcode/agents/source';
 import {
   resolvePhaseModelForIssue,
   resolvePhaseModelIdForIssue,
   resolveProviderReasoningEffort,
 } from '@shipcode/shared';
 import type { PipelineContext, PipelineDeps, PipelineExecutorModel } from '../types';
+import { loadWorkflowPolicy } from '../workflow-loader';
 import type { PipelineContextHelpers } from './shared';
 
 function buildPhasePromptScopes(): PipelineContext['phasePromptScopes'] {
@@ -16,6 +20,16 @@ function buildPhasePromptScopes(): PipelineContext['phasePromptScopes'] {
     verify: toPipelinePromptScope('verify'),
     execute: toPipelinePromptScope('execute'),
   };
+}
+
+function emitWorkflowWarning(deps: PipelineDeps, context: PipelineContext): void {
+  if (!context.workflowPolicy.warning || context.workflowWarningEmitted) return;
+  context.workflowWarningEmitted = true;
+  deps.emitter.emit({
+    type: 'workflow:warning',
+    threadId: context.threadId,
+    warning: context.workflowPolicy.warning,
+  });
 }
 
 export function createPipelineContextHelpers(
@@ -146,7 +160,11 @@ export function createPipelineContextHelpers(
         verifierReasoningEffort,
         clarificationHistory: seed.clarificationHistory ?? existing.clarificationHistory ?? [],
         repoPromptMaterials: seed.repoPromptMaterials ?? existing.repoPromptMaterials ?? null,
+        workflowPolicy: seed.workflowPolicy ?? existing.workflowPolicy,
+        workflowWarningEmitted:
+          seed.workflowWarningEmitted ?? existing.workflowWarningEmitted ?? false,
       });
+      emitWorkflowWarning(deps, existing);
       return existing;
     }
 
@@ -213,6 +231,8 @@ export function createPipelineContextHelpers(
     const verifierReasoningEffort = phaseReasoningEfforts.verify;
 
     const seededProjectId = seed.projectId ?? deps.threads.getById(threadId)?.projectId ?? null;
+    const workflowPolicy =
+      seed.workflowPolicy ?? loadWorkflowPolicy(seed.worktreePath ?? seed.projectPath);
 
     const context: PipelineContext = {
       threadId,
@@ -220,6 +240,7 @@ export function createPipelineContextHelpers(
       projectId: seededProjectId,
       worktreePath: seed.worktreePath ?? null,
       retryCount: seed.retryCount ?? 0,
+      retryTimer: seed.retryTimer ?? null,
       autonomous: seed.autonomous ?? false,
       reviewRound: seed.reviewRound ?? 0,
       clarificationRound: seed.clarificationRound ?? 0,
@@ -261,11 +282,14 @@ export function createPipelineContextHelpers(
       promptTelemetryDiagnostics: seed.promptTelemetryDiagnostics ?? [],
       repoSetupContract: seed.repoSetupContract ?? null,
       repoSetupLoaded: seed.repoSetupLoaded ?? false,
+      workflowPolicy,
+      workflowWarningEmitted: seed.workflowWarningEmitted ?? false,
       abort: seed.abort ?? new AbortController(),
       stabilizationFeedback: seed.stabilizationFeedback ?? null,
       previousPlanRawOutput: seed.previousPlanRawOutput ?? null,
     };
     activePipelines.set(threadId, context);
+    emitWorkflowWarning(deps, context);
     return context;
   }
 

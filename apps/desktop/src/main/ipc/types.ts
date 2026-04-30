@@ -1,4 +1,4 @@
-import type { ProcessManager } from '@shipcode/agents';
+import type { ProcessManager } from '@shipcode/agents/source';
 import type {
   ActivityQueries,
   AutomationQueries,

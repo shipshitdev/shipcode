@@ -1,12 +1,12 @@
 import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { AgentProvider, ProcessManager } from '@shipcode/agents';
+import type { AgentProvider, ProcessManager } from '@shipcode/agents/source';
 import {
   createClaudeCliProvider,
   createCodexCliProvider,
   createProviderRegistry,
-} from '@shipcode/agents';
+} from '@shipcode/agents/source';
 import {
   DEFAULT_SETTINGS,
   type GitHubIssueCacheRecord,
@@ -138,6 +138,7 @@ const VERIFICATION_FAILED_JSON = JSON.stringify({
 
 /** Flush the microtask queue so async handlers (await import) settle */
 const flush = () => new Promise((r) => setTimeout(r, 10));
+const useRetryFakeTimers = () => vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
 const tempDirs: string[] = [];
 
 function clarificationRequest(id: string, questionId: string, title: string) {
@@ -625,6 +626,7 @@ describe('createPipeline', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     for (const dir of tempDirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true });
@@ -821,23 +823,73 @@ describe('createPipeline', () => {
       expect(prompt).toContain('Produce a concrete plan now');
     });
 
-    it('exit non-zero → retries (spawns again)', async () => {
+    it('uses repo WORKFLOW.md body as the planner prompt template when present', async () => {
+      const projectDir = makeTempProject();
+      writeFileSync(
+        path.join(projectDir, '.shipcode', 'WORKFLOW.md'),
+        'Custom {{ phase }} prompt for attempt {{ attempt.number }}.',
+      );
+
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', projectDir, null);
+
+      const args = vi.mocked(mock.deps.processManager.spawn).mock.calls[0][2] as string[];
+      expect(args[1]).toContain('Custom plan prompt for attempt 1.');
+    });
+
+    it('emits a structured workflow warning and falls back when WORKFLOW.md is invalid', async () => {
+      const projectDir = makeTempProject();
+      writeFileSync(
+        path.join(projectDir, '.shipcode', 'WORKFLOW.md'),
+        `---
+- not-a-map
+---
+Custom prompt`,
+      );
+
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', projectDir, null);
+
+      expect(mock.emittedEvents).toContainEqual(
+        expect.objectContaining({
+          type: 'workflow:warning',
+          threadId: 't1',
+          warning: expect.objectContaining({ code: 'workflow_front_matter_not_a_map' }),
+        }),
+      );
+      const args = vi.mocked(mock.deps.processManager.spawn).mock.calls[0][2] as string[];
+      expect(args[1]).toContain('Produce a detailed, step-by-step implementation plan');
+    });
+
+    it('exit non-zero → schedules failure retry with exponential backoff', async () => {
+      useRetryFakeTimers();
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
 
-      await mock.trigger('exit', 'proc-1', 1);
+      const firstExit = mock.trigger('exit', 'proc-1', 1);
+      await vi.advanceTimersByTimeAsync(0);
+      await firstExit;
 
-      // Should have spawned a second process (retry)
+      expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(9999);
+      expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
       expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(2);
     });
 
     it('exit non-zero 4 times → emits failed (PIPELINE_MAX_RETRIES=3)', async () => {
+      useRetryFakeTimers();
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
 
       // First attempt + 3 retries = 4 total failures
       for (let i = 1; i <= PIPELINE_MAX_RETRIES + 1; i++) {
-        await mock.trigger('exit', `proc-${i}`, 1);
+        const exit = mock.trigger('exit', `proc-${i}`, 1);
+        await vi.advanceTimersByTimeAsync(0);
+        await exit;
+        if (i <= PIPELINE_MAX_RETRIES) {
+          await vi.advanceTimersByTimeAsync(10_000 * 2 ** (i - 1));
+        }
       }
 
       expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(PIPELINE_MAX_RETRIES + 1);
@@ -849,28 +901,56 @@ describe('createPipeline', () => {
     });
 
     it('C1 regression: retry counter persists across recursive calls', async () => {
+      useRetryFakeTimers();
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
 
       // First failure: retryCount becomes 1
-      await mock.trigger('exit', 'proc-1', 1);
+      const firstExit = mock.trigger('exit', 'proc-1', 1);
+      await vi.advanceTimersByTimeAsync(0);
+      await firstExit;
       expect(pipeline.getContext('t1')?.retryCount).toBe(1);
+      await vi.advanceTimersByTimeAsync(10_000);
 
       // Second failure: retryCount becomes 2
-      await mock.trigger('exit', 'proc-2', 1);
+      const secondExit = mock.trigger('exit', 'proc-2', 1);
+      await vi.advanceTimersByTimeAsync(0);
+      await secondExit;
       expect(pipeline.getContext('t1')?.retryCount).toBe(2);
+      await vi.advanceTimersByTimeAsync(20_000);
 
       // Third failure: retryCount becomes 3
-      await mock.trigger('exit', 'proc-3', 1);
+      const thirdExit = mock.trigger('exit', 'proc-3', 1);
+      await vi.advanceTimersByTimeAsync(0);
+      await thirdExit;
       expect(pipeline.getContext('t1')?.retryCount).toBe(3);
+      await vi.advanceTimersByTimeAsync(40_000);
 
       // Fourth failure: exhausted → should emit failed
-      await mock.trigger('exit', 'proc-4', 1);
+      const fourthExit = mock.trigger('exit', 'proc-4', 1);
+      await vi.advanceTimersByTimeAsync(0);
+      await fourthExit;
       expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
         't1',
         expect.any(String),
         expect.any(String),
       );
+    });
+
+    it('cancel clears pending planning retry timer', async () => {
+      useRetryFakeTimers();
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+
+      const firstExit = mock.trigger('exit', 'proc-1', 1);
+      await vi.advanceTimersByTimeAsync(0);
+      await firstExit;
+      expect(pipeline.getContext('t1')?.retryTimer).not.toBeNull();
+
+      pipeline.cancel('t1');
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -1174,6 +1254,68 @@ describe('createPipeline', () => {
 
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'completed');
       expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('executes task graph nodes one by one with specialist node prompts', async () => {
+      const graph = makeTaskGraph();
+      const taskGraphs = mock.deps.taskGraphs;
+      if (!taskGraphs) throw new Error('Expected task graph deps');
+      vi.mocked(taskGraphs.getByPlanId).mockImplementation(() => graph);
+      vi.mocked(taskGraphs.getNextReadyNode).mockImplementation(
+        () => graph.nodes.find((node) => node.status === 'ready') ?? null,
+      );
+      vi.mocked(taskGraphs.updateNodeStatus).mockImplementation((nodeId: string, status) => {
+        const node = graph.nodes.find((candidate) => candidate.id === nodeId);
+        if (!node) throw new Error(`missing node ${nodeId}`);
+        node.status = status;
+        return node;
+      });
+      vi.mocked(taskGraphs.markNodeCompletedAndPromote).mockImplementation((nodeId: string) => {
+        const node = graph.nodes.find((candidate) => candidate.id === nodeId);
+        if (!node) throw new Error(`missing node ${nodeId}`);
+        node.status = 'completed';
+        const next = graph.nodes.find((candidate) => candidate.status === 'pending');
+        if (next) next.status = 'ready';
+        if (graph.nodes.every((candidate) => candidate.status === 'completed')) {
+          graph.status = 'completed';
+        }
+        return graph;
+      });
+      vi.mocked(taskGraphs.updateGraphStatus).mockImplementation((_graphId, status) => {
+        graph.status = status;
+        return graph;
+      });
+
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        baseBranch: 'main',
+      });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+      await mock.trigger('exit', 'proc-1', 0);
+      const spawnMock = vi.mocked(mock.deps.processManager.spawn);
+      for (let i = 0; i < 100 && spawnMock.mock.calls.length < 2; i++) {
+        await flush();
+      }
+      await mock.trigger('exit', 'proc-2', 0);
+
+      expect(taskGraphs.updateNodeStatus).toHaveBeenNthCalledWith(1, 'node-1', 'running');
+      expect(taskGraphs.markNodeCompletedAndPromote).toHaveBeenNthCalledWith(1, 'node-1');
+      expect(taskGraphs.updateNodeStatus).toHaveBeenNthCalledWith(2, 'node-2', 'running');
+      expect(taskGraphs.markNodeCompletedAndPromote).toHaveBeenNthCalledWith(2, 'node-2');
+      expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(2);
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'completed');
+      expect(pipeline.getContext('t1')).toBeUndefined();
+
+      const firstPrompt = spawnMock.mock.calls[0][2][1];
+      const secondPrompt = spawnMock.mock.calls[1][2][1];
+      expect(firstPrompt).toContain('Create task graph tables');
+      expect(firstPrompt).toContain('You are running as the database specialist executor');
+      expect(firstPrompt).toContain('Hard rule: execute ONLY the active node');
+      expect(secondPrompt).toContain('Wire task graph pipeline');
+      expect(secondPrompt).toContain('You are running as the backend specialist executor');
     });
 
     it('exit non-zero → emits failed', async () => {

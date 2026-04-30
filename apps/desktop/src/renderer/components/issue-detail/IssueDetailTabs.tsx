@@ -8,6 +8,7 @@ import type {
   PlanRecord,
   ReasoningEffort,
   ReviewRecord,
+  TaskGraphWithNodes,
   Thread,
 } from '@shipcode/shared';
 import { cn, Tabs, TabsContent, TabsList, TabsTrigger } from '@shipshitdev/ui';
@@ -59,8 +60,10 @@ interface IssueDetailTabsProps {
   planRunGroups: PlanRunGroup[];
   projectDefaultPhaseSelections: Record<PhaseKey, PhaseSelection>;
   runNumberByThreadId: Record<string, number>;
+  taskGraph: TaskGraphWithNodes | null;
   thread: Thread | null | undefined;
   threadPhase: PipelinePhase | 'idle';
+  githubIssueUrl: string | null;
   projectId: string;
   commentComposerRequestId?: number | null;
   onEditPrd: () => void;
@@ -118,8 +121,10 @@ export function IssueDetailTabs({
   planRunGroups,
   projectDefaultPhaseSelections,
   runNumberByThreadId,
+  taskGraph,
   thread,
   threadPhase,
+  githubIssueUrl,
   projectId,
   commentComposerRequestId,
   onEditPrd,
@@ -236,7 +241,9 @@ export function IssueDetailTabs({
           requireApprovalSelectValue={requireApprovalSelectValue}
           revisionCountSelectValue={revisionCountSelectValue}
           projectDefaultPhaseSelections={projectDefaultPhaseSelections}
+          taskGraph={taskGraph}
           thread={thread}
+          githubIssueUrl={githubIssueUrl}
           onPhaseAgentChange={onPhaseAgentChange}
           onPhaseEffortChange={onPhaseEffortChange}
           onRequireApprovalChange={onRequireApprovalChange}
