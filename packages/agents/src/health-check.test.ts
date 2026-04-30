@@ -182,7 +182,9 @@ function createCodexRefreshPty() {
 describe('shellExecEnv', () => {
   it('hydrates PATH from the login shell and keeps standard tool locations available', () => {
     const previousBunInstall = process.env.BUN_INSTALL;
+    const previousShell = process.env.SHELL;
     process.env.BUN_INSTALL = '';
+    process.env.SHELL = '/bin/zsh';
     mockExecFileSync.mockReturnValue('/shell/bin:/usr/bin\n');
 
     try {
@@ -207,6 +209,11 @@ describe('shellExecEnv', () => {
         delete process.env.BUN_INSTALL;
       } else {
         process.env.BUN_INSTALL = previousBunInstall;
+      }
+      if (previousShell === undefined) {
+        delete process.env.SHELL;
+      } else {
+        process.env.SHELL = previousShell;
       }
     }
   });
