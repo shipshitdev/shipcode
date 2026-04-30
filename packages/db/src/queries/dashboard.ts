@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import {
+  AGENT_RUNNING_PHASES,
   type DashboardStats,
   PIPELINE_PHASE,
   type PipelinePhase,
@@ -15,17 +16,6 @@ const ACTIVE_PHASES: PipelinePhase[] = [
   PIPELINE_PHASE.reviewing,
   PIPELINE_PHASE.revising,
   PIPELINE_PHASE.awaitingApproval,
-  PIPELINE_PHASE.executing,
-  PIPELINE_PHASE.testing,
-  PIPELINE_PHASE.verifying,
-  PIPELINE_PHASE.shipping,
-];
-
-// Phases where an agent CLI process is actively running (vs waiting for user).
-const AGENT_RUNNING_PHASES: PipelinePhase[] = [
-  PIPELINE_PHASE.planning,
-  PIPELINE_PHASE.reviewing,
-  PIPELINE_PHASE.revising,
   PIPELINE_PHASE.executing,
   PIPELINE_PHASE.testing,
   PIPELINE_PHASE.verifying,

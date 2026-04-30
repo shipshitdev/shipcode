@@ -4,6 +4,7 @@ import type { KeyboardEvent } from 'react';
 import { modelDisplay } from './lib/model-display';
 import { useSharedSecondNow } from './lib/second-ticker';
 import {
+  AGENT_RUNNING_PHASES,
   type ExecutorModel,
   PIPELINE_PHASE,
   type PipelinePhase,
@@ -13,16 +14,6 @@ import { cn } from './lib/utils';
 import { PhaseChip } from './PhaseChip';
 import { Badge } from './primitives/badge';
 import { Button } from './primitives/button';
-
-const AGENT_ACTIVE_PHASES = new Set<PipelinePhase>([
-  PIPELINE_PHASE.planning,
-  PIPELINE_PHASE.reviewing,
-  PIPELINE_PHASE.revising,
-  PIPELINE_PHASE.executing,
-  PIPELINE_PHASE.testing,
-  PIPELINE_PHASE.verifying,
-  PIPELINE_PHASE.shipping,
-]);
 
 function formatElapsed(since: number, now: number): string {
   const seconds = Math.max(0, Math.floor((now - since) / 1000));
@@ -71,7 +62,7 @@ export function ActivePipelineCard({
   const isHumanBlocked =
     phase === PIPELINE_PHASE.clarifying ||
     (phase === PIPELINE_PHASE.awaitingApproval && !approvedAwaitingExecution);
-  const isAgentActive = AGENT_ACTIVE_PHASES.has(phase);
+  const isAgentActive = AGENT_RUNNING_PHASES.includes(phase);
   const progress = phaseToProgress(phase);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
