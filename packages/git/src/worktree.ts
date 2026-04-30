@@ -24,6 +24,19 @@ const slugify = slugifyIssueTitle;
 /** ShipCode-managed branch prefixes for list() filtering. */
 const SHIPCODE_BRANCH_RE = /^(shipcode\/|ship\/\d+)/;
 
+/**
+ * Prevent `git worktree add -b` from writing branch tracking config while
+ * concurrent pipeline starts are also creating worktrees in the same repo.
+ * The branch itself is still created; these flags only avoid non-essential
+ * `.git/config` mutations that can contend on `config.lock`.
+ */
+const NO_CONFIG_LOCK_FLAGS = [
+  '-c',
+  'branch.autoSetupMerge=false',
+  '-c',
+  'push.autoSetupRemote=false',
+];
+
 export class WorktreeManager {
   private git: SimpleGit;
 
@@ -119,6 +132,8 @@ export class WorktreeManager {
         ? (baseBranch ?? (await this.getDefaultBranch()))
         : (titleOrBase ?? (await this.getDefaultBranch()));
 
+    await this.prune();
+
     let branch: string;
     let dirName: string;
 
@@ -143,7 +158,15 @@ export class WorktreeManager {
     for (let attempt = 0; ; attempt++) {
       const worktreePath = path.join(parent, dirName);
       try {
-        await this.git.raw(['worktree', 'add', '-b', branch, worktreePath, base]);
+        await this.git.raw([
+          ...NO_CONFIG_LOCK_FLAGS,
+          'worktree',
+          'add',
+          '-b',
+          branch,
+          worktreePath,
+          base,
+        ]);
         return { worktreePath, branch };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -209,6 +232,10 @@ export class WorktreeManager {
   async repair(worktreePaths: string[]): Promise<void> {
     if (worktreePaths.length === 0) return;
     await this.git.raw(['worktree', 'repair', ...worktreePaths]);
+  }
+
+  async prune(): Promise<void> {
+    await this.git.raw(['worktree', 'prune']);
   }
 
   async move(fromPath: string, toPath: string): Promise<void> {

@@ -3,7 +3,14 @@ import type { ProcessManager } from '../process-manager';
 import { _internals, createClaudeCliProvider, createCodexCliProvider } from './cli-provider';
 import type { ProviderRequest } from './types';
 
-const { buildClaudeArgs, buildCodexArgs, buildCodexPrompt, stripCodexProtocol } = _internals;
+const {
+  buildClaudeArgs,
+  buildClaudeStdin,
+  buildCodexArgs,
+  buildCodexStdin,
+  buildCodexPrompt,
+  stripCodexProtocol,
+} = _internals;
 
 // Base request helper — only the phase + prompt vary per test.
 function req(overrides: Partial<ProviderRequest> = {}): ProviderRequest {
@@ -19,15 +26,13 @@ function req(overrides: Partial<ProviderRequest> = {}): ProviderRequest {
 }
 
 // ─── Arg-construction regression snapshots ────────────────────────────
-// These lock the CLI provider to the exact arg lists that previously
-// lived inline in packages/pipeline/src/pipeline.ts so the refactor
-// stays behavior-preserving.
+// These lock the provider arg lists while keeping the full prompt in stdin.
 
 describe('buildClaudeArgs', () => {
-  it('plan phase mirrors pipeline.ts:78', () => {
+  it('plan phase uses stdin prompt placeholder', () => {
     expect(buildClaudeArgs(req({ phase: 'plan' }))).toEqual([
       '-p',
-      'PROMPT',
+      '-',
       '--output-format',
       'stream-json',
       '--verbose',
@@ -41,10 +46,10 @@ describe('buildClaudeArgs', () => {
     ]);
   });
 
-  it('revision phase mirrors pipeline.ts:253', () => {
+  it('revision phase uses stdin prompt placeholder', () => {
     expect(buildClaudeArgs(req({ phase: 'revision' }))).toEqual([
       '-p',
-      'PROMPT',
+      '-',
       '--output-format',
       'stream-json',
       '--verbose',
@@ -58,10 +63,10 @@ describe('buildClaudeArgs', () => {
     ]);
   });
 
-  it('verify phase mirrors pipeline.ts:385', () => {
+  it('verify phase uses stdin prompt placeholder', () => {
     expect(buildClaudeArgs(req({ phase: 'verify' }))).toEqual([
       '-p',
-      'PROMPT',
+      '-',
       '--output-format',
       'stream-json',
       '--verbose',
@@ -75,10 +80,10 @@ describe('buildClaudeArgs', () => {
     ]);
   });
 
-  it('execute phase mirrors pipeline.ts:300', () => {
+  it('execute phase uses stdin prompt placeholder', () => {
     expect(buildClaudeArgs(req({ phase: 'execute' }))).toEqual([
       '-p',
-      'PROMPT',
+      '-',
       '--allowedTools',
       'Edit,Write,Bash,Glob,Grep,Read',
       '--max-thinking-tokens',
@@ -92,7 +97,7 @@ describe('buildClaudeArgs', () => {
       buildClaudeArgs(req({ phase: 'plan', phaseHints: { reasoningEffort: 'xhigh' } })),
     ).toEqual([
       '-p',
-      'PROMPT',
+      '-',
       '--output-format',
       'stream-json',
       '--verbose',
@@ -111,7 +116,7 @@ describe('buildClaudeArgs', () => {
       buildClaudeArgs(req({ phase: 'plan', phaseHints: { reasoningEffort: 'none' } })),
     ).toEqual([
       '-p',
-      'PROMPT',
+      '-',
       '--output-format',
       'stream-json',
       '--verbose',
@@ -121,6 +126,10 @@ describe('buildClaudeArgs', () => {
       '--disallowedTools',
       'Edit,Write,Bash,NotebookEdit',
     ]);
+  });
+
+  it('keeps the Claude prompt in stdin', () => {
+    expect(buildClaudeStdin(req({ phase: 'plan' }))).toBe('PROMPT');
   });
 });
 
@@ -134,7 +143,7 @@ describe('buildCodexArgs', () => {
       '-c',
       'model_reasoning_effort=high',
       'exec',
-      expect.stringContaining('PROMPT'),
+      '-',
       '--sandbox',
       'read-only',
       '--json',
@@ -149,7 +158,7 @@ describe('buildCodexArgs', () => {
       '-c',
       'model_reasoning_effort=high',
       'exec',
-      expect.stringContaining('PROMPT'),
+      '-',
       '--sandbox',
       'read-only',
       '--json',
@@ -163,7 +172,7 @@ describe('buildCodexArgs', () => {
       '-c',
       'model_reasoning_effort=high',
       'exec',
-      'PROMPT',
+      '-',
       '--sandbox',
       'workspace-write',
       '--json',
@@ -177,7 +186,7 @@ describe('buildCodexArgs', () => {
       '-c',
       'model_reasoning_effort=high',
       'exec',
-      expect.stringContaining('PROMPT'),
+      '-',
       '--sandbox',
       'read-only',
       '--json',
@@ -191,7 +200,7 @@ describe('buildCodexArgs', () => {
       '-c',
       'model_reasoning_effort=high',
       'exec',
-      expect.stringContaining('PROMPT'),
+      '-',
       '--sandbox',
       'read-only',
       '--json',
@@ -205,7 +214,7 @@ describe('buildCodexArgs', () => {
       '-c',
       'model_reasoning_effort=high',
       'exec',
-      expect.stringContaining('PROMPT'),
+      '-',
       '--sandbox',
       'read-only',
       '--json',
@@ -221,7 +230,7 @@ describe('buildCodexArgs', () => {
       '-c',
       'model_reasoning_effort=xhigh',
       'exec',
-      expect.stringContaining('PROMPT'),
+      '-',
       '--sandbox',
       'read-only',
       '--json',
@@ -237,11 +246,15 @@ describe('buildCodexArgs', () => {
       '-c',
       'model_reasoning_effort=none',
       'exec',
-      expect.stringContaining('PROMPT'),
+      '-',
       '--sandbox',
       'read-only',
       '--json',
     ]);
+  });
+
+  it('keeps the Codex prompt in stdin', () => {
+    expect(buildCodexStdin(req({ phase: 'review' }))).toContain('PROMPT');
   });
 });
 
@@ -328,7 +341,7 @@ function createMockProcessManager() {
   type MockListener = (...args: unknown[]) => void;
   const listeners: Record<string, MockListener[]> = {};
   let spawnCount = 0;
-  const spawnCalls: Array<{ command: string; args: string[]; cwd: string }> = [];
+  const spawnCalls: Array<{ command: string; args: string[]; cwd: string; stdin?: string }> = [];
 
   const pm = {
     spawn: vi.fn((_type: string, command: string, args: string[], cwd: string) => {
@@ -336,6 +349,13 @@ function createMockProcessManager() {
       spawnCalls.push({ command, args, cwd });
       return { id: `proc-${spawnCount}` };
     }),
+    spawnWithStdin: vi.fn(
+      (_type: string, command: string, args: string[], cwd: string, stdin: string) => {
+        spawnCount++;
+        spawnCalls.push({ command, args, cwd, stdin });
+        return { id: `proc-${spawnCount}` };
+      },
+    ),
     kill: vi.fn(),
     on: vi.fn((event: string, handler: MockListener) => {
       const eventListeners = listeners[event] ?? [];
@@ -368,6 +388,8 @@ describe('createClaudeCliProvider', () => {
 
     expect(spawnCalls).toHaveLength(1);
     expect(spawnCalls[0].command).toBe('claude');
+    expect(spawnCalls[0].args[1]).toBe('-');
+    expect(spawnCalls[0].stdin).toBe('PROMPT');
     expect(spawnCalls[0].args).toContain('--disallowedTools');
     expect(spawnCalls[0].cwd).toBe('/tmp/wt');
 
@@ -425,6 +447,7 @@ describe('createClaudeCliProvider', () => {
     const result = await provider.generate(req({ phase: 'plan', signal: abort.signal }));
     expect(result.exitCode).toBe(130);
     expect(pm.spawn).not.toHaveBeenCalled();
+    expect(pm.spawnWithStdin).not.toHaveBeenCalled();
   });
 });
 
@@ -443,11 +466,12 @@ describe('createCodexCliProvider', () => {
       '-c',
       'model_reasoning_effort=high',
       'exec',
-      expect.stringContaining('PROMPT'),
+      '-',
       '--sandbox',
       'read-only',
       '--json',
     ]);
+    expect(spawnCalls[0].stdin).toContain('PROMPT');
 
     await trigger('exit', 'proc-1', 0);
     const result = await promise;

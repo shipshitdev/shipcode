@@ -1,4 +1,5 @@
-import { execFileSync } from 'node:child_process';
+import type { ChildProcessWithoutNullStreams } from 'node:child_process';
+import { execFileSync, spawn as spawnChild } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import type { AgentState, AgentType } from '@shipcode/shared';
 import { assertWorkspaceSafe } from '@shipcode/shared/worktree-path';
@@ -96,15 +97,17 @@ export interface ManagedProcess {
   id: string;
   type: AgentType;
   state: AgentState;
-  pty: pty.IPty;
+  pty: pty.IPty | null;
+  child?: ChildProcessWithoutNullStreams;
   cwd: string;
   exitCode: number | null;
   threadId?: string;
   outputMode: ManagedProcessOutputMode;
+  stdinMode: 'tty' | 'pipe';
   /**
    * Wall-clock time (ms since epoch) of the last lifecycle event observed
-   * for this process — set on spawn and refreshed on every stdout chunk.
-   * `killStalled` reads this to decide whether the pty has gone silent.
+   * for this process — set on spawn and refreshed on every output chunk.
+   * `killStalled` reads this to decide whether the process has gone silent.
    */
   lastEventAt: number;
 }
@@ -155,11 +158,12 @@ export class ProcessManager extends EventEmitter {
         id,
         type,
         state: 'exited',
-        pty: null as unknown as pty.IPty,
+        pty: null,
         cwd,
         exitCode: 127,
         threadId,
         outputMode,
+        stdinMode: 'tty',
         lastEventAt: Date.now(),
       };
       this.processes.set(id, managed);
@@ -185,6 +189,7 @@ export class ProcessManager extends EventEmitter {
       cwd,
       exitCode: null,
       outputMode,
+      stdinMode: 'tty',
       lastEventAt: Date.now(),
     };
 
@@ -210,10 +215,127 @@ export class ProcessManager extends EventEmitter {
     return managed;
   }
 
+  spawnWithStdin(
+    type: AgentType,
+    command: string,
+    args: string[],
+    cwd: string,
+    input: string,
+    threadId?: string,
+    options: ManagedProcessSpawnOptions = {},
+  ): ManagedProcess {
+    const id = nanoid();
+    const outputMode = options.outputMode ?? 'normalized';
+
+    if (options.workspaceRoot !== undefined) {
+      assertWorkspaceSafe({ workspacePath: cwd, workspaceRoot: options.workspaceRoot });
+    }
+
+    if (!cachedEnv) {
+      cachedEnv = getShellEnv();
+    }
+
+    const resolvedCommand = resolveCommand(command);
+    let child: ChildProcessWithoutNullStreams;
+
+    try {
+      child = spawnChild(resolvedCommand, args, {
+        cwd,
+        env: { ...filterEnv(cachedEnv), FORCE_COLOR: '1' },
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+    } catch (err) {
+      cachedEnv = null;
+      const errorMsg = `Failed to spawn ${command} (resolved: ${resolvedCommand}): ${err instanceof Error ? err.message : err}`;
+      const managed: ManagedProcess = {
+        id,
+        type,
+        state: 'exited',
+        pty: null,
+        cwd,
+        exitCode: 127,
+        threadId,
+        outputMode,
+        stdinMode: 'pipe',
+        lastEventAt: Date.now(),
+      };
+      this.processes.set(id, managed);
+
+      queueMicrotask(() => {
+        this.emit('output', id, `\x1b[31mError: ${errorMsg}\x1b[0m\r\n`);
+        this.emit('stateChange', id, type, 'exited');
+        this.emit('exit', id, 127);
+        this.processes.delete(id);
+      });
+
+      return managed;
+    }
+
+    const managed: ManagedProcess = {
+      id,
+      type,
+      state: 'starting',
+      pty: null,
+      child,
+      threadId,
+      cwd,
+      exitCode: null,
+      outputMode,
+      stdinMode: 'pipe',
+      lastEventAt: Date.now(),
+    };
+
+    this.processes.set(id, managed);
+    this.updateState(id, 'running');
+
+    const emitOutput = (data: Buffer | string) => {
+      managed.lastEventAt = Date.now();
+      this.emit('output', id, String(data));
+    };
+
+    let finalized = false;
+    const finalize = (exitCode: number) => {
+      if (finalized) return;
+      finalized = true;
+      managed.exitCode = exitCode;
+      this.updateState(id, 'exited');
+      this.emit('exit', id, exitCode);
+      queueMicrotask(() => this.processes.delete(id));
+    };
+
+    child.stdout.on('data', emitOutput);
+    child.stderr.on('data', emitOutput);
+    child.on('error', (err) => {
+      cachedEnv = null;
+      emitOutput(`\x1b[31mError: ${err.message.split('\n')[0]}\x1b[0m\r\n`);
+      finalize(127);
+    });
+    child.on('close', (code, signal) => {
+      finalize(code ?? (signal ? 130 : 0));
+    });
+
+    child.stdin.on('error', () => {
+      // EPIPE is expected when a CLI exits before consuming all stdin.
+      // The close/error handlers above own the final lifecycle event.
+    });
+
+    try {
+      child.stdin.write(input);
+      child.stdin.end();
+    } catch (err) {
+      emitOutput(
+        `\x1b[31mError writing prompt to ${command}: ${err instanceof Error ? err.message : String(err)}\x1b[0m\r\n`,
+      );
+      this.killManagedProcess(managed);
+    }
+
+    return managed;
+  }
+
   kill(processId: string): void {
     const process = this.processes.get(processId);
     if (process && process.state !== 'exited') {
-      process.pty.kill();
+      this.killManagedProcess(process);
       this.updateState(processId, 'exited');
     }
   }
@@ -221,13 +343,17 @@ export class ProcessManager extends EventEmitter {
   write(processId: string, data: string): void {
     const process = this.processes.get(processId);
     if (process && process.state === 'running') {
-      process.pty.write(data);
+      if (process.pty) {
+        process.pty.write(data);
+      } else if (process.child?.stdin.writable) {
+        process.child.stdin.write(data);
+      }
     }
   }
 
   resize(processId: string, cols: number, rows: number): void {
     const process = this.processes.get(processId);
-    if (process && process.state !== 'exited') {
+    if (process?.pty && process.state !== 'exited') {
       process.pty.resize(cols, rows);
     }
   }
@@ -279,9 +405,9 @@ export class ProcessManager extends EventEmitter {
 
     for (const proc of pending) {
       try {
-        proc.pty.kill();
+        this.killManagedProcess(proc);
       } catch {
-        // ignore — pty may already be dead
+        // ignore — process may already be dead
       }
     }
 
@@ -297,7 +423,7 @@ export class ProcessManager extends EventEmitter {
         const cur = this.processes.get(proc.id);
         if (cur && cur.state !== 'exited') {
           try {
-            proc.pty.kill('SIGKILL');
+            this.killManagedProcess(proc, 'SIGKILL');
           } catch {
             // ignore
           }
@@ -311,15 +437,15 @@ export class ProcessManager extends EventEmitter {
   }
 
   /**
-   * Kill any active process whose pty has emitted no stdout for at least
+   * Kill any active process whose output streams have been silent for at least
    * `stallTimeoutMs`. Returns the IDs of processes that were killed so the
    * caller (typically the pipeline watchdog) can transition the matching
    * threads to a failed state with a "stalled" reason.
    *
    * Pass 0 to disable — a no-op that returns an empty array. SIGHUP first;
-   * `cleanup()` / pty exit handler will drop the entry from the registry
+   * `cleanup()` / exit handler will drop the entry from the registry
    * once the process actually dies. Idempotent: a stalled process whose
-   * pty is already exited is skipped.
+   * process is already exited is skipped.
    */
   killStalled(stallTimeoutMs: number): string[] {
     if (!Number.isFinite(stallTimeoutMs) || stallTimeoutMs <= 0) return [];
@@ -327,11 +453,17 @@ export class ProcessManager extends EventEmitter {
     const killed: string[] = [];
     for (const proc of this.processes.values()) {
       if (proc.state === 'exited') continue;
-      if (now - proc.lastEventAt < stallTimeoutMs) continue;
+      const idleMs = now - proc.lastEventAt;
+      if (idleMs < stallTimeoutMs) continue;
+      this.emit(
+        'output',
+        proc.id,
+        `\r\n[shipcode] No output for ${Math.round(idleMs / 1000)}s; killing stalled ${proc.type} process.\r\n`,
+      );
       try {
-        proc.pty.kill();
+        this.killManagedProcess(proc);
       } catch {
-        // pty may already be dead — exit handler will fire either way.
+        // process may already be dead — exit handler will fire either way.
       }
       killed.push(proc.id);
     }
@@ -351,5 +483,15 @@ export class ProcessManager extends EventEmitter {
       process.state = state;
       this.emit('stateChange', processId, process.type, state);
     }
+  }
+
+  private killManagedProcess(process: ManagedProcess, signal?: string): void {
+    if (process.pty) {
+      if (signal) process.pty.kill(signal);
+      else process.pty.kill();
+      return;
+    }
+    if (signal) process.child?.kill(signal as NodeJS.Signals);
+    else process.child?.kill();
   }
 }

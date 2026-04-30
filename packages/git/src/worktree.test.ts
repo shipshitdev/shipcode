@@ -66,6 +66,35 @@ branch refs/heads/feature/not-ours
     ]);
   });
 
+  it('creates worktrees without branch auto-config writes', async () => {
+    gitMock.raw
+      .mockResolvedValueOnce('')
+      .mockRejectedValueOnce(new Error('branch not found'))
+      .mockResolvedValueOnce('');
+    const manager = new WorktreeManager('/repo/project', {
+      worktreeRoot: '/tmp/shipcode-worktrees',
+    });
+
+    await expect(manager.create(42, 'Fix OpenRouter Tier 1!', 'main')).resolves.toEqual({
+      worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/42-fix-openrouter-tier-1',
+      branch: 'ship/42-fix-openrouter-tier-1',
+    });
+
+    expect(gitMock.raw).toHaveBeenNthCalledWith(1, ['worktree', 'prune']);
+    expect(gitMock.raw).toHaveBeenNthCalledWith(3, [
+      '-c',
+      'branch.autoSetupMerge=false',
+      '-c',
+      'push.autoSetupRemote=false',
+      'worktree',
+      'add',
+      '-b',
+      'ship/42-fix-openrouter-tier-1',
+      '/tmp/shipcode-worktrees/project-9a1fd1/42-fix-openrouter-tier-1',
+      'main',
+    ]);
+  });
+
   it('treats already-removed worktrees and branches as successful cleanup', async () => {
     gitMock.raw.mockRejectedValueOnce(new Error('path is not a working tree'));
     gitMock.deleteLocalBranch.mockRejectedValueOnce(new Error('branch not found'));
@@ -91,6 +120,14 @@ branch refs/heads/feature/not-ours
       '/tmp/worktree-a',
       '/tmp/worktree-b',
     ]);
+  });
+
+  it('prunes stale worktree metadata through git worktree prune', async () => {
+    const manager = new WorktreeManager('/repo/project');
+
+    await manager.prune();
+
+    expect(gitMock.raw).toHaveBeenCalledWith(['worktree', 'prune']);
   });
 
   it('moves concrete worktree paths through git worktree move', async () => {

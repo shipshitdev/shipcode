@@ -1,12 +1,15 @@
+import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockPtySpawn } = vi.hoisted(() => ({
+const { mockPtySpawn, mockChildSpawn } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
+  mockChildSpawn: vi.fn(),
 }));
 
 vi.mock('node-pty', () => ({ spawn: mockPtySpawn }));
 vi.mock('node:child_process', () => ({
   execFileSync: vi.fn(() => ''),
+  spawn: mockChildSpawn,
 }));
 
 import { ProcessManager } from './process-manager';
@@ -14,7 +17,7 @@ import { ProcessManager } from './process-manager';
 interface MockPty {
   onData: (cb: (data: string) => void) => void;
   onExit: (cb: ({ exitCode }: { exitCode: number }) => void) => void;
-  kill: () => void;
+  kill: (signal?: string) => void;
   write: () => void;
   resize: () => void;
   __exit: (code: number) => void;
@@ -34,6 +37,38 @@ function createMockPty(): MockPty {
   };
 }
 
+interface MockChild extends EventEmitter {
+  stdout: EventEmitter;
+  stderr: EventEmitter;
+  stdin: EventEmitter & {
+    write: ReturnType<typeof vi.fn>;
+    end: ReturnType<typeof vi.fn>;
+    writable: boolean;
+  };
+  kill: ReturnType<typeof vi.fn>;
+  __stdout: (data: string) => void;
+  __stderr: (data: string) => void;
+  __close: (code: number | null, signal?: NodeJS.Signals | null) => void;
+  __error: (err: Error) => void;
+}
+
+function createMockChild(): MockChild {
+  const child = new EventEmitter() as MockChild;
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  child.stdin = Object.assign(new EventEmitter(), {
+    write: vi.fn(),
+    end: vi.fn(),
+    writable: true,
+  });
+  child.kill = vi.fn();
+  child.__stdout = (data) => child.stdout.emit('data', data);
+  child.__stderr = (data) => child.stderr.emit('data', data);
+  child.__close = (code, signal = null) => child.emit('close', code, signal);
+  child.__error = (err) => child.emit('error', err);
+  return child;
+}
+
 async function flushMicrotasks(): Promise<void> {
   await new Promise<void>((resolve) => queueMicrotask(resolve));
 }
@@ -44,6 +79,7 @@ describe('ProcessManager registry hygiene', () => {
   beforeEach(() => {
     manager = new ProcessManager();
     mockPtySpawn.mockReset();
+    mockChildSpawn.mockReset();
   });
 
   afterEach(() => {
@@ -90,6 +126,45 @@ describe('ProcessManager registry hygiene', () => {
 
     await flushMicrotasks();
     expect(manager.get(failed.id)).toBeUndefined();
+  });
+
+  it('pipes stdin for one-shot CLI processes and streams stdout/stderr', async () => {
+    const child = createMockChild();
+    mockChildSpawn.mockReturnValueOnce(child);
+    const chunks: string[] = [];
+    manager.on('output', (_id: string, data: string) => {
+      chunks.push(data);
+    });
+
+    const proc = manager.spawnWithStdin('claude', 'claude', ['-p', '-'], '/tmp', 'PROMPT');
+
+    expect(mockChildSpawn).toHaveBeenCalledWith(
+      expect.any(String),
+      ['-p', '-'],
+      expect.objectContaining({ cwd: '/tmp', stdio: ['pipe', 'pipe', 'pipe'] }),
+    );
+    expect(child.stdin.write).toHaveBeenCalledWith('PROMPT');
+    expect(child.stdin.end).toHaveBeenCalledTimes(1);
+
+    child.__stdout('out');
+    child.__stderr('err');
+    child.__close(0);
+
+    expect(chunks.join('')).toBe('outerr');
+    expect(proc.exitCode).toBe(0);
+    await flushMicrotasks();
+    expect(manager.get(proc.id)).toBeUndefined();
+  });
+
+  it('kills piped processes through the same registry API', () => {
+    const child = createMockChild();
+    mockChildSpawn.mockReturnValueOnce(child);
+    const proc = manager.spawnWithStdin('codex', 'codex', ['exec', '-'], '/tmp', 'PROMPT');
+
+    manager.kill(proc.id);
+
+    expect(child.kill).toHaveBeenCalledTimes(1);
+    expect(proc.state).toBe('exited');
   });
 
   it('killAllAndWait resolves only after every pty emits exit', async () => {

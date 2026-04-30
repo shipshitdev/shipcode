@@ -1,3 +1,4 @@
+import { substitutePromptTemplateArgs } from '../prompt-template';
 import { type BundledDefault, DEFAULT_SKILLS, type PhaseSkillKey } from './defaults.generated';
 
 export interface SkillSlot {
@@ -185,34 +186,27 @@ export function resolveSkill(
  *   caught immediately during testing.
  * - Clamps to `[unknown slot: KEY]` in production so a single bad slot does
  *   not crash a long-running pipeline.
- * - Throws on missing slot in either mode — that means the prompt builder
- *   forgot to pass a value the skill body references, which is a code bug
- *   and not user-recoverable.
+ * - Strips reserved prompt-template marker characters from slot values so
+ *   future shell-expansion markers cannot be forged through substitution.
  */
 export function interpolateSkill(content: string, slots: SkillSlot[]): string {
-  const slotMap = new Map<string, string>();
+  const slotMap: Record<string, string> = {};
   for (const slot of slots) {
-    slotMap.set(slot.key, slot.value);
+    slotMap[slot.key] = slot.value;
   }
 
   const isProd = process.env.NODE_ENV === 'production';
-  const referenced = new Set<string>();
-
-  const result = content.replace(/\{\{([A-Z][A-Z0-9_]*)\}\}/g, (_, key: string) => {
-    referenced.add(key);
-    const slotValue = slotMap.get(key);
-    if (slotValue !== undefined) {
-      return slotValue;
-    }
-    if (isProd) {
-      return `[unknown slot: ${key}]`;
-    }
-    throw new Error(
-      `interpolateSkill: skill body references unknown slot {{${key}}} (provided slots: ${slots.map((s) => s.key).join(', ') || 'none'})`,
-    );
-  });
-
-  return result;
+  return substitutePromptTemplateArgs(content, slotMap, {
+    placeholderPattern: /\{\{([A-Z][A-Z0-9_]*)\}\}/g,
+    missingValue: (key) => {
+      if (isProd) {
+        return `[unknown slot: ${key}]`;
+      }
+      throw new Error(
+        `interpolateSkill: skill body references unknown slot {{${key}}} (provided slots: ${slots.map((s) => s.key).join(', ') || 'none'})`,
+      );
+    },
+  }).text;
 }
 
 export { type BundledDefault, DEFAULT_SKILLS, type PhaseSkillKey };
