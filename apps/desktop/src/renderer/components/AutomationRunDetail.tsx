@@ -1,5 +1,5 @@
 import type { DiffRecord, PipelinePhase, PlanRecord, ReviewRecord, Thread } from '@shipcode/shared';
-import { formatTokenCount, PIPELINE_PHASE } from '@shipcode/shared';
+import { formatCost, formatTokenCount, PIPELINE_PHASE } from '@shipcode/shared';
 import { PhaseChip } from '@shipcode/ui';
 import {
   Badge,
@@ -24,12 +24,6 @@ import { DiffTab } from './issue-detail/DiffTab';
 import { ACTIVE_PHASES } from './issue-detail/helpers';
 import { PlanHistoryTab } from './issue-detail/PlanHistoryTab';
 import type { PlanRunGroup } from './issue-detail/tab-types';
-
-function formatCost(usd: number): string {
-  if (usd === 0) return '$0.00';
-  if (usd < 0.005) return '< $0.01';
-  return `$${usd.toFixed(2)}`;
-}
 
 export function AutomationRunDetail({ expanded }: { expanded: boolean }) {
   const threadId = useAppStore((s) => s.activeAutomationThreadId);

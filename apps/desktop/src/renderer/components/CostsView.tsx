@@ -4,7 +4,12 @@ import type {
   GitHubIssueCacheRecord,
   PipelinePhase,
 } from '@shipcode/shared';
-import { formatTokenCount, modelDisplay, sanitizeResolvedModel } from '@shipcode/shared';
+import {
+  formatCost,
+  formatTokenCount,
+  modelDisplay,
+  sanitizeResolvedModel,
+} from '@shipcode/shared';
 import { PageHeader } from '@shipcode/ui';
 import {
   Button,
@@ -24,12 +29,6 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 import { ActivityHeatmap } from './heatmap/ActivityHeatmap';
-
-function formatCost(usd: number): string {
-  if (usd === 0) return '$0.00';
-  if (usd < 0.005) return '< $0.01';
-  return `$${usd.toFixed(2)}`;
-}
 
 function formatDateTime(iso: string): string {
   const d = new Date(iso);

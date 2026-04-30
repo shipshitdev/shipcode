@@ -5,18 +5,12 @@ import type {
   PipelineStepStatus,
   Thread,
 } from '@shipcode/shared';
-import { MODEL_DISPLAY, PIPELINE_PHASE } from '@shipcode/shared';
+import { formatCost, MODEL_DISPLAY, PIPELINE_PHASE } from '@shipcode/shared';
 import { Badge } from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ActivityHeatmap } from '../heatmap/ActivityHeatmap';
 import { timeAgo } from './helpers';
-
-function formatCost(usd: number): string {
-  if (usd === 0) return '$0.00';
-  if (usd < 0.005) return '< $0.01';
-  return `$${usd.toFixed(2)}`;
-}
 
 const STEP_STATUS_VARIANT: Record<PipelineStepStatus, 'success' | 'danger' | 'default'> = {
   started: 'default',
