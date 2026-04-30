@@ -7,6 +7,8 @@ import type {
 } from '@shipcode/shared';
 import { PIPELINE_PHASE, shipCodePlanSchema } from '@shipcode/shared';
 
+export { formatRelativeTime as timeAgo } from '@shipcode/shared';
+
 // biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI formatting from persisted terminal lines
 const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]|\x1b\].*?(?:\x07|\x1b\\)/g;
 
@@ -108,19 +110,6 @@ export function getPlanStatusPresentation(
         style: 'phase-chip',
       };
   }
-}
-
-export function timeAgo(input: string | number): string {
-  const timestamp = typeof input === 'number' ? input : new Date(input).getTime();
-  const diff = Math.max(0, Date.now() - timestamp);
-  const seconds = Math.floor(diff / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
 }
 
 export function encodePhaseOption(provider: ExecutorModel, modelId: string | null) {

@@ -1,5 +1,6 @@
 import {
   filterAttentionRequiredNotifications,
+  formatRelativeTime,
   type GitHubIssueCacheRecord,
   type NotificationKind,
   type NotificationRecord,
@@ -25,19 +26,6 @@ import { NOTIFICATIONS_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 
 type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info' | 'accent';
-
-function timeAgo(input: string | number): string {
-  const t = typeof input === 'number' ? input : new Date(input).getTime();
-  const diff = Math.max(0, Date.now() - t);
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  return `${d}d ago`;
-}
 
 const KIND_BADGE_VARIANT: Record<NotificationKind, BadgeVariant> = {
   awaiting_approval: 'warning',
@@ -192,7 +180,7 @@ export function InboxView() {
         </div>
       </TableCell>
       <TableCell className="w-[1%] whitespace-nowrap align-top text-[11px] text-muted">
-        {timeAgo(n.createdAt)}
+        {formatRelativeTime(n.createdAt)}
       </TableCell>
       <TableCell className="align-top">
         <div className="text-[13px] font-medium text-primary">{n.title}</div>
