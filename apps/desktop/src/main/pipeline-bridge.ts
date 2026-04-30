@@ -16,6 +16,7 @@ import type { BrowserWindow } from 'electron';
 import type { ChatNotificationService } from './chat-notification-service';
 import log, { logEvent } from './logger.service';
 import type { NotificationService } from './notification-service';
+import { capturePipelineFailure } from './telemetry';
 
 interface EmitterDeps {
   activity: ActivityQueries;
@@ -302,6 +303,30 @@ export function createElectronEmitter(
     }
   }
 
+  function captureFailureEvent(event: PipelineEvent, thread: Thread | null) {
+    if (!thread) return;
+    if (
+      event.type !== 'pipeline:verification-exhausted' &&
+      (event.type !== 'pipeline:phase' || event.phase !== PIPELINE_PHASE.failed)
+    ) {
+      return;
+    }
+
+    capturePipelineFailure({
+      threadId: thread.id,
+      projectId: thread.projectId,
+      githubIssueNumber: thread.githubIssueNumber,
+      source: event.type,
+      phase: event.type === 'pipeline:phase' ? event.phase : PIPELINE_PHASE.failed,
+      autonomous: thread.autonomous,
+      requireApproval: null,
+      failurePhase: thread.failurePhase,
+      failureCount: thread.failureCount,
+      verificationRetries: thread.verificationRetries,
+      message: thread.lastError,
+    });
+  }
+
   return {
     emit(event: PipelineEvent) {
       if (event.type === 'pipeline:output') {
@@ -349,6 +374,12 @@ export function createElectronEmitter(
         writeEventLog(event);
       } catch (err) {
         log.error('[pipeline-bridge] event log write failed:', err);
+      }
+
+      try {
+        captureFailureEvent(event, thread);
+      } catch (err) {
+        log.error('[pipeline-bridge] sentry capture failed:', err);
       }
 
       if (event.type === 'pipeline:phase') {

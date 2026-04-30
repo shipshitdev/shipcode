@@ -17,7 +17,15 @@ describe('SHIPCODE_DEFAULT_LABELS', () => {
     const defaultStatuses = [
       ...new Set(Object.values(DEFAULT_STATUS_LABEL_MAPPINGS).filter(Boolean)),
     ];
-    expect(SHIPCODE_STATUS_LABELS.map((label) => label.name)).toEqual(defaultStatuses);
+    expect(SHIPCODE_STATUS_LABELS.map((label) => label.name)).toEqual(
+      expect.arrayContaining(defaultStatuses),
+    );
+  });
+
+  it('includes PR review status labels', () => {
+    expect(SHIPCODE_STATUS_LABELS.map((label) => label.name)).toEqual(
+      expect.arrayContaining(['status:needs-review', 'status:ready-to-merge']),
+    );
   });
 
   it('includes the agent routing labels ShipCode already documents', () => {

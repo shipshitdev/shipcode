@@ -1,7 +1,91 @@
 import type { PipelineEmitter } from '@shipcode/pipeline';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { transitionThreadPhase } from './helpers';
+import { derivePullRequestStatusLabel, transitionThreadPhase } from './helpers';
 import type { Queries } from './types';
+
+describe('derivePullRequestStatusLabel', () => {
+  it.each([
+    [
+      'draft PR',
+      {
+        state: 'OPEN' as const,
+        isDraft: true,
+        reviewDecision: null,
+        reviewRequestCount: 0,
+        ciBlocked: false,
+      },
+      'status:in-progress',
+    ],
+    [
+      'requested review',
+      {
+        state: 'OPEN' as const,
+        isDraft: false,
+        reviewDecision: null,
+        reviewRequestCount: 1,
+        ciBlocked: false,
+      },
+      'status:needs-review',
+    ],
+    [
+      'approved PR',
+      {
+        state: 'OPEN' as const,
+        isDraft: false,
+        reviewDecision: 'APPROVED' as const,
+        reviewRequestCount: 0,
+        ciBlocked: false,
+      },
+      'status:ready-to-merge',
+    ],
+    [
+      'approved PR with failing CI',
+      {
+        state: 'OPEN' as const,
+        isDraft: false,
+        reviewDecision: 'APPROVED' as const,
+        reviewRequestCount: 0,
+        ciBlocked: true,
+      },
+      'status:in-progress',
+    ],
+    [
+      'changes requested PR with remaining review request',
+      {
+        state: 'OPEN' as const,
+        isDraft: false,
+        reviewDecision: 'CHANGES_REQUESTED' as const,
+        reviewRequestCount: 1,
+        ciBlocked: false,
+      },
+      'status:in-progress',
+    ],
+    [
+      'closed unmerged PR',
+      {
+        state: 'CLOSED' as const,
+        isDraft: false,
+        reviewDecision: null,
+        reviewRequestCount: 0,
+        ciBlocked: false,
+      },
+      'status:in-progress',
+    ],
+    [
+      'merged PR',
+      {
+        state: 'MERGED' as const,
+        isDraft: false,
+        reviewDecision: 'APPROVED' as const,
+        reviewRequestCount: 0,
+        ciBlocked: false,
+      },
+      'status:done',
+    ],
+  ])('maps %s to %s', (_name, feedback, expected) => {
+    expect(derivePullRequestStatusLabel(feedback)).toBe(expected);
+  });
+});
 
 describe('transitionThreadPhase', () => {
   const mainWindow = {

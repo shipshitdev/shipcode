@@ -591,6 +591,11 @@ export interface AppSettings {
   theme: 'light' | 'dark' | 'system';
   fontStyle: 'dm-sans' | 'system' | 'serif';
   fontSize: 12 | 13 | 14 | 15;
+  /**
+   * User consent for crash/error reporting.
+   * null = undecided; true = allowed; false = declined.
+   */
+  telemetryEnabled: boolean | null;
   defaultWorktreeEnabled: boolean;
   terminalScrollback: number;
   projectOpenTarget: ProjectOpenTarget;
@@ -673,6 +678,22 @@ export interface AppSettings {
   autoCommitMode: 'split' | 'single';
   // Branch / worktree cleanup criteria (Git tab "Cleanup" button)
   cleanupCriteria: CleanupCriteria;
+}
+
+export type TelemetryDisabledReason =
+  | 'pending-consent'
+  | 'disabled-by-user'
+  | 'disabled-by-env'
+  | 'missing-dsn'
+  | null;
+
+export interface TelemetryStatus {
+  enabled: boolean;
+  initialized: boolean;
+  envDisabled: boolean;
+  dsnConfigured: boolean;
+  pendingConsent: boolean;
+  disabledReason: TelemetryDisabledReason;
 }
 
 export interface CleanupCriteria {
@@ -1215,6 +1236,9 @@ export interface PipelineModelResolvedEvent {
 export type GitHubStatusLabel =
   | 'status:queued'
   | 'status:in-progress'
+  | 'status:needs-review'
+  | 'status:ready-to-merge'
+  | 'status:done'
   | 'status:ready-for-review'
   | 'status:failed'
   | 'status:needs-human-review'

@@ -35,6 +35,7 @@ import type {
   ShipCodePlan,
   VerificationResult,
 } from '@shipcode/shared';
+import type { TaskGraphWithNodes, TaskNodeStatus } from '@shipcode/shared/source';
 
 // Temporary alias while pipeline adopts the shared executor-model type directly.
 export type PipelineExecutorModel = ExecutorModel;
@@ -50,6 +51,18 @@ export interface PromptTelemetryPersistenceDiagnostic {
   phase: PipelinePromptPhase;
   message: string;
   nonFatal: true;
+}
+
+export interface PipelineTaskGraphQueries {
+  replaceForPlan(threadId: string, planId: string, plan: ShipCodePlan): TaskGraphWithNodes;
+  getByPlanId(planId: string): TaskGraphWithNodes | null;
+  getNextReadyNode(graphId: string): TaskGraphWithNodes['nodes'][number] | null;
+  updateNodeStatus(nodeId: string, status: TaskNodeStatus): unknown;
+  markNodeCompletedAndPromote(nodeId: string): TaskGraphWithNodes;
+  markNodeFailed(nodeId: string): TaskGraphWithNodes;
+  resetForRetry(graphId: string): TaskGraphWithNodes;
+  updateGraphStatus(graphId: string, status: TaskGraphWithNodes['status']): TaskGraphWithNodes;
+  updateNodeGithubIssueNumber(nodeId: string, issueNumber: number): TaskGraphWithNodes;
 }
 
 // Typed event contract -- both desktop and CLI adapters must handle these
@@ -252,6 +265,8 @@ export interface PipelineDeps {
   /** Per-phase prompt skill overrides (project + global). The pipeline passes
    *  this into every prompt builder so resolveSkill walks the tier chain. */
   skills: SkillsQueries;
+  /** Internal task graph persistence for decomposed plan execution contracts. */
+  taskGraphs?: PipelineTaskGraphQueries;
   promptTelemetry?: PromptTelemetryQueries;
   /**
    * Lifecycle envelope for individual provider invocations. When provided,

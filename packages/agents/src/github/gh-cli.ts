@@ -37,6 +37,9 @@ export interface PullRequestFeedback {
   number: number;
   url: string;
   isDraft: boolean;
+  state: PullRequestState;
+  reviewDecision: PullRequestReviewDecision | null;
+  reviewRequestCount: number;
   ciBlocked: boolean;
   failingChecks: GitHubPrCheckSummary[];
   unresolvedReviewComments: GitHubPrReviewCommentSummary[];
@@ -585,6 +588,11 @@ export class GhCli {
             number
             url
             isDraft
+            state
+            reviewDecision
+            reviewRequests(first:50) {
+              totalCount
+            }
             commits(last:1) {
               nodes {
                 commit {
@@ -663,6 +671,9 @@ export class GhCli {
             number: number;
             url: string;
             isDraft: boolean;
+            state: string;
+            reviewDecision: string | null;
+            reviewRequests?: { totalCount?: number | null } | null;
             commits?: {
               nodes?: Array<{
                 commit?: {
@@ -775,6 +786,9 @@ export class GhCli {
       number: pr.number,
       url: pr.url,
       isDraft: !!pr.isDraft,
+      state: pr.state as PullRequestState,
+      reviewDecision: (pr.reviewDecision as PullRequestReviewDecision) ?? null,
+      reviewRequestCount: pr.reviewRequests?.totalCount ?? 0,
       ciBlocked: failingChecks.length > 0,
       failingChecks,
       unresolvedReviewComments,
@@ -1034,6 +1048,38 @@ export class GhCli {
     );
   }
 
+  async editIssueComment(commentId: number, body: string): Promise<void> {
+    const { owner, repo } = await this.getRepoCoordinates();
+    await this.spawnWithStdin(
+      'gh',
+      [
+        'api',
+        '-X',
+        'PATCH',
+        `repos/${owner}/${repo}/issues/comments/${commentId}`,
+        '-H',
+        'Content-Type: application/json',
+        '--input',
+        '-',
+      ],
+      JSON.stringify({ body }),
+    );
+  }
+
+  async upsertIssueCommentByMarker(
+    issueNumber: number,
+    marker: string,
+    body: string,
+  ): Promise<void> {
+    const comments = await this.listIssueComments(issueNumber);
+    const existing = comments.find((comment) => comment.body.trimStart().startsWith(marker));
+    if (existing && Number.isFinite(existing.id)) {
+      await this.editIssueComment(existing.id, body);
+      return;
+    }
+    await this.addIssueComment(issueNumber, body);
+  }
+
   async listIssueComments(issueNumber: number): Promise<GitHubIssueComment[]> {
     const { stdout } = await execFileAsync(
       'gh',
@@ -1050,7 +1096,7 @@ export class GhCli {
       }>;
     };
     return (parsed.comments ?? []).map((c) => ({
-      id: Number(c.id),
+      id: parseIssueCommentDatabaseId(c.id, c.url),
       author: c.author?.login ?? null,
       body: c.body,
       createdAt: c.createdAt,
@@ -1198,4 +1244,17 @@ export class GhCli {
     );
     return stdout.trim();
   }
+}
+
+function parseIssueCommentDatabaseId(id: string, url: string): number {
+  const numericId = Number(id);
+  if (Number.isFinite(numericId)) return numericId;
+
+  const match = url.match(/issuecomment-(\d+)/);
+  if (match?.[1]) {
+    const urlId = Number(match[1]);
+    if (Number.isFinite(urlId)) return urlId;
+  }
+
+  return Number.NaN;
 }

@@ -20,6 +20,7 @@ import type {
   ThreadQueries,
   VerificationQueries,
 } from '@shipcode/db';
+import type { TaskGraphQueries } from '@shipcode/db/source';
 import type { Pipeline, PipelineEmitter } from '@shipcode/pipeline';
 import type { BrowserWindow, IpcMain } from 'electron';
 import type { ChatNotificationService } from '../chat-notification-service';
@@ -45,6 +46,7 @@ export interface Queries {
   skills: SkillsQueries;
   terminalEvents: TerminalEventQueries;
   pipelineSteps: PipelineStepQueries;
+  taskGraphs?: TaskGraphQueries;
 }
 
 export interface IpcHandlerDeps {

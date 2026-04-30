@@ -42,6 +42,7 @@ import { dialog, shell } from 'electron';
 import { runAutoCommitWorkflow, runCleanupAnalyze, runCleanupApply } from '../git-workflows';
 import log from '../logger.service';
 import { isSafeExternalUrl } from '../security';
+import { configureMainTelemetry, getTelemetryStatus } from '../telemetry';
 import { isWorktreeLocked, withWorktreeLock } from '../worktree-locks';
 import { enrichProjectPath, enrichProjectPaths, sendGithubIssuesUpdated } from './helpers';
 import type { IpcHandlerDeps } from './types';
@@ -857,6 +858,13 @@ export function registerProjectHandlers({
 
   ipcMain.handle('settings:set', (_event, patch: Partial<AppSettings>) => {
     queries.settings.set(patch);
+    void configureMainTelemetry(queries.settings.get()).catch((err) => {
+      log.warn('[telemetry] reconfigure failed:', err);
+    });
+  });
+
+  ipcMain.handle('telemetry:get-status', () => {
+    return getTelemetryStatus(queries.settings.get());
   });
 
   ipcMain.handle('health:check', async (_event, { force = false }: { force?: boolean } = {}) => {

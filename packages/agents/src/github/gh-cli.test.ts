@@ -514,6 +514,9 @@ describe('GhCli', () => {
                 number: 40,
                 url: 'https://github.com/shipshitdev/shipcode/pull/40',
                 isDraft: true,
+                state: 'OPEN',
+                reviewDecision: 'REVIEW_REQUIRED',
+                reviewRequests: { totalCount: 2 },
                 commits: {
                   nodes: [
                     {
@@ -574,6 +577,9 @@ describe('GhCli', () => {
         number: 40,
         url: 'https://github.com/shipshitdev/shipcode/pull/40',
         isDraft: true,
+        state: 'OPEN',
+        reviewDecision: 'REVIEW_REQUIRED',
+        reviewRequestCount: 2,
         ciBlocked: true,
         failingChecks: [
           {
@@ -697,7 +703,7 @@ describe('GhCli', () => {
       success(''); // remove status:in-progress
       success(''); // add new label
 
-      await gh.setStatusLabel(10, 'status:ready-for-review');
+      await gh.setStatusLabel(10, 'status:ready-to-merge');
 
       // View call
       expect(mockExecFileAsync.mock.calls[0][1]).toEqual([
@@ -714,7 +720,7 @@ describe('GhCli', () => {
       expect(mockExecFileAsync.mock.calls[2][1]).toContain('status:in-progress');
       // Add call
       expect(mockExecFileAsync.mock.calls[3][1]).toContain('--add-label');
-      expect(mockExecFileAsync.mock.calls[3][1]).toContain('status:ready-for-review');
+      expect(mockExecFileAsync.mock.calls[3][1]).toContain('status:ready-to-merge');
     });
 
     it('skips removal when no status:* labels exist', async () => {
@@ -933,6 +939,35 @@ describe('GhCli', () => {
       expect(result.failed).toEqual([]);
       // Only the listRepoLabels call, no createLabel calls
       expect(mockExecFileAsync).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('listIssueComments', () => {
+    it('parses database ids from numeric ids or issuecomment urls', async () => {
+      success(
+        JSON.stringify({
+          comments: [
+            {
+              id: '123',
+              author: { login: 'alice' },
+              body: 'one',
+              createdAt: '2026-01-01T00:00:00Z',
+              url: 'https://github.com/o/r/issues/1#issuecomment-123',
+            },
+            {
+              id: 'IC_kwDOExample',
+              author: null,
+              body: 'two',
+              createdAt: '2026-01-01T00:00:00Z',
+              url: 'https://github.com/o/r/issues/1#issuecomment-456',
+            },
+          ],
+        }),
+      );
+
+      const comments = await gh.listIssueComments(1);
+
+      expect(comments.map((comment) => comment.id)).toEqual([123, 456]);
     });
   });
 

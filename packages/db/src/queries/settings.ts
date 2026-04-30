@@ -20,6 +20,12 @@ function parseBool(raw: string | undefined, fallback: boolean): boolean {
   return fallback;
 }
 
+function parseNullableBool(raw: string | undefined): boolean | null {
+  if (raw === 'true') return true;
+  if (raw === 'false') return false;
+  return null;
+}
+
 function parseEventToggles<T extends NotificationEventToggles>(
   raw: string | undefined,
   defaults: T,
@@ -127,6 +133,7 @@ export class SettingsQueries {
       fontSize: isFontSize(parsedFontSize)
         ? (parsedFontSize as AppSettings['fontSize'])
         : DEFAULT_SETTINGS.fontSize,
+      telemetryEnabled: parseNullableBool(stored.telemetryEnabled),
       defaultWorktreeEnabled: parseBool(
         stored.defaultWorktreeEnabled,
         DEFAULT_SETTINGS.defaultWorktreeEnabled,
@@ -307,6 +314,11 @@ export class SettingsQueries {
     if ('fontSize' in patch && patch.fontSize != null) {
       if (!isFontSize(patch.fontSize)) {
         throw new Error('fontSize must be one of 12|13|14|15');
+      }
+    }
+    if ('telemetryEnabled' in patch && patch.telemetryEnabled != null) {
+      if (typeof patch.telemetryEnabled !== 'boolean') {
+        throw new Error('telemetryEnabled must be boolean|null');
       }
     }
     if ('prdRewriteCli' in patch && patch.prdRewriteCli != null) {

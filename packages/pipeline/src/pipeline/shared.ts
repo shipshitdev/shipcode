@@ -7,6 +7,7 @@ import type {
   PipelinePhase,
   ShipCodePlan,
 } from '@shipcode/shared';
+import type { TaskGraphWithNodes } from '@shipcode/shared/source';
 import type {
   ActivePipelineSummary,
   PipelineContext,
@@ -77,6 +78,7 @@ export interface PipelineRuntime {
     error?: string,
   ) => void;
   postPlanComment: (context: PipelineContext, plan: ShipCodePlan) => Promise<void>;
+  postTaskGraphComment: (context: PipelineContext, graph: TaskGraphWithNodes) => Promise<void>;
 }
 
 export interface PipelinePhaseHandlers {

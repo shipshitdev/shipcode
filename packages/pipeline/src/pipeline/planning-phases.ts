@@ -4,6 +4,7 @@ import {
   buildReviewPrompt,
   buildRevisionPrompt,
   formatClarificationContext,
+  loadCodeReviewGraphContext,
   loadRepoContext,
   loadStructuredRepoContext,
   type PromptMaterial,
@@ -25,6 +26,7 @@ import {
   resolveRevisionCountForIssue,
   type ShipCodePlan,
 } from '@shipcode/shared';
+import type { TaskGraphWithNodes } from '@shipcode/shared/source';
 import type { PipelineContext } from '../types';
 import type { PipelineHelperEnv } from './shared';
 
@@ -96,15 +98,17 @@ export function createPlanningPhaseHandlers({
     ensureRepoSetupContract,
     getVerifyCommands,
     postPlanComment,
+    postTaskGraphComment,
     resolveAgentForPhase,
     runProviderPhase,
   } = runtime;
 
   function ensureRepoPromptMaterials(context: ReturnType<typeof ensureContext>): PromptMaterial[] {
     if (context.repoPromptMaterials === null) {
-      context.repoPromptMaterials = loadStructuredRepoContext(
-        context.worktreePath ?? context.projectPath,
-      );
+      context.repoPromptMaterials = [
+        ...loadStructuredRepoContext(context.worktreePath ?? context.projectPath),
+        ...loadCodeReviewGraphContext(context.projectPath),
+      ];
       context.repoContext = context.repoPromptMaterials
         .map((material) => material.content)
         .join('\n\n');
@@ -209,12 +213,22 @@ export function createPlanningPhaseHandlers({
       : resolveRequireApproval(settings, project);
   }
 
-  function continueFromStructuredPlan(
+  async function continueFromStructuredPlan(
     threadId: string,
     context: ReturnType<typeof ensureContext>,
     plan: PlanRecord,
     structuredPlan: ShipCodePlan,
   ) {
+    let taskGraph: TaskGraphWithNodes | null = null;
+    try {
+      taskGraph = deps.taskGraphs?.replaceForPlan(threadId, plan.id, structuredPlan) ?? null;
+    } catch (error) {
+      console.error(`[pipeline] task graph persistence failed for thread ${threadId}:`, error);
+    }
+    if (taskGraph) {
+      await postTaskGraphComment(context, taskGraph);
+    }
+
     const revisionCount = getRevisionCountForContext(context);
     deps.emitter.emit({ type: 'plan:parsed', threadId, plan: structuredPlan });
 
@@ -277,7 +291,10 @@ export function createPlanningPhaseHandlers({
     const context = ensureContext(threadId, { projectPath, worktreePath });
 
     if (context.repoPromptMaterials === null) {
-      context.repoPromptMaterials = loadStructuredRepoContext(worktreePath ?? projectPath);
+      context.repoPromptMaterials = [
+        ...loadStructuredRepoContext(worktreePath ?? projectPath),
+        ...loadCodeReviewGraphContext(projectPath),
+      ];
       context.repoContext =
         context.repoPromptMaterials.map((material) => material.content).join('\n\n') ||
         loadRepoContext(worktreePath ?? projectPath);
@@ -373,7 +390,7 @@ export function createPlanningPhaseHandlers({
             clearClarificationState(threadId, context);
             const nextVersion = deps.plans.getMaxVersion(threadId) + 1;
             const plan = deps.plans.create(threadId, result.raw, result.data, nextVersion);
-            continueFromStructuredPlan(threadId, context, plan, result.data);
+            await continueFromStructuredPlan(threadId, context, plan, result.data);
           } else if (clarificationRequest) {
             enterClarifying(threadId, context, clarificationRequest);
           } else {
@@ -438,7 +455,7 @@ export function createPlanningPhaseHandlers({
         if (result.success && result.data) {
           clearClarificationState(threadId, context);
           const plan = deps.plans.create(threadId, result.raw, result.data, nextVersion);
-          continueFromStructuredPlan(threadId, context, plan, result.data);
+          await continueFromStructuredPlan(threadId, context, plan, result.data);
         } else if (clarificationRequest) {
           enterClarifying(threadId, context, clarificationRequest);
         } else {

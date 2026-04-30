@@ -22,6 +22,11 @@ import {
   PIPELINE_PHASE,
   type ShipCodePlan,
 } from '@shipcode/shared';
+import {
+  buildTaskNodePlan,
+  formatTaskGraphExecutionContract,
+  type TaskNodeRecord,
+} from '@shipcode/shared/source';
 import { parseUnifiedDiff } from './diff-parser';
 import type { PipelineHelperEnv } from './shared';
 
@@ -86,6 +91,7 @@ export function createExecutionPhaseHandlers({
     getTestingContext,
     getVerifyCommands,
     prepareWorktree,
+    postTaskGraphComment,
     runProviderPhase,
     runShellCommand,
   } = runtime;
@@ -303,6 +309,56 @@ export function createExecutionPhaseHandlers({
 
     const skill = skillCallSite(context);
     const latestPlanRecord = deps.plans.getLatest(threadId);
+    let taskGraph =
+      latestPlanRecord?.id && deps.taskGraphs
+        ? deps.taskGraphs.getByPlanId(latestPlanRecord.id)
+        : null;
+    let activeTaskNode: TaskNodeRecord | null = null;
+    const usesTaskGraph = Boolean(taskGraph && deps.taskGraphs && taskGraph.nodes.length > 1);
+    if (usesTaskGraph && taskGraph && deps.taskGraphs) {
+      const isRetry =
+        context.testRetries > 0 ||
+        context.verificationRetries > 0 ||
+        Boolean(context.stabilizationFeedback) ||
+        taskGraph.status === 'failed';
+      const hasTerminalNodesOnly = taskGraph.nodes.every((node) =>
+        ['completed', 'failed', 'blocked'].includes(node.status),
+      );
+      if (isRetry && hasTerminalNodesOnly) {
+        taskGraph = deps.taskGraphs.resetForRetry(taskGraph.id);
+      }
+
+      activeTaskNode = deps.taskGraphs.getNextReadyNode(taskGraph.id);
+      if (!activeTaskNode) {
+        const incompleteNodes = taskGraph.nodes.filter((node) => node.status !== 'completed');
+        if (incompleteNodes.length === 0) {
+          const completedGraph =
+            taskGraph.status === 'completed'
+              ? taskGraph
+              : deps.taskGraphs.updateGraphStatus(taskGraph.id, 'completed');
+          void postTaskGraphComment(context, completedGraph);
+          if (context.autonomous) {
+            handlers.startTesting(threadId);
+          } else {
+            emitPhase(threadId, 'completed');
+            activePipelines.delete(threadId);
+          }
+          return;
+        }
+
+        const blockedSummary = incompleteNodes
+          .map((node) => `${node.stableKey}:${node.status}`)
+          .join(', ');
+        emitPhase(threadId, 'failed', `Task graph has no ready node (${blockedSummary}).`);
+        activePipelines.delete(threadId);
+        return;
+      }
+
+      deps.taskGraphs.updateNodeStatus(activeTaskNode.id, 'running');
+      taskGraph = deps.taskGraphs.getByPlanId(latestPlanRecord?.id ?? '') ?? taskGraph;
+      void postTaskGraphComment(context, taskGraph);
+    }
+
     const verificationFeedback = formatVerificationRetryFeedback(
       threadId,
       latestPlanRecord?.id ?? null,
@@ -323,11 +379,13 @@ export function createExecutionPhaseHandlers({
       ...ensureRepoPromptMaterials(context),
     ];
     rememberMaterialSummary(context, 'execute', executeMaterials);
+    const executionPlan = activeTaskNode ? buildTaskNodePlan(plan, activeTaskNode) : plan;
     const executionPrompt =
-      buildExecutionPrompt(plan, skill.context, skill.deps, {
+      buildExecutionPrompt(executionPlan, skill.context, skill.deps, {
         promptMaterials: executeMaterials,
         testingContext: getTestingContext(context),
       }) +
+      formatTaskGraphExecutionContract(taskGraph, { activeNode: activeTaskNode }) +
       verificationFeedback +
       testFeedback +
       stabilizationFeedback;
@@ -340,13 +398,21 @@ export function createExecutionPhaseHandlers({
           executionPrompt,
           executeMaterials,
           {
-            reasoningEffort: context.phaseReasoningEfforts.execute,
+            reasoningEffort:
+              activeTaskNode?.suggestedReasoningEffort ?? context.phaseReasoningEfforts.execute,
           },
         );
 
         if (context.cancelled) return;
 
         if (response.exitCode === 0) {
+          if (activeTaskNode && deps.taskGraphs) {
+            const updatedGraph = deps.taskGraphs.markNodeCompletedAndPromote(activeTaskNode.id);
+            void postTaskGraphComment(context, updatedGraph);
+            handlers.startExecution(threadId, plan);
+            return;
+          }
+
           if (context.autonomous) {
             handlers.startTesting(threadId);
           } else {
@@ -355,6 +421,10 @@ export function createExecutionPhaseHandlers({
           }
         } else {
           const errSnippet = extractExecutionErrorSnippet(response.rawOutput);
+          if (activeTaskNode && deps.taskGraphs) {
+            const failedGraph = deps.taskGraphs.markNodeFailed(activeTaskNode.id);
+            void postTaskGraphComment(context, failedGraph);
+          }
           emitPhase(
             threadId,
             'failed',

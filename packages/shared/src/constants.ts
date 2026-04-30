@@ -36,6 +36,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
   fontStyle: 'dm-sans',
   fontSize: 13,
+  telemetryEnabled: null,
   defaultWorktreeEnabled: true,
   terminalScrollback: 10_000,
   projectOpenTarget: 'cursor',

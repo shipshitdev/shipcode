@@ -336,6 +336,20 @@ describe('GitHubIssueQueries', () => {
     expect(issues.getByNumber(projectId, 1)?.labels).not.toContain('blocked:ci');
   });
 
+  it('setCachedStatusLabel() replaces existing local status labels idempotently', () => {
+    const record = issues.upsert(
+      makeIssue({ labels: ['agent:claude', 'status:in-progress', 'status:queued'] }),
+    );
+
+    issues.setCachedStatusLabel(record.id, 'status:needs-review');
+    issues.setCachedStatusLabel(record.id, 'status:needs-review');
+
+    expect(issues.getByNumber(projectId, 1)?.labels).toEqual([
+      'agent:claude',
+      'status:needs-review',
+    ]);
+  });
+
   it('linkThread() sets the thread_id', () => {
     const record = issues.upsert(makeIssue());
     const threads = new ThreadQueries(db);

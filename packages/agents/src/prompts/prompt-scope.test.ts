@@ -30,6 +30,7 @@ const materials: PromptMaterial[] = [
   { kind: 'plan_output', label: 'plan', content: 'PLAN_OUTPUT_SENTINEL' },
   { kind: 'review_feedback', label: 'review', content: 'REVIEW_FEEDBACK_SENTINEL' },
   { kind: 'repo_file_context', label: 'repo', content: 'BROAD_REPO_CONTEXT_SENTINEL' },
+  { kind: 'repo_graph_context', label: 'graph', content: 'REPO_GRAPH_SENTINEL' },
   { kind: 'testing_context', label: 'tests', content: 'TEST_CONTEXT_SENTINEL' },
   { kind: 'diff_summary', label: 'diff', content: 'DIFF_SENTINEL' },
   { kind: 'verification_output', label: 'verify', content: 'VERIFY_OUTPUT_SENTINEL' },
@@ -45,6 +46,7 @@ describe('scoped prompt builders', () => {
       { promptMaterials: materials },
     );
     expect(prompt).toContain('BROAD_REPO_CONTEXT_SENTINEL');
+    expect(prompt).toContain('REPO_GRAPH_SENTINEL');
     expect(prompt).toContain('```shipcode-plan');
   });
 
@@ -56,6 +58,7 @@ describe('scoped prompt builders', () => {
       { promptMaterials: materials },
     );
     expect(prompt).not.toContain('BROAD_REPO_CONTEXT_SENTINEL');
+    expect(prompt).not.toContain('REPO_GRAPH_SENTINEL');
     expect(prompt).toContain('PLAN_OUTPUT_SENTINEL');
     expect(prompt).toContain('```shipcode-review');
   });
@@ -71,6 +74,7 @@ describe('scoped prompt builders', () => {
       { promptMaterials: materials },
     );
     expect(prompt).not.toContain('BROAD_REPO_CONTEXT_SENTINEL');
+    expect(prompt).not.toContain('REPO_GRAPH_SENTINEL');
     expect(prompt).toContain('REVIEW_FEEDBACK_SENTINEL');
     expect(prompt).toContain('```shipcode-plan');
   });
@@ -86,6 +90,7 @@ describe('scoped prompt builders', () => {
       { promptMaterials: materials },
     );
     expect(prompt).not.toContain('BROAD_REPO_CONTEXT_SENTINEL');
+    expect(prompt).not.toContain('REPO_GRAPH_SENTINEL');
     expect(prompt).toContain('TEST_CONTEXT_SENTINEL');
     expect(prompt).toContain('DIFF_SENTINEL');
     expect(prompt).toContain('```shipcode-verification');
@@ -99,6 +104,7 @@ describe('scoped prompt builders', () => {
       { promptMaterials: materials },
     );
     expect(prompt).not.toContain('BROAD_REPO_CONTEXT_SENTINEL');
+    expect(prompt).not.toContain('REPO_GRAPH_SENTINEL');
     expect(prompt).toContain('PLAN_OUTPUT_SENTINEL');
     expect(prompt).toContain('TEST_CONTEXT_SENTINEL');
   });

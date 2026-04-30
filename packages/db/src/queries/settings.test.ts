@@ -22,6 +22,7 @@ describe('SettingsQueries', () => {
     expect(s.theme).toBe('system');
     expect(s.fontStyle).toBe('dm-sans');
     expect(s.fontSize).toBe(13);
+    expect(s.telemetryEnabled).toBeNull();
     expect(s.defaultWorktreeEnabled).toBe(true);
     expect(s.terminalScrollback).toBe(10000);
     expect(s.plannerModel).toBe('claude');
@@ -91,6 +92,7 @@ describe('SettingsQueries', () => {
       theme: 'dark',
       fontStyle: 'system',
       fontSize: 15,
+      telemetryEnabled: true,
       terminalScrollback: 5000,
       projectOpenTarget: 'finder',
       terminalOpenTarget: 'ghostty',
@@ -104,6 +106,7 @@ describe('SettingsQueries', () => {
     expect(s.theme).toBe('dark');
     expect(s.fontStyle).toBe('system');
     expect(s.fontSize).toBe(15);
+    expect(s.telemetryEnabled).toBe(true);
     expect(s.terminalScrollback).toBe(5000);
     expect(s.projectOpenTarget).toBe('finder');
     expect(s.terminalOpenTarget).toBe('ghostty');
@@ -120,6 +123,21 @@ describe('SettingsQueries', () => {
       .prepare("SELECT value FROM settings WHERE key = 'defaultWorktreeEnabled'")
       .get() as { value: string };
     expect(row.value).toBe('false');
+  });
+
+  it('round-trips nullable telemetry consent', () => {
+    settings.set({ telemetryEnabled: true });
+    expect(settings.get().telemetryEnabled).toBe(true);
+
+    settings.set({ telemetryEnabled: false });
+    expect(settings.get().telemetryEnabled).toBe(false);
+
+    settings.set({ telemetryEnabled: null });
+    const row = db.prepare("SELECT value FROM settings WHERE key = 'telemetryEnabled'").get() as
+      | { value: string }
+      | undefined;
+    expect(row?.value).toBe('');
+    expect(settings.get().telemetryEnabled).toBeNull();
   });
 
   it('set() serializes objects as JSON', () => {

@@ -24,7 +24,14 @@ const PIPELINE_STATUSES = [
   { key: 'failed', label: 'Failed' },
 ];
 
-const PRESET_LABELS = ['status:queued', 'status:in-progress', 'status:done', 'status:failed'];
+const PRESET_LABELS = [
+  'status:queued',
+  'status:in-progress',
+  'status:needs-review',
+  'status:ready-to-merge',
+  'status:done',
+  'status:failed',
+];
 
 const NONE = '__none__';
 

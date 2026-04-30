@@ -15,6 +15,7 @@ const materials: PromptMaterial[] = [
   { kind: 'plan_output', label: 'plan', content: 'Approved plan' },
   { kind: 'review_feedback', label: 'review', content: 'Review notes' },
   { kind: 'repo_file_context', label: 'memory', content: 'Broad repo context' },
+  { kind: 'repo_graph_context', label: 'graph', content: 'Graph stats' },
   { kind: 'testing_context', label: 'testing', content: 'bun run test' },
   { kind: 'diff_summary', label: 'diff', content: 'diff --git a/file.ts' },
   { kind: 'verification_output', label: 'verify', content: 'Verification output' },
@@ -38,6 +39,7 @@ describe('phase prompt policy', () => {
   ] as const)('excludes repo file context from %s prompts', (phase, expected) => {
     const selected = selectPhasePromptMaterials(phase, materials);
     expect(selected.some((material) => material.kind === 'repo_file_context')).toBe(expected);
+    expect(selected.some((material) => material.kind === 'repo_graph_context')).toBe(expected);
   });
 
   it('keeps testing context independently selectable from repo context files', () => {

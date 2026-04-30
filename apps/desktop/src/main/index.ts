@@ -18,12 +18,15 @@ process.emit = ((event: string | symbol, ...args: unknown[]) => {
 // Prevent unhandled errors (e.g. EIO on shutdown, destroyed WebContents race)
 // from showing Electron's crash dialog. Log to file instead.
 import log from './logger.service';
+import { captureMainException, configureMainTelemetry } from './telemetry';
 
 process.on('uncaughtException', (err) => {
   log.error('[main] uncaught exception:', err);
+  captureMainException(err, { tags: { surface: 'main', kind: 'uncaughtException' } });
 });
 process.on('unhandledRejection', (reason) => {
   log.error('[main] unhandled rejection:', reason);
+  captureMainException(reason, { tags: { surface: 'main', kind: 'unhandledRejection' } });
 });
 
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron';
@@ -62,6 +65,7 @@ import {
   ThreadQueries,
   VerificationQueries,
 } from '@shipcode/db';
+import { TaskGraphQueries } from '@shipcode/db/source';
 import { createPipeline } from '@shipcode/pipeline';
 import {
   HEARTBEAT_TIMEOUT_MS,
@@ -237,8 +241,13 @@ function createWindow() {
     skills: new SkillsQueries(db),
     terminalEvents: new TerminalEventQueries(db),
     pipelineSteps: new PipelineStepQueries(db),
+    taskGraphs: new TaskGraphQueries(db),
   };
   threadQueries = queries.threads;
+
+  void configureMainTelemetry(queries.settings.get()).catch((err) => {
+    log.warn('[telemetry] init failed:', err);
+  });
 
   // Notification service — reads settings, writes notifications + activity,
   // emits OS notifications and dock badges. Must be constructed before the
@@ -293,6 +302,7 @@ function createWindow() {
     settings: queries.settings,
     providers,
     skills: queries.skills,
+    taskGraphs: queries.taskGraphs,
     pipelineSteps: queries.pipelineSteps,
   };
   pipeline = createPipeline(pipelineDeps as Parameters<typeof createPipeline>[0]);

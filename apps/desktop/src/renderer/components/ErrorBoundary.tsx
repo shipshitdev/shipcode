@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { captureRendererException } from '../telemetry';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -23,6 +24,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     this.setState({ componentStack: info.componentStack ?? null });
+    void captureRendererException(error, {
+      tags: { surface: 'renderer', kind: 'react-error-boundary' },
+      extra: { componentStack: info.componentStack ?? null },
+    });
     // eslint-disable-next-line no-console
     console.error('[ErrorBoundary] Uncaught render error:', error, info.componentStack);
   }

@@ -1207,3 +1207,77 @@ export function migrateV41(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (41)`);
   });
 }
+
+export function migrateV42(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 42) return;
+
+  transaction(db, () => {
+    // Internal task graphs decompose a planned issue into independently
+    // executable nodes. This is separate from issue_edges: issue_edges models
+    // GitHub issue dependencies, while task_graphs models one pipeline run's
+    // execution contract.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS task_graphs (
+        id            TEXT PRIMARY KEY,
+        thread_id     TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+        plan_id       TEXT NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+        mode          TEXT NOT NULL CHECK (mode IN ('direct', 'internal', 'github-subissues')),
+        status        TEXT NOT NULL CHECK (status IN ('active', 'superseded', 'completed', 'failed')) DEFAULT 'active',
+        risk_score    REAL NOT NULL DEFAULT 0,
+        assessment    TEXT NOT NULL,
+        created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS task_nodes (
+        id                          TEXT PRIMARY KEY,
+        graph_id                    TEXT NOT NULL REFERENCES task_graphs(id) ON DELETE CASCADE,
+        stable_key                  TEXT NOT NULL,
+        order_index                 INTEGER NOT NULL,
+        title                       TEXT NOT NULL,
+        description                 TEXT NOT NULL,
+        status                      TEXT NOT NULL CHECK (status IN ('ready', 'pending', 'running', 'completed', 'failed', 'blocked')),
+        files                       TEXT NOT NULL,
+        acceptance_criteria         TEXT NOT NULL,
+        surfaces                    TEXT NOT NULL,
+        agent_role                  TEXT NOT NULL CHECK (agent_role IN ('frontend', 'backend', 'database', 'security', 'infra', 'docs', 'tests', 'general')),
+        suggested_executor_model    TEXT CHECK (suggested_executor_model IN ('claude', 'codex', 'openrouter')),
+        suggested_reasoning_effort  TEXT NOT NULL CHECK (suggested_reasoning_effort IN ('none', 'minimal', 'low', 'medium', 'high', 'xhigh')),
+        github_issue_number         INTEGER,
+        started_at                  TEXT,
+        completed_at                TEXT,
+        created_at                  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        updated_at                  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        UNIQUE (graph_id, stable_key)
+      );
+
+      CREATE TABLE IF NOT EXISTS task_edges (
+        id              TEXT PRIMARY KEY,
+        graph_id        TEXT NOT NULL REFERENCES task_graphs(id) ON DELETE CASCADE,
+        source_node_id  TEXT NOT NULL REFERENCES task_nodes(id) ON DELETE CASCADE,
+        target_node_id  TEXT NOT NULL REFERENCES task_nodes(id) ON DELETE CASCADE,
+        edge_type       TEXT NOT NULL CHECK (edge_type IN ('depends_on', 'blocks', 'relates_to')),
+        created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        CHECK (source_node_id <> target_node_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_task_graphs_thread
+        ON task_graphs(thread_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_task_graphs_plan
+        ON task_graphs(plan_id);
+      CREATE INDEX IF NOT EXISTS idx_task_nodes_graph
+        ON task_nodes(graph_id, order_index);
+      CREATE INDEX IF NOT EXISTS idx_task_nodes_status
+        ON task_nodes(graph_id, status);
+      CREATE INDEX IF NOT EXISTS idx_task_edges_graph
+        ON task_edges(graph_id);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_task_edges_unique
+        ON task_edges(graph_id, source_node_id, target_node_id, edge_type);
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (42)`);
+  });
+}

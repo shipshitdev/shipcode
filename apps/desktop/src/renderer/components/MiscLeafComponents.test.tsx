@@ -77,6 +77,14 @@ describe('misc leaf components', () => {
     render(
       <GeneralSettingsSection
         settings={DEFAULT_SETTINGS}
+        telemetryStatus={{
+          enabled: false,
+          initialized: false,
+          envDisabled: false,
+          dsnConfigured: true,
+          pendingConsent: true,
+          disabledReason: 'pending-consent',
+        }}
         worktreeRootError="Relative paths are rejected."
         onUpdate={onUpdate}
         onUpdateWorktreeRoot={onUpdateWorktreeRoot}
@@ -96,11 +104,14 @@ describe('misc leaf components', () => {
     fireEvent.blur(branchFormatInput);
 
     fireEvent.click(screen.getByRole('button', { name: 'Re-run Setup' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Send anonymous error reports' }));
 
     expect(onUpdateWorktreeRoot).toHaveBeenCalledWith('~/custom-worktrees');
     expect(onUpdate).toHaveBeenCalledWith({ worktreeBranchFormat: 'ship/custom-{id}' });
     expect(onUpdate).toHaveBeenCalledWith({ onboardingVersion: 0 });
+    expect(onUpdate).toHaveBeenCalledWith({ telemetryEnabled: true });
     expect(screen.getByText('Relative paths are rejected.')).toBeInTheDocument();
+    expect(screen.getByText(/waiting for consent/i)).toBeInTheDocument();
   });
 
   it('renders all phase rows inside the project models tab wrapper', () => {

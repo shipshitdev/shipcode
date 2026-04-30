@@ -1,4 +1,4 @@
-import type { AppSettings, Project } from '@shipcode/shared';
+import type { AppSettings, Project, TelemetryStatus } from '@shipcode/shared';
 import { CURRENT_ONBOARDING_VERSION } from '@shipcode/shared';
 import { Button } from '@shipshitdev/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -23,6 +23,7 @@ import { ProjectView } from './components/ProjectView';
 import { SettingsPanel } from './components/SettingsPanel';
 import { SettingsSidebar } from './components/SettingsSidebar';
 import { SkillsView } from './components/SkillsView';
+import { TelemetryConsentDialog } from './components/TelemetryConsentDialog';
 import { TerminalDrawer } from './components/TerminalDrawer';
 import { Titlebar } from './components/Titlebar';
 import { UpdateBanner } from './components/UpdateBanner';
@@ -31,6 +32,7 @@ import { useGlobalKeyboard } from './hooks/useGlobalKeyboard';
 import { useIpc } from './hooks/useIpc';
 import { STABLE_APP_STATE_STALE_TIME } from './query-stale-times';
 import { useAppStore } from './stores/app-store';
+import { syncRendererTelemetry } from './telemetry';
 
 const ISSUE_DETAIL_MIN_WIDTH = 380;
 const ISSUE_DETAIL_MAX_WIDTH = 760;
@@ -86,6 +88,13 @@ export function App() {
     staleTime: STABLE_APP_STATE_STALE_TIME,
   });
 
+  const { data: telemetryStatus } = useQuery<TelemetryStatus>({
+    queryKey: ['telemetry-status'],
+    queryFn: () => window.shipcode.invoke('telemetry:get-status'),
+    enabled: !!settings,
+    staleTime: STABLE_APP_STATE_STALE_TIME,
+  });
+
   const { data: activeProject } = useQuery<Project | null>({
     queryKey: ['project', activeProjectId],
     queryFn: () => {
@@ -119,6 +128,11 @@ export function App() {
     media.addEventListener('change', handleChange);
     return () => media.removeEventListener('change', handleChange);
   }, [settings]);
+
+  useEffect(() => {
+    if (!telemetryStatus) return;
+    void syncRendererTelemetry(telemetryStatus);
+  }, [telemetryStatus]);
 
   if (settings && (settings.onboardingVersion ?? 0) < CURRENT_ONBOARDING_VERSION) {
     return (
@@ -288,6 +302,13 @@ export function App() {
       <CreateIssueModal />
       <CreateAutomationModal />
       <ProjectSettingsModal />
+      <TelemetryConsentDialog
+        open={
+          settings.telemetryEnabled == null &&
+          telemetryStatus?.dsnConfigured === true &&
+          telemetryStatus.envDisabled === false
+        }
+      />
       <NotificationToaster />
     </div>
   );

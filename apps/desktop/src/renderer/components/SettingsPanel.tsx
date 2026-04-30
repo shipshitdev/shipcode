@@ -3,6 +3,7 @@ import type {
   GitHubIssueCacheRecord,
   IntegrationStatus,
   Project,
+  TelemetryStatus,
 } from '@shipcode/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -30,10 +31,17 @@ export function SettingsPanel() {
     staleTime: STABLE_APP_STATE_STALE_TIME,
   });
 
+  const { data: telemetryStatus } = useQuery<TelemetryStatus>({
+    queryKey: ['telemetry-status'],
+    queryFn: () => window.shipcode.invoke('telemetry:get-status'),
+    staleTime: STABLE_APP_STATE_STALE_TIME,
+  });
+
   const updateSettings = useMutation({
     mutationFn: (patch: Partial<AppSettings>) => window.shipcode.invoke('settings:set', patch),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] });
+      queryClient.invalidateQueries({ queryKey: ['telemetry-status'] });
       queryClient.invalidateQueries({ queryKey: ['integrations'] });
     },
   });
@@ -105,6 +113,7 @@ export function SettingsPanel() {
         {settingsSection === 'general' && (
           <GeneralSettingsSection
             settings={settings}
+            telemetryStatus={telemetryStatus}
             worktreeRootError={worktreeRootError}
             onUpdate={update}
             onUpdateWorktreeRoot={(value) => {

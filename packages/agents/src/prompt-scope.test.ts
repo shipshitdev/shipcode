@@ -12,6 +12,7 @@ const materials: PromptMaterial[] = [
   { kind: 'plan_output', label: 'plan', content: 'approved plan' },
   { kind: 'review_feedback', label: 'review', content: 'review notes' },
   { kind: 'repo_file_context', label: 'memory', content: 'broad repo context' },
+  { kind: 'repo_graph_context', label: 'graph', content: 'graph stats' },
   { kind: 'testing_context', label: 'tests', content: 'bun test' },
   { kind: 'diff_summary', label: 'diff', content: 'diff --git' },
   { kind: 'verification_output', label: 'verify', content: 'failed output' },
@@ -32,6 +33,9 @@ describe('prompt scope policies', () => {
   ] as const)('%s broad repo context policy is deterministic', (phase, includesBroadContext) => {
     const selected = selectPromptMaterials(phase, materials);
     expect(selected.some((material) => material.kind === 'repo_file_context')).toBe(
+      includesBroadContext,
+    );
+    expect(selected.some((material) => material.kind === 'repo_graph_context')).toBe(
       includesBroadContext,
     );
     expect(selected.map((material) => material.label)).toEqual(

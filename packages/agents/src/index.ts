@@ -4,6 +4,8 @@ export type {
   CommitGroup,
 } from './auto-commit';
 export { generateCommitGroups, parseAndValidate } from './auto-commit';
+export type { CodeReviewGraphContextOptions } from './code-review-graph-context';
+export { loadCodeReviewGraphContext } from './code-review-graph-context';
 export type { ContextGenerateResult } from './context-generator';
 export {
   generateContextFiles,

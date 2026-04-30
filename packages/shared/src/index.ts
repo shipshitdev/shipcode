@@ -28,6 +28,7 @@ export * from './schemas';
 export * from './skills-types';
 export * from './sqlite-time';
 export * from './staleness';
+export * from './task-graph';
 export * from './tokens';
 export * from './types';
 // worktree-path uses node:path — import directly from '@shipcode/shared/worktree-path'

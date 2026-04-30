@@ -6,6 +6,7 @@ const MATERIAL_ORDER: PromptMaterialKind[] = [
   'plan_output',
   'review_feedback',
   'repo_file_context',
+  'repo_graph_context',
   'testing_context',
   'diff_summary',
   'verification_output',
@@ -27,6 +28,7 @@ export const PHASE_PROMPT_POLICY: Record<PromptPhase, PhasePromptPolicy> = {
     allowedMaterialKinds: [
       'issue_prompt',
       'repo_file_context',
+      'repo_graph_context',
       'testing_context',
       'execution_notes',
       'verification_output',

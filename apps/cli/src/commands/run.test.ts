@@ -45,10 +45,15 @@ vi.mock('@shipcode/db', () => ({
   CheckpointQueries: class {},
   TerminalEventQueries: class {},
   PipelineStepQueries: class {},
+  TaskGraphQueries: class {},
   SettingsQueries: class {
     get = settingsGetMock;
   },
   SkillsQueries: class {},
+}));
+
+vi.mock('@shipcode/db/source', () => ({
+  TaskGraphQueries: class {},
 }));
 
 vi.mock('@shipcode/agents', () => ({

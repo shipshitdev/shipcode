@@ -1,4 +1,4 @@
-import { type AppSettings, DEFAULT_SETTINGS } from '@shipcode/shared';
+import { type AppSettings, DEFAULT_SETTINGS, type TelemetryStatus } from '@shipcode/shared';
 import {
   Button,
   Input,
@@ -8,19 +8,25 @@ import {
   SelectTrigger,
   SelectValue,
   SettingsRow,
+  Switch,
 } from '@shipshitdev/ui';
 
 export function GeneralSettingsSection({
   settings,
+  telemetryStatus,
   worktreeRootError,
   onUpdate,
   onUpdateWorktreeRoot,
 }: {
   settings: AppSettings;
+  telemetryStatus?: TelemetryStatus;
   worktreeRootError: string | null;
   onUpdate: (patch: Partial<AppSettings>) => void;
   onUpdateWorktreeRoot: (value: string | null) => void;
 }) {
+  const telemetryDisabledByEnv = telemetryStatus?.envDisabled === true;
+  const telemetryMissingDsn = telemetryStatus?.dsnConfigured === false;
+
   return (
     <>
       <h3 className="mb-5">General</h3>
@@ -87,6 +93,39 @@ export function GeneralSettingsSection({
             </SelectContent>
           </Select>
         </SettingsRow>
+      </section>
+
+      <section className="mb-8">
+        <h4 className="mb-3 text-secondary">Privacy</h4>
+        <SettingsRow
+          label="Send anonymous error reports"
+          htmlFor="telemetry-enabled"
+          description={
+            telemetryDisabledByEnv
+              ? 'Disabled by SHIPCODE_TELEMETRY_ENABLED=false.'
+              : 'Sends crash, IPC, and pipeline failure metadata to Sentry. Prompts and terminal output are not sent.'
+          }
+        >
+          <Switch
+            id="telemetry-enabled"
+            checked={settings.telemetryEnabled === true && !telemetryDisabledByEnv}
+            disabled={telemetryDisabledByEnv}
+            onCheckedChange={(checked) => onUpdate({ telemetryEnabled: checked })}
+          />
+        </SettingsRow>
+        <p className="text-xs text-secondary mt-2">
+          Current state:{' '}
+          {telemetryDisabledByEnv
+            ? 'disabled by environment'
+            : settings.telemetryEnabled == null
+              ? 'waiting for consent'
+              : settings.telemetryEnabled
+                ? telemetryMissingDsn
+                  ? 'allowed, but no Sentry DSN is configured'
+                  : 'enabled'
+                : 'disabled'}
+          .
+        </p>
       </section>
 
       <section className="mb-8">

@@ -4,6 +4,7 @@ import {
   type GitHubIssueCacheRecord,
   type GitHubPrCheckSummary,
   type GitHubPrReviewCommentSummary,
+  type GitHubStatusLabel,
   ISO_NOW_SQL,
   ISSUE_PIPELINE_STATUS,
   type IssuePipelineStatus,
@@ -642,6 +643,21 @@ export class GitHubIssueQueries {
     this.db
       .prepare('UPDATE github_issue_cache SET labels = ? WHERE id = ?')
       .run(JSON.stringify(Array.from(current)), id);
+  }
+
+  setCachedStatusLabel(id: string, label: GitHubStatusLabel): void {
+    const row = this.db.prepare('SELECT labels FROM github_issue_cache WHERE id = ?').get(id) as
+      | { labels: string }
+      | undefined;
+    if (!row) return;
+
+    const labels = JSON.parse(row.labels || '[]') as string[];
+    const next = labels.filter((entry) => !entry.startsWith('status:'));
+    next.push(label);
+
+    this.db
+      .prepare('UPDATE github_issue_cache SET labels = ? WHERE id = ?')
+      .run(JSON.stringify([...new Set(next)]), id);
   }
 
   archiveIssues(ids: string[]): void {

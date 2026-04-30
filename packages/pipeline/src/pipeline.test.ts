@@ -20,6 +20,7 @@ import {
   type Thread,
   type VerificationRecord,
 } from '@shipcode/shared';
+import type { TaskGraphWithNodes } from '@shipcode/shared/source';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPipeline } from './pipeline';
 import type { PipelineContext, PipelineDeps, PipelineEvent } from './types';
@@ -303,6 +304,78 @@ function makeVerificationRecord(overrides: Partial<VerificationRecord> = {}): Ve
   };
 }
 
+function makeTaskGraph(): TaskGraphWithNodes {
+  const base = {
+    graphId: 'graph-1',
+    suggestedExecutorModel: null,
+    startedAt: null,
+    completedAt: null,
+    createdAt: '',
+    updatedAt: '',
+  };
+
+  return {
+    id: 'graph-1',
+    threadId: 't1',
+    planId: 'plan-1',
+    mode: 'internal',
+    status: 'active',
+    riskScore: 0.52,
+    assessment: {
+      mode: 'internal',
+      shouldDecompose: true,
+      riskScore: 0.52,
+      reasons: ['2 planned steps'],
+      suggestedNodeCount: 2,
+      surfaces: ['database', 'backend'],
+    },
+    createdAt: '',
+    updatedAt: '',
+    nodes: [
+      {
+        ...base,
+        id: 'node-1',
+        stableKey: 'step-1',
+        order: 1,
+        title: 'Create task graph tables',
+        description: 'Add the database schema',
+        status: 'ready',
+        files: ['packages/db/src/schema.ts'],
+        acceptanceCriteria: ['Schema exists'],
+        surfaces: ['database'],
+        agentRole: 'database',
+        suggestedReasoningEffort: 'high',
+        githubIssueNumber: null,
+      },
+      {
+        ...base,
+        id: 'node-2',
+        stableKey: 'step-2',
+        order: 2,
+        title: 'Wire task graph pipeline',
+        description: 'Use the graph during execution',
+        status: 'pending',
+        files: ['packages/pipeline/src/pipeline.ts'],
+        acceptanceCriteria: ['Pipeline uses graph'],
+        surfaces: ['backend'],
+        agentRole: 'backend',
+        suggestedReasoningEffort: 'medium',
+        githubIssueNumber: null,
+      },
+    ],
+    edges: [
+      {
+        id: 'edge-1',
+        graphId: 'graph-1',
+        sourceNodeId: 'node-1',
+        targetNodeId: 'node-2',
+        edgeType: 'depends_on',
+        createdAt: '',
+      },
+    ],
+  } satisfies TaskGraphWithNodes;
+}
+
 function makeProject(overrides: Partial<Project> = {}): Project {
   return {
     id: 'project-1',
@@ -519,6 +592,17 @@ function createMockDeps() {
         listAll: vi.fn(() => []),
         listQuarantined: vi.fn(() => []),
       },
+      taskGraphs: {
+        replaceForPlan: vi.fn(),
+        getByPlanId: vi.fn(() => null),
+        getNextReadyNode: vi.fn(() => null),
+        updateNodeStatus: vi.fn(),
+        markNodeCompletedAndPromote: vi.fn(),
+        markNodeFailed: vi.fn(),
+        resetForRetry: vi.fn(),
+        updateGraphStatus: vi.fn(),
+        updateNodeGithubIssueNumber: vi.fn(),
+      },
     } as unknown as PipelineDeps,
     emittedEvents,
     trigger,
@@ -621,6 +705,11 @@ describe('createPipeline', () => {
       await mock.trigger('exit', 'proc-1', 0);
 
       expect(mock.deps.plans.create).toHaveBeenCalled();
+      expect(mock.deps.taskGraphs?.replaceForPlan).toHaveBeenCalledWith(
+        't1',
+        'plan-1',
+        expect.objectContaining({ id: 'p1' }),
+      );
       expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'approved');
       expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'awaiting_approval');
       expect(mock.emittedEvents).toContainEqual(

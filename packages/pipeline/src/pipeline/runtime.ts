@@ -9,6 +9,12 @@ import {
   toPersistedPromptTelemetryMaterials,
 } from '@shipcode/agents/source';
 import { isRealGithubIssueNumber } from '@shipcode/shared';
+import {
+  formatTaskGraphChecklist,
+  formatTaskNodeIssueBody,
+  TASK_GRAPH_COMMENT_MARKER,
+  type TaskGraphWithNodes,
+} from '@shipcode/shared/source';
 import { syncThreadAndIssuePhase } from '../phase-sync';
 import type { PipelineContext, PipelineDeps, PipelineExecutorModel } from '../types';
 import type { PipelineContextHelpers, PipelineRuntime } from './shared';
@@ -602,6 +608,55 @@ export function createPipelineRuntime(
     }
   }
 
+  async function postTaskGraphComment(
+    context: PipelineContext,
+    graph: TaskGraphWithNodes,
+  ): Promise<void> {
+    if (!isRealGithubIssueNumber(context.githubIssueNumber)) return;
+    try {
+      const ghCli = new GhCli(context.projectPath);
+      const graphForComment = await ensureTaskNodeIssues(context, ghCli, graph);
+      await ghCli.upsertIssueCommentByMarker(
+        context.githubIssueNumber,
+        TASK_GRAPH_COMMENT_MARKER,
+        formatTaskGraphChecklist(graphForComment),
+      );
+    } catch (error) {
+      console.error('[pipeline] Failed to post task graph comment:', error);
+    }
+  }
+
+  async function ensureTaskNodeIssues(
+    context: PipelineContext,
+    ghCli: GhCli,
+    graph: TaskGraphWithNodes,
+  ): Promise<TaskGraphWithNodes> {
+    if (
+      graph.mode !== 'github-subissues' ||
+      !deps.taskGraphs ||
+      !isRealGithubIssueNumber(context.githubIssueNumber)
+    ) {
+      return graph;
+    }
+
+    let latestGraph = graph;
+    const parentIssueNumber = context.githubIssueNumber;
+    for (const node of graph.nodes) {
+      if (node.githubIssueNumber !== null) continue;
+      const issue = await ghCli.createIssue({
+        title: `[${node.stableKey}] ${node.title}`,
+        body: formatTaskNodeIssueBody({
+          parentIssueNumber,
+          graph: latestGraph,
+          node,
+        }),
+      });
+      latestGraph = deps.taskGraphs.updateNodeGithubIssueNumber(node.id, issue.number);
+    }
+
+    return latestGraph;
+  }
+
   return {
     emitTerminalRaw,
     emitTerminalLifecycle,
@@ -616,5 +671,6 @@ export function createPipelineRuntime(
     runProviderPhase,
     emitPhase,
     postPlanComment,
+    postTaskGraphComment,
   };
 }

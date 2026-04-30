@@ -142,6 +142,16 @@ describe('App', () => {
         if (channel === 'settings:get') {
           return baseSettings;
         }
+        if (channel === 'telemetry:get-status') {
+          return {
+            enabled: false,
+            initialized: false,
+            envDisabled: false,
+            dsnConfigured: false,
+            pendingConsent: true,
+            disabledReason: 'missing-dsn',
+          };
+        }
         if (channel === 'project:get') {
           return {
             id: args?.projectId ?? 'project-1',
@@ -216,12 +226,47 @@ describe('App', () => {
       if (channel === 'settings:get') {
         return { ...baseSettings, onboardingVersion: 0 };
       }
+      if (channel === 'telemetry:get-status') {
+        return {
+          enabled: false,
+          initialized: false,
+          envDisabled: false,
+          dsnConfigured: false,
+          pendingConsent: true,
+          disabledReason: 'missing-dsn',
+        };
+      }
       return null;
     });
 
     renderApp();
 
     expect(await screen.findByText('OnboardingWizard')).toBeInTheDocument();
+  });
+
+  it('shows telemetry consent when reporting is configured and unset', async () => {
+    window.shipcode.invoke = vi.fn(async (channel: string) => {
+      if (channel === 'settings:get') {
+        return { ...baseSettings, telemetryEnabled: null };
+      }
+      if (channel === 'telemetry:get-status') {
+        return {
+          enabled: false,
+          initialized: false,
+          envDisabled: false,
+          dsnConfigured: true,
+          pendingConsent: true,
+          disabledReason: 'pending-consent',
+        };
+      }
+      return null;
+    });
+
+    renderApp();
+
+    expect(await screen.findByText('Error reporting')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Allow' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Decline' })).toBeInTheDocument();
   });
 
   it('renders the skills view for an active project and applies theme tokens', async () => {
@@ -249,6 +294,16 @@ describe('App', () => {
     window.shipcode.invoke = vi.fn(async (channel: string) => {
       if (channel === 'settings:get') {
         return baseSettings;
+      }
+      if (channel === 'telemetry:get-status') {
+        return {
+          enabled: false,
+          initialized: false,
+          envDisabled: false,
+          dsnConfigured: false,
+          pendingConsent: true,
+          disabledReason: 'missing-dsn',
+        };
       }
       if (channel === 'project:get') {
         return {

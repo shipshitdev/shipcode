@@ -51,6 +51,7 @@ import type {
   ReviewRecord,
   ShipCodePlan,
   SystemHealth,
+  TelemetryStatus,
   TerminalEventRecord,
   Thread,
   ThreadPanelData,
@@ -233,6 +234,7 @@ export interface IpcInvokeChannels {
 
   'settings:get': { args: undefined; result: AppSettings };
   'settings:set': { args: Partial<AppSettings>; result: undefined };
+  'telemetry:get-status': { args: undefined; result: TelemetryStatus };
 
   'health:check': { args: undefined; result: SystemHealth };
   'provider-usage:check': { args: undefined; result: CliProviderUsageMap };

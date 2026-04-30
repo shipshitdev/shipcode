@@ -106,6 +106,16 @@ const STATUS_LABEL_DEFINITIONS: Record<string, GitHubLabelDefinition> = {
     color: 'fb8c00',
     description: 'Currently active in the pipeline.',
   },
+  'status:needs-review': {
+    name: 'status:needs-review',
+    color: '8250df',
+    description: 'Linked pull request is waiting for review.',
+  },
+  'status:ready-to-merge': {
+    name: 'status:ready-to-merge',
+    color: '2da44e',
+    description: 'Linked pull request is approved and ready to merge.',
+  },
   'status:done': {
     name: 'status:done',
     color: '1a7f37',
@@ -118,8 +128,13 @@ const STATUS_LABEL_DEFINITIONS: Record<string, GitHubLabelDefinition> = {
   },
 };
 
+const PR_REVIEW_STATUS_LABELS = ['status:needs-review', 'status:ready-to-merge'] as const;
+
 export const SHIPCODE_STATUS_LABELS: readonly GitHubLabelDefinition[] = [
-  ...new Set(Object.values(DEFAULT_STATUS_LABEL_MAPPINGS).filter(Boolean)),
+  ...new Set([
+    ...Object.values(DEFAULT_STATUS_LABEL_MAPPINGS).filter(Boolean),
+    ...PR_REVIEW_STATUS_LABELS,
+  ]),
 ]
   .map((name) => STATUS_LABEL_DEFINITIONS[name])
   .filter((label): label is GitHubLabelDefinition => !!label);

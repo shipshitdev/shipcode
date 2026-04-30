@@ -19,6 +19,7 @@ import { registerSupportHandlers } from './ipc/register-support-handlers';
 import type { Queries } from './ipc/types';
 import log, { logEvent } from './logger.service';
 import type { NotificationService } from './notification-service';
+import { captureIpcFailure } from './telemetry';
 import type { UpdateService } from './update-service';
 
 export function registerIpcHandlers(
@@ -63,6 +64,7 @@ export function registerIpcHandlers(
           } catch (error) {
             const elapsedMs = Date.now() - startedAt;
             const message = error instanceof Error ? error.message : String(error);
+            captureIpcFailure(error, { channel: String(channel), elapsedMs });
             logEvent('ipc:handle', {
               channel,
               ok: false,

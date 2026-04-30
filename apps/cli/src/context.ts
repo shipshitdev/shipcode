@@ -23,6 +23,7 @@ import {
   ThreadQueries,
   VerificationQueries,
 } from '@shipcode/db';
+import { TaskGraphQueries } from '@shipcode/db/source';
 import type { createPipeline } from '@shipcode/pipeline';
 import type { Project } from '@shipcode/shared';
 import { createCliEmitter } from './adapters/cli-emitter';
@@ -40,6 +41,7 @@ export interface CliContext {
   skills: SkillsQueries;
   checkpoints: CheckpointQueries;
   terminalEvents: TerminalEventQueries;
+  taskGraphs: TaskGraphQueries;
   ghCli: GhCli;
   processManager: ProcessManager;
   emitter: ReturnType<typeof createCliEmitter>;
@@ -68,6 +70,7 @@ export function createCliContext(cwd: string): CliContext {
   const checkpoints = new CheckpointQueries(db);
   const terminalEvents = new TerminalEventQueries(db);
   const pipelineSteps = new PipelineStepQueries(db);
+  const taskGraphs = new TaskGraphQueries(db);
 
   let project = projects.list().find((p) => p.path === cwd);
   if (!project) {
@@ -101,6 +104,7 @@ export function createCliContext(cwd: string): CliContext {
     settings,
     providers,
     skills,
+    taskGraphs,
     pipelineSteps,
   } as Parameters<typeof createPipeline>[0];
 
@@ -117,6 +121,7 @@ export function createCliContext(cwd: string): CliContext {
     skills,
     checkpoints,
     terminalEvents,
+    taskGraphs,
     ghCli,
     processManager,
     emitter,
