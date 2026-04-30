@@ -1,0 +1,202 @@
+// @vitest-environment jsdom
+
+import type { AppSettings, GitHubIssueCacheRecord, Project } from '@shipcode/shared';
+import { DEFAULT_SETTINGS } from '@shipcode/shared';
+import { act, type ReactElement, type ReactNode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@dnd-kit/core', async () => {
+  const actual = await vi.importActual<typeof import('@dnd-kit/core')>('@dnd-kit/core');
+  return {
+    ...actual,
+    DndContext: ({ children }: { children: ReactNode }) => (
+      <div data-testid="dnd-context">{children}</div>
+    ),
+    DragOverlay: ({ children }: { children?: ReactNode }) => (
+      <div data-testid="drag-overlay">{children}</div>
+    ),
+    useDraggable: () => ({
+      attributes: {},
+      listeners: {},
+      setNodeRef: () => {},
+      isDragging: false,
+    }),
+    useDroppable: () => ({
+      setNodeRef: () => {},
+      isOver: false,
+    }),
+  };
+});
+
+import { KanbanBoard } from '../KanbanBoard';
+
+function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssueCacheRecord {
+  return {
+    id: 'issue-1',
+    projectId: 'project-1',
+    issueNumber: 1,
+    title: 'Stale queued issue',
+    body: null,
+    labels: [],
+    assignee: null,
+    state: 'open',
+    pipelineStatus: 'queued',
+    threadId: null,
+    claimedAt: null,
+    claimedBy: null,
+    lastPhaseUpdate: '2000-01-01T00:00:00.000Z',
+    lastStatusLabel: null,
+    plannerModelOverride: null,
+    reviewerModelOverride: null,
+    executorModelOverride: null,
+    verifierModelOverride: null,
+    plannerModelIdOverride: null,
+    reviewerModelIdOverride: null,
+    executorModelIdOverride: null,
+    verifierModelIdOverride: null,
+    plannerReasoningEffortOverride: null,
+    reviewerReasoningEffortOverride: null,
+    executorReasoningEffortOverride: null,
+    verifierReasoningEffortOverride: null,
+    revisionCountOverride: null,
+    requireApprovalOverride: null,
+    linkedPrNumber: null,
+    linkedPrUrl: null,
+    linkedPrIsDraft: false,
+    ciBlocked: false,
+    failingChecks: [],
+    unresolvedReviewComments: [],
+    unresolvedReviewCommentCount: 0,
+    prLastSyncAt: null,
+    updatedAt: '2000-01-01T00:00:00.000Z',
+    fetchedAt: '2000-01-01T00:00:00.000Z',
+    priorityRank: null,
+    priorityRaw: null,
+    priorityFetchedAt: null,
+    isQuickMode: false,
+    ...overrides,
+  };
+}
+
+function makeProject(overrides: Partial<Project> = {}): Project {
+  return {
+    id: 'project-1',
+    name: 'ShipCode',
+    path: '/tmp/shipcode',
+    gitRemote: 'git@github.com:shipshitdev/shipcode.git',
+    githubRepoId: null,
+    githubRepoFullName: null,
+    starterIssueNumber: null,
+    starterIssueCreatedAt: null,
+    githubProjectUrl: null,
+    plannerModelOverride: null,
+    reviewerModelOverride: null,
+    executorModelOverride: null,
+    verifierModelOverride: null,
+    plannerModelIdOverride: null,
+    reviewerModelIdOverride: null,
+    executorModelIdOverride: null,
+    verifierModelIdOverride: null,
+    plannerReasoningEffortOverride: null,
+    reviewerReasoningEffortOverride: null,
+    executorReasoningEffortOverride: null,
+    verifierReasoningEffortOverride: null,
+    revisionCountOverride: null,
+    requireApprovalOverride: null,
+    discordRouting: 'inherit',
+    discordWebhookUrlOverride: null,
+    telegramRouting: 'inherit',
+    telegramChatIdOverride: null,
+    defaultBranch: 'main',
+    pinned: false,
+    archived: false,
+    hidden: false,
+    notifyGithubUser: null,
+    createdAt: '2026-04-28T00:00:00.000Z',
+    updatedAt: '2026-04-28T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function renderIntoDom(element: ReactElement) {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const root = createRoot(container);
+
+  act(() => {
+    root.render(element);
+  });
+
+  return {
+    container,
+    cleanup: () => {
+      act(() => {
+        root.unmount();
+      });
+      container.remove();
+    },
+  };
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe('KanbanBoard staleness flags', () => {
+  it('renders a stale red dot with a reason title on stale cards', () => {
+    const view = renderIntoDom(
+      <KanbanBoard
+        issues={[makeIssue()]}
+        project={makeProject()}
+        settings={DEFAULT_SETTINGS as AppSettings}
+        onIssueClick={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    const dot = view.container.querySelector('[data-staleness-dot="true"]');
+    expect(dot).not.toBeNull();
+    expect(dot?.getAttribute('title')).toContain('Queued');
+    expect(dot?.getAttribute('title')).toContain('no updates');
+    view.cleanup();
+  });
+
+  it('filters the board to stale cards only', () => {
+    const staleIssue = makeIssue({ id: 'stale', issueNumber: 1, title: 'Stale queued issue' });
+    const freshIssue = makeIssue({
+      id: 'fresh',
+      issueNumber: 2,
+      title: 'Fresh queued issue',
+      lastPhaseUpdate: '2999-01-01T00:00:00.000Z',
+      updatedAt: '2999-01-01T00:00:00.000Z',
+      fetchedAt: '2999-01-01T00:00:00.000Z',
+    });
+
+    const view = renderIntoDom(
+      <KanbanBoard
+        issues={[staleIssue, freshIssue]}
+        project={makeProject()}
+        settings={DEFAULT_SETTINGS as AppSettings}
+        onIssueClick={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
+    );
+
+    expect(view.container.textContent).toContain('Stale queued issue');
+    expect(view.container.textContent).toContain('Fresh queued issue');
+
+    const button = view.container.querySelector('button[title="Show only stale issues"]');
+    if (!(button instanceof HTMLButtonElement)) {
+      throw new Error('Expected stale filter button');
+    }
+
+    act(() => {
+      button.click();
+    });
+
+    expect(view.container.textContent).toContain('Stale queued issue');
+    expect(view.container.textContent).not.toContain('Fresh queued issue');
+    view.cleanup();
+  });
+});

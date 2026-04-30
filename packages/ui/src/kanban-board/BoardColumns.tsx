@@ -3,7 +3,7 @@
 import { useDroppable } from '@dnd-kit/core';
 import { Archive, ChevronDown, ChevronRight } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
-import type { GitHubIssueCacheRecord } from '../lib/shipcode';
+import type { GitHubIssueCacheRecord, IssueStalenessResult } from '../lib/shipcode';
 import { cn } from '../lib/utils';
 import { Button } from '../primitives/button';
 import { COLUMN_DOT_CLASS } from './constants';
@@ -48,6 +48,7 @@ const EMPTY_PHASE_CHIP_MAP = new Map<string, IssuePhaseChip | null>();
 const EMPTY_REVISION_BADGE_MAP = new Map<string, IssueRevisionBadge | null>();
 const EMPTY_APPROVAL_BADGE_MAP = new Map<string, IssueApprovalBadge | null>();
 const EMPTY_PRIORITY_BADGE_MAP = new Map<string, IssuePriorityBadge | null>();
+const EMPTY_STALENESS_MAP = new Map<string, IssueStalenessResult | null>();
 const EMPTY_APPROVED_AWAITING_EXECUTION = new Set<string>();
 
 interface DroppableColumnProps {
@@ -72,6 +73,7 @@ interface DroppableColumnProps {
   issueRevisionBadgeById: Map<string, IssueRevisionBadge | null>;
   issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
   issuePriorityBadgeById: Map<string, IssuePriorityBadge | null>;
+  issueStalenessById?: Map<string, IssueStalenessResult | null>;
   approvedAwaitingExecutionIssueIds?: ReadonlySet<string>;
   flashingIssueIds?: ReadonlySet<string>;
 }
@@ -98,6 +100,7 @@ export function DroppableColumn({
   issueRevisionBadgeById = EMPTY_REVISION_BADGE_MAP,
   issueApprovalBadgeById = EMPTY_APPROVAL_BADGE_MAP,
   issuePriorityBadgeById = EMPTY_PRIORITY_BADGE_MAP,
+  issueStalenessById = EMPTY_STALENESS_MAP,
   approvedAwaitingExecutionIssueIds = EMPTY_APPROVED_AWAITING_EXECUTION,
   flashingIssueIds,
 }: DroppableColumnProps) {
@@ -151,6 +154,7 @@ export function DroppableColumn({
             revisionBadge={issueRevisionBadgeById.get(issue.id) ?? null}
             approvalBadge={issueApprovalBadgeById.get(issue.id) ?? null}
             priorityBadge={issuePriorityBadgeById.get(issue.id) ?? null}
+            staleness={issueStalenessById.get(issue.id) ?? null}
             approvedAwaitingExecution={isApprovedAwaitingExecutionIssue(
               issue,
               approvedAwaitingExecutionIssueIds,
@@ -196,6 +200,7 @@ interface SectionBlockProps {
   issueRevisionBadgeById: Map<string, IssueRevisionBadge | null>;
   issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
   issuePriorityBadgeById: Map<string, IssuePriorityBadge | null>;
+  issueStalenessById?: Map<string, IssueStalenessResult | null>;
   approvedAwaitingExecutionIssueIds?: ReadonlySet<string>;
   flashingIssueIds?: ReadonlySet<string>;
 }
@@ -223,6 +228,7 @@ function SectionBlock({
   issueRevisionBadgeById = EMPTY_REVISION_BADGE_MAP,
   issueApprovalBadgeById = EMPTY_APPROVAL_BADGE_MAP,
   issuePriorityBadgeById = EMPTY_PRIORITY_BADGE_MAP,
+  issueStalenessById = EMPTY_STALENESS_MAP,
   approvedAwaitingExecutionIssueIds = EMPTY_APPROVED_AWAITING_EXECUTION,
   flashingIssueIds,
 }: SectionBlockProps) {
@@ -285,6 +291,7 @@ function SectionBlock({
               revisionBadge={issueRevisionBadgeById.get(issue.id) ?? null}
               approvalBadge={issueApprovalBadgeById.get(issue.id) ?? null}
               priorityBadge={issuePriorityBadgeById.get(issue.id) ?? null}
+              staleness={issueStalenessById.get(issue.id) ?? null}
               approvedAwaitingExecution={isApprovedAwaitingExecutionIssue(
                 issue,
                 approvedAwaitingExecutionIssueIds,
@@ -339,6 +346,7 @@ interface StackedColumnProps {
   issueRevisionBadgeById: Map<string, IssueRevisionBadge | null>;
   issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
   issuePriorityBadgeById: Map<string, IssuePriorityBadge | null>;
+  issueStalenessById?: Map<string, IssueStalenessResult | null>;
   approvedAwaitingExecutionIssueIds?: ReadonlySet<string>;
   flashingIssueIds?: ReadonlySet<string>;
 }
@@ -364,6 +372,7 @@ export function StackedColumn({
   issueRevisionBadgeById = EMPTY_REVISION_BADGE_MAP,
   issueApprovalBadgeById = EMPTY_APPROVAL_BADGE_MAP,
   issuePriorityBadgeById = EMPTY_PRIORITY_BADGE_MAP,
+  issueStalenessById = EMPTY_STALENESS_MAP,
   approvedAwaitingExecutionIssueIds = EMPTY_APPROVED_AWAITING_EXECUTION,
   flashingIssueIds,
 }: StackedColumnProps) {
@@ -451,6 +460,7 @@ export function StackedColumn({
             issueRevisionBadgeById={issueRevisionBadgeById}
             issueApprovalBadgeById={issueApprovalBadgeById}
             issuePriorityBadgeById={issuePriorityBadgeById}
+            issueStalenessById={issueStalenessById}
             approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
             flashingIssueIds={flashingIssueIds}
           />

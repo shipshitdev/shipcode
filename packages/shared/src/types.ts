@@ -1022,6 +1022,7 @@ export interface GitHubIssue {
   assignee: string | null;
   state: 'open' | 'closed';
   url: string;
+  updatedAt?: string | null;
   author?: { login: string };
 }
 
@@ -1127,6 +1128,7 @@ export interface GitHubIssueCacheRecord {
   unresolvedReviewComments: GitHubPrReviewCommentSummary[];
   unresolvedReviewCommentCount: number;
   prLastSyncAt: string | null;
+  updatedAt?: string | null;
   fetchedAt: string;
   // GitHub Projects v2 single-select Priority field, synced via the configured
   // project board. priorityRank is the normalized bucket; priorityRaw is the

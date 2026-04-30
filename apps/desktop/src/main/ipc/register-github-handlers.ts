@@ -170,6 +170,7 @@ export function registerGitHubHandlers({
             labels: issue.labels,
             assignee: issue.assignee,
             state: issue.state,
+            updatedAt: issue.updatedAt ?? null,
           });
           if (record.state === 'closed') {
             queries.githubIssues.markDoneOnClose(record.id);

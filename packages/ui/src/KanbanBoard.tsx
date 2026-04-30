@@ -34,6 +34,7 @@ import {
   formatIssueBranch,
   type GitHubIssueCacheRecord,
   ISSUE_PIPELINE_STATUS,
+  resolveIssueStaleness,
 } from './lib/shipcode';
 import { cn } from './lib/utils';
 
@@ -176,6 +177,7 @@ export function KanbanBoard({
   const [view, setView] = useState<BoardView>('kanban');
   const [sortOrder, setSortOrder] = useState<BoardSortOrder>('priority');
   const [approvalFilter, setApprovalFilter] = useState<'all' | 'needs-approval'>('all');
+  const [stalenessFilter, setStalenessFilter] = useState<'all' | 'stale'>('all');
   const [refreshing, setRefreshing] = useState(false);
   const [showRefreshToast, setShowRefreshToast] = useState(false);
   const [branchCopyToast, setBranchCopyToast] = useState<{
@@ -191,6 +193,25 @@ export function KanbanBoard({
   const threadById = useMemo(
     () => new Map(threads.map((thread) => [thread.id, thread])),
     [threads],
+  );
+  const issueStalenessById = useMemo(
+    () =>
+      new Map(
+        boardIssues.map((issue) => {
+          const thread = issue.threadId ? threadById.get(issue.threadId) : null;
+          return [
+            issue.id,
+            resolveIssueStaleness({
+              pipelineStatus: issue.pipelineStatus,
+              issueUpdatedAt: issue.updatedAt ?? issue.fetchedAt,
+              statusUpdatedAt: issue.lastPhaseUpdate ?? null,
+              threadStatus: thread?.status ?? null,
+              threadUpdatedAt: thread?.updatedAt ?? null,
+            }),
+          ] as const;
+        }),
+      ),
+    [boardIssues, threadById],
   );
   const issuePhaseChipById = useMemo(
     () =>
@@ -260,10 +281,16 @@ export function KanbanBoard({
   );
   const visibleIssues = useMemo(
     () =>
-      approvalFilter === 'needs-approval'
-        ? sortedIssues.filter((issue) => issueApprovalBadgeById.get(issue.id) != null)
-        : sortedIssues,
-    [approvalFilter, issueApprovalBadgeById, sortedIssues],
+      sortedIssues.filter((issue) => {
+        if (approvalFilter === 'needs-approval' && issueApprovalBadgeById.get(issue.id) == null) {
+          return false;
+        }
+        if (stalenessFilter === 'stale' && issueStalenessById.get(issue.id) == null) {
+          return false;
+        }
+        return true;
+      }),
+    [approvalFilter, issueApprovalBadgeById, issueStalenessById, sortedIssues, stalenessFilter],
   );
   const visibleIssuesByColumn = useMemo(
     () =>
@@ -549,6 +576,8 @@ export function KanbanBoard({
         graphEnabled={!!graphContent}
         approvalFilter={approvalFilter}
         onApprovalFilterChange={setApprovalFilter}
+        stalenessFilter={stalenessFilter}
+        onStalenessFilterChange={setStalenessFilter}
         refreshing={refreshing}
         onRefresh={handleRefresh}
         projectName={projectName}
@@ -574,6 +603,7 @@ export function KanbanBoard({
               issueRevisionBadgeById={issueRevisionBadgeById}
               issueApprovalBadgeById={issueApprovalBadgeById}
               issuePriorityBadgeById={issuePriorityBadgeById}
+              issueStalenessById={issueStalenessById}
               approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
               onIssueClick={onIssueClick}
               onOpenPullRequest={onOpenPullRequest}
@@ -607,6 +637,7 @@ export function KanbanBoard({
                       issueRevisionBadgeById={issueRevisionBadgeById}
                       issueApprovalBadgeById={issueApprovalBadgeById}
                       issuePriorityBadgeById={issuePriorityBadgeById}
+                      issueStalenessById={issueStalenessById}
                       approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
                       flashingIssueIds={flashingIssueIds}
                       readOnly={readOnly}
@@ -637,6 +668,7 @@ export function KanbanBoard({
                     issueRevisionBadgeById={issueRevisionBadgeById}
                     issueApprovalBadgeById={issueApprovalBadgeById}
                     issuePriorityBadgeById={issuePriorityBadgeById}
+                    issueStalenessById={issueStalenessById}
                     approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
                     flashingIssueIds={flashingIssueIds}
                     readOnly={readOnly}

@@ -1,6 +1,6 @@
 'use client';
 
-import { Columns3, ExternalLink, LayoutList, RefreshCw, Workflow } from 'lucide-react';
+import { CircleAlert, Columns3, ExternalLink, LayoutList, RefreshCw, Workflow } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button } from '../primitives/button';
 import {
@@ -29,6 +29,8 @@ interface BoardToolbarProps {
   graphEnabled?: boolean;
   approvalFilter: 'all' | 'needs-approval';
   onApprovalFilterChange: (filter: 'all' | 'needs-approval') => void;
+  stalenessFilter: 'all' | 'stale';
+  onStalenessFilterChange: (filter: 'all' | 'stale') => void;
   refreshing: boolean;
   onRefresh: () => void;
   projectName?: string;
@@ -51,6 +53,8 @@ export function BoardToolbar({
   graphEnabled = false,
   approvalFilter,
   onApprovalFilterChange,
+  stalenessFilter,
+  onStalenessFilterChange,
   refreshing,
   onRefresh,
   projectName,
@@ -174,6 +178,20 @@ export function BoardToolbar({
           }
         >
           Needs approval
+        </Button>
+        <Button
+          variant="outline"
+          size="xs"
+          className={cn(
+            'shrink-0 gap-1.5',
+            stalenessFilter === 'stale' &&
+              'border-danger/40 bg-danger/10 text-danger hover:bg-danger/15 hover:text-danger',
+          )}
+          title={stalenessFilter === 'stale' ? 'Show all issues' : 'Show only stale issues'}
+          onClick={() => onStalenessFilterChange(stalenessFilter === 'stale' ? 'all' : 'stale')}
+        >
+          <CircleAlert size={12} />
+          Stale
         </Button>
         <div className="flex shrink-0 items-center overflow-hidden rounded-md border border-border">
           <Button

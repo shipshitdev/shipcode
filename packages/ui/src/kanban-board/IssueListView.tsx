@@ -11,7 +11,11 @@ import {
   User,
 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
-import { type GitHubIssueCacheRecord, ISSUE_PIPELINE_STATUS } from '../lib/shipcode';
+import {
+  type GitHubIssueCacheRecord,
+  ISSUE_PIPELINE_STATUS,
+  type IssueStalenessResult,
+} from '../lib/shipcode';
 import { cn } from '../lib/utils';
 import { Badge } from '../primitives/badge';
 import { Button } from '../primitives/button';
@@ -23,7 +27,7 @@ import {
   LIST_COLUMN_DROP_ID,
   LIST_COLUMN_LABEL,
 } from './constants';
-import { IssueExternalBlockers } from './IssueCardParts';
+import { IssueExternalBlockers, StalenessDot } from './IssueCardParts';
 import type {
   ColumnKey,
   IssueApprovalBadge,
@@ -45,6 +49,7 @@ import {
 const EMPTY_REVISION_BADGE_MAP = new Map<string, IssueRevisionBadge | null>();
 const EMPTY_APPROVAL_BADGE_MAP = new Map<string, IssueApprovalBadge | null>();
 const EMPTY_PRIORITY_BADGE_MAP = new Map<string, IssuePriorityBadge | null>();
+const EMPTY_STALENESS_MAP = new Map<string, IssueStalenessResult | null>();
 const EMPTY_APPROVED_AWAITING_EXECUTION = new Set<string>();
 
 interface DraggableListRowProps {
@@ -52,6 +57,7 @@ interface DraggableListRowProps {
   revisionBadge?: IssueRevisionBadge | null;
   approvalBadge?: IssueApprovalBadge | null;
   priorityBadge?: IssuePriorityBadge | null;
+  staleness?: IssueStalenessResult | null;
   selectedIssueNumber?: number;
   activeId: string | null;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
@@ -65,6 +71,7 @@ function DraggableListRow({
   revisionBadge,
   approvalBadge,
   priorityBadge,
+  staleness,
   selectedIssueNumber,
   activeId,
   onIssueClick,
@@ -164,6 +171,7 @@ function DraggableListRow({
           )}
         />
       )}
+      <StalenessDot staleness={staleness} className="h-2 w-2" />
       <div className="flex shrink-0 items-center gap-1.5">
         <span className="font-mono text-xs text-secondary">{referenceLabel}</span>
         {issue.linkedPrNumber &&
@@ -282,6 +290,7 @@ interface ListSectionBlockProps {
   issueRevisionBadgeById: Map<string, IssueRevisionBadge | null>;
   issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
   issuePriorityBadgeById: Map<string, IssuePriorityBadge | null>;
+  issueStalenessById?: Map<string, IssueStalenessResult | null>;
   selectedIssueNumber?: number;
   activeId: string | null;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
@@ -297,6 +306,7 @@ function ListSectionBlock({
   issueRevisionBadgeById = EMPTY_REVISION_BADGE_MAP,
   issueApprovalBadgeById = EMPTY_APPROVAL_BADGE_MAP,
   issuePriorityBadgeById = EMPTY_PRIORITY_BADGE_MAP,
+  issueStalenessById = EMPTY_STALENESS_MAP,
   selectedIssueNumber,
   activeId,
   onIssueClick,
@@ -347,6 +357,7 @@ function ListSectionBlock({
               revisionBadge={issueRevisionBadgeById.get(issue.id) ?? null}
               approvalBadge={issueApprovalBadgeById.get(issue.id) ?? null}
               priorityBadge={issuePriorityBadgeById.get(issue.id) ?? null}
+              staleness={issueStalenessById.get(issue.id) ?? null}
               approvedAwaitingExecution={isApprovedAwaitingExecutionIssue(
                 issue,
                 approvedAwaitingExecutionIssueIds,
@@ -390,6 +401,7 @@ interface IssueListViewProps {
   issueRevisionBadgeById: Map<string, IssueRevisionBadge | null>;
   issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
   issuePriorityBadgeById: Map<string, IssuePriorityBadge | null>;
+  issueStalenessById?: Map<string, IssueStalenessResult | null>;
   selectedIssueNumber?: number;
   activeId: string | null;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
@@ -404,6 +416,7 @@ export function IssueListView({
   issueRevisionBadgeById,
   issueApprovalBadgeById,
   issuePriorityBadgeById,
+  issueStalenessById = EMPTY_STALENESS_MAP,
   selectedIssueNumber,
   activeId,
   onIssueClick,
@@ -474,6 +487,7 @@ export function IssueListView({
                         issueRevisionBadgeById={issueRevisionBadgeById}
                         issueApprovalBadgeById={issueApprovalBadgeById}
                         issuePriorityBadgeById={issuePriorityBadgeById}
+                        issueStalenessById={issueStalenessById}
                         approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
                         selectedIssueNumber={selectedIssueNumber}
                         activeId={activeId}
@@ -492,6 +506,7 @@ export function IssueListView({
                         revisionBadge={issueRevisionBadgeById.get(issue.id) ?? null}
                         approvalBadge={issueApprovalBadgeById.get(issue.id) ?? null}
                         priorityBadge={issuePriorityBadgeById.get(issue.id) ?? null}
+                        staleness={issueStalenessById.get(issue.id) ?? null}
                         approvedAwaitingExecution={isApprovedAwaitingExecutionIssue(
                           issue,
                           approvedAwaitingExecutionIssueIds,

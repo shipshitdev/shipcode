@@ -30,6 +30,7 @@ describe('GitHubIssueQueries', () => {
       labels: string[];
       assignee: string | null;
       state: string;
+      updatedAt: string | null;
     }> = {},
   ) {
     return {
@@ -40,6 +41,7 @@ describe('GitHubIssueQueries', () => {
       labels: overrides.labels ?? ['bug'],
       assignee: overrides.assignee ?? null,
       state: overrides.state ?? 'open',
+      updatedAt: overrides.updatedAt ?? null,
     };
   }
 
@@ -60,6 +62,15 @@ describe('GitHubIssueQueries', () => {
     // Should still be one record
     const list = issues.list(projectId);
     expect(list.length).toBe(1);
+  });
+
+  it('upsert() preserves GitHub updatedAt separately from local fetchedAt', () => {
+    const record = issues.upsert(makeIssue({ updatedAt: '2026-04-01T12:00:00.000Z' }));
+
+    expect(record.updatedAt).toBe('2026-04-01T12:00:00.000Z');
+
+    const updated = issues.upsert(makeIssue({ title: 'Updated Title' }));
+    expect(updated.updatedAt).toBe('2026-04-01T12:00:00.000Z');
   });
 
   it('list() returns all issues for a project', () => {

@@ -5,7 +5,7 @@ import { Archive, Check, Copy, Loader2, Lock, PanelLeftOpen } from 'lucide-react
 import { memo } from 'react';
 import { modelDisplay } from '../lib/model-display';
 import { useSharedSecondNow } from '../lib/second-ticker';
-import type { GitHubIssueCacheRecord } from '../lib/shipcode';
+import type { GitHubIssueCacheRecord, IssueStalenessResult } from '../lib/shipcode';
 import { ISSUE_PIPELINE_STATUS, phaseToProgress } from '../lib/shipcode';
 import { formatElapsedDuration } from '../lib/time';
 import { cn } from '../lib/utils';
@@ -67,12 +67,36 @@ const PLAN_ACTION_BADGE_CLASS =
 const DANGER_ACTION_BADGE_CLASS =
   'border-danger/30 bg-danger/15 text-danger hover:border-danger/40 hover:bg-danger/20 hover:text-danger';
 
+export function StalenessDot({
+  staleness,
+  className,
+}: {
+  staleness?: IssueStalenessResult | null;
+  className?: string;
+}) {
+  if (!staleness) return null;
+
+  return (
+    <span
+      data-staleness-dot="true"
+      role="img"
+      aria-label={`Stale: ${staleness.title}`}
+      title={staleness.title}
+      className={cn(
+        'inline-flex h-2.5 w-2.5 shrink-0 rounded-full border border-danger/60 bg-danger shadow-[0_0_0_2px_rgba(239,68,68,0.14)]',
+        className,
+      )}
+    />
+  );
+}
+
 interface DraggableCardProps {
   issue: GitHubIssueCacheRecord;
   phaseChip?: IssuePhaseChip | null;
   revisionBadge?: IssueRevisionBadge | null;
   approvalBadge?: IssueApprovalBadge | null;
   priorityBadge?: IssuePriorityBadge | null;
+  staleness?: IssueStalenessResult | null;
   approvedAwaitingExecution?: boolean;
   readOnly?: boolean;
   onClick: (issue: GitHubIssueCacheRecord) => void;
@@ -96,6 +120,7 @@ function DraggableCardComponent({
   revisionBadge,
   approvalBadge,
   priorityBadge,
+  staleness,
   approvedAwaitingExecution = false,
   readOnly = false,
   onClick,
@@ -252,6 +277,7 @@ function DraggableCardComponent({
           </div>
         )}
       <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-1">
+        <StalenessDot staleness={staleness} />
         {branchName && onCopyBranchName && !isCreating && !isAutomation && (
           <Button
             variant="ghost"

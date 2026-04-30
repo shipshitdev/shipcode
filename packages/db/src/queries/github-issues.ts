@@ -55,6 +55,7 @@ interface GitHubIssueCacheRow {
   unresolved_review_comments: string | null;
   unresolved_review_comment_count: number | null;
   pr_last_sync_at: string | null;
+  github_updated_at: string | null;
   fetched_at: string;
   archived_at: string | null;
   priority_rank: string | null;
@@ -139,7 +140,15 @@ export class GitHubIssueQueries {
     if (existing) {
       this.db
         .prepare(
-          `UPDATE github_issue_cache SET title = ?, body = ?, labels = ?, assignee = ?, state = ?, fetched_at = ${ISO_NOW_SQL} WHERE id = ?`,
+          `UPDATE github_issue_cache
+              SET title = ?,
+                  body = ?,
+                  labels = ?,
+                  assignee = ?,
+                  state = ?,
+                  github_updated_at = COALESCE(?, github_updated_at),
+                  fetched_at = ${ISO_NOW_SQL}
+            WHERE id = ?`,
         )
         .run(
           record.title,
@@ -147,6 +156,7 @@ export class GitHubIssueQueries {
           JSON.stringify(record.labels),
           record.assignee,
           record.state,
+          record.updatedAt ?? null,
           existing.id,
         );
       const updated = this.getByNumber(record.projectId, record.issueNumber);
@@ -160,7 +170,9 @@ export class GitHubIssueQueries {
     const id = nanoid();
     this.db
       .prepare(
-        'INSERT INTO github_issue_cache (id, project_id, issue_number, title, body, labels, assignee, state) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        `INSERT INTO github_issue_cache (
+           id, project_id, issue_number, title, body, labels, assignee, state, github_updated_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -171,6 +183,7 @@ export class GitHubIssueQueries {
         JSON.stringify(record.labels),
         record.assignee,
         record.state,
+        record.updatedAt ?? null,
       );
     const created = this.getByNumber(record.projectId, record.issueNumber);
     if (!created) {
@@ -730,6 +743,7 @@ export class GitHubIssueQueries {
       unresolvedReviewComments: JSON.parse(row.unresolved_review_comments || '[]'),
       unresolvedReviewCommentCount: row.unresolved_review_comment_count ?? 0,
       prLastSyncAt: toIsoUtc(row.pr_last_sync_at),
+      updatedAt: toIsoUtc(row.github_updated_at) ?? row.github_updated_at ?? null,
       fetchedAt: toIsoUtc(row.fetched_at) ?? row.fetched_at,
       priorityRank:
         row.priority_rank === 'p0' ||

@@ -250,7 +250,7 @@ export class GhCli {
         '--state',
         'all',
         '--json',
-        'number,title,body,labels,assignees,author,state,url',
+        'number,title,body,labels,assignees,author,state,url,updatedAt',
         '--limit',
         '200',
       ],
@@ -266,6 +266,7 @@ export class GhCli {
       assignee: ((r.assignees as Array<{ login: string }>) ?? [])[0]?.login ?? null,
       state: ((r.state as string)?.toLowerCase() ?? 'open') as 'open' | 'closed',
       url: (r.url as string) ?? '',
+      ...((r.updatedAt as string | undefined) ? { updatedAt: r.updatedAt as string } : {}),
       author: (r.author as { login?: string } | null)?.login
         ? { login: (r.author as { login: string }).login }
         : undefined,

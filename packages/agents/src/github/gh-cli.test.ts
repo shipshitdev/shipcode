@@ -162,6 +162,7 @@ describe('GhCli', () => {
           assignees: [{ login: 'bob' }],
           state: 'OPEN',
           url: 'https://github.com/o/r/issues/10',
+          updatedAt: '2026-04-30T08:00:00Z',
         },
       ];
       success(JSON.stringify(raw));
@@ -170,6 +171,7 @@ describe('GhCli', () => {
 
       expect(issues).toHaveLength(1);
       expect(issues[0].labels).toEqual(['feat']);
+      expect(issues[0].updatedAt).toBe('2026-04-30T08:00:00Z');
       expect(mockExecFileAsync).toHaveBeenCalledWith(
         'gh',
         expect.arrayContaining(['--limit', '200']),

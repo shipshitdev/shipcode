@@ -1188,3 +1188,22 @@ export function migrateV40(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (40)`);
   });
 }
+
+export function migrateV41(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 41) return;
+
+  transaction(db, () => {
+    // Store GitHub's issue updatedAt separately from fetched_at so renderer
+    // staleness flags are not reset by local polling.
+    execAlterTableIfMissing(db, 'ALTER TABLE github_issue_cache ADD COLUMN github_updated_at TEXT');
+    db.exec(`
+      UPDATE github_issue_cache
+         SET github_updated_at = COALESCE(github_updated_at, fetched_at)
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (41)`);
+  });
+}
