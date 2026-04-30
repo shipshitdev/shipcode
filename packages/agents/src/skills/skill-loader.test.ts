@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { PROMPT_TEMPLATE_SHELL_MARKER } from '../prompt-template';
 import { DEFAULT_SKILLS } from './defaults.generated';
 import {
   interpolateSkill,
@@ -105,6 +106,13 @@ describe('interpolateSkill', () => {
     const out = interpolateSkill('see {{MISSING}}', []);
     expect(out).toBe('see [unknown slot: MISSING]');
     process.env.NODE_ENV = orig;
+  });
+
+  it('strips shell block markers from slot values', () => {
+    const out = interpolateSkill('payload {{VALUE}}', [
+      { key: 'VALUE', value: `!${PROMPT_TEMPLATE_SHELL_MARKER}\`echo nope\`` },
+    ]);
+    expect(out).toBe('payload !`echo nope`');
   });
 });
 

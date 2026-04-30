@@ -1,18 +1,13 @@
 /**
  * CLI providers wrapping the existing claude/codex subprocess path.
  *
- * These are BEHAVIOR-PRESERVING: the arg lists constructed here must
- * match the inline spawn calls that previously lived in
- * `packages/pipeline/src/pipeline.ts` byte-for-byte. The snapshot-based
- * regression tests in `cli-provider.test.ts` enforce this.
+ * Prompts are piped through stdin instead of passed as argv. That keeps
+ * large issue bodies and YAML-frontmatter skills out of CLI argument
+ * parsing while preserving the existing provider lifecycle.
  *
- * The only meaningful change is lifecycle: instead of the pipeline
- * attaching `output`/`exit` listeners to the shared ProcessManager and
- * continuing execution from within the exit handler, the provider wraps
- * the spawn → accumulate → wait → cleanup flow in a single promise. The
- * pipeline awaits that promise and then keeps its existing phase-specific
- * completion logic (salvage-on-non-zero for PLAN, ignore-exit for
- * REVIEW/REVISION/VERIFY, exit-zero-only for EXECUTE).
+ * The provider also keeps the process lifecycle contained here: spawn,
+ * accumulate terminal output, wait for exit, then return one result to the
+ * pipeline's phase-specific completion logic.
  */
 
 import type { ProcessManager } from '../process-manager';
@@ -27,6 +22,36 @@ interface CliRunResult {
   exitCode: number;
 }
 
+interface CliCommand {
+  args: string[];
+  stdin?: string;
+}
+
+type ProcessManagerWithStdin = ProcessManager & {
+  spawnWithStdin?: (
+    type: 'claude' | 'codex',
+    command: string,
+    args: string[],
+    cwd: string,
+    input: string,
+    threadId?: string,
+    options?: Parameters<ProcessManager['spawn']>[5],
+  ) => ReturnType<ProcessManager['spawn']>;
+};
+
+function materializeStdinArgsForLegacySpawn(args: string[], stdin?: string): string[] {
+  if (stdin === undefined) return args;
+  const promptFlagIndex = args.indexOf('-p');
+  if (promptFlagIndex !== -1 && args[promptFlagIndex + 1] === '-') {
+    return args.map((arg, index) => (index === promptFlagIndex + 1 ? stdin : arg));
+  }
+  const execIndex = args.indexOf('exec');
+  if (execIndex !== -1 && args[execIndex + 1] === '-') {
+    return args.map((arg, index) => (index === execIndex + 1 ? stdin : arg));
+  }
+  return args;
+}
+
 /**
  * Spawn a CLI via ProcessManager, accumulate output, wait for exit,
  * honoring the abort signal. Shared by both Claude and Codex providers.
@@ -35,6 +60,7 @@ async function runCli(
   processManager: ProcessManager,
   agentId: 'claude' | 'codex',
   args: string[],
+  stdin: string | undefined,
   cwd: string,
   signal: AbortSignal,
   threadId?: string,
@@ -46,14 +72,28 @@ async function runCli(
 
   let process: ReturnType<ProcessManager['spawn']>;
   try {
-    process = processManager.spawn(
-      agentId,
-      agentId,
-      args,
-      cwd,
-      threadId,
-      workspaceRoot !== undefined ? { workspaceRoot } : {},
-    );
+    const spawnOptions = workspaceRoot !== undefined ? { workspaceRoot } : {};
+    const processManagerWithStdin = processManager as ProcessManagerWithStdin;
+    if (stdin !== undefined && processManagerWithStdin.spawnWithStdin) {
+      process = processManagerWithStdin.spawnWithStdin(
+        agentId,
+        agentId,
+        args,
+        cwd,
+        stdin,
+        threadId,
+        spawnOptions,
+      );
+    } else {
+      process = processManager.spawn(
+        agentId,
+        agentId,
+        materializeStdinArgsForLegacySpawn(args, stdin),
+        cwd,
+        threadId,
+        spawnOptions,
+      );
+    }
   } catch (err) {
     // ProcessManager synthesizes an exit event for missing binaries etc.
     // but if spawn() throws synchronously, surface that as exit 127.
@@ -108,11 +148,8 @@ async function runCli(
   });
 }
 
-/**
- * Build claude CLI args for a given phase. Mirrors the inline arg
- * construction that previously lived in pipeline.ts verbatim.
- */
-function buildClaudeArgs(req: ProviderRequest): string[] {
+/** Build claude CLI args/stdin for a given phase. */
+function buildClaudeCommand(req: ProviderRequest): CliCommand {
   const modelArgs = req.modelHint ? ['--model', req.modelHint] : [];
   switch (req.phase) {
     case 'plan':
@@ -132,7 +169,7 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
       );
       const args = [
         '-p',
-        req.prompt,
+        '-',
         ...modelArgs,
         '--output-format',
         'stream-json',
@@ -151,13 +188,13 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
           String(thinkingTokens),
         );
       }
-      return args;
+      return { args, stdin: req.prompt };
     }
     case 'execute': {
       // Execution: full tool surface, no JSON wrapping, no turn limit.
       const execArgs = [
         '-p',
-        req.prompt,
+        '-',
         ...modelArgs,
         '--allowedTools',
         'Edit,Write,Bash,Glob,Grep,Read',
@@ -175,24 +212,35 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
           String(execThinking),
         );
       }
-      return execArgs;
+      return { args: execArgs, stdin: req.prompt };
     }
     case 'review':
       // Claude does not review in the current pipeline (codex does).
       // Kept for symmetry; always 1 turn (structural, not configurable).
-      return [
-        '-p',
-        req.prompt,
-        ...modelArgs,
-        '--output-format',
-        'json',
-        '--max-turns',
-        '1',
-        '--dangerously-skip-permissions',
-        '--disallowedTools',
-        'Edit,Write,Bash,NotebookEdit',
-      ];
+      return {
+        args: [
+          '-p',
+          '-',
+          ...modelArgs,
+          '--output-format',
+          'json',
+          '--max-turns',
+          '1',
+          '--dangerously-skip-permissions',
+          '--disallowedTools',
+          'Edit,Write,Bash,NotebookEdit',
+        ],
+        stdin: req.prompt,
+      };
   }
+}
+
+function buildClaudeArgs(req: ProviderRequest): string[] {
+  return buildClaudeCommand(req).args;
+}
+
+function buildClaudeStdin(req: ProviderRequest): string {
+  return buildClaudeCommand(req).stdin ?? '';
 }
 
 /**
@@ -201,21 +249,31 @@ function buildClaudeArgs(req: ProviderRequest): string[] {
  * codex v0.120.0 layout: top-level flags come BEFORE the `exec` subcommand,
  * and the subcommand's own flags (`--sandbox`, `--json`) go after the prompt.
  *
- *   codex [-a never] [-c model_reasoning_effort=high] exec <prompt> --sandbox <level> --json
+ *   codex [-a never] [-c model_reasoning_effort=high] exec - --sandbox <level> --json
  *
- * Previously we passed `-a never` AFTER `exec`, which is invalid — codex errors
- * out in ~30ms with `unexpected argument '-a' found` and the pipeline sees an
- * empty review. Same story for `--reasoning-effort`, which was removed as a
- * standalone flag in 0.120.0 and must now be set via `-c model_reasoning_effort=<effort>`.
+ * The prompt itself is piped through stdin. Keeping the prompt out of argv
+ * avoids shell/arg length limits and keeps logs from accidentally echoing
+ * full issue bodies.
  */
-function buildCodexArgs(req: ProviderRequest): string[] {
+function buildCodexCommand(req: ProviderRequest): CliCommand {
   const sandbox = req.phase === 'execute' ? 'workspace-write' : 'read-only';
   const topLevelFlags: string[] = ['-a', 'never'];
   if (req.modelHint) topLevelFlags.push('-m', req.modelHint);
   // Default to high reasoning so thinking output is always visible in the terminal.
   const effort = mapReasoningEffortToCodex(req.phaseHints?.reasoningEffort, req.modelHint);
   topLevelFlags.push('-c', `model_reasoning_effort=${effort}`);
-  return [...topLevelFlags, 'exec', buildCodexPrompt(req), '--sandbox', sandbox, '--json'];
+  return {
+    args: [...topLevelFlags, 'exec', '-', '--sandbox', sandbox, '--json'],
+    stdin: buildCodexPrompt(req),
+  };
+}
+
+function buildCodexArgs(req: ProviderRequest): string[] {
+  return buildCodexCommand(req).args;
+}
+
+function buildCodexStdin(req: ProviderRequest): string {
+  return buildCodexCommand(req).stdin ?? '';
 }
 
 function buildCodexPrompt(req: ProviderRequest): string {
@@ -255,11 +313,12 @@ export function createClaudeCliProvider(processManager: ProcessManager): AgentPr
         promptSize: measurePromptPayload(req.prompt),
         ...(req.promptMaterialSummary ? { selectedMaterials: req.promptMaterialSummary } : {}),
       };
-      const args = buildClaudeArgs(req);
+      const command = buildClaudeCommand(req);
       const result = await runCli(
         processManager,
         'claude',
-        args,
+        command.args,
+        command.stdin,
         req.cwd,
         req.signal,
         req.threadId,
@@ -315,11 +374,12 @@ export function createCodexCliProvider(processManager: ProcessManager): AgentPro
         promptSize: measurePromptPayload(req.prompt),
         ...(req.promptMaterialSummary ? { selectedMaterials: req.promptMaterialSummary } : {}),
       };
-      const args = buildCodexArgs(req);
+      const command = buildCodexCommand(req);
       const result = await runCli(
         processManager,
         'codex',
-        args,
+        command.args,
+        command.stdin,
         req.cwd,
         req.signal,
         req.threadId,
@@ -424,7 +484,9 @@ function stripCodexProtocol(raw: string, options: { includeCommandOutput?: boole
  */
 export const _internals = {
   buildClaudeArgs,
+  buildClaudeStdin,
   buildCodexArgs,
+  buildCodexStdin,
   buildCodexPrompt,
   stripCodexProtocol,
 };

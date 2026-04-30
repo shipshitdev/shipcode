@@ -77,6 +77,19 @@ export {
   summarizePromptMaterials,
 } from './prompt-scope';
 export type {
+  PromptTemplateArgValue,
+  SubstitutePromptTemplateArgsOptions,
+  SubstitutePromptTemplateArgsResult,
+} from './prompt-template';
+export {
+  markPromptTemplateShellBlocks,
+  PROMPT_TEMPLATE_SHELL_MARKER,
+  PromptTemplateError,
+  sanitizePromptTemplateValue,
+  stripPromptTemplateShellMarkers,
+  substitutePromptTemplateArgs,
+} from './prompt-template';
+export type {
   ExecutePromptContext,
   ExecutePromptDeps,
   ExecutePromptOptions,
