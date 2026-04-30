@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import {
+  AGENT_RUNNING_PHASES,
   type AnsweredClarification,
   answeredClarificationSchema,
   type ClarificationAnswer,
@@ -15,16 +16,6 @@ import {
 } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
 import { asRow, asRows } from '../utils';
-
-const STUCK_THREAD_PHASES: ThreadStatus[] = [
-  PIPELINE_PHASE.planning,
-  PIPELINE_PHASE.reviewing,
-  PIPELINE_PHASE.revising,
-  PIPELINE_PHASE.executing,
-  PIPELINE_PHASE.testing,
-  PIPELINE_PHASE.verifying,
-  PIPELINE_PHASE.shipping,
-];
 
 interface ThreadRow {
   id: string;
@@ -416,9 +407,9 @@ export class ThreadQueries {
   hasActivePipeline(projectId: string): boolean {
     const row = this.db
       .prepare(
-        `SELECT 1 FROM threads WHERE project_id = ? AND status IN (${Array(STUCK_THREAD_PHASES.length).fill('?').join(',')}) LIMIT 1`,
+        `SELECT 1 FROM threads WHERE project_id = ? AND status IN (${Array(AGENT_RUNNING_PHASES.length).fill('?').join(',')}) LIMIT 1`,
       )
-      .get(projectId, ...STUCK_THREAD_PHASES);
+      .get(projectId, ...AGENT_RUNNING_PHASES);
     return !!row;
   }
 
@@ -426,9 +417,9 @@ export class ThreadQueries {
     return asRows<ThreadRow>(
       this.db
         .prepare(
-          `SELECT * FROM threads WHERE status IN (${Array(STUCK_THREAD_PHASES.length).fill('?').join(',')})`,
+          `SELECT * FROM threads WHERE status IN (${Array(AGENT_RUNNING_PHASES.length).fill('?').join(',')})`,
         )
-        .all(...STUCK_THREAD_PHASES),
+        .all(...AGENT_RUNNING_PHASES),
     ).map(mapThread);
   }
 
@@ -458,10 +449,10 @@ export class ThreadQueries {
     const rows = this.db
       .prepare(
         `SELECT * FROM threads
-         WHERE status IN (${Array(STUCK_THREAD_PHASES.length).fill('?').join(',')})
+         WHERE status IN (${Array(AGENT_RUNNING_PHASES.length).fill('?').join(',')})
            AND updated_at <= datetime('now', '-' || ? || ' seconds')`,
       )
-      .all(...STUCK_THREAD_PHASES, thresholdSec);
+      .all(...AGENT_RUNNING_PHASES, thresholdSec);
     return asRows<ThreadRow>(rows).map(mapThread);
   }
 
