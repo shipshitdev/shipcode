@@ -154,6 +154,20 @@ describe('registerGitHubHandlers', () => {
     fetchProjectPrioritiesMock.mockResolvedValue(new Map());
   });
 
+  function buildGithubIssuesQueries(
+    overrides: Record<string, unknown> = {},
+    listResult: unknown[] = [baseIssue],
+  ): Record<string, ReturnType<typeof vi.fn>> {
+    return {
+      getByNumber: vi.fn(() => baseIssue),
+      updatePipelineStatus: vi.fn(),
+      linkThread: vi.fn(),
+      list: vi.fn(() => listResult),
+      reconcileCompletedFromEvidence: vi.fn(),
+      ...overrides,
+    };
+  }
+
   it('reuses the existing issue thread and worktree on github:start-issue', async () => {
     const queries = {
       projects: {
@@ -333,14 +347,14 @@ describe('registerGitHubHandlers', () => {
       projects: {
         getById: vi.fn(() => baseProject),
       },
-      githubIssues: {
-        getByNumber: vi.fn().mockReturnValueOnce(closedIssue).mockReturnValue(restoredIssue),
-        updateState: vi.fn(),
-        updatePipelineStatus: vi.fn(),
-        clearArchivedAt: vi.fn(),
-        linkThread: vi.fn(),
-        list: vi.fn(() => [restoredIssue]),
-      },
+      githubIssues: buildGithubIssuesQueries(
+        {
+          getByNumber: vi.fn().mockReturnValueOnce(closedIssue).mockReturnValue(restoredIssue),
+          updateState: vi.fn(),
+          clearArchivedAt: vi.fn(),
+        },
+        [restoredIssue],
+      ),
       threads: {
         getById: vi.fn(() => ({ ...reusableThread, status: 'awaiting_approval' })),
         getByProjectAndGithubIssue: vi.fn(() => ({
@@ -397,23 +411,19 @@ describe('registerGitHubHandlers', () => {
       const cachedAfterUpsert = [{ ...baseIssue, fetchedAt: new Date().toISOString() }];
       return {
         projects: { getById: vi.fn(() => project) },
-        githubIssues: {
+        githubIssues: buildGithubIssuesQueries({
           list: vi
             .fn()
             // First call: cache check (empty so we proceed past TTL gate).
             .mockReturnValueOnce([])
             // Subsequent calls: post-upsert + final list-for-broadcast.
             .mockReturnValue(cachedAfterUpsert),
-          getByNumber: vi.fn(() => baseIssue),
           upsert: vi.fn(() => baseIssue),
           markDoneOnClose: vi.fn(),
           updateState: vi.fn(),
-          updatePipelineStatus: vi.fn(),
           clearArchivedAt: vi.fn(),
-          linkThread: vi.fn(),
-          reconcileCompletedFromEvidence: vi.fn(() => null),
           setPriority: vi.fn(),
-        },
+        }),
         issueEdges: {
           replaceBodyEdges: vi.fn(),
         },
@@ -537,6 +547,9 @@ describe('registerGitHubHandlers', () => {
           rank: null,
           raw: null,
         }),
+      );
+      expect(queries.githubIssues.reconcileCompletedFromEvidence).toHaveBeenCalledWith(
+        baseIssue.id,
       );
     });
   });
