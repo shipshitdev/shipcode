@@ -1,7 +1,15 @@
 'use client';
 
 import { useDraggable, useDroppable } from '@dnd-kit/core';
-import { Archive, ChevronDown, ChevronRight, PanelLeftOpen, User } from 'lucide-react';
+import {
+  Archive,
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+  Lock,
+  PanelLeftOpen,
+  User,
+} from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { type GitHubIssueCacheRecord, ISSUE_PIPELINE_STATUS } from '../lib/shipcode';
 import { cn } from '../lib/utils';
@@ -26,6 +34,7 @@ import type {
 import {
   formatDate,
   isApprovedAwaitingExecutionIssue,
+  isIssueCreating,
   issueMatchesColumn,
   issueMatchesSection,
   rowToneFor,
@@ -65,7 +74,8 @@ function DraggableListRow({
   const isDoneState =
     issue.pipelineStatus === ISSUE_PIPELINE_STATUS.completed ||
     issue.pipelineStatus === ISSUE_PIPELINE_STATUS.done;
-  const isDraggable = DRAGGABLE_STATUSES.includes(issue.pipelineStatus);
+  const isCreating = isIssueCreating(issue);
+  const isDraggable = !isCreating && DRAGGABLE_STATUSES.includes(issue.pipelineStatus);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: issue.id,
     data: issue,
@@ -107,10 +117,11 @@ function DraggableListRow({
             : 'border-warning/60 bg-warning/[0.03] text-primary hover:bg-warning/[0.06]'),
         isDragging && 'opacity-40',
         isDraggable ? 'cursor-grab' : 'cursor-default',
+        isCreating && 'opacity-80',
         activeId && activeId !== issue.id && 'pointer-events-none',
       )}
       onClick={(event) => {
-        if (event.defaultPrevented || isDragging) return;
+        if (event.defaultPrevented || isDragging || isCreating) return;
         onIssueClick(issue);
       }}
       {...(isDraggable ? { ...attributes, ...listeners } : {})}
@@ -120,6 +131,7 @@ function DraggableListRow({
         if (event.defaultPrevented || event.currentTarget !== event.target) return;
         if (event.key !== 'Enter' && event.key !== ' ') return;
         event.preventDefault();
+        if (isCreating) return;
         onIssueClick(issue);
       }}
     >
@@ -144,7 +156,7 @@ function DraggableListRow({
       )}
       <div className="flex shrink-0 items-center gap-1.5">
         <span className="font-mono text-xs text-secondary">
-          {issue.isQuickMode ? 'Quick' : `#${issue.issueNumber}`}
+          {isCreating ? 'Creating' : issue.isQuickMode ? 'Quick' : `#${issue.issueNumber}`}
         </span>
         {issue.linkedPrNumber &&
           (issue.linkedPrUrl && onOpenPullRequest ? (
@@ -188,7 +200,13 @@ function DraggableListRow({
             {revisionBadge.label}
           </Badge>
         ) : null}
-        {approvedAwaitingExecution ? (
+        {isCreating ? (
+          <Badge className="inline-flex items-center gap-1 border-agent/25 bg-agent/10 px-1.5 py-px text-[10px] font-medium text-agent">
+            <Loader2 size={10} className="animate-spin" />
+            Creating
+            <Lock size={10} />
+          </Badge>
+        ) : approvedAwaitingExecution ? (
           <>
             <Badge variant="success" className="px-1.5 py-px text-[10px] font-medium">
               Approved
@@ -213,20 +231,22 @@ function DraggableListRow({
       </span>
       <span className="shrink-0 text-xs text-muted">{formatDate(issue.fetchedAt)}</span>
       <span className="flex shrink-0 items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="text-muted/70 hover:bg-muted/10 hover:text-primary"
-          title="Open issue detail"
-          aria-label="Open issue detail"
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => {
-            event.stopPropagation();
-            onIssueClick(issue);
-          }}
-        >
-          <PanelLeftOpen size={12} />
-        </Button>
+        {!isCreating && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="text-muted/70 hover:bg-muted/10 hover:text-primary"
+            title="Open issue detail"
+            aria-label="Open issue detail"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onIssueClick(issue);
+            }}
+          >
+            <PanelLeftOpen size={12} />
+          </Button>
+        )}
         {isDoneState && onArchiveIssue && (
           <Button
             variant="ghost"

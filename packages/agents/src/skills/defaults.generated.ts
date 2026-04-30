@@ -49,8 +49,9 @@ User task:
 Treat the plan as an executable contract, not a sketch.
 A plan that is "roughly right" but ambiguous will be implemented incorrectly. Vagueness is a defect.
 Prefer fewer, larger, atomic steps over many small ceremonial ones — but every step must be independently verifiable.
-If the task is missing information that would materially change the plan, emit a structured clarification request instead of guessing.
-If the ambiguity is minor, encode the assumption you made under \`outOfScope\` and keep planning.
+Clarification is a last resort. Do not ask for routine implementation details, file placement, naming, copy, visual treatment, test strategy, or integration shape that can be inferred from the issue, repository context, or existing patterns.
+If missing information would materially change the plan but a low-risk default exists, choose the default, state the assumption in the relevant step rationale and \`outOfScope\`, and keep planning.
+Emit a structured clarification request only when there are multiple incompatible product, security, legal, destructive-data, billing, or external-provider decisions and no repo convention or task text makes one safe.
 </operating_stance>
 
 <planning_method>
@@ -94,7 +95,7 @@ If a step depends on a fact you cannot verify from the codebase, state the assum
 {{CONTEXT_FILES}}
 </repository_context>
 `,
-    version: 'd85e551f76863a82',
+    version: '09b59cc30ab2bd3e',
     requiredSlots: ['USER_PROMPT', 'THREAD_ID', 'OUTPUT_SCHEMA'] as const,
     schemaVersion: 1,
   },

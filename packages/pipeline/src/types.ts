@@ -22,6 +22,7 @@ import type {
   VerificationQueries,
 } from '@shipcode/db';
 import type {
+  AnsweredClarification,
   ClarificationAnswer,
   ClarificationRequest,
   ExecutorModel,
@@ -157,6 +158,7 @@ export interface PipelineContext {
   clarificationRound: number;
   clarificationRequest: ClarificationRequest | null;
   clarificationAnswers: ClarificationAnswer[];
+  clarificationHistory: AnsweredClarification[];
   verificationRetries: number;
   testRetries: number;
   testOutput: string | null;

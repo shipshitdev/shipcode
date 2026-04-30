@@ -53,6 +53,49 @@ describe('analyzeCleanup', () => {
     }
   });
 
+  it('treats local commits ahead of the compare ref as unsafe worktree state', () => {
+    const items = analyzeCleanup(
+      input({
+        worktrees: [
+          {
+            path: '/wt/b',
+            branch: 'feat/b',
+            dirty: false,
+            aheadCount: 2,
+            behindCount: 0,
+            compareRef: 'develop',
+          },
+        ],
+        pullRequests: [{ number: 2, url: 'u', state: 'closed', headRef: 'feat/b', merged: false }],
+      }),
+    );
+    expect(items).toHaveLength(1);
+    expect(items[0].kind).toBe('worktree-closed-pr');
+    if (items[0].kind === 'worktree-closed-pr') {
+      expect(items[0].dirty).toBe(true);
+      expect(items[0].aheadCount).toBe(2);
+      expect(items[0].compareRef).toBe('develop');
+    }
+  });
+
+  it('does not suggest no-PR worktrees that are clean but ahead of the compare ref', () => {
+    const items = analyzeCleanup(
+      input({
+        worktrees: [
+          {
+            path: '/wt/a',
+            branch: 'feat/a',
+            dirty: false,
+            aheadCount: 1,
+            compareRef: 'develop',
+          },
+        ],
+        criteria: { ...ALL_ON, worktreeNoPrCleanTree: true },
+      }),
+    );
+    expect(items).toHaveLength(0);
+  });
+
   it('never returns protected branches', () => {
     const items = analyzeCleanup(
       input({

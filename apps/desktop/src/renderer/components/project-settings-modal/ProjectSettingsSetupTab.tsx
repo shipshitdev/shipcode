@@ -1,13 +1,5 @@
 import type { ProjectSetupDraft, ProjectSetupInspection, RepoSetupEnvFile } from '@shipcode/shared';
-import {
-  Button,
-  Checkbox,
-  Input,
-  Label,
-  LoadingButtonContent,
-  SettingsRow,
-  Textarea,
-} from '@shipshitdev/ui';
+import { Button, Checkbox, Input, Label, RefreshCw, SettingsRow, Textarea } from '@shipshitdev/ui';
 import type { LocalEnvFile } from './setup-utils';
 
 export function ProjectSettingsSetupTab({
@@ -83,7 +75,8 @@ export function ProjectSettingsSetupTab({
           description="Click a detected profile to fill the commands below with that suggested setup. Nothing is saved until you click Save."
         >
           <Button variant="secondary" size="sm" onClick={onRedetect} disabled={detectPending}>
-            <LoadingButtonContent loading={detectPending}>Re-detect</LoadingButtonContent>
+            <RefreshCw size={14} className={detectPending ? 'animate-spin' : ''} />
+            Re-detect
           </Button>
         </SettingsRow>
         <div className="mt-3 flex flex-wrap gap-2">

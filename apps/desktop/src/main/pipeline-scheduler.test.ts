@@ -188,6 +188,7 @@ describe('PipelineScheduler', () => {
         setPhaseModels: vi.fn(),
         setAutomationId: vi.fn(),
         resetFailureTracking: vi.fn(),
+        hasActiveForAutomation: vi.fn(() => false),
       },
       automations: {
         getById: vi.fn(() => null as unknown),

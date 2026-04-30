@@ -80,6 +80,32 @@ branch refs/heads/feature/not-ours
     });
   });
 
+  it('repairs concrete worktree paths through git worktree repair', async () => {
+    const manager = new WorktreeManager('/repo/project');
+
+    await manager.repair(['/tmp/worktree-a', '/tmp/worktree-b']);
+
+    expect(gitMock.raw).toHaveBeenCalledWith([
+      'worktree',
+      'repair',
+      '/tmp/worktree-a',
+      '/tmp/worktree-b',
+    ]);
+  });
+
+  it('moves concrete worktree paths through git worktree move', async () => {
+    const manager = new WorktreeManager('/repo/project');
+
+    await manager.move('/tmp/old-worktree', '/tmp/new-worktree');
+
+    expect(gitMock.raw).toHaveBeenCalledWith([
+      'worktree',
+      'move',
+      '/tmp/old-worktree',
+      '/tmp/new-worktree',
+    ]);
+  });
+
   it('uses squash merge flow when requested', async () => {
     const manager = new WorktreeManager('/repo/project');
 

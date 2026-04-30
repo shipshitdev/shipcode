@@ -1,6 +1,12 @@
 'use client';
 
-import { GitBranch, GitCommitHorizontal, GitCompareArrows, RefreshCw } from 'lucide-react';
+import {
+  GitBranch,
+  GitCommitHorizontal,
+  GitCompareArrows,
+  RefreshCw,
+  ShieldAlert,
+} from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { DiffRecord, GitWorktreeSummary } from './lib/shipcode';
 import { cn } from './lib/utils';
@@ -34,6 +40,15 @@ function formatDirtySummary(worktree: GitWorktreeSummary) {
     worktree.untrackedCount > 0 ? `${worktree.untrackedCount} untracked` : null,
   ].filter(Boolean);
   return parts.join(', ');
+}
+
+function formatDivergence(worktree: GitWorktreeSummary) {
+  const parts = [
+    worktree.aheadCount > 0 ? `+${worktree.aheadCount} ahead` : null,
+    worktree.behindCount > 0 ? `-${worktree.behindCount} behind` : null,
+  ].filter(Boolean);
+  if (parts.length === 0) return worktree.compareRef ? `even with ${worktree.compareRef}` : null;
+  return `${parts.join(' / ')}${worktree.compareRef ? ` vs ${worktree.compareRef}` : ''}`;
 }
 
 function worktreeTitle(worktree: GitWorktreeSummary) {
@@ -91,6 +106,8 @@ export function GitVisualizer({
           <div className="space-y-1 px-2">
             {worktrees.map((worktree) => {
               const selected = selectedWorktree?.path === worktree.path;
+              const divergence = formatDivergence(worktree);
+              const hasLocalCommits = worktree.aheadCount > 0;
               return (
                 <button
                   key={worktree.id}
@@ -109,10 +126,10 @@ export function GitVisualizer({
                       {worktree.branch}
                     </span>
                     <Badge
-                      variant={worktree.isDirty ? 'warning' : 'success'}
+                      variant={worktree.isDirty || hasLocalCommits ? 'warning' : 'success'}
                       className="ml-auto shrink-0"
                     >
-                      {worktree.isDirty ? 'dirty' : 'clean'}
+                      {worktree.isDirty ? 'dirty' : hasLocalCommits ? 'ahead' : 'clean'}
                     </Badge>
                   </div>
                   <div className="mt-1 truncate text-xs text-secondary">
@@ -123,6 +140,16 @@ export function GitVisualizer({
                     <span className="font-mono">{formatShortSha(worktree.commitHash)}</span>
                     <span className="truncate">{formatDirtySummary(worktree)}</span>
                   </div>
+                  {divergence ? (
+                    <div
+                      className={cn(
+                        'mt-1 truncate text-[11px]',
+                        hasLocalCommits ? 'text-amber-500' : 'text-muted',
+                      )}
+                    >
+                      {divergence}
+                    </div>
+                  ) : null}
                 </button>
               );
             })}
@@ -165,6 +192,12 @@ export function GitVisualizer({
               <Badge variant={diffs.length > 0 ? 'warning' : 'success'}>
                 {diffs.length} file{diffs.length === 1 ? '' : 's'}
               </Badge>
+              {selectedWorktree.preCommitHookPath ? (
+                <Badge variant="warning" title={selectedWorktree.preCommitHookPath}>
+                  <ShieldAlert size={11} />
+                  pre-hook
+                </Badge>
+              ) : null}
               {headerActions ? (
                 <div className="flex shrink-0 items-center gap-1">{headerActions}</div>
               ) : null}

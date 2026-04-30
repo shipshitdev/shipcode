@@ -76,7 +76,8 @@ const FORMAT_REINFORCEMENT = `
 <!-- FORMAT REMINDER — this takes priority over any conflicting instruction above -->
 Return exactly one fenced JSON block and nothing else.
 If you can plan safely, use exactly \`\`\`${PLAN_FENCE_TAG}.
-If you need user clarification first, use exactly \`\`\`${CLARIFICATION_FENCE_TAG}.
+Clarification is a last resort. If you need user clarification first for a truly blocking product/security/destructive-data/billing/external-provider decision, use exactly \`\`\`${CLARIFICATION_FENCE_TAG}.
+If clarification_context is present, treat those answers as final user input and emit a \`\`\`${PLAN_FENCE_TAG} plan unless planning is impossible without another user-owned decision.
 Do NOT use \`\`\`json or \`\`\`typescript.
 Never output both fence types in one response.
 The JSON inside the fence must validate against the matching schema shown above.
@@ -221,6 +222,7 @@ export function formatClarificationContext(
   const lines = [
     `Clarification request: ${request.summary}`,
     'Use the answers below as hard requirements while planning.',
+    'Do not ask follow-up clarification for routine implementation choices; resolve remaining ambiguity from repository patterns and state assumptions in the plan.',
   ];
 
   for (const question of request.questions) {

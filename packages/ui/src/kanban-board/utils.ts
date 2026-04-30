@@ -42,6 +42,10 @@ export function isApprovedAwaitingExecutionIssue(
   );
 }
 
+export function isIssueCreating(issue: GitHubIssueCacheRecord): boolean {
+  return issue.syncState === 'creating';
+}
+
 export function issueMatchesColumn(
   issue: GitHubIssueCacheRecord,
   column: Pick<BoardColumn, 'key' | 'statuses'>,
@@ -346,6 +350,13 @@ export function compareIssues(
   b: GitHubIssueCacheRecord,
   order: BoardSortOrder,
 ): number {
+  const aCreating = isIssueCreating(a);
+  const bCreating = isIssueCreating(b);
+  if (aCreating || bCreating) {
+    if (aCreating !== bCreating) return aCreating ? -1 : 1;
+    return b.fetchedAt.localeCompare(a.fetchedAt);
+  }
+
   if (order === 'title') {
     const byTitle = a.title.localeCompare(b.title);
     if (byTitle !== 0) return byTitle;

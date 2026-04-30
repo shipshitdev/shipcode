@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import type { GeneratorCli, ReasoningEffort } from '@shipcode/shared';
 import { extractCliFailureMessage } from './cli-error';
+import { shellExecEnv } from './health-check';
 import {
   mapReasoningEffortToClaudeThinkingTokens,
   mapReasoningEffortToCodex,
@@ -155,9 +156,6 @@ function runPrdCliWithStdin(
                 : (['--max-thinking-tokens', String(thinkingTokens)] as string[]);
             })(),
             '--dangerously-skip-permissions',
-            // PRD enhance is a pure text transform. Disallow ALL tools so the
-            // model answers in a single turn instead of burning turns on
-            // Read/Glob/Grep exploration and hitting `--max-turns`.
             '--disallowedTools',
             'Edit,Write,Bash,NotebookEdit,Read,Glob,Grep,Task,WebSearch,WebFetch',
           ]
@@ -172,7 +170,11 @@ function runPrdCliWithStdin(
             '--sandbox',
             'read-only',
           ];
-    const proc = spawn(command, args, { cwd, stdio: ['pipe', 'pipe', 'pipe'] });
+    const proc = spawn(command, args, {
+      cwd,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: shellExecEnv(),
+    });
 
     let stdout = '';
     let stderr = '';

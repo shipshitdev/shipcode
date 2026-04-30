@@ -1,7 +1,7 @@
 'use client';
 
 import { useDraggable } from '@dnd-kit/core';
-import { Archive, Check, Copy, PanelLeftOpen } from 'lucide-react';
+import { Archive, Check, Copy, Loader2, Lock, PanelLeftOpen } from 'lucide-react';
 import { memo } from 'react';
 import { modelDisplay } from '../lib/model-display';
 import { useSharedSecondNow } from '../lib/second-ticker';
@@ -18,7 +18,12 @@ import type {
   IssuePriorityBadge,
   IssueRevisionBadge,
 } from './types';
-import { dragOverlayBorderClass, formatPhaseElapsed, resolveIssuePriorityBadge } from './utils';
+import {
+  dragOverlayBorderClass,
+  formatPhaseElapsed,
+  isIssueCreating,
+  resolveIssuePriorityBadge,
+} from './utils';
 
 function PhaseElapsed({ since }: { since: number }) {
   const now = useSharedSecondNow();
@@ -97,7 +102,8 @@ function DraggableCardComponent({
   isKeyboardFocused,
   isRerunning,
 }: DraggableCardProps) {
-  const draggable = !readOnly && DRAGGABLE_STATUSES.includes(issue.pipelineStatus);
+  const isCreating = isIssueCreating(issue);
+  const draggable = !readOnly && !isCreating && DRAGGABLE_STATUSES.includes(issue.pipelineStatus);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: issue.id,
     data: issue,
@@ -127,6 +133,7 @@ function DraggableCardComponent({
       className={cn(
         'group relative flex min-h-[92px] flex-col overflow-hidden rounded-md border bg-elevated p-3 text-left transition-colors outline-none',
         draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-default',
+        isCreating && 'border-agent/30 bg-agent/[0.025] opacity-80',
         isSelected && !isFailed && !isAwaiting && !isActive
           ? 'border-text-primary/60 bg-elevated'
           : !isSelected && !isActive
@@ -163,7 +170,7 @@ function DraggableCardComponent({
       data-issue-card-id={issue.id}
       data-keyboard-focused={isKeyboardFocused ? 'true' : undefined}
       onClick={(event) => {
-        if (event.defaultPrevented || isDragging) return;
+        if (event.defaultPrevented || isDragging || isCreating) return;
         onClick(issue);
       }}
       {...listeners}
@@ -174,9 +181,16 @@ function DraggableCardComponent({
         if (event.defaultPrevented || event.currentTarget !== event.target) return;
         if (event.key !== 'Enter' && event.key !== ' ') return;
         event.preventDefault();
+        if (isCreating) return;
         onClick(issue);
       }}
     >
+      {isCreating && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 rounded-[inherit] bg-[repeating-linear-gradient(135deg,rgba(56,189,248,0.04)_0,rgba(56,189,248,0.04)_8px,transparent_8px,transparent_16px)]"
+        />
+      )}
       {isActive && (
         <div
           aria-hidden="true"
@@ -223,7 +237,7 @@ function DraggableCardComponent({
           </div>
         )}
       <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-1">
-        {branchName && onCopyBranchName && (
+        {branchName && onCopyBranchName && !isCreating && (
           <Button
             variant="ghost"
             size="icon-xs"
@@ -252,20 +266,22 @@ function DraggableCardComponent({
             {branchCopyState === 'copied' ? <Check size={14} /> : <Copy size={14} />}
           </Button>
         )}
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="text-muted/70 hover:bg-muted/10 hover:text-primary"
-          title="Open issue detail"
-          aria-label="Open issue detail"
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => {
-            event.stopPropagation();
-            onClick(issue);
-          }}
-        >
-          <PanelLeftOpen size={14} />
-        </Button>
+        {!isCreating && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="text-muted/70 hover:bg-muted/10 hover:text-primary"
+            title="Open issue detail"
+            aria-label="Open issue detail"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onClick(issue);
+            }}
+          >
+            <PanelLeftOpen size={14} />
+          </Button>
+        )}
         {isDoneState && onArchiveIssue && (
           <Button
             variant="ghost"
@@ -290,7 +306,7 @@ function DraggableCardComponent({
       >
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <span className="shrink-0 font-mono text-[11px] text-secondary">
-            {issue.isQuickMode ? 'Quick' : `#${issue.issueNumber}`}
+            {isCreating ? 'Creating' : issue.isQuickMode ? 'Quick' : `#${issue.issueNumber}`}
           </span>
           {linkedPrLabel &&
             (issue.linkedPrUrl && onOpenPullRequest ? (
@@ -378,7 +394,17 @@ function DraggableCardComponent({
             </Badge>
           ))}
         <IssueExternalBlockers issue={issue} />
-        {readOnly ? (
+        {isCreating ? (
+          <Badge
+            variant="default"
+            className="inline-flex items-center gap-1 border-agent/25 bg-agent/10 px-1.5 py-px text-[10px] font-medium text-agent"
+            title="Creating issue on GitHub"
+          >
+            <Loader2 size={10} className="animate-spin" />
+            Creating
+            <Lock size={10} />
+          </Badge>
+        ) : readOnly ? (
           <PhaseChip status={issue.pipelineStatus} />
         ) : isTodo && onStartPipeline ? (
           <span className="relative inline-flex items-center">
@@ -463,6 +489,7 @@ export function DragOverlayCard({
   approvedAwaitingExecution?: boolean;
 }) {
   const priorityBadge = resolveIssuePriorityBadge(issue);
+  const isCreating = isIssueCreating(issue);
   return (
     <div
       className={cn(
@@ -471,7 +498,7 @@ export function DragOverlayCard({
       )}
     >
       <div className="font-mono text-[11px] text-muted">
-        {issue.isQuickMode ? 'Quick' : `#${issue.issueNumber}`}
+        {isCreating ? 'Creating' : issue.isQuickMode ? 'Quick' : `#${issue.issueNumber}`}
       </div>
       <div className="mt-1 line-clamp-2 w-full min-w-0 text-[13px] font-medium leading-snug text-primary">
         {issue.title}
@@ -486,11 +513,18 @@ export function DragOverlayCard({
             {priorityBadge.label}
           </Badge>
         ) : null}
-        <PhaseChip
-          status={issue.pipelineStatus}
-          label={approvedAwaitingExecution ? 'Waiting for slot' : undefined}
-          className={approvedAwaitingExecution ? 'border-agent/25 bg-agent/10 text-agent' : ''}
-        />
+        {isCreating ? (
+          <Badge className="inline-flex items-center gap-1 border-agent/25 bg-agent/10 px-1.5 py-px text-[10px] font-medium text-agent">
+            <Loader2 size={10} className="animate-spin" />
+            Creating
+          </Badge>
+        ) : (
+          <PhaseChip
+            status={issue.pipelineStatus}
+            label={approvedAwaitingExecution ? 'Waiting for slot' : undefined}
+            className={approvedAwaitingExecution ? 'border-agent/25 bg-agent/10 text-agent' : ''}
+          />
+        )}
         <div className="ml-auto h-5" />
       </div>
     </div>

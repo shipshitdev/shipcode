@@ -21,6 +21,7 @@ import type { BoardSortOrder, BoardView, ColumnKey, KanbanBoardProps } from './k
 import {
   compareIssues,
   customCollisionDetection,
+  isIssueCreating,
   issueMatchesColumn,
   issueMatchesSection,
   resolveIssueApprovalBadge,
@@ -240,11 +241,13 @@ export function KanbanBoard({
       new Map(
         boardIssues.map((issue) => [
           issue.id,
-          formatIssueBranch(
-            issue.issueNumber,
-            issue.title ?? '',
-            settings?.worktreeBranchFormat ?? null,
-          ),
+          isIssueCreating(issue)
+            ? ''
+            : formatIssueBranch(
+                issue.issueNumber,
+                issue.title ?? '',
+                settings?.worktreeBranchFormat ?? null,
+              ),
         ]),
       ),
     [boardIssues, settings?.worktreeBranchFormat],
@@ -405,6 +408,13 @@ export function KanbanBoard({
       }
 
       if (!focusedIssue) return;
+      if (isIssueCreating(focusedIssue)) {
+        if (key === 'Enter' || key === 'c' || key === 'e') {
+          event.preventDefault();
+          setKeyboardActionToast('Issue is still being created on GitHub.');
+        }
+        return;
+      }
       if (key === 'Enter') {
         event.preventDefault();
         onIssueClick(focusedIssue);

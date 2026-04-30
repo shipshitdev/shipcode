@@ -1,14 +1,10 @@
 'use client';
 
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useState } from 'react';
-import { type BundledLanguage, codeToTokensBase } from 'shiki';
+import { type BundledLanguage, codeToTokens, type ThemedToken } from 'shiki';
 import { cn } from './lib/utils';
 
-type HighlightToken = {
-  content: string;
-  color?: string;
-  fontStyle?: number;
-};
+type HighlightToken = ThemedToken;
 
 export interface SyntaxHighlightedCodeProps {
   code: string;
@@ -81,13 +77,13 @@ function useHighlightedTokens(
       };
     }
 
-    codeToTokensBase(code, {
+    codeToTokens(code, {
       lang: language,
       theme: 'dark-plus',
     })
-      .then((nextTokens) => {
+      .then((result) => {
         if (!cancelled) {
-          setTokens(nextTokens);
+          setTokens(result.tokens);
         }
       })
       .catch(() => {

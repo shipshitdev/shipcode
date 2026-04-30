@@ -447,11 +447,26 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  app.setAboutPanelOptions({
+    applicationName: 'ShipCode',
+    applicationVersion: app.getVersion(),
+    copyright: `Copyright © ${new Date().getFullYear()} ShipCode`,
+    website: 'https://github.com/shipshitdev/shipcode',
+  });
+
   const menu = Menu.buildFromTemplate([
     {
       label: 'ShipCode',
       submenu: [
         { label: 'About ShipCode', role: 'about' },
+        {
+          label: 'Check for Update…',
+          click: () => updateService?.checkNow(),
+        },
+        {
+          label: 'GitHub Repository',
+          click: () => shell.openExternal('https://github.com/shipshitdev/shipcode'),
+        },
         { type: 'separator' },
         { label: 'Hide ShipCode', role: 'hide' },
         { label: 'Hide Others', role: 'hideOthers' },

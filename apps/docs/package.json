@@ -1,7 +1,7 @@
 {
   "dependencies": {
     "@shipcode/ui": "workspace:*",
-    "@shipshitdev/ui": "^0.6.0",
+    "@shipshitdev/ui": "^0.6.2",
     "next": "16.2.4",
     "nextra": "4.6.1",
     "nextra-theme-docs": "4.6.1",

@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ContextFileInfo, ContextGeneratorCli } from '@shipcode/shared';
 import { extractCliFailureMessage } from './cli-error';
+import { shellExecEnv } from './health-check';
 
 const MEMORY_DIR = '.agents/memory';
 const MEMORY_FENCE_TAG = 'shipcode-memory';
@@ -335,7 +336,11 @@ function runContextCliWithStdin(
             '--sandbox',
             'read-only',
           ];
-    const proc = spawn(command, args, { cwd, stdio: ['pipe', 'pipe', 'pipe'] });
+    const proc = spawn(command, args, {
+      cwd,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: shellExecEnv(),
+    });
 
     let stdout = '';
     let stderr = '';

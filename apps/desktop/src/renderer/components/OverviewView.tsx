@@ -26,6 +26,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
+import { PageHeader } from './PageHeader';
 
 function timeAgo(input: string | number): string {
   const t = typeof input === 'number' ? input : new Date(input).getTime();
@@ -159,12 +160,7 @@ export function OverviewView() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex items-center justify-between border-b border-border px-6 py-4">
-        <div>
-          <h1 className="text-base font-semibold text-primary">Overview</h1>
-          <p className="text-xs text-muted">Live view of every agent across every project.</p>
-        </div>
-      </div>
+      <PageHeader title="Overview" subtitle="Live view of every agent across every project." />
 
       <div className="flex-1 overflow-y-auto px-6 py-6">
         <div className="flex flex-col gap-6 max-w-5xl">

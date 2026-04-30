@@ -103,6 +103,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       clarificationRound: 0,
       clarificationRequest: null,
       clarificationAnswers: [],
+      clarificationHistory: [],
       verificationRetries: 0,
       githubIssueNumber: issue.number,
       githubIssueTitle: issue.title,
@@ -230,6 +231,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       clarificationRound: 0,
       clarificationRequest: null,
       clarificationAnswers: [],
+      clarificationHistory: [],
       verificationRetries: 0,
       // Quick tasks have no real GH issue. Pipeline guards check this with
       // isRealGithubIssueNumber, so leaving null skips workpad / PR / comments.
@@ -256,10 +258,8 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       verifiedSha: null,
     });
 
-    const project =
-      deps.threads.getById(threadId)?.projectId != null
-        ? deps.projects.getById(deps.threads.getById(threadId)!.projectId!)
-        : null;
+    const thread = deps.threads.getById(threadId);
+    const project = thread?.projectId ? deps.projects.getById(thread.projectId) : null;
     const requireApproval = project
       ? resolveRequireApproval(settings, project)
       : settings.requireApproval;

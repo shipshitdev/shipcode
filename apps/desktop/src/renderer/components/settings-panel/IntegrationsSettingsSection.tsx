@@ -7,6 +7,7 @@ import type {
 import {
   Button,
   FolderGit,
+  Input,
   LoadingButtonContent,
   Select,
   SelectContent,
@@ -14,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
   Sparkles,
+  Switch,
   Tabs,
   TabsContent,
   TabsList,
@@ -329,18 +331,17 @@ export function IntegrationsSettingsSection({
                     ].map(([key, label]) => (
                       <label key={key} className="flex items-center justify-between gap-3">
                         <span>{label}</span>
-                        <input
-                          type="checkbox"
+                        <Switch
                           checked={
                             settings.chatNotificationEvents[
                               key as keyof AppSettings['chatNotificationEvents']
                             ]
                           }
-                          onChange={(e) =>
+                          onCheckedChange={(checked) =>
                             onUpdate({
                               chatNotificationEvents: {
                                 ...settings.chatNotificationEvents,
-                                [key]: e.target.checked,
+                                [key]: checked,
                               },
                             })
                           }
@@ -370,14 +371,12 @@ export function IntegrationsSettingsSection({
                   <div className="space-y-2">
                     <label className="flex items-center justify-between gap-3">
                       <span>Enable Discord chat alerts</span>
-                      <input
-                        type="checkbox"
+                      <Switch
                         checked={settings.discordEnabled}
-                        onChange={(e) => onUpdate({ discordEnabled: e.target.checked })}
+                        onCheckedChange={(checked) => onUpdate({ discordEnabled: checked })}
                       />
                     </label>
-                    <input
-                      className="w-full rounded-md border border-border bg-primary px-3 py-2 text-primary"
+                    <Input
                       value={settings.discordWebhookUrl ?? ''}
                       onChange={(e) => onUpdate({ discordWebhookUrl: e.target.value || null })}
                       placeholder="https://discord.com/api/webhooks/..."
@@ -426,21 +425,18 @@ export function IntegrationsSettingsSection({
                   <div className="space-y-2">
                     <label className="flex items-center justify-between gap-3">
                       <span>Enable Telegram chat alerts</span>
-                      <input
-                        type="checkbox"
+                      <Switch
                         checked={settings.telegramEnabled}
-                        onChange={(e) => onUpdate({ telegramEnabled: e.target.checked })}
+                        onCheckedChange={(checked) => onUpdate({ telegramEnabled: checked })}
                       />
                     </label>
-                    <input
-                      className="w-full rounded-md border border-border bg-primary px-3 py-2 text-primary"
+                    <Input
                       value={settings.telegramBotToken ?? ''}
                       onChange={(e) => onUpdate({ telegramBotToken: e.target.value || null })}
                       placeholder="Bot token"
                       spellCheck={false}
                     />
-                    <input
-                      className="w-full rounded-md border border-border bg-primary px-3 py-2 text-primary"
+                    <Input
                       value={settings.telegramDefaultChatId ?? ''}
                       onChange={(e) => onUpdate({ telegramDefaultChatId: e.target.value || null })}
                       placeholder="Default chat ID"

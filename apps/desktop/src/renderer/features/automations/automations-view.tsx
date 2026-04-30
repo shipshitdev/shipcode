@@ -1,8 +1,10 @@
-import type { Automation, Project } from '@shipcode/shared';
+import type { Automation, Project, Thread } from '@shipcode/shared';
+import { PhaseChip } from '@shipcode/ui';
 import {
   Button,
   Card,
   CardContent,
+  ChevronDown,
   cn,
   Loader2,
   Pencil,
@@ -12,6 +14,8 @@ import {
 } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Cron } from 'croner';
+import { useState } from 'react';
+import { PageHeader } from '../../components/PageHeader';
 import { useAppStore } from '../../stores/app-store';
 
 function describeCron(expr: string): string {
@@ -75,15 +79,11 @@ export function AutomationsView() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden min-w-0">
-      <header className="flex items-start justify-between border-b border-border px-6 py-5">
-        <div>
-          <h1 className="text-lg font-semibold text-primary">Automations</h1>
-          <p className="text-[13px] text-secondary">
-            Recurring AI tasks that run on a cron schedule against a project.
-          </p>
-        </div>
-        <Button onClick={() => openCreateAutomationModal()}>+ New automation</Button>
-      </header>
+      <PageHeader
+        title="Automations"
+        subtitle="Recurring AI tasks that run on a cron schedule against a project."
+        actions={<Button onClick={() => openCreateAutomationModal()}>+ New automation</Button>}
+      />
 
       <div className="flex-1 overflow-auto p-6">
         {isLoading ? (
@@ -138,79 +138,136 @@ function AutomationCard({
   onToggleEnabled,
   onDelete,
 }: AutomationCardProps) {
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const selectAutomationThread = useAppStore((s) => s.selectAutomationThread);
+
   const runNow = useMutation({
     mutationKey: ['run-now', automation.id],
     mutationFn: () =>
       window.shipcode.invoke<{ queued: boolean }>('automations:run-now', { id: automation.id }),
   });
 
+  const { data: runHistory = [], isLoading: isHistoryLoading } = useQuery<Thread[]>({
+    queryKey: ['automation-run-history', automation.id],
+    queryFn: () =>
+      window.shipcode.invoke<Thread[]>('automations:run-history', {
+        automationId: automation.id,
+      }),
+    enabled: historyOpen,
+  });
+
   return (
     <Card className="overflow-hidden">
-      <CardContent className="flex items-center justify-between gap-4 p-4">
-        <button
-          type="button"
-          className="flex-1 text-left"
-          onClick={onEdit}
-          aria-label={`Edit automation ${automation.name}`}
-        >
-          <div className="flex items-center gap-2">
-            <span className="text-[14px] font-medium text-primary">{automation.name}</span>
-            {automation.lastStatus ? (
-              <span
-                className={cn(
-                  'rounded-full border px-2 py-0.5 text-[10px] font-medium',
-                  STATUS_COLOR[automation.lastStatus] ?? 'bg-tertiary text-secondary border-border',
-                )}
-              >
-                {automation.lastStatus}
-              </span>
-            ) : null}
-          </div>
-          <div className="mt-1 text-[12px] text-secondary">
-            {projectName} · {describeCron(automation.cronExpr)}
-          </div>
-          <div className="mt-1 text-[11px] text-muted">
-            {automation.lastStartedAt
-              ? `Last run ${formatRelative(automation.lastStartedAt)} · ${automation.runCount} total`
-              : 'Never run'}
-          </div>
-        </button>
+      <CardContent className="p-0">
+        <div className="flex items-center justify-between gap-4 p-4">
+          <button
+            type="button"
+            className="flex-1 text-left"
+            onClick={() => setHistoryOpen((o) => !o)}
+            aria-label={`${historyOpen ? 'Collapse' : 'Expand'} run history for ${automation.name}`}
+          >
+            <div className="flex items-center gap-2">
+              <ChevronDown
+                size={14}
+                className={cn('text-muted transition-transform', historyOpen && 'rotate-180')}
+              />
+              <span className="text-[14px] font-medium text-primary">{automation.name}</span>
+              {automation.lastStatus ? (
+                <span
+                  className={cn(
+                    'rounded-full border px-2 py-0.5 text-[10px] font-medium',
+                    STATUS_COLOR[automation.lastStatus] ??
+                      'bg-tertiary text-secondary border-border',
+                  )}
+                >
+                  {automation.lastStatus}
+                </span>
+              ) : null}
+            </div>
+            <div className="mt-1 pl-[22px] text-[12px] text-secondary">
+              {projectName} · {describeCron(automation.cronExpr)}
+            </div>
+            <div className="mt-1 pl-[22px] text-[11px] text-muted">
+              {automation.lastStartedAt
+                ? `Last run ${formatRelative(automation.lastStartedAt)} · ${automation.runCount} total`
+                : 'Never run'}
+            </div>
+          </button>
 
-        <div className="flex items-center gap-2">
-          <Switch
-            checked={automation.enabled}
-            onCheckedChange={(checked) => onToggleEnabled(checked)}
-            aria-label={automation.enabled ? 'Disable' : 'Enable'}
-          />
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => runNow.mutate()}
-            disabled={runNow.isPending}
-            aria-label="Run now"
-            title="Run now"
-          >
-            {runNow.isPending ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onEdit}
-            aria-label="Edit automation"
-            title="Edit"
-          >
-            <Pencil size={14} />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onDelete}
-            aria-label="Delete automation"
-            title="Delete"
-          >
-            <Trash2 size={14} />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={automation.enabled}
+              onCheckedChange={(checked) => onToggleEnabled(checked)}
+              aria-label={automation.enabled ? 'Disable' : 'Enable'}
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => runNow.mutate()}
+              disabled={runNow.isPending}
+              aria-label="Run now"
+              title="Run now"
+            >
+              {runNow.isPending ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Play size={14} />
+              )}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onEdit}
+              aria-label="Edit automation"
+              title="Edit"
+            >
+              <Pencil size={14} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onDelete}
+              aria-label="Delete automation"
+              title="Delete"
+            >
+              <Trash2 size={14} />
+            </Button>
+          </div>
         </div>
+
+        {historyOpen && (
+          <div className="border-t border-border bg-tertiary/30 px-4 py-3">
+            <h4 className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted">
+              Run History
+            </h4>
+            {isHistoryLoading ? (
+              <div className="flex justify-center py-4">
+                <Loader2 className="h-4 w-4 animate-spin text-muted" />
+              </div>
+            ) : runHistory.length === 0 ? (
+              <p className="py-2 text-[12px] text-muted">No runs yet.</p>
+            ) : (
+              <div className="flex flex-col gap-1">
+                {runHistory.map((thread) => (
+                  <button
+                    key={thread.id}
+                    type="button"
+                    onClick={() => selectAutomationThread(thread.id)}
+                    className="flex items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-hover"
+                  >
+                    <PhaseChip status={thread.status} />
+                    <span className="flex-1 truncate text-[12px] text-secondary">
+                      {thread.lastError ? thread.lastError.slice(0, 80) : thread.status}
+                    </span>
+                    <span className="text-[11px] text-muted">
+                      {formatRelative(thread.createdAt)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

@@ -3,7 +3,7 @@ import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 import type { PromptMaterial, ProviderPhase, ProviderRequest } from '@shipcode/agents';
-import { formatPlanComment, GhCli, loadRepoSetupContract } from '@shipcode/agents';
+import { formatPlanComment, GhCli, loadRepoSetupContract, shellExecEnv } from '@shipcode/agents';
 import {
   measurePhasePromptTelemetry,
   toPersistedPromptTelemetryMaterials,
@@ -14,6 +14,28 @@ import type { PipelineContext, PipelineDeps, PipelineExecutorModel } from '../ty
 import type { PipelineContextHelpers, PipelineRuntime } from './shared';
 
 const execFileAsync = promisify(execFile);
+const TRUSTED_LOGIN_SHELLS = new Set([
+  '/bin/bash',
+  '/bin/zsh',
+  '/usr/bin/bash',
+  '/usr/bin/zsh',
+  '/usr/local/bin/bash',
+  '/usr/local/bin/zsh',
+  '/opt/homebrew/bin/bash',
+  '/opt/homebrew/bin/zsh',
+]);
+
+function resolveSetupShell(): { command: string; args: (setupCommand: string) => string[] } {
+  const preferred = process.env.SHELL;
+  if (preferred && TRUSTED_LOGIN_SHELLS.has(preferred) && existsSync(preferred)) {
+    return { command: preferred, args: (setupCommand) => ['-ilc', setupCommand] };
+  }
+  for (const shell of ['/bin/zsh', '/bin/bash']) {
+    if (existsSync(shell))
+      return { command: shell, args: (setupCommand) => ['-ilc', setupCommand] };
+  }
+  return { command: '/bin/sh', args: (setupCommand) => ['-c', setupCommand] };
+}
 
 /**
  * Read the orchestrator-side GitHub token via `gh auth token`. Spawns
@@ -68,15 +90,44 @@ export function createPipelineRuntime(
     return context.repoSetupContract;
   }
 
+  const SHELL_COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
+
   async function runShellCommand(
     threadId: string,
     cwd: string,
     command: string,
     signal: AbortSignal,
+    timeoutMs: number = SHELL_COMMAND_TIMEOUT_MS,
   ): Promise<{ exitCode: number; output: string }> {
     return await new Promise((resolvePromise, rejectPromise) => {
+      let settled = false;
       const chunks: string[] = [];
-      const child = spawn(command, { cwd, shell: true, signal });
+      const shell = resolveSetupShell();
+      const child = spawn(shell.command, shell.args(command), {
+        cwd,
+        env: shellExecEnv(),
+        signal,
+      });
+
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        emitTerminalRaw(
+          threadId,
+          `\r\n[shipcode] Command timed out after ${Math.round(timeoutMs / 60_000)}m — killing process.\r\n`,
+        );
+        child.kill('SIGTERM');
+        setTimeout(() => {
+          try {
+            child.kill('SIGKILL');
+          } catch {}
+        }, 5_000);
+        rejectPromise(
+          new Error(
+            `Command timed out after ${Math.round(timeoutMs / 60_000)} minutes: ${command}`,
+          ),
+        );
+      }, timeoutMs);
 
       const onData = (chunk: Buffer) => {
         const text = chunk.toString();
@@ -86,8 +137,16 @@ export function createPipelineRuntime(
 
       child.stdout?.on('data', onData);
       child.stderr?.on('data', onData);
-      child.on('error', rejectPromise);
+      child.on('error', (err) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        rejectPromise(err);
+      });
       child.on('close', (code) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
         resolvePromise({ exitCode: code ?? 1, output: chunks.join('') });
       });
     });

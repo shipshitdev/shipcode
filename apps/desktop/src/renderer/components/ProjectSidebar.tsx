@@ -23,9 +23,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
   Folder,
   FolderOpen,
@@ -62,14 +59,6 @@ const SORT_LABELS: Record<SortOrder, string> = {
   alpha: 'Alphabetical',
   added: 'Date added',
 };
-
-const PROJECT_OPEN_TARGETS: AppSettings['projectOpenTarget'][] = [
-  'cursor',
-  'finder',
-  'terminal',
-  'ghostty',
-  'vscode',
-];
 
 type AppIcon = ComponentType<{ size?: number; className?: string }>;
 
@@ -285,9 +274,19 @@ export function ProjectSidebar() {
   }
 
   const liveCount = stats?.agentsRunning ?? 0;
-  const inboxCount = filterAttentionRequiredNotifications(
+  const inboxItems = filterAttentionRequiredNotifications(
     notifs.filter((n) => n.dismissedAt === null),
-  ).length;
+  );
+  const inboxCount = inboxItems.length;
+  const hasFailure = inboxItems.some((n) => n.kind === 'failed' || n.kind === 'ci_blocked');
+  const hasWarning = inboxItems.some(
+    (n) => n.kind === 'awaiting_approval' || n.kind === 'verification_exhausted',
+  );
+  const inboxBadgeClass = hasFailure
+    ? 'bg-danger/15 text-danger'
+    : hasWarning
+      ? 'bg-warning/15 text-warning'
+      : 'bg-tertiary text-secondary';
 
   // Pinned projects always float to top; within each group, apply the selected sort order.
   const sortedProjects = [...projects].sort((a, b) => {
@@ -362,7 +361,9 @@ export function ProjectSidebar() {
           <Inbox size={14} className="shrink-0 text-secondary" />
           <span className="flex-1 truncate">Inbox</span>
           {inboxCount > 0 && (
-            <span className="inline-flex items-center justify-center rounded-full bg-tertiary px-1.5 py-0.5 text-[10px] font-medium text-secondary">
+            <span
+              className={`inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${inboxBadgeClass}`}
+            >
               {inboxCount}
             </span>
           )}
@@ -586,47 +587,25 @@ export function ProjectSidebar() {
                         }}
                       >
                         {(() => {
-                          const availableTargets = PROJECT_OPEN_TARGETS.filter(
-                            (target) => integrations?.desktopApps?.[target]?.available,
-                          );
+                          const defaultTarget = settings?.projectOpenTarget ?? 'cursor';
+                          const app = integrations?.desktopApps?.[defaultTarget];
+                          if (!app?.available) return null;
 
-                          if (availableTargets.length === 0) return null;
+                          const Icon = PROJECT_OPEN_TARGET_ICONS[defaultTarget];
 
                           return (
-                            <DropdownMenuSub>
-                              <DropdownMenuSubTrigger disabled={project.pathExists === false}>
-                                <FolderOpen size={12} />
-                                <span className="truncate">Open in</span>
-                              </DropdownMenuSubTrigger>
-                              <DropdownMenuSubContent className="min-w-[240px]">
-                                {availableTargets.map((target) => {
-                                  const app = integrations?.desktopApps?.[target];
-                                  if (!app) return null;
-
-                                  const isDefaultTarget =
-                                    (settings?.projectOpenTarget ?? 'cursor') === target;
-                                  const Icon = PROJECT_OPEN_TARGET_ICONS[target];
-
-                                  return (
-                                    <DropdownMenuItem
-                                      key={target}
-                                      onSelect={() =>
-                                        openProjectPath.mutate({ projectId: project.id, target })
-                                      }
-                                    >
-                                      <span className="flex h-3.5 w-3.5 items-center justify-center">
-                                        {isDefaultTarget ? <Check size={12} /> : null}
-                                      </span>
-                                      <Icon size={12} className="shrink-0 text-secondary" />
-                                      <span className="flex-1 truncate">{app.label}</span>
-                                      {isDefaultTarget ? (
-                                        <span className="text-[11px] text-muted">Default</span>
-                                      ) : null}
-                                    </DropdownMenuItem>
-                                  );
-                                })}
-                              </DropdownMenuSubContent>
-                            </DropdownMenuSub>
+                            <DropdownMenuItem
+                              disabled={project.pathExists === false}
+                              onSelect={() =>
+                                openProjectPath.mutate({
+                                  projectId: project.id,
+                                  target: defaultTarget,
+                                })
+                              }
+                            >
+                              <Icon size={12} className="shrink-0 text-secondary" />
+                              <span className="truncate">Open in {app.label}</span>
+                            </DropdownMenuItem>
                           );
                         })()}
                         <DropdownMenuSeparator />

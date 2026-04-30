@@ -262,7 +262,7 @@ export interface IpcInvokeChannels {
   };
   'github:create-issue': {
     args: { projectId: string; title: string; body: string; labels?: string[] };
-    result: GitHubIssueCacheRecord;
+    result: { issue: GitHubIssueCacheRecord; projectAttachWarning: string | null };
   };
   'github:edit-issue-body': {
     args: {
@@ -590,6 +590,7 @@ export interface IpcInvokeChannels {
     result: Automation;
   };
   'automations:run-now': { args: { id: string }; result: { queued: boolean } };
+  'automations:run-history': { args: { automationId: string }; result: Thread[] };
 }
 
 // === Streaming Channels (send/on) ===

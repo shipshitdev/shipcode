@@ -35,6 +35,7 @@ import {
   parseGithubRemote,
   validateGithubProjectUrl,
 } from '@shipcode/shared';
+import { resolveWorktreeParent } from '@shipcode/shared/worktree-path';
 import { dialog, shell } from 'electron';
 import { runAutoCommitWorkflow, runCleanupAnalyze, runCleanupApply } from '../git-workflows';
 import log from '../logger.service';
@@ -225,7 +226,9 @@ async function buildGitVisualizerData(
 
   const worktrees = await Promise.all(
     entries.map(async (entry) => {
-      const status = await git.getStatus(entry.path);
+      const compareRef =
+        entry.kind === 'main' ? `origin/${project.defaultBranch}` : project.defaultBranch;
+      const status = await git.getStatus(entry.path, compareRef);
       const thread =
         entry.kind === 'shipcode'
           ? (threadByWorktreePath.get(entry.path) ?? threadByBranch.get(entry.branch ?? ''))
@@ -242,6 +245,10 @@ async function buildGitVisualizerData(
         untrackedCount: status.untrackedCount,
         stagedCount: status.stagedCount,
         modifiedCount: status.modifiedCount,
+        aheadCount: status.aheadCount,
+        behindCount: status.behindCount,
+        compareRef: status.compareRef,
+        preCommitHookPath: status.preCommitHookPath,
         threadId: thread?.id ?? null,
         issueNumber: issue?.issueNumber ?? thread?.githubIssueNumber ?? null,
         title: issue?.title ?? thread?.title ?? null,
@@ -255,6 +262,81 @@ async function buildGitVisualizerData(
     branches: await git.listBranches(project.defaultBranch),
     worktrees,
   };
+}
+
+function isPathInside(parentPath: string, childPath: string): boolean {
+  const parent = path.resolve(parentPath);
+  const child = path.resolve(childPath);
+  const relative = path.relative(parent, child);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+function getRelinkedWorktreePath(
+  worktreePath: string,
+  oldParent: string,
+  newParent: string,
+): string | null {
+  if (!isPathInside(oldParent, worktreePath)) return null;
+  return path.join(newParent, path.relative(path.resolve(oldParent), path.resolve(worktreePath)));
+}
+
+async function repairProjectWorktreesAfterRelink(
+  project: Project,
+  nextProjectPath: string,
+  queries: IpcHandlerDeps['queries'],
+): Promise<void> {
+  const settings = queries.settings.get();
+  const manager = new WorktreeManager(nextProjectPath, {
+    worktreeRoot: settings.worktreeRoot,
+  });
+  const oldParent = resolveWorktreeParent(project.path, settings.worktreeRoot);
+  const nextParent = resolveWorktreeParent(nextProjectPath, settings.worktreeRoot);
+  const threads = queries.threads.list(project.id);
+
+  for (const thread of threads) {
+    if (!thread.worktreePath || !thread.worktreeBranch) continue;
+
+    const currentPath = thread.worktreePath;
+    const relinkedPath = getRelinkedWorktreePath(currentPath, oldParent, nextParent);
+    const currentExists = fs.existsSync(currentPath);
+    const relinkedExists = relinkedPath ? fs.existsSync(relinkedPath) : false;
+
+    if (currentExists) {
+      try {
+        await manager.repair([currentPath]);
+      } catch (error) {
+        log.warn(`[project:relink-path] worktree repair failed for ${currentPath}:`, error);
+      }
+
+      if (relinkedPath && path.resolve(relinkedPath) !== path.resolve(currentPath)) {
+        try {
+          await fsp.mkdir(path.dirname(relinkedPath), { recursive: true });
+          await manager.move(currentPath, relinkedPath);
+          queries.threads.setWorktree(thread.id, thread.worktreeBranch, relinkedPath);
+        } catch (error) {
+          log.warn(
+            `[project:relink-path] worktree move failed for ${currentPath} -> ${relinkedPath}:`,
+            error,
+          );
+        }
+      }
+      continue;
+    }
+
+    if (relinkedPath && relinkedExists) {
+      try {
+        await manager.repair([relinkedPath]);
+      } catch (error) {
+        log.warn(`[project:relink-path] worktree repair failed for ${relinkedPath}:`, error);
+      }
+      queries.threads.setWorktree(thread.id, thread.worktreeBranch, relinkedPath);
+      continue;
+    }
+
+    if (relinkedPath) {
+      queries.threads.clearWorktree(thread.id);
+    }
+  }
 }
 
 async function resolveGithubRepoIdentity(
@@ -505,6 +587,7 @@ export function registerProjectHandlers({
         throw new Error(`Another project already points to ${projectPath}`);
       }
 
+      await repairProjectWorktreesAfterRelink(project, projectPath, queries);
       queries.projects.updatePath(projectId, projectPath);
 
       try {

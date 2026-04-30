@@ -12,6 +12,7 @@ import {
   generateMemoryFiles,
   inspectRepoMemory,
   readMemoryFile,
+  shellExecEnv,
 } from '@shipcode/agents';
 import { type ExecutorModel, type GeneratorCli, providerDisplay } from '@shipcode/shared';
 import log, { logProcessOutput } from '../logger.service';
@@ -54,7 +55,7 @@ export function registerSupportHandlers({
     try {
       const { stdout } = await execAsync(
         "gh api 'user/repos?per_page=100&affiliation=owner,collaborator,organization_member' --paginate --jq '.[] | {id: .node_id, name: .full_name, private: .private} | @json'",
-        { timeout: 20_000 },
+        { timeout: 20_000, env: shellExecEnv() },
       );
 
       const seen = new Set<string>();

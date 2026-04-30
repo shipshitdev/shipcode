@@ -12,10 +12,20 @@ export interface BranchSnapshot {
   name: string;
   hasRemote: boolean;
   lastCommitDate: string;
+  aheadCount?: number;
+  behindCount?: number;
+  compareRef?: string | null;
 }
 
 export interface CleanupAnalysisInput {
-  worktrees: Array<{ path: string; branch: string; dirty: boolean }>;
+  worktrees: Array<{
+    path: string;
+    branch: string;
+    dirty: boolean;
+    aheadCount?: number;
+    behindCount?: number;
+    compareRef?: string | null;
+  }>;
   branches: BranchSnapshot[];
   pullRequests: PullRequestSnapshot[];
   criteria: CleanupCriteria;
@@ -37,14 +47,21 @@ export function analyzeCleanup(input: CleanupAnalysisInput): CleanupItem[] {
 
   for (const wt of input.worktrees) {
     if (protectedSet.has(wt.branch)) continue;
+    const aheadCount = wt.aheadCount ?? 0;
+    const behindCount = wt.behindCount ?? 0;
+    const compareRef = wt.compareRef ?? null;
+    const hasLocalWork = wt.dirty || aheadCount > 0;
     const pr = prByHead.get(wt.branch);
     if (!pr) {
-      if (input.criteria.worktreeNoPrCleanTree && !wt.dirty) {
+      if (input.criteria.worktreeNoPrCleanTree && !hasLocalWork) {
         items.push({
           id: `wt-no-pr:${wt.path}`,
           kind: 'local-branch-no-remote',
           branch: wt.branch,
           lastCommitDate: '',
+          aheadCount,
+          behindCount,
+          compareRef,
         });
       }
       continue;
@@ -58,7 +75,10 @@ export function analyzeCleanup(input: CleanupAnalysisInput): CleanupItem[] {
         branch: wt.branch,
         prNumber: pr.number,
         prUrl: pr.url,
-        dirty: wt.dirty,
+        dirty: hasLocalWork,
+        aheadCount,
+        behindCount,
+        compareRef,
       });
       continue;
     }
@@ -71,7 +91,10 @@ export function analyzeCleanup(input: CleanupAnalysisInput): CleanupItem[] {
         branch: wt.branch,
         prNumber: pr.number,
         prUrl: pr.url,
-        dirty: wt.dirty,
+        dirty: hasLocalWork,
+        aheadCount,
+        behindCount,
+        compareRef,
       });
     }
   }
@@ -87,6 +110,9 @@ export function analyzeCleanup(input: CleanupAnalysisInput): CleanupItem[] {
         kind: 'local-branch-no-remote',
         branch: branch.name,
         lastCommitDate: branch.lastCommitDate,
+        aheadCount: branch.aheadCount ?? 0,
+        behindCount: branch.behindCount ?? 0,
+        compareRef: branch.compareRef ?? null,
       });
     }
   }

@@ -23,6 +23,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 import { ActivityHeatmap } from './heatmap/ActivityHeatmap';
+import { PageHeader } from './PageHeader';
 
 function formatCost(usd: number): string {
   if (usd === 0) return '$0.00';
@@ -154,35 +155,38 @@ export function CostsView() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
+      <PageHeader
+        title="Costs"
+        subtitle="Token usage and spend across all pipelines."
+        actions={
+          <div className="flex items-center rounded-md border border-border bg-secondary p-0.5 text-[11px]">
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => setDisplayMode('$')}
+              className={cn(
+                displayMode === '$' ? 'bg-tertiary text-primary font-medium' : 'text-muted',
+              )}
+              aria-label="Show costs in US dollars"
+            >
+              USD
+            </Button>
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => setDisplayMode('tokens')}
+              className={cn(
+                displayMode === 'tokens' ? 'bg-tertiary text-primary font-medium' : 'text-muted',
+              )}
+              aria-label="Show costs in tokens"
+            >
+              Tokens
+            </Button>
+          </div>
+        }
+      />
       <div className="flex-1 overflow-y-auto px-6 py-6">
         <div className="max-w-5xl space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-primary">Costs</h2>
-            <div className="flex items-center rounded-md border border-border bg-secondary p-0.5 text-[11px]">
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={() => setDisplayMode('$')}
-                className={cn(
-                  displayMode === '$' ? 'bg-tertiary text-primary font-medium' : 'text-muted',
-                )}
-                aria-label="Show costs in US dollars"
-              >
-                USD
-              </Button>
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={() => setDisplayMode('tokens')}
-                className={cn(
-                  displayMode === 'tokens' ? 'bg-tertiary text-primary font-medium' : 'text-muted',
-                )}
-                aria-label="Show costs in tokens"
-              >
-                Tokens
-              </Button>
-            </div>
-          </div>
           {isLoading && (
             <div className="flex items-center justify-center py-16">
               <Loader2 size={20} className="animate-spin text-muted" />

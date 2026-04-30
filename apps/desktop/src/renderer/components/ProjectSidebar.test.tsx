@@ -34,11 +34,9 @@ async function openProjectActionsMenu() {
   fireEvent.pointerDown(await screen.findByRole('button', { name: 'More actions for ShipCode' }));
 }
 
-async function openProjectOpenerSubmenu() {
+async function openProjectActionsAndFindOpener() {
   await openProjectActionsMenu();
-  const openInTrigger = await screen.findByText('Open in');
-  openInTrigger.focus();
-  fireEvent.keyDown(openInTrigger, { key: 'ArrowRight' });
+  return screen.findByText(/^Open in /);
 }
 
 const project: Project = {
@@ -298,7 +296,7 @@ describe('ProjectSidebar', () => {
     expect(screen.queryByRole('button', { name: 'Open ShipCode folder' })).not.toBeInTheDocument();
   });
 
-  it('shows available opener targets inside a nested project actions submenu and marks the default target', async () => {
+  it('shows a single open-in item using the default target', async () => {
     invokeMock.mockImplementation(async (channel) => {
       if (channel === 'projects-visible' || channel === 'project:list-visible') return [project];
       if (channel === 'settings:get') return DEFAULT_SETTINGS;
@@ -315,17 +313,11 @@ describe('ProjectSidebar', () => {
 
     renderWithProviders();
 
-    await openProjectOpenerSubmenu();
-
-    expect(await screen.findByText('Cursor')).toBeInTheDocument();
-    expect(screen.getByText('Finder')).toBeInTheDocument();
-    expect(screen.getByText('Terminal')).toBeInTheDocument();
-    expect(screen.getByText('Visual Studio Code')).toBeInTheDocument();
-    expect(screen.queryByText('Ghostty')).not.toBeInTheDocument();
-    expect(screen.getByText('Default')).toBeInTheDocument();
+    const openInItem = await openProjectActionsAndFindOpener();
+    expect(openInItem.textContent).toBe('Open in Cursor');
   });
 
-  it('opens the selected target from the project actions menu', async () => {
+  it('opens in default target when clicked', async () => {
     invokeMock.mockImplementation(async (channel) => {
       if (channel === 'projects-visible' || channel === 'project:list-visible') return [project];
       if (channel === 'settings:get') return DEFAULT_SETTINGS;
@@ -343,13 +335,13 @@ describe('ProjectSidebar', () => {
 
     renderWithProviders();
 
-    await openProjectOpenerSubmenu();
-    fireEvent.click(await screen.findByText('Finder'));
+    const openInItem = await openProjectActionsAndFindOpener();
+    fireEvent.click(openInItem);
 
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith('project:open-path', {
         projectId: project.id,
-        target: 'finder',
+        target: 'cursor',
       });
     });
   });

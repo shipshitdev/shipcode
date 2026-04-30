@@ -1,8 +1,10 @@
-import type { AppSettings, GitHubIssueCacheRecord, Project } from '@shipcode/shared';
+import type { AppSettings, Project } from '@shipcode/shared';
 import { CURRENT_ONBOARDING_VERSION } from '@shipcode/shared';
+import { Button } from '@shipshitdev/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef } from 'react';
 import { ActivityView } from './components/ActivityView';
+import { AutomationRunDetail } from './components/AutomationRunDetail';
 import { AutomationsView } from './components/AutomationsView';
 import { CommandPalette } from './components/CommandPalette';
 import { CostsView } from './components/CostsView';
@@ -43,6 +45,7 @@ export function App() {
   const activeProjectId = useAppStore((state) => state.activeProjectId);
   const viewMode = useAppStore((state) => state.viewMode);
   const hasActiveIssue = useAppStore((state) => state.activeIssue !== null);
+  const hasActiveAutomationThread = useAppStore((state) => state.activeAutomationThreadId !== null);
   const issueDetailExpanded = useAppStore((state) => state.issueDetailExpanded);
   const issueDetailCollapsed = useAppStore((state) => state.issueDetailCollapsed);
   const issueDetailWidth = useAppStore((state) => state.issueDetailWidth);
@@ -120,51 +123,16 @@ export function App() {
   if (settings && (settings.onboardingVersion ?? 0) < CURRENT_ONBOARDING_VERSION) {
     return (
       <OnboardingWizard
-        onComplete={async (newProjectId?: string) => {
+        onComplete={async () => {
           queryClient.invalidateQueries({ queryKey: ['settings'] });
           queryClient.invalidateQueries({ queryKey: ['health'] });
-          if (newProjectId) {
-            const store = useAppStore.getState();
-            queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
-            store.selectProject(newProjectId);
-
-            const project = await queryClient.fetchQuery<Project | null>({
-              queryKey: ['project', newProjectId],
-              queryFn: () => window.shipcode.invoke('project:get', { projectId: newProjectId }),
-              staleTime: STABLE_APP_STATE_STALE_TIME,
-            });
-
-            const issues = await window.shipcode
-              .invoke<GitHubIssueCacheRecord[]>('github:refresh-issues', {
-                projectId: newProjectId,
-                force: true,
-              })
-              .catch(async () =>
-                window.shipcode.invoke<GitHubIssueCacheRecord[]>('github:list-issues', {
-                  projectId: newProjectId,
-                }),
-              );
-
-            queryClient.setQueryData(['github-issues', newProjectId], issues);
-            store.setGithubIssues(issues);
-
-            if (project?.starterIssueNumber) {
-              const starterIssue = issues.find(
-                (issue) => issue.issueNumber === project.starterIssueNumber,
-              );
-              if (starterIssue) {
-                store.selectIssue(starterIssue);
-              }
-            }
-          } else {
-            const projects = await queryClient.fetchQuery<Project[]>({
-              queryKey: ['projects-visible'],
-              queryFn: () => window.shipcode.invoke('project:list-visible'),
-              staleTime: STABLE_APP_STATE_STALE_TIME,
-            });
-            if (projects && projects.length > 0) {
-              useAppStore.getState().selectProject(projects[0].id);
-            }
+          const projects = await queryClient.fetchQuery<Project[]>({
+            queryKey: ['projects-visible'],
+            queryFn: () => window.shipcode.invoke('project:list-visible'),
+            staleTime: STABLE_APP_STATE_STALE_TIME,
+          });
+          if (projects && projects.length > 0) {
+            useAppStore.getState().selectProject(projects[0].id);
           }
         }}
       />
@@ -212,13 +180,9 @@ export function App() {
                   then restart the app.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => window.location.reload()}
-                className="inline-flex items-center justify-center rounded-md bg-red-600 px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-red-700"
-              >
+              <Button variant="destructive" onClick={() => window.location.reload()}>
                 Reload App
-              </button>
+              </Button>
             </>
           ) : (
             <>
@@ -245,7 +209,8 @@ export function App() {
     viewMode === 'project' &&
     !!activeProjectId &&
     activeProject?.pathExists === false;
-  const hideSidebarForReader = hasActiveIssue && issueDetailExpanded && !settingsVisible;
+  const hideSidebarForReader =
+    (hasActiveIssue || hasActiveAutomationThread) && issueDetailExpanded && !settingsVisible;
   const hideMainContentForTerminal = terminalVisible && terminalMaximized;
 
   return (
@@ -265,6 +230,8 @@ export function App() {
             <div className="flex flex-1 overflow-hidden min-h-0 bg-primary">
               {hasActiveIssue && issueDetailExpanded ? (
                 <IssueDetail expanded={true} />
+              ) : hasActiveAutomationThread && issueDetailExpanded ? (
+                <AutomationRunDetail expanded={true} />
               ) : settingsVisible ? (
                 <SettingsPanel />
               ) : viewMode === 'activity' ? (
@@ -291,25 +258,31 @@ export function App() {
         {/* Right detail panel — full row height, flanks both the upper
             view and the terminal. Hidden when expanded (it takes over the
             center column instead) or when collapsed. */}
-        {hasActiveIssue && !issueDetailExpanded && !issueDetailCollapsed && (
-          <div
-            data-slot="overlay-panel"
-            className="pointer-events-auto relative flex h-full flex-shrink-0 flex-col overflow-hidden border-l border-border bg-primary shadow-[-16px_0_40px_rgba(0,0,0,0.35)]"
-            style={{
-              width: issueDetailWidth,
-              minWidth: ISSUE_DETAIL_MIN_WIDTH,
-              maxWidth: ISSUE_DETAIL_MAX_WIDTH,
-            }}
-          >
-            <button
-              type="button"
-              aria-label="Resize issue detail panel"
-              className="absolute inset-y-0 left-0 z-10 w-1 -translate-x-1/2 cursor-col-resize transition-colors hover:bg-accent/20 active:bg-accent/30"
-              onMouseDown={handleIssueDetailResizeMouseDown}
-            />
-            <IssueDetail expanded={false} />
-          </div>
-        )}
+        {(hasActiveIssue || hasActiveAutomationThread) &&
+          !issueDetailExpanded &&
+          !issueDetailCollapsed && (
+            <div
+              data-slot="overlay-panel"
+              className="pointer-events-auto relative flex h-full flex-shrink-0 flex-col overflow-hidden border-l border-border bg-primary shadow-[-16px_0_40px_rgba(0,0,0,0.35)]"
+              style={{
+                width: issueDetailWidth,
+                minWidth: ISSUE_DETAIL_MIN_WIDTH,
+                maxWidth: ISSUE_DETAIL_MAX_WIDTH,
+              }}
+            >
+              <button
+                type="button"
+                aria-label="Resize issue detail panel"
+                className="absolute inset-y-0 left-0 z-10 w-1 -translate-x-1/2 cursor-col-resize transition-colors hover:bg-accent/20 active:bg-accent/30"
+                onMouseDown={handleIssueDetailResizeMouseDown}
+              />
+              {hasActiveIssue ? (
+                <IssueDetail expanded={false} />
+              ) : (
+                <AutomationRunDetail expanded={false} />
+              )}
+            </div>
+          )}
       </div>
       <CommandPalette />
       <CreateIssueModal />

@@ -1,4 +1,4 @@
-import { exec } from 'node:child_process';
+import { exec, execFileSync } from 'node:child_process';
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -34,6 +34,97 @@ import {
 import * as pty from 'node-pty';
 
 const execAsync = promisify(exec);
+
+const TRUSTED_SHELLS = new Set([
+  '/bin/bash',
+  '/bin/zsh',
+  '/bin/sh',
+  '/usr/bin/bash',
+  '/usr/bin/zsh',
+  '/usr/local/bin/bash',
+  '/usr/local/bin/zsh',
+  '/opt/homebrew/bin/bash',
+  '/opt/homebrew/bin/zsh',
+]);
+
+let cachedShellPath: string | null = null;
+let cachedShellPathKey: string | null = null;
+
+function splitPath(value: string | null | undefined): string[] {
+  if (!value) return [];
+  return value.split(':').filter((segment) => segment.length > 0);
+}
+
+function mergePathSegments(...pathGroups: Array<string[] | string | null | undefined>): string {
+  const seen = new Set<string>();
+  const merged: string[] = [];
+
+  for (const group of pathGroups) {
+    const segments = Array.isArray(group) ? group : splitPath(group);
+    for (const segment of segments) {
+      if (seen.has(segment)) continue;
+      seen.add(segment);
+      merged.push(segment);
+    }
+  }
+
+  return merged.join(':');
+}
+
+function fallbackExecPathSegments(): string[] {
+  const home = homedir();
+  const bunInstall = process.env.BUN_INSTALL || join(home, '.bun');
+  return [
+    join(bunInstall, 'bin'),
+    join(home, 'bin'),
+    join(home, '.local', 'bin'),
+    '/opt/homebrew/bin',
+    '/opt/homebrew/sbin',
+    '/usr/local/bin',
+    '/usr/bin',
+    '/bin',
+    '/usr/sbin',
+    '/sbin',
+  ];
+}
+
+function getShellPath(): string {
+  const cacheKey = [
+    process.env.SHELL ?? '',
+    process.env.PATH ?? '',
+    process.env.BUN_INSTALL ?? '',
+  ].join('\0');
+  if (cachedShellPath && cachedShellPathKey === cacheKey) return cachedShellPath;
+  let shellPath = '';
+  try {
+    const shell = process.env.SHELL ?? '/bin/zsh';
+    if (!TRUSTED_SHELLS.has(shell)) {
+      cachedShellPath = mergePathSegments(process.env.PATH, fallbackExecPathSegments());
+      cachedShellPathKey = cacheKey;
+      return cachedShellPath;
+    }
+    const output = execFileSync(shell, ['-ilc', 'printf "%s" "$PATH"'], {
+      encoding: 'utf-8',
+      timeout: 5000,
+    }).trim();
+    shellPath = output.split('\n').at(-1)?.trim() ?? '';
+  } catch {
+    shellPath = '';
+  }
+
+  cachedShellPath = mergePathSegments(shellPath, process.env.PATH, fallbackExecPathSegments());
+  cachedShellPathKey = cacheKey;
+  return cachedShellPath;
+}
+
+export function shellExecEnv(): Record<string, string> {
+  return {
+    ...process.env,
+    BUN_INSTALL: process.env.BUN_INSTALL || join(homedir(), '.bun'),
+    PATH: getShellPath(),
+  } as Record<string, string>;
+}
+
 const CLI_USAGE_TIMEOUT_MS = 20_000;
 const CLI_USAGE_OUTPUT_TAIL = 8_192;
 const SYSTEM_HEALTH_TTL_MS = 30_000;
@@ -79,8 +170,9 @@ const DESKTOP_APP_LABELS: Record<ProjectOpenTarget, string> = {
 };
 
 async function checkCli(command: string, versionFlag: string = '--version'): Promise<CliHealth> {
+  const env = shellExecEnv();
   try {
-    const whichResult = await execAsync(`which ${command}`);
+    const whichResult = await execAsync(`which ${command}`, { env });
     const binaryPath = whichResult.stdout.trim();
 
     if (!binaryPath) {
@@ -94,7 +186,7 @@ async function checkCli(command: string, versionFlag: string = '--version'): Pro
     }
 
     try {
-      const versionResult = await execAsync(`${command} ${versionFlag}`);
+      const versionResult = await execAsync(`${binaryPath} ${versionFlag}`, { env });
       const version = versionResult.stdout.trim() || versionResult.stderr.trim();
       return { available: true, version, path: binaryPath, error: null, authenticated: false };
     } catch {
@@ -127,41 +219,58 @@ function unavailableDesktopApp(key: ProjectOpenTarget, error: string): DesktopAp
   };
 }
 
+const ALWAYS_AVAILABLE_APPS: Set<ProjectOpenTarget> = new Set(['finder', 'terminal']);
+
+const ALWAYS_AVAILABLE_PATHS: Partial<Record<ProjectOpenTarget, string>> = {
+  finder: '/System/Library/CoreServices/Finder.app',
+  terminal: '/System/Applications/Utilities/Terminal.app',
+};
+
+const DESKTOP_APP_BUNDLE_NAMES: Record<ProjectOpenTarget, string> = {
+  cursor: 'Cursor.app',
+  finder: 'Finder.app',
+  terminal: 'Terminal.app',
+  ghostty: 'Ghostty.app',
+  vscode: 'Visual Studio Code.app',
+};
+
 async function checkDesktopAppByName(
   key: ProjectOpenTarget,
-  appName: string,
+  _appName: string,
 ): Promise<DesktopAppHealth> {
   if (process.platform !== 'darwin') {
     return unavailableDesktopApp(key, 'Desktop app detection is currently macOS-only');
   }
 
-  if (key === 'finder') {
+  if (ALWAYS_AVAILABLE_APPS.has(key)) {
     return {
       key,
       label: DESKTOP_APP_LABELS[key],
       available: true,
-      path: '/System/Library/CoreServices/Finder.app',
+      path: ALWAYS_AVAILABLE_PATHS[key] ?? null,
       error: null,
     };
   }
 
-  const escapedName = appName.replace(/"/g, '\\"');
-  try {
-    const { stdout } = await execAsync(
-      `osascript -e 'POSIX path of (path to application "${escapedName}")'`,
-      { timeout: 5_000 },
-    );
-    const path = stdout.trim();
-    return {
-      key,
-      label: DESKTOP_APP_LABELS[key],
-      available: !!path,
-      path: path || null,
-      error: path ? null : `${appName} is not installed`,
-    };
-  } catch {
-    return unavailableDesktopApp(key, `${appName} is not installed`);
+  const bundleName = DESKTOP_APP_BUNDLE_NAMES[key];
+  const candidates = [
+    `/Applications/${bundleName}`,
+    `${process.env.HOME}/Applications/${bundleName}`,
+  ];
+
+  for (const candidate of candidates) {
+    if (await fileExists(candidate)) {
+      return {
+        key,
+        label: DESKTOP_APP_LABELS[key],
+        available: true,
+        path: candidate,
+        error: null,
+      };
+    }
   }
+
+  return unavailableDesktopApp(key, `${DESKTOP_APP_LABELS[key]} is not installed`);
 }
 
 export async function checkDesktopApps(): Promise<DesktopAppHealthMap> {
@@ -434,7 +543,7 @@ export function parseClaudeAuthStatusOutput(stdout: string): ClaudeAuthDetails {
 
 async function readClaudeAuthDetails(): Promise<ClaudeAuthDetails> {
   try {
-    const result = await execAsync('claude auth status', { timeout: 5_000 });
+    const result = await execAsync('claude auth status', { timeout: 5_000, env: shellExecEnv() });
     const stdout = `${result.stdout}${result.stderr}`.trim();
     return parseClaudeAuthStatusOutput(stdout);
   } catch {
@@ -985,15 +1094,12 @@ function checkTelegramHealth(settings: AppSettings): ChatIntegrationHealth {
 
 export async function checkClaudeAuth(): Promise<boolean> {
   try {
-    // Try `claude auth status` first (supported in newer CLI versions)
-    // execAsync resolves on exit code 0, so reaching here means authenticated
-    await execAsync('claude auth status', { timeout: 10_000 });
+    await execAsync('claude auth status', { timeout: 10_000, env: shellExecEnv() });
     return true;
   } catch {
-    // Command may not exist in older versions — fall back to credential file check
+    // Command may not exist or not in PATH — fall back to credential file check
   }
 
-  // Fall back to checking for credential files
   const credentialPath = join(homedir(), '.claude', '.credentials.json');
   return fileExists(credentialPath);
 }
@@ -1258,7 +1364,7 @@ export async function validateOpenRouterModel(
 
 async function getGhVersion(): Promise<string | null> {
   try {
-    const { stdout } = await execAsync('gh --version', { timeout: 5_000 });
+    const { stdout } = await execAsync('gh --version', { timeout: 5_000, env: shellExecEnv() });
     const match = stdout.match(/gh version (\S+)/);
     return match?.[1] ?? null;
   } catch {
@@ -1280,9 +1386,10 @@ export function parseGhProjectScope(output: string): boolean | null {
 }
 
 export async function checkGhAuth(): Promise<GhAuthStatus> {
+  const env = shellExecEnv();
   try {
     const [result, version] = await Promise.all([
-      execAsync('gh auth status 2>&1', { timeout: 10_000 }),
+      execAsync('gh auth status 2>&1', { timeout: 10_000, env }),
       getGhVersion(),
     ]);
     const output = result.stdout + result.stderr;
@@ -1296,9 +1403,8 @@ export async function checkGhAuth(): Promise<GhAuthStatus> {
       hasProjectScope: parseGhProjectScope(output),
     };
   } catch (err) {
-    // Check if gh is installed but not authenticated
     try {
-      const [, version] = await Promise.all([execAsync('which gh'), getGhVersion()]);
+      const [, version] = await Promise.all([execAsync('which gh', { env }), getGhVersion()]);
       return {
         installed: true,
         authenticated: false,
@@ -1445,6 +1551,7 @@ export async function checkCodexModelCapabilities(): Promise<CliModelCapabilitie
     const { stdout } = await execAsync('codex debug models', {
       timeout: CLI_MODEL_CATALOG_TIMEOUT_MS,
       maxBuffer: CLI_MODEL_CATALOG_MAX_BUFFER,
+      env: shellExecEnv(),
     });
     const capabilities = parseCodexDebugModels(stdout, checkedAt);
     if (capabilities.models.length > 0) return capabilities;
@@ -1467,6 +1574,7 @@ export async function checkClaudeModelCapabilities(): Promise<CliModelCapabiliti
     await execAsync('claude --help', {
       timeout: CLI_MODEL_CATALOG_TIMEOUT_MS,
       maxBuffer: 512_000,
+      env: shellExecEnv(),
     });
     return fallbackCliModelCapabilities('claude', checkedAt);
   } catch (error) {
@@ -1566,6 +1674,8 @@ export async function checkIntegrationStatus(
  * @knipignore
  */
 export function __resetHealthCheckCachesForTests(): void {
+  cachedShellPath = null;
+  cachedShellPathKey = null;
   systemHealthCache = null;
   systemHealthInFlight = null;
   systemHealthWithAuthCache = null;

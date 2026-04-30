@@ -82,6 +82,7 @@ interface AppState {
   activeProjectId: string | null;
   activeThreadId: string | null;
   activeIssue: GitHubIssueCacheRecord | null;
+  activeAutomationThreadId: string | null;
 
   // UI state
   viewMode: ViewMode;
@@ -104,6 +105,7 @@ interface AppState {
   // Verification & issues
   currentVerification: VerificationResult | null;
   githubIssues: GitHubIssueCacheRecord[];
+  pendingCreatedIssues: GitHubIssueCacheRecord[];
 
   // Agent output buffers
   agentOutputs: Record<string, string[]>;
@@ -168,6 +170,7 @@ interface AppState {
   selectProject: (id: string | null) => void;
   selectThread: (id: string | null) => void;
   selectIssue: (issue: GitHubIssueCacheRecord | null) => void;
+  selectAutomationThread: (threadId: string | null) => void;
   toggleSidebar: () => void;
   toggleTerminal: () => void;
   openTerminal: () => void;
@@ -180,6 +183,8 @@ interface AppState {
   setSystemHealth: (health: SystemHealth) => void;
   setVerification: (verification: VerificationResult | null) => void;
   setGithubIssues: (issues: GitHubIssueCacheRecord[]) => void;
+  addPendingCreatedIssue: (issue: GitHubIssueCacheRecord) => void;
+  removePendingCreatedIssue: (id: string) => void;
   appendAgentOutput: (processId: string, chunk: string) => void;
   clearAgentOutput: (processId: string) => void;
   mapProcessToThread: (processId: string, threadId: string) => void;
@@ -239,6 +244,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeProjectId: null,
   activeThreadId: null,
   activeIssue: null,
+  activeAutomationThreadId: null,
   viewMode: 'overview',
   sidebarCollapsed: false,
   terminalVisible: false,
@@ -255,6 +261,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   systemHealth: null,
   currentVerification: null,
   githubIssues: [],
+  pendingCreatedIssues: [],
   agentOutputs: {},
   processToThread: {},
   terminalEvents: [],
@@ -283,6 +290,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       viewMode: 'overview',
       activeIssue: null,
+      activeAutomationThreadId: null,
       issueDetailExpanded: false,
       terminalMaximized: false,
       currentPlan: null,
@@ -293,6 +301,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       viewMode: 'activity',
       activeIssue: null,
+      activeAutomationThreadId: null,
       issueDetailExpanded: false,
       terminalMaximized: false,
       currentPlan: null,
@@ -303,6 +312,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       viewMode: 'inbox',
       activeIssue: null,
+      activeAutomationThreadId: null,
       issueDetailExpanded: false,
       terminalMaximized: false,
       currentPlan: null,
@@ -313,6 +323,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       viewMode: 'costs',
       activeIssue: null,
+      activeAutomationThreadId: null,
       issueDetailExpanded: false,
       terminalMaximized: false,
       currentPlan: null,
@@ -323,6 +334,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       viewMode: 'skills',
       activeIssue: null,
+      activeAutomationThreadId: null,
       issueDetailExpanded: false,
       terminalMaximized: false,
       currentPlan: null,
@@ -333,6 +345,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       viewMode: 'automations',
       activeIssue: null,
+      activeAutomationThreadId: null,
       issueDetailExpanded: false,
       terminalMaximized: false,
       currentPlan: null,
@@ -344,6 +357,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       activeProjectId: id,
       activeThreadId: null,
       activeIssue: null,
+      activeAutomationThreadId: null,
       terminalMaximized: false,
       issueDetailExpanded: false,
       currentPlan: null,
@@ -366,6 +380,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectIssue: (issue) =>
     set((s) => ({
       activeIssue: issue,
+      activeAutomationThreadId: null,
       activeThreadId: issue?.threadId ?? null,
       currentPlan: null,
       currentReview: null,
@@ -382,6 +397,20 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Auto-open terminal when the selected issue has an agent actively running
       terminalVisible:
         issue && AGENT_ACTIVE_STATUSES.has(issue.pipelineStatus) ? true : s.terminalVisible,
+    })),
+  selectAutomationThread: (threadId) =>
+    set((s) => ({
+      activeAutomationThreadId: threadId,
+      activeThreadId: threadId,
+      activeIssue: null,
+      currentPlan: null,
+      currentReview: null,
+      currentVerification: null,
+      pipelinePhase: PIPELINE_PHASE.idle,
+      terminalEvents: [],
+      issueDetailExpanded: threadId ? s.issueDetailExpanded : false,
+      issueDetailCollapsed: threadId ? false : s.issueDetailCollapsed,
+      terminalThreadId: threadId ?? s.terminalThreadId,
     })),
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   toggleTerminal: () =>
@@ -423,6 +452,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     ),
   setVerification: (verification) => set({ currentVerification: verification }),
   setGithubIssues: (issues) => set({ githubIssues: issues }),
+  addPendingCreatedIssue: (issue) =>
+    set((s) => ({
+      pendingCreatedIssues: [
+        issue,
+        ...s.pendingCreatedIssues.filter((candidate) => candidate.id !== issue.id),
+      ],
+    })),
+  removePendingCreatedIssue: (id) =>
+    set((s) => ({
+      pendingCreatedIssues: s.pendingCreatedIssues.filter((issue) => issue.id !== id),
+    })),
   setSystemHealth: (health) => set({ systemHealth: health }),
   appendAgentOutput: (processId, chunk) =>
     set((s) => {
@@ -537,6 +577,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   navigateToIssue: (projectId, issue) =>
     set((s) => ({
       activeProjectId: projectId,
+      activeAutomationThreadId: null,
       viewMode: 'project',
       projectTab: 'issues' as ProjectTab,
       activeIssue: issue,
@@ -565,6 +606,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       viewMode: 'project',
       projectTab: 'sessions' as ProjectTab,
       activeIssue: null,
+      activeAutomationThreadId: null,
       issueDetailExpanded: false,
       terminalMaximized: false,
       currentPlan: null,

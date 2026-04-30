@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import type { GitState } from '@shipcode/shared';
 import { normalizeBranches } from '@shipcode/shared';
 import { type SimpleGit, type StatusResult, simpleGit } from 'simple-git';
@@ -9,10 +11,12 @@ export class GitService {
     this.git = simpleGit(projectPath);
   }
 
-  async getStatus(worktreePath?: string): Promise<GitState> {
+  async getStatus(worktreePath?: string, compareFallbackRef?: string): Promise<GitState> {
     const git = worktreePath ? simpleGit(worktreePath) : this.git;
     const status: StatusResult = await git.status();
     const log = await git.log({ maxCount: 1 });
+    const divergence = await this.getDivergence(git, compareFallbackRef);
+    const preCommitHookPath = await this.getPreCommitHookPath(worktreePath);
 
     return {
       branch: status.current ?? 'HEAD',
@@ -21,6 +25,10 @@ export class GitService {
       untrackedCount: status.not_added.length,
       stagedCount: status.staged.length,
       modifiedCount: status.modified.length,
+      aheadCount: divergence.aheadCount,
+      behindCount: divergence.behindCount,
+      compareRef: divergence.compareRef,
+      preCommitHookPath,
     };
   }
 
@@ -175,6 +183,102 @@ export class GitService {
   async getRawStatus(worktreePath?: string): Promise<StatusResult> {
     const git = worktreePath ? simpleGit(worktreePath) : this.git;
     return git.status();
+  }
+
+  async getPreCommitHookPath(worktreePath?: string): Promise<string | null> {
+    const git = worktreePath ? simpleGit(worktreePath) : this.git;
+    try {
+      const root = (await git.revparse(['--show-toplevel'])).trim();
+      const configuredPath = (await git.raw(['config', '--get', 'core.hooksPath']).catch(() => ''))
+        .trim()
+        .replace(/^"(.*)"$/, '$1');
+      const hookPath = configuredPath
+        ? path.join(
+            path.isAbsolute(configuredPath) ? configuredPath : path.join(root, configuredPath),
+            'pre-commit',
+          )
+        : (await git.raw(['rev-parse', '--git-path', 'hooks/pre-commit'])).trim();
+      if (!hookPath || !fs.existsSync(hookPath)) return null;
+      return hookPath;
+    } catch {
+      return null;
+    }
+  }
+
+  async getBranchDivergence(
+    branch: string,
+    compareRef: string,
+  ): Promise<{ aheadCount: number; behindCount: number; compareRef: string | null }> {
+    if (
+      !(await this.refExists(this.git, branch)) ||
+      !(await this.refExists(this.git, compareRef))
+    ) {
+      return { aheadCount: 0, behindCount: 0, compareRef: null };
+    }
+    try {
+      const raw = await this.git.raw([
+        'rev-list',
+        '--left-right',
+        '--count',
+        `${compareRef}...${branch}`,
+      ]);
+      const [behindRaw, aheadRaw] = raw.trim().split(/\s+/);
+      return {
+        aheadCount: Number.parseInt(aheadRaw ?? '0', 10) || 0,
+        behindCount: Number.parseInt(behindRaw ?? '0', 10) || 0,
+        compareRef,
+      };
+    } catch {
+      return { aheadCount: 0, behindCount: 0, compareRef };
+    }
+  }
+
+  private async getDivergence(
+    git: SimpleGit,
+    compareFallbackRef?: string,
+  ): Promise<{ aheadCount: number; behindCount: number; compareRef: string | null }> {
+    const compareRef = await this.resolveCompareRef(git, compareFallbackRef);
+    if (!compareRef) return { aheadCount: 0, behindCount: 0, compareRef: null };
+
+    try {
+      const raw = await git.raw(['rev-list', '--left-right', '--count', `${compareRef}...HEAD`]);
+      const [behindRaw, aheadRaw] = raw.trim().split(/\s+/);
+      return {
+        aheadCount: Number.parseInt(aheadRaw ?? '0', 10) || 0,
+        behindCount: Number.parseInt(behindRaw ?? '0', 10) || 0,
+        compareRef,
+      };
+    } catch {
+      return { aheadCount: 0, behindCount: 0, compareRef };
+    }
+  }
+
+  private async resolveCompareRef(
+    git: SimpleGit,
+    compareFallbackRef?: string,
+  ): Promise<string | null> {
+    let upstream = '';
+    try {
+      upstream = (
+        await git.raw(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'])
+      ).trim();
+    } catch {
+      upstream = '';
+    }
+    if (upstream && (await this.refExists(git, upstream))) return upstream;
+    if (compareFallbackRef && (await this.refExists(git, compareFallbackRef))) {
+      return compareFallbackRef;
+    }
+    return null;
+  }
+
+  private async refExists(git: SimpleGit, ref: string): Promise<boolean> {
+    try {
+      await git.raw(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**

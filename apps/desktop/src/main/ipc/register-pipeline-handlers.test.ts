@@ -526,6 +526,50 @@ describe('registerPipelineHandlers', () => {
       expect(pipeline.startVerification).not.toHaveBeenCalled();
     });
 
+    it('re-activates a superseded latest plan before retrying execution', async () => {
+      queries.threads.getById.mockReturnValue(makeThread({ status: 'failed' }));
+      queries.plans.getLatest.mockReturnValue({
+        id: 'plan-1',
+        threadId: 'thread-1',
+        version: 1,
+        rawOutput: `\`\`\`shipcode-plan\n${PLAN_JSON}\n\`\`\``,
+        structured: JSON.parse(PLAN_JSON),
+        status: 'superseded',
+        createdAt: new Date().toISOString(),
+      });
+      queries.verifications.getLatest.mockReturnValue({
+        id: 'verification-1',
+        threadId: 'thread-1',
+        planId: 'plan-1',
+        rawOutput: 'raw',
+        structured: {
+          threadId: 'thread-1',
+          planId: 'plan-1',
+          result: 'failed',
+          summary: 'Needs changes',
+          criteriaResults: [],
+          issues: [],
+        },
+        result: 'failed',
+        retryCount: 0,
+        createdAt: new Date().toISOString(),
+      });
+
+      const handler = handlers.get('pipeline:retry');
+      if (!handler) throw new Error('pipeline:retry handler not registered');
+
+      await handler(undefined, { threadId: 'thread-1' });
+
+      expect(queries.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'approved');
+      expect(queries.plans.updateStatus.mock.invocationCallOrder[0]).toBeLessThan(
+        pipeline.startExecution.mock.invocationCallOrder[0],
+      );
+      expect(pipeline.startExecution).toHaveBeenCalledWith(
+        'thread-1',
+        expect.objectContaining({ objective: 'Test plan' }),
+      );
+    });
+
     it('re-runs verification when the latest verification failed without structured findings', async () => {
       queries.threads.getById.mockReturnValue(makeThread({ status: 'failed' }));
       queries.verifications.getLatest.mockReturnValue({

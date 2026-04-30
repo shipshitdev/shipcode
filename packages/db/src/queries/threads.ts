@@ -80,6 +80,22 @@ export class ThreadQueries {
     return asRows<ThreadRow>(rows).map(mapThread);
   }
 
+  listByAutomationId(automationId: string): Thread[] {
+    const rows = this.db
+      .prepare('SELECT * FROM threads WHERE automation_id = ? ORDER BY created_at DESC')
+      .all(automationId);
+    return asRows<ThreadRow>(rows).map(mapThread);
+  }
+
+  hasActiveForAutomation(automationId: string): boolean {
+    const row = this.db
+      .prepare(
+        "SELECT 1 FROM threads WHERE automation_id = ? AND status NOT IN ('idle', 'completed', 'failed') LIMIT 1",
+      )
+      .get(automationId);
+    return !!row;
+  }
+
   getById(id: string): Thread | null {
     const row = this.db.prepare('SELECT * FROM threads WHERE id = ?').get(id);
     return row ? mapThread(asRow<ThreadRow>(row)) : null;

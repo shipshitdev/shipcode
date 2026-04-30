@@ -22,6 +22,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { NOTIFICATIONS_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
+import { PageHeader } from './PageHeader';
 
 type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info' | 'accent';
 
@@ -161,11 +162,15 @@ export function InboxView() {
         if (thread?.githubIssueNumber) {
           match = issues.find((i) => i.issueNumber === thread.githubIssueNumber) ?? null;
         }
+        if (!match && thread?.automationId) {
+          useAppStore.getState().selectAutomationThread(n.threadId);
+          const store = useAppStore.getState();
+          if (store.issueDetailCollapsed) store.toggleIssueDetail();
+          return;
+        }
       }
       if (match) {
         selectIssue(match);
-        // If the detail panel was previously collapsed, un-collapse it so the
-        // user actually sees the issue after clicking View.
         const store = useAppStore.getState();
         if (store.issueDetailCollapsed) store.toggleIssueDetail();
       }
@@ -234,46 +239,49 @@ export function InboxView() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
+      <PageHeader
+        title="Inbox"
+        subtitle="Notifications and items that need your attention."
+        actions={
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSortOrder((s) => (s === 'newest' ? 'oldest' : 'newest'))}
+              className="h-7 gap-1.5 text-[11px] text-muted"
+              title={sortOrder === 'newest' ? 'Showing newest first' : 'Showing oldest first'}
+            >
+              <ArrowUpDown size={12} />
+              {sortOrder === 'newest' ? 'Newest' : 'Oldest'}
+            </Button>
+            <Button
+              variant={showOnlyApprovalRequired ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setShowOnlyApprovalRequired((current) => !current)}
+              className="h-7 text-[11px]"
+              title={
+                showOnlyApprovalRequired
+                  ? 'Show all notifications'
+                  : 'Show only notifications that need approval'
+              }
+            >
+              Needs approval
+            </Button>
+            {active.length > 0 && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => dismissAll.mutate()}
+                disabled={dismissAll.isPending}
+              >
+                Read all
+              </Button>
+            )}
+          </>
+        }
+      />
       <div className="flex-1 overflow-y-auto px-6 py-6">
         <div className="max-w-5xl space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-primary">Inbox</h2>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSortOrder((s) => (s === 'newest' ? 'oldest' : 'newest'))}
-                className="h-7 gap-1.5 text-[11px] text-muted"
-                title={sortOrder === 'newest' ? 'Showing newest first' : 'Showing oldest first'}
-              >
-                <ArrowUpDown size={12} />
-                {sortOrder === 'newest' ? 'Newest' : 'Oldest'}
-              </Button>
-              <Button
-                variant={showOnlyApprovalRequired ? 'secondary' : 'ghost'}
-                size="sm"
-                onClick={() => setShowOnlyApprovalRequired((current) => !current)}
-                className="h-7 text-[11px]"
-                title={
-                  showOnlyApprovalRequired
-                    ? 'Show all notifications'
-                    : 'Show only notifications that need approval'
-                }
-              >
-                Needs approval
-              </Button>
-              {active.length > 0 && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => dismissAll.mutate()}
-                  disabled={dismissAll.isPending}
-                >
-                  Read all
-                </Button>
-              )}
-            </div>
-          </div>
           {isLoading && (
             <div className="flex items-center justify-center py-16">
               <Loader2 size={20} className="animate-spin text-muted" />

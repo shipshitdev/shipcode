@@ -14,6 +14,7 @@ import {
   type PullRequestReviewDecision,
   type PullRequestState,
 } from '@shipcode/shared';
+import { shellExecEnv } from '../health-check';
 
 const execFileAsync = promisify(execFile);
 
@@ -43,7 +44,11 @@ export interface PullRequestFeedback {
 }
 
 export class GhCli {
-  constructor(private cwd: string) {}
+  private env: Record<string, string>;
+
+  constructor(private cwd: string) {
+    this.env = shellExecEnv();
+  }
 
   async getRepoMetadata(): Promise<{ githubRepoId: string; githubRepoFullName: string }> {
     const { stdout } = await execFileAsync('gh', ['repo', 'view', '--json', 'id,nameWithOwner'], {
@@ -75,7 +80,7 @@ export class GhCli {
     const { stdout } = await execFileAsync(
       'gh',
       ['label', 'list', '--limit', '200', '--json', 'name'],
-      { cwd: this.cwd },
+      { cwd: this.cwd, env: this.env },
     );
 
     const raw = JSON.parse(stdout) as Array<{ name?: string }>;
@@ -88,7 +93,7 @@ export class GhCli {
     const { stdout } = await execFileAsync(
       'gh',
       ['label', 'list', '--limit', '200', '--json', 'name,color,description'],
-      { cwd: this.cwd },
+      { cwd: this.cwd, env: this.env },
     );
 
     const raw = JSON.parse(stdout) as Array<{
@@ -112,7 +117,7 @@ export class GhCli {
       await execFileAsync(
         'gh',
         ['label', 'create', label.name, '--color', label.color, '--description', label.description],
-        { cwd: this.cwd },
+        { cwd: this.cwd, env: this.env },
       );
     } catch (err) {
       const stderr = String((err as { stderr?: string }).stderr ?? (err as Error).message ?? '');
@@ -214,7 +219,7 @@ export class GhCli {
         '--limit',
         '50',
       ],
-      { cwd: this.cwd },
+      { cwd: this.cwd, env: this.env },
     );
 
     const raw = JSON.parse(stdout) as Record<string, unknown>[];
@@ -245,7 +250,7 @@ export class GhCli {
         '--limit',
         '200',
       ],
-      { cwd: this.cwd },
+      { cwd: this.cwd, env: this.env },
     );
 
     const raw = JSON.parse(stdout) as Record<string, unknown>[];
@@ -290,7 +295,7 @@ export class GhCli {
         '--json',
         'number,title,body,labels,assignees,author,state,url',
       ],
-      { cwd: this.cwd },
+      { cwd: this.cwd, env: this.env },
     );
 
     const r = JSON.parse(stdout) as Record<string, unknown>;
@@ -355,7 +360,7 @@ export class GhCli {
           '--url',
           opts.issueUrl,
         ],
-        { cwd: this.cwd },
+        { cwd: this.cwd, env: this.env },
       );
       return { added: true, alreadyPresent: false };
     } catch (err) {
@@ -398,7 +403,11 @@ export class GhCli {
    */
   private spawnWithStdin(command: string, args: string[], input: string): Promise<string> {
     return new Promise((resolve, reject) => {
-      const proc = spawn(command, args, { cwd: this.cwd, stdio: ['pipe', 'pipe', 'pipe'] });
+      const proc = spawn(command, args, {
+        cwd: this.cwd,
+        env: this.env,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
       let stdout = '';
       let stderr = '';
       proc.stdout.on('data', (chunk) => {
@@ -440,7 +449,7 @@ export class GhCli {
     if (options.base) args.push('--base', options.base);
     if (options.labels?.length) args.push('--label', options.labels.join(','));
 
-    const { stdout } = await execFileAsync('gh', args, { cwd: this.cwd });
+    const { stdout } = await execFileAsync('gh', args, { cwd: this.cwd, env: this.env });
     const match = stdout.match(/\/pull\/(\d+)/);
     if (!match) throw new Error(`Failed to parse PR number from: ${stdout}`);
     return parseInt(match[1], 10);
@@ -463,7 +472,7 @@ export class GhCli {
         '--limit',
         '1',
       ],
-      { cwd: this.cwd },
+      { cwd: this.cwd, env: this.env },
     );
     const rows = JSON.parse(stdout) as Array<{ number: number; url: string; isDraft: boolean }>;
     const found = rows[0];
@@ -496,7 +505,7 @@ export class GhCli {
         '--limit',
         String(limit),
       ],
-      { cwd: this.cwd },
+      { cwd: this.cwd, env: this.env },
     );
     const rows = JSON.parse(stdout) as Array<{
       number: number;
@@ -555,7 +564,7 @@ export class GhCli {
       await execFileAsync(
         'gh',
         ['issue', 'edit', String(issueNumber), present ? '--add-label' : '--remove-label', label],
-        { cwd: this.cwd },
+        { cwd: this.cwd, env: this.env },
       );
     } catch {
       // Best-effort marker sync; local cache still reflects the blocker state.
@@ -639,7 +648,7 @@ export class GhCli {
         '-F',
         `number=${prNumber}`,
       ],
-      { cwd: this.cwd },
+      { cwd: this.cwd, env: this.env },
     );
 
     const parsed = JSON.parse(stdout) as {
@@ -857,7 +866,7 @@ export class GhCli {
         '-F',
         `number=${prNumber}`,
       ],
-      { cwd: this.cwd },
+      { cwd: this.cwd, env: this.env },
     );
 
     const parsed = JSON.parse(stdout) as {
@@ -1024,7 +1033,7 @@ export class GhCli {
     const { stdout } = await execFileAsync(
       'gh',
       ['issue', 'view', String(issueNumber), '--json', 'comments'],
-      { cwd: this.cwd },
+      { cwd: this.cwd, env: this.env },
     );
     const parsed = JSON.parse(stdout) as {
       comments: Array<{
@@ -1045,11 +1054,17 @@ export class GhCli {
   }
 
   async closeIssue(issueNumber: number): Promise<void> {
-    await execFileAsync('gh', ['issue', 'close', String(issueNumber)], { cwd: this.cwd });
+    await execFileAsync('gh', ['issue', 'close', String(issueNumber)], {
+      cwd: this.cwd,
+      env: this.env,
+    });
   }
 
   async reopenIssue(issueNumber: number): Promise<void> {
-    await execFileAsync('gh', ['issue', 'reopen', String(issueNumber)], { cwd: this.cwd });
+    await execFileAsync('gh', ['issue', 'reopen', String(issueNumber)], {
+      cwd: this.cwd,
+      env: this.env,
+    });
   }
 
   /**
@@ -1093,7 +1108,7 @@ export class GhCli {
         '-F',
         `number=${issueNumber}`,
       ],
-      { cwd: this.cwd },
+      { cwd: this.cwd, env: this.env },
     );
     const itemData = JSON.parse(itemOut) as {
       data: {
@@ -1128,7 +1143,7 @@ export class GhCli {
             '-F',
             `itemId=${item.id}`,
           ],
-          { cwd: this.cwd },
+          { cwd: this.cwd, env: this.env },
         ),
       ),
     );
@@ -1140,7 +1155,7 @@ export class GhCli {
       const { stdout } = await execFileAsync(
         'gh',
         ['issue', 'view', String(issueNumber), '--json', 'labels'],
-        { cwd: this.cwd },
+        { cwd: this.cwd, env: this.env },
       );
       const { labels } = JSON.parse(stdout) as { labels: Array<{ name: string }> };
       const statusLabels = (labels ?? []).map((l) => l.name).filter((n) => n.startsWith('status:'));
@@ -1172,7 +1187,7 @@ export class GhCli {
     const { stdout } = await execFileAsync(
       'gh',
       ['repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner'],
-      { cwd: this.cwd },
+      { cwd: this.cwd, env: this.env },
     );
     return stdout.trim();
   }

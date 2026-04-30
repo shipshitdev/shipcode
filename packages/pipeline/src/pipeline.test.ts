@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { AgentProvider, ProcessManager } from '@shipcode/agents';
@@ -138,6 +138,29 @@ const VERIFICATION_FAILED_JSON = JSON.stringify({
 /** Flush the microtask queue so async handlers (await import) settle */
 const flush = () => new Promise((r) => setTimeout(r, 10));
 const tempDirs: string[] = [];
+
+function clarificationRequest(id: string, questionId: string, title: string) {
+  return {
+    id,
+    threadId: 't1',
+    phase: 'plan' as const,
+    summary: `Need ${title}`,
+    questions: [
+      {
+        id: questionId,
+        title,
+        prompt: `Choose ${title}`,
+        description: null,
+        choices: [
+          { id: 'a', label: `${title} A`, description: `Use ${title} A` },
+          { id: 'b', label: `${title} B`, description: `Use ${title} B` },
+        ],
+        allowFreeform: true,
+        freeformPlaceholder: null,
+      },
+    ],
+  };
+}
 
 function makeTempProject() {
   const dir = path.join(
@@ -674,6 +697,41 @@ describe('createPipeline', () => {
       );
     });
 
+    it('carries prior clarification answers into the next planning prompt', async () => {
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        clarificationRound: 2,
+        clarificationHistory: [
+          {
+            request: clarificationRequest('clarify-1', 'brand', 'Brand'),
+            answers: [{ questionId: 'brand', selectedChoiceId: 'a', freeformText: 'Genfeed' }],
+          },
+          {
+            request: clarificationRequest('clarify-2', 'balance', 'Balance'),
+            answers: [
+              {
+                questionId: 'balance',
+                selectedChoiceId: 'b',
+                freeformText: 'Connected providers only',
+              },
+            ],
+          },
+        ],
+      });
+
+      await pipeline.startPlanGeneration('t1', 'add the topbar pill', '/proj', null);
+
+      const args = vi.mocked(mock.deps.processManager.spawn).mock.calls[0][2] as string[];
+      const prompt = args[1];
+      expect(prompt).toContain('The user has already answered planner clarification');
+      expect(prompt).toContain('Clarification round 1');
+      expect(prompt).toContain('Extra note: Genfeed');
+      expect(prompt).toContain('Clarification round 2');
+      expect(prompt).toContain('Extra note: Connected providers only');
+      expect(prompt).toContain('Produce a concrete plan now');
+    });
+
     it('exit non-zero → retries (spawns again)', async () => {
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
@@ -1100,6 +1158,55 @@ describe('createPipeline', () => {
 
       expect(readFileSync(path.join(worktreeDir, '.env.local'), 'utf-8')).toBe('TOKEN=abc\n');
       expect(readFileSync(path.join(worktreeDir, '.setup-ran'), 'utf-8')).toBe('setup');
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'executing');
+    });
+
+    it('runs setup commands with the hydrated login-shell PATH', async () => {
+      const projectDir = makeTempProject();
+      const worktreeDir = path.join(projectDir, 'worktree');
+      const binDir = path.join(projectDir, 'bin');
+      mkdirSync(worktreeDir, { recursive: true });
+      mkdirSync(binDir, { recursive: true });
+      writeFileSync(
+        path.join(binDir, 'shipcode-setup-probe'),
+        '#!/bin/sh\nprintf hydrated > .setup-ran\n',
+      );
+      chmodSync(path.join(binDir, 'shipcode-setup-probe'), 0o755);
+      writeFileSync(
+        path.join(projectDir, '.shipcode', 'setup.json'),
+        JSON.stringify({
+          setupCommands: ['shipcode-setup-probe'],
+        }),
+      );
+
+      const previousPath = process.env.PATH;
+      const previousShell = process.env.SHELL;
+      process.env.PATH = '/usr/bin:/bin';
+      process.env.SHELL = '/bin/zsh';
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd === '/bin/zsh -ilc printf "%s" "$PATH"') return `${binDir}:/usr/bin:/bin`;
+        if (cmd === 'git rev-parse --abbrev-ref HEAD') return 'feat/test-branch';
+        if (cmd === 'git rev-parse HEAD') return 'abc123';
+        if (cmd === 'git status --porcelain') return '';
+        return '';
+      });
+
+      try {
+        const pipeline = createPipeline(mock.deps);
+        pipeline.initializeContext('t1', {
+          projectPath: projectDir,
+          worktreePath: worktreeDir,
+          baseBranch: 'main',
+        });
+
+        await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+        await flush();
+      } finally {
+        process.env.PATH = previousPath;
+        process.env.SHELL = previousShell;
+      }
+
+      expect(readFileSync(path.join(worktreeDir, '.setup-ran'), 'utf-8')).toBe('hydrated');
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'executing');
     });
 

@@ -13,6 +13,25 @@ interface ActiveWorktreeOwner {
   worktreePath: string | null;
 }
 
+const ANSI_ESCAPE_PATTERN = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
+
+function stripAnsi(value: string): string {
+  return value.replace(ANSI_ESCAPE_PATTERN, '');
+}
+
+function summarizeCommitFailure(value: string): string {
+  const lines = stripAnsi(value)
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const summary = lines.slice(0, 8).join('\n');
+  return summary.length > 800 ? `${summary.slice(0, 797)}...` : summary;
+}
+
+function isLikelyHookFailure(message: string): boolean {
+  return /\b(pre-commit|hook|biome check|Running Biome on staged files)\b/i.test(message);
+}
+
 /**
  * Runs the full auto-commit workflow against a worktree:
  *   enumerate dirty → ask LLM → validate groups → stage+commit each
@@ -28,6 +47,7 @@ export async function runAutoCommitWorkflow(args: {
 }): Promise<AutoCommitResult> {
   const git = new GitService(args.project.path);
   const status = await git.getRawStatus(args.worktreePath);
+  const preCommitHookPath = await git.getPreCommitHookPath(args.worktreePath);
 
   // Aggregate every changed/untracked path into a single dirty set.
   const dirtySet = new Set<string>();
@@ -81,15 +101,22 @@ export async function runAutoCommitWorkflow(args: {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       log.warn(`[auto-commit] group ${i} failed: ${message}`);
+      const hookFailure = !!preCommitHookPath && isLikelyHookFailure(message);
       return {
         commits,
         fallbackUsed: result.fallbackUsed,
-        partialFailure: { groupIndex: i, error: message },
+        preCommitHookPath,
+        partialFailure: {
+          groupIndex: i,
+          error: summarizeCommitFailure(message),
+          hookFailure,
+          hookPath: hookFailure ? preCommitHookPath : null,
+        },
       };
     }
   }
 
-  return { commits, fallbackUsed: result.fallbackUsed };
+  return { commits, fallbackUsed: result.fallbackUsed, preCommitHookPath };
 }
 
 /**
@@ -125,14 +152,43 @@ export async function runCleanupAnalyze(args: {
   }
 
   const dirtyMap = await git.getDirtyWorktrees(worktreeList.map((w) => w.path));
+  const statusMap = new Map(
+    await Promise.all(
+      worktreeList.map(async (w) => {
+        try {
+          return [w.path, await git.getStatus(w.path, defaultBranch)] as const;
+        } catch {
+          return [w.path, null] as const;
+        }
+      }),
+    ),
+  );
+
+  const branches = await Promise.all(
+    branchList.map(async (branch) => {
+      const divergence = await git.getBranchDivergence(branch.name, defaultBranch);
+      return {
+        ...branch,
+        aheadCount: divergence.aheadCount,
+        behindCount: divergence.behindCount,
+        compareRef: divergence.compareRef,
+      };
+    }),
+  );
 
   const items = analyzeCleanup({
-    worktrees: worktreeList.map((w) => ({
-      path: w.path,
-      branch: w.branch,
-      dirty: dirtyMap.get(w.path) ?? false,
-    })),
-    branches: branchList,
+    worktrees: worktreeList.map((w) => {
+      const status = statusMap.get(w.path);
+      return {
+        path: w.path,
+        branch: w.branch,
+        dirty: dirtyMap.get(w.path) ?? false,
+        aheadCount: status?.aheadCount ?? 0,
+        behindCount: status?.behindCount ?? 0,
+        compareRef: status?.compareRef ?? null,
+      };
+    }),
+    branches,
     pullRequests: prs.map((pr) => ({
       number: pr.number,
       url: pr.url,
@@ -180,6 +236,11 @@ export async function runCleanupApply(args: {
     try {
       if (item.kind === 'worktree-merged-pr' || item.kind === 'worktree-closed-pr') {
         if (item.dirty) {
+          if (item.aheadCount > 0) {
+            throw new Error(
+              `worktree has ${item.aheadCount} local commit${item.aheadCount === 1 ? '' : 's'} ahead of ${item.compareRef ?? 'the compare ref'} — refusing to remove: ${item.worktreePath}`,
+            );
+          }
           throw new Error(`worktree dirty — refusing to remove: ${item.worktreePath}`);
         }
         const result = await args.lockFor(item.worktreePath, async () => {
@@ -187,6 +248,11 @@ export async function runCleanupApply(args: {
         });
         if (result.error) throw new Error(result.error);
       } else if (item.kind === 'local-branch-no-remote') {
+        if ((item.aheadCount ?? 0) > 0) {
+          throw new Error(
+            `branch has ${item.aheadCount} local commit${item.aheadCount === 1 ? '' : 's'} ahead of ${item.compareRef ?? 'the compare ref'} — refusing to delete: ${item.branch}`,
+          );
+        }
         await git.deleteLocalBranch(item.branch);
       } else if (item.kind === 'remote-branch-merged') {
         await git.deleteRemoteBranch(item.branch);

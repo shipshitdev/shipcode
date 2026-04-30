@@ -15,6 +15,11 @@ import {
   Folder,
   FolderOpen,
   Loader2,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
@@ -287,33 +292,33 @@ export function CodeBrowser() {
     <div className="flex flex-1 min-h-0">
       <aside className="flex w-72 shrink-0 flex-col border-r border-border bg-secondary/20">
         <div className="shrink-0 border-b border-border px-3 py-2">
-          <label
-            htmlFor="code-worktree-select"
-            className="block pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted"
-          >
+          <span className="block pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
             Worktree
-          </label>
+          </span>
           {worktreesLoading ? (
             <div className="flex items-center gap-1 text-xs text-muted">
               <Loader2 size={12} className="animate-spin" /> loading
             </div>
           ) : (
-            <select
-              id="code-worktree-select"
+            <Select
               value={selectedWorktreePath ?? ''}
-              onChange={(e) => {
-                setSelectedWorktreePath(e.target.value || null);
+              onValueChange={(value) => {
+                setSelectedWorktreePath(value || null);
                 setSelectedPath(null);
               }}
-              className="w-full rounded border border-border bg-primary px-2 py-1 text-xs text-primary focus:outline-none focus:ring-1 focus:ring-accent"
             >
-              {worktrees.map((w) => (
-                <option key={w.path} value={w.path}>
-                  {w.kind === 'main' ? '● main' : `◐ ${w.branch}`}
-                  {w.isDirty ? ' *' : ''}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="h-7 w-full text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {worktrees.map((w) => (
+                  <SelectItem key={w.path} value={w.path} className="text-xs">
+                    {w.kind === 'main' ? '● main' : `◐ ${w.branch}`}
+                    {w.isDirty ? ' *' : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
           {activeWorktree && (
             <div className="pt-1.5 text-[10px] text-muted">

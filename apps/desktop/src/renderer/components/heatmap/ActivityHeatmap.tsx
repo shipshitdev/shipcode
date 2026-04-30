@@ -8,7 +8,7 @@ import type {
 import { formatTokenCount } from '@shipcode/shared';
 import { cn } from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 export type HeatmapSurface = 'global' | 'project' | 'issue';
 
@@ -227,8 +227,28 @@ export function ActivityHeatmap({
   const totalActive = data.reduce((sum, r) => sum + (metricValue(r, metric) > 0 ? 1 : 0), 0);
   const cellSizeClass = CELL_SIZE_CLASS[range];
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [tooltip, setTooltip] = useState<{
+    record: HeatmapDayRecord;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const handleCellEnter = useCallback((e: React.MouseEvent, record: HeatmapDayRecord) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const containerRect = containerRef.current?.getBoundingClientRect();
+    if (!containerRect) return;
+    setTooltip({
+      record,
+      x: rect.left + rect.width / 2 - containerRect.left,
+      y: rect.top - containerRect.top,
+    });
+  }, []);
+
+  const handleCellLeave = useCallback(() => setTooltip(null), []);
+
   return (
-    <div className={cn('flex flex-col gap-3', className)}>
+    <div ref={containerRef} className={cn('relative flex flex-col gap-3', className)}>
       {(showMetricToggle || showRangePicker) && (
         <div className="flex items-center justify-between gap-3">
           {showMetricToggle ? (
@@ -312,13 +332,15 @@ export function ActivityHeatmap({
                   }
                   const value = metricValue(cell.record, metric);
                   const bucket = bucketFor(value, thresholds);
+                  const rec = cell.record;
                   return (
                     <button
-                      key={cell.record.date}
+                      key={rec.date}
                       type="button"
                       tabIndex={0}
-                      title={`${formatTooltipDate(cell.record.date)} — ${formatMetric(value, metric)}`}
-                      aria-label={`${formatTooltipDate(cell.record.date)}: ${formatMetric(value, metric)}`}
+                      aria-label={`${formatTooltipDate(rec.date)}: ${formatMetric(value, metric)}`}
+                      onMouseEnter={(e) => handleCellEnter(e, rec)}
+                      onMouseLeave={handleCellLeave}
                       className={cn(
                         cellSizeClass,
                         'rounded-[2px] transition-[background-color,border-color,box-shadow] hover:ring-1 hover:ring-accent/60 focus:outline-none focus:ring-1 focus:ring-accent',
@@ -344,6 +366,24 @@ export function ActivityHeatmap({
         ))}
         <span>More</span>
       </div>
+
+      {tooltip && (
+        <div
+          role="tooltip"
+          className="pointer-events-none absolute z-50 -translate-x-1/2 -translate-y-full rounded-md border border-border bg-elevated px-2.5 py-2 shadow-lg"
+          style={{ left: tooltip.x, top: tooltip.y - 6 }}
+        >
+          <p className="mb-1 text-[11px] font-medium text-primary">
+            {formatTooltipDate(tooltip.record.date)}
+          </p>
+          <div className="flex flex-col gap-0.5 text-[10px] text-secondary">
+            <span>{formatMetric(tooltip.record.tokens, 'tokens')}</span>
+            <span>{formatMetric(tooltip.record.runs, 'runs')}</span>
+            <span>{formatMetric(tooltip.record.prsOpened, 'prsOpened')}</span>
+            <span>{formatMetric(tooltip.record.costUsd, 'costUsd')}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

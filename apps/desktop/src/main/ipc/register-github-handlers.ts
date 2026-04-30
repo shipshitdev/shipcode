@@ -449,9 +449,8 @@ export function registerGitHubHandlers({
       const allIssues = queries.githubIssues.list(projectId);
       mainWindow.webContents.send('github:issues-updated', { projectId, issues: allIssues });
 
-      let projectAttachWarning: string | null = null;
       if (parseGithubProjectUrl(project.githubProjectUrl) && issue.url) {
-        projectAttachWarning = await attachIssueToConfiguredProjectBoard(
+        void attachIssueToConfiguredProjectBoard(
           project,
           ghCli,
           issue.number,
@@ -464,7 +463,7 @@ export function registerGitHubHandlers({
       if (!record) {
         throw new Error(`Created issue #${issue.number} not found in cache after upsert`);
       }
-      return { issue: record, projectAttachWarning };
+      return { issue: record, projectAttachWarning: null };
     },
   );
 

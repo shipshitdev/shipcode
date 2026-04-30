@@ -206,6 +206,15 @@ export class WorktreeManager {
     return { worktreeRemoved, branchDeleted };
   }
 
+  async repair(worktreePaths: string[]): Promise<void> {
+    if (worktreePaths.length === 0) return;
+    await this.git.raw(['worktree', 'repair', ...worktreePaths]);
+  }
+
+  async move(fromPath: string, toPath: string): Promise<void> {
+    await this.git.raw(['worktree', 'move', fromPath, toPath]);
+  }
+
   /**
    * List all ShipCode worktrees in this project by branch-name prefix.
    * Returns { path, branch } pairs so callers can act on either identifier.

@@ -56,6 +56,10 @@ describe('GitService', () => {
       untrackedCount: 2,
       stagedCount: 1,
       modifiedCount: 3,
+      aheadCount: 0,
+      behindCount: 0,
+      compareRef: null,
+      preCommitHookPath: null,
     });
   });
 

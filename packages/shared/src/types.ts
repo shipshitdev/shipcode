@@ -551,6 +551,10 @@ export interface GitState {
   untrackedCount: number;
   stagedCount: number;
   modifiedCount: number;
+  aheadCount: number;
+  behindCount: number;
+  compareRef: string | null;
+  preCommitHookPath: string | null;
 }
 
 export type GitWorktreeKind = 'main' | 'shipcode';
@@ -565,6 +569,10 @@ export interface GitWorktreeSummary {
   untrackedCount: number;
   stagedCount: number;
   modifiedCount: number;
+  aheadCount: number;
+  behindCount: number;
+  compareRef: string | null;
+  preCommitHookPath: string | null;
   threadId: string | null;
   issueNumber: number | null;
   title: string | null;
@@ -680,6 +688,9 @@ export type CleanupItem =
       prNumber: number;
       prUrl: string;
       dirty: boolean;
+      aheadCount: number;
+      behindCount: number;
+      compareRef: string | null;
     }
   | {
       id: string;
@@ -689,12 +700,18 @@ export type CleanupItem =
       prNumber: number;
       prUrl: string;
       dirty: boolean;
+      aheadCount: number;
+      behindCount: number;
+      compareRef: string | null;
     }
   | {
       id: string;
       kind: 'local-branch-no-remote';
       branch: string;
       lastCommitDate: string;
+      aheadCount?: number;
+      behindCount?: number;
+      compareRef?: string | null;
     }
   | {
       id: string;
@@ -706,7 +723,13 @@ export type CleanupItem =
 export interface AutoCommitResult {
   commits: Array<{ sha: string; message: string }>;
   fallbackUsed: boolean;
-  partialFailure?: { groupIndex: number; error: string };
+  preCommitHookPath?: string | null;
+  partialFailure?: {
+    groupIndex: number;
+    error: string;
+    hookFailure?: boolean;
+    hookPath?: string | null;
+  };
 }
 
 export interface CleanupAnalyzeResult {
@@ -1109,6 +1132,9 @@ export interface GitHubIssueCacheRecord {
   // and no real GitHub issue. Pipeline runs against raw text; PR/comment paths
   // must skip these rows.
   isQuickMode: boolean;
+  // Renderer-only optimistic state for a GitHub issue that has been accepted
+  // by the UI but has not been confirmed by GitHub yet.
+  syncState?: 'creating';
 }
 
 export const ISSUE_PIPELINE_STATUS = {

@@ -32,18 +32,32 @@ const KIND_LABELS: Record<CleanupItem['kind'], string> = {
 
 const REMOTE_KINDS = new Set<CleanupItem['kind']>(['remote-branch-merged']);
 
+function formatCleanupDivergence(item: CleanupItem): string | null {
+  if (!('aheadCount' in item)) return null;
+  const ahead = item.aheadCount ?? 0;
+  const behind = item.behindCount ?? 0;
+  const parts = [ahead > 0 ? `+${ahead} ahead` : null, behind > 0 ? `-${behind} behind` : null]
+    .filter(Boolean)
+    .join(' / ');
+  if (!parts) return null;
+  return `${parts}${item.compareRef ? ` vs ${item.compareRef}` : ''}`;
+}
+
 function describeItem(item: CleanupItem): { primary: string; secondary?: string } {
+  const divergence = formatCleanupDivergence(item);
   switch (item.kind) {
     case 'worktree-merged-pr':
     case 'worktree-closed-pr':
       return {
         primary: `${item.branch}  ·  PR #${item.prNumber}`,
-        secondary: `${item.worktreePath}${item.dirty ? '  ·  DIRTY' : ''}`,
+        secondary: [item.worktreePath, item.dirty ? 'LOCAL WORK' : null, divergence]
+          .filter(Boolean)
+          .join('  ·  '),
       };
     case 'local-branch-no-remote':
       return {
         primary: item.branch,
-        secondary: `last commit ${item.lastCommitDate}`,
+        secondary: [`last commit ${item.lastCommitDate}`, divergence].filter(Boolean).join('  ·  '),
       };
     case 'remote-branch-merged':
       return {
@@ -136,7 +150,8 @@ export function CleanupModal({ open, onClose, projectId, criteria }: CleanupModa
         }
         const isWorktree = kind === 'worktree-merged-pr' || kind === 'worktree-closed-pr';
         const dirty = isWorktree && 'dirty' in it && it.dirty === true;
-        if (!dirty) next.add(it.id);
+        const hasLocalCommits = 'aheadCount' in it && (it.aheadCount ?? 0) > 0;
+        if (!dirty && !hasLocalCommits) next.add(it.id);
       }
       return next;
     });
@@ -210,6 +225,7 @@ export function CleanupModal({ open, onClose, projectId, criteria }: CleanupModa
                   const isWorktree =
                     item.kind === 'worktree-merged-pr' || item.kind === 'worktree-closed-pr';
                   const dirtyBlocked = isWorktree && item.dirty;
+                  const localCommitsBlocked = 'aheadCount' in item && (item.aheadCount ?? 0) > 0;
                   return (
                     <li
                       key={item.id}
@@ -218,7 +234,7 @@ export function CleanupModal({ open, onClose, projectId, criteria }: CleanupModa
                       <Checkbox
                         id={`cleanup-${item.id}`}
                         checked={selected.has(item.id)}
-                        disabled={dirtyBlocked}
+                        disabled={dirtyBlocked || localCommitsBlocked}
                         onCheckedChange={() => toggle(item.id)}
                         className="mt-0.5"
                       />
@@ -230,7 +246,9 @@ export function CleanupModal({ open, onClose, projectId, criteria }: CleanupModa
                         {desc.secondary ? (
                           <div
                             className={`truncate ${
-                              dirtyBlocked ? 'text-destructive' : 'text-muted'
+                              dirtyBlocked || localCommitsBlocked
+                                ? 'text-destructive'
+                                : 'text-muted'
                             }`}
                           >
                             {desc.secondary}

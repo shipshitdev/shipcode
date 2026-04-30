@@ -118,6 +118,10 @@ const worktrees: GitWorktreeSummary[] = [
     untrackedCount: 1,
     stagedCount: 0,
     modifiedCount: 2,
+    aheadCount: 1,
+    behindCount: 0,
+    compareRef: 'origin/develop',
+    preCommitHookPath: '/repo/shipcode/.githooks/pre-commit',
     threadId: null,
     issueNumber: null,
     title: null,
@@ -133,6 +137,10 @@ const worktrees: GitWorktreeSummary[] = [
     untrackedCount: 0,
     stagedCount: 0,
     modifiedCount: 0,
+    aheadCount: 0,
+    behindCount: 0,
+    compareRef: 'develop',
+    preCommitHookPath: null,
     threadId: 'thread-46',
     issueNumber: 46,
     title: 'Bootstrap visualizer',
@@ -243,6 +251,8 @@ describe('UI component regression coverage', () => {
     expect(view.container.textContent).toContain('develop');
     expect(view.container.textContent).toContain('#46 Bootstrap visualizer');
     expect(view.container.textContent).toContain('2 modified, 1 untracked');
+    expect(view.container.textContent).toContain('+1 ahead vs origin/develop');
+    expect(view.container.textContent).toContain('pre-hook');
     expect(view.container.textContent).toContain('2 files');
 
     const worktreeButton = Array.from(view.container.querySelectorAll('button')).find((button) =>

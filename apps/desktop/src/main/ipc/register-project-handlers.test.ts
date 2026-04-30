@@ -1,29 +1,36 @@
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { checkDesktopApps } from '@shipcode/agents';
 import type { Project } from '@shipcode/shared';
+import { resolveWorktreeParent } from '@shipcode/shared/worktree-path';
 import type { IpcMain } from 'electron';
 import { shell } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const handlers = new Map<string, (...args: unknown[]) => unknown>();
 
-const { createIssueMock, execMock, execFileMock } = vi.hoisted(() => ({
-  createIssueMock: vi.fn(),
-  execMock: vi.fn((_command: string, optionsOrCallback?: unknown, maybeCallback?: unknown) => {
-    const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback;
-    if (typeof callback === 'function') {
-      callback(null, '', '');
-    }
-  }),
-  execFileMock: vi.fn(
-    (_file: string, _args: string[], optionsOrCallback?: unknown, maybeCallback?: unknown) => {
+const { createIssueMock, execMock, execFileMock, worktreeMoveMock, worktreeRepairMock } =
+  vi.hoisted(() => ({
+    createIssueMock: vi.fn(),
+    execMock: vi.fn((_command: string, optionsOrCallback?: unknown, maybeCallback?: unknown) => {
       const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback;
       if (typeof callback === 'function') {
         callback(null, '', '');
       }
-    },
-  ),
-}));
+    }),
+    execFileMock: vi.fn(
+      (_file: string, _args: string[], optionsOrCallback?: unknown, maybeCallback?: unknown) => {
+        const callback =
+          typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback;
+        if (typeof callback === 'function') {
+          callback(null, '', '');
+        }
+      },
+    ),
+    worktreeMoveMock: vi.fn(async () => undefined),
+    worktreeRepairMock: vi.fn(async () => undefined),
+  }));
 
 vi.mock('electron', () => ({
   app: undefined,
@@ -68,7 +75,10 @@ vi.mock('@shipcode/git', () => ({
     getRemoteUrl = vi.fn(async () => 'git@github.com:shipshitdev/shipcode.git');
     getDefaultBranch = vi.fn(async () => 'main');
   },
-  WorktreeManager: class {},
+  WorktreeManager: class {
+    move = worktreeMoveMock;
+    repair = worktreeRepairMock;
+  },
 }));
 
 describe('registerProjectHandlers', () => {
@@ -204,6 +214,134 @@ describe('registerProjectHandlers', () => {
       Object.defineProperty(process, 'platform', { value: platform });
     }
   }
+
+  it('repairs and moves managed worktrees when relinking a renamed project path', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'shipcode-relink-'));
+    const oldProjectPath = path.join(tmp, 'old-repo');
+    const nextProjectPath = path.join(tmp, 'new-repo');
+    const worktreeRoot = path.join(tmp, 'worktrees');
+    fs.mkdirSync(oldProjectPath, { recursive: true });
+    fs.mkdirSync(nextProjectPath, { recursive: true });
+
+    const oldParent = resolveWorktreeParent(oldProjectPath, worktreeRoot);
+    const nextParent = resolveWorktreeParent(nextProjectPath, worktreeRoot);
+    const oldWorktreePath = path.join(oldParent, '56-chore');
+    const nextWorktreePath = path.join(nextParent, '56-chore');
+    fs.mkdirSync(oldWorktreePath, { recursive: true });
+
+    let project = { ...baseProject, path: oldProjectPath };
+    const queries = {
+      projects: {
+        getById: vi.fn(() => project),
+        getByPath: vi.fn(() => null),
+        updatePath: vi.fn((_id: string, projectPath: string) => {
+          project = { ...project, path: projectPath };
+        }),
+        updateGitInfo: vi.fn(),
+      },
+      settings: {
+        get: vi.fn(() => ({ projectOpenTarget: 'cursor', worktreeRoot })),
+      },
+      threads: {
+        list: vi.fn(() => [
+          {
+            id: 'thread-56',
+            worktreeBranch: 'ship/56-chore',
+            worktreePath: oldWorktreePath,
+          },
+        ]),
+        setWorktree: vi.fn(),
+        clearWorktree: vi.fn(),
+      },
+    };
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+    });
+
+    const relinkPath = handlers.get('project:relink-path');
+    if (!relinkPath) throw new Error('project:relink-path handler not registered');
+
+    await relinkPath(undefined, { projectId: 'project-1', path: nextProjectPath });
+
+    expect(worktreeRepairMock).toHaveBeenCalledWith([oldWorktreePath]);
+    expect(worktreeMoveMock).toHaveBeenCalledWith(oldWorktreePath, nextWorktreePath);
+    expect(queries.threads.setWorktree).toHaveBeenCalledWith(
+      'thread-56',
+      'ship/56-chore',
+      nextWorktreePath,
+    );
+    expect(queries.threads.clearWorktree).not.toHaveBeenCalled();
+    expect(queries.projects.updatePath).toHaveBeenCalledWith('project-1', nextProjectPath);
+  });
+
+  it('clears managed worktree paths that are missing after a project relink', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'shipcode-relink-missing-'));
+    const oldProjectPath = path.join(tmp, 'old-repo');
+    const nextProjectPath = path.join(tmp, 'new-repo');
+    const worktreeRoot = path.join(tmp, 'worktrees');
+    fs.mkdirSync(nextProjectPath, { recursive: true });
+
+    const oldWorktreePath = path.join(
+      resolveWorktreeParent(oldProjectPath, worktreeRoot),
+      '12-docs',
+    );
+
+    let project = { ...baseProject, path: oldProjectPath };
+    const queries = {
+      projects: {
+        getById: vi.fn(() => project),
+        getByPath: vi.fn(() => null),
+        updatePath: vi.fn((_id: string, projectPath: string) => {
+          project = { ...project, path: projectPath };
+        }),
+        updateGitInfo: vi.fn(),
+      },
+      settings: {
+        get: vi.fn(() => ({ projectOpenTarget: 'cursor', worktreeRoot })),
+      },
+      threads: {
+        list: vi.fn(() => [
+          {
+            id: 'thread-12',
+            worktreeBranch: 'ship/12-docs',
+            worktreePath: oldWorktreePath,
+          },
+        ]),
+        setWorktree: vi.fn(),
+        clearWorktree: vi.fn(),
+      },
+    };
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+    });
+
+    const relinkPath = handlers.get('project:relink-path');
+    if (!relinkPath) throw new Error('project:relink-path handler not registered');
+
+    await relinkPath(undefined, { projectId: 'project-1', path: nextProjectPath });
+
+    expect(worktreeRepairMock).not.toHaveBeenCalled();
+    expect(worktreeMoveMock).not.toHaveBeenCalled();
+    expect(queries.threads.clearWorktree).toHaveBeenCalledWith('thread-12');
+    expect(queries.threads.setWorktree).not.toHaveBeenCalled();
+    expect(queries.projects.updatePath).toHaveBeenCalledWith('project-1', nextProjectPath);
+  });
 
   it('opens the project in Terminal.app at the project path', async () => {
     await withDarwin(async () => {

@@ -1,15 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // vi.hoisted runs before vi.mock factories, making these available inside them
-const { mockExec, mockAccess, mockHomedir, mockMkdir, mockPtySpawn } = vi.hoisted(() => ({
-  mockExec: vi.fn(),
-  mockAccess: vi.fn(),
-  mockHomedir: vi.fn(() => '/mock/home'),
-  mockMkdir: vi.fn(),
-  mockPtySpawn: vi.fn(),
-}));
+const { mockExec, mockExecFileSync, mockAccess, mockHomedir, mockMkdir, mockPtySpawn } = vi.hoisted(
+  () => ({
+    mockExec: vi.fn(),
+    mockExecFileSync: vi.fn(),
+    mockAccess: vi.fn(),
+    mockHomedir: vi.fn(() => '/mock/home'),
+    mockMkdir: vi.fn(),
+    mockPtySpawn: vi.fn(),
+  }),
+);
 
-vi.mock('node:child_process', () => ({ exec: mockExec }));
+vi.mock('node:child_process', () => ({ exec: mockExec, execFileSync: mockExecFileSync }));
 vi.mock('node:fs/promises', () => ({
   access: mockAccess,
   mkdir: mockMkdir,
@@ -37,6 +40,7 @@ import {
   parseCodexDebugModels,
   parseCodexStatusText,
   parseGhProjectScope,
+  shellExecEnv,
   validateOpenRouterModel,
 } from './health-check';
 
@@ -95,6 +99,7 @@ function execRouted(routes: Record<string, { stdout?: string; stderr?: string } 
 beforeEach(() => {
   vi.clearAllMocks();
   __resetHealthCheckCachesForTests();
+  mockExecFileSync.mockReturnValue('');
   mockAccess.mockRejectedValue(new Error('ENOENT'));
   mockMkdir.mockResolvedValue(undefined);
 });
@@ -173,6 +178,39 @@ function createCodexRefreshPty() {
     }),
   };
 }
+
+describe('shellExecEnv', () => {
+  it('hydrates PATH from the login shell and keeps standard tool locations available', () => {
+    const previousBunInstall = process.env.BUN_INSTALL;
+    process.env.BUN_INSTALL = '';
+    mockExecFileSync.mockReturnValue('/shell/bin:/usr/bin\n');
+
+    try {
+      const env = shellExecEnv();
+
+      expect(env.PATH.split(':')).toEqual(
+        expect.arrayContaining([
+          '/shell/bin',
+          '/mock/home/.bun/bin',
+          '/mock/home/.local/bin',
+          '/opt/homebrew/bin',
+          '/usr/local/bin',
+        ]),
+      );
+      expect(env.BUN_INSTALL).toBe('/mock/home/.bun');
+      expect(mockExecFileSync).toHaveBeenCalledWith('/bin/zsh', ['-ilc', 'printf "%s" "$PATH"'], {
+        encoding: 'utf-8',
+        timeout: 5000,
+      });
+    } finally {
+      if (previousBunInstall === undefined) {
+        delete process.env.BUN_INSTALL;
+      } else {
+        process.env.BUN_INSTALL = previousBunInstall;
+      }
+    }
+  });
+});
 
 // ---------------------------------------------------------------------------
 // checkClaudeAuth
@@ -1067,19 +1105,12 @@ describe('checkIntegrationStatus', () => {
 
 describe('checkDesktopApps', () => {
   it.skipIf(process.platform !== 'darwin')(
-    'detects installed desktop apps via AppleScript and treats Finder as available on macOS',
+    'detects installed desktop apps and treats Finder and Terminal as available on macOS',
     async () => {
-      execRouted({
-        'POSIX path of (path to application "Cursor")': {
-          stdout: '/Applications/Cursor.app/\n',
-        },
-        'POSIX path of (path to application "Terminal")': {
-          stdout: '/System/Applications/Utilities/Terminal.app/\n',
-        },
-        'POSIX path of (path to application "Ghostty")': new Error('not found'),
-        'POSIX path of (path to application "Visual Studio Code")': {
-          stdout: '/Applications/Visual Studio Code.app/\n',
-        },
+      mockAccess.mockImplementation((path: string) => {
+        if (path === '/Applications/Cursor.app') return Promise.resolve();
+        if (path === '/Applications/Visual Studio Code.app') return Promise.resolve();
+        return Promise.reject(new Error('ENOENT'));
       });
 
       const result = await checkDesktopApps();

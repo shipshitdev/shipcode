@@ -152,6 +152,7 @@ export function registerPipelineHandlers({
       reviewerReasoningEffort: phaseModels.reviewerReasoningEffort,
       executorReasoningEffort: phaseModels.executorReasoningEffort,
       verifierReasoningEffort: phaseModels.verifierReasoningEffort,
+      clarificationHistory: [],
       baseBranch: project.defaultBranch,
     });
     logEvent('pipeline:start-context', {
@@ -235,6 +236,15 @@ export function registerPipelineHandlers({
       pipeline.rehydrateContext(threadId, project.path, issue?.title);
       const context = pipeline.getContext(threadId);
       if (context) {
+        const answeredClarification = {
+          request: thread.clarificationRequest,
+          answers: normalizedAnswers,
+        };
+        const existingHistory = context.clarificationHistory ?? [];
+        context.clarificationHistory =
+          existingHistory.at(-1)?.request.id === answeredClarification.request.id
+            ? existingHistory
+            : [...existingHistory, answeredClarification];
         context.clarificationRequest = thread.clarificationRequest;
         context.clarificationAnswers = normalizedAnswers;
         context.clarificationRound = thread.clarificationRound;
@@ -457,6 +467,9 @@ export function registerPipelineHandlers({
         if (latestPlan) queries.plans.updateStatus(latestPlan.id, 'pending_review');
         await pipeline.startReview(threadId, structured);
       } else if (retryAction === 'execute') {
+        if (latestPlan?.status === 'superseded') {
+          queries.plans.updateStatus(latestPlan.id, 'approved');
+        }
         await pipeline.startExecution(threadId, structured);
       } else if (retryAction === 'verify') {
         await pipeline.startVerification(threadId);

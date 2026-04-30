@@ -35,6 +35,7 @@ export function ThreadPanel() {
   const selectIssue = useAppStore((state) => state.selectIssue);
   const requestCommentComposer = useAppStore((state) => state.requestCommentComposer);
   const setGithubIssues = useAppStore((state) => state.setGithubIssues);
+  const pendingCreatedIssues = useAppStore((state) => state.pendingCreatedIssues);
   const [isRefreshingBranches, setIsRefreshingBranches] = useState(false);
   const [archiveFeedback, setArchiveFeedback] = useState<{
     tone: 'pending' | 'success' | 'error';
@@ -54,7 +55,17 @@ export function ThreadPanel() {
     enabled: !!activeProjectId,
     staleTime: 5_000,
   });
-  const issues = issuesData ?? EMPTY_ISSUES;
+  const issues = useMemo(() => {
+    const cachedIssues = issuesData ?? EMPTY_ISSUES;
+    const scopedPendingIssues = pendingCreatedIssues.filter(
+      (issue) =>
+        issue.projectId === activeProjectId &&
+        !cachedIssues.some((cachedIssue) => cachedIssue.id === issue.id),
+    );
+    return scopedPendingIssues.length > 0
+      ? [...scopedPendingIssues, ...cachedIssues]
+      : cachedIssues;
+  }, [activeProjectId, issuesData, pendingCreatedIssues]);
 
   useEffect(() => {
     if (issuesData === undefined) return;

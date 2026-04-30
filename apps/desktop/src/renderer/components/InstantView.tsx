@@ -5,6 +5,7 @@ import { getShortcut } from '../data/shortcuts';
 import { type InstantShellCli, useStartInstantShell } from '../hooks/useStartInstantShell';
 import { type InstantPaneMode, useAppStore } from '../stores/app-store';
 import { InstantTerminalPane } from './instant-terminal/InstantTerminalPane';
+import { PageHeader } from './PageHeader';
 
 function formatLivePaneTitle(cli: 'claude' | 'codex', prompt: string): string {
   const trimmedPrompt = prompt.trim();
@@ -177,30 +178,32 @@ export function InstantView() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border">
-        <h2 className="text-sm font-medium text-primary">Terminal Sessions</h2>
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={!activeProjectId || startingCli != null}
-            onClick={() => handleStartShell('claude')}
-          >
-            <Sparkles size={14} />
-            Claude
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={!activeProjectId || startingCli != null}
-            onClick={() => handleStartShell('codex')}
-          >
-            <Code2 size={14} />
-            Codex
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Terminal Sessions"
+        subtitle="Interactive AI shells for the active project."
+        actions={
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={!activeProjectId || startingCli != null}
+              onClick={() => handleStartShell('claude')}
+            >
+              <Sparkles size={14} />
+              Claude
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={!activeProjectId || startingCli != null}
+              onClick={() => handleStartShell('codex')}
+            >
+              <Code2 size={14} />
+              Codex
+            </Button>
+          </>
+        }
+      />
 
       {/* Pane grid */}
       <div className={cn('flex-1 min-h-0 gap-1 p-1', gridClass)}>

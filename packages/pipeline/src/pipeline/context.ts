@@ -144,6 +144,7 @@ export function createPipelineContextHelpers(
         reviewerReasoningEffort,
         executorReasoningEffort,
         verifierReasoningEffort,
+        clarificationHistory: seed.clarificationHistory ?? existing.clarificationHistory ?? [],
         repoPromptMaterials: seed.repoPromptMaterials ?? existing.repoPromptMaterials ?? null,
       });
       return existing;
@@ -224,6 +225,7 @@ export function createPipelineContextHelpers(
       clarificationRound: seed.clarificationRound ?? 0,
       clarificationRequest: seed.clarificationRequest ?? null,
       clarificationAnswers: seed.clarificationAnswers ?? [],
+      clarificationHistory: seed.clarificationHistory ?? [],
       verificationRetries: seed.verificationRetries ?? 0,
       testRetries: seed.testRetries ?? 0,
       testOutput: seed.testOutput ?? null,
@@ -288,6 +290,7 @@ export function createPipelineContextHelpers(
       clarificationRound: thread.clarificationRound,
       clarificationRequest: thread.clarificationRequest,
       clarificationAnswers: thread.clarificationAnswers,
+      clarificationHistory: thread.answeredClarification ? [thread.answeredClarification] : [],
       verificationRetries: thread.verificationRetries,
       githubIssueNumber: thread.githubIssueNumber ?? null,
       githubIssueTitle: issueTitle ?? null,

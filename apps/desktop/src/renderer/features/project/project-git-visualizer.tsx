@@ -81,14 +81,17 @@ export function ProjectGitVisualizer() {
     onSuccess: (result) => {
       const created = result.commits.length;
       if (result.partialFailure) {
+        const hookPrefix = result.partialFailure.hookFailure
+          ? `Pre-commit hook blocked auto-commit${result.partialFailure.hookPath ? ` (${result.partialFailure.hookPath})` : ''}: `
+          : '';
         setAutoCommitMessage({
           tone: 'error',
-          text: `Committed ${created} of ${result.partialFailure.groupIndex + 1} groups, then failed: ${result.partialFailure.error}`,
+          text: `${hookPrefix}Committed ${created} of ${result.partialFailure.groupIndex + 1} groups, then failed: ${result.partialFailure.error}`,
         });
       } else {
         setAutoCommitMessage({
           tone: 'success',
-          text: `Created ${created} commit${created === 1 ? '' : 's'}${result.fallbackUsed ? ' (single-commit fallback)' : ''}.`,
+          text: `Created ${created} commit${created === 1 ? '' : 's'}${result.fallbackUsed ? ' (single-commit fallback)' : ''}${result.preCommitHookPath ? ' after running the pre-commit hook' : ''}.`,
         });
       }
       queryClient.invalidateQueries({ queryKey: ['git-visualizer-data', activeProjectId] });
@@ -186,7 +189,11 @@ export function ProjectGitVisualizer() {
           variant={autoCommitMessage.tone === 'error' ? 'destructive' : 'default'}
           className="m-3 mb-0 shrink-0"
         >
-          <AlertDescription>{autoCommitMessage.text}</AlertDescription>
+          <AlertDescription>
+            <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed">
+              {autoCommitMessage.text}
+            </pre>
+          </AlertDescription>
         </Alert>
       ) : null}
       <GitVisualizer

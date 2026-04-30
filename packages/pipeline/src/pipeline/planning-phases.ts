@@ -12,6 +12,7 @@ import {
   summarizePromptMaterials,
 } from '@shipcode/agents';
 import {
+  type AnsweredClarification,
   type ClarificationRequest,
   clampTextBlock,
   MAX_CLARIFICATION_ROUNDS,
@@ -24,6 +25,7 @@ import {
   resolveRevisionCountForIssue,
   type ShipCodePlan,
 } from '@shipcode/shared';
+import type { PipelineContext } from '../types';
 import type { PipelineHelperEnv } from './shared';
 
 const NO_VALID_PLAN_REASON = 'Plan generation failed — no valid shipcode-plan block was produced.';
@@ -31,6 +33,37 @@ const NO_VALID_PLAN_REASON = 'Plan generation failed — no valid shipcode-plan 
 function formatPlanParseFailure(error?: string): string {
   if (!error) return NO_VALID_PLAN_REASON;
   return `Plan output could not be parsed — ${clampTextBlock(error.split('\n')[0] ?? error, 280)}`;
+}
+
+function formatAnsweredClarification(
+  answered: AnsweredClarification,
+  index: number,
+): string | null {
+  const formatted = formatClarificationContext(answered.request, answered.answers);
+  return formatted ? `Clarification round ${index + 1}\n${formatted}` : null;
+}
+
+function buildClarificationContext(context: PipelineContext): string | null {
+  const history = context.clarificationHistory ?? [];
+  const blocks = history
+    .map((answered, index) => formatAnsweredClarification(answered, index))
+    .filter((block): block is string => Boolean(block));
+
+  if (blocks.length === 0) {
+    const current = formatClarificationContext(
+      context.clarificationRequest,
+      context.clarificationAnswers,
+    );
+    if (current) blocks.push(current);
+  }
+
+  if (blocks.length === 0) return null;
+
+  return [
+    'The user has already answered planner clarification. Treat this as final planning input.',
+    ...blocks,
+    'Produce a concrete plan now unless another user-owned product/security/destructive-data/billing/external-provider decision makes planning impossible.',
+  ].join('\n\n');
 }
 
 /**
@@ -140,6 +173,7 @@ export function createPlanningPhaseHandlers({
     context.clarificationRound = 0;
     context.clarificationRequest = null;
     context.clarificationAnswers = [];
+    context.clarificationHistory = [];
     const threads = deps.threads as typeof deps.threads & {
       clearClarification?: (id: string) => void;
       clearPendingClarification?: (id: string) => void;
@@ -285,10 +319,7 @@ export function createPlanningPhaseHandlers({
     const skill = skillCallSite(context);
     const previousAttempt = context.previousPlanRawOutput;
     context.previousPlanRawOutput = null; // consume — one shot
-    const clarificationContext = formatClarificationContext(
-      context.clarificationRequest,
-      context.clarificationAnswers,
-    );
+    const clarificationContext = buildClarificationContext(context);
     const planMaterials: PromptMaterial[] = [
       { kind: 'issue_prompt', label: 'issue prompt', content: prompt },
       ...ensureRepoPromptMaterials(context),

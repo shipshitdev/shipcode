@@ -196,6 +196,11 @@ export class PipelineScheduler {
    * in-memory if pipeline slots are full. Called by AutomationScheduler.
    */
   async startOrQueueAutomation(automationId: string): Promise<{ queued: boolean }> {
+    if (this.deps.queries.threads.hasActiveForAutomation(automationId)) {
+      log.info(`[scheduler] skipping automation ${automationId} — already has an active pipeline`);
+      return { queued: false };
+    }
+
     const settings = this.deps.queries.settings.get();
     const activeCount = this._getRunningPipelineCount();
 
@@ -510,6 +515,7 @@ export class PipelineScheduler {
       clarificationRound: 0,
       clarificationRequest: null,
       clarificationAnswers: [],
+      clarificationHistory: [],
       verificationRetries: 0,
       githubIssueNumber: null,
       githubIssueTitle: null,

@@ -32,10 +32,10 @@ export function SettingsNavigation<TKey extends string>({
       )}
     >
       {backLabel && onBack ? (
-        <div className="px-2 pt-2 pb-1">
+        <div className="px-2 pt-3">
           <Button
             variant="ghost"
-            className="h-auto w-full justify-start gap-2 px-3 py-2 text-[13px] font-normal text-secondary app-region-no-drag"
+            className="h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag"
             onClick={onBack}
           >
             <span className="shrink-0 text-muted">
@@ -46,13 +46,13 @@ export function SettingsNavigation<TKey extends string>({
         </div>
       ) : null}
 
-      <div className={cn(backLabel && onBack ? 'mt-1 px-2' : 'px-2 pt-2')}>
+      <div className={cn('space-y-0.5', backLabel && onBack ? 'mt-0.5 px-2' : 'px-2 pt-3')}>
         {items.map(({ key, label, icon }) => (
           <Button
             variant="ghost"
             key={key}
             className={cn(
-              'h-auto w-full justify-start gap-2 px-3 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
+              'h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
               activeKey === key && 'bg-tertiary text-primary',
             )}
             onClick={() => onSelect(key)}

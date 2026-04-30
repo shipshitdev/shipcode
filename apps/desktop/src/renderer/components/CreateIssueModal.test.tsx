@@ -94,6 +94,7 @@ describe('CreateIssueModal — image drop / attachment management', () => {
       systemHealth: null,
       currentVerification: null,
       githubIssues: [],
+      pendingCreatedIssues: [],
     } as never);
   });
 
@@ -251,6 +252,62 @@ describe('CreateIssueModal — image drop / attachment management', () => {
     });
 
     expect(invokeMock).not.toHaveBeenCalledWith('github:create-issue', expect.anything());
+  });
+
+  it('adds a locked creating issue immediately while GitHub create is pending', async () => {
+    type CreateIssueResult = {
+      issue: { id: string; projectId: string; issueNumber: number; title: string };
+      projectAttachWarning: null;
+    };
+    let resolveCreate!: (value: CreateIssueResult) => void;
+    const createPromise = new Promise<CreateIssueResult>((resolve) => {
+      resolveCreate = resolve;
+    });
+
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'project:list-visible') {
+        return [{ id: 'project-1', name: 'Test Project', path: '/tmp/repo' }];
+      }
+      if (channel === 'github:create-issue') return createPromise;
+      if (channel === 'github:start-issue') return undefined;
+      if (channel === 'prd-attachments:clear') return undefined;
+      return null;
+    });
+
+    renderWithProviders();
+
+    const textarea = screen.getByRole('textbox');
+    fireEvent.change(textarea, { target: { value: '# Slow GitHub issue\n\nShip it.' } });
+    fireEvent.click(screen.getByRole('button', { name: /create/i }));
+
+    await waitFor(() => {
+      expect(useAppStore.getState().pendingCreatedIssues).toHaveLength(1);
+    });
+    expect(useAppStore.getState().pendingCreatedIssues[0]).toMatchObject({
+      projectId: 'project-1',
+      title: 'Slow GitHub issue',
+      syncState: 'creating',
+      pipelineStatus: 'queued',
+    });
+    expect(useAppStore.getState().createIssueModalOpen).toBe(false);
+
+    resolveCreate({
+      issue: {
+        id: 'issue-123',
+        projectId: 'project-1',
+        issueNumber: 123,
+        title: 'Slow GitHub issue',
+      },
+      projectAttachWarning: null,
+    });
+
+    await waitFor(() => {
+      expect(useAppStore.getState().pendingCreatedIssues).toHaveLength(0);
+      expect(invokeMock).toHaveBeenCalledWith('github:start-issue', {
+        projectId: 'project-1',
+        issueNumber: 123,
+      });
+    });
   });
 
   it('disables Format button when attachments are present', async () => {

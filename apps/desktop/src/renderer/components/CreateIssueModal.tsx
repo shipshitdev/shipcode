@@ -2,6 +2,7 @@ import {
   bodyHasRequiredPrdSections,
   buildPrdMetadataLabels,
   type GitHubIssueCacheRecord,
+  ISSUE_PIPELINE_STATUS,
   PRD_REQUIRED_HEADINGS,
   type PrdBlastRadius,
   type PrdEstimatedComplexity,
@@ -66,6 +67,76 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function upsertIssueRecord(
+  issues: GitHubIssueCacheRecord[],
+  issue: GitHubIssueCacheRecord,
+  removeId?: string,
+): GitHubIssueCacheRecord[] {
+  const filtered = issues.filter((candidate) => candidate.id !== removeId);
+  const existing = filtered.some((candidate) => candidate.id === issue.id);
+  return existing
+    ? filtered.map((candidate) => (candidate.id === issue.id ? issue : candidate))
+    : [issue, ...filtered];
+}
+
+function createPendingIssueRecord({
+  projectId,
+  title,
+  body,
+  labels,
+}: {
+  projectId: string;
+  title: string;
+  body: string;
+  labels: string[];
+}): GitHubIssueCacheRecord {
+  const now = new Date().toISOString();
+  return {
+    id: `pending:create:${crypto.randomUUID()}`,
+    projectId,
+    issueNumber: -Date.now(),
+    title,
+    body,
+    labels,
+    assignee: null,
+    state: 'open',
+    pipelineStatus: ISSUE_PIPELINE_STATUS.queued,
+    threadId: null,
+    claimedAt: null,
+    claimedBy: null,
+    lastPhaseUpdate: null,
+    lastStatusLabel: null,
+    plannerModelOverride: null,
+    reviewerModelOverride: null,
+    executorModelOverride: null,
+    verifierModelOverride: null,
+    plannerModelIdOverride: null,
+    reviewerModelIdOverride: null,
+    executorModelIdOverride: null,
+    verifierModelIdOverride: null,
+    plannerReasoningEffortOverride: null,
+    reviewerReasoningEffortOverride: null,
+    executorReasoningEffortOverride: null,
+    verifierReasoningEffortOverride: null,
+    revisionCountOverride: null,
+    requireApprovalOverride: null,
+    linkedPrNumber: null,
+    linkedPrUrl: null,
+    linkedPrIsDraft: false,
+    ciBlocked: false,
+    failingChecks: [],
+    unresolvedReviewComments: [],
+    unresolvedReviewCommentCount: 0,
+    prLastSyncAt: null,
+    fetchedAt: now,
+    priorityRank: null,
+    priorityRaw: null,
+    priorityFetchedAt: null,
+    isQuickMode: false,
+    syncState: 'creating',
+  };
+}
+
 export function CreateIssueModal() {
   const queryClient = useQueryClient();
   const createIssueModalOpen = useAppStore((state) => state.createIssueModalOpen);
@@ -74,6 +145,8 @@ export function CreateIssueModal() {
   const editingPrd = useAppStore((state) => state.editingPrd);
   const selectIssue = useAppStore((state) => state.selectIssue);
   const selectProject = useAppStore((state) => state.selectProject);
+  const addPendingCreatedIssue = useAppStore((state) => state.addPendingCreatedIssue);
+  const removePendingCreatedIssue = useAppStore((state) => state.removePendingCreatedIssue);
   const [body, setBody] = useState('');
   const [estimatedComplexity, setEstimatedComplexity] = useState<PrdEstimatedComplexity>('medium');
   const [blastRadius, setBlastRadius] = useState<PrdBlastRadius>('contained');
@@ -249,6 +322,16 @@ export function CreateIssueModal() {
     closeCreateIssueModal();
   }, [clearAttachmentSession, closeCreateIssueModal]);
 
+  const resetDraftForSubmitAnother = useCallback(() => {
+    setBody('');
+    setEstimatedComplexity('medium');
+    setBlastRadius('contained');
+    setError(null);
+    setEnhancing(false);
+    setQuickText('');
+    setTimeout(() => bodyRef.current?.focus(), 50);
+  }, []);
+
   // ---------------------------------------------------------------------------
   // Validation
   // ---------------------------------------------------------------------------
@@ -290,6 +373,91 @@ export function CreateIssueModal() {
       setEnhancing(false);
     }
   };
+
+  const createGithubIssueInBackground = useCallback(
+    ({
+      pendingIssue,
+      projectId,
+      title,
+      issueBody,
+      labels,
+      selectOnComplete,
+      showInlineErrors,
+    }: {
+      pendingIssue: GitHubIssueCacheRecord;
+      projectId: string;
+      title: string;
+      issueBody: string;
+      labels: string[];
+      selectOnComplete: boolean;
+      showInlineErrors: boolean;
+    }) => {
+      void window.shipcode
+        .invoke('github:create-issue', {
+          projectId,
+          title,
+          body: issueBody,
+          labels,
+        })
+        .then((created) => {
+          const realIssue = created.issue;
+          const planningIssue: GitHubIssueCacheRecord = {
+            ...realIssue,
+            pipelineStatus: ISSUE_PIPELINE_STATUS.planning,
+          };
+
+          queryClient.setQueryData<GitHubIssueCacheRecord[]>(
+            ['github-issues', projectId],
+            (previous) => upsertIssueRecord(previous ?? [], planningIssue, pendingIssue.id),
+          );
+          removePendingCreatedIssue(pendingIssue.id);
+
+          const store = useAppStore.getState();
+          if (store.activeProjectId === projectId) {
+            useAppStore.setState({
+              githubIssues: upsertIssueRecord(store.githubIssues, planningIssue, pendingIssue.id),
+              activeIssue:
+                selectOnComplete || store.activeIssue?.id === pendingIssue.id
+                  ? planningIssue
+                  : store.activeIssue,
+            });
+          }
+
+          if (selectOnComplete) {
+            selectIssue(planningIssue);
+          }
+
+          if (created.projectAttachWarning) {
+            log.warn('[CreateIssueModal] project attach warning', created.projectAttachWarning);
+          }
+
+          window.shipcode
+            .invoke('github:start-issue', {
+              projectId,
+              issueNumber: realIssue.issueNumber,
+            })
+            .then(() => {
+              void queryClient.invalidateQueries({ queryKey: ['github-issues', projectId] });
+            })
+            .catch((startErr) => {
+              void queryClient.invalidateQueries({ queryKey: ['github-issues', projectId] });
+              log.error('[CreateIssueModal] start-issue failed', startErr);
+            });
+        })
+        .catch((err) => {
+          log.error('[CreateIssueModal] submit failed', err);
+          removePendingCreatedIssue(pendingIssue.id);
+          void queryClient.invalidateQueries({ queryKey: ['github-issues', projectId] });
+          const message = clampError(err);
+          if (showInlineErrors) {
+            setError(`Failed to create "${title}": ${message}`);
+          } else {
+            window.alert(`Failed to create issue "${title}": ${message}`);
+          }
+        });
+    },
+    [queryClient, removePendingCreatedIssue, selectIssue],
+  );
 
   const handleSubmit = async () => {
     if (mode === 'create' && isQuickMode) {
@@ -336,49 +504,38 @@ export function CreateIssueModal() {
         });
         await queryClient.invalidateQueries({ queryKey: ['github-issues'] });
       } else {
-        const created = await window.shipcode.invoke<{
-          issue: GitHubIssueCacheRecord;
-          projectAttachWarning: string | null;
-        }>('github:create-issue', {
+        const pendingIssue = createPendingIssueRecord({
           projectId: effectiveProjectId,
           title: derivedTitle,
           body,
           labels: metadataLabels,
         });
-        await queryClient.invalidateQueries({ queryKey: ['github-issues'] });
-        // Kick off the pipeline immediately and open the issue detail
-        // so the user can watch planning start.
-        try {
-          await window.shipcode.invoke('github:start-issue', {
-            projectId: effectiveProjectId,
-            issueNumber: created.issue.issueNumber,
-          });
-        } catch (startErr) {
-          log.error('[CreateIssueModal] start-issue failed', startErr);
-          // Don't block the success path — the issue is on GitHub either way.
-        }
-        if (submitAnother) {
-          // Reset form and stay open so the user can submit the next idea.
-          setBody('');
-          setSubmitting(false);
-          // Clear attachments for the next submission
-          void clearAttachmentSession();
-          return;
-        }
+        addPendingCreatedIssue(pendingIssue);
         if (effectiveProjectId !== activeProjectId) {
           selectProject(effectiveProjectId);
         }
-        selectIssue(created.issue);
-        // If best-effort board attach failed, keep the modal open with an
-        // inline warning so the user actually sees it. The issue is already
-        // on GitHub and is selected — they can dismiss and move on.
-        if (created.projectAttachWarning) {
-          setError(
-            `Issue #${created.issue.issueNumber} created, but couldn't add to project board: ${created.projectAttachWarning}`,
-          );
+        createGithubIssueInBackground({
+          pendingIssue,
+          projectId: effectiveProjectId,
+          title: derivedTitle,
+          issueBody: body,
+          labels: metadataLabels,
+          selectOnComplete: !submitAnother,
+          showInlineErrors: submitAnother,
+        });
+
+        // Clear attachment session immediately. The GitHub issue creation has
+        // already captured the body sent to GitHub, and the user can continue
+        // drafting while the CLI finishes in the background.
+        void clearAttachmentSession();
+        if (submitAnother) {
+          resetDraftForSubmitAnother();
           setSubmitting(false);
           return;
         }
+        closeCreateIssueModal();
+        setSubmitting(false);
+        return;
       }
       // Clear attachment session on successful submit
       void clearAttachmentSession();
@@ -415,7 +572,7 @@ export function CreateIssueModal() {
         ? noProject || quickTextEmpty || submitting
         : noProject || titleMissing || bodyIsEmpty || submitting || enhancing;
 
-  const submitLabel = mode === 'edit' ? 'Save' : isQuickMode ? 'Run Quick Task' : 'Create Plan';
+  const submitLabel = mode === 'edit' ? 'Save' : isQuickMode ? 'Run Quick Task' : 'Create';
 
   const hasAttachments = attachments.length > 0;
 

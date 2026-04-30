@@ -14,7 +14,7 @@
   "dependencies": {
     "@shipcode/shared": "workspace:*",
     "@shipcode/ui": "workspace:*",
-    "@shipshitdev/ui": "^0.6.0",
+    "@shipshitdev/ui": "^0.6.2",
     "next": "16.2.4",
     "react": "19.2.5",
     "react-dom": "19.2.5"

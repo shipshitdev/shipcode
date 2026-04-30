@@ -119,4 +119,16 @@ export function registerAutomationHandlers(
       throw new Error(clampError(err));
     }
   });
+
+  ipcMain.handle(
+    'automations:run-history',
+    async (_e, { automationId }: { automationId: string }) => {
+      try {
+        return queries.threads.listByAutomationId(automationId);
+      } catch (err) {
+        log.error('[automations:run-history]', err);
+        throw new Error(clampError(err));
+      }
+    },
+  );
 }

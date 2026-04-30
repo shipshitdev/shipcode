@@ -40,6 +40,7 @@ export {
   parseCodexDebugModels,
   parseCodexStatusText,
   parseGhProjectScope,
+  shellExecEnv,
   validateOpenRouterModel,
 } from './health-check';
 export type { MemoryGenerateResult } from './memory-generator';

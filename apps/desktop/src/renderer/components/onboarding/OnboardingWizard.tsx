@@ -1,35 +1,26 @@
-import type {
-  AgentType,
-  GhAuthStatus,
-  OnboardingRepo,
-  Project,
-  StatusLabelMapping,
-  SystemHealth,
-} from '@shipcode/shared';
+import type { AgentType, GhAuthStatus, StatusLabelMapping, SystemHealth } from '@shipcode/shared';
 import { CURRENT_ONBOARDING_VERSION, DEFAULT_STATUS_LABEL_MAPPINGS } from '@shipcode/shared';
 import { Button, Card, LoadingButtonContent } from '@shipshitdev/ui';
 import { useEffect, useState } from 'react';
 import { StepAuthCheck, useAuthCheck } from './StepAuthCheck';
-import { StepGitHubProject } from './StepGitHubProject';
 import { StepLabelMapping } from './StepLabelMapping';
 import { StepModelPrefs } from './StepModelPrefs';
 
-type Step = 0 | 1 | 2 | 3;
+type Step = 0 | 1 | 2;
 
-const STEP_LABELS = ['AI Auth', 'GitHub', 'Models', 'Labels'];
+const STEP_LABELS = ['AI Auth', 'Models', 'Labels'];
 
 interface AuthResult extends SystemHealth {
   ghAuth: GhAuthStatus;
 }
 
 interface Props {
-  onComplete: (projectId?: string) => void | Promise<void>;
+  onComplete: () => void | Promise<void>;
 }
 
 export function OnboardingWizard({ onComplete }: Props) {
   const [step, setStep] = useState<Step>(0);
   const [authResult, setAuthResult] = useState<AuthResult | null>(null);
-  const [selectedRepo, setSelectedRepo] = useState<OnboardingRepo | null>(null);
   const [plannerModel, setPlannerModel] = useState<AgentType>('claude');
   const [reviewerModel, setReviewerModel] = useState<AgentType>('codex');
   const [labelMappings, setLabelMappings] = useState<StatusLabelMapping>(
@@ -38,31 +29,29 @@ export function OnboardingWizard({ onComplete }: Props) {
 
   const authCheck = useAuthCheck();
   const [saving, setSaving] = useState(false);
+  const { mutate: runAuthCheck } = authCheck;
 
-  // Run auth check on mount
+  // Run auth check once on mount
   useEffect(() => {
-    authCheck.mutate(undefined, {
+    runAuthCheck(undefined, {
       onSuccess: (data) => setAuthResult(data),
     });
-  }, [authCheck]);
+  }, [runAuthCheck]);
 
   const aiAuthCount = [authResult?.claude.authenticated, authResult?.codex.authenticated].filter(
     Boolean,
   ).length;
-  const ghAuthenticated = !!authResult?.ghAuth.authenticated;
-  // GitHub is mandatory: shipcode uses GitHub issues as the PRD/work-item store
-  // and the `shipping` phase only creates PRs when a GitHub issue exists.
-  const canAdvanceFromAuth = aiAuthCount >= 1 && ghAuthenticated;
+  const canAdvanceFromAuth = aiAuthCount >= 1;
   const singleAgentMode = aiAuthCount === 1;
 
   function handleRecheck() {
-    authCheck.mutate(undefined, {
+    runAuthCheck(undefined, {
       onSuccess: (data) => setAuthResult(data),
     });
   }
 
   function handleNext() {
-    if (step < 3) {
+    if (step < 2) {
       setStep((step + 1) as Step);
     }
   }
@@ -82,25 +71,14 @@ export function OnboardingWizard({ onComplete }: Props) {
         statusLabelMappings: labelMappings,
         onboardingVersion: CURRENT_ONBOARDING_VERSION,
       });
-      let newProjectId: string | undefined;
-      if (selectedRepo) {
-        const localPath = await window.shipcode.invoke<string | null>('dialog:open-directory');
-        if (localPath) {
-          const project = await window.shipcode.invoke<Project>('project:add', {
-            path: localPath,
-            repo: { id: selectedRepo.id, name: selectedRepo.name },
-          });
-          newProjectId = project.id;
-        }
-      }
-      await onComplete(newProjectId);
+      await onComplete();
     } finally {
       setSaving(false);
     }
   }
 
-  const canNext = step === 0 ? canAdvanceFromAuth : step === 1 ? selectedRepo !== null : true;
-  const isLastStep = step === 3;
+  const canNext = step === 0 ? canAdvanceFromAuth : true;
+  const isLastStep = step === 2;
 
   return (
     <div className="flex items-center justify-center h-screen bg-primary [app-region:drag]">
@@ -135,15 +113,6 @@ export function OnboardingWizard({ onComplete }: Props) {
             />
           )}
           {step === 1 && (
-            <StepGitHubProject
-              selectedRepo={selectedRepo}
-              onSelect={(repo) => {
-                setSelectedRepo(repo);
-                handleNext();
-              }}
-            />
-          )}
-          {step === 2 && (
             <StepModelPrefs
               plannerModel={plannerModel}
               reviewerModel={reviewerModel}
@@ -154,7 +123,7 @@ export function OnboardingWizard({ onComplete }: Props) {
               singleAgentMode={singleAgentMode}
             />
           )}
-          {step === 3 && <StepLabelMapping mappings={labelMappings} onChange={setLabelMappings} />}
+          {step === 2 && <StepLabelMapping mappings={labelMappings} onChange={setLabelMappings} />}
         </div>
 
         <div className="flex items-center gap-2 px-6 py-4 border-t border-border">
