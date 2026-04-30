@@ -10,23 +10,15 @@ import {
   type PipelinePhase,
   phaseToProgress,
 } from './lib/shipcode';
+import { formatElapsedDuration } from './lib/time';
 import { cn } from './lib/utils';
 import { PhaseChip } from './PhaseChip';
 import { Badge } from './primitives/badge';
 import { Button } from './primitives/button';
 
-function formatElapsed(since: number, now: number): string {
-  const seconds = Math.max(0, Math.floor((now - since) / 1000));
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ${minutes % 60}m`;
-}
-
 function PhaseElapsed({ since }: { since: number }) {
   const now = useSharedSecondNow();
-  const label = formatElapsed(since, now);
+  const label = formatElapsedDuration(since, now);
 
   return <span className="font-mono tabular-nums text-[10px] text-muted">{label}</span>;
 }

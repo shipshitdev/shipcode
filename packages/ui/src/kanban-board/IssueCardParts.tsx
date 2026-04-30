@@ -7,6 +7,7 @@ import { modelDisplay } from '../lib/model-display';
 import { useSharedSecondNow } from '../lib/second-ticker';
 import type { GitHubIssueCacheRecord } from '../lib/shipcode';
 import { ISSUE_PIPELINE_STATUS, phaseToProgress } from '../lib/shipcode';
+import { formatElapsedDuration } from '../lib/time';
 import { cn } from '../lib/utils';
 import { PhaseChip } from '../PhaseChip';
 import { Badge } from '../primitives/badge';
@@ -20,7 +21,6 @@ import type {
 } from './types';
 import {
   dragOverlayBorderClass,
-  formatPhaseElapsed,
   isAutomationIssue,
   isIssueCreating,
   resolveIssuePriorityBadge,
@@ -28,7 +28,7 @@ import {
 
 function PhaseElapsed({ since }: { since: number }) {
   const now = useSharedSecondNow();
-  const label = formatPhaseElapsed(since, now);
+  const label = formatElapsedDuration(since, now);
 
   return <span className="font-mono tabular-nums text-[10px] text-muted">{label}</span>;
 }

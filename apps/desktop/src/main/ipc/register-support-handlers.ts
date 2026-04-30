@@ -14,7 +14,12 @@ import {
   readMemoryFile,
   shellExecEnv,
 } from '@shipcode/agents';
-import { type ExecutorModel, type GeneratorCli, providerDisplay } from '@shipcode/shared';
+import {
+  clampError,
+  type ExecutorModel,
+  type GeneratorCli,
+  providerDisplay,
+} from '@shipcode/shared';
 import log, { logProcessOutput } from '../logger.service';
 import { assertPrdRewriteModelSupported } from './helpers';
 import {
@@ -26,6 +31,11 @@ import {
 import type { IpcHandlerDeps } from './types';
 
 const execAsync = promisify(exec);
+
+function supportHandlerError(err: unknown, fallback: string): string {
+  if (err instanceof Error || typeof err === 'string') return clampError(err);
+  return fallback;
+}
 
 export function registerSupportHandlers({
   ipcMain,
@@ -70,11 +80,7 @@ export function registerSupportHandlers({
       }
       return repos.sort((a, b) => a.name.localeCompare(b.name));
     } catch (err) {
-      const short =
-        err instanceof Error
-          ? err.message.split('\n')[0].slice(0, 300)
-          : 'Repository lookup failed';
-      throw new Error(short);
+      throw new Error(supportHandlerError(err, 'Repository lookup failed'));
     }
   });
 
@@ -131,9 +137,7 @@ export function registerSupportHandlers({
         });
       } catch (err) {
         log.error('[ai:enhance-prd]', err);
-        const short =
-          err instanceof Error ? err.message.split('\n')[0].slice(0, 300) : 'Enhancement failed';
-        throw new Error(short);
+        throw new Error(supportHandlerError(err, 'Enhancement failed'));
       }
     },
   );
@@ -180,9 +184,7 @@ export function registerSupportHandlers({
         return { success: result.success, error: result.error };
       } catch (err) {
         log.error('[memory:generate]', err);
-        const short =
-          err instanceof Error ? err.message.split('\n')[0].slice(0, 300) : 'Generation failed';
-        return { success: false, error: short };
+        return { success: false, error: supportHandlerError(err, 'Generation failed') };
       }
     },
   );
