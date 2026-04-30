@@ -140,6 +140,7 @@ export function AutomationRunDetail({ expanded }: { expanded: boolean }) {
         <button
           type="button"
           onClick={handleClose}
+          aria-label="Close automation run detail"
           className="rounded p-0.5 text-muted transition-colors hover:text-primary"
         >
           <X className="h-4 w-4" />
@@ -147,6 +148,9 @@ export function AutomationRunDetail({ expanded }: { expanded: boolean }) {
         <button
           type="button"
           onClick={toggleIssueDetailExpanded}
+          aria-label={
+            issueDetailExpanded ? 'Collapse automation run detail' : 'Expand automation run detail'
+          }
           className="rounded p-0.5 text-muted transition-colors hover:text-primary"
         >
           {issueDetailExpanded ? (

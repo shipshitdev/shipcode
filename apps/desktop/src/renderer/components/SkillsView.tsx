@@ -1,4 +1,5 @@
 import type { PhaseSkillKey } from '@shipcode/shared';
+import { PageHeader } from '@shipcode/ui';
 import {
   Badge,
   Button,
@@ -14,7 +15,6 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
-import { PageHeader } from './PageHeader';
 
 // The row shape below mirrors what apps/desktop/src/main/ipc.ts builds in
 // `buildSkillRow`. The IPC channel itself is typed as `unknown` in shared to

@@ -2,6 +2,7 @@
 
 import type { Automation, Project } from '@shipcode/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AutomationsView } from './automations-view';

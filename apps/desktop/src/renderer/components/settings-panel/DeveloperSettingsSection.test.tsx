@@ -7,6 +7,18 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DeveloperSettingsSection } from './DeveloperSettingsSection';
 
+const MOCK_UPDATE_STATUS = {
+  current: '0.1.0',
+  latest: null,
+  hasUpdate: false,
+  releaseUrl: null,
+  releaseTag: null,
+  publishedAt: null,
+  checkedAt: null,
+  state: 'idle',
+  error: null,
+} as const;
+
 const MOCK_INFO: DeveloperInfo = {
   appVersion: '0.1.0',
   electronVersion: '34.0.0',
@@ -36,6 +48,7 @@ beforeEach(() => {
   invokeMock.mockReset();
   invokeMock.mockImplementation(async (channel: string) => {
     if (channel === 'developer:get-info') return MOCK_INFO;
+    if (channel === 'update:get-status') return MOCK_UPDATE_STATUS;
     return undefined;
   });
 

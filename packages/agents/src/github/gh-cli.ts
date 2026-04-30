@@ -53,6 +53,7 @@ export class GhCli {
   async getRepoMetadata(): Promise<{ githubRepoId: string; githubRepoFullName: string }> {
     const { stdout } = await execFileAsync('gh', ['repo', 'view', '--json', 'id,nameWithOwner'], {
       cwd: this.cwd,
+      env: this.env,
     });
     const parsed = JSON.parse(stdout) as { id?: string; nameWithOwner?: string };
     const githubRepoId = parsed.id?.trim();
@@ -66,6 +67,7 @@ export class GhCli {
   private async getRepoCoordinates(): Promise<{ owner: string; repo: string }> {
     const { stdout } = await execFileAsync('gh', ['repo', 'view', '--json', 'owner,name'], {
       cwd: this.cwd,
+      env: this.env,
     });
     const parsed = JSON.parse(stdout) as { owner?: { login?: string }; name?: string };
     const owner = parsed.owner?.login?.trim();
@@ -187,6 +189,7 @@ export class GhCli {
       try {
         await execFileAsync('gh', ['issue', 'edit', String(issueNumber), '--remove-label', label], {
           cwd: this.cwd,
+          env: this.env,
         });
       } catch {
         // Removal is best-effort.
@@ -197,6 +200,7 @@ export class GhCli {
       try {
         await execFileAsync('gh', ['issue', 'edit', String(issueNumber), '--add-label', label], {
           cwd: this.cwd,
+          env: this.env,
         });
       } catch {
         // Addition is best-effort.
@@ -1164,6 +1168,7 @@ export class GhCli {
         try {
           await execFileAsync('gh', ['issue', 'edit', String(issueNumber), '--remove-label', old], {
             cwd: this.cwd,
+            env: this.env,
           });
         } catch {
           // Label removal is best-effort
@@ -1177,6 +1182,7 @@ export class GhCli {
     try {
       await execFileAsync('gh', ['issue', 'edit', String(issueNumber), '--add-label', label], {
         cwd: this.cwd,
+        env: this.env,
       });
     } catch {
       // Label addition is best-effort

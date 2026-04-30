@@ -6,6 +6,14 @@ vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp') },
 }));
 
+vi.mock('../logger.service', () => ({
+  default: {
+    error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  },
+}));
+
 const startQuickTaskOrQueue = vi.fn();
 
 vi.mock('../pipeline-scheduler', () => ({
@@ -52,6 +60,12 @@ describe('registerQuickTaskHandlers', () => {
       handlers.set(channel, listener);
     }),
   } as unknown as IpcMain;
+
+  function getHandler(channel: string) {
+    const handler = handlers.get(channel);
+    if (!handler) throw new Error(`${channel} handler not registered`);
+    return handler;
+  }
 
   const mainWindow = {
     isDestroyed: vi.fn(() => false),
@@ -111,10 +125,8 @@ describe('registerQuickTaskHandlers', () => {
   it('creates thread + quick-task row, stamps thread issue number, dispatches scheduler', async () => {
     startQuickTaskOrQueue.mockResolvedValue(undefined);
 
-    const handler = handlers.get('pipeline:create-quick-task');
-    expect(handler).toBeDefined();
-
-    const result = (await handler!(null, {
+    const handler = getHandler('pipeline:create-quick-task');
+    const result = (await handler(null, {
       projectId: 'p1',
       text: '  Fix auth middleware off-by-one  ',
     })) as { issue: { issueNumber: number } };
@@ -144,8 +156,8 @@ describe('registerQuickTaskHandlers', () => {
 
   it('rejects when the project is missing', async () => {
     queries.projects.getById.mockReturnValueOnce(null);
-    const handler = handlers.get('pipeline:create-quick-task');
-    await expect(handler!(null, { projectId: 'missing', text: 'do thing' })).rejects.toThrow(
+    const handler = getHandler('pipeline:create-quick-task');
+    await expect(handler(null, { projectId: 'missing', text: 'do thing' })).rejects.toThrow(
       /project missing not found/i,
     );
     expect(queries.threads.create).not.toHaveBeenCalled();
@@ -153,8 +165,8 @@ describe('registerQuickTaskHandlers', () => {
   });
 
   it('rejects empty text', async () => {
-    const handler = handlers.get('pipeline:create-quick-task');
-    await expect(handler!(null, { projectId: 'p1', text: '   ' })).rejects.toThrow(
+    const handler = getHandler('pipeline:create-quick-task');
+    await expect(handler(null, { projectId: 'p1', text: '   ' })).rejects.toThrow(
       /quick task text is empty/i,
     );
     expect(queries.threads.create).not.toHaveBeenCalled();
@@ -162,9 +174,9 @@ describe('registerQuickTaskHandlers', () => {
 
   it('records failure on cache row + thread when scheduler launch throws', async () => {
     startQuickTaskOrQueue.mockRejectedValueOnce(new Error('scheduler boom'));
-    const handler = handlers.get('pipeline:create-quick-task');
+    const handler = getHandler('pipeline:create-quick-task');
 
-    await handler!(null, { projectId: 'p1', text: 'do thing' });
+    await handler(null, { projectId: 'p1', text: 'do thing' });
 
     // Wait for fire-and-forget catch
     await new Promise((r) => setTimeout(r, 0));

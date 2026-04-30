@@ -8,8 +8,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { useAppStore } from './stores/app-store';
 
+vi.mock('electron-log/renderer', () => ({
+  default: {
+    error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  },
+}));
+vi.mock('./components/AutomationRunDetail', () => ({
+  AutomationRunDetail: ({ expanded }: { expanded: boolean }) => (
+    <div>{expanded ? 'AutomationRunDetailExpanded' : 'AutomationRunDetailPanel'}</div>
+  ),
+}));
 vi.mock('./components/ActivityView', () => ({
   ActivityView: () => <div>ActivityView</div>,
+}));
+vi.mock('./components/AutomationsView', () => ({
+  AutomationsView: () => <div>AutomationsView</div>,
 }));
 vi.mock('./components/CommandPalette', () => ({
   CommandPalette: () => <div>CommandPalette</div>,
@@ -70,6 +85,12 @@ vi.mock('./components/SkillsView', () => ({
 }));
 vi.mock('./components/TerminalDrawer', () => ({
   TerminalDrawer: () => <div>TerminalDrawer</div>,
+}));
+vi.mock('./components/UpdateBanner', () => ({
+  UpdateBanner: () => <div>UpdateBanner</div>,
+}));
+vi.mock('./features/automations/create-automation-modal', () => ({
+  CreateAutomationModal: () => <div>CreateAutomationModal</div>,
 }));
 vi.mock('./components/ProjectView', () => ({
   ProjectView: () => <div>ProjectView</div>,
