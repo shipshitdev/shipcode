@@ -24,6 +24,9 @@ vi.mock('./ThreadPanelArchiveDialog', () => ({
 }));
 
 vi.mock('@shipcode/ui', () => ({
+  AUTOMATION_ISSUE_NUMBER_BASE: -1_000_000,
+  isAutomationIssue: (issue: GitHubIssueCacheRecord) =>
+    !issue.isQuickMode && issue.issueNumber <= -1_000_000,
   KanbanBoard: ({
     issues,
     onMarkDone,
