@@ -37,6 +37,7 @@ describe('SettingsQueries', () => {
     expect(s.onboardingVersion).toBe(0);
     expect(s.worktreeRoot).toBeNull();
     expect(s.projectOpenTarget).toBe('cursor');
+    expect(s.updateTrack).toBe('master');
   });
 
   describe('worktreeRoot', () => {
@@ -95,6 +96,7 @@ describe('SettingsQueries', () => {
       prdRewriteClaudeModel: 'claude-opus-4-6',
       prdRewriteCodexModel: 'gpt-5.4',
       prdRewriteReasoningEffort: 'medium',
+      updateTrack: 'nightly',
     });
     const s = settings.get();
     expect(s.theme).toBe('dark');
@@ -106,6 +108,7 @@ describe('SettingsQueries', () => {
     expect(s.prdRewriteClaudeModel).toBe('claude-opus-4-6');
     expect(s.prdRewriteCodexModel).toBe('gpt-5.4');
     expect(s.prdRewriteReasoningEffort).toBe('medium');
+    expect(s.updateTrack).toBe('nightly');
   });
 
   it('set() serializes booleans as string true/false', () => {
@@ -171,6 +174,12 @@ describe('SettingsQueries', () => {
   it('rejects invalid PRD rewrite CLI values', () => {
     expect(() => settings.set({ prdRewriteCli: 'openrouter' as unknown as 'claude' })).toThrow(
       /prdRewriteCli/,
+    );
+  });
+
+  it('rejects invalid update tracks', () => {
+    expect(() => settings.set({ updateTrack: 'canary' as unknown as 'master' })).toThrow(
+      /updateTrack/,
     );
   });
 

@@ -25,6 +25,8 @@ const MOCK_INFO: DeveloperInfo = {
   nodeVersion: '22.0.0',
   platform: 'darwin',
   osRelease: '25.4.0',
+  logDirectoryPath: '/tmp/shipcode/logs',
+  eventLogPath: '/tmp/shipcode/logs/events.log',
   cliVersions: {
     claude: '1.2.3',
     codex: '0.5.0',

@@ -4,6 +4,7 @@ import {
   FolderGit,
   Globe,
   Keyboard,
+  PackageCheck,
   Settings,
   Sparkles,
   Workflow,
@@ -15,6 +16,11 @@ import { useAppStore } from '../stores/app-store';
 import { SettingsNavigation } from './SettingsNavigation';
 
 const SECTIONS: { key: SettingsSection; label: string; icon: ReactNode }[] = [
+  {
+    key: 'about',
+    label: 'About',
+    icon: <PackageCheck size={14} />,
+  },
   {
     key: 'general',
     label: 'General',

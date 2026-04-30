@@ -1,4 +1,4 @@
-import type { ActivePipelineSummary } from '@shipcode/shared';
+import { type ActivePipelineSummary, formatDurationSeconds } from '@shipcode/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { useSharedSecondNow } from '../../hooks/useSharedSecondNow';
@@ -21,11 +21,6 @@ export function PlanWaiting({ threadId }: { threadId: string }) {
   const sinceOutput = lastActivity ? Math.floor((now - lastActivity) / 1000) : sinceStart;
   const stale = (sinceOutput ?? 0) >= 90;
 
-  function formatDuration(seconds: number) {
-    if (seconds < 60) return `${seconds}s`;
-    return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
-  }
-
   return (
     <div className="mb-5 py-4 text-center text-[13px]">
       <p className="text-muted">
@@ -33,19 +28,19 @@ export function PlanWaiting({ threadId }: { threadId: string }) {
         {sinceStart !== null && (
           <>
             {' '}
-            <span className="tabular-nums">- {formatDuration(sinceStart)}</span>
+            <span className="tabular-nums">- {formatDurationSeconds(sinceStart)}</span>
           </>
         )}
       </p>
       {lastActivity && !stale && sinceOutput !== null && (
         <p className="mt-1 text-[11px] text-muted opacity-60">
-          Last output: {formatDuration(sinceOutput)} ago
+          Last output: {formatDurationSeconds(sinceOutput)} ago
         </p>
       )}
       {stale && sinceOutput !== null && (
         <p className="mt-2 text-[11px] text-warning">
-          No output in {formatDuration(sinceOutput)} - the model may be slow or stalled. Open the
-          terminal to diagnose, or cancel and retry.
+          No output in {formatDurationSeconds(sinceOutput)} - the model may be slow or stalled. Open
+          the terminal to diagnose, or cancel and retry.
         </p>
       )}
     </div>

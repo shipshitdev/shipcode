@@ -89,6 +89,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   maxConcurrentExecutions: 3,
   instantDefaultPanes: 1,
   devLogLevel: 'debug',
+  updateTrack: 'master',
   autoCommitEnabled: true,
   autoCommitModel: 'openrouter/auto',
   autoCommitMode: 'split',

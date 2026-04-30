@@ -22,6 +22,18 @@ function getEventsLogPath(): string {
   return cachedEventsLogPath;
 }
 
+export function getEventLogPath(): string {
+  return getEventsLogPath();
+}
+
+export function getLogDirectoryPath(): string {
+  try {
+    return path.dirname(log.transports.file.getFile().path);
+  } catch {
+    return path.dirname(getEventsLogPath());
+  }
+}
+
 if (app) {
   try {
     const eventsLogPath = getEventsLogPath();

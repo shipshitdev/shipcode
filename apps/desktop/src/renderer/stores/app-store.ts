@@ -67,6 +67,7 @@ export type ViewMode =
 export type ProjectTab = 'issues' | 'git' | 'code' | 'pull-requests' | 'sessions' | 'insights';
 export type InstantPaneMode = 'replay' | 'live';
 export type SettingsSection =
+  | 'about'
   | 'general'
   | 'integrations'
   | 'github'

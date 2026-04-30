@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
+import { AboutSettingsSection } from './settings-panel/AboutSettingsSection';
 import { ArchivedSettingsSection } from './settings-panel/ArchivedSettingsSection';
 import { AutoCommitSettingsSection } from './settings-panel/AutoCommitSettingsSection';
 import { DeveloperSettingsSection } from './settings-panel/DeveloperSettingsSection';
@@ -98,6 +99,9 @@ export function SettingsPanel() {
   return (
     <div className="flex-1 overflow-y-auto bg-primary p-8">
       <div className="max-w-2xl">
+        {settingsSection === 'about' && (
+          <AboutSettingsSection settings={settings} onUpdate={update} />
+        )}
         {settingsSection === 'general' && (
           <GeneralSettingsSection
             settings={settings}

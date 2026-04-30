@@ -60,6 +60,7 @@ const PROJECT_OPEN_TARGETS = ['cursor', 'finder', 'terminal', 'ghostty', 'vscode
 const FONT_SIZES = [12, 13, 14, 15] as const;
 const GENERATOR_CLIS = ['claude', 'codex'] as const;
 const DEV_LOG_LEVELS = ['error', 'warn', 'info', 'debug'] as const;
+const UPDATE_TRACKS = ['master', 'stable', 'nightly'] as const;
 const AUTO_COMMIT_MODES = ['split', 'single'] as const;
 
 function isAutoCommitMode(value: unknown): value is AppSettings['autoCommitMode'] {
@@ -78,6 +79,10 @@ function parseCleanupCriteria(raw: string | undefined): CleanupCriteria {
 
 function isDevLogLevel(value: unknown): value is AppSettings['devLogLevel'] {
   return typeof value === 'string' && (DEV_LOG_LEVELS as readonly string[]).includes(value);
+}
+
+function isUpdateTrack(value: unknown): value is AppSettings['updateTrack'] {
+  return typeof value === 'string' && (UPDATE_TRACKS as readonly string[]).includes(value);
 }
 
 function isReasoningEffort(value: unknown): value is AppSettings['plannerReasoningEffort'] {
@@ -237,6 +242,9 @@ export class SettingsQueries {
       devLogLevel: isDevLogLevel(stored.devLogLevel)
         ? stored.devLogLevel
         : DEFAULT_SETTINGS.devLogLevel,
+      updateTrack: isUpdateTrack(stored.updateTrack)
+        ? stored.updateTrack
+        : DEFAULT_SETTINGS.updateTrack,
       autoCommitEnabled: parseBool(stored.autoCommitEnabled, DEFAULT_SETTINGS.autoCommitEnabled),
       autoCommitModel: stored.autoCommitModel || DEFAULT_SETTINGS.autoCommitModel,
       autoCommitMode: isAutoCommitMode(stored.autoCommitMode)
@@ -299,6 +307,11 @@ export class SettingsQueries {
     if ('devLogLevel' in patch && patch.devLogLevel != null) {
       if (!isDevLogLevel(patch.devLogLevel)) {
         throw new Error('devLogLevel must be error|warn|info|debug');
+      }
+    }
+    if ('updateTrack' in patch && patch.updateTrack != null) {
+      if (!isUpdateTrack(patch.updateTrack)) {
+        throw new Error('updateTrack must be master|stable|nightly');
       }
     }
     if ('autoCommitMode' in patch && patch.autoCommitMode != null) {

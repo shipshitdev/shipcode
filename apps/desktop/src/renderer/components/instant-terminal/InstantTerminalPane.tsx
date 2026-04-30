@@ -1,4 +1,4 @@
-import type { AgentState, TerminalEventRecord } from '@shipcode/shared';
+import { type AgentState, formatDurationSeconds, type TerminalEventRecord } from '@shipcode/shared';
 import { Badge, Button, Columns2, RefreshCw, Rows2, Square, X } from '@shipshitdev/ui';
 import { useMemo } from 'react';
 import { useSharedSecondNow } from '../../hooks/useSharedSecondNow';
@@ -10,11 +10,6 @@ import { useInstantTerminalPane } from './useInstantTerminalPane';
 const EMPTY_STREAM: TerminalEventRecord[] = [];
 const QUIET_HINT_SECONDS = 15;
 const STALE_WARNING_SECONDS = 90;
-
-function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`;
-  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
-}
 
 interface InstantTerminalPaneProps {
   threadId: string;
@@ -91,8 +86,8 @@ export function InstantTerminalPane({
             className={`font-mono text-[10px] tabular-nums ${stale ? 'text-warning' : 'text-muted'}`}
           >
             {stale
-              ? `No output ${formatDuration(quietSeconds)}`
-              : `Quiet ${formatDuration(quietSeconds)}`}
+              ? `No output ${formatDurationSeconds(quietSeconds)}`
+              : `Quiet ${formatDurationSeconds(quietSeconds)}`}
           </span>
         ) : null}
         <div className="flex items-center gap-0.5">
@@ -151,8 +146,8 @@ export function InstantTerminalPane({
       </div>
       {isRunning && stale && quietSeconds != null ? (
         <div className="border-b border-warning/20 bg-warning/5 px-3 py-1.5 text-[11px] text-warning">
-          No output for {formatDuration(quietSeconds)}. The CLI may be thinking or waiting on a slow
-          tool call. Press Esc to interrupt if it stays stuck.
+          No output for {formatDurationSeconds(quietSeconds)}. The CLI may be thinking or waiting on
+          a slow tool call. Press Esc to interrupt if it stays stuck.
         </div>
       ) : null}
       {restartError && (

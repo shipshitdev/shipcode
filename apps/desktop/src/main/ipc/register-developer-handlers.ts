@@ -2,7 +2,7 @@ import os from 'node:os';
 import { checkSystemHealthWithAuth } from '@shipcode/agents';
 import type { DeveloperInfo } from '@shipcode/shared';
 import { app, shell } from 'electron';
-import log from '../logger.service';
+import log, { getEventLogPath, getLogDirectoryPath } from '../logger.service';
 import type { UpdateService } from '../update-service';
 import type { IpcHandlerDeps } from './types';
 
@@ -18,6 +18,8 @@ export function registerDeveloperHandlers(
       nodeVersion: process.versions.node,
       platform: process.platform,
       osRelease: os.release(),
+      logDirectoryPath: getLogDirectoryPath(),
+      eventLogPath: getEventLogPath(),
       cliVersions: {
         claude: health.claude.version,
         codex: health.codex.version,
@@ -33,13 +35,14 @@ export function registerDeveloperHandlers(
     }
   });
 
-  ipcMain.handle('developer:open-log-directory', () => {
+  ipcMain.handle('developer:open-log-directory', async () => {
     try {
-      const logFile = log.transports.file.getFile();
-      shell.showItemInFolder(logFile.path);
+      const openError = await shell.openPath(getLogDirectoryPath());
+      if (openError) throw new Error(openError);
     } catch (error) {
       log.warn('[developer] failed to resolve log file path:', error);
-      shell.openPath(app.getPath('logs'));
+      const fallbackError = await shell.openPath(app.getPath('logs'));
+      if (fallbackError) throw new Error(fallbackError);
     }
   });
 

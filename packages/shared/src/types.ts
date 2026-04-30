@@ -664,6 +664,8 @@ export interface AppSettings {
   instantDefaultPanes: 1 | 2 | 4;
   /** Persisted log level for the electron-log file transport. Console stays at 'info'. */
   devLogLevel: 'error' | 'warn' | 'info' | 'debug';
+  /** Desktop update channel. Only master is published today; stable/nightly are reserved. */
+  updateTrack: UpdateTrack;
   // Auto-commit (Git tab "Auto-commit" button)
   autoCommitEnabled: boolean;
   autoCommitModel: string;
@@ -748,6 +750,8 @@ export interface DeveloperInfo {
   nodeVersion: string;
   platform: string;
   osRelease: string;
+  logDirectoryPath: string;
+  eventLogPath: string;
   cliVersions: {
     claude: string | null;
     codex: string | null;
@@ -755,6 +759,8 @@ export interface DeveloperInfo {
     gh: string | null;
   };
 }
+
+export type UpdateTrack = 'master' | 'stable' | 'nightly';
 
 export type UpdateCheckState = 'idle' | 'checking' | 'available' | 'up-to-date' | 'error';
 
