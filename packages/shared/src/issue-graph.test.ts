@@ -62,6 +62,13 @@ describe('parseIssueBodyDependencyEdges', () => {
     ]);
   });
 
+  it('keeps adjacent dependency clauses scoped to their own keyword', () => {
+    expect(parseIssueBodyDependencyEdges(42, 'Depends on #7 and blocks #8.')).toEqual([
+      { sourceIssueNumber: 7, targetIssueNumber: 42, edgeType: 'depends_on' },
+      { sourceIssueNumber: 42, targetIssueNumber: 8, edgeType: 'blocks' },
+    ]);
+  });
+
   it('parses bare references as visualization-only edges', () => {
     expect(parseIssueBodyDependencyEdges(42, 'Related: #7 and see #8 for context.')).toEqual([
       { sourceIssueNumber: 42, targetIssueNumber: 7, edgeType: 'reference' },

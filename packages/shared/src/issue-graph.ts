@@ -47,8 +47,10 @@ export interface ProjectIssueGraph {
 const DEPENDS_ON_PATTERN = /\bdepends\s+on\b[\s:]*#(\d+)\b/gi;
 const BLOCKS_PATTERN = /\bblocks\b[\s:]*#(\d+)\b/gi;
 const ISSUE_REFERENCE_PATTERN = /(^|[^\w])#(\d+)\b/g;
-const DEPENDS_ON_CLAUSE_PATTERN = /\bdepends\s+on\b([^.\n\r]*)/gi;
-const BLOCKS_CLAUSE_PATTERN = /\bblocks\b([^.\n\r]*)/gi;
+const DEPENDS_ON_CLAUSE_PATTERN =
+  /\bdepends\s+on\b[\s:]*([^.\n\r]*?)(?=\b(?:depends\s+on|blocks)\b|[.\n\r]|$)/gi;
+const BLOCKS_CLAUSE_PATTERN =
+  /\bblocks\b[\s:]*([^.\n\r]*?)(?=\b(?:depends\s+on|blocks)\b|[.\n\r]|$)/gi;
 const CLAUSE_REFERENCE_PATTERN = /#(\d+)\b/g;
 
 export function normalizeIssueDependencyEdge(
