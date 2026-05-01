@@ -52,8 +52,4 @@ export class TerminalEventQueries {
       .all(threadId, limit);
     return asRows<TerminalEventRow>(rows).map(mapRow);
   }
-
-  clearByThread(threadId: string): void {
-    this.db.prepare('DELETE FROM terminal_events WHERE thread_id = ?').run(threadId);
-  }
 }

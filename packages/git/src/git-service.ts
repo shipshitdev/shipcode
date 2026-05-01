@@ -47,11 +47,6 @@ export class GitService {
     return git.diff(['--stat']);
   }
 
-  async getDiffFromSha(sha: string, head?: string): Promise<string> {
-    const ref = head ? `${sha}..${head}` : `${sha}..HEAD`;
-    return this.git.diff([ref]);
-  }
-
   async commit(message: string, worktreePath?: string): Promise<string> {
     const git = worktreePath ? simpleGit(worktreePath) : this.git;
     await git.add('.');

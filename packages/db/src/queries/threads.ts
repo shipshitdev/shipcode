@@ -218,17 +218,6 @@ export class ThreadQueries {
       .run(JSON.stringify(request), round, id);
   }
 
-  setClarificationAnswers(id: string, answers: ClarificationAnswer[]): void {
-    this.db
-      .prepare(
-        `UPDATE threads
-            SET clarification_answers = ?,
-                updated_at = ${ISO_NOW_SQL}
-          WHERE id = ?`,
-      )
-      .run(JSON.stringify(answers), id);
-  }
-
   resolveClarification(
     id: string,
     request: ClarificationRequest,
@@ -273,14 +262,6 @@ export class ThreadQueries {
           WHERE id = ?`,
       )
       .run(id);
-  }
-
-  setVerificationStatus(id: string, status: string): void {
-    this.db
-      .prepare(
-        `UPDATE threads SET verification_status = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
-      )
-      .run(status, id);
   }
 
   setGithubIssue(id: string, issueNumber: number, repo: string | null): void {

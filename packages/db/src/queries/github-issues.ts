@@ -433,16 +433,6 @@ export class GitHubIssueQueries {
       .run(ISSUE_PIPELINE_STATUS.queued, id);
   }
 
-  getStale(olderThanMs: number): GitHubIssueCacheRecord[] {
-    const thresholdSec = Math.floor(olderThanMs / 1000);
-    const rows = this.db
-      .prepare(
-        `SELECT * FROM github_issue_cache WHERE claimed_at IS NOT NULL AND last_phase_update IS NOT NULL AND last_phase_update < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-' || ? || ' seconds')`,
-      )
-      .all(thresholdSec);
-    return asRows<GitHubIssueCacheRow>(rows).map((r) => this.toRecord(r));
-  }
-
   getRequeued(projectId: string): GitHubIssueCacheRecord[] {
     const rows = this.db
       .prepare(
@@ -474,18 +464,6 @@ export class GitHubIssueQueries {
       )
       .all();
     return asRows<GitHubIssueCacheRow>(rows).map((r) => this.toRecord(r));
-  }
-
-  refreshHeartbeat(id: string): void {
-    this.db
-      .prepare(`UPDATE github_issue_cache SET last_phase_update = ${ISO_NOW_SQL} WHERE id = ?`)
-      .run(id);
-  }
-
-  updateLastStatusLabel(id: string, label: string | null): void {
-    this.db
-      .prepare('UPDATE github_issue_cache SET last_status_label = ? WHERE id = ?')
-      .run(label, id);
   }
 
   updatePhaseModelOverride(

@@ -84,7 +84,6 @@ describe('registerPipelineHandlers', () => {
       getById: ReturnType<typeof vi.fn>;
       updateStatus: ReturnType<typeof vi.fn>;
       resetFailureTracking: ReturnType<typeof vi.fn>;
-      setClarificationAnswers: ReturnType<typeof vi.fn>;
       resolveClarification: ReturnType<typeof vi.fn>;
       clearClarification: ReturnType<typeof vi.fn>;
       clearPendingClarification: ReturnType<typeof vi.fn>;
@@ -166,7 +165,6 @@ describe('registerPipelineHandlers', () => {
         getById: vi.fn(() => makeThread()),
         updateStatus: vi.fn(),
         resetFailureTracking: vi.fn(),
-        setClarificationAnswers: vi.fn(),
         resolveClarification: vi.fn(),
         clearClarification: vi.fn(),
         clearPendingClarification: vi.fn(),
