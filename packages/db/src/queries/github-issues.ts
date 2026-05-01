@@ -13,7 +13,7 @@ import {
   toIsoUtc,
 } from '@shipcode/shared';
 import { nanoid } from 'nanoid';
-import { asRow, asRows } from '../utils';
+import { asRow, asRows, transaction } from '../utils';
 
 function isUniqueViolation(err: unknown): boolean {
   return err instanceof Error && /UNIQUE constraint failed/i.test(err.message);
@@ -67,6 +67,11 @@ interface GitHubIssueCacheRow {
 
 export class GitHubIssueQueries {
   constructor(private db: DatabaseSync) {}
+
+  /** Wrap multiple DB operations in a single transaction. */
+  runInTransaction<T>(fn: () => T): T {
+    return transaction(this.db, fn);
+  }
 
   list(projectId: string): GitHubIssueCacheRecord[] {
     const rows = this.db

@@ -1278,6 +1278,12 @@ export function migrateV42(db: DatabaseSync): void {
         ON task_edges(graph_id, source_node_id, target_node_id, edge_type);
     `);
 
-    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (42)`);
+    // v43: composite index on threads(kind, status) for dashboard stats
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_threads_kind_status
+        ON threads(kind, status);
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (43)`);
   });
 }

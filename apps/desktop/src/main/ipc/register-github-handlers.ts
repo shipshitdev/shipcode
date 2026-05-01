@@ -160,33 +160,40 @@ export function registerGitHubHandlers({
           elapsedMs: Date.now() - startedAt,
         });
 
-        for (const issue of issues) {
-          const existingIssue = queries.githubIssues.getByNumber(projectId, issue.number);
-          const record = queries.githubIssues.upsert({
-            projectId,
-            issueNumber: issue.number,
-            title: issue.title,
-            body: issue.body,
-            labels: issue.labels,
-            assignee: issue.assignee,
-            state: issue.state,
-            updatedAt: issue.updatedAt ?? null,
-          });
-          if (record.state === 'closed') {
-            queries.githubIssues.markDoneOnClose(record.id);
-          } else if (record.state === 'open') {
-            syncOpenIssueState(queries, record);
-          }
+        // Batch upsert in a single transaction to avoid per-issue WAL overhead.
+        const newIssues: Array<{ number: number; url: string }> = [];
+        queries.githubIssues.runInTransaction(() => {
+          for (const issue of issues) {
+            const existingIssue = queries.githubIssues.getByNumber(projectId, issue.number);
+            const record = queries.githubIssues.upsert({
+              projectId,
+              issueNumber: issue.number,
+              title: issue.title,
+              body: issue.body,
+              labels: issue.labels,
+              assignee: issue.assignee,
+              state: issue.state,
+              updatedAt: issue.updatedAt ?? null,
+            });
+            if (record.state === 'closed') {
+              queries.githubIssues.markDoneOnClose(record.id);
+            } else if (record.state === 'open') {
+              syncOpenIssueState(queries, record);
+            }
 
-          if (!existingIssue) {
-            await attachIssueToConfiguredProjectBoard(
-              project,
-              ghCli,
-              issue.number,
-              issue.url,
-              'github:refresh-issues',
-            );
+            if (!existingIssue) {
+              newIssues.push({ number: issue.number, url: issue.url });
+            }
           }
+        });
+        for (const issue of newIssues) {
+          await attachIssueToConfiguredProjectBoard(
+            project,
+            ghCli,
+            issue.number,
+            issue.url,
+            'github:refresh-issues',
+          );
         }
 
         const cachedAfterIssueSync = queries.githubIssues.list(projectId);

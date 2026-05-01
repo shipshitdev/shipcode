@@ -16,9 +16,24 @@ import { useOpenProjectTerminal } from '../hooks/useOpenProjectTerminal';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 
+/**
+ * Thin wrapper: only subscribes to open/toggle. When closed the inner
+ * component is unmounted so its 20+ selectors, queries, and derived
+ * state cost exactly zero.
+ */
 export function CommandPalette() {
-  const queryClient = useQueryClient();
   const commandPaletteOpen = useAppStore((state) => state.commandPaletteOpen);
+  const toggleCommandPalette = useAppStore((state) => state.toggleCommandPalette);
+
+  return (
+    <CommandDialog open={commandPaletteOpen} onOpenChange={toggleCommandPalette}>
+      {commandPaletteOpen && <CommandPaletteContent />}
+    </CommandDialog>
+  );
+}
+
+function CommandPaletteContent() {
+  const queryClient = useQueryClient();
   const toggleCommandPalette = useAppStore((state) => state.toggleCommandPalette);
   const openCreateIssueModal = useAppStore((state) => state.openCreateIssueModal);
   const activeProjectId = useAppStore((state) => state.activeProjectId);
@@ -41,12 +56,11 @@ export function CommandPalette() {
   const navigateToIssue = useAppStore((state) => state.navigateToIssue);
   const { openProjectTerminal } = useOpenProjectTerminal();
 
-  // Cross-project issue search — only fetches when palette is open
+  // Cross-project issue search
   const { data: allProjects = [] } = useQuery<Project[]>({
     queryKey: ['projects-visible'],
     queryFn: () => window.shipcode.invoke('project:list-visible'),
     staleTime: STABLE_APP_STATE_STALE_TIME,
-    enabled: commandPaletteOpen,
   });
 
   const issueResults = useQueries({
@@ -57,15 +71,13 @@ export function CommandPalette() {
           projectId: p.id,
         }),
       staleTime: STABLE_APP_STATE_STALE_TIME,
-      enabled: commandPaletteOpen,
     })),
   });
   const { data: activeThreadPlans = [] } = useQuery<PlanRecord[]>({
     queryKey: ['command-palette-plan-history', activeThreadId],
     queryFn: () => window.shipcode.invoke('plan:list', { threadId: activeThreadId }),
     staleTime: STABLE_APP_STATE_STALE_TIME,
-    enabled:
-      commandPaletteOpen && !!activeThreadId && pipelinePhase === PIPELINE_PHASE.awaitingApproval,
+    enabled: !!activeThreadId && pipelinePhase === PIPELINE_PHASE.awaitingApproval,
   });
   const latestPlanStatus = activeThreadPlans[0]?.status ?? null;
   const approvedAwaitingExecution =
@@ -116,7 +128,7 @@ export function CommandPalette() {
   };
 
   return (
-    <CommandDialog open={commandPaletteOpen} onOpenChange={toggleCommandPalette}>
+    <>
       <CommandInput placeholder="Search issues, commands..." />
       <CommandList>
         <CommandEmpty>No results found.</CommandEmpty>
@@ -297,6 +309,6 @@ export function CommandPalette() {
           </CommandGroup>
         )}
       </CommandList>
-    </CommandDialog>
+    </>
   );
 }

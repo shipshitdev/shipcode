@@ -7,7 +7,7 @@ import type {
 } from '@shipcode/shared';
 import { PIPELINE_PHASE } from '@shipcode/shared';
 import { useQuery } from '@tanstack/react-query';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../../query-stale-times';
 import { useAppStore } from '../../stores/app-store';
 import {
@@ -69,27 +69,42 @@ export function useTerminalDrawer() {
   const isMaximized = useAppStore((s) => s.terminalMaximized);
   const githubIssues = useAppStore((s) => s.githubIssues);
   const activeIssue = useAppStore((s) => s.activeIssue);
-  const scopedIssues = githubIssues.filter((issue) => issue.projectId === activeProjectId);
+  const scopedIssues = useMemo(
+    () => githubIssues.filter((issue) => issue.projectId === activeProjectId),
+    [githubIssues, activeProjectId],
+  );
   const { data: activePipelines = [] } = useQuery<ActivePipelineSummary[]>({
-    queryKey: ['pipeline-list-active'],
+    queryKey: ['dashboard', 'running'],
     queryFn: async () => {
       const result = await window.shipcode.invoke<ActivePipelineSummary[]>('pipeline:list-active');
       return Array.isArray(result) ? result : [];
     },
-    refetchInterval: 2_000,
+    staleTime: STABLE_APP_STATE_STALE_TIME,
   });
-  const issueTargets = scopedIssues
-    .map(issueTarget)
-    .filter((target): target is TerminalDrawerTarget => target !== null);
-  const runningIssueTargets = issueTargets.filter((target) =>
-    CONSOLE_VISIBLE_STATUSES.has(target.phase),
+  const issueTargets = useMemo(
+    () =>
+      scopedIssues
+        .map(issueTarget)
+        .filter((target): target is TerminalDrawerTarget => target !== null),
+    [scopedIssues],
   );
-  const issueThreadIds = new Set(issueTargets.map((target) => target.threadId));
-  const syntheticActiveTargets = activePipelines
-    .filter((summary) => summary.projectId === activeProjectId)
-    .filter((summary) => !issueThreadIds.has(summary.threadId))
-    .map(activeSummaryTarget);
-  const runningTargets = [...runningIssueTargets, ...syntheticActiveTargets];
+  const { runningIssueTargets, issueThreadIds } = useMemo(() => {
+    const running = issueTargets.filter((target) => CONSOLE_VISIBLE_STATUSES.has(target.phase));
+    const threadIds = new Set(issueTargets.map((target) => target.threadId));
+    return { runningIssueTargets: running, issueThreadIds: threadIds };
+  }, [issueTargets]);
+  const syntheticActiveTargets = useMemo(
+    () =>
+      activePipelines
+        .filter((summary) => summary.projectId === activeProjectId)
+        .filter((summary) => !issueThreadIds.has(summary.threadId))
+        .map(activeSummaryTarget),
+    [activePipelines, activeProjectId, issueThreadIds],
+  );
+  const runningTargets = useMemo(
+    () => [...runningIssueTargets, ...syntheticActiveTargets],
+    [runningIssueTargets, syntheticActiveTargets],
+  );
   const scopedActiveIssue = activeIssue?.projectId === activeProjectId ? activeIssue : null;
   const explicitTarget =
     terminalThreadId != null

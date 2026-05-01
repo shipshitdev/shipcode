@@ -164,6 +164,7 @@ describe('registerGitHubHandlers', () => {
       linkThread: vi.fn(),
       list: vi.fn(() => listResult),
       reconcileCompletedFromEvidence: vi.fn(),
+      runInTransaction: vi.fn((fn: () => unknown) => fn()),
       ...overrides,
     };
   }

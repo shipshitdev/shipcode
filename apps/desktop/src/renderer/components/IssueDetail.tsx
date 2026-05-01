@@ -280,7 +280,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       return graph && Array.isArray(graph.nodes) ? graph : null;
     },
     enabled: !!activeThreadId && shouldLoadPipelineTab,
-    refetchInterval: shouldPollLiveThread && shouldLoadPipelineTab ? 5_000 : false,
+    refetchInterval: shouldPollLiveThread && shouldLoadPipelineTab ? 15_000 : false,
   });
 
   // Fetch latest verification for the thread

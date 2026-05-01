@@ -46,33 +46,36 @@ export function registerPipelineHandlers({
       : resolveRequireApproval(settings, project);
   };
 
-  const buildActivePipelineSummary = (
-    summary: ReturnType<typeof pipeline.listActive>[number],
-  ): ActivePipelineSummary => {
-    const thread = queries.threads.getById(summary.threadId);
-    const project = thread ? queries.projects.getById(thread.projectId) : null;
-    const latestPlanStatus = thread ? (queries.plans.getLatest(thread.id)?.status ?? null) : null;
+  const buildActivePipelineSummaries = (
+    summaries: ReturnType<typeof pipeline.listActive>,
+  ): ActivePipelineSummary[] => {
+    if (summaries.length === 0) return [];
     const settings = queries.settings.get();
-    const phasePresentation =
-      thread != null
-        ? resolveThreadPhasePresentation(settings, project, thread, summary.phase)
-        : null;
+    return summaries.map((summary) => {
+      const thread = queries.threads.getById(summary.threadId);
+      const project = thread ? queries.projects.getById(thread.projectId) : null;
+      const latestPlanStatus = thread ? (queries.plans.getLatest(thread.id)?.status ?? null) : null;
+      const phasePresentation =
+        thread != null
+          ? resolveThreadPhasePresentation(settings, project, thread, summary.phase)
+          : null;
 
-    return {
-      threadId: summary.threadId,
-      projectId: thread?.projectId ?? '',
-      projectName: project?.name ?? 'Unknown project',
-      threadTitle: thread?.title ?? summary.threadId,
-      phase: summary.phase,
-      approvedAwaitingExecution:
-        summary.phase === PIPELINE_PHASE.awaitingApproval && latestPlanStatus === 'approved',
-      startedAt: summary.startedAt,
-      activeProcessId: summary.activeProcessId,
-      githubIssueNumber: thread?.githubIssueNumber ?? null,
-      modelProvider: phasePresentation?.provider ?? null,
-      model: phasePresentation?.model ?? null,
-      reasoningEffort: phasePresentation?.effort ?? null,
-    };
+      return {
+        threadId: summary.threadId,
+        projectId: thread?.projectId ?? '',
+        projectName: project?.name ?? 'Unknown project',
+        threadTitle: thread?.title ?? summary.threadId,
+        phase: summary.phase,
+        approvedAwaitingExecution:
+          summary.phase === PIPELINE_PHASE.awaitingApproval && latestPlanStatus === 'approved',
+        startedAt: summary.startedAt,
+        activeProcessId: summary.activeProcessId,
+        githubIssueNumber: thread?.githubIssueNumber ?? null,
+        modelProvider: phasePresentation?.provider ?? null,
+        model: phasePresentation?.model ?? null,
+        reasoningEffort: phasePresentation?.effort ?? null,
+      };
+    });
   };
 
   ipcMain.handle('verification:get', (_event, { threadId }: { threadId: string }) => {
@@ -572,7 +575,7 @@ export function registerPipelineHandlers({
   });
 
   ipcMain.handle('pipeline:list-active', (): ActivePipelineSummary[] => {
-    return pipeline.listActive().map(buildActivePipelineSummary);
+    return buildActivePipelineSummaries(pipeline.listActive());
   });
 
   ipcMain.handle(
@@ -591,7 +594,7 @@ export function registerPipelineHandlers({
         recentOffset?: number;
       } = {},
     ) => {
-      const running = pipeline.listActive().map(buildActivePipelineSummary);
+      const running = buildActivePipelineSummaries(pipeline.listActive());
 
       return {
         stats: queries.dashboard.getStats(),

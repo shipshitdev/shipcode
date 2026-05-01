@@ -28,17 +28,28 @@ function dedupeTerminalEvents(events: TerminalEventRecord[]): TerminalEventRecor
   return Array.from(new Map(events.map((event) => [event.id, event])).values());
 }
 
+// Module-level index cache: avoids O(n) Map rebuild on every upsert call.
+// Keyed by threadId → (eventId → index in the array). Reset on hydrate.
+const _terminalIdIndex = new Map<string, Map<string, number>>();
+
+function getOrCreateIndex(threadId: string, events: TerminalEventRecord[]): Map<string, number> {
+  let index = _terminalIdIndex.get(threadId);
+  if (!index || index.size !== events.length) {
+    index = new Map(events.map((e, i) => [e.id, i]));
+    _terminalIdIndex.set(threadId, index);
+  }
+  return index;
+}
+
 function upsertTerminalEvents(
+  threadId: string,
   previous: TerminalEventRecord[],
   incoming: TerminalEventRecord[],
 ): TerminalEventRecord[] {
   if (incoming.length === 0) return previous;
 
+  const indexById = getOrCreateIndex(threadId, previous);
   const merged = [...previous];
-  const indexById = new Map<string, number>();
-  previous.forEach((event, index) => {
-    indexById.set(event.id, index);
-  });
 
   for (const event of incoming) {
     const existingIndex = indexById.get(event.id);
@@ -50,9 +61,14 @@ function upsertTerminalEvents(
     merged[existingIndex] = event;
   }
 
-  return merged.length > MAX_CANONICAL_TERMINAL_EVENTS
-    ? merged.slice(-MAX_CANONICAL_TERMINAL_EVENTS)
-    : merged;
+  if (merged.length > MAX_CANONICAL_TERMINAL_EVENTS) {
+    const trimmed = merged.slice(-MAX_CANONICAL_TERMINAL_EVENTS);
+    // Rebuild the index for the trimmed array
+    const newIndex = new Map(trimmed.map((e, i) => [e.id, i]));
+    _terminalIdIndex.set(threadId, newIndex);
+    return trimmed;
+  }
+  return merged;
 }
 
 export type ViewMode =
@@ -478,7 +494,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     }),
   mapProcessToThread: (processId, threadId) =>
     set((s) => ({ processToThread: { ...s.processToThread, [processId]: threadId } })),
-  logTerminalEvent: (line) => set((s) => ({ terminalEvents: [...s.terminalEvents, line] })),
+  logTerminalEvent: (line) =>
+    set((s) => {
+      const next = [...s.terminalEvents, line];
+      return { terminalEvents: next.length > 500 ? next.slice(-500) : next };
+    }),
   setTerminalThread: (id) => set({ terminalThreadId: id }),
   setCurrentModel: (threadId, model) =>
     set((s) => ({ currentModels: { ...s.currentModels, [threadId]: model } })),
@@ -497,14 +517,14 @@ export const useAppStore = create<AppState>((set, get) => ({
         event,
         createdAt: meta?.createdAt ?? new Date().toISOString(),
       };
-      const trimmed = upsertTerminalEvents(prev, [record]);
+      const trimmed = upsertTerminalEvents(threadId, prev, [record]);
       return { canonicalTerminalStream: { ...s.canonicalTerminalStream, [threadId]: trimmed } };
     }),
   appendCanonicalEvents: (threadId, events) =>
     set((s) => {
       if (events.length === 0) return s;
       const prev = s.canonicalTerminalStream[threadId] ?? [];
-      const trimmed = upsertTerminalEvents(prev, events);
+      const trimmed = upsertTerminalEvents(threadId, prev, events);
       return { canonicalTerminalStream: { ...s.canonicalTerminalStream, [threadId]: trimmed } };
     }),
   hydrateCanonicalEvents: (threadId, events) =>
@@ -520,6 +540,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         deduped.length >= MAX_CANONICAL_TERMINAL_EVENTS
           ? deduped.slice(-MAX_CANONICAL_TERMINAL_EVENTS)
           : deduped;
+      // Reset the index cache for this thread since we rebuilt from scratch
+      _terminalIdIndex.delete(threadId);
       return { canonicalTerminalStream: { ...s.canonicalTerminalStream, [threadId]: trimmed } };
     }),
   touchLastActivity: (threadId) =>

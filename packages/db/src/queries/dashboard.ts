@@ -38,10 +38,6 @@ interface RecentTaskRow {
   project_name: string;
 }
 
-function placeholders(n: number): string {
-  return Array(n).fill('?').join(',');
-}
-
 function awaitingHumanApprovalWhere(alias: string): string {
   return `${alias}.kind = 'pipeline'
     AND ${alias}.status = '${PIPELINE_PHASE.awaitingApproval}'
@@ -61,112 +57,88 @@ export class DashboardQueries {
   constructor(private db: DatabaseSync) {}
 
   getStats(): DashboardStats {
-    // Agents running = threads in any agent-running phase.
-    const agentsRunningRow = this.db
-      .prepare(
-        `SELECT COUNT(*) as n FROM threads WHERE kind = 'pipeline' AND status IN (${placeholders(AGENT_RUNNING_PHASES.length)})`,
-      )
-      .get(...AGENT_RUNNING_PHASES) as { n: number };
+    // Single-pass aggregation: one scan of pipeline threads computes all scalar
+    // counters plus per-status and per-project breakdowns. Replaces 9+ separate
+    // COUNT queries that each full-scanned the threads table.
+    const RUNNING_SET = new Set<string>(AGENT_RUNNING_PHASES);
+    const ACTIVE_SET = new Set<string>(ACTIVE_PHASES);
+    const BLOCKED_SET = new Set<string>(BLOCKED_PHASES);
+    const CLOSED_SET = new Set<string>([
+      PIPELINE_PHASE.completed,
+      PIPELINE_PHASE.failed,
+      PIPELINE_PHASE.idle,
+    ]);
 
-    // Per-phase breakdown for running agents (for subtitle on the card).
-    const perPhaseRows = this.db
-      .prepare(
-        `SELECT status, COUNT(*) as n FROM threads
-       WHERE kind = 'pipeline' AND status IN (${placeholders(AGENT_RUNNING_PHASES.length)})
-       GROUP BY status`,
-      )
-      .all(...AGENT_RUNNING_PHASES) as Array<{ status: string; n: number }>;
+    const rows = this.db
+      .prepare(`SELECT status, project_id, updated_at FROM threads WHERE kind = 'pipeline'`)
+      .all() as Array<{ status: string; project_id: string; updated_at: string }>;
 
+    let agentsRunning = 0;
+    let tasksInProgress = 0;
+    let tasksBlocked = 0;
+    let tasksOpen = 0;
+    let shippedLast7d = 0;
+    let failedLast7d = 0;
     const runningByPhase: Partial<Record<PipelinePhase, number>> = {};
-    for (const row of perPhaseRows) {
-      runningByPhase[row.status as PipelinePhase] = row.n;
+    const agentsRunningByProject: Record<string, number> = {};
+    const pendingApprovalsByProject: Record<string, number> = {};
+
+    const nowJulian = Date.now();
+    const sevenDaysMs = 7 * 86_400_000;
+
+    for (const row of rows) {
+      const { status, project_id, updated_at } = row;
+
+      if (RUNNING_SET.has(status)) {
+        agentsRunning++;
+        runningByPhase[status as PipelinePhase] =
+          (runningByPhase[status as PipelinePhase] ?? 0) + 1;
+        agentsRunningByProject[project_id] = (agentsRunningByProject[project_id] ?? 0) + 1;
+      }
+      if (ACTIVE_SET.has(status)) tasksInProgress++;
+      if (BLOCKED_SET.has(status)) tasksBlocked++;
+      if (!CLOSED_SET.has(status)) tasksOpen++;
+
+      if ((status === PIPELINE_PHASE.completed || status === PIPELINE_PHASE.failed) && updated_at) {
+        const ageMs = nowJulian - new Date(updated_at).getTime();
+        if (ageMs <= sevenDaysMs) {
+          if (status === PIPELINE_PHASE.completed) shippedLast7d++;
+          else failedLast7d++;
+        }
+      }
     }
 
-    // Per-project running count for sidebar badges.
-    const perProjectRows = this.db
+    // Pending approvals need the subquery check (plan status != 'approved'),
+    // so keep as a separate query — but only one instead of three.
+    const pendingRows = this.db
       .prepare(
-        `SELECT project_id, COUNT(*) as n FROM threads
-         WHERE kind = 'pipeline' AND status IN (${placeholders(AGENT_RUNNING_PHASES.length)})
-         GROUP BY project_id`,
+        `SELECT project_id, updated_at FROM threads
+         WHERE ${awaitingHumanApprovalWhere('threads')}`,
       )
-      .all(...AGENT_RUNNING_PHASES) as Array<{ project_id: string; n: number }>;
-    const agentsRunningByProject: Record<string, number> = Object.fromEntries(
-      perProjectRows.map((r) => [r.project_id, r.n]),
-    );
+      .all() as Array<{ project_id: string; updated_at: string }>;
 
-    // Per-project pending approval count for sidebar badges.
-    const pendingApprovalProjectRows = this.db
-      .prepare(
-        `SELECT project_id, COUNT(*) as n FROM threads
-         WHERE ${awaitingHumanApprovalWhere('threads')}
-         GROUP BY project_id`,
-      )
-      .all() as Array<{ project_id: string; n: number }>;
-    const pendingApprovalsByProject: Record<string, number> = Object.fromEntries(
-      pendingApprovalProjectRows.map((r) => [r.project_id, r.n]),
-    );
-
-    // Tasks in progress = any active phase (including awaiting_approval).
-    const tasksInProgressRow = this.db
-      .prepare(
-        `SELECT COUNT(*) as n FROM threads WHERE kind = 'pipeline' AND status IN (${placeholders(ACTIVE_PHASES.length)})`,
-      )
-      .get(...ACTIVE_PHASES) as { n: number };
-
-    // Open / blocked breakdown.
-    const blockedRow = this.db
-      .prepare(
-        `SELECT COUNT(*) as n FROM threads WHERE kind = 'pipeline' AND status IN (${placeholders(BLOCKED_PHASES.length)})`,
-      )
-      .get(...BLOCKED_PHASES) as { n: number };
-
-    const tasksOpenRow = this.db
-      .prepare(
-        `SELECT COUNT(*) as n FROM threads WHERE kind = 'pipeline' AND status NOT IN (?, ?, ?)`,
-      )
-      .get(PIPELINE_PHASE.completed, PIPELINE_PHASE.failed, PIPELINE_PHASE.idle) as { n: number };
-
-    // Pending approvals = only threads still waiting on a human sign-off.
-    const pendingApprovalsRow = this.db
-      .prepare(`SELECT COUNT(*) as n FROM threads WHERE ${awaitingHumanApprovalWhere('threads')}`)
-      .get() as { n: number };
-    const staleRow = this.db
-      .prepare(
-        `SELECT COUNT(*) as n FROM threads
-       WHERE ${awaitingHumanApprovalWhere('threads')}
-         AND julianday('now') - julianday(updated_at) > 1.0`,
-      )
-      .get() as { n: number };
-
-    // Recent shipped / failed (last 7 days).
-    const shippedRow = this.db
-      .prepare(
-        `SELECT COUNT(*) as n FROM threads
-       WHERE kind = 'pipeline' AND status = ?
-         AND julianday('now') - julianday(updated_at) <= 7.0`,
-      )
-      .get(PIPELINE_PHASE.completed) as { n: number };
-
-    const failedRow = this.db
-      .prepare(
-        `SELECT COUNT(*) as n FROM threads
-       WHERE kind = 'pipeline' AND status = ?
-         AND julianday('now') - julianday(updated_at) <= 7.0`,
-      )
-      .get(PIPELINE_PHASE.failed) as { n: number };
+    let pendingApprovals = 0;
+    let staleApprovals = 0;
+    for (const row of pendingRows) {
+      pendingApprovals++;
+      pendingApprovalsByProject[row.project_id] =
+        (pendingApprovalsByProject[row.project_id] ?? 0) + 1;
+      const ageMs = nowJulian - new Date(row.updated_at).getTime();
+      if (ageMs > 86_400_000) staleApprovals++;
+    }
 
     return {
-      agentsRunning: agentsRunningRow.n,
+      agentsRunning,
       runningByPhase,
       agentsRunningByProject,
       pendingApprovalsByProject,
-      tasksInProgress: tasksInProgressRow.n,
-      tasksOpen: tasksOpenRow.n,
-      tasksBlocked: blockedRow.n,
-      pendingApprovals: pendingApprovalsRow.n,
-      staleApprovals: staleRow.n,
-      shippedLast7d: shippedRow.n,
-      failedLast7d: failedRow.n,
+      tasksInProgress,
+      tasksOpen,
+      tasksBlocked,
+      pendingApprovals,
+      staleApprovals,
+      shippedLast7d,
+      failedLast7d,
     };
   }
 
