@@ -1,6 +1,8 @@
 name: Publish
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       release_tag:
@@ -31,7 +33,7 @@ on:
         description: "Publish the CLI to npm via Trusted Publisher"
         required: false
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: write
@@ -39,15 +41,57 @@ permissions:
 env:
   BUN_VERSION: "1.3.13"
   NODE_VERSION: "22"
-  VERCEL_PROJECT_ID_WEB: "prj_em8zYt0Lxin5PqxObNI47qBl2fOa"
 
 jobs:
+  validate-release:
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.version.outputs.release_tag }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate release tag and app versions
+        id: version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+        run: |
+          if [ -z "$RELEASE_TAG" ]; then
+            echo "::error::release_tag is required"
+            exit 1
+          fi
+
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::release_tag must be a v-prefixed semver tag, got '$RELEASE_TAG'"
+            exit 1
+          fi
+
+          VERSION="${RELEASE_TAG#v}"
+          CLI_VERSION=$(node -p "require('./apps/cli/package.json').version")
+          DESKTOP_VERSION=$(node -p "require('./apps/desktop/package.json').version")
+
+          if [ "$CLI_VERSION" != "$DESKTOP_VERSION" ]; then
+            echo "::error::apps/cli ($CLI_VERSION) and apps/desktop ($DESKTOP_VERSION) versions must match"
+            exit 1
+          fi
+
+          if [ "$CLI_VERSION" != "$VERSION" ]; then
+            echo "::error::release tag $RELEASE_TAG does not match app versions $CLI_VERSION"
+            exit 1
+          fi
+
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
+
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
   deploy-web:
-    if: ${{ inputs.deploy_web }}
+    if: ${{ github.event_name == 'release' || inputs.deploy_web }}
+    needs: validate-release
     runs-on: ubuntu-latest
     env:
       VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ env.VERCEL_PROJECT_ID_WEB }}
+      VERCEL_PROJECT_ID: "prj_em8zYt0Lxin5PqxObNI47qBl2fOa"
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -70,7 +114,8 @@ jobs:
         run: vercel deploy --cwd apps/web --prebuilt --prod --token "${{ secrets.VERCEL_TOKEN }}"
 
   build-desktop-linux:
-    if: ${{ inputs.build_linux }}
+    if: ${{ github.event_name == 'release' || inputs.build_linux }}
+    needs: validate-release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -83,21 +128,13 @@ jobs:
       - name: Install native build dependencies
         run: sudo apt-get update && sudo apt-get install -y build-essential python3
       - run: bun install
-      - name: Set desktop version from release tag
-        run: |
-          VERSION="${{ inputs.release_tag }}"
-          VERSION="${VERSION#v}"
-          CURRENT=$(node -p "require('./apps/desktop/package.json').version")
-          if [ "$CURRENT" != "$VERSION" ]; then
-            cd apps/desktop && npm version "$VERSION" --no-git-tag-version
-          fi
       - name: Build desktop app
         run: cd apps/desktop && bun run build:code
       - name: Package Linux installers
         run: cd apps/desktop && npx electron-builder --linux --publish never
       - name: Upload Linux binaries to release
         run: |
-          gh release upload "${{ inputs.release_tag }}" \
+          gh release upload "${{ needs.validate-release.outputs.release_tag }}" \
             apps/desktop/out/*.AppImage \
             apps/desktop/out/*.deb \
             --clobber
@@ -105,12 +142,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-desktop-macos:
-    if: ${{ inputs.build_macos }}
+    if: ${{ github.event_name == 'release' || inputs.build_macos }}
+    needs: validate-release
     strategy:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-13
+          - runner: macos-15-intel
             arch: x64
           - runner: macos-15
             arch: arm64
@@ -124,14 +162,6 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
       - run: bun install
-      - name: Set desktop version from release tag
-        run: |
-          VERSION="${{ inputs.release_tag }}"
-          VERSION="${VERSION#v}"
-          CURRENT=$(node -p "require('./apps/desktop/package.json').version")
-          if [ "$CURRENT" != "$VERSION" ]; then
-            cd apps/desktop && npm version "$VERSION" --no-git-tag-version
-          fi
       - name: Build desktop app
         run: cd apps/desktop && bun run build:code
       - name: Package macOS installers
@@ -140,7 +170,7 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
       - name: Upload macOS binaries to release
         run: |
-          gh release upload "${{ inputs.release_tag }}" \
+          gh release upload "${{ needs.validate-release.outputs.release_tag }}" \
             apps/desktop/out/*.dmg \
             apps/desktop/out/*.zip \
             --clobber
@@ -148,8 +178,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   update-homebrew-cask:
-    if: ${{ inputs.build_macos && inputs.update_homebrew }}
-    needs: build-desktop-macos
+    if: ${{ github.event_name == 'release' || (inputs.build_macos && inputs.update_homebrew) }}
+    needs:
+      - validate-release
+      - build-desktop-macos
     runs-on: ubuntu-latest
     steps:
       - name: Verify HOMEBREW_TAP_TOKEN secret
@@ -168,9 +200,7 @@ jobs:
           ref: master
       - name: Download macOS release artifacts
         run: |
-          VERSION="${{ inputs.release_tag }}"
-          VERSION="${VERSION#v}"
-          gh release download "v${VERSION}" \
+          gh release download "${{ needs.validate-release.outputs.release_tag }}" \
             --repo shipshitdev/shipcode \
             --pattern "*.dmg" \
             --dir ./artifacts
@@ -179,8 +209,8 @@ jobs:
       - name: Compute SHA256 hashes
         id: sha
         run: |
-          ARM_FILE=$(ls artifacts/*-arm64.dmg 2>/dev/null | head -1)
-          INTEL_FILE=$(ls artifacts/*-x64.dmg 2>/dev/null | head -1)
+          ARM_FILE=$(find artifacts -maxdepth 1 -type f -name "*-arm64.dmg" | head -n 1)
+          INTEL_FILE=$(find artifacts -maxdepth 1 -type f -name "*-x64.dmg" | head -n 1)
           if [ -n "$ARM_FILE" ]; then
             echo "arm_sha=$(shasum -a 256 "$ARM_FILE" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
           fi
@@ -197,21 +227,40 @@ jobs:
           fi
       - name: Update cask version and SHA256
         run: |
-          VERSION="${{ inputs.release_tag }}"
-          VERSION="${VERSION#v}"
-          sed -i "s/version \".*\"/version \"${VERSION}\"/" Casks/shipcode.rb
-          sed -i "s|arm:   \"[a-f0-9]*\"|arm:   \"${{ steps.sha.outputs.arm_sha }}\"|" Casks/shipcode.rb
-          sed -i "s|intel: \"[a-f0-9]*\"|intel: \"${{ steps.sha.outputs.intel_sha }}\"|" Casks/shipcode.rb
+          cat > Casks/shipcode.rb <<'RUBY'
+          cask "shipcode" do
+            version "${{ needs.validate-release.outputs.version }}"
+            arch arm: "arm64", intel: "x64"
+
+            sha256 arm:   "${{ steps.sha.outputs.arm_sha }}",
+                   intel: "${{ steps.sha.outputs.intel_sha }}"
+
+            url "https://github.com/shipshitdev/shipcode/releases/download/v#{version}/ShipCode-#{version}-#{arch}.dmg",
+                verified: "github.com/shipshitdev/shipcode/"
+            name "ShipCode"
+            desc "AI-driven dev pipeline orchestrator for GitHub issues"
+            homepage "https://shipcode.shipshit.dev"
+
+            app "ShipCode.app"
+
+            zap trash: [
+              "~/Library/Application Support/ShipCode",
+              "~/Library/Logs/ShipCode",
+              "~/Library/Preferences/com.shipcode.app.plist",
+            ]
+          end
+          RUBY
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Casks/shipcode.rb
-          git commit -m "chore: bump shipcode to ${{ inputs.release_tag }}"
+          git commit -m "chore: bump shipcode to ${{ needs.validate-release.outputs.release_tag }}"
           git push
 
   publish-cli:
-    if: ${{ inputs.publish_cli }}
+    if: ${{ github.event_name == 'release' || inputs.publish_cli }}
+    needs: validate-release
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -227,15 +276,7 @@ jobs:
           registry-url: "https://registry.npmjs.org"
       - run: bun install
       - name: Build CLI and dependencies
-        run: bun run turbo run build --filter=shipcode
-      - name: Set version from release tag
-        run: |
-          VERSION="${{ inputs.release_tag }}"
-          VERSION="${VERSION#v}"
-          CURRENT=$(node -p "require('./apps/cli/package.json').version")
-          if [ "$CURRENT" != "$VERSION" ]; then
-            cd apps/cli && npm version "$VERSION" --no-git-tag-version
-          fi
+        run: bun run turbo run build --filter=@shipshitdev/shipcode
       - name: Publish to npm (OIDC / Trusted Publisher)
         run: cd apps/cli && npm publish --access public --provenance
         # No NODE_AUTH_TOKEN. Authentication happens via OIDC — the npm
