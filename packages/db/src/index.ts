@@ -102,6 +102,11 @@ export function getDatabase(dataDir: string): DatabaseSync {
 
   db.exec('PRAGMA journal_mode = WAL');
   db.exec('PRAGMA busy_timeout = 5000');
+  db.exec('PRAGMA synchronous = NORMAL');
+  db.exec('PRAGMA journal_size_limit = 67108864');
+  db.exec('PRAGMA mmap_size = 134217728');
+  db.exec('PRAGMA cache_size = -16000');
+  db.exec('PRAGMA temp_store = MEMORY');
 
   migrate(db);
   migrateV2(db);

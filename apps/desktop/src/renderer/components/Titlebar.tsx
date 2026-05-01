@@ -294,12 +294,12 @@ export function Titlebar() {
     staleTime: STABLE_APP_STATE_STALE_TIME,
   });
 
+  // Polling owned by HealthBanner (health) and ProjectSidebar (provider-usage).
+  // Titlebar piggybacks via shared query keys — no duplicate refetchInterval.
   const { data: systemHealth } = useQuery<SystemHealth>({
     queryKey: ['health'],
     queryFn: () => window.shipcode.invoke<SystemHealth>('health:check'),
     staleTime: 30_000,
-    refetchInterval: 60_000,
-    refetchIntervalInBackground: true,
   });
 
   const { data: providerUsage, isFetching: isProviderUsageFetching } =
@@ -307,8 +307,6 @@ export function Titlebar() {
       queryKey: ['provider-usage'],
       queryFn: () => window.shipcode.invoke<CliProviderUsageMap>('provider-usage:check'),
       staleTime: 60_000,
-      refetchInterval: 60_000,
-      refetchIntervalInBackground: true,
     });
 
   const refreshProviderUsage = useMutation({

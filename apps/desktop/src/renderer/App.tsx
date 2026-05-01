@@ -2,37 +2,63 @@ import type { AppSettings, Project, TelemetryStatus } from '@shipcode/shared';
 import { CURRENT_ONBOARDING_VERSION } from '@shipcode/shared';
 import { Button } from '@shipshitdev/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useRef } from 'react';
-import { ActivityView } from './components/ActivityView';
+import { lazy, Suspense, useCallback, useEffect, useRef } from 'react';
 import { AutomationRunDetail } from './components/AutomationRunDetail';
-import { AutomationsView } from './components/AutomationsView';
 import { CommandPalette } from './components/CommandPalette';
-import { CostsView } from './components/CostsView';
-import { CreateIssueModal } from './components/CreateIssueModal';
 import { HealthBanner } from './components/HealthBanner';
-import { InboxView } from './components/InboxView';
 import { IssueDetail } from './components/IssueDetail';
 import { NotificationToaster } from './components/NotificationToaster';
 import { OverviewView } from './components/OverviewView';
-import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
 import { ProjectMissingView } from './components/ProjectMissingView';
 import { ProjectPathBanner } from './components/ProjectPathBanner';
-import { ProjectSettingsModal } from './components/ProjectSettingsModal';
 import { ProjectSidebar } from './components/ProjectSidebar';
 import { ProjectView } from './components/ProjectView';
 import { SettingsPanel } from './components/SettingsPanel';
 import { SettingsSidebar } from './components/SettingsSidebar';
-import { SkillsView } from './components/SkillsView';
 import { TelemetryConsentDialog } from './components/TelemetryConsentDialog';
 import { TerminalDrawer } from './components/TerminalDrawer';
 import { Titlebar } from './components/Titlebar';
 import { UpdateBanner } from './components/UpdateBanner';
-import { CreateAutomationModal } from './features/automations/create-automation-modal';
 import { useGlobalKeyboard } from './hooks/useGlobalKeyboard';
 import { useIpc } from './hooks/useIpc';
 import { STABLE_APP_STATE_STALE_TIME } from './query-stale-times';
 import { useAppStore } from './stores/app-store';
 import { syncRendererTelemetry } from './telemetry';
+
+// Code-split: heavy views loaded on demand.
+const ActivityView = lazy(() =>
+  import('./components/ActivityView').then((m) => ({ default: m.ActivityView })),
+);
+const AutomationsView = lazy(() =>
+  import('./components/AutomationsView').then((m) => ({ default: m.AutomationsView })),
+);
+const CostsView = lazy(() =>
+  import('./components/CostsView').then((m) => ({ default: m.CostsView })),
+);
+const InboxView = lazy(() =>
+  import('./components/InboxView').then((m) => ({ default: m.InboxView })),
+);
+const SkillsView = lazy(() =>
+  import('./components/SkillsView').then((m) => ({ default: m.SkillsView })),
+);
+const OnboardingWizard = lazy(() =>
+  import('./components/onboarding/OnboardingWizard').then((m) => ({
+    default: m.OnboardingWizard,
+  })),
+);
+const CreateIssueModal = lazy(() =>
+  import('./components/CreateIssueModal').then((m) => ({ default: m.CreateIssueModal })),
+);
+const ProjectSettingsModal = lazy(() =>
+  import('./components/ProjectSettingsModal').then((m) => ({
+    default: m.ProjectSettingsModal,
+  })),
+);
+const CreateAutomationModal = lazy(() =>
+  import('./features/automations/create-automation-modal').then((m) => ({
+    default: m.CreateAutomationModal,
+  })),
+);
 
 const ISSUE_DETAIL_MIN_WIDTH = 380;
 const ISSUE_DETAIL_MAX_WIDTH = 760;
@@ -136,20 +162,22 @@ export function App() {
 
   if (settings && (settings.onboardingVersion ?? 0) < CURRENT_ONBOARDING_VERSION) {
     return (
-      <OnboardingWizard
-        onComplete={async () => {
-          queryClient.invalidateQueries({ queryKey: ['settings'] });
-          queryClient.invalidateQueries({ queryKey: ['health'] });
-          const projects = await queryClient.fetchQuery<Project[]>({
-            queryKey: ['projects-visible'],
-            queryFn: () => window.shipcode.invoke('project:list-visible'),
-            staleTime: STABLE_APP_STATE_STALE_TIME,
-          });
-          if (projects && projects.length > 0) {
-            useAppStore.getState().selectProject(projects[0].id);
-          }
-        }}
-      />
+      <Suspense fallback={null}>
+        <OnboardingWizard
+          onComplete={async () => {
+            queryClient.invalidateQueries({ queryKey: ['settings'] });
+            queryClient.invalidateQueries({ queryKey: ['health'] });
+            const projects = await queryClient.fetchQuery<Project[]>({
+              queryKey: ['projects-visible'],
+              queryFn: () => window.shipcode.invoke('project:list-visible'),
+              staleTime: STABLE_APP_STATE_STALE_TIME,
+            });
+            if (projects && projects.length > 0) {
+              useAppStore.getState().selectProject(projects[0].id);
+            }
+          }}
+        />
+      </Suspense>
     );
   }
 
@@ -241,31 +269,33 @@ export function App() {
             either flank opens or closes. */}
         <div className="flex flex-col flex-1 overflow-hidden min-h-0">
           {!hideMainContentForTerminal && (
-            <div className="flex flex-1 overflow-hidden min-h-0 bg-primary">
-              {hasActiveIssue && issueDetailExpanded ? (
-                <IssueDetail expanded={true} />
-              ) : hasActiveAutomationThread && issueDetailExpanded ? (
-                <AutomationRunDetail expanded={true} />
-              ) : settingsVisible ? (
-                <SettingsPanel />
-              ) : viewMode === 'activity' ? (
-                <ActivityView />
-              ) : viewMode === 'costs' ? (
-                <CostsView />
-              ) : viewMode === 'skills' ? (
-                <SkillsView />
-              ) : viewMode === 'automations' ? (
-                <AutomationsView />
-              ) : viewMode === 'inbox' ? (
-                <InboxView />
-              ) : showOverview ? (
-                <OverviewView />
-              ) : showMissingProject && activeProject ? (
-                <ProjectMissingView project={activeProject} />
-              ) : (
-                <ProjectView />
-              )}
-            </div>
+            <Suspense fallback={null}>
+              <div className="flex flex-1 overflow-hidden min-h-0 bg-primary">
+                {hasActiveIssue && issueDetailExpanded ? (
+                  <IssueDetail expanded={true} />
+                ) : hasActiveAutomationThread && issueDetailExpanded ? (
+                  <AutomationRunDetail expanded={true} />
+                ) : settingsVisible ? (
+                  <SettingsPanel />
+                ) : viewMode === 'activity' ? (
+                  <ActivityView />
+                ) : viewMode === 'costs' ? (
+                  <CostsView />
+                ) : viewMode === 'skills' ? (
+                  <SkillsView />
+                ) : viewMode === 'automations' ? (
+                  <AutomationsView />
+                ) : viewMode === 'inbox' ? (
+                  <InboxView />
+                ) : showOverview ? (
+                  <OverviewView />
+                ) : showMissingProject && activeProject ? (
+                  <ProjectMissingView project={activeProject} />
+                ) : (
+                  <ProjectView />
+                )}
+              </div>
+            </Suspense>
           )}
           {terminalVisible && <TerminalDrawer />}
         </div>
@@ -299,9 +329,11 @@ export function App() {
           )}
       </div>
       <CommandPalette />
-      <CreateIssueModal />
-      <CreateAutomationModal />
-      <ProjectSettingsModal />
+      <Suspense fallback={null}>
+        <CreateIssueModal />
+        <CreateAutomationModal />
+        <ProjectSettingsModal />
+      </Suspense>
       <TelemetryConsentDialog
         open={
           settings.telemetryEnabled == null &&

@@ -169,6 +169,12 @@ export function useIpc() {
         if (data.threadId === store.activeThreadId) {
           setPipelinePhase(data.phase);
           invalidatePlanQueriesForThread(data.threadId);
+          // Push-invalidate pipeline-tab queries so IssueDetail doesn't
+          // rely solely on polling for freshness.
+          queryClient.invalidateQueries({ queryKey: ['checkpoints', data.threadId] });
+          queryClient.invalidateQueries({ queryKey: ['diffs', data.threadId] });
+          queryClient.invalidateQueries({ queryKey: ['task-graph', data.threadId] });
+          queryClient.invalidateQueries({ queryKey: ['thread', data.threadId] });
         }
         if (data.phase !== PIPELINE_PHASE.idle && data.phase !== PIPELINE_PHASE.planning) {
           focusThreadIfSelectedProject();
@@ -293,6 +299,13 @@ export function useIpc() {
         const displayName = formatResolvedModelDisplay(data.requestedModel, data.resolvedModel);
         const tid = data.threadId ?? store.terminalThreadId;
         if (tid && displayName) setCurrentModel(tid, displayName);
+        // Token usage recorded — push-invalidate cost queries so CostsView
+        // updates without relying on heavy polling.
+        queryClient.invalidateQueries({ queryKey: ['costs-summary'] });
+        queryClient.invalidateQueries({ queryKey: ['costs-tasks'] });
+        queryClient.invalidateQueries({ queryKey: ['costs-tasks-count'] });
+        queryClient.invalidateQueries({ queryKey: ['costs-project-tasks'] });
+        queryClient.invalidateQueries({ queryKey: ['costs-project-tasks-count'] });
       }),
     );
 

@@ -28,6 +28,17 @@ const BLOCKED_PHASES: PipelinePhase[] = [
   PIPELINE_PHASE.awaitingApproval,
 ];
 
+// Pre-built Sets for O(1) membership checks in getStats(). Derived from
+// constants — no reason to rebuild per call.
+const RUNNING_SET = new Set<string>(AGENT_RUNNING_PHASES);
+const ACTIVE_SET = new Set<string>(ACTIVE_PHASES);
+const BLOCKED_SET = new Set<string>(BLOCKED_PHASES);
+const CLOSED_SET = new Set<string>([
+  PIPELINE_PHASE.completed,
+  PIPELINE_PHASE.failed,
+  PIPELINE_PHASE.idle,
+]);
+
 interface RecentTaskRow {
   thread_id: string;
   project_id: string;
@@ -60,15 +71,6 @@ export class DashboardQueries {
     // Single-pass aggregation: one scan of pipeline threads computes all scalar
     // counters plus per-status and per-project breakdowns. Replaces 9+ separate
     // COUNT queries that each full-scanned the threads table.
-    const RUNNING_SET = new Set<string>(AGENT_RUNNING_PHASES);
-    const ACTIVE_SET = new Set<string>(ACTIVE_PHASES);
-    const BLOCKED_SET = new Set<string>(BLOCKED_PHASES);
-    const CLOSED_SET = new Set<string>([
-      PIPELINE_PHASE.completed,
-      PIPELINE_PHASE.failed,
-      PIPELINE_PHASE.idle,
-    ]);
-
     const rows = this.db
       .prepare(`SELECT status, project_id, updated_at FROM threads WHERE kind = 'pipeline'`)
       .all() as Array<{ status: string; project_id: string; updated_at: string }>;

@@ -140,7 +140,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     queryKey: ['thread', activeThreadId],
     queryFn: () => window.shipcode.invoke('thread:get', { threadId: activeThreadId }),
     enabled: !!activeThreadId,
-    refetchInterval: shouldPollThread ? 15_000 : false,
+    refetchInterval: shouldPollThread ? 60_000 : false,
   });
   const currentPipelinePhase = thread?.status ?? pipelinePhase;
   const shouldPollLiveThread =
@@ -163,7 +163,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     queryKey: ['plan-history', activeThreadId],
     queryFn: () => window.shipcode.invoke('plan:list', { threadId: activeThreadId }),
     enabled: !!activeThreadId,
-    refetchInterval: shouldPollPlanData ? 15_000 : false,
+    refetchInterval: shouldPollPlanData ? 60_000 : false,
   });
   const isThreadPlanHistoryLoading = !!activeThreadId && planHistory === undefined;
   const normalizedThreadPlanHistory = Array.isArray(planHistory) ? planHistory : [];
@@ -180,7 +180,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       });
     },
     enabled: shouldLoadIssueWidePlanHistory,
-    refetchInterval: shouldPollPlanData && shouldLoadIssueWidePlanHistory ? 15_000 : false,
+    refetchInterval: shouldPollPlanData && shouldLoadIssueWidePlanHistory ? 60_000 : false,
   });
   const isIssuePlanHistoryLoading =
     shouldLoadIssueWidePlanHistory && issuePlanHistory === undefined;
@@ -205,7 +205,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       });
     },
     enabled: !!activeProjectId && !!activeIssue && shouldLoadActivityTab,
-    refetchInterval: shouldPollLiveThread && shouldLoadActivityTab ? 30_000 : false,
+    refetchInterval: shouldPollLiveThread && shouldLoadActivityTab ? 60_000 : false,
   });
   const normalizedIssueActivity = Array.isArray(issueActivity) ? issueActivity : [];
   const planRunGroups = useMemo(() => {
@@ -238,7 +238,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     queryKey: ['reviews-by-plans', reviewPlanIds.join(',')],
     queryFn: () => window.shipcode.invoke('review:list-by-plans', { planIds: reviewPlanIds }),
     enabled: reviewPlanIds.length > 0,
-    refetchInterval: shouldPollPlanData && shouldLoadHistoryTab ? 15_000 : false,
+    refetchInterval: shouldPollPlanData && shouldLoadHistoryTab ? 60_000 : false,
   });
   const normalizedReviewsByPlanId =
     reviewsByPlanId && typeof reviewsByPlanId === 'object' ? reviewsByPlanId : {};
@@ -260,14 +260,14 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     queryKey: ['checkpoints', activeThreadId],
     queryFn: () => window.shipcode.invoke('checkpoint:list', { threadId: activeThreadId }),
     enabled: !!activeThreadId && shouldLoadPipelineTab,
-    refetchInterval: shouldPollLiveThread && shouldLoadPipelineTab ? 15_000 : false,
+    refetchInterval: shouldPollLiveThread && shouldLoadPipelineTab ? 60_000 : false,
   });
 
   const { data: diffs = [] } = useQuery<DiffRecord[]>({
     queryKey: ['diffs', activeThreadId],
     queryFn: () => window.shipcode.invoke('diff:list', { threadId: activeThreadId }),
     enabled: !!activeThreadId && shouldLoadPipelineTab,
-    refetchInterval: shouldPollLiveThread && shouldLoadPipelineTab ? 15_000 : false,
+    refetchInterval: shouldPollLiveThread && shouldLoadPipelineTab ? 60_000 : false,
   });
 
   const { data: taskGraph = null } = useQuery<TaskGraphWithNodes | null>({
@@ -280,7 +280,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       return graph && Array.isArray(graph.nodes) ? graph : null;
     },
     enabled: !!activeThreadId && shouldLoadPipelineTab,
-    refetchInterval: shouldPollLiveThread && shouldLoadPipelineTab ? 15_000 : false,
+    refetchInterval: shouldPollLiveThread && shouldLoadPipelineTab ? 60_000 : false,
   });
 
   // Fetch latest verification for the thread

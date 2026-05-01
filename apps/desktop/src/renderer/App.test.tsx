@@ -278,7 +278,7 @@ describe('App', () => {
     renderApp();
 
     expect(await screen.findByText('ProjectSidebar')).toBeInTheDocument();
-    expect(screen.getByText('SkillsView')).toBeInTheDocument();
+    expect(await screen.findByText('SkillsView')).toBeInTheDocument();
     await waitFor(() => {
       expect(document.documentElement.dataset.theme).toBe('dark');
       expect(document.documentElement.dataset.fontStyle).toBe('dm-sans');

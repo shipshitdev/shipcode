@@ -24,6 +24,29 @@ type AliasEntry = {
   ) => ReturnType<NonNullable<Plugin['resolveId']>>;
 };
 
+type ElectronOnStartArgs = {
+  startup: (
+    argv?: string[],
+    options?: import('node:child_process').SpawnOptions,
+    customElectronPkg?: string,
+  ) => Promise<void>;
+  reload: () => void;
+};
+
+function electronStartupEnv(): NodeJS.ProcessEnv {
+  const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...env } = process.env;
+  return env;
+}
+
+function restartOrReloadElectron(args: ElectronOnStartArgs): void {
+  if (process.electronApp) {
+    args.reload();
+    return;
+  }
+
+  void args.startup(undefined, { env: electronStartupEnv() });
+}
+
 function stripInvalidFreezeOutputOption(config: UserConfig): void {
   const output = config.build?.rollupOptions?.output;
   if (!output) return;
@@ -114,6 +137,7 @@ export default defineConfig(async ({ command, mode }) => {
       electron([
         {
           entry: 'src/main/index.ts',
+          onstart: restartOrReloadElectron,
           vite: {
             build: {
               outDir: 'dist/main',
@@ -136,9 +160,7 @@ export default defineConfig(async ({ command, mode }) => {
         },
         {
           entry: 'src/preload/index.ts',
-          onstart(args) {
-            args.reload();
-          },
+          onstart: restartOrReloadElectron,
           vite: {
             build: {
               outDir: 'dist/preload',
