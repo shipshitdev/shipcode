@@ -2,6 +2,7 @@ import { createPipeline } from '@shipcode/pipeline';
 import { PIPELINE_PHASE } from '@shipcode/shared';
 import { createCliContext } from '../context';
 import { requireOnboarding } from './guard';
+import { parseIssueNumberOrExit } from './issue-number';
 
 /**
  * `shipcode approve <issue-number>`
@@ -12,12 +13,7 @@ import { requireOnboarding } from './guard';
 export async function approveCommand(issueNumber: string) {
   if (!requireOnboarding()) return;
 
-  const num = parseInt(issueNumber, 10);
-  if (Number.isNaN(num)) {
-    console.error('Invalid issue number:', issueNumber);
-    process.exit(1);
-  }
-
+  const num = parseIssueNumberOrExit(issueNumber);
   const ctx = createCliContext(process.cwd());
 
   const thread = ctx.threads.getByProjectAndGithubIssue(ctx.project.id, num);
