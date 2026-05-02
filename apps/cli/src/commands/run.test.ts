@@ -11,6 +11,7 @@ const {
   createCliEmitterMock,
   startFromGitHubIssueMock,
   settingsGetMock,
+  EmptyQuery,
 } = vi.hoisted(() => ({
   requireOnboardingMock: vi.fn(),
   mkdirSyncMock: vi.fn(),
@@ -22,6 +23,7 @@ const {
   createCliEmitterMock: vi.fn(),
   startFromGitHubIssueMock: vi.fn(),
   settingsGetMock: vi.fn(),
+  EmptyQuery: class {},
 }));
 
 vi.mock('node:fs', () => ({
@@ -36,24 +38,25 @@ vi.mock('@shipcode/db', () => ({
     list = listProjectsMock;
     add = addProjectMock;
   },
-  ThreadQueries: class {},
-  PlanQueries: class {},
-  ReviewQueries: class {},
-  DiffQueries: class {},
-  VerificationQueries: class {},
-  GitHubIssueQueries: class {},
-  CheckpointQueries: class {},
-  TerminalEventQueries: class {},
-  PipelineStepQueries: class {},
-  TaskGraphQueries: class {},
+  ThreadQueries: EmptyQuery,
+  PlanQueries: EmptyQuery,
+  ReviewQueries: EmptyQuery,
+  DiffQueries: EmptyQuery,
+  VerificationQueries: EmptyQuery,
+  GitHubIssueQueries: EmptyQuery,
+  CheckpointQueries: EmptyQuery,
+  TerminalEventQueries: EmptyQuery,
+  PipelineStepQueries: EmptyQuery,
+  AgentConversationQueries: EmptyQuery,
+  FeatureQaResultQueries: EmptyQuery,
   SettingsQueries: class {
     get = settingsGetMock;
   },
-  SkillsQueries: class {},
+  SkillsQueries: EmptyQuery,
 }));
 
 vi.mock('@shipcode/db/source', () => ({
-  TaskGraphQueries: class {},
+  TaskGraphQueries: EmptyQuery,
 }));
 
 vi.mock('@shipcode/agents', () => ({
