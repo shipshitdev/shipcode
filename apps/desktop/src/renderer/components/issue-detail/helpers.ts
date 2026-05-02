@@ -7,14 +7,7 @@ import type {
 } from '@shipcode/shared';
 import { PIPELINE_PHASE, shipCodePlanSchema } from '@shipcode/shared';
 
-export { formatRelativeTime as timeAgo } from '@shipcode/shared';
-
-// biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI formatting from persisted terminal lines
-const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]|\x1b\].*?(?:\x07|\x1b\\)/g;
-
-export function stripAnsi(value: string): string {
-  return value.replace(ANSI_RE, '');
-}
+export { formatRelativeTime as timeAgo, stripAnsi } from '@shipcode/shared';
 
 export const ACTIVE_PHASES: PipelinePhase[] = [
   PIPELINE_PHASE.planning,

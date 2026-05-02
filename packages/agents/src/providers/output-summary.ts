@@ -1,11 +1,6 @@
-import { clampTextBlock } from '@shipcode/shared';
+import { clampTextBlock, stripAnsi } from '@shipcode/shared';
 
-// biome-ignore lint/suspicious/noControlCharactersInRegex: intentional ANSI stripping for terminal summaries
-const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]|\x1b\].*?(?:\x07|\x1b\\)/g;
-
-export function stripAnsi(value: string): string {
-  return value.replace(ANSI_RE, '');
-}
+export { stripAnsi };
 
 export function summarizeTerminalText(
   raw: string | null | undefined,
