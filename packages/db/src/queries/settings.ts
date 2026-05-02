@@ -200,6 +200,7 @@ export class SettingsQueries {
         (stored.projectSortOrder as AppSettings['projectSortOrder']) ??
         DEFAULT_SETTINGS.projectSortOrder,
       worktreeRoot: readWorktreeRoot(stored.worktreeRoot),
+      addProjectStartsIn: readNullable(stored.addProjectStartsIn) ?? null,
       worktreeBranchFormat: stored.worktreeBranchFormat || DEFAULT_SETTINGS.worktreeBranchFormat,
       revisionCount: readRevisionCount(stored.revisionCount, DEFAULT_SETTINGS.revisionCount),
       requireApproval: parseBool(stored.requireApproval, DEFAULT_SETTINGS.requireApproval),
@@ -291,6 +292,14 @@ export class SettingsQueries {
     // Validate worktreeRoot up-front so malformed values (relative paths, ~user/…) never reach the DB.
     if ('worktreeRoot' in patch && patch.worktreeRoot != null && patch.worktreeRoot !== '') {
       expandWorktreeRoot(patch.worktreeRoot);
+    }
+    // Same path validation for addProjectStartsIn.
+    if (
+      'addProjectStartsIn' in patch &&
+      patch.addProjectStartsIn != null &&
+      patch.addProjectStartsIn !== ''
+    ) {
+      expandWorktreeRoot(patch.addProjectStartsIn);
     }
     if ('revisionCount' in patch && patch.revisionCount != null) {
       const n = Number(patch.revisionCount);

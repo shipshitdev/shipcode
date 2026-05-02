@@ -134,23 +134,7 @@ export function ProjectSidebar() {
     queryClient.invalidateQueries({ queryKey: ['projects-archived'] });
   };
 
-  const addProject = useMutation({
-    mutationFn: async () => {
-      const path = await window.shipcode.invoke<string | null>('dialog:open-directory');
-      if (!path) return null;
-      return window.shipcode.invoke<Project>('project:add', { path });
-    },
-    onSuccess: (project) => {
-      if (project) {
-        invalidateProjects();
-        selectProject(project.id);
-        openProjectSettingsModal(project.id, 'setup');
-        window.shipcode
-          .invoke('github:refresh-issues', { projectId: project.id, force: true })
-          .catch(() => {});
-      }
-    },
-  });
+  const openAddProjectExplorer = useAppStore((s) => s.openAddProjectExplorer);
 
   const setSortOrder = useMutation({
     mutationFn: (projectSortOrder: SortOrder) =>
@@ -460,7 +444,7 @@ export function ProjectSidebar() {
             className="text-muted app-region-no-drag"
             title="Add repository"
             aria-label="Add repository"
-            onClick={() => addProject.mutate()}
+            onClick={() => openAddProjectExplorer()}
           >
             <Plus size={14} />
           </Button>

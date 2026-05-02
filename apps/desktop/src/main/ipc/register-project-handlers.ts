@@ -1,6 +1,7 @@
 import { exec, execFile } from 'node:child_process';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import {
@@ -634,9 +635,11 @@ export function registerProjectHandlers({
       project,
       settings: queries.settings.get(),
       threads,
-      latestPlanStatusByThreadId: Object.fromEntries(
-        threads.map((thread) => [thread.id, queries.plans.getLatest(thread.id)?.status ?? null]),
-      ),
+      latestPlanStatusByThreadId: (() => {
+        const threadIds = threads.map((t) => t.id);
+        const statusMap = queries.plans.getLatestStatusByThreadIds(threadIds);
+        return Object.fromEntries(threads.map((t) => [t.id, statusMap.get(t.id) ?? null]));
+      })(),
       branches: await git.listBranches(project.defaultBranch),
     };
   });
@@ -808,6 +811,46 @@ export function registerProjectHandlers({
       properties: ['openDirectory'],
     });
     return result.canceled ? null : (result.filePaths[0] ?? null);
+  });
+
+  // ── Filesystem explorer for Add Project ──────────────────────────────
+
+  ipcMain.handle('fs:resolve-start-dir', () => {
+    const settings = queries.settings.get();
+    const raw = settings.addProjectStartsIn;
+    let resolvedPath: string;
+    if (!raw) {
+      resolvedPath = os.homedir();
+    } else if (raw === '~') {
+      resolvedPath = os.homedir();
+    } else if (raw.startsWith('~/')) {
+      resolvedPath = path.join(os.homedir(), raw.slice(2));
+    } else if (path.isAbsolute(raw)) {
+      resolvedPath = raw;
+    } else {
+      resolvedPath = os.homedir();
+    }
+    if (!fs.existsSync(resolvedPath)) {
+      resolvedPath = os.homedir();
+    }
+    return { resolvedPath };
+  });
+
+  ipcMain.handle('fs:list-directories', async (_event, { dirPath }: { dirPath: string }) => {
+    try {
+      const entries = await fsp.readdir(dirPath, { withFileTypes: true });
+      const dirs = entries
+        .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((e) => ({ name: e.name, absolutePath: path.join(dirPath, e.name) }));
+      return { entries: dirs, error: null };
+    } catch (err: unknown) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT') {
+        return { entries: [], error: 'not-found' as const };
+      }
+      return { entries: [], error: 'permission-denied' as const };
+    }
   });
 
   ipcMain.handle('shell:open-external', async (_event, { url }: { url: string }) => {

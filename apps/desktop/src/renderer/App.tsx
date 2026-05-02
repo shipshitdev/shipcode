@@ -59,6 +59,11 @@ const CreateAutomationModal = lazy(() =>
     default: m.CreateAutomationModal,
   })),
 );
+const AddProjectExplorer = lazy(() =>
+  import('./components/AddProjectExplorer').then((m) => ({
+    default: m.AddProjectExplorer,
+  })),
+);
 
 const ISSUE_DETAIL_MIN_WIDTH = 380;
 const ISSUE_DETAIL_MAX_WIDTH = 760;
@@ -333,6 +338,7 @@ export function App() {
         <CreateIssueModal />
         <CreateAutomationModal />
         <ProjectSettingsModal />
+        <AddProjectExplorer />
       </Suspense>
       <TelemetryConsentDialog
         open={

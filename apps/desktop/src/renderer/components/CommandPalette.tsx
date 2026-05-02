@@ -9,7 +9,7 @@ import {
   CommandList,
   CommandShortcut,
 } from '@shipshitdev/ui';
-import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { getShortcut } from '../data/shortcuts';
 import { useOpenProjectTerminal } from '../hooks/useOpenProjectTerminal';
@@ -51,8 +51,6 @@ function CommandPaletteContent() {
   const openSkills = useAppStore((state) => state.openSkills);
   const openTerminalSessions = useAppStore((state) => state.openTerminalSessions);
   const setProjectTab = useAppStore((state) => state.setProjectTab);
-  const selectProject = useAppStore((state) => state.selectProject);
-  const openProjectSettingsModal = useAppStore((state) => state.openProjectSettingsModal);
   const navigateToIssue = useAppStore((state) => state.navigateToIssue);
   const { openProjectTerminal } = useOpenProjectTerminal();
 
@@ -96,22 +94,7 @@ function CommandPaletteContent() {
     return result;
   }, [issueResults, allProjects]);
 
-  const addProject = useMutation({
-    mutationFn: async () => {
-      const path = await window.shipcode.invoke<string | null>('dialog:open-directory');
-      if (!path) return null;
-      return window.shipcode.invoke<Project>('project:add', { path });
-    },
-    onSuccess: (project) => {
-      if (project) {
-        queryClient.invalidateQueries({ queryKey: ['projects'] });
-        queryClient.invalidateQueries({ queryKey: ['projects-visible'] });
-        queryClient.invalidateQueries({ queryKey: ['projects-archived'] });
-        selectProject(project.id);
-        openProjectSettingsModal(project.id, 'setup');
-      }
-    },
-  });
+  const openAddProjectExplorer = useAppStore((s) => s.openAddProjectExplorer);
 
   const close = () => toggleCommandPalette();
 
@@ -263,7 +246,12 @@ function CommandPaletteContent() {
         </CommandGroup>
 
         <CommandGroup heading="Workspace">
-          <CommandItem onSelect={() => runAction(() => addProject.mutate())}>
+          <CommandItem
+            onSelect={() => {
+              close();
+              openAddProjectExplorer();
+            }}
+          >
             <span className="flex-1">Add Repository…</span>
           </CommandItem>
           <CommandItem onSelect={() => runAction(() => toggleSidebar())}>

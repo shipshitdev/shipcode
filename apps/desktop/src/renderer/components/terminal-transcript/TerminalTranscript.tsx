@@ -1,7 +1,8 @@
 import type { CanonicalTerminalEvent, TerminalEventRecord } from '@shipcode/shared';
 import { ERROR_PATTERNS, formatClockTime, stripAnsi } from '@shipcode/shared';
 import { Badge, Button, cn } from '@shipshitdev/ui';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 interface TerminalTranscriptProps {
   events: TerminalEventRecord[];
@@ -363,6 +364,9 @@ function dedupeTranscriptEvents(events: TerminalEventRecord[]): TerminalEventRec
   return Array.from(new Map(events.map((record) => [record.id, record])).values());
 }
 
+/** Threshold below which we skip virtualization overhead (plain DOM is fine). */
+const VIRTUALIZE_THRESHOLD = 60;
+
 export function TerminalTranscript({
   events,
   pendingLabel = null,
@@ -391,19 +395,34 @@ export function TerminalTranscript({
   const scrollAnchor = hasEvents
     ? (visibleEvents.at(-1)?.id ?? String(visibleEvents.length))
     : pendingLabel;
-  const rows = useMemo(
+
+  const shouldVirtualize = visibleEvents.length >= VIRTUALIZE_THRESHOLD;
+
+  // Virtualizer — only active when shouldVirtualize is true.
+  const virtualizer = useVirtualizer({
+    count: visibleEvents.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 56, // rough average row height
+    overscan: 10,
+    enabled: shouldVirtualize,
+  });
+
+  // Non-virtualized rows (small lists) — same as original.
+  const plainRows = useMemo(
     () =>
-      visibleEvents
-        .map((record) => (
-          <MemoTranscriptRow
-            key={record.id}
-            record={record}
-            compact={compact}
-            onAction={onAction}
-          />
-        ))
-        .filter(Boolean),
-    [compact, onAction, visibleEvents],
+      shouldVirtualize
+        ? null
+        : visibleEvents
+            .map((record) => (
+              <MemoTranscriptRow
+                key={record.id}
+                record={record}
+                compact={compact}
+                onAction={onAction}
+              />
+            ))
+            .filter(Boolean),
+    [compact, onAction, visibleEvents, shouldVirtualize],
   );
 
   useEffect(() => {
@@ -411,68 +430,165 @@ export function TerminalTranscript({
     setShowAllEvents(false);
   }, [sourceKey]);
 
+  // Stick-to-bottom: scroll to end when new events arrive.
   useEffect(() => {
     const node = scrollRef.current;
     if (!node || !stickToBottomRef.current || !scrollAnchor) return;
     node.scrollTop = node.scrollHeight;
   }, [scrollAnchor]);
 
+  const handleScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
+    const node = event.currentTarget;
+    stickToBottomRef.current = node.scrollHeight - node.scrollTop - node.clientHeight < 48;
+  }, []);
+
+  const headerContent = (
+    <>
+      {hiddenEventCount > 0 ? (
+        <div className="flex justify-center">
+          <Button
+            variant="ghost"
+            size="xs"
+            className="rounded-full border border-border bg-primary/60 px-3 text-muted"
+            onClick={() => setShowAllEvents(true)}
+          >
+            Show {hiddenEventCount} older event{hiddenEventCount === 1 ? '' : 's'}
+          </Button>
+        </div>
+      ) : null}
+
+      {showAllEvents && dedupedEvents.length > DEFAULT_VISIBLE_EVENT_LIMIT ? (
+        <div className="flex justify-center">
+          <Button
+            variant="ghost"
+            size="xs"
+            className="rounded-full border border-border bg-primary/60 px-3 text-muted"
+            onClick={() => setShowAllEvents(false)}
+          >
+            Show latest {DEFAULT_VISIBLE_EVENT_LIMIT}
+          </Button>
+        </div>
+      ) : null}
+    </>
+  );
+
+  const footerContent = (
+    <>
+      {!hasEvents && pendingLabel ? (
+        <div className="flex min-h-full items-center justify-center">
+          <div className="inline-flex items-center gap-3 rounded-xl border border-border/70 bg-elevated px-4 py-3">
+            <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-agent" />
+            <span className={cn('text-secondary', compact ? 'text-[12px]' : 'text-[13px]')}>
+              {pendingLabel}…
+            </span>
+          </div>
+        </div>
+      ) : null}
+
+      {!hasEvents && !pendingLabel ? (
+        <div className="flex min-h-full items-center justify-center">
+          <div className="rounded-xl border border-dashed border-border/80 bg-primary/20 px-4 py-3 text-[12px] text-muted">
+            {emptyMessage}
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+
+  // Non-virtualized path: small event lists render plain DOM.
+  if (!shouldVirtualize) {
+    return (
+      <div
+        ref={scrollRef}
+        className={cn('h-full overflow-y-auto overscroll-contain', className)}
+        onScroll={handleScroll}
+      >
+        <div className={cn('flex min-h-full w-full flex-col gap-3', compact ? 'p-3' : 'px-4 py-4')}>
+          {headerContent}
+          {hasEvents ? plainRows : null}
+          {footerContent}
+        </div>
+      </div>
+    );
+  }
+
+  // Virtualized path: only render visible rows.
+  const virtualItems = virtualizer.getVirtualItems();
+
+  // Graceful degradation: when scrollElement has zero height (jsdom / unmounted),
+  // the virtualizer returns no items. Fall back to plain DOM rendering.
+  if (virtualItems.length === 0 && hasEvents) {
+    return (
+      <div
+        ref={scrollRef}
+        className={cn('h-full overflow-y-auto overscroll-contain', className)}
+        onScroll={handleScroll}
+      >
+        <div className={cn('flex min-h-full w-full flex-col gap-3', compact ? 'p-3' : 'px-4 py-4')}>
+          {headerContent}
+          {visibleEvents.map((record) => (
+            <MemoTranscriptRow
+              key={record.id}
+              record={record}
+              compact={compact}
+              onAction={onAction}
+            />
+          ))}
+          {footerContent}
+        </div>
+      </div>
+    );
+  }
+
+  const totalSize = virtualizer.getTotalSize();
+  const padding = compact ? 12 : 16;
+  const gap = 12; // gap-3 = 0.75rem = 12px
+
   return (
     <div
       ref={scrollRef}
       className={cn('h-full overflow-y-auto overscroll-contain', className)}
-      onScroll={(event) => {
-        const node = event.currentTarget;
-        stickToBottomRef.current = node.scrollHeight - node.scrollTop - node.clientHeight < 48;
-      }}
+      onScroll={handleScroll}
     >
-      <div className={cn('flex min-h-full w-full flex-col gap-3', compact ? 'p-3' : 'px-4 py-4')}>
-        {hiddenEventCount > 0 ? (
-          <div className="flex justify-center">
-            <Button
-              variant="ghost"
-              size="xs"
-              className="rounded-full border border-border bg-primary/60 px-3 text-muted"
-              onClick={() => setShowAllEvents(true)}
+      <div className={cn('flex w-full flex-col gap-3', compact ? 'p-3' : 'px-4 py-4')}>
+        {headerContent}
+      </div>
+
+      {hasEvents ? (
+        <div
+          style={{
+            height: totalSize + padding,
+            width: '100%',
+            position: 'relative',
+          }}
+        >
+          {virtualItems.map((virtualRow) => (
+            <div
+              key={visibleEvents[virtualRow.index]!.id}
+              data-index={virtualRow.index}
+              ref={virtualizer.measureElement}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                transform: `translateY(${virtualRow.start + gap}px)`,
+              }}
             >
-              Show {hiddenEventCount} older event{hiddenEventCount === 1 ? '' : 's'}
-            </Button>
-          </div>
-        ) : null}
-
-        {showAllEvents && dedupedEvents.length > DEFAULT_VISIBLE_EVENT_LIMIT ? (
-          <div className="flex justify-center">
-            <Button
-              variant="ghost"
-              size="xs"
-              className="rounded-full border border-border bg-primary/60 px-3 text-muted"
-              onClick={() => setShowAllEvents(false)}
-            >
-              Show latest {DEFAULT_VISIBLE_EVENT_LIMIT}
-            </Button>
-          </div>
-        ) : null}
-
-        {hasEvents ? rows : null}
-
-        {!hasEvents && pendingLabel ? (
-          <div className="flex min-h-full items-center justify-center">
-            <div className="inline-flex items-center gap-3 rounded-xl border border-border/70 bg-elevated px-4 py-3">
-              <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-agent" />
-              <span className={cn('text-secondary', compact ? 'text-[12px]' : 'text-[13px]')}>
-                {pendingLabel}…
-              </span>
+              <div className={compact ? 'px-3' : 'px-4'}>
+                <MemoTranscriptRow
+                  record={visibleEvents[virtualRow.index]!}
+                  compact={compact}
+                  onAction={onAction}
+                />
+              </div>
             </div>
-          </div>
-        ) : null}
+          ))}
+        </div>
+      ) : null}
 
-        {!hasEvents && !pendingLabel ? (
-          <div className="flex min-h-full items-center justify-center">
-            <div className="rounded-xl border border-dashed border-border/80 bg-primary/20 px-4 py-3 text-[12px] text-muted">
-              {emptyMessage}
-            </div>
-          </div>
-        ) : null}
+      <div className={cn('flex w-full flex-col gap-3', compact ? 'px-3 pb-3' : 'px-4 pb-4')}>
+        {footerContent}
       </div>
     </div>
   );

@@ -15,8 +15,13 @@ import { AUTOMATION_ISSUE_NUMBER_BASE, isAutomationIssue, KanbanBoard } from '@s
 import { Button, RefreshCw, X } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { ProjectGraphTab } from '../features/project/project-graph-tab';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+
+// ReactFlow + CSS is heavy — lazy-load since graph tab is rarely the default view.
+const ProjectGraphTab = lazy(() =>
+  import('../features/project/project-graph-tab').then((m) => ({ default: m.ProjectGraphTab })),
+);
+
 import { useAppStore } from '../stores/app-store';
 import { ThreadPanelArchiveDialog } from './ThreadPanelArchiveDialog';
 import { ThreadPanelBoardReviewDialog } from './ThreadPanelBoardReviewDialog';
@@ -565,7 +570,11 @@ export function ThreadPanel() {
           ).length;
           setArchiveConfirm({ type: 'all', count: doneCount });
         }}
-        graphContent={<ProjectGraphTab embedded />}
+        graphContent={
+          <Suspense fallback={null}>
+            <ProjectGraphTab embedded />
+          </Suspense>
+        }
         onMarkDone={(issue) => {
           if (!activeProjectId) return;
           const linkedThread = issue.threadId ? threadById.get(issue.threadId) : null;

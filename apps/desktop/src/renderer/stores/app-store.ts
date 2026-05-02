@@ -158,6 +158,7 @@ interface AppState {
   projectSettingsModalInitialTab: string | null;
   createAutomationModalOpen: boolean;
   editingAutomationId: string | null;
+  addProjectExplorerOpen: boolean;
 
   // Project tab
   projectTab: ProjectTab;
@@ -232,6 +233,8 @@ interface AppState {
   closeProjectSettingsModal: () => void;
   openCreateAutomationModal: (id?: string) => void;
   closeCreateAutomationModal: () => void;
+  openAddProjectExplorer: () => void;
+  closeAddProjectExplorer: () => void;
 
   // Cross-project navigation
   navigateToIssue: (projectId: string, issue: GitHubIssueCacheRecord) => void;
@@ -294,6 +297,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   projectSettingsModalInitialTab: null,
   createAutomationModalOpen: false,
   editingAutomationId: null,
+  addProjectExplorerOpen: false,
   projectTab: 'issues' as ProjectTab,
   activePrNumber: null,
   instantPaneThreadIds: [],
@@ -596,6 +600,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     }),
   closeCreateAutomationModal: () =>
     set({ createAutomationModalOpen: false, editingAutomationId: null }),
+  openAddProjectExplorer: () => set({ addProjectExplorerOpen: true, commandPaletteOpen: false }),
+  closeAddProjectExplorer: () => set({ addProjectExplorerOpen: false }),
   // Cross-project navigation
   navigateToIssue: (projectId, issue) =>
     set((s) => ({

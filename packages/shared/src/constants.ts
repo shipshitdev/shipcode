@@ -61,6 +61,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   onboardingVersion: 0,
   projectSortOrder: 'recent',
   worktreeRoot: null,
+  addProjectStartsIn: null,
   worktreeBranchFormat: 'ship/{id}-{slug}',
   revisionCount: 0,
   requireApproval: false,

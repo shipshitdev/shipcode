@@ -622,6 +622,8 @@ export interface AppSettings {
   projectSortOrder: 'alpha' | 'recent' | 'added';
   // null = default (~/.shipcode/worktrees), '' = project-local legacy, else absolute or ~-prefixed
   worktreeRoot: string | null;
+  // null = default (~/), else absolute or ~-prefixed path for the Add Project explorer start dir
+  addProjectStartsIn: string | null;
   // Branch naming format for worktrees. Tokens: {id} = issue number, {slug} = slugified title.
   // Default: 'ship/{id}-{slug}'. Falls back to 'shipcode/{threadId}' for non-issue threads.
   worktreeBranchFormat: string;

@@ -136,6 +136,41 @@ export class PlanQueries {
       .run(JSON.stringify(structured), id);
   }
 
+  /**
+   * Batch-fetch latest plan status for multiple threads in a single query.
+   * Replaces N separate getLatest() calls on the thread-panel hot path.
+   */
+  getLatestStatusByThreadIds(threadIds: string[]): Map<string, PlanStatus> {
+    if (threadIds.length === 0) return new Map();
+
+    // SQLite max variable limit is 999; batch in chunks if needed.
+    const CHUNK = 900;
+    const result = new Map<string, PlanStatus>();
+
+    for (let i = 0; i < threadIds.length; i += CHUNK) {
+      const chunk = threadIds.slice(i, i + CHUNK);
+      const placeholders = chunk.map(() => '?').join(',');
+      const rows = this.db
+        .prepare(
+          `SELECT p.thread_id, p.status
+             FROM plans p
+            INNER JOIN (
+              SELECT thread_id, MAX(version) AS max_ver
+                FROM plans
+               WHERE thread_id IN (${placeholders})
+               GROUP BY thread_id
+            ) latest ON p.thread_id = latest.thread_id AND p.version = latest.max_ver`,
+        )
+        .all(...chunk) as Array<{ thread_id: string; status: string }>;
+
+      for (const row of rows) {
+        result.set(row.thread_id, row.status as PlanStatus);
+      }
+    }
+
+    return result;
+  }
+
   supersedeAll(threadId: string): void {
     this.db
       .prepare(

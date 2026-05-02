@@ -1,5 +1,5 @@
-import type { TaskGraphWithNodes } from './task-graph';
 import type { PrdBlastRadius, PrdEstimatedComplexity } from './prd-issue-metadata';
+import type { TaskGraphWithNodes } from './task-graph';
 import type {
   ActivePipelineSummary,
   ActivityEntry,
@@ -254,6 +254,18 @@ export interface IpcInvokeChannels {
   };
 
   'dialog:open-directory': { args: undefined; result: string | null };
+
+  'fs:list-directories': {
+    args: { dirPath: string };
+    result: {
+      entries: Array<{ name: string; absolutePath: string }>;
+      error: 'permission-denied' | 'not-found' | null;
+    };
+  };
+  'fs:resolve-start-dir': {
+    args: undefined;
+    result: { resolvedPath: string };
+  };
 
   'shell:open-external': { args: { url: string }; result: undefined };
 

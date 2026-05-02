@@ -172,6 +172,31 @@ export function GeneralSettingsSection({
       </section>
 
       <section className="mb-8">
+        <h4 className="mb-3 text-secondary">Add Project</h4>
+        <SettingsRow
+          label="Start browsing in"
+          htmlFor="add-project-starts-in"
+          description="The directory the project explorer opens to when adding a new repository."
+        >
+          <Input
+            id="add-project-starts-in"
+            type="text"
+            placeholder="~/"
+            className="w-[240px]"
+            defaultValue={settings.addProjectStartsIn ?? ''}
+            onBlur={(e) => {
+              const raw = e.target.value.trim();
+              onUpdate({ addProjectStartsIn: raw === '' ? null : raw });
+            }}
+          />
+        </SettingsRow>
+        <p className="text-xs text-secondary mt-2">
+          Default: <code>~/</code> (home directory). Use an absolute path or <code>~/...</code>.
+          Leave blank to reset.
+        </p>
+      </section>
+
+      <section className="mb-8">
         <h4 className="mb-3 text-secondary">Setup</h4>
         <SettingsRow label="Re-run the onboarding wizard">
           <Button variant="secondary" onClick={() => onUpdate({ onboardingVersion: 0 })}>
