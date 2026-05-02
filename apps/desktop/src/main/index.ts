@@ -52,6 +52,7 @@ import {
   closeDatabase,
   DashboardQueries,
   DiffQueries,
+  FeatureQaResultQueries,
   GitHubIssueQueries,
   getDatabase,
   HeatmapQueries,

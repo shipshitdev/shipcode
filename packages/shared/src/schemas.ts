@@ -163,6 +163,20 @@ export const featureQaFlowResultSchema = z.object({
   failureReason: z.string().optional(),
 });
 
+/**
+ * Parse raw JSON into validated FeatureQaFlowResult[].
+ * Returns empty array on any parse/validation failure.
+ */
+export function parseFeatureQaFlowResults(
+  raw: unknown,
+): z.infer<typeof featureQaFlowResultSchema>[] {
+  try {
+    return z.array(featureQaFlowResultSchema).parse(raw);
+  } catch {
+    return [];
+  }
+}
+
 export const featureQaResultSchema = z.object({
   featureId: z.string().min(1),
   status: z.enum(['passed', 'failed', 'partial']),

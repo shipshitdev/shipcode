@@ -4,6 +4,7 @@ import type {
   ClarificationAnswer,
   DiffRecord,
   ExecutorModel,
+  FeatureQaResult,
   IntegrationStatus,
   IssuePipelineStatus,
   OpenRouterModelValidation,
@@ -264,6 +265,13 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     queryFn: () => window.shipcode.invoke('diff:list', { threadId: activeThreadId }),
     enabled: !!activeThreadId && shouldLoadPipelineTab,
     // Push-invalidated by pipeline:phase in useIpc.
+  });
+
+  const { data: qaResults = [] } = useQuery<FeatureQaResult[]>({
+    queryKey: ['feature-qa', activeThreadId],
+    queryFn: () =>
+      window.shipcode.invoke('feature-qa:list-by-thread', { threadId: activeThreadId as string }),
+    enabled: !!activeThreadId && shouldLoadPipelineTab,
   });
 
   const { data: taskGraph = null } = useQuery<TaskGraphWithNodes | null>({
@@ -1377,6 +1385,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       planRunGroups={resolvedPlanRunGroups}
       projectDefaultPhaseSelections={projectDefaultPhaseSelections}
       runNumberByThreadId={runNumberByThreadId}
+      qaResults={qaResults}
       taskGraph={taskGraph}
       thread={thread}
       threadPhase={threadPhase}

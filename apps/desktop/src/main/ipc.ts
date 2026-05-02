@@ -8,6 +8,7 @@ import { transitionThreadPhase } from './ipc/helpers';
 import { registerAgentConversationHandlers } from './ipc/register-agent-conversation-handlers';
 import { registerAutomationHandlers } from './ipc/register-automation-handlers';
 import { registerDeveloperHandlers } from './ipc/register-developer-handlers';
+import { registerFeatureQaHandlers } from './ipc/register-feature-qa-handlers';
 import { registerGitHubHandlers } from './ipc/register-github-handlers';
 import { registerInstantHandlers } from './ipc/register-instant-handlers';
 import { registerIssueGraphHandlers } from './ipc/register-issue-graph-handlers';
@@ -101,6 +102,7 @@ export function registerIpcHandlers(
   registerInstantHandlers(deps);
   registerPullRequestHandlers(deps);
   registerAgentConversationHandlers(deps);
+  registerFeatureQaHandlers(deps);
   registerAutomationHandlers(deps, automationScheduler);
   registerDeveloperHandlers(deps, updateService);
 }

@@ -288,6 +288,7 @@ export function createPipelineContextHelpers(
       stabilizationFeedback: seed.stabilizationFeedback ?? null,
       previousPlanRawOutput: seed.previousPlanRawOutput ?? null,
       turnCount: seed.turnCount ?? 0,
+      featureQaState: seed.featureQaState ?? null,
     };
     activePipelines.set(threadId, context);
     emitWorkflowWarning(deps, context);

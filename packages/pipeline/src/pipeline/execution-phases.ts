@@ -31,6 +31,7 @@ import {
 import { computeRetryDelayMs } from '../retry-scheduler';
 import type { PipelineContext } from '../types';
 import { renderWorkflowPromptTemplate } from '../workflow-prompt';
+import { extractQaFlowResults } from './qa-result-parser';
 import type { PipelineHelperEnv } from './shared';
 
 const DEFAULT_CONTINUATION_PROMPT_TEMPLATE = `The previous turn failed verification. Address the remaining gaps and fix the issues.
@@ -408,6 +409,15 @@ export function createExecutionPhaseHandlers({
         content: deps.threads.getById(threadId)?.prompt ?? '',
       },
       ...ensureRepoPromptMaterials(context),
+      ...(context.featureQaState
+        ? [
+            {
+              kind: 'qa_contract' as const,
+              label: 'feature QA contract',
+              content: JSON.stringify(context.featureQaState, null, 2),
+            },
+          ]
+        : []),
     ];
     rememberMaterialSummary(context, 'execute', executeMaterials);
     const executionPlan = activeTaskNode ? buildTaskNodePlan(plan, activeTaskNode) : plan;
@@ -655,6 +665,15 @@ export function createExecutionPhaseHandlers({
             },
           ]
         : []),
+      ...(context.featureQaState
+        ? [
+            {
+              kind: 'qa_contract' as const,
+              label: 'feature QA contract',
+              content: JSON.stringify(context.featureQaState, null, 2),
+            },
+          ]
+        : []),
     ];
     rememberMaterialSummary(context, 'verify', verifyMaterials);
     let verificationPrompt: string;
@@ -673,7 +692,10 @@ export function createExecutionPhaseHandlers({
           skill.context,
           skill.deps,
           context.testOutput ?? null,
-          { promptMaterials: verifyMaterials },
+          {
+            promptMaterials: verifyMaterials,
+            qaState: context.featureQaState ?? undefined,
+          },
         );
     } catch (error) {
       emitPhase(
@@ -706,6 +728,28 @@ export function createExecutionPhaseHandlers({
         if (result.success && result.data) {
           deps.verifications.create(threadId, latestPlan.id, result.raw, result.data);
           deps.emitter.emit({ type: 'verification:parsed', threadId, verification: result.data });
+
+          if (context.featureQaState) {
+            try {
+              const qaFlowResults = extractQaFlowResults(response.rawOutput);
+              if (qaFlowResults.length > 0) {
+                const qaStatus = qaFlowResults.every((f) => f.passed)
+                  ? 'passed'
+                  : qaFlowResults.some((f) => f.passed)
+                    ? 'partial'
+                    : 'failed';
+                deps.featureQaResults?.insert({
+                  threadId,
+                  featureId: context.featureQaState.featureId,
+                  status: qaStatus as 'passed' | 'failed' | 'partial',
+                  flowResults: qaFlowResults,
+                  summary: result.data.summary,
+                });
+              }
+            } catch (err) {
+              console.error('[pipeline] feature QA result insert failed:', err);
+            }
+          }
 
           if (result.data.result === 'passed') {
             handlers.startCommitAndPush(threadId);

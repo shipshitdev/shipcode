@@ -12,6 +12,7 @@ import {
   AgentConversationQueries,
   CheckpointQueries,
   DiffQueries,
+  FeatureQaResultQueries,
   GitHubIssueQueries,
   getDatabase,
   PipelineStepQueries,
@@ -72,6 +73,7 @@ export function createCliContext(cwd: string): CliContext {
   const terminalEvents = new TerminalEventQueries(db);
   const pipelineSteps = new PipelineStepQueries(db);
   const agentConversations = new AgentConversationQueries(db);
+  const featureQaResults = new FeatureQaResultQueries(db);
   const taskGraphs = new TaskGraphQueries(db);
 
   let project = projects.list().find((p) => p.path === cwd);
@@ -109,6 +111,7 @@ export function createCliContext(cwd: string): CliContext {
     taskGraphs,
     pipelineSteps,
     agentConversations,
+    featureQaResults,
   } as Parameters<typeof createPipeline>[0];
 
   return {

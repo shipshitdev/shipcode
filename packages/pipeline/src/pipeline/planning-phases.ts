@@ -14,8 +14,10 @@ import {
 } from '@shipcode/agents/source';
 import {
   type AnsweredClarification,
+  buildQaStateGapMessage,
   type ClarificationRequest,
   clampTextBlock,
+  extractFeatureQaState,
   getPrdQualityIssues,
   MAX_CLARIFICATION_ROUNDS,
   PIPELINE_MAX_RETRIES,
@@ -319,6 +321,20 @@ export function createPlanningPhaseHandlers({
 
       // Gate OFF (default) — post/log a warning and continue
       emitTerminalLifecycle(threadId, `[prd-gate] Warning: PRD quality issues: ${issueList}\r\n`);
+    }
+
+    // Extract feature QA state from the PRD `## QA State` section (once per pipeline).
+    if (!context.featureQaState) {
+      const qaExtraction = extractFeatureQaState(prompt);
+      context.featureQaState = qaExtraction.qaState;
+      if (qaExtraction.status !== 'present') {
+        const gapMsg = buildQaStateGapMessage(
+          qaExtraction.status,
+          qaExtraction.reason ?? '',
+          context.githubIssueNumber,
+        );
+        emitTerminalLifecycle(threadId, `[qa-state] ${gapMsg}\r\n`);
+      }
     }
 
     emitPhase(threadId, 'planning');

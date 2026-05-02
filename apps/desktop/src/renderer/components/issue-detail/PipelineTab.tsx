@@ -1,5 +1,6 @@
 import type {
   DiffRecord,
+  FeatureQaResult,
   GitHubIssueCacheRecord,
   IntegrationStatus,
   OpenRouterModelValidation,
@@ -62,6 +63,7 @@ export function PipelineTab({
   phaseEffortSelectValues,
   phaseModelValidation,
   phaseSelectValues,
+  qaResults,
   requireApprovalSelectValue,
   projectDefaultPhaseSelections,
   revisionCountSelectValue,
@@ -96,6 +98,7 @@ export function PipelineTab({
   phaseEffortSelectValues: Record<PhaseKey, string>;
   phaseModelValidation: Partial<Record<PhaseKey, OpenRouterModelValidation | null>>;
   phaseSelectValues: Record<PhaseKey, string>;
+  qaResults: FeatureQaResult[];
   requireApprovalSelectValue: string;
   projectDefaultPhaseSelections: Record<PhaseKey, PhaseSelection>;
   revisionCountSelectValue: string;
@@ -607,6 +610,65 @@ export function PipelineTab({
                 >
                   Restore
                 </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {qaResults.length > 0 ? (
+        <div className="mb-5">
+          <div className="mb-2 flex items-center justify-between">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">
+              QA Results
+            </h4>
+            <span className="text-[11px] text-muted">
+              {qaResults.length} run{qaResults.length === 1 ? '' : 's'}
+            </span>
+          </div>
+          <div className="space-y-3">
+            {qaResults.slice(0, 5).map((result) => (
+              <div
+                key={`${result.featureId}-${result.runAt}`}
+                className="rounded-md border border-border bg-secondary p-3"
+              >
+                <div className="mb-2 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant={
+                        result.status === 'passed'
+                          ? 'success'
+                          : result.status === 'partial'
+                            ? 'warning'
+                            : 'danger'
+                      }
+                    >
+                      {result.status}
+                    </Badge>
+                    <span className="text-[12px] font-medium text-primary">{result.featureId}</span>
+                  </div>
+                  <span className="text-[11px] text-muted">
+                    {new Date(result.runAt).toLocaleString()}
+                  </span>
+                </div>
+                {result.summary ? (
+                  <div className="mb-2 text-[11px] text-muted">{result.summary}</div>
+                ) : null}
+                {result.flowResults.length > 0 ? (
+                  <div className="space-y-1">
+                    {result.flowResults.map((flow) => (
+                      <div key={flow.flowName} className="flex items-start gap-2 text-[11px]">
+                        <span className={flow.passed ? 'text-green-500' : 'text-red-500'}>
+                          {flow.passed ? '✓' : '✗'}
+                        </span>
+                        <span className="font-medium text-primary">{flow.flowName}</span>
+                        {flow.failureReason ? (
+                          <span className="text-muted">— {flow.failureReason}</span>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>

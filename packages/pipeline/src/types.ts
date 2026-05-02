@@ -11,6 +11,7 @@ import type {
   AgentConversationQueries,
   CheckpointQueries,
   DiffQueries,
+  FeatureQaResultQueries,
   GitHubIssueQueries,
   PipelineStepQueries,
   PlanQueries,
@@ -27,6 +28,7 @@ import type {
   ClarificationAnswer,
   ClarificationRequest,
   ExecutorModel,
+  FeatureQaState,
   GitHubPrCheckSummary,
   GitHubPrReviewCommentSummary,
   PhaseSkillKey,
@@ -258,6 +260,12 @@ export interface PipelineContext {
    * or verify passes.
    */
   turnCount: number;
+  /**
+   * Feature QA contract extracted from the PRD `## QA State` section.
+   * When present, the verifier evaluates each critical flow and
+   * persists per-flow pass/fail results.
+   */
+  featureQaState: FeatureQaState | null;
 }
 
 export interface ActivePipelineSummary {
@@ -304,6 +312,12 @@ export interface PipelineDeps {
    * dialogue is queryable and viewable in the Conversations tab.
    */
   agentConversations?: AgentConversationQueries;
+  /**
+   * Feature QA result persistence. When provided, the pipeline persists
+   * per-flow QA results after verification when a ## QA State section
+   * exists in the PRD.
+   */
+  featureQaResults?: FeatureQaResultQueries;
 }
 
 export interface Pipeline {

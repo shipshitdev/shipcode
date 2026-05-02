@@ -11,7 +11,8 @@ export type PromptMaterialKind =
   | 'testing_context'
   | 'diff_summary'
   | 'verification_output'
-  | 'execution_notes';
+  | 'execution_notes'
+  | 'qa_contract';
 
 export interface PromptMaterial {
   kind: PromptMaterialKind;
@@ -47,6 +48,7 @@ const MATERIAL_ORDER: PromptMaterialKind[] = [
   'diff_summary',
   'verification_output',
   'execution_notes',
+  'qa_contract',
 ];
 
 const PHASE_POLICIES: Record<PromptPhase, ReadonlySet<PromptMaterialKind>> = {
@@ -60,8 +62,20 @@ const PHASE_POLICIES: Record<PromptPhase, ReadonlySet<PromptMaterialKind>> = {
   ]),
   review: new Set(['issue_prompt', 'plan_output', 'review_feedback', 'testing_context']),
   revision: new Set(['issue_prompt', 'plan_output', 'review_feedback', 'testing_context']),
-  verify: new Set(['plan_output', 'testing_context', 'diff_summary', 'verification_output']),
-  execute: new Set(['issue_prompt', 'plan_output', 'review_feedback', 'testing_context']),
+  verify: new Set([
+    'plan_output',
+    'testing_context',
+    'diff_summary',
+    'verification_output',
+    'qa_contract',
+  ]),
+  execute: new Set([
+    'issue_prompt',
+    'plan_output',
+    'review_feedback',
+    'testing_context',
+    'qa_contract',
+  ]),
 };
 
 export function selectPromptMaterials(

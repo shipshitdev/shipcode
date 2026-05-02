@@ -1,4 +1,4 @@
-import type { ShipCodePlan } from '@shipcode/shared';
+import type { FeatureQaState, ShipCodePlan } from '@shipcode/shared';
 import { VERIFICATION_FENCE_TAG } from '@shipcode/shared';
 import { buildScopedContext, type PromptMaterial } from '../prompt-scope';
 import {
@@ -43,6 +43,7 @@ export interface VerificationPromptDeps {
 export interface VerificationPromptOptions {
   contextFiles?: string;
   promptMaterials?: PromptMaterial[];
+  qaState?: FeatureQaState;
 }
 
 function withRepoContext(prompt: string, contextFiles: string, include: boolean): string {
@@ -78,8 +79,15 @@ export function buildVerificationPrompt(
     scoped.contextFiles,
     Boolean(opts.promptMaterials?.length || opts.contextFiles),
   );
+  let prompt = result;
   if (testOutput) {
-    return `${result}\n\n<test_results>\n${testOutput}\n</test_results>\n\nIf test results above show failures, treat them as blockers. A clean test run is strong evidence that behavioral acceptance criteria are satisfied.`;
+    prompt = `${prompt}\n\n<test_results>\n${testOutput}\n</test_results>\n\nIf test results above show failures, treat them as blockers. A clean test run is strong evidence that behavioral acceptance criteria are satisfied.`;
   }
-  return result;
+  if (opts.qaState) {
+    const flowList = opts.qaState.criticalFlows
+      .map((f) => `- ${f.name}: ${f.successCriteria}`)
+      .join('\n');
+    prompt += `\n\n<qa_contract>\nFeature: ${opts.qaState.featureId}\nRoutes: ${opts.qaState.routes.join(', ')}\n\nCritical flows to evaluate:\n${flowList}\n\nAfter your verification output, also evaluate each critical flow against the implementation diff and output:\n<qa_results>\n[\n  { "flowName": "...", "passed": true|false, "failureReason": "..." }\n]\n</qa_results>\n</qa_contract>`;
+  }
+  return prompt;
 }

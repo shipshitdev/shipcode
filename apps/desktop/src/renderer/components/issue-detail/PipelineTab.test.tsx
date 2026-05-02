@@ -143,6 +143,7 @@ function renderPipelineTab(diffs: DiffRecord[]) {
         verifier: '__inherit__',
       }}
       phaseModelValidation={{}}
+      qaResults={[]}
       phaseSelectValues={{
         planner: '__inherit__',
         reviewer: '__inherit__',

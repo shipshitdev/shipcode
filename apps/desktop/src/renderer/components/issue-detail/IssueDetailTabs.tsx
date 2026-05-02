@@ -1,5 +1,6 @@
 import type {
   DiffRecord,
+  FeatureQaResult,
   GitHubIssueCacheRecord,
   IntegrationStatus,
   OpenRouterModelValidation,
@@ -60,6 +61,7 @@ interface IssueDetailTabsProps {
   planRunCount: number;
   planRunGroups: PlanRunGroup[];
   projectDefaultPhaseSelections: Record<PhaseKey, PhaseSelection>;
+  qaResults: FeatureQaResult[];
   runNumberByThreadId: Record<string, number>;
   taskGraph: TaskGraphWithNodes | null;
   thread: Thread | null | undefined;
@@ -121,6 +123,7 @@ export function IssueDetailTabs({
   planRunCount,
   planRunGroups,
   projectDefaultPhaseSelections,
+  qaResults,
   runNumberByThreadId,
   taskGraph,
   thread,
@@ -243,6 +246,7 @@ export function IssueDetailTabs({
           requireApprovalSelectValue={requireApprovalSelectValue}
           revisionCountSelectValue={revisionCountSelectValue}
           projectDefaultPhaseSelections={projectDefaultPhaseSelections}
+          qaResults={qaResults}
           taskGraph={taskGraph}
           thread={thread}
           githubIssueUrl={githubIssueUrl}
