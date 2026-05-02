@@ -1367,3 +1367,35 @@ export function migrateV45(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (45)`);
   });
 }
+
+export function migrateV46(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 46) return;
+
+  transaction(db, () => {
+    // Feature QA results — persists the outcome of focused QA runs.
+    // One row per feature per run. flowResults stored as JSON array.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS feature_qa_results (
+        id            TEXT PRIMARY KEY,
+        thread_id     TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+        feature_id    TEXT NOT NULL,
+        status        TEXT NOT NULL CHECK(status IN ('passed', 'failed', 'partial')),
+        flow_results  TEXT NOT NULL DEFAULT '[]',
+        summary       TEXT NOT NULL DEFAULT '',
+        evidence_paths TEXT,
+        run_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_feature_qa_thread
+        ON feature_qa_results(thread_id, created_at);
+      CREATE INDEX IF NOT EXISTS idx_feature_qa_feature
+        ON feature_qa_results(feature_id, run_at);
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (46)`);
+  });
+}

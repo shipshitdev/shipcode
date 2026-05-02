@@ -21,6 +21,7 @@ import type {
   DashboardStats,
   DeveloperInfo,
   DiffRecord,
+  FeatureQaResult,
   GeneratorCli,
   GhAuthStatus,
   GitHubIssueCacheRecord,
@@ -511,6 +512,16 @@ export interface IpcInvokeChannels {
     args: { projectId: string; issueNumber: number };
     result: CostTaskSummary[];
   };
+  // Feature QA results
+  'feature-qa:list-by-thread': {
+    args: { threadId: string };
+    result: FeatureQaResult[];
+  };
+  'feature-qa:latest-by-feature': {
+    args: { featureId: string };
+    result: FeatureQaResult | null;
+  };
+
   // Agent conversation log
   'agent-conversations:list-by-thread': {
     args: { threadId: string; phase?: string; role?: 'prompt' | 'response' };

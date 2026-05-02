@@ -46,6 +46,7 @@ import {
   migrateV43,
   migrateV44,
   migrateV45,
+  migrateV46,
 } from './schema';
 import { createTestDb } from './test-helpers';
 import { asRow } from './utils';
@@ -1084,5 +1085,71 @@ describe('migrateV45', () => {
 
   it('is idempotent', () => {
     expect(() => migrateV45(db)).not.toThrow();
+  });
+});
+
+describe('migrateV46', () => {
+  let db: DatabaseSync;
+
+  beforeEach(() => {
+    db = createTestDb();
+  });
+
+  it('creates feature_qa_results table with correct columns', () => {
+    const cols = db.prepare("PRAGMA table_info('feature_qa_results')").all() as {
+      name: string;
+      type: string;
+      notnull: number;
+    }[];
+    const colNames = cols.map((c) => c.name);
+
+    expect(colNames).toContain('id');
+    expect(colNames).toContain('thread_id');
+    expect(colNames).toContain('feature_id');
+    expect(colNames).toContain('status');
+    expect(colNames).toContain('flow_results');
+    expect(colNames).toContain('summary');
+    expect(colNames).toContain('evidence_paths');
+    expect(colNames).toContain('run_at');
+    expect(colNames).toContain('created_at');
+  });
+
+  it('creates indexes on (thread_id, created_at) and (feature_id, run_at)', () => {
+    const indexes = db.prepare("PRAGMA index_list('feature_qa_results')").all() as {
+      name: string;
+    }[];
+    const indexNames = indexes.map((i) => i.name);
+
+    expect(indexNames).toContain('idx_feature_qa_thread');
+    expect(indexNames).toContain('idx_feature_qa_feature');
+  });
+
+  it('cascades delete when thread is deleted', () => {
+    const projectId = 'proj-1';
+    db.prepare(
+      "INSERT INTO projects (id, name, path, git_remote, default_branch, created_at, updated_at) VALUES (?, 'test', '/tmp', 'git@x', 'main', datetime('now'), datetime('now'))",
+    ).run(projectId);
+    db.prepare(
+      "INSERT INTO threads (id, project_id, prompt, title, status, created_at, updated_at) VALUES ('t1', ?, 'go', 'Test', 'idle', datetime('now'), datetime('now'))",
+    ).run(projectId);
+    db.prepare(
+      "INSERT INTO feature_qa_results (id, thread_id, feature_id, status, flow_results, summary) VALUES ('qa1', 't1', 'issue-1', 'passed', '[]', 'ok')",
+    ).run();
+
+    const before = db
+      .prepare("SELECT COUNT(*) as count FROM feature_qa_results WHERE thread_id = 't1'")
+      .get() as { count: number };
+    expect(before.count).toBe(1);
+
+    db.prepare("DELETE FROM threads WHERE id = 't1'").run();
+
+    const after = db
+      .prepare("SELECT COUNT(*) as count FROM feature_qa_results WHERE thread_id = 't1'")
+      .get() as { count: number };
+    expect(after.count).toBe(0);
+  });
+
+  it('is idempotent', () => {
+    expect(() => migrateV46(db)).not.toThrow();
   });
 });
