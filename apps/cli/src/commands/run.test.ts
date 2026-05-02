@@ -32,28 +32,20 @@ vi.mock('node:fs', () => ({
   },
 }));
 
-vi.mock('@shipcode/db', () => ({
-  getDatabase: getDatabaseMock,
-  ProjectQueries: class {
-    list = listProjectsMock;
-    add = addProjectMock;
-  },
-  ThreadQueries: EmptyQuery,
-  PlanQueries: EmptyQuery,
-  ReviewQueries: EmptyQuery,
-  DiffQueries: EmptyQuery,
-  VerificationQueries: EmptyQuery,
-  GitHubIssueQueries: EmptyQuery,
-  CheckpointQueries: EmptyQuery,
-  TerminalEventQueries: EmptyQuery,
-  PipelineStepQueries: EmptyQuery,
-  AgentConversationQueries: EmptyQuery,
-  FeatureQaResultQueries: EmptyQuery,
-  SettingsQueries: class {
-    get = settingsGetMock;
-  },
-  SkillsQueries: EmptyQuery,
-}));
+vi.mock('@shipcode/db', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@shipcode/db')>();
+  return {
+    ...actual,
+    getDatabase: getDatabaseMock,
+    ProjectQueries: class {
+      list = listProjectsMock;
+      add = addProjectMock;
+    },
+    SettingsQueries: class {
+      get = settingsGetMock;
+    },
+  };
+});
 
 vi.mock('@shipcode/db/source', () => ({
   TaskGraphQueries: EmptyQuery,
