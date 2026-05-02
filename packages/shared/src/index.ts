@@ -31,5 +31,6 @@ export * from './staleness';
 export * from './task-graph';
 export * from './tokens';
 export * from './types';
+export * from './unified-diff';
 // worktree-path uses node:path — import directly from '@shipcode/shared/worktree-path'
 // to avoid Vite externalization warnings in renderer code.

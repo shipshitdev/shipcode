@@ -35,6 +35,7 @@ import {
   DEFAULT_SETTINGS,
   PIPELINE_PHASE,
   parseGithubRemote,
+  parseUnifiedDiff,
   validateGithubProjectUrl,
 } from '@shipcode/shared';
 import { resolveWorktreeParent } from '@shipcode/shared/worktree-path';
@@ -94,103 +95,13 @@ function buildStarterIssueBody(repoFullName: string): string {
   ].join('\n');
 }
 
-function stripDiffPathQuotes(value: string): string {
-  if (value.startsWith('"') && value.endsWith('"') && value.length >= 2) {
-    return value.slice(1, -1);
-  }
-  return value;
-}
-
-function normalizeDiffPath(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const unquoted = stripDiffPathQuotes(value.trim());
-  if (unquoted === '/dev/null') return null;
-  if (unquoted.startsWith('a/') || unquoted.startsWith('b/')) {
-    return unquoted.slice(2);
-  }
-  return unquoted;
-}
-
-function parseDiffGitHeader(line: string): { beforePath: string | null; afterPath: string | null } {
-  const match = /^diff --git "?a\/(.+?)"? "?b\/(.+?)"?$/.exec(line);
-  if (!match) {
-    return { beforePath: null, afterPath: null };
-  }
-  return {
-    beforePath: normalizeDiffPath(`a/${match[1]}`),
-    afterPath: normalizeDiffPath(`b/${match[2]}`),
-  };
-}
-
 function parseDiffRecords(diff: string, threadId: string): DiffRecord[] {
-  const normalized = diff.trim();
-  if (!normalized) return [];
-
   const now = new Date().toISOString();
-  const sections = normalized
-    .split(/^diff --git /m)
-    .map((section, index) => (index === 0 ? section : `diff --git ${section}`))
-    .filter((section) => section.trim().startsWith('diff --git '));
-
-  return sections.map((section, index) => {
-    const lines = section.split('\n');
-    const header = parseDiffGitHeader(lines[0] ?? '');
-
-    let action: DiffRecord['action'] = 'modify';
-    let beforePath = header.beforePath;
-    let afterPath = header.afterPath;
-    let beforeHash: string | null = null;
-    let afterHash: string | null = null;
-
-    for (const line of lines) {
-      if (line.startsWith('new file mode ')) {
-        action = 'create';
-        continue;
-      }
-      if (line.startsWith('deleted file mode ')) {
-        action = 'delete';
-        continue;
-      }
-      if (line.startsWith('rename from ')) {
-        action = 'rename';
-        beforePath = normalizeDiffPath(line.slice('rename from '.length));
-        continue;
-      }
-      if (line.startsWith('rename to ')) {
-        action = 'rename';
-        afterPath = normalizeDiffPath(line.slice('rename to '.length));
-        continue;
-      }
-      if (line.startsWith('index ')) {
-        const match = /^index ([0-9a-f]+)\.\.([0-9a-f]+)/i.exec(line);
-        if (match) {
-          beforeHash = match[1];
-          afterHash = match[2];
-        }
-        continue;
-      }
-      if (line.startsWith('--- ')) {
-        beforePath = normalizeDiffPath(line.slice(4));
-        continue;
-      }
-      if (line.startsWith('+++ ')) {
-        afterPath = normalizeDiffPath(line.slice(4));
-      }
-    }
-
-    const filePath =
-      action === 'delete'
-        ? (beforePath ?? afterPath ?? 'changes.patch')
-        : (afterPath ?? beforePath ?? 'changes.patch');
-
+  return parseUnifiedDiff(diff).map((record, index) => {
     return {
-      id: `${threadId}:${index}:${filePath}`,
+      id: `${threadId}:${index}:${record.filePath}`,
       threadId,
-      filePath,
-      action,
-      diffContent: section,
-      beforeHash,
-      afterHash,
+      ...record,
       createdAt: now,
     };
   });
