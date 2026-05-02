@@ -244,6 +244,7 @@ function createWindow() {
     terminalEvents: new TerminalEventQueries(db),
     pipelineSteps: new PipelineStepQueries(db),
     agentConversations: new AgentConversationQueries(db),
+    featureQaResults: new FeatureQaResultQueries(db),
     taskGraphs: new TaskGraphQueries(db),
   };
   threadQueries = queries.threads;
@@ -308,6 +309,7 @@ function createWindow() {
     taskGraphs: queries.taskGraphs,
     pipelineSteps: queries.pipelineSteps,
     agentConversations: queries.agentConversations,
+    featureQaResults: queries.featureQaResults,
   };
   pipeline = createPipeline(pipelineDeps as Parameters<typeof createPipeline>[0]);
   const activePipeline = requirePipeline();

@@ -7,6 +7,7 @@ import type {
   CostsQueries,
   DashboardQueries,
   DiffQueries,
+  FeatureQaResultQueries,
   GitHubIssueQueries,
   HeatmapQueries,
   IssueEdgeQueries,
@@ -48,6 +49,7 @@ export interface Queries {
   terminalEvents: TerminalEventQueries;
   pipelineSteps: PipelineStepQueries;
   agentConversations: AgentConversationQueries;
+  featureQaResults: FeatureQaResultQueries;
   taskGraphs?: TaskGraphQueries;
 }
 
