@@ -124,7 +124,22 @@ export function parseWorkflowPolicy(raw: string, sourcePath: string): WorkflowPo
   };
 }
 
+// Short-lived cache: loadWorkflowPolicy is called on every slot-freed event
+// (every pipeline phase transition). WORKFLOW.md rarely changes — 30s TTL
+// avoids redundant existsSync + readFileSync on a hot path.
+const _policyCache = new Map<string, { policy: WorkflowPolicy; expiresAt: number }>();
+const POLICY_CACHE_TTL_MS = 30_000;
+
 export function loadWorkflowPolicy(repoPath: string): WorkflowPolicy {
+  const cached = _policyCache.get(repoPath);
+  if (cached && Date.now() < cached.expiresAt) return cached.policy;
+
+  const policy = _loadWorkflowPolicyUncached(repoPath);
+  _policyCache.set(repoPath, { policy, expiresAt: Date.now() + POLICY_CACHE_TTL_MS });
+  return policy;
+}
+
+function _loadWorkflowPolicyUncached(repoPath: string): WorkflowPolicy {
   const workflowPath = resolveWorkflowPath(repoPath);
   if (!workflowPath) return DEFAULT_WORKFLOW_POLICY;
 

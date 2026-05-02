@@ -1287,3 +1287,25 @@ export function migrateV42(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (43)`);
   });
 }
+
+export function migrateV43(db: DatabaseSync): void {
+  const row = db.prepare('SELECT version FROM schema_version').get() as { version: number };
+  if (row.version >= 44) return;
+
+  // v44: composite indexes for common lookup patterns.
+  // threads(project_id, github_issue_number) — used by getByProjectAndGithubIssue,
+  // activity:list-for-issue, costs:list-tasks-for-issue.
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_threads_project_issue
+      ON threads(project_id, github_issue_number);
+  `);
+
+  // plans(thread_id, version DESC) — eliminates sort for correlated subqueries
+  // in getStats pending-approvals check and listAwaitingWithApprovedPlans.
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_plans_thread_version
+      ON plans(thread_id, version DESC);
+  `);
+
+  db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (44)`);
+}

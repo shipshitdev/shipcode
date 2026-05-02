@@ -129,18 +129,12 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     enabled: !!activeProjectId,
     staleTime: STABLE_APP_STATE_STALE_TIME,
   });
-  const shouldPollThread =
-    !!activeThreadId &&
-    (ACTIVE_PHASES.includes(pipelinePhase as PipelinePhase) ||
-      pipelinePhase === PIPELINE_PHASE.awaitingApproval ||
-      ACTIVE_PHASES.includes(activeIssue?.pipelineStatus as PipelinePhase));
-
   // Fetch thread data if issue is linked
   const { data: thread } = useQuery<Thread | null>({
     queryKey: ['thread', activeThreadId],
     queryFn: () => window.shipcode.invoke('thread:get', { threadId: activeThreadId }),
     enabled: !!activeThreadId,
-    refetchInterval: shouldPollThread ? 60_000 : false,
+    // Push-invalidated by pipeline:phase in useIpc.
   });
   const currentPipelinePhase = thread?.status ?? pipelinePhase;
   const shouldPollLiveThread =
@@ -163,7 +157,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     queryKey: ['plan-history', activeThreadId],
     queryFn: () => window.shipcode.invoke('plan:list', { threadId: activeThreadId }),
     enabled: !!activeThreadId,
-    refetchInterval: shouldPollPlanData ? 60_000 : false,
+    // Push-invalidated by pipeline:phase + plan:parsed in useIpc.
   });
   const isThreadPlanHistoryLoading = !!activeThreadId && planHistory === undefined;
   const normalizedThreadPlanHistory = Array.isArray(planHistory) ? planHistory : [];
@@ -180,7 +174,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       });
     },
     enabled: shouldLoadIssueWidePlanHistory,
-    refetchInterval: shouldPollPlanData && shouldLoadIssueWidePlanHistory ? 60_000 : false,
+    // Push-invalidated by plan:parsed in useIpc.
   });
   const isIssuePlanHistoryLoading =
     shouldLoadIssueWidePlanHistory && issuePlanHistory === undefined;
@@ -260,14 +254,14 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
     queryKey: ['checkpoints', activeThreadId],
     queryFn: () => window.shipcode.invoke('checkpoint:list', { threadId: activeThreadId }),
     enabled: !!activeThreadId && shouldLoadPipelineTab,
-    refetchInterval: shouldPollLiveThread && shouldLoadPipelineTab ? 60_000 : false,
+    // Push-invalidated by pipeline:phase in useIpc.
   });
 
   const { data: diffs = [] } = useQuery<DiffRecord[]>({
     queryKey: ['diffs', activeThreadId],
     queryFn: () => window.shipcode.invoke('diff:list', { threadId: activeThreadId }),
     enabled: !!activeThreadId && shouldLoadPipelineTab,
-    refetchInterval: shouldPollLiveThread && shouldLoadPipelineTab ? 60_000 : false,
+    // Push-invalidated by pipeline:phase in useIpc.
   });
 
   const { data: taskGraph = null } = useQuery<TaskGraphWithNodes | null>({
@@ -280,7 +274,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       return graph && Array.isArray(graph.nodes) ? graph : null;
     },
     enabled: !!activeThreadId && shouldLoadPipelineTab,
-    refetchInterval: shouldPollLiveThread && shouldLoadPipelineTab ? 60_000 : false,
+    // Push-invalidated by pipeline:phase in useIpc.
   });
 
   // Fetch latest verification for the thread

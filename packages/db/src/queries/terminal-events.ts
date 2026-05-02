@@ -20,18 +20,27 @@ function mapRow(row: TerminalEventRow): TerminalEventRecord {
 }
 
 export class TerminalEventQueries {
+  // Hot-path: one INSERT per terminal event line. Cache the prepared statement
+  // to avoid re-parsing on every call.
+  private _insertStmt: ReturnType<DatabaseSync['prepare']> | null = null;
+
   constructor(private db: DatabaseSync) {}
+
+  private getInsertStmt(): ReturnType<DatabaseSync['prepare']> {
+    if (!this._insertStmt) {
+      this._insertStmt = this.db.prepare(
+        `INSERT INTO terminal_events (id, thread_id, event)
+         VALUES (?, ?, ?)
+         RETURNING id, thread_id, event, created_at`,
+      );
+    }
+    return this._insertStmt;
+  }
 
   create(threadId: string, event: CanonicalTerminalEvent): TerminalEventRecord {
     const id = nanoid();
     const row = asRow<TerminalEventRow>(
-      this.db
-        .prepare(
-          `INSERT INTO terminal_events (id, thread_id, event)
-           VALUES (?, ?, ?)
-           RETURNING id, thread_id, event, created_at`,
-        )
-        .get(id, threadId, JSON.stringify(event)),
+      this.getInsertStmt().get(id, threadId, JSON.stringify(event)),
     );
     return mapRow(row);
   }

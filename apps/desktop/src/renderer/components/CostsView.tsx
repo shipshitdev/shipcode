@@ -105,7 +105,7 @@ export function CostsView() {
   const { data, isLoading, isError, refetch } = useQuery<CostSummary>({
     queryKey: ['costs-summary'],
     queryFn: () => window.shipcode.invoke<CostSummary>('costs:get-summary'),
-    refetchInterval: 120_000,
+    // Event-driven: invalidated by pipeline:model-resolved in useIpc.
   });
 
   const { data: tasks = [] } = useQuery<CostTaskSummary[]>({
@@ -115,13 +115,13 @@ export function CostsView() {
         limit: PAGE_SIZE,
         offset: (tasksPage - 1) * PAGE_SIZE,
       }),
-    refetchInterval: 120_000,
+    // Event-driven: invalidated by pipeline:model-resolved in useIpc.
   });
 
   const { data: tasksTotal = 0 } = useQuery<number>({
     queryKey: ['costs-tasks-count'],
     queryFn: () => window.shipcode.invoke<number>('costs:count-tasks'),
-    refetchInterval: 120_000,
+    // Event-driven: invalidated by pipeline:model-resolved in useIpc.
   });
 
   const { data: projectTasks = [] } = useQuery<CostTaskSummary[]>({
@@ -132,7 +132,7 @@ export function CostsView() {
         limit: PAGE_SIZE,
         offset: (projectPage - 1) * PAGE_SIZE,
       }),
-    refetchInterval: 120_000,
+    // Event-driven: invalidated by pipeline:model-resolved in useIpc.
     enabled: !!selectedProjectId,
   });
 
@@ -140,7 +140,7 @@ export function CostsView() {
     queryKey: ['costs-project-tasks-count', selectedProjectId],
     queryFn: () =>
       window.shipcode.invoke<number>('costs:count-tasks', { projectId: selectedProjectId ?? '' }),
-    refetchInterval: 120_000,
+    // Event-driven: invalidated by pipeline:model-resolved in useIpc.
     enabled: !!selectedProjectId,
   });
 
