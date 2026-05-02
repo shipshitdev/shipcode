@@ -91,6 +91,22 @@ export class PipelineScheduler {
   }
 
   /**
+   * Check whether per-state concurrency cap allows dispatching a new
+   * pipeline that will enter `targetPhase`. Returns true when dispatch
+   * is allowed (no cap or under the cap).
+   */
+  private _isPerStateSlotAvailable(projectPath: string, targetPhase: string): boolean {
+    const policy = loadWorkflowPolicy(projectPath);
+    const caps = policy.agent.maxConcurrentAgentsByState;
+    const phaseKey = targetPhase.toLowerCase();
+    const cap = caps[phaseKey];
+    if (cap === undefined) return true; // no per-state cap → global cap governs
+
+    const runningInPhase = this.deps.pipeline.listActiveInPhases([targetPhase]).length;
+    return runningInPhase < cap;
+  }
+
+  /**
    * Attempt to start a GitHub issue pipeline.
    *
    * If all slots are full, queues the issue instead and returns `{ queued: true }`.
@@ -108,7 +124,10 @@ export class PipelineScheduler {
     const activeCount = this._getRunningPipelineCount();
     const pipelineCap = this._getProjectPipelineCap(project.path);
 
-    if (activeCount >= pipelineCap) {
+    if (
+      activeCount >= pipelineCap ||
+      !this._isPerStateSlotAvailable(project.path, PIPELINE_PHASE.planning)
+    ) {
       queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.queued);
       this._sendIssuesUpdated(projectId);
       log.info(
@@ -145,7 +164,10 @@ export class PipelineScheduler {
     const activeCount = this._getRunningPipelineCount();
     const pipelineCap = this._getProjectPipelineCap(project.path);
 
-    if (activeCount >= pipelineCap) {
+    if (
+      activeCount >= pipelineCap ||
+      !this._isPerStateSlotAvailable(project.path, PIPELINE_PHASE.planning)
+    ) {
       queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.queued);
       this._sendIssuesUpdated(projectId);
       log.info(
@@ -174,7 +196,11 @@ export class PipelineScheduler {
       if (pendingAutomationId) {
         const automation = queries.automations.getById(pendingAutomationId);
         const project = automation ? queries.projects.getById(automation.projectId) : null;
-        if (project && activeCount >= this._getProjectPipelineCap(project.path)) {
+        if (
+          project &&
+          (activeCount >= this._getProjectPipelineCap(project.path) ||
+            !this._isPerStateSlotAvailable(project.path, PIPELINE_PHASE.planning))
+        ) {
           this.pendingAutomations.unshift(pendingAutomationId);
           return;
         }
@@ -191,6 +217,7 @@ export class PipelineScheduler {
       const project = queries.projects.getById(next.projectId);
       if (!project) return;
       if (activeCount >= this._getProjectPipelineCap(project.path)) return;
+      if (!this._isPerStateSlotAvailable(project.path, PIPELINE_PHASE.planning)) return;
 
       log.info(`[scheduler] auto-promoting #${next.issueNumber} "${next.title}"`);
 
@@ -225,7 +252,11 @@ export class PipelineScheduler {
       ? this._getProjectPipelineCap(project.path)
       : settings.maxConcurrentPipelines;
 
-    if (activeCount >= pipelineCap) {
+    const perStateBlocked = project
+      ? !this._isPerStateSlotAvailable(project.path, PIPELINE_PHASE.planning)
+      : false;
+
+    if (activeCount >= pipelineCap || perStateBlocked) {
       if (!this.pendingAutomations.includes(automationId)) {
         this.pendingAutomations.push(automationId);
       }

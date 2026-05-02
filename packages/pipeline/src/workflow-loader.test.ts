@@ -93,4 +93,98 @@ body`,
     expect(policy.warning?.code).toBe('workflow_front_matter_not_a_map');
     expect(policy.promptTemplate).toBeNull();
   });
+
+  describe('max_concurrent_agents_by_state', () => {
+    it('parses valid per-state caps with lowercase normalization', () => {
+      const policy = parseWorkflowPolicy(
+        `---
+agent:
+  max_concurrent_agents_by_state:
+    Verify: 1
+    plan: 5
+    REVIEW: 2
+---
+body`,
+        '/repo/WORKFLOW.md',
+      );
+
+      expect(policy.agent.maxConcurrentAgentsByState).toEqual({
+        verify: 1,
+        plan: 5,
+        review: 2,
+      });
+    });
+
+    it('silently ignores non-positive values', () => {
+      const policy = parseWorkflowPolicy(
+        `---
+agent:
+  max_concurrent_agents_by_state:
+    verify: 0
+    plan: -1
+    review: 2
+---
+body`,
+        '/repo/WORKFLOW.md',
+      );
+
+      expect(policy.agent.maxConcurrentAgentsByState).toEqual({ review: 2 });
+    });
+
+    it('silently ignores non-numeric values', () => {
+      const policy = parseWorkflowPolicy(
+        `---
+agent:
+  max_concurrent_agents_by_state:
+    verify: "yes"
+    plan: true
+    review: 3
+---
+body`,
+        '/repo/WORKFLOW.md',
+      );
+
+      expect(policy.agent.maxConcurrentAgentsByState).toEqual({ review: 3 });
+    });
+
+    it('returns empty map when key is absent', () => {
+      const policy = parseWorkflowPolicy(
+        `---
+agent:
+  max_concurrent_agents: 5
+---
+body`,
+        '/repo/WORKFLOW.md',
+      );
+
+      expect(policy.agent.maxConcurrentAgentsByState).toEqual({});
+    });
+
+    it('returns empty map when value is not an object', () => {
+      const policy = parseWorkflowPolicy(
+        `---
+agent:
+  max_concurrent_agents_by_state: 42
+---
+body`,
+        '/repo/WORKFLOW.md',
+      );
+
+      expect(policy.agent.maxConcurrentAgentsByState).toEqual({});
+    });
+
+    it('floors fractional values to integers', () => {
+      const policy = parseWorkflowPolicy(
+        `---
+agent:
+  max_concurrent_agents_by_state:
+    verify: 2.9
+---
+body`,
+        '/repo/WORKFLOW.md',
+      );
+
+      expect(policy.agent.maxConcurrentAgentsByState).toEqual({ verify: 2 });
+    });
+  });
 });

@@ -19,6 +19,13 @@ export interface WorkflowLoadWarning {
 export interface WorkflowAgentPolicy {
   maxConcurrentAgents: number;
   maxRetryBackoffMs: number;
+  /**
+   * Per-state concurrency caps from `agent.max_concurrent_agents_by_state`.
+   * Keys are lowercase phase names; values are positive integers.
+   * When a key exists for the current phase, both this cap AND the global
+   * `maxConcurrentAgents` must pass for dispatch.
+   */
+  maxConcurrentAgentsByState: Record<string, number>;
 }
 
 export interface WorkflowPolicy {
@@ -36,6 +43,7 @@ export const DEFAULT_WORKFLOW_POLICY: WorkflowPolicy = {
   agent: {
     maxConcurrentAgents: DEFAULT_MAX_CONCURRENT_AGENTS,
     maxRetryBackoffMs: DEFAULT_MAX_RETRY_BACKOFF_MS,
+    maxConcurrentAgentsByState: {},
   },
   warning: null,
 };
@@ -48,6 +56,22 @@ function positiveInteger(value: unknown): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null;
   const normalized = Math.floor(value);
   return normalized > 0 ? normalized : null;
+}
+
+/**
+ * Parse `agent.max_concurrent_agents_by_state` from front matter.
+ * Keys normalized to lowercase; non-positive/non-numeric values silently dropped.
+ */
+function parsePerStateCaps(raw: unknown): Record<string, number> {
+  if (!isRecord(raw)) return {};
+  const result: Record<string, number> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    const cap = positiveInteger(value);
+    if (cap !== null) {
+      result[key.toLowerCase()] = cap;
+    }
+  }
+  return result;
 }
 
 export function resolveWorkflowPath(repoPath: string): string | null {
@@ -119,6 +143,7 @@ export function parseWorkflowPolicy(raw: string, sourcePath: string): WorkflowPo
         positiveInteger(agent.max_concurrent_agents) ?? DEFAULT_MAX_CONCURRENT_AGENTS,
       maxRetryBackoffMs:
         positiveInteger(agent.max_retry_backoff_ms) ?? DEFAULT_MAX_RETRY_BACKOFF_MS,
+      maxConcurrentAgentsByState: parsePerStateCaps(agent.max_concurrent_agents_by_state),
     },
     warning: null,
   };

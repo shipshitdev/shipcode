@@ -3,7 +3,7 @@ import { PipelineScheduler } from './pipeline-scheduler';
 
 const { loadWorkflowPolicyMock } = vi.hoisted(() => ({
   loadWorkflowPolicyMock: vi.fn(() => ({
-    agent: { maxConcurrentAgents: 10, maxRetryBackoffMs: 300_000 },
+    agent: { maxConcurrentAgents: 10, maxRetryBackoffMs: 300_000, maxConcurrentAgentsByState: {} },
   })),
 }));
 
@@ -230,7 +230,11 @@ describe('PipelineScheduler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     loadWorkflowPolicyMock.mockReturnValue({
-      agent: { maxConcurrentAgents: 10, maxRetryBackoffMs: 300_000 },
+      agent: {
+        maxConcurrentAgents: 10,
+        maxRetryBackoffMs: 300_000,
+        maxConcurrentAgentsByState: {},
+      },
     });
     queries = makeQueries();
     pipeline = {
@@ -307,7 +311,11 @@ describe('PipelineScheduler', () => {
 
     it('queues when WORKFLOW.md agent.max_concurrent_agents lowers the dispatch cap', async () => {
       loadWorkflowPolicyMock.mockReturnValue({
-        agent: { maxConcurrentAgents: 1, maxRetryBackoffMs: 300_000 },
+        agent: {
+          maxConcurrentAgents: 1,
+          maxRetryBackoffMs: 300_000,
+          maxConcurrentAgentsByState: {},
+        },
       });
       pipeline.listActiveInPhases.mockReturnValue([
         { threadId: 'a', phase: 'executing', startedAt: Date.now(), activeProcessId: null },
@@ -521,6 +529,104 @@ describe('PipelineScheduler', () => {
       expect(promoted).toBe(true);
       expect(pipeline.rehydrateContext).toHaveBeenCalledWith('thread-open', '/tmp/project-2');
       expect(pipeline.startExecution).toHaveBeenCalledWith('thread-open', approvedPlan.structured);
+    });
+  });
+
+  describe('per-state concurrency caps', () => {
+    it('queues when per-state cap for planning is reached even if global cap has room', async () => {
+      loadWorkflowPolicyMock.mockReturnValue({
+        agent: {
+          maxConcurrentAgents: 10,
+          maxRetryBackoffMs: 300_000,
+          maxConcurrentAgentsByState: { planning: 1 },
+        },
+      });
+      pipeline.listActiveInPhases.mockImplementation((phases: readonly string[]) => {
+        const phaseSet = new Set(phases);
+        const all = [
+          { threadId: 'a', phase: 'planning', startedAt: Date.now(), activeProcessId: null },
+          { threadId: 'b', phase: 'executing', startedAt: Date.now(), activeProcessId: null },
+        ];
+        return all.filter((s) => phaseSet.has(s.phase));
+      });
+      queries.settings.get.mockReturnValue(makeBaseSettings({ maxConcurrentPipelines: 10 }));
+
+      const result = await scheduler.startOrQueue('project-1', 42);
+
+      expect(result.queued).toBe(true);
+      expect(pipeline.startFromGitHubIssue).not.toHaveBeenCalled();
+    });
+
+    it('dispatches when per-state cap has room', async () => {
+      loadWorkflowPolicyMock.mockReturnValue({
+        agent: {
+          maxConcurrentAgents: 10,
+          maxRetryBackoffMs: 300_000,
+          maxConcurrentAgentsByState: { planning: 3 },
+        },
+      });
+      pipeline.listActiveInPhases.mockImplementation((phases: readonly string[]) => {
+        const phaseSet = new Set(phases);
+        const all = [
+          { threadId: 'a', phase: 'planning', startedAt: Date.now(), activeProcessId: null },
+          { threadId: 'b', phase: 'executing', startedAt: Date.now(), activeProcessId: null },
+        ];
+        return all.filter((s) => phaseSet.has(s.phase));
+      });
+      queries.settings.get.mockReturnValue(makeBaseSettings({ maxConcurrentPipelines: 10 }));
+
+      const result = await scheduler.startOrQueue('project-1', 42);
+
+      expect(result.queued).toBe(false);
+      expect(pipeline.startFromGitHubIssue).toHaveBeenCalled();
+    });
+
+    it('uses global cap when no per-state cap exists for the phase', async () => {
+      loadWorkflowPolicyMock.mockReturnValue({
+        agent: {
+          maxConcurrentAgents: 10,
+          maxRetryBackoffMs: 300_000,
+          maxConcurrentAgentsByState: { verify: 1 }, // no cap on planning
+        },
+      });
+      pipeline.listActiveInPhases.mockImplementation((phases: readonly string[]) => {
+        const phaseSet = new Set(phases);
+        const all = [
+          { threadId: 'a', phase: 'planning', startedAt: Date.now(), activeProcessId: null },
+          { threadId: 'b', phase: 'planning', startedAt: Date.now(), activeProcessId: null },
+          { threadId: 'c', phase: 'planning', startedAt: Date.now(), activeProcessId: null },
+        ];
+        return all.filter((s) => phaseSet.has(s.phase));
+      });
+      queries.settings.get.mockReturnValue(makeBaseSettings({ maxConcurrentPipelines: 10 }));
+
+      const result = await scheduler.startOrQueue('project-1', 42);
+
+      // No per-state cap for planning → global cap (10) governs → dispatch allowed
+      expect(result.queued).toBe(false);
+    });
+
+    it('onSlotFreed respects per-state cap when promoting queued issues', () => {
+      loadWorkflowPolicyMock.mockReturnValue({
+        agent: {
+          maxConcurrentAgents: 10,
+          maxRetryBackoffMs: 300_000,
+          maxConcurrentAgentsByState: { planning: 1 },
+        },
+      });
+      pipeline.listActiveInPhases.mockImplementation((phases: readonly string[]) => {
+        const phaseSet = new Set(phases);
+        const all = [
+          { threadId: 'a', phase: 'planning', startedAt: Date.now(), activeProcessId: null },
+        ];
+        return all.filter((s) => phaseSet.has(s.phase));
+      });
+      queries.settings.get.mockReturnValue(makeBaseSettings({ maxConcurrentPipelines: 10 }));
+      queries.githubIssues.getNextQueued.mockReturnValue(makeIssue());
+
+      scheduler.onSlotFreed();
+
+      expect(pipeline.startFromGitHubIssue).not.toHaveBeenCalled();
     });
   });
 
