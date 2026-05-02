@@ -19,7 +19,7 @@ import {
   TableRow,
 } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowUpDown, X } from 'lucide-react';
+import { ArrowUpDown, RefreshCw, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { NOTIFICATIONS_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
@@ -93,6 +93,14 @@ export function InboxView() {
     mutationFn: () => window.shipcode.invoke('notification:dismiss-all'),
     onSuccess: () => {
       clearNotifications();
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+  });
+
+  const retryPipeline = useMutation({
+    mutationFn: (threadId: string) =>
+      window.shipcode.invoke('pipeline:retry', { threadId }),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
   });
@@ -197,6 +205,19 @@ export function InboxView() {
               aria-label={`Open issue: ${n.title}`}
             >
               View
+            </Button>
+          )}
+          {(n.kind === 'failed' || n.kind === 'verification_exhausted') && n.threadId && (
+            <Button
+              variant="ghost"
+              className="h-5 gap-1 px-1.5 text-[10px] font-medium text-muted hover:text-primary hover:bg-elevated"
+              onClick={() => retryPipeline.mutate(n.threadId!)}
+              disabled={retryPipeline.isPending && retryPipeline.variables === n.threadId}
+              title="Retry pipeline"
+              aria-label={`Retry pipeline: ${n.title}`}
+            >
+              <RefreshCw size={12} />
+              Retry
             </Button>
           )}
           <Button

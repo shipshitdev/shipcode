@@ -196,6 +196,11 @@ describe('KanbanBoard keyboard navigation', () => {
       />,
     );
 
+    // No card auto-focused on mount
+    expect(view.container.querySelector('[data-keyboard-focused="true"]')).toBeNull();
+
+    // First arrow key press focuses first card
+    pressKey('j');
     expect(focusedCard(view.container).textContent).toContain('Todo top');
 
     pressKey('j');
@@ -235,6 +240,9 @@ describe('KanbanBoard keyboard navigation', () => {
       />,
     );
 
+    // Activate keyboard focus first
+    pressKey('j');
+
     pressKey('Enter');
     pressKey('c');
     pressKey('e');
@@ -260,6 +268,8 @@ describe('KanbanBoard keyboard navigation', () => {
       />,
     );
 
+    // Activate keyboard focus first
+    pressKey('j');
     expect(focusedCard(view.container).textContent).toContain('Todo top');
 
     const input = document.createElement('input');
@@ -296,6 +306,8 @@ describe('KanbanBoard keyboard navigation', () => {
       />,
     );
 
+    // Activate keyboard focus, then try to start
+    pressKey('j');
     pressKey('e');
 
     expect(onStartPipeline).not.toHaveBeenCalled();
@@ -324,6 +336,8 @@ describe('KanbanBoard keyboard navigation', () => {
       <KanbanBoard issues={[todoBottom, todoTop, agentQueued]} {...commonProps} />,
     );
 
+    // Activate keyboard focus first
+    pressKey('j');
     expect(focusedCard(view.container).textContent).toContain('Todo top');
     pressKey('j');
     expect(focusedCard(view.container).textContent).toContain('Todo bottom');
@@ -355,14 +369,16 @@ describe('KanbanBoard keyboard navigation', () => {
       />,
     );
 
-    expect(focusedCard(view.container).textContent).toContain('Todo top');
+    // No card focused on mount
+    expect(view.container.querySelector('[data-keyboard-focused="true"]')).toBeNull();
 
     pressKey('j');
     pressKey('Enter');
     pressKey('c');
     pressKey('e');
 
-    expect(focusedCard(view.container).textContent).toContain('Todo top');
+    // Still no focus — shortcuts disabled
+    expect(view.container.querySelector('[data-keyboard-focused="true"]')).toBeNull();
     expect(onIssueClick).not.toHaveBeenCalled();
     expect(onCommentIssue).not.toHaveBeenCalled();
     expect(onStartPipeline).not.toHaveBeenCalled();

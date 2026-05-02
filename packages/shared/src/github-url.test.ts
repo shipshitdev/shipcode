@@ -1,5 +1,46 @@
 import { describe, expect, it } from 'vitest';
-import { githubProjectsUrl, parseGithubProjectUrl, validateGithubProjectUrl } from './github-url';
+import {
+  githubCompareUrl,
+  githubProjectsUrl,
+  parseGithubProjectUrl,
+  validateGithubProjectUrl,
+} from './github-url';
+
+describe('githubCompareUrl', () => {
+  it('builds compare URL from scp-style remote', () => {
+    expect(githubCompareUrl('git@github.com:acme/widget.git', 'main', 'feat/login')).toBe(
+      'https://github.com/acme/widget/compare/main...feat%2Flogin',
+    );
+  });
+
+  it('builds compare URL from https remote', () => {
+    expect(
+      githubCompareUrl('https://github.com/acme/widget.git', 'develop', 'fix/typo'),
+    ).toBe('https://github.com/acme/widget/compare/develop...fix%2Ftypo');
+  });
+
+  it('encodes special characters in branch names', () => {
+    expect(
+      githubCompareUrl('git@github.com:acme/repo.git', 'main', 'SHIPCODE/abc_def'),
+    ).toBe('https://github.com/acme/repo/compare/main...SHIPCODE%2Fabc_def');
+  });
+
+  it('returns null when remote is null', () => {
+    expect(githubCompareUrl(null, 'main', 'feat/x')).toBeNull();
+  });
+
+  it('returns null when base is null', () => {
+    expect(githubCompareUrl('git@github.com:acme/repo.git', null, 'feat/x')).toBeNull();
+  });
+
+  it('returns null when branch is null', () => {
+    expect(githubCompareUrl('git@github.com:acme/repo.git', 'main', null)).toBeNull();
+  });
+
+  it('returns null when remote is unparseable', () => {
+    expect(githubCompareUrl('not-a-remote', 'main', 'feat/x')).toBeNull();
+  });
+});
 
 describe('githubProjectsUrl (with override)', () => {
   it('returns trimmed override when provided', () => {
