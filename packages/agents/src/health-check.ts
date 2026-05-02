@@ -30,6 +30,7 @@ import {
   getSupportedReasoningEfforts,
   normalizeReasoningModelId,
   OPENROUTER_API_BASE,
+  stripAnsi,
 } from '@shipcode/shared';
 import * as pty from 'node-pty';
 
@@ -392,16 +393,12 @@ interface ClaudeAuthDetails {
   loginMethod: string | null;
 }
 
-function stripAnsiCodes(text: string): string {
-  const csiSource = String.raw`\\u001B\\[[0-?]*[ -/]*[@-~]`.replace(/\\\\/g, '\\');
-  const oscSource = String.raw`\\u001B\\][^\\u0007]*(?:\\u0007|\\u001B\\\\)`.replace(/\\\\/g, '\\');
-  const csiPattern = new RegExp(csiSource, 'g');
-  const oscPattern = new RegExp(oscSource, 'g');
-  return text.replace(csiPattern, '').replace(oscPattern, '').replace(/\r/g, '');
+function cleanTerminalText(text: string): string {
+  return stripAnsi(text).replace(/\r/g, '');
 }
 
 function normalizeForSearch(text: string): string {
-  return stripAnsiCodes(text).toLowerCase().replace(/\s+/g, '');
+  return cleanTerminalText(text).toLowerCase().replace(/\s+/g, '');
 }
 
 function escapeRegex(value: string): string {
@@ -774,7 +771,7 @@ export function parseCodexStatusText(
   // "codex --version" outputs "codex-cli X.Y.Z" — strip the binary name prefix so
   // the UI renders "vX.Y.Z" instead of "vcodex-cli X.Y.Z".
   const normalizedVersion = version ? (version.match(/\d+\.\d+[\w.-]*/)?.[0] ?? version) : null;
-  const clean = stripAnsiCodes(stdout);
+  const clean = cleanTerminalText(stdout);
   const creditsRemaining = firstNumber(/Credits:\s*([0-9][0-9., ]*)/i, clean);
   const sessionLine = firstCodexLimitBlock(clean, '5h limit');
   const weeklyLine = firstCodexLimitBlock(clean, 'Weekly limit');
@@ -838,7 +835,7 @@ export function parseClaudeUsageText(
   // "claude --version" outputs e.g. "2.1.92 (Claude Code)" — strip the parenthetical
   // so the UI renders "v2.1.92" instead of "v2.1.92 (Claude Code)".
   const normalizedVersion = version ? (version.match(/\d+\.\d+[\w.-]*/)?.[0] ?? version) : null;
-  const clean = stripAnsiCodes(stdout);
+  const clean = cleanTerminalText(stdout);
   const collapsed = clean.replace(/\s+/g, ' ').trim();
   const compact = normalizeForSearch(clean);
 

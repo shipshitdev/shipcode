@@ -8,7 +8,7 @@
  * so changes to one don't ripple through unrelated code.
  */
 
-import { sanitizeResolvedModel } from '@shipcode/shared';
+import { sanitizeResolvedModel, stripAnsi } from '@shipcode/shared';
 
 export interface CliUsage {
   inputTokens: number;
@@ -16,12 +16,7 @@ export interface CliUsage {
   costUsd: number;
 }
 
-// biome-ignore lint/suspicious/noControlCharactersInRegex: stripping ANSI escape codes
-const ANSI_RE = /\x1b\[[0-9;]*[a-zA-Z]/g;
-
-export function stripAnsi(text: string): string {
-  return text.replace(ANSI_RE, '');
-}
+export { stripAnsi };
 
 /**
  * Best-effort `JSON.parse` that returns `null` on syntax error instead of

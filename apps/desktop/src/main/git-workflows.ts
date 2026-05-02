@@ -7,16 +7,11 @@ import type {
   CleanupItem,
   Project,
 } from '@shipcode/shared';
+import { stripAnsi } from '@shipcode/shared';
 import log from './logger.service';
 
 interface ActiveWorktreeOwner {
   worktreePath: string | null;
-}
-
-const ANSI_ESCAPE_PATTERN = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
-
-function stripAnsi(value: string): string {
-  return value.replace(ANSI_ESCAPE_PATTERN, '');
 }
 
 function summarizeCommitFailure(value: string): string {

@@ -5,16 +5,10 @@ import type {
   ReviewRecord,
   ShipCodePlan,
 } from '@shipcode/shared';
-import { PIPELINE_PHASE, shipCodePlanSchema } from '@shipcode/shared';
+import { PIPELINE_PHASE, shipCodePlanSchema, stripAnsi } from '@shipcode/shared';
 
 export { formatRelativeTime as timeAgo } from '@shipcode/shared';
-
-// biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI formatting from persisted terminal lines
-const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]|\x1b\].*?(?:\x07|\x1b\\)/g;
-
-export function stripAnsi(value: string): string {
-  return value.replace(ANSI_RE, '');
-}
+export { stripAnsi };
 
 export const ACTIVE_PHASES: PipelinePhase[] = [
   PIPELINE_PHASE.planning,
@@ -131,8 +125,7 @@ export function decodePhaseOption(value: string): {
 function resolveRawPlanText(raw: string): string {
   const lines = raw.split('\n');
   for (let i = lines.length - 1; i >= 0; i--) {
-    // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping ANSI codes
-    const line = lines[i].replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').trim();
+    const line = stripAnsi(lines[i]).trim();
     if (!line) continue;
     try {
       const parsed = JSON.parse(line);
