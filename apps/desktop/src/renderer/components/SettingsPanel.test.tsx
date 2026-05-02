@@ -1,25 +1,12 @@
 import { DEFAULT_SETTINGS, type IntegrationStatus } from '@shipcode/shared';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '../stores/app-store';
+import { renderWithQueryClient } from '../test/render';
 import { SettingsPanel } from './SettingsPanel';
 
 function renderWithProviders() {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-        refetchOnWindowFocus: false,
-      },
-    },
-  });
-
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <SettingsPanel />
-    </QueryClientProvider>,
-  );
+  return renderWithQueryClient(<SettingsPanel />);
 }
 
 function makeDesktopApps() {

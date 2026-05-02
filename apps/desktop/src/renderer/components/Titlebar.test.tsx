@@ -1,33 +1,19 @@
 // @vitest-environment jsdom
 
-import type {
-  CliProviderUsageMap,
-  CliProviderUsageStatus,
-  Project,
-  SystemHealth,
-} from '@shipcode/shared';
+import type { Project, SystemHealth } from '@shipcode/shared';
 import { DEFAULT_SETTINGS } from '@shipcode/shared';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '../stores/app-store';
+import {
+  makeProviderUsageStatus as makeUsage,
+  makeProviderUsageMap as makeUsageMap,
+} from '../test/provider-usage';
+import { renderWithQueryClient } from '../test/render';
 import { Titlebar } from './Titlebar';
 
 function renderWithProviders() {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-        refetchOnWindowFocus: false,
-      },
-    },
-  });
-
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <Titlebar />
-    </QueryClientProvider>,
-  );
+  return renderWithQueryClient(<Titlebar />);
 }
 
 function makeProject(overrides: Partial<Project> = {}): Project {
@@ -66,81 +52,6 @@ function makeProject(overrides: Partial<Project> = {}): Project {
     notifyGithubUser: null,
     createdAt: '2026-04-16T00:00:00.000Z',
     updatedAt: '2026-04-16T00:00:00.000Z',
-    ...overrides,
-  };
-}
-
-function makeUsage(
-  provider: 'claude' | 'codex',
-  overrides: Partial<CliProviderUsageStatus>,
-): CliProviderUsageStatus {
-  return {
-    provider,
-    available: true,
-    stale: false,
-    state: 'ready',
-    source: 'cli',
-    version: '1.0.0',
-    accountEmail: 'vincent@shipshit.dev',
-    loginMethod: 'pro',
-    updatedAt: '2026-04-16T16:00:00.000Z',
-    checkedAt: '2026-04-16T16:01:00.000Z',
-    message: null,
-    creditsRemaining: null,
-    windows:
-      provider === 'claude'
-        ? [
-            {
-              key: 'session',
-              label: 'Session',
-              usedPercent: 10,
-              leftPercent: 90,
-              resetsAt: null,
-              resetDescription: null,
-            },
-            {
-              key: 'weekly',
-              label: 'Weekly',
-              usedPercent: 20,
-              leftPercent: 80,
-              resetsAt: null,
-              resetDescription: null,
-            },
-            {
-              key: 'model',
-              label: 'Sonnet',
-              usedPercent: 30,
-              leftPercent: 70,
-              resetsAt: null,
-              resetDescription: null,
-            },
-          ]
-        : [
-            {
-              key: 'session',
-              label: 'Session',
-              usedPercent: 10,
-              leftPercent: 90,
-              resetsAt: null,
-              resetDescription: null,
-            },
-            {
-              key: 'weekly',
-              label: 'Weekly',
-              usedPercent: 20,
-              leftPercent: 80,
-              resetsAt: null,
-              resetDescription: null,
-            },
-          ],
-    ...overrides,
-  };
-}
-
-function makeUsageMap(overrides: Partial<CliProviderUsageMap> = {}): CliProviderUsageMap {
-  return {
-    claude: makeUsage('claude', {}),
-    codex: makeUsage('codex', {}),
     ...overrides,
   };
 }
