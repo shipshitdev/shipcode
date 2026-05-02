@@ -27,9 +27,10 @@ export function GithubSettingsSection({
             type="number"
             className="w-[120px]"
             value={settings.githubPollingIntervalMs}
-            onChange={(e) =>
-              onUpdate({ githubPollingIntervalMs: Number.parseInt(e.target.value, 10) })
-            }
+            onChange={(e) => {
+              const parsed = Number.parseInt(e.target.value, 10);
+              if (!Number.isNaN(parsed)) onUpdate({ githubPollingIntervalMs: parsed });
+            }}
             min={5000}
             step={5000}
           />

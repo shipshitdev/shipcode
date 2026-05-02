@@ -38,7 +38,8 @@ export function IntegrationsSettingsSection({
   onRefetch: () => void;
   onTestChat: (provider: 'discord' | 'telegram') => Promise<string>;
 }) {
-  const [testResult, setTestResult] = useState<string | null>(null);
+  const [discordTestResult, setDiscordTestResult] = useState<string | null>(null);
+  const [telegramTestResult, setTelegramTestResult] = useState<string | null>(null);
   const getOpenRouterModelPresentation = (
     check: NonNullable<IntegrationStatus>['openrouter']['modelChecks'][number],
   ) => {
@@ -426,10 +427,13 @@ export function IntegrationsSettingsSection({
                     <Button
                       variant="secondary"
                       size="sm"
-                      onClick={() => void onTestChat('discord').then(setTestResult)}
+                      onClick={() => void onTestChat('discord').then(setDiscordTestResult)}
                     >
                       Send test message
                     </Button>
+                    {discordTestResult ? (
+                      <div className="text-[12px] text-secondary">{discordTestResult}</div>
+                    ) : null}
                   </div>
                 </div>
 
@@ -486,14 +490,15 @@ export function IntegrationsSettingsSection({
                     <Button
                       variant="secondary"
                       size="sm"
-                      onClick={() => void onTestChat('telegram').then(setTestResult)}
+                      onClick={() => void onTestChat('telegram').then(setTelegramTestResult)}
                     >
                       Send test message
                     </Button>
+                    {telegramTestResult ? (
+                      <div className="text-[12px] text-secondary">{telegramTestResult}</div>
+                    ) : null}
                   </div>
                 </div>
-
-                {testResult ? <div className="text-[12px] text-secondary">{testResult}</div> : null}
               </div>
             </section>
 

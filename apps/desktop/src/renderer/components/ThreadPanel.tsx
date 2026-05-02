@@ -169,7 +169,7 @@ export function ThreadPanel() {
     onSuccess: (result, projectId) => {
       queryClient.invalidateQueries({ queryKey: ['github-issues', projectId] });
       setArchiveFeedback({
-        tone: result.appliedCount > 0 ? 'success' : 'pending',
+        tone: 'success',
         message:
           result.consideredCount === 0
             ? 'No Todo issues need triage.'

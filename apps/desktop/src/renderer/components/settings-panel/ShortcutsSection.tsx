@@ -15,12 +15,7 @@ export function ShortcutsSection() {
     <>
       <h3 className="mb-1">Keyboard Shortcuts</h3>
       <p className="mb-6 text-xs text-muted">
-        Reference of every shortcut in ShipCode. Remapping isn&apos;t supported yet - if you want a
-        different binding, edit{' '}
-        <code className="rounded bg-tertiary px-1 py-0.5 text-[11px]">
-          apps/desktop/src/renderer/data/shortcuts.ts
-        </code>
-        .
+        Reference of every shortcut in ShipCode. Custom key bindings are not supported yet.
       </p>
       {(Object.entries(byCategory) as [ShortcutCategory, ShortcutDef[]][]).map(
         ([category, items]) => (
