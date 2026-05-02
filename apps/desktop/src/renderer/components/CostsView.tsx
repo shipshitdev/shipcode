@@ -40,10 +40,6 @@ function formatDateTime(iso: string): string {
   });
 }
 
-function formatProvider(provider: string): string {
-  return provider;
-}
-
 function formatModelDescription(model: string | null, provider: string): string {
   return modelDisplay(sanitizeResolvedModel(model) ?? provider);
 }
@@ -298,163 +294,143 @@ export function CostsView() {
                       'Project'}{' '}
                     Cost Details
                   </h2>
-                  <Card>
-                    <CardContent className="p-0">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Phase</TableHead>
-                            <TableHead>Date</TableHead>
-                            <TableHead>Task</TableHead>
-                            <TableHead>Provider</TableHead>
-                            <TableHead>Model</TableHead>
-                            <TableHead className="text-right">Tokens</TableHead>
-                            <TableHead className="text-right">Cost</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {projectTasks.map((t) => (
-                            <TableRow
-                              key={`${selectedProjectId}-${t.threadId}`}
-                              className={cn(
-                                'cursor-pointer hover:bg-hover',
-                                navigatingThreadId === t.threadId && 'opacity-60',
-                              )}
-                              onClick={() => goToTask(t.projectId, t.threadId)}
-                            >
-                              <TableCell>
-                                <span
-                                  className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${PHASE_COLOR[t.phase] ?? PHASE_COLOR.idle}`}
-                                >
-                                  {t.phase.replace(/_/g, ' ')}
-                                </span>
-                              </TableCell>
-                              <TableCell className="text-[11px] text-muted whitespace-nowrap">
-                                {t.updatedAt ? formatDateTime(t.updatedAt) : '—'}
-                              </TableCell>
-                              <TableCell>
-                                <div className="font-medium text-primary truncate max-w-[260px]">
-                                  {t.title}
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-[11px] text-muted whitespace-nowrap">
-                                {formatProvider(t.provider)}
-                              </TableCell>
-                              <TableCell className="text-[11px] text-primary whitespace-nowrap">
-                                {formatModelDescription(t.model, t.provider)}
-                              </TableCell>
-                              <TableCell className="text-right font-mono text-xs text-primary">
-                                {formatTokenCount(t.tokensPrompt + t.tokensCompletion)}
-                              </TableCell>
-                              <TableCell className="text-right font-mono text-xs text-primary">
-                                {formatCost(t.costUsd)}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </CardContent>
-                  </Card>
-                  {projectTasksTotalPages > 1 && (
-                    <div className="mt-3 px-1">
-                      <Pagination
-                        page={projectPage}
-                        totalPages={projectTasksTotalPages}
-                        onPageChange={setProjectPage}
-                        className="w-full"
-                      />
-                    </div>
-                  )}
+                  <CostTaskTable
+                    tasks={projectTasks}
+                    page={projectPage}
+                    totalPages={projectTasksTotalPages}
+                    onPageChange={setProjectPage}
+                    onTaskClick={goToTask}
+                    navigatingThreadId={navigatingThreadId}
+                    keyPrefix={`${selectedProjectId}-`}
+                  />
                 </section>
               )}
 
-              {/* Top tasks by cost */}
               <section>
                 <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
                   Top Tasks by Cost
                 </h2>
-                {tasks.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-xs text-muted">
-                    No tasks yet.
-                  </div>
-                ) : (
-                  <>
-                    <Card>
-                      <CardContent className="p-0">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Phase</TableHead>
-                              <TableHead>Date</TableHead>
-                              <TableHead>Task</TableHead>
-                              <TableHead>Provider</TableHead>
-                              <TableHead>Model</TableHead>
-                              <TableHead className="text-right">Tokens</TableHead>
-                              <TableHead className="text-right">Cost</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {tasks.map((t) => (
-                              <TableRow
-                                key={t.threadId}
-                                className={cn(
-                                  'cursor-pointer hover:bg-hover',
-                                  navigatingThreadId === t.threadId && 'opacity-60',
-                                )}
-                                onClick={() => goToTask(t.projectId, t.threadId)}
-                              >
-                                <TableCell>
-                                  <span
-                                    className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${PHASE_COLOR[t.phase] ?? PHASE_COLOR.idle}`}
-                                  >
-                                    {t.phase.replace(/_/g, ' ')}
-                                  </span>
-                                </TableCell>
-                                <TableCell className="text-[11px] text-muted whitespace-nowrap">
-                                  {t.updatedAt ? formatDateTime(t.updatedAt) : '—'}
-                                </TableCell>
-                                <TableCell>
-                                  <div className="font-medium text-primary truncate max-w-[260px]">
-                                    {t.title}
-                                  </div>
-                                  <div className="text-[11px] text-muted">{t.projectName}</div>
-                                </TableCell>
-                                <TableCell className="text-[11px] text-muted whitespace-nowrap">
-                                  {formatProvider(t.provider)}
-                                </TableCell>
-                                <TableCell className="text-[11px] text-primary whitespace-nowrap">
-                                  {formatModelDescription(t.model, t.provider)}
-                                </TableCell>
-                                <TableCell className="text-right font-mono text-xs text-primary">
-                                  {formatTokenCount(t.tokensPrompt + t.tokensCompletion)}
-                                </TableCell>
-                                <TableCell className="text-right font-mono text-xs text-primary">
-                                  {formatCost(t.costUsd)}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </CardContent>
-                    </Card>
-                    {tasksTotalPages > 1 && (
-                      <div className="mt-3 px-1">
-                        <Pagination
-                          page={tasksPage}
-                          totalPages={tasksTotalPages}
-                          onPageChange={setTasksPage}
-                          className="w-full"
-                        />
-                      </div>
-                    )}
-                  </>
-                )}
+                <CostTaskTable
+                  tasks={tasks}
+                  page={tasksPage}
+                  totalPages={tasksTotalPages}
+                  onPageChange={setTasksPage}
+                  onTaskClick={goToTask}
+                  navigatingThreadId={navigatingThreadId}
+                  showProjectName
+                  emptyMessage="No tasks yet."
+                />
               </section>
             </>
           )}
         </div>
       </div>
     </div>
+  );
+}
+
+function CostTaskTable({
+  tasks,
+  page,
+  totalPages,
+  onPageChange,
+  onTaskClick,
+  navigatingThreadId,
+  showProjectName = false,
+  emptyMessage,
+  keyPrefix = '',
+}: {
+  tasks: CostTaskSummary[];
+  page: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+  onTaskClick: (projectId: string, threadId: string) => void;
+  navigatingThreadId: string | null;
+  showProjectName?: boolean;
+  emptyMessage?: string;
+  keyPrefix?: string;
+}) {
+  if (tasks.length === 0 && emptyMessage) {
+    return (
+      <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-xs text-muted">
+        {emptyMessage}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Phase</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Task</TableHead>
+                <TableHead>Provider</TableHead>
+                <TableHead>Model</TableHead>
+                <TableHead className="text-right">Tokens</TableHead>
+                <TableHead className="text-right">Cost</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {tasks.map((task) => (
+                <TableRow
+                  key={`${keyPrefix}${task.threadId}`}
+                  className={cn(
+                    'cursor-pointer hover:bg-hover',
+                    navigatingThreadId === task.threadId && 'opacity-60',
+                  )}
+                  onClick={() => onTaskClick(task.projectId, task.threadId)}
+                >
+                  <TableCell>
+                    <span
+                      className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${PHASE_COLOR[task.phase] ?? PHASE_COLOR.idle}`}
+                    >
+                      {task.phase.replace(/_/g, ' ')}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-[11px] text-muted whitespace-nowrap">
+                    {task.updatedAt ? formatDateTime(task.updatedAt) : '—'}
+                  </TableCell>
+                  <TableCell>
+                    <div className="font-medium text-primary truncate max-w-[260px]">
+                      {task.title}
+                    </div>
+                    {showProjectName && (
+                      <div className="text-[11px] text-muted">{task.projectName}</div>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-[11px] text-muted whitespace-nowrap">
+                    {task.provider}
+                  </TableCell>
+                  <TableCell className="text-[11px] text-primary whitespace-nowrap">
+                    {formatModelDescription(task.model, task.provider)}
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-xs text-primary">
+                    {formatTokenCount(task.tokensPrompt + task.tokensCompletion)}
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-xs text-primary">
+                    {formatCost(task.costUsd)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+      {totalPages > 1 && (
+        <div className="mt-3 px-1">
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onPageChange={onPageChange}
+            className="w-full"
+          />
+        </div>
+      )}
+    </>
   );
 }
 
