@@ -437,8 +437,8 @@ export function createElectronEmitter(
       if (event.type === 'pipeline:verification-exhausted' && thread) {
         try {
           deps.notifications.markVerificationExhausted(event.threadId);
-          deps.notifications.fire('verification_exhausted', thread);
-          deps.chatNotifications.fire('verification_exhausted', thread);
+          deps.notifications.fire('verification_exhausted', thread, event.testSummary);
+          deps.chatNotifications.fire('verification_exhausted', thread, event.testSummary);
         } catch (err) {
           log.error('[pipeline-bridge] notification error:', err);
         }

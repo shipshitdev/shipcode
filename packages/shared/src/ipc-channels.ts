@@ -189,6 +189,10 @@ export interface IpcInvokeChannels {
   'pipeline:stabilize-pr': { args: { threadId: string }; result: undefined };
   'pipeline:cancel': { args: { threadId: string }; result: undefined };
   'pipeline:skip-review': { args: { threadId: string }; result: undefined };
+  'pipeline:create-pr': {
+    args: { threadId: string };
+    result: { prNumber: number; prUrl: string };
+  };
 
   'plan:get': { args: { threadId: string }; result: PlanRecord | null };
   'plan:get-by-id': { args: { planId: string }; result: PlanRecord | null };
@@ -651,7 +655,7 @@ export interface IpcStreamChannels {
   'agent:state': { processId: string; type: string; state: AgentState; threadId?: string };
   'pipeline:phase': { threadId: string; phase: PipelinePhase };
   'pipeline:model-resolved': PipelineModelResolvedEvent;
-  'pipeline:verification-exhausted': { threadId: string; retries: number };
+  'pipeline:verification-exhausted': { threadId: string; retries: number; testSummary?: string };
   'plan:parsed': { threadId: string; plan: ShipCodePlan };
   'review:parsed': { threadId: string; review: PlanReview };
   'verification:parsed': { threadId: string; verification: VerificationResult };

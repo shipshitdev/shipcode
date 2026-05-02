@@ -104,6 +104,43 @@ export function extractExecutionErrorSnippet(rawOutput: string): string {
   return '';
 }
 
+/**
+ * Extract a short summary from raw test command output for use in
+ * last_error and notification bodies. Looks for common test failure
+ * patterns across Jest, Vitest, Go test, pytest, and plain exit output.
+ */
+export function extractTestFailureSummary(testOutput: string): string {
+  if (!testOutput.trim()) return 'Tests failed (no output captured)';
+
+  const lines = testOutput.split('\n');
+
+  // Pattern 1: FAIL <path> (Jest/Vitest)
+  const failLine = lines.find((l) => /^\s*(FAIL|✗|×)\s+\S/.test(l));
+  if (failLine) return failLine.trim().slice(0, 280);
+
+  // Pattern 2: "X failed" summary line (pytest, Vitest)
+  const summaryLine = lines
+    .slice()
+    .reverse()
+    .find((l) => /\d+\s+(failed|error|failing)/i.test(l));
+  if (summaryLine) return summaryLine.trim().slice(0, 280);
+
+  // Pattern 3: "--- FAIL" (Go)
+  const goFail = lines.find((l) => l.startsWith('--- FAIL'));
+  if (goFail) return goFail.trim().slice(0, 280);
+
+  // Pattern 4: "Error:" lines
+  const errorLine = lines.find((l) => /^\s*Error:/i.test(l));
+  if (errorLine) return errorLine.trim().slice(0, 280);
+
+  // Fallback: last non-empty line, capped
+  const lastMeaningful = lines
+    .slice()
+    .reverse()
+    .find((l) => l.trim().length > 0);
+  return (lastMeaningful ?? 'Tests failed').trim().slice(0, 280);
+}
+
 export function createExecutionPhaseHandlers({
   deps,
   contextHelpers,
@@ -116,6 +153,7 @@ export function createExecutionPhaseHandlers({
     emitTerminalLifecycle,
     ensureRepoSetupContract,
     formatStabilizationFeedback,
+    formatTestFixFeedback,
     getTestingContext,
     getVerifyCommands,
     prepareWorktree,
@@ -497,6 +535,31 @@ export function createExecutionPhaseHandlers({
     })();
   }
 
+  async function startTestFix(threadId: string) {
+    const context = activePipelines.get(threadId);
+    if (!context) return;
+
+    const testOutput = context.testOutput ?? '';
+    context.testOutput = null;
+
+    const latestPlan = deps.plans.getLatest(threadId);
+    const structuredPlan = latestPlan?.structured;
+    if (!structuredPlan) {
+      emitPhase(
+        threadId,
+        'failed',
+        'Test fix cannot start: structured plan missing for this thread.',
+      );
+      activePipelines.delete(threadId);
+      return;
+    }
+
+    // Inject focused test-fix feedback via the stabilization slot (consumed-once).
+    context.stabilizationFeedback = formatTestFixFeedback(testOutput, context.testRetries);
+
+    await handlers.startExecution(threadId, structuredPlan);
+  }
+
   async function startTesting(threadId: string) {
     const context = activePipelines.get(threadId);
     if (!context) return;
@@ -535,37 +598,28 @@ export function createExecutionPhaseHandlers({
         if (result.exitCode !== 0) {
           if (context.testRetries < MAX_TEST_RETRIES) {
             context.testRetries++;
-            const latestPlan = deps.plans.getLatest(threadId);
-            const structuredPlan = latestPlan?.structured;
-            if (structuredPlan) {
-              const delayMs = computeRetryDelayMs({
-                reason: 'continuation',
-                attempt: context.testRetries,
-              });
-              if (context.retryTimer) clearTimeout(context.retryTimer);
-              context.retryTimer = setTimeout(() => {
-                context.retryTimer = null;
-                if (context.cancelled || !activePipelines.has(threadId)) return;
-                handlers.startExecution(threadId, structuredPlan);
-              }, delayMs);
-            } else {
-              emitPhase(
-                threadId,
-                'failed',
-                'Verification commands failed — plan unavailable for re-execution.',
-              );
-              activePipelines.delete(threadId);
-            }
+            const delayMs = computeRetryDelayMs({
+              reason: 'continuation',
+              attempt: context.testRetries,
+            });
+            if (context.retryTimer) clearTimeout(context.retryTimer);
+            context.retryTimer = setTimeout(() => {
+              context.retryTimer = null;
+              if (context.cancelled || !activePipelines.has(threadId)) return;
+              void startTestFix(threadId);
+            }, delayMs);
           } else {
+            const testSummary = extractTestFailureSummary(context.testOutput ?? '');
             deps.emitter.emit({
               type: 'pipeline:verification-exhausted',
               threadId,
               retries: context.testRetries,
+              testSummary,
             });
             emitPhase(
               threadId,
               'failed',
-              `Verification commands failed after ${context.testRetries + 1} attempt(s). See terminal output.`,
+              `Test fix exhausted after ${context.testRetries + 1} attempt(s): ${testSummary}`,
             );
             activePipelines.delete(threadId);
           }

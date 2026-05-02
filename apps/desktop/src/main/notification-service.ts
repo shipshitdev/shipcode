@@ -9,7 +9,11 @@ import { app, type BrowserWindow, Notification } from 'electron';
 
 const DEDUPE_WINDOW_MS = 2_000;
 
-function buildCopy(kind: NotificationKind, thread: Thread): { title: string; body: string } {
+function buildCopy(
+  kind: NotificationKind,
+  thread: Thread,
+  testSummary?: string,
+): { title: string; body: string } {
   const label = thread.title || `Thread ${thread.id.slice(0, 6)}`;
   switch (kind) {
     case 'awaiting_approval':
@@ -27,7 +31,9 @@ function buildCopy(kind: NotificationKind, thread: Thread): { title: string; bod
     case 'verification_exhausted':
       return {
         title: 'Target verification failed',
-        body: `${label} hit the retry limit while running build/test commands in the worktree`,
+        body: testSummary
+          ? `${label} — ${testSummary.slice(0, 180)}`
+          : `${label} hit the retry limit while running build/test commands in the worktree`,
       };
     case 'ci_blocked':
       return {
@@ -60,7 +66,7 @@ export class NotificationService {
     this.verificationExhaustedAt.set(threadId, Date.now());
   }
 
-  fire(kind: NotificationKind, thread: Thread) {
+  fire(kind: NotificationKind, thread: Thread, testSummary?: string) {
     const settings = this.settings.get();
     if (!settings.notificationsEnabled) return;
 
@@ -82,7 +88,13 @@ export class NotificationService {
     }
     this.lastFiredByThread.set(thread.id, { kind, t: Date.now() });
 
-    const { title, body } = buildCopy(kind, thread);
+    // Clear prior notifications (failed, verification_exhausted, etc.) before
+    // creating the completed notification so stale failures don't linger in the inbox.
+    if (kind === 'completed') {
+      this.dismissByThread(thread.id);
+    }
+
+    const { title, body } = buildCopy(kind, thread, testSummary);
 
     const record = this.notifications.create({
       threadId: thread.id,

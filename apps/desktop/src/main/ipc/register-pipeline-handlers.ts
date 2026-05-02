@@ -1,3 +1,5 @@
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import type { ActivePipelineSummary, HeatmapQueryArgs } from '@shipcode/shared';
 import {
   clarificationAnswerSchema,
@@ -572,6 +574,103 @@ export function registerPipelineHandlers({
       threadId,
       phase: PIPELINE_PHASE.awaitingApproval,
     });
+  });
+
+  const execFileAsync = promisify(execFile);
+  const GH_TIMEOUT_MS = 30_000;
+  const createPrInFlight = new Set<string>();
+
+  ipcMain.handle('pipeline:create-pr', async (_event, { threadId }: { threadId: string }) => {
+    // Prevent concurrent PR creation for the same thread.
+    if (createPrInFlight.has(threadId)) {
+      throw new Error('PR creation already in progress for this thread');
+    }
+    createPrInFlight.add(threadId);
+
+    try {
+      const thread = queries.threads.getById(threadId);
+      if (!thread) throw new Error(`Thread ${threadId} not found`);
+
+      const project = queries.projects.getById(thread.projectId);
+      if (!project) throw new Error(`Project ${thread.projectId} not found`);
+
+      if (!thread.worktreeBranch) {
+        throw new Error('No branch available for this run');
+      }
+      if (thread.githubPrNumber) {
+        throw new Error('A pull request already exists for this thread');
+      }
+      if (thread.status !== PIPELINE_PHASE.completed) {
+        throw new Error('Can only create a PR for a completed run');
+      }
+
+      const branch = thread.worktreeBranch;
+      const baseBranch = thread.baseBranch ?? project.defaultBranch;
+      const cwd = thread.worktreePath ?? project.path;
+
+      const latestPlan = queries.plans.getLatest(threadId);
+      const title = latestPlan?.structured?.objective ?? thread.title;
+      const body = [
+        '## Summary',
+        '',
+        `*Automation run: ${thread.title}*`,
+        '',
+        '---',
+        '*Autonomous implementation by ShipCode*',
+      ].join('\n');
+
+      // Check for an existing PR on this branch (mirrors execution-phases.ts pattern).
+      const { stdout: existingPrJson } = await execFileAsync(
+        'gh',
+        ['pr', 'list', '--state', 'all', '--head', branch, '--json', 'number,url', '--limit', '1'],
+        { cwd, encoding: 'utf-8', timeout: GH_TIMEOUT_MS },
+      );
+      const existingPrs = JSON.parse(existingPrJson) as Array<{ number: number; url: string }>;
+      const existingPr = existingPrs[0];
+
+      let prNumber: number;
+      let prUrl: string;
+
+      if (existingPr) {
+        prNumber = existingPr.number;
+        prUrl = existingPr.url;
+      } else {
+        const { stdout: prOutput } = await execFileAsync(
+          'gh',
+          [
+            'pr',
+            'create',
+            '--draft',
+            '--title',
+            title,
+            '--body',
+            body,
+            '--head',
+            branch,
+            '--base',
+            baseBranch,
+          ],
+          { cwd, encoding: 'utf-8', timeout: GH_TIMEOUT_MS },
+        );
+        const prMatch = prOutput.match(/\/pull\/(\d+)/);
+        if (!prMatch) {
+          throw new Error(`Failed to parse pull request number from gh output: ${prOutput}`);
+        }
+        prNumber = Number.parseInt(prMatch[1], 10);
+        prUrl = prOutput.trim();
+      }
+
+      queries.threads.setGithubPr(threadId, prNumber);
+
+      return { prNumber, prUrl };
+    } catch (err) {
+      // Clamp error message for IPC — full trace stays in main-process console.
+      const raw = err instanceof Error ? err.message : String(err);
+      const clamped = raw.split('\n')[0]?.slice(0, 280) ?? 'Unknown error';
+      throw new Error(clamped);
+    } finally {
+      createPrInFlight.delete(threadId);
+    }
   });
 
   ipcMain.handle('pipeline:list-active', (): ActivePipelineSummary[] => {

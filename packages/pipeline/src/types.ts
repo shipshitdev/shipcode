@@ -109,7 +109,12 @@ export type PipelineEvent =
         | 'manualSkipReview'
       )[];
     }
-  | { type: 'pipeline:verification-exhausted'; threadId: string; retries: number }
+  | {
+      type: 'pipeline:verification-exhausted';
+      threadId: string;
+      retries: number;
+      testSummary?: string;
+    }
   | { type: 'pipeline:turn-started'; threadId: string; turnNumber: number }
   | {
       type: 'pipeline:turn-completed';

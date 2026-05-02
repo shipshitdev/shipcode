@@ -56,6 +56,7 @@ export interface PipelineRuntime {
     failingChecks: GitHubPrCheckSummary[];
     unresolvedReviewComments: GitHubPrReviewCommentSummary[];
   }) => string;
+  formatTestFixFeedback: (testOutput: string, attempt: number) => string;
   resolveAgentForPhase: (context: PipelineContext, phase: ProviderPhase) => PipelineExecutorModel;
   runProviderPhase: (
     context: PipelineContext,

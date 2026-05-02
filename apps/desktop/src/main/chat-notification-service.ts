@@ -38,7 +38,12 @@ function buildGitHubPrUrl(thread: Thread): string | null {
   return `https://github.com/${thread.githubRepo}/pull/${thread.githubPrNumber}`;
 }
 
-function buildMessage(kind: NotificationKind, thread: Thread, project: Project): string {
+function buildMessage(
+  kind: NotificationKind,
+  thread: Thread,
+  project: Project,
+  testSummary?: string,
+): string {
   const lines = [
     `ShipCode: ${kindLabel(kind)}`,
     `Project: ${project.name}`,
@@ -49,6 +54,7 @@ function buildMessage(kind: NotificationKind, thread: Thread, project: Project):
   const prUrl = buildGitHubPrUrl(thread);
   if (issueUrl) lines.push(`Issue: ${issueUrl}`);
   if (prUrl) lines.push(`PR: ${prUrl}`);
+  if (testSummary) lines.push(`Failure: ${testSummary.slice(0, 200)}`);
   return lines.join('\n');
 }
 
@@ -75,8 +81,8 @@ export class ChatNotificationService {
     private projects: ProjectQueries,
   ) {}
 
-  fire(kind: NotificationKind, thread: Thread) {
-    void this.deliver(kind, thread);
+  fire(kind: NotificationKind, thread: Thread, testSummary?: string) {
+    void this.deliver(kind, thread, testSummary);
   }
 
   async sendTest(provider: 'discord' | 'telegram', projectId: string | null = null) {
@@ -111,14 +117,14 @@ export class ChatNotificationService {
     };
   }
 
-  private async deliver(kind: NotificationKind, thread: Thread) {
+  private async deliver(kind: NotificationKind, thread: Thread, testSummary?: string) {
     const settings = this.settings.get();
     if (!settings.chatNotificationEvents[notificationEventFlagForKind(kind)]) return;
 
     const project = this.projects.getById(thread.projectId);
     if (!project) return;
 
-    const message = buildMessage(kind, thread, project);
+    const message = buildMessage(kind, thread, project, testSummary);
     const dedupeBase = `${thread.id}:${kind}`;
 
     const discordRoute = this.resolveDiscordRoute(settings, project);

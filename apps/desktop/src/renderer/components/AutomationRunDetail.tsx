@@ -2,11 +2,12 @@ import type { DiffRecord, PipelinePhase, PlanRecord, ReviewRecord, Thread } from
 import { formatCost, formatTokenCount, githubCompareUrl, PIPELINE_PHASE } from '@shipcode/shared';
 import { PhaseChip } from '@shipcode/ui';
 import { Badge, Button, cn, Tabs, TabsContent, TabsList, TabsTrigger } from '@shipshitdev/ui';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Copy,
   ExternalLink,
   GitBranch,
+  GitPullRequest,
   Maximize2,
   Minimize2,
   RefreshCw,
@@ -100,6 +101,16 @@ export function AutomationRunDetail({ expanded }: { expanded: boolean }) {
     setCopiedBranch(true);
     setTimeout(() => setCopiedBranch(false), 1500);
   }, []);
+
+  const createPr = useMutation({
+    mutationFn: (tid: string) =>
+      window.shipcode.invoke<{ prNumber: number; prUrl: string }>('pipeline:create-pr', {
+        threadId: tid,
+      }),
+    onSuccess: (_data, tid) => {
+      queryClient.invalidateQueries({ queryKey: ['thread', tid] });
+    },
+  });
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -310,6 +321,30 @@ export function AutomationRunDetail({ expanded }: { expanded: boolean }) {
                   })()}
                   {copiedBranch && <span className="text-[10px] text-accent">Copied</span>}
                 </div>
+                {thread.status === PIPELINE_PHASE.completed &&
+                  !thread.githubPrNumber &&
+                  thread.githubRepo && (
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-6 gap-1 px-2 text-[11px]"
+                        onClick={() => threadId && createPr.mutate(threadId)}
+                        disabled={createPr.isPending}
+                        title="Create a draft pull request on GitHub"
+                      >
+                        <GitPullRequest className="h-3 w-3" />
+                        {createPr.isPending ? 'Creating…' : 'Create PR'}
+                      </Button>
+                      {createPr.isError && (
+                        <span className="text-[10px] text-destructive">
+                          {createPr.error instanceof Error
+                            ? createPr.error.message
+                            : 'Failed to create PR'}
+                        </span>
+                      )}
+                    </div>
+                  )}
               </div>
             )}
 

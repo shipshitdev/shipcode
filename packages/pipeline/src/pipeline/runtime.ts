@@ -363,6 +363,37 @@ export function createPipelineRuntime(
     return lines.join('\n');
   }
 
+  function formatTestFixFeedback(testOutput: string, attempt: number): string {
+    const lines = [
+      '',
+      '',
+      '<test_fix_feedback>',
+      `The build/test command failed on attempt ${attempt}. Your only goal in this pass is to fix these failing tests. Do NOT re-execute the full plan or add new features.`,
+      '',
+      'Failing test output:',
+      '<test_output>',
+      testOutput.trim().slice(-8192),
+      '</test_output>',
+      '</test_fix_feedback>',
+      '',
+      '<debugging_methodology>',
+      '<scope_constraint>',
+      'These steps apply ONLY to diagnosing the failing tests.',
+      'Do not expand beyond the files directly implicated by the test failures.',
+      'Do not redesign, refactor, or improve code outside the failure path.',
+      '</scope_constraint>',
+      '',
+      '1. READ the full test output — not just the last line.',
+      '2. IDENTIFY the exact assertion or compilation error that caused failure.',
+      '3. HYPOTHESIZE explicitly before each change — state what you believe is wrong and why.',
+      '4. LOCALIZE — narrow the failure to the smallest scope. Is it your code or existing code?',
+      '5. FIX the root cause, not the symptom. Suppressing errors or changing test expectations is not a fix.',
+      '6. VERIFY by re-reading the test expectations after the fix.',
+      '</debugging_methodology>',
+    ];
+    return lines.join('\n');
+  }
+
   function resolveAgentForPhase(
     context: PipelineContext,
     phase: ProviderPhase,
@@ -772,6 +803,7 @@ export function createPipelineRuntime(
     getVerifyCommands,
     buildRepoSetupPlannerNote,
     formatStabilizationFeedback,
+    formatTestFixFeedback,
     resolveAgentForPhase,
     runProviderPhase,
     emitPhase,
