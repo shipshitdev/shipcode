@@ -1248,6 +1248,59 @@ export interface VerificationRecord {
   createdAt: string;
 }
 
+// === Feature QA State ===
+
+/**
+ * Machine-readable QA contract for a feature. Declares what to test,
+ * where, and what data is needed so agents can run focused verification
+ * instead of a full-suite crawl.
+ */
+export interface FeatureQaState {
+  /** Stable feature identifier (e.g. issue number or slug). */
+  featureId: string;
+  /** Route or surface scope the feature operates on. */
+  routes: string[];
+  /** Named user flows that must work for the feature to ship. */
+  criticalFlows: FeatureQaCriticalFlow[];
+  /** Expected UI states the feature should be able to reach. */
+  expectedStates: string[];
+  /** Test data or seeding assumptions required for QA. */
+  testDataAssumptions: string[];
+  /** Whether stable selectors exist for critical controls. */
+  selectorReadiness: 'ready' | 'partial' | 'missing';
+}
+
+export interface FeatureQaCriticalFlow {
+  /** Human-readable name of the flow (e.g. "login with valid credentials"). */
+  name: string;
+  /** Ordered steps to exercise the flow. */
+  steps: string[];
+  /** What constitutes success for this flow. */
+  successCriteria: string;
+}
+
+/**
+ * Result of a focused QA run for a single feature.
+ */
+export interface FeatureQaResult {
+  featureId: string;
+  status: 'passed' | 'failed' | 'partial';
+  /** Per-flow results. */
+  flowResults: FeatureQaFlowResult[];
+  /** Concise human-readable summary. */
+  summary: string;
+  /** Optional paths to screenshots, traces, or logs. */
+  evidencePaths?: string[];
+  runAt: string;
+}
+
+export interface FeatureQaFlowResult {
+  flowName: string;
+  passed: boolean;
+  /** Failure reason if not passed. */
+  failureReason?: string;
+}
+
 export interface PipelineModelResolvedEvent {
   threadId: string;
   phase: 'plan' | 'review' | 'revision' | 'execute' | 'verify';

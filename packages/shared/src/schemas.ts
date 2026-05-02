@@ -140,6 +140,38 @@ export const verificationResultSchema = z.object({
   issues: z.array(verificationIssueSchema),
 });
 
+// === Feature QA State ===
+
+export const featureQaCriticalFlowSchema = z.object({
+  name: z.string().min(1),
+  steps: z.array(z.string().min(1)).min(1),
+  successCriteria: z.string().min(1),
+});
+
+export const featureQaStateSchema = z.object({
+  featureId: z.string().min(1),
+  routes: z.array(z.string().min(1)),
+  criticalFlows: z.array(featureQaCriticalFlowSchema).min(1),
+  expectedStates: z.array(z.string().min(1)),
+  testDataAssumptions: z.array(z.string()),
+  selectorReadiness: z.enum(['ready', 'partial', 'missing']),
+});
+
+export const featureQaFlowResultSchema = z.object({
+  flowName: z.string().min(1),
+  passed: z.boolean(),
+  failureReason: z.string().optional(),
+});
+
+export const featureQaResultSchema = z.object({
+  featureId: z.string().min(1),
+  status: z.enum(['passed', 'failed', 'partial']),
+  flowResults: z.array(featureQaFlowResultSchema),
+  summary: z.string().min(1),
+  evidencePaths: z.array(z.string()).optional(),
+  runAt: z.string().min(1),
+});
+
 export const repoSetupEnvFileSchema = z.object({
   source: z.string().min(1),
   target: z.string().min(1).optional(),
