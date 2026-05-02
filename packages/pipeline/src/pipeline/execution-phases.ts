@@ -20,6 +20,7 @@ import {
   MAX_TEST_RETRIES,
   MAX_VERIFICATION_RETRIES,
   PIPELINE_PHASE,
+  parseUnifiedDiff,
   type ShipCodePlan,
 } from '@shipcode/shared';
 import {
@@ -28,7 +29,6 @@ import {
   type TaskNodeRecord,
 } from '@shipcode/shared/source';
 import { renderWorkflowPromptTemplate } from '../workflow-prompt';
-import { parseUnifiedDiff } from './diff-parser';
 import type { PipelineHelperEnv } from './shared';
 
 // Extract a short, human-readable error from an executor transcript.
