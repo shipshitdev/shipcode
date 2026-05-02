@@ -1,9 +1,18 @@
 import type { DiffRecord, PipelinePhase, PlanRecord, ReviewRecord, Thread } from '@shipcode/shared';
-import { formatCost, formatTokenCount, PIPELINE_PHASE } from '@shipcode/shared';
+import { formatCost, formatTokenCount, githubCompareUrl, PIPELINE_PHASE } from '@shipcode/shared';
 import { PhaseChip } from '@shipcode/ui';
 import { Badge, Button, cn, Tabs, TabsContent, TabsList, TabsTrigger } from '@shipshitdev/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Copy, ExternalLink, Maximize2, Minimize2, RefreshCw, Square, X } from 'lucide-react';
+import {
+  Copy,
+  ExternalLink,
+  GitBranch,
+  Maximize2,
+  Minimize2,
+  RefreshCw,
+  Square,
+  X,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 import { DiffTab } from './issue-detail/DiffTab';
@@ -16,6 +25,7 @@ export function AutomationRunDetail({ expanded }: { expanded: boolean }) {
   const issueDetailExpanded = useAppStore((s) => s.issueDetailExpanded);
   const selectAutomationThread = useAppStore((s) => s.selectAutomationThread);
   const toggleIssueDetailExpanded = useAppStore((s) => s.toggleIssueDetailExpanded);
+  const navigateToGitWorktree = useAppStore((s) => s.navigateToGitWorktree);
   const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<'run' | 'plans' | 'diff'>('run');
@@ -263,9 +273,41 @@ export function AutomationRunDetail({ expanded }: { expanded: boolean }) {
                       if (thread.worktreeBranch) handleCopyBranch(thread.worktreeBranch);
                     }}
                     className="rounded p-0.5 text-muted transition-colors hover:text-primary"
+                    title="Copy branch name"
                   >
                     <Copy className="h-3 w-3" />
                   </button>
+                  {thread.worktreePath && thread.projectId && (
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="text-muted"
+                      onClick={() => navigateToGitWorktree(thread.projectId, thread.worktreePath!)}
+                      title="View in Git tab"
+                    >
+                      <GitBranch size={12} />
+                    </Button>
+                  )}
+                  {(() => {
+                    const compareUrl = githubCompareUrl(
+                      thread.githubRepo ? `https://github.com/${thread.githubRepo}` : null,
+                      thread.baseBranch,
+                      thread.worktreeBranch,
+                    );
+                    return compareUrl ? (
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className="text-muted"
+                        onClick={() =>
+                          window.shipcode.invoke('shell:open-external', { url: compareUrl })
+                        }
+                        title="Compare on GitHub"
+                      >
+                        <ExternalLink size={12} />
+                      </Button>
+                    ) : null;
+                  })()}
                   {copiedBranch && <span className="text-[10px] text-accent">Copied</span>}
                 </div>
               </div>

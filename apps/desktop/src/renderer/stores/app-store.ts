@@ -163,6 +163,7 @@ interface AppState {
   // Project tab
   projectTab: ProjectTab;
   activePrNumber: number | null;
+  pendingGitWorktreePath: string | null;
 
   // Instant terminal sessions
   instantPaneThreadIds: string[];
@@ -238,6 +239,8 @@ interface AppState {
 
   // Cross-project navigation
   navigateToIssue: (projectId: string, issue: GitHubIssueCacheRecord) => void;
+  navigateToGitWorktree: (projectId: string, worktreePath: string) => void;
+  clearPendingGitWorktreePath: () => void;
   openCommandPalette: () => void;
 
   // Project tab actions
@@ -300,6 +303,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   addProjectExplorerOpen: false,
   projectTab: 'issues' as ProjectTab,
   activePrNumber: null,
+  pendingGitWorktreePath: null,
   instantPaneThreadIds: [],
   instantSplitDirection: 'horizontal',
   instantPaneMetaByThread: {},
@@ -387,6 +391,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       pipelinePhase: PIPELINE_PHASE.idle,
       viewMode: 'project',
       projectTab: 'issues' as ProjectTab,
+      pendingGitWorktreePath: null,
       githubIssues: [],
     }),
   selectThread: (id) =>
@@ -622,6 +627,24 @@ export const useAppStore = create<AppState>((set, get) => ({
       terminalVisible: AGENT_ACTIVE_STATUSES.has(issue.pipelineStatus) ? true : s.terminalVisible,
       commandPaletteOpen: false,
     })),
+  navigateToGitWorktree: (projectId, worktreePath) =>
+    set({
+      activeProjectId: projectId,
+      activeThreadId: null,
+      activeIssue: null,
+      activeAutomationThreadId: null,
+      terminalMaximized: false,
+      issueDetailExpanded: false,
+      currentPlan: null,
+      currentReview: null,
+      currentVerification: null,
+      pipelinePhase: PIPELINE_PHASE.idle,
+      viewMode: 'project',
+      projectTab: 'git' as ProjectTab,
+      pendingGitWorktreePath: worktreePath,
+      githubIssues: [],
+    }),
+  clearPendingGitWorktreePath: () => set({ pendingGitWorktreePath: null }),
   openCommandPalette: () => set({ commandPaletteOpen: true }),
 
   // Project tab actions

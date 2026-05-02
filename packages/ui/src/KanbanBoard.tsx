@@ -373,6 +373,7 @@ export function KanbanBoard({
     }
 
     setFocusedIssueId((current) => {
+      if (!current) return null; // don't auto-focus on mount
       if (findFocusedPosition(keyboardFocusColumns, current)) return current;
       return firstFocusableIssueId(keyboardFocusColumns);
     });

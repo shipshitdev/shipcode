@@ -16,6 +16,8 @@ import { useAppStore } from '../../stores/app-store';
 export function ProjectGitVisualizer() {
   const queryClient = useQueryClient();
   const activeProjectId = useAppStore((state) => state.activeProjectId);
+  const pendingGitWorktreePath = useAppStore((state) => state.pendingGitWorktreePath);
+  const clearPendingGitWorktreePath = useAppStore((state) => state.clearPendingGitWorktreePath);
   const [selectedWorktreePath, setSelectedWorktreePath] = useState<string | null>(null);
   const [autoCommitMessage, setAutoCommitMessage] = useState<{
     tone: 'success' | 'error';
@@ -46,12 +48,26 @@ export function ProjectGitVisualizer() {
       setSelectedWorktreePath(null);
       return;
     }
+
+    // If a pending worktree path was requested (e.g. from detail panel "View in Git"),
+    // prefer it over the default first-worktree selection.
+    if (pendingGitWorktreePath) {
+      const match = data.worktrees.find((w) => w.path === pendingGitWorktreePath);
+      if (match) {
+        setSelectedWorktreePath(match.path);
+        clearPendingGitWorktreePath();
+        return;
+      }
+      // No match — clear pending and fall through to default behavior.
+      clearPendingGitWorktreePath();
+    }
+
     setSelectedWorktreePath((current) =>
       current && data.worktrees.some((worktree) => worktree.path === current)
         ? current
         : data.worktrees[0].path,
     );
-  }, [data?.worktrees]);
+  }, [data?.worktrees, pendingGitWorktreePath, clearPendingGitWorktreePath]);
 
   const {
     data: diffs = [],
