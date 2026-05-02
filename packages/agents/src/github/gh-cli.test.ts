@@ -693,7 +693,7 @@ describe('GhCli', () => {
   });
 
   describe('setStatusLabel', () => {
-    it('removes existing status:* labels and adds new one', async () => {
+    it('removes existing status:* labels without adding a new one', async () => {
       const labelsResponse = {
         labels: [{ name: 'status:queued' }, { name: 'status:in-progress' }, { name: 'bug' }],
       };
@@ -701,7 +701,6 @@ describe('GhCli', () => {
       success(JSON.stringify(labelsResponse)); // view
       success(''); // remove status:queued
       success(''); // remove status:in-progress
-      success(''); // add new label
 
       await gh.setStatusLabel(10, 'status:ready-to-merge');
 
@@ -718,32 +717,25 @@ describe('GhCli', () => {
       expect(mockExecFileAsync.mock.calls[1][1]).toContain('status:queued');
       expect(mockExecFileAsync.mock.calls[2][1]).toContain('--remove-label');
       expect(mockExecFileAsync.mock.calls[2][1]).toContain('status:in-progress');
-      // Add call
-      expect(mockExecFileAsync.mock.calls[3][1]).toContain('--add-label');
-      expect(mockExecFileAsync.mock.calls[3][1]).toContain('status:ready-to-merge');
+      expect(mockExecFileAsync).toHaveBeenCalledTimes(3);
     });
 
-    it('skips removal when no status:* labels exist', async () => {
+    it('does nothing after fetch when no status:* labels exist', async () => {
       const labelsResponse = { labels: [{ name: 'bug' }] };
 
       success(JSON.stringify(labelsResponse)); // view
-      success(''); // add
 
       await gh.setStatusLabel(5, 'status:queued');
 
-      expect(mockExecFileAsync).toHaveBeenCalledTimes(2);
-      expect(mockExecFileAsync.mock.calls[1][1]).toContain('--add-label');
+      expect(mockExecFileAsync).toHaveBeenCalledTimes(1);
     });
 
-    it('handles fetch failure gracefully and still adds label', async () => {
+    it('handles fetch failure gracefully', async () => {
       failure('view failed'); // view fails
-      success(''); // add succeeds
 
       await gh.setStatusLabel(5, 'status:in-progress');
 
-      expect(mockExecFileAsync).toHaveBeenCalledTimes(2);
-      expect(mockExecFileAsync.mock.calls[1][1]).toContain('--add-label');
-      expect(mockExecFileAsync.mock.calls[1][1]).toContain('status:in-progress');
+      expect(mockExecFileAsync).toHaveBeenCalledTimes(1);
     });
 
     it('handles removal failure and continues', async () => {
@@ -751,21 +743,11 @@ describe('GhCli', () => {
 
       success(JSON.stringify(labelsResponse)); // view
       failure('remove failed'); // remove fails
-      success(''); // add succeeds
 
       await gh.setStatusLabel(5, 'status:in-progress');
 
-      expect(mockExecFileAsync).toHaveBeenCalledTimes(3);
-      expect(mockExecFileAsync.mock.calls[2][1]).toContain('--add-label');
-    });
-
-    it('handles addition failure without throwing', async () => {
-      const labelsResponse = { labels: [] };
-
-      success(JSON.stringify(labelsResponse)); // view
-      failure('add failed'); // add fails
-
-      await expect(gh.setStatusLabel(5, 'status:queued')).resolves.toBeUndefined();
+      expect(mockExecFileAsync).toHaveBeenCalledTimes(2);
+      expect(mockExecFileAsync.mock.calls[1][1]).toContain('--remove-label');
     });
   });
 

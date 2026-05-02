@@ -3,17 +3,17 @@ import { type AppSettings, PIPELINE_PHASE, type PipelinePhase } from './types';
 
 export const DEFAULT_STATUS_LABEL_MAPPINGS: Record<string, string> = {
   todo: '',
-  queued: 'status:queued',
-  planning: 'status:in-progress',
-  reviewing: 'status:in-progress',
-  revising: 'status:in-progress',
-  executing: 'status:in-progress',
+  queued: '',
+  planning: '',
+  reviewing: '',
+  revising: '',
+  executing: '',
   testing: '',
-  verifying: 'status:in-progress',
-  shipping: 'status:in-progress',
-  completed: 'status:done',
-  done: 'status:done',
-  failed: 'status:failed',
+  verifying: '',
+  shipping: '',
+  completed: '',
+  done: '',
+  failed: '',
 };
 
 export const DEFAULT_NOTIFICATION_EVENTS = {

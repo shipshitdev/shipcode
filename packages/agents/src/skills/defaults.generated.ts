@@ -2,9 +2,9 @@
 // Source files: skills/<phase>/SKILL.md at repo root.
 // Regenerate via: bun run build:skills
 
-import { type PhaseSkillKey } from '@shipcode/shared';
+import type { PhaseSkillKey } from '@shipcode/shared';
 
-export { type PhaseSkillKey, PHASE_SKILL_KEYS } from '@shipcode/shared';
+export { PHASE_SKILL_KEYS, type PhaseSkillKey } from '@shipcode/shared';
 
 export interface BundledDefault {
   /** Raw markdown including frontmatter. The loader strips frontmatter before sending to the provider. */
@@ -105,7 +105,7 @@ If a step depends on a fact you cannot verify from the codebase, state the assum
 </repository_context>
 `,
     version: '889de8095a934158',
-    requiredSlots: ["USER_PROMPT","THREAD_ID","OUTPUT_SCHEMA"] as const,
+    requiredSlots: ['USER_PROMPT', 'THREAD_ID', 'OUTPUT_SCHEMA'] as const,
     schemaVersion: 1,
   },
   'adversarial-review': {
@@ -229,7 +229,7 @@ Before finalizing, check that each finding is:
 </repo_context>
 `,
     version: 'a77e00a1016c70e4',
-    requiredSlots: ["PLAN_JSON","OUTPUT_SCHEMA"] as const,
+    requiredSlots: ['PLAN_JSON', 'OUTPUT_SCHEMA'] as const,
     schemaVersion: 1,
   },
   'plan-revision': {
@@ -320,7 +320,13 @@ Every claim in a \`rationale\` must be defensible from the plan or repo state â€
 </review_feedback>
 `,
     version: 'f3f11e200f871c40',
-    requiredSlots: ["ORIGINAL_PLAN","REVIEW_FEEDBACK","THREAD_ID","NEW_VERSION","OUTPUT_SCHEMA"] as const,
+    requiredSlots: [
+      'ORIGINAL_PLAN',
+      'REVIEW_FEEDBACK',
+      'THREAD_ID',
+      'NEW_VERSION',
+      'OUTPUT_SCHEMA',
+    ] as const,
     schemaVersion: 1,
   },
   'plan-execution': {
@@ -401,7 +407,7 @@ If a step requires a tool or command, run it; do not pretend it succeeded.
 </approved_plan>
 `,
     version: '82c7e88d74bc952a',
-    requiredSlots: ["APPROVED_PLAN"] as const,
+    requiredSlots: ['APPROVED_PLAN'] as const,
     schemaVersion: 1,
   },
   'plan-verification': {
@@ -492,7 +498,7 @@ Do not infer success from the absence of failure.
 </acceptance_criteria>
 `,
     version: '0fa873ae640511f2',
-    requiredSlots: ["PLAN_JSON","DIFF","ACCEPTANCE_CRITERIA","OUTPUT_SCHEMA"] as const,
+    requiredSlots: ['PLAN_JSON', 'DIFF', 'ACCEPTANCE_CRITERIA', 'OUTPUT_SCHEMA'] as const,
     schemaVersion: 1,
   },
   'pr-generation': {
@@ -528,7 +534,7 @@ Closes #{{ISSUE_NUMBER}}
 *Autonomous implementation by ShipCode*
 `,
     version: '2b994c3957358268',
-    requiredSlots: ["PLAN_OBJECTIVE","PLAN_STEPS","ACCEPTANCE_CRITERIA","ISSUE_NUMBER"] as const,
+    requiredSlots: ['PLAN_OBJECTIVE', 'PLAN_STEPS', 'ACCEPTANCE_CRITERIA', 'ISSUE_NUMBER'] as const,
     schemaVersion: 1,
   },
 };

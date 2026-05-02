@@ -12,18 +12,10 @@ Label a GitHub issue with one of the agent labels below and ShipCode will route 
 | `agent:openrouter/auto` | OpenRouter `auto` meta-router — picks the best model per prompt |
 | `agent:openrouter/free` | OpenRouter restricted to free-tier models |
 
-## Status Labels
+## Workflow State
 
-ShipCode can sync pipeline status to GitHub issue labels. Configure the mapping in Settings.
-
-| Pipeline Status | Default Label |
-|----------------|---------------|
-| Planning | `status:in-progress` |
-| Reviewing | `status:in-progress` |
-| Executing | `status:in-progress` |
-| Completed | `status:done` |
-| Done | `status:done` |
-| Failed | `status:failed` |
+ShipCode does not use GitHub labels for workflow state. Keep workflow state in a typed GitHub
+Projects v2 `Status` field, such as `Todo`, `In Progress`, `Done`, and `On hold`.
 
 ## Repo Setup Contract
 

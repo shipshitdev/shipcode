@@ -17,14 +17,20 @@ describe('SHIPCODE_DEFAULT_LABELS', () => {
     const defaultStatuses = [
       ...new Set(Object.values(DEFAULT_STATUS_LABEL_MAPPINGS).filter(Boolean)),
     ];
-    expect(SHIPCODE_STATUS_LABELS.map((label) => label.name)).toEqual(
-      expect.arrayContaining(defaultStatuses),
-    );
+    expect(defaultStatuses).toEqual([]);
+    expect(SHIPCODE_STATUS_LABELS).toEqual([]);
   });
 
-  it('includes PR review status labels', () => {
-    expect(SHIPCODE_STATUS_LABELS.map((label) => label.name)).toEqual(
-      expect.arrayContaining(['status:needs-review', 'status:ready-to-merge']),
+  it('does not create workflow status labels', () => {
+    expect(SHIPCODE_DEFAULT_LABELS.map((label) => label.name)).not.toEqual(
+      expect.arrayContaining([
+        'status:queued',
+        'status:in-progress',
+        'status:needs-review',
+        'status:ready-to-merge',
+        'status:done',
+        'status:failed',
+      ]),
     );
   });
 

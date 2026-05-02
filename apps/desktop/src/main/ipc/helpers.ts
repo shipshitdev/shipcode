@@ -14,10 +14,7 @@ import {
   DEFAULT_SETTINGS,
   type ExecutorModel,
   type GeneratorCli,
-  type GitHubStatusLabel,
   type PipelinePhase,
-  type PullRequestReviewDecision,
-  type PullRequestState,
   parseGithubProjectUrl,
   type ReasoningEffort,
   resolveEffectivePhaseReasoningEffort,
@@ -192,34 +189,6 @@ export function tryParsePlan(rawOutput: string): ShipCodePlan | null {
   return result.success ? result.data : null;
 }
 
-export function derivePullRequestStatusLabel(feedback: {
-  state: PullRequestState;
-  isDraft: boolean;
-  reviewDecision: PullRequestReviewDecision | null;
-  reviewRequestCount: number;
-  ciBlocked: boolean;
-}): GitHubStatusLabel {
-  if (feedback.state === 'MERGED') return 'status:done';
-  if (feedback.state === 'CLOSED') return 'status:in-progress';
-  if (feedback.isDraft) return 'status:in-progress';
-  if (feedback.reviewDecision === 'CHANGES_REQUESTED') return 'status:in-progress';
-  if (feedback.reviewDecision === 'APPROVED' && !feedback.ciBlocked) {
-    return 'status:ready-to-merge';
-  }
-  if (feedback.reviewRequestCount > 0 || feedback.reviewDecision === 'REVIEW_REQUIRED') {
-    return 'status:needs-review';
-  }
-  return 'status:in-progress';
-}
-
-function hasCachedStatusLabel(
-  issue: import('@shipcode/shared').GitHubIssueCacheRecord,
-  label: GitHubStatusLabel,
-): boolean {
-  const statusLabels = issue.labels.filter((entry) => entry.startsWith('status:'));
-  return statusLabels.length === 1 && statusLabels[0] === label;
-}
-
 export async function syncLinkedPullRequestFeedback(
   project: import('@shipcode/shared').Project,
   issue: import('@shipcode/shared').GitHubIssueCacheRecord,
@@ -273,10 +242,9 @@ export async function syncLinkedPullRequestFeedback(
     queries.githubIssues.setCachedLabelPresence(issue.id, 'blocked:ci', true);
   }
 
-  const statusLabel = derivePullRequestStatusLabel(feedback);
-  if (!hasCachedStatusLabel(issue, statusLabel)) {
-    queries.githubIssues.setCachedStatusLabel(issue.id, statusLabel);
-    await ghCli.setStatusLabel(issue.issueNumber, statusLabel);
+  if (issue.labels.some((entry) => entry.startsWith('status:'))) {
+    queries.githubIssues.clearCachedStatusLabels(issue.id);
+    await ghCli.setStatusLabel(issue.issueNumber, 'status:in-progress');
   }
 }
 

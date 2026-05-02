@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import type { DiffRecord, GitWorktreeSummary, StatusLabelMapping } from '@shipcode/shared';
+import type { DiffRecord, GitWorktreeSummary } from '@shipcode/shared';
 import { act, type ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { describe, expect, it, vi } from 'vitest';
@@ -23,7 +23,6 @@ import { Modal } from './primitives/modal';
 import { OverlayPanel } from './primitives/overlay-panel';
 import { SettingsRow } from './primitives/settings-row';
 import { SideBySideDiffViewer } from './SideBySideDiffViewer';
-import { StatusMappingEditor } from './StatusMappingEditor';
 
 function renderIntoDom(element: ReactElement) {
   const container = document.createElement('div');
@@ -149,23 +148,6 @@ const worktrees: GitWorktreeSummary[] = [
   },
 ];
 
-const mappings: StatusLabelMapping = {
-  todo: '',
-  queued: 'status:queued',
-  planning: 'status:in-progress',
-  clarifying: 'status:in-progress',
-  reviewing: 'status:in-progress',
-  revising: 'status:in-progress',
-  awaiting_approval: 'status:in-progress',
-  executing: 'status:in-progress',
-  testing: '',
-  verifying: 'status:in-progress',
-  shipping: 'status:in-progress',
-  completed: 'status:done',
-  done: 'status:done',
-  failed: 'status:failed',
-};
-
 describe('UI component regression coverage', () => {
   it('renders diff states, selection, and empty fallback', () => {
     const onFileSelect = vi.fn();
@@ -268,46 +250,6 @@ describe('UI component regression coverage', () => {
     });
 
     expect(onSelectWorktree).toHaveBeenCalledWith('/tmp/shipcode/46');
-    view.cleanup();
-  });
-
-  it('renders the status mapping editor and resets to defaults', () => {
-    const onSave = vi.fn();
-    const view = renderIntoDom(<StatusMappingEditor mappings={mappings} onSave={onSave} />);
-
-    expect(view.container.textContent).toContain('GitHub Label Mapping');
-    expect(view.container.textContent).toContain(
-      "Labels are auto-created on GitHub if they don't exist.",
-    );
-    expect(view.container.querySelectorAll('tbody tr')).toHaveLength(13);
-
-    const resetButton = view.container.querySelector(
-      'button[aria-label="Reset status mapping to defaults"]',
-    );
-    if (!(resetButton instanceof HTMLButtonElement)) {
-      throw new Error('Expected reset button');
-    }
-
-    act(() => {
-      resetButton.click();
-    });
-
-    expect(onSave).toHaveBeenCalledWith({
-      todo: '',
-      queued: 'status:queued',
-      planning: 'status:in-progress',
-      clarifying: 'status:in-progress',
-      reviewing: 'status:in-progress',
-      revising: 'status:in-progress',
-      awaiting_approval: 'status:in-progress',
-      executing: 'status:in-progress',
-      testing: 'status:in-progress',
-      verifying: 'status:in-progress',
-      shipping: 'status:in-progress',
-      completed: 'status:done',
-      done: 'status:done',
-      failed: 'status:failed',
-    });
     view.cleanup();
   });
 

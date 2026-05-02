@@ -18,7 +18,6 @@ export { PipelineStatus } from './PipelineStatus';
 export { PlanViewer } from './PlanViewer';
 export { ReviewViewer } from './ReviewViewer';
 export { SideBySideDiffViewer } from './SideBySideDiffViewer';
-export { StatusMappingEditor } from './StatusMappingEditor';
 export {
   languageFromFilePath,
   SyntaxHighlightedCode,

@@ -1,10 +1,9 @@
 // @vitest-environment jsdom
 
-import type { StatusLabelMapping, SystemHealth } from '@shipcode/shared';
+import type { SystemHealth } from '@shipcode/shared';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { StepAuthCheck } from './StepAuthCheck';
-import { StepLabelMapping } from './StepLabelMapping';
 import { StepModelPrefs } from './StepModelPrefs';
 
 afterEach(() => {
@@ -124,30 +123,7 @@ describe('onboarding leaf steps', () => {
     expect(screen.getByText('@decod3rs')).toBeInTheDocument();
   });
 
-  it('renders the status mapping editor wrapper and model preference warning state', () => {
-    const onChange = vi.fn();
-    const mappings: StatusLabelMapping = {
-      todo: '',
-      queued: 'status:queued',
-      planning: 'status:in-progress',
-      reviewing: 'status:in-progress',
-      revising: 'status:in-progress',
-      executing: 'status:in-progress',
-      testing: '',
-      verifying: 'status:in-progress',
-      shipping: 'status:in-progress',
-      completed: 'status:done',
-      done: 'status:done',
-      failed: 'status:failed',
-    };
-
-    const { container } = render(<StepLabelMapping mappings={mappings} onChange={onChange} />);
-
-    expect(screen.getByText('Status label mapping')).toBeInTheDocument();
-    expect(container.textContent).toContain('status:in-progress');
-
-    cleanup();
-
+  it('renders the model preference warning state', () => {
     render(
       <StepModelPrefs
         plannerModel="claude"

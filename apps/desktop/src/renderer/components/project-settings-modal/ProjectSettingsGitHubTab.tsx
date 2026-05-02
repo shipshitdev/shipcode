@@ -4,7 +4,6 @@ import {
   SHIPCODE_CLASSIFICATION_LABELS,
   SHIPCODE_DEFAULT_LABELS,
   SHIPCODE_METADATA_LABELS,
-  SHIPCODE_STATUS_LABELS,
 } from '@shipcode/shared';
 import { Button, LoadingButtonContent, SettingsRow } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -93,8 +92,8 @@ export function ProjectSettingsGitHubTab({
   return (
     <div className="space-y-4">
       <div className="text-xs text-muted">
-        ShipCode uses these labels to route issues to agents and track pipeline status. Sync to
-        create any missing labels in your repo.
+        ShipCode uses these labels to route issues to agents and attach concise metadata. Workflow
+        state belongs in the typed GitHub Projects Status field.
       </div>
 
       {isLoading ? (
@@ -110,11 +109,6 @@ export function ProjectSettingsGitHubTab({
             <LabelCategory
               title="Agent routing"
               labels={SHIPCODE_AGENT_LABELS}
-              existingNames={existingNames}
-            />
-            <LabelCategory
-              title="Status"
-              labels={SHIPCODE_STATUS_LABELS}
               existingNames={existingNames}
             />
             <LabelCategory
