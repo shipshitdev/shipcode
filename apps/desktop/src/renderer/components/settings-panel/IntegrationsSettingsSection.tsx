@@ -377,42 +377,8 @@ export function IntegrationsSettingsSection({
             </section>
 
             <section>
-              <h4 className="mb-3 text-secondary">Chat Alerts</h4>
+              <h4 className="mb-3 text-secondary">Chat Providers</h4>
               <div className="space-y-4">
-                <div className="rounded-md border border-border bg-secondary/40 p-3 text-[12px] text-secondary">
-                  <div className="mb-3 text-[13px] font-medium text-primary">
-                    Chat event defaults
-                  </div>
-                  <div className="grid gap-2 md:grid-cols-2">
-                    {[
-                      ['awaitingApproval', 'Needs approval'],
-                      ['failed', 'Pipeline failed'],
-                      ['ciBlocked', 'CI blocked'],
-                      ['verificationExhausted', 'Verification exhausted'],
-                      ['completed', 'Pipeline completed'],
-                    ].map(([key, label]) => (
-                      <label key={key} className="flex items-center justify-between gap-3">
-                        <span>{label}</span>
-                        <Switch
-                          checked={
-                            settings.chatNotificationEvents[
-                              key as keyof AppSettings['chatNotificationEvents']
-                            ]
-                          }
-                          onCheckedChange={(checked) =>
-                            onUpdate({
-                              chatNotificationEvents: {
-                                ...settings.chatNotificationEvents,
-                                [key]: checked,
-                              },
-                            })
-                          }
-                        />
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
                 <div className="rounded-md border border-border bg-secondary/40 p-3 text-[12px] text-secondary">
                   <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
                     <span className="text-[13px] font-medium text-primary">Discord</span>

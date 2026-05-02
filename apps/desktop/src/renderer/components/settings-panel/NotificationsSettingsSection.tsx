@@ -118,6 +118,83 @@ export function NotificationsSettingsSection({
           />
         </SettingsRow>
       </section>
+
+      <section className="mb-8">
+        <p className="mt-4 mb-1 text-xs uppercase tracking-wide text-muted">
+          Chat alerts (Discord / Telegram)
+        </p>
+
+        <SettingsRow label="Needs approval" htmlFor="chat-awaiting-approval">
+          <Switch
+            id="chat-awaiting-approval"
+            checked={settings.chatNotificationEvents.awaitingApproval}
+            onCheckedChange={(checked: boolean) =>
+              onUpdate({
+                chatNotificationEvents: {
+                  ...settings.chatNotificationEvents,
+                  awaitingApproval: !!checked,
+                },
+              })
+            }
+          />
+        </SettingsRow>
+        <SettingsRow label="Pipeline failed" htmlFor="chat-failed">
+          <Switch
+            id="chat-failed"
+            checked={settings.chatNotificationEvents.failed}
+            onCheckedChange={(checked: boolean) =>
+              onUpdate({
+                chatNotificationEvents: {
+                  ...settings.chatNotificationEvents,
+                  failed: !!checked,
+                },
+              })
+            }
+          />
+        </SettingsRow>
+        <SettingsRow label="CI blocked" htmlFor="chat-ci-blocked">
+          <Switch
+            id="chat-ci-blocked"
+            checked={settings.chatNotificationEvents.ciBlocked}
+            onCheckedChange={(checked: boolean) =>
+              onUpdate({
+                chatNotificationEvents: {
+                  ...settings.chatNotificationEvents,
+                  ciBlocked: !!checked,
+                },
+              })
+            }
+          />
+        </SettingsRow>
+        <SettingsRow label="Pipeline completed" htmlFor="chat-completed">
+          <Switch
+            id="chat-completed"
+            checked={settings.chatNotificationEvents.completed}
+            onCheckedChange={(checked: boolean) =>
+              onUpdate({
+                chatNotificationEvents: {
+                  ...settings.chatNotificationEvents,
+                  completed: !!checked,
+                },
+              })
+            }
+          />
+        </SettingsRow>
+        <SettingsRow label="Verification retries exhausted" htmlFor="chat-verification-exhausted">
+          <Switch
+            id="chat-verification-exhausted"
+            checked={settings.chatNotificationEvents.verificationExhausted}
+            onCheckedChange={(checked: boolean) =>
+              onUpdate({
+                chatNotificationEvents: {
+                  ...settings.chatNotificationEvents,
+                  verificationExhausted: !!checked,
+                },
+              })
+            }
+          />
+        </SettingsRow>
+      </section>
     </>
   );
 }

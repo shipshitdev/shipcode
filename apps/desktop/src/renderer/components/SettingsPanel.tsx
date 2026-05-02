@@ -107,9 +107,6 @@ export function SettingsPanel() {
   return (
     <div className="flex-1 overflow-y-auto bg-primary p-8">
       <div className="max-w-2xl">
-        {settingsSection === 'about' && (
-          <AboutSettingsSection settings={settings} onUpdate={update} />
-        )}
         {settingsSection === 'general' && (
           <GeneralSettingsSection
             settings={settings}
@@ -154,6 +151,9 @@ export function SettingsPanel() {
             onUpdate={update}
           />
         )}
+        {settingsSection === 'auto-commit' && (
+          <AutoCommitSettingsSection settings={settings} onUpdate={update} />
+        )}
         {settingsSection === 'shortcuts' && <ShortcutsSection />}
         {settingsSection === 'archived' && (
           <ArchivedSettingsSection
@@ -168,8 +168,8 @@ export function SettingsPanel() {
         {settingsSection === 'developer' && (
           <DeveloperSettingsSection settings={settings} onUpdate={update} />
         )}
-        {settingsSection === 'auto-commit' && (
-          <AutoCommitSettingsSection settings={settings} onUpdate={update} />
+        {settingsSection === 'about' && (
+          <AboutSettingsSection settings={settings} onUpdate={update} />
         )}
       </div>
     </div>

@@ -2,15 +2,21 @@
 
 import {
   BrainCircuit,
-  CircleAlert,
   Columns3,
   ExternalLink,
   LayoutList,
   RefreshCw,
+  SlidersHorizontal,
   Workflow,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button } from '../primitives/button';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from '../primitives/dropdown-menu';
 import {
   Select,
   SelectContent,
@@ -79,6 +85,8 @@ export function BoardToolbar({
 }: BoardToolbarProps) {
   const localBranches = branches?.filter((branch) => !branch.includes('/')) ?? [];
   const remoteBranches = branches?.filter((branch) => branch.includes('/')) ?? [];
+  const activeFilterCount =
+    (approvalFilter === 'needs-approval' ? 1 : 0) + (stalenessFilter === 'stale' ? 1 : 0);
 
   return (
     <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3">
@@ -86,7 +94,7 @@ export function BoardToolbar({
       {(repoUrl || projectsUrl) && (
         <div className="flex shrink-0 items-center gap-1">
           {repoUrl && (
-            <Button asChild variant="outline" size="xs" title="Open repository on github.com">
+            <Button asChild variant="outline" size="sm" title="Open repository on github.com">
               <a href={repoUrl} target="_blank" rel="noreferrer noopener" onClick={onRepoClick}>
                 repo
                 <ExternalLink size={10} />
@@ -94,7 +102,7 @@ export function BoardToolbar({
             </Button>
           )}
           {projectsUrl && (
-            <Button asChild variant="outline" size="xs" title="Open Projects board on github.com">
+            <Button asChild variant="outline" size="sm" title="Open Projects board on github.com">
               <a
                 href={projectsUrl}
                 target="_blank"
@@ -174,39 +182,44 @@ export function BoardToolbar({
             </SelectContent>
           </Select>
         </div>
-        <Button
-          variant="outline"
-          size="xs"
-          className={cn(
-            'shrink-0',
-            approvalFilter === 'needs-approval' &&
-              'border-warning/40 bg-warning/10 text-warning hover:bg-warning/15 hover:text-warning',
-          )}
-          title={
-            approvalFilter === 'needs-approval'
-              ? 'Show all issues'
-              : 'Show only issues that require approval'
-          }
-          onClick={() =>
-            onApprovalFilterChange(approvalFilter === 'needs-approval' ? 'all' : 'needs-approval')
-          }
-        >
-          Needs approval
-        </Button>
-        <Button
-          variant="outline"
-          size="xs"
-          className={cn(
-            'shrink-0 gap-1.5',
-            stalenessFilter === 'stale' &&
-              'border-danger/40 bg-danger/10 text-danger hover:bg-danger/15 hover:text-danger',
-          )}
-          title={stalenessFilter === 'stale' ? 'Show all issues' : 'Show only stale issues'}
-          onClick={() => onStalenessFilterChange(stalenessFilter === 'stale' ? 'all' : 'stale')}
-        >
-          <CircleAlert size={12} />
-          Stale
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className={cn(
+                'shrink-0 gap-1.5',
+                activeFilterCount > 0 &&
+                  'border-accent/40 bg-accent/10 text-accent hover:bg-accent/15 hover:text-accent',
+              )}
+              title="Filter issues"
+            >
+              <SlidersHorizontal size={12} />
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="flex size-4 items-center justify-center rounded-full bg-accent/20 text-[10px] font-semibold leading-none text-accent">
+                  {activeFilterCount}
+                </span>
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuCheckboxItem
+              checked={approvalFilter === 'needs-approval'}
+              onCheckedChange={(checked) =>
+                onApprovalFilterChange(checked ? 'needs-approval' : 'all')
+              }
+            >
+              Needs approval
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem
+              checked={stalenessFilter === 'stale'}
+              onCheckedChange={(checked) => onStalenessFilterChange(checked ? 'stale' : 'all')}
+            >
+              Stale
+            </DropdownMenuCheckboxItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <div className="flex shrink-0 items-center overflow-hidden rounded-md border border-border">
           <Button
             variant="ghost"
@@ -244,9 +257,6 @@ export function BoardToolbar({
             <Columns3 size={14} />
           </Button>
         </div>
-        <Button variant="outline" size="icon-sm" onClick={onRefresh} title="Refresh board">
-          <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-        </Button>
         {onTriageIssues && (
           <Button
             variant="outline"
@@ -263,6 +273,9 @@ export function BoardToolbar({
             <BrainCircuit size={14} className={triagingIssues ? 'animate-pulse' : ''} />
           </Button>
         )}
+        <Button variant="outline" size="icon-sm" onClick={onRefresh} title="Refresh board">
+          <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+        </Button>
       </div>
     </div>
   );
