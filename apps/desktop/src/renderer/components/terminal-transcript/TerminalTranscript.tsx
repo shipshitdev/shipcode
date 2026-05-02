@@ -1,5 +1,5 @@
 import type { CanonicalTerminalEvent, TerminalEventRecord } from '@shipcode/shared';
-import { ERROR_PATTERNS, formatClockTime } from '@shipcode/shared';
+import { ERROR_PATTERNS, formatClockTime, stripAnsi } from '@shipcode/shared';
 import { Badge, Button, cn } from '@shipshitdev/ui';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -12,8 +12,6 @@ interface TerminalTranscriptProps {
   onAction?: (event: Extract<CanonicalTerminalEvent, { kind: 'action' }>) => void;
 }
 
-// biome-ignore lint/suspicious/noControlCharactersInRegex: strips ANSI formatting from persisted terminal lines
-const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]|\x1b\].*?(?:\x07|\x1b\\)/g;
 const DEFAULT_VISIBLE_EVENT_LIMIT = 300;
 
 const ERROR_LINE_RE = /(^|\s)(error|fatal|panic|exception|traceback|posix_spawnp failed)\b/i;
@@ -27,10 +25,6 @@ function classifyConsoleLine(content: string): ConsoleSeverity {
   if (EXIT_NONZERO_RE.test(content)) return 'error';
   if (WARNING_LINE_RE.test(content)) return 'warning';
   return 'info';
-}
-
-function stripAnsi(value: string): string {
-  return value.replace(ANSI_RE, '');
 }
 
 function formatTokens(usage: { prompt: number; completion: number } | undefined, costUsd?: number) {
