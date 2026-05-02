@@ -1,4 +1,9 @@
-import type { DiffInsert } from '@shipcode/db';
+import type { DiffRecord } from './types';
+
+export type ParsedUnifiedDiff = Pick<
+  DiffRecord,
+  'filePath' | 'action' | 'diffContent' | 'beforeHash' | 'afterHash'
+>;
 
 function stripQuotes(value: string): string {
   if (value.startsWith('"') && value.endsWith('"') && value.length >= 2) {
@@ -28,7 +33,7 @@ function parseGitHeader(line: string): { beforePath: string | null; afterPath: s
   };
 }
 
-export function parseUnifiedDiff(diff: string): DiffInsert[] {
+export function parseUnifiedDiff(diff: string): ParsedUnifiedDiff[] {
   const normalized = diff.trim();
   if (!normalized) return [];
 
@@ -41,7 +46,7 @@ export function parseUnifiedDiff(diff: string): DiffInsert[] {
     const lines = section.split('\n');
     const header = parseGitHeader(lines[0] ?? '');
 
-    let action: DiffInsert['action'] = 'modify';
+    let action: ParsedUnifiedDiff['action'] = 'modify';
     let beforePath = header.beforePath;
     let afterPath = header.afterPath;
     let beforeHash: string | null = null;

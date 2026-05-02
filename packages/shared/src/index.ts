@@ -2,6 +2,7 @@ export * from './branch-name';
 export * from './branches';
 export * from './cli-model-capabilities';
 export * from './constants';
+export * from './diff-parser';
 export * from './errors';
 export * from './format-cost';
 export * from './format-duration';
