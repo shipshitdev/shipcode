@@ -5,6 +5,7 @@ import {
   githubRepoUrl,
   ISSUE_PIPELINE_STATUS,
   type IssuePipelineStatus,
+  isRealGithubIssueNumber,
   PIPELINE_PHASE,
   type Project,
   type Thread,
@@ -18,6 +19,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ProjectGraphTab } from '../features/project/project-graph-tab';
 import { useAppStore } from '../stores/app-store';
 import { ThreadPanelArchiveDialog } from './ThreadPanelArchiveDialog';
+import { ThreadPanelBoardReviewDialog } from './ThreadPanelBoardReviewDialog';
 
 const EMPTY_ISSUES: GitHubIssueCacheRecord[] = [];
 const DONE_PIPELINE_STATUSES: IssuePipelineStatus[] = [
@@ -159,6 +161,7 @@ export function ThreadPanel() {
     mutationFn: (projectId: string) =>
       window.shipcode.invoke<GitHubIssueTriageResult>('github:triage-issues', { projectId }),
     onSuccess: (result, projectId) => {
+      setBoardReviewConfirmOpen(false);
       queryClient.invalidateQueries({ queryKey: ['github-issues', projectId] });
       setArchiveFeedback({
         tone: result.appliedCount > 0 ? 'success' : 'pending',
@@ -169,6 +172,7 @@ export function ThreadPanel() {
       });
     },
     onError: (err) => {
+      setBoardReviewConfirmOpen(false);
       setArchiveFeedback({
         tone: 'error',
         message: `Issue triage failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -296,6 +300,19 @@ export function ThreadPanel() {
   const [archiveConfirm, setArchiveConfirm] = useState<
     { type: 'one'; issue: GitHubIssueCacheRecord } | { type: 'all'; count: number } | null
   >(null);
+  const [boardReviewConfirmOpen, setBoardReviewConfirmOpen] = useState(false);
+  const triageCandidateCount = useMemo(
+    () =>
+      issues.filter(
+        (issue) =>
+          issue.state === 'open' &&
+          issue.pipelineStatus === ISSUE_PIPELINE_STATUS.todo &&
+          !issue.threadId &&
+          !issue.isQuickMode &&
+          isRealGithubIssueNumber(issue.issueNumber),
+      ).length,
+    [issues],
+  );
 
   const archiveIssuesOptimistic = (ids: string[]) => {
     queryClient.setQueryData<GitHubIssueCacheRecord[]>(queryKey, (prev) =>
@@ -433,8 +450,12 @@ export function ThreadPanel() {
         }
         selectedIssueNumber={selectedBoardIssueNumber}
         onRefresh={() => activeProjectId && refreshIssues.mutate(activeProjectId)}
-        onTriageIssues={() => activeProjectId && triageIssues.mutate(activeProjectId)}
+        onTriageIssues={() => {
+          if (!activeProjectId || triageCandidateCount === 0) return;
+          setBoardReviewConfirmOpen(true);
+        }}
         triagingIssues={triageIssues.isPending}
+        triageCandidateCount={triageCandidateCount}
         baseBranch={project?.defaultBranch}
         branches={branches}
         refreshingBranches={isRefreshingBranches}
@@ -619,6 +640,20 @@ export function ThreadPanel() {
         count={archiveConfirm?.type === 'all' ? archiveConfirm.count : undefined}
         onClose={() => setArchiveConfirm(null)}
         onConfirm={handleArchiveConfirm}
+      />
+      <ThreadPanelBoardReviewDialog
+        open={boardReviewConfirmOpen}
+        count={triageCandidateCount}
+        reviewing={triageIssues.isPending}
+        onClose={() => setBoardReviewConfirmOpen(false)}
+        onConfirm={() => {
+          if (!activeProjectId || triageCandidateCount === 0) return;
+          setArchiveFeedback({
+            tone: 'pending',
+            message: `Reviewing ${triageCandidateCount} Todo issue${triageCandidateCount === 1 ? '' : 's'} with the triage model…`,
+          });
+          triageIssues.mutate(activeProjectId);
+        }}
       />
       <div className="pointer-events-none absolute bottom-4 left-1/2 z-50 flex -translate-x-1/2 flex-col items-center gap-2">
         {doneUndo && (

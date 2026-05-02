@@ -24,6 +24,7 @@ export interface KanbanBoardProps {
   onRefresh: () => void;
   onTriageIssues?: () => void;
   triagingIssues?: boolean;
+  triageCandidateCount?: number;
   onStartPipeline?: (issue: GitHubIssueCacheRecord) => void;
   onRetry?: (issue: GitHubIssueCacheRecord) => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;

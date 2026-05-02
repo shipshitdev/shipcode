@@ -136,6 +136,7 @@ export function KanbanBoard({
   onRefresh,
   onTriageIssues,
   triagingIssues = false,
+  triageCandidateCount = 0,
   onStartPipeline,
   onRetry,
   onRerun,
@@ -578,6 +579,7 @@ export function KanbanBoard({
         refreshing={refreshing}
         onRefresh={handleRefresh}
         triagingIssues={triagingIssues}
+        triageCandidateCount={triageCandidateCount}
         onTriageIssues={onTriageIssues}
         projectName={projectName}
         repoUrl={repoUrl}

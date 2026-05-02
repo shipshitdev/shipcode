@@ -42,6 +42,7 @@ interface BoardToolbarProps {
   refreshing: boolean;
   onRefresh: () => void;
   triagingIssues?: boolean;
+  triageCandidateCount?: number;
   onTriageIssues?: () => void;
   projectName?: string;
   repoUrl?: string | null;
@@ -68,6 +69,7 @@ export function BoardToolbar({
   refreshing,
   onRefresh,
   triagingIssues = false,
+  triageCandidateCount = 0,
   onTriageIssues,
   projectName,
   repoUrl,
@@ -250,8 +252,13 @@ export function BoardToolbar({
             variant="outline"
             size="icon-sm"
             onClick={onTriageIssues}
-            disabled={triagingIssues}
-            title="Review Todo issues with the triage model"
+            disabled={triagingIssues || triageCandidateCount === 0}
+            title={
+              triageCandidateCount === 0
+                ? 'No unclaimed Todo issues to review'
+                : `Review and align ${triageCandidateCount} Todo issue${triageCandidateCount === 1 ? '' : 's'}`
+            }
+            aria-label="Review and align board issues"
           >
             <BrainCircuit size={14} className={triagingIssues ? 'animate-pulse' : ''} />
           </Button>
