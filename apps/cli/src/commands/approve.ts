@@ -2,7 +2,7 @@ import { createPipeline } from '@shipcode/pipeline';
 import { PIPELINE_PHASE } from '@shipcode/shared';
 import { createCliContext } from '../context';
 import { requireOnboarding } from './guard';
-import { parseIssueNumberOrExit } from './issue-number';
+import { getThreadForIssueOrExit, parseIssueNumber } from './issue-helpers';
 
 /**
  * `shipcode approve <issue-number>`
@@ -13,14 +13,9 @@ import { parseIssueNumberOrExit } from './issue-number';
 export async function approveCommand(issueNumber: string) {
   if (!requireOnboarding()) return;
 
-  const num = parseIssueNumberOrExit(issueNumber);
+  const num = parseIssueNumber(issueNumber);
   const ctx = createCliContext(process.cwd());
-
-  const thread = ctx.threads.getByProjectAndGithubIssue(ctx.project.id, num);
-  if (!thread) {
-    console.error(`No thread found for issue #${num} in this project.`);
-    process.exit(1);
-  }
+  const thread = getThreadForIssueOrExit(ctx, num);
 
   if (thread.status !== PIPELINE_PHASE.awaitingApproval) {
     console.error(
