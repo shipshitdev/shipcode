@@ -17,6 +17,7 @@ import {
   CardContent,
   cn,
   Pagination,
+  Skeleton,
   Table,
   TableBody,
   TableCell,
@@ -25,7 +26,6 @@ import {
   TableRow,
 } from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
-import { Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 import { ActivityHeatmap } from './heatmap/ActivityHeatmap';
@@ -182,12 +182,6 @@ export function CostsView() {
       />
       <div className="flex-1 overflow-y-auto px-6 py-6">
         <div className="max-w-5xl space-y-6">
-          {isLoading && (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 size={20} className="animate-spin text-muted" />
-            </div>
-          )}
-
           {isError && (
             <div className="flex flex-col items-center gap-3 py-16 text-center">
               <p className="text-sm text-secondary">Failed to load cost data.</p>
@@ -197,132 +191,147 @@ export function CostsView() {
             </div>
           )}
 
-          {data && (
-            <>
-              {/* Stat cards */}
-              <div className="grid grid-cols-3 gap-4">
-                <StatCard
-                  label="All-time"
-                  value={displayValue(data.totalCostAllTime, data.totalTokensAllTime)}
-                  subtitle={
-                    displayMode === '$'
-                      ? `${formatTokenCount(data.totalTokensAllTime)} tokens`
-                      : undefined
-                  }
-                />
-                <StatCard
-                  label="Last 7 days"
-                  value={displayValue(data.totalCost7d, data.totalTokens7d)}
-                />
-                <StatCard
-                  label="Avg per task"
-                  value={displayValue(data.avgCostPerTask, data.avgTokensPerTask)}
-                />
-              </div>
+          {/* Stat cards — skeleton while loading, real values when data arrives */}
+          {isLoading && !data ? (
+            <div className="grid grid-cols-3 gap-4">
+              {Array.from({ length: 3 }, (_, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton placeholders
+                <Skeleton key={i} className="h-[76px] rounded-lg" />
+              ))}
+            </div>
+          ) : data ? (
+            <div className="grid grid-cols-3 gap-4">
+              <StatCard
+                label="All-time"
+                value={displayValue(data.totalCostAllTime, data.totalTokensAllTime)}
+                subtitle={
+                  displayMode === '$'
+                    ? `${formatTokenCount(data.totalTokensAllTime)} tokens`
+                    : undefined
+                }
+              />
+              <StatCard
+                label="Last 7 days"
+                value={displayValue(data.totalCost7d, data.totalTokens7d)}
+              />
+              <StatCard
+                label="Avg per task"
+                value={displayValue(data.avgCostPerTask, data.avgTokensPerTask)}
+              />
+            </div>
+          ) : null}
 
-              {/* Activity heatmap — daily cost / tokens / runs / PRs across all projects. */}
-              <section className="rounded-xl border border-border bg-elevated p-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-primary">Activity</h3>
-                  <p className="text-[11px] text-muted">All projects</p>
+          {/* Activity heatmap — renders immediately, manages own data fetching */}
+          <section className="rounded-xl border border-border bg-elevated p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-primary">Activity</h3>
+              <p className="text-[11px] text-muted">All projects</p>
+            </div>
+            <ActivityHeatmap scope="global" surface="global" />
+          </section>
+
+          {/* By project — skeleton while loading */}
+          {isLoading && !data ? (
+            <div className="space-y-3">
+              <Skeleton className="h-3 w-20" />
+              {Array.from({ length: 3 }, (_, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton placeholders
+                <Skeleton key={i} className="h-10 w-full rounded-md" />
+              ))}
+            </div>
+          ) : data ? (
+            <section>
+              <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                By Project
+              </h2>
+              {data.byProject.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-xs text-muted">
+                  No tasks yet.
                 </div>
-                <ActivityHeatmap scope="global" surface="global" />
-              </section>
-
-              {/* By project */}
-              <section>
-                <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
-                  By Project
-                </h2>
-                {data.byProject.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-xs text-muted">
-                    No tasks yet.
-                  </div>
-                ) : (
-                  <Card>
-                    <CardContent className="p-0">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Project</TableHead>
-                            <TableHead className="text-right">Tasks</TableHead>
-                            <TableHead className="text-right">
-                              {displayMode === '$' ? 'Cost' : 'Tokens'}
-                            </TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {data.byProject.map((p) => (
-                            <TableRow
-                              key={p.projectId}
-                              className={cn(
-                                'cursor-pointer hover:bg-hover',
-                                selectedProjectId === p.projectId && 'bg-hover',
+              ) : (
+                <Card>
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Project</TableHead>
+                          <TableHead className="text-right">Tasks</TableHead>
+                          <TableHead className="text-right">
+                            {displayMode === '$' ? 'Cost' : 'Tokens'}
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {data.byProject.map((p) => (
+                          <TableRow
+                            key={p.projectId}
+                            className={cn(
+                              'cursor-pointer hover:bg-hover',
+                              selectedProjectId === p.projectId && 'bg-hover',
+                            )}
+                            onClick={() => {
+                              setSelectedProjectId((current) =>
+                                current === p.projectId ? null : p.projectId,
+                              );
+                              setProjectPage(1);
+                            }}
+                          >
+                            <TableCell className="font-medium text-primary">
+                              {p.projectName}
+                            </TableCell>
+                            <TableCell className="text-right text-secondary">
+                              {p.taskCount}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-xs text-primary">
+                              {displayValue(
+                                p.totalCostUsd,
+                                p.totalTokensPrompt + p.totalTokensCompletion,
                               )}
-                              onClick={() => {
-                                setSelectedProjectId((current) =>
-                                  current === p.projectId ? null : p.projectId,
-                                );
-                                setProjectPage(1);
-                              }}
-                            >
-                              <TableCell className="font-medium text-primary">
-                                {p.projectName}
-                              </TableCell>
-                              <TableCell className="text-right text-secondary">
-                                {p.taskCount}
-                              </TableCell>
-                              <TableCell className="text-right font-mono text-xs text-primary">
-                                {displayValue(
-                                  p.totalCostUsd,
-                                  p.totalTokensPrompt + p.totalTokensCompletion,
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </CardContent>
-                  </Card>
-                )}
-              </section>
-
-              {selectedProjectId && (
-                <section>
-                  <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
-                    {data.byProject.find((p) => p.projectId === selectedProjectId)?.projectName ??
-                      'Project'}{' '}
-                    Cost Details
-                  </h2>
-                  <CostTaskTable
-                    tasks={projectTasks}
-                    page={projectPage}
-                    totalPages={projectTasksTotalPages}
-                    onPageChange={setProjectPage}
-                    onTaskClick={goToTask}
-                    navigatingThreadId={navigatingThreadId}
-                    keyPrefix={`${selectedProjectId}-`}
-                  />
-                </section>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
               )}
+            </section>
+          ) : null}
 
-              <section>
-                <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
-                  Top Tasks by Cost
-                </h2>
-                <CostTaskTable
-                  tasks={tasks}
-                  page={tasksPage}
-                  totalPages={tasksTotalPages}
-                  onPageChange={setTasksPage}
-                  onTaskClick={goToTask}
-                  navigatingThreadId={navigatingThreadId}
-                  showProjectName
-                  emptyMessage="No tasks yet."
-                />
-              </section>
-            </>
+          {selectedProjectId && data && (
+            <section>
+              <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                {data.byProject.find((p) => p.projectId === selectedProjectId)?.projectName ??
+                  'Project'}{' '}
+                Cost Details
+              </h2>
+              <CostTaskTable
+                tasks={projectTasks}
+                page={projectPage}
+                totalPages={projectTasksTotalPages}
+                onPageChange={setProjectPage}
+                onTaskClick={goToTask}
+                navigatingThreadId={navigatingThreadId}
+                keyPrefix={`${selectedProjectId}-`}
+              />
+            </section>
           )}
+
+          <section>
+            <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
+              Top Tasks by Cost
+            </h2>
+            <CostTaskTable
+              tasks={tasks}
+              page={tasksPage}
+              totalPages={tasksTotalPages}
+              onPageChange={setTasksPage}
+              onTaskClick={goToTask}
+              navigatingThreadId={navigatingThreadId}
+              showProjectName
+              emptyMessage="No tasks yet."
+            />
+          </section>
         </div>
       </div>
     </div>

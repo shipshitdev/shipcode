@@ -17,6 +17,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  Skeleton,
 } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -89,7 +90,7 @@ export function ProjectSidebar() {
   const openCommandPalette = useAppStore((state) => state.openCommandPalette);
   const queryClient = useQueryClient();
 
-  const { data: projects = [] } = useQuery<ProjectWithPathState[]>({
+  const { data: projects = [], isLoading: projectsLoading } = useQuery<ProjectWithPathState[]>({
     queryKey: ['projects-visible'],
     queryFn: () => window.shipcode.invoke('project:list-visible'),
     staleTime: STABLE_APP_STATE_STALE_TIME,
@@ -119,6 +120,7 @@ export function ProjectSidebar() {
   const { data: stats } = useQuery<DashboardStats>({
     queryKey: ['dashboard', 'stats'],
     queryFn: () => window.shipcode.invoke<DashboardStats>('dashboard:get-stats'),
+    staleTime: 15_000, // dashboard:invalidate IPC push handles freshness
   });
 
   const { data: notifs = [] } = useQuery<NotificationRecord[]>({
@@ -454,6 +456,15 @@ export function ProjectSidebar() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 py-1" data-project-list>
+        {projectsLoading && projects.length === 0
+          ? Array.from({ length: 4 }, (_, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton placeholders
+              <div key={i} className="flex items-center gap-2 px-3 py-2">
+                <Skeleton className="h-3.5 w-3.5 shrink-0 rounded" />
+                <Skeleton className="h-3.5 flex-1 rounded" />
+              </div>
+            ))
+          : null}
         {sortedProjects.map((project) => (
           <div key={project.id} className="relative group">
             {(() => {

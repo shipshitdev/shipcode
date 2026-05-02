@@ -1,6 +1,6 @@
 import type { AppSettings, Project, TelemetryStatus } from '@shipcode/shared';
 import { CURRENT_ONBOARDING_VERSION } from '@shipcode/shared';
-import { Button } from '@shipshitdev/ui';
+import { Button, Skeleton } from '@shipshitdev/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { lazy, Suspense, useCallback, useEffect, useRef } from 'react';
 import { AutomationRunDetail } from './components/AutomationRunDetail';
@@ -24,6 +24,30 @@ import { useIpc } from './hooks/useIpc';
 import { STABLE_APP_STATE_STALE_TIME } from './query-stale-times';
 import { useAppStore } from './stores/app-store';
 import { syncRendererTelemetry } from './telemetry';
+
+/** Skeleton shown while lazy view chunks load — matches PageHeader + content layout. */
+function ViewLoadingFallback() {
+  return (
+    <div className="flex flex-1 flex-col overflow-hidden bg-primary">
+      <div className="flex items-center justify-between border-b border-border px-6 py-4">
+        <div className="space-y-1.5">
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="h-3 w-56" />
+        </div>
+      </div>
+      <div className="flex-1 space-y-4 px-6 py-6">
+        <div className="grid grid-cols-3 gap-4">
+          {Array.from({ length: 3 }, (_, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton placeholders
+            <Skeleton key={i} className="h-20 rounded-lg" />
+          ))}
+        </div>
+        <Skeleton className="h-48 rounded-xl" />
+        <Skeleton className="h-32 rounded-xl" />
+      </div>
+    </div>
+  );
+}
 
 // Code-split: heavy views loaded on demand.
 const ActivityView = lazy(() =>
@@ -122,8 +146,9 @@ export function App() {
   const { data: telemetryStatus } = useQuery<TelemetryStatus>({
     queryKey: ['telemetry-status'],
     queryFn: () => window.shipcode.invoke('telemetry:get-status'),
-    enabled: !!settings,
     staleTime: STABLE_APP_STATE_STALE_TIME,
+    // No enabled guard — fire in parallel with settings:get.
+    // Consumers (syncRendererTelemetry, TelemetryConsentDialog) already guard on deps being present.
   });
 
   const { data: activeProject } = useQuery<Project | null>({
@@ -167,7 +192,13 @@ export function App() {
 
   if (settings && (settings.onboardingVersion ?? 0) < CURRENT_ONBOARDING_VERSION) {
     return (
-      <Suspense fallback={null}>
+      <Suspense
+        fallback={
+          <div className="flex h-screen w-screen items-center justify-center bg-primary">
+            <Skeleton className="h-[440px] w-full max-w-md rounded-2xl" />
+          </div>
+        }
+      >
         <OnboardingWizard
           onComplete={async () => {
             queryClient.invalidateQueries({ queryKey: ['settings'] });
@@ -274,7 +305,7 @@ export function App() {
             either flank opens or closes. */}
         <div className="flex flex-col flex-1 overflow-hidden min-h-0">
           {!hideMainContentForTerminal && (
-            <Suspense fallback={null}>
+            <Suspense fallback={<ViewLoadingFallback />}>
               <div className="flex flex-1 overflow-hidden min-h-0 bg-primary">
                 {hasActiveIssue && issueDetailExpanded ? (
                   <IssueDetail expanded={true} />

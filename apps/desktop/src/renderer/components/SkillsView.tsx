@@ -10,6 +10,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Skeleton,
   Textarea,
 } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -221,8 +222,23 @@ export function SkillsView() {
 
   if (isLoading || !list) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-secondary">
-        Loading skills…
+      <div className="flex flex-1 flex-col overflow-hidden bg-primary">
+        <PageHeader title="Skills" subtitle="Customize prompts for each pipeline phase." />
+        <div className="flex flex-1 overflow-hidden">
+          <aside className="w-[260px] shrink-0 border-r border-border bg-primary p-4">
+            <Skeleton className="mb-4 h-3 w-24" />
+            <div className="space-y-2">
+              {Array.from({ length: 7 }, (_, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton placeholders
+                <Skeleton key={i} className="h-8 w-full rounded-md" />
+              ))}
+            </div>
+          </aside>
+          <div className="flex flex-1 flex-col p-6">
+            <Skeleton className="mb-3 h-4 w-32" />
+            <Skeleton className="h-48 w-full rounded-lg" />
+          </div>
+        </div>
       </div>
     );
   }

@@ -1,7 +1,7 @@
 import type { PipelinePhase, PlanRecord, ReviewRecord } from '@shipcode/shared';
 import { PIPELINE_PHASE } from '@shipcode/shared';
 import { PhaseChip, PlanViewer, ReviewViewer } from '@shipcode/ui';
-import { Badge, Button, cn } from '@shipshitdev/ui';
+import { Badge, Button, cn, Skeleton } from '@shipshitdev/ui';
 import { ChevronDown, ChevronRight, ChevronUp, Maximize2 } from 'lucide-react';
 import {
   diagnosePlanParseFailure,
@@ -236,8 +236,12 @@ export function PlanHistoryTab({
       ) : null}
 
       {isPlanHistoryLoading && normalizedPlanHistory.length === 0 ? (
-        <div className="mb-5">
-          <p className="py-4 text-center text-[13px] text-muted">Loading plans…</p>
+        <div className="mb-5 space-y-2">
+          <Skeleton className="h-4 w-32" />
+          <div className="overflow-hidden rounded-md border border-border">
+            <Skeleton className="h-10 w-full rounded-none" />
+            <Skeleton className="h-10 w-full rounded-none border-t border-border" />
+          </div>
         </div>
       ) : null}
 

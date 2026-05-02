@@ -208,13 +208,25 @@ export function ThreadPanel() {
         projectId: activeProjectId ?? '',
       }),
     enabled: !!activeProjectId,
-    staleTime: 5_000,
+    staleTime: 30_000, // IPC push events handle freshness; avoid frequent git branch calls
   });
+
+  // Branches fetched separately — git I/O is slow, don't block board render.
+  const { data: branchData } = useQuery<string[]>({
+    queryKey: ['git-branches', activeProjectId],
+    queryFn: () =>
+      window.shipcode.invoke<string[]>('git:list-branches', {
+        projectId: activeProjectId ?? '',
+      }),
+    enabled: !!activeProjectId,
+    staleTime: 30_000, // branches change rarely
+  });
+
   const project: Project | null = panelData?.project ?? null;
   const settings: AppSettings | undefined = panelData?.settings;
   const threads: Thread[] = panelData?.threads ?? [];
   const latestPlanStatusByThreadId = panelData?.latestPlanStatusByThreadId ?? {};
-  const branches: string[] = panelData?.branches ?? [];
+  const branches: string[] = branchData ?? panelData?.branches ?? [];
   const threadById = useMemo(
     () => new Map(threads.map((thread) => [thread.id, thread] as const)),
     [threads],
@@ -636,10 +648,12 @@ export function ThreadPanel() {
         }}
         onCancel={(issue) => {
           if (!issue.threadId) return;
+          patchIssueOptimistic(issue.id, { pipelineStatus: ISSUE_PIPELINE_STATUS.todo });
           window.shipcode
             .invoke('pipeline:cancel', { threadId: issue.threadId })
             .then(() => activeProjectId && refreshIssues.mutate(activeProjectId))
             .catch((err) => {
+              if (activeProjectId) refreshIssues.mutate(activeProjectId);
               log.error('[threadpanel] cancel failed', { issueNumber: issue.issueNumber, err });
             });
         }}

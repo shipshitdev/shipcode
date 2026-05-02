@@ -6,7 +6,7 @@ import type {
   Thread,
 } from '@shipcode/shared';
 import { formatCost, MODEL_DISPLAY, PIPELINE_PHASE } from '@shipcode/shared';
-import { Badge } from '@shipshitdev/ui';
+import { Badge, Skeleton } from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ActivityHeatmap } from '../heatmap/ActivityHeatmap';
@@ -42,7 +42,14 @@ function StepAttempts({ threadId }: { threadId: string }) {
   });
 
   if (isLoading) {
-    return <p className="px-3 py-2 text-[11px] text-muted">Loading attempts…</p>;
+    return (
+      <div className="space-y-2 px-3 py-2">
+        {Array.from({ length: 3 }, (_, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton placeholders
+          <Skeleton key={i} className="h-8 w-full rounded-md" />
+        ))}
+      </div>
+    );
   }
   if (steps.length === 0) {
     return <p className="px-3 py-2 text-[11px] text-muted">No attempts recorded.</p>;
@@ -125,7 +132,16 @@ export function CostsTab({
       </div>
 
       {isLoading ? (
-        <p className="py-4 text-center text-[13px] text-muted">Loading cost data…</p>
+        <div className="space-y-3 py-2">
+          <div className="grid grid-cols-2 gap-2">
+            <Skeleton className="h-14 rounded-md" />
+            <Skeleton className="h-14 rounded-md" />
+          </div>
+          {Array.from({ length: 3 }, (_, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton placeholders
+            <Skeleton key={i} className="h-10 w-full rounded-md" />
+          ))}
+        </div>
       ) : tasks.length === 0 ? (
         <div className="rounded-md border border-dashed border-border bg-secondary/10 px-4 py-8 text-center text-[12px] text-muted">
           No cost data yet.

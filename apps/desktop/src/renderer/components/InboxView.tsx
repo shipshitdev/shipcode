@@ -12,13 +12,14 @@ import {
   Button,
   Card,
   CardContent,
+  Skeleton,
   Table,
   TableBody,
   TableCell,
   TableRow,
 } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowUpDown, Loader2, X } from 'lucide-react';
+import { ArrowUpDown, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { NOTIFICATIONS_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
@@ -269,8 +270,23 @@ export function InboxView() {
       <div className="flex-1 overflow-y-auto px-6 py-6">
         <div className="max-w-5xl space-y-6">
           {isLoading && (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 size={20} className="animate-spin text-muted" />
+            <div className="space-y-3 py-4">
+              <Card>
+                <CardContent className="p-0">
+                  {Array.from({ length: 4 }, (_, i) => (
+                    <div
+                      // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton placeholders
+                      key={i}
+                      className="flex items-center gap-3 border-b border-border px-4 py-3 last:border-0"
+                    >
+                      <Skeleton className="h-5 w-16 rounded-full" />
+                      <Skeleton className="h-3 w-12" />
+                      <Skeleton className="h-3.5 flex-1" />
+                      <Skeleton className="h-6 w-16 rounded-md" />
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
             </div>
           )}
 
