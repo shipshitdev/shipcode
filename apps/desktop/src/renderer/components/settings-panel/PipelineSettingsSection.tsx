@@ -10,7 +10,6 @@ import {
   type ModelConfigPresetKey,
   resolveProviderReasoningEffort,
 } from '@shipcode/shared';
-import { StatusMappingEditor } from '@shipcode/ui';
 import {
   Button,
   ChevronDown,
@@ -100,7 +99,6 @@ export function PipelineSettingsSection({
           <TabsTrigger value="runtime">Runtime</TabsTrigger>
           <TabsTrigger value="models">Models</TabsTrigger>
           <TabsTrigger value="testing">Testing</TabsTrigger>
-          <TabsTrigger value="labels">Labels</TabsTrigger>
         </TabsList>
 
         <TabsContent value="runtime" className="mt-0">
@@ -757,15 +755,6 @@ export function PipelineSettingsSection({
                 onBlur={(e) => onUpdate({ testingContext: e.target.value.trim() || null })}
               />
             </SettingsRow>
-          </section>
-        </TabsContent>
-
-        <TabsContent value="labels" className="mt-0">
-          <section className="mb-8">
-            <StatusMappingEditor
-              mappings={settings.statusLabelMappings}
-              onSave={(mappings) => onUpdate({ statusLabelMappings: mappings })}
-            />
           </section>
         </TabsContent>
       </Tabs>

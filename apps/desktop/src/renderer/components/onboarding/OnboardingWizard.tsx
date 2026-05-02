@@ -1,14 +1,13 @@
-import type { AgentType, GhAuthStatus, StatusLabelMapping, SystemHealth } from '@shipcode/shared';
-import { CURRENT_ONBOARDING_VERSION, DEFAULT_STATUS_LABEL_MAPPINGS } from '@shipcode/shared';
+import type { AgentType, GhAuthStatus, SystemHealth } from '@shipcode/shared';
+import { CURRENT_ONBOARDING_VERSION } from '@shipcode/shared';
 import { Button, Card, LoadingButtonContent } from '@shipshitdev/ui';
 import { useEffect, useState } from 'react';
 import { StepAuthCheck, useAuthCheck } from './StepAuthCheck';
-import { StepLabelMapping } from './StepLabelMapping';
 import { StepModelPrefs } from './StepModelPrefs';
 
-type Step = 0 | 1 | 2;
+type Step = 0 | 1;
 
-const STEP_LABELS = ['AI Auth', 'Models', 'Labels'];
+const STEP_LABELS = ['AI Auth', 'Models'];
 
 interface AuthResult extends SystemHealth {
   ghAuth: GhAuthStatus;
@@ -23,9 +22,6 @@ export function OnboardingWizard({ onComplete }: Props) {
   const [authResult, setAuthResult] = useState<AuthResult | null>(null);
   const [plannerModel, setPlannerModel] = useState<AgentType>('claude');
   const [reviewerModel, setReviewerModel] = useState<AgentType>('codex');
-  const [labelMappings, setLabelMappings] = useState<StatusLabelMapping>(
-    DEFAULT_STATUS_LABEL_MAPPINGS,
-  );
 
   const authCheck = useAuthCheck();
   const [saving, setSaving] = useState(false);
@@ -51,7 +47,7 @@ export function OnboardingWizard({ onComplete }: Props) {
   }
 
   function handleNext() {
-    if (step < 2) {
+    if (step < 1) {
       setStep((step + 1) as Step);
     }
   }
@@ -68,7 +64,6 @@ export function OnboardingWizard({ onComplete }: Props) {
       await window.shipcode.invoke('settings:set', {
         plannerModel,
         reviewerModel,
-        statusLabelMappings: labelMappings,
         onboardingVersion: CURRENT_ONBOARDING_VERSION,
       });
       await onComplete();
@@ -78,7 +73,7 @@ export function OnboardingWizard({ onComplete }: Props) {
   }
 
   const canNext = step === 0 ? canAdvanceFromAuth : true;
-  const isLastStep = step === 2;
+  const isLastStep = step === 1;
 
   return (
     <div className="flex items-center justify-center h-screen bg-primary [app-region:drag]">
@@ -123,7 +118,6 @@ export function OnboardingWizard({ onComplete }: Props) {
               singleAgentMode={singleAgentMode}
             />
           )}
-          {step === 2 && <StepLabelMapping mappings={labelMappings} onChange={setLabelMappings} />}
         </div>
 
         <div className="flex items-center gap-2 px-6 py-4 border-t border-border">

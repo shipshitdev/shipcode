@@ -17,6 +17,5 @@ ShipCode-specific UI for the ShipCode monorepo.
 - `PlanViewer`
 - `ReviewViewer`
 - `SideBySideDiffViewer`
-- `StatusMappingEditor`
 - `VerificationViewer`
 - `ShipCodeLogoMark`

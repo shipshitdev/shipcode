@@ -1207,8 +1207,9 @@ export class GhCli {
     );
   }
 
-  async setStatusLabel(issueNumber: number, label: GitHubStatusLabel): Promise<void> {
-    // Remove all existing status:* labels first
+  async setStatusLabel(issueNumber: number, _label: GitHubStatusLabel): Promise<void> {
+    // Workflow state is represented by the typed Projects v2 Status field.
+    // This legacy method is cleanup-only so older callers do not recreate status:* labels.
     try {
       const { stdout } = await execFileAsync(
         'gh',
@@ -1230,16 +1231,6 @@ export class GhCli {
       }
     } catch {
       // Issue fetch is best-effort
-    }
-
-    // Add new label
-    try {
-      await execFileAsync('gh', ['issue', 'edit', String(issueNumber), '--add-label', label], {
-        cwd: this.cwd,
-        env: this.env,
-      });
-    } catch {
-      // Label addition is best-effort
     }
   }
 

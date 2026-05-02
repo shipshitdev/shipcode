@@ -628,7 +628,7 @@ export class GitHubIssueQueries {
       .run(JSON.stringify(Array.from(current)), id);
   }
 
-  setCachedStatusLabel(id: string, label: GitHubStatusLabel): void {
+  clearCachedStatusLabels(id: string): void {
     const row = this.db.prepare('SELECT labels FROM github_issue_cache WHERE id = ?').get(id) as
       | { labels: string }
       | undefined;
@@ -636,11 +636,14 @@ export class GitHubIssueQueries {
 
     const labels = JSON.parse(row.labels || '[]') as string[];
     const next = labels.filter((entry) => !entry.startsWith('status:'));
-    next.push(label);
 
     this.db
       .prepare('UPDATE github_issue_cache SET labels = ? WHERE id = ?')
       .run(JSON.stringify([...new Set(next)]), id);
+  }
+
+  setCachedStatusLabel(id: string, _label: GitHubStatusLabel): void {
+    this.clearCachedStatusLabels(id);
   }
 
   archiveIssues(ids: string[]): void {

@@ -41,14 +41,11 @@ gh label list --limit 200 --json name
 | `agent:openrouter/auto` | `#0ea5e9` | Route this issue to OpenRouter auto routing. |
 | `agent:openrouter/free` | `#65a30d` | Route this issue to OpenRouter free-tier routing. |
 
-### Status Labels
+### Workflow State
 
-| Name | Color | Description |
-|------|-------|-------------|
-| `status:queued` | `#6e7781` | Queued for the pipeline. |
-| `status:in-progress` | `#fb8c00` | Currently active in the pipeline. |
-| `status:done` | `#1a7f37` | Pipeline completed successfully. |
-| `status:failed` | `#cf222e` | Pipeline failed and needs attention. |
+Workflow state is not represented as GitHub labels. Use the typed GitHub
+Projects v2 `Status` single-select field instead (`Todo`, `In Progress`,
+`Done`, `On hold`).
 
 ### Metadata Labels
 
