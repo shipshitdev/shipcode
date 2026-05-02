@@ -44,7 +44,10 @@ import {
   migrateV41,
   migrateV42,
   migrateV43,
+  migrateV44,
+  migrateV45,
 } from './schema';
+import { createTestDb } from './test-helpers';
 import { asRow } from './utils';
 
 interface ThreadV2Row {
@@ -1003,5 +1006,83 @@ describe('migrateV41', () => {
       .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
       .get() as { version: number };
     expect(row.version).toBeGreaterThanOrEqual(41);
+  });
+});
+
+describe('migrateV45', () => {
+  let db: DatabaseSync;
+
+  beforeEach(() => {
+    db = createTestDb();
+  });
+
+  it('creates agent_conversations table with correct columns', () => {
+    const cols = db.prepare("PRAGMA table_info('agent_conversations')").all() as {
+      name: string;
+      type: string;
+      notnull: number;
+    }[];
+    const colNames = cols.map((c) => c.name);
+
+    expect(colNames).toContain('id');
+    expect(colNames).toContain('thread_id');
+    expect(colNames).toContain('phase');
+    expect(colNames).toContain('round');
+    expect(colNames).toContain('speaker');
+    expect(colNames).toContain('role');
+    expect(colNames).toContain('parent_id');
+    expect(colNames).toContain('provider');
+    expect(colNames).toContain('model');
+    expect(colNames).toContain('content');
+    expect(colNames).toContain('tokens_in');
+    expect(colNames).toContain('tokens_out');
+    expect(colNames).toContain('cost_usd');
+    expect(colNames).toContain('created_at');
+  });
+
+  it('creates indexes on (thread_id, created_at) and (thread_id, phase, round)', () => {
+    const indexes = db.prepare("PRAGMA index_list('agent_conversations')").all() as {
+      name: string;
+    }[];
+    const indexNames = indexes.map((i) => i.name);
+
+    expect(indexNames).toContain('idx_agent_conv_thread_time');
+    expect(indexNames).toContain('idx_agent_conv_thread_phase_round');
+  });
+
+  it('adds conversation_id column to pipeline_step_log', () => {
+    const cols = db.prepare("PRAGMA table_info('pipeline_step_log')").all() as { name: string }[];
+    const colNames = cols.map((c) => c.name);
+
+    expect(colNames).toContain('conversation_id');
+  });
+
+  it('cascades delete when thread is deleted', () => {
+    const projectId = 'proj-1';
+    db.prepare(
+      "INSERT INTO projects (id, name, path, git_remote, default_branch, created_at, updated_at) VALUES (?, 'test', '/tmp', 'git@x', 'main', datetime('now'), datetime('now'))",
+    ).run(projectId);
+    db.prepare(
+      "INSERT INTO threads (id, project_id, prompt, title, status, created_at, updated_at) VALUES ('t1', ?, 'go', 'Test', 'idle', datetime('now'), datetime('now'))",
+    ).run(projectId);
+    db.prepare(
+      "INSERT INTO agent_conversations (id, thread_id, phase, speaker, role, content) VALUES ('c1', 't1', 'plan', 'planner', 'prompt', 'hello')",
+    ).run();
+
+    const before = db
+      .prepare("SELECT COUNT(*) as count FROM agent_conversations WHERE thread_id = 't1'")
+      .get() as { count: number };
+    expect(before.count).toBe(1);
+
+    db.prepare("DELETE FROM threads WHERE id = 't1'").run();
+
+    const after = db
+      .prepare("SELECT COUNT(*) as count FROM agent_conversations WHERE thread_id = 't1'")
+      .get() as { count: number };
+    expect(after.count).toBe(0);
+  });
+
+  it('is idempotent', () => {
+    expect(() => migrateV45(db)).not.toThrow();
   });
 });

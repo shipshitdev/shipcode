@@ -1250,6 +1250,25 @@ export interface VerificationRecord {
   createdAt: string;
 }
 
+// === Agent Conversation Log ===
+
+export interface AgentConversationRecord {
+  id: string;
+  threadId: string;
+  phase: string;
+  round: number;
+  speaker: string;
+  role: 'prompt' | 'response';
+  parentId: string | null;
+  provider: string | null;
+  model: string | null;
+  content: string;
+  tokensIn: number | null;
+  tokensOut: number | null;
+  costUsd: number | null;
+  createdAt: string;
+}
+
 // === Feature QA State ===
 
 /**

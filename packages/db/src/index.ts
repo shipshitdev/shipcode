@@ -65,9 +65,15 @@ import {
   migrateV42,
   migrateV43,
   migrateV44,
+  migrateV45,
 } from './schema';
 
 export { ActivityQueries } from './queries/activity';
+export type {
+  AgentConversationRecord,
+  InsertAgentConversation,
+} from './queries/agent-conversations';
+export { AgentConversationQueries } from './queries/agent-conversations';
 export { AutomationQueries } from './queries/automations';
 export { CheckpointQueries } from './queries/checkpoints';
 export { CostsQueries } from './queries/costs';
@@ -154,6 +160,7 @@ export function getDatabase(dataDir: string): DatabaseSync {
   migrateV42(db);
   migrateV43(db);
   migrateV44(db);
+  migrateV45(db);
 
   // Startup cleanup: reset unclaimed queued issues to todo on every launch.
   // An unclaimed queued issue has no active worker holding it — it's stale state

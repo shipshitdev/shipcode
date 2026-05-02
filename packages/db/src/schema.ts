@@ -1324,3 +1324,46 @@ export function migrateV44(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (44)`);
   });
 }
+
+export function migrateV45(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 45) return;
+
+  transaction(db, () => {
+    // Agent conversation log — append-only audit trail of every prompt
+    // and response exchanged between pipeline phases and their providers.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS agent_conversations (
+        id          TEXT PRIMARY KEY,
+        thread_id   TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+        phase       TEXT NOT NULL,
+        round       INTEGER NOT NULL DEFAULT 0,
+        speaker     TEXT NOT NULL,
+        role        TEXT NOT NULL CHECK(role IN ('prompt', 'response')),
+        parent_id   TEXT REFERENCES agent_conversations(id) ON DELETE SET NULL,
+        provider    TEXT,
+        model       TEXT,
+        content     TEXT NOT NULL DEFAULT '',
+        tokens_in   INTEGER,
+        tokens_out  INTEGER,
+        cost_usd    REAL,
+        created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_agent_conv_thread_time
+        ON agent_conversations(thread_id, created_at);
+      CREATE INDEX IF NOT EXISTS idx_agent_conv_thread_phase_round
+        ON agent_conversations(thread_id, phase, round);
+    `);
+
+    // Link pipeline_step_log rows to their conversation prompt/response pair.
+    db.exec(`
+      ALTER TABLE pipeline_step_log ADD COLUMN conversation_id TEXT
+        REFERENCES agent_conversations(id) ON DELETE SET NULL;
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (45)`);
+  });
+}

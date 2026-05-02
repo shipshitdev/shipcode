@@ -3,6 +3,7 @@ import type { TaskGraphWithNodes } from './task-graph';
 import type {
   ActivePipelineSummary,
   ActivityEntry,
+  AgentConversationRecord,
   AgentState,
   AppSettings,
   AutoCommitResult,
@@ -510,6 +511,12 @@ export interface IpcInvokeChannels {
     args: { projectId: string; issueNumber: number };
     result: CostTaskSummary[];
   };
+  // Agent conversation log
+  'agent-conversations:list-by-thread': {
+    args: { threadId: string; phase?: string; role?: 'prompt' | 'response' };
+    result: AgentConversationRecord[];
+  };
+
   'pipeline-steps:list-by-thread': {
     args: { threadId: string };
     result: PipelineStepRecord[];
