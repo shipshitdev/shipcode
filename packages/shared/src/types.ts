@@ -604,6 +604,10 @@ export interface AppSettings {
   reviewerModel: AgentType;
   verifierModel: AgentType;
   executorModel: AgentType;
+  triageModel: ExecutorModel;
+  triageModelId: string | null;
+  triageReasoningEffort: ReasoningEffort;
+  triageAutoApplyThreshold: number;
   prdRewriteCli: GeneratorCli;
   prdRewriteClaudeModel: string | null;
   prdRewriteCodexModel: string | null;
@@ -1166,6 +1170,28 @@ export interface GitHubIssueCacheRecord {
   // Renderer-only optimistic state for a GitHub issue that has been accepted
   // by the UI but has not been confirmed by GitHub yet.
   syncState?: 'creating';
+}
+
+export interface GitHubIssueTriageSummary {
+  issueNumber: number;
+  confidence: number;
+  applied: boolean;
+  suggestedLabels: string[];
+  suggestedAgent: ExecutorModel | null;
+  shouldStart: boolean;
+  needsHuman: boolean;
+  rationale: string;
+}
+
+export interface GitHubIssueTriageResult {
+  provider: ExecutorModel;
+  modelId: string | null;
+  resolvedModel: string | null;
+  consideredCount: number;
+  appliedCount: number;
+  skippedCount: number;
+  threshold: number;
+  issues: GitHubIssueTriageSummary[];
 }
 
 export const ISSUE_PIPELINE_STATUS = {

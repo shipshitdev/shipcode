@@ -15,6 +15,12 @@ export {
 export { loadRepoContext, loadStructuredRepoContext } from './context-loader';
 export { GhCli } from './github/gh-cli';
 export { IssuePoller } from './github/issue-poller';
+export type { IssueTriageRecommendation, IssueTriageRunResult } from './github/issue-triage';
+export {
+  buildTriagePrompt,
+  extractTriageRecommendations,
+  triageGitHubIssues,
+} from './github/issue-triage';
 export { routeFromLabels } from './github/model-router';
 export type {
   FetchProjectPrioritiesOptions,

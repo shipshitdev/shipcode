@@ -13,10 +13,12 @@ describe('model-catalog', () => {
       claude: {
         phase: 'claude-sonnet-4-6',
         prdRewrite: 'claude-sonnet-4-6',
+        triage: 'claude-haiku-4-5-20251001',
       },
       codex: {
         phase: 'gpt-5.4',
         prdRewrite: 'gpt-5.4-mini',
+        triage: 'gpt-5.4-mini',
       },
       openrouter: {
         paid: 'openrouter/auto',
