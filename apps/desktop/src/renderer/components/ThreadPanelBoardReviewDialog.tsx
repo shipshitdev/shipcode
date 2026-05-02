@@ -1,10 +1,8 @@
 import { Button, Modal, ModalFooter } from '@shipshitdev/ui';
-import { LoadingButtonContent } from '@shipshitdev/ui/common';
 
 interface ThreadPanelBoardReviewDialogProps {
   count: number;
   open: boolean;
-  reviewing: boolean;
   onClose: () => void;
   onConfirm: () => void;
 }
@@ -12,13 +10,12 @@ interface ThreadPanelBoardReviewDialogProps {
 export function ThreadPanelBoardReviewDialog({
   count,
   open,
-  reviewing,
   onClose,
   onConfirm,
 }: ThreadPanelBoardReviewDialogProps) {
   const noun = count === 1 ? 'issue' : 'issues';
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.metaKey && event.key === 'Enter' && count > 0 && !reviewing) {
+    if (event.metaKey && event.key === 'Enter' && count > 0) {
       event.preventDefault();
       onConfirm();
     }
@@ -27,9 +24,7 @@ export function ThreadPanelBoardReviewDialog({
   return (
     <Modal
       open={open}
-      onClose={() => {
-        if (!reviewing) onClose();
-      }}
+      onClose={onClose}
       title={`Review and align ${count} ${noun}?`}
       className="max-w-md"
       onKeyDown={handleKeyDown}
@@ -45,7 +40,7 @@ export function ThreadPanelBoardReviewDialog({
         </p>
       </div>
       <ModalFooter>
-        <Button variant="ghost" size="sm" onClick={onClose} disabled={reviewing}>
+        <Button variant="ghost" size="sm" onClick={onClose}>
           Cancel
         </Button>
         <Button
@@ -53,9 +48,9 @@ export function ThreadPanelBoardReviewDialog({
           size="sm"
           className="border-warning/35 bg-warning/10 text-warning hover:bg-warning/15 hover:text-warning"
           onClick={onConfirm}
-          disabled={count === 0 || reviewing}
+          disabled={count === 0}
         >
-          <LoadingButtonContent loading={reviewing}>Review board</LoadingButtonContent>
+          Review board
         </Button>
       </ModalFooter>
     </Modal>

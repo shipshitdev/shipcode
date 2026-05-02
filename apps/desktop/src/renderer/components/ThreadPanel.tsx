@@ -167,7 +167,6 @@ export function ThreadPanel() {
     mutationFn: (projectId: string) =>
       window.shipcode.invoke<GitHubIssueTriageResult>('github:triage-issues', { projectId }),
     onSuccess: (result, projectId) => {
-      setBoardReviewConfirmOpen(false);
       queryClient.invalidateQueries({ queryKey: ['github-issues', projectId] });
       setArchiveFeedback({
         tone: result.appliedCount > 0 ? 'success' : 'pending',
@@ -178,7 +177,6 @@ export function ThreadPanel() {
       });
     },
     onError: (err) => {
-      setBoardReviewConfirmOpen(false);
       setArchiveFeedback({
         tone: 'error',
         message: `Issue triage failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -668,10 +666,10 @@ export function ThreadPanel() {
       <ThreadPanelBoardReviewDialog
         open={boardReviewConfirmOpen}
         count={triageCandidateCount}
-        reviewing={triageIssues.isPending}
         onClose={() => setBoardReviewConfirmOpen(false)}
         onConfirm={() => {
           if (!activeProjectId || triageCandidateCount === 0) return;
+          setBoardReviewConfirmOpen(false);
           setArchiveFeedback({
             tone: 'pending',
             message: `Reviewing ${triageCandidateCount} Todo issue${triageCandidateCount === 1 ? '' : 's'} with the triage model…`,
