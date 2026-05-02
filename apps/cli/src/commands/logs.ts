@@ -1,6 +1,6 @@
 import { createCliContext } from '../context';
 import { requireOnboarding } from './guard';
-import { parseIssueNumberOrExit } from './issue-number';
+import { getThreadForIssueOrExit, parseIssueNumber } from './issue-helpers';
 
 /**
  * `shipcode logs <issue-number>`
@@ -11,14 +11,9 @@ import { parseIssueNumberOrExit } from './issue-number';
 export async function logsCommand(issueNumber: string) {
   if (!requireOnboarding()) return;
 
-  const num = parseIssueNumberOrExit(issueNumber);
+  const num = parseIssueNumber(issueNumber);
   const ctx = createCliContext(process.cwd());
-
-  const thread = ctx.threads.getByProjectAndGithubIssue(ctx.project.id, num);
-  if (!thread) {
-    console.error(`No thread found for issue #${num} in this project.`);
-    process.exit(1);
-  }
+  const thread = getThreadForIssueOrExit(ctx, num);
 
   console.log(`Logs for issue #${num}: ${thread.title}`);
   console.log(`Status: ${thread.status}\n`);

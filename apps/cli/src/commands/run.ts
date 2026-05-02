@@ -2,12 +2,12 @@ import { routeFromLabels } from '@shipcode/agents';
 import { createPipeline } from '@shipcode/pipeline';
 import { createCliContext } from '../context';
 import { requireOnboarding } from './guard';
-import { parseIssueNumberOrExit } from './issue-number';
+import { parseIssueNumber } from './issue-helpers';
 
 export async function runCommand(issueNumber: string) {
   if (!requireOnboarding()) return;
 
-  const num = parseIssueNumberOrExit(issueNumber);
+  const num = parseIssueNumber(issueNumber);
   const ctx = createCliContext(process.cwd());
 
   console.log(`Fetching issue #${num}...`);
