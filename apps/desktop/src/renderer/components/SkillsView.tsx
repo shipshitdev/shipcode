@@ -343,7 +343,7 @@ export function SkillsView() {
                 ) : (
                   <p className="mt-3 text-[11px] leading-snug text-muted">
                     Pick a project from the sidebar to inspect that repo&apos;s
-                    <span className="mx-1 font-mono">.agents/skills/writing-prds/SKILL.md</span>
+                    <span className="mx-1 font-mono">skills/writing-prds/SKILL.md</span>
                     file.
                   </p>
                 )}

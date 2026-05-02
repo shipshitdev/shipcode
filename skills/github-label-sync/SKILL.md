@@ -27,7 +27,6 @@ gh label list --limit 200 --json name
 
 | Name | Color | Description |
 |------|-------|-------------|
-| `enhancement` | `#a2eeef` | Feature or product improvement. |
 | `bug` | `#d73a4a` | Something is broken. |
 | `deferred` | `#6e7781` | Intentionally postponed work. |
 
@@ -47,18 +46,13 @@ Workflow state is not represented as GitHub labels. Use the typed GitHub
 Projects v2 `Status` single-select field instead (`Todo`, `In Progress`,
 `Done`, `On hold`).
 
-### Metadata Labels
+### System Labels
 
 | Name | Color | Description |
 |------|-------|-------------|
-| `complexity:low` | `#1a7f37` | Low-complexity task. |
-| `complexity:medium` | `#bf8700` | Medium-complexity task. |
-| `complexity:high` | `#cf222e` | High-complexity task. |
-| `blast:contained` | `#1a7f37` | Changes stay within a contained surface area. |
-| `blast:cross-package` | `#1f6feb` | Changes cross package boundaries. |
-| `blast:cross-app` | `#d97706` | Changes cross app boundaries. |
-| `blast:infra` | `#cf222e` | Changes touch infrastructure or platform concerns. |
 | `blocked:ci` | `#cf222e` | Linked PR has failing CI checks and needs follow-up. |
+
+Type, priority, status, complexity, and blast radius belong in native GitHub issue type or project fields when those fields are available. Do not recreate them as labels.
 
 3. **Create missing labels:**
 

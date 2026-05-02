@@ -550,13 +550,24 @@ export function registerGitHubHandlers({
         title,
         body,
         labels,
-      }: { projectId: string; title: string; body: string; labels?: string[] },
+        prdMetadata,
+      }: {
+        projectId: string;
+        title: string;
+        body: string;
+        labels?: string[];
+        prdMetadata?: {
+          estimatedComplexity: import('@shipcode/shared').PrdEstimatedComplexity;
+          blastRadius: import('@shipcode/shared').PrdBlastRadius;
+        };
+      },
     ) => {
       const project = queries.projects.getById(projectId);
       if (!project) throw new Error(`Project ${projectId} not found`);
 
       const ghCli = new GhCli(project.path);
       const issue = await ghCli.createIssue({ title, body, labels });
+      let projectAttachWarning: string | null = null;
 
       queries.githubIssues.upsert({
         projectId,
@@ -572,20 +583,43 @@ export function registerGitHubHandlers({
       mainWindow.webContents.send('github:issues-updated', { projectId, issues: allIssues });
 
       if (parseGithubProjectUrl(project.githubProjectUrl) && issue.url) {
-        void attachIssueToConfiguredProjectBoard(
+        projectAttachWarning = await attachIssueToConfiguredProjectBoard(
           project,
           ghCli,
           issue.number,
           issue.url,
           'github:create-issue',
         );
+        if (prdMetadata) {
+          try {
+            const warnings = await ghCli.setIssueProjectMetadata({
+              issueNumber: issue.number,
+              projectUrl: project.githubProjectUrl,
+              metadata: {
+                issueType: 'Feature',
+                status: 'Todo',
+                priority: 'P3',
+                complexity: prdMetadata.estimatedComplexity,
+                blastRadius: prdMetadata.blastRadius,
+              },
+            });
+            if (warnings.length > 0) {
+              projectAttachWarning = [projectAttachWarning, ...warnings].filter(Boolean).join('; ');
+            }
+          } catch (err) {
+            log.warn(`[github:create-issue] project metadata failed for #${issue.number}:`, err);
+            projectAttachWarning = [projectAttachWarning, clampError(err)]
+              .filter(Boolean)
+              .join('; ');
+          }
+        }
       }
 
       const record = queries.githubIssues.getByNumber(projectId, issue.number);
       if (!record) {
         throw new Error(`Created issue #${issue.number} not found in cache after upsert`);
       }
-      return { issue: record, projectAttachWarning: null };
+      return { issue: record, projectAttachWarning };
     },
   );
 
@@ -599,12 +633,17 @@ export function registerGitHubHandlers({
         title,
         body,
         labels,
+        prdMetadata,
       }: {
         projectId: string;
         issueNumber: number;
         title: string;
         body: string;
         labels?: string[];
+        prdMetadata?: {
+          estimatedComplexity: import('@shipcode/shared').PrdEstimatedComplexity;
+          blastRadius: import('@shipcode/shared').PrdBlastRadius;
+        };
       },
     ) => {
       const project = queries.projects.getById(projectId);
@@ -616,6 +655,28 @@ export function registerGitHubHandlers({
 
       const ghCli = new GhCli(project.path);
       await ghCli.editIssue({ issueNumber, title, body, labels });
+      if (prdMetadata) {
+        await attachIssueToConfiguredProjectBoard(
+          project,
+          ghCli,
+          issueNumber,
+          deriveGithubIssueUrl(project.gitRemote, issueNumber),
+          'github:edit-issue-body',
+        );
+        try {
+          await ghCli.setIssueProjectMetadata({
+            issueNumber,
+            projectUrl: project.githubProjectUrl,
+            metadata: {
+              issueType: 'Feature',
+              complexity: prdMetadata.estimatedComplexity,
+              blastRadius: prdMetadata.blastRadius,
+            },
+          });
+        } catch (err) {
+          log.warn(`[github:edit-issue-body] project metadata failed for #${issueNumber}:`, err);
+        }
+      }
 
       const issue = await ghCli.getIssue(issueNumber);
       queries.githubIssues.upsert({

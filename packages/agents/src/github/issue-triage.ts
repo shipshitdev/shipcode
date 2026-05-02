@@ -22,16 +22,7 @@ const TRIAGE_LABELS = [
   'agent:openrouter',
   'agent:openrouter/auto',
   'agent:openrouter/free',
-  'bug',
-  'enhancement',
   'deferred',
-  'complexity:low',
-  'complexity:medium',
-  'complexity:high',
-  'blast:contained',
-  'blast:cross-package',
-  'blast:cross-app',
-  'blast:infra',
 ] as const;
 
 export interface IssueTriageRecommendation {
@@ -133,7 +124,7 @@ export function buildTriagePrompt(issues: GitHubIssueCacheRecord[]): string {
 
   return `Review these GitHub issues for ShipCode's autonomous issue-to-PR pipeline.
 
-Classify each issue using only this label allowlist:
+Suggest only labels from this routing/system allowlist. Do not encode issue type, priority, status, complexity, or blast radius as labels; those belong in native GitHub issue type or project fields.
 ${TRIAGE_LABELS.map((label) => `- ${label}`).join('\n')}
 
 Guidance:
@@ -149,7 +140,7 @@ ${JSON.stringify(compactIssues, null, 2)}
 
 Output exactly one fenced block:
 \`\`\`${TRIAGE_FENCE_TAG}
-{"issues":[{"issueNumber":123,"confidence":0.92,"suggestedAgent":"codex","suggestedLabels":["agent:codex","bug","complexity:low","blast:contained"],"shouldStart":true,"needsHuman":false,"rationale":"Specific bug with clear acceptance criteria."}]}
+{"issues":[{"issueNumber":123,"confidence":0.92,"suggestedAgent":"codex","suggestedLabels":["agent:codex"],"shouldStart":true,"needsHuman":false,"rationale":"Specific bug with clear acceptance criteria."}]}
 \`\`\`
 `;
 }

@@ -115,7 +115,7 @@ export function registerSupportHandlers({
         settings.prdRewriteReasoningEffort,
       );
 
-      const skillPath = path.join(project.path, '.agents', 'skills', 'writing-prds', 'SKILL.md');
+      const skillPath = path.join(project.path, 'skills', 'writing-prds', 'SKILL.md');
       let skillContent: string;
       try {
         skillContent = fs.readFileSync(skillPath, 'utf-8');

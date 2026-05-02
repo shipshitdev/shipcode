@@ -21,7 +21,7 @@ Each skill is a markdown file with frontmatter (name, description, model hints).
 - **Repo-scoped skills** — `.agents/skills/<skill-name>/SKILL.md` inside the target repo. These override the built-in skills for that project.
 - **Built-in skills** — shipped with the app, used as a fallback when no repo skill exists.
 
-The PRD generator reads `.agents/skills/writing-prds/SKILL.md` from the **target repo** (the repo whose issue you're writing a PRD for), not from the ShipCode install itself. This means a project can evolve its own PRD style without touching ShipCode.
+The PRD generator reads `skills/writing-prds/SKILL.md` from the **target repo** (the repo whose issue you're writing a PRD for), not from the ShipCode install itself. This means a project can evolve its own PRD style without touching ShipCode.
 
 ## Editing flow
 

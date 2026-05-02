@@ -71,14 +71,15 @@ Output **exactly one** fenced code block with the tag \`${PRD_FENCE_TAG}\`. Do
 not output anything else. The block must contain a single JSON object with one
 key:
 
-- \`body\`: the refined PRD markdown body as a string. Must start with the YAML
-  frontmatter (\`---\\nname: ...\\n---\\n\`) and include every required section
-  from the skill, in order. Escape newlines as \\n and quotes as \\".
+- \`body\`: the refined PRD markdown body as a string. Must start with
+  \`# PRD: ...\` and include every required section from the skill, in order.
+  Do not include YAML frontmatter in the GitHub issue body. Escape newlines
+  as \\n and quotes as \\".
 
 Example envelope:
 
 \`\`\`${PRD_FENCE_TAG}
-{"body":"---\\nname: copy-issue-url\\n---\\n\\n# PRD: copy-issue-url\\n\\n## Executive Summary\\n..."}
+{"body":"# PRD: copy-issue-url\\n\\n## Executive Summary\\n..."}
 \`\`\`
 `;
 }

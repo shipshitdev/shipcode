@@ -109,12 +109,11 @@ describe('enhancePrdDraft', () => {
     );
 
     fake.close(0, {
-      stdout:
-        '```shipcode-prd\n{"body":"---\\nname: test\\n---\\n\\n## Executive Summary\\nOk"}\n```',
+      stdout: '```shipcode-prd\n{"body":"# PRD: test\\n\\n## Executive Summary\\nOk"}\n```',
     });
 
     await expect(promise).resolves.toEqual({
-      body: '---\nname: test\n---\n\n## Executive Summary\nOk',
+      body: '# PRD: test\n\n## Executive Summary\nOk',
     });
   });
 
@@ -153,12 +152,11 @@ describe('enhancePrdDraft', () => {
     expect(fake.isStdinEnded()).toBe(true);
 
     fake.close(0, {
-      stdout:
-        '```shipcode-prd\n{"body":"---\\nname: test\\n---\\n\\n## Executive Summary\\nOk"}\n```',
+      stdout: '```shipcode-prd\n{"body":"# PRD: test\\n\\n## Executive Summary\\nOk"}\n```',
     });
 
     await expect(promise).resolves.toEqual({
-      body: '---\nname: test\n---\n\n## Executive Summary\nOk',
+      body: '# PRD: test\n\n## Executive Summary\nOk',
     });
   });
 });

@@ -112,7 +112,7 @@ export function ProjectSettingsGitHubTab({
               existingNames={existingNames}
             />
             <LabelCategory
-              title="Metadata"
+              title="System"
               labels={SHIPCODE_METADATA_LABELS}
               existingNames={existingNames}
             />

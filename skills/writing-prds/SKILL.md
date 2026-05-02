@@ -11,34 +11,33 @@ A PRD in shipcode is the input contract for the pipeline's **plan** phase. A goo
 
 **The GitHub issue body IS the PRD.** There is no local sidecar file, no `.shipcode/prds/` directory, no SQLite-only draft. One document per work item, one location: the body of a GitHub issue in the project's connected repo.
 
-- **Create** a PRD by creating a GitHub issue whose body is the PRD markdown (including frontmatter).
+- **Create** a PRD by creating a GitHub issue whose body is clean PRD markdown.
 - **Edit** a PRD by editing that issue's body.
 - **Version history** is GitHub's issue edit history — no manual `updated` field bumping.
 - **The pipeline reads** the issue body verbatim (`packages/pipeline/src/pipeline.ts:581` — `const prompt = \`GitHub Issue #${issue.number}: ${issue.title}\n\n${issue.body ?? ''}\``) and feeds it into the planner agent. What you write in the issue body is exactly what the planner sees.
 
 If shipcode's onboarding has not been completed (no GitHub repo connected), **you cannot write a PRD yet**. Complete onboarding first — shipcode is mandatory-GitHub by design.
 
-## Frontmatter Schema
+## Native GitHub Metadata
 
-Frontmatter lives at the top of the issue body. GitHub renders it as a fenced code block in the preview — harmless, and machine-readable for any future tooling that wants to parse it.
+Do not put YAML frontmatter at the top of GitHub issue bodies. GitHub renders
+issue-body frontmatter as visible noise and already has native places for this
+metadata.
 
-```yaml
----
-name: <kebab-name>               # kebab-case slug, matches the issue title's slugified form
-description: <one-line summary>  # shown in kanban cards and issue lists
-status: draft | backlog | active | blocked | completed
-estimated_complexity: low | medium | high
-blast_radius: contained | cross-package | cross-app | infra
----
-```
+Use native GitHub and Projects fields instead:
+
+- **Issue type:** `Feature`, `Bug`, or `Task`.
+- **Project status:** `Todo`, `In Progress`, `Done`, or `On hold`.
+- **Project priority:** `P0`, `P1`, `P2`, or `P3`.
+- **Project complexity:** `Low`, `Medium`, or `High`.
+- **Project blast radius:** `Contained`, `Cross-package`, `Cross-app`, or `Infra`.
 
 Rules:
 
-- **`name`** is a kebab-case slug. Prefer matching it to the issue title (slugified) so branch names, PR titles, and PRD references all stay consistent.
-- **`estimated_complexity` feeds `PlanStructured.estimatedComplexity`** (`packages/shared/src/types.ts:12`). If the PRD author truly can't estimate, write `medium` and explain why in the Risks section.
-- **`blast_radius`** tells the pipeline and the reviewer how much scrutiny to apply. `infra` means CI, Vercel config, DB migrations, release workflow — reviewer runs longer, verification retries higher.
-- **`status: draft`** for PRDs that are still being elicited. The kanban should not offer "Start pipeline" on a draft. GitHub itself stays `open` — `status` here is a shipcode concept, not a GitHub state.
-- **No `created` / `updated` / `github_issue` / `github_repo` fields** — GitHub tracks creation and edit history natively, and the issue IS the canonical location so there's nothing to cross-reference.
+- The PRD body starts with `# PRD: <name>` and contains only human-readable PRD content.
+- Put card/list summaries in the issue title, project fields, or a short Executive Summary, not in hidden metadata.
+- If the author cannot estimate complexity, set the project field to `Medium` and explain why in Risks & Open Questions.
+- `Draft` is workflow state, not body text. Keep draft PRDs off the runnable kanban path through project status or app state.
 
 ## Issue Title Style
 
@@ -46,10 +45,10 @@ The GitHub issue title is what the board shows most of the time. Keep it short.
 
 - Prefer **4-7 words** when possible.
 - Prefer an **imperative verb + object** shape: `Add pipeline checkpoints`, `Track CI blockers on issues`, `Expose model selectors in SettingsPanel`.
-- Put the detail in the `description` frontmatter and body, not in the title.
+- Put the detail in the Executive Summary and body, not in the title.
 - Avoid titles chained together with `and` / `while` / `during` unless the feature is truly one inseparable unit.
 - Avoid titles that restate the full implementation loop. The title names the work item; the PRD explains it.
-- Keep `name` aligned with the final issue title's slugified form. If you shorten the title, shorten `name` too.
+- Keep the `# PRD:` name aligned with the final issue title's slugified form. If you shorten the title, shorten the PRD heading too.
 
 Bad:
 
@@ -147,7 +146,7 @@ A PRD is read by the planner agent. Every section has a downstream consumer:
 | Feature Phase Breakdown | Exactly three ordered plan steps | Planner + task graph execution |
 | Success Criteria | `PlanStructured.acceptanceCriteria` | Verification phase |
 | Out of Scope | `PlanStructured.outOfScope` | Review phase (rejects scope creep) |
-| `estimated_complexity` frontmatter | `PlanStructured.estimatedComplexity` | Review rubric, retry budget |
+| Project complexity field | `PlanStructured.estimatedComplexity` | Review rubric, retry budget |
 | Verification Plan | `buildVerificationPrompt(...)` input | Verification phase |
 | Non-Goals + Out of Scope | Review gate | Reviewer rejects patches that violate these |
 
@@ -155,7 +154,7 @@ A PRD is read by the planner agent. Every section has a downstream consumer:
 
 ## Quality Gates
 
-Before saving a PRD with `status: backlog` (i.e. ready for the pipeline to consume), every one of these must be true:
+Before marking a PRD ready for the pipeline to consume, every one of these must be true:
 
 - [ ] No placeholder text (`TODO`, `TBD`, `<fill this in>`) remains in any section.
 - [ ] `Goals` has at least one measurable bullet.
@@ -167,7 +166,7 @@ Before saving a PRD with `status: backlog` (i.e. ready for the pipeline to consu
 - [ ] Every external dependency in `Dependencies` is named (package, PRD path, or URL), not described vaguely.
 - [ ] `Verification Plan` names either test file paths, suite names, or concrete manual steps — not "write some tests".
 
-If any gate fails, keep `status: draft` and do not offer "Start pipeline" in the kanban.
+If any gate fails, keep it in draft/on-hold workflow state and do not offer "Start pipeline" in the kanban.
 
 ## Workflow
 
@@ -184,13 +183,13 @@ If any gate fails, keep `status: draft` and do not offer "Start pipeline" in the
 
 3. **Check for an existing issue.** Run `gh issue list --search "<keywords>" --state all` in the target repo. If a matching issue already exists, ask whether to edit it or create a fresh one.
 
-4. **Kebab-case the slug.** If the proposed name has spaces, camelCase, or punctuation, kebab-case it: `"Notification Center"` → `notification-center`. This slug goes in the frontmatter `name` field.
+4. **Kebab-case the PRD name.** If the proposed name has spaces, camelCase, or punctuation, kebab-case it: `"Notification Center"` → `notification-center`. This slug goes in the `# PRD:` heading.
 
-5. **Compress the issue title before writing the body.** Default to a short imperative title, then derive the frontmatter `name` from that final title. Put nuance in `description`, not the title.
+5. **Compress the issue title before writing the body.** Default to a short imperative title, then derive the `# PRD:` heading from that final title. Put nuance in the Executive Summary, not the title.
 
 6. **Draft the PRD body** using the template above, in a scratch buffer. Fill every required section. If you can't fill a section, ask the user — don't hallucinate requirements.
 
-7. **Run the quality gates** against the draft. If any fail, set frontmatter `status: draft` and tell the user which gates failed. If they all pass, `status: backlog`.
+7. **Run the quality gates** against the draft. If any fail, keep the issue in draft/on-hold workflow state and tell the user which gates failed. If they all pass, mark it ready through native project/app state.
 
 8. **Create the GitHub issue.** Preferred: use the desktop app's Create PRD modal (which calls the `github:create-issue` IPC handler — the handler wraps `gh issue create` and upserts the cache). Alternative for CLI contexts: `gh issue create --title "<Human Readable Title>" --body-file -` with the PRD markdown piped on stdin.
 
@@ -199,8 +198,8 @@ If any gate fails, keep `status: draft` and do not offer "Start pipeline" in the
 ### When the user says "plan the X PRD"
 
 1. Fetch the current issue body via the cache (`github_issue_cache.body`) or `gh issue view <N> --json body --jq .body` if the cache may be stale. Read it fully before producing anything.
-2. Verify frontmatter `status` is `backlog` or `active` — never plan a `draft`.
-3. Translate directly: Executive Summary → objective, Feature Phase Breakdown → exactly three ordered plan steps, Success Criteria → acceptanceCriteria, Out of Scope → outOfScope, `estimated_complexity` → estimatedComplexity.
+2. Verify the issue is ready through native project/app state — never plan a draft/on-hold issue.
+3. Translate directly: Executive Summary → objective, Feature Phase Breakdown → exactly three ordered plan steps, Success Criteria → acceptanceCriteria, Out of Scope → outOfScope, project complexity → estimatedComplexity.
 4. The plan phase owns file changes and step breakdown — do not copy those out of the PRD (there shouldn't be any).
 
 ### When the user says "update the X PRD"
@@ -224,17 +223,9 @@ Observed failure modes from prior sessions — do not repeat:
 
 ## Minimal Example
 
-The text below is the exact issue body that gets pushed to `gh issue create --body-file -` (or, equivalently, pasted into the Create PRD modal's body field). Frontmatter and all.
+The text below is the exact issue body that gets pushed to `gh issue create --body-file -` (or, equivalently, pasted into the Create PRD modal's body field). GitHub metadata belongs in native fields, not in this body.
 
 ```markdown
----
-name: copy-issue-url-action
-description: Let users copy the canonical GitHub issue URL from the kanban card context menu.
-status: backlog
-estimated_complexity: low
-blast_radius: contained
----
-
 # PRD: copy-issue-url-action
 
 ## Executive Summary
@@ -330,4 +321,4 @@ through IssueDetail. This is pure friction — the URL is already known.
   doesn't fight with drag-and-drop handlers on the same card?
 ```
 
-Note: no `created` or `updated` fields — GitHub tracks those natively. No file path — the PRD lives in the issue body itself. The entire text block above (starting from `---`) is what gets pasted into `gh issue create --body-file -`.
+Note: no `created`, `updated`, `status`, `complexity`, or `blast radius` fields in the body — GitHub and the project board track those natively. No file path — the PRD lives in the issue body itself. The entire text block above (starting from `# PRD:`) is what gets pasted into `gh issue create --body-file -`.

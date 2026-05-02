@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  buildPrdMetadataLabels,
   readPrdIssueMetadata,
   splitPrdFrontmatter,
   stripPrdFrontmatter,
@@ -100,13 +99,5 @@ blast_radius: contained
       estimatedComplexity: 'medium',
       blastRadius: 'contained',
     });
-  });
-});
-
-describe('buildPrdMetadataLabels', () => {
-  it('builds the managed complexity and blast labels', () => {
-    expect(
-      buildPrdMetadataLabels({ estimatedComplexity: 'high', blastRadius: 'cross-app' }),
-    ).toEqual(['complexity:high', 'blast:cross-app']);
   });
 });

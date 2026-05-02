@@ -674,6 +674,139 @@ describe('GhCli', () => {
     });
   });
 
+  describe('setIssueProjectMetadata', () => {
+    it('sets native issue type and project single-select fields', async () => {
+      success(JSON.stringify({ owner: { login: 'shipshitdev' }, name: 'shipcode' }));
+      success(
+        JSON.stringify({
+          data: {
+            repository: {
+              issue: {
+                id: 'ISSUE_id',
+                projectItems: {
+                  nodes: [{ id: 'ITEM_id', project: { id: 'PROJECT_id', number: 1 } }],
+                },
+              },
+              issueType: { id: 'TYPE_feature', isEnabled: true },
+            },
+            organization: {
+              projectV2: {
+                id: 'PROJECT_id',
+                fields: {
+                  nodes: [
+                    {
+                      __typename: 'ProjectV2SingleSelectField',
+                      id: 'FIELD_status',
+                      name: 'Status',
+                      options: [{ id: 'OPT_todo', name: 'Todo' }],
+                    },
+                    {
+                      __typename: 'ProjectV2SingleSelectField',
+                      id: 'FIELD_priority',
+                      name: 'Priority',
+                      options: [{ id: 'OPT_p3', name: 'P3' }],
+                    },
+                    {
+                      __typename: 'ProjectV2SingleSelectField',
+                      id: 'FIELD_complexity',
+                      name: 'Complexity',
+                      options: [{ id: 'OPT_medium', name: 'Medium' }],
+                    },
+                    {
+                      __typename: 'ProjectV2SingleSelectField',
+                      id: 'FIELD_blast',
+                      name: 'Blast radius',
+                      options: [{ id: 'OPT_cross_app', name: 'Cross-app' }],
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        }),
+      );
+      success(JSON.stringify({ data: { updateIssueIssueType: { issue: { id: 'ISSUE_id' } } } }));
+      success(
+        JSON.stringify({
+          data: { updateProjectV2ItemFieldValue: { projectV2Item: { id: 'ITEM_id' } } },
+        }),
+      );
+      success(
+        JSON.stringify({
+          data: { updateProjectV2ItemFieldValue: { projectV2Item: { id: 'ITEM_id' } } },
+        }),
+      );
+      success(
+        JSON.stringify({
+          data: { updateProjectV2ItemFieldValue: { projectV2Item: { id: 'ITEM_id' } } },
+        }),
+      );
+      success(
+        JSON.stringify({
+          data: { updateProjectV2ItemFieldValue: { projectV2Item: { id: 'ITEM_id' } } },
+        }),
+      );
+
+      const warnings = await gh.setIssueProjectMetadata({
+        issueNumber: 42,
+        projectUrl: 'https://github.com/orgs/shipshitdev/projects/1',
+        metadata: {
+          issueType: 'Feature',
+          status: 'Todo',
+          priority: 'P3',
+          complexity: 'medium',
+          blastRadius: 'cross-app',
+        },
+      });
+
+      expect(warnings).toEqual([]);
+      expect(mockExecFileAsync).toHaveBeenCalledWith(
+        'gh',
+        ['repo', 'view', '--json', 'owner,name'],
+        ghExecOptions,
+      );
+      const mutationCalls = mockExecFileAsync.mock.calls
+        .map((call) => call[1] as string[])
+        .filter((args) => args[0] === 'api' && args[1] === 'graphql')
+        .map((args) => args.join(' '));
+      expect(mutationCalls.some((args) => args.includes('updateIssueIssueType'))).toBe(true);
+      expect(
+        mutationCalls.filter((args) => args.includes('updateProjectV2ItemFieldValue')),
+      ).toHaveLength(4);
+    });
+
+    it('returns a warning when the issue is not attached to the project', async () => {
+      success(JSON.stringify({ owner: { login: 'shipshitdev' }, name: 'shipcode' }));
+      success(
+        JSON.stringify({
+          data: {
+            repository: {
+              issue: {
+                id: 'ISSUE_id',
+                projectItems: { nodes: [] },
+              },
+              issueType: { id: 'TYPE_feature', isEnabled: true },
+            },
+            organization: {
+              projectV2: {
+                id: 'PROJECT_id',
+                fields: { nodes: [] },
+              },
+            },
+          },
+        }),
+      );
+
+      await expect(
+        gh.setIssueProjectMetadata({
+          issueNumber: 42,
+          projectUrl: 'https://github.com/orgs/shipshitdev/projects/1',
+          metadata: { issueType: 'Feature' },
+        }),
+      ).resolves.toEqual(['#42: issue is not attached to the configured project']);
+    });
+  });
+
   describe('addIssueComment', () => {
     it('calls with correct args and resolves', async () => {
       const fake = createFakeProc();

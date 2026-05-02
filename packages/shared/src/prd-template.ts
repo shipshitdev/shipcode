@@ -8,15 +8,7 @@ import { REQUIRED_PRD_SECTIONS } from './constants';
  * them directly into `PlanStructured` fields (see the mapping table in the
  * skill file). Do not reorder or rename sections without updating the skill.
  */
-export const PRD_TEMPLATE = `---
-name: <kebab-name>
-description: <one-line summary>
-status: backlog
-estimated_complexity: medium
-blast_radius: contained
----
-
-# PRD: <name>
+export const PRD_TEMPLATE = `# PRD: <name>
 
 ## Executive Summary
 <2-4 sentences. What is this feature, why now, who wins.>

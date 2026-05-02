@@ -44,16 +44,10 @@ describe('SHIPCODE_DEFAULT_LABELS', () => {
     ]);
   });
 
-  it('includes the metadata labels used by PRD issue metadata', () => {
-    expect(SHIPCODE_METADATA_LABELS.map((label) => label.name)).toEqual([
-      'complexity:low',
-      'complexity:medium',
-      'complexity:high',
-      'blast:contained',
-      'blast:cross-package',
-      'blast:cross-app',
-      'blast:infra',
-      'blocked:ci',
-    ]);
+  it('keeps only labels that are not covered by native GitHub/project fields', () => {
+    const labelNames = SHIPCODE_DEFAULT_LABELS.map((label) => label.name);
+    expect(SHIPCODE_METADATA_LABELS.map((label) => label.name)).toEqual(['blocked:ci']);
+    expect(labelNames.some((name) => name.startsWith('complexity:'))).toBe(false);
+    expect(labelNames.some((name) => name.startsWith('blast:'))).toBe(false);
   });
 });

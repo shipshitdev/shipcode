@@ -6,6 +6,7 @@ import {
   type GitHubPrCheckSummary,
   type GitHubPrReviewCommentSummary,
   type GitHubStatusLabel,
+  parseGithubProjectUrl,
   PRD_MANAGED_DISCRETE_LABELS,
   PRD_MANAGED_LABEL_PREFIXES,
   type PullRequestDetail,
@@ -33,6 +34,23 @@ function isAlreadyOnBoardError(stderr: string): boolean {
   );
 }
 
+function normalizeProjectFieldKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function formatMetadataOption(value: string): string {
+  return value
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => part[0]?.toUpperCase() + part.slice(1).toLowerCase())
+    .join('-');
+}
+
+function getGraphqlErrors(response: { errors?: Array<{ message?: string }> }): string | null {
+  if (!response.errors || response.errors.length === 0) return null;
+  return response.errors.map((err) => err.message ?? '<unknown>').join('; ');
+}
+
 export interface PullRequestFeedback {
   number: number;
   url: string;
@@ -44,6 +62,48 @@ export interface PullRequestFeedback {
   failingChecks: GitHubPrCheckSummary[];
   unresolvedReviewComments: GitHubPrReviewCommentSummary[];
   unresolvedReviewCommentCount: number;
+}
+
+export interface IssueProjectMetadata {
+  issueType?: string;
+  status?: string;
+  priority?: string;
+  complexity?: string;
+  blastRadius?: string;
+}
+
+interface ProjectMetadataQueryResponse {
+  data?: {
+    repository?: {
+      issue?: {
+        id?: string;
+        projectItems?: {
+          nodes?: Array<{
+            id?: string;
+            project?: { id?: string; number?: number };
+          }>;
+        };
+      } | null;
+      issueType?: { id?: string; isEnabled?: boolean } | null;
+    } | null;
+    organization?: ProjectOwnerNode | null;
+    user?: ProjectOwnerNode | null;
+  };
+  errors?: Array<{ message?: string }>;
+}
+
+interface ProjectOwnerNode {
+  projectV2?: {
+    id?: string;
+    fields?: {
+      nodes?: Array<{
+        __typename?: string;
+        id?: string;
+        name?: string;
+        options?: Array<{ id?: string; name?: string }>;
+      }>;
+    };
+  } | null;
 }
 
 export class GhCli {
@@ -387,6 +447,168 @@ export class GhCli {
     }
   }
 
+  async setIssueProjectMetadata(opts: {
+    issueNumber: number;
+    projectUrl: string | null | undefined;
+    metadata: IssueProjectMetadata;
+  }): Promise<string[]> {
+    const warnings: string[] = [];
+    const parsedProject = parseGithubProjectUrl(opts.projectUrl);
+    if (!parsedProject) return warnings;
+
+    const { owner: repoOwner, repo: repoName } = await this.getRepoCoordinates();
+    const isOrgProject = parsedProject.ownerType === 'orgs';
+    const projectSelection = isOrgProject
+      ? 'organization(login: $projectOwner) { projectV2(number: $projectNumber) { id fields(first: 100) { nodes { __typename ... on ProjectV2SingleSelectField { id name options { id name } } } } } }'
+      : 'user(login: $projectOwner) { projectV2(number: $projectNumber) { id fields(first: 100) { nodes { __typename ... on ProjectV2SingleSelectField { id name options { id name } } } } } }';
+    const query = `
+      query(
+        $repoOwner: String!
+        $repoName: String!
+        $issueNumber: Int!
+        $issueType: String!
+        $projectOwner: String!
+        $projectNumber: Int!
+      ) {
+        repository(owner: $repoOwner, name: $repoName) {
+          issue(number: $issueNumber) {
+            id
+            projectItems(first: 100) {
+              nodes {
+                id
+                project { id number }
+              }
+            }
+          }
+          issueType(name: $issueType) { id isEnabled }
+        }
+        ${projectSelection}
+      }
+    `;
+
+    const { stdout } = await execFileAsync(
+      'gh',
+      [
+        'api',
+        'graphql',
+        '-f',
+        `query=${query}`,
+        '-F',
+        `repoOwner=${repoOwner}`,
+        '-F',
+        `repoName=${repoName}`,
+        '-F',
+        `issueNumber=${opts.issueNumber}`,
+        '-F',
+        `issueType=${opts.metadata.issueType ?? ''}`,
+        '-F',
+        `projectOwner=${parsedProject.owner}`,
+        '-F',
+        `projectNumber=${parsedProject.number}`,
+      ],
+      { cwd: this.cwd, env: this.env },
+    );
+    const response = JSON.parse(stdout) as ProjectMetadataQueryResponse;
+    const queryErrors = getGraphqlErrors(response);
+    if (queryErrors) throw new Error(`GitHub project metadata query failed: ${queryErrors}`);
+
+    const issue = response.data?.repository?.issue;
+    const project = isOrgProject
+      ? response.data?.organization?.projectV2
+      : response.data?.user?.projectV2;
+    const issueId = issue?.id;
+    const projectId = project?.id;
+    if (!issueId || !projectId) return warnings;
+
+    const itemId =
+      issue.projectItems?.nodes?.find((item) => item.project?.id === projectId)?.id ?? null;
+    if (!itemId) {
+      warnings.push(`#${opts.issueNumber}: issue is not attached to the configured project`);
+      return warnings;
+    }
+
+    if (opts.metadata.issueType) {
+      const issueType = response.data?.repository?.issueType;
+      if (issueType?.id && issueType.isEnabled !== false) {
+        await this.graphqlMutation(
+          `
+          mutation($issueId: ID!, $issueTypeId: ID!) {
+            updateIssueIssueType(input: { issueId: $issueId, issueTypeId: $issueTypeId }) {
+              issue { id }
+            }
+          }
+        `,
+          [
+            ['issueId', issueId],
+            ['issueTypeId', issueType.id],
+          ],
+        );
+      } else {
+        warnings.push(`#${opts.issueNumber}: issue type "${opts.metadata.issueType}" not found`);
+      }
+    }
+
+    const fieldValues: Array<[fieldName: string, optionName: string | undefined]> = [
+      ['Status', opts.metadata.status],
+      ['Priority', opts.metadata.priority],
+      ['Complexity', opts.metadata.complexity],
+      ['Blast radius', opts.metadata.blastRadius],
+    ];
+    const fields = project.fields?.nodes ?? [];
+
+    for (const [fieldName, optionName] of fieldValues) {
+      if (!optionName) continue;
+      const field = fields.find(
+        (candidate) =>
+          candidate.__typename === 'ProjectV2SingleSelectField' &&
+          normalizeProjectFieldKey(candidate.name ?? '') === normalizeProjectFieldKey(fieldName),
+      );
+      if (!field?.id) {
+        warnings.push(`#${opts.issueNumber}: project field "${fieldName}" not found`);
+        continue;
+      }
+
+      const formattedOption =
+        fieldName === 'Priority' ? optionName.toUpperCase() : formatMetadataOption(optionName);
+      const option = field.options?.find(
+        (candidate) =>
+          normalizeProjectFieldKey(candidate.name ?? '') ===
+          normalizeProjectFieldKey(formattedOption),
+      );
+      if (!option?.id) {
+        warnings.push(
+          `#${opts.issueNumber}: option "${formattedOption}" missing for "${fieldName}"`,
+        );
+        continue;
+      }
+
+      await this.graphqlMutation(
+        `
+        mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+          updateProjectV2ItemFieldValue(
+            input: {
+              projectId: $projectId
+              itemId: $itemId
+              fieldId: $fieldId
+              value: { singleSelectOptionId: $optionId }
+            }
+          ) {
+            projectV2Item { id }
+          }
+        }
+      `,
+        [
+          ['projectId', projectId],
+          ['itemId', itemId],
+          ['fieldId', field.id],
+          ['optionId', option.id],
+        ],
+      );
+    }
+
+    return warnings;
+  }
+
   async editIssueBody(issueNumber: number, body: string): Promise<void> {
     // Piping via stdin avoids argv length limits for multi-KB PRD bodies
     // and avoids any shell-escaping risk for backticks, quotes, etc.
@@ -442,6 +664,17 @@ export class GhCli {
       proc.stdin.write(input);
       proc.stdin.end();
     });
+  }
+
+  private async graphqlMutation(query: string, variables: Array<[string, string]>): Promise<void> {
+    const args = ['api', 'graphql', '-f', `query=${query}`];
+    for (const [key, value] of variables) {
+      args.push('-F', `${key}=${value}`);
+    }
+    const { stdout } = await execFileAsync('gh', args, { cwd: this.cwd, env: this.env });
+    const parsed = JSON.parse(stdout) as { errors?: Array<{ message?: string }> };
+    const errors = getGraphqlErrors(parsed);
+    if (errors) throw new Error(`GitHub GraphQL mutation failed: ${errors}`);
   }
 
   async createPR(options: {

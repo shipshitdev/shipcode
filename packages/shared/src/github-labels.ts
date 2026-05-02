@@ -34,11 +34,6 @@ export const SHIPCODE_AGENT_LABELS: readonly GitHubLabelDefinition[] = [
 
 export const SHIPCODE_CLASSIFICATION_LABELS: readonly GitHubLabelDefinition[] = [
   {
-    name: 'enhancement',
-    color: 'a2eeef',
-    description: 'Feature or product improvement.',
-  },
-  {
     name: 'bug',
     color: 'd73a4a',
     description: 'Something is broken.',
@@ -51,41 +46,6 @@ export const SHIPCODE_CLASSIFICATION_LABELS: readonly GitHubLabelDefinition[] = 
 ] as const;
 
 export const SHIPCODE_METADATA_LABELS: readonly GitHubLabelDefinition[] = [
-  {
-    name: 'complexity:low',
-    color: '1a7f37',
-    description: 'Low-complexity task.',
-  },
-  {
-    name: 'complexity:medium',
-    color: 'bf8700',
-    description: 'Medium-complexity task.',
-  },
-  {
-    name: 'complexity:high',
-    color: 'cf222e',
-    description: 'High-complexity task.',
-  },
-  {
-    name: 'blast:contained',
-    color: '1a7f37',
-    description: 'Changes stay within a contained surface area.',
-  },
-  {
-    name: 'blast:cross-package',
-    color: '1f6feb',
-    description: 'Changes cross package boundaries.',
-  },
-  {
-    name: 'blast:cross-app',
-    color: 'd97706',
-    description: 'Changes cross app boundaries.',
-  },
-  {
-    name: 'blast:infra',
-    color: 'cf222e',
-    description: 'Changes touch infrastructure or platform concerns.',
-  },
   {
     name: 'blocked:ci',
     color: 'cf222e',

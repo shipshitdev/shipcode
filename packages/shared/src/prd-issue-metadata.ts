@@ -100,13 +100,3 @@ export function readPrdIssueMetadata(body: string, labels: string[] = []): PrdIs
     blastRadius,
   };
 }
-
-export function buildPrdMetadataLabels(metadata: {
-  estimatedComplexity: PrdEstimatedComplexity;
-  blastRadius: PrdBlastRadius;
-}): string[] {
-  return [
-    `${PRD_COMPLEXITY_LABEL_PREFIX}${metadata.estimatedComplexity}`,
-    `${PRD_BLAST_LABEL_PREFIX}${metadata.blastRadius}`,
-  ];
-}

@@ -1,6 +1,5 @@
 import {
   bodyHasRequiredPrdSections,
-  buildPrdMetadataLabels,
   clampError,
   formatBytes,
   type GitHubIssueCacheRecord,
@@ -325,9 +324,10 @@ export function CreateIssueModal() {
   const missingSections = useMemo(() => getMissingRequiredPrdSections(body), [body]);
   const clampedError = useMemo(() => (error ? clampError(error) : null), [error]);
   const derivedTitle = useMemo(() => deriveTitleFromBody(body), [body]);
-  const metadataLabels = useMemo(
-    () => ['enhancement', ...buildPrdMetadataLabels({ estimatedComplexity, blastRadius })],
-    [estimatedComplexity, blastRadius],
+  const metadataLabels = useMemo(() => [], []);
+  const prdMetadata = useMemo(
+    () => ({ estimatedComplexity, blastRadius }),
+    [blastRadius, estimatedComplexity],
   );
 
   // ---------------------------------------------------------------------------
@@ -363,6 +363,7 @@ export function CreateIssueModal() {
       title,
       issueBody,
       labels,
+      prdMetadata,
       selectOnComplete,
       showInlineErrors,
     }: {
@@ -371,6 +372,7 @@ export function CreateIssueModal() {
       title: string;
       issueBody: string;
       labels: string[];
+      prdMetadata: { estimatedComplexity: PrdEstimatedComplexity; blastRadius: PrdBlastRadius };
       selectOnComplete: boolean;
       showInlineErrors: boolean;
     }) => {
@@ -380,6 +382,7 @@ export function CreateIssueModal() {
           title,
           body: issueBody,
           labels,
+          prdMetadata,
         })
         .then((created) => {
           const realIssue = created.issue;
@@ -483,6 +486,7 @@ export function CreateIssueModal() {
           title: derivedTitle,
           body,
           labels: metadataLabels,
+          prdMetadata,
         });
         await queryClient.invalidateQueries({ queryKey: ['github-issues'] });
       } else {
@@ -502,6 +506,7 @@ export function CreateIssueModal() {
           title: derivedTitle,
           issueBody: body,
           labels: metadataLabels,
+          prdMetadata,
           selectOnComplete: !submitAnother,
           showInlineErrors: submitAnother,
         });

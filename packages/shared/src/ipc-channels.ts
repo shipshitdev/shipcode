@@ -1,4 +1,5 @@
 import type { TaskGraphWithNodes } from './task-graph';
+import type { PrdBlastRadius, PrdEstimatedComplexity } from './prd-issue-metadata';
 import type {
   ActivePipelineSummary,
   ActivityEntry,
@@ -268,7 +269,16 @@ export interface IpcInvokeChannels {
     result: GitHubIssueCacheRecord | null;
   };
   'github:create-issue': {
-    args: { projectId: string; title: string; body: string; labels?: string[] };
+    args: {
+      projectId: string;
+      title: string;
+      body: string;
+      labels?: string[];
+      prdMetadata?: {
+        estimatedComplexity: PrdEstimatedComplexity;
+        blastRadius: PrdBlastRadius;
+      };
+    };
     result: { issue: GitHubIssueCacheRecord; projectAttachWarning: string | null };
   };
   'github:edit-issue-body': {
@@ -278,6 +288,10 @@ export interface IpcInvokeChannels {
       title: string;
       body: string;
       labels?: string[];
+      prdMetadata?: {
+        estimatedComplexity: PrdEstimatedComplexity;
+        blastRadius: PrdBlastRadius;
+      };
     };
     result: GitHubIssueCacheRecord | null;
   };
