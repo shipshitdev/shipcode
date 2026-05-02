@@ -43,7 +43,7 @@ export function TerminalDrawerHeader({
   onToggleTerminal,
 }: TerminalDrawerHeaderProps) {
   return (
-    <div className="flex items-center justify-between border-b border-border bg-primary/75 px-3 py-1.5 shrink-0 gap-3 min-w-0">
+    <div className="flex items-center justify-between border-b border-border bg-primary/75 px-4 py-1.5 shrink-0 gap-3 min-w-0">
       <div className="flex items-center gap-3 min-w-0 overflow-hidden">
         <div className="shrink-0">
           <span className="rounded-md bg-tertiary px-3 py-1 text-[11px] font-medium text-primary">

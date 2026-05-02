@@ -41,7 +41,8 @@ describe('TerminalTranscript', () => {
 
     expect(screen.getByText("You've hit your limit.")).toBeInTheDocument();
 
-    const scrollContainer = container.firstChild as HTMLDivElement | null;
+    const wrapper = container.firstChild as HTMLDivElement | null;
+    const scrollContainer = wrapper?.firstChild as HTMLDivElement | null;
     const innerContainer = scrollContainer?.firstChild as HTMLDivElement | null;
 
     expect(innerContainer).not.toBeNull();
@@ -52,7 +53,8 @@ describe('TerminalTranscript', () => {
   it('keeps compact padding without reintroducing a width cap', () => {
     const { container } = render(<TerminalTranscript events={[makeTextEvent()]} compact />);
 
-    const scrollContainer = container.firstChild as HTMLDivElement | null;
+    const wrapper = container.firstChild as HTMLDivElement | null;
+    const scrollContainer = wrapper?.firstChild as HTMLDivElement | null;
     const innerContainer = scrollContainer?.firstChild as HTMLDivElement | null;
 
     expect(innerContainer).not.toBeNull();

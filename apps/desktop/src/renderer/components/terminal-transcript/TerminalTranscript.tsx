@@ -2,6 +2,7 @@ import type { CanonicalTerminalEvent, TerminalEventRecord } from '@shipcode/shar
 import { ERROR_PATTERNS, formatClockTime, stripAnsi } from '@shipcode/shared';
 import { Badge, Button, cn } from '@shipshitdev/ui';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { ArrowDownToLine } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 interface TerminalTranscriptProps {
@@ -377,6 +378,7 @@ export function TerminalTranscript({
 }: TerminalTranscriptProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
+  const [isAtBottom, setIsAtBottom] = useState(true);
   const [showAllEvents, setShowAllEvents] = useState(false);
   const dedupedEvents = useMemo(() => dedupeTranscriptEvents(events), [events]);
 
@@ -439,7 +441,17 @@ export function TerminalTranscript({
 
   const handleScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
     const node = event.currentTarget;
-    stickToBottomRef.current = node.scrollHeight - node.scrollTop - node.clientHeight < 48;
+    const atBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 48;
+    stickToBottomRef.current = atBottom;
+    setIsAtBottom(atBottom);
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
+    const node = scrollRef.current;
+    if (!node) return;
+    node.scrollTo({ top: node.scrollHeight, behavior: 'smooth' });
+    stickToBottomRef.current = true;
+    setIsAtBottom(true);
   }, []);
 
   const headerContent = (
@@ -495,19 +507,39 @@ export function TerminalTranscript({
     </>
   );
 
+  const scrollToBottomButton =
+    hasEvents && !isAtBottom ? (
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center pb-3">
+        <Button
+          variant="outline"
+          size="xs"
+          className="pointer-events-auto gap-1.5 rounded-full border-border bg-elevated px-3 shadow-md"
+          onClick={scrollToBottom}
+        >
+          <ArrowDownToLine size={12} />
+          <span className="text-[11px]">Scroll to bottom</span>
+        </Button>
+      </div>
+    ) : null;
+
   // Non-virtualized path: small event lists render plain DOM.
   if (!shouldVirtualize) {
     return (
-      <div
-        ref={scrollRef}
-        className={cn('h-full overflow-y-auto overscroll-contain', className)}
-        onScroll={handleScroll}
-      >
-        <div className={cn('flex min-h-full w-full flex-col gap-3', compact ? 'p-3' : 'px-4 py-4')}>
-          {headerContent}
-          {hasEvents ? plainRows : null}
-          {footerContent}
+      <div className={cn('relative h-full', className)}>
+        <div
+          ref={scrollRef}
+          className="h-full overflow-y-auto overscroll-contain"
+          onScroll={handleScroll}
+        >
+          <div
+            className={cn('flex min-h-full w-full flex-col gap-3', compact ? 'p-3' : 'px-4 py-4')}
+          >
+            {headerContent}
+            {hasEvents ? plainRows : null}
+            {footerContent}
+          </div>
         </div>
+        {scrollToBottomButton}
       </div>
     );
   }
@@ -519,23 +551,28 @@ export function TerminalTranscript({
   // the virtualizer returns no items. Fall back to plain DOM rendering.
   if (virtualItems.length === 0 && hasEvents) {
     return (
-      <div
-        ref={scrollRef}
-        className={cn('h-full overflow-y-auto overscroll-contain', className)}
-        onScroll={handleScroll}
-      >
-        <div className={cn('flex min-h-full w-full flex-col gap-3', compact ? 'p-3' : 'px-4 py-4')}>
-          {headerContent}
-          {visibleEvents.map((record) => (
-            <MemoTranscriptRow
-              key={record.id}
-              record={record}
-              compact={compact}
-              onAction={onAction}
-            />
-          ))}
-          {footerContent}
+      <div className={cn('relative h-full', className)}>
+        <div
+          ref={scrollRef}
+          className="h-full overflow-y-auto overscroll-contain"
+          onScroll={handleScroll}
+        >
+          <div
+            className={cn('flex min-h-full w-full flex-col gap-3', compact ? 'p-3' : 'px-4 py-4')}
+          >
+            {headerContent}
+            {visibleEvents.map((record) => (
+              <MemoTranscriptRow
+                key={record.id}
+                record={record}
+                compact={compact}
+                onAction={onAction}
+              />
+            ))}
+            {footerContent}
+          </div>
         </div>
+        {scrollToBottomButton}
       </div>
     );
   }
@@ -545,51 +582,54 @@ export function TerminalTranscript({
   const gap = 12; // gap-3 = 0.75rem = 12px
 
   return (
-    <div
-      ref={scrollRef}
-      className={cn('h-full overflow-y-auto overscroll-contain', className)}
-      onScroll={handleScroll}
-    >
-      <div className={cn('flex w-full flex-col gap-3', compact ? 'p-3' : 'px-4 py-4')}>
-        {headerContent}
-      </div>
-
-      {hasEvents ? (
-        <div
-          style={{
-            height: totalSize + padding,
-            width: '100%',
-            position: 'relative',
-          }}
-        >
-          {virtualItems.map((virtualRow) => (
-            <div
-              key={visibleEvents[virtualRow.index]!.id}
-              data-index={virtualRow.index}
-              ref={virtualizer.measureElement}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                transform: `translateY(${virtualRow.start + gap}px)`,
-              }}
-            >
-              <div className={compact ? 'px-3' : 'px-4'}>
-                <MemoTranscriptRow
-                  record={visibleEvents[virtualRow.index]!}
-                  compact={compact}
-                  onAction={onAction}
-                />
-              </div>
-            </div>
-          ))}
+    <div className={cn('relative h-full', className)}>
+      <div
+        ref={scrollRef}
+        className="h-full overflow-y-auto overscroll-contain"
+        onScroll={handleScroll}
+      >
+        <div className={cn('flex w-full flex-col gap-3', compact ? 'p-3' : 'px-4 py-4')}>
+          {headerContent}
         </div>
-      ) : null}
 
-      <div className={cn('flex w-full flex-col gap-3', compact ? 'px-3 pb-3' : 'px-4 pb-4')}>
-        {footerContent}
+        {hasEvents ? (
+          <div
+            style={{
+              height: totalSize + padding,
+              width: '100%',
+              position: 'relative',
+            }}
+          >
+            {virtualItems.map((virtualRow) => (
+              <div
+                key={visibleEvents[virtualRow.index]!.id}
+                data-index={virtualRow.index}
+                ref={virtualizer.measureElement}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  transform: `translateY(${virtualRow.start + gap}px)`,
+                }}
+              >
+                <div className={compact ? 'px-3' : 'px-4'}>
+                  <MemoTranscriptRow
+                    record={visibleEvents[virtualRow.index]!}
+                    compact={compact}
+                    onAction={onAction}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        <div className={cn('flex w-full flex-col gap-3', compact ? 'px-3 pb-3' : 'px-4 pb-4')}>
+          {footerContent}
+        </div>
       </div>
+      {scrollToBottomButton}
     </div>
   );
 }
