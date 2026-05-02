@@ -31,8 +31,10 @@ import {
   Folder,
   FolderOpen,
   Ghost,
+  GitPullRequest,
   Inbox,
   LayoutGrid,
+  LayoutList,
   MoreHorizontal,
   Pin,
   PinOff,
@@ -47,8 +49,17 @@ import {
 import type { ComponentType } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NOTIFICATIONS_STALE_TIME, STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
-import { useAppStore } from '../stores/app-store';
+import { type ProjectTab, useAppStore } from '../stores/app-store';
 import { ProjectProviderWarningPopover } from './ProjectProviderWarningPopover';
+
+const PROJECT_TAB_ITEMS: Array<{ key: ProjectTab; label: string; icon: ComponentType<{ size?: number; className?: string }> }> = [
+  { key: 'issues', label: 'Issues', icon: LayoutList },
+  { key: 'git', label: 'Git', icon: GitPullRequest },
+  { key: 'code', label: 'Code', icon: Code2 },
+  { key: 'pull-requests', label: 'Pull Requests', icon: GitPullRequest },
+  { key: 'insights', label: 'Insights', icon: Activity },
+  { key: 'sessions', label: 'Sessions', icon: Terminal },
+];
 
 const SIDEBAR_MIN = 220;
 const SIDEBAR_MAX = 256;
@@ -88,6 +99,8 @@ export function ProjectSidebar() {
   const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
   const openCreateIssueModal = useAppStore((state) => state.openCreateIssueModal);
   const openCommandPalette = useAppStore((state) => state.openCommandPalette);
+  const projectTab = useAppStore((state) => state.projectTab);
+  const setProjectTab = useAppStore((state) => state.setProjectTab);
   const queryClient = useQueryClient();
 
   const { data: projects = [], isLoading: projectsLoading } = useQuery<ProjectWithPathState[]>({
@@ -466,7 +479,7 @@ export function ProjectSidebar() {
             ))
           : null}
         {sortedProjects.map((project) => (
-          <div key={project.id} className="relative group">
+          <div key={project.id} className="group">
             {(() => {
               const projectWarnings =
                 settings && integrations?.system && providerUsage
@@ -489,70 +502,71 @@ export function ProjectSidebar() {
 
               return (
                 <>
-                  <Button
-                    variant="ghost"
-                    className={cn(
-                      'h-auto w-full justify-start gap-2 pl-3 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
-                      warningBadgeLabel ? 'pr-[7.25rem]' : 'pr-8',
-                      project.pathExists === false && 'opacity-50',
-                      viewMode === 'project' &&
-                        activeProjectId === project.id &&
-                        'bg-tertiary text-primary font-medium',
-                    )}
-                    onClick={() => selectProject(project.id)}
-                    title={
-                      project.pathExists === false
-                        ? `Project folder missing: ${project.path}`
-                        : project.path
-                    }
-                  >
-                    {project.pinned ? (
-                      <Pin size={12} className="shrink-0 text-accent fill-accent" />
-                    ) : (
-                      <Folder
-                        size={14}
-                        className={cn(
-                          'shrink-0 text-secondary',
-                          project.pathExists === false && 'text-warning',
-                        )}
-                      />
-                    )}
-                    <span className="flex-1 truncate text-primary">{project.name}</span>
-                    {project.pathExists === false && (
-                      <Badge variant="warning" className="shrink-0 text-[10px]">
-                        Missing
-                      </Badge>
-                    )}
-                    {project.pathExists !== false && project.setupStatus === 'missing' && (
-                      <Badge variant="default" className="shrink-0 text-[10px]">
-                        Setup
-                      </Badge>
-                    )}
-                    {project.pathExists !== false && project.setupStatus === 'invalid' && (
-                      <Badge variant="warning" className="shrink-0 text-[10px]">
-                        Setup!
-                      </Badge>
-                    )}
-                    {(stats?.pendingApprovalsByProject?.[project.id] ?? 0) > 0 && (
-                      <Badge variant="warning" className="shrink-0 text-[10px]">
-                        {stats?.pendingApprovalsByProject[project.id]}{' '}
-                        {stats?.pendingApprovalsByProject[project.id] === 1
-                          ? 'approval'
-                          : 'approvals'}
-                      </Badge>
-                    )}
-                    {(stats?.agentsRunningByProject?.[project.id] ?? 0) > 0 && (
-                      <span className="inline-flex items-center gap-1 shrink-0 rounded-full border border-agent/30 bg-agent/10 px-1.5 py-0.5 text-[10px] font-medium text-agent">
-                        <span className="relative flex h-1.5 w-1.5 items-center justify-center">
-                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-agent opacity-60" />
-                          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-agent" />
+                  <div className="relative">
+                    <Button
+                      variant="ghost"
+                      className={cn(
+                        'h-auto w-full justify-start gap-2 pl-3 py-2 text-[13px] font-normal text-secondary app-region-no-drag',
+                        warningBadgeLabel ? 'pr-[7.25rem]' : 'pr-8',
+                        project.pathExists === false && 'opacity-50',
+                        viewMode === 'project' &&
+                          activeProjectId === project.id &&
+                          'bg-tertiary text-primary font-medium',
+                      )}
+                      onClick={() => selectProject(project.id)}
+                      title={
+                        project.pathExists === false
+                          ? `Project folder missing: ${project.path}`
+                          : project.path
+                      }
+                    >
+                      {project.pinned ? (
+                        <Pin size={12} className="shrink-0 text-accent fill-accent" />
+                      ) : (
+                        <Folder
+                          size={14}
+                          className={cn(
+                            'shrink-0 text-secondary',
+                            project.pathExists === false && 'text-warning',
+                          )}
+                        />
+                      )}
+                      <span className="flex-1 truncate text-primary">{project.name}</span>
+                      {project.pathExists === false && (
+                        <Badge variant="warning" className="shrink-0 text-[10px]">
+                          Missing
+                        </Badge>
+                      )}
+                      {project.pathExists !== false && project.setupStatus === 'missing' && (
+                        <Badge variant="default" className="shrink-0 text-[10px]">
+                          Setup
+                        </Badge>
+                      )}
+                      {project.pathExists !== false && project.setupStatus === 'invalid' && (
+                        <Badge variant="warning" className="shrink-0 text-[10px]">
+                          Setup!
+                        </Badge>
+                      )}
+                      {(stats?.pendingApprovalsByProject?.[project.id] ?? 0) > 0 && (
+                        <Badge variant="warning" className="shrink-0 text-[10px]">
+                          {stats?.pendingApprovalsByProject[project.id]}{' '}
+                          {stats?.pendingApprovalsByProject[project.id] === 1
+                            ? 'approval'
+                            : 'approvals'}
+                        </Badge>
+                      )}
+                      {(stats?.agentsRunningByProject?.[project.id] ?? 0) > 0 && (
+                        <span className="inline-flex items-center gap-1 shrink-0 rounded-full border border-agent/30 bg-agent/10 px-1.5 py-0.5 text-[10px] font-medium text-agent">
+                          <span className="relative flex h-1.5 w-1.5 items-center justify-center">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-agent opacity-60" />
+                            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-agent" />
+                          </span>
+                          {stats?.agentsRunningByProject[project.id]} live
                         </span>
-                        {stats?.agentsRunningByProject[project.id]} live
-                      </span>
-                    )}
-                  </Button>
+                      )}
+                    </Button>
 
-                  <div className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-1">
+                    <div className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-1">
                     {warningBadgeLabel && settings ? (
                       <ProjectProviderWarningPopover
                         settings={settings}
@@ -661,7 +675,30 @@ export function ProjectSidebar() {
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
+                    </div>
                   </div>
+
+                  {viewMode === 'project' && activeProjectId === project.id && (
+                    <div className="ml-5 space-y-0.5 pb-1">
+                      {PROJECT_TAB_ITEMS.map(({ key, label, icon: Icon }) => (
+                        <Button
+                          key={key}
+                          variant="ghost"
+                          className={cn(
+                            'h-auto w-full justify-start gap-2 pl-3 pr-5 py-1.5 text-[12px] font-normal text-muted app-region-no-drag',
+                            projectTab === key && 'bg-tertiary/60 text-primary font-medium',
+                          )}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setProjectTab(key);
+                          }}
+                        >
+                          <Icon size={12} className="shrink-0" />
+                          {label}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
                 </>
               );
             })()}
