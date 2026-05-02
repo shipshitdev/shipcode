@@ -1059,7 +1059,9 @@ export function registerProjectHandlers({
           relativePath: entryRelative,
           type: isFile ? 'file' : 'dir',
           sizeBytes,
-          isModified: isFile && modifiedSet.has(entryRelative),
+          isModified: isFile
+            ? modifiedSet.has(entryRelative)
+            : isDirty && [...modifiedSet].some((p) => p.startsWith(entryRelative + '/')),
         });
       }
 

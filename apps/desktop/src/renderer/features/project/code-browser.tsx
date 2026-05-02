@@ -17,10 +17,88 @@ import {
   SelectValue,
 } from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, Code2, Folder, FolderOpen, Loader2 } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronRight,
+  File,
+  FileCode,
+  FileImage,
+  FileJson,
+  FileText,
+  Folder,
+  FolderOpen,
+  Loader2,
+  Lock,
+  Palette,
+  Terminal,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../../query-stale-times';
 import { useAppStore } from '../../stores/app-store';
+
+function getFileIcon(name: string): LucideIcon {
+  const ext = name.toLowerCase().split('.').pop() ?? '';
+  switch (ext) {
+    case 'ts':
+    case 'tsx':
+    case 'js':
+    case 'jsx':
+    case 'mjs':
+    case 'cjs':
+    case 'py':
+    case 'rb':
+    case 'go':
+    case 'rs':
+    case 'java':
+    case 'c':
+    case 'cpp':
+    case 'h':
+    case 'cs':
+    case 'php':
+    case 'vue':
+    case 'svelte':
+    case 'yml':
+    case 'yaml':
+    case 'toml':
+    case 'html':
+    case 'htm':
+    case 'xml':
+      return FileCode;
+    case 'json':
+    case 'jsonc':
+    case 'json5':
+      return FileJson;
+    case 'md':
+    case 'mdx':
+    case 'txt':
+    case 'log':
+      return FileText;
+    case 'png':
+    case 'jpg':
+    case 'jpeg':
+    case 'gif':
+    case 'svg':
+    case 'ico':
+    case 'webp':
+    case 'avif':
+      return FileImage;
+    case 'sh':
+    case 'bash':
+    case 'zsh':
+    case 'fish':
+      return Terminal;
+    case 'lock':
+      return Lock;
+    case 'css':
+    case 'scss':
+    case 'sass':
+    case 'less':
+      return Palette;
+    default:
+      return File;
+  }
+}
 
 const EMPTY_WORKTREES: GitWorktreeSummary[] = [];
 
@@ -88,14 +166,26 @@ function TreeNode({
         )}
         {isDir ? (
           expanded ? (
-            <FolderOpen size={12} className="shrink-0 text-muted" />
+            <FolderOpen
+              size={12}
+              className={cn('shrink-0', entry.isModified ? 'text-amber-500' : 'text-muted')}
+            />
           ) : (
-            <Folder size={12} className="shrink-0 text-muted" />
+            <Folder
+              size={12}
+              className={cn('shrink-0', entry.isModified ? 'text-amber-500' : 'text-muted')}
+            />
           )
-        ) : (
-          <Code2 size={12} className="shrink-0 text-muted" />
-        )}
-        <span className="truncate">{entry.name}</span>
+        ) : (() => {
+          const Icon = getFileIcon(entry.name);
+          return (
+            <Icon
+              size={12}
+              className={cn('shrink-0', entry.isModified ? 'text-amber-500' : 'text-muted')}
+            />
+          );
+        })()}
+        <span className={cn('truncate', entry.isModified && 'text-amber-500')}>{entry.name}</span>
         {entry.isModified && (
           <span className="ml-auto shrink-0 text-[10px] font-medium text-amber-500">M</span>
         )}
@@ -160,7 +250,7 @@ function FileViewer({
     <div className="flex flex-1 min-h-0 flex-col">
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-secondary/30 px-3 py-1.5">
         <div className="flex items-center gap-2 truncate text-xs text-secondary">
-          <Code2 size={12} className="shrink-0 text-muted" />
+          {(() => { const Icon = getFileIcon(relativePath); return <Icon size={12} className="shrink-0 text-muted" />; })()}
           <span className="truncate font-mono">{relativePath}</span>
           {file && !file.isBinary && (
             <span className="text-[10px] text-muted">{formatBytes(file.sizeBytes)}</span>
