@@ -1,5 +1,6 @@
 import { clampError, type Project } from '@shipcode/shared';
-import { Button, LoadingButtonContent } from '@shipshitdev/ui';
+import { Button } from '@shipshitdev/ui';
+import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
 import { useAppStore } from '../stores/app-store';

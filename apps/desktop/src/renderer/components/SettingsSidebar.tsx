@@ -17,11 +17,6 @@ import { SettingsNavigation } from './SettingsNavigation';
 
 const SECTIONS: { key: SettingsSection; label: string; icon: ReactNode }[] = [
   {
-    key: 'about',
-    label: 'About',
-    icon: <PackageCheck size={14} />,
-  },
-  {
     key: 'general',
     label: 'General',
     icon: <Settings size={14} />,
@@ -65,6 +60,11 @@ const SECTIONS: { key: SettingsSection; label: string; icon: ReactNode }[] = [
     key: 'developer',
     label: 'Developer',
     icon: <Wrench size={14} />,
+  },
+  {
+    key: 'about',
+    label: 'About',
+    icon: <PackageCheck size={14} />,
   },
 ];
 

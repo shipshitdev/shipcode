@@ -1,5 +1,6 @@
 import type { GitHubIssueComment } from '@shipcode/shared';
-import { Button, LoadingButtonContent, Textarea } from '@shipshitdev/ui';
+import { Button, Textarea } from '@shipshitdev/ui';
+import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';

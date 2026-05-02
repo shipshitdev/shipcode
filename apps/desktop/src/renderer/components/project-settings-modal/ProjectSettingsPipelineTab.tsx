@@ -2,7 +2,6 @@ import type { AppSettings, Project } from '@shipcode/shared';
 import { resolveRequireApproval, resolveRevisionCount } from '@shipcode/shared';
 import {
   Button,
-  LoadingButtonContent,
   Select,
   SelectContent,
   SelectItem,
@@ -10,6 +9,7 @@ import {
   SelectValue,
   SettingsRow,
 } from '@shipshitdev/ui';
+import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import type { Dispatch, SetStateAction } from 'react';
 import type { ProjectOverrideState } from './shared';
 

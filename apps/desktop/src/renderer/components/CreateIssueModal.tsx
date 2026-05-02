@@ -18,7 +18,6 @@ import {
   Input,
   Keycap,
   Label,
-  LoadingButtonContent,
   Modal,
   ModalFooter,
   Select,
@@ -28,6 +27,7 @@ import {
   SelectValue,
   Textarea,
 } from '@shipshitdev/ui';
+import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
 import { ImageIcon, Mic, Square, Trash2 } from 'lucide-react';

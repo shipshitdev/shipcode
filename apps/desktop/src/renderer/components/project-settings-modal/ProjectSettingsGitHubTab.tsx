@@ -5,7 +5,8 @@ import {
   SHIPCODE_DEFAULT_LABELS,
   SHIPCODE_METADATA_LABELS,
 } from '@shipcode/shared';
-import { Button, LoadingButtonContent, SettingsRow } from '@shipshitdev/ui';
+import { Button, SettingsRow } from '@shipshitdev/ui';
+import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 

@@ -178,6 +178,7 @@ export function AddProjectExplorer() {
       onClose={close}
       title="Add Repository"
       className="max-w-[580px] h-[480px] flex flex-col p-0 gap-0"
+      headerClassName="px-4 py-3 border-b border-border"
       onKeyDown={handleKeyDown}
     >
       {/* ── Path bar ──────────────────────────────────────────────── */}
@@ -261,8 +262,7 @@ export function AddProjectExplorer() {
               'flex w-full items-center gap-2.5 px-4 py-2 text-sm text-left transition-colors hover:bg-hover',
               i === selectedIndex && 'bg-hover text-primary',
             )}
-            onClick={() => setSelectedIndex(i)}
-            onDoubleClick={() => navigateTo(entry.absolutePath)}
+            onClick={() => navigateTo(entry.absolutePath)}
           >
             <Folder size={14} className="shrink-0 text-muted" />
             <span className="truncate flex-1">{entry.name}</span>

@@ -1,7 +1,6 @@
 import { type ContextFileInfo, formatBytes } from '@shipcode/shared';
 import {
   Button,
-  LoadingButtonContent,
   Select,
   SelectContent,
   SelectItem,
@@ -9,6 +8,7 @@ import {
   SelectValue,
   SettingsRow,
 } from '@shipshitdev/ui';
+import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import type { ContextGeneratorCli } from './shared';
 
 export function ProjectSettingsContextTab({

@@ -12,7 +12,6 @@ import {
   Input,
   Keycap,
   Label,
-  LoadingButtonContent,
   Modal,
   ModalFooter,
   Select,
@@ -23,6 +22,7 @@ import {
   Switch,
   Textarea,
 } from '@shipshitdev/ui';
+import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Cron } from 'croner';
 import log from 'electron-log/renderer';

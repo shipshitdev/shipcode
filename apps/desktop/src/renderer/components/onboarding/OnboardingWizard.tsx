@@ -1,6 +1,7 @@
 import type { AgentType, GhAuthStatus, SystemHealth } from '@shipcode/shared';
 import { CURRENT_ONBOARDING_VERSION } from '@shipcode/shared';
-import { Button, Card, LoadingButtonContent } from '@shipshitdev/ui';
+import { Button, Card } from '@shipshitdev/ui';
+import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useEffect, useState } from 'react';
 import { StepAuthCheck, useAuthCheck } from './StepAuthCheck';
 import { StepModelPrefs } from './StepModelPrefs';

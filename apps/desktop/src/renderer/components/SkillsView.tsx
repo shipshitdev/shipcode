@@ -4,7 +4,6 @@ import {
   Badge,
   Button,
   cn,
-  LoadingButtonContent,
   Select,
   SelectContent,
   SelectItem,
@@ -13,6 +12,7 @@ import {
   Skeleton,
   Textarea,
 } from '@shipshitdev/ui';
+import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '../stores/app-store';

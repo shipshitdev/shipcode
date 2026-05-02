@@ -9,7 +9,7 @@ import {
   SettingsRow,
 } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FolderOpen, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { useEffect } from 'react';
 
 const UPDATE_TRACK_OPTIONS: Array<{
@@ -122,24 +122,6 @@ export function AboutSettingsSection({
             </SelectContent>
           </Select>
         </SettingsRow>
-
-        <div className="flex items-center justify-between gap-4 px-4 py-4">
-          <div className="min-w-0">
-            <p className="text-sm text-primary">Diagnostics</p>
-            <p className="mt-0.5 text-xs text-muted">Local trace directory.</p>
-            <code className="mt-2 block truncate font-mono text-xs text-secondary">
-              {info?.logDirectoryPath ?? '...'}
-            </code>
-          </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => void window.shipcode.invoke('developer:open-log-directory')}
-          >
-            <FolderOpen size={14} className="mr-1.5" />
-            Open logs folder
-          </Button>
-        </div>
       </section>
     </>
   );

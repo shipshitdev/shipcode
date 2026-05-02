@@ -44,7 +44,9 @@ export function Modal({
       }}
     >
       <DialogContent className={className} onKeyDown={onKeyDown}>
-        <DialogHeader className={cn('flex-row items-center justify-between mb-0', headerClassName)}>
+        <DialogHeader
+          className={cn('flex-row items-center justify-between gap-2 mb-0', headerClassName)}
+        >
           <DialogTitle>{title}</DialogTitle>
           {headerAction}
           <DialogClose

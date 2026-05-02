@@ -4,7 +4,6 @@ import {
   Badge,
   Button,
   cn,
-  LoadingButtonContent,
   Select,
   SelectContent,
   SelectItem,
@@ -12,6 +11,7 @@ import {
   SelectValue,
   Textarea,
 } from '@shipshitdev/ui';
+import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { ChevronDown, ChevronUp, Copy, ExternalLink } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import {

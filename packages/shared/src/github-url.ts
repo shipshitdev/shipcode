@@ -141,6 +141,23 @@ export function deriveGithubIssueUrl(
   return base ? `${base}/issues/${issueNumber}` : null;
 }
 
+/**
+ * GitHub compare URL: `https://github.com/<owner>/<repo>/compare/<base>...<branch>`
+ *
+ * Returns `null` when any input is missing or the remote is not parseable.
+ */
+export function githubCompareUrl(
+  remote: string | null | undefined,
+  base: string | null | undefined,
+  branch: string | null | undefined,
+): string | null {
+  if (!base || !branch) return null;
+  const repoBase = githubRepoUrl(remote);
+  return repoBase
+    ? `${repoBase}/compare/${encodeURIComponent(base)}...${encodeURIComponent(branch)}`
+    : null;
+}
+
 export interface ParsedGithubProject {
   /** Whether the project lives under an organization or a user. */
   ownerType: 'orgs' | 'users';

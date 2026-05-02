@@ -12,7 +12,8 @@ import {
   type RepoSetupEnvFile,
   validateGithubProjectUrl,
 } from '@shipcode/shared';
-import { Button, Keycap, LoadingButtonContent, Modal, ModalFooter } from '@shipshitdev/ui';
+import { Button, Keycap, Modal, ModalFooter } from '@shipshitdev/ui';
+import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
 import { Bell, Code2, FolderGit, Settings, Terminal, Workflow } from 'lucide-react';

@@ -1,5 +1,6 @@
 import type { PullRequestState } from '@shipcode/shared';
-import { Button, LoadingButtonContent } from '@shipshitdev/ui';
+import { Button } from '@shipshitdev/ui';
+import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useState } from 'react';
 import { useAppStore } from '../../stores/app-store';
 

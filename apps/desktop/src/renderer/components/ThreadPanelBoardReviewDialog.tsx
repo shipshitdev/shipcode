@@ -1,4 +1,5 @@
-import { Button, LoadingButtonContent, Modal, ModalFooter } from '@shipshitdev/ui';
+import { Button, Modal, ModalFooter } from '@shipshitdev/ui';
+import { LoadingButtonContent } from '@shipshitdev/ui/common';
 
 interface ThreadPanelBoardReviewDialogProps {
   count: number;

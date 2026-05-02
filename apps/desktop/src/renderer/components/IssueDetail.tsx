@@ -43,8 +43,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  LoadingButtonContent,
 } from '@shipshitdev/ui';
+import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Archive,

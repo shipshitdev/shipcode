@@ -8,7 +8,7 @@
     "@shipcode/pipeline": "workspace:*",
     "@shipcode/shared": "workspace:*",
     "@shipcode/ui": "workspace:*",
-    "@shipshitdev/ui": "0.6.2",
+    "@shipshitdev/ui": "0.7.0",
     "@tanstack/react-query": "5.100.8",
     "@tanstack/react-virtual": "^3.13.24",
     "@xterm/addon-fit": "0.11.0",

@@ -22,7 +22,6 @@ import {
   Badge,
   Button,
   Input,
-  LoadingButtonContent,
   Select,
   SelectContent,
   SelectGroup,
@@ -32,6 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@shipshitdev/ui';
+import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { ExternalLink } from 'lucide-react';
 import {
   formatProviderSelectionLabel,

@@ -11,6 +11,7 @@ export {
   isAutomationIssue,
   resolveIssuePriorityBadge,
 } from './kanban-board/utils';
+export { LoadingButtonContent } from './LoadingButtonContent';
 export type { PageHeaderProps } from './PageHeader';
 export { PageHeader } from './PageHeader';
 export { PhaseChip } from './PhaseChip';

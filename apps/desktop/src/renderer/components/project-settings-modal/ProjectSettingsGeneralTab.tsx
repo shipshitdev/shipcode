@@ -2,7 +2,6 @@ import type { Project } from '@shipcode/shared';
 import {
   Button,
   Input,
-  LoadingButtonContent,
   Select,
   SelectContent,
   SelectGroup,
@@ -13,6 +12,7 @@ import {
   SelectValue,
   SettingsRow,
 } from '@shipshitdev/ui';
+import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { RefreshCw } from 'lucide-react';
 
 export function ProjectSettingsGeneralTab({

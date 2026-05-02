@@ -7,7 +7,6 @@ import type {
 import {
   Button,
   Input,
-  LoadingButtonContent,
   Select,
   SelectContent,
   SelectItem,
@@ -19,6 +18,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '@shipshitdev/ui';
+import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { FolderGit, Sparkles, Terminal } from 'lucide-react';
 import { useState } from 'react';
 import { StatusPill } from './StatusPill';

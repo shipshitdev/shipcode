@@ -694,7 +694,7 @@ export function KanbanBoard({
       {showRefreshToast && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
           <div className="flex items-center gap-2 rounded-lg border border-border bg-elevated px-3 py-2 shadow-lg text-xs text-secondary">
-            <RefreshCw size={12} className="text-muted" />
+            <RefreshCw size={12} className="animate-spin text-muted" />
             Board refreshed
           </div>
         </div>
