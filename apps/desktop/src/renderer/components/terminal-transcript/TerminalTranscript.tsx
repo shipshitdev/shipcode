@@ -1,5 +1,5 @@
 import type { CanonicalTerminalEvent, TerminalEventRecord } from '@shipcode/shared';
-import { ERROR_PATTERNS } from '@shipcode/shared';
+import { ERROR_PATTERNS, formatClockTime } from '@shipcode/shared';
 import { Badge, Button, cn } from '@shipshitdev/ui';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -33,15 +33,6 @@ function stripAnsi(value: string): string {
   return value.replace(ANSI_RE, '');
 }
 
-function formatClock(isoLike: string): string {
-  return new Date(isoLike).toLocaleTimeString('en-US', {
-    hour12: false,
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-}
-
 function formatTokens(usage: { prompt: number; completion: number } | undefined, costUsd?: number) {
   const parts: string[] = [];
   if (usage) parts.push(`${usage.prompt}+${usage.completion} tok`);
@@ -65,7 +56,7 @@ function TranscriptMeta({
         compact && 'text-[9px]',
       )}
     >
-      <span>{formatClock(createdAt)}</span>
+      <span>{formatClockTime(createdAt)}</span>
       {children}
     </div>
   );
