@@ -4,6 +4,7 @@ export * from './branches';
 export * from './cli-model-capabilities';
 export * from './constants';
 export * from './errors';
+export * from './format-bytes';
 export * from './format-clock-time';
 export * from './format-cost';
 export * from './format-duration';

@@ -1,9 +1,10 @@
-import type {
-  CodeFileContent,
-  CodeTreeEntry,
-  DiffRecord,
-  GitVisualizerData,
-  GitWorktreeSummary,
+import {
+  type CodeFileContent,
+  type CodeTreeEntry,
+  type DiffRecord,
+  formatBytes,
+  type GitVisualizerData,
+  type GitWorktreeSummary,
 } from '@shipcode/shared';
 import { SideBySideDiffViewer, SyntaxHighlightedCode } from '@shipcode/ui';
 import {
@@ -132,13 +133,6 @@ function TreeNode({
   );
 }
 
-function formatSize(bytes: number | null): string {
-  if (bytes == null) return '';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 function FileViewer({
   projectId,
   worktreePath,
@@ -174,7 +168,7 @@ function FileViewer({
           <Code2 size={12} className="shrink-0 text-muted" />
           <span className="truncate font-mono">{relativePath}</span>
           {file && !file.isBinary && (
-            <span className="text-[10px] text-muted">{formatSize(file.sizeBytes)}</span>
+            <span className="text-[10px] text-muted">{formatBytes(file.sizeBytes)}</span>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -208,14 +202,14 @@ function FileViewer({
             <div className="p-4 text-xs text-muted">No file selected</div>
           ) : file.isBinary ? (
             <div className="p-4 text-xs text-muted">
-              Binary file ({formatSize(file.sizeBytes)}) — preview unavailable.
+              Binary file ({formatBytes(file.sizeBytes)}) — preview unavailable.
             </div>
           ) : (
             <>
               {file.truncated && (
                 <div className="border-b border-border bg-amber-500/10 px-3 py-1.5 text-[11px] text-amber-500">
-                  File truncated — showing first {formatSize(file.content.length)} of{' '}
-                  {formatSize(file.sizeBytes)}.
+                  File truncated — showing first {formatBytes(file.content.length)} of{' '}
+                  {formatBytes(file.sizeBytes)}.
                 </div>
               )}
               <SyntaxHighlightedCode code={file.content} filePath={relativePath} className="p-3" />

@@ -2,6 +2,7 @@ import {
   bodyHasRequiredPrdSections,
   buildPrdMetadataLabels,
   clampError,
+  formatBytes,
   type GitHubIssueCacheRecord,
   ISSUE_PIPELINE_STATUS,
   PRD_REQUIRED_HEADINGS,
@@ -49,12 +50,6 @@ function deriveTitleFromBody(body: string): string {
   const heading = lines.find((l) => l.startsWith('# '));
   const raw = heading ? heading.replace(/^#\s+/, '').replace(/^PRD:\s*/i, '') : (lines[0] ?? '');
   return raw.slice(0, 80).trim();
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function upsertIssueRecord(

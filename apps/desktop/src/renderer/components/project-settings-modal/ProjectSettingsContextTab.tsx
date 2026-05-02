@@ -1,4 +1,4 @@
-import type { ContextFileInfo } from '@shipcode/shared';
+import { type ContextFileInfo, formatBytes } from '@shipcode/shared';
 import {
   Button,
   LoadingButtonContent,
@@ -55,9 +55,7 @@ export function ProjectSettingsContextTab({
                   )}
                   <span className="font-mono text-[12px] text-primary">{name}</span>
                   {file?.exists && file.size != null ? (
-                    <span className="ml-auto text-[11px] text-muted">
-                      {file.size < 1024 ? `${file.size} B` : `${(file.size / 1024).toFixed(1)} KB`}
-                    </span>
+                    <span className="ml-auto text-[11px] text-muted">{formatBytes(file.size)}</span>
                   ) : null}
                 </div>
               );
