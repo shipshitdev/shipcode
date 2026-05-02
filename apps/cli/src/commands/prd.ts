@@ -29,7 +29,7 @@ export async function prdCommand(keywords: string) {
     skillContent = fs.readFileSync(skillPath, 'utf-8');
   } else {
     console.log('No writing-prds skill found in repo. Using default template.\n');
-    skillContent = `Write a comprehensive PRD with sections: Executive Summary, Problem Statement, Goals, Non-Goals, Functional Requirements, Acceptance Criteria, Verification Plan.`;
+    skillContent = `Write a comprehensive PRD with sections: Executive Summary, Problem Statement, Goals, Non-Goals, User Stories, System Specification, Functional Requirements, Non-Functional Requirements, Feature Phase Breakdown, Success Criteria, Out of Scope, Dependencies, Verification Plan, Risks & Open Questions. Feature Phase Breakdown must contain exactly three ordered phases.`;
   }
 
   // Check if there's an existing issue to enhance

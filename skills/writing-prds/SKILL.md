@@ -86,6 +86,11 @@ Avoid "users might want..." — if you can't name the user, you don't have a pro
 - As a <role>, I want <capability> so that <outcome>.
 - Each story ends with "**Acceptance:**" followed by 1–3 concrete checks.
 
+## System Specification
+<Observable system contract for the feature. Include user-visible states, data
+contracts, permissions/trust boundaries, failure behavior, and integration
+points. Do not name files, functions, libraries, or implementation details.>
+
 ## Functional Requirements
 <Numbered list. Each item must be verifiable by reading code or running it.
 NO implementation details — "the system must do X", not "use Zustand to do X".>
@@ -93,6 +98,17 @@ NO implementation details — "the system must do X", not "use Zustand to do X".
 ## Non-Functional Requirements
 <Performance, accessibility, error-handling, offline, observability.
 Only list the ones that actually matter for this feature.>
+
+## Feature Phase Breakdown
+<Exactly three product-level phases, in order. These are the phases the planner
+must translate into the three ordered ShipCodePlan steps.
+1. Foundation/spec plumbing — contracts, persistence, configuration, or shared
+   surfaces needed before behavior can be implemented.
+2. Primary feature behavior — the actual user/system capability.
+3. Hardening/verification/shipping polish — tests, error handling,
+   observability, docs, or UI polish needed to ship confidently.
+Each phase must include: purpose, in-scope behavior, out-of-scope behavior, and
+a concrete completion signal.>
 
 ## Success Criteria
 <The bar the pipeline's verification phase will check against.
@@ -126,7 +142,9 @@ A PRD is read by the planner agent. Every section has a downstream consumer:
 | PRD section | Feeds | Consumer |
 |---|---|---|
 | Executive Summary | `PlanStructured.objective` | Plan display, PR title, kanban card |
+| System Specification | Plan `objective`, `dependencies`, step rationale | Planner + reviewer |
 | Goals + Functional Requirements | Plan `steps` | Planner agent decomposition |
+| Feature Phase Breakdown | Exactly three ordered plan steps | Planner + task graph execution |
 | Success Criteria | `PlanStructured.acceptanceCriteria` | Verification phase |
 | Out of Scope | `PlanStructured.outOfScope` | Review phase (rejects scope creep) |
 | `estimated_complexity` frontmatter | `PlanStructured.estimatedComplexity` | Review rubric, retry budget |
@@ -144,6 +162,8 @@ Before saving a PRD with `status: backlog` (i.e. ready for the pipeline to consu
 - [ ] `Success Criteria` has at least one bullet, and every bullet is **verifiable without judgement** — it either passes or fails. "Feels fast" is not verifiable. "p95 latency < 300ms on the issues query" is.
 - [ ] `Out of Scope` has at least one bullet. Empty `Out of Scope` is a tell that the author didn't scope the feature.
 - [ ] `User Stories` has at least one story with explicit Acceptance bullets.
+- [ ] `System Specification` names the observable states, data contracts, permissions/trust boundaries, and failure behavior that matter for the feature.
+- [ ] `Feature Phase Breakdown` contains exactly three ordered phases, and each phase has a purpose, scope, and completion signal.
 - [ ] Every external dependency in `Dependencies` is named (package, PRD path, or URL), not described vaguely.
 - [ ] `Verification Plan` names either test file paths, suite names, or concrete manual steps — not "write some tests".
 
@@ -180,7 +200,7 @@ If any gate fails, keep `status: draft` and do not offer "Start pipeline" in the
 
 1. Fetch the current issue body via the cache (`github_issue_cache.body`) or `gh issue view <N> --json body --jq .body` if the cache may be stale. Read it fully before producing anything.
 2. Verify frontmatter `status` is `backlog` or `active` — never plan a `draft`.
-3. Translate directly: Executive Summary → objective, Success Criteria → acceptanceCriteria, Out of Scope → outOfScope, `estimated_complexity` → estimatedComplexity.
+3. Translate directly: Executive Summary → objective, Feature Phase Breakdown → exactly three ordered plan steps, Success Criteria → acceptanceCriteria, Out of Scope → outOfScope, `estimated_complexity` → estimatedComplexity.
 4. The plan phase owns file changes and step breakdown — do not copy those out of the PRD (there shouldn't be any).
 
 ### When the user says "update the X PRD"
@@ -248,6 +268,14 @@ through IssueDetail. This is pure friction — the URL is already known.
   - Clicking it results in the URL being on the system clipboard.
   - A toast appears within 200ms confirming the copy.
 
+## System Specification
+- Cards expose a context menu action surface without changing click-to-open
+  behavior or drag behavior.
+- The copied value is the canonical GitHub issue URL for the card's project
+  and issue number.
+- Clipboard failures surface a user-visible error state instead of failing
+  silently.
+
 ## Functional Requirements
 1. The kanban card component must support a right-click context menu.
 2. The context menu must include an action labeled "Copy URL".
@@ -259,6 +287,15 @@ through IssueDetail. This is pure friction — the URL is already known.
 ## Non-Functional Requirements
 - Clipboard write must succeed or fail cleanly — no silent failures. On
   permission denial, surface an error toast.
+
+## Feature Phase Breakdown
+1. Foundation/spec plumbing — identify the existing kanban action surface,
+   URL source, and toast primitive; completion signal is a plan that names the
+   exact data source and reusable UI primitive.
+2. Primary feature behavior — add the context menu action and clipboard write;
+   completion signal is a card action that copies the correct URL.
+3. Hardening/verification/shipping polish — cover success and failure paths;
+   completion signal is passing focused tests plus manual paste verification.
 
 ## Success Criteria
 - Right-clicking any kanban card opens a context menu with a "Copy URL" item.

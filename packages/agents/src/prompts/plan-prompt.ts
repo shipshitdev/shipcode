@@ -18,7 +18,9 @@ const PLAN_SCHEMA_DESCRIPTION = `{
     { "path": "src/file.ts", "action": "create|modify|delete|rename", "description": "What changes" }
   ],
   "steps": [
-    { "order": 1, "description": "Step description", "files": ["src/file.ts"], "rationale": "Why this step" }
+    { "order": 1, "description": "System/spec foundation phase", "files": ["src/file.ts"], "rationale": "Why this phase comes first" },
+    { "order": 2, "description": "Primary feature implementation phase", "files": ["src/file.ts"], "rationale": "Why this phase comes second" },
+    { "order": 3, "description": "Hardening and verification phase", "files": ["src/file.ts"], "rationale": "Why this phase completes the work" }
   ],
   "acceptanceCriteria": ["Criteria 1", "Criteria 2"],
   "outOfScope": ["What this does NOT do"],
@@ -109,7 +111,9 @@ ${truncated}
 
 Fix the format: wrap your plan JSON in exactly \`\`\`${PLAN_FENCE_TAG} ... \`\`\` and ensure
 all required fields (id, threadId, version, objective, files, steps, acceptanceCriteria,
-outOfScope, estimatedComplexity, dependencies) are present.
+outOfScope, estimatedComplexity, dependencies) are present. The plan must contain exactly
+three steps ordered 1, 2, 3; every step must reference declared files; every declared file
+must appear in at least one step.
 </previous_attempt_failed>`;
 }
 

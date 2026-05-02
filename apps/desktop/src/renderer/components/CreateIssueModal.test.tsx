@@ -111,7 +111,7 @@ describe('CreateIssueModal — image drop / attachment management', () => {
     useAppStore.setState({
       editingPrd: {
         issueNumber: 42,
-        body: '# My PRD\n## Executive Summary\n## Problem Statement\n## Goals\n## Non-Goals\n## User Stories\n## Functional Requirements\n## Non-Functional Requirements\n## Success Criteria\n## Out of Scope\n## Dependencies\n## Verification Plan\n## Risks & Open Questions',
+        body: '# My PRD\n## Executive Summary\n## Problem Statement\n## Goals\n## Non-Goals\n## User Stories\n## System Specification\n## Functional Requirements\n## Non-Functional Requirements\n## Feature Phase Breakdown\n## Success Criteria\n## Out of Scope\n## Dependencies\n## Verification Plan\n## Risks & Open Questions',
         labels: [],
       },
     } as never);

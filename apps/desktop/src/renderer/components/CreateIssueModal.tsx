@@ -4,8 +4,8 @@ import {
   clampError,
   formatBytes,
   type GitHubIssueCacheRecord,
+  getMissingRequiredPrdSections,
   ISSUE_PIPELINE_STATUS,
-  PRD_REQUIRED_HEADINGS,
   type PrdBlastRadius,
   type PrdEstimatedComplexity,
   type Project,
@@ -322,10 +322,7 @@ export function CreateIssueModal() {
   // ---------------------------------------------------------------------------
 
   const editBodyValid = bodyHasRequiredPrdSections(body);
-  const missingSections = useMemo(
-    () => PRD_REQUIRED_HEADINGS.filter((h) => !body.includes(h)),
-    [body],
-  );
+  const missingSections = useMemo(() => getMissingRequiredPrdSections(body), [body]);
   const clampedError = useMemo(() => (error ? clampError(error) : null), [error]);
   const derivedTitle = useMemo(() => deriveTitleFromBody(body), [body]);
   const metadataLabels = useMemo(

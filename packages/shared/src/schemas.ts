@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const planStepSchema = z.object({
   order: z.number().int().positive(),
   description: z.string().min(1),
-  files: z.array(z.string()),
+  files: z.array(z.string().min(1)).min(1),
   rationale: z.string().min(1),
 });
 
@@ -14,18 +14,55 @@ export const planFileChangeSchema = z.object({
   fromPath: z.string().optional(),
 });
 
-export const shipCodePlanSchema = z.object({
-  id: z.string().min(1),
-  threadId: z.string().min(1),
-  version: z.number().int().positive(),
-  objective: z.string().min(1),
-  files: z.array(planFileChangeSchema),
-  steps: z.array(planStepSchema),
-  acceptanceCriteria: z.array(z.string()),
-  outOfScope: z.array(z.string()),
-  estimatedComplexity: z.enum(['low', 'medium', 'high']),
-  dependencies: z.array(z.string()),
-});
+export const shipCodePlanSchema = z
+  .object({
+    id: z.string().min(1),
+    threadId: z.string().min(1),
+    version: z.number().int().positive(),
+    objective: z.string().min(1),
+    files: z.array(planFileChangeSchema).min(1),
+    steps: z.array(planStepSchema).length(3),
+    acceptanceCriteria: z.array(z.string().min(1)).min(1),
+    outOfScope: z.array(z.string().min(1)).min(1),
+    estimatedComplexity: z.enum(['low', 'medium', 'high']),
+    dependencies: z.array(z.string().min(1)),
+  })
+  .superRefine((plan, ctx) => {
+    const declaredFiles = new Set(plan.files.map((file) => file.path));
+    const referencedFiles = new Set<string>();
+
+    for (const [index, step] of plan.steps.entries()) {
+      const expectedOrder = index + 1;
+      if (step.order !== expectedOrder) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['steps', index, 'order'],
+          message: `Plan steps must be ordered sequentially; expected ${expectedOrder}.`,
+        });
+      }
+
+      for (const file of step.files) {
+        referencedFiles.add(file);
+        if (!declaredFiles.has(file)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['steps', index, 'files'],
+            message: `Step references undeclared file: ${file}`,
+          });
+        }
+      }
+    }
+
+    for (const [index, file] of plan.files.entries()) {
+      if (!referencedFiles.has(file.path)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['files', index, 'path'],
+          message: `Declared file is not referenced by any step: ${file.path}`,
+        });
+      }
+    }
+  });
 
 export const clarificationChoiceSchema = z.object({
   id: z.string().min(1),

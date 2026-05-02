@@ -191,9 +191,17 @@ export const REQUIRED_PRD_SECTIONS = [
   'Executive Summary',
   'Problem Statement',
   'Goals',
+  'Non-Goals',
+  'User Stories',
+  'System Specification',
   'Functional Requirements',
-  'Acceptance Criteria',
+  'Non-Functional Requirements',
+  'Feature Phase Breakdown',
+  'Success Criteria',
+  'Out of Scope',
+  'Dependencies',
   'Verification Plan',
+  'Risks & Open Questions',
 ] as const;
 
 // === OpenRouter ===

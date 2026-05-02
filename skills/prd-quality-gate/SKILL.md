@@ -12,9 +12,24 @@ Required sections:
 - Executive Summary
 - Problem Statement
 - Goals
+- Non-Goals
+- User Stories
+- System Specification
 - Functional Requirements
-- Acceptance Criteria
+- Non-Functional Requirements
+- Feature Phase Breakdown
+- Success Criteria
+- Out of Scope
+- Dependencies
 - Verification Plan
+- Risks & Open Questions
+
+Additional quality rules:
+- Feature Phase Breakdown must describe exactly three ordered phases.
+- Success Criteria and Out of Scope must each contain at least one concrete
+  bullet.
+- System Specification must cover observable behavior and boundaries, not
+  implementation file names.
 
 When the quality gate is ENABLED (blocking):
 - Missing any required section → pipeline fails immediately with an actionable message

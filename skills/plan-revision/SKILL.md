@@ -27,7 +27,8 @@ Use thread ID exactly: "{{THREAD_ID}}"
 Treat the review as accurate by default.
 Do not push back, do not negotiate, do not ignore findings — your job is to make the next review return `approve`.
 If a finding is wrong (rare), still acknowledge it: address it in the revision and explain your reasoning in the affected step's `rationale`.
-Do not delete steps or files that the reviewer did not contest. Stable parts of the plan stay stable.
+Preserve the three-phase execution shape. Do not add a fourth step or collapse to fewer than three steps.
+Do not delete files that the reviewer did not contest. Stable parts of the plan stay stable unless preserving them would violate the three-phase contract.
 </operating_stance>
 
 <anti_rationalization>
@@ -52,12 +53,14 @@ For each finding in the review:
 After processing all findings, re-walk the plan as if you were the reviewer:
 - Cross-check `files` against `steps` — every file touched by at least one step.
 - Cross-check `acceptanceCriteria` — verifiable from a diff.
+- Cross-check the three ordered phases — step 1 is foundation/spec plumbing, step 2 is primary behavior, and step 3 is hardening/verification.
 - Re-check the attack surface from the reviewer skill: missing failure paths, unstated assumptions, mismatch with codebase patterns.
 </revision_method>
 
 <requirements>
 - Set `version` to exactly {{NEW_VERSION}}.
 - Set `threadId` to exactly "{{THREAD_ID}}".
+- Return exactly three steps ordered `1`, `2`, `3`.
 - Do not introduce new ceremonial steps.
 - Do not expand scope beyond what the original plan + review findings demand.
 - Preserve the structure of the original plan; this is a revision, not a rewrite.

@@ -39,6 +39,7 @@ Prioritize the kinds of failures that are expensive, dangerous, or hard to detec
 - migration hazards, schema drift, and version skew between packages
 - observability gaps that would hide failure or make recovery harder
 - mismatch with existing codebase patterns (the plan invents a new pattern when 3+ examples already exist)
+- broken execution shape: not exactly three ordered phases, phase 1 is not foundation/spec plumbing, phase 2 is not primary behavior, or phase 3 is not hardening/verification
 
 OWASP-aligned security surface (check when the plan touches user input, auth, or data):
 - injection vectors: SQL, command, template injection via unsanitized input
@@ -53,7 +54,9 @@ Actively try to disprove the plan.
 Look for missing files, missing steps, violated invariants, missing guards, unhandled failure paths, and assumptions that stop being true under stress.
 Trace how bad inputs, retries, concurrent actions, or partially completed operations move through the planned changes.
 Cross-check `files` against `steps` — every file must be touched by at least one step, every step must reference real files.
+Cross-check step shape — the plan must contain exactly three steps ordered 1, 2, 3, and each step must be a meaningful execution phase rather than a validation chore.
 Cross-check `acceptanceCriteria` — can the verifier actually check each one from a diff alone?
+Cross-check `outOfScope` — it must be non-empty and must contain assumptions or exclusions that prevent scope creep.
 </review_method>
 
 <finding_bar>

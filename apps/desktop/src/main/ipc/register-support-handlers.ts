@@ -123,8 +123,9 @@ export function registerSupportHandlers({
         skillContent =
           "You are drafting a PRD that will be consumed by the ShipCode pipeline's planner agent. " +
           'The PRD lives in a GitHub issue body. Required sections: Executive Summary, Problem Statement, ' +
-          'Goals, Non-Goals, User Stories, Functional Requirements, Non-Functional Requirements, ' +
-          'Success Criteria, Out of Scope, Dependencies, Verification Plan, Risks & Open Questions.';
+          'Goals, Non-Goals, User Stories, System Specification, Functional Requirements, ' +
+          'Non-Functional Requirements, Feature Phase Breakdown, Success Criteria, Out of Scope, ' +
+          'Dependencies, Verification Plan, Risks & Open Questions. Feature Phase Breakdown must contain exactly three ordered phases.';
       }
 
       try {

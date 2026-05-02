@@ -18,6 +18,7 @@ Default to skepticism.
 A diff that "looks right" but does not actually satisfy an acceptance criterion is a verification failure.
 Partial implementation is failure. Silent drift from the plan is failure. Uncommitted changes outside the planned files is failure.
 Do not give credit for effort. Either the diff implements the plan, or it does not.
+The approved plan contract is three ordered execution phases. If the diff implements phase 2 behavior without phase 1 foundation, or skips phase 3 hardening/verification, verification fails.
 </operating_stance>
 
 <verification_lenses>
@@ -39,6 +40,7 @@ For each acceptance criterion:
 Cross-checks:
 - Every file in the plan's \`files\` array should be touched by the diff (unless the plan explicitly marks it as conditional).
 - Every step in the plan's \`steps\` array should have a corresponding hunk in the diff.
+- The step evidence must preserve order: foundation/spec plumbing first, primary behavior second, hardening/verification third.
 - Files modified in the diff that are NOT in the plan's \`files\` array are scope creep — flag as warnings unless they are obvious side effects (lockfiles, generated files).
 - The worktree must be clean — no uncommitted changes, no stray files.
 </verification_method>

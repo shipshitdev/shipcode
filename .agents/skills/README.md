@@ -17,6 +17,7 @@ They are Claude Code developer workflow tools: code patterns, linting validators
 | Backend | `api-design-expert`, `error-handling-expert`, `testing-expert`, `typescript-expert`, `typescript-refactor`, `biome-validator`, `bun-validator`, `scaffold`, `package-architect` |
 | DevOps | `docker-expert`, `turborepo`, `security-expert`, `security-audit` |
 | AI | `prompt-engineering`, `mcp-builder`, `claude-code-guide` |
+| Product planning | `writing-prds`, `prd-quality-gate`, `github-label-sync` |
 
 ## Adding a skill
 

@@ -23,7 +23,7 @@ Skills that ShipCode reads directly from each target repo at runtime:
 | [`writing-prds/SKILL.md`](./writing-prds/SKILL.md) | `register-github-handlers.ts` via `ai:enhance-prd` IPC | Style guide for enhancing GitHub issue bodies |
 | [`github-label-sync/SKILL.md`](./github-label-sync/SKILL.md) | ShipCode skill loader | Ensures required ShipCode labels exist on the repo |
 
-The pipeline loops through review → revise up to the configured `revisionCount` before either entering `awaiting_approval` (manual mode) or proceeding to execute (autonomous mode).
+The pipeline loops through review → revise up to the configured `revisionCount` before either entering `awaiting_approval` (manual mode) or proceeding to execute (autonomous mode). Approved plans must contain exactly three ordered execution phases: foundation/spec plumbing, primary feature behavior, and hardening/verification. That shape lets the task graph execute feature work one phase at a time instead of handing one large ambiguous blob to the executor.
 
 ## Format
 

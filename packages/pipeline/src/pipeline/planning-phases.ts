@@ -16,10 +16,10 @@ import {
   type AnsweredClarification,
   type ClarificationRequest,
   clampTextBlock,
+  getPrdQualityIssues,
   MAX_CLARIFICATION_ROUNDS,
   PIPELINE_MAX_RETRIES,
   type PlanRecord,
-  REQUIRED_PRD_SECTIONS,
   resolveRequireApproval,
   resolveRequireApprovalForIssue,
   resolveRevisionCount,
@@ -74,22 +74,6 @@ function buildClarificationContext(context: PipelineContext): string | null {
     ...blocks,
     'Produce a concrete plan now unless another user-owned product/security/destructive-data/billing/external-provider decision makes planning impossible.',
   ].join('\n\n');
-}
-
-/**
- * Scan a PRD (issue body / prompt) for required section headings.
- * Returns the list of section names that are MISSING.
- * Matching is case-insensitive against `##` or `###` markdown headings.
- */
-function checkPrdSections(prompt: string): string[] {
-  const headingPattern = /^#{2,3}\s+(.+)$/gm;
-  const found = new Set<string>();
-  while (true) {
-    const match = headingPattern.exec(prompt);
-    if (!match) break;
-    found.add(match[1].trim().toLowerCase());
-  }
-  return REQUIRED_PRD_SECTIONS.filter((section) => !found.has(section.toLowerCase()));
 }
 
 export function createPlanningPhaseHandlers({
@@ -316,28 +300,25 @@ export function createPlanningPhaseHandlers({
       return;
     }
 
-    // PRD quality gate — check issue body for required sections
-    const missingSections = checkPrdSections(prompt);
-    if (missingSections.length > 0) {
+    // PRD quality gate — check issue body for required sections and structure.
+    const qualityIssues = getPrdQualityIssues(prompt);
+    if (qualityIssues.length > 0) {
       const project = context.projectId ? deps.projects.getById(context.projectId) : null;
       const gateEnabled = project?.prdQualityGate === true;
-      const sectionList = missingSections.join(', ');
+      const issueList = qualityIssues.join('; ');
 
       if (gateEnabled) {
         emitPhase(
           threadId,
           'failed',
-          `PRD quality gate: missing sections — ${sectionList}. Update the issue body and re-trigger.`,
+          `PRD quality gate: ${issueList}. Update the issue body and re-trigger.`,
         );
         activePipelines.delete(threadId);
         return;
       }
 
       // Gate OFF (default) — post/log a warning and continue
-      emitTerminalLifecycle(
-        threadId,
-        `[prd-gate] Warning: PRD may be missing sections: ${sectionList}\r\n`,
-      );
+      emitTerminalLifecycle(threadId, `[prd-gate] Warning: PRD quality issues: ${issueList}\r\n`);
     }
 
     emitPhase(threadId, 'planning');

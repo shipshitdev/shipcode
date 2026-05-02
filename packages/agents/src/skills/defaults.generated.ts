@@ -2,9 +2,9 @@
 // Source files: skills/<phase>/SKILL.md at repo root.
 // Regenerate via: bun run build:skills
 
-import type { PhaseSkillKey } from '@shipcode/shared';
+import { type PhaseSkillKey } from '@shipcode/shared';
 
-export { PHASE_SKILL_KEYS, type PhaseSkillKey } from '@shipcode/shared';
+export { type PhaseSkillKey, PHASE_SKILL_KEYS } from '@shipcode/shared';
 
 export interface BundledDefault {
   /** Raw markdown including frontmatter. The loader strips frontmatter before sending to the provider. */
@@ -48,7 +48,11 @@ User task:
 <operating_stance>
 Treat the plan as an executable contract, not a sketch.
 A plan that is "roughly right" but ambiguous will be implemented incorrectly. Vagueness is a defect.
-Prefer fewer, larger, atomic steps over many small ceremonial ones — but every step must be independently verifiable.
+Every plan must have exactly three ordered execution phases. These are not ceremonial:
+1. System/spec foundation — contracts, shared types, persistence, configuration, or dependency surfaces needed before behavior.
+2. Primary feature behavior — the user-visible or system-visible capability.
+3. Hardening and verification — tests, failure handling, observability, docs, and final integration polish needed to ship.
+Each phase must be independently verifiable and must map to real files.
 Clarification is a last resort. Do not ask for routine implementation details, file placement, naming, copy, visual treatment, test strategy, or integration shape that can be inferred from the issue, repository context, or existing patterns.
 If missing information would materially change the plan but a low-risk default exists, choose the default, state the assumption in the relevant step rationale and \`outOfScope\`, and keep planning.
 Emit a structured clarification request only when there are multiple incompatible product, security, legal, destructive-data, billing, or external-provider decisions and no repo convention or task text makes one safe.
@@ -59,6 +63,8 @@ Before writing the plan, walk the codebase mentally:
 - Find at least 3 existing examples of similar code and match their shape (file naming, error handling, test layout, import order).
 - Identify which existing helpers should be reused instead of reinvented.
 - Decide what is in scope and what is explicitly out of scope.
+- If the PRD includes \`Feature Phase Breakdown\`, preserve its three-phase order in the plan steps.
+- If the PRD does not include \`Feature Phase Breakdown\`, synthesize exactly three ordered phases using the foundation → behavior → hardening structure above.
 - Identify the failure modes and where each step could go wrong.
 - Identify acceptance criteria that the verifier can check from a diff alone.
 
@@ -66,9 +72,12 @@ Then produce the plan. Every \`files\` entry must list a real, addressable path.
 </planning_method>
 
 <requirements>
-- Each step is atomic and independently verifiable.
+- The plan has exactly three steps ordered \`1\`, \`2\`, \`3\`; no more and no fewer.
+- Each step is an atomic execution phase and independently verifiable.
 - The \`files\` array lists ALL files that will be created, modified, or deleted — no surprises in the diff.
+- Every file in \`files\` appears in at least one step, and every step file appears in \`files\`.
 - \`acceptanceCriteria\` are written so a verifier with only the diff can check them.
+- \`acceptanceCriteria\` and \`outOfScope\` must both be non-empty.
 - \`outOfScope\` explicitly states what this plan does NOT do, including any assumption you made on the user's behalf.
 - \`dependencies\` lists any files, packages, or system state that must already exist for the plan to apply cleanly.
 - Use thread ID exactly: "{{THREAD_ID}}"
@@ -76,7 +85,7 @@ Then produce the plan. Every \`files\` entry must list a real, addressable path.
 </requirements>
 
 <finding_bar>
-Reject ceremonial steps. Do not include "run formatter", "run typecheck", "open the file" — those are not steps, they are reflexes.
+Reject ceremonial steps. The three required steps must be meaningful execution phases, not "run formatter", "run typecheck", or "open the file" — those are reflexes.
 Do not include speculative future work in \`steps\`. If it does not ship in this plan, it goes to \`outOfScope\`.
 </finding_bar>
 
@@ -95,8 +104,8 @@ If a step depends on a fact you cannot verify from the codebase, state the assum
 {{CONTEXT_FILES}}
 </repository_context>
 `,
-    version: '09b59cc30ab2bd3e',
-    requiredSlots: ['USER_PROMPT', 'THREAD_ID', 'OUTPUT_SCHEMA'] as const,
+    version: '889de8095a934158',
+    requiredSlots: ["USER_PROMPT","THREAD_ID","OUTPUT_SCHEMA"] as const,
     schemaVersion: 1,
   },
   'adversarial-review': {
@@ -141,6 +150,7 @@ Prioritize the kinds of failures that are expensive, dangerous, or hard to detec
 - migration hazards, schema drift, and version skew between packages
 - observability gaps that would hide failure or make recovery harder
 - mismatch with existing codebase patterns (the plan invents a new pattern when 3+ examples already exist)
+- broken execution shape: not exactly three ordered phases, phase 1 is not foundation/spec plumbing, phase 2 is not primary behavior, or phase 3 is not hardening/verification
 
 OWASP-aligned security surface (check when the plan touches user input, auth, or data):
 - injection vectors: SQL, command, template injection via unsanitized input
@@ -155,7 +165,9 @@ Actively try to disprove the plan.
 Look for missing files, missing steps, violated invariants, missing guards, unhandled failure paths, and assumptions that stop being true under stress.
 Trace how bad inputs, retries, concurrent actions, or partially completed operations move through the planned changes.
 Cross-check \`files\` against \`steps\` — every file must be touched by at least one step, every step must reference real files.
+Cross-check step shape — the plan must contain exactly three steps ordered 1, 2, 3, and each step must be a meaningful execution phase rather than a validation chore.
 Cross-check \`acceptanceCriteria\` — can the verifier actually check each one from a diff alone?
+Cross-check \`outOfScope\` — it must be non-empty and must contain assumptions or exclusions that prevent scope creep.
 </review_method>
 
 <finding_bar>
@@ -216,8 +228,8 @@ Before finalizing, check that each finding is:
 {{CONTEXT_FILES}}
 </repo_context>
 `,
-    version: '1b5a1a9f2ea2b6eb',
-    requiredSlots: ['PLAN_JSON', 'OUTPUT_SCHEMA'] as const,
+    version: 'a77e00a1016c70e4',
+    requiredSlots: ["PLAN_JSON","OUTPUT_SCHEMA"] as const,
     schemaVersion: 1,
   },
   'plan-revision': {
@@ -250,7 +262,8 @@ Use thread ID exactly: "{{THREAD_ID}}"
 Treat the review as accurate by default.
 Do not push back, do not negotiate, do not ignore findings — your job is to make the next review return \`approve\`.
 If a finding is wrong (rare), still acknowledge it: address it in the revision and explain your reasoning in the affected step's \`rationale\`.
-Do not delete steps or files that the reviewer did not contest. Stable parts of the plan stay stable.
+Preserve the three-phase execution shape. Do not add a fourth step or collapse to fewer than three steps.
+Do not delete files that the reviewer did not contest. Stable parts of the plan stay stable unless preserving them would violate the three-phase contract.
 </operating_stance>
 
 <anti_rationalization>
@@ -275,12 +288,14 @@ For each finding in the review:
 After processing all findings, re-walk the plan as if you were the reviewer:
 - Cross-check \`files\` against \`steps\` — every file touched by at least one step.
 - Cross-check \`acceptanceCriteria\` — verifiable from a diff.
+- Cross-check the three ordered phases — step 1 is foundation/spec plumbing, step 2 is primary behavior, and step 3 is hardening/verification.
 - Re-check the attack surface from the reviewer skill: missing failure paths, unstated assumptions, mismatch with codebase patterns.
 </revision_method>
 
 <requirements>
 - Set \`version\` to exactly {{NEW_VERSION}}.
 - Set \`threadId\` to exactly "{{THREAD_ID}}".
+- Return exactly three steps ordered \`1\`, \`2\`, \`3\`.
 - Do not introduce new ceremonial steps.
 - Do not expand scope beyond what the original plan + review findings demand.
 - Preserve the structure of the original plan; this is a revision, not a rewrite.
@@ -304,14 +319,8 @@ Every claim in a \`rationale\` must be defensible from the plan or repo state �
 {{REVIEW_FEEDBACK}}
 </review_feedback>
 `,
-    version: '8c247b1b7a725b63',
-    requiredSlots: [
-      'ORIGINAL_PLAN',
-      'REVIEW_FEEDBACK',
-      'THREAD_ID',
-      'NEW_VERSION',
-      'OUTPUT_SCHEMA',
-    ] as const,
+    version: 'f3f11e200f871c40',
+    requiredSlots: ["ORIGINAL_PLAN","REVIEW_FEEDBACK","THREAD_ID","NEW_VERSION","OUTPUT_SCHEMA"] as const,
     schemaVersion: 1,
   },
   'plan-execution': {
@@ -334,6 +343,7 @@ Your job is to apply that plan to the repository — write the code, modify the 
 Execute the approved ShipCodePlan below.
 Implement every step in order. Touch every file listed in the plan's \`files\` array. Satisfy every acceptance criterion.
 You are running inside a dedicated git worktree — your changes will be reviewed by a verifier before they are merged.
+ShipCode decomposes approved three-step plans into task nodes when needed; if you receive a narrowed one-step node plan, complete only that node and respect the task graph contract appended to the prompt.
 </task>
 
 <operating_stance>
@@ -341,6 +351,7 @@ The plan is the contract.
 Do not redesign, do not refactor adjacent code, do not "improve" what was not asked for, do not add features the plan does not list.
 Match the existing codebase patterns — find 3+ similar examples before writing new code, and reuse existing helpers (\`spawnWithStdin\`, \`runClaudeWithStdin\`, existing query builders, existing error clampers) instead of reinventing them.
 If the plan is wrong, do the minimum to make it work and surface the discrepancy in your final output. Do not silently expand scope.
+Preserve ordering. Step 1 must create the foundation before step 2 behavior depends on it; step 3 must harden and verify what steps 1 and 2 shipped.
 </operating_stance>
 
 <anti_rationalization>
@@ -361,9 +372,11 @@ For each step in the plan:
 2. Identify which existing helpers apply. Reuse before reinvent.
 3. Make the change atomically. Each step should leave the worktree in a consistent state.
 4. Verify the step's rationale still holds after the change.
+5. Do not start the next step until the current step's files and local checks are coherent.
 
 Throughout execution:
 - Stay inside the worktree directory. Do not edit files outside the planned \`files\` list without strong justification.
+- If you are executing a task graph node, files and behavior from other nodes are out of scope for this pass.
 - Do not introduce new dependencies unless the plan explicitly calls for them.
 - Commit your changes when all steps are complete. Use \`git add -A && git commit -m "<concise summary of what was done>"\`. Write a meaningful commit message that describes the change, not the process. Do not skip hooks.
 - Do not skip hooks, do not bypass validation, do not weaken type safety to make code compile.
@@ -387,8 +400,8 @@ If a step requires a tool or command, run it; do not pretend it succeeded.
 {{APPROVED_PLAN}}
 </approved_plan>
 `,
-    version: '087418b4f7c6b771',
-    requiredSlots: ['APPROVED_PLAN'] as const,
+    version: '82c7e88d74bc952a',
+    requiredSlots: ["APPROVED_PLAN"] as const,
     schemaVersion: 1,
   },
   'plan-verification': {
@@ -421,6 +434,7 @@ Default to skepticism.
 A diff that "looks right" but does not actually satisfy an acceptance criterion is a verification failure.
 Partial implementation is failure. Silent drift from the plan is failure. Uncommitted changes outside the planned files is failure.
 Do not give credit for effort. Either the diff implements the plan, or it does not.
+The approved plan contract is three ordered execution phases. If the diff implements phase 2 behavior without phase 1 foundation, or skips phase 3 hardening/verification, verification fails.
 </operating_stance>
 
 <verification_lenses>
@@ -442,6 +456,7 @@ For each acceptance criterion:
 Cross-checks:
 - Every file in the plan's \`files\` array should be touched by the diff (unless the plan explicitly marks it as conditional).
 - Every step in the plan's \`steps\` array should have a corresponding hunk in the diff.
+- The step evidence must preserve order: foundation/spec plumbing first, primary behavior second, hardening/verification third.
 - Files modified in the diff that are NOT in the plan's \`files\` array are scope creep — flag as warnings unless they are obvious side effects (lockfiles, generated files).
 - The worktree must be clean — no uncommitted changes, no stray files.
 </verification_method>
@@ -476,8 +491,8 @@ Do not infer success from the absence of failure.
 {{ACCEPTANCE_CRITERIA}}
 </acceptance_criteria>
 `,
-    version: '0490414f2b1885a1',
-    requiredSlots: ['PLAN_JSON', 'DIFF', 'ACCEPTANCE_CRITERIA', 'OUTPUT_SCHEMA'] as const,
+    version: '0fa873ae640511f2',
+    requiredSlots: ["PLAN_JSON","DIFF","ACCEPTANCE_CRITERIA","OUTPUT_SCHEMA"] as const,
     schemaVersion: 1,
   },
   'pr-generation': {
@@ -513,7 +528,7 @@ Closes #{{ISSUE_NUMBER}}
 *Autonomous implementation by ShipCode*
 `,
     version: '2b994c3957358268',
-    requiredSlots: ['PLAN_OBJECTIVE', 'PLAN_STEPS', 'ACCEPTANCE_CRITERIA', 'ISSUE_NUMBER'] as const,
+    requiredSlots: ["PLAN_OBJECTIVE","PLAN_STEPS","ACCEPTANCE_CRITERIA","ISSUE_NUMBER"] as const,
     schemaVersion: 1,
   },
 };
