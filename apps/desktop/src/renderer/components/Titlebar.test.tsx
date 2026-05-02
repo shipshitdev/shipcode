@@ -189,7 +189,6 @@ describe('Titlebar', () => {
       sidebarCollapsed: false,
       terminalVisible: false,
       terminalMaximized: false,
-      issueDetailCollapsed: false,
     });
   });
 

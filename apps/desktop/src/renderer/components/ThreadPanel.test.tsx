@@ -228,9 +228,7 @@ describe('ThreadPanel', () => {
   it('opens the issue detail sidebar from the explicit card action while collapsed', async () => {
     const issue = makeIssue();
 
-    useAppStore.setState({
-      issueDetailCollapsed: true,
-    });
+    useAppStore.setState({});
 
     invokeMock.mockImplementation(async (channel) => {
       if (channel === 'thread-panel:get-data') return panelData;
@@ -246,7 +244,6 @@ describe('ThreadPanel', () => {
       const state = useAppStore.getState();
       expect(state.activeIssue?.id).toBe(issue.id);
       expect(state.activeThreadId).toBe(issue.threadId);
-      expect(state.issueDetailCollapsed).toBe(false);
     });
   });
 

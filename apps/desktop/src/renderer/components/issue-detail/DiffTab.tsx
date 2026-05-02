@@ -4,7 +4,7 @@ import { Button, Modal } from '@shipshitdev/ui';
 import { Maximize2, X } from 'lucide-react';
 import { useState } from 'react';
 
-export function DiffTab({ diffs, expanded }: { diffs: DiffRecord[]; expanded: boolean }) {
+export function DiffTab({ diffs }: { diffs: DiffRecord[] }) {
   const [isFullScreen, setIsFullScreen] = useState(false);
 
   if (diffs.length === 0) {
@@ -43,7 +43,7 @@ export function DiffTab({ diffs, expanded }: { diffs: DiffRecord[]; expanded: bo
 
         <div
           className="overflow-hidden rounded-md border border-border"
-          style={{ height: expanded ? 'calc(100vh - 180px)' : '500px' }}
+          style={{ height: 'calc(100vh - 180px)' }}
         >
           <SideBySideDiffViewer diffs={diffs} className="h-full" />
         </div>

@@ -16,7 +16,6 @@ describe('SettingsSidebar', () => {
       settingsSection: 'general',
       terminalVisible: true,
       terminalMaximized: true,
-      issueDetailCollapsed: false,
     });
   });
 

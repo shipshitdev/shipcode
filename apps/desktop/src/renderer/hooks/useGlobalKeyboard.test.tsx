@@ -25,13 +25,11 @@ describe('useGlobalKeyboard', () => {
   const toggleCommandPalette = vi.fn();
   const toggleTerminal = vi.fn();
   const toggleSidebar = vi.fn();
-  const toggleIssueDetail = vi.fn();
 
   beforeEach(() => {
     toggleCommandPalette.mockReset();
     toggleTerminal.mockReset();
     toggleSidebar.mockReset();
-    toggleIssueDetail.mockReset();
     openProjectTerminalMock.mockReset();
     openProjectTerminalMock.mockResolvedValue(undefined);
 
@@ -39,7 +37,6 @@ describe('useGlobalKeyboard', () => {
       toggleCommandPalette,
       toggleTerminal,
       toggleSidebar,
-      toggleIssueDetail,
     });
   });
 
@@ -49,13 +46,11 @@ describe('useGlobalKeyboard', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }));
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', metaKey: true }));
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', metaKey: true }));
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: '∫', metaKey: true, altKey: true }));
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', metaKey: true, shiftKey: true }));
 
     expect(toggleCommandPalette).toHaveBeenCalledTimes(1);
     expect(toggleTerminal).toHaveBeenCalledTimes(1);
     expect(toggleSidebar).toHaveBeenCalledTimes(1);
-    expect(toggleIssueDetail).toHaveBeenCalledTimes(1);
     expect(openProjectTerminalMock).toHaveBeenCalledTimes(1);
   });
 
@@ -70,6 +65,5 @@ describe('useGlobalKeyboard', () => {
     expect(toggleCommandPalette).not.toHaveBeenCalled();
     expect(toggleTerminal).not.toHaveBeenCalled();
     expect(toggleSidebar).not.toHaveBeenCalled();
-    expect(toggleIssueDetail).not.toHaveBeenCalled();
   });
 });

@@ -187,9 +187,6 @@ describe('App', () => {
       terminalMaximized: false,
       settingsVisible: false,
       settingsSection: 'general',
-      issueDetailExpanded: false,
-      issueDetailCollapsed: false,
-      issueDetailWidth: 480,
       currentPlan: null,
       currentReview: null,
       pipelinePhase: 'idle',
@@ -320,7 +317,7 @@ describe('App', () => {
     expect(await screen.findByText('ProjectMissingView:/tmp/missing-project')).toBeInTheDocument();
   });
 
-  it('renders issue detail as an overlay without unmounting the main project view', async () => {
+  it('renders issue detail in the center column when an issue is active', async () => {
     useAppStore.setState({
       activeProjectId: 'project-1',
       viewMode: 'project',
@@ -333,20 +330,13 @@ describe('App', () => {
         threadId: 'thread-1',
       } as never,
       activeThreadId: 'thread-1',
-      issueDetailExpanded: false,
-      issueDetailCollapsed: false,
-      issueDetailWidth: 480,
     });
 
     const view = renderApp();
 
-    expect(await screen.findByText('ProjectView')).toBeInTheDocument();
-    const issueDetailPanel = within(view.container).getByText('IssueDetailPanel');
-    const overlayPanel = view.container.querySelector('[data-slot="overlay-panel"]');
-
-    expect(overlayPanel).not.toBeNull();
-    expect(overlayPanel).toContainElement(issueDetailPanel);
-    expect(overlayPanel).toHaveClass('pointer-events-auto', 'relative', 'overflow-hidden');
-    expect(overlayPanel).toHaveStyle({ width: '480px' });
+    const issueDetailPanel = await within(view.container).findByText('IssueDetailPanel');
+    expect(issueDetailPanel).toBeInTheDocument();
+    // IssueDetail now replaces center column — no overlay panel
+    expect(view.container.querySelector('[data-slot="overlay-panel"]')).toBeNull();
   });
 });

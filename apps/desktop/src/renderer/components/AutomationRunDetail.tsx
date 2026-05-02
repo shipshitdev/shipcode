@@ -1,18 +1,16 @@
 import type { DiffRecord, PipelinePhase, PlanRecord, ReviewRecord, Thread } from '@shipcode/shared';
 import { formatCost, formatTokenCount, githubCompareUrl, PIPELINE_PHASE } from '@shipcode/shared';
 import { PhaseChip } from '@shipcode/ui';
-import { Badge, Button, cn, Tabs, TabsContent, TabsList, TabsTrigger } from '@shipshitdev/ui';
+import { Badge, Button, Tabs, TabsContent, TabsList, TabsTrigger } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  ArrowLeft,
   Copy,
   ExternalLink,
   GitBranch,
   GitPullRequest,
-  Maximize2,
-  Minimize2,
   RefreshCw,
   Square,
-  X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
@@ -21,11 +19,9 @@ import { ACTIVE_PHASES } from './issue-detail/helpers';
 import { PlanHistoryTab } from './issue-detail/PlanHistoryTab';
 import type { PlanRunGroup } from './issue-detail/tab-types';
 
-export function AutomationRunDetail({ expanded }: { expanded: boolean }) {
+export function AutomationRunDetail() {
   const threadId = useAppStore((s) => s.activeAutomationThreadId);
-  const issueDetailExpanded = useAppStore((s) => s.issueDetailExpanded);
   const selectAutomationThread = useAppStore((s) => s.selectAutomationThread);
-  const toggleIssueDetailExpanded = useAppStore((s) => s.toggleIssueDetailExpanded);
   const navigateToGitWorktree = useAppStore((s) => s.navigateToGitWorktree);
   const queryClient = useQueryClient();
 
@@ -116,16 +112,12 @@ export function AutomationRunDetail({ expanded }: { expanded: boolean }) {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        if (issueDetailExpanded) {
-          toggleIssueDetailExpanded();
-        } else {
-          handleClose();
-        }
+        handleClose();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [issueDetailExpanded, toggleIssueDetailExpanded, handleClose]);
+  }, [handleClose]);
 
   if (!threadId) return null;
 
@@ -135,30 +127,16 @@ export function AutomationRunDetail({ expanded }: { expanded: boolean }) {
   const hasError = !!thread?.lastError;
 
   return (
-    <div className={cn('flex h-full flex-col overflow-hidden', expanded && 'flex-1')}>
+    <div className="flex h-full flex-1 flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-border px-4 py-3">
         <button
           type="button"
           onClick={handleClose}
-          aria-label="Close automation run detail"
+          aria-label="Back to board"
           className="rounded p-0.5 text-muted transition-colors hover:text-primary"
         >
-          <X className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          onClick={toggleIssueDetailExpanded}
-          aria-label={
-            issueDetailExpanded ? 'Collapse automation run detail' : 'Expand automation run detail'
-          }
-          className="rounded p-0.5 text-muted transition-colors hover:text-primary"
-        >
-          {issueDetailExpanded ? (
-            <Minimize2 className="h-3.5 w-3.5" />
-          ) : (
-            <Maximize2 className="h-3.5 w-3.5" />
-          )}
+          <ArrowLeft className="h-4 w-4" />
         </button>
         <h3 className="min-w-0 flex-1 truncate text-sm font-medium text-primary">
           {thread?.title ?? 'Automation run'}
@@ -400,7 +378,6 @@ export function AutomationRunDetail({ expanded }: { expanded: boolean }) {
             <PlanHistoryTab
               activeThreadId={threadId}
               effectiveExpanded={expandedPlanId}
-              expanded={expanded}
               isPlanHistoryLoading={isPlanHistoryLoading}
               isShowingAllPlanRuns={false}
               loadingPlanDetailIds={[]}
@@ -419,7 +396,7 @@ export function AutomationRunDetail({ expanded }: { expanded: boolean }) {
           </TabsContent>
 
           <TabsContent value="diff" className="py-3">
-            <DiffTab diffs={diffs} expanded={expanded} />
+            <DiffTab diffs={diffs} />
           </TabsContent>
         </div>
       </Tabs>

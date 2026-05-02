@@ -2,7 +2,7 @@ import type { AppSettings, Project, TelemetryStatus } from '@shipcode/shared';
 import { CURRENT_ONBOARDING_VERSION } from '@shipcode/shared';
 import { Button, Skeleton } from '@shipshitdev/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { lazy, Suspense, useCallback, useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { AutomationRunDetail } from './components/AutomationRunDetail';
 import { CommandPalette } from './components/CommandPalette';
 import { HealthBanner } from './components/HealthBanner';
@@ -89,9 +89,6 @@ const AddProjectExplorer = lazy(() =>
   })),
 );
 
-const ISSUE_DETAIL_MIN_WIDTH = 380;
-const ISSUE_DETAIL_MAX_WIDTH = 760;
-
 export function App() {
   useGlobalKeyboard();
   useIpc();
@@ -103,39 +100,6 @@ export function App() {
   const viewMode = useAppStore((state) => state.viewMode);
   const hasActiveIssue = useAppStore((state) => state.activeIssue !== null);
   const hasActiveAutomationThread = useAppStore((state) => state.activeAutomationThreadId !== null);
-  const issueDetailExpanded = useAppStore((state) => state.issueDetailExpanded);
-  const issueDetailCollapsed = useAppStore((state) => state.issueDetailCollapsed);
-  const issueDetailWidth = useAppStore((state) => state.issueDetailWidth);
-  const setIssueDetailWidth = useAppStore((state) => state.setIssueDetailWidth);
-  const issueDetailDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
-
-  const handleIssueDetailResizeMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      issueDetailDragRef.current = { startX: e.clientX, startWidth: issueDetailWidth };
-      const onMove = (event: MouseEvent) => {
-        if (!issueDetailDragRef.current) return;
-        const delta = event.clientX - issueDetailDragRef.current.startX;
-        const nextWidth = Math.min(
-          ISSUE_DETAIL_MAX_WIDTH,
-          Math.max(ISSUE_DETAIL_MIN_WIDTH, issueDetailDragRef.current.startWidth - delta),
-        );
-        setIssueDetailWidth(nextWidth);
-      };
-      const onUp = () => {
-        issueDetailDragRef.current = null;
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-      };
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
-    },
-    [issueDetailWidth, setIssueDetailWidth],
-  );
 
   const { data: settings } = useQuery<AppSettings>({
     queryKey: ['settings'],
@@ -287,8 +251,6 @@ export function App() {
     viewMode === 'project' &&
     !!activeProjectId &&
     activeProject?.pathExists === false;
-  const hideSidebarForReader =
-    (hasActiveIssue || hasActiveAutomationThread) && issueDetailExpanded && !settingsVisible;
   const hideMainContentForTerminal = terminalVisible && terminalMaximized;
 
   return (
@@ -298,19 +260,16 @@ export function App() {
       <HealthBanner />
       <ProjectPathBanner project={activeProject ?? null} />
       <div className="flex flex-1 overflow-hidden">
-        {!hideSidebarForReader && (settingsVisible ? <SettingsSidebar /> : <ProjectSidebar />)}
-        {/* Center column — main view above, terminal below. Right detail
-            panel is a sibling (not nested), so the terminal sits BETWEEN
-            the sidebar and the detail panel (Cursor-style) and resizes as
-            either flank opens or closes. */}
+        {settingsVisible ? <SettingsSidebar /> : <ProjectSidebar />}
+        {/* Center column — main view above, terminal below. */}
         <div className="flex flex-col flex-1 overflow-hidden min-h-0">
           {!hideMainContentForTerminal && (
             <Suspense fallback={<ViewLoadingFallback />}>
               <div className="flex flex-1 overflow-hidden min-h-0 bg-primary">
-                {hasActiveIssue && issueDetailExpanded ? (
-                  <IssueDetail expanded={true} />
-                ) : hasActiveAutomationThread && issueDetailExpanded ? (
-                  <AutomationRunDetail expanded={true} />
+                {hasActiveIssue ? (
+                  <IssueDetail />
+                ) : hasActiveAutomationThread ? (
+                  <AutomationRunDetail />
                 ) : settingsVisible ? (
                   <SettingsPanel />
                 ) : viewMode === 'activity' ? (
@@ -335,34 +294,6 @@ export function App() {
           )}
           {terminalVisible && <TerminalDrawer />}
         </div>
-        {/* Right detail panel — full row height, flanks both the upper
-            view and the terminal. Hidden when expanded (it takes over the
-            center column instead) or when collapsed. */}
-        {(hasActiveIssue || hasActiveAutomationThread) &&
-          !issueDetailExpanded &&
-          !issueDetailCollapsed && (
-            <div
-              data-slot="overlay-panel"
-              className="pointer-events-auto relative flex h-full flex-shrink-0 flex-col overflow-hidden border-l border-border bg-primary shadow-[-16px_0_40px_rgba(0,0,0,0.35)]"
-              style={{
-                width: issueDetailWidth,
-                minWidth: ISSUE_DETAIL_MIN_WIDTH,
-                maxWidth: ISSUE_DETAIL_MAX_WIDTH,
-              }}
-            >
-              <button
-                type="button"
-                aria-label="Resize issue detail panel"
-                className="absolute inset-y-0 left-0 z-10 w-1 -translate-x-1/2 cursor-col-resize transition-colors hover:bg-accent/20 active:bg-accent/30"
-                onMouseDown={handleIssueDetailResizeMouseDown}
-              />
-              {hasActiveIssue ? (
-                <IssueDetail expanded={false} />
-              ) : (
-                <AutomationRunDetail expanded={false} />
-              )}
-            </div>
-          )}
       </div>
       <CommandPalette />
       <Suspense fallback={null}>

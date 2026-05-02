@@ -201,7 +201,7 @@ const makeProject = () => ({
   updatedAt: new Date().toISOString(),
 });
 
-function renderWithProviders(props?: { expanded?: boolean }) {
+function renderWithProviders() {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -213,7 +213,7 @@ function renderWithProviders(props?: { expanded?: boolean }) {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <IssueDetail expanded={props?.expanded} />
+      <IssueDetail />
     </QueryClientProvider>,
   );
 }
@@ -516,7 +516,7 @@ describe('IssueDetail', () => {
       return args ?? null;
     });
 
-    const { container } = renderWithProviders({ expanded: true });
+    const { container } = renderWithProviders();
 
     const clarificationHeading = await screen.findByText('Answer these before planning continues');
     const scrollRegion = container.querySelector('[data-issue-detail-scroll-region]');
@@ -1174,7 +1174,7 @@ describe('IssueDetail', () => {
     });
 
     const tabLabels = screen.getAllByRole('tab').map((tab) => tab.textContent?.trim());
-    expect(tabLabels).toEqual(['Issue', 'Comments', 'Plans', 'Pipeline', 'Activity', 'Costs']);
+    expect(tabLabels).toEqual(['Issue', 'Comments', 'Plans', 'Pipeline', 'Activity', 'Conversations', 'Costs']);
   });
 
   it('pipeline start card is above the tab bar when pipeline not started', async () => {
@@ -1188,27 +1188,13 @@ describe('IssueDetail', () => {
     expect(startButton.compareDocumentPosition(prdTab)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
-  it('uses full-size toggle action and distinct close behavior', async () => {
+  it('back button closes issue detail and returns to board', async () => {
     invokeMock.mockResolvedValue([]);
 
     renderWithProviders();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open full size' }));
-    expect(useAppStore.getState().issueDetailExpanded).toBe(true);
-    expect(useAppStore.getState().activeIssue?.id).toBe('issue-1');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Close issue detail' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back to board' }));
     expect(useAppStore.getState().activeIssue).toBeNull();
-  });
-
-  it('expanded layout removes Back to board and uses return-to-sidebar control', async () => {
-    invokeMock.mockResolvedValue([]);
-
-    renderWithProviders({ expanded: true });
-
-    expect(screen.queryByText('Back to board')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Return to sidebar' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Close issue detail' })).toBeInTheDocument();
   });
 
   it('does not auto-dismiss notifications when opening a thread', async () => {

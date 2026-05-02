@@ -122,9 +122,6 @@ export function ProjectGraphTab({ embedded = false }: { embedded?: boolean }) {
         .githubIssues.find((entry) => entry.id === issue.issueId);
       if (!cachedIssue) return;
       selectIssue(cachedIssue);
-      if (useAppStore.getState().issueDetailCollapsed) {
-        useAppStore.getState().toggleIssueDetail();
-      }
     },
     [graph, selectIssue],
   );

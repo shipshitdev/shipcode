@@ -42,7 +42,7 @@ function CommandPaletteContent() {
   const toggleTerminal = useAppStore((state) => state.toggleTerminal);
   const toggleSettings = useAppStore((state) => state.toggleSettings);
   const toggleSidebar = useAppStore((state) => state.toggleSidebar);
-  const toggleIssueDetail = useAppStore((state) => state.toggleIssueDetail);
+  const selectIssue = useAppStore((state) => state.selectIssue);
   const activeIssue = useAppStore((state) => state.activeIssue);
   const openOverview = useAppStore((state) => state.openOverview);
   const openActivity = useAppStore((state) => state.openActivity);
@@ -259,7 +259,7 @@ function CommandPaletteContent() {
             <CommandShortcut>{getShortcut('toggle-sidebar').glyph}</CommandShortcut>
           </CommandItem>
           {activeIssue && (
-            <CommandItem onSelect={() => runAction(() => toggleIssueDetail())}>
+            <CommandItem onSelect={() => runAction(() => selectIssue(null))}>
               <span className="flex-1">{getShortcut('toggle-issue-detail').label}</span>
               <CommandShortcut>{getShortcut('toggle-issue-detail').glyph}</CommandShortcut>
             </CommandItem>

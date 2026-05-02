@@ -1,5 +1,5 @@
 import type { GitHubIssueCacheRecord } from '@shipcode/shared';
-import { Button, cn } from '@shipshitdev/ui';
+import { Button } from '@shipshitdev/ui';
 import { Pencil, RefreshCw } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -7,13 +7,11 @@ import { PRD_PROSE_CLASSES } from './helpers';
 
 export function PrdTab({
   activeIssue,
-  expanded,
   isRefreshingFromGithub,
   onEditPrd,
   onRefreshFromGithub,
 }: {
   activeIssue: GitHubIssueCacheRecord;
-  expanded: boolean;
   isRefreshingFromGithub: boolean;
   onEditPrd: () => void;
   onRefreshFromGithub: () => void;
@@ -51,12 +49,7 @@ export function PrdTab({
       </div>
 
       {activeIssue.body ? (
-        <div
-          className={cn(
-            'min-h-0 flex-1 rounded-md bg-secondary p-3 text-[13px] leading-relaxed text-primary',
-            !expanded && 'overflow-y-auto',
-          )}
-        >
+        <div className="min-h-0 flex-1 rounded-md bg-secondary p-3 text-[13px] leading-relaxed text-primary">
           <div className={PRD_PROSE_CLASSES}>
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{activeIssue.body}</ReactMarkdown>
           </div>

@@ -7,7 +7,7 @@ export function useGlobalKeyboard() {
   const toggleCommandPalette = useAppStore((s) => s.toggleCommandPalette);
   const toggleTerminal = useAppStore((s) => s.toggleTerminal);
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
-  const toggleIssueDetail = useAppStore((s) => s.toggleIssueDetail);
+  const selectIssue = useAppStore((s) => s.selectIssue);
   const openCreateIssueModal = useAppStore((s) => s.openCreateIssueModal);
   const { openProjectTerminal } = useOpenProjectTerminal();
 
@@ -21,7 +21,7 @@ export function useGlobalKeyboard() {
       'command-palette': toggleCommandPalette,
       'toggle-terminal': toggleTerminal,
       'toggle-sidebar': toggleSidebar,
-      'toggle-issue-detail': toggleIssueDetail,
+      'toggle-issue-detail': () => selectIssue(null),
       'open-project-terminal': openTerminal,
       'new-issue': openCreateIssueModal,
     };
@@ -50,7 +50,7 @@ export function useGlobalKeyboard() {
     toggleCommandPalette,
     toggleTerminal,
     toggleSidebar,
-    toggleIssueDetail,
+    selectIssue,
     openCreateIssueModal,
     openProjectTerminal,
   ]);

@@ -159,15 +159,11 @@ export function InboxView() {
         }
         if (!match && thread?.automationId) {
           useAppStore.getState().selectAutomationThread(n.threadId);
-          const store = useAppStore.getState();
-          if (store.issueDetailCollapsed) store.toggleIssueDetail();
           return;
         }
       }
       if (match) {
         selectIssue(match);
-        const store = useAppStore.getState();
-        if (store.issueDetailCollapsed) store.toggleIssueDetail();
       }
     } catch {
       if (navTokenRef.current === token) {

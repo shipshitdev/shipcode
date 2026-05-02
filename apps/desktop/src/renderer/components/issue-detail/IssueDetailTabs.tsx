@@ -12,7 +12,7 @@ import type {
   TaskGraphWithNodes,
   Thread,
 } from '@shipcode/shared';
-import { cn, Tabs, TabsContent, TabsList, TabsTrigger } from '@shipshitdev/ui';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shipshitdev/ui';
 import { CommentsTab } from './CommentsTab';
 import { ConversationsTab } from './ConversationsTab';
 import { CostsTab } from './CostsTab';
@@ -33,7 +33,6 @@ interface IssueDetailTabsProps {
   effectiveExpanded: string | null | undefined;
   effectivePhaseResolvedModels: Record<PhaseKey, string>;
   executorEditable: boolean;
-  expanded: boolean;
   hasPrFeedbackBlockers: boolean;
   integrationStatus?: IntegrationStatus;
   isRefreshingFromGithub: boolean;
@@ -95,7 +94,6 @@ export function IssueDetailTabs({
   effectiveExpanded,
   effectivePhaseResolvedModels,
   executorEditable,
-  expanded,
   hasPrFeedbackBlockers,
   integrationStatus,
   isRefreshingFromGithub,
@@ -171,8 +169,8 @@ export function IssueDetailTabs({
       onValueChange={(value) => onActiveTabChange(value as IssueDetailTab)}
       className="flex min-h-0 flex-col"
     >
-      <div className={cn('flex shrink-0 items-center overflow-x-auto', expanded ? 'mb-5' : '')}>
-        <TabsList className={cn(expanded ? '' : 'px-4')}>
+      <div className="flex shrink-0 items-center overflow-x-auto mb-5">
+        <TabsList>
           {orderedTabs.map((tab) => (
             <TabsTrigger key={tab.value} value={tab.value}>
               {tab.label}
@@ -181,17 +179,16 @@ export function IssueDetailTabs({
         </TabsList>
       </div>
 
-      <TabsContent value="prd" className={cn('mt-0', !expanded && 'p-4')}>
+      <TabsContent value="prd" className={"mt-0"}>
         <PrdTab
           activeIssue={activeIssue}
-          expanded={expanded}
           isRefreshingFromGithub={isRefreshingFromGithub}
           onEditPrd={onEditPrd}
           onRefreshFromGithub={onRefreshFromGithub}
         />
       </TabsContent>
 
-      <TabsContent value="comments" className={cn('mt-0', !expanded && 'p-4')}>
+      <TabsContent value="comments" className={"mt-0"}>
         <CommentsTab
           projectId={projectId}
           issueNumber={activeIssue.issueNumber}
@@ -199,11 +196,10 @@ export function IssueDetailTabs({
         />
       </TabsContent>
 
-      <TabsContent value="history" className={cn('mt-0', !expanded && 'p-4')}>
+      <TabsContent value="history" className={"mt-0"}>
         <PlanHistoryTab
           activeThreadId={activeThreadId}
           effectiveExpanded={effectiveExpanded}
-          expanded={expanded}
           isPlanHistoryLoading={isPlanHistoryLoading}
           isShowingAllPlanRuns={isShowingAllPlanRuns}
           loadingPlanDetailIds={loadingPlanDetailIds}
@@ -221,7 +217,7 @@ export function IssueDetailTabs({
         />
       </TabsContent>
 
-      <TabsContent value="pipeline" className={cn('mt-0', !expanded && 'p-4')}>
+      <TabsContent value="pipeline" className={"mt-0"}>
         <PipelineTab
           activeIssue={activeIssue}
           activeThreadId={activeThreadId}
@@ -260,11 +256,11 @@ export function IssueDetailTabs({
         />
       </TabsContent>
 
-      <TabsContent value="diff" className={cn('mt-0', !expanded && 'p-4')}>
-        <DiffTab diffs={diffs} expanded={expanded} />
+      <TabsContent value="diff" className={"mt-0"}>
+        <DiffTab diffs={diffs} />
       </TabsContent>
 
-      <TabsContent value="activity" className={cn('mt-0', !expanded && 'p-4')}>
+      <TabsContent value="activity" className={"mt-0"}>
         <IssueHistoryTab
           normalizedIssueActivity={normalizedIssueActivity}
           runNumberByThreadId={runNumberByThreadId}
@@ -272,12 +268,12 @@ export function IssueDetailTabs({
       </TabsContent>
 
       {activeThreadId && (
-        <TabsContent value="conversations" className={cn('mt-0', !expanded && 'p-4')}>
+        <TabsContent value="conversations" className={"mt-0"}>
           <ConversationsTab threadId={activeThreadId} />
         </TabsContent>
       )}
 
-      <TabsContent value="costs" className={cn('mt-0', !expanded && 'p-4')}>
+      <TabsContent value="costs" className={"mt-0"}>
         <CostsTab projectId={projectId} issueNumber={activeIssue.issueNumber} thread={thread} />
       </TabsContent>
     </Tabs>

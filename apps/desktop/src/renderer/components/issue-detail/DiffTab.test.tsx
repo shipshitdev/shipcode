@@ -36,7 +36,7 @@ afterEach(() => {
 
 describe('DiffTab', () => {
   it('shows the empty state before any diff exists', () => {
-    render(<DiffTab diffs={[]} expanded={false} />);
+    render(<DiffTab diffs={[]} />);
 
     expect(screen.getByText('No code changes yet')).toBeInTheDocument();
     expect(
@@ -46,7 +46,7 @@ describe('DiffTab', () => {
   });
 
   it('renders the inline viewer and opens and closes the fullscreen modal', async () => {
-    render(<DiffTab diffs={diffs} expanded={false} />);
+    render(<DiffTab diffs={diffs} />);
 
     expect(screen.getByText('Code Changes')).toBeInTheDocument();
     expect(screen.getByText('2 files')).toBeInTheDocument();

@@ -69,8 +69,8 @@ export const SHORTCUTS: ShortcutDef[] = [
   },
   {
     id: 'toggle-issue-detail',
-    label: 'Toggle Issue Detail',
-    description: 'Show or hide the issue detail panel on the right',
+    label: 'Close Issue',
+    description: 'Close the issue detail view and return to the board',
     category: 'Workspace',
     glyph: '⌥⌘B',
     combo: { meta: true, alt: true, key: 'b', altKey: '∫' },

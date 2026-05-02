@@ -108,9 +108,6 @@ interface AppState {
   terminalMaximized: boolean;
   settingsVisible: boolean;
   settingsSection: SettingsSection;
-  issueDetailExpanded: boolean;
-  issueDetailCollapsed: boolean;
-  issueDetailWidth: number;
   commentComposerRequest: { issueId: string; requestId: number } | null;
 
   // Live data
@@ -222,9 +219,6 @@ interface AppState {
   addNotification: (notification: NotificationRecord) => void;
   removeNotification: (id: string) => void;
   clearNotifications: () => void;
-  toggleIssueDetailExpanded: () => void;
-  toggleIssueDetail: () => void;
-  setIssueDetailWidth: (width: number) => void;
   requestCommentComposer: (issueId: string) => void;
   toggleCommandPalette: () => void;
   openCreateIssueModal: () => void;
@@ -274,9 +268,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   terminalMaximized: false,
   settingsVisible: false,
   settingsSection: 'general' as SettingsSection,
-  issueDetailExpanded: false,
-  issueDetailCollapsed: false,
-  issueDetailWidth: 480,
   commentComposerRequest: null,
   currentPlan: null,
   currentReview: null,
@@ -316,7 +307,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       viewMode: 'overview',
       activeIssue: null,
       activeAutomationThreadId: null,
-      issueDetailExpanded: false,
       terminalMaximized: false,
       currentPlan: null,
       currentReview: null,
@@ -327,7 +317,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       viewMode: 'activity',
       activeIssue: null,
       activeAutomationThreadId: null,
-      issueDetailExpanded: false,
       terminalMaximized: false,
       currentPlan: null,
       currentReview: null,
@@ -338,7 +327,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       viewMode: 'inbox',
       activeIssue: null,
       activeAutomationThreadId: null,
-      issueDetailExpanded: false,
       terminalMaximized: false,
       currentPlan: null,
       currentReview: null,
@@ -349,7 +337,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       viewMode: 'costs',
       activeIssue: null,
       activeAutomationThreadId: null,
-      issueDetailExpanded: false,
       terminalMaximized: false,
       currentPlan: null,
       currentReview: null,
@@ -360,7 +347,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       viewMode: 'skills',
       activeIssue: null,
       activeAutomationThreadId: null,
-      issueDetailExpanded: false,
       terminalMaximized: false,
       currentPlan: null,
       currentReview: null,
@@ -371,7 +357,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       viewMode: 'automations',
       activeIssue: null,
       activeAutomationThreadId: null,
-      issueDetailExpanded: false,
       terminalMaximized: false,
       currentPlan: null,
       currentReview: null,
@@ -384,7 +369,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       activeIssue: null,
       activeAutomationThreadId: null,
       terminalMaximized: false,
-      issueDetailExpanded: false,
       currentPlan: null,
       currentReview: null,
       currentVerification: null,
@@ -413,12 +397,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentVerification: null,
       pipelinePhase: PIPELINE_PHASE.idle,
       terminalEvents: [],
-      // Console is decoupled from the detail panel: closing detail (issue=null)
+      // Console is decoupled from the detail view: closing detail (issue=null)
       // must keep the current console pin so the user can still read output.
       // Switching to another issue re-pins the console to that thread.
       terminalThreadId: issue ? (issue.threadId ?? null) : s.terminalThreadId,
-      // Keep expanded mode when switching between issues; reset when closing.
-      issueDetailExpanded: issue ? s.issueDetailExpanded : false,
       terminalMaximized: issue ? s.terminalMaximized : false,
       // Auto-open terminal when the selected issue has an agent actively running
       terminalVisible:
@@ -434,8 +416,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentVerification: null,
       pipelinePhase: PIPELINE_PHASE.idle,
       terminalEvents: [],
-      issueDetailExpanded: threadId ? s.issueDetailExpanded : false,
-      issueDetailCollapsed: threadId ? false : s.issueDetailCollapsed,
       terminalThreadId: threadId ?? s.terminalThreadId,
     })),
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
@@ -454,7 +434,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         settingsSection: 'general' as SettingsSection,
         terminalVisible: nextSettingsVisible ? false : s.terminalVisible,
         terminalMaximized: nextSettingsVisible ? false : s.terminalMaximized,
-        issueDetailCollapsed: nextSettingsVisible ? true : s.issueDetailCollapsed,
       };
     }),
   setSettingsSection: (section) => set({ settingsSection: section }),
@@ -564,9 +543,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   removeNotification: (id) =>
     set((s) => ({ notifications: s.notifications.filter((n) => n.id !== id) })),
   clearNotifications: () => set({ notifications: [] }),
-  toggleIssueDetailExpanded: () => set((s) => ({ issueDetailExpanded: !s.issueDetailExpanded })),
-  toggleIssueDetail: () => set((s) => ({ issueDetailCollapsed: !s.issueDetailCollapsed })),
-  setIssueDetailWidth: (width) => set({ issueDetailWidth: width }),
   requestCommentComposer: (issueId) =>
     set((s) => ({
       commentComposerRequest: {
@@ -622,7 +598,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       pipelinePhase: PIPELINE_PHASE.idle,
       terminalEvents: [],
       terminalThreadId: issue.threadId ?? null,
-      issueDetailExpanded: s.issueDetailExpanded,
       terminalMaximized: s.terminalMaximized,
       terminalVisible: AGENT_ACTIVE_STATUSES.has(issue.pipelineStatus) ? true : s.terminalVisible,
       commandPaletteOpen: false,
@@ -634,7 +609,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       activeIssue: null,
       activeAutomationThreadId: null,
       terminalMaximized: false,
-      issueDetailExpanded: false,
       currentPlan: null,
       currentReview: null,
       currentVerification: null,
@@ -659,7 +633,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       projectTab: 'sessions' as ProjectTab,
       activeIssue: null,
       activeAutomationThreadId: null,
-      issueDetailExpanded: false,
       terminalMaximized: false,
       currentPlan: null,
       currentReview: null,

@@ -14,7 +14,6 @@ import type { PlanRunGroup } from './tab-types';
 export function PlanHistoryTab({
   activeThreadId,
   effectiveExpanded,
-  expanded,
   isPlanHistoryLoading,
   isShowingAllPlanRuns,
   loadingPlanDetailIds,
@@ -32,7 +31,6 @@ export function PlanHistoryTab({
 }: {
   activeThreadId: string | null;
   effectiveExpanded: string | null | undefined;
-  expanded: boolean;
   isPlanHistoryLoading: boolean;
   isShowingAllPlanRuns: boolean;
   loadingPlanDetailIds: string[];
@@ -250,15 +248,7 @@ export function PlanHistoryTab({
       normalizedThreadPlanHistory.length === 0 &&
       normalizedPlanHistory.length === 0 &&
       threadPhase !== PIPELINE_PHASE.failed ? (
-        expanded ? (
-          <PlanWaiting threadId={activeThreadId} />
-        ) : (
-          <div className="mb-5">
-            <p className="py-4 text-center text-[13px] text-muted">
-              Pipeline is running - waiting for plan generation...
-            </p>
-          </div>
-        )
+        <PlanWaiting threadId={activeThreadId} />
       ) : null}
 
       {!activeThreadId &&

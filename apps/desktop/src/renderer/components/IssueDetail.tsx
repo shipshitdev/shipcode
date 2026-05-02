@@ -48,13 +48,11 @@ import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Archive,
+  ArrowLeft,
   Check,
   CircleCheck,
   CircleDot,
   Copy,
-  Maximize2,
-  Minimize2,
-  X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
@@ -84,7 +82,7 @@ const EXECUTOR_EDITABLE_STATUSES = new Set<IssuePipelineStatus>([
   ISSUE_PIPELINE_STATUS.done,
 ]);
 
-export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
+export function IssueDetail() {
   const queryClient = useQueryClient();
   const activeIssue = useAppStore((state) => state.activeIssue);
   const activeThreadId = useAppStore((state) => state.activeThreadId);
@@ -93,7 +91,6 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   const pipelinePhase = useAppStore((state) => state.pipelinePhase);
   const commentComposerRequest = useAppStore((state) => state.commentComposerRequest);
   const openEditPrdModal = useAppStore((state) => state.openEditPrdModal);
-  const toggleIssueDetailExpanded = useAppStore((state) => state.toggleIssueDetailExpanded);
   const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
   const prevIssueSelectionKeyRef = useRef<string | null>(null);
   const [fullScreenPlanId, setFullScreenPlanId] = useState<string | null>(null);
@@ -425,17 +422,12 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (expanded) {
-          // Collapse to panel first; preserve issue selection
-          toggleIssueDetailExpanded();
-        } else {
-          selectIssue(null);
-        }
+        selectIssue(null);
       }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [selectIssue, expanded, toggleIssueDetailExpanded]);
+  }, [selectIssue]);
 
   const latestPlan = useMemo(
     () => normalizedThreadPlanHistory[0] ?? null,
@@ -1056,20 +1048,10 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
         size="icon-xs"
         className="text-muted"
         onClick={() => selectIssue(null)}
-        title="Close issue detail"
-        aria-label="Close issue detail"
+        title="Back to board"
+        aria-label="Back to board"
       >
-        <X size={15} strokeWidth={2.25} />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        className="text-muted"
-        onClick={toggleIssueDetailExpanded}
-        title={expanded ? 'Return to sidebar' : 'Open full size'}
-        aria-label={expanded ? 'Return to sidebar' : 'Open full size'}
-      >
-        {expanded ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+        <ArrowLeft size={15} strokeWidth={2.25} />
       </Button>
     </div>
   );
@@ -1359,7 +1341,6 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       effectiveExpanded={effectiveExpanded}
       effectivePhaseResolvedModels={effectivePhaseResolvedModels}
       executorEditable={executorEditable}
-      expanded={expanded}
       hasPrFeedbackBlockers={hasPrFeedbackBlockers}
       integrationStatus={integrationStatus}
       isRefreshingFromGithub={isRefreshingFromGithub}
@@ -1460,7 +1441,7 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
 
   const detailActionStack =
     pipelineStartCard || rerunSection || clarificationSection || approvalSection ? (
-      <div className={cn('space-y-4', expanded ? 'mb-6' : 'px-4 pt-4 pb-4')}>
+      <div className="space-y-4 mb-6">
         {pipelineStartCard}
         {rerunSection}
         {clarificationSection}
@@ -1468,59 +1449,31 @@ export function IssueDetail({ expanded = false }: { expanded?: boolean }) {
       </div>
     ) : null;
 
-  // ─── Expanded (full-page) layout ────────────────────────────────────────
-
-  if (expanded) {
-    return (
-      <div className="flex h-full bg-primary">
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          {/* Header */}
-          <div className="relative shrink-0 border-b border-border p-4">
-            <div className="mx-auto w-full max-w-5xl">
-              {headerButtons}
-              {issueIdentityLinks}
-              <div className="my-1 flex flex-wrap items-center gap-2 pr-16">
-                {issueStatusBadge}
-                <h1 className="text-xl font-semibold">{activeIssue.title}</h1>
-              </div>
-              {issueBadges}
-            </div>
-          </div>
-          {/* Scrollable content */}
-          <div className="flex-1 min-h-0 overflow-y-auto" data-issue-detail-scroll-region>
-            <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col p-6">
-              {detailActionStack}
-              {detailTabs}
-            </div>
-          </div>
-        </div>
-        {detailDialogs}
-      </div>
-    );
-  }
-
-  // ─── Panel (default) layout ──────────────────────────────────────────────
+  // ─── Full-page layout (Linear-style) ─────────────────────────────────────
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-primary">
-      {/* Header */}
-      <div className="relative shrink-0 border-b border-border p-4">
-        {headerButtons}
-        {issueIdentityLinks}
-        <div className="my-1 flex flex-wrap items-center gap-2 pr-16">
-          {issueStatusBadge}
-          <h3 className="text-[15px] font-semibold">{activeIssue.title}</h3>
+    <div className="flex h-full bg-primary">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        {/* Header */}
+        <div className="relative shrink-0 border-b border-border p-4">
+          <div className="mx-auto w-full max-w-5xl">
+            {headerButtons}
+            {issueIdentityLinks}
+            <div className="my-1 flex flex-wrap items-center gap-2 pr-16">
+              {issueStatusBadge}
+              <h1 className="text-xl font-semibold">{activeIssue.title}</h1>
+            </div>
+            {issueBadges}
+          </div>
         </div>
-        {issueBadges}
+        {/* Scrollable content */}
+        <div className="flex-1 min-h-0 overflow-y-auto" data-issue-detail-scroll-region>
+          <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col p-6">
+            {detailActionStack}
+            {detailTabs}
+          </div>
+        </div>
       </div>
-
-      {/* Tabbed content — min-h-0 required for flex scroll containment */}
-      <div className="flex-1 min-h-0 overflow-y-auto" data-issue-detail-scroll-region>
-        {detailActionStack}
-        {detailTabs}
-      </div>
-
-      {/* Portal-based dialog — outside tabs to avoid unmount on tab switch */}
       {detailDialogs}
     </div>
   );

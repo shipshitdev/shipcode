@@ -13,6 +13,7 @@ import { PhaseChip } from '../PhaseChip';
 import { Badge } from '../primitives/badge';
 import { Button } from '../primitives/button';
 import { ACTIVE_STATUSES, DRAGGABLE_STATUSES, PHASE_ELAPSED_STATUSES } from './constants';
+import { IssueHoverCard } from './IssueHoverCard';
 import type {
   IssueApprovalBadge,
   IssuePhaseChip,
@@ -165,7 +166,8 @@ function DraggableCardComponent({
   const linkedPrLabel = issue.linkedPrNumber ? `PR #${issue.linkedPrNumber}` : null;
 
   return (
-    // biome-ignore lint/a11y/useSemanticElements: The card contains nested action buttons, so it cannot be a semantic button.
+    <IssueHoverCard issue={issue} disabled={isDragging || isCreating}>
+    {/* biome-ignore lint/a11y/useSemanticElements: The card contains nested action buttons, so it cannot be a semantic button. */}
     <div
       ref={setNodeRef}
       className={cn(
@@ -514,6 +516,7 @@ function DraggableCardComponent({
         )}
       </div>
     </div>
+    </IssueHoverCard>
   );
 }
 

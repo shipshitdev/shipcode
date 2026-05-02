@@ -433,18 +433,10 @@ export function ThreadPanel() {
       selectAutomationThread(issue.threadId);
       setTerminalThread(issue.threadId);
       openTerminal();
-      const store = useAppStore.getState();
-      if (store.issueDetailCollapsed) {
-        store.toggleIssueDetail();
-      }
       return;
     }
 
     selectIssue(issue);
-    const store = useAppStore.getState();
-    if (store.issueDetailCollapsed) {
-      store.toggleIssueDetail();
-    }
   };
   const handleIssueComment = (issue: GitHubIssueCacheRecord) => {
     handleIssueClick(issue);
