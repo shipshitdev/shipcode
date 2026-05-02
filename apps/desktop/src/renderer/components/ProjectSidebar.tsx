@@ -42,7 +42,7 @@ import {
 } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ComponentType } from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NOTIFICATIONS_STALE_TIME, STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 import { ProjectProviderWarningPopover } from './ProjectProviderWarningPopover';
@@ -269,6 +269,19 @@ export function ProjectSidebar() {
     [sidebarWidth],
   );
 
+  // Pinned projects always float to top; within each group, apply the selected sort order.
+  const sortedProjects = useMemo(
+    () =>
+      [...projects].sort((a, b) => {
+        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+        if (sortOrder === 'alpha') return a.name.localeCompare(b.name);
+        if (sortOrder === 'added') return (a.createdAt || '').localeCompare(b.createdAt || '');
+        // 'recent'
+        return (b.updatedAt || '').localeCompare(a.updatedAt || '');
+      }),
+    [projects, sortOrder],
+  );
+
   if (sidebarCollapsed) {
     return null;
   }
@@ -287,15 +300,6 @@ export function ProjectSidebar() {
     : hasWarning
       ? 'bg-warning/15 text-warning'
       : 'bg-tertiary text-secondary';
-
-  // Pinned projects always float to top; within each group, apply the selected sort order.
-  const sortedProjects = [...projects].sort((a, b) => {
-    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-    if (sortOrder === 'alpha') return a.name.localeCompare(b.name);
-    if (sortOrder === 'added') return (a.createdAt || '').localeCompare(b.createdAt || '');
-    // 'recent'
-    return (b.updatedAt || '').localeCompare(a.updatedAt || '');
-  });
 
   return (
     <aside

@@ -1278,12 +1278,49 @@ export function migrateV42(db: DatabaseSync): void {
         ON task_edges(graph_id, source_node_id, target_node_id, edge_type);
     `);
 
-    // v43: composite index on threads(kind, status) for dashboard stats
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (42)`);
+  });
+}
+
+export function migrateV43(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 43) return;
+
+  transaction(db, () => {
+    // Composite index on threads(kind, status) for dashboard stats.
     db.exec(`
       CREATE INDEX IF NOT EXISTS idx_threads_kind_status
         ON threads(kind, status);
     `);
 
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (43)`);
+  });
+}
+
+export function migrateV44(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 44) return;
+
+  transaction(db, () => {
+    // Composite indexes for common lookup patterns.
+    // threads(project_id, github_issue_number) — used by getByProjectAndGithubIssue,
+    // activity:list-for-issue, costs:list-tasks-for-issue.
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_threads_project_issue
+        ON threads(project_id, github_issue_number);
+    `);
+
+    // plans(thread_id, version DESC) — eliminates sort for correlated subqueries
+    // in getStats pending-approvals check and listAwaitingWithApprovedPlans.
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_plans_thread_version
+        ON plans(thread_id, version DESC);
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (44)`);
   });
 }

@@ -43,6 +43,7 @@ import {
   migrateV40,
   migrateV41,
   migrateV42,
+  migrateV43,
 } from './schema';
 import { asRow } from './utils';
 
@@ -143,6 +144,78 @@ describe('migrateV42', () => {
   it('is idempotent', () => {
     migrateV42(db);
     expect(() => migrateV42(db)).not.toThrow();
+  });
+});
+
+describe('migrateV43', () => {
+  let db: DatabaseSync;
+
+  beforeEach(() => {
+    db = new DatabaseSync(':memory:');
+    migrate(db);
+    migrateV2(db);
+    migrateV3(db);
+    migrateV4(db);
+    migrateV5(db);
+    migrateV6(db);
+    migrateV7(db);
+    migrateV8(db);
+    migrateV9(db);
+    migrateV10(db);
+    migrateV11(db);
+    migrateV12(db);
+    migrateV13(db);
+    migrateV14(db);
+    migrateV15(db);
+    migrateV16(db);
+    migrateV17(db);
+    migrateV18(db);
+    migrateV19(db);
+    migrateV20(db);
+    migrateV21(db);
+    migrateV22(db);
+    migrateV23(db);
+    migrateV24(db);
+    migrateV25(db);
+    migrateV26(db);
+    migrateV27(db);
+    migrateV28(db);
+    migrateV29(db);
+    migrateV30(db);
+    migrateV31(db);
+    migrateV32(db);
+    migrateV33(db);
+    migrateV34(db);
+    migrateV35(db);
+    migrateV36(db);
+    migrateV37(db);
+    migrateV38(db);
+    migrateV39(db);
+    migrateV40(db);
+    migrateV41(db);
+    migrateV42(db);
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('runs for databases already at v42', () => {
+    migrateV43(db);
+
+    const index = db
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_threads_kind_status'",
+      )
+      .get();
+    const version = db
+      .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+      .get() as {
+      version: number;
+    };
+
+    expect(index).toBeTruthy();
+    expect(version.version).toBe(43);
   });
 });
 

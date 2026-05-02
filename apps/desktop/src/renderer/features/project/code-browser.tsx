@@ -26,6 +26,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../../query-stale-times';
 import { useAppStore } from '../../stores/app-store';
 
+const EMPTY_WORKTREES: GitWorktreeSummary[] = [];
+
 type ViewMode = 'source' | 'diff';
 
 interface TreeNodeProps {
@@ -246,7 +248,7 @@ export function CodeBrowser() {
     staleTime: STABLE_APP_STATE_STALE_TIME,
   });
 
-  const worktrees: GitWorktreeSummary[] = data?.worktrees ?? [];
+  const worktrees: GitWorktreeSummary[] = data?.worktrees ?? EMPTY_WORKTREES;
 
   useEffect(() => {
     if (!worktrees.length) {

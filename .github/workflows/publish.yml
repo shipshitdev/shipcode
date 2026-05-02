@@ -272,7 +272,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: "24"
           registry-url: "https://registry.npmjs.org"
       - run: bun install
       - name: Build CLI and dependencies
