@@ -11,10 +11,17 @@ const plan: ShipCodePlan = {
   objective: 'Ship the feature',
   files: [{ path: 'src/file.ts', action: 'modify', description: 'Update the file' }],
   steps: [
-    { order: 1, description: 'Implement the change', files: ['src/file.ts'], rationale: 'Scope' },
+    { order: 1, description: 'Inspect the target', files: ['src/file.ts'], rationale: 'Baseline' },
+    { order: 2, description: 'Implement the change', files: ['src/file.ts'], rationale: 'Scope' },
+    {
+      order: 3,
+      description: 'Verify the change',
+      files: ['src/file.ts'],
+      rationale: 'Regression coverage',
+    },
   ],
   acceptanceCriteria: ['It works'],
-  outOfScope: [],
+  outOfScope: ['Unrelated refactors'],
   estimatedComplexity: 'low',
   dependencies: [],
 };

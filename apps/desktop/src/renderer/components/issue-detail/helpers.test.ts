@@ -15,9 +15,23 @@ const VALID_PLAN_JSON = JSON.stringify({
   version: 1,
   objective: 'Add feature',
   files: [{ path: 'src/foo.ts', action: 'modify', description: 'Update foo' }],
-  steps: [{ order: 1, description: 'Do the thing', files: ['src/foo.ts'], rationale: 'Needed' }],
+  steps: [
+    {
+      order: 1,
+      description: 'Inspect current behavior',
+      files: ['src/foo.ts'],
+      rationale: 'Baseline',
+    },
+    { order: 2, description: 'Do the thing', files: ['src/foo.ts'], rationale: 'Needed' },
+    {
+      order: 3,
+      description: 'Verify behavior',
+      files: ['src/foo.ts'],
+      rationale: 'Regression coverage',
+    },
+  ],
   acceptanceCriteria: ['Tests pass'],
-  outOfScope: [],
+  outOfScope: ['Unrelated refactors'],
   estimatedComplexity: 'low',
   dependencies: [],
 });

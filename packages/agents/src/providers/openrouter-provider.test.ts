@@ -272,10 +272,29 @@ describe('createOpenRouterProvider', () => {
       threadId: 't1',
       version: 1,
       objective: 'test',
-      files: [],
-      steps: [],
-      acceptanceCriteria: [],
-      outOfScope: [],
+      files: [{ path: 'src/file.ts', action: 'modify', description: 'Update the file' }],
+      steps: [
+        {
+          order: 1,
+          description: 'Inspect the target',
+          files: ['src/file.ts'],
+          rationale: 'Baseline',
+        },
+        {
+          order: 2,
+          description: 'Implement the change',
+          files: ['src/file.ts'],
+          rationale: 'Feature work',
+        },
+        {
+          order: 3,
+          description: 'Verify the change',
+          files: ['src/file.ts'],
+          rationale: 'Regression coverage',
+        },
+      ],
+      acceptanceCriteria: ['It works'],
+      outOfScope: ['Unrelated refactors'],
       estimatedComplexity: 'low',
       dependencies: [],
     });

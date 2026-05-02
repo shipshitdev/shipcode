@@ -63,9 +63,18 @@ const PLAN_JSON = JSON.stringify({
   version: 1,
   objective: 'Fix the bug',
   files: [{ path: 'src/index.ts', action: 'modify', description: 'fix it' }],
-  steps: [{ order: 1, description: 'fix it', files: ['src/index.ts'], rationale: 'required' }],
+  steps: [
+    { order: 1, description: 'Inspect the bug', files: ['src/index.ts'], rationale: 'Baseline' },
+    { order: 2, description: 'Fix the bug', files: ['src/index.ts'], rationale: 'Required change' },
+    {
+      order: 3,
+      description: 'Verify the fix',
+      files: ['src/index.ts'],
+      rationale: 'Regression coverage',
+    },
+  ],
   acceptanceCriteria: ['bug is fixed'],
-  outOfScope: [],
+  outOfScope: ['Unrelated refactors'],
   estimatedComplexity: 'low',
   dependencies: [],
 });

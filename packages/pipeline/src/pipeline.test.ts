@@ -65,9 +65,13 @@ const PLAN_JSON = JSON.stringify({
   version: 1,
   objective: 'Test',
   files: [{ path: 'a.ts', action: 'modify', description: 'd' }],
-  steps: [{ order: 1, description: 'd', files: ['a.ts'], rationale: 'r' }],
+  steps: [
+    { order: 1, description: 'Inspect a.ts', files: ['a.ts'], rationale: 'Baseline' },
+    { order: 2, description: 'Modify a.ts', files: ['a.ts'], rationale: 'Feature work' },
+    { order: 3, description: 'Verify a.ts', files: ['a.ts'], rationale: 'Regression coverage' },
+  ],
   acceptanceCriteria: ['works'],
-  outOfScope: [],
+  outOfScope: ['Unrelated refactors'],
   estimatedComplexity: 'low',
   dependencies: [],
 });

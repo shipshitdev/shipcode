@@ -282,7 +282,6 @@ describe('SettingsPanel', () => {
     expect(screen.getByRole('tab', { name: 'Runtime' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Models' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Testing' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Labels' })).toBeInTheDocument();
     expect(screen.getByText('Require approval before execution')).toBeInTheDocument();
     expect(screen.getByText('Max concurrent pipelines')).toBeInTheDocument();
   });

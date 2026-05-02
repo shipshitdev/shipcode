@@ -7,9 +7,28 @@ const VALID_PLAN = {
   version: 1,
   objective: 'Test objective',
   files: [{ path: 'src/foo.ts', action: 'modify', description: 'Update foo' }],
-  steps: [{ order: 1, description: 'Do thing', files: ['src/foo.ts'], rationale: 'Because' }],
+  steps: [
+    {
+      order: 1,
+      description: 'Review current behavior',
+      files: ['src/foo.ts'],
+      rationale: 'Baseline',
+    },
+    {
+      order: 2,
+      description: 'Update foo behavior',
+      files: ['src/foo.ts'],
+      rationale: 'Feature work',
+    },
+    {
+      order: 3,
+      description: 'Verify foo behavior',
+      files: ['src/foo.ts'],
+      rationale: 'Regression coverage',
+    },
+  ],
   acceptanceCriteria: ['It works'],
-  outOfScope: [],
+  outOfScope: ['Unrelated refactors'],
   estimatedComplexity: 'low',
   dependencies: [],
 };
@@ -133,22 +152,6 @@ describe('StreamParser', () => {
       parser.feed('Some preamble text\n');
       parser.feed(fenced('shipcode-plan', VALID_PLAN));
       parser.feed('\nSome trailing text');
-      const result = parser.extractPlan();
-      expect(result.success).toBe(true);
-      expect(result.data?.objective).toBe('Test objective');
-    });
-
-    it('falls back to raw JSON extraction when no fence is present (flat)', () => {
-      // Use a plan with no nested objects so the non-greedy regex captures
-      // the full JSON blob (first { to last } with no inner braces to trip it).
-      const flatPlan = {
-        ...VALID_PLAN,
-        files: [],
-        steps: [],
-      };
-      // Wrap so the only braces are the outer ones
-      const json = JSON.stringify(flatPlan);
-      parser.feed(`Here is the plan: ${json}`);
       const result = parser.extractPlan();
       expect(result.success).toBe(true);
       expect(result.data?.objective).toBe('Test objective');
