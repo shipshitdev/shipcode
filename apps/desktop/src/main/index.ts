@@ -40,6 +40,7 @@ import {
   createCodexCliProvider,
   createOpenRouterProvider,
   createProviderRegistry,
+  GhCli,
   ProcessManager,
 } from '@shipcode/agents/source';
 import {
@@ -66,7 +67,7 @@ import {
   VerificationQueries,
 } from '@shipcode/db';
 import { TaskGraphQueries } from '@shipcode/db/source';
-import { createPipeline } from '@shipcode/pipeline';
+import { createPipeline, createReconciliationLoop } from '@shipcode/pipeline';
 import {
   HEARTBEAT_TIMEOUT_MS,
   PIPELINE_PHASE,
@@ -321,6 +322,25 @@ function createWindow() {
   });
   automationScheduler.start();
 
+  // Reconciliation loop: polls running pipelines' GitHub issue state every 30s.
+  // Cancels pipelines whose issue was closed or tagged with a terminal label.
+  const reconciliationLoop = createReconciliationLoop({
+    pipeline: activePipeline,
+    issueStateProvider: {
+      async getIssueState(projectPath: string, issueNumber: number) {
+        const ghCli = new GhCli(projectPath);
+        const issue = await ghCli.getIssue(issueNumber);
+        return { state: issue.state, labels: issue.labels };
+      },
+    },
+    onReconciliationCancel: (threadId, reason) => {
+      onPipelineTerminal?.({ threadId, phase: PIPELINE_PHASE.idle });
+      log.info(`[reconcile] ${reason}`);
+    },
+    log: (msg) => log.info(msg),
+  });
+  reconciliationLoop.start();
+
   // Queue promotion: start the next queued issue when a pipeline slot opens.
   onPipelineTerminal = (event) => {
     try {
@@ -448,6 +468,7 @@ function createWindow() {
 
   mainWindow.on('closed', () => {
     clearInterval(watchdogTimer);
+    reconciliationLoop.stop();
     updateService?.stop();
     updateService = null;
     mainWindow = null;

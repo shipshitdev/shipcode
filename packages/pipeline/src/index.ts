@@ -5,6 +5,18 @@ export {
 } from './issue-group-scheduler';
 export { mapPhaseToIssuePipelineStatus, syncThreadAndIssuePhase } from './phase-sync';
 export { createPipeline } from './pipeline';
+export type {
+  IssueStateProvider,
+  ReconciliationLoop,
+  ReconciliationLoopDeps,
+  ReconciliationLoopOptions,
+  ReconciliationTickResult,
+} from './reconciliation-loop';
+export {
+  createReconciliationLoop,
+  DEFAULT_RECONCILE_INTERVAL_MS,
+  DEFAULT_TERMINAL_LABELS,
+} from './reconciliation-loop';
 export type { PipelineRetryReason } from './retry-scheduler';
 export {
   CONTINUATION_RETRY_DELAY_MS,
