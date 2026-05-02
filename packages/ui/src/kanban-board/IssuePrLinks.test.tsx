@@ -1,14 +1,8 @@
 // @vitest-environment jsdom
 
 import { DndContext } from '@dnd-kit/core';
-import {
-  type AppSettings,
-  DEFAULT_SETTINGS,
-  type GitHubIssueCacheRecord,
-  type Project,
-} from '@shipcode/shared';
-import { act, type ComponentProps, type ReactElement } from 'react';
-import { createRoot } from 'react-dom/client';
+import { type AppSettings, DEFAULT_SETTINGS, type GitHubIssueCacheRecord } from '@shipcode/shared';
+import { act, type ComponentProps } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ActivePipelineCard } from '../ActivePipelineCard';
 import { KanbanBoard } from '../KanbanBoard';
@@ -16,118 +10,25 @@ import { DroppableColumn, StackedColumn } from './BoardColumns';
 import { COLUMNS } from './constants';
 import { DraggableCard } from './IssueCardParts';
 import { IssueListView } from './IssueListView';
+import { makeIssue as makeBaseIssue, makeProject, renderIntoDom } from './test-helpers';
 
 function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssueCacheRecord {
-  return {
-    id: 'issue-1',
-    projectId: 'project-1',
+  return makeBaseIssue({
     issueNumber: 38,
     title: 'Add demo pipeline task',
-    body: null,
-    labels: [],
-    assignee: null,
-    state: 'open',
     pipelineStatus: 'completed',
-    threadId: null,
-    claimedAt: null,
-    claimedBy: null,
-    lastPhaseUpdate: null,
-    lastStatusLabel: null,
-    plannerModelOverride: null,
-    reviewerModelOverride: null,
-    executorModelOverride: null,
-    verifierModelOverride: null,
-    plannerModelIdOverride: null,
-    reviewerModelIdOverride: null,
-    executorModelIdOverride: null,
-    verifierModelIdOverride: null,
-    plannerReasoningEffortOverride: null,
-    reviewerReasoningEffortOverride: null,
-    executorReasoningEffortOverride: null,
-    verifierReasoningEffortOverride: null,
-    revisionCountOverride: null,
-    requireApprovalOverride: null,
     linkedPrNumber: 91,
     linkedPrUrl: 'https://github.com/acme/repo/pull/91',
     linkedPrIsDraft: true,
-    ciBlocked: false,
-    failingChecks: [],
-    unresolvedReviewComments: [],
-    unresolvedReviewCommentCount: 0,
-    prLastSyncAt: null,
     fetchedAt: new Date('2026-04-14T00:00:00.000Z').toISOString(),
-    priorityRank: null,
-    priorityRaw: null,
-    priorityFetchedAt: null,
-    isQuickMode: false,
     ...overrides,
-  };
+  });
 }
 
 const SETTINGS: AppSettings = {
   ...DEFAULT_SETTINGS,
   requireApproval: false,
 };
-
-function makeProject(overrides: Partial<Project> = {}): Project {
-  return {
-    id: 'project-1',
-    name: 'ShipCode',
-    path: '/tmp/shipcode',
-    gitRemote: 'git@github.com:shipshitdev/shipcode.git',
-    githubRepoId: null,
-    githubRepoFullName: null,
-    starterIssueNumber: null,
-    starterIssueCreatedAt: null,
-    githubProjectUrl: null,
-    plannerModelOverride: null,
-    reviewerModelOverride: null,
-    executorModelOverride: null,
-    verifierModelOverride: null,
-    plannerModelIdOverride: null,
-    reviewerModelIdOverride: null,
-    executorModelIdOverride: null,
-    verifierModelIdOverride: null,
-    plannerReasoningEffortOverride: null,
-    reviewerReasoningEffortOverride: null,
-    executorReasoningEffortOverride: null,
-    verifierReasoningEffortOverride: null,
-    revisionCountOverride: null,
-    requireApprovalOverride: null,
-    discordRouting: 'inherit',
-    discordWebhookUrlOverride: null,
-    telegramRouting: 'inherit',
-    telegramChatIdOverride: null,
-    defaultBranch: 'main',
-    pinned: false,
-    archived: false,
-    hidden: false,
-    notifyGithubUser: null,
-    createdAt: '2026-04-14T00:00:00.000Z',
-    updatedAt: '2026-04-14T00:00:00.000Z',
-    ...overrides,
-  };
-}
-
-function renderIntoDom(element: ReactElement) {
-  const container = document.createElement('div');
-  document.body.appendChild(container);
-  const root = createRoot(container);
-
-  act(() => {
-    root.render(element);
-  });
-
-  return {
-    container,
-    cleanup: () => {
-      act(() => {
-        root.unmount();
-      });
-      container.remove();
-    },
-  };
-}
 
 function expectBadgeGeometry(element: HTMLElement) {
   expect(element.className).toContain('rounded-md');
