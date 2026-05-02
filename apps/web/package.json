@@ -20,10 +20,12 @@
     "react-dom": "19.2.5"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@tailwindcss/postcss": "4.2.4",
     "@types/node": "25.6.0",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
+    "satori": "^0.26.0",
     "tailwindcss": "4.2.4",
     "typescript": "6.0.3"
   }

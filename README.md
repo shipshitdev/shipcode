@@ -1,8 +1,12 @@
 # ShipCode
 
-> [Watch the launch video (MP4)](https://github.com/shipshitdev/shipcode/releases/download/v0.1.0/shipcode-launch.mp4)
+AI Agents that ship working code. GitHub issue in, reviewed PR out.
 
-Autonomous AI coding pipeline. GitHub issues in, pull requests out.
+<p align="center">
+  <img src="docs/cli-demo.png" alt="ShipCode CLI running a full pipeline" width="720" />
+</p>
+
+> [Watch the launch video (MP4)](https://github.com/shipshitdev/shipcode/releases/download/v0.1.0/shipcode-launch.mp4)
 
 Label a GitHub issue with `agent:claude` or `agent:codex`, and ShipCode handles the rest: plan, adversarial review, implement, verify, and ship a PR. No human gates until the PR is created.
 

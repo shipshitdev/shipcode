@@ -50,6 +50,7 @@
 
 html {
   color-scheme: dark;
+  scroll-behavior: smooth;
 }
 
 body {
@@ -118,4 +119,15 @@ body::after {
 
 .animate-screenshot-in {
   animation: screenshotIn 0.9s ease-out;
+}
+
+/* Hide all scrollbars inside the product mockup illustration */
+.product-mockup-inner,
+.product-mockup-inner * {
+  scrollbar-width: none;          /* Firefox */
+  -ms-overflow-style: none;       /* IE/Edge */
+}
+.product-mockup-inner::-webkit-scrollbar,
+.product-mockup-inner *::-webkit-scrollbar {
+  display: none;                  /* Chrome/Safari/Blink */
 }

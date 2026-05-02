@@ -8,9 +8,12 @@ export function Footer() {
           rel="noopener noreferrer"
           className="transition-colors hover:text-secondary"
         >
-          © 2026 shipshit.dev
+          &copy; 2026 shipshit.dev
         </a>
         <div className="flex items-center gap-6">
+          <a href="/docs" className="transition-colors hover:text-secondary">
+            Docs
+          </a>
           <a
             href="https://github.com/shipshitdev/shipcode"
             target="_blank"
@@ -19,8 +22,29 @@ export function Footer() {
           >
             GitHub
           </a>
-          <a href="/docs" className="transition-colors hover:text-secondary">
-            Docs
+          <a
+            href="https://discord.gg/shipcode"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition-colors hover:text-secondary"
+          >
+            Discord
+          </a>
+          <a
+            href="https://x.com/shipshitdev"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition-colors hover:text-secondary"
+          >
+            Twitter
+          </a>
+          <a
+            href="https://youtube.com/@shipshitshow"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition-colors hover:text-secondary"
+          >
+            YouTube
           </a>
         </div>
       </div>
