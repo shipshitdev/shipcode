@@ -17,6 +17,7 @@ import {
 import {
   clampError,
   type ExecutorModel,
+  formatClockTime,
   type GeneratorCli,
   providerDisplay,
 } from '@shipcode/shared';
@@ -270,12 +271,7 @@ export function registerSupportHandlers({
     }
 
     if ((state === 'running' || state === 'exited') && proc?.threadId) {
-      const ts = new Date().toLocaleTimeString('en-US', {
-        hour12: false,
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      });
+      const ts = formatClockTime(new Date());
       const agentColor =
         type === 'claude' ? '\x1b[36m' : type === 'codex' ? '\x1b[33m' : '\x1b[35m';
       const exitColor = state === 'exited' ? '\x1b[2m' : '';

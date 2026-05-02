@@ -5,7 +5,7 @@ import type {
   PlanRecord,
   Thread,
 } from '@shipcode/shared';
-import { PIPELINE_PHASE } from '@shipcode/shared';
+import { formatClockTime, PIPELINE_PHASE } from '@shipcode/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../../query-stale-times';
@@ -221,15 +221,7 @@ export function useTerminalDrawer() {
     resolvedHeight: isMaximized ? undefined : height,
     runningTargets,
     showEmptyState: displayTarget === null,
-    startedAt:
-      firstEventCreatedAt != null
-        ? new Date(firstEventCreatedAt).toLocaleTimeString('en-US', {
-            hour12: false,
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-          })
-        : null,
+    startedAt: firstEventCreatedAt != null ? formatClockTime(firstEventCreatedAt) : null,
     terminalThreadId: visibleTerminalThreadId,
     toggleMaximize,
     toggleTerminal,

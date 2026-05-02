@@ -3,6 +3,7 @@ export * from './branches';
 export * from './cli-model-capabilities';
 export * from './constants';
 export * from './errors';
+export * from './format-clock-time';
 export * from './format-cost';
 export * from './format-duration';
 export * from './format-relative-time';

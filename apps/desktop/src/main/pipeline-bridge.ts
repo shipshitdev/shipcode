@@ -7,6 +7,7 @@ import type {
 import type { PipelineEmitter, PipelineEvent } from '@shipcode/pipeline';
 import {
   type ActivityKind,
+  formatClockTime,
   formatResolvedModelDisplay,
   PIPELINE_PHASE,
   type PipelinePhase,
@@ -29,17 +30,8 @@ interface EmitterDeps {
   onExecutionSlotFreed?: () => void;
 }
 
-function formatClock(isoLike: string): string {
-  return new Date(isoLike).toLocaleTimeString('en-US', {
-    hour12: false,
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-}
-
 function formatTimestampPrefix(isoLike: string): string {
-  return `\x1b[90m[${formatClock(isoLike)}]\x1b[0m`;
+  return `\x1b[90m[${formatClockTime(isoLike)}]\x1b[0m`;
 }
 
 // Phase transitions that map to human-visible activity entries.
