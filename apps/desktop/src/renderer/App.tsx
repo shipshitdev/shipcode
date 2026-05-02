@@ -12,6 +12,7 @@ import { OverviewView } from './components/OverviewView';
 import { ProjectMissingView } from './components/ProjectMissingView';
 import { ProjectPathBanner } from './components/ProjectPathBanner';
 import { ProjectSidebar } from './components/ProjectSidebar';
+import { ProjectSubSidebar } from './components/ProjectSubSidebar';
 import { ProjectView } from './components/ProjectView';
 import { SettingsPanel } from './components/SettingsPanel';
 import { SettingsSidebar } from './components/SettingsSidebar';
@@ -298,7 +299,14 @@ export function App() {
       <HealthBanner />
       <ProjectPathBanner project={activeProject ?? null} />
       <div className="flex flex-1 overflow-hidden">
-        {!hideSidebarForReader && (settingsVisible ? <SettingsSidebar /> : <ProjectSidebar />)}
+        {!hideSidebarForReader &&
+          (settingsVisible ? (
+            <SettingsSidebar />
+          ) : viewMode === 'project' ? (
+            <ProjectSubSidebar />
+          ) : (
+            <ProjectSidebar />
+          ))}
         {/* Center column — main view above, terminal below. Right detail
             panel is a sibling (not nested), so the terminal sits BETWEEN
             the sidebar and the detail panel (Cursor-style) and resizes as
