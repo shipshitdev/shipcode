@@ -45,6 +45,7 @@ import {
 } from '@shipcode/agents/source';
 import {
   ActivityQueries,
+  AgentConversationQueries,
   AutomationQueries,
   CheckpointQueries,
   CostsQueries,
@@ -242,6 +243,7 @@ function createWindow() {
     skills: new SkillsQueries(db),
     terminalEvents: new TerminalEventQueries(db),
     pipelineSteps: new PipelineStepQueries(db),
+    agentConversations: new AgentConversationQueries(db),
     taskGraphs: new TaskGraphQueries(db),
   };
   threadQueries = queries.threads;
@@ -305,6 +307,7 @@ function createWindow() {
     skills: queries.skills,
     taskGraphs: queries.taskGraphs,
     pipelineSteps: queries.pipelineSteps,
+    agentConversations: queries.agentConversations,
   };
   pipeline = createPipeline(pipelineDeps as Parameters<typeof createPipeline>[0]);
   const activePipeline = requirePipeline();

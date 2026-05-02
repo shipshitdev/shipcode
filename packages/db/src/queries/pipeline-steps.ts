@@ -73,7 +73,8 @@ export class PipelineStepQueries {
                 completion_tokens = COALESCE(?, completion_tokens),
                 cost_usd = COALESCE(?, cost_usd),
                 completed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
-                duration_ms = ?
+                duration_ms = ?,
+                conversation_id = COALESCE(?, conversation_id)
           WHERE id = ?`,
       )
       .run(
@@ -85,6 +86,7 @@ export class PipelineStepQueries {
         update.completionTokens ?? null,
         update.costUsd ?? null,
         durationMs,
+        update.conversationId ?? null,
         id,
       );
     return this.getById(id) ?? this.failLoad(id);

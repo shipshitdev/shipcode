@@ -9,6 +9,7 @@ import {
   ProcessManager,
 } from '@shipcode/agents/source';
 import {
+  AgentConversationQueries,
   CheckpointQueries,
   DiffQueries,
   GitHubIssueQueries,
@@ -70,6 +71,7 @@ export function createCliContext(cwd: string): CliContext {
   const checkpoints = new CheckpointQueries(db);
   const terminalEvents = new TerminalEventQueries(db);
   const pipelineSteps = new PipelineStepQueries(db);
+  const agentConversations = new AgentConversationQueries(db);
   const taskGraphs = new TaskGraphQueries(db);
 
   let project = projects.list().find((p) => p.path === cwd);
@@ -106,6 +108,7 @@ export function createCliContext(cwd: string): CliContext {
     skills,
     taskGraphs,
     pipelineSteps,
+    agentConversations,
   } as Parameters<typeof createPipeline>[0];
 
   return {

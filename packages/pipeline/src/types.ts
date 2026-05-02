@@ -8,6 +8,7 @@ import type {
   TerminalEvent,
 } from '@shipcode/agents/source';
 import type {
+  AgentConversationQueries,
   CheckpointQueries,
   DiffQueries,
   GitHubIssueQueries,
@@ -297,6 +298,12 @@ export interface PipelineDeps {
    * across the whole pipeline.
    */
   pipelineSteps?: PipelineStepQueries;
+  /**
+   * Append-only conversation log. When provided, runProviderPhase writes
+   * one prompt + one response row per provider invocation so all agent
+   * dialogue is queryable and viewable in the Conversations tab.
+   */
+  agentConversations?: AgentConversationQueries;
 }
 
 export interface Pipeline {

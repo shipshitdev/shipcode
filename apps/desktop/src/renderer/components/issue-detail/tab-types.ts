@@ -7,6 +7,7 @@ export const ISSUE_DETAIL_TABS = [
   'pipeline',
   'diff',
   'activity',
+  'conversations',
   'costs',
 ] as const;
 export type PhaseKey = ResolvedPhaseModel;

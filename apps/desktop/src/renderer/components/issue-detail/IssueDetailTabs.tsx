@@ -13,6 +13,7 @@ import type {
 } from '@shipcode/shared';
 import { cn, Tabs, TabsContent, TabsList, TabsTrigger } from '@shipshitdev/ui';
 import { CommentsTab } from './CommentsTab';
+import { ConversationsTab } from './ConversationsTab';
 import { CostsTab } from './CostsTab';
 import { DiffTab } from './DiffTab';
 import { IssueHistoryTab } from './IssueHistoryTab';
@@ -157,6 +158,7 @@ export function IssueDetailTabs({
       value: 'activity',
       label: `Activity${normalizedIssueActivity.length > 0 ? ` (${normalizedIssueActivity.length})` : ''}`,
     },
+    ...(activeThreadId ? [{ value: 'conversations' as const, label: 'Conversations' }] : []),
     { value: 'costs', label: 'Costs' },
   ];
 
@@ -264,6 +266,12 @@ export function IssueDetailTabs({
           runNumberByThreadId={runNumberByThreadId}
         />
       </TabsContent>
+
+      {activeThreadId && (
+        <TabsContent value="conversations" className={cn('mt-0', !expanded && 'p-4')}>
+          <ConversationsTab threadId={activeThreadId} />
+        </TabsContent>
+      )}
 
       <TabsContent value="costs" className={cn('mt-0', !expanded && 'p-4')}>
         <CostsTab projectId={projectId} issueNumber={activeIssue.issueNumber} thread={thread} />

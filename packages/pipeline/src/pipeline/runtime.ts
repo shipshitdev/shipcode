@@ -442,6 +442,28 @@ export function createPipelineRuntime(
       }
     })();
 
+    // Conversation log: write the prompt row before calling the provider.
+    // The response row is written after we get output (or on failure).
+    const promptConvRow = (() => {
+      try {
+        return (
+          deps.agentConversations?.insert({
+            threadId: context.threadId,
+            phase,
+            round: context.promptTelemetry.length,
+            speaker: 'pipeline',
+            role: 'prompt',
+            provider: provider.id,
+            model: modelHint ?? null,
+            content: prompt,
+          }) ?? null
+        );
+      } catch (error) {
+        console.error('[pipeline] conversation prompt insert failed:', error);
+        return null;
+      }
+    })();
+
     let response: Awaited<ReturnType<typeof provider.generate>>;
     try {
       // Defense in depth: only assert workspace shape when running inside a
@@ -478,20 +500,57 @@ export function createPipelineRuntime(
           deps.emitter.emit({ type: 'terminal:event', threadId: context.threadId, event }),
       });
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const aborted = context.abort.signal.aborted || /abort/i.test(message);
+
+      // Conversation log: write synthetic error response row.
+      try {
+        deps.agentConversations?.insert({
+          threadId: context.threadId,
+          phase,
+          round: context.promptTelemetry.length,
+          speaker: 'pipeline',
+          role: 'response',
+          parentId: promptConvRow?.id ?? null,
+          content: `[error] ${message.slice(0, 2000)}`,
+        });
+      } catch (convError) {
+        console.error('[pipeline] conversation error-response insert failed:', convError);
+      }
+
       if (stepRow && deps.pipelineSteps) {
-        const message = error instanceof Error ? error.message : String(error);
-        const aborted = context.abort.signal.aborted || /abort/i.test(message);
         try {
           deps.pipelineSteps.complete(stepRow.id, {
             status: aborted ? 'aborted' : 'failed',
             errorKind: aborted ? 'aborted' : 'unknown',
             errorMessage: message.slice(0, 500),
+            conversationId: promptConvRow?.id ?? null,
           });
         } catch (logError) {
           console.error('[pipeline] pipeline step complete (throw path) failed:', logError);
         }
       }
       throw error;
+    }
+
+    // Conversation log: write the provider response row.
+    try {
+      deps.agentConversations?.insert({
+        threadId: context.threadId,
+        phase,
+        round: context.promptTelemetry.length,
+        speaker: provider.id,
+        role: 'response',
+        parentId: promptConvRow?.id ?? null,
+        provider: provider.id,
+        model: response.resolvedModel ?? modelHint ?? null,
+        content: response.rawOutput,
+        tokensIn: response.tokensUsed?.prompt ?? null,
+        tokensOut: response.tokensUsed?.completion ?? null,
+        costUsd: response.costUsd ?? null,
+      });
+    } catch (convError) {
+      console.error('[pipeline] conversation response insert failed:', convError);
     }
 
     if (stepRow && deps.pipelineSteps) {
@@ -503,6 +562,7 @@ export function createPipelineRuntime(
             promptTokens: response.tokensUsed?.prompt ?? null,
             completionTokens: response.tokensUsed?.completion ?? null,
             costUsd: response.costUsd ?? null,
+            conversationId: promptConvRow?.id ?? null,
           });
         } else {
           const kind = response.providerError?.kind;
@@ -515,6 +575,7 @@ export function createPipelineRuntime(
             promptTokens: response.tokensUsed?.prompt ?? null,
             completionTokens: response.tokensUsed?.completion ?? null,
             costUsd: response.costUsd ?? null,
+            conversationId: promptConvRow?.id ?? null,
           });
         }
       } catch (logError) {

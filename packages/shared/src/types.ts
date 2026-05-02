@@ -322,6 +322,8 @@ export interface PipelineStepCompletionUpdate {
   promptTokens?: number | null;
   completionTokens?: number | null;
   costUsd?: number | null;
+  /** Links this step to its conversation prompt/response pair. */
+  conversationId?: string | null;
 }
 
 // === Terminal Types ===

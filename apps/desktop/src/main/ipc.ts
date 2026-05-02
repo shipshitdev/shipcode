@@ -5,6 +5,7 @@ import type { BrowserWindow, IpcMain } from 'electron';
 import type { AutomationSchedulerLike } from './automation-scheduler';
 import type { ChatNotificationService } from './chat-notification-service';
 import { transitionThreadPhase } from './ipc/helpers';
+import { registerAgentConversationHandlers } from './ipc/register-agent-conversation-handlers';
 import { registerAutomationHandlers } from './ipc/register-automation-handlers';
 import { registerDeveloperHandlers } from './ipc/register-developer-handlers';
 import { registerGitHubHandlers } from './ipc/register-github-handlers';
@@ -99,6 +100,7 @@ export function registerIpcHandlers(
   registerSupportHandlers(deps);
   registerInstantHandlers(deps);
   registerPullRequestHandlers(deps);
+  registerAgentConversationHandlers(deps);
   registerAutomationHandlers(deps, automationScheduler);
   registerDeveloperHandlers(deps, updateService);
 }

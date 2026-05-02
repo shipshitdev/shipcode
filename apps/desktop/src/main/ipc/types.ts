@@ -1,6 +1,7 @@
 import type { ProcessManager } from '@shipcode/agents/source';
 import type {
   ActivityQueries,
+  AgentConversationQueries,
   AutomationQueries,
   CheckpointQueries,
   CostsQueries,
@@ -46,6 +47,7 @@ export interface Queries {
   skills: SkillsQueries;
   terminalEvents: TerminalEventQueries;
   pipelineSteps: PipelineStepQueries;
+  agentConversations: AgentConversationQueries;
   taskGraphs?: TaskGraphQueries;
 }
 
