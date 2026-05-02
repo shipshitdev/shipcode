@@ -1716,6 +1716,7 @@ Custom prompt`,
       const context = requireContext(pipeline);
       context.forkPointSha = 'abc123';
       context.verificationRetries = MAX_VERIFICATION_RETRIES;
+      context.workflowPolicy.agent.maxTurns = 1;
 
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.startsWith('git diff')) return 'some diff';
@@ -1817,6 +1818,7 @@ Custom prompt`,
       const context = requireContext(pipeline);
       context.forkPointSha = 'abc123';
       context.verificationRetries = MAX_VERIFICATION_RETRIES;
+      context.workflowPolicy.agent.maxTurns = 1;
 
       mockExecSync.mockImplementation((cmd: string) => {
         if (cmd.startsWith('git diff')) return 'some diff';
@@ -1877,6 +1879,91 @@ Custom prompt`,
 
       // Should NOT have re-entered execution after cancel
       expect(mock.deps.threads.updateStatus).not.toHaveBeenCalledWith('t1', 'executing');
+    });
+  });
+
+  // ─── turn loop ──────────────────────────────────────────────────────
+
+  describe('turn loop', () => {
+    it('triggers new turn on verify-exhausted when maxTurns allows', async () => {
+      useRetryFakeTimers();
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      const context = requireContext(pipeline);
+      context.forkPointSha = 'abc123';
+      context.verificationRetries = MAX_VERIFICATION_RETRIES;
+      context.turnCount = 0;
+      context.workflowPolicy.agent.maxTurns = 3;
+
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git diff')) return 'some diff';
+        if (cmd.startsWith('git status')) return '';
+        return '';
+      });
+
+      await pipeline.startVerification('t1');
+
+      await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_FAILED_JSON));
+      const exitP = mock.trigger('exit', 'proc-2', 0);
+      await vi.advanceTimersByTimeAsync(0);
+      await exitP;
+
+      // Turn loop should have incremented turnCount and reset retries
+      expect(context.turnCount).toBe(1);
+      expect(context.verificationRetries).toBe(0);
+
+      // turn events emitted
+      expect(mock.emittedEvents).toContainEqual(
+        expect.objectContaining({
+          type: 'pipeline:turn-completed',
+          turnNumber: 1,
+          result: 'failed',
+        }),
+      );
+      expect(mock.emittedEvents).toContainEqual(
+        expect.objectContaining({ type: 'pipeline:turn-started', turnNumber: 2 }),
+      );
+
+      // After continuation delay, should re-enter planning (not execution)
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'planning');
+    });
+
+    it('emits max_turns_reached when turn cap is hit', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      const context = requireContext(pipeline);
+      context.forkPointSha = 'abc123';
+      context.verificationRetries = MAX_VERIFICATION_RETRIES;
+      context.turnCount = 2;
+      context.workflowPolicy.agent.maxTurns = 3;
+
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git diff')) return 'some diff';
+        if (cmd.startsWith('git status')) return '';
+        return '';
+      });
+
+      await pipeline.startVerification('t1');
+
+      await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_FAILED_JSON));
+      await mock.trigger('exit', 'proc-2', 0);
+
+      expect(mock.emittedEvents).toContainEqual(
+        expect.objectContaining({
+          type: 'pipeline:turn-completed',
+          turnNumber: 3,
+          result: 'max_turns_reached',
+        }),
+      );
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('turnCount defaults to 0 in fresh context', async () => {
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      const context = requireContext(pipeline);
+      expect(context.turnCount).toBe(0);
     });
   });
 

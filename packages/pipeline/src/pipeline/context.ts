@@ -287,6 +287,7 @@ export function createPipelineContextHelpers(
       abort: seed.abort ?? new AbortController(),
       stabilizationFeedback: seed.stabilizationFeedback ?? null,
       previousPlanRawOutput: seed.previousPlanRawOutput ?? null,
+      turnCount: seed.turnCount ?? 0,
     };
     activePipelines.set(threadId, context);
     emitWorkflowWarning(deps, context);

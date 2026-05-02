@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   DEFAULT_MAX_CONCURRENT_AGENTS,
+  DEFAULT_MAX_TURNS,
   loadWorkflowPolicy,
   parseWorkflowPolicy,
   resolveWorkflowPath,
@@ -185,6 +186,74 @@ body`,
       );
 
       expect(policy.agent.maxConcurrentAgentsByState).toEqual({ verify: 2 });
+    });
+  });
+
+  describe('max_turns', () => {
+    it('parses max_turns from front matter', () => {
+      const policy = parseWorkflowPolicy(
+        `---
+agent:
+  max_turns: 5
+---
+body`,
+        '/repo/WORKFLOW.md',
+      );
+
+      expect(policy.agent.maxTurns).toBe(5);
+    });
+
+    it('defaults to DEFAULT_MAX_TURNS when absent', () => {
+      const policy = parseWorkflowPolicy(
+        `---
+agent:
+  max_concurrent_agents: 3
+---
+body`,
+        '/repo/WORKFLOW.md',
+      );
+
+      expect(policy.agent.maxTurns).toBe(DEFAULT_MAX_TURNS);
+    });
+
+    it('ignores non-positive values', () => {
+      const policy = parseWorkflowPolicy(
+        `---
+agent:
+  max_turns: 0
+---
+body`,
+        '/repo/WORKFLOW.md',
+      );
+
+      expect(policy.agent.maxTurns).toBe(DEFAULT_MAX_TURNS);
+    });
+  });
+
+  describe('continuation_prompt', () => {
+    it('parses continuation_prompt from front matter', () => {
+      const policy = parseWorkflowPolicy(
+        `---
+continuation_prompt: "Fix the gaps: {{ prior_failure_reason }}"
+---
+body`,
+        '/repo/WORKFLOW.md',
+      );
+
+      expect(policy.continuationPromptTemplate).toBe('Fix the gaps: {{ prior_failure_reason }}');
+    });
+
+    it('defaults to null when absent', () => {
+      const policy = parseWorkflowPolicy(
+        `---
+agent:
+  max_concurrent_agents: 3
+---
+body`,
+        '/repo/WORKFLOW.md',
+      );
+
+      expect(policy.continuationPromptTemplate).toBeNull();
     });
   });
 });

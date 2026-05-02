@@ -4,6 +4,7 @@ import { parse as parseYaml } from 'yaml';
 import { DEFAULT_MAX_RETRY_BACKOFF_MS } from './retry-scheduler';
 
 export const DEFAULT_MAX_CONCURRENT_AGENTS = 10;
+export const DEFAULT_MAX_TURNS = 20;
 
 export type WorkflowLoadWarningCode =
   | 'workflow_file_unreadable'
@@ -26,12 +27,23 @@ export interface WorkflowAgentPolicy {
    * `maxConcurrentAgents` must pass for dispatch.
    */
   maxConcurrentAgentsByState: Record<string, number>;
+  /**
+   * Maximum number of full plan→review→execute→verify turns before the
+   * pipeline gives up. Default 20 (matching Symphony §7.1).
+   */
+  maxTurns: number;
 }
 
 export interface WorkflowPolicy {
   path: string | null;
   config: Record<string, unknown>;
   promptTemplate: string | null;
+  /**
+   * Optional Liquid template for continuation turns (after verify failure).
+   * Rendered with the same context as promptTemplate plus `prior_failure_reason`.
+   * Must NOT re-send the full PRD body — the agent already has it in context.
+   */
+  continuationPromptTemplate: string | null;
   agent: WorkflowAgentPolicy;
   warning: WorkflowLoadWarning | null;
 }
@@ -40,10 +52,12 @@ export const DEFAULT_WORKFLOW_POLICY: WorkflowPolicy = {
   path: null,
   config: {},
   promptTemplate: null,
+  continuationPromptTemplate: null,
   agent: {
     maxConcurrentAgents: DEFAULT_MAX_CONCURRENT_AGENTS,
     maxRetryBackoffMs: DEFAULT_MAX_RETRY_BACKOFF_MS,
     maxConcurrentAgentsByState: {},
+    maxTurns: DEFAULT_MAX_TURNS,
   },
   warning: null,
 };
@@ -134,16 +148,22 @@ export function parseWorkflowPolicy(raw: string, sourcePath: string): WorkflowPo
   }
 
   const agent = isRecord(config.agent) ? config.agent : {};
+  const continuationPrompt =
+    typeof config.continuation_prompt === 'string' && config.continuation_prompt.trim()
+      ? config.continuation_prompt.trim()
+      : null;
   return {
     path: sourcePath,
     config,
     promptTemplate: body || null,
+    continuationPromptTemplate: continuationPrompt,
     agent: {
       maxConcurrentAgents:
         positiveInteger(agent.max_concurrent_agents) ?? DEFAULT_MAX_CONCURRENT_AGENTS,
       maxRetryBackoffMs:
         positiveInteger(agent.max_retry_backoff_ms) ?? DEFAULT_MAX_RETRY_BACKOFF_MS,
       maxConcurrentAgentsByState: parsePerStateCaps(agent.max_concurrent_agents_by_state),
+      maxTurns: positiveInteger(agent.max_turns) ?? DEFAULT_MAX_TURNS,
     },
     warning: null,
   };

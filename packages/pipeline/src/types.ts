@@ -107,6 +107,13 @@ export type PipelineEvent =
       )[];
     }
   | { type: 'pipeline:verification-exhausted'; threadId: string; retries: number }
+  | { type: 'pipeline:turn-started'; threadId: string; turnNumber: number }
+  | {
+      type: 'pipeline:turn-completed';
+      threadId: string;
+      turnNumber: number;
+      result: 'success' | 'failed' | 'max_turns_reached' | 'issue_closed';
+    }
   | {
       /**
        * Emitted after every provider call that reports which model
@@ -244,6 +251,12 @@ export interface PipelineContext {
    * Consumed (cleared) after use.
    */
   previousPlanRawOutput: string | null;
+  /**
+   * Number of full plan→review→execute→verify turns completed so far.
+   * Incremented after each turn; the loop exits when `turnCount >= maxTurns`
+   * or verify passes.
+   */
+  turnCount: number;
 }
 
 export interface ActivePipelineSummary {

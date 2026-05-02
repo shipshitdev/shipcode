@@ -35,6 +35,7 @@ export type {
 export type { WorkflowAgentPolicy, WorkflowLoadWarning, WorkflowPolicy } from './workflow-loader';
 export {
   DEFAULT_MAX_CONCURRENT_AGENTS,
+  DEFAULT_MAX_TURNS,
   DEFAULT_WORKFLOW_POLICY,
   loadWorkflowPolicy,
   parseWorkflowPolicy,

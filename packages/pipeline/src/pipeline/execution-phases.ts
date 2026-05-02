@@ -29,8 +29,33 @@ import {
   type TaskNodeRecord,
 } from '@shipcode/shared/source';
 import { computeRetryDelayMs } from '../retry-scheduler';
+import type { PipelineContext } from '../types';
 import { renderWorkflowPromptTemplate } from '../workflow-prompt';
 import type { PipelineHelperEnv } from './shared';
+
+const DEFAULT_CONTINUATION_PROMPT_TEMPLATE = `The previous turn failed verification. Address the remaining gaps and fix the issues.
+
+Prior failure reason: {{ prior_failure_reason }}
+
+Do NOT re-read the original PRD — you already have it in context. Focus only on fixing the verification failures above.`;
+
+/**
+ * Build a continuation prompt for a new turn after verify failure.
+ * Uses the WORKFLOW.md continuation_prompt template if available,
+ * otherwise falls back to the built-in default.
+ */
+function buildContinuationPrompt(context: PipelineContext, failureReason: string): string {
+  const template =
+    context.workflowPolicy.continuationPromptTemplate ?? DEFAULT_CONTINUATION_PROMPT_TEMPLATE;
+
+  // Simple variable replacement — the template is short and doesn't
+  // need the full Liquid engine unless the user provides a custom one.
+  // For custom templates the workflow-prompt renderer handles it.
+  return template
+    .replace(/\{\{\s*prior_failure_reason\s*\}\}/g, failureReason)
+    .replace(/\{\{\s*turn_count\s*\}\}/g, String(context.turnCount))
+    .trim();
+}
 
 // Extract a short, human-readable error from an executor transcript.
 // The previous heuristic only dropped the snippet when the joined last
@@ -702,12 +727,61 @@ export function createExecutionPhaseHandlers({
               threadId,
               retries: context.verificationRetries,
             });
-            emitPhase(
-              threadId,
-              'failed',
-              `Verification failed: retries exhausted (${context.verificationRetries}/${MAX_VERIFICATION_RETRIES}).`,
-            );
-            activePipelines.delete(threadId);
+
+            // Turn-level retry: if maxTurns allows, start a new turn
+            // (re-enter planning with a continuation prompt).
+            const maxTurns = context.workflowPolicy.agent.maxTurns;
+            if (context.turnCount + 1 < maxTurns) {
+              deps.emitter.emit({
+                type: 'pipeline:turn-completed',
+                threadId,
+                turnNumber: context.turnCount + 1,
+                result: 'failed',
+              });
+              context.turnCount++;
+              context.verificationRetries = 0;
+              context.testRetries = 0;
+              context.retryCount = 0;
+              deps.emitter.emit({
+                type: 'pipeline:turn-started',
+                threadId,
+                turnNumber: context.turnCount + 1,
+              });
+
+              // Build continuation prompt — short, references prior failure
+              const failureReason =
+                result.data.summary ?? 'Verification failed — address remaining gaps.';
+              const continuationPrompt = buildContinuationPrompt(context, failureReason);
+
+              const delayMs = computeRetryDelayMs({
+                reason: 'continuation',
+                attempt: 1,
+              });
+              if (context.retryTimer) clearTimeout(context.retryTimer);
+              context.retryTimer = setTimeout(() => {
+                context.retryTimer = null;
+                if (context.cancelled || !activePipelines.has(threadId)) return;
+                handlers.startPlanGeneration(
+                  threadId,
+                  continuationPrompt,
+                  context.projectPath,
+                  context.worktreePath,
+                );
+              }, delayMs);
+            } else {
+              deps.emitter.emit({
+                type: 'pipeline:turn-completed',
+                threadId,
+                turnNumber: context.turnCount + 1,
+                result: 'max_turns_reached',
+              });
+              emitPhase(
+                threadId,
+                'failed',
+                `Verification failed: max turns reached (${context.turnCount + 1}/${maxTurns}).`,
+              );
+              activePipelines.delete(threadId);
+            }
           }
         } else {
           deps.verifications.create(threadId, latestPlan.id, parser.getRawOutput(), null);
