@@ -67,6 +67,21 @@ export function PipelineSettingsSection({
     prdRewriteProvider,
     prdRewriteModelValue,
   );
+  const triageModelOptions = getModelOptions(settings.triageModel, integrationStatus);
+  const triageKnownModelValues = new Set(triageModelOptions.map((option) => option.value));
+  const triageEffortResolution = resolveProviderReasoningEffort(
+    settings.triageModel,
+    settings.triageReasoningEffort,
+    settings.triageModelId,
+  );
+  const triageSupportedEfforts =
+    settings.triageModel === 'openrouter'
+      ? (['none', 'low', 'medium', 'high'] as const)
+      : getCapabilitySupportedReasoningEfforts(
+          integrationStatus,
+          settings.triageModel,
+          settings.triageModelId,
+        );
   const normalizeEffort = (
     provider: ExecutorModel,
     effort: AppSettings['plannerReasoningEffort'],
@@ -407,6 +422,122 @@ export function PipelineSettingsSection({
                   </Select>
                 </div>
               </div>
+            </div>
+
+            <div className="mb-5 rounded-md border border-border bg-secondary/40 p-3">
+              <div className="mb-3">
+                <div className="text-[13px] font-medium text-primary">Issue triage</div>
+                <div className="text-[11px] text-muted">
+                  Board review model for classifying Todo issues and applying high-confidence
+                  labels.
+                </div>
+              </div>
+              <SettingsRow label="Triage provider" htmlFor="triage-provider">
+                <Select
+                  value={settings.triageModel}
+                  onValueChange={(value) =>
+                    onUpdate({
+                      triageModel: value as AppSettings['triageModel'],
+                      triageModelId: null,
+                      triageReasoningEffort: normalizeEffort(
+                        value as ExecutorModel,
+                        settings.triageReasoningEffort,
+                        null,
+                      ),
+                    })
+                  }
+                >
+                  <SelectTrigger id="triage-provider" className="w-[160px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="claude">Anthropic</SelectItem>
+                    <SelectItem value="codex">OpenAI</SelectItem>
+                    <SelectItem value="openrouter">OpenRouter</SelectItem>
+                  </SelectContent>
+                </Select>
+              </SettingsRow>
+              <SettingsRow label="Triage model" htmlFor="triage-model">
+                <Select
+                  value={settings.triageModelId ?? '__default__'}
+                  onValueChange={(value) => {
+                    const nextModelId = value === '__default__' ? null : value;
+                    onUpdate({
+                      triageModelId: nextModelId,
+                      triageReasoningEffort: normalizeEffort(
+                        settings.triageModel,
+                        settings.triageReasoningEffort,
+                        nextModelId,
+                      ),
+                    });
+                  }}
+                >
+                  <SelectTrigger id="triage-model" className="w-[220px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__default__">Default small model</SelectItem>
+                    {settings.triageModelId &&
+                    !triageKnownModelValues.has(settings.triageModelId) ? (
+                      <SelectItem value={settings.triageModelId}>
+                        {settings.triageModelId}
+                      </SelectItem>
+                    ) : null}
+                    {triageModelOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </SettingsRow>
+              <SettingsRow
+                label={
+                  settings.triageModel === 'claude'
+                    ? 'Triage thinking budget'
+                    : 'Triage reasoning effort'
+                }
+                htmlFor="triage-reasoning"
+              >
+                <Select
+                  value={triageEffortResolution.effective}
+                  onValueChange={(value) =>
+                    onUpdate({
+                      triageReasoningEffort: value as AppSettings['triageReasoningEffort'],
+                    })
+                  }
+                >
+                  <SelectTrigger id="triage-reasoning" className="w-[140px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {triageSupportedEfforts.map((effort) => (
+                      <SelectItem key={effort} value={effort}>
+                        {formatReasoningEffortLabel(effort as AppSettings['triageReasoningEffort'])}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </SettingsRow>
+              <SettingsRow
+                label="Auto-apply threshold"
+                htmlFor="triage-threshold"
+                description="Recommendations below this confidence are reported but not applied."
+              >
+                <Input
+                  id="triage-threshold"
+                  type="number"
+                  className="w-[90px]"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={settings.triageAutoApplyThreshold}
+                  onChange={(event) => {
+                    const value = Number(event.target.value);
+                    if (value >= 0 && value <= 1) onUpdate({ triageAutoApplyThreshold: value });
+                  }}
+                />
+              </SettingsRow>
             </div>
 
             <PhaseModelRow

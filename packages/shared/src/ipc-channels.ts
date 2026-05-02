@@ -23,6 +23,7 @@ import type {
   GhAuthStatus,
   GitHubIssueCacheRecord,
   GitHubIssueComment,
+  GitHubIssueTriageResult,
   GitState,
   GitVisualizerData,
   HeatmapDayRecord,
@@ -258,6 +259,7 @@ export interface IpcInvokeChannels {
   // GitHub
   'github:list-issues': { args: { projectId: string }; result: GitHubIssueCacheRecord[] };
   'github:refresh-issues': { args: { projectId: string }; result: GitHubIssueCacheRecord[] };
+  'github:triage-issues': { args: { projectId: string }; result: GitHubIssueTriageResult };
   'github:start-issue': { args: { projectId: string; issueNumber: number }; result: undefined };
   'github:retry-issue': { args: { projectId: string; issueNumber: number }; result: undefined };
   'github:mark-done': { args: { projectId: string; issueNumber: number }; result: undefined };

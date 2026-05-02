@@ -1,6 +1,14 @@
 'use client';
 
-import { CircleAlert, Columns3, ExternalLink, LayoutList, RefreshCw, Workflow } from 'lucide-react';
+import {
+  BrainCircuit,
+  CircleAlert,
+  Columns3,
+  ExternalLink,
+  LayoutList,
+  RefreshCw,
+  Workflow,
+} from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button } from '../primitives/button';
 import {
@@ -33,6 +41,8 @@ interface BoardToolbarProps {
   onStalenessFilterChange: (filter: 'all' | 'stale') => void;
   refreshing: boolean;
   onRefresh: () => void;
+  triagingIssues?: boolean;
+  onTriageIssues?: () => void;
   projectName?: string;
   repoUrl?: string | null;
   projectsUrl?: string | null;
@@ -57,6 +67,8 @@ export function BoardToolbar({
   onStalenessFilterChange,
   refreshing,
   onRefresh,
+  triagingIssues = false,
+  onTriageIssues,
   projectName,
   repoUrl,
   projectsUrl,
@@ -233,6 +245,17 @@ export function BoardToolbar({
         <Button variant="outline" size="icon-sm" onClick={onRefresh} title="Refresh board">
           <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
         </Button>
+        {onTriageIssues && (
+          <Button
+            variant="outline"
+            size="icon-sm"
+            onClick={onTriageIssues}
+            disabled={triagingIssues}
+            title="Review Todo issues with the triage model"
+          >
+            <BrainCircuit size={14} className={triagingIssues ? 'animate-pulse' : ''} />
+          </Button>
+        )}
       </div>
     </div>
   );

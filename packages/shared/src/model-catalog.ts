@@ -68,10 +68,12 @@ export const PINNED_MODEL_DEFAULTS = {
   claude: {
     phase: CLAUDE_MODEL_IDS.sonnet46,
     prdRewrite: CLAUDE_MODEL_IDS.sonnet46,
+    triage: CLAUDE_MODEL_IDS.haiku45,
   },
   codex: {
     phase: CODEX_FALLBACK_MODEL_IDS.gpt54,
     prdRewrite: CODEX_FALLBACK_MODEL_IDS.gpt54Mini,
+    triage: CODEX_FALLBACK_MODEL_IDS.gpt54Mini,
   },
   openrouter: {
     paid: OPENROUTER_MODEL_IDS.autoPaid,

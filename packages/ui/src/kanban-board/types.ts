@@ -22,6 +22,8 @@ export interface KanbanBoardProps {
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
   onCommentIssue?: (issue: GitHubIssueCacheRecord) => void;
   onRefresh: () => void;
+  onTriageIssues?: () => void;
+  triagingIssues?: boolean;
   onStartPipeline?: (issue: GitHubIssueCacheRecord) => void;
   onRetry?: (issue: GitHubIssueCacheRecord) => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;

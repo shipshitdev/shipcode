@@ -1,6 +1,7 @@
 import {
   type AppSettings,
   type GitHubIssueCacheRecord,
+  type GitHubIssueTriageResult,
   githubRepoUrl,
   ISSUE_PIPELINE_STATUS,
   type IssuePipelineStatus,
@@ -151,6 +152,28 @@ export function ThreadPanel() {
     },
     onError: (err) => {
       log.error('[threadpanel] refresh-issues failed', { err });
+    },
+  });
+
+  const triageIssues = useMutation({
+    mutationFn: (projectId: string) =>
+      window.shipcode.invoke<GitHubIssueTriageResult>('github:triage-issues', { projectId }),
+    onSuccess: (result, projectId) => {
+      queryClient.invalidateQueries({ queryKey: ['github-issues', projectId] });
+      setArchiveFeedback({
+        tone: result.appliedCount > 0 ? 'success' : 'pending',
+        message:
+          result.consideredCount === 0
+            ? 'No Todo issues need triage.'
+            : `Triaged ${result.consideredCount} issue${result.consideredCount === 1 ? '' : 's'}; applied ${result.appliedCount}.`,
+      });
+    },
+    onError: (err) => {
+      setArchiveFeedback({
+        tone: 'error',
+        message: `Issue triage failed: ${err instanceof Error ? err.message : String(err)}`,
+      });
+      log.error('[threadpanel] triage-issues failed', { err });
     },
   });
 
@@ -410,6 +433,8 @@ export function ThreadPanel() {
         }
         selectedIssueNumber={selectedBoardIssueNumber}
         onRefresh={() => activeProjectId && refreshIssues.mutate(activeProjectId)}
+        onTriageIssues={() => activeProjectId && triageIssues.mutate(activeProjectId)}
+        triagingIssues={triageIssues.isPending}
         baseBranch={project?.defaultBranch}
         branches={branches}
         refreshingBranches={isRefreshingBranches}

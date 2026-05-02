@@ -66,6 +66,7 @@ const PROJECT_OPEN_TARGETS = ['cursor', 'finder', 'terminal', 'ghostty', 'vscode
 const TERMINAL_OPEN_TARGETS = ['terminal', 'ghostty'] as const;
 const FONT_SIZES = [12, 13, 14, 15] as const;
 const GENERATOR_CLIS = ['claude', 'codex'] as const;
+const EXECUTOR_MODELS = ['claude', 'codex', 'openrouter'] as const;
 const DEV_LOG_LEVELS = ['error', 'warn', 'info', 'debug'] as const;
 const UPDATE_TRACKS = ['master', 'stable', 'nightly'] as const;
 const AUTO_COMMIT_MODES = ['split', 'single'] as const;
@@ -112,6 +113,10 @@ function isGeneratorCli(value: unknown): value is AppSettings['prdRewriteCli'] {
   return typeof value === 'string' && (GENERATOR_CLIS as readonly string[]).includes(value);
 }
 
+function isExecutorModel(value: unknown): value is AppSettings['triageModel'] {
+  return typeof value === 'string' && (EXECUTOR_MODELS as readonly string[]).includes(value);
+}
+
 export class SettingsQueries {
   constructor(private db: DatabaseSync) {}
 
@@ -153,6 +158,19 @@ export class SettingsQueries {
         (stored.reviewerModel as AppSettings['reviewerModel']) ?? DEFAULT_SETTINGS.reviewerModel,
       executorModel:
         (stored.executorModel as AppSettings['executorModel']) ?? DEFAULT_SETTINGS.executorModel,
+      triageModel: isExecutorModel(stored.triageModel)
+        ? stored.triageModel
+        : DEFAULT_SETTINGS.triageModel,
+      triageModelId: readNullable(stored.triageModelId) ?? DEFAULT_SETTINGS.triageModelId,
+      triageReasoningEffort: isReasoningEffort(stored.triageReasoningEffort)
+        ? stored.triageReasoningEffort
+        : DEFAULT_SETTINGS.triageReasoningEffort,
+      triageAutoApplyThreshold: clampNumber(
+        stored.triageAutoApplyThreshold,
+        0,
+        1,
+        DEFAULT_SETTINGS.triageAutoApplyThreshold,
+      ),
       prdRewriteCli: isGeneratorCli(stored.prdRewriteCli)
         ? stored.prdRewriteCli
         : DEFAULT_SETTINGS.prdRewriteCli,
@@ -293,6 +311,7 @@ export class SettingsQueries {
       'reviewerReasoningEffort',
       'executorReasoningEffort',
       'verifierReasoningEffort',
+      'triageReasoningEffort',
       'prdRewriteReasoningEffort',
     ] as const) {
       if (key in patch && patch[key] != null) {
@@ -324,6 +343,17 @@ export class SettingsQueries {
     if ('prdRewriteCli' in patch && patch.prdRewriteCli != null) {
       if (!isGeneratorCli(patch.prdRewriteCli)) {
         throw new Error('prdRewriteCli must be claude|codex');
+      }
+    }
+    if ('triageModel' in patch && patch.triageModel != null) {
+      if (!isExecutorModel(patch.triageModel)) {
+        throw new Error('triageModel must be claude|codex|openrouter');
+      }
+    }
+    if ('triageAutoApplyThreshold' in patch && patch.triageAutoApplyThreshold != null) {
+      const n = Number(patch.triageAutoApplyThreshold);
+      if (!Number.isFinite(n) || n < 0 || n > 1) {
+        throw new Error('triageAutoApplyThreshold must be 0–1');
       }
     }
     if ('worktreeBranchFormat' in patch && patch.worktreeBranchFormat != null) {
@@ -383,6 +413,11 @@ export class SettingsQueries {
 
 function clampInt(raw: string | undefined, min: number, max: number, fallback: number): number {
   const n = raw ? parseInt(raw, 10) : Number.NaN;
+  return Number.isFinite(n) && n >= min && n <= max ? n : fallback;
+}
+
+function clampNumber(raw: string | undefined, min: number, max: number, fallback: number): number {
+  const n = raw ? Number(raw) : Number.NaN;
   return Number.isFinite(n) && n >= min && n <= max ? n : fallback;
 }
 

@@ -1,6 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { enhancePrdDraft, fetchProjectPriorities, GhCli } from '@shipcode/agents';
+import {
+  enhancePrdDraft,
+  fetchProjectPriorities,
+  GhCli,
+  type IssueTriageRecommendation,
+  triageGitHubIssues,
+} from '@shipcode/agents';
 import type {
   ExecutorModel,
   GitHubIssueCacheRecord,
@@ -86,6 +92,23 @@ function syncOpenIssueState(
   queries.githubIssues.clearArchivedAt(issue.id);
 
   return queries.githubIssues.getByNumber(issue.projectId, issue.issueNumber);
+}
+
+function mergeTriageLabels(
+  currentLabels: string[],
+  recommendation: IssueTriageRecommendation,
+): string[] {
+  const next = currentLabels.filter(
+    (label) =>
+      !label.startsWith('agent:') &&
+      !label.startsWith('complexity:') &&
+      !label.startsWith('blast:'),
+  );
+  const labels = [...recommendation.suggestedLabels];
+  if (recommendation.suggestedAgent && !labels.some((label) => label.startsWith('agent:'))) {
+    labels.push(`agent:${recommendation.suggestedAgent}`);
+  }
+  return Array.from(new Set([...next, ...labels]));
 }
 
 export function registerGitHubHandlers({
@@ -273,6 +296,97 @@ export function registerGitHubHandlers({
       }
     },
   );
+
+  ipcMain.handle('github:triage-issues', async (_event, { projectId }: { projectId: string }) => {
+    const project = queries.projects.getById(projectId);
+    if (!project) throw new Error(`Project ${projectId} not found`);
+    if (!fs.existsSync(project.path)) {
+      throw new Error(
+        `Project path no longer exists: ${project.path}. Re-add the repository from a valid path.`,
+      );
+    }
+
+    const settings = queries.settings.get();
+    const ghCli = new GhCli(project.path);
+    const candidates = queries.githubIssues
+      .list(projectId)
+      .filter(
+        (issue) =>
+          issue.state === 'open' &&
+          issue.pipelineStatus === ISSUE_PIPELINE_STATUS.todo &&
+          !issue.threadId &&
+          !issue.isQuickMode &&
+          isRealGithubIssueNumber(issue.issueNumber),
+      );
+
+    if (candidates.length === 0) {
+      return {
+        provider: settings.triageModel,
+        modelId: settings.triageModelId,
+        resolvedModel: settings.triageModelId,
+        consideredCount: 0,
+        appliedCount: 0,
+        skippedCount: 0,
+        threshold: settings.triageAutoApplyThreshold,
+        issues: [],
+      };
+    }
+
+    await ghCli.ensureLabels(SHIPCODE_DEFAULT_LABELS);
+    const result = await triageGitHubIssues({
+      cwd: project.path,
+      issues: candidates,
+      settings,
+      apiKey: process.env.OPENROUTER_API_KEY,
+    });
+    const candidatesByNumber = new Map(candidates.map((issue) => [issue.issueNumber, issue]));
+    const threshold = settings.triageAutoApplyThreshold;
+    let appliedCount = 0;
+    const summaries = [];
+
+    for (const recommendation of result.recommendations) {
+      const issue = candidatesByNumber.get(recommendation.issueNumber);
+      if (!issue) continue;
+      const applied = recommendation.confidence >= threshold;
+      if (applied) {
+        const nextLabels = mergeTriageLabels(issue.labels, recommendation);
+        await ghCli.syncIssueLabels(issue.issueNumber, nextLabels, { removeAgentLabels: true });
+        const refreshedIssue = await ghCli.getIssue(issue.issueNumber);
+        queries.githubIssues.upsert({
+          projectId,
+          issueNumber: refreshedIssue.number,
+          title: refreshedIssue.title,
+          body: refreshedIssue.body,
+          labels: refreshedIssue.labels,
+          assignee: refreshedIssue.assignee,
+          state: refreshedIssue.state,
+        });
+        appliedCount += 1;
+      }
+      summaries.push({
+        issueNumber: recommendation.issueNumber,
+        confidence: recommendation.confidence,
+        applied,
+        suggestedLabels: recommendation.suggestedLabels,
+        suggestedAgent: recommendation.suggestedAgent,
+        shouldStart: recommendation.shouldStart,
+        needsHuman: recommendation.needsHuman,
+        rationale: recommendation.rationale,
+      });
+    }
+
+    sendGithubIssuesUpdated(mainWindow, queries, projectId);
+    return {
+      provider: result.provider,
+      modelId: result.modelId,
+      resolvedModel: result.resolvedModel,
+      consideredCount: candidates.length,
+      appliedCount,
+      skippedCount: Math.max(0, summaries.length - appliedCount),
+      threshold,
+      issues: summaries,
+    };
+  });
 
   ipcMain.handle(
     'github:archive-issue',

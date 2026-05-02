@@ -134,6 +134,8 @@ export function KanbanBoard({
   onIssueClick,
   onCommentIssue,
   onRefresh,
+  onTriageIssues,
+  triagingIssues = false,
   onStartPipeline,
   onRetry,
   onRerun,
@@ -575,6 +577,8 @@ export function KanbanBoard({
         onStalenessFilterChange={setStalenessFilter}
         refreshing={refreshing}
         onRefresh={handleRefresh}
+        triagingIssues={triagingIssues}
+        onTriageIssues={onTriageIssues}
         projectName={projectName}
         repoUrl={repoUrl}
         projectsUrl={projectsUrl}

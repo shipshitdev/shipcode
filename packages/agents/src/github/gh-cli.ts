@@ -172,7 +172,11 @@ export class GhCli {
     );
   }
 
-  private async syncIssueLabels(issueNumber: number, labels: string[]): Promise<void> {
+  async syncIssueLabels(
+    issueNumber: number,
+    labels: string[],
+    options?: { removeAgentLabels?: boolean },
+  ): Promise<void> {
     const next = await this.filterExistingLabels(labels);
     let current: string[] = [];
 
@@ -183,9 +187,12 @@ export class GhCli {
       current = [];
     }
 
-    const toRemove = current.filter(
-      (label) => this.isManagedPrdLabel(label) && !next.includes(label),
-    );
+    const toRemove = current.filter((label) => {
+      const managed =
+        this.isManagedPrdLabel(label) ||
+        (!!options?.removeAgentLabels && label.startsWith('agent:'));
+      return managed && !next.includes(label);
+    });
     const toAdd = next.filter((label) => !current.includes(label));
 
     for (const label of toRemove) {
