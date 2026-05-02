@@ -12,7 +12,6 @@ import { OverviewView } from './components/OverviewView';
 import { ProjectMissingView } from './components/ProjectMissingView';
 import { ProjectPathBanner } from './components/ProjectPathBanner';
 import { ProjectSidebar } from './components/ProjectSidebar';
-import { ProjectSubSidebar } from './components/ProjectSubSidebar';
 import { ProjectView } from './components/ProjectView';
 import { SettingsPanel } from './components/SettingsPanel';
 import { SettingsSidebar } from './components/SettingsSidebar';
@@ -261,13 +260,7 @@ export function App() {
       <HealthBanner />
       <ProjectPathBanner project={activeProject ?? null} />
       <div className="flex flex-1 overflow-hidden">
-        {settingsVisible ? (
-          <SettingsSidebar />
-        ) : viewMode === 'project' ? (
-          <ProjectSubSidebar />
-        ) : (
-          <ProjectSidebar />
-        )}
+        {settingsVisible ? <SettingsSidebar /> : <ProjectSidebar />}
         {/* Center column — main view above, terminal below. */}
         <div className="flex flex-col flex-1 overflow-hidden min-h-0">
           {!hideMainContentForTerminal && (
