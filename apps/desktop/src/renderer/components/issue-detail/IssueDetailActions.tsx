@@ -3,11 +3,7 @@ import { PIPELINE_PHASE } from '@shipcode/shared';
 import {
   Badge,
   Button,
-  ChevronDown,
-  ChevronUp,
-  Copy,
   cn,
-  ExternalLink,
   LoadingButtonContent,
   Select,
   SelectContent,
@@ -16,6 +12,7 @@ import {
   SelectValue,
   Textarea,
 } from '@shipshitdev/ui';
+import { ChevronDown, ChevronUp, Copy, ExternalLink } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import {
   getFailurePresentation,

@@ -1,20 +1,15 @@
 import type { AppSettings, DeveloperInfo, UpdateStatus } from '@shipcode/shared';
 import {
   Button,
-  Check,
-  Copy,
-  ExternalLink,
-  FolderOpen,
-  RefreshCw,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
   SettingsRow,
-  Terminal,
 } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Check, Copy, ExternalLink, FolderOpen, RefreshCw, Terminal } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 export function DeveloperSettingsSection({

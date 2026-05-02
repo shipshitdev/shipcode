@@ -3,7 +3,6 @@ import {
   Button,
   Input,
   LoadingButtonContent,
-  RefreshCw,
   Select,
   SelectContent,
   SelectGroup,
@@ -14,6 +13,7 @@ import {
   SelectValue,
   SettingsRow,
 } from '@shipshitdev/ui';
+import { RefreshCw } from 'lucide-react';
 
 export function ProjectSettingsGeneralTab({
   project,

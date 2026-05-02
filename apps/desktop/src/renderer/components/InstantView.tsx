@@ -1,5 +1,6 @@
 import { PageHeader } from '@shipcode/ui';
-import { Button, cn, Terminal } from '@shipshitdev/ui';
+import { Button, cn } from '@shipshitdev/ui';
+import { Terminal } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { useOpenProjectTerminal } from '../hooks/useOpenProjectTerminal';
 import { type InstantPaneMode, useAppStore } from '../stores/app-store';

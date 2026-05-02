@@ -1,15 +1,8 @@
 import type { PipelinePhase, PlanRecord, ReviewRecord } from '@shipcode/shared';
 import { PIPELINE_PHASE } from '@shipcode/shared';
 import { PhaseChip, PlanViewer, ReviewViewer } from '@shipcode/ui';
-import {
-  Badge,
-  Button,
-  ChevronDown,
-  ChevronRight,
-  ChevronUp,
-  cn,
-  Maximize2,
-} from '@shipshitdev/ui';
+import { Badge, Button, cn } from '@shipshitdev/ui';
+import { ChevronDown, ChevronRight, ChevronUp, Maximize2 } from 'lucide-react';
 import {
   diagnosePlanParseFailure,
   getPlanStatusPresentation,

@@ -1,8 +1,6 @@
 import type { AppSettings, DeveloperInfo, UpdateStatus } from '@shipcode/shared';
 import {
   Button,
-  FolderOpen,
-  RefreshCw,
   Select,
   SelectContent,
   SelectItem,
@@ -11,6 +9,7 @@ import {
   SettingsRow,
 } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { FolderOpen, RefreshCw } from 'lucide-react';
 import { useEffect } from 'react';
 
 const UPDATE_TRACK_OPTIONS: Array<{

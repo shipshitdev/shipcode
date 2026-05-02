@@ -12,21 +12,10 @@ import {
   type RepoSetupEnvFile,
   validateGithubProjectUrl,
 } from '@shipcode/shared';
-import {
-  Bell,
-  Button,
-  Code2,
-  FolderGit,
-  Keycap,
-  LoadingButtonContent,
-  Modal,
-  ModalFooter,
-  Settings,
-  Terminal,
-  Workflow,
-} from '@shipshitdev/ui';
+import { Button, Keycap, LoadingButtonContent, Modal, ModalFooter } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
+import { Bell, Code2, FolderGit, Settings, Terminal, Workflow } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';

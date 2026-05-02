@@ -1,6 +1,7 @@
 import type { DiffRecord } from '@shipcode/shared';
 import { SideBySideDiffViewer } from '@shipcode/ui';
-import { Button, Maximize2, Modal, X } from '@shipshitdev/ui';
+import { Button, Modal } from '@shipshitdev/ui';
+import { Maximize2, X } from 'lucide-react';
 import { useState } from 'react';
 
 export function DiffTab({ diffs, expanded }: { diffs: DiffRecord[]; expanded: boolean }) {

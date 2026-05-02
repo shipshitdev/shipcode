@@ -2,16 +2,13 @@ import { PIPELINE_PHASE, type PipelinePhase } from '@shipcode/shared';
 import { PhaseChip } from '@shipcode/ui';
 import {
   Button,
-  ChevronDown,
-  ChevronUp,
   cn,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  Terminal,
-  X,
 } from '@shipshitdev/ui';
+import { ChevronDown, ChevronUp, Terminal, X } from 'lucide-react';
 import type { TerminalDrawerTarget } from './constants';
 
 interface TerminalDrawerHeaderProps {

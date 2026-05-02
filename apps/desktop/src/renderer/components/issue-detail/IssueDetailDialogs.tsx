@@ -1,6 +1,7 @@
 import type { PlanRecord, ReviewRecord } from '@shipcode/shared';
 import { PlanViewer, ReviewViewer } from '@shipcode/ui';
-import { Button, LoadingButtonContent, Modal, ModalFooter, X } from '@shipshitdev/ui';
+import { Button, LoadingButtonContent, Modal, ModalFooter } from '@shipshitdev/ui';
+import { X } from 'lucide-react';
 import { diagnosePlanParseFailure, resolveClientSidePlan } from './helpers';
 
 interface IssueDetailDialogsProps {

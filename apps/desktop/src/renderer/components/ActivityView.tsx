@@ -4,7 +4,6 @@ import {
   Button,
   Card,
   CardContent,
-  Loader2,
   Pagination,
   Table,
   TableBody,
@@ -12,6 +11,7 @@ import {
   TableRow,
 } from '@shipshitdev/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 

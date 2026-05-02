@@ -9,7 +9,7 @@ import {
   Sparkles,
   Workflow,
   Wrench,
-} from '@shipshitdev/ui';
+} from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { SettingsSection } from '../stores/app-store';
 import { useAppStore } from '../stores/app-store';

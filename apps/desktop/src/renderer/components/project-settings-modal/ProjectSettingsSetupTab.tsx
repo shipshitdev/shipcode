@@ -1,5 +1,6 @@
 import type { ProjectSetupDraft, ProjectSetupInspection, RepoSetupEnvFile } from '@shipcode/shared';
-import { Button, Checkbox, Input, Label, RefreshCw, SettingsRow, Textarea } from '@shipshitdev/ui';
+import { Button, Checkbox, Input, Label, SettingsRow, Textarea } from '@shipshitdev/ui';
+import { RefreshCw } from 'lucide-react';
 import type { LocalEnvFile } from './setup-utils';
 
 export function ProjectSettingsSetupTab({

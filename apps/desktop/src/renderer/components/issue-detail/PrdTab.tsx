@@ -1,5 +1,6 @@
 import type { GitHubIssueCacheRecord } from '@shipcode/shared';
-import { Button, cn, Pencil, RefreshCw } from '@shipshitdev/ui';
+import { Button, cn } from '@shipshitdev/ui';
+import { Pencil, RefreshCw } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { PRD_PROSE_CLASSES } from './helpers';

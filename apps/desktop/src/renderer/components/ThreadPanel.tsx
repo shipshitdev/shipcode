@@ -12,9 +12,10 @@ import {
   type ThreadPanelData,
 } from '@shipcode/shared';
 import { AUTOMATION_ISSUE_NUMBER_BASE, isAutomationIssue, KanbanBoard } from '@shipcode/ui';
-import { Button, RefreshCw, X } from '@shipshitdev/ui';
+import { Button } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
+import { RefreshCw, X } from 'lucide-react';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 
 // ReactFlow + CSS is heavy — lazy-load since graph tab is rarely the default view.

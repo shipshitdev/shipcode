@@ -4,16 +4,9 @@ import type {
   CleanupCriteria,
   CleanupItem,
 } from '@shipcode/shared';
-import {
-  Alert,
-  AlertDescription,
-  Button,
-  Checkbox,
-  Loader2,
-  Modal,
-  ModalFooter,
-} from '@shipshitdev/ui';
+import { Alert, AlertDescription, Button, Checkbox, Modal, ModalFooter } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Loader2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 interface CleanupModalProps {

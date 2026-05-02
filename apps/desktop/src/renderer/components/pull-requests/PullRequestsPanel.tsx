@@ -1,6 +1,7 @@
 import type { PullRequestListFilter, PullRequestListItem } from '@shipcode/shared';
-import { Button, cn, GitPullRequest, RefreshCw } from '@shipshitdev/ui';
+import { Button, cn } from '@shipshitdev/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { GitPullRequest, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 import { useAppStore } from '../../stores/app-store';
 import { PullRequestDetailPanel } from './PullRequestDetailPanel';

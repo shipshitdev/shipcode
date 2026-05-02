@@ -8,19 +8,17 @@ import {
 } from '@shipcode/shared';
 import { PageHeader } from '@shipcode/ui';
 import {
-  ArrowUpDown,
   Badge,
   Button,
   Card,
   CardContent,
-  Loader2,
   Table,
   TableBody,
   TableCell,
   TableRow,
-  X,
 } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowUpDown, Loader2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { NOTIFICATIONS_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';

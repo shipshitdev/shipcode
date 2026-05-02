@@ -1,16 +1,7 @@
 import type { Project } from '@shipcode/shared';
-import {
-  AlertCircle,
-  Button,
-  ChevronLeft,
-  ChevronRight,
-  cn,
-  Folder,
-  Input,
-  Loader2,
-  Modal,
-} from '@shipshitdev/ui';
+import { Button, cn, Input, Modal } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { AlertCircle, ChevronLeft, ChevronRight, Folder, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 

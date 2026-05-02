@@ -1,23 +1,9 @@
 import type { DiffRecord, PipelinePhase, PlanRecord, ReviewRecord, Thread } from '@shipcode/shared';
 import { formatCost, formatTokenCount, PIPELINE_PHASE } from '@shipcode/shared';
 import { PhaseChip } from '@shipcode/ui';
-import {
-  Badge,
-  Button,
-  Copy,
-  cn,
-  ExternalLink,
-  Maximize2,
-  Minimize2,
-  RefreshCw,
-  Square,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-  X,
-} from '@shipshitdev/ui';
+import { Badge, Button, cn, Tabs, TabsContent, TabsList, TabsTrigger } from '@shipshitdev/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Copy, ExternalLink, Maximize2, Minimize2, RefreshCw, Square, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 import { DiffTab } from './issue-detail/DiffTab';

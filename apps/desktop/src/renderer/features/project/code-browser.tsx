@@ -9,13 +9,7 @@ import {
 import { SideBySideDiffViewer, SyntaxHighlightedCode } from '@shipcode/ui';
 import {
   Button,
-  ChevronDown,
-  ChevronRight,
-  Code2,
   cn,
-  Folder,
-  FolderOpen,
-  Loader2,
   Select,
   SelectContent,
   SelectItem,
@@ -23,6 +17,7 @@ import {
   SelectValue,
 } from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
+import { ChevronDown, ChevronRight, Code2, Folder, FolderOpen, Loader2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../../query-stale-times';
 import { useAppStore } from '../../stores/app-store';

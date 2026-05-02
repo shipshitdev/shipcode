@@ -5,8 +5,9 @@ import type {
   GitVisualizerData,
 } from '@shipcode/shared';
 import { GitVisualizer } from '@shipcode/ui';
-import { Alert, AlertDescription, Button, Loader2, Sparkles, Trash2 } from '@shipshitdev/ui';
+import { Alert, AlertDescription, Button } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Loader2, Sparkles, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { CleanupModal } from '../../components/CleanupModal';
 import { STABLE_APP_STATE_STALE_TIME } from '../../query-stale-times';

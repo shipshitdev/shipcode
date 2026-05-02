@@ -9,13 +9,9 @@ import {
 } from '@shipcode/shared';
 import { ActivePipelineCard, PageHeader, PhaseChip } from '@shipcode/ui';
 import {
-  Bell,
-  Bot,
   Button,
   Card,
   CardContent,
-  ListTodo,
-  PackageCheck,
   Pagination,
   Table,
   TableBody,
@@ -25,6 +21,7 @@ import {
   TableRow,
 } from '@shipshitdev/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Bell, Bot, ListTodo, PackageCheck } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 

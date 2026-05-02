@@ -20,7 +20,6 @@ import { SideBySideDiffViewer, TaskGraphViewer } from '@shipcode/ui';
 import {
   Badge,
   Button,
-  ExternalLink,
   Input,
   LoadingButtonContent,
   Select,
@@ -32,6 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@shipshitdev/ui';
+import { ExternalLink } from 'lucide-react';
 import {
   formatProviderSelectionLabel,
   getModelOptions,

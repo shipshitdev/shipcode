@@ -6,7 +6,6 @@ import type {
 } from '@shipcode/shared';
 import {
   Button,
-  FolderGit,
   Input,
   LoadingButtonContent,
   Select,
@@ -14,14 +13,13 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Sparkles,
   Switch,
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
-  Terminal,
 } from '@shipshitdev/ui';
+import { FolderGit, Sparkles, Terminal } from 'lucide-react';
 import { useState } from 'react';
 import { StatusPill } from './StatusPill';
 

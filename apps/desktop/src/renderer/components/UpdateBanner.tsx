@@ -1,6 +1,7 @@
 import type { UpdateStatus } from '@shipcode/shared';
-import { Alert, AlertDescription, Button, Check, Copy, ExternalLink } from '@shipshitdev/ui';
+import { Alert, AlertDescription, Button } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Check, Copy, ExternalLink } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 const BREW_UPGRADE_COMMAND = 'brew upgrade --cask shipcode';

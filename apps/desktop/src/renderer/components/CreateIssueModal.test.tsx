@@ -336,3 +336,202 @@ describe('CreateIssueModal — image drop / attachment management', () => {
     expect(formatBtn).toBeDisabled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Voice input tests
+// ---------------------------------------------------------------------------
+
+describe('CreateIssueModal — voice input', () => {
+  const invokeMock = vi.fn<(channel: string, args?: unknown) => Promise<unknown>>();
+  let mockRecognition: {
+    continuous: boolean;
+    interimResults: boolean;
+    lang: string;
+    onresult: ((e: unknown) => void) | null;
+    onend: (() => void) | null;
+    onerror: ((e: unknown) => void) | null;
+    onstart: (() => void) | null;
+    start: ReturnType<typeof vi.fn> & (() => void);
+    stop: ReturnType<typeof vi.fn> & (() => void);
+    abort: ReturnType<typeof vi.fn> & (() => void);
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    // Mock SpeechRecognition as a constructable class.
+    // The hook creates a new instance per startListening() call, so we use
+    // a shared `mockRecognition` object that the constructor returns via prototype.
+    mockRecognition = {
+      continuous: false,
+      interimResults: false,
+      lang: '',
+      onresult: null,
+      onend: null,
+      onerror: null,
+      onstart: null,
+      start: vi.fn<() => void>(),
+      stop: vi.fn<() => void>(),
+      abort: vi.fn<() => void>(),
+    };
+
+    class MockSpeechRecognition {
+      continuous = false;
+      interimResults = false;
+      lang = '';
+      onresult: ((e: unknown) => void) | null = null;
+      onend: (() => void) | null = null;
+      onerror: ((e: unknown) => void) | null = null;
+      onstart: (() => void) | null = null;
+      start = () => {
+        mockRecognition.start();
+        // Capture callbacks set on this instance so tests can trigger them
+        mockRecognition.onresult = this.onresult;
+        mockRecognition.onend = this.onend;
+        mockRecognition.onerror = this.onerror;
+        mockRecognition.interimResults = this.interimResults;
+        mockRecognition.continuous = this.continuous;
+      };
+      stop = () => {
+        mockRecognition.stop();
+      };
+      abort = () => {
+        mockRecognition.abort();
+      };
+    }
+
+    Object.defineProperty(window, 'webkitSpeechRecognition', {
+      value: MockSpeechRecognition,
+      writable: true,
+      configurable: true,
+    });
+
+    window.shipcode = {
+      invoke: invokeMock as unknown as typeof window.shipcode.invoke,
+      on: vi.fn(() => () => {}),
+    };
+
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'project:list-visible')
+        return [{ id: 'project-1', name: 'Test Project', path: '/tmp/repo' }];
+      return null;
+    });
+
+    useAppStore.setState({
+      createIssueModalOpen: true,
+      activeProjectId: 'project-1',
+      editingPrd: null,
+      activeThreadId: null,
+      activeIssue: null,
+      viewMode: 'overview',
+      sidebarCollapsed: false,
+      terminalVisible: false,
+      terminalMaximized: false,
+      settingsVisible: false,
+      settingsSection: 'general',
+      issueDetailExpanded: false,
+      issueDetailCollapsed: false,
+      issueDetailWidth: 480,
+      currentPlan: null,
+      currentReview: null,
+      pipelinePhase: 'idle',
+      systemHealth: null,
+      currentVerification: null,
+      githubIssues: [],
+      pendingCreatedIssues: [],
+    } as never);
+  });
+
+  it('shows mic button when textarea is empty in create mode', () => {
+    renderWithProviders();
+    expect(screen.getByRole('button', { name: /start voice input/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /create/i })).not.toBeInTheDocument();
+  });
+
+  it('shows submit button once text is typed', async () => {
+    renderWithProviders();
+    const textarea = document.getElementById('issue-body') as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: '# My PRD' } });
+
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /start voice input/i })).not.toBeInTheDocument();
+    });
+  });
+
+  it('mic button not shown in edit mode', () => {
+    useAppStore.setState({
+      editingPrd: {
+        issueNumber: 42,
+        body: '# Existing PRD\n## Executive Summary\n## Problem Statement\n## Goals\n## Non-Goals\n## User Stories\n## System Specification\n## Functional Requirements\n## Non-Functional Requirements\n## Feature Phase Breakdown\n## Success Criteria\n## Out of Scope\n## Dependencies\n## Verification Plan\n## Risks & Open Questions',
+        labels: [],
+      },
+    } as never);
+
+    renderWithProviders();
+    expect(screen.queryByRole('button', { name: /start voice input/i })).not.toBeInTheDocument();
+  });
+
+  it('clicking mic button starts listening', () => {
+    renderWithProviders();
+    const micBtn = screen.getByRole('button', { name: /start voice input/i });
+    fireEvent.click(micBtn);
+
+    expect(mockRecognition.start).toHaveBeenCalled();
+    expect(mockRecognition.interimResults).toBe(true);
+  });
+
+  it('streams transcript into textarea on result', async () => {
+    renderWithProviders();
+    const micBtn = screen.getByRole('button', { name: /start voice input/i });
+    fireEvent.click(micBtn);
+
+    // Simulate a speech result
+    const resultEvent = {
+      resultIndex: 0,
+      results: {
+        0: { 0: { transcript: 'Add login page' }, isFinal: true, length: 1 },
+        length: 1,
+      },
+    };
+    mockRecognition.onresult?.(resultEvent);
+
+    await waitFor(() => {
+      const textarea = document.getElementById('issue-body') as HTMLTextAreaElement;
+      expect(textarea.value).toBe('Add login page');
+    });
+  });
+
+  it('shows stop button while listening', async () => {
+    renderWithProviders();
+    const micBtn = screen.getByRole('button', { name: /start voice input/i });
+    fireEvent.click(micBtn);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /stop recording/i })).toBeInTheDocument();
+    });
+  });
+
+  it('shows voice error when mic permission denied', async () => {
+    renderWithProviders();
+    const micBtn = screen.getByRole('button', { name: /start voice input/i });
+    fireEvent.click(micBtn);
+
+    mockRecognition.onerror?.({ error: 'not-allowed', message: '' });
+    mockRecognition.onend?.();
+
+    await waitFor(() => {
+      expect(screen.getByText(/microphone access denied/i)).toBeInTheDocument();
+    });
+  });
+
+  it('stop listening called on modal close', () => {
+    renderWithProviders();
+    const micBtn = screen.getByRole('button', { name: /start voice input/i });
+    fireEvent.click(micBtn);
+
+    const cancelBtn = screen.getByRole('button', { name: /cancel/i });
+    fireEvent.click(cancelBtn);
+
+    expect(mockRecognition.stop).toHaveBeenCalled();
+  });
+});

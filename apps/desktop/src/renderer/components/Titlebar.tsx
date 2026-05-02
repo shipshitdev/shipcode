@@ -7,21 +7,17 @@ import type {
   SystemHealth,
 } from '@shipcode/shared';
 import { getProjectProviderWarnings } from '@shipcode/shared';
+import { Button, cn, Popover, PopoverContent, PopoverTrigger } from '@shipshitdev/ui';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Button,
-  cn,
   Loader2,
   PanelLeftClose,
   PanelLeftOpen,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
   RefreshCw,
   Settings,
   Terminal,
   X,
-} from '@shipshitdev/ui';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+} from 'lucide-react';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 import { ProjectProviderWarningPopover } from './ProjectProviderWarningPopover';

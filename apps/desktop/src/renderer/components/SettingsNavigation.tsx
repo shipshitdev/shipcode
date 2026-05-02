@@ -1,4 +1,5 @@
-import { Button, ChevronLeft, cn } from '@shipshitdev/ui';
+import { Button, cn } from '@shipshitdev/ui';
+import { ChevronLeft } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 export interface SettingsNavigationItem<TKey extends string> {

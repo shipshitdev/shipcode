@@ -12,7 +12,6 @@ import {
 } from '@shipcode/shared';
 import {
   Button,
-  ChevronDown,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -31,6 +30,7 @@ import {
   TabsTrigger,
   Textarea,
 } from '@shipshitdev/ui';
+import { ChevronDown } from 'lucide-react';
 import { getModelOptions } from '../model-provider-options';
 import { PhaseModelRow } from './PhaseModelRow';
 

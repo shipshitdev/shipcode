@@ -8,13 +8,13 @@ import type {
 import { MODEL_CONFIG_PRESETS } from '@shipcode/shared';
 import {
   Button,
-  ChevronDown,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
   SettingsRow,
 } from '@shipshitdev/ui';
+import { ChevronDown } from 'lucide-react';
 import type { Dispatch, SetStateAction } from 'react';
 import { ProjectPhaseSettingsRow } from './ProjectPhaseSettingsRow';
 import { PHASE_META, type PhaseKey, type ProjectOverrideState } from './shared';

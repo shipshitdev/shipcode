@@ -1,14 +1,5 @@
 import type { ProjectIssueGraph } from '@shipcode/shared';
-import {
-  Alert,
-  AlertDescription,
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  cn,
-  Loader2,
-} from '@shipshitdev/ui';
+import { Alert, AlertDescription, Badge, Button, Card, CardContent, cn } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Background,
@@ -20,6 +11,7 @@ import {
   ReactFlow,
   SelectionMode,
 } from '@xyflow/react';
+import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import '@xyflow/react/dist/style.css';
 import { useAppStore } from '../../stores/app-store';

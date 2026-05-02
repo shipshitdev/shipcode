@@ -1,4 +1,5 @@
-import { Activity, Button, Code2, cn, GitPullRequest, LayoutList, Terminal } from '@shipshitdev/ui';
+import { Button, cn } from '@shipshitdev/ui';
+import { Activity, Code2, GitPullRequest, LayoutList, Terminal } from 'lucide-react';
 import { ActivityHeatmap } from '../../components/heatmap/ActivityHeatmap';
 import { InstantView } from '../../components/InstantView';
 import { PullRequestsPanel } from '../../components/pull-requests/PullRequestsPanel';

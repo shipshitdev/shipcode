@@ -16,7 +16,6 @@ import {
   Card,
   CardContent,
   cn,
-  Loader2,
   Pagination,
   Table,
   TableBody,
@@ -26,6 +25,7 @@ import {
   TableRow,
 } from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
+import { Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 import { ActivityHeatmap } from './heatmap/ActivityHeatmap';

@@ -9,21 +9,24 @@ import {
   type Project,
 } from '@shipcode/shared';
 import {
-  Activity,
-  Archive,
-  ArrowUpDown,
   Badge,
   Button,
-  Check,
-  Clock3,
-  Code2,
   cn,
-  DollarSign,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+} from '@shipshitdev/ui';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  Activity,
+  Archive,
+  ArrowUpDown,
+  Check,
+  Clock3,
+  Code2,
+  DollarSign,
   Folder,
   FolderOpen,
   Ghost,
@@ -39,8 +42,7 @@ import {
   Terminal,
   Trash2,
   Wrench,
-} from '@shipshitdev/ui';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+} from 'lucide-react';
 import type { ComponentType } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NOTIFICATIONS_STALE_TIME, STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';

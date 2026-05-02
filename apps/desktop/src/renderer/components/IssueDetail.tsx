@@ -35,24 +35,26 @@ import {
 } from '@shipcode/shared';
 import { PhaseChip, resolveIssuePriorityBadge } from '@shipcode/ui';
 import {
-  Archive,
   Badge,
   Button,
-  Check,
-  CircleCheck,
-  CircleDot,
-  Copy,
   cn,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
   LoadingButtonContent,
+} from '@shipshitdev/ui';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  Archive,
+  Check,
+  CircleCheck,
+  CircleDot,
+  Copy,
   Maximize2,
   Minimize2,
   X,
-} from '@shipshitdev/ui';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+} from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';

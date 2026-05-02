@@ -1,5 +1,6 @@
 import { type AgentState, formatDurationSeconds, type TerminalEventRecord } from '@shipcode/shared';
-import { Badge, Button, Square, X } from '@shipshitdev/ui';
+import { Badge, Button } from '@shipshitdev/ui';
+import { Square, X } from 'lucide-react';
 import { useMemo } from 'react';
 import { useSharedSecondNow } from '../../hooks/useSharedSecondNow';
 import type { InstantPaneMode } from '../../stores/app-store';

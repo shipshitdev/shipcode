@@ -1,4 +1,5 @@
-import { Button, cn, X } from '@shipshitdev/ui';
+import { Button, cn } from '@shipshitdev/ui';
+import { X } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 type InAppNotificationTone = 'default' | 'success' | 'warning' | 'danger';

@@ -1,19 +1,9 @@
 import type { Automation, Project, Thread } from '@shipcode/shared';
 import { PageHeader, PhaseChip } from '@shipcode/ui';
-import {
-  Button,
-  Card,
-  CardContent,
-  ChevronDown,
-  cn,
-  Loader2,
-  Pencil,
-  Play,
-  Switch,
-  Trash2,
-} from '@shipshitdev/ui';
+import { Button, Card, CardContent, cn, Switch } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Cron } from 'croner';
+import { ChevronDown, Loader2, Pencil, Play, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useAppStore } from '../../stores/app-store';
 
