@@ -1671,6 +1671,7 @@ Custom prompt`,
     });
 
     it('dirty worktree is auto-committed before verification, then retries on verifier failure', async () => {
+      useRetryFakeTimers();
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
       const context = requireContext(pipeline);
@@ -1696,12 +1697,17 @@ Custom prompt`,
       );
 
       await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_FAILED_JSON));
-      await mock.trigger('exit', 'proc-2', 0);
-      await flush();
+      const exitP = mock.trigger('exit', 'proc-2', 0);
+      await vi.advanceTimersByTimeAsync(0);
+      await exitP;
 
+      // Retry is scheduled via continuation delay (1s), not immediate
       expect(mock.deps.verifications.create).toHaveBeenCalled();
-      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'executing');
+      expect(pipeline.getContext('t1')?.retryTimer).not.toBeNull();
       expect(pipeline.getContext('t1')?.verificationRetries).toBe(1);
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'executing');
     });
 
     it('dirty worktree is auto-committed before verification, then fails when retries are exhausted', async () => {
@@ -1774,7 +1780,8 @@ Custom prompt`,
       );
     });
 
-    it('verification failed + retries left → starts execution', async () => {
+    it('verification failed + retries left → schedules continuation retry then starts execution', async () => {
+      useRetryFakeTimers();
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
       const context = requireContext(pipeline);
@@ -1790,13 +1797,18 @@ Custom prompt`,
       await pipeline.startVerification('t1');
 
       await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_FAILED_JSON));
-      await mock.trigger('exit', 'proc-2', 0);
+      const exitP = mock.trigger('exit', 'proc-2', 0);
+      await vi.advanceTimersByTimeAsync(0);
+      await exitP;
 
-      // startExecution is async — wait for it to settle
-      await flush();
+      // Retry scheduled but not yet fired
+      expect(pipeline.getContext('t1')?.retryTimer).not.toBeNull();
+      expect(pipeline.getContext('t1')?.verificationRetries).toBe(1);
+
+      // Advance past continuation delay (1s)
+      await vi.advanceTimersByTimeAsync(1000);
 
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'executing');
-      expect(pipeline.getContext('t1')?.verificationRetries).toBe(1);
     });
 
     it('verification failed + no retries → emits failed', async () => {
@@ -1835,6 +1847,36 @@ Custom prompt`,
           threadId: 't1',
         }),
       );
+    });
+
+    it('cancel clears pending verification retry timer', async () => {
+      useRetryFakeTimers();
+      const pipeline = createPipeline(mock.deps);
+      await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
+      const context = requireContext(pipeline);
+      context.forkPointSha = 'abc123';
+      context.verificationRetries = 0;
+
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git diff')) return 'some diff';
+        if (cmd.startsWith('git status')) return '';
+        return '';
+      });
+
+      await pipeline.startVerification('t1');
+
+      await mock.trigger('output', 'proc-2', verificationBlock(VERIFICATION_FAILED_JSON));
+      const exitP = mock.trigger('exit', 'proc-2', 0);
+      await vi.advanceTimersByTimeAsync(0);
+      await exitP;
+
+      expect(pipeline.getContext('t1')?.retryTimer).not.toBeNull();
+
+      pipeline.cancel('t1');
+      await vi.advanceTimersByTimeAsync(1000);
+
+      // Should NOT have re-entered execution after cancel
+      expect(mock.deps.threads.updateStatus).not.toHaveBeenCalledWith('t1', 'executing');
     });
   });
 

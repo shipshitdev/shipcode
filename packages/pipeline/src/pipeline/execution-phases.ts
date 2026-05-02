@@ -28,6 +28,7 @@ import {
   formatTaskGraphExecutionContract,
   type TaskNodeRecord,
 } from '@shipcode/shared/source';
+import { computeRetryDelayMs } from '../retry-scheduler';
 import { renderWorkflowPromptTemplate } from '../workflow-prompt';
 import type { PipelineHelperEnv } from './shared';
 
@@ -500,8 +501,18 @@ export function createExecutionPhaseHandlers({
           if (context.testRetries < MAX_TEST_RETRIES) {
             context.testRetries++;
             const latestPlan = deps.plans.getLatest(threadId);
-            if (latestPlan?.structured) {
-              handlers.startExecution(threadId, latestPlan.structured);
+            const structuredPlan = latestPlan?.structured;
+            if (structuredPlan) {
+              const delayMs = computeRetryDelayMs({
+                reason: 'continuation',
+                attempt: context.testRetries,
+              });
+              if (context.retryTimer) clearTimeout(context.retryTimer);
+              context.retryTimer = setTimeout(() => {
+                context.retryTimer = null;
+                if (context.cancelled || !activePipelines.has(threadId)) return;
+                handlers.startExecution(threadId, structuredPlan);
+              }, delayMs);
             } else {
               emitPhase(
                 threadId,
@@ -675,7 +686,16 @@ export function createExecutionPhaseHandlers({
             handlers.startCommitAndPush(threadId);
           } else if (context.verificationRetries < MAX_VERIFICATION_RETRIES) {
             context.verificationRetries++;
-            handlers.startExecution(threadId, plan);
+            const delayMs = computeRetryDelayMs({
+              reason: 'continuation',
+              attempt: context.verificationRetries,
+            });
+            if (context.retryTimer) clearTimeout(context.retryTimer);
+            context.retryTimer = setTimeout(() => {
+              context.retryTimer = null;
+              if (context.cancelled || !activePipelines.has(threadId)) return;
+              handlers.startExecution(threadId, plan);
+            }, delayMs);
           } else {
             deps.emitter.emit({
               type: 'pipeline:verification-exhausted',

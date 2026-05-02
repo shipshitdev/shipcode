@@ -406,6 +406,7 @@ export function createPlanningPhaseHandlers({
                 attempt: context.retryCount,
                 maxRetryBackoffMs: context.workflowPolicy.agent.maxRetryBackoffMs,
               });
+              if (context.retryTimer) clearTimeout(context.retryTimer);
               context.retryTimer = setTimeout(() => {
                 context.retryTimer = null;
                 if (context.cancelled || !activePipelines.has(threadId)) return;
