@@ -186,7 +186,12 @@ export const PIPELINE_PHASE = {
 export type PipelinePhase = (typeof PIPELINE_PHASE)[keyof typeof PIPELINE_PHASE];
 
 export type ThreadStatus = PipelinePhase;
-export type ThreadKind = 'pipeline' | 'instant';
+export const THREAD_KIND = {
+  pipeline: 'pipeline',
+  instant: 'instant',
+} as const;
+
+export type ThreadKind = (typeof THREAD_KIND)[keyof typeof THREAD_KIND];
 export type InstantFixScope = 'user' | 'project' | 'custom';
 
 export interface Thread {

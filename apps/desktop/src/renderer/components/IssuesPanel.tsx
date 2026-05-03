@@ -9,6 +9,7 @@ import {
   isRealGithubIssueNumber,
   PIPELINE_PHASE,
   type Project,
+  THREAD_KIND,
   type Thread,
 } from '@shipcode/shared';
 import { AUTOMATION_ISSUE_NUMBER_BASE, isAutomationIssue, KanbanBoard } from '@shipcode/ui';
@@ -262,7 +263,7 @@ export function IssuesPanel() {
     const automationIssues = threads
       .filter(
         (thread) =>
-          thread.kind === 'pipeline' &&
+          thread.kind === THREAD_KIND.pipeline &&
           thread.automationId !== null &&
           !issueThreadIds.has(thread.id),
       )

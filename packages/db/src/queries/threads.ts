@@ -9,6 +9,7 @@ import {
   clarificationRequestSchema,
   ISO_NOW_SQL,
   PIPELINE_PHASE,
+  THREAD_KIND,
   type Thread,
   type ThreadKind,
   type ThreadStatus,
@@ -106,7 +107,12 @@ export class ThreadQueries {
     return row ? mapThread(asRow<ThreadRow>(row)) : null;
   }
 
-  create(projectId: string, prompt: string, title: string, kind: ThreadKind = 'pipeline'): Thread {
+  create(
+    projectId: string,
+    prompt: string,
+    title: string,
+    kind: ThreadKind = THREAD_KIND.pipeline,
+  ): Thread {
     const id = nanoid();
     const now = new Date().toISOString();
 
@@ -464,7 +470,7 @@ function mapThread(row: ThreadRow): Thread {
   return {
     id: row.id,
     projectId: row.project_id,
-    kind: row.kind ?? 'pipeline',
+    kind: row.kind ?? THREAD_KIND.pipeline,
     title: row.title,
     prompt: row.prompt,
     status: row.status as ThreadStatus,

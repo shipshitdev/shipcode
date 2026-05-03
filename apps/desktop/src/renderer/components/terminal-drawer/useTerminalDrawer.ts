@@ -5,15 +5,17 @@ import type {
   PlanRecord,
   Thread,
 } from '@shipcode/shared';
-import { formatClockTime, PIPELINE_PHASE } from '@shipcode/shared';
+import { formatClockTime, PIPELINE_PHASE, THREAD_KIND } from '@shipcode/shared';
 import { useQuery } from '@tanstack/react-query';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../../query-stale-times';
 import { useAppStore } from '../../stores/app-store';
 import {
   CONSOLE_VISIBLE_STATUSES,
   DEFAULT_HEIGHT,
+  FULL_HEIGHT,
   MIN_HEIGHT,
+  MINIMIZED_HEIGHT,
   type TerminalDrawerTarget,
 } from './constants';
 
@@ -53,7 +55,7 @@ function threadTarget(thread: Thread): TerminalDrawerTarget {
         ? `#${thread.githubIssueNumber}`
         : thread.automationId
           ? 'Automation'
-          : thread.kind === 'instant'
+          : thread.kind === THREAD_KIND.instant
             ? 'Session'
             : 'Thread',
     phase: thread.status,
@@ -66,7 +68,7 @@ export function useTerminalDrawer() {
   const setTerminalMaximized = useAppStore((s) => s.setTerminalMaximized);
   const activeProjectId = useAppStore((s) => s.activeProjectId);
   const terminalThreadId = useAppStore((s) => s.terminalThreadId);
-  const isMaximized = useAppStore((s) => s.terminalMaximized);
+  const legacyMaximized = useAppStore((s) => s.terminalMaximized);
   const githubIssues = useAppStore((s) => s.githubIssues);
   const activeIssue = useAppStore((s) => s.activeIssue);
   const scopedIssues = useMemo(
@@ -164,13 +166,21 @@ export function useTerminalDrawer() {
   const setTerminalThread = useAppStore((s) => s.setTerminalThread);
   const selectIssue = useAppStore((s) => s.selectIssue);
   const [height, setHeight] = useState(DEFAULT_HEIGHT);
-  const prevHeightRef = useRef(DEFAULT_HEIGHT);
   const dragStartRef = useRef<{ y: number; h: number } | null>(null);
+  const isMaximized = height >= FULL_HEIGHT;
+  const isMinimized = height <= MINIMIZED_HEIGHT;
+
+  useEffect(() => {
+    if (legacyMaximized) setTerminalMaximized(false);
+  }, [legacyMaximized, setTerminalMaximized]);
 
   const handleResizeMouseDown = useCallback(
     (event: React.MouseEvent) => {
       event.preventDefault();
-      dragStartRef.current = { y: event.clientY, h: height };
+      const measuredHeight = event.currentTarget.parentElement?.getBoundingClientRect().height;
+      const currentHeight = measuredHeight && measuredHeight > 0 ? measuredHeight : height;
+      dragStartRef.current = { y: event.clientY, h: currentHeight };
+      setTerminalMaximized(false);
 
       const onMove = (moveEvent: MouseEvent) => {
         if (!dragStartRef.current) return;
@@ -187,22 +197,21 @@ export function useTerminalDrawer() {
       window.addEventListener('mousemove', onMove);
       window.addEventListener('mouseup', onUp);
     },
-    [height],
+    [height, setTerminalMaximized],
   );
 
   const toggleMaximize = useCallback(() => {
-    if (isMaximized) {
-      setHeight(prevHeightRef.current);
-    } else {
-      prevHeightRef.current = height;
-      setHeight(9999);
-    }
-    setTerminalMaximized(!isMaximized);
-  }, [height, isMaximized, setTerminalMaximized]);
+    setHeight((current) => (current >= FULL_HEIGHT ? DEFAULT_HEIGHT : FULL_HEIGHT));
+    setTerminalMaximized(false);
+  }, [setTerminalMaximized]);
 
   const resetHeight = useCallback(() => {
-    prevHeightRef.current = DEFAULT_HEIGHT;
     setHeight(DEFAULT_HEIGHT);
+    setTerminalMaximized(false);
+  }, [setTerminalMaximized]);
+
+  const toggleMinimized = useCallback(() => {
+    setHeight((current) => (current <= MINIMIZED_HEIGHT ? DEFAULT_HEIGHT : MINIMIZED_HEIGHT));
     setTerminalMaximized(false);
   }, [setTerminalMaximized]);
 
@@ -223,13 +232,15 @@ export function useTerminalDrawer() {
     handleRunningTargetSelect,
     approvedAwaitingExecution,
     isMaximized,
+    isMinimized,
     pipelinePhase,
-    resolvedHeight: isMaximized ? undefined : height,
+    resolvedHeight: height,
     runningTargets,
     showEmptyState: displayTarget === null,
     startedAt: firstEventCreatedAt != null ? formatClockTime(firstEventCreatedAt) : null,
     terminalThreadId: visibleTerminalThreadId,
     resetHeight,
+    toggleMinimized,
     toggleMaximize,
     toggleTerminal,
   };

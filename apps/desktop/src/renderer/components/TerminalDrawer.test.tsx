@@ -6,6 +6,7 @@ import type {
   IntegrationStatus,
   PlanRecord,
 } from '@shipcode/shared';
+import { TooltipProvider } from '@shipcode/ui';
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -19,7 +20,9 @@ function renderWithProviders() {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <TerminalDrawer />
+      <TooltipProvider>
+        <TerminalDrawer />
+      </TooltipProvider>
     </QueryClientProvider>,
   );
 }
@@ -460,7 +463,7 @@ describe('TerminalDrawer', () => {
     expect(state.terminalPaneThreadIds).toContain('thread-shell-1');
   });
 
-  it('switches into full-size terminal mode instead of keeping the resize handle visible', () => {
+  it('uses the full-size button as a resizable height preset', () => {
     useAppStore.setState({
       activeProjectId: 'project-1',
       terminalThreadId: 'thread-1',
@@ -473,9 +476,17 @@ describe('TerminalDrawer', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Maximize terminal' }));
 
-    expect(screen.queryByLabelText('Resize terminal drawer')).not.toBeInTheDocument();
+    const resizeHandle = screen.getByLabelText('Resize terminal drawer');
+    expect(resizeHandle).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Minimize terminal to window' })).toBeInTheDocument();
-    expect(useAppStore.getState().terminalMaximized).toBe(true);
+    expect(resizeHandle.parentElement).toHaveStyle({ height: '9999px' });
+    expect(useAppStore.getState().terminalMaximized).toBe(false);
+
+    fireEvent.mouseDown(resizeHandle, { clientY: 500 });
+    fireEvent.mouseMove(window, { clientY: 520 });
+    fireEvent.mouseUp(window);
+
+    expect(resizeHandle.parentElement).toHaveStyle({ height: '9979px' });
   });
 
   it('resets a resized or maximized terminal back to the default drawer size', () => {
@@ -510,6 +521,40 @@ describe('TerminalDrawer', () => {
     expect(screen.getByLabelText('Resize terminal drawer').parentElement).toHaveStyle({
       height: '250px',
     });
+  });
+
+  it('uses the minimize button as a one-line resizable height preset', () => {
+    useAppStore.setState({
+      activeProjectId: 'project-1',
+      terminalThreadId: 'thread-1',
+      githubIssues: [makeIssue()],
+    });
+
+    renderWithProviders();
+
+    const resizeHandle = screen.getByLabelText('Resize terminal drawer');
+    const drawer = resizeHandle.parentElement;
+    expect(drawer).toHaveStyle({ height: '250px' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Minimize terminal to one line' }));
+
+    expect(screen.getByText('Console')).toBeInTheDocument();
+    expect(screen.getByLabelText('Resize terminal drawer')).toBeInTheDocument();
+    expect(screen.getByText(/Thinking/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Restore terminal drawer' })).toBeInTheDocument();
+    expect(drawer).toHaveStyle({ height: '42px' });
+
+    fireEvent.mouseDown(resizeHandle, { clientY: 500 });
+    fireEvent.mouseMove(window, { clientY: 300 });
+    fireEvent.mouseUp(window);
+
+    expect(drawer).toHaveStyle({ height: '242px' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Minimize terminal to one line' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Restore terminal drawer' }));
+
+    expect(screen.getByLabelText('Resize terminal drawer')).toBeInTheDocument();
+    expect(drawer).toHaveStyle({ height: '250px' });
   });
 
   it('shows waiting-for-execution copy for approved slot waiters', async () => {

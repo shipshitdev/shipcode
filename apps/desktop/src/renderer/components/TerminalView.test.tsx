@@ -96,10 +96,10 @@ describe('TerminalView', () => {
     expect(screen.getByRole('button', { name: 'Open' })).toBeInTheDocument();
   });
 
-  it('does not rerender the sessions grid when unrelated terminal streams update', () => {
+  it('does not rerender the terminal grid when unrelated terminal streams update', () => {
     const onRender = vi.fn();
     render(
-      <Profiler id="instant-view" onRender={onRender}>
+      <Profiler id="terminal-view" onRender={onRender}>
         <TerminalView />
       </Profiler>,
     );

@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 
 import type { GitHubIssueCacheRecord } from '@shipcode/shared';
+import { TooltipProvider } from '@shipcode/ui';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { TerminalDrawerTarget } from './constants';
 import { TerminalDrawerHeader } from './TerminalDrawerHeader';
@@ -66,6 +68,10 @@ function issueTarget(issue: GitHubIssueCacheRecord): TerminalDrawerTarget {
   };
 }
 
+function renderHeader(header: ReactElement) {
+  return render(<TooltipProvider>{header}</TooltipProvider>);
+}
+
 afterEach(() => {
   cleanup();
 });
@@ -74,17 +80,19 @@ describe('TerminalDrawerHeader', () => {
   it('renders the active issue context and forwards single-tab actions', () => {
     const onOpenIssue = vi.fn();
     const onResetHeight = vi.fn();
+    const onToggleMinimized = vi.fn();
     const onToggleMaximize = vi.fn();
     const onToggleTerminal = vi.fn();
     const issue = makeIssue();
 
-    render(
+    renderHeader(
       <TerminalDrawerHeader
         activeProjectId={null}
         approvedAwaitingExecution={false}
         currentModel="gpt-5.4"
         displayTarget={issueTarget(issue)}
         isMaximized={false}
+        isMinimized={false}
         pipelinePhase="executing"
         runningTargets={[issueTarget(issue)]}
         startedAt="2m 10s"
@@ -92,6 +100,7 @@ describe('TerminalDrawerHeader', () => {
         onOpenProjectTerminal={() => {}}
         onOpenTarget={onOpenIssue}
         onResetHeight={onResetHeight}
+        onToggleMinimized={onToggleMinimized}
         onToggleMaximize={onToggleMaximize}
         onToggleTerminal={onToggleTerminal}
       />,
@@ -105,11 +114,13 @@ describe('TerminalDrawerHeader', () => {
 
     fireEvent.click(screen.getByTitle('Open issue detail for #19'));
     fireEvent.click(screen.getByRole('button', { name: 'Maximize terminal' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Minimize terminal to one line' }));
     fireEvent.click(screen.getByRole('button', { name: 'Reset terminal size' }));
     fireEvent.click(screen.getByRole('button', { name: 'Close terminal' }));
 
     expect(onOpenIssue).toHaveBeenCalledWith(issueTarget(issue));
     expect(onResetHeight).toHaveBeenCalledTimes(1);
+    expect(onToggleMinimized).toHaveBeenCalledTimes(1);
     expect(onToggleMaximize).toHaveBeenCalledTimes(1);
     expect(onToggleTerminal).toHaveBeenCalledTimes(1);
   });
@@ -124,13 +135,14 @@ describe('TerminalDrawerHeader', () => {
       threadId: 'thread-2',
     });
 
-    render(
+    renderHeader(
       <TerminalDrawerHeader
         activeProjectId={null}
         approvedAwaitingExecution={false}
         currentModel={null}
         displayTarget={issueTarget(issueA)}
         isMaximized={true}
+        isMinimized={false}
         pipelinePhase="idle"
         runningTargets={[issueTarget(issueA), issueTarget(issueB)]}
         startedAt={null}
@@ -138,6 +150,7 @@ describe('TerminalDrawerHeader', () => {
         onOpenProjectTerminal={() => {}}
         onOpenTarget={onOpenIssue}
         onResetHeight={vi.fn()}
+        onToggleMinimized={vi.fn()}
         onToggleMaximize={vi.fn()}
         onToggleTerminal={vi.fn()}
       />,
@@ -157,13 +170,14 @@ describe('TerminalDrawerHeader', () => {
     const issue = makeIssue();
     const onOpenProjectTerminal = vi.fn();
 
-    render(
+    renderHeader(
       <TerminalDrawerHeader
         activeProjectId="project-1"
         approvedAwaitingExecution={false}
         currentModel={null}
         displayTarget={issueTarget(issue)}
         isMaximized={false}
+        isMinimized={false}
         pipelinePhase="idle"
         runningTargets={[issueTarget(issue)]}
         startedAt={null}
@@ -171,6 +185,7 @@ describe('TerminalDrawerHeader', () => {
         onOpenProjectTerminal={onOpenProjectTerminal}
         onOpenTarget={() => {}}
         onResetHeight={() => {}}
+        onToggleMinimized={() => {}}
         onToggleMaximize={() => {}}
         onToggleTerminal={() => {}}
       />,
@@ -186,13 +201,14 @@ describe('TerminalDrawerHeader', () => {
   it('renders waiting-for-slot copy for approved execution waiters', () => {
     const issue = makeIssue({ pipelineStatus: 'awaiting_approval' });
 
-    render(
+    renderHeader(
       <TerminalDrawerHeader
         activeProjectId={null}
         approvedAwaitingExecution
         currentModel={null}
         displayTarget={issueTarget(issue)}
         isMaximized={false}
+        isMinimized={false}
         pipelinePhase="awaiting_approval"
         runningTargets={[issueTarget(issue)]}
         startedAt={null}
@@ -200,6 +216,7 @@ describe('TerminalDrawerHeader', () => {
         onOpenProjectTerminal={() => {}}
         onOpenTarget={() => {}}
         onResetHeight={() => {}}
+        onToggleMinimized={() => {}}
         onToggleMaximize={() => {}}
         onToggleTerminal={() => {}}
       />,
@@ -219,13 +236,14 @@ describe('TerminalDrawerHeader', () => {
       phase: 'testing',
     };
 
-    render(
+    renderHeader(
       <TerminalDrawerHeader
         activeProjectId="project-1"
         approvedAwaitingExecution={false}
         currentModel="gpt-5.4"
         displayTarget={target}
         isMaximized={false}
+        isMinimized={false}
         pipelinePhase="testing"
         runningTargets={[target]}
         startedAt="21:26:15"
@@ -233,6 +251,7 @@ describe('TerminalDrawerHeader', () => {
         onOpenProjectTerminal={() => {}}
         onOpenTarget={vi.fn()}
         onResetHeight={() => {}}
+        onToggleMinimized={() => {}}
         onToggleMaximize={() => {}}
         onToggleTerminal={() => {}}
       />,

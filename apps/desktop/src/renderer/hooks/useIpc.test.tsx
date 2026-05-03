@@ -283,7 +283,7 @@ describe('useIpc terminal scoping', () => {
     vi.useRealTimers();
   });
 
-  it('tracks live instant pane state from agent lifecycle events', () => {
+  it('tracks live terminal pane state from agent lifecycle events', () => {
     useAppStore.getState().addTerminalPane('thread-live', {
       mode: 'live',
       cli: 'claude',
