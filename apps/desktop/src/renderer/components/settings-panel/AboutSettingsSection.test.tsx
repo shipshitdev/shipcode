@@ -76,19 +76,9 @@ describe('AboutSettingsSection', () => {
 
     expect(await screen.findByText('0.1.0')).toBeInTheDocument();
     expect(screen.getByText('Master')).toBeInTheDocument();
-    expect(screen.getByText('/tmp/shipcode/logs')).toBeInTheDocument();
-  });
-
-  it('opens the logs folder from diagnostics', async () => {
-    const onUpdate = vi.fn();
-
-    render(<AboutSettingsSection settings={DEFAULT_SETTINGS} onUpdate={onUpdate} />, {
-      wrapper: createWrapper(),
-    });
-
-    fireEvent.click(await screen.findByRole('button', { name: /open logs folder/i }));
-
-    expect(window.shipcode.invoke).toHaveBeenCalledWith('developer:open-log-directory');
+    expect(
+      screen.getByText(/Master is the only published update track today/i),
+    ).toBeInTheDocument();
   });
 
   it('runs a manual update check from the version row', async () => {

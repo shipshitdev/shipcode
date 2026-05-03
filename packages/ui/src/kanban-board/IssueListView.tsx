@@ -3,14 +3,15 @@
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { Archive, ChevronDown, ChevronRight, Loader2, Lock, Maximize2, User } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
+import { IssueExternalBlockers, StalenessDot } from '@/kanban-board/IssueCardParts';
 import {
   type GitHubIssueCacheRecord,
   ISSUE_PIPELINE_STATUS,
   type IssueStalenessResult,
-} from '../lib/shipcode';
-import { cn } from '../lib/utils';
-import { Badge } from '../primitives/badge';
-import { Button } from '../primitives/button';
+} from '@/lib/shipcode';
+import { cn } from '@/lib/utils';
+import { Badge } from '@/primitives/badge';
+import { Button } from '@/primitives/button';
 import {
   ACTIVE_STATUSES,
   COLUMN_DOT_CLASS,
@@ -19,7 +20,6 @@ import {
   LIST_COLUMN_DROP_ID,
   LIST_COLUMN_LABEL,
 } from './constants';
-import { IssueExternalBlockers, StalenessDot } from './IssueCardParts';
 import type {
   ColumnKey,
   IssueApprovalBadge,
@@ -73,9 +73,7 @@ function DraggableListRow({
   onArchiveIssue,
   approvedAwaitingExecution = false,
 }: DraggableListRowProps) {
-  const isDoneState =
-    issue.pipelineStatus === ISSUE_PIPELINE_STATUS.completed ||
-    issue.pipelineStatus === ISSUE_PIPELINE_STATUS.done;
+  const isDone = issue.pipelineStatus === ISSUE_PIPELINE_STATUS.done;
   const isCreating = isIssueCreating(issue);
   const isAutomation = isAutomationIssue(issue);
   const referenceLabel = isCreating
@@ -275,7 +273,7 @@ function DraggableListRow({
             <Maximize2 size={12} />
           </Button>
         )}
-        {isDoneState && onArchiveIssue && !isAutomation && (
+        {isDone && onArchiveIssue && !isAutomation && (
           <Button
             variant="ghost"
             size="icon-xs"
@@ -424,7 +422,6 @@ interface IssueListViewProps {
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
   onOpenPullRequest?: (url: string) => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
-  onArchiveAllDone?: () => void;
   approvedAwaitingExecutionIssueIds?: ReadonlySet<string>;
 }
 
@@ -441,7 +438,6 @@ export function IssueListView({
   onIssueClick,
   onOpenPullRequest,
   onArchiveIssue,
-  onArchiveAllDone,
   approvedAwaitingExecutionIssueIds = EMPTY_APPROVED_AWAITING_EXECUTION,
 }: IssueListViewProps) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -457,8 +453,8 @@ export function IssueListView({
         const columnIssues = issues.filter((issue) =>
           issueMatchesColumn(issue, column, approvedAwaitingExecutionIssueIds),
         );
-        const hasArchivableIssues = columnIssues.some((issue) => !isAutomationIssue(issue));
         const isCollapsed = collapsed[column.key] ?? false;
+        const columnDotColor = columnDotColors?.[column.key];
         const dropId = LIST_COLUMN_DROP_ID[column.key];
 
         return (
@@ -474,30 +470,15 @@ export function IssueListView({
                 <span
                   className={cn(
                     'h-2 w-2 shrink-0 rounded-full',
-                    !columnDotColors?.[column.key] && COLUMN_DOT_CLASS[column.key],
+                    !columnDotColor && COLUMN_DOT_CLASS[column.key],
                   )}
-                  style={
-                    columnDotColors?.[column.key]
-                      ? { backgroundColor: columnDotColors[column.key]! }
-                      : undefined
-                  }
+                  style={columnDotColor ? { backgroundColor: columnDotColor } : undefined}
                 />
                 {label}
                 <span className="ml-0.5 font-normal normal-case tracking-normal text-muted">
                   ({columnIssues.length})
                 </span>
               </Button>
-              {column.key === 'done' && onArchiveAllDone && hasArchivableIssues && (
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  className="text-muted/60 hover:bg-muted/10 hover:text-muted"
-                  title="Archive all done issues"
-                  onClick={onArchiveAllDone}
-                >
-                  <Archive size={12} />
-                </Button>
-              )}
             </div>
             {!isCollapsed && (
               <DroppableListGroup dropId={dropId}>

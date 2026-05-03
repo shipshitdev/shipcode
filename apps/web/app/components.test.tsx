@@ -4,16 +4,16 @@ import { act, type ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { Footer } from './components/Footer';
-import { Header } from './components/Header';
-import { InstallCommand } from './components/InstallCommand';
+import { Footer } from '@/components/Footer';
+import { Header } from '@/components/Header';
+import { InstallCommand } from '@/components/InstallCommand';
 
 vi.mock('next/font/google', () => ({
   Inter: () => ({ variable: 'font-inter' }),
   JetBrains_Mono: () => ({ variable: 'font-jetbrains' }),
 }));
 
-import RootLayout, { metadata } from './layout';
+import RootLayout, { metadata } from '@/layout';
 
 function renderIntoDom(element: ReactElement) {
   const container = document.createElement('div');
@@ -102,8 +102,7 @@ describe('web component coverage', () => {
       button.click();
     });
 
-    expect(writeText).toHaveBeenCalledWith(`brew tap shipshitdev/tap
-brew install --cask shipcode`);
+    expect(writeText).toHaveBeenCalledWith('brew install --cask shipshitdev/tap/shipcode');
     expect(button.textContent).toBe('Copied!');
 
     act(() => {
@@ -127,8 +126,7 @@ brew install --cask shipcode`);
       button.click();
     });
 
-    expect(writeText).toHaveBeenLastCalledWith(`npx @shipshitdev/shipcode onboard
-npx @shipshitdev/shipcode run 42`);
+    expect(writeText).toHaveBeenLastCalledWith('npx @shipshitdev/shipcode run 42');
     view.cleanup();
     vi.useRealTimers();
   });

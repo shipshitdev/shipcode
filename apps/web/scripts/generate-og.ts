@@ -5,9 +5,9 @@
  * Output: public/og.png (1200x630)
  */
 
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { Resvg } from '@resvg/resvg-js';
-import { writeFileSync } from 'fs';
-import { join } from 'path';
 import type { ReactNode } from 'react';
 import satori from 'satori';
 

@@ -5,7 +5,10 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "ignoreDeprecations": "6.0",
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
   "include": ["src"]
 }

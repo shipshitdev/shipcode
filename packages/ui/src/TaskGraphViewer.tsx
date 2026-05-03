@@ -13,10 +13,10 @@ import type {
   TaskGraphWithNodes,
   TaskNodeRecord,
   TaskNodeStatus,
-} from './lib/shipcode';
-import { cn } from './lib/utils';
-import { Badge } from './primitives/badge';
-import { Button } from './primitives/button';
+} from '@/lib/shipcode';
+import { cn } from '@/lib/utils';
+import { Badge } from '@/primitives/badge';
+import { Button } from '@/primitives/button';
 
 interface TaskGraphViewerProps {
   graph: TaskGraphWithNodes | null;

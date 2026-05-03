@@ -10,8 +10,8 @@ import {
   SlidersHorizontal,
   Workflow,
 } from 'lucide-react';
-import { cn } from '../lib/utils';
-import { Button } from '../primitives/button';
+import { cn } from '@/lib/utils';
+import { Button } from '@/primitives/button';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -19,7 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '../primitives/dropdown-menu';
+} from '@/primitives/dropdown-menu';
 import {
   Select,
   SelectContent,
@@ -29,7 +29,7 @@ import {
   SelectSeparator,
   SelectTrigger,
   SelectValue,
-} from '../primitives/select';
+} from '@/primitives/select';
 import { BOARD_SORT_LABELS } from './constants';
 import type { BoardSortOrder, BoardView } from './types';
 

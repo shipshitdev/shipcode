@@ -1,7 +1,13 @@
+import path from 'node:path';
 import { defineConfig } from 'vitest/config';
 import { withCoverage } from '../../vitest.coverage';
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
   test: withCoverage(
     {
       environment: 'node',

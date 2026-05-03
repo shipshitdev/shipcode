@@ -1251,6 +1251,10 @@ Custom prompt`,
     });
 
     it('exit 0 + manual → emits completed', async () => {
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd === 'git status --porcelain') return ' M a.ts';
+        return '';
+      });
       const pipeline = createPipeline(mock.deps);
       await pipeline.startPlanGeneration('t1', 'do stuff', '/proj', null);
 
@@ -1263,6 +1267,10 @@ Custom prompt`,
     });
 
     it('executes task graph nodes one by one with specialist node prompts', async () => {
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd === 'git status --porcelain') return ' M a.ts';
+        return '';
+      });
       const graph = makeTaskGraph();
       const taskGraphs = mock.deps.taskGraphs;
       if (!taskGraphs) throw new Error('Expected task graph deps');
@@ -1493,6 +1501,10 @@ Custom prompt`,
         openrouter: openrouterProvider,
       });
       const deps = { ...mock.deps, providers: registry };
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd === 'git status --porcelain') return ' M a.ts';
+        return '';
+      });
       const pipeline = createPipeline(deps);
 
       pipeline.initializeContext('t1', {

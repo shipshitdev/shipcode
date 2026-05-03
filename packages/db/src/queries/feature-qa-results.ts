@@ -59,7 +59,9 @@ export class FeatureQaResultQueries {
         input.evidencePaths ? JSON.stringify(input.evidencePaths) : null,
         input.runAt ?? null,
       );
-    return this.getById(id)!;
+    const created = this.getById(id);
+    if (!created) throw new Error(`Failed to load feature QA result after insert: ${id}`);
+    return created;
   }
 
   getById(id: string): FeatureQaResultRecord | null {

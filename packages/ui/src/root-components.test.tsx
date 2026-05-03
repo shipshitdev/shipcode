@@ -9,11 +9,11 @@ import type {
 import { act, type ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { describe, expect, it, vi } from 'vitest';
-import { PipelineStatus } from './PipelineStatus';
-import { PlanViewer } from './PlanViewer';
-import { ReviewViewer } from './ReviewViewer';
-import { TaskGraphViewer } from './TaskGraphViewer';
-import { VerificationViewer } from './VerificationViewer';
+import { PipelineStatus } from '@/PipelineStatus';
+import { PlanViewer } from '@/PlanViewer';
+import { ReviewViewer } from '@/ReviewViewer';
+import { TaskGraphViewer } from '@/TaskGraphViewer';
+import { VerificationViewer } from '@/VerificationViewer';
 
 (
   globalThis as typeof globalThis & {

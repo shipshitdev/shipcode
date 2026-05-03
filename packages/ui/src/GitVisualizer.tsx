@@ -8,11 +8,11 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import type { DiffRecord, GitWorktreeSummary } from './lib/shipcode';
-import { cn } from './lib/utils';
-import { Badge } from './primitives/badge';
-import { Button } from './primitives/button';
-import { SideBySideDiffViewer } from './SideBySideDiffViewer';
+import type { DiffRecord, GitWorktreeSummary } from '@/lib/shipcode';
+import { cn } from '@/lib/utils';
+import { Badge } from '@/primitives/badge';
+import { Button } from '@/primitives/button';
+import { SideBySideDiffViewer } from '@/SideBySideDiffViewer';
 
 export interface GitVisualizerProps {
   worktrees: GitWorktreeSummary[];

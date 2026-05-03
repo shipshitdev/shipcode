@@ -197,6 +197,7 @@ const threadDefaults = {
   githubRepo: 'shipshitdev/shipcode',
   automationId: null,
   lastError: null,
+  doneAt: null,
   createdAt: now,
   updatedAt: now,
   revisorResolvedModel: null,

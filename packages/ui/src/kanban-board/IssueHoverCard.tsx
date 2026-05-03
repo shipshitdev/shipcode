@@ -2,11 +2,11 @@
 
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { useCallback, useRef, useState } from 'react';
-import type { GitHubIssueCacheRecord } from '../lib/shipcode';
-import { formatElapsedDuration } from '../lib/time';
-import { cn } from '../lib/utils';
-import { PhaseChip } from '../PhaseChip';
-import { Badge } from '../primitives/badge';
+import type { GitHubIssueCacheRecord } from '@/lib/shipcode';
+import { formatElapsedDuration } from '@/lib/time';
+import { cn } from '@/lib/utils';
+import { PhaseChip } from '@/PhaseChip';
+import { Badge } from '@/primitives/badge';
 import { ACTIVE_STATUSES } from './constants';
 import { resolveIssuePriorityBadge } from './utils';
 

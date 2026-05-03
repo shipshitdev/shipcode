@@ -36,6 +36,7 @@ vi.mock('@shipcode/ui', () => ({
   }) => (
     <div>
       <div>{issues[0]?.title ?? 'Loading issues'}</div>
+      <div data-testid="board-status">{issues[0]?.pipelineStatus ?? 'none'}</div>
       {issues[0] ? (
         <button type="button" onClick={() => onMarkDone?.(issues[0])}>
           Trigger mark done
@@ -115,6 +116,7 @@ const awaitingApprovalThread: Thread = {
   lastError: null,
   failurePhase: null,
   failureCount: 0,
+  doneAt: null,
   createdAt: '2026-04-14T00:00:00.000Z',
   updatedAt: '2026-04-14T00:00:00.000Z',
   plannerResolvedModel: null,
@@ -261,6 +263,44 @@ describe('IssuesPanel undo done move', () => {
         projectId: project.id,
         issueNumber: originalIssue.issueNumber,
       });
+    });
+  });
+
+  it('optimistically moves completed linked-PR issues into done when the badge is clicked', async () => {
+    const completedIssue = makeIssue({
+      pipelineStatus: 'completed',
+      linkedPrNumber: 91,
+      linkedPrUrl: 'https://github.com/shipshitdev/shipcode/pull/91',
+    });
+    const doneIssue = makeIssue({
+      pipelineStatus: 'done',
+      state: 'closed',
+      linkedPrNumber: 91,
+      linkedPrUrl: 'https://github.com/shipshitdev/shipcode/pull/91',
+    });
+
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'thread-panel:get-data') return panelData;
+      if (channel === 'github:list-issues') return [completedIssue];
+      if (channel === 'issue:mark-done') return undefined;
+      if (channel === 'github:refresh-issues') return [doneIssue];
+      return null;
+    });
+
+    renderWithProviders();
+
+    await screen.findByText(completedIssue.title);
+    expect(screen.getByTestId('board-status')).toHaveTextContent('completed');
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Trigger mark done' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('board-status')).toHaveTextContent('done');
+    });
+    expect(invokeMock).toHaveBeenCalledWith('issue:mark-done', {
+      projectId: project.id,
+      issueId: completedIssue.id,
+      issueNumber: completedIssue.issueNumber,
     });
   });
 });

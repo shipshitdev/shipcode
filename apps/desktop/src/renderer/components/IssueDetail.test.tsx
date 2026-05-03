@@ -97,6 +97,7 @@ const makeThread = (overrides: Partial<Thread> = {}): Thread => {
     totalTokensPrompt: 0,
     totalTokensCompletion: 0,
     totalCostUsd: 0,
+    doneAt: null,
     lastError: null,
     failurePhase: null,
     failureCount: 0,
@@ -1104,13 +1105,6 @@ describe('IssueDetail', () => {
 
     renderWithProviders();
 
-    const pipelineTab = screen.getByRole('tab', { name: 'Pipeline' });
-    fireEvent.mouseDown(pipelineTab, { button: 0 });
-    fireEvent.click(pipelineTab);
-    await waitFor(() => {
-      expect(pipelineTab).toHaveAttribute('data-state', 'active');
-    });
-
     const plannerTrigger = (await screen.findAllByRole('combobox'))[0];
     fireEvent.click(plannerTrigger);
     fireEvent.click(await screen.findByText('GPT-5.4'));
@@ -1139,8 +1133,8 @@ describe('IssueDetail', () => {
     renderWithProviders();
 
     expect(screen.getByRole('tab', { name: 'Issue' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Comments' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Plans' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Pipeline' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Activity' })).toBeInTheDocument();
   });
 
@@ -1177,15 +1171,7 @@ describe('IssueDetail', () => {
     });
 
     const tabLabels = screen.getAllByRole('tab').map((tab) => tab.textContent?.trim());
-    expect(tabLabels).toEqual([
-      'Issue',
-      'Comments',
-      'Plans',
-      'Pipeline',
-      'Activity',
-      'Conversations',
-      'Costs',
-    ]);
+    expect(tabLabels).toEqual(['Issue', 'Comments', 'Plans', 'Diff', 'Activity', 'Conversations']);
   });
 
   it('pipeline start card is above the tab bar when pipeline not started', async () => {
