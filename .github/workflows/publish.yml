@@ -277,6 +277,8 @@ jobs:
       - run: bun install
       - name: Build CLI and dependencies
         run: bun run turbo run build --filter=@shipshitdev/shipcode
+      - name: Smoke-test packaged CLI entrypoint
+        run: node apps/cli/dist/index.js --help
       - name: Publish to npm (OIDC / Trusted Publisher)
         run: cd apps/cli && npm publish --access public --provenance
         # No NODE_AUTH_TOKEN. Authentication happens via OIDC — the npm
