@@ -537,7 +537,12 @@ function migrateStatusMapping(raw: unknown): GhStatusMapping {
   function toOption(v: unknown): GhStatusOption | null {
     if (v === null || v === undefined) return null;
     if (typeof v === 'string') return { name: v, color: null };
-    if (typeof v === 'object' && v !== null && 'name' in v) return v as GhStatusOption;
+    if (typeof v === 'object' && v !== null && 'name' in v) {
+      const obj = v as Record<string, unknown>;
+      if (typeof obj.name !== 'string') return null;
+      const color = typeof obj.color === 'string' ? obj.color : null;
+      return { name: obj.name, color };
+    }
     return null;
   }
   return {

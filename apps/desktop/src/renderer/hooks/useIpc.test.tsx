@@ -102,6 +102,7 @@ const makeThread = (overrides: Partial<Thread> = {}): Thread => ({
   totalTokensPrompt: 0,
   totalTokensCompletion: 0,
   totalCostUsd: 0,
+  doneAt: null,
   ...overrides,
 });
 

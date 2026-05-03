@@ -58,6 +58,7 @@ interface ThreadRow {
   total_tokens_prompt: number | null;
   total_tokens_completion: number | null;
   total_cost_usd: number | null;
+  done_at: string | null;
 }
 
 export class ThreadQueries {
@@ -144,6 +145,14 @@ export class ThreadQueries {
         )
         .run(status, id);
     }
+  }
+
+  markDone(id: string): void {
+    this.db
+      .prepare(
+        `UPDATE threads SET done_at = ${ISO_NOW_SQL}, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
+      )
+      .run(id);
   }
 
   recordFailure(id: string, failurePhase: string, lastError?: string): void {
@@ -507,6 +516,7 @@ function mapThread(row: ThreadRow): Thread {
     totalTokensPrompt: row.total_tokens_prompt ?? 0,
     totalTokensCompletion: row.total_tokens_completion ?? 0,
     totalCostUsd: row.total_cost_usd ?? 0,
+    doneAt: row.done_at ?? null,
   };
 }
 

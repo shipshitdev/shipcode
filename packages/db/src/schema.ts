@@ -1415,3 +1415,20 @@ export function migrateV47(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (47)`);
   });
 }
+
+export function migrateV48(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 48) return;
+
+  transaction(db, () => {
+    // Automation threads have no github_issue_cache row, so "mark done" has
+    // nowhere to persist. Adding done_at to threads lets the renderer map
+    // completed automation threads → ISSUE_PIPELINE_STATUS.done when the
+    // column is set.
+    execAlterTableIfMissing(db, 'ALTER TABLE threads ADD COLUMN done_at TEXT');
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (48)`);
+  });
+}

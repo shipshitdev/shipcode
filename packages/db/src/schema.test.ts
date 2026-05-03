@@ -47,6 +47,7 @@ import {
   migrateV45,
   migrateV46,
   migrateV47,
+  migrateV48,
 } from './schema';
 import { createTestDb } from './test-helpers';
 import { asRow } from './utils';
@@ -1181,5 +1182,38 @@ describe('migrateV47', () => {
 
   it('is idempotent', () => {
     expect(() => migrateV47(db)).not.toThrow();
+  });
+});
+
+describe('migrateV48', () => {
+  let db: ReturnType<typeof createTestDb>;
+
+  beforeEach(() => {
+    db = createTestDb();
+  });
+
+  it('adds done_at column to threads', () => {
+    const columns = db.prepare("SELECT name FROM pragma_table_info('threads')").all() as Array<{
+      name: string;
+    }>;
+    const colNames = columns.map((c) => c.name);
+    expect(colNames).toContain('done_at');
+  });
+
+  it('defaults to NULL for existing threads', () => {
+    db.prepare(
+      "INSERT INTO projects (id, name, path, default_branch) VALUES ('p1', 'test', '/tmp/test', 'main')",
+    ).run();
+    db.prepare(
+      "INSERT INTO threads (id, project_id, title, prompt) VALUES ('t1', 'p1', 'Test', 'prompt')",
+    ).run();
+    const row = db.prepare("SELECT done_at FROM threads WHERE id = 't1'").get() as {
+      done_at: string | null;
+    };
+    expect(row.done_at).toBeNull();
+  });
+
+  it('is idempotent', () => {
+    expect(() => migrateV48(db)).not.toThrow();
   });
 });

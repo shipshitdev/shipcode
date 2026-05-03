@@ -523,6 +523,15 @@ export function registerGitHubHandlers({
       const project = queries.projects.getById(projectId);
       if (!project) throw new Error(`Project ${projectId} not found`);
 
+      // Automation issues are renderer-only (no github_issue_cache row).
+      // Their issueId follows the pattern "automation:<threadId>".
+      if (issueId.startsWith('automation:')) {
+        const threadId = issueId.slice('automation:'.length);
+        queries.threads.markDone(threadId);
+        sendGithubIssuesUpdated(mainWindow, queries, projectId);
+        return;
+      }
+
       const issue = getActiveIssueById(queries, projectId, issueId);
       if (!issue) throw new Error(`Issue ${issueId} not found in project ${projectId}`);
       if (issue.issueNumber !== issueNumber) {

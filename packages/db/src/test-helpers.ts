@@ -47,6 +47,7 @@ import {
   migrateV45,
   migrateV46,
   migrateV47,
+  migrateV48,
 } from './schema';
 
 export function createTestDb(): DatabaseSync {
@@ -98,5 +99,6 @@ export function createTestDb(): DatabaseSync {
   migrateV45(db);
   migrateV46(db);
   migrateV47(db);
+  migrateV48(db);
   return db;
 }

@@ -91,6 +91,7 @@ function buildItemPage(opts: ItemPageOpts): string {
 
 interface FieldsPageOpts {
   statusOptions?: string[];
+  statusColors?: (string | null)[];
   ownerType?: 'organization' | 'user';
   noStatusField?: boolean;
 }
@@ -103,7 +104,11 @@ function buildFieldsPage(opts: FieldsPageOpts): string {
     fields.push({
       __typename: 'ProjectV2SingleSelectField',
       name: 'Status',
-      options: (opts.statusOptions ?? []).map((name, i) => ({ id: `opt_${i}`, name, color: null })),
+      options: (opts.statusOptions ?? []).map((name, i) => ({
+        id: `opt_${i}`,
+        name,
+        color: opts.statusColors?.[i] ?? null,
+      })),
     });
   }
 
@@ -504,5 +509,27 @@ describe('validateProjectStatusField', () => {
     });
     expect(result.ok).toBe(true);
     expect(result.mapping?.humanReview).toEqual({ name: 'Codex Review', color: null });
+  });
+
+  it('captures color enum from GitHub status options', async () => {
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: buildFieldsPage({
+        statusOptions: ['Todo', 'In Progress', 'Human Review', 'Done'],
+        statusColors: ['GREEN', 'YELLOW', 'ORANGE', 'PURPLE'],
+      }),
+      stderr: '',
+    });
+
+    const result = await validateProjectStatusField({
+      cwd: '/repo',
+      projectUrl: ORG_URL,
+    });
+    expect(result.ok).toBe(true);
+    expect(result.mapping).toEqual({
+      todo: { name: 'Todo', color: 'GREEN' },
+      inProgress: { name: 'In Progress', color: 'YELLOW' },
+      humanReview: { name: 'Human Review', color: 'ORANGE' },
+      done: { name: 'Done', color: 'PURPLE' },
+    });
   });
 });
