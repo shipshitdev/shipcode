@@ -4,10 +4,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { GhSyncQueue, type GhSyncWriteOpts } from './gh-sync-queue';
 
 const MAPPING: GhStatusMapping = {
-  todo: 'Todo',
-  inProgress: 'In Progress',
-  humanReview: 'Human Review',
-  done: 'Done',
+  todo: { name: 'Todo', color: 'GREEN' },
+  inProgress: { name: 'In Progress', color: 'YELLOW' },
+  humanReview: { name: 'Human Review', color: 'ORANGE' },
+  done: { name: 'Done', color: 'PURPLE' },
 };
 
 function makeOpts(overrides: Partial<GhSyncWriteOpts> = {}): GhSyncWriteOpts {

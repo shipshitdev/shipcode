@@ -622,6 +622,7 @@ export function KanbanBoard({
           {view === 'list' && (
             <IssueListView
               issues={visibleIssues}
+              columnDotColors={columnDotColors}
               selectedIssueNumber={selectedIssueNumber}
               activeId={activeId}
               issueRevisionBadgeById={issueRevisionBadgeById}
@@ -652,6 +653,7 @@ export function KanbanBoard({
                       onOpenPullRequest={onOpenPullRequest}
                       onCopyBranchName={handleCopyBranchName}
                       repoUrl={repoUrl}
+                      onMarkDone={col.key === 'done' ? onMarkDone : undefined}
                       onArchiveAllDone={col.key === 'done' ? onArchiveAllDone : undefined}
                       onArchiveIssue={col.key === 'done' ? onArchiveIssue : undefined}
                       rerunningId={rerunningId}
@@ -677,6 +679,7 @@ export function KanbanBoard({
                     key={col.key}
                     id={col.key}
                     columnKey={col.key}
+                    columnDotColor={columnDotColors[col.key]}
                     label={col.label}
                     issues={columnIssues}
                     droppable={!!col.droppable}

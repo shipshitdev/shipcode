@@ -54,6 +54,7 @@ const EMPTY_APPROVED_AWAITING_EXECUTION = new Set<string>();
 interface DroppableColumnProps {
   id: string;
   columnKey: ColumnKey;
+  columnDotColor?: string | null;
   label: string;
   issues: GitHubIssueCacheRecord[];
   droppable: boolean;
@@ -82,6 +83,7 @@ interface DroppableColumnProps {
 export function DroppableColumn({
   id,
   columnKey,
+  columnDotColor,
   label,
   issues,
   droppable,
@@ -120,7 +122,13 @@ export function DroppableColumn({
     >
       <div className="flex shrink-0 items-center justify-between border-b border-border px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-primary">
         <span className="flex items-center gap-1.5">
-          <span className={cn('h-2 w-2 shrink-0 rounded-full', COLUMN_DOT_CLASS[columnKey])} />
+          <span
+            className={cn(
+              'h-2 w-2 shrink-0 rounded-full',
+              !columnDotColor && COLUMN_DOT_CLASS[columnKey],
+            )}
+            style={columnDotColor ? { backgroundColor: columnDotColor } : undefined}
+          />
           {label}
         </span>
         <div className="flex items-center gap-1">
@@ -194,6 +202,7 @@ interface SectionBlockProps {
   onCancel?: (issue: GitHubIssueCacheRecord) => void;
   onOpenPullRequest?: (url: string) => void;
   onCopyBranchName?: (issue: GitHubIssueCacheRecord, branchName: string) => void;
+  onMarkDone?: (issue: GitHubIssueCacheRecord) => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
   selectedIssueNumber?: number;
   rerunningId?: string | null;
@@ -223,6 +232,7 @@ function SectionBlock({
   onCancel,
   onOpenPullRequest,
   onCopyBranchName,
+  onMarkDone,
   onArchiveIssue,
   selectedIssueNumber,
   rerunningId,
@@ -309,6 +319,7 @@ function SectionBlock({
               onCancel={onCancel}
               onOpenPullRequest={onOpenPullRequest}
               onCopyBranchName={onCopyBranchName}
+              onMarkDone={columnKey === 'done' ? onMarkDone : undefined}
               issueGithubUrl={
                 repoUrl && issue.issueNumber > 0 ? `${repoUrl}/issues/${issue.issueNumber}` : null
               }
@@ -338,6 +349,7 @@ function SectionBlock({
 
 interface StackedColumnProps {
   column: BoardColumn;
+  columnDotColor?: string | null;
   issues: GitHubIssueCacheRecord[];
   readOnly?: boolean;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
@@ -345,6 +357,7 @@ interface StackedColumnProps {
   onCancel?: (issue: GitHubIssueCacheRecord) => void;
   onOpenPullRequest?: (url: string) => void;
   onCopyBranchName?: (issue: GitHubIssueCacheRecord, branchName: string) => void;
+  onMarkDone?: (issue: GitHubIssueCacheRecord) => void;
   onArchiveAllDone?: () => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
   selectedIssueNumber?: number;
@@ -365,6 +378,7 @@ interface StackedColumnProps {
 
 export function StackedColumn({
   column,
+  columnDotColor,
   issues,
   readOnly = false,
   onIssueClick,
@@ -372,6 +386,7 @@ export function StackedColumn({
   onCancel,
   onOpenPullRequest,
   onCopyBranchName,
+  onMarkDone,
   onArchiveAllDone,
   onArchiveIssue,
   selectedIssueNumber,
@@ -420,7 +435,13 @@ export function StackedColumn({
     <div className="flex min-h-0 min-w-[280px] max-w-[360px] flex-[1.3] flex-col overflow-hidden rounded-md border border-border/40 bg-secondary">
       <div className="flex shrink-0 items-center justify-between border-b border-border px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-primary">
         <span className="flex items-center gap-1.5">
-          <span className={cn('h-2 w-2 shrink-0 rounded-full', COLUMN_DOT_CLASS[column.key])} />
+          <span
+            className={cn(
+              'h-2 w-2 shrink-0 rounded-full',
+              !columnDotColor && COLUMN_DOT_CLASS[column.key],
+            )}
+            style={columnDotColor ? { backgroundColor: columnDotColor } : undefined}
+          />
           {column.label}
         </span>
         <div className="flex items-center gap-1">
@@ -462,6 +483,7 @@ export function StackedColumn({
             onCancel={onCancel}
             onOpenPullRequest={onOpenPullRequest}
             onCopyBranchName={onCopyBranchName}
+            onMarkDone={onMarkDone}
             onArchiveIssue={onArchiveIssue}
             selectedIssueNumber={selectedIssueNumber}
             rerunningId={rerunningId}

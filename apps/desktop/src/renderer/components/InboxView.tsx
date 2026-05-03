@@ -195,61 +195,63 @@ export function InboxView() {
           <Badge variant={KIND_BADGE_VARIANT[n.kind]}>{KIND_LABEL[n.kind]}</Badge>
         </div>
       </TableCell>
-      <TableCell className="w-[1%] whitespace-nowrap align-top text-[11px] text-muted">
-        {formatRelativeTime(n.createdAt)}
-      </TableCell>
       <TableCell className="align-top">
         <div className="text-[13px] font-medium text-primary">{n.title}</div>
         {n.body && <div className="mt-0.5 line-clamp-2 text-[12px] text-secondary">{n.body}</div>}
       </TableCell>
-      <TableCell className="w-[1%] whitespace-nowrap align-top text-right">
-        <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-          {n.projectId !== null && (
+      <TableCell className="w-[144px] whitespace-nowrap align-top text-right">
+        <div className="relative flex min-h-7 items-start justify-end">
+          <span className="pt-0.5 text-[11px] text-muted transition-opacity group-hover:opacity-0 group-focus-within:opacity-0">
+            {formatRelativeTime(n.createdAt)}
+          </span>
+          <div className="absolute right-0 top-0 flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+            {n.projectId !== null && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => goToIssue(n)}
+                    disabled={navigatingId === n.id}
+                    aria-label={`Open issue: ${n.title}`}
+                  >
+                    <Maximize2 size={13} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Open issue</TooltipContent>
+              </Tooltip>
+            )}
+            {(n.kind === 'failed' || n.kind === 'verification_exhausted') && n.threadId && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => retryPipeline.mutate(n.threadId as string)}
+                    disabled={retryPipeline.isPending && retryPipeline.variables === n.threadId}
+                    aria-label={`Retry pipeline: ${n.title}`}
+                  >
+                    <RefreshCw size={13} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Retry pipeline</TooltipContent>
+              </Tooltip>
+            )}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon-xs"
-                  onClick={() => goToIssue(n)}
-                  disabled={navigatingId === n.id}
-                  aria-label={`Open issue: ${n.title}`}
+                  onClick={() => dismiss.mutate(n.id)}
+                  disabled={dismiss.isPending && dismiss.variables === n.id}
+                  aria-label={`Dismiss notification: ${n.title}`}
                 >
-                  <Maximize2 size={13} />
+                  <X size={13} />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Open issue</TooltipContent>
+              <TooltipContent>Dismiss</TooltipContent>
             </Tooltip>
-          )}
-          {(n.kind === 'failed' || n.kind === 'verification_exhausted') && n.threadId && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={() => retryPipeline.mutate(n.threadId as string)}
-                  disabled={retryPipeline.isPending && retryPipeline.variables === n.threadId}
-                  aria-label={`Retry pipeline: ${n.title}`}
-                >
-                  <RefreshCw size={13} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Retry pipeline</TooltipContent>
-            </Tooltip>
-          )}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={() => dismiss.mutate(n.id)}
-                disabled={dismiss.isPending && dismiss.variables === n.id}
-                aria-label={`Dismiss notification: ${n.title}`}
-              >
-                <X size={13} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Dismiss</TooltipContent>
-          </Tooltip>
+          </div>
         </div>
       </TableCell>
     </TableRow>

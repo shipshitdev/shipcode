@@ -1,6 +1,10 @@
-import type { NotificationRecord } from '@shipcode/shared';
+// @vitest-environment jsdom
+
+import { formatRelativeTime, type NotificationRecord } from '@shipcode/shared';
+import { TooltipProvider } from '@shipcode/ui';
+import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { InboxView } from './InboxView';
 
@@ -16,7 +20,9 @@ function renderWithProviders() {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <InboxView />
+      <TooltipProvider>
+        <InboxView />
+      </TooltipProvider>
     </QueryClientProvider>,
   );
 }
@@ -50,16 +56,17 @@ describe('InboxView', () => {
   });
 
   beforeEach(() => {
-    window.shipcode.invoke = vi.fn(async (channel: string) => {
-      if (channel === 'notification:list') return notifications;
-      if (channel === 'notification:dismiss') return null;
-      if (channel === 'notification:dismiss-all') return null;
-      if (channel === 'github:list-issues') return [];
-      if (channel === 'thread:get') return null;
-      return null;
-    }) as typeof window.shipcode.invoke;
-
-    window.shipcode.on = vi.fn(() => () => {}) as typeof window.shipcode.on;
+    (window as typeof window & { shipcode: typeof window.shipcode }).shipcode = {
+      invoke: vi.fn(async (channel: string) => {
+        if (channel === 'notification:list') return notifications;
+        if (channel === 'notification:dismiss') return null;
+        if (channel === 'notification:dismiss-all') return null;
+        if (channel === 'github:list-issues') return [];
+        if (channel === 'thread:get') return null;
+        return null;
+      }) as typeof window.shipcode.invoke,
+      on: vi.fn(() => () => {}) as typeof window.shipcode.on,
+    };
   });
 
   it('labels approval-gated notifications without a redundant secondary badge', async () => {
@@ -78,5 +85,23 @@ describe('InboxView', () => {
 
     expect(screen.getByText('Approval needed for demo task')).toBeInTheDocument();
     expect(screen.queryByText('Execution failed for demo task')).toBeNull();
+  });
+
+  it('places the timestamp in the rightmost column with hover actions in the same cell', async () => {
+    renderWithProviders();
+
+    const title = await screen.findByText('Execution failed for demo task');
+    const row = title.closest('tr');
+    expect(row).not.toBeNull();
+
+    const cells = within(row as HTMLTableRowElement).getAllByRole('cell');
+    expect(cells).toHaveLength(3);
+    expect(cells[1]).toHaveTextContent('Execution failed for demo task');
+    expect(cells[2]).toHaveTextContent(formatRelativeTime(notifications[1].createdAt));
+    expect(within(cells[2]).getByRole('button', { name: /Open issue/i })).toBeInTheDocument();
+    expect(within(cells[2]).getByRole('button', { name: /Retry pipeline/i })).toBeInTheDocument();
+    expect(
+      within(cells[2]).getByRole('button', { name: /Dismiss notification/i }),
+    ).toBeInTheDocument();
   });
 });

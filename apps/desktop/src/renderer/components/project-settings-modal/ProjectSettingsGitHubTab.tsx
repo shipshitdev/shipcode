@@ -96,7 +96,7 @@ function StatusColumnMapping({
             <span className="font-medium text-primary">{col.label}</span>
             <span className="text-muted">→</span>
             <span className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] text-primary">
-              {mapping[col.key]}
+              {mapping[col.key]?.name}
             </span>
           </div>
         ))}

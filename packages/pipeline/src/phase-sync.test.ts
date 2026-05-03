@@ -57,10 +57,10 @@ describe('syncThreadAndIssuePhase', () => {
       id: 'proj-1',
       githubProjectUrl: 'https://github.com/orgs/acme/projects/1',
       githubStatusMapping: {
-        todo: 'Todo',
-        inProgress: 'In Progress',
-        humanReview: 'Human Review',
-        done: 'Done',
+        todo: { name: 'Todo', color: 'GREEN' },
+        inProgress: { name: 'In Progress', color: 'YELLOW' },
+        humanReview: { name: 'Human Review', color: 'ORANGE' },
+        done: { name: 'Done', color: 'PURPLE' },
       },
       path: '/tmp/repo',
     };
@@ -123,10 +123,10 @@ describe('syncThreadAndIssuePhase', () => {
       id: 'proj-1',
       githubProjectUrl: 'https://github.com/orgs/acme/projects/1',
       githubStatusMapping: {
-        todo: 'Todo',
-        inProgress: 'In Progress',
+        todo: { name: 'Todo', color: 'GREEN' },
+        inProgress: { name: 'In Progress', color: 'YELLOW' },
         humanReview: null,
-        done: 'Done',
+        done: { name: 'Done', color: 'PURPLE' },
       },
       path: '/tmp/repo',
     };
