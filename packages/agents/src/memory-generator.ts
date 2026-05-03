@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { GeneratorCli, MemoryFileInfo, RepoMemoryStatus } from '@shipcode/shared';
 import { runCliWithStdin } from './cli-stdin-runner';
+import { unwrapCliResultEnvelope } from './cli-result';
 
 const MEMORY_DIR = '.agents/memory';
 const OBSOLETE_CONTEXT_DIR = '.agents/context';
@@ -44,14 +45,6 @@ export interface MemoryGenerateResult {
   success: boolean;
   error?: string;
   written: string[];
-}
-
-function isCliResultEnvelope(value: unknown): value is { result: string } {
-  return (
-    value != null &&
-    typeof value === 'object' &&
-    typeof (value as { result?: unknown }).result === 'string'
-  );
 }
 
 export function listMemoryFiles(projectPath: string): MemoryFileInfo[] {
@@ -118,19 +111,9 @@ export async function generateMemoryFiles(
     };
   }
 
-  let text = stdout;
-  try {
-    const envelope = JSON.parse(stdout) as unknown;
-    if (isCliResultEnvelope(envelope)) {
-      text = envelope.result;
-    }
-  } catch {
-    // not a JSON envelope — use raw stdout
-  }
-
   let files: Record<string, string>;
   try {
-    files = extractGeneratedMemoryFiles(text);
+    files = extractGeneratedMemoryFiles(unwrapCliResultEnvelope(stdout));
   } catch (err) {
     return {
       success: false,

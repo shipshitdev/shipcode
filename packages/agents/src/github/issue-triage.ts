@@ -6,6 +6,7 @@ import type {
   ReasoningEffort,
 } from '@shipcode/shared';
 import { extractCliFailureMessage, formatCliSpawnFailure } from '../cli-error';
+import { unwrapCliResultEnvelope } from '../cli-result';
 import { shellExecEnv } from '../health-check';
 import { OpenRouterClient, OpenRouterError } from '../providers/openrouter-http';
 import {
@@ -221,21 +222,11 @@ function runCliTriage(opts: {
         reject(new Error(`${label} exited ${code}: ${extractCliFailureMessage(stdout, stderr)}`));
         return;
       }
-      resolve(unwrapClaudeJson(stdout));
+      resolve(unwrapCliResultEnvelope(stdout));
     });
     proc.stdin.write(opts.prompt);
     proc.stdin.end();
   });
-}
-
-function unwrapClaudeJson(stdout: string): string {
-  try {
-    const parsed = JSON.parse(stdout) as { result?: unknown };
-    if (typeof parsed.result === 'string') return parsed.result;
-  } catch {
-    // raw text
-  }
-  return stdout;
 }
 
 export function extractTriageRecommendations(text: string): IssueTriageRecommendation[] {
