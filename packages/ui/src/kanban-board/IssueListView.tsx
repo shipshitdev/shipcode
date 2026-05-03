@@ -1,15 +1,7 @@
 'use client';
 
 import { useDraggable, useDroppable } from '@dnd-kit/core';
-import {
-  Archive,
-  ChevronDown,
-  ChevronRight,
-  Loader2,
-  Lock,
-  PanelLeftOpen,
-  User,
-} from 'lucide-react';
+import { Archive, ChevronDown, ChevronRight, Loader2, Lock, Maximize2, User } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import {
   type GitHubIssueCacheRecord,
@@ -94,7 +86,9 @@ function DraggableListRow({
         ? 'Auto'
         : `#${issue.issueNumber}`;
   const isDraggable =
-    !isCreating && !isAutomation && DRAGGABLE_STATUSES.includes(issue.pipelineStatus);
+    !isCreating &&
+    DRAGGABLE_STATUSES.includes(issue.pipelineStatus) &&
+    (!isAutomation || issue.pipelineStatus === ISSUE_PIPELINE_STATUS.completed);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: issue.id,
     data: issue,
@@ -278,7 +272,7 @@ function DraggableListRow({
               onIssueClick(issue);
             }}
           >
-            <PanelLeftOpen size={12} />
+            <Maximize2 size={12} />
           </Button>
         )}
         {isDoneState && onArchiveIssue && !isAutomation && (
@@ -419,6 +413,7 @@ function DroppableListGroup({ dropId, children }: DroppableListGroupProps) {
 
 interface IssueListViewProps {
   issues: GitHubIssueCacheRecord[];
+  columnDotColors?: Partial<Record<ColumnKey, string | null>>;
   issueRevisionBadgeById: Map<string, IssueRevisionBadge | null>;
   issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
   issuePriorityBadgeById: Map<string, IssuePriorityBadge | null>;
@@ -435,6 +430,7 @@ interface IssueListViewProps {
 
 export function IssueListView({
   issues,
+  columnDotColors,
   issueRevisionBadgeById,
   issueApprovalBadgeById,
   issuePriorityBadgeById,
@@ -476,7 +472,15 @@ export function IssueListView({
               >
                 {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
                 <span
-                  className={cn('h-2 w-2 shrink-0 rounded-full', COLUMN_DOT_CLASS[column.key])}
+                  className={cn(
+                    'h-2 w-2 shrink-0 rounded-full',
+                    !columnDotColors?.[column.key] && COLUMN_DOT_CLASS[column.key],
+                  )}
+                  style={
+                    columnDotColors?.[column.key]
+                      ? { backgroundColor: columnDotColors[column.key]! }
+                      : undefined
+                  }
                 />
                 {label}
                 <span className="ml-0.5 font-normal normal-case tracking-normal text-muted">

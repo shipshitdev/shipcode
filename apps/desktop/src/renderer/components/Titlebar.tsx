@@ -7,6 +7,7 @@ import type {
   SystemHealth,
 } from '@shipcode/shared';
 import { getProjectProviderWarnings } from '@shipcode/shared';
+import { ShipCodeLogoMark } from '@shipcode/ui';
 import { Button, cn, Popover, PopoverContent, PopoverTrigger } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -335,16 +336,18 @@ export function Titlebar() {
         ShipCode
       </span>
       <div className="flex min-w-0 items-center gap-2 text-xs">
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="shrink-0 app-region-no-drag"
+        <button
+          type="button"
+          className="group relative flex h-6 w-6 shrink-0 items-center justify-center rounded-md app-region-no-drag hover:bg-elevated disabled:pointer-events-none disabled:opacity-50"
           onClick={toggleSidebar}
           title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
           disabled={hasDetailView}
         >
-          {sidebarCollapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
-        </Button>
+          <ShipCodeLogoMark size={16} className="transition-opacity group-hover:opacity-0" />
+          <span className="absolute inset-0 flex items-center justify-center text-secondary opacity-0 transition-opacity group-hover:opacity-100">
+            {sidebarCollapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
+          </span>
+        </button>
         {activeProject ? (
           <>
             <span className="text-muted">ShipCode</span>

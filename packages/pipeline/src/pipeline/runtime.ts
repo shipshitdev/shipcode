@@ -701,12 +701,12 @@ export function createPipelineRuntime(
     const macroCol = macroColumnForStatus(opts.pipelineStatus);
     const ghStatusName =
       macroCol === 'todo'
-        ? opts.statusMapping.todo
+        ? opts.statusMapping.todo?.name
         : macroCol === 'in_progress'
-          ? opts.statusMapping.inProgress
+          ? opts.statusMapping.inProgress?.name
           : macroCol === 'human_review'
-            ? opts.statusMapping.humanReview
-            : opts.statusMapping.done;
+            ? opts.statusMapping.humanReview?.name
+            : opts.statusMapping.done?.name;
     if (ghStatusName) {
       try {
         await ghCli.setIssueProjectMetadata({

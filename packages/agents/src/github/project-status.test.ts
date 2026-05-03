@@ -19,10 +19,10 @@ const ORG_URL = 'https://github.com/orgs/acme/projects/3';
 const USER_URL = 'https://github.com/users/octocat/projects/7';
 
 const DEFAULT_MAPPING: GhStatusMapping = {
-  todo: 'Todo',
-  inProgress: 'In Progress',
-  humanReview: 'Human Review',
-  done: 'Done',
+  todo: { name: 'Todo', color: null },
+  inProgress: { name: 'In Progress', color: null },
+  humanReview: { name: 'Human Review', color: null },
+  done: { name: 'Done', color: null },
 };
 
 // ---------------------------------------------------------------------------
@@ -103,7 +103,7 @@ function buildFieldsPage(opts: FieldsPageOpts): string {
     fields.push({
       __typename: 'ProjectV2SingleSelectField',
       name: 'Status',
-      options: (opts.statusOptions ?? []).map((name, i) => ({ id: `opt_${i}`, name })),
+      options: (opts.statusOptions ?? []).map((name, i) => ({ id: `opt_${i}`, name, color: null })),
     });
   }
 
@@ -164,10 +164,10 @@ describe('normalizeStatusOption', () => {
 
   it('handles mapping with null values gracefully', () => {
     const partial: GhStatusMapping = {
-      todo: 'Todo',
+      todo: { name: 'Todo', color: null },
       inProgress: null,
       humanReview: null,
-      done: 'Done',
+      done: { name: 'Done', color: null },
     };
     expect(normalizeStatusOption('In Progress', partial).macroColumn).toBeNull();
     expect(normalizeStatusOption('Todo', partial).macroColumn).toBe('todo');
@@ -408,10 +408,10 @@ describe('validateProjectStatusField', () => {
     });
     expect(result.ok).toBe(true);
     expect(result.mapping).toEqual({
-      todo: 'Todo',
-      inProgress: 'In Progress',
-      humanReview: 'Human Review',
-      done: 'Done',
+      todo: { name: 'Todo', color: null },
+      inProgress: { name: 'In Progress', color: null },
+      humanReview: { name: 'Human Review', color: null },
+      done: { name: 'Done', color: null },
     });
     expect(result.availableOptions).toEqual(['Todo', 'In Progress', 'Human Review', 'Done']);
   });
@@ -430,10 +430,10 @@ describe('validateProjectStatusField', () => {
     });
     expect(result.ok).toBe(true);
     expect(result.mapping).toEqual({
-      todo: 'Backlog',
-      inProgress: 'Active',
-      humanReview: 'Review',
-      done: 'Shipped',
+      todo: { name: 'Backlog', color: null },
+      inProgress: { name: 'Active', color: null },
+      humanReview: { name: 'Review', color: null },
+      done: { name: 'Shipped', color: null },
     });
   });
 
@@ -464,8 +464,8 @@ describe('validateProjectStatusField', () => {
       projectUrl: ORG_URL,
     });
     expect(result.ok).toBe(false);
-    expect(result.mapping?.todo).toBe('Todo');
-    expect(result.mapping?.done).toBe('Done');
+    expect(result.mapping?.todo).toEqual({ name: 'Todo', color: null });
+    expect(result.mapping?.done).toEqual({ name: 'Done', color: null });
     expect(result.mapping?.inProgress).toBeNull();
     expect(result.reason).toContain('inProgress');
   });
@@ -503,6 +503,6 @@ describe('validateProjectStatusField', () => {
       projectUrl: ORG_URL,
     });
     expect(result.ok).toBe(true);
-    expect(result.mapping?.humanReview).toBe('Codex Review');
+    expect(result.mapping?.humanReview).toEqual({ name: 'Codex Review', color: null });
   });
 });

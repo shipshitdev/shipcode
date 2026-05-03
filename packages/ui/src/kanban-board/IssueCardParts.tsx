@@ -1,7 +1,7 @@
 'use client';
 
 import { useDraggable } from '@dnd-kit/core';
-import { Archive, Check, Copy, Loader2, Lock, PanelLeftOpen } from 'lucide-react';
+import { Archive, Check, Copy, Loader2, Lock, Maximize2 } from 'lucide-react';
 import { memo } from 'react';
 import { modelDisplay } from '../lib/model-display';
 import { useSharedSecondNow } from '../lib/second-ticker';
@@ -67,6 +67,8 @@ const PLAN_ACTION_BADGE_CLASS =
   'border-agent/25 bg-agent/10 text-agent hover:border-agent/35 hover:bg-agent/15 hover:text-agent';
 const DANGER_ACTION_BADGE_CLASS =
   'border-danger/30 bg-danger/15 text-danger hover:border-danger/40 hover:bg-danger/20 hover:text-danger';
+const DONE_ACTION_BADGE_CLASS =
+  'border-done/30 bg-done/15 text-done hover:border-done/40 hover:bg-done/20 hover:text-done';
 
 export function StalenessDot({
   staleness,
@@ -106,6 +108,7 @@ interface DraggableCardProps {
   onStartPipeline?: (issue: GitHubIssueCacheRecord) => void;
   onOpenPullRequest?: (url: string) => void;
   onCopyBranchName?: (issue: GitHubIssueCacheRecord, branchName: string) => void;
+  onMarkDone?: (issue: GitHubIssueCacheRecord) => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
   issueGithubUrl?: string | null;
   branchName?: string | null;
@@ -131,6 +134,7 @@ function DraggableCardComponent({
   onStartPipeline,
   onOpenPullRequest,
   onCopyBranchName,
+  onMarkDone,
   onArchiveIssue,
   issueGithubUrl,
   branchName,
@@ -144,7 +148,10 @@ function DraggableCardComponent({
   const isAutomation = isAutomationIssue(issue);
   const referenceLabel = issueReferenceLabel(issue, isCreating);
   const draggable =
-    !readOnly && !isCreating && !isAutomation && DRAGGABLE_STATUSES.includes(issue.pipelineStatus);
+    !readOnly &&
+    !isCreating &&
+    DRAGGABLE_STATUSES.includes(issue.pipelineStatus) &&
+    (!isAutomation || issue.pipelineStatus === ISSUE_PIPELINE_STATUS.completed);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: issue.id,
     data: issue,
@@ -324,7 +331,7 @@ function DraggableCardComponent({
                 onClick(issue);
               }}
             >
-              <PanelLeftOpen size={14} />
+              <Maximize2 size={14} />
             </Button>
           )}
           {isDoneState && onArchiveIssue && !isAutomation && (
@@ -527,6 +534,25 @@ function DraggableCardComponent({
                 }}
               >
                 RETRY
+              </Button>
+            </span>
+          ) : isCompleted && onMarkDone ? (
+            <span className="relative inline-flex items-center">
+              <span className="pointer-events-none transition-opacity group-hover:opacity-0">
+                <PhaseChip status={issue.pipelineStatus} />
+              </span>
+              <Button
+                variant="ghost"
+                size="xs"
+                className={cn(ACTION_BADGE_CLASS, DONE_ACTION_BADGE_CLASS)}
+                title="Mark as done"
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onMarkDone(issue);
+                }}
+              >
+                DONE
               </Button>
             </span>
           ) : approvedAwaitingExecution ? (
