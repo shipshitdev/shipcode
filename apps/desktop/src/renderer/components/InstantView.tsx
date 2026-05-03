@@ -77,7 +77,7 @@ export function InstantView() {
     <div className="flex flex-1 flex-col overflow-hidden">
       <PageHeader
         title="Terminal Sessions"
-        subtitle="External terminal access for the active project."
+        subtitle="Terminal sessions for the active project."
         actions={openTerminalButton}
       />
 
@@ -89,6 +89,7 @@ export function InstantView() {
             title={paneTitle(threadId)}
             mode={(instantPaneMetaByThread[threadId]?.mode ?? 'replay') as InstantPaneMode}
             paneState={instantPaneMetaByThread[threadId]?.state}
+            isBareShell={instantPaneMetaByThread[threadId]?.cli === 'shell'}
             onClose={handleClose}
             onCancel={handleCancel}
           />

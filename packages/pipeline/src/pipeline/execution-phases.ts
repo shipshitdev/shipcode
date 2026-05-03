@@ -141,6 +141,38 @@ export function extractTestFailureSummary(testOutput: string): string {
   return (lastMeaningful ?? 'Tests failed').trim().slice(0, 280);
 }
 
+/**
+ * Check if the worktree has any uncommitted or committed changes relative to
+ * the fork point. Returns true if there are changes to commit/ship.
+ */
+function worktreeHasChanges(context: PipelineContext): boolean {
+  const cwd = context.worktreePath ?? context.projectPath;
+  try {
+    // Check for uncommitted changes (staged + unstaged)
+    const status = execFileSync('git', ['status', '--porcelain'], {
+      cwd,
+      encoding: 'utf-8',
+      maxBuffer: 1024 * 1024,
+    }).trim();
+    if (status.length > 0) return true;
+
+    // Check for committed changes since fork point
+    if (context.forkPointSha) {
+      const diff = execFileSync('git', ['diff', '--name-only', `${context.forkPointSha}..HEAD`], {
+        cwd,
+        encoding: 'utf-8',
+        maxBuffer: 1024 * 1024,
+      }).trim();
+      if (diff.length > 0) return true;
+    }
+
+    return false;
+  } catch {
+    // If git commands fail, assume changes exist to avoid false negatives
+    return true;
+  }
+}
+
 export function createExecutionPhaseHandlers({
   deps,
   contextHelpers,
@@ -410,6 +442,16 @@ export function createExecutionPhaseHandlers({
           if (context.autonomous) {
             handlers.startTesting(threadId);
           } else {
+            // Check if any code was actually changed
+            if (!worktreeHasChanges(context)) {
+              emitPhase(
+                threadId,
+                'failed',
+                'All task graph nodes completed but no code changes were produced',
+              );
+              activePipelines.delete(threadId);
+              return;
+            }
             emitPhase(threadId, 'completed');
             activePipelines.delete(threadId);
           }
@@ -510,6 +552,18 @@ export function createExecutionPhaseHandlers({
           if (context.autonomous) {
             handlers.startTesting(threadId);
           } else {
+            // Check if executor actually produced code changes
+            const hasChanges = worktreeHasChanges(context);
+            if (!hasChanges) {
+              const errSnippet = extractExecutionErrorSnippet(response.rawOutput);
+              emitPhase(
+                threadId,
+                'failed',
+                `Executor exited successfully but produced no code changes${errSnippet ? `: ${errSnippet}` : ''}`,
+              );
+              activePipelines.delete(threadId);
+              return;
+            }
             emitPhase(threadId, 'completed');
             activePipelines.delete(threadId);
           }

@@ -374,6 +374,7 @@ export function ThreadPanel() {
       window.shipcode
         .invoke('github:archive-issue', {
           projectId: activeProjectId,
+          issueId: confirm.issue.id,
           issueNumber: confirm.issue.issueNumber,
         })
         .then(() => {

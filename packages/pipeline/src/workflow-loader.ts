@@ -175,12 +175,23 @@ export function parseWorkflowPolicy(raw: string, sourcePath: string): WorkflowPo
 const _policyCache = new Map<string, { policy: WorkflowPolicy; expiresAt: number }>();
 const POLICY_CACHE_TTL_MS = 30_000;
 
+function evictExpiredPolicyCacheEntries(now: number): void {
+  for (const [repoPath, entry] of _policyCache) {
+    if (now >= entry.expiresAt) {
+      _policyCache.delete(repoPath);
+    }
+  }
+}
+
 export function loadWorkflowPolicy(repoPath: string): WorkflowPolicy {
+  const now = Date.now();
+  evictExpiredPolicyCacheEntries(now);
+
   const cached = _policyCache.get(repoPath);
-  if (cached && Date.now() < cached.expiresAt) return cached.policy;
+  if (cached) return cached.policy;
 
   const policy = _loadWorkflowPolicyUncached(repoPath);
-  _policyCache.set(repoPath, { policy, expiresAt: Date.now() + POLICY_CACHE_TTL_MS });
+  _policyCache.set(repoPath, { policy, expiresAt: now + POLICY_CACHE_TTL_MS });
   return policy;
 }
 
@@ -217,3 +228,8 @@ function _loadWorkflowPolicyUncached(repoPath: string): WorkflowPolicy {
     };
   }
 }
+
+export const _internals = {
+  policyCache: _policyCache,
+  policyCacheTtlMs: POLICY_CACHE_TTL_MS,
+};

@@ -1,6 +1,7 @@
 const ESC = String.fromCharCode(27);
+const BEL = String.fromCharCode(7);
 const ANSI_ESCAPE_PATTERN = new RegExp(
-  `${ESC}\\[[0-?]*[ -/]*[@-~]|${ESC}\\][^\\u0007]*(?:\\u0007|${ESC}\\\\)`,
+  `${ESC}\\[[0-?]*[ -/]*[@-~]|${ESC}\\](?:[^${ESC}${BEL}]|${ESC}(?!\\\\))*?(?:${BEL}|${ESC}\\\\)`,
   'g',
 );
 

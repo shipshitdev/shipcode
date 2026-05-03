@@ -171,7 +171,7 @@ interface AppState {
     {
       mode: InstantPaneMode;
       title?: string | null;
-      cli?: 'claude' | 'codex';
+      cli?: 'claude' | 'codex' | 'shell';
       state?: AgentState;
     }
   >;
@@ -250,7 +250,7 @@ interface AppState {
     meta?: {
       mode?: InstantPaneMode;
       title?: string | null;
-      cli?: 'claude' | 'codex';
+      cli?: 'claude' | 'codex' | 'shell';
       state?: AgentState;
     },
   ) => void;

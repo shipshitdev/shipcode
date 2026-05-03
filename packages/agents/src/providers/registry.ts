@@ -44,6 +44,8 @@ export function createProviderRegistry(providers: RegistryProviders): ProviderRe
         return providers.openrouter;
       case 'gh':
         throw new Error("ProviderRegistry: 'gh' is not an LLM agent and has no provider");
+      case 'shell':
+        throw new Error("ProviderRegistry: 'shell' is a bare terminal and has no provider");
     }
   }
 

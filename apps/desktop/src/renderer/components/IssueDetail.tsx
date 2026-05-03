@@ -528,8 +528,9 @@ export function IssueDetail() {
     if (!activeProjectId || !activeIssue) return;
     setIsSubmitting(true);
     try {
-      await window.shipcode.invoke('github:close-issue', {
+      await window.shipcode.invoke('issue:mark-done', {
         projectId: activeProjectId,
+        issueId: activeIssue.id,
         issueNumber: activeIssue.issueNumber,
       });
       await refreshIssueState();
@@ -983,6 +984,7 @@ export function IssueDetail() {
     window.shipcode
       .invoke('github:archive-issue', {
         projectId: activeProjectId,
+        issueId: activeIssue.id,
         issueNumber: activeIssue.issueNumber,
       })
       .then(() => {

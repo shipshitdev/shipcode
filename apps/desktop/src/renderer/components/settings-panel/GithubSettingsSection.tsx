@@ -45,8 +45,23 @@ export function GithubSettingsSection({
       </section>
 
       <section className="mb-8">
-        <h4 className="mb-3 text-secondary">Auto-Run Priority Filter</h4>
-        <p className="mb-3 text-xs text-muted">
+        <h4 className="mb-3 text-secondary">Auto-Run</h4>
+        <SettingsRow label="Max tasks per run (0 = all)" htmlFor="auto-run-max">
+          <Input
+            id="auto-run-max"
+            type="number"
+            className="w-[80px]"
+            min={0}
+            max={100}
+            step={1}
+            value={settings.autoRunMaxTasks}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10);
+              if (!Number.isNaN(v) && v >= 0) onUpdate({ autoRunMaxTasks: v });
+            }}
+          />
+        </SettingsRow>
+        <p className="mb-3 mt-2 text-xs text-muted">
           {settings.autoRunPriorities.length === 0
             ? 'All priorities eligible — Run (X) will include every todo issue.'
             : `Only ${settings.autoRunPriorities.map((p) => p.toUpperCase()).join(', ')} issues will be included.`}

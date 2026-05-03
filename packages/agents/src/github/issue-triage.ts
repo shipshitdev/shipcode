@@ -67,6 +67,10 @@ export async function triageGitHubIssues(opts: {
     const model = modelId || opts.settings.openrouterDefaultPaidModel;
     const controller = new AbortController();
     try {
+      const reasoningEffort = normalizeOpenRouterReasoningEffort(
+        opts.settings.triageReasoningEffort,
+        model,
+      );
       const result = await client.chat(
         {
           model,
@@ -79,10 +83,8 @@ export async function triageGitHubIssues(opts: {
             { role: 'user', content: prompt },
           ],
           stream: false,
-          include_reasoning: opts.settings.triageReasoningEffort !== 'none',
-          reasoning: {
-            effort: normalizeOpenRouterReasoningEffort(opts.settings.triageReasoningEffort, model),
-          },
+          include_reasoning: reasoningEffort !== 'none',
+          reasoning: { effort: reasoningEffort },
         },
         controller.signal,
       );

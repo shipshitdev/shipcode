@@ -17,6 +17,7 @@ interface InstantTerminalPaneProps {
   title: string;
   mode: InstantPaneMode;
   paneState?: AgentState;
+  isBareShell?: boolean;
   onClose: (threadId: string, isRunning: boolean) => void;
   onCancel: (threadId: string) => void;
 }
@@ -26,6 +27,7 @@ export function InstantTerminalPane({
   title,
   mode,
   paneState,
+  isBareShell,
   onClose,
   onCancel,
 }: InstantTerminalPaneProps) {
@@ -65,13 +67,15 @@ export function InstantTerminalPane({
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-1.5 bg-elevated border-b border-border">
         <span className="flex-1 truncate text-xs text-secondary font-medium">{title}</span>
-        <Badge
-          variant={isRunning ? (stale ? 'warning' : 'default') : 'done'}
-          className="text-[10px] px-1.5 py-0"
-        >
-          {isRunning ? 'Running' : 'Done'}
-        </Badge>
-        {isRunning && showQuietHint ? (
+        {!isBareShell && (
+          <Badge
+            variant={isRunning ? (stale ? 'warning' : 'default') : 'done'}
+            className="text-[10px] px-1.5 py-0"
+          >
+            {isRunning ? 'Running' : 'Done'}
+          </Badge>
+        )}
+        {!isBareShell && isRunning && showQuietHint ? (
           <span
             className={`font-mono text-[10px] tabular-nums ${stale ? 'text-warning' : 'text-muted'}`}
           >
@@ -81,7 +85,7 @@ export function InstantTerminalPane({
           </span>
         ) : null}
         <div className="flex items-center gap-0.5">
-          {isRunning && (
+          {!isBareShell && isRunning && (
             <Button
               variant="ghost"
               size="icon-xs"
@@ -103,7 +107,7 @@ export function InstantTerminalPane({
           </Button>
         </div>
       </div>
-      {isRunning && stale && quietSeconds != null ? (
+      {!isBareShell && isRunning && stale && quietSeconds != null ? (
         <div className="border-b border-warning/20 bg-warning/5 px-3 py-1.5 text-[11px] text-warning">
           No output for {formatDurationSeconds(quietSeconds)}. The CLI may be thinking or waiting on
           a slow tool call. Press Esc to interrupt if it stays stuck.

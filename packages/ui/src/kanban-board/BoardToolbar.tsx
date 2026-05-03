@@ -312,6 +312,7 @@ export function BoardToolbar({
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem
+                    onSelect={(e) => e.preventDefault()}
                     onClick={() =>
                       onAutoRunPrioritiesChange(
                         autoRunPriorities.length === 4
@@ -328,6 +329,7 @@ export function BoardToolbar({
                       <DropdownMenuCheckboxItem
                         key={rank}
                         checked={autoRunPriorities.includes(rank)}
+                        onSelect={(e) => e.preventDefault()}
                         onCheckedChange={(checked) => {
                           const next = checked
                             ? [...autoRunPriorities, rank]

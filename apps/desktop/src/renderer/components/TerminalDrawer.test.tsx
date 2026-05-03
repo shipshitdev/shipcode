@@ -427,9 +427,10 @@ describe('TerminalDrawer', () => {
     expect(screen.queryByText('Foreign project task')).not.toBeInTheDocument();
   });
 
-  it('opens the configured project terminal from the header button', async () => {
+  it('opens an embedded bare shell from the header button', async () => {
     const invoke = vi.fn(async (channel: string) => {
       if (channel === 'integrations:check') return integrations;
+      if (channel === 'instant:bare-shell') return { threadId: 'thread-shell-1' };
       return null;
     });
 
@@ -449,13 +450,13 @@ describe('TerminalDrawer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open Terminal' }));
 
     await waitFor(() => {
-      expect(invoke).toHaveBeenCalledWith('project:open-path', {
+      expect(invoke).toHaveBeenCalledWith('instant:bare-shell', {
         projectId: 'project-1',
-        target: 'default-terminal',
       });
     });
 
-    expect(useAppStore.getState().instantPaneThreadIds).toEqual([]);
+    const state = useAppStore.getState();
+    expect(state.instantPaneThreadIds).toContain('thread-shell-1');
   });
 
   it('switches into full-size terminal mode instead of keeping the resize handle visible', () => {
