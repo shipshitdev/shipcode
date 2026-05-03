@@ -1,6 +1,11 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { type GhMacroColumn, type GhStatusMapping, parseGithubProjectUrl } from '@shipcode/shared';
+import {
+  type GhMacroColumn,
+  type GhStatusMapping,
+  type GhStatusOption,
+  parseGithubProjectUrl,
+} from '@shipcode/shared';
 
 const execFileAsync = promisify(execFile);
 
@@ -49,16 +54,16 @@ export function normalizeStatusOption(
   if (trimmed === '') return { macroColumn: null, raw: null };
   const lower = trimmed.toLowerCase();
 
-  if (mapping.todo && lower === mapping.todo.toLowerCase()) {
+  if (mapping.todo?.name && lower === mapping.todo.name.toLowerCase()) {
     return { macroColumn: 'todo', raw: trimmed };
   }
-  if (mapping.inProgress && lower === mapping.inProgress.toLowerCase()) {
+  if (mapping.inProgress?.name && lower === mapping.inProgress.name.toLowerCase()) {
     return { macroColumn: 'in_progress', raw: trimmed };
   }
-  if (mapping.humanReview && lower === mapping.humanReview.toLowerCase()) {
+  if (mapping.humanReview?.name && lower === mapping.humanReview.name.toLowerCase()) {
     return { macroColumn: 'human_review', raw: trimmed };
   }
-  if (mapping.done && lower === mapping.done.toLowerCase()) {
+  if (mapping.done?.name && lower === mapping.done.name.toLowerCase()) {
     return { macroColumn: 'done', raw: trimmed };
   }
   return { macroColumn: null, raw: trimmed };
@@ -179,6 +184,7 @@ const ITEMS_USER_QUERY = `
 interface FieldOptionNode {
   id: string;
   name: string;
+  color?: string | null;
 }
 
 interface FieldNode {
@@ -212,7 +218,7 @@ const FIELDS_ORG_QUERY = `
             __typename
             ... on ProjectV2SingleSelectField {
               name
-              options { id name }
+              options { id name color }
             }
           }
         }
@@ -230,7 +236,7 @@ const FIELDS_USER_QUERY = `
             __typename
             ... on ProjectV2SingleSelectField {
               name
-              options { id name }
+              options { id name color }
             }
           }
         }
@@ -461,16 +467,21 @@ export async function validateProjectStatusField(opts: {
   const availableOptions = statusField.options.map((o) => o.name);
 
   // Attempt auto-mapping
-  let todo: string | null = null;
-  let inProgress: string | null = null;
-  let humanReview: string | null = null;
-  let done: string | null = null;
+  let todo: GhStatusOption | null = null;
+  let inProgress: GhStatusOption | null = null;
+  let humanReview: GhStatusOption | null = null;
+  let done: GhStatusOption | null = null;
+
+  const colorOf = (name: string): string | null =>
+    statusField.options?.find((o) => o.name === name)?.color ?? null;
 
   for (const opt of availableOptions) {
-    if (!todo && TODO_PATTERN.test(opt)) todo = opt;
-    else if (!inProgress && IN_PROGRESS_PATTERN.test(opt)) inProgress = opt;
-    else if (!humanReview && HUMAN_REVIEW_PATTERN.test(opt)) humanReview = opt;
-    else if (!done && DONE_PATTERN.test(opt)) done = opt;
+    if (!todo && TODO_PATTERN.test(opt)) todo = { name: opt, color: colorOf(opt) };
+    else if (!inProgress && IN_PROGRESS_PATTERN.test(opt))
+      inProgress = { name: opt, color: colorOf(opt) };
+    else if (!humanReview && HUMAN_REVIEW_PATTERN.test(opt))
+      humanReview = { name: opt, color: colorOf(opt) };
+    else if (!done && DONE_PATTERN.test(opt)) done = { name: opt, color: colorOf(opt) };
   }
 
   const mapping: GhStatusMapping = { todo, inProgress, humanReview, done };

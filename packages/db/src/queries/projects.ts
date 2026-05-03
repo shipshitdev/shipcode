@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import {
   type AgentType,
   type GhStatusMapping,
+  type GhStatusOption,
   ISO_NOW_SQL,
   ISSUE_PIPELINE_STATUS,
   type Project,
@@ -523,6 +524,30 @@ export class ProjectQueries {
   }
 }
 
+/**
+ * Migrate old flat-string `GhStatusMapping` values (pre-color) to the new
+ * `GhStatusOption` shape. Old rows stored `"Todo"` directly; new rows store
+ * `{ name: "Todo", color: "GREEN" }`.
+ */
+function migrateStatusMapping(raw: unknown): GhStatusMapping {
+  if (raw === null || typeof raw !== 'object') {
+    return { todo: null, inProgress: null, humanReview: null, done: null };
+  }
+  const obj = raw as Record<string, unknown>;
+  function toOption(v: unknown): GhStatusOption | null {
+    if (v === null || v === undefined) return null;
+    if (typeof v === 'string') return { name: v, color: null };
+    if (typeof v === 'object' && v !== null && 'name' in v) return v as GhStatusOption;
+    return null;
+  }
+  return {
+    todo: toOption(obj['todo']),
+    inProgress: toOption(obj['inProgress']),
+    humanReview: toOption(obj['humanReview']),
+    done: toOption(obj['done']),
+  };
+}
+
 function mapProject(row: ProjectRow): Project {
   return {
     id: row.id,
@@ -535,7 +560,7 @@ function mapProject(row: ProjectRow): Project {
     starterIssueCreatedAt: toIsoUtc(row.starter_issue_created_at) ?? row.starter_issue_created_at,
     githubProjectUrl: row.github_project_url ?? null,
     githubStatusMapping: row.github_status_mapping
-      ? (JSON.parse(row.github_status_mapping) as GhStatusMapping)
+      ? migrateStatusMapping(JSON.parse(row.github_status_mapping))
       : null,
     plannerModelOverride: row.planner_model_override ?? null,
     reviewerModelOverride: row.reviewer_model_override ?? null,

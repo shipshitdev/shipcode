@@ -1238,15 +1238,23 @@ export type IssuePipelineStatus =
 /** ShipCode macro columns that map to GH Projects v2 Status field options. */
 export type GhMacroColumn = 'todo' | 'in_progress' | 'human_review' | 'done';
 
+/** A single GitHub Projects v2 Status field option with its display color. */
+export interface GhStatusOption {
+  name: string;
+  /** GitHub color enum: GRAY | BLUE | GREEN | YELLOW | ORANGE | RED | PINK | PURPLE */
+  color: string | null;
+}
+
 /**
  * Per-project mapping from ShipCode macro columns to GitHub Projects v2
- * Status field option names. Stored as JSON in `projects.github_status_mapping`.
+ * Status field option names (with optional color). Stored as JSON in
+ * `projects.github_status_mapping`.
  */
 export interface GhStatusMapping {
-  todo: string | null;
-  inProgress: string | null;
-  humanReview: string | null;
-  done: string | null;
+  todo: GhStatusOption | null;
+  inProgress: GhStatusOption | null;
+  humanReview: GhStatusOption | null;
+  done: GhStatusOption | null;
 }
 
 // === Verification Types ===

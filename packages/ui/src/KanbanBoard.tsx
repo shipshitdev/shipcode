@@ -25,6 +25,7 @@ import {
   isIssueCreating,
   issueMatchesColumn,
   issueMatchesSection,
+  resolveColumnDotColor,
   resolveIssueApprovalBadge,
   resolveIssuePhaseChip,
   resolveIssuePriorityBadge,
@@ -220,6 +221,17 @@ export function KanbanBoard({
       ),
     [boardIssues, threadById],
   );
+  const columnDotColors = useMemo(
+    () =>
+      Object.fromEntries(
+        COLUMNS.map((col) => [
+          col.key,
+          resolveColumnDotColor(col.key, project?.githubStatusMapping),
+        ]),
+      ) as Record<ColumnKey, string | null>,
+    [project?.githubStatusMapping],
+  );
+
   const issuePhaseChipById = useMemo(
     () =>
       new Map(
@@ -632,6 +644,7 @@ export function KanbanBoard({
                     <StackedColumn
                       key={col.key}
                       column={col}
+                      columnDotColor={columnDotColors[col.key]}
                       issues={visibleIssues}
                       onIssueClick={onIssueClick}
                       onRerun={handleRerun}
