@@ -278,14 +278,14 @@ export function App() {
             {!hideMainContentForTerminal && (
               <Suspense fallback={<ViewLoadingFallback />}>
                 <div className="flex flex-1 overflow-hidden min-h-0 bg-primary">
-                  {hasActiveIssue ? (
+                  {settingsVisible ? (
+                    <SettingsPanel />
+                  ) : hasActiveIssue ? (
                     <IssueDetail />
                   ) : hasActiveAutomationThread ? (
                     <AutomationRunDetail />
                   ) : hasActiveAutomationDetail ? (
                     <AutomationDetail />
-                  ) : settingsVisible ? (
-                    <SettingsPanel />
                   ) : viewMode === 'activity' ? (
                     <ActivityView />
                   ) : viewMode === 'costs' ? (

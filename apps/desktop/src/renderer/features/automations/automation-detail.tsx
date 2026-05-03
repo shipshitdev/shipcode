@@ -1,7 +1,7 @@
 import type { Automation, Project, Thread } from '@shipcode/shared';
 import { formatCost, formatTokenCount } from '@shipcode/shared';
 import { PhaseChip } from '@shipcode/ui';
-import { Badge, Button, cn } from '@shipshitdev/ui';
+import { Button, cn } from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
 import { Cron } from 'croner';
 import { ArrowLeft, Loader2 } from 'lucide-react';
@@ -41,6 +41,11 @@ function describeCron(expr: string): string {
   } catch {
     return `Invalid: ${expr}`;
   }
+}
+
+function formatTokens(run: Thread): string | null {
+  const total = (run.totalTokensPrompt ?? 0) + (run.totalTokensCompletion ?? 0);
+  return total > 0 ? formatTokenCount(total) : null;
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -107,7 +112,7 @@ export function AutomationDetail() {
             {automation?.lastStatus && (
               <span
                 className={cn(
-                  'rounded-full border px-2 py-0.5 text-[10px] font-medium',
+                  'shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium',
                   STATUS_COLOR[automation.lastStatus] ?? 'bg-tertiary text-secondary border-border',
                 )}
               >
@@ -137,70 +142,68 @@ export function AutomationDetail() {
               <p className="px-6 py-8 text-center text-[12px] text-muted">No runs yet.</p>
             ) : (
               <div className="flex flex-col divide-y divide-border">
-                {runHistory.map((run) => (
-                  <Button
-                    key={run.id}
-                    type="button"
-                    variant="ghost"
-                    onClick={() => selectAutomationThread(run.id)}
-                    className="flex items-center gap-3 rounded-none px-6 py-3 text-left transition-colors hover:bg-hover"
-                  >
-                    <PhaseChip status={run.status} />
-                    <div className="min-w-0 flex-1">
-                      <span className="block truncate text-[12px] text-secondary">
-                        {run.lastError ? run.lastError.slice(0, 120) : run.status}
-                      </span>
-                      <span className="mt-0.5 block text-[11px] text-muted">
-                        {formatTimestamp(run.createdAt)}
-                      </span>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-0.5">
-                      <span className="text-[11px] text-muted">
+                {runHistory.map((run) => {
+                  const tokens = formatTokens(run);
+                  const hasCost = run.totalCostUsd != null && run.totalCostUsd > 0;
+                  return (
+                    <Button
+                      key={run.id}
+                      type="button"
+                      variant="ghost"
+                      onClick={() => selectAutomationThread(run.id)}
+                      className="flex items-start gap-3 rounded-none px-6 py-3 text-left transition-colors hover:bg-hover"
+                    >
+                      <div className="mt-0.5 shrink-0">
+                        <PhaseChip status={run.status} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span className="block truncate text-[12px] text-secondary">
+                          {run.lastError ? run.lastError.slice(0, 120) : run.status}
+                        </span>
+                        <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted">
+                          <span>{formatTimestamp(run.createdAt)}</span>
+                          {run.failureCount > 0 && (
+                            <span className="text-danger">
+                              {run.failureCount} {run.failureCount === 1 ? 'failure' : 'failures'}
+                            </span>
+                          )}
+                          {hasCost && <span>{formatCost(run.totalCostUsd as number)}</span>}
+                          {tokens && <span>{tokens}</span>}
+                        </div>
+                      </div>
+                      <span className="mt-0.5 shrink-0 text-[11px] text-muted">
                         {formatRelative(run.createdAt)}
                       </span>
-                      {run.failureCount > 0 && (
-                        <span className="text-[10px] text-danger">{run.failureCount} failures</span>
-                      )}
-                    </div>
-                    {run.totalCostUsd != null && run.totalCostUsd > 0 && (
-                      <Badge variant="default" className="shrink-0 text-[10px]">
-                        {formatCost(run.totalCostUsd)}
-                      </Badge>
-                    )}
-                    {(run.totalTokensPrompt ?? 0) + (run.totalTokensCompletion ?? 0) > 0 && (
-                      <span className="shrink-0 text-[10px] text-muted">
-                        {formatTokenCount(
-                          (run.totalTokensPrompt ?? 0) + (run.totalTokensCompletion ?? 0),
-                        )}
-                      </span>
-                    )}
-                  </Button>
-                ))}
+                    </Button>
+                  );
+                })}
               </div>
             )}
           </div>
         </div>
 
         {/* Right sidebar: automation metadata */}
-        <div className="w-72 shrink-0 overflow-y-auto border-l border-border">
-          <div className="space-y-5 p-4">
+        <div className="w-56 shrink-0 overflow-y-auto border-l border-border">
+          <div className="space-y-4 p-3">
             {/* Project */}
             {project && (
-              <div>
+              <div className="min-w-0">
                 <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
                   Project
                 </span>
-                <p className="mt-0.5 text-sm text-primary">{project.name}</p>
+                <p className="mt-0.5 truncate text-sm text-primary">{project.name}</p>
               </div>
             )}
 
             {/* Schedule */}
             {automation && (
-              <div>
+              <div className="min-w-0">
                 <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
                   Schedule
                 </span>
-                <p className="mt-0.5 font-mono text-sm text-primary">{automation.cronExpr}</p>
+                <p className="mt-0.5 break-all font-mono text-sm text-primary">
+                  {automation.cronExpr}
+                </p>
                 <p className="mt-0.5 text-[11px] text-muted">{describeCron(automation.cronExpr)}</p>
               </div>
             )}
@@ -219,27 +222,28 @@ export function AutomationDetail() {
 
             {/* Run Stats */}
             {automation && (
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
-                    Total Runs
-                  </span>
-                  <p className="mt-0.5 text-sm text-primary">{automation.runCount}</p>
-                </div>
-                <div>
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
-                    Last Run
-                  </span>
-                  <p className="mt-0.5 text-sm text-primary">
-                    {formatRelative(automation.lastStartedAt)}
-                  </p>
-                </div>
+              <div>
+                <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
+                  Total Runs
+                </span>
+                <p className="mt-0.5 text-sm text-primary">{automation.runCount}</p>
+              </div>
+            )}
+
+            {automation?.lastStartedAt && (
+              <div>
+                <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
+                  Last Run
+                </span>
+                <p className="mt-0.5 text-sm text-primary">
+                  {formatRelative(automation.lastStartedAt)}
+                </p>
               </div>
             )}
 
             {/* Executor Override */}
             {automation?.executorProvider && (
-              <div>
+              <div className="min-w-0">
                 <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
                   Executor
                 </span>
@@ -254,12 +258,12 @@ export function AutomationDetail() {
 
             {/* Prompt */}
             {automation?.prompt && (
-              <div>
+              <div className="min-w-0">
                 <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
                   Prompt
                 </span>
-                <div className="mt-1 rounded-md border border-border bg-tertiary/40 px-3 py-2">
-                  <pre className="whitespace-pre-wrap text-[11px] leading-relaxed text-secondary">
+                <div className="mt-1 rounded-md border border-border bg-tertiary/40 px-2 py-1.5">
+                  <pre className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-secondary">
                     {automation.prompt}
                   </pre>
                 </div>
