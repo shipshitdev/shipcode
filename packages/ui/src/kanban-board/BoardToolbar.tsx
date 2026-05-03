@@ -16,6 +16,8 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../primitives/dropdown-menu';
 import {
@@ -309,6 +311,18 @@ export function BoardToolbar({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    onClick={() =>
+                      onAutoRunPrioritiesChange(
+                        autoRunPriorities.length === 4
+                          ? []
+                          : (['p0', 'p1', 'p2', 'p3'] as const).slice(),
+                      )
+                    }
+                  >
+                    {autoRunPriorities.length === 4 ? 'Clear filter' : 'Select all'}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   {(Object.keys(PRIORITY_LABELS) as Array<'p0' | 'p1' | 'p2' | 'p3'>).map(
                     (rank) => (
                       <DropdownMenuCheckboxItem

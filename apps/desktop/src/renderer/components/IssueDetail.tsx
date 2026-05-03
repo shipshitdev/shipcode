@@ -281,7 +281,9 @@ export function IssueDetail() {
   const { data: latestVerification } = useQuery<VerificationRecord | null>({
     queryKey: ['verification', activeThreadId],
     queryFn: () => window.shipcode.invoke('verification:get', { threadId: activeThreadId }),
-    enabled: !!activeThreadId && thread?.status === PIPELINE_PHASE.failed,
+    enabled:
+      !!activeThreadId &&
+      (thread?.status === PIPELINE_PHASE.failed || thread?.status === PIPELINE_PHASE.completed),
   });
 
   useEffect(() => {
@@ -1314,33 +1316,41 @@ export function IssueDetail() {
     ? normalizedReviewsByPlanId[fullScreenPlan.id]
     : undefined;
 
-  const { approvalSection, clarificationSection, pipelineStartCard, rerunSection } =
-    IssueDetailActions({
-      approveError,
-      approvedAwaitingExecution,
-      canApprove,
-      canRerun,
-      canStartPipeline,
-      effectiveRevisionCount,
-      clarificationRequest: thread?.clarificationRequest ?? null,
-      failingPhaseOutput,
-      hasApprovalDecision,
-      isSubmitting,
-      requireApproval: effectiveRequireApproval,
-      retryButtonLabel,
-      retrySummary,
-      showRawOutput,
-      thread,
-      onApprove: () => void handleApprove(),
-      onCancel: () => void handleCancel(),
-      onEditPrd: handleEditPrd,
-      onMarkAsDone: () => setShowMarkAsDoneConfirm(true),
-      onReject: (nextFeedback) => void handleReject(nextFeedback),
-      onRerun: () => void handleRerun(),
-      onShowRawOutputChange: setShowRawOutput,
-      onStartPipeline: () => void handleStartPipeline(),
-      onSubmitClarification: handleSubmitClarification,
-    });
+  const {
+    approvalSection,
+    clarificationSection,
+    completionSection,
+    pipelineStartCard,
+    rerunSection,
+  } = IssueDetailActions({
+    approveError,
+    approvedAwaitingExecution,
+    canApprove,
+    canRerun,
+    canStartPipeline,
+    effectiveRevisionCount,
+    clarificationRequest: thread?.clarificationRequest ?? null,
+    failingPhaseOutput,
+    hasDiffs: (diffs?.length ?? 0) > 0,
+    hasApprovalDecision,
+    isCompleted: activeIssue?.pipelineStatus === ISSUE_PIPELINE_STATUS.completed,
+    isSubmitting,
+    requireApproval: effectiveRequireApproval,
+    retryButtonLabel,
+    retrySummary,
+    showRawOutput,
+    thread,
+    verificationSummary: latestVerification?.structured?.summary ?? null,
+    onApprove: () => void handleApprove(),
+    onCancel: () => void handleCancel(),
+    onEditPrd: handleEditPrd,
+    onMarkAsDone: () => setShowMarkAsDoneConfirm(true),
+    onReject: (nextFeedback) => void handleReject(nextFeedback),
+    onRerun: () => void handleRerun(),
+    onShowRawOutputChange: setShowRawOutput,
+    onStartPipeline: () => void handleStartPipeline(),
+    onSubmitClarification: handleSubmitClarification,
+  });
 
   const detailTabs = (
     <IssueDetailTabs
@@ -1452,10 +1462,15 @@ export function IssueDetail() {
   );
 
   const detailActionStack =
-    pipelineStartCard || rerunSection || clarificationSection || approvalSection ? (
+    pipelineStartCard ||
+    rerunSection ||
+    clarificationSection ||
+    approvalSection ||
+    completionSection ? (
       <div className="space-y-4 mb-6">
         {pipelineStartCard}
         {rerunSection}
+        {completionSection}
         {clarificationSection}
         {approvalSection}
       </div>

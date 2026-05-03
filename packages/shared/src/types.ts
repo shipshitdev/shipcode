@@ -430,7 +430,7 @@ export interface PipelineCheckpoint {
 
 // === Pipeline Types ===
 
-export type AgentType = 'claude' | 'codex' | 'gh' | 'openrouter';
+export type AgentType = 'claude' | 'codex' | 'gh' | 'openrouter' | 'shell';
 
 /**
  * The subset of AgentType that can drive a pipeline phase. Excludes
@@ -625,6 +625,8 @@ export interface AppSettings {
   githubBotUsername: string;
   /** Priority filter for kanban auto-run. Empty array = all priorities eligible. */
   autoRunPriorities: Array<'p0' | 'p1' | 'p2' | 'p3'>;
+  /** Max issues to start per auto-run click. 0 = unlimited (all eligible). */
+  autoRunMaxTasks: number;
   statusLabelMappings: StatusLabelMapping;
   onboardingVersion: number;
   // Sidebar project ordering preference (pinned projects always float to top first)

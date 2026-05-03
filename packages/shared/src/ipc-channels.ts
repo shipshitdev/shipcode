@@ -281,11 +281,11 @@ export interface IpcInvokeChannels {
   'github:triage-issues': { args: { projectId: string }; result: GitHubIssueTriageResult };
   'github:start-issue': { args: { projectId: string; issueNumber: number }; result: undefined };
   'github:auto-run-count': {
-    args: { projectId: string; priorities: Array<'p0' | 'p1' | 'p2' | 'p3'> };
+    args: { projectId: string; priorities: Array<'p0' | 'p1' | 'p2' | 'p3'>; maxTasks: number };
     result: { count: number };
   };
   'github:auto-run': {
-    args: { projectId: string; priorities: Array<'p0' | 'p1' | 'p2' | 'p3'> };
+    args: { projectId: string; priorities: Array<'p0' | 'p1' | 'p2' | 'p3'>; maxTasks: number };
     result: { started: number; queued: number };
   };
   'github:retry-issue': { args: { projectId: string; issueNumber: number }; result: undefined };
@@ -608,6 +608,10 @@ export interface IpcInvokeChannels {
   'instant:shell-resize': {
     args: { threadId: string; cols: number; rows: number };
     result: undefined;
+  };
+  'instant:bare-shell': {
+    args: { projectId: string };
+    result: { threadId: string };
   };
   'instant:cancel': { args: { threadId: string }; result: undefined };
   'instant:list': { args: undefined; result: Thread[] };

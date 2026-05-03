@@ -45,6 +45,24 @@ describe('DiffTab', () => {
     expect(screen.queryByRole('button', { name: 'Full screen diff' })).not.toBeInTheDocument();
   });
 
+  it('shows completed empty state when thread is completed with no diffs', () => {
+    render(<DiffTab diffs={[]} threadStatus="completed" />);
+
+    expect(screen.getByText('No code changes')).toBeInTheDocument();
+    expect(
+      screen.getByText('Pipeline completed without producing code changes.'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows completed empty state when thread is done with no diffs', () => {
+    render(<DiffTab diffs={[]} threadStatus="done" />);
+
+    expect(screen.getByText('No code changes')).toBeInTheDocument();
+    expect(
+      screen.getByText('Pipeline completed without producing code changes.'),
+    ).toBeInTheDocument();
+  });
+
   it('renders the inline viewer and opens and closes the fullscreen modal', async () => {
     render(<DiffTab diffs={diffs} />);
 

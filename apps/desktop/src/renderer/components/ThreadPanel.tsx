@@ -234,12 +234,15 @@ export function ThreadPanel() {
     if (settings?.autoRunPriorities) setAutoRunPriorities(settings.autoRunPriorities);
   }, [settings?.autoRunPriorities]);
 
+  const autoRunMaxTasks = settings?.autoRunMaxTasks ?? 0;
+
   const { data: autoRunCountData } = useQuery<{ count: number }>({
-    queryKey: ['auto-run-count', activeProjectId, autoRunPriorities],
+    queryKey: ['auto-run-count', activeProjectId, autoRunPriorities, autoRunMaxTasks],
     queryFn: () =>
       window.shipcode.invoke('github:auto-run-count', {
         projectId: activeProjectId ?? '',
         priorities: autoRunPriorities,
+        maxTasks: autoRunMaxTasks,
       }),
     enabled: !!activeProjectId,
     staleTime: 10_000,
@@ -682,6 +685,7 @@ export function ThreadPanel() {
             .invoke('github:auto-run', {
               projectId: activeProjectId,
               priorities: autoRunPriorities,
+              maxTasks: autoRunMaxTasks,
             })
             .then(() => {
               if (activeProjectId) refreshIssues.mutate(activeProjectId);

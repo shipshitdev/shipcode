@@ -62,7 +62,14 @@ function readNullable(raw: string | undefined): string | null {
 }
 
 const REASONING_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'] as const;
-const PROJECT_OPEN_TARGETS = ['cursor', 'finder', 'terminal', 'ghostty', 'vscode'] as const;
+const PROJECT_OPEN_TARGETS = [
+  'cursor',
+  'finder',
+  'terminal',
+  'ghostty',
+  'vscode',
+  't3code',
+] as const;
 const TERMINAL_OPEN_TARGETS = ['terminal', 'ghostty'] as const;
 const FONT_SIZES = [12, 13, 14, 15] as const;
 const GENERATOR_CLIS = ['claude', 'codex'] as const;
@@ -192,6 +199,7 @@ export class SettingsQueries {
       autoRunPriorities: stored.autoRunPriorities
         ? (JSON.parse(stored.autoRunPriorities) as AppSettings['autoRunPriorities'])
         : DEFAULT_SETTINGS.autoRunPriorities,
+      autoRunMaxTasks: clampInt(stored.autoRunMaxTasks, 0, 100, DEFAULT_SETTINGS.autoRunMaxTasks),
       statusLabelMappings: stored.statusLabelMappings
         ? JSON.parse(stored.statusLabelMappings)
         : DEFAULT_STATUS_LABEL_MAPPINGS,
@@ -333,7 +341,7 @@ export class SettingsQueries {
     }
     if ('projectOpenTarget' in patch && patch.projectOpenTarget != null) {
       if (!isProjectOpenTarget(patch.projectOpenTarget)) {
-        throw new Error('projectOpenTarget must be cursor|finder|terminal|ghostty|vscode');
+        throw new Error('projectOpenTarget must be cursor|finder|terminal|ghostty|vscode|t3code');
       }
     }
     if ('terminalOpenTarget' in patch && patch.terminalOpenTarget != null) {

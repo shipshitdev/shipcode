@@ -4,15 +4,20 @@ import { Button, Modal } from '@shipshitdev/ui';
 import { Maximize2, X } from 'lucide-react';
 import { useState } from 'react';
 
-export function DiffTab({ diffs }: { diffs: DiffRecord[] }) {
+export function DiffTab({ diffs, threadStatus }: { diffs: DiffRecord[]; threadStatus?: string }) {
   const [isFullScreen, setIsFullScreen] = useState(false);
 
   if (diffs.length === 0) {
+    const isTerminal = threadStatus === 'completed' || threadStatus === 'done';
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
-        <p className="text-sm text-muted">No code changes yet</p>
+        <p className="text-sm text-muted">
+          {isTerminal ? 'No code changes' : 'No code changes yet'}
+        </p>
         <p className="text-xs text-muted/70">
-          Diff will appear here after execution produces changes.
+          {isTerminal
+            ? 'Pipeline completed without producing code changes.'
+            : 'Diff will appear here after execution produces changes.'}
         </p>
       </div>
     );

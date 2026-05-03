@@ -852,9 +852,11 @@ export function registerGitHubHandlers({
       {
         projectId,
         priorities,
-      }: { projectId: string; priorities: Array<'p0' | 'p1' | 'p2' | 'p3'> },
+        maxTasks,
+      }: { projectId: string; priorities: Array<'p0' | 'p1' | 'p2' | 'p3'>; maxTasks: number },
     ) => {
-      return { count: queries.githubIssues.countEligibleTodo(projectId, priorities) };
+      const total = queries.githubIssues.countEligibleTodo(projectId, priorities);
+      return { count: maxTasks > 0 ? Math.min(total, maxTasks) : total };
     },
   );
 
@@ -866,12 +868,18 @@ export function registerGitHubHandlers({
       {
         projectId,
         priorities,
-      }: { projectId: string; priorities: Array<'p0' | 'p1' | 'p2' | 'p3'> },
+        maxTasks,
+      }: {
+        projectId: string;
+        priorities: Array<'p0' | 'p1' | 'p2' | 'p3'>;
+        maxTasks: number;
+      },
     ) => {
       const project = queries.projects.getById(projectId);
       if (!project) throw new Error(`Project ${projectId} not found`);
 
-      const eligible = queries.githubIssues.getEligibleTodoIssues(projectId, priorities);
+      let eligible = queries.githubIssues.getEligibleTodoIssues(projectId, priorities);
+      if (maxTasks > 0) eligible = eligible.slice(0, maxTasks);
       let started = 0;
       let queued = 0;
 

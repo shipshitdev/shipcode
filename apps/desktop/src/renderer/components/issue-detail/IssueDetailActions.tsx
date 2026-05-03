@@ -38,13 +38,16 @@ interface IssueDetailActionsProps {
   effectiveRevisionCount: number;
   clarificationRequest: ClarificationRequest | null;
   failingPhaseOutput: string | null;
+  hasDiffs: boolean;
   hasApprovalDecision: boolean;
+  isCompleted: boolean;
   isSubmitting: boolean;
   requireApproval: boolean;
   retryButtonLabel: string;
   retrySummary: string | null;
   showRawOutput: boolean;
   thread: Thread | null | undefined;
+  verificationSummary: string | null;
   onApprove: () => void;
   onCancel: () => void;
   onEditPrd: () => void;
@@ -368,13 +371,16 @@ export function IssueDetailActions({
   effectiveRevisionCount,
   clarificationRequest,
   failingPhaseOutput,
+  hasDiffs,
   hasApprovalDecision,
+  isCompleted,
   isSubmitting,
   requireApproval,
   retryButtonLabel,
   retrySummary,
   showRawOutput,
   thread,
+  verificationSummary,
   onApprove,
   onCancel,
   onEditPrd,
@@ -603,6 +609,28 @@ export function IssueDetailActions({
     </div>
   ) : null;
 
+  const completionSection = isCompleted ? (
+    <div className="flex items-center justify-between rounded-md border border-success/30 bg-success/10 px-3 py-2">
+      <div className="flex items-center gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-success">
+          Pipeline Completed
+        </p>
+        {!hasDiffs && <span className="text-[11px] text-muted">— no code changes</span>}
+        {thread?.totalCostUsd ? (
+          <span className="text-[11px] text-muted">· ${thread.totalCostUsd.toFixed(4)}</span>
+        ) : null}
+      </div>
+      <Button
+        size="sm"
+        onClick={onMarkAsDone}
+        disabled={isSubmitting}
+        className="bg-purple-600 text-white hover:bg-purple-500"
+      >
+        Mark As Done
+      </Button>
+    </div>
+  ) : null;
+
   const approvalSection = hasApprovalDecision ? (
     <ApprovalSection
       key={thread?.id ?? 'approval'}
@@ -640,6 +668,7 @@ export function IssueDetailActions({
   return {
     approvalSection,
     clarificationSection,
+    completionSection,
     pipelineStartCard,
     rerunSection,
   };

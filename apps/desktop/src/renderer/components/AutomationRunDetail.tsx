@@ -259,7 +259,7 @@ export function AutomationRunDetail() {
             </TabsContent>
 
             <TabsContent value="diff">
-              <DiffTab diffs={diffs} />
+              <DiffTab diffs={diffs} threadStatus={thread?.status} />
             </TabsContent>
 
             <TabsContent value="history" className="p-6">

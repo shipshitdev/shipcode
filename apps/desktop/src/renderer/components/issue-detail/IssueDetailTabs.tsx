@@ -186,7 +186,7 @@ export function IssueDetailTabs(props: IssueDetailTabsProps) {
       </TabsContent>
 
       <TabsContent value="diff" className={'mt-0'}>
-        <DiffTab diffs={diffs} />
+        <DiffTab diffs={diffs} threadStatus={props.thread?.status} />
       </TabsContent>
 
       <TabsContent value="activity" className={'mt-0'}>
