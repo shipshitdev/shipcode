@@ -77,6 +77,7 @@ export function TerminalDrawer() {
     handleResizeMouseDown,
     handleRunningTargetSelect,
     isMaximized,
+    isMinimized,
     pipelinePhase,
     resolvedHeight,
     runningTargets,
@@ -84,6 +85,7 @@ export function TerminalDrawer() {
     startedAt,
     terminalThreadId,
     resetHeight,
+    toggleMinimized,
     toggleMaximize,
     toggleTerminal,
   } = useTerminalDrawer();
@@ -100,23 +102,22 @@ export function TerminalDrawer() {
   return (
     <div
       className="flex flex-col border-t border-border bg-secondary shrink-0"
-      style={isMaximized ? { flex: '1 1 0', minHeight: 0 } : { height: resolvedHeight }}
+      style={{ height: resolvedHeight }}
     >
-      {!isMaximized && (
-        <Button
-          type="button"
-          variant="ghost"
-          aria-label="Resize terminal drawer"
-          className="h-1 w-full cursor-ns-resize rounded-none p-0 hover:bg-accent/30 transition-colors shrink-0"
-          onMouseDown={handleResizeMouseDown}
-        />
-      )}
+      <Button
+        type="button"
+        variant="ghost"
+        aria-label="Resize terminal drawer"
+        className="h-1 w-full cursor-ns-resize rounded-none p-0 hover:bg-accent/30 transition-colors shrink-0"
+        onMouseDown={handleResizeMouseDown}
+      />
       <TerminalDrawerHeader
         activeProjectId={activeProjectId}
         currentModel={currentModel}
         displayTarget={displayTarget}
         approvedAwaitingExecution={approvedAwaitingExecution}
         isMaximized={isMaximized}
+        isMinimized={isMinimized}
         pipelinePhase={pipelinePhase}
         runningTargets={runningTargets}
         startedAt={startedAt}
@@ -124,6 +125,7 @@ export function TerminalDrawer() {
         onOpenProjectTerminal={handleOpenProjectTerminal}
         onOpenTarget={handleRunningTargetSelect}
         onResetHeight={resetHeight}
+        onToggleMinimized={toggleMinimized}
         onToggleMaximize={toggleMaximize}
         onToggleTerminal={toggleTerminal}
       />

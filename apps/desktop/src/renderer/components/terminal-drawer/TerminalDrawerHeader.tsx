@@ -1,5 +1,5 @@
 import { PIPELINE_PHASE, type PipelinePhase } from '@shipcode/shared';
-import { PhaseChip } from '@shipcode/ui';
+import { PhaseChip, Tooltip, TooltipContent, TooltipTrigger } from '@shipcode/ui';
 import {
   Button,
   cn,
@@ -8,8 +8,45 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@shipshitdev/ui';
-import { ChevronDown, ChevronUp, Plus, RotateCcw, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Minus, Plus, RotateCcw, X } from 'lucide-react';
+import type { ReactNode } from 'react';
 import type { TerminalDrawerTarget } from './constants';
+
+interface TerminalHeaderIconButtonProps {
+  ariaLabel: string;
+  children: ReactNode;
+  disabled?: boolean;
+  tooltip: string;
+  onClick: () => void;
+}
+
+function TerminalHeaderIconButton({
+  ariaLabel,
+  children,
+  disabled = false,
+  tooltip,
+  onClick,
+}: TerminalHeaderIconButtonProps) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="text-muted hover:bg-hover/70 hover:text-primary"
+            disabled={disabled}
+            onClick={onClick}
+            aria-label={ariaLabel}
+          >
+            {children}
+          </Button>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top">{tooltip}</TooltipContent>
+    </Tooltip>
+  );
+}
 
 interface TerminalDrawerHeaderProps {
   activeProjectId: string | null;
@@ -17,6 +54,7 @@ interface TerminalDrawerHeaderProps {
   currentModel: string | null;
   displayTarget: TerminalDrawerTarget | null;
   isMaximized: boolean;
+  isMinimized: boolean;
   pipelinePhase: PipelinePhase;
   runningTargets: TerminalDrawerTarget[];
   startedAt: string | null;
@@ -24,6 +62,7 @@ interface TerminalDrawerHeaderProps {
   onOpenProjectTerminal: () => void;
   onOpenTarget: (target: TerminalDrawerTarget) => void;
   onResetHeight: () => void;
+  onToggleMinimized: () => void;
   onToggleMaximize: () => void;
   onToggleTerminal: () => void;
 }
@@ -34,6 +73,7 @@ export function TerminalDrawerHeader({
   currentModel,
   displayTarget,
   isMaximized,
+  isMinimized,
   pipelinePhase,
   runningTargets,
   startedAt,
@@ -41,9 +81,13 @@ export function TerminalDrawerHeader({
   onOpenProjectTerminal,
   onOpenTarget,
   onResetHeight,
+  onToggleMinimized,
   onToggleMaximize,
   onToggleTerminal,
 }: TerminalDrawerHeaderProps) {
+  const maximizeLabel = isMaximized ? 'Minimize terminal to window' : 'Maximize terminal';
+  const oneLineLabel = isMinimized ? 'Restore terminal drawer' : 'Minimize terminal to one line';
+
   return (
     <div className="flex items-center justify-between border-b border-border bg-primary/75 px-4 py-1.5 shrink-0 gap-3 min-w-0">
       <div className="flex items-center gap-3 min-w-0 overflow-hidden">
@@ -123,50 +167,46 @@ export function TerminalDrawerHeader({
       </div>
 
       <div className="flex items-center gap-0.5 shrink-0">
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="text-muted hover:bg-hover/70 hover:text-primary"
+        <TerminalHeaderIconButton
           disabled={!activeProjectId}
           onClick={onOpenProjectTerminal}
-          title="Open Terminal"
-          aria-label="Open Terminal"
+          tooltip="Open Terminal"
+          ariaLabel="Open Terminal"
         >
           <Plus size={14} />
-        </Button>
+        </TerminalHeaderIconButton>
 
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="text-muted hover:bg-hover/70 hover:text-primary"
+        <TerminalHeaderIconButton
           onClick={onToggleMaximize}
-          title={isMaximized ? 'Minimize terminal to window' : 'Maximize terminal'}
-          aria-label={isMaximized ? 'Minimize terminal to window' : 'Maximize terminal'}
+          tooltip={maximizeLabel}
+          ariaLabel={maximizeLabel}
         >
           {isMaximized ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-        </Button>
+        </TerminalHeaderIconButton>
 
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="text-muted hover:bg-hover/70 hover:text-primary"
+        <TerminalHeaderIconButton
+          onClick={onToggleMinimized}
+          tooltip={oneLineLabel}
+          ariaLabel={oneLineLabel}
+        >
+          {isMinimized ? <ChevronUp size={14} /> : <Minus size={14} />}
+        </TerminalHeaderIconButton>
+
+        <TerminalHeaderIconButton
           onClick={onResetHeight}
-          title="Reset terminal size"
-          aria-label="Reset terminal size"
+          tooltip="Reset terminal size"
+          ariaLabel="Reset terminal size"
         >
           <RotateCcw size={13} />
-        </Button>
+        </TerminalHeaderIconButton>
 
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="text-muted hover:bg-hover/70 hover:text-primary"
+        <TerminalHeaderIconButton
           onClick={onToggleTerminal}
-          title="Close terminal"
-          aria-label="Close terminal"
+          tooltip="Close terminal"
+          ariaLabel="Close terminal"
         >
           <X size={14} />
-        </Button>
+        </TerminalHeaderIconButton>
       </div>
     </div>
   );

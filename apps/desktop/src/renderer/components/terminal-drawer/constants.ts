@@ -10,6 +10,8 @@ const EMPTY_STREAM: never[] = [];
 
 export const MIN_HEIGHT = 120;
 export const DEFAULT_HEIGHT = 250;
+export const MINIMIZED_HEIGHT = 42;
+export const FULL_HEIGHT = 9999;
 
 export const CONSOLE_VISIBLE_STATUSES = new Set<PipelinePhase>([
   PIPELINE_PHASE.clarifying,

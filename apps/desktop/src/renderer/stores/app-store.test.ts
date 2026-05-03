@@ -274,7 +274,7 @@ describe('app-store', () => {
     });
   });
 
-  describe('instant pane metadata', () => {
+  describe('terminal pane metadata', () => {
     it('stores pane mode/title/state and removes metadata on close', () => {
       useAppStore.getState().addTerminalPane('thread-live', {
         mode: 'live',

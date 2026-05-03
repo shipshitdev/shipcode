@@ -47,7 +47,7 @@ import {
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Archive, ArrowLeft, Check, CircleCheck, CircleDot, Copy } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 import { CostsTab } from './issue-detail/CostsTab';
@@ -62,6 +62,10 @@ import { IssueDetailDialogs } from './issue-detail/IssueDetailDialogs';
 import { IssueDetailTabs } from './issue-detail/IssueDetailTabs';
 import { PipelineTab } from './issue-detail/PipelineTab';
 import type { IssueDetailTab } from './issue-detail/tab-types';
+
+const DETAIL_SIDEBAR_MIN = 320;
+const DETAIL_SIDEBAR_MAX = 640;
+const DETAIL_SIDEBAR_DEFAULT = 416; // matches previous w-[26rem]
 
 const INHERIT_EXECUTOR_VALUE = '__inherit__';
 const PLAN_MUTATING_PHASES: PipelinePhase[] = [
@@ -104,6 +108,39 @@ export function IssueDetail() {
       if (branchCopyResetRef.current) clearTimeout(branchCopyResetRef.current);
     };
   }, []);
+
+  // Detail sidebar resize (matches TerminalDrawer / ProjectSidebar pattern)
+  const [detailSidebarWidth, setDetailSidebarWidth] = useState(DETAIL_SIDEBAR_DEFAULT);
+  const detailDragRef = useRef<{ startX: number; startW: number } | null>(null);
+  const handleDetailResizeMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      detailDragRef.current = { startX: e.clientX, startW: detailSidebarWidth };
+      const onMove = (ev: MouseEvent) => {
+        if (!detailDragRef.current) return;
+        // Dragging left = wider sidebar (inverted delta)
+        const delta = detailDragRef.current.startX - ev.clientX;
+        const next = Math.min(
+          DETAIL_SIDEBAR_MAX,
+          Math.max(DETAIL_SIDEBAR_MIN, detailDragRef.current.startW + delta),
+        );
+        setDetailSidebarWidth(next);
+      };
+      const onUp = () => {
+        detailDragRef.current = null;
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    },
+    [detailSidebarWidth],
+  );
+
   const [activeTab, setActiveTab] = useState<IssueDetailTab>('prd');
   const [phaseModelValidation, setPhaseModelValidation] = useState<
     Partial<
@@ -1503,8 +1540,22 @@ export function IssueDetail() {
           {detailActionStack}
           {detailTabs}
         </div>
-        {/* Sidebar — full height, own scroll */}
-        <div className="w-[26rem] shrink-0 overflow-y-auto border-l border-border">
+        {/* Sidebar — full height, own scroll, resizable */}
+        <div
+          className="relative shrink-0 overflow-y-auto border-l border-border"
+          style={{
+            width: detailSidebarWidth,
+            minWidth: DETAIL_SIDEBAR_MIN,
+            maxWidth: DETAIL_SIDEBAR_MAX,
+          }}
+        >
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label="Resize detail sidebar"
+            className="absolute top-0 left-0 bottom-0 h-auto w-1 cursor-col-resize rounded-none p-0 hover:bg-accent/20 active:bg-accent/30 transition-colors z-10"
+            onMouseDown={handleDetailResizeMouseDown}
+          />
           <div className="space-y-6 px-4 pt-2 pb-4">
             {/* Details */}
             {issueBadges && <div>{issueBadges}</div>}
