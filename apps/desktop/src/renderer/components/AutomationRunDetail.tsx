@@ -13,21 +13,15 @@ import {
   Square,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  describeAutomationRun,
+  getAutomationRunTotalTokens,
+} from '../features/automations/run-presentation';
 import { useAppStore } from '../stores/app-store';
 import { DiffTab } from './issue-detail/DiffTab';
 import { ACTIVE_PHASES } from './issue-detail/helpers';
 import { PlanHistoryTab } from './issue-detail/PlanHistoryTab';
 import type { PlanRunGroup } from './issue-detail/tab-types';
-
-function describeRun(run: Thread): string {
-  if (run.lastError) return run.lastError.slice(0, 80);
-  const parts: string[] = [];
-  const totalTokens = (run.totalTokensPrompt ?? 0) + (run.totalTokensCompletion ?? 0);
-  if (run.totalCostUsd > 0) parts.push(formatCost(run.totalCostUsd));
-  if (totalTokens > 0) parts.push(`${formatTokenCount(totalTokens)} tokens`);
-  if (run.executorResolvedModel) parts.push(run.executorResolvedModel);
-  return parts.length > 0 ? parts.join(' · ') : 'No details';
-}
 
 export function AutomationRunDetail() {
   const threadId = useAppStore((s) => s.activeAutomationThreadId);
@@ -141,7 +135,7 @@ export function AutomationRunDetail() {
 
   if (!threadId) return null;
 
-  const totalTokens = (thread?.totalTokensPrompt ?? 0) + (thread?.totalTokensCompletion ?? 0);
+  const totalTokens = thread ? getAutomationRunTotalTokens(thread) : 0;
   const isFailed =
     thread?.status === PIPELINE_PHASE.failed || thread?.status === PIPELINE_PHASE.idle;
   const hasError = !!thread?.lastError;
@@ -280,7 +274,7 @@ export function AutomationRunDetail() {
                     >
                       <PhaseChip status={run.status} />
                       <span className="min-w-0 flex-1 truncate text-[12px] text-secondary">
-                        {describeRun(run)}
+                        {describeAutomationRun(run)}
                       </span>
                       <span className="shrink-0 text-[11px] text-muted">
                         {new Date(run.createdAt).toLocaleString(undefined, {
