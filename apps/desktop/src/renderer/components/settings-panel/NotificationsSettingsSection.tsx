@@ -127,6 +127,7 @@ export function NotificationsSettingsSection({
         <SettingsRow label="Chat: needs approval" htmlFor="chat-awaiting-approval">
           <Switch
             id="chat-awaiting-approval"
+            aria-label="Chat alert: Needs approval"
             checked={settings.chatNotificationEvents.awaitingApproval}
             onCheckedChange={(checked: boolean) =>
               onUpdate({
@@ -141,6 +142,7 @@ export function NotificationsSettingsSection({
         <SettingsRow label="Chat: pipeline failed" htmlFor="chat-failed">
           <Switch
             id="chat-failed"
+            aria-label="Chat alert: Pipeline failed"
             checked={settings.chatNotificationEvents.failed}
             onCheckedChange={(checked: boolean) =>
               onUpdate({
@@ -155,6 +157,7 @@ export function NotificationsSettingsSection({
         <SettingsRow label="Chat: CI blocked" htmlFor="chat-ci-blocked">
           <Switch
             id="chat-ci-blocked"
+            aria-label="Chat alert: CI blocked"
             checked={settings.chatNotificationEvents.ciBlocked}
             onCheckedChange={(checked: boolean) =>
               onUpdate({
@@ -169,6 +172,7 @@ export function NotificationsSettingsSection({
         <SettingsRow label="Chat: pipeline completed" htmlFor="chat-completed">
           <Switch
             id="chat-completed"
+            aria-label="Chat alert: Pipeline completed"
             checked={settings.chatNotificationEvents.completed}
             onCheckedChange={(checked: boolean) =>
               onUpdate({
@@ -186,6 +190,7 @@ export function NotificationsSettingsSection({
         >
           <Switch
             id="chat-verification-exhausted"
+            aria-label="Chat alert: Verification retries exhausted"
             checked={settings.chatNotificationEvents.verificationExhausted}
             onCheckedChange={(checked: boolean) =>
               onUpdate({

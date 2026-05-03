@@ -139,6 +139,7 @@ describe('settings leaf sections', () => {
 
     expect(screen.getByRole('switch', { name: 'OS notifications' })).toBeDisabled();
     expect(screen.getByRole('switch', { name: 'Pipeline completed' })).toBeDisabled();
+    expect(screen.getByRole('switch', { name: 'Chat alert: Pipeline completed' })).toBeEnabled();
 
     cleanup();
 
