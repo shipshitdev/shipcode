@@ -3,26 +3,26 @@ import { Badge, Button } from '@shipshitdev/ui';
 import { Square, X } from 'lucide-react';
 import { useMemo } from 'react';
 import { useSharedSecondNow } from '../../hooks/useSharedSecondNow';
-import type { InstantPaneMode } from '../../stores/app-store';
+import type { TerminalPaneMode } from '../../stores/app-store';
 import { useAppStore } from '../../stores/app-store';
 import { TerminalTranscript } from '../terminal-transcript/TerminalTranscript';
-import { useInstantTerminalPane } from './useInstantTerminalPane';
+import { useTerminalPane } from './useTerminalPane';
 
 const EMPTY_STREAM: TerminalEventRecord[] = [];
 const QUIET_HINT_SECONDS = 15;
 const STALE_WARNING_SECONDS = 90;
 
-interface InstantTerminalPaneProps {
+interface TerminalPaneProps {
   threadId: string;
   title: string;
-  mode: InstantPaneMode;
+  mode: TerminalPaneMode;
   paneState?: AgentState;
   isBareShell?: boolean;
   onClose: (threadId: string, isRunning: boolean) => void;
   onCancel: (threadId: string) => void;
 }
 
-export function InstantTerminalPane({
+export function TerminalPane({
   threadId,
   title,
   mode,
@@ -30,7 +30,7 @@ export function InstantTerminalPane({
   isBareShell,
   onClose,
   onCancel,
-}: InstantTerminalPaneProps) {
+}: TerminalPaneProps) {
   const shouldReadStream = mode !== 'live' || paneState == null;
   const canonicalStream = useAppStore((s) =>
     shouldReadStream ? (s.canonicalTerminalStream[threadId] ?? EMPTY_STREAM) : EMPTY_STREAM,
@@ -43,7 +43,7 @@ export function InstantTerminalPane({
       : lastEvent?.kind === 'lifecycle' && lastEvent.message.includes('process exited')
         ? false
         : lastEvent?.kind !== 'done';
-  const { containerRef } = useInstantTerminalPane(threadId, mode, isRunning);
+  const { containerRef } = useTerminalPane(threadId, mode, isRunning);
   const now = useSharedSecondNow();
 
   const quietSince = useMemo(() => {

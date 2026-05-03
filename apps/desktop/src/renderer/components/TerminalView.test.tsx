@@ -5,10 +5,10 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { Profiler } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '../stores/app-store';
-import { InstantView } from './InstantView';
+import { TerminalView } from './TerminalView';
 
-vi.mock('./instant-terminal/InstantTerminalPane', () => ({
-  InstantTerminalPane: ({
+vi.mock('./terminal-panes/TerminalPane', () => ({
+  TerminalPane: ({
     title,
     onClose,
   }: {
@@ -32,7 +32,7 @@ afterEach(() => {
   cleanup();
 });
 
-describe('InstantView', () => {
+describe('TerminalView', () => {
   const invokeMock = vi.fn<(channel: string, args?: unknown) => Promise<unknown>>();
 
   beforeEach(() => {
@@ -47,8 +47,8 @@ describe('InstantView', () => {
 
     useAppStore.setState({
       activeProjectId: 'project-1',
-      instantPaneThreadIds: ['thread-live'],
-      instantPaneMetaByThread: {
+      terminalPaneThreadIds: ['thread-live'],
+      terminalPaneMetaByThread: {
         'thread-live': {
           mode: 'live',
           cli: 'claude',
@@ -63,16 +63,16 @@ describe('InstantView', () => {
   it('opens an embedded bare shell from the empty state', async () => {
     useAppStore.setState({
       activeProjectId: 'project-1',
-      instantPaneThreadIds: [],
-      instantPaneMetaByThread: {},
+      terminalPaneThreadIds: [],
+      terminalPaneMetaByThread: {},
       canonicalTerminalStream: {},
     } as never);
 
     invokeMock.mockResolvedValueOnce({ threadId: 'thread-shell-1' });
 
-    render(<InstantView />);
+    render(<TerminalView />);
 
-    fireEvent.click(screen.getByTitle('Open Terminal'));
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
 
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith('instant:bare-shell', {
@@ -81,8 +81,8 @@ describe('InstantView', () => {
     });
 
     const state = useAppStore.getState();
-    expect(state.instantPaneThreadIds).toContain('thread-shell-1');
-    expect(state.instantPaneMetaByThread['thread-shell-1']).toEqual({
+    expect(state.terminalPaneThreadIds).toContain('thread-shell-1');
+    expect(state.terminalPaneMetaByThread['thread-shell-1']).toEqual({
       mode: 'live',
       title: 'Terminal',
       cli: 'shell',
@@ -90,17 +90,17 @@ describe('InstantView', () => {
   });
 
   it('keeps existing session panes visible', () => {
-    render(<InstantView />);
+    render(<TerminalView />);
 
     expect(screen.getByText('Claude shell')).toBeInTheDocument();
-    expect(screen.getByTitle('Open Terminal')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open' })).toBeInTheDocument();
   });
 
   it('does not rerender the sessions grid when unrelated terminal streams update', () => {
     const onRender = vi.fn();
     render(
       <Profiler id="instant-view" onRender={onRender}>
-        <InstantView />
+        <TerminalView />
       </Profiler>,
     );
     onRender.mockClear();

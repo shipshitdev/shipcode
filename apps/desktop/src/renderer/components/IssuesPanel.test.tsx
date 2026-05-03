@@ -13,7 +13,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { Profiler, type ProfilerOnRenderCallback, StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '../stores/app-store';
-import { ThreadPanel } from './ThreadPanel';
+import { IssuesPanel } from './IssuesPanel';
 
 vi.mock('electron-log/renderer', () => ({
   default: {
@@ -36,12 +36,12 @@ function renderWithProviders(onRender?: ProfilerOnRenderCallback) {
       {onRender ? (
         <Profiler id="thread-panel" onRender={onRender}>
           <QueryClientProvider client={queryClient}>
-            <ThreadPanel />
+            <IssuesPanel />
           </QueryClientProvider>
         </Profiler>
       ) : (
         <QueryClientProvider client={queryClient}>
-          <ThreadPanel />
+          <IssuesPanel />
         </QueryClientProvider>
       )}
     </StrictMode>,
@@ -186,7 +186,7 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
   };
 }
 
-describe('ThreadPanel', () => {
+describe('IssuesPanel', () => {
   const invokeMock = vi.fn<(channel: string, args?: unknown) => Promise<unknown>>();
 
   beforeEach(() => {

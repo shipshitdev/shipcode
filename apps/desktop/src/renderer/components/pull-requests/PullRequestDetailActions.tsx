@@ -36,14 +36,14 @@ export function PullRequestDetailActions({
         cli: 'claude',
         customSystemPrompt: skillContent ?? undefined,
       });
-      const { addInstantPane } = useAppStore.getState();
-      addInstantPane(result.threadId, {
+      const { addTerminalPane } = useAppStore.getState();
+      addTerminalPane(result.threadId, {
         mode: 'replay',
         cli: 'claude',
         title: `Review PR #${prNumber}`,
         state: 'running',
       });
-      setProjectTab('sessions');
+      setProjectTab('terminal');
     } finally {
       setIsReviewing(false);
     }
@@ -63,14 +63,14 @@ export function PullRequestDetailActions({
         cli: 'claude',
         customSystemPrompt: skillContent ?? undefined,
       });
-      const { addInstantPane } = useAppStore.getState();
-      addInstantPane(result.threadId, {
+      const { addTerminalPane } = useAppStore.getState();
+      addTerminalPane(result.threadId, {
         mode: 'replay',
         cli: 'claude',
         title: `Address PR #${prNumber}`,
         state: 'running',
       });
-      setProjectTab('sessions');
+      setProjectTab('terminal');
     } finally {
       setIsAddressing(false);
     }

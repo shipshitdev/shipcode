@@ -83,6 +83,7 @@ export function TerminalDrawer() {
     showEmptyState,
     startedAt,
     terminalThreadId,
+    resetHeight,
     toggleMaximize,
     toggleTerminal,
   } = useTerminalDrawer();
@@ -122,6 +123,7 @@ export function TerminalDrawer() {
         terminalThreadId={terminalThreadId}
         onOpenProjectTerminal={handleOpenProjectTerminal}
         onOpenTarget={handleRunningTargetSelect}
+        onResetHeight={resetHeight}
         onToggleMaximize={toggleMaximize}
         onToggleTerminal={toggleTerminal}
       />

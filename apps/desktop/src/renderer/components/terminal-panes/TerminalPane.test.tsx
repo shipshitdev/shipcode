@@ -4,10 +4,10 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppStore } from '../../stores/app-store';
-import { InstantTerminalPane } from './InstantTerminalPane';
+import { TerminalPane } from './TerminalPane';
 
-vi.mock('./useInstantTerminalPane', () => ({
-  useInstantTerminalPane: () => ({
+vi.mock('./useTerminalPane', () => ({
+  useTerminalPane: () => ({
     containerRef: { current: null },
   }),
 }));
@@ -17,7 +17,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('InstantTerminalPane', () => {
+describe('TerminalPane', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-04-22T21:54:07.000Z'));
@@ -29,7 +29,7 @@ describe('InstantTerminalPane', () => {
 
   it('renders a live pane without crashing when the thread has no stream yet', () => {
     render(
-      <InstantTerminalPane
+      <TerminalPane
         threadId="thread-live"
         title="Codex shell"
         mode="live"
@@ -62,7 +62,7 @@ describe('InstantTerminalPane', () => {
     } as never);
 
     render(
-      <InstantTerminalPane
+      <TerminalPane
         threadId="thread-live"
         title="Codex shell"
         mode="live"

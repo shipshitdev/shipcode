@@ -25,7 +25,7 @@ export function useIpc() {
   const removeNotification = useAppStore((state) => state.removeNotification);
   const mapProcessToThread = useAppStore((state) => state.mapProcessToThread);
   const setCurrentModel = useAppStore((state) => state.setCurrentModel);
-  const setInstantPaneState = useAppStore((state) => state.setInstantPaneState);
+  const setTerminalPaneState = useAppStore((state) => state.setTerminalPaneState);
   const appendCanonicalEvents = useAppStore((state) => state.appendCanonicalEvents);
 
   useEffect(() => {
@@ -288,7 +288,7 @@ export function useIpc() {
           mapProcessToThread(data.processId, data.threadId);
         }
         if (data.threadId) {
-          setInstantPaneState(data.threadId, data.state);
+          setTerminalPaneState(data.threadId, data.state);
         }
       }),
     );
@@ -355,7 +355,7 @@ export function useIpc() {
     removeNotification,
     mapProcessToThread,
     setCurrentModel,
-    setInstantPaneState,
+    setTerminalPaneState,
     appendCanonicalEvents,
     queryClient,
   ]);

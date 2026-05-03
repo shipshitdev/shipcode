@@ -3,14 +3,16 @@ import { Button, cn } from '@shipshitdev/ui';
 import { Plus, Terminal } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { useOpenProjectTerminal } from '../hooks/useOpenProjectTerminal';
-import { type InstantPaneMode, useAppStore } from '../stores/app-store';
-import { InstantTerminalPane } from './instant-terminal/InstantTerminalPane';
+import { type TerminalPaneMode, useAppStore } from '../stores/app-store';
+import { TerminalPane } from './terminal-panes/TerminalPane';
 
-export function InstantView() {
-  const instantPaneThreadIds = useAppStore((state) => state.instantPaneThreadIds);
-  const instantSplitDirection = useAppStore((state) => state.instantSplitDirection);
-  const instantPaneMetaByThread = useAppStore((state) => state.instantPaneMetaByThread);
-  const removeInstantPane = useAppStore((state) => state.removeInstantPane);
+const MAX_PANES = 4;
+
+export function TerminalView() {
+  const terminalPaneThreadIds = useAppStore((state) => state.terminalPaneThreadIds);
+  const terminalSplitDirection = useAppStore((state) => state.terminalSplitDirection);
+  const terminalPaneMetaByThread = useAppStore((state) => state.terminalPaneMetaByThread);
+  const removeTerminalPane = useAppStore((state) => state.removeTerminalPane);
   const activeProjectId = useAppStore((state) => state.activeProjectId);
   const { openProjectTerminal, openingTerminal } = useOpenProjectTerminal();
 
@@ -22,24 +24,21 @@ export function InstantView() {
 
   const openTerminalButton = (
     <Button
-      variant="ghost"
-      size="icon"
-      disabled={!activeProjectId || openingTerminal || instantPaneThreadIds.length >= 4}
+      variant="default"
+      size="sm"
+      disabled={!activeProjectId || openingTerminal || terminalPaneThreadIds.length >= MAX_PANES}
       onClick={handleOpenTerminal}
-      title="Open Terminal"
     >
-      <div className="relative">
-        <Terminal size={16} />
-        <Plus size={10} className="absolute -right-1.5 -top-1.5 stroke-[3]" />
-      </div>
+      <Plus size={14} />
+      Open
     </Button>
   );
 
   const paneTitle = useCallback(
     (threadId: string) => {
-      return instantPaneMetaByThread[threadId]?.title ?? threadId.slice(0, 8);
+      return terminalPaneMetaByThread[threadId]?.title ?? threadId.slice(0, 8);
     },
-    [instantPaneMetaByThread],
+    [terminalPaneMetaByThread],
   );
 
   const handleCancel = useCallback((threadId: string) => {
@@ -48,25 +47,25 @@ export function InstantView() {
 
   const handleClose = useCallback(
     (threadId: string, isRunning: boolean) => {
-      const meta = instantPaneMetaByThread[threadId];
+      const meta = terminalPaneMetaByThread[threadId];
       if (meta?.mode === 'live' && isRunning) {
         void window.shipcode.invoke('instant:cancel', { threadId });
       }
-      removeInstantPane(threadId);
+      removeTerminalPane(threadId);
     },
-    [instantPaneMetaByThread, removeInstantPane],
+    [terminalPaneMetaByThread, removeTerminalPane],
   );
 
   const gridClass = useMemo(() => {
-    const count = instantPaneThreadIds.length;
+    const count = terminalPaneThreadIds.length;
     if (count <= 1) return 'flex flex-col';
     if (count === 2) {
-      return instantSplitDirection === 'horizontal' ? 'grid grid-cols-2' : 'grid grid-rows-2';
+      return terminalSplitDirection === 'horizontal' ? 'grid grid-cols-2' : 'grid grid-rows-2';
     }
     return 'grid grid-cols-2 grid-rows-2';
-  }, [instantPaneThreadIds.length, instantSplitDirection]);
+  }, [terminalPaneThreadIds.length, terminalSplitDirection]);
 
-  if (instantPaneThreadIds.length === 0) {
+  if (terminalPaneThreadIds.length === 0) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-4 text-muted">
         <Terminal size={32} className="text-muted" />
@@ -79,20 +78,20 @@ export function InstantView() {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <PageHeader
-        title="Terminal Sessions"
+        title="Terminal"
         subtitle="Terminal sessions for the active project."
         actions={openTerminalButton}
       />
 
       <div className={cn('flex-1 min-h-0 gap-1 p-1', gridClass)}>
-        {instantPaneThreadIds.map((threadId) => (
-          <InstantTerminalPane
+        {terminalPaneThreadIds.map((threadId) => (
+          <TerminalPane
             key={threadId}
             threadId={threadId}
             title={paneTitle(threadId)}
-            mode={(instantPaneMetaByThread[threadId]?.mode ?? 'replay') as InstantPaneMode}
-            paneState={instantPaneMetaByThread[threadId]?.state}
-            isBareShell={instantPaneMetaByThread[threadId]?.cli === 'shell'}
+            mode={(terminalPaneMetaByThread[threadId]?.mode ?? 'replay') as TerminalPaneMode}
+            paneState={terminalPaneMetaByThread[threadId]?.state}
+            isBareShell={terminalPaneMetaByThread[threadId]?.cli === 'shell'}
             onClose={handleClose}
             onCancel={handleCancel}
           />

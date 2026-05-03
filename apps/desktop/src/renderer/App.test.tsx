@@ -95,8 +95,8 @@ vi.mock('./features/automations/create-automation-modal', () => ({
 vi.mock('./components/ProjectView', () => ({
   ProjectView: () => <div>ProjectView</div>,
 }));
-vi.mock('./components/ThreadPanel', () => ({
-  ThreadPanel: () => <div>ThreadPanel</div>,
+vi.mock('./components/IssuesPanel', () => ({
+  IssuesPanel: () => <div>IssuesPanel</div>,
 }));
 vi.mock('./components/Titlebar', () => ({
   Titlebar: () => <div>Titlebar</div>,
