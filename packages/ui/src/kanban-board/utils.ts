@@ -1,6 +1,7 @@
 import { type CollisionDetection, pointerWithin, rectIntersection } from '@dnd-kit/core';
 import type {
   AppSettings,
+  GhStatusMapping,
   GitHubIssueCacheRecord,
   IssuePipelineStatus,
   Project,
@@ -19,7 +20,7 @@ import {
   resolveRevisionCountForIssue,
   sanitizeResolvedModel,
 } from '../lib/shipcode';
-import { ACTIVE_STATUSES } from './constants';
+import { ACTIVE_STATUSES, GH_OPTION_COLOR_HEX } from './constants';
 import type {
   BoardColumn,
   BoardSortOrder,
@@ -411,4 +412,26 @@ export function formatDate(iso: string): string {
     day: 'numeric',
     year: 'numeric',
   });
+}
+
+/**
+ * Returns CSS hex color for a kanban column dot when a GitHub Projects
+ * color is available, or null to fall back to the default Tailwind class.
+ */
+export function resolveColumnDotColor(
+  columnKey: ColumnKey,
+  mapping: GhStatusMapping | null | undefined,
+): string | null {
+  if (!mapping) return null;
+
+  const optionMap = {
+    todo: mapping.todo,
+    agent: mapping.inProgress,
+    human: mapping.humanReview,
+    done: mapping.done,
+  } as const;
+
+  const option = optionMap[columnKey];
+  if (!option?.color) return null;
+  return GH_OPTION_COLOR_HEX[option.color] ?? null;
 }
