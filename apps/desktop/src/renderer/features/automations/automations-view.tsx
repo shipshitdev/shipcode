@@ -1,5 +1,4 @@
 import type { Automation, Project, Thread } from '@shipcode/shared';
-import { formatCost, formatTokenCount } from '@shipcode/shared';
 import { PageHeader, PhaseChip } from '@shipcode/ui';
 import { Button, Card, CardContent, cn, Switch } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -7,6 +6,7 @@ import { Cron } from 'croner';
 import { ChevronDown, Loader2, Pencil, Play, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useAppStore } from '../../stores/app-store';
+import { describeAutomationRun } from './run-presentation';
 
 const RUN_HISTORY_LIMIT = 5;
 
@@ -34,16 +34,6 @@ function formatRelative(date: Date | string | null): string {
   if (minutes < 60) return past ? `${minutes}m ago` : `in ${minutes}m`;
   if (hours < 48) return past ? `${hours}h ago` : `in ${hours}h`;
   return past ? `${days}d ago` : `in ${days}d`;
-}
-
-function describeRun(thread: Thread): string {
-  if (thread.lastError) return thread.lastError.slice(0, 80);
-  const parts: string[] = [];
-  const totalTokens = (thread.totalTokensPrompt ?? 0) + (thread.totalTokensCompletion ?? 0);
-  if (thread.totalCostUsd > 0) parts.push(formatCost(thread.totalCostUsd));
-  if (totalTokens > 0) parts.push(`${formatTokenCount(totalTokens)} tokens`);
-  if (thread.executorResolvedModel) parts.push(thread.executorResolvedModel);
-  return parts.length > 0 ? parts.join(' · ') : 'No details';
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -262,7 +252,7 @@ function AutomationCard({
                   >
                     <PhaseChip status={thread.status} />
                     <span className="flex-1 truncate text-[12px] text-secondary">
-                      {describeRun(thread)}
+                      {describeAutomationRun(thread)}
                     </span>
                     <span className="text-[11px] text-muted">
                       {formatRelative(thread.createdAt)}

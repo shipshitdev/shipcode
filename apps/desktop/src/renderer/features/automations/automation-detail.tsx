@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Cron } from 'croner';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useAppStore } from '../../stores/app-store';
+import { describeAutomationRun, getAutomationRunTotalTokens } from './run-presentation';
 
 function formatRelative(date: Date | string | null): string {
   if (!date) return '—';
@@ -44,18 +45,8 @@ function describeCron(expr: string): string {
 }
 
 function formatTokens(run: Thread): string | null {
-  const total = (run.totalTokensPrompt ?? 0) + (run.totalTokensCompletion ?? 0);
+  const total = getAutomationRunTotalTokens(run);
   return total > 0 ? formatTokenCount(total) : null;
-}
-
-function describeRun(run: Thread): string {
-  if (run.lastError) return run.lastError.slice(0, 120);
-  const parts: string[] = [];
-  const totalTokens = (run.totalTokensPrompt ?? 0) + (run.totalTokensCompletion ?? 0);
-  if (run.totalCostUsd > 0) parts.push(formatCost(run.totalCostUsd));
-  if (totalTokens > 0) parts.push(`${formatTokenCount(totalTokens)} tokens`);
-  if (run.executorResolvedModel) parts.push(run.executorResolvedModel);
-  return parts.length > 0 ? parts.join(' · ') : 'No details';
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -168,7 +159,7 @@ export function AutomationDetail() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <span className="block truncate text-[12px] text-secondary">
-                          {describeRun(run)}
+                          {describeAutomationRun(run, { errorMaxLength: 120 })}
                         </span>
                         <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted">
                           <span>{formatTimestamp(run.createdAt)}</span>
