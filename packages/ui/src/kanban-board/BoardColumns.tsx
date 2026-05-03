@@ -134,17 +134,6 @@ export function DroppableColumn({
           {label}
         </span>
         <div className="flex items-center gap-1">
-          {onArchiveAllDone && hasArchivableIssues && (
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="text-muted/60 hover:bg-muted/10 hover:text-muted"
-              title="Archive all done issues"
-              onClick={onArchiveAllDone}
-            >
-              <Archive size={12} />
-            </Button>
-          )}
           <span
             className={cn(
               'min-w-[18px] rounded-full border border-transparent bg-tertiary px-1.5 py-px text-center text-[10px] font-medium',
@@ -458,17 +447,6 @@ export function StackedColumn({
           {column.label}
         </span>
         <div className="flex items-center gap-1">
-          {onArchiveAllDone && column.key === 'done' && hasArchivableIssues && (
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="text-muted/60 hover:bg-muted/10 hover:text-muted"
-              title="Archive all done issues"
-              onClick={onArchiveAllDone}
-            >
-              <Archive size={12} />
-            </Button>
-          )}
           <span
             className={cn(
               'min-w-[18px] rounded-full border border-transparent bg-tertiary px-1.5 py-px text-center text-[10px] font-medium',

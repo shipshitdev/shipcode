@@ -180,6 +180,10 @@ export interface IpcInvokeChannels {
   };
   'pipeline:start': { args: { threadId: string }; result: undefined };
   'pipeline:retry': { args: { threadId: string }; result: undefined };
+  'pipeline:auto-fix': {
+    args: { threadId: string; failureOutput: string };
+    result: undefined;
+  };
   'pipeline:answer-clarification': {
     args: { threadId: string; answers: ClarificationAnswer[] };
     result: undefined;
@@ -607,6 +611,10 @@ export interface IpcInvokeChannels {
       attachmentSessionId?: string;
     };
     result: { threadId: string };
+  };
+  'instant:fix-thread-failure': {
+    args: { threadId: string; failureOutput: string };
+    result: { threadId: string; cli: 'claude' | 'codex'; title: string };
   };
   'instant:shell-input': {
     args: { threadId: string; data: string };

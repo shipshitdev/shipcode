@@ -30,17 +30,24 @@ vi.mock('@shipcode/ui', () => ({
   KanbanBoard: ({
     issues,
     onMarkDone,
+    onRerun,
   }: {
     issues: GitHubIssueCacheRecord[];
     onMarkDone?: (issue: GitHubIssueCacheRecord) => void;
+    onRerun?: (issue: GitHubIssueCacheRecord) => void;
   }) => (
     <div>
       <div>{issues[0]?.title ?? 'Loading issues'}</div>
       <div data-testid="board-status">{issues[0]?.pipelineStatus ?? 'none'}</div>
       {issues[0] ? (
-        <button type="button" onClick={() => onMarkDone?.(issues[0])}>
-          Trigger mark done
-        </button>
+        <>
+          <button type="button" onClick={() => onMarkDone?.(issues[0])}>
+            Trigger mark done
+          </button>
+          <button type="button" onClick={() => onRerun?.(issues[0])}>
+            Trigger rerun
+          </button>
+        </>
       ) : null}
     </div>
   ),
@@ -302,5 +309,54 @@ describe('IssuesPanel undo done move', () => {
       issueId: completedIssue.id,
       issueNumber: completedIssue.issueNumber,
     });
+  });
+
+  it('retries failed automation cards through pipeline retry and moves them to planning', async () => {
+    const automationThread: Thread = {
+      ...awaitingApprovalThread,
+      id: 'automation-thread-1',
+      githubIssueNumber: null,
+      automationId: 'automation-1',
+      status: 'failed',
+      title: '[Auto] clean',
+      failurePhase: 'executing',
+      lastError: 'failed',
+    };
+    let retried = false;
+
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'thread-panel:get-data') {
+        return {
+          ...panelData,
+          threads: [
+            retried
+              ? { ...automationThread, status: 'planning', updatedAt: new Date().toISOString() }
+              : automationThread,
+          ],
+          latestPlanStatusByThreadId: {},
+        } satisfies ThreadPanelData;
+      }
+      if (channel === 'github:list-issues') return [];
+      if (channel === 'pipeline:retry') {
+        retried = true;
+        return undefined;
+      }
+      return null;
+    });
+
+    renderWithProviders();
+
+    await screen.findByText('[Auto] clean');
+    expect(screen.getByTestId('board-status')).toHaveTextContent('failed');
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Trigger rerun' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('board-status')).toHaveTextContent('planning');
+    });
+    expect(invokeMock).toHaveBeenCalledWith('pipeline:retry', {
+      threadId: automationThread.id,
+    });
+    expect(invokeMock).not.toHaveBeenCalledWith('github:start-issue', expect.anything());
   });
 });

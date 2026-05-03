@@ -463,6 +463,75 @@ describe('TerminalDrawer', () => {
     expect(state.terminalPaneThreadIds).toContain('thread-shell-1');
   });
 
+  it('sends a terminal failure to an embedded fix session', async () => {
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'integrations:check') return integrations;
+      if (channel === 'instant:fix-thread-failure') {
+        return { threadId: 'thread-fix-1', cli: 'codex', title: 'Fix #1' };
+      }
+      return null;
+    });
+
+    (window as typeof window & { shipcode: typeof window.shipcode }).shipcode = {
+      invoke: invoke as unknown as typeof window.shipcode.invoke,
+      on: vi.fn(() => () => {}) as unknown as typeof window.shipcode.on,
+    };
+
+    useAppStore.setState({
+      activeProjectId: 'project-1',
+      activeIssue: makeIssue({
+        pipelineStatus: 'failed',
+        title: 'Broken task',
+        threadId: 'thread-1',
+      }),
+      terminalThreadId: 'thread-1',
+      githubIssues: [
+        makeIssue({
+          pipelineStatus: 'failed',
+          title: 'Broken task',
+          threadId: 'thread-1',
+        }),
+      ],
+      canonicalTerminalStream: {
+        'thread-1': [
+          {
+            id: 'error-1',
+            threadId: 'thread-1',
+            event: {
+              kind: 'raw',
+              content: 'ERROR codex_core::session: failed to record rollout items',
+            },
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      },
+      terminalPaneThreadIds: [],
+      terminalPaneMetaByThread: {},
+      projectTab: 'issues',
+    } as never);
+
+    renderWithProviders();
+
+    fireEvent.click(screen.getByRole('button', { name: /send failure to terminal/i }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('instant:fix-thread-failure', {
+        threadId: 'thread-1',
+        failureOutput: 'ERROR codex_core::session: failed to record rollout items',
+      });
+    });
+
+    const state = useAppStore.getState();
+    expect(state.terminalPaneThreadIds).toContain('thread-fix-1');
+    expect(state.terminalPaneMetaByThread['thread-fix-1']).toMatchObject({
+      mode: 'replay',
+      cli: 'codex',
+      title: 'Fix #1',
+      state: 'running',
+    });
+    expect(state.projectTab).toBe('terminal');
+  });
+
   it('uses the full-size button as a resizable height preset', () => {
     useAppStore.setState({
       activeProjectId: 'project-1',

@@ -330,6 +330,36 @@ describe('linked PR affordances', () => {
     doneView.cleanup();
   });
 
+  it('shows retry affordance on failed automation cards', () => {
+    const onRerun = vi.fn();
+    const issue = makeIssue({
+      id: 'automation:thread-1',
+      issueNumber: -1_000_001,
+      title: '[Auto] clean',
+      pipelineStatus: 'failed',
+      linkedPrNumber: null,
+      linkedPrUrl: null,
+    });
+
+    const view = renderIntoDom(
+      <DndContext>
+        <DraggableCard issue={issue} onClick={vi.fn()} onRerun={onRerun} />
+      </DndContext>,
+    );
+
+    const retryButton = view.container.querySelector('button[title="Retry pipeline"]');
+    if (!(retryButton instanceof HTMLButtonElement)) {
+      throw new Error('Expected automation retry action button');
+    }
+
+    act(() => {
+      retryButton.click();
+    });
+
+    expect(onRerun).toHaveBeenCalledWith(issue);
+    view.cleanup();
+  });
+
   it('renders an approval badge on cards with a source tooltip', () => {
     const view = renderIntoDom(
       <DndContext>

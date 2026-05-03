@@ -10,6 +10,7 @@ import {
   resolveRevisionCount,
   resolveRevisionCountForIssue,
   resolveThreadPhasePresentation,
+  stripAnsi,
 } from '@shipcode/shared';
 
 import { logEvent } from '../logger.service';
@@ -22,6 +23,17 @@ import {
 } from './helpers';
 import { getRetryAction } from './retry-phase';
 import type { IpcHandlerDeps } from './types';
+
+const execFileAsync = promisify(execFile);
+const AUTO_FIX_FAILURE_OUTPUT_MAX = 8_000;
+
+function clampAutoFixFailureOutput(output: string): string {
+  const cleaned = stripAnsi(output).trim();
+  if (cleaned.length <= AUTO_FIX_FAILURE_OUTPUT_MAX) return cleaned;
+
+  const truncated = cleaned.slice(-AUTO_FIX_FAILURE_OUTPUT_MAX);
+  return `[Earlier terminal output truncated for Auto Fix]\n\n${truncated}`;
+}
 
 export function registerPipelineHandlers({
   ipcMain,
@@ -417,7 +429,21 @@ export function registerPipelineHandlers({
     pipeline.cancel(threadId);
   });
 
-  ipcMain.handle('pipeline:retry', async (_event, { threadId }: { threadId: string }) => {
+  const emitTerminalEvent = (
+    threadId: string,
+    event: Parameters<typeof queries.terminalEvents.create>[1],
+  ) => {
+    const record = queries.terminalEvents.create(threadId, event);
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('terminal:event', record);
+    }
+    return record;
+  };
+
+  const retryPipelineThread = async (
+    threadId: string,
+    source: 'pipeline:retry' | 'pipeline:auto-fix',
+  ) => {
     if (pipeline.listActive().some((summary) => summary.threadId === threadId)) {
       throw new Error('Stop the active pipeline before retrying');
     }
@@ -447,7 +473,7 @@ export function registerPipelineHandlers({
     notificationService.dismissByThread(threadId);
     logEvent('pipeline:start-context', {
       threadId,
-      source: 'pipeline:retry',
+      source,
       projectPath: project.path,
       githubIssueNumber: thread.githubIssueNumber ?? null,
       autonomous: thread.autonomous,
@@ -463,7 +489,7 @@ export function registerPipelineHandlers({
         logEvent('pipeline:plan-parse-fallback', {
           threadId,
           planId: latestPlan.id,
-          source: 'pipeline:retry',
+          source,
         });
       }
     }
@@ -541,7 +567,68 @@ export function registerPipelineHandlers({
 
     queries.plans.supersedeAll(threadId);
     await pipeline.startPlanGeneration(threadId, thread.prompt, project.path, thread.worktreePath);
+  };
+
+  ipcMain.handle('pipeline:retry', async (_event, { threadId }: { threadId: string }) => {
+    await retryPipelineThread(threadId, 'pipeline:retry');
   });
+
+  ipcMain.handle(
+    'pipeline:auto-fix',
+    async (_event, { threadId, failureOutput }: { threadId: string; failureOutput: string }) => {
+      if (pipeline.listActive().some((summary) => summary.threadId === threadId)) {
+        throw new Error('Stop the active pipeline before auto-fixing');
+      }
+
+      const thread = queries.threads.getById(threadId);
+      if (!thread) throw new Error(`Thread ${threadId} not found`);
+      if (!thread.worktreePath) throw new Error('No worktree available for Auto Fix');
+
+      const checkpoint = queries.checkpoints.getLatest(threadId);
+      if (!checkpoint) throw new Error('No checkpoint available for Auto Fix');
+
+      const clippedOutput = clampAutoFixFailureOutput(failureOutput);
+      if (!clippedOutput) throw new Error('No failure output available for Auto Fix');
+
+      emitTerminalEvent(threadId, {
+        kind: 'lifecycle',
+        message: `Auto Fix restoring checkpoint ${checkpoint.label} (${checkpoint.commitSha.slice(0, 12)})`,
+      });
+      emitTerminalEvent(threadId, {
+        kind: 'raw',
+        content: ['[Auto Fix] Captured failure output', '', clippedOutput].join('\n'),
+      });
+
+      try {
+        await execFileAsync('git', ['reset', '--hard', checkpoint.commitSha], {
+          cwd: thread.worktreePath,
+          timeout: 15_000,
+        });
+        await execFileAsync('git', ['clean', '-fd'], {
+          cwd: thread.worktreePath,
+          timeout: 15_000,
+        });
+      } catch (error) {
+        const raw = error instanceof Error ? error.message : String(error);
+        const clamped = raw.split('\n')[0]?.slice(0, 280) ?? 'Unknown checkpoint restore error';
+        emitTerminalEvent(threadId, {
+          kind: 'error',
+          message: `Auto Fix checkpoint restore failed: ${clamped}`,
+        });
+        throw new Error(clamped);
+      }
+
+      const retryContext = [
+        'Auto Fix requested from terminal failure output.',
+        `Restored checkpoint ${checkpoint.label} (${checkpoint.commitSha}).`,
+        '',
+        clippedOutput,
+      ].join('\n');
+      queries.threads.updateStatus(threadId, PIPELINE_PHASE.failed, retryContext);
+
+      await retryPipelineThread(threadId, 'pipeline:auto-fix');
+    },
+  );
 
   ipcMain.handle('pipeline:skip-review', async (_event, { threadId }: { threadId: string }) => {
     const thread = queries.threads.getById(threadId);
@@ -577,7 +664,6 @@ export function registerPipelineHandlers({
     });
   });
 
-  const execFileAsync = promisify(execFile);
   const GH_TIMEOUT_MS = 30_000;
   const createPrInFlight = new Set<string>();
 

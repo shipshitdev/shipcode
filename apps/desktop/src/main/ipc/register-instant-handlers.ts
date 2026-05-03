@@ -3,6 +3,7 @@ import {
   type InstantFixScope,
   type ReasoningEffort,
   resolveProviderReasoningEffort,
+  stripAnsi,
 } from '@shipcode/shared';
 import log from '../logger.service';
 import { assertPrdRewriteModelSupported } from './helpers';
@@ -18,6 +19,8 @@ type RunningInstantSession = {
 
 /** threadId → process metadata mapping for cancel/input/resize support. */
 const runningInstants = new Map<string, RunningInstantSession>();
+const FAILURE_OUTPUT_MAX = 8_000;
+const TASK_CONTEXT_MAX = 6_000;
 
 function formatInstantCliLabel(cli: InstantCli): string {
   return cli === 'claude' ? 'Claude' : 'Codex';
@@ -29,6 +32,85 @@ function buildAttachmentContext(attachmentSessionId?: string): string {
   if (!session || session.attachments.length === 0) return '';
   const paths = session.attachments.map((attachment) => attachment.stagedPath);
   return `\n\nScreenshot files available at:\n${paths.join('\n')}\nUse the Read tool to view them.`;
+}
+
+function clampContextText(value: string | null | undefined, max = TASK_CONTEXT_MAX): string {
+  const cleaned = stripAnsi(value ?? '').trim();
+  if (cleaned.length <= max) return cleaned;
+  return `${cleaned.slice(0, max)}\n\n[truncated]`;
+}
+
+function clampFailureOutput(output: string): string {
+  const cleaned = stripAnsi(output).trim();
+  if (cleaned.length <= FAILURE_OUTPUT_MAX) return cleaned;
+  return `[Earlier terminal output truncated]\n\n${cleaned.slice(-FAILURE_OUTPUT_MAX)}`;
+}
+
+function formatLatestPlanContext(
+  plan: ReturnType<IpcHandlerDeps['queries']['plans']['getLatest']>,
+) {
+  if (!plan?.structured) return null;
+  const lines = [
+    `Objective: ${plan.structured.objective}`,
+    `Plan version: ${plan.structured.version}`,
+  ];
+  if (plan.structured.steps.length > 0) {
+    lines.push(
+      'Steps:',
+      ...plan.structured.steps.map((step) => `${step.order}. ${step.description}`),
+    );
+  }
+  if (plan.structured.acceptanceCriteria.length > 0) {
+    lines.push('Acceptance criteria:', ...plan.structured.acceptanceCriteria.map((c) => `- ${c}`));
+  }
+  return lines.join('\n');
+}
+
+function buildThreadFailurePrompt(args: {
+  project: { name?: string | null; path: string };
+  thread: ReturnType<IpcHandlerDeps['queries']['threads']['getById']>;
+  issue: ReturnType<IpcHandlerDeps['queries']['githubIssues']['getByNumber']>;
+  latestPlan: ReturnType<IpcHandlerDeps['queries']['plans']['getLatest']>;
+  failureOutput: string;
+  cwd: string;
+}): string {
+  const { project, thread, issue, latestPlan, failureOutput, cwd } = args;
+  if (!thread) throw new Error('Thread not found');
+  const latestPlanContext = formatLatestPlanContext(latestPlan);
+
+  const sections = [
+    'Fix this ShipCode task failure from the embedded terminal.',
+    '',
+    'Task context:',
+    `- Project: ${project.name ?? 'Project'}`,
+    `- Project path: ${project.path}`,
+    `- Working directory for this terminal: ${cwd}`,
+    `- Source thread: ${thread.id}`,
+    `- Source status: ${thread.status}`,
+    thread.worktreePath ? `- Pipeline worktree: ${thread.worktreePath}` : null,
+    thread.worktreeBranch ? `- Pipeline branch: ${thread.worktreeBranch}` : null,
+    thread.githubIssueNumber != null ? `- GitHub issue: #${thread.githubIssueNumber}` : null,
+    issue?.title ? `- Issue title: ${issue.title}` : `- Thread title: ${thread.title}`,
+    '',
+    issue?.body
+      ? ['Issue body:', clampContextText(issue.body)].join('\n')
+      : ['Thread prompt:', clampContextText(thread.prompt)].join('\n'),
+    '',
+    latestPlanContext ? ['Latest plan:', latestPlanContext].join('\n') : null,
+    '',
+    'Failure output:',
+    '```text',
+    failureOutput,
+    '```',
+    '',
+    'What to do:',
+    '1. Diagnose the failure against the task context and current repo/worktree.',
+    '2. Make the smallest correct code change needed.',
+    '3. Run the relevant command, test, build, or verification again.',
+    '4. Leave a concise summary of what changed and what command you reran.',
+  ].filter((line): line is string => line != null);
+
+  return sections.join('\n');
 }
 
 function buildClaudeShellEffort(
@@ -297,6 +379,88 @@ export function registerInstantHandlers({
       registerExitTracking(processManager, queries, thread.id, proc.id, args.cli, 'shell');
 
       return { threadId: thread.id };
+    },
+  );
+
+  ipcMain.handle(
+    'instant:fix-thread-failure',
+    async (_event, args: { threadId: string; failureOutput: string }) => {
+      const sourceThread = queries.threads.getById(args.threadId);
+      if (!sourceThread) throw new Error(`Thread ${args.threadId} not found`);
+
+      const project = queries.projects.getById(sourceThread.projectId);
+      if (!project) throw new Error(`Project ${sourceThread.projectId} not found`);
+
+      const failureOutput = clampFailureOutput(args.failureOutput);
+      if (!failureOutput) throw new Error('No failure output available');
+
+      const issue =
+        sourceThread.githubIssueNumber != null
+          ? queries.githubIssues.getByNumber(project.id, sourceThread.githubIssueNumber)
+          : null;
+      const latestPlan = queries.plans.getLatest(sourceThread.id);
+      const cwd = sourceThread.worktreePath || project.path;
+      const prompt = buildThreadFailurePrompt({
+        project,
+        thread: sourceThread,
+        issue,
+        latestPlan,
+        failureOutput,
+        cwd,
+      });
+      const cli: InstantCli = sourceThread.executorModel === 'claude' ? 'claude' : 'codex';
+      const title =
+        `Fix ${sourceThread.githubIssueNumber != null ? `#${sourceThread.githubIssueNumber}` : sourceThread.title}`.slice(
+          0,
+          80,
+        );
+      const thread = queries.threads.create(project.id, prompt, title, 'instant');
+
+      const proc =
+        cli === 'claude'
+          ? processManager.spawnWithStdin(
+              'claude',
+              'claude',
+              [
+                '-p',
+                '--allowedTools',
+                'Edit,Write,Bash,Glob,Grep,Read',
+                '--dangerously-skip-permissions',
+              ],
+              cwd,
+              prompt,
+              thread.id,
+            )
+          : processManager.spawnWithStdin(
+              'codex',
+              'codex',
+              [
+                '-a',
+                'never',
+                '-c',
+                'model_reasoning_effort=high',
+                'exec',
+                '-',
+                '--sandbox',
+                'workspace-write',
+                '--json',
+              ],
+              cwd,
+              prompt,
+              thread.id,
+            );
+
+      runningInstants.set(thread.id, {
+        processId: proc.id,
+        cli,
+        mode: 'run',
+      });
+      registerExitTracking(processManager, queries, thread.id, proc.id, cli, 'run');
+      log.info(
+        `[instant] started ${cli} terminal fix for source thread ${sourceThread.id} as ${thread.id} (cwd=${cwd})`,
+      );
+
+      return { threadId: thread.id, cli, title };
     },
   );
 

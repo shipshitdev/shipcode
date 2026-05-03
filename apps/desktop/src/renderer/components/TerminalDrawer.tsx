@@ -1,13 +1,17 @@
 import type { TerminalEventRecord } from '@shipcode/shared';
 import { Button } from '@shipshitdev/ui';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useOpenProjectTerminal } from '../hooks/useOpenProjectTerminal';
 import { useAppStore } from '../stores/app-store';
 import { EMPTY_STREAM, PHASE_LABELS, type TerminalDrawerTarget } from './terminal-drawer/constants';
 import { TerminalDrawerEmptyState } from './terminal-drawer/TerminalDrawerEmptyState';
 import { TerminalDrawerHeader } from './terminal-drawer/TerminalDrawerHeader';
 import { useTerminalDrawer } from './terminal-drawer/useTerminalDrawer';
-import { TerminalTranscript } from './terminal-transcript/TerminalTranscript';
+import {
+  type TerminalAutoFixRequest,
+  type TerminalFailureActionRequest,
+  TerminalTranscript,
+} from './terminal-transcript/TerminalTranscript';
 
 interface TerminalDrawerTranscriptProps {
   approvedAwaitingExecution: boolean;
@@ -26,6 +30,10 @@ function TerminalDrawerTranscript({
     (state) => state.canonicalTerminalStream[terminalThreadId] ?? EMPTY_STREAM,
   );
   const hydrateCanonicalEvents = useAppStore((state) => state.hydrateCanonicalEvents);
+  const addTerminalPane = useAppStore((state) => state.addTerminalPane);
+  const setProjectTab = useAppStore((state) => state.setProjectTab);
+  const [autoFixingEventId, setAutoFixingEventId] = useState<string | null>(null);
+  const [sendingToTerminalEventId, setSendingToTerminalEventId] = useState<string | null>(null);
 
   useEffect(() => {
     if (canonicalStream.length > 0) return;
@@ -58,6 +66,53 @@ function TerminalDrawerTranscript({
   const handleAction = useCallback(() => {
     onOpenTarget(displayTarget);
   }, [displayTarget, onOpenTarget]);
+  const handleAutoFix = useCallback(
+    async ({ record, output }: TerminalAutoFixRequest) => {
+      if (autoFixingEventId) return;
+
+      setAutoFixingEventId(record.id);
+      try {
+        await window.shipcode.invoke('pipeline:auto-fix', {
+          threadId: terminalThreadId,
+          failureOutput: output,
+        });
+      } catch (error) {
+        window.alert(error instanceof Error ? error.message : 'Auto Fix failed');
+      } finally {
+        setAutoFixingEventId(null);
+      }
+    },
+    [autoFixingEventId, terminalThreadId],
+  );
+  const handleSendToTerminal = useCallback(
+    async ({ record, output }: TerminalFailureActionRequest) => {
+      if (sendingToTerminalEventId) return;
+
+      setSendingToTerminalEventId(record.id);
+      try {
+        const result = await window.shipcode.invoke<{
+          threadId: string;
+          cli: 'claude' | 'codex';
+          title: string;
+        }>('instant:fix-thread-failure', {
+          threadId: terminalThreadId,
+          failureOutput: output,
+        });
+        addTerminalPane(result.threadId, {
+          mode: 'replay',
+          cli: result.cli,
+          title: result.title,
+          state: 'running',
+        });
+        setProjectTab('terminal');
+      } catch (error) {
+        window.alert(error instanceof Error ? error.message : 'Failed to send error to terminal');
+      } finally {
+        setSendingToTerminalEventId(null);
+      }
+    },
+    [addTerminalPane, sendingToTerminalEventId, setProjectTab, terminalThreadId],
+  );
 
   return (
     <TerminalTranscript
@@ -65,6 +120,10 @@ function TerminalDrawerTranscript({
       pendingLabel={pendingLabel}
       emptyMessage="No console output yet."
       onAction={displayTarget.kind === 'issue' ? handleAction : undefined}
+      onAutoFix={handleAutoFix}
+      onSendToTerminal={handleSendToTerminal}
+      autoFixingEventId={autoFixingEventId}
+      sendingToTerminalEventId={sendingToTerminalEventId}
     />
   );
 }

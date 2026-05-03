@@ -340,7 +340,7 @@ function DraggableCardComponent({
               <Maximize2 size={14} />
             </Button>
           )}
-          {isDoneState && onArchiveIssue && !isAutomation && (
+          {isDone && onArchiveIssue && !isAutomation && (
             <Button
               variant="ghost"
               size="icon-xs"
@@ -558,7 +558,7 @@ function DraggableCardComponent({
                 )}
               </Button>
             </span>
-          ) : isFailed && onRerun && !isAutomation ? (
+          ) : isFailed && onRerun ? (
             <span className="relative inline-flex items-center">
               <span
                 className={cn(

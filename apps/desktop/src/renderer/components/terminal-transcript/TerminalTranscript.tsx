@@ -1,9 +1,15 @@
 import type { CanonicalTerminalEvent, TerminalEventRecord } from '@shipcode/shared';
 import { ERROR_PATTERNS, formatClockTime, stripAnsi } from '@shipcode/shared';
 import { Badge, Button, cn } from '@shipshitdev/ui';
-import { useVirtualizer } from '@tanstack/react-virtual';
-import { ArrowDownToLine } from 'lucide-react';
+import { ArrowDownToLine, Check, Copy, Loader2, Terminal, Wand2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+export interface TerminalFailureActionRequest {
+  record: TerminalEventRecord;
+  output: string;
+}
+
+export type TerminalAutoFixRequest = TerminalFailureActionRequest;
 
 interface TerminalTranscriptProps {
   events: TerminalEventRecord[];
@@ -12,6 +18,10 @@ interface TerminalTranscriptProps {
   compact?: boolean;
   className?: string;
   onAction?: (event: Extract<CanonicalTerminalEvent, { kind: 'action' }>) => void;
+  onAutoFix?: (request: TerminalFailureActionRequest) => void;
+  onSendToTerminal?: (request: TerminalFailureActionRequest) => void;
+  autoFixingEventId?: string | null;
+  sendingToTerminalEventId?: string | null;
 }
 
 const DEFAULT_VISIBLE_EVENT_LIMIT = 300;
@@ -58,14 +68,108 @@ function TranscriptMeta({
   );
 }
 
+function FailureActions({
+  record,
+  output,
+  compact = false,
+  onAutoFix,
+  onSendToTerminal,
+  onCopy,
+  autoFixingEventId,
+  sendingToTerminalEventId,
+  copiedEventId,
+}: {
+  record: TerminalEventRecord;
+  output: string;
+  compact?: boolean;
+  onAutoFix?: (request: TerminalFailureActionRequest) => void;
+  onSendToTerminal?: (request: TerminalFailureActionRequest) => void;
+  onCopy?: (request: TerminalFailureActionRequest) => void;
+  autoFixingEventId?: string | null;
+  sendingToTerminalEventId?: string | null;
+  copiedEventId?: string | null;
+}) {
+  if (output.trim().length === 0) return null;
+
+  const autoFixing = autoFixingEventId === record.id;
+  const sending = sendingToTerminalEventId === record.id;
+  const copied = copiedEventId === record.id;
+
+  return (
+    <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+      {onCopy ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          aria-label="Copy failure output"
+          className={cn(
+            'h-6 gap-1.5 border-border/70 bg-primary/30 px-2 font-mono text-[10px] uppercase tracking-[0.08em] text-secondary hover:text-primary',
+            compact && 'h-5 px-1.5 text-[9px]',
+          )}
+          onClick={() => onCopy({ record, output })}
+        >
+          {copied ? <Check size={11} /> : <Copy size={11} />}
+          {copied ? 'Copied' : 'Copy'}
+        </Button>
+      ) : null}
+      {onSendToTerminal ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          aria-label="Send failure to terminal"
+          className={cn(
+            'h-6 gap-1.5 border-agent/35 bg-agent/10 px-2 font-mono text-[10px] uppercase tracking-[0.08em] text-agent hover:bg-agent/15 hover:text-agent',
+            compact && 'h-5 px-1.5 text-[9px]',
+          )}
+          disabled={sending}
+          onClick={() => onSendToTerminal({ record, output })}
+        >
+          {sending ? <Loader2 size={11} className="animate-spin" /> : <Terminal size={11} />}
+          Terminal
+        </Button>
+      ) : null}
+      {onAutoFix ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          className={cn(
+            'h-6 gap-1.5 border-danger/35 bg-danger/10 px-2 font-mono text-[10px] uppercase tracking-[0.08em] text-danger hover:bg-danger/15 hover:text-danger',
+            compact && 'h-5 px-1.5 text-[9px]',
+          )}
+          disabled={autoFixing}
+          onClick={() => onAutoFix({ record, output })}
+        >
+          {autoFixing ? <Loader2 size={11} className="animate-spin" /> : <Wand2 size={11} />}
+          Auto Fix
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 function TranscriptRow({
   record,
   compact = false,
   onAction,
+  onAutoFix,
+  onSendToTerminal,
+  onCopyFailure,
+  autoFixingEventId,
+  sendingToTerminalEventId,
+  copiedEventId,
 }: {
   record: TerminalEventRecord;
   compact?: boolean;
   onAction?: (event: Extract<CanonicalTerminalEvent, { kind: 'action' }>) => void;
+  onAutoFix?: (request: TerminalFailureActionRequest) => void;
+  onSendToTerminal?: (request: TerminalFailureActionRequest) => void;
+  onCopyFailure?: (request: TerminalFailureActionRequest) => void;
+  autoFixingEventId?: string | null;
+  sendingToTerminalEventId?: string | null;
+  copiedEventId?: string | null;
 }) {
   const event = record.event;
 
@@ -119,16 +223,29 @@ function TranscriptRow({
               : 'border-warning/30 bg-warning/8',
           )}
         >
-          <TranscriptMeta createdAt={record.createdAt} compact={compact}>
-            <span
-              className={cn(
-                'tracking-normal normal-case',
-                lifecycleSeverity === 'error' ? 'text-danger' : 'text-warning',
-              )}
-            >
-              {lifecycleText}
-            </span>
-          </TranscriptMeta>
+          <div className="flex items-start justify-between gap-3">
+            <TranscriptMeta createdAt={record.createdAt} compact={compact}>
+              <span
+                className={cn(
+                  'tracking-normal normal-case',
+                  lifecycleSeverity === 'error' ? 'text-danger' : 'text-warning',
+                )}
+              >
+                {lifecycleText}
+              </span>
+            </TranscriptMeta>
+            <FailureActions
+              record={record}
+              output={lifecycleText}
+              compact={compact}
+              onAutoFix={onAutoFix}
+              onSendToTerminal={onSendToTerminal}
+              onCopy={onCopyFailure}
+              autoFixingEventId={autoFixingEventId}
+              sendingToTerminalEventId={sendingToTerminalEventId}
+              copiedEventId={copiedEventId}
+            />
+          </div>
         </div>
       );
     }
@@ -189,7 +306,20 @@ function TranscriptRow({
             <TranscriptMeta createdAt={record.createdAt} compact={compact}>
               <span className="tracking-normal normal-case text-danger">Tool failed</span>
             </TranscriptMeta>
-            <span className="font-mono text-[11px] text-danger">{detail}</span>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-[11px] text-danger">{detail}</span>
+              <FailureActions
+                record={record}
+                output={outputSummary ?? detail}
+                compact={compact}
+                onAutoFix={onAutoFix}
+                onSendToTerminal={onSendToTerminal}
+                onCopy={onCopyFailure}
+                autoFixingEventId={autoFixingEventId}
+                sendingToTerminalEventId={sendingToTerminalEventId}
+                copiedEventId={copiedEventId}
+              />
+            </div>
           </div>
           {outputSummary ? (
             <pre
@@ -268,16 +398,29 @@ function TranscriptRow({
               : 'border-warning/30 bg-warning/8',
           )}
         >
-          <TranscriptMeta createdAt={record.createdAt} compact={compact}>
-            <span
-              className={cn(
-                'tracking-normal normal-case',
-                severity === 'error' ? 'text-danger' : 'text-warning',
-              )}
-            >
-              Console
-            </span>
-          </TranscriptMeta>
+          <div className="flex items-start justify-between gap-3">
+            <TranscriptMeta createdAt={record.createdAt} compact={compact}>
+              <span
+                className={cn(
+                  'tracking-normal normal-case',
+                  severity === 'error' ? 'text-danger' : 'text-warning',
+                )}
+              >
+                Console
+              </span>
+            </TranscriptMeta>
+            <FailureActions
+              record={record}
+              output={content}
+              compact={compact}
+              onAutoFix={onAutoFix}
+              onSendToTerminal={onSendToTerminal}
+              onCopy={onCopyFailure}
+              autoFixingEventId={autoFixingEventId}
+              sendingToTerminalEventId={sendingToTerminalEventId}
+              copiedEventId={copiedEventId}
+            />
+          </div>
           <pre
             className={cn(
               'mt-1.5 whitespace-pre-wrap break-words font-mono',
@@ -290,22 +433,37 @@ function TranscriptRow({
         </div>
       );
     }
-    case 'error':
+    case 'error': {
+      const errorMessage = stripAnsi(event.message);
       return (
         <div className="mb-3 rounded-xl border border-danger/30 bg-danger/8 px-4 py-3">
-          <TranscriptMeta createdAt={record.createdAt} compact={compact}>
-            <span className="tracking-normal text-danger normal-case">Error</span>
-          </TranscriptMeta>
+          <div className="flex items-start justify-between gap-3">
+            <TranscriptMeta createdAt={record.createdAt} compact={compact}>
+              <span className="tracking-normal text-danger normal-case">Error</span>
+            </TranscriptMeta>
+            <FailureActions
+              record={record}
+              output={errorMessage}
+              compact={compact}
+              onAutoFix={onAutoFix}
+              onSendToTerminal={onSendToTerminal}
+              onCopy={onCopyFailure}
+              autoFixingEventId={autoFixingEventId}
+              sendingToTerminalEventId={sendingToTerminalEventId}
+              copiedEventId={copiedEventId}
+            />
+          </div>
           <pre
             className={cn(
               'mt-2 whitespace-pre-wrap break-words font-sans text-danger',
               compact ? 'text-[12px] leading-5' : 'text-[13px] leading-6',
             )}
           >
-            {stripAnsi(event.message)}
+            {errorMessage}
           </pre>
         </div>
       );
+    }
     case 'clarification_requested':
       return (
         <div className="mb-3 rounded-xl border border-warning/35 bg-warning/[0.06] px-4 py-3">
@@ -369,9 +527,6 @@ function dedupeTranscriptEvents(events: TerminalEventRecord[]): TerminalEventRec
   return Array.from(new Map(events.map((record) => [record.id, record])).values());
 }
 
-/** Threshold below which we skip virtualization overhead (plain DOM is fine). */
-const VIRTUALIZE_THRESHOLD = 60;
-
 export function TerminalTranscript({
   events,
   pendingLabel = null,
@@ -379,11 +534,17 @@ export function TerminalTranscript({
   compact = false,
   className,
   onAction,
+  onAutoFix,
+  onSendToTerminal,
+  autoFixingEventId = null,
+  sendingToTerminalEventId = null,
 }: TerminalTranscriptProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
+  const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [showAllEvents, setShowAllEvents] = useState(false);
+  const [copiedEventId, setCopiedEventId] = useState<string | null>(null);
   const dedupedEvents = useMemo(() => dedupeTranscriptEvents(events), [events]);
 
   const hasEvents = dedupedEvents.length > 0;
@@ -402,34 +563,56 @@ export function TerminalTranscript({
     ? (visibleEvents.at(-1)?.id ?? String(visibleEvents.length))
     : pendingLabel;
 
-  const shouldVirtualize = visibleEvents.length >= VIRTUALIZE_THRESHOLD;
+  const handleCopyFailure = useCallback(
+    async ({ record, output }: TerminalFailureActionRequest) => {
+      if (copyResetRef.current) clearTimeout(copyResetRef.current);
+      try {
+        await navigator.clipboard.writeText(output);
+        setCopiedEventId(record.id);
+        copyResetRef.current = setTimeout(() => setCopiedEventId(null), 1500);
+      } catch {
+        setCopiedEventId(null);
+      }
+    },
+    [],
+  );
 
-  // Virtualizer — only active when shouldVirtualize is true.
-  const virtualizer = useVirtualizer({
-    count: visibleEvents.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => 56, // rough average row height
-    overscan: 10,
-    enabled: shouldVirtualize,
-  });
-
-  // Non-virtualized rows (small lists) — same as original.
   const plainRows = useMemo(
     () =>
-      shouldVirtualize
-        ? null
-        : visibleEvents
-            .map((record) => (
-              <MemoTranscriptRow
-                key={record.id}
-                record={record}
-                compact={compact}
-                onAction={onAction}
-              />
-            ))
-            .filter(Boolean),
-    [compact, onAction, visibleEvents, shouldVirtualize],
+      visibleEvents
+        .map((record) => (
+          <MemoTranscriptRow
+            key={record.id}
+            record={record}
+            compact={compact}
+            onAction={onAction}
+            onAutoFix={onAutoFix}
+            onSendToTerminal={onSendToTerminal}
+            onCopyFailure={handleCopyFailure}
+            autoFixingEventId={autoFixingEventId}
+            sendingToTerminalEventId={sendingToTerminalEventId}
+            copiedEventId={copiedEventId}
+          />
+        ))
+        .filter(Boolean),
+    [
+      autoFixingEventId,
+      compact,
+      copiedEventId,
+      handleCopyFailure,
+      onAction,
+      onAutoFix,
+      onSendToTerminal,
+      sendingToTerminalEventId,
+      visibleEvents,
+    ],
   );
+
+  useEffect(() => {
+    return () => {
+      if (copyResetRef.current) clearTimeout(copyResetRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     void sourceKey;
@@ -526,65 +709,6 @@ export function TerminalTranscript({
       </div>
     ) : null;
 
-  // Non-virtualized path: small event lists render plain DOM.
-  if (!shouldVirtualize) {
-    return (
-      <div className={cn('relative h-full', className)}>
-        <div
-          ref={scrollRef}
-          className="h-full overflow-y-auto overscroll-contain"
-          onScroll={handleScroll}
-        >
-          <div
-            className={cn('flex min-h-full w-full flex-col gap-1.5', compact ? 'p-3' : 'px-4 py-4')}
-          >
-            {headerContent}
-            {hasEvents ? plainRows : null}
-            {footerContent}
-          </div>
-        </div>
-        {scrollToBottomButton}
-      </div>
-    );
-  }
-
-  // Virtualized path: only render visible rows.
-  const virtualItems = virtualizer.getVirtualItems();
-
-  // Graceful degradation: when scrollElement has zero height (jsdom / unmounted),
-  // the virtualizer returns no items. Fall back to plain DOM rendering.
-  if (virtualItems.length === 0 && hasEvents) {
-    return (
-      <div className={cn('relative h-full', className)}>
-        <div
-          ref={scrollRef}
-          className="h-full overflow-y-auto overscroll-contain"
-          onScroll={handleScroll}
-        >
-          <div
-            className={cn('flex min-h-full w-full flex-col gap-1.5', compact ? 'p-3' : 'px-4 py-4')}
-          >
-            {headerContent}
-            {visibleEvents.map((record) => (
-              <MemoTranscriptRow
-                key={record.id}
-                record={record}
-                compact={compact}
-                onAction={onAction}
-              />
-            ))}
-            {footerContent}
-          </div>
-        </div>
-        {scrollToBottomButton}
-      </div>
-    );
-  }
-
-  const totalSize = virtualizer.getTotalSize();
-  const padding = compact ? 12 : 16;
-  const gap = 6; // gap-1.5 = 0.375rem = 6px
-
   return (
     <div className={cn('relative h-full', className)}>
       <div
@@ -592,45 +716,11 @@ export function TerminalTranscript({
         className="h-full overflow-y-auto overscroll-contain"
         onScroll={handleScroll}
       >
-        <div className={cn('flex w-full flex-col gap-1.5', compact ? 'p-3' : 'px-4 py-4')}>
+        <div
+          className={cn('flex min-h-full w-full flex-col gap-1.5', compact ? 'p-3' : 'px-4 py-4')}
+        >
           {headerContent}
-        </div>
-
-        {hasEvents ? (
-          <div
-            style={{
-              height: totalSize + padding,
-              width: '100%',
-              position: 'relative',
-            }}
-          >
-            {virtualItems.map((virtualRow) => (
-              <div
-                key={visibleEvents[virtualRow.index]?.id}
-                data-index={virtualRow.index}
-                ref={virtualizer.measureElement}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  transform: `translateY(${virtualRow.start + gap}px)`,
-                }}
-              >
-                <div className={compact ? 'px-3' : 'px-4'}>
-                  <MemoTranscriptRow
-                    // biome-ignore lint/style/noNonNullAssertion: virtualizer guarantees valid index
-                    record={visibleEvents[virtualRow.index]!}
-                    compact={compact}
-                    onAction={onAction}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        <div className={cn('flex w-full flex-col gap-1.5', compact ? 'px-3 pb-3' : 'px-4 pb-4')}>
+          {hasEvents ? plainRows : null}
           {footerContent}
         </div>
       </div>

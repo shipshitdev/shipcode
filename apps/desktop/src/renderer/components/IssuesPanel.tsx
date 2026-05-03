@@ -450,6 +450,24 @@ export function IssuesPanel() {
     }));
   };
 
+  const patchThreadOptimistic = (
+    threadId: string,
+    patch: Partial<Pick<Thread, 'status' | 'doneAt' | 'updatedAt'>>,
+  ) => {
+    queryClient.setQueryData<IssuesPanelData | undefined>(
+      ['thread-panel-data', activeProjectId],
+      (prev) =>
+        prev
+          ? {
+              ...prev,
+              threads: prev.threads.map((thread) =>
+                thread.id === threadId ? { ...thread, ...patch } : thread,
+              ),
+            }
+          : prev,
+    );
+  };
+
   const repoUrl = githubRepoUrl(project?.gitRemote);
   const projectsUrl = project?.githubProjectUrl?.trim() ? project.githubProjectUrl.trim() : null;
   const handleIssueClick = (issue: GitHubIssueCacheRecord) => {
@@ -644,6 +662,26 @@ export function IssuesPanel() {
             });
         }}
         onRerun={(issue) => {
+          if (isAutomationIssue(issue) && issue.threadId) {
+            patchThreadOptimistic(issue.threadId, {
+              status: PIPELINE_PHASE.planning,
+              doneAt: null,
+              updatedAt: new Date().toISOString(),
+            });
+            return window.shipcode
+              .invoke('pipeline:retry', { threadId: issue.threadId })
+              .then(() => {
+                queryClient.invalidateQueries({ queryKey: ['thread-panel-data', activeProjectId] });
+              })
+              .catch((err) => {
+                queryClient.invalidateQueries({ queryKey: ['thread-panel-data', activeProjectId] });
+                log.error('[threadpanel] automation rerun failed', {
+                  threadId: issue.threadId,
+                  err,
+                });
+                window.alert(`Failed to retry automation run: ${err?.message ?? err}`);
+              });
+          }
           patchIssueOptimistic(issue.id, {
             pipelineStatus: ISSUE_PIPELINE_STATUS.planning,
             state: 'open',

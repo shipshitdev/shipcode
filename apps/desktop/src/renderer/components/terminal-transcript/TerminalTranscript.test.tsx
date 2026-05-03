@@ -3,7 +3,7 @@
 import type { TerminalEventRecord } from '@shipcode/shared';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TerminalTranscript } from './TerminalTranscript';
 
 function makeTextEvent(overrides: Partial<TerminalEventRecord> = {}): TerminalEventRecord {
@@ -30,6 +30,29 @@ function makeToolEndEvent(overrides: Partial<TerminalEventRecord> = {}): Termina
     ...overrides,
   };
 }
+
+function makeRawErrorEvent(overrides: Partial<TerminalEventRecord> = {}): TerminalEventRecord {
+  return {
+    id: 'event-raw-error-1',
+    threadId: 'thread-1',
+    createdAt: '2026-04-22T11:06:30.000Z',
+    event: {
+      kind: 'raw',
+      content: 'ERROR codex_core::session: failed to record rollout items',
+    },
+    ...overrides,
+  };
+}
+
+const writeText = vi.fn();
+
+beforeEach(() => {
+  writeText.mockReset();
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText },
+  });
+});
 
 afterEach(() => {
   cleanup();
@@ -70,6 +93,61 @@ describe('TerminalTranscript', () => {
     expect(
       screen.getByText('Error: Cannot find module ./reference-portals.service'),
     ).toBeInTheDocument();
+  });
+
+  it('offers auto fix on failed console output and passes the captured failure text', () => {
+    const event = makeRawErrorEvent();
+    const onAutoFix = vi.fn();
+
+    render(<TerminalTranscript events={[event]} onAutoFix={onAutoFix} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /auto fix/i }));
+
+    expect(onAutoFix).toHaveBeenCalledWith({
+      record: event,
+      output: 'ERROR codex_core::session: failed to record rollout items',
+    });
+  });
+
+  it('copies failed console output from the row action', async () => {
+    const event = makeRawErrorEvent();
+
+    render(<TerminalTranscript events={[event]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /copy failure output/i }));
+
+    expect(writeText).toHaveBeenCalledWith(
+      'ERROR codex_core::session: failed to record rollout items',
+    );
+    expect(await screen.findByText('Copied')).toBeInTheDocument();
+  });
+
+  it('can send failed console output to the embedded terminal', () => {
+    const event = makeRawErrorEvent();
+    const onSendToTerminal = vi.fn();
+
+    render(<TerminalTranscript events={[event]} onSendToTerminal={onSendToTerminal} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /send failure to terminal/i }));
+
+    expect(onSendToTerminal).toHaveBeenCalledWith({
+      record: event,
+      output: 'ERROR codex_core::session: failed to record rollout items',
+    });
+  });
+
+  it('shows the auto fix loading state for the active failure row', () => {
+    const { container } = render(
+      <TerminalTranscript
+        events={[makeRawErrorEvent()]}
+        onAutoFix={vi.fn()}
+        autoFixingEventId="event-raw-error-1"
+      />,
+    );
+
+    const button = screen.getByRole('button', { name: /auto fix/i });
+    expect(button).toBeDisabled();
+    expect(container.querySelector('.animate-spin')).not.toBeNull();
   });
 
   it('deduplicates repeated event ids before rendering rows', () => {

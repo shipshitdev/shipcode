@@ -2,9 +2,22 @@ import type { IpcMain } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerPipelineHandlers } from './register-pipeline-handlers';
 
+const execFileMock = vi.hoisted(() => vi.fn());
+
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp') },
 }));
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>();
+  return {
+    ...actual,
+    default: {
+      ...actual,
+      execFile: execFileMock,
+    },
+    execFile: execFileMock,
+  };
+});
 
 const PLAN_JSON = JSON.stringify({
   id: 'plan-1',
@@ -134,6 +147,7 @@ describe('registerPipelineHandlers', () => {
     };
     checkpoints: {
       list: ReturnType<typeof vi.fn>;
+      getLatest: ReturnType<typeof vi.fn>;
     };
   };
 
@@ -159,6 +173,17 @@ describe('registerPipelineHandlers', () => {
   beforeEach(() => {
     handlers.clear();
     vi.clearAllMocks();
+    execFileMock.mockReset();
+    execFileMock.mockImplementation(
+      (
+        _command: string,
+        _args: string[],
+        _options: Record<string, unknown>,
+        callback: (error: Error | null, stdout: string, stderr: string) => void,
+      ) => {
+        callback(null, '', '');
+      },
+    );
 
     queries = {
       threads: {
@@ -244,6 +269,17 @@ describe('registerPipelineHandlers', () => {
       },
       checkpoints: {
         list: vi.fn(() => []),
+        getLatest: vi.fn(() => ({
+          id: 'checkpoint-1',
+          threadId: 'thread-1',
+          projectId: 'project-1',
+          phase: 'execute',
+          reason: 'before retry',
+          label: 'Before execute',
+          branch: 'shipcode/thread-1',
+          commitSha: 'abc123def456',
+          createdAt: new Date().toISOString(),
+        })),
       },
     };
 
@@ -588,6 +624,51 @@ describe('registerPipelineHandlers', () => {
 
       expect(pipeline.startVerification).toHaveBeenCalledWith('thread-1');
       expect(pipeline.startExecution).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('pipeline:auto-fix', () => {
+    it('restores the latest checkpoint, records failure output, and resumes retry routing', async () => {
+      queries.threads.getById.mockReturnValue(makeThread({ status: 'failed' }));
+
+      const handler = handlers.get('pipeline:auto-fix');
+      if (!handler) throw new Error('pipeline:auto-fix handler not registered');
+
+      await handler(undefined, {
+        threadId: 'thread-1',
+        failureOutput: 'ERROR codex_core::session: failed to record rollout items',
+      });
+
+      expect(execFileMock).toHaveBeenCalledWith(
+        'git',
+        ['reset', '--hard', 'abc123def456'],
+        expect.objectContaining({ cwd: '/tmp/worktree' }),
+        expect.any(Function),
+      );
+      expect(execFileMock).toHaveBeenCalledWith(
+        'git',
+        ['clean', '-fd'],
+        expect.objectContaining({ cwd: '/tmp/worktree' }),
+        expect.any(Function),
+      );
+      expect(queries.terminalEvents.create).toHaveBeenCalledWith(
+        'thread-1',
+        expect.objectContaining({
+          kind: 'raw',
+          content: expect.stringContaining(
+            'ERROR codex_core::session: failed to record rollout items',
+          ),
+        }),
+      );
+      expect(queries.threads.updateStatus).toHaveBeenCalledWith(
+        'thread-1',
+        'failed',
+        expect.stringContaining('Auto Fix requested from terminal failure output.'),
+      );
+      expect(pipeline.startExecution).toHaveBeenCalledWith(
+        'thread-1',
+        expect.objectContaining({ objective: 'Test plan' }),
+      );
     });
   });
 });

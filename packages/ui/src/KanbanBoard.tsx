@@ -555,12 +555,7 @@ export function KanbanBoard({
         handleStartPipeline(focusedIssue);
         return;
       }
-      if (
-        focusedIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.failed &&
-        onRerun &&
-        !readOnly &&
-        !isAutomationIssue(focusedIssue)
-      ) {
+      if (focusedIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.failed && onRerun && !readOnly) {
         handleRerun(focusedIssue);
         return;
       }
