@@ -100,4 +100,23 @@ blast_radius: contained
       blastRadius: 'contained',
     });
   });
+
+  it('normalizes mixed-case metadata values before applying defaults', () => {
+    const raw = `---
+estimated_complexity:  HIGH
+blast_radius: Cross_App
+---
+
+# PRD: example`;
+
+    expect(readPrdIssueMetadata(raw)).toEqual({
+      cleanBody: '# PRD: example',
+      frontmatter: {
+        estimated_complexity: 'HIGH',
+        blast_radius: 'Cross_App',
+      },
+      estimatedComplexity: 'high',
+      blastRadius: 'cross-app',
+    });
+  });
 });
