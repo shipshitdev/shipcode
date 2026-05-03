@@ -1,5 +1,5 @@
-import type { IssuePipelineStatus, PipelinePhase } from './lib/shipcode';
-import { cn } from './lib/utils';
+import type { IssuePipelineStatus, PipelinePhase } from '@/lib/shipcode';
+import { cn } from '@/lib/utils';
 
 const AGENT_PHASE_CLASSES = 'bg-agent/10 text-agent border-agent/25';
 

@@ -86,7 +86,10 @@ export function CreateAutomationModal() {
 
   const { data: existing } = useQuery<Automation | null>({
     queryKey: ['automation', editingId],
-    queryFn: () => window.shipcode.invoke<Automation | null>('automations:get', { id: editingId! }),
+    queryFn: () => {
+      if (editingId === null) return null;
+      return window.shipcode.invoke<Automation | null>('automations:get', { id: editingId });
+    },
     enabled: open && isEdit,
   });
 

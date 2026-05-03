@@ -123,7 +123,8 @@ describe('AutomationQueries', () => {
     });
 
     automations.recordRunStarted(a.id, 'thread-1');
-    const after = automations.getById(a.id)!;
+    const after = automations.getById(a.id);
+    if (!after) throw new Error('Expected automation after run started');
     expect(after.runCount).toBe(1);
     expect(after.lastStatus).toBe('running');
     expect(after.lastStartedAt).not.toBeNull();
@@ -143,12 +144,13 @@ describe('AutomationQueries', () => {
     automations.recordRunStarted(a.id, 'thread-1');
 
     automations.recordRunFinished(a.id, 'completed');
-    const completed = automations.getById(a.id)!;
+    const completed = automations.getById(a.id);
+    if (!completed) throw new Error('Expected automation after run finished');
     expect(completed.lastStatus).toBe('completed');
     expect(completed.lastCompletedAt).not.toBeNull();
 
     automations.recordRunFinished(a.id, 'failed');
-    expect(automations.getById(a.id)!.lastStatus).toBe('failed');
+    expect(automations.getById(a.id)?.lastStatus).toBe('failed');
   });
 
   it('delete removes the row', () => {

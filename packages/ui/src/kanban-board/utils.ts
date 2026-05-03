@@ -6,7 +6,7 @@ import type {
   IssuePipelineStatus,
   Project,
   Thread,
-} from '../lib/shipcode';
+} from '@/lib/shipcode';
 import {
   type ExecutorModel,
   formatProviderReasoningEffort,
@@ -19,7 +19,7 @@ import {
   resolveRequireApprovalStateForIssue,
   resolveRevisionCountForIssue,
   sanitizeResolvedModel,
-} from '../lib/shipcode';
+} from '@/lib/shipcode';
 import { ACTIVE_STATUSES, GH_OPTION_COLOR_HEX } from './constants';
 import type {
   BoardColumn,

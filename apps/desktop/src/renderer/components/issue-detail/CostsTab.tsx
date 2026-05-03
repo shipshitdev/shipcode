@@ -38,7 +38,10 @@ function formatDuration(ms: number | null): string {
 function StepAttempts({ threadId }: { threadId: string }) {
   const { data: steps = [], isLoading } = useQuery<PipelineStepRecord[]>({
     queryKey: ['pipeline-steps', threadId],
-    queryFn: () => window.shipcode.invoke('pipeline-steps:list-by-thread', { threadId }),
+    queryFn: async () => {
+      const result = await window.shipcode.invoke('pipeline-steps:list-by-thread', { threadId });
+      return Array.isArray(result) ? result : [];
+    },
   });
 
   if (isLoading) {
@@ -117,7 +120,13 @@ export function CostsTab({
 }) {
   const { data: tasks = [], isLoading } = useQuery<CostTaskSummary[]>({
     queryKey: ['issue-costs', projectId, issueNumber],
-    queryFn: () => window.shipcode.invoke('costs:list-for-issue', { projectId, issueNumber }),
+    queryFn: async () => {
+      const result = await window.shipcode.invoke('costs:list-for-issue', {
+        projectId,
+        issueNumber,
+      });
+      return Array.isArray(result) ? result : [];
+    },
     enabled: !!projectId,
   });
 

@@ -78,7 +78,9 @@ export class AgentConversationQueries {
         input.tokensOut ?? null,
         input.costUsd ?? null,
       );
-    return this.getById(id)!;
+    const created = this.getById(id);
+    if (!created) throw new Error(`Failed to load agent conversation after insert: ${id}`);
+    return created;
   }
 
   getById(id: string): AgentConversationRecord | null {

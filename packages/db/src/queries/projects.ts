@@ -546,10 +546,10 @@ function migrateStatusMapping(raw: unknown): GhStatusMapping {
     return null;
   }
   return {
-    todo: toOption(obj['todo']),
-    inProgress: toOption(obj['inProgress']),
-    humanReview: toOption(obj['humanReview']),
-    done: toOption(obj['done']),
+    todo: toOption(obj.todo),
+    inProgress: toOption(obj.inProgress),
+    humanReview: toOption(obj.humanReview),
+    done: toOption(obj.done),
   };
 }
 

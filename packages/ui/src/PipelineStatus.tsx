@@ -1,7 +1,7 @@
 import { Check, X } from 'lucide-react';
-import type { PipelinePhase } from './lib/shipcode';
-import { cn } from './lib/utils';
-import { Button } from './primitives/button';
+import type { PipelinePhase } from '@/lib/shipcode';
+import { cn } from '@/lib/utils';
+import { Button } from '@/primitives/button';
 
 const PHASES: { key: PipelinePhase; label: string }[] = [
   { key: 'planning', label: 'Plan' },

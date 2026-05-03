@@ -1,20 +1,20 @@
 'use client';
 
 import type { KeyboardEvent } from 'react';
-import { modelDisplay } from './lib/model-display';
-import { useSharedSecondNow } from './lib/second-ticker';
+import { modelDisplay } from '@/lib/model-display';
+import { useSharedSecondNow } from '@/lib/second-ticker';
 import {
   AGENT_RUNNING_PHASES,
   type ExecutorModel,
   PIPELINE_PHASE,
   type PipelinePhase,
   phaseToProgress,
-} from './lib/shipcode';
-import { formatElapsedDuration } from './lib/time';
-import { cn } from './lib/utils';
-import { PhaseChip } from './PhaseChip';
-import { Badge } from './primitives/badge';
-import { Button } from './primitives/button';
+} from '@/lib/shipcode';
+import { formatElapsedDuration } from '@/lib/time';
+import { cn } from '@/lib/utils';
+import { PhaseChip } from '@/PhaseChip';
+import { Badge } from '@/primitives/badge';
+import { Button } from '@/primitives/button';
 
 function PhaseElapsed({ since }: { since: number }) {
   const now = useSharedSecondNow();

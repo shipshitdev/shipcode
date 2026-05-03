@@ -252,10 +252,6 @@ export function IssuesPanel() {
   });
   const latestPlanStatusByThreadId = panelData?.latestPlanStatusByThreadId ?? {};
   const branches: string[] = branchData ?? panelData?.branches ?? [];
-  const threadById = useMemo(
-    () => new Map(threads.map((thread) => [thread.id, thread] as const)),
-    [threads],
-  );
   const boardIssues = useMemo(() => {
     if (!activeProjectId) return issues;
     const issueThreadIds = new Set(
@@ -292,14 +288,14 @@ export function IssuesPanel() {
   useEffect(() => {
     const tracked = new Map<string, IssuePipelineStatus>();
     for (const issue of boardIssues) {
-      if (issue.isQuickMode || isAutomationIssue(issue)) {
-        tracked.set(issue.id, issue.pipelineStatus);
-      }
+      tracked.set(issue.id, issue.pipelineStatus);
     }
 
     const changedIds: string[] = [];
+    const previous = previousTaskStatusById.current;
     for (const [issueId, status] of tracked) {
-      if (previousTaskStatusById.current.get(issueId) !== status) {
+      const previousStatus = previous.get(issueId);
+      if (previousStatus !== undefined && previousStatus !== status) {
         changedIds.push(issueId);
       }
     }
@@ -557,12 +553,14 @@ export function IssuesPanel() {
         }}
         onStartPipeline={(issue) => {
           patchIssueOptimistic(issue.id, { pipelineStatus: ISSUE_PIPELINE_STATUS.planning });
-          window.shipcode
+          return window.shipcode
             .invoke('github:start-issue', {
               projectId: activeProjectId,
               issueNumber: issue.issueNumber,
             })
-            .then(() => activeProjectId && refreshIssues.mutate(activeProjectId))
+            .then(() => {
+              if (activeProjectId) refreshIssues.mutate(activeProjectId);
+            })
             .catch((err) => {
               if (activeProjectId) refreshIssues.mutate(activeProjectId);
               log.error('[threadpanel] start-issue failed', {
@@ -583,8 +581,10 @@ export function IssuesPanel() {
                 projectId: activeProjectId,
                 issueNumber: issue.issueNumber,
               });
-          request
-            .then(() => activeProjectId && refreshIssues.mutate(activeProjectId))
+          return request
+            .then(() => {
+              if (activeProjectId) refreshIssues.mutate(activeProjectId);
+            })
             .catch((err) => {
               if (activeProjectId) refreshIssues.mutate(activeProjectId);
               log.error('[threadpanel] retry-issue failed', {
@@ -608,15 +608,8 @@ export function IssuesPanel() {
         }
         onMarkDone={(issue) => {
           if (!activeProjectId) return;
-          const linkedThread = issue.threadId ? threadById.get(issue.threadId) : null;
-          const nextStatus: IssuePipelineStatus =
-            issue.state === 'closed'
-              ? ISSUE_PIPELINE_STATUS.done
-              : issue.linkedPrNumber != null || linkedThread?.status === PIPELINE_PHASE.completed
-                ? ISSUE_PIPELINE_STATUS.completed
-                : ISSUE_PIPELINE_STATUS.done;
-          const nextState: GitHubIssueCacheRecord['state'] =
-            nextStatus === ISSUE_PIPELINE_STATUS.done ? 'closed' : issue.state;
+          const nextStatus: IssuePipelineStatus = ISSUE_PIPELINE_STATUS.done;
+          const nextState: GitHubIssueCacheRecord['state'] = 'closed';
           patchIssueOptimistic(issue.id, { pipelineStatus: nextStatus, state: nextState });
           setDoneUndo(
             nextStatus === ISSUE_PIPELINE_STATUS.done
@@ -629,13 +622,15 @@ export function IssuesPanel() {
                 }
               : null,
           );
-          window.shipcode
+          return window.shipcode
             .invoke('issue:mark-done', {
               projectId: activeProjectId,
               issueId: issue.id,
               issueNumber: issue.issueNumber,
             })
-            .then(() => activeProjectId && refreshIssues.mutate(activeProjectId))
+            .then(() => {
+              if (activeProjectId) refreshIssues.mutate(activeProjectId);
+            })
             .catch((err) => {
               setDoneUndo((current) => (current?.issueId === issue.id ? null : current));
               if (activeProjectId) refreshIssues.mutate(activeProjectId);
@@ -653,12 +648,14 @@ export function IssuesPanel() {
             pipelineStatus: ISSUE_PIPELINE_STATUS.planning,
             state: 'open',
           });
-          window.shipcode
+          return window.shipcode
             .invoke('github:start-issue', {
               projectId: activeProjectId,
               issueNumber: issue.issueNumber,
             })
-            .then(() => activeProjectId && refreshIssues.mutate(activeProjectId))
+            .then(() => {
+              if (activeProjectId) refreshIssues.mutate(activeProjectId);
+            })
             .catch((err) => {
               if (activeProjectId) refreshIssues.mutate(activeProjectId);
               log.error('[threadpanel] rerun failed', { issueNumber: issue.issueNumber, err });
@@ -668,9 +665,11 @@ export function IssuesPanel() {
         onCancel={(issue) => {
           if (!issue.threadId) return;
           patchIssueOptimistic(issue.id, { pipelineStatus: ISSUE_PIPELINE_STATUS.todo });
-          window.shipcode
+          return window.shipcode
             .invoke('pipeline:cancel', { threadId: issue.threadId })
-            .then(() => activeProjectId && refreshIssues.mutate(activeProjectId))
+            .then(() => {
+              if (activeProjectId) refreshIssues.mutate(activeProjectId);
+            })
             .catch((err) => {
               if (activeProjectId) refreshIssues.mutate(activeProjectId);
               log.error('[threadpanel] cancel failed', { issueNumber: issue.issueNumber, err });

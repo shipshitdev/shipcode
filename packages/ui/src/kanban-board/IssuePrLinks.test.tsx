@@ -4,12 +4,12 @@ import { DndContext } from '@dnd-kit/core';
 import { type AppSettings, DEFAULT_SETTINGS, type GitHubIssueCacheRecord } from '@shipcode/shared';
 import { act, type ComponentProps } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ActivePipelineCard } from '../ActivePipelineCard';
-import { KanbanBoard } from '../KanbanBoard';
-import { DroppableColumn, StackedColumn } from './BoardColumns';
+import { ActivePipelineCard } from '@/ActivePipelineCard';
+import { KanbanBoard } from '@/KanbanBoard';
+import { DroppableColumn, StackedColumn } from '@/kanban-board/BoardColumns';
+import { DraggableCard } from '@/kanban-board/IssueCardParts';
+import { IssueListView } from '@/kanban-board/IssueListView';
 import { COLUMNS } from './constants';
-import { DraggableCard } from './IssueCardParts';
-import { IssueListView } from './IssueListView';
 import { makeIssue as makeBaseIssue, makeProject, renderIntoDom } from './test-helpers';
 
 function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssueCacheRecord {
@@ -116,7 +116,7 @@ describe('linked PR affordances', () => {
     );
 
     const button = view.container.querySelector('button[title="Open pull request on GitHub"]');
-    if (!(button instanceof HTMLButtonElement)) {
+    if (!(button instanceof HTMLElement)) {
       throw new Error('Expected PR button');
     }
 
@@ -148,7 +148,7 @@ describe('linked PR affordances', () => {
     );
 
     const button = view.container.querySelector('button[title="Open pull request on GitHub"]');
-    if (!(button instanceof HTMLButtonElement)) {
+    if (!(button instanceof HTMLElement)) {
       throw new Error('Expected PR button');
     }
 
@@ -170,21 +170,19 @@ describe('linked PR affordances', () => {
       </DndContext>,
     );
 
-    const title = Array.from(view.container.querySelectorAll('div')).find((element) =>
-      element.textContent?.includes('Add demo pipeline task'),
-    );
-    if (!(title instanceof HTMLDivElement)) {
-      throw new Error('Expected issue title block');
+    const card = view.container.querySelector('[data-issue-card-id]');
+    if (!(card instanceof HTMLDivElement)) {
+      throw new Error('Expected issue card');
     }
 
     act(() => {
-      title.click();
+      card.click();
     });
 
     expect(onClick).toHaveBeenCalledTimes(1);
 
     const button = view.container.querySelector('button[title="Open issue detail"]');
-    if (!(button instanceof HTMLButtonElement)) {
+    if (!(button instanceof HTMLElement)) {
       throw new Error('Expected issue detail button');
     }
 
@@ -226,7 +224,7 @@ describe('linked PR affordances', () => {
     expect(onIssueClick).toHaveBeenCalledTimes(1);
 
     const button = view.container.querySelector('button[title="Open issue detail"]');
-    if (!(button instanceof HTMLButtonElement)) {
+    if (!(button instanceof HTMLElement)) {
       throw new Error('Expected list-row detail button');
     }
 
@@ -280,6 +278,56 @@ describe('linked PR affordances', () => {
     expectBadgeGeometry(retryButton);
     expect(retryButton.className).toContain('border-danger/30');
     failedView.cleanup();
+  });
+
+  it('renders loading affordances for card action badges', () => {
+    const retryView = renderIntoDom(
+      <DndContext>
+        <DraggableCard
+          issue={makeIssue({
+            pipelineStatus: 'failed',
+            linkedPrNumber: null,
+            linkedPrUrl: null,
+          })}
+          onClick={vi.fn()}
+          onRerun={vi.fn()}
+          isRerunning
+        />
+      </DndContext>,
+    );
+
+    const retryButton = retryView.container.querySelector('button[title="Retrying pipeline"]');
+    if (!(retryButton instanceof HTMLButtonElement)) {
+      throw new Error('Expected retrying action button');
+    }
+    expect(retryButton.disabled).toBe(true);
+    expect(retryButton.textContent).toContain('RETRY');
+    expect(retryButton.querySelector('.animate-spin')).not.toBeNull();
+    retryView.cleanup();
+
+    const doneView = renderIntoDom(
+      <DndContext>
+        <DraggableCard
+          issue={makeIssue({
+            pipelineStatus: 'completed',
+            linkedPrNumber: null,
+            linkedPrUrl: null,
+          })}
+          onClick={vi.fn()}
+          onMarkDone={vi.fn()}
+          isMarkingDone
+        />
+      </DndContext>,
+    );
+
+    const doneButton = doneView.container.querySelector('button[title="Marking as done"]');
+    if (!(doneButton instanceof HTMLButtonElement)) {
+      throw new Error('Expected marking done action button');
+    }
+    expect(doneButton.disabled).toBe(true);
+    expect(doneButton.textContent).toContain('DONE');
+    expect(doneButton.querySelector('.animate-spin')).not.toBeNull();
+    doneView.cleanup();
   });
 
   it('renders an approval badge on cards with a source tooltip', () => {
@@ -399,10 +447,24 @@ describe('linked PR affordances', () => {
     expect(view.container.textContent).toContain('Needs human approval');
     expect(view.container.textContent).toContain('Auto-runs normally');
 
-    const button = Array.from(view.container.querySelectorAll('button')).find((element) =>
-      element.textContent?.includes('Needs approval'),
+    const filterButton = Array.from(view.container.querySelectorAll('button')).find((element) =>
+      element.textContent?.includes('Filters'),
     );
-    if (!(button instanceof HTMLButtonElement)) {
+    if (!(filterButton instanceof HTMLButtonElement)) {
+      throw new Error('Expected filters button');
+    }
+
+    act(() => {
+      filterButton.dispatchEvent(
+        new MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0 }),
+      );
+      filterButton.click();
+    });
+
+    const button = Array.from(document.body.querySelectorAll('[role="menuitemcheckbox"]')).find(
+      (element) => element.textContent?.includes('Needs approval'),
+    );
+    if (!(button instanceof HTMLElement)) {
       throw new Error('Expected approval filter button');
     }
 
@@ -446,10 +508,24 @@ describe('linked PR affordances', () => {
       />,
     );
 
-    const button = Array.from(view.container.querySelectorAll('button')).find((element) =>
-      element.textContent?.includes('Needs approval'),
+    const filterButton = Array.from(view.container.querySelectorAll('button')).find((element) =>
+      element.textContent?.includes('Filters'),
     );
-    if (!(button instanceof HTMLButtonElement)) {
+    if (!(filterButton instanceof HTMLButtonElement)) {
+      throw new Error('Expected filters button');
+    }
+
+    act(() => {
+      filterButton.dispatchEvent(
+        new MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0 }),
+      );
+      filterButton.click();
+    });
+
+    const button = Array.from(document.body.querySelectorAll('[role="menuitemcheckbox"]')).find(
+      (element) => element.textContent?.includes('Needs approval'),
+    );
+    if (!(button instanceof HTMLElement)) {
       throw new Error('Expected approval filter button');
     }
 

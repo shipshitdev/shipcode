@@ -12,12 +12,12 @@ import {
 } from '@dnd-kit/core';
 import { RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DroppableColumn, StackedColumn } from './kanban-board/BoardColumns';
-import { BoardToolbar } from './kanban-board/BoardToolbar';
-import { COLUMNS } from './kanban-board/constants';
-import { DragOverlayCard } from './kanban-board/IssueCardParts';
-import { IssueListView } from './kanban-board/IssueListView';
-import type { BoardSortOrder, BoardView, ColumnKey, KanbanBoardProps } from './kanban-board/types';
+import { DroppableColumn, StackedColumn } from '@/kanban-board/BoardColumns';
+import { BoardToolbar } from '@/kanban-board/BoardToolbar';
+import { COLUMNS } from '@/kanban-board/constants';
+import { DragOverlayCard } from '@/kanban-board/IssueCardParts';
+import { IssueListView } from '@/kanban-board/IssueListView';
+import type { BoardSortOrder, BoardView, ColumnKey, KanbanBoardProps } from '@/kanban-board/types';
 import {
   compareIssues,
   customCollisionDetection,
@@ -30,19 +30,23 @@ import {
   resolveIssuePhaseChip,
   resolveIssuePriorityBadge,
   resolveIssueRevisionBadge,
-} from './kanban-board/utils';
+} from '@/kanban-board/utils';
 import {
   formatIssueBranch,
   type GitHubIssueCacheRecord,
   ISSUE_PIPELINE_STATUS,
   resolveIssueStaleness,
-} from './lib/shipcode';
-import { cn } from './lib/utils';
+} from '@/lib/shipcode';
+import { cn } from '@/lib/utils';
 
 type KeyboardFocusColumn = {
   key: ColumnKey;
   issues: GitHubIssueCacheRecord[];
 };
+
+type PendingIssueAction = 'start' | 'retry' | 'cancel' | 'done' | 'reset';
+type IssueActionHandler = (issue: GitHubIssueCacheRecord) => void | Promise<void>;
+const MIN_ACTION_PENDING_MS = 650;
 
 function isEditableKeyboardTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -196,7 +200,10 @@ export function KanbanBoard({
   } | null>(null);
   const [keyboardActionToast, setKeyboardActionToast] = useState<string | null>(null);
   const [focusedIssueId, setFocusedIssueId] = useState<string | null>(null);
-  const [rerunningId, setRerunningId] = useState<string | null>(null);
+  const [pendingIssueActions, setPendingIssueActions] = useState<
+    Partial<Record<string, PendingIssueAction>>
+  >({});
+  const pendingActionTimeouts = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const shortcutsEnabled = keyboardShortcutsEnabled ?? !readOnly;
   const threadById = useMemo(
     () => new Map(threads.map((thread) => [thread.id, thread])),
@@ -353,14 +360,70 @@ export function KanbanBoard({
     }
     return null;
   }, [focusedIssueId, keyboardFocusColumns]);
+  const pendingIssueIdByAction = useMemo(() => {
+    const ids: Partial<Record<PendingIssueAction, string>> = {};
+    for (const [issueId, action] of Object.entries(pendingIssueActions)) {
+      if (action && !ids[action]) ids[action] = issueId;
+    }
+    return ids;
+  }, [pendingIssueActions]);
+
+  const runIssueAction = useCallback(
+    (
+      action: PendingIssueAction,
+      issue: GitHubIssueCacheRecord,
+      handler: IssueActionHandler | undefined,
+    ) => {
+      if (!handler) return;
+
+      const existingTimeout = pendingActionTimeouts.current.get(issue.id);
+      if (existingTimeout) clearTimeout(existingTimeout);
+
+      const startedAt = Date.now();
+      setPendingIssueActions((current) => ({ ...current, [issue.id]: action }));
+
+      const finish = () => {
+        const remaining = Math.max(0, MIN_ACTION_PENDING_MS - (Date.now() - startedAt));
+        const timeout = setTimeout(() => {
+          pendingActionTimeouts.current.delete(issue.id);
+          setPendingIssueActions((current) => {
+            if (current[issue.id] !== action) return current;
+            const next = { ...current };
+            delete next[issue.id];
+            return next;
+          });
+        }, remaining);
+        pendingActionTimeouts.current.set(issue.id, timeout);
+      };
+
+      Promise.resolve(handler(issue)).finally(finish);
+    },
+    [],
+  );
+
+  const handleStartPipeline = useCallback(
+    (issue: GitHubIssueCacheRecord) => runIssueAction('start', issue, onStartPipeline),
+    [onStartPipeline, runIssueAction],
+  );
 
   const handleRerun = useCallback(
-    (issue: GitHubIssueCacheRecord) => {
-      setRerunningId(issue.id);
-      onRerun?.(issue);
-      setTimeout(() => setRerunningId(null), 800);
-    },
-    [onRerun],
+    (issue: GitHubIssueCacheRecord) => runIssueAction('retry', issue, onRerun),
+    [onRerun, runIssueAction],
+  );
+
+  const handleCancel = useCallback(
+    (issue: GitHubIssueCacheRecord) => runIssueAction('cancel', issue, onCancel),
+    [onCancel, runIssueAction],
+  );
+
+  const handleMarkDone = useCallback(
+    (issue: GitHubIssueCacheRecord) => runIssueAction('done', issue, onMarkDone),
+    [onMarkDone, runIssueAction],
+  );
+
+  const handleResetIssue = useCallback(
+    (issue: GitHubIssueCacheRecord) => runIssueAction('reset', issue, onRetry),
+    [onRetry, runIssueAction],
   );
 
   const handleRefresh = useCallback(() => {
@@ -424,6 +487,16 @@ export function KanbanBoard({
     return () => clearTimeout(id);
   }, [keyboardActionToast]);
 
+  useEffect(
+    () => () => {
+      for (const timeout of pendingActionTimeouts.current.values()) {
+        clearTimeout(timeout);
+      }
+      pendingActionTimeouts.current.clear();
+    },
+    [],
+  );
+
   useEffect(() => {
     if (!shortcutsEnabled || view !== 'kanban') return;
 
@@ -479,7 +552,7 @@ export function KanbanBoard({
         !readOnly &&
         !isAutomationIssue(focusedIssue)
       ) {
-        onStartPipeline(focusedIssue);
+        handleStartPipeline(focusedIssue);
         return;
       }
       if (
@@ -499,6 +572,7 @@ export function KanbanBoard({
   }, [
     focusedIssue,
     handleRerun,
+    handleStartPipeline,
     keyboardFocusColumns,
     onCommentIssue,
     onIssueClick,
@@ -530,7 +604,7 @@ export function KanbanBoard({
     // Only these transitions are allowed:
     // 1. todo → agent:planning (start pipeline)
     if (sourceColumn === 'todo' && dropId === 'agent:planning' && onStartPipeline) {
-      onStartPipeline(issue);
+      handleStartPipeline(issue);
       return;
     }
     // 2. failed → agent:planning (re-run directly from failed)
@@ -540,7 +614,7 @@ export function KanbanBoard({
       issue.pipelineStatus === ISSUE_PIPELINE_STATUS.failed &&
       (onRerun ?? onStartPipeline)
     ) {
-      (onRerun ?? onStartPipeline)?.(issue);
+      runIssueAction('retry', issue, onRerun ?? onStartPipeline);
       return;
     }
     // 3. human → todo (reset failed or awaiting_approval back to todo)
@@ -552,7 +626,7 @@ export function KanbanBoard({
         issue.pipelineStatus === ISSUE_PIPELINE_STATUS.awaitingApproval) &&
       onRetry
     ) {
-      onRetry(issue);
+      handleResetIssue(issue);
       return;
     }
     // 4. agent (queued) → todo (dequeue)
@@ -563,12 +637,12 @@ export function KanbanBoard({
         issue.pipelineStatus === ISSUE_PIPELINE_STATUS.awaitingApproval) &&
       onRetry
     ) {
-      onRetry(issue);
+      handleResetIssue(issue);
       return;
     }
     // 5. any manually draggable card → done (explicitly complete issue)
     if ((dropId === 'done' || dropId === 'done:done') && onMarkDone) {
-      onMarkDone(issue);
+      handleMarkDone(issue);
       return;
     }
     // All other drops: no-op (snap back)
@@ -634,7 +708,6 @@ export function KanbanBoard({
               onIssueClick={onIssueClick}
               onOpenPullRequest={onOpenPullRequest}
               onArchiveIssue={onArchiveIssue}
-              onArchiveAllDone={onArchiveAllDone}
             />
           )}
           {view !== 'list' && (
@@ -649,14 +722,16 @@ export function KanbanBoard({
                       issues={visibleIssues}
                       onIssueClick={onIssueClick}
                       onRerun={handleRerun}
-                      onCancel={onCancel}
+                      onCancel={handleCancel}
                       onOpenPullRequest={onOpenPullRequest}
                       onCopyBranchName={handleCopyBranchName}
                       repoUrl={repoUrl}
-                      onMarkDone={col.key === 'done' ? onMarkDone : undefined}
+                      onMarkDone={col.key === 'done' ? handleMarkDone : undefined}
                       onArchiveAllDone={col.key === 'done' ? onArchiveAllDone : undefined}
                       onArchiveIssue={col.key === 'done' ? onArchiveIssue : undefined}
-                      rerunningId={rerunningId}
+                      rerunningId={pendingIssueIdByAction.retry ?? null}
+                      cancellingId={pendingIssueIdByAction.cancel ?? null}
+                      markingDoneId={pendingIssueIdByAction.done ?? null}
                       selectedIssueNumber={selectedIssueNumber}
                       issueBranchNameById={issueBranchNameById}
                       branchCopyIssueId={branchCopyToast?.issueId ?? null}
@@ -685,7 +760,7 @@ export function KanbanBoard({
                     droppable={!!col.droppable}
                     onIssueClick={onIssueClick}
                     selectedIssueNumber={selectedIssueNumber}
-                    onStartPipeline={col.key === 'todo' ? onStartPipeline : undefined}
+                    onStartPipeline={col.key === 'todo' ? handleStartPipeline : undefined}
                     onOpenPullRequest={onOpenPullRequest}
                     onCopyBranchName={handleCopyBranchName}
                     repoUrl={repoUrl}
@@ -695,6 +770,7 @@ export function KanbanBoard({
                     branchCopyIssueId={branchCopyToast?.issueId ?? null}
                     branchCopyStatus={branchCopyToast?.status ?? null}
                     focusedIssueId={focusedIssueId}
+                    startingPipelineId={pendingIssueIdByAction.start ?? null}
                     issuePhaseChipById={issuePhaseChipById}
                     issueRevisionBadgeById={issueRevisionBadgeById}
                     issueApprovalBadgeById={issueApprovalBadgeById}

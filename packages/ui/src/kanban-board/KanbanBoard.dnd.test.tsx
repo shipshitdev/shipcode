@@ -31,7 +31,7 @@ vi.mock('@dnd-kit/core', async () => {
   };
 });
 
-import { KanbanBoard } from '../KanbanBoard';
+import { KanbanBoard } from '@/KanbanBoard';
 import { makeIssue, makeProject, renderIntoDom } from './test-helpers';
 
 describe('KanbanBoard drag activation', () => {

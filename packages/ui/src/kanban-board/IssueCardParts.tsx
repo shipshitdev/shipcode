@@ -3,17 +3,17 @@
 import { useDraggable } from '@dnd-kit/core';
 import { Archive, Check, Copy, Loader2, Lock, Maximize2 } from 'lucide-react';
 import { memo } from 'react';
-import { modelDisplay } from '../lib/model-display';
-import { useSharedSecondNow } from '../lib/second-ticker';
-import type { GitHubIssueCacheRecord, IssueStalenessResult } from '../lib/shipcode';
-import { ISSUE_PIPELINE_STATUS, phaseToProgress } from '../lib/shipcode';
-import { formatElapsedDuration } from '../lib/time';
-import { cn } from '../lib/utils';
-import { PhaseChip } from '../PhaseChip';
-import { Badge } from '../primitives/badge';
-import { Button } from '../primitives/button';
+import { IssueHoverCard } from '@/kanban-board/IssueHoverCard';
+import { modelDisplay } from '@/lib/model-display';
+import { useSharedSecondNow } from '@/lib/second-ticker';
+import type { GitHubIssueCacheRecord, IssueStalenessResult } from '@/lib/shipcode';
+import { ISSUE_PIPELINE_STATUS, phaseToProgress } from '@/lib/shipcode';
+import { formatElapsedDuration } from '@/lib/time';
+import { cn } from '@/lib/utils';
+import { PhaseChip } from '@/PhaseChip';
+import { Badge } from '@/primitives/badge';
+import { Button } from '@/primitives/button';
 import { ACTIVE_STATUSES, DRAGGABLE_STATUSES, PHASE_ELAPSED_STATUSES } from './constants';
-import { IssueHoverCard } from './IssueHoverCard';
 import type {
   IssueApprovalBadge,
   IssuePhaseChip,
@@ -62,7 +62,7 @@ export function IssueExternalBlockers({ issue }: { issue: GitHubIssueCacheRecord
 }
 
 const ACTION_BADGE_CLASS =
-  'absolute inset-0 inline-flex h-full items-center justify-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide opacity-0 transition-opacity group-hover:opacity-100';
+  'absolute inset-0 inline-flex h-full items-center justify-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide opacity-0 transition-opacity group-hover:opacity-100';
 const PLAN_ACTION_BADGE_CLASS =
   'border-agent/25 bg-agent/10 text-agent hover:border-agent/35 hover:bg-agent/15 hover:text-agent';
 const DANGER_ACTION_BADGE_CLASS =
@@ -116,6 +116,9 @@ interface DraggableCardProps {
   isSelected?: boolean;
   isKeyboardFocused?: boolean;
   isRerunning?: boolean;
+  isStartingPipeline?: boolean;
+  isCancelling?: boolean;
+  isMarkingDone?: boolean;
   isFlashing?: boolean;
 }
 
@@ -142,6 +145,9 @@ function DraggableCardComponent({
   isSelected,
   isKeyboardFocused,
   isRerunning,
+  isStartingPipeline,
+  isCancelling,
+  isMarkingDone,
   isFlashing = false,
 }: DraggableCardProps) {
   const isCreating = isIssueCreating(issue);
@@ -480,79 +486,151 @@ function DraggableCardComponent({
             <PhaseChip status={issue.pipelineStatus} />
           ) : isTodo && onStartPipeline && !isAutomation ? (
             <span className="relative inline-flex items-center">
-              <span className="pointer-events-none transition-opacity group-hover:opacity-0">
+              <span
+                className={cn(
+                  'pointer-events-none transition-opacity group-hover:opacity-0',
+                  isStartingPipeline && 'opacity-0',
+                )}
+              >
                 <PhaseChip status={issue.pipelineStatus} />
               </span>
               <Button
                 variant="ghost"
                 size="xs"
-                className={cn(ACTION_BADGE_CLASS, PLAN_ACTION_BADGE_CLASS)}
-                title="Start planning"
+                className={cn(
+                  ACTION_BADGE_CLASS,
+                  PLAN_ACTION_BADGE_CLASS,
+                  isStartingPipeline && 'opacity-100',
+                )}
+                title={isStartingPipeline ? 'Starting pipeline' : 'Start planning'}
+                disabled={isStartingPipeline}
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={(event) => {
                   event.stopPropagation();
+                  if (isStartingPipeline) return;
                   onStartPipeline(issue);
                 }}
               >
-                PLAN
+                {isStartingPipeline ? (
+                  <>
+                    <Loader2 size={10} className="animate-spin" />
+                    PLAN
+                  </>
+                ) : (
+                  'PLAN'
+                )}
               </Button>
             </span>
           ) : isActive && onCancel ? (
             <span className="relative inline-flex items-center">
-              <span className="pointer-events-none transition-opacity group-hover:opacity-0">
+              <span
+                className={cn(
+                  'pointer-events-none transition-opacity group-hover:opacity-0',
+                  isCancelling && 'opacity-0',
+                )}
+              >
                 <PhaseChip status={issue.pipelineStatus} />
               </span>
               <Button
                 variant="ghost"
                 size="xs"
-                className={cn(ACTION_BADGE_CLASS, DANGER_ACTION_BADGE_CLASS)}
-                title="Cancel pipeline"
+                className={cn(
+                  ACTION_BADGE_CLASS,
+                  DANGER_ACTION_BADGE_CLASS,
+                  isCancelling && 'opacity-100',
+                )}
+                title={isCancelling ? 'Cancelling pipeline' : 'Cancel pipeline'}
+                disabled={isCancelling}
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={(event) => {
                   event.stopPropagation();
+                  if (isCancelling) return;
                   onCancel(issue);
                 }}
               >
-                CANCEL
+                {isCancelling ? (
+                  <>
+                    <Loader2 size={10} className="animate-spin" />
+                    CANCEL
+                  </>
+                ) : (
+                  'CANCEL'
+                )}
               </Button>
             </span>
           ) : isFailed && onRerun && !isAutomation ? (
             <span className="relative inline-flex items-center">
-              <span className="pointer-events-none transition-opacity group-hover:opacity-0">
+              <span
+                className={cn(
+                  'pointer-events-none transition-opacity group-hover:opacity-0',
+                  isRerunning && 'opacity-0',
+                )}
+              >
                 <PhaseChip status={issue.pipelineStatus} />
               </span>
               <Button
                 variant="ghost"
                 size="xs"
-                className={cn(ACTION_BADGE_CLASS, DANGER_ACTION_BADGE_CLASS, 'disabled:opacity-60')}
-                title="Retry pipeline"
+                className={cn(
+                  ACTION_BADGE_CLASS,
+                  DANGER_ACTION_BADGE_CLASS,
+                  'disabled:opacity-100',
+                  isRerunning && 'opacity-100',
+                )}
+                title={isRerunning ? 'Retrying pipeline' : 'Retry pipeline'}
                 disabled={isRerunning}
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={(event) => {
                   event.stopPropagation();
+                  if (isRerunning) return;
                   onRerun(issue);
                 }}
               >
-                RETRY
+                {isRerunning ? (
+                  <>
+                    <Loader2 size={10} className="animate-spin" />
+                    RETRY
+                  </>
+                ) : (
+                  'RETRY'
+                )}
               </Button>
             </span>
           ) : isCompleted && onMarkDone ? (
             <span className="relative inline-flex items-center">
-              <span className="pointer-events-none transition-opacity group-hover:opacity-0">
+              <span
+                className={cn(
+                  'pointer-events-none transition-opacity group-hover:opacity-0',
+                  isMarkingDone && 'opacity-0',
+                )}
+              >
                 <PhaseChip status={issue.pipelineStatus} />
               </span>
               <Button
                 variant="ghost"
                 size="xs"
-                className={cn(ACTION_BADGE_CLASS, DONE_ACTION_BADGE_CLASS)}
-                title="Mark as done"
+                className={cn(
+                  ACTION_BADGE_CLASS,
+                  DONE_ACTION_BADGE_CLASS,
+                  isMarkingDone && 'opacity-100',
+                )}
+                title={isMarkingDone ? 'Marking as done' : 'Mark as done'}
+                disabled={isMarkingDone}
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={(event) => {
                   event.stopPropagation();
+                  if (isMarkingDone) return;
                   onMarkDone(issue);
                 }}
               >
-                DONE
+                {isMarkingDone ? (
+                  <>
+                    <Loader2 size={10} className="animate-spin" />
+                    DONE
+                  </>
+                ) : (
+                  'DONE'
+                )}
               </Button>
             </span>
           ) : approvedAwaitingExecution ? (

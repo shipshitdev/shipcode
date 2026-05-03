@@ -3,11 +3,11 @@
 import { useDroppable } from '@dnd-kit/core';
 import { Archive, ChevronDown, ChevronRight } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
-import type { GitHubIssueCacheRecord, IssueStalenessResult } from '../lib/shipcode';
-import { cn } from '../lib/utils';
-import { Button } from '../primitives/button';
+import { DraggableCard } from '@/kanban-board/IssueCardParts';
+import type { GitHubIssueCacheRecord, IssueStalenessResult } from '@/lib/shipcode';
+import { cn } from '@/lib/utils';
+import { Button } from '@/primitives/button';
 import { COLUMN_DOT_CLASS } from './constants';
-import { DraggableCard } from './IssueCardParts';
 import type {
   BoardColumn,
   ColumnKey,
@@ -60,7 +60,7 @@ interface DroppableColumnProps {
   droppable: boolean;
   readOnly?: boolean;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
-  onStartPipeline?: (issue: GitHubIssueCacheRecord) => void;
+  onStartPipeline?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
   onOpenPullRequest?: (url: string) => void;
   onCopyBranchName?: (issue: GitHubIssueCacheRecord, branchName: string) => void;
   selectedIssueNumber?: number;
@@ -71,6 +71,7 @@ interface DroppableColumnProps {
   branchCopyIssueId?: string | null;
   branchCopyStatus?: 'copied' | 'error' | null;
   focusedIssueId?: string | null;
+  startingPipelineId?: string | null;
   issuePhaseChipById: Map<string, IssuePhaseChip | null>;
   issueRevisionBadgeById: Map<string, IssueRevisionBadge | null>;
   issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
@@ -100,6 +101,7 @@ export function DroppableColumn({
   branchCopyIssueId,
   branchCopyStatus,
   focusedIssueId,
+  startingPipelineId,
   issuePhaseChipById = EMPTY_PHASE_CHIP_MAP,
   issueRevisionBadgeById = EMPTY_REVISION_BADGE_MAP,
   issueApprovalBadgeById = EMPTY_APPROVAL_BADGE_MAP,
@@ -180,6 +182,7 @@ export function DroppableColumn({
             branchCopyState={branchCopyIssueId === issue.id ? branchCopyStatus : null}
             isSelected={issue.issueNumber === selectedIssueNumber}
             isKeyboardFocused={issue.id === focusedIssueId}
+            isStartingPipeline={issue.id === startingPipelineId}
             onArchiveIssue={onArchiveIssue}
             readOnly={readOnly}
             isFlashing={flashingIssueIds?.has(issue.id) ?? false}
@@ -198,14 +201,16 @@ interface SectionBlockProps {
   onToggle: () => void;
   readOnly?: boolean;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
-  onRerun?: (issue: GitHubIssueCacheRecord) => void;
-  onCancel?: (issue: GitHubIssueCacheRecord) => void;
+  onRerun?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
+  onCancel?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
   onOpenPullRequest?: (url: string) => void;
   onCopyBranchName?: (issue: GitHubIssueCacheRecord, branchName: string) => void;
-  onMarkDone?: (issue: GitHubIssueCacheRecord) => void;
+  onMarkDone?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
   selectedIssueNumber?: number;
   rerunningId?: string | null;
+  cancellingId?: string | null;
+  markingDoneId?: string | null;
   repoUrl?: string | null;
   issueBranchNameById?: Map<string, string>;
   branchCopyIssueId?: string | null;
@@ -236,6 +241,8 @@ function SectionBlock({
   onArchiveIssue,
   selectedIssueNumber,
   rerunningId,
+  cancellingId,
+  markingDoneId,
   repoUrl,
   issueBranchNameById,
   branchCopyIssueId,
@@ -328,6 +335,8 @@ function SectionBlock({
               isSelected={issue.issueNumber === selectedIssueNumber}
               isKeyboardFocused={issue.id === focusedIssueId}
               isRerunning={issue.id === rerunningId}
+              isCancelling={issue.id === cancellingId}
+              isMarkingDone={issue.id === markingDoneId}
               onArchiveIssue={columnKey === 'done' ? onArchiveIssue : undefined}
               readOnly={readOnly}
               isFlashing={flashingIssueIds?.has(issue.id) ?? false}
@@ -353,15 +362,17 @@ interface StackedColumnProps {
   issues: GitHubIssueCacheRecord[];
   readOnly?: boolean;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
-  onRerun?: (issue: GitHubIssueCacheRecord) => void;
-  onCancel?: (issue: GitHubIssueCacheRecord) => void;
+  onRerun?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
+  onCancel?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
   onOpenPullRequest?: (url: string) => void;
   onCopyBranchName?: (issue: GitHubIssueCacheRecord, branchName: string) => void;
-  onMarkDone?: (issue: GitHubIssueCacheRecord) => void;
+  onMarkDone?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
   onArchiveAllDone?: () => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
   selectedIssueNumber?: number;
   rerunningId?: string | null;
+  cancellingId?: string | null;
+  markingDoneId?: string | null;
   repoUrl?: string | null;
   issueBranchNameById?: Map<string, string>;
   branchCopyIssueId?: string | null;
@@ -391,6 +402,8 @@ export function StackedColumn({
   onArchiveIssue,
   selectedIssueNumber,
   rerunningId,
+  cancellingId,
+  markingDoneId,
   repoUrl,
   issueBranchNameById,
   branchCopyIssueId,
@@ -487,6 +500,8 @@ export function StackedColumn({
             onArchiveIssue={onArchiveIssue}
             selectedIssueNumber={selectedIssueNumber}
             rerunningId={rerunningId}
+            cancellingId={cancellingId}
+            markingDoneId={markingDoneId}
             repoUrl={repoUrl}
             issueBranchNameById={issueBranchNameById}
             branchCopyIssueId={branchCopyIssueId}

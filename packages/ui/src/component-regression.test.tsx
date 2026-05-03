@@ -4,13 +4,13 @@ import type { DiffRecord, GitWorktreeSummary } from '@shipcode/shared';
 import { act, type ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { describe, expect, it, vi } from 'vitest';
-import { ActivePipelineCard } from './ActivePipelineCard';
-import { DiffViewer } from './DiffViewer';
-import { GitVisualizer } from './GitVisualizer';
-import { LoadingButtonContent } from './LoadingButtonContent';
-import { PageHeader } from './PageHeader';
-import { Alert, AlertDescription, AlertTitle } from './primitives/alert';
-import { Button } from './primitives/button';
+import { ActivePipelineCard } from '@/ActivePipelineCard';
+import { DiffViewer } from '@/DiffViewer';
+import { GitVisualizer } from '@/GitVisualizer';
+import { LoadingButtonContent } from '@/LoadingButtonContent';
+import { PageHeader } from '@/PageHeader';
+import { Alert, AlertDescription, AlertTitle } from '@/primitives/alert';
+import { Button } from '@/primitives/button';
 import {
   Card,
   CardContent,
@@ -18,11 +18,11 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from './primitives/card';
-import { Modal } from './primitives/modal';
-import { OverlayPanel } from './primitives/overlay-panel';
-import { SettingsRow } from './primitives/settings-row';
-import { SideBySideDiffViewer } from './SideBySideDiffViewer';
+} from '@/primitives/card';
+import { Modal } from '@/primitives/modal';
+import { OverlayPanel } from '@/primitives/overlay-panel';
+import { SettingsRow } from '@/primitives/settings-row';
+import { SideBySideDiffViewer } from '@/SideBySideDiffViewer';
 
 function renderIntoDom(element: ReactElement) {
   const container = document.createElement('div');

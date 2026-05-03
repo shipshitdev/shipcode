@@ -1,5 +1,5 @@
-import { InstallCommand } from './InstallCommand';
-import { ProductMockup } from './ProductMockup';
+import { InstallCommand } from '@/components/InstallCommand';
+import { ProductMockup } from '@/components/ProductMockup';
 
 export function Hero() {
   return (

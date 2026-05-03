@@ -1,11 +1,11 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import type { DiffRecord } from './lib/shipcode';
-import { cn } from './lib/utils';
-import { Badge } from './primitives/badge';
-import { Button } from './primitives/button';
-import { useSyntaxHighlightedLines } from './SyntaxHighlightedCode';
+import type { DiffRecord } from '@/lib/shipcode';
+import { cn } from '@/lib/utils';
+import { Badge } from '@/primitives/badge';
+import { Button } from '@/primitives/button';
+import { useSyntaxHighlightedLines } from '@/SyntaxHighlightedCode';
 
 interface SideBySideDiffViewerProps {
   diffs: DiffRecord[];

@@ -79,6 +79,7 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     totalTokensPrompt: 0,
     totalTokensCompletion: 0,
     totalCostUsd: 0,
+    doneAt: null,
     ...overrides,
   };
 }
@@ -130,6 +131,7 @@ describe('NotificationService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (notificationQueries.listActive as ReturnType<typeof vi.fn>).mockReturnValue([]);
+    (notificationQueries.listByThread as ReturnType<typeof vi.fn>).mockReturnValue([]);
     (settingsQueries.get as ReturnType<typeof vi.fn>).mockReturnValue({
       notificationsEnabled: true,
       notificationOsEnabled: true,

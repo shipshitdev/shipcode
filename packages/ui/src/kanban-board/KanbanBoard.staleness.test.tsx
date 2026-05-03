@@ -28,7 +28,7 @@ vi.mock('@dnd-kit/core', async () => {
   };
 });
 
-import { KanbanBoard } from '../KanbanBoard';
+import { KanbanBoard } from '@/KanbanBoard';
 import { makeIssue as makeBaseIssue, makeProject, renderIntoDom } from './test-helpers';
 
 function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssueCacheRecord {
@@ -90,13 +90,27 @@ describe('KanbanBoard staleness flags', () => {
     expect(view.container.textContent).toContain('Stale queued issue');
     expect(view.container.textContent).toContain('Fresh queued issue');
 
-    const button = view.container.querySelector('button[title="Show only stale issues"]');
-    if (!(button instanceof HTMLButtonElement)) {
-      throw new Error('Expected stale filter button');
+    const filtersButton = view.container.querySelector('button[title="Filter issues"]');
+    if (!(filtersButton instanceof HTMLButtonElement)) {
+      throw new Error('Expected filters button');
     }
 
     act(() => {
-      button.click();
+      filtersButton.dispatchEvent(
+        new MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0 }),
+      );
+      filtersButton.click();
+    });
+
+    const staleButton = Array.from(
+      document.body.querySelectorAll('[role="menuitemcheckbox"]'),
+    ).find((element) => element.textContent?.includes('Stale'));
+    if (!(staleButton instanceof HTMLElement)) {
+      throw new Error('Expected stale filter menu item');
+    }
+
+    act(() => {
+      staleButton.click();
     });
 
     expect(view.container.textContent).toContain('Stale queued issue');

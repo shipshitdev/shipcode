@@ -1,4 +1,5 @@
 {
+  "author": "shipshit.dev",
   "dependencies": {
     "@fontsource/dm-sans": "5.2.8",
     "@sentry/electron": "7.13.0",
@@ -47,6 +48,7 @@
     "vite-plugin-electron-renderer": "0.14.7",
     "vitest": "4.1.5"
   },
+  "description": "Autonomous AI coding pipeline desktop app. GitHub issues in, pull requests out.",
   "main": "./dist/main/index.js",
   "name": "@shipcode/desktop",
   "private": true,

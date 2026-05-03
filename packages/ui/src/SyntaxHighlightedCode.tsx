@@ -2,7 +2,7 @@
 
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { type BundledLanguage, codeToTokens, type ThemedToken } from 'shiki';
-import { cn } from './lib/utils';
+import { cn } from '@/lib/utils';
 
 type HighlightToken = ThemedToken;
 

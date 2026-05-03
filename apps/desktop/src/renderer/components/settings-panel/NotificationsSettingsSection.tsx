@@ -124,7 +124,7 @@ export function NotificationsSettingsSection({
           Chat alerts (Discord / Telegram)
         </p>
 
-        <SettingsRow label="Needs approval" htmlFor="chat-awaiting-approval">
+        <SettingsRow label="Chat: needs approval" htmlFor="chat-awaiting-approval">
           <Switch
             id="chat-awaiting-approval"
             checked={settings.chatNotificationEvents.awaitingApproval}
@@ -138,7 +138,7 @@ export function NotificationsSettingsSection({
             }
           />
         </SettingsRow>
-        <SettingsRow label="Pipeline failed" htmlFor="chat-failed">
+        <SettingsRow label="Chat: pipeline failed" htmlFor="chat-failed">
           <Switch
             id="chat-failed"
             checked={settings.chatNotificationEvents.failed}
@@ -152,7 +152,7 @@ export function NotificationsSettingsSection({
             }
           />
         </SettingsRow>
-        <SettingsRow label="CI blocked" htmlFor="chat-ci-blocked">
+        <SettingsRow label="Chat: CI blocked" htmlFor="chat-ci-blocked">
           <Switch
             id="chat-ci-blocked"
             checked={settings.chatNotificationEvents.ciBlocked}
@@ -166,7 +166,7 @@ export function NotificationsSettingsSection({
             }
           />
         </SettingsRow>
-        <SettingsRow label="Pipeline completed" htmlFor="chat-completed">
+        <SettingsRow label="Chat: pipeline completed" htmlFor="chat-completed">
           <Switch
             id="chat-completed"
             checked={settings.chatNotificationEvents.completed}
@@ -180,7 +180,10 @@ export function NotificationsSettingsSection({
             }
           />
         </SettingsRow>
-        <SettingsRow label="Verification retries exhausted" htmlFor="chat-verification-exhausted">
+        <SettingsRow
+          label="Chat: verification retries exhausted"
+          htmlFor="chat-verification-exhausted"
+        >
           <Switch
             id="chat-verification-exhausted"
             checked={settings.chatNotificationEvents.verificationExhausted}

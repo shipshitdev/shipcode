@@ -1,6 +1,6 @@
-import type { PlanReview, ReviewFinding } from './lib/shipcode';
-import { cn } from './lib/utils';
-import { Badge } from './primitives/badge';
+import type { PlanReview, ReviewFinding } from '@/lib/shipcode';
+import { cn } from '@/lib/utils';
+import { Badge } from '@/primitives/badge';
 
 interface ReviewViewerProps {
   review: PlanReview | null;

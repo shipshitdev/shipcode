@@ -93,6 +93,7 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     totalTokensPrompt: 0,
     totalTokensCompletion: 0,
     totalCostUsd: 0,
+    doneAt: null,
     ...overrides,
   };
 }
@@ -179,7 +180,9 @@ describe('PipelineTab', () => {
   it('shows the persisted execution diff when available', () => {
     renderPipelineTab();
 
-    expect(screen.getByText('Code Diff')).toBeInTheDocument();
+    expect(screen.getByText('Agents')).toBeInTheDocument();
+    expect(screen.getByText('Branch')).toBeInTheDocument();
+    expect(screen.getByText('ship/42-issue-title')).toBeInTheDocument();
   });
 
   it('shows a waiting message before a diff exists', () => {
@@ -187,10 +190,6 @@ describe('PipelineTab', () => {
 
     expect(screen.getByText('Human Approval')).toBeInTheDocument();
     expect(screen.getByText('Revisions')).toBeInTheDocument();
-    expect(screen.getByText(/Current workflow uses 1 revision/i)).toBeInTheDocument();
-    expect(screen.getByText('Code Diff')).toBeInTheDocument();
-    expect(
-      screen.getByText('Diff will appear here after execution produces changes.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('1 revision before approval/execution.')).toBeInTheDocument();
   });
 });

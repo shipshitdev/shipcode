@@ -14,15 +14,15 @@ describe('githubCompareUrl', () => {
   });
 
   it('builds compare URL from https remote', () => {
-    expect(
-      githubCompareUrl('https://github.com/acme/widget.git', 'develop', 'fix/typo'),
-    ).toBe('https://github.com/acme/widget/compare/develop...fix%2Ftypo');
+    expect(githubCompareUrl('https://github.com/acme/widget.git', 'develop', 'fix/typo')).toBe(
+      'https://github.com/acme/widget/compare/develop...fix%2Ftypo',
+    );
   });
 
   it('encodes special characters in branch names', () => {
-    expect(
-      githubCompareUrl('git@github.com:acme/repo.git', 'main', 'SHIPCODE/abc_def'),
-    ).toBe('https://github.com/acme/repo/compare/main...SHIPCODE%2Fabc_def');
+    expect(githubCompareUrl('git@github.com:acme/repo.git', 'main', 'SHIPCODE/abc_def')).toBe(
+      'https://github.com/acme/repo/compare/main...SHIPCODE%2Fabc_def',
+    );
   });
 
   it('returns null when remote is null', () => {

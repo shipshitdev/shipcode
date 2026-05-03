@@ -144,8 +144,8 @@ describe('FeatureQaResultQueries', () => {
 
     const latest = qaResults.latestByFeature('issue-42');
     expect(latest).not.toBeNull();
-    expect(latest!.summary).toBe('latest run');
-    expect(latest!.status).toBe('failed');
+    expect(latest?.summary).toBe('latest run');
+    expect(latest?.status).toBe('failed');
   });
 
   it('returns null for nonexistent feature', () => {

@@ -1,6 +1,6 @@
-import type { VerificationResult } from './lib/shipcode';
-import { cn } from './lib/utils';
-import { Badge } from './primitives/badge';
+import type { VerificationResult } from '@/lib/shipcode';
+import { cn } from '@/lib/utils';
+import { Badge } from '@/primitives/badge';
 
 interface VerificationViewerProps {
   verification: VerificationResult;

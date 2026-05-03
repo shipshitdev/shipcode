@@ -6,7 +6,7 @@ import type {
   Project,
   ResolvedPhaseModel,
   Thread,
-} from '../lib/shipcode';
+} from '@/lib/shipcode';
 
 export type BoardView = 'kanban' | 'list' | 'graph';
 
@@ -25,11 +25,11 @@ export interface KanbanBoardProps {
   onTriageIssues?: () => void;
   triagingIssues?: boolean;
   triageCandidateCount?: number;
-  onStartPipeline?: (issue: GitHubIssueCacheRecord) => void;
-  onRetry?: (issue: GitHubIssueCacheRecord) => void;
-  onRerun?: (issue: GitHubIssueCacheRecord) => void;
-  onMarkDone?: (issue: GitHubIssueCacheRecord) => void;
-  onCancel?: (issue: GitHubIssueCacheRecord) => void;
+  onStartPipeline?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
+  onRetry?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
+  onRerun?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
+  onMarkDone?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
+  onCancel?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
   baseBranch?: string;
   branches?: string[];
   onBaseBranchChange?: (branch: string) => void;
