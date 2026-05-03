@@ -783,6 +783,8 @@ export function ProjectSettingsModal() {
                     pathExists={pathExists}
                     projectId={projectSettingsModalProjectId ?? ''}
                     isActive={activeTab === 'github'}
+                    statusMapping={project?.githubStatusMapping ?? null}
+                    hasProjectUrl={!!project?.githubProjectUrl}
                   />
                 )}
 
