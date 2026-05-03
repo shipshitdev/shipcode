@@ -30,20 +30,24 @@ export interface PrdIssueMetadata {
   blastRadius: PrdBlastRadius;
 }
 
-function normalizeComplexity(value: string | null | undefined): PrdEstimatedComplexity | null {
+function normalizeDiscreteValue<T extends string>(
+  value: string | null | undefined,
+  allowed: readonly T[],
+  transform?: (normalized: string) => string,
+): T | null {
   if (!value) return null;
-  const normalized = value.trim().toLowerCase();
-  return PRD_ESTIMATED_COMPLEXITIES.includes(normalized as PrdEstimatedComplexity)
-    ? (normalized as PrdEstimatedComplexity)
-    : null;
+  const normalized = (transform ? transform(value) : value.trim().toLowerCase()) as T;
+  return allowed.includes(normalized) ? normalized : null;
+}
+
+function normalizeComplexity(value: string | null | undefined): PrdEstimatedComplexity | null {
+  return normalizeDiscreteValue(value, PRD_ESTIMATED_COMPLEXITIES);
 }
 
 function normalizeBlastRadius(value: string | null | undefined): PrdBlastRadius | null {
-  if (!value) return null;
-  const normalized = value.trim().toLowerCase().replaceAll('_', '-');
-  return PRD_BLAST_RADII.includes(normalized as PrdBlastRadius)
-    ? (normalized as PrdBlastRadius)
-    : null;
+  return normalizeDiscreteValue(value, PRD_BLAST_RADII, (raw) =>
+    raw.trim().toLowerCase().replaceAll('_', '-'),
+  );
 }
 
 function parseFrontmatter(raw: string): ParsedPrdFrontmatter {
