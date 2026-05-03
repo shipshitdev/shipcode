@@ -1399,3 +1399,19 @@ export function migrateV46(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (46)`);
   });
 }
+
+export function migrateV47(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 47) return;
+
+  transaction(db, () => {
+    // Per-project GitHub Projects v2 Status field option name mapping.
+    // JSON column storing a GhStatusMapping: { todo, inProgress, humanReview, done }
+    // NULL means not yet configured (no project URL, or validation never run).
+    execAlterTableIfMissing(db, 'ALTER TABLE projects ADD COLUMN github_status_mapping TEXT');
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (47)`);
+  });
+}

@@ -65,6 +65,7 @@ interface DroppableColumnProps {
   selectedIssueNumber?: number;
   onArchiveAllDone?: () => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
+  repoUrl?: string | null;
   issueBranchNameById?: Map<string, string>;
   branchCopyIssueId?: string | null;
   branchCopyStatus?: 'copied' | 'error' | null;
@@ -92,6 +93,7 @@ export function DroppableColumn({
   selectedIssueNumber,
   onArchiveAllDone,
   onArchiveIssue,
+  repoUrl,
   issueBranchNameById,
   branchCopyIssueId,
   branchCopyStatus,
@@ -163,6 +165,9 @@ export function DroppableColumn({
             onStartPipeline={onStartPipeline}
             onOpenPullRequest={onOpenPullRequest}
             onCopyBranchName={onCopyBranchName}
+            issueGithubUrl={
+              repoUrl && issue.issueNumber > 0 ? `${repoUrl}/issues/${issue.issueNumber}` : null
+            }
             branchName={issueBranchNameById?.get(issue.id) ?? null}
             branchCopyState={branchCopyIssueId === issue.id ? branchCopyStatus : null}
             isSelected={issue.issueNumber === selectedIssueNumber}
@@ -192,6 +197,7 @@ interface SectionBlockProps {
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
   selectedIssueNumber?: number;
   rerunningId?: string | null;
+  repoUrl?: string | null;
   issueBranchNameById?: Map<string, string>;
   branchCopyIssueId?: string | null;
   branchCopyStatus?: 'copied' | 'error' | null;
@@ -220,6 +226,7 @@ function SectionBlock({
   onArchiveIssue,
   selectedIssueNumber,
   rerunningId,
+  repoUrl,
   issueBranchNameById,
   branchCopyIssueId,
   branchCopyStatus,
@@ -248,8 +255,9 @@ function SectionBlock({
         section.droppable && isOver && 'bg-tertiary/40',
       )}
     >
-      <button
+      <Button
         type="button"
+        variant="ghost"
         aria-expanded={!collapsed}
         className={cn(
           'sticky top-0 z-10 flex w-full items-center justify-between gap-2 border-b border-transparent px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide backdrop-blur supports-[backdrop-filter]:bg-secondary/85',
@@ -273,7 +281,7 @@ function SectionBlock({
         >
           {count}
         </span>
-      </button>
+      </Button>
       {!empty && !collapsed && (
         <div
           className={cn(
@@ -301,6 +309,9 @@ function SectionBlock({
               onCancel={onCancel}
               onOpenPullRequest={onOpenPullRequest}
               onCopyBranchName={onCopyBranchName}
+              issueGithubUrl={
+                repoUrl && issue.issueNumber > 0 ? `${repoUrl}/issues/${issue.issueNumber}` : null
+              }
               branchName={issueBranchNameById?.get(issue.id) ?? null}
               branchCopyState={branchCopyIssueId === issue.id ? branchCopyStatus : null}
               isSelected={issue.issueNumber === selectedIssueNumber}
@@ -338,6 +349,7 @@ interface StackedColumnProps {
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
   selectedIssueNumber?: number;
   rerunningId?: string | null;
+  repoUrl?: string | null;
   issueBranchNameById?: Map<string, string>;
   branchCopyIssueId?: string | null;
   branchCopyStatus?: 'copied' | 'error' | null;
@@ -364,6 +376,7 @@ export function StackedColumn({
   onArchiveIssue,
   selectedIssueNumber,
   rerunningId,
+  repoUrl,
   issueBranchNameById,
   branchCopyIssueId,
   branchCopyStatus,
@@ -452,6 +465,7 @@ export function StackedColumn({
             onArchiveIssue={onArchiveIssue}
             selectedIssueNumber={selectedIssueNumber}
             rerunningId={rerunningId}
+            repoUrl={repoUrl}
             issueBranchNameById={issueBranchNameById}
             branchCopyIssueId={branchCopyIssueId}
             branchCopyStatus={branchCopyStatus}

@@ -804,8 +804,10 @@ export function CreateIssueModal() {
                     {a.fileName}
                   </span>
                   <span className="shrink-0 text-muted">{formatBytes(a.sizeBytes)}</span>
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon-xs"
                     aria-label={`Remove ${a.fileName}`}
                     className="shrink-0 rounded p-0.5 text-muted transition-colors hover:text-danger"
                     onClick={(e) => {
@@ -814,7 +816,7 @@ export function CreateIssueModal() {
                     }}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  </Button>
                 </div>
               ))}
             </div>

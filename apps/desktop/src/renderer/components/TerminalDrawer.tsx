@@ -1,4 +1,5 @@
 import type { TerminalEventRecord } from '@shipcode/shared';
+import { Button } from '@shipshitdev/ui';
 import { useCallback, useEffect } from 'react';
 import { useOpenProjectTerminal } from '../hooks/useOpenProjectTerminal';
 import { useAppStore } from '../stores/app-store';
@@ -101,10 +102,11 @@ export function TerminalDrawer() {
       style={isMaximized ? { flex: '1 1 0', minHeight: 0 } : { height: resolvedHeight }}
     >
       {!isMaximized && (
-        <button
+        <Button
           type="button"
+          variant="ghost"
           aria-label="Resize terminal drawer"
-          className="h-1 cursor-ns-resize hover:bg-accent/30 transition-colors shrink-0"
+          className="h-1 w-full cursor-ns-resize rounded-none p-0 hover:bg-accent/30 transition-colors shrink-0"
           onMouseDown={handleResizeMouseDown}
         />
       )}

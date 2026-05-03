@@ -28,6 +28,16 @@ export type {
   PriorityRank,
 } from './github/project-priority';
 export { fetchProjectPriorities, normalizePriorityOption } from './github/project-priority';
+export type {
+  FetchProjectStatusesOptions,
+  IssueGhStatus,
+  ValidateProjectStatusFieldResult,
+} from './github/project-status';
+export {
+  fetchProjectStatuses,
+  normalizeStatusOption,
+  validateProjectStatusField,
+} from './github/project-status';
 export type { CacheOptions, OpenRouterAuthStatus } from './health-check';
 export {
   checkClaudeAuth,

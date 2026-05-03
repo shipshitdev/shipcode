@@ -12,7 +12,7 @@ import {
   Textarea,
 } from '@shipshitdev/ui';
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
-import { ChevronDown, ChevronUp, Copy, ExternalLink } from 'lucide-react';
+import { ChevronDown, ChevronUp, Copy } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import {
   getFailurePresentation,
@@ -38,7 +38,6 @@ interface IssueDetailActionsProps {
   effectiveRevisionCount: number;
   clarificationRequest: ClarificationRequest | null;
   failingPhaseOutput: string | null;
-  githubIssueUrl: string | null;
   hasApprovalDecision: boolean;
   isSubmitting: boolean;
   requireApproval: boolean;
@@ -50,7 +49,6 @@ interface IssueDetailActionsProps {
   onCancel: () => void;
   onEditPrd: () => void;
   onMarkAsDone: () => void;
-  onOpenOnGithub: () => void;
   onReject: (feedback: string) => void;
   onRerun: () => void;
   onShowRawOutputChange: (show: boolean) => void;
@@ -196,9 +194,10 @@ function ClarificationSection({
                 {question.choices.map((choice) => {
                   const selected = answer.selectedChoiceId === choice.id;
                   return (
-                    <button
+                    <Button
                       key={choice.id}
                       type="button"
+                      variant="ghost"
                       className={cn(
                         'rounded-md border px-3 py-2.5 text-left transition-colors',
                         selected
@@ -224,7 +223,7 @@ function ClarificationSection({
                       <p className="mt-1 pl-[18px] text-[11px] leading-relaxed text-secondary">
                         {choice.description}
                       </p>
-                    </button>
+                    </Button>
                   );
                 })}
               </div>
@@ -369,7 +368,6 @@ export function IssueDetailActions({
   effectiveRevisionCount,
   clarificationRequest,
   failingPhaseOutput,
-  githubIssueUrl,
   hasApprovalDecision,
   isSubmitting,
   requireApproval,
@@ -381,7 +379,6 @@ export function IssueDetailActions({
   onCancel,
   onEditPrd,
   onMarkAsDone,
-  onOpenOnGithub,
   onReject,
   onRerun,
   onShowRawOutputChange,
@@ -477,7 +474,7 @@ export function IssueDetailActions({
           </Badge>
         </div>
 
-        <div className="mt-5 overflow-hidden rounded-lg border border-agent/15 bg-primary/20">
+        <div className="mt-4 space-y-3">
           {answeredClarification.request.questions.map((question, index) => {
             const answer = answeredClarification.answers.find(
               (entry) => entry.questionId === question.id,
@@ -489,39 +486,36 @@ export function IssueDetailActions({
             const freeformText = answer?.freeformText?.trim() ?? '';
 
             return (
-              <section
-                key={question.id}
-                className={cn('px-4 py-4', index > 0 && 'border-t border-agent/10')}
-              >
-                <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-agent/80">
+              <div key={question.id} className="border-l-2 border-agent/30 pl-3">
+                <div className="mb-1 flex items-center gap-2">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-agent/70">
                     Q{index + 1}
                   </span>
-                  <h5 className="text-[13px] font-semibold text-primary/95">{question.title}</h5>
+                  <h5 className="text-[12px] font-semibold text-primary/90">{question.title}</h5>
                 </div>
 
                 {selectedChoice ? (
-                  <div className="rounded-md border border-agent/20 bg-agent/[0.08] px-3 py-2.5">
+                  <div>
                     <div className="text-[12px] font-medium text-primary">
                       {selectedChoice.label}
                     </div>
-                    <p className="mt-1 text-[11px] leading-relaxed text-secondary">
+                    <p className="mt-0.5 text-[11px] leading-relaxed text-secondary">
                       {selectedChoice.description}
                     </p>
                   </div>
                 ) : null}
 
                 {freeformText ? (
-                  <div className={cn(selectedChoice ? 'mt-3' : '')}>
-                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-agent/80">
-                      Note
-                    </p>
-                    <div className="rounded-md border border-border/70 bg-secondary/35 px-3 py-2.5 text-[12px] leading-relaxed whitespace-pre-wrap text-secondary">
-                      {freeformText}
-                    </div>
-                  </div>
+                  <p
+                    className={cn(
+                      'text-[11px] leading-relaxed whitespace-pre-wrap text-secondary',
+                      selectedChoice && 'mt-1.5',
+                    )}
+                  >
+                    {freeformText}
+                  </p>
                 ) : null}
-              </section>
+              </div>
             );
           })}
         </div>
@@ -606,17 +600,6 @@ export function IssueDetailActions({
           Mark As Done
         </Button>
       </div>
-      {githubIssueUrl && (
-        <Button
-          variant="link"
-          size="xs"
-          onClick={onOpenOnGithub}
-          className="mt-2 h-auto gap-1 px-0 text-[11px] text-muted hover:text-primary"
-        >
-          <ExternalLink size={11} />
-          View issue on GitHub
-        </Button>
-      )}
     </div>
   ) : null;
 

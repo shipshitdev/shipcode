@@ -95,26 +95,35 @@ function TranscriptRow({
     case 'lifecycle': {
       const lifecycleText = stripAnsi(event.message);
       const lifecycleSeverity = classifyConsoleLine(lifecycleText);
+      if (lifecycleSeverity === 'info') {
+        return (
+          <div className="flex items-start gap-2 px-1">
+            <TranscriptMeta createdAt={record.createdAt} compact={compact} />
+            <pre
+              className={cn(
+                'flex-1 whitespace-pre-wrap break-words font-mono text-secondary/70',
+                compact ? 'text-[10px] leading-4' : 'text-[11px] leading-[1.5]',
+              )}
+            >
+              {lifecycleText}
+            </pre>
+          </div>
+        );
+      }
       return (
         <div
           className={cn(
             'rounded-lg border px-3 py-2',
             lifecycleSeverity === 'error'
               ? 'border-danger/30 bg-danger/8'
-              : lifecycleSeverity === 'warning'
-                ? 'border-warning/30 bg-warning/8'
-                : 'border-border/70 bg-primary/40',
+              : 'border-warning/30 bg-warning/8',
           )}
         >
           <TranscriptMeta createdAt={record.createdAt} compact={compact}>
             <span
               className={cn(
                 'tracking-normal normal-case',
-                lifecycleSeverity === 'error'
-                  ? 'text-danger'
-                  : lifecycleSeverity === 'warning'
-                    ? 'text-warning'
-                    : 'text-secondary',
+                lifecycleSeverity === 'error' ? 'text-danger' : 'text-warning',
               )}
             >
               {lifecycleText}
@@ -125,7 +134,7 @@ function TranscriptRow({
     }
     case 'turn_start':
       return (
-        <div className="flex items-center gap-3 py-1">
+        <div className="flex items-center gap-5 py-1">
           <div className="h-px flex-1 bg-border/70" />
           <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted">
             Turn {event.turn}
@@ -145,26 +154,24 @@ function TranscriptRow({
     }
     case 'tool_start':
       return (
-        <div className="rounded-lg border border-border/70 bg-secondary/80 px-3 py-2">
-          <div className="flex items-center justify-between gap-3">
-            <TranscriptMeta createdAt={record.createdAt} compact={compact}>
-              <Badge
-                variant="default"
-                className="rounded-full px-2 py-0 text-[9px] tracking-normal"
-              >
-                Tool
-              </Badge>
-            </TranscriptMeta>
-            <span className="font-mono text-[11px] text-muted">{event.name}</span>
+        <div className="rounded-md border border-border/50 bg-secondary/50 px-3 py-2">
+          <div className="flex items-center gap-2">
+            <Badge
+              variant="default"
+              className="shrink-0 rounded-sm px-1.5 py-0 text-[9px] font-bold tracking-wide"
+            >
+              {event.name || 'TOOL'}
+            </Badge>
+            <TranscriptMeta createdAt={record.createdAt} compact={compact} />
           </div>
-          <div
+          <pre
             className={cn(
-              'mt-2 break-words font-mono text-secondary',
-              compact ? 'text-[11px]' : 'text-[12px]',
+              'mt-1.5 whitespace-pre-wrap break-words font-mono text-primary',
+              compact ? 'text-[11px] leading-4' : 'text-[12px] leading-[1.55]',
             )}
           >
             {stripAnsi(event.summary)}
-          </div>
+          </pre>
         </div>
       );
     case 'tool_end': {
@@ -175,24 +182,21 @@ function TranscriptRow({
         : typeof event.durationMs === 'number'
           ? `${(event.durationMs / 1000).toFixed(1)}s`
           : 'Completed';
+      if (!failed) {
+        return (
+          <div className="flex items-center gap-5 pl-1">
+            <span className="text-[10px] text-success/80">✓</span>
+            <span className="font-mono text-[10px] text-muted/70">{detail}</span>
+          </div>
+        );
+      }
       return (
-        <div
-          className={cn(
-            'rounded-lg border px-3 py-2',
-            failed ? 'border-danger/30 bg-danger/8' : 'border-border/60 bg-secondary/60',
-          )}
-        >
-          <div className="flex items-center justify-between gap-3">
+        <div className="rounded-md border border-danger/30 bg-danger/8 px-3 py-2">
+          <div className="flex items-center justify-between gap-5">
             <TranscriptMeta createdAt={record.createdAt} compact={compact}>
-              <span className={cn('tracking-normal normal-case', failed && 'text-danger')}>
-                {failed ? 'Tool failed' : 'Tool finished'}
-              </span>
+              <span className="tracking-normal normal-case text-danger">Tool failed</span>
             </TranscriptMeta>
-            <span
-              className={cn('font-mono text-[11px]', failed ? 'text-danger' : 'text-secondary')}
-            >
-              {detail}
-            </span>
+            <span className="font-mono text-[11px] text-danger">{detail}</span>
           </div>
           {outputSummary ? (
             <pre
@@ -209,14 +213,14 @@ function TranscriptRow({
     }
     case 'thinking':
       return (
-        <div className="rounded-xl border border-border/60 bg-secondary/60 px-4 py-3">
+        <div className="rounded-md border border-border/50 bg-secondary/40 px-3 py-2.5">
           <TranscriptMeta createdAt={record.createdAt} compact={compact}>
-            <span className="tracking-normal text-secondary normal-case">Reasoning</span>
+            <span className="tracking-normal text-muted/80 normal-case">Reasoning</span>
           </TranscriptMeta>
           <pre
             className={cn(
-              'mt-2 whitespace-pre-wrap break-words font-sans italic text-secondary',
-              compact ? 'text-[11px] leading-5' : 'text-[12px] leading-6',
+              'mt-1.5 whitespace-pre-wrap break-words font-sans italic text-secondary/80',
+              compact ? 'text-[11px] leading-5' : 'text-[12px] leading-[1.6]',
             )}
           >
             {stripAnsi(event.content)}
@@ -225,14 +229,16 @@ function TranscriptRow({
       );
     case 'text':
       return (
-        <div className="rounded-xl border border-border/70 bg-elevated px-4 py-3 shadow-[0_1px_0_0_rgba(0,0,0,0.18)]">
+        <div className="rounded-lg border border-border/60 bg-elevated px-4 py-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.2)]">
           <TranscriptMeta createdAt={record.createdAt} compact={compact}>
-            <span className="tracking-normal text-secondary normal-case">Assistant</span>
+            <span className="tracking-normal text-primary/70 normal-case font-medium">
+              Assistant
+            </span>
           </TranscriptMeta>
           <pre
             className={cn(
               'mt-2 whitespace-pre-wrap break-words font-sans text-primary',
-              compact ? 'text-[12px] leading-5' : 'text-[13px] leading-6',
+              compact ? 'text-[12px] leading-[1.6]' : 'text-[13px] leading-[1.65]',
             )}
           >
             {stripAnsi(event.content)}
@@ -245,26 +251,35 @@ function TranscriptRow({
         ({ pattern, type }) => type === 'rate_limited' && pattern.test(content),
       );
       const severity: ConsoleSeverity = isRateLimited ? 'error' : classifyConsoleLine(content);
+      if (severity === 'info') {
+        return (
+          <div className="flex items-start gap-2 px-1">
+            <TranscriptMeta createdAt={record.createdAt} compact={compact} />
+            <pre
+              className={cn(
+                'flex-1 whitespace-pre-wrap break-words font-mono text-muted/70',
+                compact ? 'text-[10px] leading-4' : 'text-[11px] leading-[1.5]',
+              )}
+            >
+              {content}
+            </pre>
+          </div>
+        );
+      }
       return (
         <div
           className={cn(
-            'rounded-xl border px-4 py-3',
+            'rounded-md border px-3 py-2.5',
             severity === 'error'
               ? 'border-danger/30 bg-danger/8'
-              : severity === 'warning'
-                ? 'border-warning/30 bg-warning/8'
-                : 'border-border/60 bg-secondary/60',
+              : 'border-warning/30 bg-warning/8',
           )}
         >
           <TranscriptMeta createdAt={record.createdAt} compact={compact}>
             <span
               className={cn(
                 'tracking-normal normal-case',
-                severity === 'error'
-                  ? 'text-danger'
-                  : severity === 'warning'
-                    ? 'text-warning'
-                    : 'text-secondary',
+                severity === 'error' ? 'text-danger' : 'text-warning',
               )}
             >
               Console
@@ -272,13 +287,9 @@ function TranscriptRow({
           </TranscriptMeta>
           <pre
             className={cn(
-              'mt-2 whitespace-pre-wrap break-words font-mono',
-              compact ? 'text-[10px] leading-4' : 'text-[11px] leading-5',
-              severity === 'error'
-                ? 'text-danger'
-                : severity === 'warning'
-                  ? 'text-warning'
-                  : 'text-secondary',
+              'mt-1.5 whitespace-pre-wrap break-words font-mono',
+              compact ? 'text-[10px] leading-4' : 'text-[11px] leading-[1.5]',
+              severity === 'error' ? 'text-danger' : 'text-warning',
             )}
           >
             {content}
@@ -488,7 +499,7 @@ export function TerminalTranscript({
     <>
       {!hasEvents && pendingLabel ? (
         <div className="flex min-h-full items-center justify-center">
-          <div className="inline-flex items-center gap-3 rounded-xl border border-border/70 bg-elevated px-4 py-3">
+          <div className="inline-flex items-center gap-5 rounded-xl border border-border/70 bg-elevated px-4 py-3">
             <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-agent" />
             <span className={cn('text-secondary', compact ? 'text-[12px]' : 'text-[13px]')}>
               {pendingLabel}…
@@ -513,7 +524,7 @@ export function TerminalTranscript({
         <Button
           variant="outline"
           size="xs"
-          className="pointer-events-auto gap-1.5 rounded-full border-border bg-elevated px-3 shadow-md"
+          className="pointer-events-auto gap-5 rounded-full border-border bg-elevated px-3 shadow-md"
           onClick={scrollToBottom}
         >
           <ArrowDownToLine size={12} />
@@ -532,7 +543,7 @@ export function TerminalTranscript({
           onScroll={handleScroll}
         >
           <div
-            className={cn('flex min-h-full w-full flex-col gap-3', compact ? 'p-3' : 'px-4 py-4')}
+            className={cn('flex min-h-full w-full flex-col gap-5', compact ? 'p-3' : 'px-4 py-4')}
           >
             {headerContent}
             {hasEvents ? plainRows : null}
@@ -558,7 +569,7 @@ export function TerminalTranscript({
           onScroll={handleScroll}
         >
           <div
-            className={cn('flex min-h-full w-full flex-col gap-3', compact ? 'p-3' : 'px-4 py-4')}
+            className={cn('flex min-h-full w-full flex-col gap-5', compact ? 'p-3' : 'px-4 py-4')}
           >
             {headerContent}
             {visibleEvents.map((record) => (
@@ -579,7 +590,7 @@ export function TerminalTranscript({
 
   const totalSize = virtualizer.getTotalSize();
   const padding = compact ? 12 : 16;
-  const gap = 12; // gap-3 = 0.75rem = 12px
+  const gap = 20; // gap-5 = 1.25rem = 20px
 
   return (
     <div className={cn('relative h-full', className)}>
@@ -588,7 +599,7 @@ export function TerminalTranscript({
         className="h-full overflow-y-auto overscroll-contain"
         onScroll={handleScroll}
       >
-        <div className={cn('flex w-full flex-col gap-3', compact ? 'p-3' : 'px-4 py-4')}>
+        <div className={cn('flex w-full flex-col gap-5', compact ? 'p-3' : 'px-4 py-4')}>
           {headerContent}
         </div>
 
@@ -602,7 +613,7 @@ export function TerminalTranscript({
           >
             {virtualItems.map((virtualRow) => (
               <div
-                key={visibleEvents[virtualRow.index]!.id}
+                key={visibleEvents[virtualRow.index]?.id}
                 data-index={virtualRow.index}
                 ref={virtualizer.measureElement}
                 style={{
@@ -615,6 +626,7 @@ export function TerminalTranscript({
               >
                 <div className={compact ? 'px-3' : 'px-4'}>
                   <MemoTranscriptRow
+                    // biome-ignore lint/style/noNonNullAssertion: virtualizer guarantees valid index
                     record={visibleEvents[virtualRow.index]!}
                     compact={compact}
                     onAction={onAction}
@@ -625,7 +637,7 @@ export function TerminalTranscript({
           </div>
         ) : null}
 
-        <div className={cn('flex w-full flex-col gap-3', compact ? 'px-3 pb-3' : 'px-4 pb-4')}>
+        <div className={cn('flex w-full flex-col gap-5', compact ? 'px-3 pb-3' : 'px-4 pb-4')}>
           {footerContent}
         </div>
       </div>

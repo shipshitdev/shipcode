@@ -21,6 +21,7 @@ function makeProject(overrides: Partial<Project> = {}): Project {
     starterIssueNumber: null,
     starterIssueCreatedAt: null,
     githubProjectUrl: null,
+    githubStatusMapping: null,
     plannerModelOverride: null,
     reviewerModelOverride: null,
     executorModelOverride: null,

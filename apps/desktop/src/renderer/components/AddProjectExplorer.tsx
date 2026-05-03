@@ -183,8 +183,10 @@ export function AddProjectExplorer() {
     >
       {/* ── Path bar ──────────────────────────────────────────────── */}
       <div className="flex items-center gap-2 border-b border-border px-4 py-2.5 shrink-0">
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon-xs"
           onClick={goUp}
           disabled={isAtRoot}
           className={cn(
@@ -196,7 +198,7 @@ export function AddProjectExplorer() {
           title="Go up (Backspace)"
         >
           <ChevronLeft size={16} />
-        </button>
+        </Button>
         <Input
           ref={pathInputRef}
           type="text"
@@ -254,9 +256,10 @@ export function AddProjectExplorer() {
         )}
 
         {entries.map((entry, i) => (
-          <button
+          <Button
             key={entry.absolutePath}
             type="button"
+            variant="ghost"
             data-index={i}
             className={cn(
               'flex w-full items-center gap-2.5 px-4 py-2 text-sm text-left transition-colors hover:bg-hover',
@@ -267,7 +270,7 @@ export function AddProjectExplorer() {
             <Folder size={14} className="shrink-0 text-muted" />
             <span className="truncate flex-1">{entry.name}</span>
             <ChevronRight size={12} className="shrink-0 text-muted opacity-60" />
-          </button>
+          </Button>
         ))}
       </div>
 

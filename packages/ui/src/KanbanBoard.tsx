@@ -606,6 +606,7 @@ export function KanbanBoard({
               issueApprovalBadgeById={issueApprovalBadgeById}
               issuePriorityBadgeById={issuePriorityBadgeById}
               issueStalenessById={issueStalenessById}
+              repoUrl={repoUrl}
               approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
               onIssueClick={onIssueClick}
               onOpenPullRequest={onOpenPullRequest}
@@ -627,6 +628,7 @@ export function KanbanBoard({
                       onCancel={onCancel}
                       onOpenPullRequest={onOpenPullRequest}
                       onCopyBranchName={handleCopyBranchName}
+                      repoUrl={repoUrl}
                       onArchiveAllDone={col.key === 'done' ? onArchiveAllDone : undefined}
                       onArchiveIssue={col.key === 'done' ? onArchiveIssue : undefined}
                       rerunningId={rerunningId}
@@ -660,6 +662,7 @@ export function KanbanBoard({
                     onStartPipeline={col.key === 'todo' ? onStartPipeline : undefined}
                     onOpenPullRequest={onOpenPullRequest}
                     onCopyBranchName={handleCopyBranchName}
+                    repoUrl={repoUrl}
                     onArchiveAllDone={col.key === 'done' ? onArchiveAllDone : undefined}
                     onArchiveIssue={col.key === 'done' ? onArchiveIssue : undefined}
                     issueBranchNameById={issueBranchNameById}

@@ -13,13 +13,20 @@ import {
   shellExecEnv,
   toPersistedPromptTelemetryMaterials,
 } from '@shipcode/agents/source';
-import { type GitHubStatusLabel, isRealGithubIssueNumber } from '@shipcode/shared';
+import {
+  type GitHubStatusLabel,
+  isRealGithubIssueNumber,
+  macroColumnForStatus,
+  PIPELINE_LABEL_PREFIX,
+  pipelineLabelForStatus,
+} from '@shipcode/shared';
 import {
   formatTaskGraphChecklist,
   formatTaskNodeIssueBody,
   TASK_GRAPH_COMMENT_MARKER,
   type TaskGraphWithNodes,
 } from '@shipcode/shared/source';
+import { GhSyncQueue, type GhSyncWriteOpts } from '../gh-sync-queue';
 import { syncThreadAndIssuePhase } from '../phase-sync';
 import type { PipelineContext, PipelineDeps, PipelineExecutorModel } from '../types';
 import type { PipelineContextHelpers, PipelineRuntime } from './shared';
@@ -73,6 +80,9 @@ export function createPipelineRuntime(
   deps: PipelineDeps,
   _contextHelpers: PipelineContextHelpers,
 ): PipelineRuntime {
+  // Late-initialized after performGhSync is defined below.
+  let ghSyncQueue: GhSyncQueue;
+
   function emitTerminalRaw(threadId: string, content: string) {
     deps.emitter.emit({ type: 'terminal:event', threadId, event: { kind: 'raw', content } });
   }
@@ -683,12 +693,68 @@ export function createPipelineRuntime(
     };
   }
 
+  /** Perform the actual GH write for a single state snapshot. */
+  async function performGhSync(opts: GhSyncWriteOpts): Promise<void> {
+    const ghCli = new GhCli(opts.projectPath);
+
+    // 1. Write GH Projects v2 Status field
+    const macroCol = macroColumnForStatus(opts.pipelineStatus);
+    const ghStatusName =
+      macroCol === 'todo'
+        ? opts.statusMapping.todo
+        : macroCol === 'in_progress'
+          ? opts.statusMapping.inProgress
+          : macroCol === 'human_review'
+            ? opts.statusMapping.humanReview
+            : opts.statusMapping.done;
+    if (ghStatusName) {
+      try {
+        await ghCli.setIssueProjectMetadata({
+          issueNumber: opts.issueNumber,
+          projectUrl: opts.projectUrl,
+          metadata: { status: ghStatusName },
+        });
+      } catch (err) {
+        console.warn('[gh-status-sync] setIssueProjectMetadata failed', err);
+      }
+    }
+
+    // 2. Toggle pipeline labels — remove stale, set current
+    const targetLabel = pipelineLabelForStatus(opts.pipelineStatus);
+    try {
+      const issue = await ghCli.getIssue(opts.issueNumber);
+      const currentPipelineLabels = issue.labels.filter((l) => l.startsWith(PIPELINE_LABEL_PREFIX));
+      for (const old of currentPipelineLabels) {
+        if (old !== targetLabel) {
+          await ghCli.setIssueLabelPresence(opts.issueNumber, old, false);
+        }
+      }
+      if (targetLabel) {
+        await ghCli.setIssueLabelPresence(opts.issueNumber, targetLabel, true);
+      }
+    } catch (err) {
+      console.warn('[gh-status-sync] pipeline label sync failed', err);
+    }
+  }
+
+  // Initialize the serializer now that performGhSync is defined.
+  ghSyncQueue = new GhSyncQueue(performGhSync, (err) => {
+    console.warn('[gh-status-sync] queued write failed', err);
+  });
+
   function emitPhase(
     threadId: string,
     phase: Parameters<typeof deps.threads.updateStatus>[1],
     error?: string,
   ) {
-    syncThreadAndIssuePhase(deps.threads, deps.githubIssues, threadId, phase, error);
+    syncThreadAndIssuePhase(deps.threads, deps.githubIssues, threadId, phase, error, {
+      getProject: (pid) => deps.projects.getById(pid),
+      syncToGithub: async (opts) => {
+        // Route through the serializer — collapses rapid phase transitions
+        // into the latest desired state per issue.
+        ghSyncQueue.enqueue(opts);
+      },
+    });
     deps.emitter.emit({ type: 'pipeline:phase', threadId, phase });
   }
 

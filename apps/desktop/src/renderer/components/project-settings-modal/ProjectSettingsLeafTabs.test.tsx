@@ -22,6 +22,7 @@ function makeProject(overrides: Partial<Project> = {}): Project {
     starterIssueNumber: null,
     starterIssueCreatedAt: null,
     githubProjectUrl: 'https://github.com/orgs/shipshitdev/projects/1',
+    githubStatusMapping: null,
     plannerModelOverride: null,
     reviewerModelOverride: null,
     executorModelOverride: null,

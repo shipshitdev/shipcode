@@ -34,7 +34,7 @@ import {
   resolveRevisionCountForIssue,
   sanitizeResolvedModel,
 } from '@shipcode/shared';
-import { PhaseChip, resolveIssuePriorityBadge } from '@shipcode/ui';
+import { isAutomationIssue, PhaseChip, resolveIssuePriorityBadge } from '@shipcode/ui';
 import {
   Badge,
   Button,
@@ -46,17 +46,11 @@ import {
 } from '@shipshitdev/ui';
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Archive,
-  ArrowLeft,
-  Check,
-  CircleCheck,
-  CircleDot,
-  Copy,
-} from 'lucide-react';
+import { Archive, ArrowLeft, Check, CircleCheck, CircleDot, Copy } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
+import { CostsTab } from './issue-detail/CostsTab';
 import {
   ACTIVE_PHASES,
   decodePhaseOption,
@@ -66,6 +60,7 @@ import {
 import { IssueDetailActions } from './issue-detail/IssueDetailActions';
 import { IssueDetailDialogs } from './issue-detail/IssueDetailDialogs';
 import { IssueDetailTabs } from './issue-detail/IssueDetailTabs';
+import { PipelineTab } from './issue-detail/PipelineTab';
 import type { IssueDetailTab } from './issue-detail/tab-types';
 
 const INHERIT_EXECUTOR_VALUE = '__inherit__';
@@ -150,8 +145,6 @@ export function IssueDetail() {
     !!activeIssue &&
     (!activeThreadId || showAllPlanRuns);
   const shouldLoadActivityTab = activeTab === 'activity';
-  const shouldLoadPipelineTab = activeTab === 'pipeline';
-
   // Fetch plan history
   const { data: planHistory } = useQuery<PlanRecord[]>({
     queryKey: ['plan-history', activeThreadId],
@@ -246,21 +239,21 @@ export function IssueDetail() {
   const { data: integrationStatus } = useQuery<IntegrationStatus>({
     queryKey: ['integrations'],
     queryFn: () => window.shipcode.invoke('integrations:check'),
-    enabled: shouldLoadPipelineTab,
+    enabled: true,
     staleTime: 30_000,
   });
 
   const { data: checkpoints = [] } = useQuery<PipelineCheckpoint[]>({
     queryKey: ['checkpoints', activeThreadId],
     queryFn: () => window.shipcode.invoke('checkpoint:list', { threadId: activeThreadId }),
-    enabled: !!activeThreadId && shouldLoadPipelineTab,
+    enabled: !!activeThreadId,
     // Push-invalidated by pipeline:phase in useIpc.
   });
 
   const { data: diffs = [] } = useQuery<DiffRecord[]>({
     queryKey: ['diffs', activeThreadId],
     queryFn: () => window.shipcode.invoke('diff:list', { threadId: activeThreadId }),
-    enabled: !!activeThreadId && shouldLoadPipelineTab,
+    enabled: !!activeThreadId,
     // Push-invalidated by pipeline:phase in useIpc.
   });
 
@@ -268,7 +261,7 @@ export function IssueDetail() {
     queryKey: ['feature-qa', activeThreadId],
     queryFn: () =>
       window.shipcode.invoke('feature-qa:list-by-thread', { threadId: activeThreadId as string }),
-    enabled: !!activeThreadId && shouldLoadPipelineTab,
+    enabled: !!activeThreadId,
   });
 
   const { data: taskGraph = null } = useQuery<TaskGraphWithNodes | null>({
@@ -280,7 +273,7 @@ export function IssueDetail() {
       });
       return graph && Array.isArray(graph.nodes) ? graph : null;
     },
-    enabled: !!activeThreadId && shouldLoadPipelineTab,
+    enabled: !!activeThreadId,
     // Push-invalidated by pipeline:phase in useIpc.
   });
 
@@ -748,7 +741,7 @@ export function IssueDetail() {
   };
 
   const githubIssueUrl =
-    activeIssue && !activeIssue.isQuickMode
+    activeIssue && !activeIssue.isQuickMode && !isAutomationIssue(activeIssue)
       ? deriveGithubIssueUrl(activeProject?.gitRemote ?? null, activeIssue.issueNumber)
       : null;
 
@@ -756,13 +749,14 @@ export function IssueDetail() {
     if (!githubIssueUrl) return;
     await window.shipcode.invoke('shell:open-external', { url: githubIssueUrl });
   };
-  const issueBranchName = activeIssue
-    ? formatIssueBranch(
-        activeIssue.issueNumber,
-        activeIssue.title ?? '',
-        settings?.worktreeBranchFormat ?? null,
-      )
-    : null;
+  const issueBranchName =
+    activeIssue && !isAutomationIssue(activeIssue)
+      ? formatIssueBranch(
+          activeIssue.issueNumber,
+          activeIssue.title ?? '',
+          settings?.worktreeBranchFormat ?? null,
+        )
+      : null;
   const handleCopyBranchName = async () => {
     if (!issueBranchName) return;
     if (branchCopyResetRef.current) clearTimeout(branchCopyResetRef.current);
@@ -1030,30 +1024,36 @@ export function IssueDetail() {
   };
 
   const headerButtons = (
-    <div className="absolute right-3 top-3 flex items-center gap-0.5">
-      {(activeIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.completed ||
-        activeIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.done) && (
+    <>
+      {/* Back button — left */}
+      <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center">
         <Button
           variant="ghost"
-          size="icon-xs"
+          size="icon-sm"
           className="text-muted"
-          onClick={() => setShowArchiveConfirm(true)}
-          title="Archive issue"
+          onClick={() => selectIssue(null)}
+          title="Back to board"
+          aria-label="Back to board"
         >
-          <Archive size={13} />
+          <ArrowLeft size={18} strokeWidth={2.5} />
         </Button>
+      </div>
+      {/* Archive button — top right */}
+      {(activeIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.completed ||
+        activeIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.done) && (
+        <div className="absolute right-3 top-3">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="text-muted"
+            onClick={() => setShowArchiveConfirm(true)}
+            title="Archive issue"
+          >
+            <Archive size={14} />
+          </Button>
+        </div>
       )}
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        className="text-muted"
-        onClick={() => selectIssue(null)}
-        title="Back to board"
-        aria-label="Back to board"
-      >
-        <ArrowLeft size={15} strokeWidth={2.25} />
-      </Button>
-    </div>
+    </>
   );
 
   const headerStatus =
@@ -1138,117 +1138,131 @@ export function IssueDetail() {
     (thread?.githubPrNumber && thread.githubRepo
       ? `https://github.com/${thread.githubRepo}/pull/${thread.githubPrNumber}`
       : null);
+  const dot = <span className="mx-1.5 text-border">·</span>;
   const issueIdentityLinks = (
-    <div className="flex flex-wrap items-center gap-1.5 pr-16">
+    <div className="mt-1 flex flex-wrap items-center pl-10 text-[11px]">
+      {/* Issue number */}
       {activeIssue.isQuickMode ? (
-        <span className="font-mono text-xs text-muted">Quick</span>
+        <span className="font-mono text-muted">Quick</span>
+      ) : isAutomationIssue(activeIssue) ? (
+        <span className="font-mono text-muted">[Auto]</span>
       ) : githubIssueUrl ? (
-        <Button
-          variant="ghost"
-          size="xs"
+        <button
+          type="button"
           onClick={handleOpenOnGithub}
-          className="h-5 px-1.5 font-mono text-[11px] text-muted hover:bg-secondary hover:text-primary"
+          className="font-mono text-muted transition-colors hover:text-primary"
           title="Open this issue on GitHub"
         >
           #{activeIssue.issueNumber}
-        </Button>
+        </button>
       ) : (
-        <span className="font-mono text-xs text-muted">#{activeIssue.issueNumber}</span>
+        <span className="font-mono text-muted">#{activeIssue.issueNumber}</span>
       )}
-      {issueBranchName ? (
-        <Button
-          variant="ghost"
-          size="xs"
-          onClick={() => void handleCopyBranchName()}
-          className={cn(
-            'h-5 gap-1 px-1.5 font-mono text-[11px] hover:bg-secondary',
-            branchCopyState === 'copied'
-              ? 'text-success hover:text-success'
-              : branchCopyState === 'error'
-                ? 'text-danger hover:text-danger'
-                : 'text-muted hover:text-primary',
-          )}
-          title={
-            branchCopyState === 'copied'
-              ? 'Copied!'
-              : branchCopyState === 'error'
-                ? 'Clipboard write failed'
-                : `Copy branch name (${issueBranchName})`
-          }
-          aria-label="Copy branch name"
-          data-testid="copy-branch-name"
-        >
-          {branchCopyState === 'copied' ? (
-            <Check className="h-3 w-3" />
-          ) : (
-            <Copy className="h-3 w-3" />
-          )}
-          <span className="max-w-[14ch] truncate">{issueBranchName}</span>
-        </Button>
-      ) : null}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="xs"
+
+      {/* State — open/closed dropdown */}
+      {!isAutomationIssue(activeIssue) && (
+        <>
+          {dot}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  'flex items-center gap-1 font-medium transition-colors disabled:opacity-50',
+                  activeIssue.state === 'open' ? 'text-success' : 'text-muted hover:text-primary',
+                )}
+                disabled={isTogglingState}
+              >
+                {activeIssue.state === 'open' ? (
+                  <CircleDot className="h-3 w-3" />
+                ) : (
+                  <CircleCheck className="h-3 w-3" />
+                )}
+                <LoadingButtonContent
+                  loading={isTogglingState}
+                  className="gap-1"
+                  labelClassName="gap-1"
+                  spinnerSize={10}
+                >
+                  {activeIssue.state === 'open' ? 'Open' : 'Closed'}
+                </LoadingButtonContent>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem
+                disabled={activeIssue.state === 'open'}
+                onClick={() => void handleToggleIssueState('open')}
+              >
+                <CircleDot className="mr-2 h-3.5 w-3.5 text-success" />
+                Reopen issue
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={activeIssue.state === 'closed'}
+                onClick={() => void handleToggleIssueState('closed')}
+              >
+                <CircleCheck className="mr-2 h-3.5 w-3.5 text-muted" />
+                Close issue
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
+      )}
+
+      {/* Branch name — copy on click */}
+      {issueBranchName && (
+        <>
+          {dot}
+          <button
+            type="button"
+            onClick={() => void handleCopyBranchName()}
             className={cn(
-              'h-5 gap-1 px-1.5 text-[10px] font-medium',
-              activeIssue.state === 'open'
-                ? 'text-success hover:bg-success/10 hover:text-success'
-                : 'text-muted hover:bg-secondary hover:text-primary',
+              'flex items-center gap-1 font-mono transition-colors',
+              branchCopyState === 'copied'
+                ? 'text-success'
+                : branchCopyState === 'error'
+                  ? 'text-danger'
+                  : 'text-muted hover:text-primary',
             )}
-            disabled={isTogglingState}
+            title={
+              branchCopyState === 'copied'
+                ? 'Copied!'
+                : branchCopyState === 'error'
+                  ? 'Clipboard write failed'
+                  : `Copy branch name (${issueBranchName})`
+            }
+            aria-label="Copy branch name"
+            data-testid="copy-branch-name"
           >
-            {activeIssue.state === 'open' ? (
-              <CircleDot className="h-3 w-3" />
+            {branchCopyState === 'copied' ? (
+              <Check className="h-3 w-3" />
             ) : (
-              <CircleCheck className="h-3 w-3" />
+              <Copy className="h-3 w-3" />
             )}
-            <LoadingButtonContent
-              loading={isTogglingState}
-              className="gap-1"
-              labelClassName="gap-1"
-              spinnerSize={10}
+            <span className="max-w-[20ch] truncate">{issueBranchName}</span>
+          </button>
+        </>
+      )}
+
+      {/* PR link */}
+      {activeIssue.linkedPrNumber && (
+        <>
+          {dot}
+          {linkedPrUrl ? (
+            <button
+              type="button"
+              onClick={() => void handleOpenPullRequest()}
+              className="font-medium text-done transition-colors hover:text-done/80"
+              title="Open pull request on GitHub"
             >
-              {activeIssue.state === 'open' ? 'Open' : 'Closed'}
-            </LoadingButtonContent>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
-          <DropdownMenuItem
-            disabled={activeIssue.state === 'open'}
-            onClick={() => void handleToggleIssueState('open')}
-          >
-            <CircleDot className="mr-2 h-3.5 w-3.5 text-success" />
-            Reopen issue
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            disabled={activeIssue.state === 'closed'}
-            onClick={() => void handleToggleIssueState('closed')}
-          >
-            <CircleCheck className="mr-2 h-3.5 w-3.5 text-muted" />
-            Close issue
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      {activeIssue.linkedPrNumber &&
-        (linkedPrUrl ? (
-          <Button
-            variant="ghost"
-            size="xs"
-            className="h-5 gap-1 px-1.5 text-[10px] font-medium text-done hover:bg-done/10 hover:text-done"
-            onClick={() => {
-              void handleOpenPullRequest();
-            }}
-            title="Open pull request on GitHub"
-          >
-            PR #{activeIssue.linkedPrNumber}
-          </Button>
-        ) : (
-          <Badge variant="done" className="text-[10px]">
-            PR #{activeIssue.linkedPrNumber}
-          </Badge>
-        ))}
+              PR #{activeIssue.linkedPrNumber}
+            </button>
+          ) : (
+            <Badge variant="done" className="text-[10px]">
+              PR #{activeIssue.linkedPrNumber}
+            </Badge>
+          )}
+        </>
+      )}
     </div>
   );
   const issuePriorityBadge = resolveIssuePriorityBadge(activeIssue);
@@ -1310,7 +1324,6 @@ export function IssueDetail() {
       effectiveRevisionCount,
       clarificationRequest: thread?.clarificationRequest ?? null,
       failingPhaseOutput,
-      githubIssueUrl,
       hasApprovalDecision,
       isSubmitting,
       requireApproval: effectiveRequireApproval,
@@ -1322,7 +1335,6 @@ export function IssueDetail() {
       onCancel: () => void handleCancel(),
       onEditPrd: handleEditPrd,
       onMarkAsDone: () => setShowMarkAsDoneConfirm(true),
-      onOpenOnGithub: () => void handleOpenOnGithub(),
       onReject: (nextFeedback) => void handleReject(nextFeedback),
       onRerun: () => void handleRerun(),
       onShowRawOutputChange: setShowRawOutput,
@@ -1452,25 +1464,89 @@ export function IssueDetail() {
   // ─── Full-page layout (Linear-style) ─────────────────────────────────────
 
   return (
-    <div className="flex h-full bg-primary">
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        {/* Header */}
-        <div className="relative shrink-0 border-b border-border p-4">
-          <div className="mx-auto w-full max-w-5xl">
-            {headerButtons}
-            {issueIdentityLinks}
-            <div className="my-1 flex flex-wrap items-center gap-2 pr-16">
-              {issueStatusBadge}
-              <h1 className="text-xl font-semibold">{activeIssue.title}</h1>
-            </div>
-            {issueBadges}
-          </div>
+    <div className="flex h-full min-w-0 flex-1 flex-col bg-primary">
+      {/* Header — full width */}
+      <div className="relative shrink-0 border-b border-border px-6 py-4">
+        {headerButtons}
+        {/* Title + status badge */}
+        <div className="flex flex-wrap items-baseline gap-2 pl-10">
+          <h1 className="text-xl font-semibold leading-snug">{activeIssue.title}</h1>
+          {issueStatusBadge}
         </div>
-        {/* Scrollable content */}
-        <div className="flex-1 min-h-0 overflow-y-auto" data-issue-detail-scroll-region>
-          <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col p-6">
-            {detailActionStack}
-            {detailTabs}
+        {/* Metadata: #num · state · branch · PR */}
+        {issueIdentityLinks}
+      </div>
+      {/* Two-column body — fills remaining height */}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {/* Main — scrollable */}
+        <div
+          className="flex min-w-0 flex-1 flex-col overflow-y-auto p-6"
+          data-issue-detail-scroll-region
+        >
+          {detailActionStack}
+          {detailTabs}
+        </div>
+        {/* Sidebar — full height, own scroll */}
+        <div className="w-[26rem] shrink-0 overflow-y-auto border-l border-border">
+          <div className="space-y-6 px-4 pt-2 pb-4">
+            {/* Details */}
+            {issueBadges && <div>{issueBadges}</div>}
+            {/* Pipeline */}
+            <PipelineTab
+              activeIssue={activeIssue}
+              activeThreadId={activeThreadId}
+              checkpoints={checkpoints}
+              currentPhaseReasoningEfforts={currentPhaseReasoningEfforts}
+              currentPhaseSelections={currentPhaseSelections}
+              effectivePhaseResolvedModels={effectivePhaseResolvedModels}
+              effectiveRequireApproval={effectiveRequireApproval}
+              effectiveRevisionCount={effectiveRevisionCount}
+              executorEditable={executorEditable}
+              hasPrFeedbackBlockers={hasPrFeedbackBlockers}
+              inheritedPhaseReasoningEfforts={inheritedPhaseReasoningEfforts}
+              inheritedRequireApproval={inheritedRequireApproval}
+              inheritedRevisionCount={inheritedRevisionCount}
+              integrationStatus={integrationStatus}
+              isSubmitting={isSubmitting}
+              linkedPrUrl={linkedPrUrl}
+              phaseEffortSelectValues={phaseEffortSelectValues}
+              phaseModelValidation={phaseModelValidation}
+              phaseSelectValues={phaseSelectValues}
+              qaResults={qaResults}
+              requireApprovalSelectValue={requireApprovalSelectValue}
+              projectDefaultPhaseSelections={projectDefaultPhaseSelections}
+              revisionCountSelectValue={revisionCountSelectValue}
+              taskGraph={taskGraph}
+              thread={thread}
+              githubIssueUrl={githubIssueUrl}
+              onPhaseAgentChange={(phase, value) => {
+                void handlePhaseAgentChange(phase, value);
+              }}
+              onPhaseEffortChange={(phase, effort) => {
+                void handlePhaseEffortChange(phase, effort);
+              }}
+              onRequireApprovalChange={(value) => {
+                void handleRequireApprovalChange(value);
+              }}
+              onRevisionCountChange={(value) => {
+                void handleRevisionCountChange(value);
+              }}
+              onPhaseOpenRouterSlugBlur={(phase, value) => {
+                void handlePhaseOpenRouterSlugBlur(phase, value);
+              }}
+              onRestoreCheckpoint={(checkpoint) => {
+                void handleRestoreCheckpoint(checkpoint);
+              }}
+              onStabilizePr={() => {
+                void handleStabilizePr();
+              }}
+            />
+            {/* Costs */}
+            <CostsTab
+              projectId={activeProjectId ?? ''}
+              issueNumber={activeIssue.issueNumber}
+              thread={thread}
+            />
           </div>
         </div>
       </div>

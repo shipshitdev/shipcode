@@ -271,6 +271,9 @@ export function Titlebar() {
   const toggleSidebar = useAppStore((state) => state.toggleSidebar);
   const terminalVisible = useAppStore((state) => state.terminalVisible);
   const toggleTerminal = useAppStore((state) => state.toggleTerminal);
+  const hasDetailView = useAppStore(
+    (state) => state.activeIssue !== null || state.activeAutomationThreadId !== null,
+  );
 
   const { data: activeProject } = useQuery<Project | null>({
     queryKey: ['project', activeProjectId],
@@ -338,6 +341,7 @@ export function Titlebar() {
           className="shrink-0 app-region-no-drag"
           onClick={toggleSidebar}
           title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+          disabled={hasDetailView}
         >
           {sidebarCollapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
         </Button>

@@ -149,8 +149,9 @@ function AutomationCard({
     <Card className="overflow-hidden">
       <CardContent className="p-0">
         <div className="flex items-center justify-between gap-4 p-4">
-          <button
+          <Button
             type="button"
+            variant="ghost"
             className="flex-1 text-left"
             onClick={() => setHistoryOpen((o) => !o)}
             aria-label={`${historyOpen ? 'Collapse' : 'Expand'} run history for ${automation.name}`}
@@ -181,7 +182,7 @@ function AutomationCard({
                 ? `Last run ${formatRelative(automation.lastStartedAt)} · ${automation.runCount} total`
                 : 'Never run'}
             </div>
-          </button>
+          </Button>
 
           <div className="flex items-center gap-2">
             <Switch
@@ -238,9 +239,10 @@ function AutomationCard({
             ) : (
               <div className="flex flex-col gap-1">
                 {runHistory.map((thread) => (
-                  <button
+                  <Button
                     key={thread.id}
                     type="button"
+                    variant="ghost"
                     onClick={() => selectAutomationThread(thread.id)}
                     className="flex items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-hover"
                   >
@@ -251,7 +253,7 @@ function AutomationCard({
                     <span className="text-[11px] text-muted">
                       {formatRelative(thread.createdAt)}
                     </span>
-                  </button>
+                  </Button>
                 ))}
               </div>
             )}

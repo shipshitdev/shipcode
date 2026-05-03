@@ -104,7 +104,6 @@ export function ThreadPanel() {
   const settingsVisible = useAppStore((state) => state.settingsVisible);
   const activeAutomationThreadId = useAppStore((state) => state.activeAutomationThreadId);
   const selectIssue = useAppStore((state) => state.selectIssue);
-  const selectAutomationThread = useAppStore((state) => state.selectAutomationThread);
   const setTerminalThread = useAppStore((state) => state.setTerminalThread);
   const openTerminal = useAppStore((state) => state.openTerminal);
   const requestCommentComposer = useAppStore((state) => state.requestCommentComposer);
@@ -430,10 +429,8 @@ export function ThreadPanel() {
   const projectsUrl = project?.githubProjectUrl?.trim() ? project.githubProjectUrl.trim() : null;
   const handleIssueClick = (issue: GitHubIssueCacheRecord) => {
     if (isAutomationIssue(issue) && issue.threadId) {
-      selectAutomationThread(issue.threadId);
       setTerminalThread(issue.threadId);
       openTerminal();
-      return;
     }
 
     selectIssue(issue);

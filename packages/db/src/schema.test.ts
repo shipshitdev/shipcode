@@ -44,9 +44,9 @@ import {
   migrateV41,
   migrateV42,
   migrateV43,
-  migrateV44,
   migrateV45,
   migrateV46,
+  migrateV47,
 } from './schema';
 import { createTestDb } from './test-helpers';
 import { asRow } from './utils';
@@ -1151,5 +1151,35 @@ describe('migrateV46', () => {
 
   it('is idempotent', () => {
     expect(() => migrateV46(db)).not.toThrow();
+  });
+});
+
+describe('migrateV47', () => {
+  let db: ReturnType<typeof createTestDb>;
+
+  beforeEach(() => {
+    db = createTestDb();
+  });
+
+  it('adds github_status_mapping column to projects', () => {
+    const columns = db.prepare("SELECT name FROM pragma_table_info('projects')").all() as Array<{
+      name: string;
+    }>;
+    const colNames = columns.map((c) => c.name);
+    expect(colNames).toContain('github_status_mapping');
+  });
+
+  it('defaults to NULL for existing rows', () => {
+    db.prepare(
+      "INSERT INTO projects (id, name, path, default_branch) VALUES ('p1', 'test', '/tmp/test', 'main')",
+    ).run();
+    const row = db.prepare("SELECT github_status_mapping FROM projects WHERE id = 'p1'").get() as {
+      github_status_mapping: string | null;
+    };
+    expect(row.github_status_mapping).toBeNull();
+  });
+
+  it('is idempotent', () => {
+    expect(() => migrateV47(db)).not.toThrow();
   });
 });

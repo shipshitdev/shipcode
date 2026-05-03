@@ -85,9 +85,10 @@ export function PullRequestsPanel() {
             </div>
           ) : (
             pullRequests.map((pr) => (
-              <button
+              <Button
                 key={pr.number}
                 type="button"
+                variant="ghost"
                 className={cn(
                   'w-full cursor-pointer border-b border-border px-3 py-2.5 text-left transition-colors hover:bg-secondary/30',
                   activePrNumber === pr.number && 'bg-tertiary',
@@ -120,7 +121,7 @@ export function PullRequestsPanel() {
                     </span>
                   )}
                 </div>
-              </button>
+              </Button>
             ))
           )}
         </div>

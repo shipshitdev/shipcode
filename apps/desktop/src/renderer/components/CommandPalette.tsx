@@ -44,6 +44,8 @@ function CommandPaletteContent() {
   const toggleSidebar = useAppStore((state) => state.toggleSidebar);
   const selectIssue = useAppStore((state) => state.selectIssue);
   const activeIssue = useAppStore((state) => state.activeIssue);
+  const activeAutomationThreadId = useAppStore((state) => state.activeAutomationThreadId);
+  const hasDetailView = activeIssue !== null || activeAutomationThreadId !== null;
   const openOverview = useAppStore((state) => state.openOverview);
   const openActivity = useAppStore((state) => state.openActivity);
   const openInbox = useAppStore((state) => state.openInbox);
@@ -254,10 +256,12 @@ function CommandPaletteContent() {
           >
             <span className="flex-1">Add Repository…</span>
           </CommandItem>
-          <CommandItem onSelect={() => runAction(() => toggleSidebar())}>
-            <span className="flex-1">{getShortcut('toggle-sidebar').label}</span>
-            <CommandShortcut>{getShortcut('toggle-sidebar').glyph}</CommandShortcut>
-          </CommandItem>
+          {!hasDetailView && (
+            <CommandItem onSelect={() => runAction(() => toggleSidebar())}>
+              <span className="flex-1">{getShortcut('toggle-sidebar').label}</span>
+              <CommandShortcut>{getShortcut('toggle-sidebar').glyph}</CommandShortcut>
+            </CommandItem>
+          )}
           {activeIssue && (
             <CommandItem onSelect={() => runAction(() => selectIssue(null))}>
               <span className="flex-1">{getShortcut('toggle-issue-detail').label}</span>

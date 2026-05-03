@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
+import type { LucideIcon } from 'lucide-react';
 import {
   ChevronDown,
   ChevronRight,
@@ -32,7 +33,6 @@ import {
   Palette,
   Terminal,
 } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../../query-stale-times';
 import { useAppStore } from '../../stores/app-store';
@@ -139,8 +139,9 @@ function TreeNode({
 
   return (
     <div className="text-xs">
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={() => {
           if (isDir) {
             setExpanded((prev) => !prev);
@@ -176,20 +177,22 @@ function TreeNode({
               className={cn('shrink-0', entry.isModified ? 'text-amber-500' : 'text-muted')}
             />
           )
-        ) : (() => {
-          const Icon = getFileIcon(entry.name);
-          return (
-            <Icon
-              size={12}
-              className={cn('shrink-0', entry.isModified ? 'text-amber-500' : 'text-muted')}
-            />
-          );
-        })()}
+        ) : (
+          (() => {
+            const Icon = getFileIcon(entry.name);
+            return (
+              <Icon
+                size={12}
+                className={cn('shrink-0', entry.isModified ? 'text-amber-500' : 'text-muted')}
+              />
+            );
+          })()
+        )}
         <span className={cn('truncate', entry.isModified && 'text-amber-500')}>{entry.name}</span>
         {entry.isModified && (
           <span className="ml-auto shrink-0 text-[10px] font-medium text-amber-500">M</span>
         )}
-      </button>
+      </Button>
       {isDir && expanded && (
         <div>
           {isLoading && (
@@ -250,7 +253,10 @@ function FileViewer({
     <div className="flex flex-1 min-h-0 flex-col">
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-secondary/30 px-3 py-1.5">
         <div className="flex items-center gap-2 truncate text-xs text-secondary">
-          {(() => { const Icon = getFileIcon(relativePath); return <Icon size={12} className="shrink-0 text-muted" />; })()}
+          {(() => {
+            const Icon = getFileIcon(relativePath);
+            return <Icon size={12} className="shrink-0 text-muted" />;
+          })()}
           <span className="truncate font-mono">{relativePath}</span>
           {file && !file.isBinary && (
             <span className="text-[10px] text-muted">{formatBytes(file.sizeBytes)}</span>

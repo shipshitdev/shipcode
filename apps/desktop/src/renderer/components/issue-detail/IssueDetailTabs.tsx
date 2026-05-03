@@ -15,10 +15,8 @@ import type {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shipshitdev/ui';
 import { CommentsTab } from './CommentsTab';
 import { ConversationsTab } from './ConversationsTab';
-import { CostsTab } from './CostsTab';
 import { DiffTab } from './DiffTab';
 import { IssueHistoryTab } from './IssueHistoryTab';
-import { PipelineTab } from './PipelineTab';
 import { PlanHistoryTab } from './PlanHistoryTab';
 import { PrdTab } from './PrdTab';
 import type { IssueDetailTab, PhaseKey, PhaseSelection, PlanRunGroup } from './tab-types';
@@ -84,66 +82,36 @@ interface IssueDetailTabsProps {
   onStabilizePr: () => void;
 }
 
-export function IssueDetailTabs({
-  activeIssue,
-  activeTab,
-  activeThreadId,
-  checkpoints,
-  currentPhaseSelections,
-  diffs,
-  effectiveExpanded,
-  effectivePhaseResolvedModels,
-  executorEditable,
-  hasPrFeedbackBlockers,
-  integrationStatus,
-  isRefreshingFromGithub,
-  isSubmitting,
-  isShowingAllPlanRuns,
-  linkedPrUrl,
-  effectiveRequireApproval,
-  effectiveRevisionCount,
-  inheritedRequireApproval,
-  inheritedRevisionCount,
-  loadingPlanDetailIds,
-  normalizedIssueActivity,
-  normalizedPlanHistory,
-  normalizedReviewsByPlanId,
-  normalizedThreadPlanHistory,
-  isPlanHistoryLoading,
-  currentPhaseReasoningEfforts,
-  inheritedPhaseReasoningEfforts,
-  phaseEffortSelectValues,
-  phaseModelValidation,
-  phaseSelectValues,
-  requireApprovalSelectValue,
-  revisionCountSelectValue,
-  planHistoryCollapsed,
-  planRunCount,
-  planRunGroups,
-  projectDefaultPhaseSelections,
-  qaResults,
-  runNumberByThreadId,
-  taskGraph,
-  thread,
-  threadPhase,
-  githubIssueUrl,
-  projectId,
-  commentComposerRequestId,
-  onEditPrd,
-  onActiveTabChange,
-  onFullScreenPlan,
-  onPhaseAgentChange,
-  onPhaseEffortChange,
-  onRequireApprovalChange,
-  onRevisionCountChange,
-  onPhaseOpenRouterSlugBlur,
-  onPlanExpandedChange,
-  onPlanHistoryCollapsedChange,
-  onShowAllPlanRunsChange,
-  onRefreshFromGithub,
-  onRestoreCheckpoint,
-  onStabilizePr,
-}: IssueDetailTabsProps) {
+export function IssueDetailTabs(props: IssueDetailTabsProps) {
+  const {
+    activeIssue,
+    activeTab,
+    activeThreadId,
+    diffs,
+    effectiveExpanded,
+    isRefreshingFromGithub,
+    isShowingAllPlanRuns,
+    loadingPlanDetailIds,
+    normalizedIssueActivity,
+    normalizedPlanHistory,
+    normalizedReviewsByPlanId,
+    normalizedThreadPlanHistory,
+    isPlanHistoryLoading,
+    planHistoryCollapsed,
+    planRunCount,
+    planRunGroups,
+    runNumberByThreadId,
+    threadPhase,
+    projectId,
+    commentComposerRequestId,
+    onEditPrd,
+    onActiveTabChange,
+    onFullScreenPlan,
+    onPlanExpandedChange,
+    onPlanHistoryCollapsedChange,
+    onShowAllPlanRunsChange,
+    onRefreshFromGithub,
+  } = props;
   const orderedTabs: Array<{ value: IssueDetailTab; label: string }> = [
     { value: 'prd', label: 'Issue' },
     ...(activeIssue.isQuickMode
@@ -153,14 +121,14 @@ export function IssueDetailTabs({
       value: 'history',
       label: `Plans${normalizedPlanHistory.length > 0 ? ` (${normalizedPlanHistory.length})` : ''}`,
     },
-    { value: 'pipeline', label: 'Pipeline' },
-    ...(diffs.length > 0 ? [{ value: 'diff' as const, label: `Diff (${diffs.length})` }] : []),
+    ...(activeThreadId
+      ? [{ value: 'diff' as const, label: diffs.length > 0 ? `Diff (${diffs.length})` : 'Diff' }]
+      : []),
     {
       value: 'activity',
       label: `Activity${normalizedIssueActivity.length > 0 ? ` (${normalizedIssueActivity.length})` : ''}`,
     },
     ...(activeThreadId ? [{ value: 'conversations' as const, label: 'Conversations' }] : []),
-    { value: 'costs', label: 'Costs' },
   ];
 
   return (
@@ -179,7 +147,7 @@ export function IssueDetailTabs({
         </TabsList>
       </div>
 
-      <TabsContent value="prd" className={"mt-0"}>
+      <TabsContent value="prd" className={'mt-0'}>
         <PrdTab
           activeIssue={activeIssue}
           isRefreshingFromGithub={isRefreshingFromGithub}
@@ -188,7 +156,7 @@ export function IssueDetailTabs({
         />
       </TabsContent>
 
-      <TabsContent value="comments" className={"mt-0"}>
+      <TabsContent value="comments" className={'mt-0'}>
         <CommentsTab
           projectId={projectId}
           issueNumber={activeIssue.issueNumber}
@@ -196,7 +164,7 @@ export function IssueDetailTabs({
         />
       </TabsContent>
 
-      <TabsContent value="history" className={"mt-0"}>
+      <TabsContent value="history" className={'mt-0'}>
         <PlanHistoryTab
           activeThreadId={activeThreadId}
           effectiveExpanded={effectiveExpanded}
@@ -217,50 +185,11 @@ export function IssueDetailTabs({
         />
       </TabsContent>
 
-      <TabsContent value="pipeline" className={"mt-0"}>
-        <PipelineTab
-          activeIssue={activeIssue}
-          activeThreadId={activeThreadId}
-          checkpoints={checkpoints}
-          currentPhaseReasoningEfforts={currentPhaseReasoningEfforts}
-          currentPhaseSelections={currentPhaseSelections}
-          diffs={diffs}
-          effectivePhaseResolvedModels={effectivePhaseResolvedModels}
-          effectiveRequireApproval={effectiveRequireApproval}
-          executorEditable={executorEditable}
-          hasPrFeedbackBlockers={hasPrFeedbackBlockers}
-          inheritedPhaseReasoningEfforts={inheritedPhaseReasoningEfforts}
-          inheritedRequireApproval={inheritedRequireApproval}
-          inheritedRevisionCount={inheritedRevisionCount}
-          integrationStatus={integrationStatus}
-          isSubmitting={isSubmitting}
-          linkedPrUrl={linkedPrUrl}
-          effectiveRevisionCount={effectiveRevisionCount}
-          phaseEffortSelectValues={phaseEffortSelectValues}
-          phaseModelValidation={phaseModelValidation}
-          phaseSelectValues={phaseSelectValues}
-          requireApprovalSelectValue={requireApprovalSelectValue}
-          revisionCountSelectValue={revisionCountSelectValue}
-          projectDefaultPhaseSelections={projectDefaultPhaseSelections}
-          qaResults={qaResults}
-          taskGraph={taskGraph}
-          thread={thread}
-          githubIssueUrl={githubIssueUrl}
-          onPhaseAgentChange={onPhaseAgentChange}
-          onPhaseEffortChange={onPhaseEffortChange}
-          onRequireApprovalChange={onRequireApprovalChange}
-          onRevisionCountChange={onRevisionCountChange}
-          onPhaseOpenRouterSlugBlur={onPhaseOpenRouterSlugBlur}
-          onRestoreCheckpoint={onRestoreCheckpoint}
-          onStabilizePr={onStabilizePr}
-        />
-      </TabsContent>
-
-      <TabsContent value="diff" className={"mt-0"}>
+      <TabsContent value="diff" className={'mt-0'}>
         <DiffTab diffs={diffs} />
       </TabsContent>
 
-      <TabsContent value="activity" className={"mt-0"}>
+      <TabsContent value="activity" className={'mt-0'}>
         <IssueHistoryTab
           normalizedIssueActivity={normalizedIssueActivity}
           runNumberByThreadId={runNumberByThreadId}
@@ -268,14 +197,10 @@ export function IssueDetailTabs({
       </TabsContent>
 
       {activeThreadId && (
-        <TabsContent value="conversations" className={"mt-0"}>
+        <TabsContent value="conversations" className={'mt-0'}>
           <ConversationsTab threadId={activeThreadId} />
         </TabsContent>
       )}
-
-      <TabsContent value="costs" className={"mt-0"}>
-        <CostsTab projectId={projectId} issueNumber={activeIssue.issueNumber} thread={thread} />
-      </TabsContent>
     </Tabs>
   );
 }

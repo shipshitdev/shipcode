@@ -2,6 +2,7 @@ import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import {
   type AgentType,
+  type GhStatusMapping,
   ISO_NOW_SQL,
   ISSUE_PIPELINE_STATUS,
   type Project,
@@ -29,6 +30,7 @@ interface ProjectRow {
   starter_issue_number: number | null;
   starter_issue_created_at: string | null;
   github_project_url: string | null;
+  github_status_mapping: string | null;
   planner_model_override: AgentType | null;
   reviewer_model_override: AgentType | null;
   executor_model_override: AgentType | null;
@@ -406,6 +408,26 @@ export class ProjectQueries {
       .run(url, id);
   }
 
+  /**
+   * Store the auto-detected mapping from ShipCode macro columns to GH Projects
+   * v2 Status field option names for this project.
+   */
+  setGithubStatusMapping(id: string, mapping: GhStatusMapping): void {
+    this.db
+      .prepare(
+        `UPDATE projects SET github_status_mapping = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
+      )
+      .run(JSON.stringify(mapping), id);
+  }
+
+  clearGithubStatusMapping(id: string): void {
+    this.db
+      .prepare(
+        `UPDATE projects SET github_status_mapping = NULL, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
+      )
+      .run(id);
+  }
+
   updateNotifyGithubUser(id: string, handle: string | null): void {
     this.db
       .prepare(
@@ -512,6 +534,9 @@ function mapProject(row: ProjectRow): Project {
     starterIssueNumber: row.starter_issue_number ?? null,
     starterIssueCreatedAt: toIsoUtc(row.starter_issue_created_at) ?? row.starter_issue_created_at,
     githubProjectUrl: row.github_project_url ?? null,
+    githubStatusMapping: row.github_status_mapping
+      ? (JSON.parse(row.github_status_mapping) as GhStatusMapping)
+      : null,
     plannerModelOverride: row.planner_model_override ?? null,
     reviewerModelOverride: row.reviewer_model_override ?? null,
     executorModelOverride: row.executor_model_override ?? null,

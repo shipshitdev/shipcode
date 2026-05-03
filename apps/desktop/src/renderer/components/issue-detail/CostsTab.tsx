@@ -6,7 +6,7 @@ import type {
   Thread,
 } from '@shipcode/shared';
 import { formatCost, MODEL_DISPLAY, PIPELINE_PHASE } from '@shipcode/shared';
-import { Badge, Skeleton } from '@shipshitdev/ui';
+import { Badge, Button, Skeleton } from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ActivityHeatmap } from '../heatmap/ActivityHeatmap';
@@ -200,8 +200,9 @@ export function CostsTab({
                 const isExpanded = expandedThreadId === task.threadId;
                 return (
                   <div key={task.threadId}>
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
                       onClick={() => setExpandedThreadId(isExpanded ? null : task.threadId)}
                       aria-expanded={isExpanded}
                       className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-secondary/40"
@@ -245,7 +246,7 @@ export function CostsTab({
                       <span className="shrink-0 text-[10px] text-muted">
                         {timeAgo(task.updatedAt)}
                       </span>
-                    </button>
+                    </Button>
                     {isExpanded && <StepAttempts threadId={task.threadId} />}
                   </div>
                 );

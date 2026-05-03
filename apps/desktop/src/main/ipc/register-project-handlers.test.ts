@@ -107,6 +107,7 @@ describe('registerProjectHandlers', () => {
     starterIssueNumber: null,
     starterIssueCreatedAt: null,
     githubProjectUrl: null,
+    githubStatusMapping: null,
     plannerModelOverride: null,
     reviewerModelOverride: null,
     executorModelOverride: null,

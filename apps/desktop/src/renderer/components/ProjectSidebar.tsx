@@ -52,7 +52,11 @@ import { NOTIFICATIONS_STALE_TIME, STABLE_APP_STATE_STALE_TIME } from '../query-
 import { type ProjectTab, useAppStore } from '../stores/app-store';
 import { ProjectProviderWarningPopover } from './ProjectProviderWarningPopover';
 
-const PROJECT_TAB_ITEMS: Array<{ key: ProjectTab; label: string; icon: ComponentType<{ size?: number; className?: string }> }> = [
+const PROJECT_TAB_ITEMS: Array<{
+  key: ProjectTab;
+  label: string;
+  icon: ComponentType<{ size?: number; className?: string }>;
+}> = [
   { key: 'issues', label: 'Issues', icon: LayoutList },
   { key: 'git', label: 'Git', icon: GitPullRequest },
   { key: 'code', label: 'Code', icon: Code2 },
@@ -567,114 +571,115 @@ export function ProjectSidebar() {
                     </Button>
 
                     <div className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-1">
-                    {warningBadgeLabel && settings ? (
-                      <ProjectProviderWarningPopover
-                        settings={settings}
-                        project={project}
-                        warnings={projectWarnings}
-                        className="app-region-no-drag"
-                      />
-                    ) : null}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          className={cn(
-                            'opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100',
-                            warningBadgeLabel ? 'text-warning' : 'text-muted',
-                          )}
-                          aria-label={`More actions for ${project.name}`}
-                          title={warningTitle}
-                        >
-                          <MoreHorizontal size={14} />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent
-                        align="end"
-                        collisionPadding={{ top: 44, right: 8, bottom: 8, left: 8 }}
-                        className="min-w-[220px]"
-                        onInteractOutside={(e) => {
-                          const target = e.target as Element | null;
-                          if (target?.closest('[data-project-list]')) {
-                            e.preventDefault();
-                          }
-                        }}
-                      >
-                        {(() => {
-                          const defaultTarget = settings?.projectOpenTarget ?? 'cursor';
-                          const app = integrations?.desktopApps?.[defaultTarget];
-                          if (!app?.available) return null;
-
-                          const Icon = PROJECT_OPEN_TARGET_ICONS[defaultTarget];
-
-                          return (
-                            <DropdownMenuItem
-                              disabled={project.pathExists === false}
-                              onSelect={() =>
-                                openProjectPath.mutate({
-                                  projectId: project.id,
-                                  target: defaultTarget,
-                                })
-                              }
-                            >
-                              <Icon size={12} className="shrink-0 text-secondary" />
-                              <span className="truncate">Open in {app.label}</span>
-                            </DropdownMenuItem>
-                          );
-                        })()}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onSelect={() => openProjectSettingsModal(project.id)}>
-                          <Settings size={12} /> Settings
-                        </DropdownMenuItem>
-                        {project.pathExists !== false &&
-                        (project.setupStatus === 'missing' || project.setupStatus === 'invalid') ? (
-                          <DropdownMenuItem
-                            onSelect={() => openProjectSettingsModal(project.id, 'setup')}
+                      {warningBadgeLabel && settings ? (
+                        <ProjectProviderWarningPopover
+                          settings={settings}
+                          project={project}
+                          warnings={projectWarnings}
+                          className="app-region-no-drag"
+                        />
+                      ) : null}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            className={cn(
+                              'opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100',
+                              warningBadgeLabel ? 'text-warning' : 'text-muted',
+                            )}
+                            aria-label={`More actions for ${project.name}`}
+                            title={warningTitle}
                           >
-                            <Wrench size={12} /> Setup
-                          </DropdownMenuItem>
-                        ) : null}
-                        {project.pathExists === false && (
-                          <DropdownMenuItem onSelect={() => relinkProject.mutate(project.id)}>
-                            <Wrench size={12} /> Relink folder…
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuItem
-                          onSelect={() =>
-                            pinProject.mutate({ projectId: project.id, pinned: !project.pinned })
-                          }
-                        >
-                          {project.pinned ? (
-                            <>
-                              <PinOff size={12} /> Unpin
-                            </>
-                          ) : (
-                            <>
-                              <Pin size={12} /> Pin to top
-                            </>
-                          )}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => archiveProject.mutate(project.id)}>
-                          <Archive size={12} /> Archive
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onSelect={() => {
-                            if (
-                              window.confirm(
-                                `Remove "${project.name}" from ShipCode? This does not delete the repository on disk.`,
-                              )
-                            ) {
-                              removeProject.mutate(project.id);
+                            <MoreHorizontal size={14} />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align="end"
+                          collisionPadding={{ top: 44, right: 8, bottom: 8, left: 8 }}
+                          className="min-w-[220px]"
+                          onInteractOutside={(e) => {
+                            const target = e.target as Element | null;
+                            if (target?.closest('[data-project-list]')) {
+                              e.preventDefault();
                             }
                           }}
-                          className="text-danger"
                         >
-                          <Trash2 size={12} /> Remove
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                          {(() => {
+                            const defaultTarget = settings?.projectOpenTarget ?? 'cursor';
+                            const app = integrations?.desktopApps?.[defaultTarget];
+                            if (!app?.available) return null;
+
+                            const Icon = PROJECT_OPEN_TARGET_ICONS[defaultTarget];
+
+                            return (
+                              <DropdownMenuItem
+                                disabled={project.pathExists === false}
+                                onSelect={() =>
+                                  openProjectPath.mutate({
+                                    projectId: project.id,
+                                    target: defaultTarget,
+                                  })
+                                }
+                              >
+                                <Icon size={12} className="shrink-0 text-secondary" />
+                                <span className="truncate">Open in {app.label}</span>
+                              </DropdownMenuItem>
+                            );
+                          })()}
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onSelect={() => openProjectSettingsModal(project.id)}>
+                            <Settings size={12} /> Settings
+                          </DropdownMenuItem>
+                          {project.pathExists !== false &&
+                          (project.setupStatus === 'missing' ||
+                            project.setupStatus === 'invalid') ? (
+                            <DropdownMenuItem
+                              onSelect={() => openProjectSettingsModal(project.id, 'setup')}
+                            >
+                              <Wrench size={12} /> Setup
+                            </DropdownMenuItem>
+                          ) : null}
+                          {project.pathExists === false && (
+                            <DropdownMenuItem onSelect={() => relinkProject.mutate(project.id)}>
+                              <Wrench size={12} /> Relink folder…
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem
+                            onSelect={() =>
+                              pinProject.mutate({ projectId: project.id, pinned: !project.pinned })
+                            }
+                          >
+                            {project.pinned ? (
+                              <>
+                                <PinOff size={12} /> Unpin
+                              </>
+                            ) : (
+                              <>
+                                <Pin size={12} /> Pin to top
+                              </>
+                            )}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onSelect={() => archiveProject.mutate(project.id)}>
+                            <Archive size={12} /> Archive
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onSelect={() => {
+                              if (
+                                window.confirm(
+                                  `Remove "${project.name}" from ShipCode? This does not delete the repository on disk.`,
+                                )
+                              ) {
+                                removeProject.mutate(project.id);
+                              }
+                            }}
+                            className="text-danger"
+                          >
+                            <Trash2 size={12} /> Remove
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
 
@@ -706,10 +711,11 @@ export function ProjectSidebar() {
         ))}
       </div>
       {/* Drag handle for resizing */}
-      <button
+      <Button
         type="button"
+        variant="ghost"
         aria-label="Resize project sidebar"
-        className="absolute top-0 right-0 bottom-0 w-1 cursor-col-resize hover:bg-accent/20 active:bg-accent/30 transition-colors"
+        className="absolute top-0 right-0 bottom-0 h-auto w-1 cursor-col-resize rounded-none p-0 hover:bg-accent/20 active:bg-accent/30 transition-colors"
         onMouseDown={handleResizeMouseDown}
       />
     </aside>

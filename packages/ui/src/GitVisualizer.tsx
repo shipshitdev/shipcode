@@ -109,9 +109,10 @@ export function GitVisualizer({
               const divergence = formatDivergence(worktree);
               const hasLocalCommits = worktree.aheadCount > 0;
               return (
-                <button
+                <Button
                   key={worktree.id}
                   type="button"
+                  variant="ghost"
                   className={cn(
                     'w-full rounded-md border px-2.5 py-2 text-left transition-colors',
                     selected
@@ -150,7 +151,7 @@ export function GitVisualizer({
                       {divergence}
                     </div>
                   ) : null}
-                </button>
+                </Button>
               );
             })}
           </div>

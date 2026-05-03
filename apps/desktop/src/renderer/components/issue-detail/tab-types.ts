@@ -4,11 +4,9 @@ export const ISSUE_DETAIL_TABS = [
   'prd',
   'comments',
   'history',
-  'pipeline',
   'diff',
   'activity',
   'conversations',
-  'costs',
 ] as const;
 export type PhaseKey = ResolvedPhaseModel;
 export type IssueDetailTab = (typeof ISSUE_DETAIL_TABS)[number];

@@ -260,7 +260,11 @@ export function App() {
       <HealthBanner />
       <ProjectPathBanner project={activeProject ?? null} />
       <div className="flex flex-1 overflow-hidden">
-        {settingsVisible ? <SettingsSidebar /> : <ProjectSidebar />}
+        {settingsVisible ? (
+          <SettingsSidebar />
+        ) : (
+          !hasActiveIssue && !hasActiveAutomationThread && <ProjectSidebar />
+        )}
         {/* Center column — main view above, terminal below. */}
         <div className="flex flex-col flex-1 overflow-hidden min-h-0">
           {!hideMainContentForTerminal && (

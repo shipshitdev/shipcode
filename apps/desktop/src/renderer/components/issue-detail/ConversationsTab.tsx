@@ -115,16 +115,17 @@ export function ConversationsTab({ threadId }: ConversationsTabProps) {
       {/* Phase filter chips + copy all */}
       <div className="flex items-center gap-2 flex-wrap">
         {ALL_PHASES.map((phase) => (
-          <button
+          <Button
             key={phase}
             type="button"
+            variant="ghost"
             onClick={() => togglePhase(phase)}
             className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-opacity ${
               PHASE_COLORS[phase] ?? 'bg-zinc-500/15 text-zinc-400'
             } ${selectedPhases.has(phase) ? 'opacity-100' : 'opacity-30'}`}
           >
             {phase}
-          </button>
+          </Button>
         ))}
         <div className="ml-auto">
           <Button variant="ghost" size="sm" onClick={copyAll} className="h-7 text-xs gap-1">
@@ -177,7 +178,7 @@ function ConversationTurn({
   const isLong = lines.length > COLLAPSE_LINE_THRESHOLD;
   const displayContent =
     isLong && !isExpanded
-      ? lines.slice(0, COLLAPSE_LINE_THRESHOLD).join('\n') + '\n…'
+      ? `${lines.slice(0, COLLAPSE_LINE_THRESHOLD).join('\n')}\n…`
       : conv.content;
 
   const speakerColor =
@@ -205,13 +206,15 @@ function ConversationTurn({
           {conv.costUsd != null && conv.costUsd > 0 && (
             <span className="text-muted-foreground text-[10px]">${conv.costUsd.toFixed(4)}</span>
           )}
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-xs"
             onClick={onCopy}
             className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
           >
             {isCopied ? <CheckIcon className="h-3 w-3" /> : <CopyIcon className="h-3 w-3" />}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -221,13 +224,15 @@ function ConversationTurn({
       </pre>
 
       {isLong && (
-        <button
+        <Button
           type="button"
+          variant="link"
+          size="xs"
           onClick={onToggleExpand}
           className="text-muted-foreground hover:text-foreground text-xs underline"
         >
           {isExpanded ? 'Show less' : `Show full (${lines.length} lines)`}
-        </button>
+        </Button>
       )}
     </div>
   );

@@ -6,7 +6,7 @@ import type {
   HeatmapScope,
 } from '@shipcode/shared';
 import { formatTokenCount } from '@shipcode/shared';
-import { cn } from '@shipshitdev/ui';
+import { Button, cn } from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -24,6 +24,10 @@ interface ActivityHeatmapProps {
   showMetricToggle?: boolean;
   showRangePicker?: boolean;
   className?: string;
+  /** Controlled range — when provided, overrides internal state. */
+  range?: HeatmapRange;
+  /** Called when the user changes the range picker. */
+  onRangeChange?: (r: HeatmapRange) => void;
 }
 
 const ALL_METRICS: HeatmapMetric[] = ['tokens', 'runs', 'prsOpened', 'costUsd'];
@@ -182,6 +186,8 @@ export function ActivityHeatmap({
   showMetricToggle = true,
   showRangePicker = true,
   className,
+  range: controlledRange,
+  onRangeChange,
 }: ActivityHeatmapProps) {
   const resolvedDefaultMetric = allowedMetrics.includes(defaultMetric)
     ? defaultMetric
@@ -189,7 +195,7 @@ export function ActivityHeatmap({
   const [metric, setMetric] = useState<HeatmapMetric>(() =>
     readStored<HeatmapMetric>(storageKey(surface, 'metric'), allowedMetrics, resolvedDefaultMetric),
   );
-  const [range, setRange] = useState<HeatmapRange>(() => {
+  const [internalRange, setInternalRange] = useState<HeatmapRange>(() => {
     const stored = readStored<string>(
       storageKey(surface, 'range'),
       allowedRanges.map(String),
@@ -198,6 +204,8 @@ export function ActivityHeatmap({
     const parsed = Number(stored) as HeatmapRange;
     return (allowedRanges as number[]).includes(parsed) ? parsed : defaultRange;
   });
+  // When a controlled range is provided, use it; otherwise fall back to internal state.
+  const range = controlledRange !== undefined ? controlledRange : internalRange;
 
   useEffect(() => {
     writeStored(storageKey(surface, 'metric'), metric);
@@ -258,9 +266,10 @@ export function ActivityHeatmap({
               className="flex items-center gap-1 rounded-lg border border-border bg-tertiary/40 p-0.5"
             >
               {allowedMetrics.map((m) => (
-                <button
+                <Button
                   key={m}
                   type="button"
+                  variant="ghost"
                   role="tab"
                   aria-selected={metric === m}
                   onClick={() => setMetric(m)}
@@ -270,7 +279,7 @@ export function ActivityHeatmap({
                   )}
                 >
                   {METRIC_LABEL[m]}
-                </button>
+                </Button>
               ))}
             </div>
           ) : (
@@ -283,19 +292,23 @@ export function ActivityHeatmap({
               className="flex items-center gap-1 rounded-lg border border-border bg-tertiary/40 p-0.5"
             >
               {allowedRanges.map((r) => (
-                <button
+                <Button
                   key={r}
                   type="button"
+                  variant="ghost"
                   role="tab"
                   aria-selected={range === r}
-                  onClick={() => setRange(r)}
+                  onClick={() => {
+                    setInternalRange(r);
+                    onRangeChange?.(r);
+                  }}
                   className={cn(
                     'h-6 rounded-md px-2 text-[11px] font-medium text-secondary transition-colors',
                     range === r && 'bg-elevated text-primary shadow-sm',
                   )}
                 >
                   {RANGE_LABEL[r]}
-                </button>
+                </Button>
               ))}
             </div>
           )}
@@ -334,9 +347,10 @@ export function ActivityHeatmap({
                   const bucket = bucketFor(value, thresholds);
                   const rec = cell.record;
                   return (
-                    <button
+                    <Button
                       key={rec.date}
                       type="button"
+                      variant="ghost"
                       tabIndex={0}
                       aria-label={`${formatTooltipDate(rec.date)}: ${formatMetric(value, metric)}`}
                       onMouseEnter={(e) => handleCellEnter(e, rec)}

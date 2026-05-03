@@ -109,6 +109,7 @@ function makeProject(overrides: Record<string, unknown> = {}) {
     path: '/tmp/project',
     gitRemote: 'https://github.com/acme/repo.git',
     githubProjectUrl: null,
+    githubStatusMapping: null,
     defaultBranch: 'main',
     plannerModelOverride: null,
     reviewerModelOverride: null,

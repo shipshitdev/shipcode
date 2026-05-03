@@ -13,6 +13,7 @@ import {
   GhCli,
   inspectProjectSetup,
   validateOpenRouterModel,
+  validateProjectStatusField,
   writeProjectSetup,
 } from '@shipcode/agents';
 import { GitService, WorktreeManager } from '@shipcode/git';
@@ -37,6 +38,7 @@ import {
   PIPELINE_PHASE,
   parseGithubRemote,
   parseUnifiedDiff,
+  SHIPCODE_PIPELINE_LABELS,
   validateGithubProjectUrl,
 } from '@shipcode/shared';
 import { resolveWorktreeParent } from '@shipcode/shared/worktree-path';
@@ -1061,7 +1063,7 @@ export function registerProjectHandlers({
           sizeBytes,
           isModified: isFile
             ? modifiedSet.has(entryRelative)
-            : isDirty && [...modifiedSet].some((p) => p.startsWith(entryRelative + '/')),
+            : isDirty && [...modifiedSet].some((p) => p.startsWith(`${entryRelative}/`)),
         });
       }
 
@@ -1250,6 +1252,45 @@ export function registerProjectHandlers({
       }
 
       queries.projects.updateGithubProjectUrl(projectId, result.value);
+
+      // Auto-detect GH Projects v2 Status field mapping when URL is set
+      if (result.value && project.path) {
+        try {
+          const validation = await validateProjectStatusField({
+            cwd: project.path,
+            projectUrl: result.value,
+            onWarn: (msg: string, err?: unknown) =>
+              log.warn('[project:set-github-project-url] status validation:', msg, err),
+          });
+          if (validation.ok && validation.mapping) {
+            queries.projects.setGithubStatusMapping(projectId, validation.mapping);
+            // Ensure pipeline labels exist in the repo
+            const ghCli = new GhCli(project.path);
+            await ghCli.ensureLabels([...SHIPCODE_PIPELINE_LABELS]);
+            log.info('[project:set-github-project-url] status mapping auto-detected', {
+              mapping: validation.mapping,
+            });
+          } else {
+            log.info('[project:set-github-project-url] status auto-detection partial/failed', {
+              ok: validation.ok,
+              reason: validation.reason,
+              available: validation.availableOptions,
+            });
+            // Store partial mapping if available — still useful for partial sync
+            if (validation.mapping) {
+              queries.projects.setGithubStatusMapping(projectId, validation.mapping);
+            } else {
+              queries.projects.clearGithubStatusMapping(projectId);
+            }
+          }
+        } catch (err) {
+          log.warn('[project:set-github-project-url] status field validation error:', err);
+          // Don't block saving the URL — status sync is best-effort
+        }
+      } else if (!result.value) {
+        queries.projects.clearGithubStatusMapping(projectId);
+      }
+
       const updated = enrichProjectPath(queries.projects.getById(projectId));
       if (!updated) throw new Error(`Project ${projectId} not found after GitHub URL update`);
       return updated;

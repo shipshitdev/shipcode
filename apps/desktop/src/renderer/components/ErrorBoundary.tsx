@@ -1,3 +1,4 @@
+import { Button } from '@shipshitdev/ui';
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { captureRendererException } from '../telemetry';
 
@@ -105,8 +106,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               <pre className="max-h-64 w-full overflow-auto rounded-lg border border-red-500/20 bg-red-500/5 p-4 text-left font-mono text-xs leading-relaxed text-red-300 select-text">
                 {trace}
               </pre>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 onClick={this.handleCopy}
                 className="absolute top-2.5 right-2.5 inline-flex items-center gap-1.5 rounded-md border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-[11px] font-medium text-red-400 transition-colors hover:bg-red-500/20"
               >
@@ -146,25 +148,27 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                     Copy
                   </>
                 )}
-              </button>
+              </Button>
             </div>
           )}
 
           <div className="flex gap-3">
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={this.handleDismiss}
               className="inline-flex items-center justify-center rounded-md border border-border bg-tertiary px-4 py-2 text-[13px] font-medium text-primary transition-colors hover:bg-hover"
             >
               Dismiss
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="ghost"
               onClick={this.handleReload}
               className="inline-flex items-center justify-center rounded-md bg-red-600 px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-red-700"
             >
               Reload App
-            </button>
+            </Button>
           </div>
         </div>
       </div>

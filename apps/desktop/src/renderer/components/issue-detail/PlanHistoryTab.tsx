@@ -55,8 +55,9 @@ export function PlanHistoryTab({
       {normalizedPlanHistory.length > 0 ? (
         <div className="mb-5">
           <div className="mb-2 flex w-full items-center gap-1">
-            <button
+            <Button
               type="button"
+              variant="ghost"
               className="flex min-w-0 flex-1 items-center text-left"
               onClick={() => onPlanHistoryCollapsedChange(!planHistoryCollapsed)}
               title={planHistoryCollapseLabel}
@@ -67,7 +68,7 @@ export function PlanHistoryTab({
                 {normalizedPlanHistory.length !== 1 ? 's' : ''}
                 {planRunCount > 1 ? ` across ${planRunCount} runs` : ''})
               </h4>
-            </button>
+            </Button>
             <Button
               variant="ghost"
               size="icon-xs"

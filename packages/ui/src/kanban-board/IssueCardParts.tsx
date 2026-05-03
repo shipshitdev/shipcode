@@ -62,7 +62,7 @@ export function IssueExternalBlockers({ issue }: { issue: GitHubIssueCacheRecord
 }
 
 const ACTION_BADGE_CLASS =
-  'absolute inset-0 inline-flex h-auto items-center justify-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide opacity-0 transition-opacity group-hover:opacity-100';
+  'absolute inset-0 inline-flex h-full items-center justify-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide opacity-0 transition-opacity group-hover:opacity-100';
 const PLAN_ACTION_BADGE_CLASS =
   'border-agent/25 bg-agent/10 text-agent hover:border-agent/35 hover:bg-agent/15 hover:text-agent';
 const DANGER_ACTION_BADGE_CLASS =
@@ -107,6 +107,7 @@ interface DraggableCardProps {
   onOpenPullRequest?: (url: string) => void;
   onCopyBranchName?: (issue: GitHubIssueCacheRecord, branchName: string) => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
+  issueGithubUrl?: string | null;
   branchName?: string | null;
   branchCopyState?: 'copied' | 'error' | null;
   isSelected?: boolean;
@@ -131,6 +132,7 @@ function DraggableCardComponent({
   onOpenPullRequest,
   onCopyBranchName,
   onArchiveIssue,
+  issueGithubUrl,
   branchName,
   branchCopyState,
   isSelected,
@@ -167,355 +169,377 @@ function DraggableCardComponent({
 
   return (
     <IssueHoverCard issue={issue} disabled={isDragging || isCreating}>
-    {/* biome-ignore lint/a11y/useSemanticElements: The card contains nested action buttons, so it cannot be a semantic button. */}
-    <div
-      ref={setNodeRef}
-      className={cn(
-        'group relative flex min-h-[92px] flex-col overflow-hidden rounded-md border bg-elevated p-3 text-left transition-colors outline-none',
-        draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-default',
-        isCreating && 'border-agent/30 bg-agent/[0.025] opacity-80',
-        isSelected && !isFailed && !isAwaiting && !isActive
-          ? 'border-text-primary/60 bg-elevated'
-          : !isSelected && !isActive
-            ? 'border-border/50 hover:border-border-strong'
-            : '',
-        isCompleted &&
-          (isSelected
-            ? 'border-success/65 bg-success/[0.08] opacity-90'
-            : 'border-success/35 bg-success/[0.04] opacity-80 hover:border-success/55 hover:bg-success/[0.055] hover:opacity-90'),
-        isDone &&
-          (isSelected
-            ? 'border-done/65 bg-done/[0.09] opacity-85'
-            : 'border-done/35 bg-done/[0.045] opacity-70 hover:border-done/55 hover:bg-done/[0.06] hover:opacity-80'),
-        isFailed &&
-          (isSelected
-            ? 'border-danger/65 bg-danger/[0.09] opacity-85'
-            : 'border-danger/35 bg-danger/[0.045] opacity-70 hover:border-danger/55 hover:bg-danger/[0.06] hover:opacity-80'),
-        approvedAwaitingExecution &&
-          (isSelected
-            ? 'border-agent/65 bg-agent/[0.08]'
-            : 'border-agent/35 bg-agent/[0.04] hover:border-agent/55 hover:bg-agent/[0.055]'),
-        isAwaiting &&
-          (isSelected
-            ? 'border-warning bg-warning/[0.07]'
-            : 'border-warning/30 bg-warning/[0.03] hover:border-warning/50'),
-        isActive && 'shadow-[0_0_12px_rgba(56,189,248,0.18)]',
-        isActive &&
-          (isSelected
-            ? 'border-agent/70 bg-agent/[0.06]'
-            : 'border-agent/40 bg-agent/[0.03] hover:border-agent/60'),
-        isFlashing && 'animate-card-flash ring-2 ring-agent/55',
-        isKeyboardFocused && 'border-accent/80 ring-2 ring-accent/70',
-        isDragging && 'opacity-50',
-      )}
-      data-issue-card-id={issue.id}
-      data-flashing={isFlashing ? 'true' : undefined}
-      data-keyboard-focused={isKeyboardFocused ? 'true' : undefined}
-      onClick={(event) => {
-        if (event.defaultPrevented || isDragging || isCreating) return;
-        onClick(issue);
-      }}
-      {...listeners}
-      {...attributes}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(event) => {
-        if (event.defaultPrevented || event.currentTarget !== event.target) return;
-        if (event.key !== 'Enter' && event.key !== ' ') return;
-        event.preventDefault();
-        if (isCreating) return;
-        onClick(issue);
-      }}
-    >
-      {isCreating && (
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 rounded-[inherit] bg-[repeating-linear-gradient(135deg,rgba(56,189,248,0.04)_0,rgba(56,189,248,0.04)_8px,transparent_8px,transparent_16px)]"
-        />
-      )}
-      {isActive && (
-        <div
-          aria-hidden="true"
-          className="issue-card-active-bg pointer-events-none absolute inset-0 rounded-[inherit]"
-        >
-          <span className="absolute inset-0 bg-gradient-to-br from-agent/[0.05] via-agent/[0.02] to-transparent" />
-          <span className="absolute inset-0 animate-slide-progress-card bg-gradient-to-r from-transparent via-white/[0.08] to-transparent" />
-        </div>
-      )}
-      {issue.pipelineStatus !== ISSUE_PIPELINE_STATUS.todo &&
-        issue.pipelineStatus !== ISSUE_PIPELINE_STATUS.queued &&
-        issue.pipelineStatus !== ISSUE_PIPELINE_STATUS.failed && (
+      {/* biome-ignore lint/a11y/useSemanticElements: The card contains nested action buttons, so it cannot be a semantic button. */}
+      <div
+        ref={setNodeRef}
+        className={cn(
+          'group relative flex min-h-[92px] flex-col overflow-hidden rounded-md border bg-elevated p-3 text-left transition-colors outline-none',
+          draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-default',
+          isCreating && 'border-agent/30 bg-agent/[0.025] opacity-80',
+          isSelected && !isFailed && !isAwaiting && !isActive
+            ? 'border-text-primary/60 bg-elevated'
+            : !isSelected && !isActive
+              ? 'border-border/50 hover:border-border-strong'
+              : '',
+          isCompleted &&
+            (isSelected
+              ? 'border-success/65 bg-success/[0.08] opacity-90'
+              : 'border-success/35 bg-success/[0.04] opacity-80 hover:border-success/55 hover:bg-success/[0.055] hover:opacity-90'),
+          isDone &&
+            (isSelected
+              ? 'border-done/65 bg-done/[0.09] opacity-85'
+              : 'border-done/35 bg-done/[0.045] opacity-70 hover:border-done/55 hover:bg-done/[0.06] hover:opacity-80'),
+          isFailed &&
+            (isSelected
+              ? 'border-danger/65 bg-danger/[0.09] opacity-85'
+              : 'border-danger/35 bg-danger/[0.045] opacity-70 hover:border-danger/55 hover:bg-danger/[0.06] hover:opacity-80'),
+          approvedAwaitingExecution &&
+            (isSelected
+              ? 'border-agent/65 bg-agent/[0.08]'
+              : 'border-agent/35 bg-agent/[0.04] hover:border-agent/55 hover:bg-agent/[0.055]'),
+          isAwaiting &&
+            (isSelected
+              ? 'border-warning bg-warning/[0.07]'
+              : 'border-warning/30 bg-warning/[0.03] hover:border-warning/50'),
+          isActive && 'shadow-[0_0_12px_rgba(56,189,248,0.18)]',
+          isActive &&
+            (isSelected
+              ? 'border-agent/70 bg-agent/[0.06]'
+              : 'border-agent/40 bg-agent/[0.03] hover:border-agent/60'),
+          isFlashing && 'animate-card-flash ring-2 ring-agent/55',
+          isKeyboardFocused && 'border-accent/80 ring-2 ring-accent/70',
+          isDragging && 'opacity-50',
+        )}
+        data-issue-card-id={issue.id}
+        data-flashing={isFlashing ? 'true' : undefined}
+        data-keyboard-focused={isKeyboardFocused ? 'true' : undefined}
+        onClick={(event) => {
+          if (event.defaultPrevented || isDragging || isCreating) return;
+          onClick(issue);
+        }}
+        {...listeners}
+        {...attributes}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(event) => {
+          if (event.defaultPrevented || event.currentTarget !== event.target) return;
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          event.preventDefault();
+          if (isCreating) return;
+          onClick(issue);
+        }}
+      >
+        {isCreating && (
           <div
-            className={cn(
-              'absolute right-0 bottom-0 left-0 z-10 h-[3px] overflow-hidden rounded-b-md',
-              isCompleted
-                ? 'bg-success/15'
-                : isDone
-                  ? 'bg-done/15'
-                  : approvedAwaitingExecution
-                    ? 'bg-agent/15'
-                    : 'bg-agent/15',
-            )}
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 rounded-[inherit] bg-[repeating-linear-gradient(135deg,rgba(56,189,248,0.04)_0,rgba(56,189,248,0.04)_8px,transparent_8px,transparent_16px)]"
+          />
+        )}
+        {isActive && (
+          <div
+            aria-hidden="true"
+            className="issue-card-active-bg pointer-events-none absolute inset-0 rounded-[inherit]"
           >
-            <div
-              className={cn(
-                'absolute h-full transition-[width] duration-700',
-                isCompleted
-                  ? 'bg-success'
-                  : isDone
-                    ? 'bg-done'
-                    : approvedAwaitingExecution
-                      ? 'bg-agent'
-                      : issue.pipelineStatus === ISSUE_PIPELINE_STATUS.awaitingApproval ||
-                          issue.pipelineStatus === ISSUE_PIPELINE_STATUS.clarifying
-                        ? 'bg-warning'
-                        : 'bg-agent',
-              )}
-              style={{ width: `${phaseToProgress(issue.pipelineStatus)}%` }}
-            />
-            {isActive && (
-              <span className="absolute inset-0 animate-slide-progress bg-gradient-to-r from-transparent via-white/30 to-transparent" />
-            )}
+            <span className="absolute inset-0 bg-gradient-to-br from-agent/[0.05] via-agent/[0.02] to-transparent" />
+            <span className="absolute inset-0 animate-slide-progress-card bg-gradient-to-r from-transparent via-white/[0.08] to-transparent" />
           </div>
         )}
-      <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-1">
-        <StalenessDot staleness={staleness} />
-        {branchName && onCopyBranchName && !isCreating && !isAutomation && (
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className={cn(
-              'text-muted/60 opacity-0 transition-opacity hover:bg-muted/10 group-hover:opacity-100',
-              branchCopyState === 'copied'
-                ? 'text-success hover:text-success'
-                : branchCopyState === 'error'
-                  ? 'text-danger hover:text-danger'
-                  : 'hover:text-primary',
-            )}
-            title={
-              branchCopyState === 'copied'
-                ? 'Copied!'
-                : branchCopyState === 'error'
-                  ? 'Clipboard write failed'
-                  : `Copy branch name (${branchName})`
-            }
-            aria-label={`Copy branch name for issue #${issue.issueNumber}`}
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.stopPropagation();
-              onCopyBranchName(issue, branchName);
-            }}
-          >
-            {branchCopyState === 'copied' ? <Check size={14} /> : <Copy size={14} />}
-          </Button>
-        )}
-        {!isCreating && (
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className="text-muted/70 hover:bg-muted/10 hover:text-primary"
-            title="Open issue detail"
-            aria-label="Open issue detail"
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.stopPropagation();
-              onClick(issue);
-            }}
-          >
-            <PanelLeftOpen size={14} />
-          </Button>
-        )}
-        {isDoneState && onArchiveIssue && !isAutomation && (
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className="text-muted/60 opacity-0 transition-opacity hover:bg-muted/10 hover:text-muted group-hover:opacity-100"
-            title="Archive issue"
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.stopPropagation();
-              onArchiveIssue(issue);
-            }}
-          >
-            <Archive size={14} />
-          </Button>
-        )}
-      </div>
-      <div
-        className={cn(
-          'relative z-10 flex min-w-0 items-center justify-between gap-2',
-          branchName && onCopyBranchName && !isAutomation ? 'pr-12' : 'pr-7',
-        )}
-      >
-        <div className="flex min-w-0 flex-1 items-center gap-1.5">
-          <span className="shrink-0 font-mono text-[11px] text-secondary">{referenceLabel}</span>
-          {linkedPrLabel &&
-            (issue.linkedPrUrl && onOpenPullRequest ? (
+        {issue.pipelineStatus !== ISSUE_PIPELINE_STATUS.todo &&
+          issue.pipelineStatus !== ISSUE_PIPELINE_STATUS.queued &&
+          issue.pipelineStatus !== ISSUE_PIPELINE_STATUS.failed && (
+            <div
+              className={cn(
+                'absolute right-0 bottom-0 left-0 z-10 h-[3px] overflow-hidden rounded-b-md',
+                isCompleted
+                  ? 'bg-success/15'
+                  : isDone
+                    ? 'bg-done/15'
+                    : approvedAwaitingExecution
+                      ? 'bg-agent/15'
+                      : 'bg-agent/15',
+              )}
+            >
+              <div
+                className={cn(
+                  'absolute h-full transition-[width] duration-700',
+                  isCompleted
+                    ? 'bg-success'
+                    : isDone
+                      ? 'bg-done'
+                      : approvedAwaitingExecution
+                        ? 'bg-agent'
+                        : issue.pipelineStatus === ISSUE_PIPELINE_STATUS.awaitingApproval ||
+                            issue.pipelineStatus === ISSUE_PIPELINE_STATUS.clarifying
+                          ? 'bg-warning'
+                          : 'bg-agent',
+                )}
+                style={{ width: `${phaseToProgress(issue.pipelineStatus)}%` }}
+              />
+              {isActive && (
+                <span className="absolute inset-0 animate-slide-progress bg-gradient-to-r from-transparent via-white/30 to-transparent" />
+              )}
+            </div>
+          )}
+        <StalenessDot staleness={staleness} className="absolute right-2 bottom-2 z-10" />
+        <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-1">
+          {branchName && onCopyBranchName && !isCreating && !isAutomation && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className={cn(
+                'text-muted/60 opacity-0 transition-opacity hover:bg-muted/10 group-hover:opacity-100',
+                branchCopyState === 'copied'
+                  ? 'text-success hover:text-success'
+                  : branchCopyState === 'error'
+                    ? 'text-danger hover:text-danger'
+                    : 'hover:text-primary',
+              )}
+              title={
+                branchCopyState === 'copied'
+                  ? 'Copied!'
+                  : branchCopyState === 'error'
+                    ? 'Clipboard write failed'
+                    : `Copy branch name (${branchName})`
+              }
+              aria-label={`Copy branch name for issue #${issue.issueNumber}`}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                onCopyBranchName(issue, branchName);
+              }}
+            >
+              {branchCopyState === 'copied' ? <Check size={14} /> : <Copy size={14} />}
+            </Button>
+          )}
+          {!isCreating && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted/70 opacity-0 transition-opacity hover:bg-muted/10 hover:text-primary group-hover:opacity-100"
+              title="Open issue detail"
+              aria-label="Open issue detail"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                onClick(issue);
+              }}
+            >
+              <PanelLeftOpen size={16} />
+            </Button>
+          )}
+          {isDoneState && onArchiveIssue && !isAutomation && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="text-muted/60 opacity-0 transition-opacity hover:bg-muted/10 hover:text-muted group-hover:opacity-100"
+              title="Archive issue"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                onArchiveIssue(issue);
+              }}
+            >
+              <Archive size={14} />
+            </Button>
+          )}
+        </div>
+        <div
+          className={cn(
+            'relative flex min-w-0 items-center justify-between gap-2',
+            branchName && onCopyBranchName && !isAutomation ? 'pr-12' : 'pr-7',
+          )}
+        >
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+            {issueGithubUrl &&
+            !isCreating &&
+            !isAutomation &&
+            !issue.isQuickMode &&
+            onOpenPullRequest ? (
               <Button
                 variant="ghost"
                 size="xs"
-                className="h-5 shrink-0 px-1.5 text-[10px] font-medium text-done hover:bg-done/10 hover:text-done"
-                title="Open pull request on GitHub"
+                className="h-auto shrink-0 p-0 font-mono text-[11px] text-secondary hover:bg-transparent hover:text-primary hover:underline"
+                title="Open issue on GitHub"
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={(event) => {
                   event.stopPropagation();
-                  onOpenPullRequest(issue.linkedPrUrl as string);
+                  onOpenPullRequest(issueGithubUrl);
                 }}
               >
-                {linkedPrLabel}
+                {referenceLabel}
               </Button>
             ) : (
-              <Badge variant="done" className="px-1.5 py-px text-[10px] font-medium">
-                {linkedPrLabel}
+              <span className="shrink-0 font-mono text-[11px] text-secondary">
+                {referenceLabel}
+              </span>
+            )}
+            {linkedPrLabel &&
+              (issue.linkedPrUrl && onOpenPullRequest ? (
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  className="h-5 shrink-0 px-1.5 text-[10px] font-medium text-done hover:bg-done/10 hover:text-done"
+                  title="Open pull request on GitHub"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpenPullRequest(issue.linkedPrUrl as string);
+                  }}
+                >
+                  {linkedPrLabel}
+                </Button>
+              ) : (
+                <Badge variant="done" className="px-1.5 py-px text-[10px] font-medium">
+                  {linkedPrLabel}
+                </Badge>
+              ))}
+          </div>
+          {showPhaseElapsed && (
+            <span className="ml-auto flex shrink-0 items-center gap-1.5">
+              <span className="font-mono tabular-nums text-[10px] text-muted">
+                {phaseToProgress(issue.pipelineStatus)}%
+              </span>
+              <PhaseElapsed since={phaseSince} />
+            </span>
+          )}
+        </div>
+        <div className="relative z-10 mt-1 line-clamp-2 w-full min-w-0 text-[13px] font-medium leading-snug text-primary">
+          {issue.title}
+        </div>
+        <div className="relative z-10 mt-auto flex flex-wrap items-center gap-1.5 pt-2">
+          {priorityBadge ? (
+            <Badge
+              variant={priorityBadge.variant}
+              className="px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide"
+              title={priorityBadge.title}
+            >
+              {priorityBadge.label}
+            </Badge>
+          ) : null}
+          {phaseChip && isActive && (
+            <Badge
+              variant="default"
+              className="whitespace-nowrap px-1.5 py-px text-[10px] font-medium normal-case tracking-normal"
+              title={`${phaseChip.phase} model: ${modelDisplay(phaseChip.model)}${
+                phaseChip.effort ? ` · ${phaseChip.effort}` : ''
+              }`}
+            >
+              {modelDisplay(phaseChip.model)}
+              {phaseChip.effort ? ` · ${phaseChip.effort}` : ''}
+            </Badge>
+          )}
+          {revisionBadge ? (
+            <Badge
+              variant={revisionBadge.variant}
+              className="px-1.5 py-px text-[10px] font-medium"
+              title={revisionBadge.title}
+            >
+              {revisionBadge.label}
+            </Badge>
+          ) : null}
+          {approvedAwaitingExecution ? (
+            <Badge variant="success" className="px-1.5 py-px text-[10px] font-medium">
+              Approved
+            </Badge>
+          ) : null}
+          {approvalBadge && !approvedAwaitingExecution ? (
+            <Badge
+              variant="warning"
+              className="px-1.5 py-px text-[10px] font-medium"
+              title={approvalBadge.title}
+            >
+              {approvalBadge.label}
+            </Badge>
+          ) : null}
+          {issue.labels
+            .filter((label) => !readOnly && label.startsWith('agent:'))
+            .map((label) => (
+              <Badge key={label} variant="accent" className="px-1.5 py-px text-[10px] font-medium">
+                {label}
               </Badge>
             ))}
-        </div>
-        {showPhaseElapsed && (
-          <span className="ml-auto flex shrink-0 items-center gap-1.5">
-            <span className="font-mono tabular-nums text-[10px] text-muted">
-              {phaseToProgress(issue.pipelineStatus)}%
-            </span>
-            <PhaseElapsed since={phaseSince} />
-          </span>
-        )}
-      </div>
-      <div className="relative z-10 mt-1 line-clamp-2 w-full min-w-0 text-[13px] font-medium leading-snug text-primary">
-        {issue.title}
-      </div>
-      <div className="relative z-10 mt-auto flex flex-wrap items-center gap-1.5 pt-2">
-        {priorityBadge ? (
-          <Badge
-            variant={priorityBadge.variant}
-            className="px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide"
-            title={priorityBadge.title}
-          >
-            {priorityBadge.label}
-          </Badge>
-        ) : null}
-        {phaseChip && isActive && (
-          <Badge
-            variant="default"
-            className="whitespace-nowrap px-1.5 py-px text-[10px] font-medium normal-case tracking-normal"
-            title={`${phaseChip.phase} model: ${modelDisplay(phaseChip.model)}${
-              phaseChip.effort ? ` · ${phaseChip.effort}` : ''
-            }`}
-          >
-            {modelDisplay(phaseChip.model)}
-            {phaseChip.effort ? ` · ${phaseChip.effort}` : ''}
-          </Badge>
-        )}
-        {revisionBadge ? (
-          <Badge
-            variant={revisionBadge.variant}
-            className="px-1.5 py-px text-[10px] font-medium"
-            title={revisionBadge.title}
-          >
-            {revisionBadge.label}
-          </Badge>
-        ) : null}
-        {approvedAwaitingExecution ? (
-          <Badge variant="success" className="px-1.5 py-px text-[10px] font-medium">
-            Approved
-          </Badge>
-        ) : null}
-        {approvalBadge && !approvedAwaitingExecution ? (
-          <Badge
-            variant="warning"
-            className="px-1.5 py-px text-[10px] font-medium"
-            title={approvalBadge.title}
-          >
-            {approvalBadge.label}
-          </Badge>
-        ) : null}
-        {issue.labels
-          .filter((label) => !readOnly && label.startsWith('agent:'))
-          .map((label) => (
-            <Badge key={label} variant="accent" className="px-1.5 py-px text-[10px] font-medium">
-              {label}
+          <IssueExternalBlockers issue={issue} />
+          {isCreating ? (
+            <Badge
+              variant="default"
+              className="inline-flex items-center gap-1 border-agent/25 bg-agent/10 px-1.5 py-px text-[10px] font-medium text-agent"
+              title="Creating issue on GitHub"
+            >
+              <Loader2 size={10} className="animate-spin" />
+              Creating
+              <Lock size={10} />
             </Badge>
-          ))}
-        <IssueExternalBlockers issue={issue} />
-        {isCreating ? (
-          <Badge
-            variant="default"
-            className="inline-flex items-center gap-1 border-agent/25 bg-agent/10 px-1.5 py-px text-[10px] font-medium text-agent"
-            title="Creating issue on GitHub"
-          >
-            <Loader2 size={10} className="animate-spin" />
-            Creating
-            <Lock size={10} />
-          </Badge>
-        ) : readOnly ? (
-          <PhaseChip status={issue.pipelineStatus} />
-        ) : isTodo && onStartPipeline && !isAutomation ? (
-          <span className="relative inline-flex items-center">
-            <span className="pointer-events-none transition-opacity group-hover:opacity-0">
-              <PhaseChip status={issue.pipelineStatus} />
+          ) : readOnly ? (
+            <PhaseChip status={issue.pipelineStatus} />
+          ) : isTodo && onStartPipeline && !isAutomation ? (
+            <span className="relative inline-flex items-center">
+              <span className="pointer-events-none transition-opacity group-hover:opacity-0">
+                <PhaseChip status={issue.pipelineStatus} />
+              </span>
+              <Button
+                variant="ghost"
+                size="xs"
+                className={cn(ACTION_BADGE_CLASS, PLAN_ACTION_BADGE_CLASS)}
+                title="Start planning"
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onStartPipeline(issue);
+                }}
+              >
+                PLAN
+              </Button>
             </span>
-            <Button
-              variant="ghost"
-              size="xs"
-              className={cn(ACTION_BADGE_CLASS, PLAN_ACTION_BADGE_CLASS)}
-              title="Start planning"
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation();
-                onStartPipeline(issue);
-              }}
-            >
-              PLAN
-            </Button>
-          </span>
-        ) : isActive && onCancel ? (
-          <span className="relative inline-flex items-center">
-            <span className="pointer-events-none transition-opacity group-hover:opacity-0">
-              <PhaseChip status={issue.pipelineStatus} />
+          ) : isActive && onCancel ? (
+            <span className="relative inline-flex items-center">
+              <span className="pointer-events-none transition-opacity group-hover:opacity-0">
+                <PhaseChip status={issue.pipelineStatus} />
+              </span>
+              <Button
+                variant="ghost"
+                size="xs"
+                className={cn(ACTION_BADGE_CLASS, DANGER_ACTION_BADGE_CLASS)}
+                title="Cancel pipeline"
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onCancel(issue);
+                }}
+              >
+                CANCEL
+              </Button>
             </span>
-            <Button
-              variant="ghost"
-              size="xs"
-              className={cn(ACTION_BADGE_CLASS, DANGER_ACTION_BADGE_CLASS)}
-              title="Cancel pipeline"
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation();
-                onCancel(issue);
-              }}
-            >
-              CANCEL
-            </Button>
-          </span>
-        ) : isFailed && onRerun && !isAutomation ? (
-          <span className="relative inline-flex items-center">
-            <span className="pointer-events-none transition-opacity group-hover:opacity-0">
-              <PhaseChip status={issue.pipelineStatus} />
+          ) : isFailed && onRerun && !isAutomation ? (
+            <span className="relative inline-flex items-center">
+              <span className="pointer-events-none transition-opacity group-hover:opacity-0">
+                <PhaseChip status={issue.pipelineStatus} />
+              </span>
+              <Button
+                variant="ghost"
+                size="xs"
+                className={cn(ACTION_BADGE_CLASS, DANGER_ACTION_BADGE_CLASS, 'disabled:opacity-60')}
+                title="Retry pipeline"
+                disabled={isRerunning}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onRerun(issue);
+                }}
+              >
+                RETRY
+              </Button>
             </span>
-            <Button
-              variant="ghost"
-              size="xs"
-              className={cn(ACTION_BADGE_CLASS, DANGER_ACTION_BADGE_CLASS, 'disabled:opacity-60')}
-              title="Retry pipeline"
-              disabled={isRerunning}
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation();
-                onRerun(issue);
-              }}
-            >
-              RETRY
-            </Button>
-          </span>
-        ) : approvedAwaitingExecution ? (
-          <PhaseChip
-            status={issue.pipelineStatus}
-            label="Waiting for slot"
-            className="border-agent/25 bg-agent/10 text-agent"
-          />
-        ) : (
-          <PhaseChip status={issue.pipelineStatus} />
-        )}
+          ) : approvedAwaitingExecution ? (
+            <PhaseChip
+              status={issue.pipelineStatus}
+              label="Waiting for slot"
+              className="border-agent/25 bg-agent/10 text-agent"
+            />
+          ) : (
+            <PhaseChip status={issue.pipelineStatus} />
+          )}
+        </div>
       </div>
-    </div>
     </IssueHoverCard>
   );
 }

@@ -1,7 +1,7 @@
 import type { DiffRecord, PipelinePhase, PlanRecord, ReviewRecord, Thread } from '@shipcode/shared';
 import { formatCost, formatTokenCount, githubCompareUrl, PIPELINE_PHASE } from '@shipcode/shared';
 import { PhaseChip } from '@shipcode/ui';
-import { Badge, Button, Tabs, TabsContent, TabsList, TabsTrigger } from '@shipshitdev/ui';
+import { Badge, Button, cn, Tabs, TabsContent, TabsList, TabsTrigger } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -25,7 +25,7 @@ export function AutomationRunDetail() {
   const navigateToGitWorktree = useAppStore((s) => s.navigateToGitWorktree);
   const queryClient = useQueryClient();
 
-  const [activeTab, setActiveTab] = useState<'run' | 'plans' | 'diff'>('run');
+  const [activeTab, setActiveTab] = useState<'run' | 'plans' | 'diff' | 'history'>('run');
   const [expandedPlanId, setExpandedPlanId] = useState<string | null | undefined>(null);
   const [planHistoryCollapsed, setPlanHistoryCollapsed] = useState(false);
   const [copiedBranch, setCopiedBranch] = useState(false);
@@ -71,6 +71,16 @@ export function AutomationRunDetail() {
       return window.shipcode.invoke<DiffRecord[]>('diff:list', { threadId });
     },
     enabled: !!threadId,
+  });
+
+  const automationId = thread?.automationId ?? null;
+  const { data: runHistory = [] } = useQuery<Thread[]>({
+    queryKey: ['automation-run-history', automationId],
+    queryFn: () =>
+      window.shipcode.invoke<Thread[]>('automations:run-history', {
+        automationId: automationId as string,
+      }),
+    enabled: !!automationId,
   });
 
   const planRunGroups: PlanRunGroup[] = useMemo(() => {
@@ -129,15 +139,17 @@ export function AutomationRunDetail() {
   return (
     <div className="flex h-full flex-1 flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-        <button
+      <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3">
+        <Button
           type="button"
+          variant="ghost"
+          size="icon-xs"
           onClick={handleClose}
           aria-label="Back to board"
           className="rounded p-0.5 text-muted transition-colors hover:text-primary"
         >
           <ArrowLeft className="h-4 w-4" />
-        </button>
+        </Button>
         <h3 className="min-w-0 flex-1 truncate text-sm font-medium text-primary">
           {thread?.title ?? 'Automation run'}
         </h3>
@@ -168,96 +180,184 @@ export function AutomationRunDetail() {
 
       {/* Error banner */}
       {hasError && isFailed && (
-        <div className="border-b border-destructive/30 bg-destructive/10 px-4 py-2.5">
-          <div className="flex items-start gap-2">
-            <div className="min-w-0 flex-1">
-              {thread.failurePhase && (
-                <span className="text-[10px] font-medium uppercase tracking-wider text-destructive/70">
-                  Failed in {thread.failurePhase}
-                </span>
-              )}
-              <p className="mt-0.5 text-xs text-destructive">{thread.lastError}</p>
-            </div>
-          </div>
+        <div className="shrink-0 border-b border-border bg-destructive/10 px-4 py-2.5">
+          {thread.failurePhase && (
+            <span className="text-[10px] font-medium uppercase tracking-wider text-destructive/70">
+              Failed in {thread.failurePhase}
+            </span>
+          )}
+          <p className="mt-0.5 text-xs text-destructive">{thread.lastError}</p>
         </div>
       )}
 
-      {/* Tabs */}
-      <Tabs
-        value={activeTab}
-        onValueChange={(v) => setActiveTab(v as 'run' | 'plans' | 'diff')}
-        className="flex flex-1 flex-col overflow-hidden"
-      >
-        <TabsList className="flex-shrink-0 border-b border-border px-4">
-          <TabsTrigger value="run">Run</TabsTrigger>
-          {plans.length > 0 && <TabsTrigger value="plans">Plans ({plans.length})</TabsTrigger>}
-          {diffs.length > 0 && <TabsTrigger value="diff">Diff ({diffs.length})</TabsTrigger>}
-        </TabsList>
+      {/* Body: two-column */}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {/* Left: tabs */}
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) => setActiveTab(v as 'run' | 'plans' | 'diff' | 'history')}
+          className="flex min-w-0 flex-1 flex-col overflow-hidden"
+        >
+          <TabsList className="shrink-0 border-b border-border px-4">
+            <TabsTrigger value="run">Run</TabsTrigger>
+            {plans.length > 0 && <TabsTrigger value="plans">Plans ({plans.length})</TabsTrigger>}
+            {diffs.length > 0 && <TabsTrigger value="diff">Diff ({diffs.length})</TabsTrigger>}
+            {automationId && (
+              <TabsTrigger value="history">
+                History{runHistory.length > 0 ? ` (${runHistory.length})` : ''}
+              </TabsTrigger>
+            )}
+          </TabsList>
 
-        <div className="flex-1 overflow-y-auto">
-          <TabsContent value="run" className="px-4 py-3">
-            {/* Prompt */}
-            {thread?.prompt && (
-              <div className="mb-4">
-                <h4 className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-muted">
-                  Prompt
-                </h4>
-                <div className="rounded-md border border-border bg-tertiary/40 px-3 py-2">
-                  <pre className="whitespace-pre-wrap text-xs leading-relaxed text-secondary">
-                    {thread.prompt}
-                  </pre>
+          <div className="flex-1 overflow-y-auto">
+            <TabsContent value="run" className="p-6">
+              {thread?.prompt ? (
+                <div>
+                  <h4 className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-muted">
+                    Prompt
+                  </h4>
+                  <div className="rounded-md border border-border bg-tertiary/40 px-3 py-2">
+                    <pre className="whitespace-pre-wrap text-xs leading-relaxed text-secondary">
+                      {thread.prompt}
+                    </pre>
+                  </div>
                 </div>
+              ) : (
+                <p className="text-[12px] text-muted">No prompt recorded.</p>
+              )}
+            </TabsContent>
+
+            <TabsContent value="plans" className="p-6">
+              <PlanHistoryTab
+                activeThreadId={threadId}
+                effectiveExpanded={expandedPlanId}
+                isPlanHistoryLoading={isPlanHistoryLoading}
+                isShowingAllPlanRuns={false}
+                loadingPlanDetailIds={[]}
+                normalizedPlanHistory={plans}
+                normalizedReviewsByPlanId={reviewsByPlanId}
+                normalizedThreadPlanHistory={plans}
+                planHistoryCollapsed={planHistoryCollapsed}
+                planRunCount={1}
+                planRunGroups={planRunGroups}
+                threadPhase={(thread?.status as PipelinePhase) ?? PIPELINE_PHASE.idle}
+                onFullScreenPlan={() => {}}
+                onPlanExpandedChange={setExpandedPlanId}
+                onPlanHistoryCollapsedChange={setPlanHistoryCollapsed}
+                onShowAllPlanRunsChange={() => {}}
+              />
+            </TabsContent>
+
+            <TabsContent value="diff">
+              <DiffTab diffs={diffs} />
+            </TabsContent>
+
+            <TabsContent value="history" className="p-6">
+              {runHistory.length === 0 ? (
+                <p className="text-[12px] text-muted">No previous runs.</p>
+              ) : (
+                <div className="flex flex-col divide-y divide-border rounded-md border border-border">
+                  {runHistory.map((run) => (
+                    <Button
+                      key={run.id}
+                      type="button"
+                      variant="ghost"
+                      onClick={() => selectAutomationThread(run.id)}
+                      className={cn(
+                        'flex items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-hover',
+                        run.id === threadId && 'bg-hover',
+                      )}
+                    >
+                      <PhaseChip status={run.status} />
+                      <span className="min-w-0 flex-1 truncate text-[12px] text-secondary">
+                        {run.lastError ? run.lastError.slice(0, 80) : run.status}
+                      </span>
+                      <span className="shrink-0 text-[11px] text-muted">
+                        {new Date(run.createdAt).toLocaleString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: 'numeric',
+                          minute: '2-digit',
+                        })}
+                      </span>
+                      {run.failureCount > 0 && (
+                        <span className="shrink-0 text-[10px] text-danger">
+                          {run.failureCount}✕
+                        </span>
+                      )}
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+          </div>
+        </Tabs>
+
+        {/* Right sidebar: metadata */}
+        <div className="w-72 shrink-0 overflow-y-auto border-l border-border">
+          <div className="space-y-5 p-4">
+            {/* Cost + Tokens */}
+            {(thread?.totalCostUsd != null || totalTokens > 0) && (
+              <div className="grid grid-cols-2 gap-3">
+                {thread?.totalCostUsd != null && (
+                  <div>
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
+                      Cost
+                    </span>
+                    <p className="mt-0.5 text-sm text-primary">{formatCost(thread.totalCostUsd)}</p>
+                  </div>
+                )}
+                {totalTokens > 0 && (
+                  <div>
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
+                      Tokens
+                    </span>
+                    <p className="mt-0.5 text-sm text-primary">{formatTokenCount(totalTokens)}</p>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Metadata grid */}
-            <div className="mb-4 grid grid-cols-2 gap-x-4 gap-y-2">
-              {thread?.totalCostUsd != null && (
-                <div>
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
-                    Cost
-                  </span>
-                  <p className="text-sm text-primary">{formatCost(thread.totalCostUsd)}</p>
-                </div>
-              )}
-              {totalTokens > 0 && (
-                <div>
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
-                    Tokens
-                  </span>
-                  <p className="text-sm text-primary">{formatTokenCount(totalTokens)}</p>
-                </div>
-              )}
-              {thread?.executorResolvedModel && (
-                <div>
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
-                    Executor
-                  </span>
-                  <p className="truncate text-sm text-primary">{thread.executorResolvedModel}</p>
-                </div>
-              )}
-              {thread?.verifierResolvedModel && (
-                <div>
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
-                    Verifier
-                  </span>
-                  <p className="truncate text-sm text-primary">{thread.verifierResolvedModel}</p>
-                </div>
-              )}
-            </div>
+            {/* Executor + Verifier */}
+            {(thread?.executorResolvedModel || thread?.verifierResolvedModel) && (
+              <div className="grid grid-cols-1 gap-3">
+                {thread.executorResolvedModel && (
+                  <div>
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
+                      Executor
+                    </span>
+                    <p className="mt-0.5 truncate text-sm text-primary">
+                      {thread.executorResolvedModel}
+                    </p>
+                  </div>
+                )}
+                {thread.verifierResolvedModel && (
+                  <div>
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
+                      Verifier
+                    </span>
+                    <p className="mt-0.5 truncate text-sm text-primary">
+                      {thread.verifierResolvedModel}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Branch */}
             {thread?.worktreeBranch && (
-              <div className="mb-4">
+              <div>
                 <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
                   Branch
                 </span>
-                <div className="mt-1 flex items-center gap-1.5">
+                <div className="mt-1 flex flex-wrap items-center gap-1.5">
                   <Badge variant="default" className="font-mono text-[11px]">
                     {thread.worktreeBranch}
                   </Badge>
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon-xs"
                     onClick={() => {
                       if (thread.worktreeBranch) handleCopyBranch(thread.worktreeBranch);
                     }}
@@ -265,13 +365,15 @@ export function AutomationRunDetail() {
                     title="Copy branch name"
                   >
                     <Copy className="h-3 w-3" />
-                  </button>
+                  </Button>
                   {thread.worktreePath && thread.projectId && (
                     <Button
                       variant="ghost"
                       size="icon-xs"
                       className="text-muted"
-                      onClick={() => navigateToGitWorktree(thread.projectId, thread.worktreePath!)}
+                      onClick={() =>
+                        navigateToGitWorktree(thread.projectId, thread.worktreePath as string)
+                      }
                       title="View in Git tab"
                     >
                       <GitBranch size={12} />
@@ -302,7 +404,7 @@ export function AutomationRunDetail() {
                 {thread.status === PIPELINE_PHASE.completed &&
                   !thread.githubPrNumber &&
                   thread.githubRepo && (
-                    <div className="mt-1.5 flex items-center gap-2">
+                    <div className="mt-2 flex items-center gap-2">
                       <Button
                         variant="outline"
                         size="sm"
@@ -328,7 +430,7 @@ export function AutomationRunDetail() {
 
             {/* Pull Request */}
             {thread?.githubPrNumber && thread.githubRepo && (
-              <div className="mb-4">
+              <div>
                 <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
                   Pull Request
                 </span>
@@ -355,8 +457,8 @@ export function AutomationRunDetail() {
 
             {/* Timestamps */}
             {thread && (
-              <div className="text-[10px] text-muted">
-                <span>
+              <div className="space-y-0.5 text-[11px] text-muted">
+                <p>
                   Created{' '}
                   {new Date(thread.createdAt).toLocaleString(undefined, {
                     month: 'short',
@@ -364,42 +466,17 @@ export function AutomationRunDetail() {
                     hour: 'numeric',
                     minute: '2-digit',
                   })}
-                </span>
+                </p>
                 {thread.failureCount > 0 && (
-                  <span className="ml-3">
+                  <p>
                     {thread.failureCount} {thread.failureCount === 1 ? 'failure' : 'failures'}
-                  </span>
+                  </p>
                 )}
               </div>
             )}
-          </TabsContent>
-
-          <TabsContent value="plans" className="px-4 py-3">
-            <PlanHistoryTab
-              activeThreadId={threadId}
-              effectiveExpanded={expandedPlanId}
-              isPlanHistoryLoading={isPlanHistoryLoading}
-              isShowingAllPlanRuns={false}
-              loadingPlanDetailIds={[]}
-              normalizedPlanHistory={plans}
-              normalizedReviewsByPlanId={reviewsByPlanId}
-              normalizedThreadPlanHistory={plans}
-              planHistoryCollapsed={planHistoryCollapsed}
-              planRunCount={1}
-              planRunGroups={planRunGroups}
-              threadPhase={(thread?.status as PipelinePhase) ?? PIPELINE_PHASE.idle}
-              onFullScreenPlan={() => {}}
-              onPlanExpandedChange={setExpandedPlanId}
-              onPlanHistoryCollapsedChange={setPlanHistoryCollapsed}
-              onShowAllPlanRunsChange={() => {}}
-            />
-          </TabsContent>
-
-          <TabsContent value="diff" className="py-3">
-            <DiffTab diffs={diffs} />
-          </TabsContent>
+          </div>
         </div>
-      </Tabs>
+      </div>
     </div>
   );
 }

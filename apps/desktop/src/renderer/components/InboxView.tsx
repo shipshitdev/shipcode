@@ -12,6 +12,7 @@ import {
   Button,
   Card,
   CardContent,
+  Pagination,
   Skeleton,
   Table,
   TableBody,
@@ -23,6 +24,8 @@ import { ArrowUpDown, RefreshCw, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { NOTIFICATIONS_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
+
+const PAGE_SIZE = 25;
 
 type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info' | 'accent';
 
@@ -52,6 +55,7 @@ export function InboxView() {
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [showOnlyApprovalRequired, setShowOnlyApprovalRequired] = useState(false);
   const [navigatingId, setNavigatingId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
   // Stale-navigation guard: each click gets a token; async results are discarded
   // if a newer click (or user navigation) has since taken over.
   const navTokenRef = useRef<string | null>(null);
@@ -81,6 +85,10 @@ export function InboxView() {
     ? sorted.filter((notification) => notification.kind === 'awaiting_approval')
     : sorted;
 
+  const totalPages = Math.max(1, Math.ceil(visibleNotifications.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageItems = visibleNotifications.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
   const dismiss = useMutation({
     mutationFn: (id: string) => window.shipcode.invoke('notification:dismiss', { id }),
     onSuccess: (_, id) => {
@@ -98,12 +106,17 @@ export function InboxView() {
   });
 
   const retryPipeline = useMutation({
-    mutationFn: (threadId: string) =>
-      window.shipcode.invoke('pipeline:retry', { threadId }),
+    mutationFn: (threadId: string) => window.shipcode.invoke('pipeline:retry', { threadId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
   });
+
+  // Reset to page 1 whenever filters or sort order change — deps are intentional triggers
+  // biome-ignore lint/correctness/useExhaustiveDependencies: sortOrder and showOnlyApprovalRequired are trigger deps
+  useEffect(() => {
+    setPage(1);
+  }, [sortOrder, showOnlyApprovalRequired]);
 
   useEffect(() => {
     const unsubFire = window.shipcode.on('notification:fire', () => {
@@ -207,7 +220,7 @@ export function InboxView() {
             <Button
               variant="ghost"
               className="h-5 gap-1 px-1.5 text-[10px] font-medium text-muted hover:text-primary hover:bg-elevated"
-              onClick={() => retryPipeline.mutate(n.threadId!)}
+              onClick={() => retryPipeline.mutate(n.threadId as string)}
               disabled={retryPipeline.isPending && retryPipeline.variables === n.threadId}
               title="Retry pipeline"
               aria-label={`Retry pipeline: ${n.title}`}
@@ -328,10 +341,17 @@ export function InboxView() {
             </div>
           )}
 
-          {!isLoading &&
-            !isError &&
-            visibleNotifications.length > 0 &&
-            renderTable(visibleNotifications)}
+          {!isLoading && !isError && visibleNotifications.length > 0 && (
+            <>
+              {renderTable(pageItems)}
+              <Pagination
+                page={safePage}
+                totalPages={totalPages}
+                onPageChange={setPage}
+                className="mt-4"
+              />
+            </>
+          )}
         </div>
       </div>
     </div>

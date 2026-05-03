@@ -24,6 +24,7 @@ function makeProject(overrides: Partial<Project> = {}): Project {
     path: '/tmp/proj',
     gitRemote: null,
     githubProjectUrl: null,
+    githubStatusMapping: null,
     defaultBranch: 'main',
     plannerModelOverride: null,
     reviewerModelOverride: null,

@@ -179,6 +179,7 @@ const makeProject = () => ({
   starterIssueNumber: null,
   starterIssueCreatedAt: null,
   githubProjectUrl: null,
+  githubStatusMapping: null,
   plannerModelOverride: null,
   reviewerModelOverride: null,
   executorModelOverride: 'codex',
@@ -601,6 +602,7 @@ describe('IssueDetail', () => {
           path: '/tmp/project',
           gitRemote: 'git@github.com:shipshitdev/shipcode.git',
           githubProjectUrl: null,
+          githubStatusMapping: null,
           plannerModelOverride: null,
           reviewerModelOverride: null,
           executorModelOverride: 'codex',
@@ -1027,6 +1029,7 @@ describe('IssueDetail', () => {
             path: '/tmp/project',
             gitRemote: 'git@github.com:shipshitdev/shipcode.git',
             githubProjectUrl: null,
+            githubStatusMapping: null,
             plannerModelOverride: null,
             reviewerModelOverride: null,
             executorModelOverride: 'codex',
@@ -1174,7 +1177,15 @@ describe('IssueDetail', () => {
     });
 
     const tabLabels = screen.getAllByRole('tab').map((tab) => tab.textContent?.trim());
-    expect(tabLabels).toEqual(['Issue', 'Comments', 'Plans', 'Pipeline', 'Activity', 'Conversations', 'Costs']);
+    expect(tabLabels).toEqual([
+      'Issue',
+      'Comments',
+      'Plans',
+      'Pipeline',
+      'Activity',
+      'Conversations',
+      'Costs',
+    ]);
   });
 
   it('pipeline start card is above the tab bar when pipeline not started', async () => {

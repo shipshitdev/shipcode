@@ -56,6 +56,7 @@ describe('registerGitHubHandlers', () => {
     path: '/tmp/project',
     gitRemote: 'https://github.com/acme/repo.git',
     githubProjectUrl: null,
+    githubStatusMapping: null,
     defaultBranch: 'main',
   };
 
@@ -406,6 +407,7 @@ describe('registerGitHubHandlers', () => {
       ...baseProject,
       path: '/tmp',
       githubProjectUrl: null,
+      githubStatusMapping: null,
     };
 
     function buildQueries(project: typeof projectWithBoard | typeof projectWithoutBoard) {

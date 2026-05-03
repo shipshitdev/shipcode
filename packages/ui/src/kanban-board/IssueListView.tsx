@@ -58,6 +58,7 @@ interface DraggableListRowProps {
   approvalBadge?: IssueApprovalBadge | null;
   priorityBadge?: IssuePriorityBadge | null;
   staleness?: IssueStalenessResult | null;
+  repoUrl?: string | null;
   selectedIssueNumber?: number;
   activeId: string | null;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
@@ -72,6 +73,7 @@ function DraggableListRow({
   approvalBadge,
   priorityBadge,
   staleness,
+  repoUrl,
   selectedIssueNumber,
   activeId,
   onIssueClick,
@@ -173,7 +175,23 @@ function DraggableListRow({
       )}
       <StalenessDot staleness={staleness} className="h-2 w-2" />
       <div className="flex shrink-0 items-center gap-1.5">
-        <span className="font-mono text-xs text-secondary">{referenceLabel}</span>
+        {repoUrl && issue.issueNumber > 0 && !isCreating && !isAutomation && onOpenPullRequest ? (
+          <Button
+            variant="ghost"
+            size="xs"
+            className="h-auto p-0 font-mono text-xs text-secondary hover:bg-transparent hover:text-primary hover:underline"
+            title="Open issue on GitHub"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpenPullRequest(`${repoUrl}/issues/${issue.issueNumber}`);
+            }}
+          >
+            {referenceLabel}
+          </Button>
+        ) : (
+          <span className="font-mono text-xs text-secondary">{referenceLabel}</span>
+        )}
         {issue.linkedPrNumber &&
           (issue.linkedPrUrl && onOpenPullRequest ? (
             <Button
@@ -291,6 +309,7 @@ interface ListSectionBlockProps {
   issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
   issuePriorityBadgeById: Map<string, IssuePriorityBadge | null>;
   issueStalenessById?: Map<string, IssueStalenessResult | null>;
+  repoUrl?: string | null;
   selectedIssueNumber?: number;
   activeId: string | null;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
@@ -307,6 +326,7 @@ function ListSectionBlock({
   issueApprovalBadgeById = EMPTY_APPROVAL_BADGE_MAP,
   issuePriorityBadgeById = EMPTY_PRIORITY_BADGE_MAP,
   issueStalenessById = EMPTY_STALENESS_MAP,
+  repoUrl,
   selectedIssueNumber,
   activeId,
   onIssueClick,
@@ -358,6 +378,7 @@ function ListSectionBlock({
               approvalBadge={issueApprovalBadgeById.get(issue.id) ?? null}
               priorityBadge={issuePriorityBadgeById.get(issue.id) ?? null}
               staleness={issueStalenessById.get(issue.id) ?? null}
+              repoUrl={repoUrl}
               approvedAwaitingExecution={isApprovedAwaitingExecutionIssue(
                 issue,
                 approvedAwaitingExecutionIssueIds,
@@ -402,6 +423,7 @@ interface IssueListViewProps {
   issueApprovalBadgeById: Map<string, IssueApprovalBadge | null>;
   issuePriorityBadgeById: Map<string, IssuePriorityBadge | null>;
   issueStalenessById?: Map<string, IssueStalenessResult | null>;
+  repoUrl?: string | null;
   selectedIssueNumber?: number;
   activeId: string | null;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
@@ -417,6 +439,7 @@ export function IssueListView({
   issueApprovalBadgeById,
   issuePriorityBadgeById,
   issueStalenessById = EMPTY_STALENESS_MAP,
+  repoUrl,
   selectedIssueNumber,
   activeId,
   onIssueClick,
@@ -488,6 +511,7 @@ export function IssueListView({
                         issueApprovalBadgeById={issueApprovalBadgeById}
                         issuePriorityBadgeById={issuePriorityBadgeById}
                         issueStalenessById={issueStalenessById}
+                        repoUrl={repoUrl}
                         approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
                         selectedIssueNumber={selectedIssueNumber}
                         activeId={activeId}
@@ -507,6 +531,7 @@ export function IssueListView({
                         approvalBadge={issueApprovalBadgeById.get(issue.id) ?? null}
                         priorityBadge={issuePriorityBadgeById.get(issue.id) ?? null}
                         staleness={issueStalenessById.get(issue.id) ?? null}
+                        repoUrl={repoUrl}
                         approvedAwaitingExecution={isApprovedAwaitingExecutionIssue(
                           issue,
                           approvedAwaitingExecutionIssueIds,

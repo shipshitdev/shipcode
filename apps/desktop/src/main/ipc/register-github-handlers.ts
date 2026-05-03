@@ -3,8 +3,10 @@ import path from 'node:path';
 import {
   enhancePrdDraft,
   fetchProjectPriorities,
+  fetchProjectStatuses,
   GhCli,
   type IssueTriageRecommendation,
+  normalizeStatusOption,
   triageGitHubIssues,
 } from '@shipcode/agents';
 import type {
@@ -248,6 +250,52 @@ export function registerGitHubHandlers({
             }
           } catch (err) {
             log.warn('[github:refresh-issues] priority sync failed', err);
+          }
+
+          // GH Projects v2 Status field sync — updates local pipeline_status
+          // for non-agent-loop issues where GH board is source of truth.
+          if (project.githubStatusMapping) {
+            try {
+              const statuses = await fetchProjectStatuses({
+                cwd: project.path,
+                projectUrl: project.githubProjectUrl,
+                repoFullName: project.githubRepoFullName ?? undefined,
+                onWarn: (msg, err) => log.warn(msg, err),
+              });
+              const ACTIVE_PIPELINE_STATUSES = new Set<IssuePipelineStatus>([
+                ISSUE_PIPELINE_STATUS.queued,
+                ISSUE_PIPELINE_STATUS.planning,
+                ISSUE_PIPELINE_STATUS.clarifying,
+                ISSUE_PIPELINE_STATUS.reviewing,
+                ISSUE_PIPELINE_STATUS.revising,
+                ISSUE_PIPELINE_STATUS.executing,
+                ISSUE_PIPELINE_STATUS.testing,
+                ISSUE_PIPELINE_STATUS.verifying,
+                ISSUE_PIPELINE_STATUS.shipping,
+              ]);
+              for (const cachedIssue of cachedAfterIssueSync) {
+                // Never override an issue actively being worked by the pipeline
+                if (ACTIVE_PIPELINE_STATUSES.has(cachedIssue.pipelineStatus)) continue;
+                if (cachedIssue.isQuickMode) continue;
+
+                const s = statuses.get(cachedIssue.issueNumber);
+                if (!s?.raw) continue;
+
+                const { macroColumn } = normalizeStatusOption(s.raw, project.githubStatusMapping);
+                let targetStatus: IssuePipelineStatus | null = null;
+                if (macroColumn === 'todo') targetStatus = ISSUE_PIPELINE_STATUS.todo;
+                else if (macroColumn === 'in_progress') targetStatus = ISSUE_PIPELINE_STATUS.queued;
+                else if (macroColumn === 'human_review')
+                  targetStatus = ISSUE_PIPELINE_STATUS.awaitingApproval;
+                else if (macroColumn === 'done') targetStatus = ISSUE_PIPELINE_STATUS.done;
+
+                if (targetStatus && targetStatus !== cachedIssue.pipelineStatus) {
+                  queries.githubIssues.updatePipelineStatus(cachedIssue.id, targetStatus);
+                }
+              }
+            } catch (err) {
+              log.warn('[github:refresh-issues] status sync failed', err);
+            }
           }
         }
         for (const issue of cachedAfterIssueSync) {

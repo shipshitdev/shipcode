@@ -622,7 +622,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   openCommandPalette: () => set({ commandPaletteOpen: true }),
 
   // Project tab actions
-  setProjectTab: (tab) => set({ projectTab: tab }),
+  setProjectTab: (tab) =>
+    set({
+      projectTab: tab,
+      activeIssue: null,
+      activeThreadId: null,
+      activeAutomationThreadId: null,
+    }),
   setActivePrNumber: (n) => set({ activePrNumber: n }),
 
   openTerminalSessions: () => {

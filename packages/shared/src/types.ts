@@ -88,6 +88,12 @@ export interface Project {
    * When null, the Kanban header hides the `board` quick-link.
    */
   githubProjectUrl: string | null;
+  /**
+   * Per-project mapping from ShipCode macro columns to GH Projects v2 Status
+   * option names. Auto-detected when `githubProjectUrl` is set. When null,
+   * GH Status sync is disabled for this project.
+   */
+  githubStatusMapping: GhStatusMapping | null;
   plannerModelOverride: AgentType | null;
   reviewerModelOverride: AgentType | null;
   executorModelOverride: AgentType | null;
@@ -1217,6 +1223,22 @@ export const ISSUE_PIPELINE_STATUS = {
 
 export type IssuePipelineStatus =
   (typeof ISSUE_PIPELINE_STATUS)[keyof typeof ISSUE_PIPELINE_STATUS];
+
+// === GitHub Projects v2 Status Sync Types ===
+
+/** ShipCode macro columns that map to GH Projects v2 Status field options. */
+export type GhMacroColumn = 'todo' | 'in_progress' | 'human_review' | 'done';
+
+/**
+ * Per-project mapping from ShipCode macro columns to GitHub Projects v2
+ * Status field option names. Stored as JSON in `projects.github_status_mapping`.
+ */
+export interface GhStatusMapping {
+  todo: string | null;
+  inProgress: string | null;
+  humanReview: string | null;
+  done: string | null;
+}
 
 // === Verification Types ===
 

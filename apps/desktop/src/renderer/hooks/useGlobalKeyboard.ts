@@ -7,6 +7,9 @@ export function useGlobalKeyboard() {
   const toggleCommandPalette = useAppStore((s) => s.toggleCommandPalette);
   const toggleTerminal = useAppStore((s) => s.toggleTerminal);
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
+  const hasDetailView = useAppStore(
+    (s) => s.activeIssue !== null || s.activeAutomationThreadId !== null,
+  );
   const selectIssue = useAppStore((s) => s.selectIssue);
   const openCreateIssueModal = useAppStore((s) => s.openCreateIssueModal);
   const { openProjectTerminal } = useOpenProjectTerminal();
@@ -20,7 +23,7 @@ export function useGlobalKeyboard() {
     const actions: Partial<Record<ShortcutId, () => void>> = {
       'command-palette': toggleCommandPalette,
       'toggle-terminal': toggleTerminal,
-      'toggle-sidebar': toggleSidebar,
+      'toggle-sidebar': hasDetailView ? () => {} : toggleSidebar,
       'toggle-issue-detail': () => selectIssue(null),
       'open-project-terminal': openTerminal,
       'new-issue': openCreateIssueModal,
@@ -50,6 +53,7 @@ export function useGlobalKeyboard() {
     toggleCommandPalette,
     toggleTerminal,
     toggleSidebar,
+    hasDetailView,
     selectIssue,
     openCreateIssueModal,
     openProjectTerminal,

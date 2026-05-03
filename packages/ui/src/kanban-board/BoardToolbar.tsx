@@ -119,7 +119,7 @@ export function BoardToolbar({
       <div className="flex-1" />
       <div className="flex shrink-0 items-center gap-2">
         {baseBranch && branches && branches.length > 0 && onBaseBranchChange && (
-          <div className="flex max-w-[240px] min-w-0 shrink-0 items-center overflow-hidden rounded-md border border-border">
+          <div className="flex h-7 max-w-[240px] min-w-0 shrink-0 items-center overflow-hidden rounded-md border border-border">
             <Select value={baseBranch} onValueChange={onBaseBranchChange}>
               <SelectTrigger className="h-7 gap-1 rounded-none border-0 bg-transparent px-2 font-mono text-xs text-secondary hover:text-primary">
                 <SelectValue />
@@ -165,7 +165,7 @@ export function BoardToolbar({
             )}
           </div>
         )}
-        <div className="flex max-w-[140px] min-w-0 shrink-0 items-center overflow-hidden rounded-md border border-border">
+        <div className="flex h-7 max-w-[140px] min-w-0 shrink-0 items-center overflow-hidden rounded-md border border-border">
           <Select
             value={sortOrder}
             onValueChange={(value) => onSortOrderChange(value as BoardSortOrder)}

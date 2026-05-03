@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import type { DiffRecord } from './lib/shipcode';
 import { cn } from './lib/utils';
 import { Badge } from './primitives/badge';
+import { Button } from './primitives/button';
 import { useSyntaxHighlightedLines } from './SyntaxHighlightedCode';
 
 interface SideBySideDiffViewerProps {
@@ -151,8 +152,9 @@ export function SideBySideDiffViewer({ diffs, className }: SideBySideDiffViewerP
             {diffs.length} file{diffs.length === 1 ? '' : 's'} changed
           </div>
           {diffs.map((diff) => (
-            <button
+            <Button
               type="button"
+              variant="ghost"
               key={diff.id}
               aria-label={diff.filePath}
               title={diff.filePath}
@@ -167,7 +169,7 @@ export function SideBySideDiffViewer({ diffs, className }: SideBySideDiffViewerP
                 {actionIcon[diff.action] ?? '~'}
               </span>
               <span className="truncate">{diff.filePath}</span>
-            </button>
+            </Button>
           ))}
         </div>
 
