@@ -11,6 +11,7 @@ import {
   resolveRevisionCountForIssue,
   resolveThreadPhasePresentation,
 } from '@shipcode/shared';
+
 import { logEvent } from '../logger.service';
 import {
   assertCliPhaseModelsSupported,

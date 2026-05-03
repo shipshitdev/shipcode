@@ -113,7 +113,7 @@ function TranscriptRow({
       return (
         <div
           className={cn(
-            'rounded-lg border px-3 py-2',
+            'my-3 rounded-lg border px-3 py-2',
             lifecycleSeverity === 'error'
               ? 'border-danger/30 bg-danger/8'
               : 'border-warning/30 bg-warning/8',
@@ -134,7 +134,7 @@ function TranscriptRow({
     }
     case 'turn_start':
       return (
-        <div className="flex items-center gap-5 py-1">
+        <div className="flex items-center gap-3 py-1">
           <div className="h-px flex-1 bg-border/70" />
           <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted">
             Turn {event.turn}
@@ -154,7 +154,7 @@ function TranscriptRow({
     }
     case 'tool_start':
       return (
-        <div className="rounded-md border border-border/50 bg-secondary/50 px-3 py-2">
+        <div className="my-3 rounded-md border border-border/50 bg-secondary/50 px-3 py-2">
           <div className="flex items-center gap-2">
             <Badge
               variant="default"
@@ -184,15 +184,15 @@ function TranscriptRow({
           : 'Completed';
       if (!failed) {
         return (
-          <div className="flex items-center gap-5 pl-1">
+          <div className="flex items-center gap-1.5 pl-1">
             <span className="text-[10px] text-success/80">✓</span>
             <span className="font-mono text-[10px] text-muted/70">{detail}</span>
           </div>
         );
       }
       return (
-        <div className="rounded-md border border-danger/30 bg-danger/8 px-3 py-2">
-          <div className="flex items-center justify-between gap-5">
+        <div className="my-3 rounded-md border border-danger/30 bg-danger/8 px-3 py-2">
+          <div className="flex items-center justify-between gap-3">
             <TranscriptMeta createdAt={record.createdAt} compact={compact}>
               <span className="tracking-normal normal-case text-danger">Tool failed</span>
             </TranscriptMeta>
@@ -213,7 +213,7 @@ function TranscriptRow({
     }
     case 'thinking':
       return (
-        <div className="rounded-md border border-border/50 bg-secondary/40 px-3 py-2.5">
+        <div className="my-3 rounded-md border border-border/50 bg-secondary/40 px-3 py-2.5">
           <TranscriptMeta createdAt={record.createdAt} compact={compact}>
             <span className="tracking-normal text-muted/80 normal-case">Reasoning</span>
           </TranscriptMeta>
@@ -229,7 +229,7 @@ function TranscriptRow({
       );
     case 'text':
       return (
-        <div className="rounded-lg border border-border/60 bg-elevated px-4 py-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.2)]">
+        <div className="my-3 rounded-lg border border-border/60 bg-elevated px-4 py-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.2)]">
           <TranscriptMeta createdAt={record.createdAt} compact={compact}>
             <span className="tracking-normal text-primary/70 normal-case font-medium">
               Assistant
@@ -269,7 +269,7 @@ function TranscriptRow({
       return (
         <div
           className={cn(
-            'rounded-md border px-3 py-2.5',
+            'my-3 rounded-md border px-3 py-2.5',
             severity === 'error'
               ? 'border-danger/30 bg-danger/8'
               : 'border-warning/30 bg-warning/8',
@@ -299,7 +299,7 @@ function TranscriptRow({
     }
     case 'error':
       return (
-        <div className="rounded-xl border border-danger/30 bg-danger/8 px-4 py-3">
+        <div className="my-3 rounded-xl border border-danger/30 bg-danger/8 px-4 py-3">
           <TranscriptMeta createdAt={record.createdAt} compact={compact}>
             <span className="tracking-normal text-danger normal-case">Error</span>
           </TranscriptMeta>
@@ -315,7 +315,7 @@ function TranscriptRow({
       );
     case 'clarification_requested':
       return (
-        <div className="rounded-xl border border-warning/35 bg-warning/[0.06] px-4 py-3">
+        <div className="my-3 rounded-xl border border-warning/35 bg-warning/[0.06] px-4 py-3">
           <TranscriptMeta createdAt={record.createdAt} compact={compact}>
             <Badge variant="warning" className="rounded-full px-2 py-0 text-[9px] tracking-normal">
               Clarification
@@ -499,7 +499,7 @@ export function TerminalTranscript({
     <>
       {!hasEvents && pendingLabel ? (
         <div className="flex min-h-full items-center justify-center">
-          <div className="inline-flex items-center gap-5 rounded-xl border border-border/70 bg-elevated px-4 py-3">
+          <div className="inline-flex items-center gap-3 rounded-xl border border-border/70 bg-elevated px-4 py-3">
             <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-agent" />
             <span className={cn('text-secondary', compact ? 'text-[12px]' : 'text-[13px]')}>
               {pendingLabel}…
@@ -524,7 +524,7 @@ export function TerminalTranscript({
         <Button
           variant="outline"
           size="xs"
-          className="pointer-events-auto gap-5 rounded-full border-border bg-elevated px-3 shadow-md"
+          className="pointer-events-auto gap-1.5 rounded-full border-border bg-elevated px-3 shadow-md"
           onClick={scrollToBottom}
         >
           <ArrowDownToLine size={12} />

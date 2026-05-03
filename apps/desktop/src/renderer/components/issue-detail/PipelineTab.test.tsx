@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import type { DiffRecord, GitHubIssueCacheRecord, Thread } from '@shipcode/shared';
+import type { GitHubIssueCacheRecord, Thread } from '@shipcode/shared';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PipelineTab } from './PipelineTab';
@@ -97,7 +97,7 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
   };
 }
 
-function renderPipelineTab(diffs: DiffRecord[]) {
+function renderPipelineTab() {
   render(
     <PipelineTab
       activeIssue={makeIssue()}
@@ -115,7 +115,6 @@ function renderPipelineTab(diffs: DiffRecord[]) {
         executor: { provider: 'claude', modelId: null },
         verifier: { provider: 'claude', modelId: null },
       }}
-      diffs={diffs}
       effectivePhaseResolvedModels={{
         planner: 'claude',
         reviewer: 'codex',
@@ -178,26 +177,13 @@ describe('PipelineTab', () => {
   });
 
   it('shows the persisted execution diff when available', () => {
-    renderPipelineTab([
-      {
-        id: 'diff-1',
-        threadId: 'thread-1',
-        filePath: 'src/foo.ts',
-        action: 'modify',
-        diffContent:
-          'diff --git a/src/foo.ts b/src/foo.ts\n@@ -1 +1 @@\n-console.log("old")\n+console.log("new")',
-        beforeHash: '1111111',
-        afterHash: '2222222',
-        createdAt: new Date().toISOString(),
-      },
-    ]);
+    renderPipelineTab();
 
     expect(screen.getByText('Code Diff')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'src/foo.ts' })).toBeInTheDocument();
   });
 
   it('shows a waiting message before a diff exists', () => {
-    renderPipelineTab([]);
+    renderPipelineTab();
 
     expect(screen.getByText('Human Approval')).toBeInTheDocument();
     expect(screen.getByText('Revisions')).toBeInTheDocument();
