@@ -3,8 +3,10 @@
 import { useState } from 'react';
 
 const COMMANDS = {
-  desktop: 'brew install --cask shipshitdev/tap/shipcode',
-  cli: 'npx @shipshitdev/shipcode run 42',
+  desktop: `brew tap shipshitdev/tap
+brew install --cask shipcode`,
+  cli: `npx @shipshitdev/shipcode onboard
+npx @shipshitdev/shipcode run 42`,
 } as const;
 
 type InstallMode = keyof typeof COMMANDS;
@@ -12,11 +14,11 @@ type InstallMode = keyof typeof COMMANDS;
 const MODE_COPY: Record<InstallMode, { label: string; description: string }> = {
   desktop: {
     label: 'Desktop App',
-    description: 'Install the packaged macOS app with Homebrew Cask.',
+    description: 'Install the desktop app with Homebrew.',
   },
   cli: {
     label: 'CLI',
-    description: 'Run the published CLI through npx — no clone needed.',
+    description: 'Run the same pipeline instantly with npx.',
   },
 };
 
@@ -63,10 +65,12 @@ export function InstallCommand({ compact = false }: { compact?: boolean }) {
 
         {/* Command */}
         <div className="px-5 py-4 text-left font-mono">
-          <div className="flex gap-2 text-[13px] leading-7">
-            <span className="select-none text-muted">$</span>
-            <span className="text-secondary">{COMMANDS[mode]}</span>
-          </div>
+          {COMMANDS[mode].split('\n').map((command) => (
+            <div key={command} className="flex gap-2 text-[13px] leading-7">
+              <span className="select-none text-muted">$</span>
+              <span className="text-secondary">{command}</span>
+            </div>
+          ))}
         </div>
       </div>
     </div>

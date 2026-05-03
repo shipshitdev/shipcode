@@ -44,6 +44,12 @@ export function Hero() {
               View on GitHub
               <span aria-hidden="true">↗</span>
             </a>
+            <a
+              href="/docs"
+              className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-6 py-3 text-sm font-semibold text-primary transition-all duration-200 hover:bg-white/[0.08]"
+            >
+              Read the docs
+            </a>
           </div>
           <a
             href="#pipeline"
@@ -71,8 +77,8 @@ export function Hero() {
             Install in seconds
           </h2>
           <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-secondary">
-            Homebrew for the desktop app. <code className="text-muted">npx</code> for the CLI. Same
-            pipeline engine underneath.
+            Install the desktop app with Homebrew or run the same pipeline instantly with{' '}
+            <code className="text-muted">npx</code>. Homebrew for the desktop app.
           </p>
           <div className="mt-6">
             <InstallCommand />
