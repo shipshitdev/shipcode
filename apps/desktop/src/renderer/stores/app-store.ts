@@ -80,8 +80,8 @@ export type ViewMode =
   | 'skills'
   | 'automations';
 
-export type ProjectTab = 'issues' | 'git' | 'code' | 'pull-requests' | 'sessions' | 'insights';
-export type InstantPaneMode = 'replay' | 'live';
+export type ProjectTab = 'issues' | 'git' | 'code' | 'pull-requests' | 'terminal' | 'insights';
+export type TerminalPaneMode = 'replay' | 'live';
 export type SettingsSection =
   | 'about'
   | 'general'
@@ -163,13 +163,13 @@ interface AppState {
   activePrNumber: number | null;
   pendingGitWorktreePath: string | null;
 
-  // Instant terminal sessions
-  instantPaneThreadIds: string[];
-  instantSplitDirection: 'horizontal' | 'vertical';
-  instantPaneMetaByThread: Record<
+  // Terminal pane sessions
+  terminalPaneThreadIds: string[];
+  terminalSplitDirection: 'horizontal' | 'vertical';
+  terminalPaneMetaByThread: Record<
     string,
     {
-      mode: InstantPaneMode;
+      mode: TerminalPaneMode;
       title?: string | null;
       cli?: 'claude' | 'codex' | 'shell';
       state?: AgentState;
@@ -243,20 +243,20 @@ interface AppState {
   setProjectTab: (tab: ProjectTab) => void;
   setActivePrNumber: (n: number | null) => void;
 
-  // Instant terminal actions
-  openTerminalSessions: () => void;
-  addInstantPane: (
+  // Terminal pane actions
+  openTerminalTab: () => void;
+  addTerminalPane: (
     threadId: string,
     meta?: {
-      mode?: InstantPaneMode;
+      mode?: TerminalPaneMode;
       title?: string | null;
       cli?: 'claude' | 'codex' | 'shell';
       state?: AgentState;
     },
   ) => void;
-  removeInstantPane: (threadId: string) => void;
-  setInstantSplitDirection: (dir: 'horizontal' | 'vertical') => void;
-  setInstantPaneState: (threadId: string, state: AgentState) => void;
+  removeTerminalPane: (threadId: string) => void;
+  setTerminalSplitDirection: (dir: 'horizontal' | 'vertical') => void;
+  setTerminalPaneState: (threadId: string, state: AgentState) => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -298,9 +298,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   projectTab: 'issues' as ProjectTab,
   activePrNumber: null,
   pendingGitWorktreePath: null,
-  instantPaneThreadIds: [],
-  instantSplitDirection: 'horizontal',
-  instantPaneMetaByThread: {},
+  terminalPaneThreadIds: [],
+  terminalSplitDirection: 'horizontal',
+  terminalPaneMetaByThread: {},
   currentModels: {},
   canonicalTerminalStream: {},
 
@@ -656,12 +656,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     }),
   setActivePrNumber: (n) => set({ activePrNumber: n }),
 
-  openTerminalSessions: () => {
+  openTerminalTab: () => {
     const { activeProjectId } = get();
     if (!activeProjectId) return;
     set({
       viewMode: 'project',
-      projectTab: 'sessions' as ProjectTab,
+      projectTab: 'terminal' as ProjectTab,
       activeIssue: null,
       activeAutomationThreadId: null,
       activeAutomationDetailId: null,
@@ -671,12 +671,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentVerification: null,
     });
   },
-  addInstantPane: (threadId, meta) =>
+  addTerminalPane: (threadId, meta) =>
     set((s) => {
-      const nextIds = s.instantPaneThreadIds.includes(threadId)
-        ? s.instantPaneThreadIds
-        : [...s.instantPaneThreadIds, threadId].slice(0, 4);
-      const existingMeta = s.instantPaneMetaByThread[threadId];
+      const nextIds = s.terminalPaneThreadIds.includes(threadId)
+        ? s.terminalPaneThreadIds
+        : [...s.terminalPaneThreadIds, threadId].slice(0, 4);
+      const existingMeta = s.terminalPaneMetaByThread[threadId];
       const nextMeta = {
         ...existingMeta,
         mode: meta?.mode ?? existingMeta?.mode ?? 'replay',
@@ -685,28 +685,28 @@ export const useAppStore = create<AppState>((set, get) => ({
         state: meta?.state ?? existingMeta?.state,
       };
       return {
-        instantPaneThreadIds: nextIds,
-        instantPaneMetaByThread: {
-          ...s.instantPaneMetaByThread,
+        terminalPaneThreadIds: nextIds,
+        terminalPaneMetaByThread: {
+          ...s.terminalPaneMetaByThread,
           [threadId]: nextMeta,
         },
       };
     }),
-  removeInstantPane: (threadId) =>
+  removeTerminalPane: (threadId) =>
     set((s) => ({
-      instantPaneThreadIds: s.instantPaneThreadIds.filter((id) => id !== threadId),
-      instantPaneMetaByThread: Object.fromEntries(
-        Object.entries(s.instantPaneMetaByThread).filter(([id]) => id !== threadId),
+      terminalPaneThreadIds: s.terminalPaneThreadIds.filter((id) => id !== threadId),
+      terminalPaneMetaByThread: Object.fromEntries(
+        Object.entries(s.terminalPaneMetaByThread).filter(([id]) => id !== threadId),
       ),
     })),
-  setInstantSplitDirection: (dir) => set({ instantSplitDirection: dir }),
-  setInstantPaneState: (threadId, state) =>
+  setTerminalSplitDirection: (dir) => set({ terminalSplitDirection: dir }),
+  setTerminalPaneState: (threadId, state) =>
     set((s) => {
-      const existing = s.instantPaneMetaByThread[threadId];
+      const existing = s.terminalPaneMetaByThread[threadId];
       if (!existing) return s;
       return {
-        instantPaneMetaByThread: {
-          ...s.instantPaneMetaByThread,
+        terminalPaneMetaByThread: {
+          ...s.terminalPaneMetaByThread,
           [threadId]: { ...existing, state },
         },
       };

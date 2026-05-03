@@ -51,7 +51,7 @@ function CommandPaletteContent() {
   const openInbox = useAppStore((state) => state.openInbox);
   const openCosts = useAppStore((state) => state.openCosts);
   const openSkills = useAppStore((state) => state.openSkills);
-  const openTerminalSessions = useAppStore((state) => state.openTerminalSessions);
+  const openTerminalTab = useAppStore((state) => state.openTerminalTab);
   const setProjectTab = useAppStore((state) => state.setProjectTab);
   const navigateToIssue = useAppStore((state) => state.navigateToIssue);
   const { openProjectTerminal } = useOpenProjectTerminal();
@@ -236,8 +236,8 @@ function CommandPaletteContent() {
           <CommandItem onSelect={() => runAction(() => openSkills())}>
             <span className="flex-1">Skills</span>
           </CommandItem>
-          <CommandItem onSelect={() => runAction(() => openTerminalSessions())}>
-            <span className="flex-1">Terminal Sessions</span>
+          <CommandItem onSelect={() => runAction(() => openTerminalTab())}>
+            <span className="flex-1">Terminal</span>
           </CommandItem>
           <CommandItem onSelect={() => runAction(() => setProjectTab('pull-requests'))}>
             <span className="flex-1">Pull Requests</span>

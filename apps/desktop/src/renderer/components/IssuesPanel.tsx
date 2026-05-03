@@ -5,11 +5,11 @@ import {
   githubRepoUrl,
   ISSUE_PIPELINE_STATUS,
   type IssuePipelineStatus,
+  type ThreadPanelData as IssuesPanelData,
   isRealGithubIssueNumber,
   PIPELINE_PHASE,
   type Project,
   type Thread,
-  type ThreadPanelData,
 } from '@shipcode/shared';
 import { AUTOMATION_ISSUE_NUMBER_BASE, isAutomationIssue, KanbanBoard } from '@shipcode/ui';
 import { Button } from '@shipshitdev/ui';
@@ -94,7 +94,7 @@ function automationThreadToIssue(thread: Thread, projectId: string): GitHubIssue
   };
 }
 
-export function ThreadPanel() {
+export function IssuesPanel() {
   const queryClient = useQueryClient();
   const activeProjectId = useAppStore((state) => state.activeProjectId);
   const selectedIssueNumber = useAppStore((state) => state.activeIssue?.issueNumber);
@@ -104,6 +104,7 @@ export function ThreadPanel() {
   const settingsVisible = useAppStore((state) => state.settingsVisible);
   const activeAutomationThreadId = useAppStore((state) => state.activeAutomationThreadId);
   const selectIssue = useAppStore((state) => state.selectIssue);
+  const selectAutomationThread = useAppStore((state) => state.selectAutomationThread);
   const setTerminalThread = useAppStore((state) => state.setTerminalThread);
   const openTerminal = useAppStore((state) => state.openTerminal);
   const requestCommentComposer = useAppStore((state) => state.requestCommentComposer);
@@ -198,10 +199,10 @@ export function ThreadPanel() {
     return () => clearTimeout(id);
   }, [doneUndo]);
 
-  const { data: panelData } = useQuery<ThreadPanelData>({
+  const { data: panelData } = useQuery<IssuesPanelData>({
     queryKey: ['thread-panel-data', activeProjectId],
     queryFn: () =>
-      window.shipcode.invoke<ThreadPanelData>('thread-panel:get-data', {
+      window.shipcode.invoke<IssuesPanelData>('thread-panel:get-data', {
         projectId: activeProjectId ?? '',
       }),
     enabled: !!activeProjectId,
@@ -455,8 +456,10 @@ export function ThreadPanel() {
   const projectsUrl = project?.githubProjectUrl?.trim() ? project.githubProjectUrl.trim() : null;
   const handleIssueClick = (issue: GitHubIssueCacheRecord) => {
     if (isAutomationIssue(issue) && issue.threadId) {
+      selectAutomationThread(issue.threadId);
       setTerminalThread(issue.threadId);
       openTerminal();
+      return;
     }
 
     selectIssue(issue);
@@ -499,7 +502,7 @@ export function ThreadPanel() {
             })
             .then((fresh) => {
               queryClient.setQueryData(['git-branches', activeProjectId], fresh);
-              queryClient.setQueryData<ThreadPanelData | undefined>(
+              queryClient.setQueryData<IssuesPanelData | undefined>(
                 ['thread-panel-data', activeProjectId],
                 (prev) => (prev ? { ...prev, branches: fresh } : prev),
               );
@@ -531,7 +534,7 @@ export function ThreadPanel() {
           queryClient.setQueryData<Project | null>(['project', activeProjectId], (prev) =>
             prev ? { ...prev, defaultBranch: branch } : prev,
           );
-          queryClient.setQueryData<ThreadPanelData | undefined>(
+          queryClient.setQueryData<IssuesPanelData | undefined>(
             ['thread-panel-data', activeProjectId],
             (prev) =>
               prev?.project

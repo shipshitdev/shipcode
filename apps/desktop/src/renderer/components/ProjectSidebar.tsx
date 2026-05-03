@@ -63,7 +63,7 @@ const PROJECT_TAB_ITEMS: Array<{
   { key: 'code', label: 'Code', icon: Code2 },
   { key: 'pull-requests', label: 'Pull Requests', icon: GitPullRequest },
   { key: 'insights', label: 'Insights', icon: Activity },
-  { key: 'sessions', label: 'Sessions', icon: Terminal },
+  { key: 'terminal', label: 'Terminal', icon: Terminal },
 ];
 
 const SIDEBAR_MIN = 220;

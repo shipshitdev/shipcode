@@ -3,8 +3,8 @@ import { useAppStore } from '../stores/app-store';
 
 export function useOpenProjectTerminal() {
   const activeProjectId = useAppStore((state) => state.activeProjectId);
-  const addInstantPane = useAppStore((state) => state.addInstantPane);
-  const openTerminalSessions = useAppStore((state) => state.openTerminalSessions);
+  const addTerminalPane = useAppStore((state) => state.addTerminalPane);
+  const openTerminalTab = useAppStore((state) => state.openTerminalTab);
   const [openingTerminal, setOpeningTerminal] = useState(false);
 
   const openProjectTerminal = useCallback(async () => {
@@ -17,12 +17,12 @@ export function useOpenProjectTerminal() {
       const { threadId } = await window.shipcode.invoke('instant:bare-shell', {
         projectId: activeProjectId,
       });
-      addInstantPane(threadId, { mode: 'live', title: 'Terminal', cli: 'shell' });
-      openTerminalSessions();
+      addTerminalPane(threadId, { mode: 'live', title: 'Terminal', cli: 'shell' });
+      openTerminalTab();
     } finally {
       setOpeningTerminal(false);
     }
-  }, [activeProjectId, addInstantPane, openTerminalSessions]);
+  }, [activeProjectId, addTerminalPane, openTerminalTab]);
 
   return { openProjectTerminal, openingTerminal };
 }

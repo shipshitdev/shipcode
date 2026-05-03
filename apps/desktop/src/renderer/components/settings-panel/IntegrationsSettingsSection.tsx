@@ -92,7 +92,7 @@ export function IntegrationsSettingsSection({
       <div className="mb-3">
         <div className="text-[13px] font-medium text-primary">Terminal opener</div>
         <div className="text-[11px] text-muted">
-          Choose the terminal ShipCode opens from Sessions and the console drawer.
+          Choose the terminal ShipCode opens from Terminal and the console drawer.
         </div>
       </div>
 

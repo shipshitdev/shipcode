@@ -152,7 +152,10 @@ describe('registerGitHubHandlers', () => {
     listAllIssuesMock.mockReset();
     listAllIssuesMock.mockImplementation(async () => []);
     fetchProjectPrioritiesMock.mockReset();
-    fetchProjectPrioritiesMock.mockResolvedValue(new Map());
+    fetchProjectPrioritiesMock.mockResolvedValue({
+      priorities: new Map(),
+      archivedIssueNumbers: new Set(),
+    });
   });
 
   function buildGithubIssuesQueries(
@@ -395,6 +398,62 @@ describe('registerGitHubHandlers', () => {
     });
   });
 
+  it('marks a quick/local issue done without calling GitHub', async () => {
+    const quickIssue = {
+      ...baseIssue,
+      id: 'quick-1',
+      issueNumber: -236024417,
+      isQuickMode: true,
+      state: 'open',
+      pipelineStatus: 'completed',
+    };
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+      },
+      githubIssues: buildGithubIssuesQueries(
+        {
+          list: vi.fn(() => [quickIssue]),
+          updatePipelineStatus: vi.fn(),
+          updateState: vi.fn(),
+        },
+        [quickIssue],
+      ),
+      threads: {
+        getById: vi.fn(() => null),
+        getByProjectAndGithubIssue: vi.fn(() => null),
+      },
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const markDone = handlers.get('issue:mark-done');
+    if (!markDone) throw new Error('issue:mark-done handler not registered');
+
+    await markDone(undefined, {
+      projectId: 'project-1',
+      issueId: quickIssue.id,
+      issueNumber: quickIssue.issueNumber,
+    });
+
+    expect(closeIssueMock).not.toHaveBeenCalled();
+    expect(queries.githubIssues.updateState).not.toHaveBeenCalled();
+    expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(quickIssue.id, 'done');
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('github:issues-updated', {
+      projectId: 'project-1',
+      issues: [quickIssue],
+    });
+  });
+
   describe('github:refresh-issues priority sync', () => {
     const projectWithBoard = {
       ...baseProject,
@@ -439,9 +498,10 @@ describe('registerGitHubHandlers', () => {
 
     it('calls setPriority for each issue when githubProjectUrl is set', async () => {
       const queries = buildQueries(projectWithBoard);
-      fetchProjectPrioritiesMock.mockResolvedValue(
-        new Map([[42, { rank: 'p0' as const, raw: 'P0' }]]),
-      );
+      fetchProjectPrioritiesMock.mockResolvedValue({
+        priorities: new Map([[42, { rank: 'p0' as const, raw: 'P0' }]]),
+        archivedIssueNumbers: new Set(),
+      });
       listAllIssuesMock.mockResolvedValue([]);
 
       registerGitHubHandlers({
@@ -526,7 +586,10 @@ describe('registerGitHubHandlers', () => {
     it('writes null priority for issues missing from the priorities map', async () => {
       const queries = buildQueries(projectWithBoard);
       // Empty priority map — the issue is on the project but has no Priority field set.
-      fetchProjectPrioritiesMock.mockResolvedValue(new Map());
+      fetchProjectPrioritiesMock.mockResolvedValue({
+        priorities: new Map(),
+        archivedIssueNumbers: new Set(),
+      });
       listAllIssuesMock.mockResolvedValue([]);
 
       registerGitHubHandlers({

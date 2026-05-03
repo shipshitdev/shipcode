@@ -203,6 +203,7 @@ describe('TerminalDrawer', () => {
       activeThreadId: null,
       activeIssue: null,
       terminalVisible: true,
+      terminalMaximized: false,
       terminalThreadId: null,
       pipelinePhase: 'idle',
       githubIssues: [],
@@ -441,13 +442,13 @@ describe('TerminalDrawer', () => {
 
     useAppStore.setState({
       activeProjectId: 'project-1',
-      instantPaneThreadIds: [],
-      instantPaneMetaByThread: {},
+      terminalPaneThreadIds: [],
+      terminalPaneMetaByThread: {},
     } as never);
 
     renderWithProviders();
 
-    fireEvent.click(screen.getByTitle('Open Terminal'));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Terminal' }));
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith('instant:bare-shell', {
@@ -456,7 +457,7 @@ describe('TerminalDrawer', () => {
     });
 
     const state = useAppStore.getState();
-    expect(state.instantPaneThreadIds).toContain('thread-shell-1');
+    expect(state.terminalPaneThreadIds).toContain('thread-shell-1');
   });
 
   it('switches into full-size terminal mode instead of keeping the resize handle visible', () => {
@@ -470,11 +471,45 @@ describe('TerminalDrawer', () => {
 
     expect(screen.getByLabelText('Resize terminal drawer')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Expand terminal' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Maximize terminal' }));
 
     expect(screen.queryByLabelText('Resize terminal drawer')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Collapse terminal' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Minimize terminal to window' })).toBeInTheDocument();
     expect(useAppStore.getState().terminalMaximized).toBe(true);
+  });
+
+  it('resets a resized or maximized terminal back to the default drawer size', () => {
+    useAppStore.setState({
+      activeProjectId: 'project-1',
+      terminalThreadId: 'thread-1',
+      githubIssues: [makeIssue()],
+    });
+
+    renderWithProviders();
+
+    const resizeHandle = screen.getByLabelText('Resize terminal drawer');
+    const drawer = resizeHandle.parentElement;
+    expect(drawer).toHaveStyle({ height: '250px' });
+
+    fireEvent.mouseDown(resizeHandle, { clientY: 500 });
+    fireEvent.mouseMove(window, { clientY: 400 });
+    fireEvent.mouseUp(window);
+
+    expect(drawer).toHaveStyle({ height: '350px' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset terminal size' }));
+
+    expect(useAppStore.getState().terminalMaximized).toBe(false);
+    expect(screen.getByLabelText('Resize terminal drawer')).toBeInTheDocument();
+    expect(drawer).toHaveStyle({ height: '250px' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Maximize terminal' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reset terminal size' }));
+
+    expect(useAppStore.getState().terminalMaximized).toBe(false);
+    expect(screen.getByLabelText('Resize terminal drawer').parentElement).toHaveStyle({
+      height: '250px',
+    });
   });
 
   it('shows waiting-for-execution copy for approved slot waiters', async () => {

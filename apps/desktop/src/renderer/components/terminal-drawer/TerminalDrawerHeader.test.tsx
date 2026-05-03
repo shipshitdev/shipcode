@@ -73,6 +73,7 @@ afterEach(() => {
 describe('TerminalDrawerHeader', () => {
   it('renders the active issue context and forwards single-tab actions', () => {
     const onOpenIssue = vi.fn();
+    const onResetHeight = vi.fn();
     const onToggleMaximize = vi.fn();
     const onToggleTerminal = vi.fn();
     const issue = makeIssue();
@@ -90,6 +91,7 @@ describe('TerminalDrawerHeader', () => {
         terminalThreadId={issue.threadId}
         onOpenProjectTerminal={() => {}}
         onOpenTarget={onOpenIssue}
+        onResetHeight={onResetHeight}
         onToggleMaximize={onToggleMaximize}
         onToggleTerminal={onToggleTerminal}
       />,
@@ -102,10 +104,12 @@ describe('TerminalDrawerHeader', () => {
     expect(screen.getByText('2m 10s')).toBeInTheDocument();
 
     fireEvent.click(screen.getByTitle('Open issue detail for #19'));
-    fireEvent.click(screen.getByRole('button', { name: 'Expand terminal' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Maximize terminal' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reset terminal size' }));
     fireEvent.click(screen.getByRole('button', { name: 'Close terminal' }));
 
     expect(onOpenIssue).toHaveBeenCalledWith(issueTarget(issue));
+    expect(onResetHeight).toHaveBeenCalledTimes(1);
     expect(onToggleMaximize).toHaveBeenCalledTimes(1);
     expect(onToggleTerminal).toHaveBeenCalledTimes(1);
   });
@@ -133,6 +137,7 @@ describe('TerminalDrawerHeader', () => {
         terminalThreadId={issueA.threadId}
         onOpenProjectTerminal={() => {}}
         onOpenTarget={onOpenIssue}
+        onResetHeight={vi.fn()}
         onToggleMaximize={vi.fn()}
         onToggleTerminal={vi.fn()}
       />,
@@ -165,6 +170,7 @@ describe('TerminalDrawerHeader', () => {
         terminalThreadId={issue.threadId}
         onOpenProjectTerminal={onOpenProjectTerminal}
         onOpenTarget={() => {}}
+        onResetHeight={() => {}}
         onToggleMaximize={() => {}}
         onToggleTerminal={() => {}}
       />,
@@ -193,6 +199,7 @@ describe('TerminalDrawerHeader', () => {
         terminalThreadId={issue.threadId}
         onOpenProjectTerminal={() => {}}
         onOpenTarget={() => {}}
+        onResetHeight={() => {}}
         onToggleMaximize={() => {}}
         onToggleTerminal={() => {}}
       />,
@@ -225,6 +232,7 @@ describe('TerminalDrawerHeader', () => {
         terminalThreadId={target.threadId}
         onOpenProjectTerminal={() => {}}
         onOpenTarget={vi.fn()}
+        onResetHeight={() => {}}
         onToggleMaximize={() => {}}
         onToggleTerminal={() => {}}
       />,

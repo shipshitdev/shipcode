@@ -200,6 +200,12 @@ export function useTerminalDrawer() {
     setTerminalMaximized(!isMaximized);
   }, [height, isMaximized, setTerminalMaximized]);
 
+  const resetHeight = useCallback(() => {
+    prevHeightRef.current = DEFAULT_HEIGHT;
+    setHeight(DEFAULT_HEIGHT);
+    setTerminalMaximized(false);
+  }, [setTerminalMaximized]);
+
   const handleRunningTargetSelect = useCallback(
     (target: TerminalDrawerTarget) => {
       setTerminalThread(target.threadId);
@@ -223,6 +229,7 @@ export function useTerminalDrawer() {
     showEmptyState: displayTarget === null,
     startedAt: firstEventCreatedAt != null ? formatClockTime(firstEventCreatedAt) : null,
     terminalThreadId: visibleTerminalThreadId,
+    resetHeight,
     toggleMaximize,
     toggleTerminal,
   };

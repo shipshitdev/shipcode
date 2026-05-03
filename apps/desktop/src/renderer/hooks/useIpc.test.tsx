@@ -131,7 +131,7 @@ describe('useIpc terminal scoping', () => {
       githubIssues: [currentIssue],
       currentModels: {},
       canonicalTerminalStream: {},
-      instantPaneMetaByThread: {},
+      terminalPaneMetaByThread: {},
       notifications: [],
     });
   });
@@ -284,7 +284,7 @@ describe('useIpc terminal scoping', () => {
   });
 
   it('tracks live instant pane state from agent lifecycle events', () => {
-    useAppStore.getState().addInstantPane('thread-live', {
+    useAppStore.getState().addTerminalPane('thread-live', {
       mode: 'live',
       cli: 'claude',
       title: 'Claude shell',
@@ -300,7 +300,7 @@ describe('useIpc terminal scoping', () => {
       threadId: 'thread-live',
     });
 
-    expect(useAppStore.getState().instantPaneMetaByThread['thread-live']?.state).toBe('exited');
+    expect(useAppStore.getState().terminalPaneMetaByThread['thread-live']?.state).toBe('exited');
   });
 
   it('formats provider and model consistently for terminal headers', () => {

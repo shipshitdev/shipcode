@@ -45,7 +45,7 @@ vi.mock('@shipcode/ui', () => ({
   ),
 }));
 
-import { ThreadPanel } from './ThreadPanel';
+import { IssuesPanel } from './IssuesPanel';
 
 const project: Project = {
   id: 'project-1',
@@ -194,12 +194,12 @@ function renderWithProviders() {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <ThreadPanel />
+      <IssuesPanel />
     </QueryClientProvider>,
   );
 }
 
-describe('ThreadPanel undo done move', () => {
+describe('IssuesPanel undo done move', () => {
   const invokeMock = vi.fn<(channel: string, args?: unknown) => Promise<unknown>>();
 
   beforeEach(() => {
@@ -232,7 +232,7 @@ describe('ThreadPanel undo done move', () => {
     invokeMock.mockImplementation(async (channel) => {
       if (channel === 'thread-panel:get-data') return panelData;
       if (channel === 'github:list-issues') return [originalIssue];
-      if (channel === 'github:mark-done') return undefined;
+      if (channel === 'issue:mark-done') return undefined;
       if (channel === 'github:reopen-issue') return undefined;
       if (channel === 'github:refresh-issues') {
         refreshCount += 1;
@@ -248,8 +248,9 @@ describe('ThreadPanel undo done move', () => {
 
     expect(await screen.findByText('Moved #18 to Done')).toBeInTheDocument();
     expect(screen.getByText(/restore it to awaiting approval/i)).toBeInTheDocument();
-    expect(invokeMock).toHaveBeenCalledWith('github:mark-done', {
+    expect(invokeMock).toHaveBeenCalledWith('issue:mark-done', {
       projectId: project.id,
+      issueId: originalIssue.id,
       issueNumber: originalIssue.issueNumber,
     });
 

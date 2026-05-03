@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@shipshitdev/ui';
-import { ChevronDown, ChevronUp, Terminal, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Plus, RotateCcw, X } from 'lucide-react';
 import type { TerminalDrawerTarget } from './constants';
 
 interface TerminalDrawerHeaderProps {
@@ -23,6 +23,7 @@ interface TerminalDrawerHeaderProps {
   terminalThreadId: string | null;
   onOpenProjectTerminal: () => void;
   onOpenTarget: (target: TerminalDrawerTarget) => void;
+  onResetHeight: () => void;
   onToggleMaximize: () => void;
   onToggleTerminal: () => void;
 }
@@ -39,6 +40,7 @@ export function TerminalDrawerHeader({
   terminalThreadId,
   onOpenProjectTerminal,
   onOpenTarget,
+  onResetHeight,
   onToggleMaximize,
   onToggleTerminal,
 }: TerminalDrawerHeaderProps) {
@@ -123,15 +125,14 @@ export function TerminalDrawerHeader({
       <div className="flex items-center gap-0.5 shrink-0">
         <Button
           variant="ghost"
-          size="xs"
-          className="h-6 gap-1 px-2"
+          size="icon-xs"
+          className="text-muted hover:bg-hover/70 hover:text-primary"
           disabled={!activeProjectId}
           onClick={onOpenProjectTerminal}
           title="Open Terminal"
           aria-label="Open Terminal"
         >
-          <Terminal size={13} />
-          <span className="hidden sm:inline">Terminal</span>
+          <Plus size={14} />
         </Button>
 
         <Button
@@ -139,10 +140,21 @@ export function TerminalDrawerHeader({
           size="icon-xs"
           className="text-muted hover:bg-hover/70 hover:text-primary"
           onClick={onToggleMaximize}
-          title={isMaximized ? 'Collapse terminal' : 'Expand terminal'}
-          aria-label={isMaximized ? 'Collapse terminal' : 'Expand terminal'}
+          title={isMaximized ? 'Minimize terminal to window' : 'Maximize terminal'}
+          aria-label={isMaximized ? 'Minimize terminal to window' : 'Maximize terminal'}
         >
           {isMaximized ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="text-muted hover:bg-hover/70 hover:text-primary"
+          onClick={onResetHeight}
+          title="Reset terminal size"
+          aria-label="Reset terminal size"
+        >
+          <RotateCcw size={13} />
         </Button>
 
         <Button

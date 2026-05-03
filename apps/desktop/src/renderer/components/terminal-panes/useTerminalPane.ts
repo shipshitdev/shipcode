@@ -4,7 +4,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { InstantPaneMode } from '../../stores/app-store';
+import type { TerminalPaneMode } from '../../stores/app-store';
 import { useAppStore } from '../../stores/app-store';
 import { renderTerminalEvent } from '../terminal-drawer/render-terminal-event';
 
@@ -44,7 +44,7 @@ function buildTerminalTheme() {
   };
 }
 
-function writeTerminalRecord(term: Terminal, mode: InstantPaneMode, record: TerminalEventRecord) {
+function writeTerminalRecord(term: Terminal, mode: TerminalPaneMode, record: TerminalEventRecord) {
   if (mode === 'live' && record.event.kind === 'raw') {
     term.write(record.event.content);
     return;
@@ -56,11 +56,7 @@ function writeTerminalRecord(term: Terminal, mode: InstantPaneMode, record: Term
   term.write(normalized);
 }
 
-export function useInstantTerminalPane(
-  threadId: string,
-  mode: InstantPaneMode,
-  isRunning: boolean,
-) {
+export function useTerminalPane(threadId: string, mode: TerminalPaneMode, isRunning: boolean) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
