@@ -447,7 +447,7 @@ describe('TerminalDrawer', () => {
 
     renderWithProviders();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open Terminal' }));
+    fireEvent.click(screen.getByTitle('Open Terminal'));
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith('instant:bare-shell', {

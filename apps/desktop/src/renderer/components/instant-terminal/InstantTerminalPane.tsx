@@ -63,7 +63,7 @@ export function InstantTerminalPane({
   const stale = quietSeconds != null && quietSeconds >= STALE_WARNING_SECONDS;
 
   return (
-    <div className="flex flex-col border border-border rounded-lg overflow-hidden bg-secondary">
+    <div className="flex flex-1 min-h-0 flex-col border border-border rounded-lg overflow-hidden bg-secondary">
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-1.5 bg-elevated border-b border-border">
         <span className="flex-1 truncate text-xs text-secondary font-medium">{title}</span>

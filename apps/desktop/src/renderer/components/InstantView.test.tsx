@@ -72,7 +72,7 @@ describe('InstantView', () => {
 
     render(<InstantView />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open Terminal' }));
+    fireEvent.click(screen.getByTitle('Open Terminal'));
 
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith('instant:bare-shell', {
@@ -93,7 +93,7 @@ describe('InstantView', () => {
     render(<InstantView />);
 
     expect(screen.getByText('Claude shell')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open Terminal' })).toBeInTheDocument();
+    expect(screen.getByTitle('Open Terminal')).toBeInTheDocument();
   });
 
   it('does not rerender the sessions grid when unrelated terminal streams update', () => {

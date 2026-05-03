@@ -625,8 +625,9 @@ export function ThreadPanel() {
               : null,
           );
           window.shipcode
-            .invoke('github:mark-done', {
+            .invoke('issue:mark-done', {
               projectId: activeProjectId,
+              issueId: issue.id,
               issueNumber: issue.issueNumber,
             })
             .then(() => activeProjectId && refreshIssues.mutate(activeProjectId))

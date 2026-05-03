@@ -277,7 +277,10 @@ export interface IpcInvokeChannels {
 
   // GitHub
   'github:list-issues': { args: { projectId: string }; result: GitHubIssueCacheRecord[] };
-  'github:refresh-issues': { args: { projectId: string }; result: GitHubIssueCacheRecord[] };
+  'github:refresh-issues': {
+    args: { projectId: string; force?: boolean };
+    result: GitHubIssueCacheRecord[];
+  };
   'github:triage-issues': { args: { projectId: string }; result: GitHubIssueTriageResult };
   'github:start-issue': { args: { projectId: string; issueNumber: number }; result: undefined };
   'github:auto-run-count': {
@@ -290,6 +293,10 @@ export interface IpcInvokeChannels {
   };
   'github:retry-issue': { args: { projectId: string; issueNumber: number }; result: undefined };
   'github:mark-done': { args: { projectId: string; issueNumber: number }; result: undefined };
+  'issue:mark-done': {
+    args: { projectId: string; issueId: string; issueNumber: number };
+    result: undefined;
+  };
   'github:get-issue': {
     args: { issueNumber: number; projectId: string };
     result: GitHubIssueCacheRecord | null;
@@ -343,7 +350,7 @@ export interface IpcInvokeChannels {
     };
   };
   'github:archive-issue': {
-    args: { projectId: string; issueNumber: number };
+    args: { projectId: string; issueId: string; issueNumber: number };
     result: { archivedCount: number };
   };
   'github:archive-all-done': {

@@ -96,6 +96,14 @@ function syncOpenIssueState(
   return queries.githubIssues.getByNumber(issue.projectId, issue.issueNumber);
 }
 
+function getActiveIssueById(
+  queries: IpcHandlerDeps['queries'],
+  projectId: string,
+  issueId: string,
+): GitHubIssueCacheRecord | null {
+  return queries.githubIssues.list(projectId).find((issue) => issue.id === issueId) ?? null;
+}
+
 function mergeTriageLabels(
   currentLabels: string[],
   recommendation: IssueTriageRecommendation,
@@ -467,32 +475,29 @@ export function registerGitHubHandlers({
       const project = queries.projects.getById(projectId);
       if (!project) throw new Error(`Project ${projectId} not found`);
 
-      // Close + archive on GitHub only for real GitHub issues
-      if (isRealGithubIssueNumber(issueNumber)) {
-        const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
-        if (issue) {
-          const ghCli = new GhCli(project.path);
-          if (issue.state !== 'closed') {
-            await ghCli.closeIssue(issueNumber);
-          }
-          try {
-            await ghCli.archiveProjectItems(issueNumber);
-          } catch (err) {
-            log.warn(
-              '[github:archive-issue] project board archive failed after GitHub close:',
-              err,
-            );
-            throw new Error(
-              `Issue #${issueNumber} was closed on GitHub but could not be archived from the GitHub project board.`,
-            );
-          }
-          queries.githubIssues.updateState(issue.id, 'closed');
+      const issue = getActiveIssueById(queries, projectId, issueId);
+      if (!issue) throw new Error(`Issue ${issueId} not found in project ${projectId}`);
+
+      // Close + archive on GitHub only for real GitHub issues.
+      if (isRealGithubIssueNumber(issue.issueNumber)) {
+        const ghCli = new GhCli(project.path);
+        if (issue.state !== 'closed') {
+          await ghCli.closeIssue(issue.issueNumber);
         }
+        try {
+          await ghCli.archiveProjectItems(issue.issueNumber);
+        } catch (err) {
+          log.warn('[github:archive-issue] project board archive failed after GitHub close:', err);
+          throw new Error(
+            `Issue #${issue.issueNumber} was closed on GitHub but could not be archived from the GitHub project board.`,
+          );
+        }
+        queries.githubIssues.updateState(issue.id, 'closed');
       }
 
       try {
-        queries.githubIssues.updatePipelineStatus(issueId, ISSUE_PIPELINE_STATUS.done);
-        queries.githubIssues.archiveIssues([issueId]);
+        queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.done);
+        queries.githubIssues.archiveIssues([issue.id]);
       } catch (err) {
         log.error('[github:archive-issue] DB archive failed:', err);
         throw new Error(
@@ -502,6 +507,36 @@ export function registerGitHubHandlers({
 
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
       return { archivedCount: 1 };
+    },
+  );
+
+  ipcMain.handle(
+    'issue:mark-done',
+    async (
+      _event,
+      {
+        projectId,
+        issueId,
+        issueNumber,
+      }: { projectId: string; issueId: string; issueNumber: number },
+    ) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+
+      const issue = getActiveIssueById(queries, projectId, issueId);
+      if (!issue) throw new Error(`Issue ${issueId} not found in project ${projectId}`);
+      if (issue.issueNumber !== issueNumber) {
+        throw new Error(`Issue ${issueId} no longer matches #${issueNumber}`);
+      }
+
+      if (isRealGithubIssueNumber(issue.issueNumber) && issue.state !== 'closed') {
+        const ghCli = new GhCli(project.path);
+        await ghCli.closeIssue(issue.issueNumber);
+        queries.githubIssues.updateState(issue.id, 'closed');
+      }
+
+      queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.done);
+      sendGithubIssuesUpdated(mainWindow, queries, projectId);
     },
   );
 
@@ -531,34 +566,6 @@ export function registerGitHubHandlers({
         queries.githubIssues.updatePipelineStatus(issue.id, ISSUE_PIPELINE_STATUS.done);
       }
 
-      sendGithubIssuesUpdated(mainWindow, queries, projectId);
-    },
-  );
-
-  ipcMain.handle(
-    'issue:mark-done',
-    async (
-      _event,
-      {
-        projectId,
-        issueId,
-        issueNumber,
-      }: { projectId: string; issueId: string; issueNumber: number },
-    ) => {
-      const project = queries.projects.getById(projectId);
-      if (!project) throw new Error(`Project ${projectId} not found`);
-
-      // For real GitHub issues, close on GitHub first
-      if (isRealGithubIssueNumber(issueNumber)) {
-        const issue = queries.githubIssues.getByNumber(projectId, issueNumber);
-        if (issue && issue.state !== 'closed') {
-          const ghCli = new GhCli(project.path);
-          await ghCli.closeIssue(issueNumber);
-          queries.githubIssues.updateState(issue.id, 'closed');
-        }
-      }
-
-      queries.githubIssues.updatePipelineStatus(issueId, ISSUE_PIPELINE_STATUS.done);
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
     },
   );
