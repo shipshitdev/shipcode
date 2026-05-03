@@ -1,6 +1,6 @@
 import { PageHeader } from '@shipcode/ui';
 import { Button, cn } from '@shipshitdev/ui';
-import { Terminal } from 'lucide-react';
+import { Plus, Terminal } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { useOpenProjectTerminal } from '../hooks/useOpenProjectTerminal';
 import { type InstantPaneMode, useAppStore } from '../stores/app-store';
@@ -22,13 +22,16 @@ export function InstantView() {
 
   const openTerminalButton = (
     <Button
-      variant="default"
-      size="sm"
-      disabled={!activeProjectId || openingTerminal}
+      variant="ghost"
+      size="icon"
+      disabled={!activeProjectId || openingTerminal || instantPaneThreadIds.length >= 4}
       onClick={handleOpenTerminal}
+      title="Open Terminal"
     >
-      <Terminal size={14} />
-      Open Terminal
+      <div className="relative">
+        <Terminal size={16} />
+        <Plus size={10} className="absolute -right-1.5 -top-1.5 stroke-[3]" />
+      </div>
     </Button>
   );
 
@@ -56,7 +59,7 @@ export function InstantView() {
 
   const gridClass = useMemo(() => {
     const count = instantPaneThreadIds.length;
-    if (count <= 1) return '';
+    if (count <= 1) return 'flex flex-col';
     if (count === 2) {
       return instantSplitDirection === 'horizontal' ? 'grid grid-cols-2' : 'grid grid-rows-2';
     }
