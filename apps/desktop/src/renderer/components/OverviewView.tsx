@@ -23,6 +23,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, Bot, ListTodo, PackageCheck } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
+import { useAnimatedNumber } from '../hooks/useAnimatedNumber';
 import { useAppStore } from '../stores/app-store';
 
 interface StatCardProps {
@@ -105,6 +106,10 @@ export function OverviewView() {
       }),
   });
   const stats: DashboardStats | undefined = overview?.stats;
+  const animatedAgents = useAnimatedNumber(stats?.agentsRunning ?? 0);
+  const animatedTasks = useAnimatedNumber(stats?.tasksInProgress ?? 0);
+  const animatedApprovals = useAnimatedNumber(stats?.pendingApprovals ?? 0);
+  const animatedShipped = useAnimatedNumber(stats?.shippedLast7d ?? 0, 800);
   const running: ActivePipelineSummary[] = overview?.running ?? [];
   const activity: ActivityEntry[] = overview?.activity ?? [];
   const activityTotal = overview?.activityTotal ?? 0;
@@ -153,7 +158,7 @@ export function OverviewView() {
             {[
               {
                 label: 'Agents Running',
-                value: stats?.agentsRunning ?? 0,
+                value: animatedAgents,
                 subtitle: stats
                   ? Object.entries(stats.runningByPhase ?? {})
                       .map(([phase, n]) => `${n} ${phase.replace(/_/g, ' ')}`)
@@ -166,7 +171,7 @@ export function OverviewView() {
               },
               {
                 label: 'Tasks In Progress',
-                value: stats?.tasksInProgress ?? 0,
+                value: animatedTasks,
                 subtitle: stats ? `${stats.tasksOpen} open · ${stats.tasksBlocked} blocked` : '—',
                 tone: (stats && stats.tasksInProgress > 0 ? 'agent' : 'default') as
                   | 'agent'
@@ -176,7 +181,7 @@ export function OverviewView() {
               },
               {
                 label: 'Pending Approvals',
-                value: stats?.pendingApprovals ?? 0,
+                value: animatedApprovals,
                 subtitle: stats?.staleApprovals
                   ? `${stats.staleApprovals} stale > 24h`
                   : 'no stale items',
@@ -188,7 +193,7 @@ export function OverviewView() {
               },
               {
                 label: 'Shipped (7d)',
-                value: stats?.shippedLast7d ?? 0,
+                value: animatedShipped,
                 subtitle: stats ? `${stats.failedLast7d} failed` : '—',
                 tone: 'success' as const,
                 icon: <PackageCheck size={18} />,

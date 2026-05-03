@@ -20,6 +20,7 @@ import { TelemetryConsentDialog } from './components/TelemetryConsentDialog';
 import { TerminalDrawer } from './components/TerminalDrawer';
 import { Titlebar } from './components/Titlebar';
 import { UpdateBanner } from './components/UpdateBanner';
+import { useDelayedUnmount } from './hooks/useDelayedUnmount';
 import { useGlobalKeyboard } from './hooks/useGlobalKeyboard';
 import { useIpc } from './hooks/useIpc';
 import { STABLE_APP_STATE_STALE_TIME } from './query-stale-times';
@@ -107,6 +108,10 @@ export function App() {
   const hasActiveIssue = useAppStore((state) => state.activeIssue !== null);
   const hasActiveAutomationThread = useAppStore((state) => state.activeAutomationThreadId !== null);
   const hasActiveAutomationDetail = useAppStore((state) => state.activeAutomationDetailId !== null);
+  const { shouldRender: shouldRenderTerminal, isExiting: isTerminalExiting } = useDelayedUnmount(
+    terminalVisible,
+    200,
+  );
 
   const { data: settings } = useQuery<AppSettings>({
     queryKey: ['settings'],
@@ -260,6 +265,17 @@ export function App() {
     activeProject?.pathExists === false;
   const hideMainContentForTerminal = terminalVisible && terminalMaximized;
 
+  // Build a key that changes when the active view changes, for crossfade animation
+  const viewKey = settingsVisible
+    ? 'settings'
+    : hasActiveIssue
+      ? 'issue-detail'
+      : hasActiveAutomationThread
+        ? 'automation-thread'
+        : hasActiveAutomationDetail
+          ? 'automation-detail'
+          : viewMode;
+
   return (
     <TooltipProvider delayDuration={400}>
       <div className="flex h-screen flex-col overflow-hidden">
@@ -279,7 +295,10 @@ export function App() {
           <div className="flex flex-col flex-1 overflow-hidden min-h-0">
             {!hideMainContentForTerminal && (
               <Suspense fallback={<ViewLoadingFallback />}>
-                <div className="flex flex-1 overflow-hidden min-h-0 bg-primary">
+                <div
+                  key={viewKey}
+                  className="flex flex-1 overflow-hidden min-h-0 bg-primary animate-view-enter"
+                >
                   {settingsVisible ? (
                     <SettingsPanel />
                   ) : hasActiveIssue ? (
@@ -308,7 +327,7 @@ export function App() {
                 </div>
               </Suspense>
             )}
-            {terminalVisible && <TerminalDrawer />}
+            {shouldRenderTerminal && <TerminalDrawer isExiting={isTerminalExiting} />}
           </div>
         </div>
         <CommandPalette />

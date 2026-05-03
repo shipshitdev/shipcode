@@ -106,7 +106,7 @@ export function SettingsPanel() {
 
   return (
     <div className="flex-1 overflow-y-auto bg-primary p-8">
-      <div className="max-w-2xl">
+      <div key={settingsSection} className="max-w-2xl animate-settings-enter">
         {settingsSection === 'general' && (
           <GeneralSettingsSection
             settings={settings}

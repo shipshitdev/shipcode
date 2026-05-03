@@ -36,7 +36,7 @@ function DialogContent({
       <DialogPrimitive.Content
         aria-describedby={undefined}
         className={cn(
-          'fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 border border-border bg-primary rounded-xl p-6 shadow-2xl shadow-black/40 outline-none',
+          'fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 border border-border bg-primary rounded-xl p-6 shadow-2xl shadow-black/40 outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95 duration-200',
           className,
         )}
         {...props}

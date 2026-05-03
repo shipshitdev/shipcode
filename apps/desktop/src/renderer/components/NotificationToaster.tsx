@@ -1,6 +1,6 @@
 import type { AppSettings, NotificationKind, NotificationRecord } from '@shipcode/shared';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import notifySoundUrl from '../assets/notify.wav?url';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
@@ -38,21 +38,32 @@ function ToastRow({
 }) {
   const sticky = STICKY_KINDS.includes(notification.kind);
   const dismissAfterMs = AUTO_DISMISS_MS[notification.kind] ?? 5_000;
+  const [isExiting, setIsExiting] = useState(false);
+
+  const triggerExit = useCallback(() => {
+    setIsExiting(true);
+    setTimeout(onHide, 220);
+  }, [onHide]);
 
   useEffect(() => {
     if (sticky) return;
-    const id = setTimeout(onHide, dismissAfterMs);
+    const id = setTimeout(triggerExit, dismissAfterMs);
     return () => clearTimeout(id);
-  }, [dismissAfterMs, sticky, onHide]);
+  }, [dismissAfterMs, sticky, triggerExit]);
 
   return (
-    <InAppNotification
-      title={notification.title}
-      description={notification.body}
-      tone={KIND_TONE[notification.kind] ?? 'default'}
-      onClick={onClick}
-      onDismiss={onDismiss}
-    />
+    <div className={isExiting ? 'animate-toast-exit' : 'animate-toast-enter'}>
+      <InAppNotification
+        title={notification.title}
+        description={notification.body}
+        tone={KIND_TONE[notification.kind] ?? 'default'}
+        onClick={onClick}
+        onDismiss={() => {
+          setIsExiting(true);
+          setTimeout(onDismiss, 220);
+        }}
+      />
+    </div>
   );
 }
 

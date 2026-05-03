@@ -166,6 +166,7 @@ export function useTerminalDrawer() {
   const setTerminalThread = useAppStore((s) => s.setTerminalThread);
   const selectIssue = useAppStore((s) => s.selectIssue);
   const [height, setHeight] = useState(DEFAULT_HEIGHT);
+  const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef<{ y: number; h: number } | null>(null);
   const isMaximized = height >= FULL_HEIGHT;
   const isMinimized = height <= MINIMIZED_HEIGHT;
@@ -181,6 +182,7 @@ export function useTerminalDrawer() {
       const currentHeight = measuredHeight && measuredHeight > 0 ? measuredHeight : height;
       dragStartRef.current = { y: event.clientY, h: currentHeight };
       setTerminalMaximized(false);
+      setIsDragging(true);
 
       const onMove = (moveEvent: MouseEvent) => {
         if (!dragStartRef.current) return;
@@ -190,6 +192,7 @@ export function useTerminalDrawer() {
 
       const onUp = () => {
         dragStartRef.current = null;
+        setIsDragging(false);
         window.removeEventListener('mousemove', onMove);
         window.removeEventListener('mouseup', onUp);
       };
@@ -231,6 +234,7 @@ export function useTerminalDrawer() {
     handleResizeMouseDown,
     handleRunningTargetSelect,
     approvedAwaitingExecution,
+    isDragging,
     isMaximized,
     isMinimized,
     pipelinePhase,
