@@ -7,6 +7,8 @@ import { ChevronDown, Loader2, Pencil, Play, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useAppStore } from '../../stores/app-store';
 
+const RUN_HISTORY_LIMIT = 5;
+
 function describeCron(expr: string): string {
   try {
     const job = new Cron(expr, { paused: true });
@@ -129,6 +131,7 @@ function AutomationCard({
 }: AutomationCardProps) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const selectAutomationThread = useAppStore((s) => s.selectAutomationThread);
+  const openAutomationDetail = useAppStore((s) => s.openAutomationDetail);
 
   const runNow = useMutation({
     mutationKey: ['run-now', automation.id],
@@ -238,7 +241,7 @@ function AutomationCard({
               <p className="py-2 text-[12px] text-muted">No runs yet.</p>
             ) : (
               <div className="flex flex-col gap-1">
-                {runHistory.map((thread) => (
+                {runHistory.slice(0, RUN_HISTORY_LIMIT).map((thread) => (
                   <Button
                     key={thread.id}
                     type="button"
@@ -255,6 +258,16 @@ function AutomationCard({
                     </span>
                   </Button>
                 ))}
+                {runHistory.length > RUN_HISTORY_LIMIT && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => openAutomationDetail(automation.id)}
+                    className="mt-1 text-[12px] text-accent hover:text-accent/80"
+                  >
+                    View all {runHistory.length} runs →
+                  </Button>
+                )}
               </div>
             )}
           </div>

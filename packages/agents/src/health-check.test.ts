@@ -1126,6 +1126,7 @@ describe('checkDesktopApps', () => {
       expect(result.terminal.available).toBe(true);
       expect(result.ghostty.available).toBe(false);
       expect(result.vscode.available).toBe(true);
+      expect(result.t3code.available).toBe(false);
     },
   );
 });

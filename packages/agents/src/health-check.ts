@@ -168,6 +168,7 @@ const DESKTOP_APP_LABELS: Record<ProjectOpenTarget, string> = {
   terminal: 'Terminal',
   ghostty: 'Ghostty',
   vscode: 'Visual Studio Code',
+  t3code: 'T3 Code',
 };
 
 async function checkCli(command: string, versionFlag: string = '--version'): Promise<CliHealth> {
@@ -233,6 +234,7 @@ const DESKTOP_APP_BUNDLE_NAMES: Record<ProjectOpenTarget, string> = {
   terminal: 'Terminal.app',
   ghostty: 'Ghostty.app',
   vscode: 'Visual Studio Code.app',
+  t3code: 'T3 Code (Alpha).app',
 };
 
 async function checkDesktopAppByName(
@@ -275,15 +277,16 @@ async function checkDesktopAppByName(
 }
 
 export async function checkDesktopApps(): Promise<DesktopAppHealthMap> {
-  const [cursor, finder, terminal, ghostty, vscode] = await Promise.all([
+  const [cursor, finder, terminal, ghostty, vscode, t3code] = await Promise.all([
     checkDesktopAppByName('cursor', 'Cursor'),
     checkDesktopAppByName('finder', 'Finder'),
     checkDesktopAppByName('terminal', 'Terminal'),
     checkDesktopAppByName('ghostty', 'Ghostty'),
     checkDesktopAppByName('vscode', 'Visual Studio Code'),
+    checkDesktopAppByName('t3code', 'T3 Code'),
   ]);
 
-  return { cursor, finder, terminal, ghostty, vscode };
+  return { cursor, finder, terminal, ghostty, vscode, t3code };
 }
 
 async function fileExists(path: string): Promise<boolean> {

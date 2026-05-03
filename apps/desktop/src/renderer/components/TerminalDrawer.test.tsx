@@ -167,6 +167,13 @@ const integrations: IntegrationStatus = {
       path: '/Applications/Visual Studio Code.app',
       error: null,
     },
+    t3code: {
+      key: 't3code',
+      label: 'T3 Code',
+      available: true,
+      path: '/Applications/T3 Code.app',
+      error: null,
+    },
   },
 };
 

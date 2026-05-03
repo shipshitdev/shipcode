@@ -16,7 +16,7 @@ vi.mock('./App', () => ({
 vi.mock('@fontsource/dm-sans/400.css', () => ({}));
 vi.mock('@fontsource/dm-sans/500.css', () => ({}));
 vi.mock('@fontsource/dm-sans/600.css', () => ({}));
-vi.mock('./styles/app.scss', () => ({}));
+vi.mock('./styles/app.css', () => ({}));
 
 describe('renderer entrypoint', () => {
   beforeEach(() => {

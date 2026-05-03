@@ -59,6 +59,7 @@ const PROJECT_OPEN_TARGET_ORDER: ProjectOpenTarget[] = [
   'terminal',
   'ghostty',
   'vscode',
+  't3code',
 ];
 const TERMINAL_OPEN_TARGET_ORDER: TerminalOpenTarget[] = ['terminal', 'ghostty'];
 
@@ -68,6 +69,7 @@ const PROJECT_OPEN_APP_NAMES: Record<ProjectOpenTarget, string> = {
   terminal: 'Terminal',
   ghostty: 'Ghostty',
   vscode: 'Visual Studio Code',
+  t3code: 'T3 Code',
 };
 
 const STARTER_ISSUE_TITLE = 'Ship your first change with ShipCode';

@@ -1,5 +1,5 @@
 /* Token source of truth: packages/shared/src/tokens.ts */
-@use "tailwindcss";
+@import "tailwindcss";
 @source "../../../node_modules/@shipshitdev/ui/dist";
 @source "../../../packages/ui/src/**/*.{ts,tsx}";
 

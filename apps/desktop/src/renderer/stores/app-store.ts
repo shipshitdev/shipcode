@@ -100,6 +100,7 @@ interface AppState {
   activeThreadId: string | null;
   activeIssue: GitHubIssueCacheRecord | null;
   activeAutomationThreadId: string | null;
+  activeAutomationDetailId: string | null;
 
   // UI state
   viewMode: ViewMode;
@@ -187,6 +188,7 @@ interface AppState {
   selectThread: (id: string | null) => void;
   selectIssue: (issue: GitHubIssueCacheRecord | null) => void;
   selectAutomationThread: (threadId: string | null) => void;
+  openAutomationDetail: (automationId: string) => void;
   toggleSidebar: () => void;
   toggleTerminal: () => void;
   openTerminal: () => void;
@@ -262,6 +264,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeThreadId: null,
   activeIssue: null,
   activeAutomationThreadId: null,
+  activeAutomationDetailId: null,
   viewMode: 'overview',
   sidebarCollapsed: false,
   terminalVisible: false,
@@ -307,6 +310,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       viewMode: 'overview',
       activeIssue: null,
       activeAutomationThreadId: null,
+      activeAutomationDetailId: null,
       terminalMaximized: false,
       currentPlan: null,
       currentReview: null,
@@ -317,6 +321,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       viewMode: 'activity',
       activeIssue: null,
       activeAutomationThreadId: null,
+      activeAutomationDetailId: null,
       terminalMaximized: false,
       currentPlan: null,
       currentReview: null,
@@ -327,6 +332,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       viewMode: 'inbox',
       activeIssue: null,
       activeAutomationThreadId: null,
+      activeAutomationDetailId: null,
       terminalMaximized: false,
       currentPlan: null,
       currentReview: null,
@@ -337,6 +343,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       viewMode: 'costs',
       activeIssue: null,
       activeAutomationThreadId: null,
+      activeAutomationDetailId: null,
       terminalMaximized: false,
       currentPlan: null,
       currentReview: null,
@@ -347,6 +354,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       viewMode: 'skills',
       activeIssue: null,
       activeAutomationThreadId: null,
+      activeAutomationDetailId: null,
       terminalMaximized: false,
       currentPlan: null,
       currentReview: null,
@@ -357,6 +365,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       viewMode: 'automations',
       activeIssue: null,
       activeAutomationThreadId: null,
+      activeAutomationDetailId: null,
       terminalMaximized: false,
       currentPlan: null,
       currentReview: null,
@@ -368,6 +377,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       activeThreadId: null,
       activeIssue: null,
       activeAutomationThreadId: null,
+      activeAutomationDetailId: null,
       terminalMaximized: false,
       currentPlan: null,
       currentReview: null,
@@ -391,6 +401,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((s) => ({
       activeIssue: issue,
       activeAutomationThreadId: null,
+      activeAutomationDetailId: null,
       activeThreadId: issue?.threadId ?? null,
       currentPlan: null,
       currentReview: null,
@@ -409,6 +420,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectAutomationThread: (threadId) =>
     set((s) => ({
       activeAutomationThreadId: threadId,
+      activeAutomationDetailId: null,
       activeThreadId: threadId,
       activeIssue: null,
       currentPlan: null,
@@ -418,6 +430,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       terminalEvents: [],
       terminalThreadId: threadId ?? s.terminalThreadId,
     })),
+  openAutomationDetail: (automationId) =>
+    set({
+      activeAutomationDetailId: automationId,
+      activeAutomationThreadId: null,
+      activeIssue: null,
+      currentPlan: null,
+      currentReview: null,
+      currentVerification: null,
+      terminalMaximized: false,
+    }),
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   toggleTerminal: () =>
     set((s) => ({
@@ -588,6 +610,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((s) => ({
       activeProjectId: projectId,
       activeAutomationThreadId: null,
+      activeAutomationDetailId: null,
       viewMode: 'project',
       projectTab: 'issues' as ProjectTab,
       activeIssue: issue,
@@ -608,6 +631,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       activeThreadId: null,
       activeIssue: null,
       activeAutomationThreadId: null,
+      activeAutomationDetailId: null,
       terminalMaximized: false,
       currentPlan: null,
       currentReview: null,
@@ -628,6 +652,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       activeIssue: null,
       activeThreadId: null,
       activeAutomationThreadId: null,
+      activeAutomationDetailId: null,
     }),
   setActivePrNumber: (n) => set({ activePrNumber: n }),
 
@@ -639,6 +664,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       projectTab: 'sessions' as ProjectTab,
       activeIssue: null,
       activeAutomationThreadId: null,
+      activeAutomationDetailId: null,
       terminalMaximized: false,
       currentPlan: null,
       currentReview: null,

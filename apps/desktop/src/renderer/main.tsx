@@ -6,7 +6,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import '@fontsource/dm-sans/400.css';
 import '@fontsource/dm-sans/500.css';
 import '@fontsource/dm-sans/600.css';
-import './styles/app.scss';
+import './styles/app.css';
 
 const queryClient = new QueryClient({
   defaultOptions: {

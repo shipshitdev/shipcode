@@ -84,6 +84,11 @@ const CreateAutomationModal = lazy(() =>
     default: m.CreateAutomationModal,
   })),
 );
+const AutomationDetail = lazy(() =>
+  import('./features/automations/automation-detail').then((m) => ({
+    default: m.AutomationDetail,
+  })),
+);
 const AddProjectExplorer = lazy(() =>
   import('./components/AddProjectExplorer').then((m) => ({
     default: m.AddProjectExplorer,
@@ -101,6 +106,7 @@ export function App() {
   const viewMode = useAppStore((state) => state.viewMode);
   const hasActiveIssue = useAppStore((state) => state.activeIssue !== null);
   const hasActiveAutomationThread = useAppStore((state) => state.activeAutomationThreadId !== null);
+  const hasActiveAutomationDetail = useAppStore((state) => state.activeAutomationDetailId !== null);
 
   const { data: settings } = useQuery<AppSettings>({
     queryKey: ['settings'],
@@ -276,6 +282,8 @@ export function App() {
                     <IssueDetail />
                   ) : hasActiveAutomationThread ? (
                     <AutomationRunDetail />
+                  ) : hasActiveAutomationDetail ? (
+                    <AutomationDetail />
                   ) : settingsVisible ? (
                     <SettingsPanel />
                   ) : viewMode === 'activity' ? (

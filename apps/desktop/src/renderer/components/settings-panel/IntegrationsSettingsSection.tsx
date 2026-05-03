@@ -68,6 +68,7 @@ export function IntegrationsSettingsSection({
     'terminal',
     'ghostty',
     'vscode',
+    't3code',
   ];
   const projectOpenTargetLabels: Record<ProjectOpenTarget, string> = {
     cursor: 'Cursor',
@@ -75,6 +76,7 @@ export function IntegrationsSettingsSection({
     terminal: 'Terminal',
     ghostty: 'Ghostty',
     vscode: 'Visual Studio Code',
+    t3code: 'T3 Code',
   };
   const terminalOpenTargets: AppSettings['terminalOpenTarget'][] = ['terminal', 'ghostty'];
   const getDesktopApp = (target: ProjectOpenTarget): DesktopAppHealth =>

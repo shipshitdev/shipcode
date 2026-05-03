@@ -960,7 +960,7 @@ export interface WritingPrdsSkillInfo {
   openTargetPath: string;
 }
 
-export type ProjectOpenTarget = 'cursor' | 'finder' | 'terminal' | 'ghostty' | 'vscode';
+export type ProjectOpenTarget = 'cursor' | 'finder' | 'terminal' | 'ghostty' | 'vscode' | 't3code';
 export type TerminalOpenTarget = Extract<ProjectOpenTarget, 'terminal' | 'ghostty'>;
 
 export interface DesktopAppHealth {
@@ -977,6 +977,7 @@ export interface DesktopAppHealthMap {
   terminal: DesktopAppHealth;
   ghostty: DesktopAppHealth;
   vscode: DesktopAppHealth;
+  t3code: DesktopAppHealth;
 }
 
 export interface SystemHealth {
