@@ -1,7 +1,5 @@
-import { spawn } from 'node:child_process';
 import type { GeneratorCli, ReasoningEffort } from '@shipcode/shared';
-import { extractCliFailureMessage, formatCliSpawnFailure } from './cli-error';
-import { shellExecEnv } from './health-check';
+import { runCliWithStdin } from './cli-stdin-runner';
 import {
   mapReasoningEffortToClaudeThinkingTokens,
   mapReasoningEffortToCodex,
@@ -135,81 +133,41 @@ function runPrdCliWithStdin(
   modelId?: string | null,
   reasoningEffort?: ReasoningEffort,
 ): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const command = cli;
-    const label = cli === 'claude' ? 'Claude CLI' : 'Codex CLI';
-    const args =
-      cli === 'claude'
-        ? [
-            '-p',
-            ...(modelId ? ['--model', modelId] : []),
-            '--output-format',
-            'json',
-            '--max-turns',
-            '3',
-            ...(() => {
-              const thinkingTokens = mapReasoningEffortToClaudeThinkingTokens(
-                reasoningEffort,
-                modelId,
-              );
-              return thinkingTokens === null
-                ? []
-                : (['--max-thinking-tokens', String(thinkingTokens)] as string[]);
-            })(),
-            '--dangerously-skip-permissions',
-            '--disallowedTools',
-            'Edit,Write,Bash,NotebookEdit,Read,Glob,Grep,Task,WebSearch,WebFetch',
-          ]
-        : [
-            '-a',
-            'never',
-            ...(modelId ? ['-m', modelId] : []),
-            '-c',
-            `model_reasoning_effort=${mapReasoningEffortToCodex(reasoningEffort, modelId)}`,
-            'exec',
-            '-',
-            '--sandbox',
-            'read-only',
-          ];
-    const proc = spawn(command, args, {
-      cwd,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: shellExecEnv(),
-    });
+  const args =
+    cli === 'claude'
+      ? [
+          '-p',
+          ...(modelId ? ['--model', modelId] : []),
+          '--output-format',
+          'json',
+          '--max-turns',
+          '3',
+          ...(() => {
+            const thinkingTokens = mapReasoningEffortToClaudeThinkingTokens(
+              reasoningEffort,
+              modelId,
+            );
+            return thinkingTokens === null
+              ? []
+              : (['--max-thinking-tokens', String(thinkingTokens)] as string[]);
+          })(),
+          '--dangerously-skip-permissions',
+          '--disallowedTools',
+          'Edit,Write,Bash,NotebookEdit,Read,Glob,Grep,Task,WebSearch,WebFetch',
+        ]
+      : [
+          '-a',
+          'never',
+          ...(modelId ? ['-m', modelId] : []),
+          '-c',
+          `model_reasoning_effort=${mapReasoningEffortToCodex(reasoningEffort, modelId)}`,
+          'exec',
+          '-',
+          '--sandbox',
+          'read-only',
+        ];
 
-    let stdout = '';
-    let stderr = '';
-    proc.stdout.on('data', (chunk) => {
-      stdout += chunk;
-    });
-    proc.stderr.on('data', (chunk) => {
-      stderr += chunk;
-    });
-
-    const timer = setTimeout(() => {
-      proc.kill('SIGTERM');
-      reject(new Error(`${label} timed out after ${timeoutMs}ms`));
-    }, timeoutMs);
-
-    proc.on('error', (err) => {
-      clearTimeout(timer);
-      // ENOENT etc — surface a short message, never echo the prompt.
-      reject(new Error(formatCliSpawnFailure(label, err.message)));
-    });
-
-    proc.on('close', (code) => {
-      clearTimeout(timer);
-      if (code === 0) {
-        resolve(stdout);
-        return;
-      }
-      const tidy = extractCliFailureMessage(stdout, stderr);
-      reject(new Error(`${label} exited ${code}: ${tidy}`));
-    });
-
-    proc.stdin.write(prompt);
-    proc.stdin.end();
-  });
+  return runCliWithStdin({ cli, args, input: prompt, cwd, timeoutMs });
 }
 
 /**

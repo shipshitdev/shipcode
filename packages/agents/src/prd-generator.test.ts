@@ -8,6 +8,10 @@ vi.mock('node:child_process', () => ({
   spawn: mockSpawn,
 }));
 
+vi.mock('./health-check', () => ({
+  shellExecEnv: () => ({ PATH: '/usr/bin' }),
+}));
+
 import { enhancePrdDraft } from './prd-generator';
 
 function createFakeProc() {
