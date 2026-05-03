@@ -1,5 +1,6 @@
 import type { CanonicalTerminalEvent, TerminalEventRecord } from '@shipcode/shared';
 import { ERROR_PATTERNS, formatClockTime, stripAnsi } from '@shipcode/shared';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@shipcode/ui';
 import { Badge, Button, cn } from '@shipshitdev/ui';
 import { ArrowDownToLine, Check, Copy, Loader2, Terminal, Wand2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -94,57 +95,71 @@ function FailureActions({
   const autoFixing = autoFixingEventId === record.id;
   const sending = sendingToTerminalEventId === record.id;
   const copied = copiedEventId === record.id;
+  const buttonClass = cn(
+    'border-border/70 bg-primary/30 text-secondary hover:text-primary',
+    compact && 'h-5 w-5',
+  );
 
   return (
     <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
       {onCopy ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="xs"
-          aria-label="Copy failure output"
-          className={cn(
-            'h-6 gap-1.5 border-border/70 bg-primary/30 px-2 font-mono text-[10px] uppercase tracking-[0.08em] text-secondary hover:text-primary',
-            compact && 'h-5 px-1.5 text-[9px]',
-          )}
-          onClick={() => onCopy({ record, output })}
-        >
-          {copied ? <Check size={11} /> : <Copy size={11} />}
-          {copied ? 'Copied' : 'Copy'}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-xs"
+              aria-label={copied ? 'Copied failure output' : 'Copy failure output'}
+              className={buttonClass}
+              onClick={() => onCopy({ record, output })}
+            >
+              {copied ? <Check size={12} /> : <Copy size={12} />}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">{copied ? 'Copied' : 'Copy error'}</TooltipContent>
+        </Tooltip>
       ) : null}
       {onSendToTerminal ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="xs"
-          aria-label="Send failure to terminal"
-          className={cn(
-            'h-6 gap-1.5 border-agent/35 bg-agent/10 px-2 font-mono text-[10px] uppercase tracking-[0.08em] text-agent hover:bg-agent/15 hover:text-agent',
-            compact && 'h-5 px-1.5 text-[9px]',
-          )}
-          disabled={sending}
-          onClick={() => onSendToTerminal({ record, output })}
-        >
-          {sending ? <Loader2 size={11} className="animate-spin" /> : <Terminal size={11} />}
-          Terminal
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-xs"
+              aria-label="Send failure to terminal"
+              className={cn(
+                'border-agent/35 bg-agent/10 text-agent hover:bg-agent/15 hover:text-agent',
+                compact && 'h-5 w-5',
+              )}
+              disabled={sending}
+              onClick={() => onSendToTerminal({ record, output })}
+            >
+              {sending ? <Loader2 size={12} className="animate-spin" /> : <Terminal size={12} />}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">Send to terminal</TooltipContent>
+        </Tooltip>
       ) : null}
       {onAutoFix ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="xs"
-          className={cn(
-            'h-6 gap-1.5 border-danger/35 bg-danger/10 px-2 font-mono text-[10px] uppercase tracking-[0.08em] text-danger hover:bg-danger/15 hover:text-danger',
-            compact && 'h-5 px-1.5 text-[9px]',
-          )}
-          disabled={autoFixing}
-          onClick={() => onAutoFix({ record, output })}
-        >
-          {autoFixing ? <Loader2 size={11} className="animate-spin" /> : <Wand2 size={11} />}
-          Auto Fix
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-xs"
+              aria-label="Auto fix failure"
+              className={cn(
+                'border-danger/35 bg-danger/10 text-danger hover:bg-danger/15 hover:text-danger',
+                compact && 'h-5 w-5',
+              )}
+              disabled={autoFixing}
+              onClick={() => onAutoFix({ record, output })}
+            >
+              {autoFixing ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">Auto Fix</TooltipContent>
+        </Tooltip>
       ) : null}
     </div>
   );

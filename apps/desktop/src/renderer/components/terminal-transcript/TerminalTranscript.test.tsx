@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 
 import type { TerminalEventRecord } from '@shipcode/shared';
+import { TooltipProvider } from '@shipcode/ui';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import type React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TerminalTranscript } from './TerminalTranscript';
 
@@ -46,6 +48,10 @@ function makeRawErrorEvent(overrides: Partial<TerminalEventRecord> = {}): Termin
 
 const writeText = vi.fn();
 
+function renderTranscript(ui: React.ReactElement) {
+  return render(<TooltipProvider>{ui}</TooltipProvider>);
+}
+
 beforeEach(() => {
   writeText.mockReset();
   Object.defineProperty(navigator, 'clipboard', {
@@ -60,7 +66,7 @@ afterEach(() => {
 
 describe('TerminalTranscript', () => {
   it('uses the full drawer width in default mode', () => {
-    const { container } = render(<TerminalTranscript events={[makeTextEvent()]} />);
+    const { container } = renderTranscript(<TerminalTranscript events={[makeTextEvent()]} />);
 
     expect(screen.getByText("You've hit your limit.")).toBeInTheDocument();
 
@@ -74,7 +80,9 @@ describe('TerminalTranscript', () => {
   });
 
   it('keeps compact padding without reintroducing a width cap', () => {
-    const { container } = render(<TerminalTranscript events={[makeTextEvent()]} compact />);
+    const { container } = renderTranscript(
+      <TerminalTranscript events={[makeTextEvent()]} compact />,
+    );
 
     const wrapper = container.firstChild as HTMLDivElement | null;
     const scrollContainer = wrapper?.firstChild as HTMLDivElement | null;
@@ -86,7 +94,7 @@ describe('TerminalTranscript', () => {
   });
 
   it('shows failed tool summaries inline', () => {
-    render(<TerminalTranscript events={[makeToolEndEvent()]} />);
+    renderTranscript(<TerminalTranscript events={[makeToolEndEvent()]} />);
 
     expect(screen.getByText('Tool failed')).toBeInTheDocument();
     expect(screen.getByText('Exit 1')).toBeInTheDocument();
@@ -99,7 +107,7 @@ describe('TerminalTranscript', () => {
     const event = makeRawErrorEvent();
     const onAutoFix = vi.fn();
 
-    render(<TerminalTranscript events={[event]} onAutoFix={onAutoFix} />);
+    renderTranscript(<TerminalTranscript events={[event]} onAutoFix={onAutoFix} />);
 
     fireEvent.click(screen.getByRole('button', { name: /auto fix/i }));
 
@@ -112,21 +120,23 @@ describe('TerminalTranscript', () => {
   it('copies failed console output from the row action', async () => {
     const event = makeRawErrorEvent();
 
-    render(<TerminalTranscript events={[event]} />);
+    renderTranscript(<TerminalTranscript events={[event]} />);
 
     fireEvent.click(screen.getByRole('button', { name: /copy failure output/i }));
 
     expect(writeText).toHaveBeenCalledWith(
       'ERROR codex_core::session: failed to record rollout items',
     );
-    expect(await screen.findByText('Copied')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: /copied failure output/i }),
+    ).toBeInTheDocument();
   });
 
   it('can send failed console output to the embedded terminal', () => {
     const event = makeRawErrorEvent();
     const onSendToTerminal = vi.fn();
 
-    render(<TerminalTranscript events={[event]} onSendToTerminal={onSendToTerminal} />);
+    renderTranscript(<TerminalTranscript events={[event]} onSendToTerminal={onSendToTerminal} />);
 
     fireEvent.click(screen.getByRole('button', { name: /send failure to terminal/i }));
 
@@ -137,7 +147,7 @@ describe('TerminalTranscript', () => {
   });
 
   it('shows the auto fix loading state for the active failure row', () => {
-    const { container } = render(
+    const { container } = renderTranscript(
       <TerminalTranscript
         events={[makeRawErrorEvent()]}
         onAutoFix={vi.fn()}
@@ -151,7 +161,7 @@ describe('TerminalTranscript', () => {
   });
 
   it('deduplicates repeated event ids before rendering rows', () => {
-    render(
+    renderTranscript(
       <TerminalTranscript
         events={[
           makeTextEvent({ id: 'event-duplicate', event: { kind: 'text', content: 'older copy' } }),
@@ -177,7 +187,7 @@ describe('TerminalTranscript', () => {
       }),
     );
 
-    render(<TerminalTranscript events={events} />);
+    renderTranscript(<TerminalTranscript events={events} />);
 
     expect(screen.queryByText('line 0')).not.toBeInTheDocument();
     expect(screen.getByText('line 304')).toBeInTheDocument();

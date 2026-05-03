@@ -670,5 +670,35 @@ describe('registerPipelineHandlers', () => {
         expect.objectContaining({ objective: 'Test plan' }),
       );
     });
+
+    it('falls back to retry routing when no worktree exists yet', async () => {
+      queries.threads.getById.mockReturnValue(makeThread({ status: 'failed', worktreePath: null }));
+
+      const handler = handlers.get('pipeline:auto-fix');
+      if (!handler) throw new Error('pipeline:auto-fix handler not registered');
+
+      await handler(undefined, {
+        threadId: 'thread-1',
+        failureOutput: 'ERROR codex_core::session: failed to record rollout items',
+      });
+
+      expect(execFileMock).not.toHaveBeenCalled();
+      expect(queries.terminalEvents.create).toHaveBeenCalledWith(
+        'thread-1',
+        expect.objectContaining({
+          kind: 'lifecycle',
+          message: expect.stringContaining('No worktree exists yet'),
+        }),
+      );
+      expect(queries.threads.updateStatus).toHaveBeenCalledWith(
+        'thread-1',
+        'failed',
+        expect.stringContaining('No worktree exists yet'),
+      );
+      expect(pipeline.startReview).toHaveBeenCalledWith(
+        'thread-1',
+        expect.objectContaining({ objective: 'Test plan' }),
+      );
+    });
   });
 });

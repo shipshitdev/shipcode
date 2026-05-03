@@ -582,13 +582,33 @@ export function registerPipelineHandlers({
 
       const thread = queries.threads.getById(threadId);
       if (!thread) throw new Error(`Thread ${threadId} not found`);
-      if (!thread.worktreePath) throw new Error('No worktree available for Auto Fix');
-
-      const checkpoint = queries.checkpoints.getLatest(threadId);
-      if (!checkpoint) throw new Error('No checkpoint available for Auto Fix');
 
       const clippedOutput = clampAutoFixFailureOutput(failureOutput);
       if (!clippedOutput) throw new Error('No failure output available for Auto Fix');
+
+      const checkpoint = queries.checkpoints.getLatest(threadId);
+      if (!thread.worktreePath || !checkpoint) {
+        const reason = !thread.worktreePath
+          ? 'No worktree exists yet; rerunning from the latest pipeline state.'
+          : 'No checkpoint exists yet; rerunning from the latest pipeline state.';
+        emitTerminalEvent(threadId, {
+          kind: 'lifecycle',
+          message: `Auto Fix fallback: ${reason}`,
+        });
+        emitTerminalEvent(threadId, {
+          kind: 'raw',
+          content: ['[Auto Fix] Captured failure output', '', clippedOutput].join('\n'),
+        });
+        queries.threads.updateStatus(
+          threadId,
+          PIPELINE_PHASE.failed,
+          ['Auto Fix requested from terminal failure output.', reason, '', clippedOutput].join(
+            '\n',
+          ),
+        );
+        await retryPipelineThread(threadId, 'pipeline:auto-fix');
+        return;
+      }
 
       emitTerminalEvent(threadId, {
         kind: 'lifecycle',

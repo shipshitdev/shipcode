@@ -138,8 +138,7 @@ export function DroppableColumn({
             className={cn(
               'min-w-[18px] rounded-full border border-transparent bg-tertiary px-1.5 py-px text-center text-[10px] font-medium',
               !hasIssues && 'text-muted/70',
-              hasIssues && columnKey === 'done' && 'border-done/25 bg-done/15 text-done',
-              hasIssues && columnKey !== 'done' && 'text-muted',
+              hasIssues && 'text-muted',
             )}
           >
             {issues.length}
@@ -196,6 +195,7 @@ interface SectionBlockProps {
   onCopyBranchName?: (issue: GitHubIssueCacheRecord, branchName: string) => void;
   onMarkDone?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
+  onArchiveAllDone?: () => void;
   selectedIssueNumber?: number;
   rerunningId?: string | null;
   cancellingId?: string | null;
@@ -228,6 +228,7 @@ function SectionBlock({
   onCopyBranchName,
   onMarkDone,
   onArchiveIssue,
+  onArchiveAllDone,
   selectedIssueNumber,
   rerunningId,
   cancellingId,
@@ -261,10 +262,7 @@ function SectionBlock({
         section.droppable && isOver && 'bg-tertiary/40',
       )}
     >
-      <Button
-        type="button"
-        variant="ghost"
-        aria-expanded={!collapsed}
+      <div
         className={cn(
           'sticky top-0 z-10 flex w-full items-center justify-between gap-2 border-b border-transparent px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide backdrop-blur supports-[backdrop-filter]:bg-secondary/85',
           'transition-colors',
@@ -272,22 +270,40 @@ function SectionBlock({
           empty && 'opacity-60',
           section.droppable && isOver && 'border-accent/50 bg-tertiary/95',
         )}
-        onClick={onToggle}
       >
-        <span className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
+        <Button
+          type="button"
+          variant="ghost"
+          aria-expanded={!collapsed}
+          className="flex min-w-0 flex-1 items-center gap-1.5 p-0 text-left text-[10px] font-semibold uppercase tracking-wide hover:bg-transparent"
+          onClick={onToggle}
+        >
           {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
           <span className="min-w-0 truncate">{section.label}</span>
-        </span>
-        <span
-          className={cn(
-            'min-w-[18px] rounded-full border px-1.5 py-px text-center text-[10px] font-medium',
-            SECTION_COUNT_CLASS[tone],
-            empty && 'opacity-75',
+        </Button>
+        <div className="flex items-center gap-1">
+          {onArchiveAllDone && section.key === 'done' && !empty && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="text-muted/60 hover:bg-muted/10 hover:text-muted"
+              title="Archive all done issues"
+              onClick={onArchiveAllDone}
+            >
+              <Archive size={12} />
+            </Button>
           )}
-        >
-          {count}
-        </span>
-      </Button>
+          <span
+            className={cn(
+              'min-w-[18px] rounded-full border px-1.5 py-px text-center text-[10px] font-medium',
+              SECTION_COUNT_CLASS[tone],
+              empty && 'opacity-75',
+            )}
+          >
+            {count}
+          </span>
+        </div>
+      </div>
       {!empty && !collapsed && (
         <div
           className={cn(
@@ -451,8 +467,7 @@ export function StackedColumn({
             className={cn(
               'min-w-[18px] rounded-full border border-transparent bg-tertiary px-1.5 py-px text-center text-[10px] font-medium',
               !hasIssues && 'text-muted/70',
-              hasIssues && column.key === 'done' && 'border-done/25 bg-done/15 text-done',
-              hasIssues && column.key !== 'done' && 'text-muted',
+              hasIssues && 'text-muted',
             )}
           >
             {columnIssues.length}
@@ -476,6 +491,7 @@ export function StackedColumn({
             onCopyBranchName={onCopyBranchName}
             onMarkDone={onMarkDone}
             onArchiveIssue={onArchiveIssue}
+            onArchiveAllDone={section.key === 'done' ? onArchiveAllDone : undefined}
             selectedIssueNumber={selectedIssueNumber}
             rerunningId={rerunningId}
             cancellingId={cancellingId}
