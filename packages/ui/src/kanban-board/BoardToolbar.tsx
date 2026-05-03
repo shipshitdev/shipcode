@@ -203,44 +203,76 @@ export function BoardToolbar({
             </SelectContent>
           </Select>
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className={cn(
-                'shrink-0 gap-1.5',
-                activeFilterCount > 0 &&
-                  'border-accent/40 bg-accent/10 text-accent hover:bg-accent/15 hover:text-accent',
-              )}
-              title="Filter issues"
-            >
-              <SlidersHorizontal size={12} />
-              Filters
-              {activeFilterCount > 0 && (
-                <span className="flex size-4 items-center justify-center rounded-full bg-accent/20 text-[10px] font-semibold leading-none text-accent">
-                  {activeFilterCount}
-                </span>
-              )}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuCheckboxItem
-              checked={approvalFilter === 'needs-approval'}
-              onCheckedChange={(checked) =>
-                onApprovalFilterChange(checked ? 'needs-approval' : 'all')
-              }
-            >
-              Needs approval
-            </DropdownMenuCheckboxItem>
-            <DropdownMenuCheckboxItem
-              checked={stalenessFilter === 'stale'}
-              onCheckedChange={(checked) => onStalenessFilterChange(checked ? 'stale' : 'all')}
-            >
-              Stale
-            </DropdownMenuCheckboxItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn(
+              'shrink-0 gap-1.5',
+              approvalFilter === 'needs-approval' &&
+                'border-accent/40 bg-accent/10 text-accent hover:bg-accent/15 hover:text-accent',
+            )}
+            title="Show only issues awaiting approval"
+            onClick={() =>
+              onApprovalFilterChange(approvalFilter === 'needs-approval' ? 'all' : 'needs-approval')
+            }
+          >
+            <SlidersHorizontal size={12} />
+            Needs approval
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn(
+              'shrink-0 gap-1.5',
+              stalenessFilter === 'stale' &&
+                'border-accent/40 bg-accent/10 text-accent hover:bg-accent/15 hover:text-accent',
+            )}
+            title="Show only stale issues"
+            onClick={() => onStalenessFilterChange(stalenessFilter === 'stale' ? 'all' : 'stale')}
+          >
+            <SlidersHorizontal size={12} />
+            Stale
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn(
+                  'shrink-0 gap-1.5',
+                  activeFilterCount > 0 &&
+                    'border-accent/40 bg-accent/10 text-accent hover:bg-accent/15 hover:text-accent',
+                )}
+                title="Filter issues"
+              >
+                <SlidersHorizontal size={12} />
+                Filters
+                {activeFilterCount > 0 && (
+                  <span className="flex size-4 items-center justify-center rounded-full bg-accent/20 text-[10px] font-semibold leading-none text-accent">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuCheckboxItem
+                checked={approvalFilter === 'needs-approval'}
+                onCheckedChange={(checked) =>
+                  onApprovalFilterChange(checked ? 'needs-approval' : 'all')
+                }
+              >
+                Needs approval
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={stalenessFilter === 'stale'}
+                onCheckedChange={(checked) => onStalenessFilterChange(checked ? 'stale' : 'all')}
+              >
+                Stale
+              </DropdownMenuCheckboxItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
         <div className="flex shrink-0 items-center overflow-hidden rounded-md border border-border">
           <Button
             variant="ghost"

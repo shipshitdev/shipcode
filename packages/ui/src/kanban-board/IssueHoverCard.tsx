@@ -1,7 +1,7 @@
 'use client';
 
 import * as PopoverPrimitive from '@radix-ui/react-popover';
-import { useCallback, useRef, useState } from 'react';
+import { cloneElement, isValidElement, useCallback, useRef, useState } from 'react';
 import type { GitHubIssueCacheRecord } from '@/lib/shipcode';
 import { formatElapsedDuration } from '@/lib/time';
 import { cn } from '@/lib/utils';
@@ -45,14 +45,18 @@ export function IssueHoverCard({ issue, disabled = false, children }: IssueHover
       .replace(/\n+/g, ' ')
       .trim()
       .slice(0, 200) ?? null;
+  const anchorChild = isValidElement<{ onPointerEnter?: () => void; onPointerLeave?: () => void }>(
+    children,
+  )
+    ? cloneElement(children, {
+        onPointerEnter: handlePointerEnter,
+        onPointerLeave: handlePointerLeave,
+      })
+    : children;
 
   return (
     <PopoverPrimitive.Root open={isOpen && !disabled}>
-      <PopoverPrimitive.Anchor asChild>
-        <div onPointerEnter={handlePointerEnter} onPointerLeave={handlePointerLeave}>
-          {children}
-        </div>
-      </PopoverPrimitive.Anchor>
+      <PopoverPrimitive.Anchor asChild>{anchorChild}</PopoverPrimitive.Anchor>
       <PopoverPrimitive.Portal>
         <PopoverPrimitive.Content
           side="right"
