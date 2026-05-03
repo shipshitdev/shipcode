@@ -16,6 +16,38 @@ export interface GithubRepoRef {
   repo: string;
 }
 
+function parseGithubHttpsUrl(raw: string): URL | null {
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'https:' || url.hostname.toLowerCase() !== 'github.com') {
+      return null;
+    }
+    return url;
+  } catch {
+    return null;
+  }
+}
+
+function parseGithubUrl(raw: string): URL | null {
+  try {
+    const url = new URL(raw);
+    if (url.hostname.toLowerCase() !== 'github.com') {
+      return null;
+    }
+    return url;
+  } catch {
+    return null;
+  }
+}
+
+function githubPathParts(url: URL): string[] {
+  return url.pathname
+    .replace(/^\/+/, '')
+    .replace(/\/+$/, '')
+    .replace(/\.git$/i, '')
+    .split('/');
+}
+
 export function parseGithubRemote(remote: string | null | undefined): GithubRepoRef | null {
   if (!remote) return null;
   const trimmed = remote.trim();
@@ -26,19 +58,12 @@ export function parseGithubRemote(remote: string | null | undefined): GithubRepo
     return { owner: scp[2], repo: scp[3] };
   }
 
-  // URL-parseable forms (ssh://git@... or https://...)
-  try {
-    const u = new URL(trimmed);
-    if (u.hostname.toLowerCase() !== 'github.com') return null;
-    const parts = u.pathname
-      .replace(/^\/+/, '')
-      .replace(/\.git$/i, '')
-      .split('/');
-    if (parts.length < 2 || !parts[0] || !parts[1]) return null;
-    return { owner: parts[0], repo: parts[1] };
-  } catch {
-    return null;
-  }
+  const url = parseGithubUrl(trimmed);
+  if (!url) return null;
+
+  const parts = githubPathParts(url);
+  if (parts.length < 2 || !parts[0] || !parts[1]) return null;
+  return { owner: parts[0], repo: parts[1] };
 }
 
 export function githubRepoUrl(remote: string | null | undefined): string | null {
@@ -107,7 +132,7 @@ export function validateGithubProjectUrl(
     return { ok: false, reason: 'Host must be github.com' };
   }
 
-  const parts = u.pathname.replace(/^\/+/, '').replace(/\/+$/, '').split('/');
+  const parts = githubPathParts(u);
   // orgs/<org>/projects/<n>
   if (
     parts.length >= 4 &&
@@ -191,17 +216,10 @@ export function parseGithubProjectUrl(raw: string | null | undefined): ParsedGit
   const trimmed = raw.trim();
   if (trimmed === '') return null;
 
-  let u: URL;
-  try {
-    u = new URL(trimmed);
-  } catch {
-    return null;
-  }
+  const u = parseGithubHttpsUrl(trimmed);
+  if (!u) return null;
 
-  if (u.protocol !== 'https:') return null;
-  if (u.hostname.toLowerCase() !== 'github.com') return null;
-
-  const parts = u.pathname.replace(/^\/+/, '').replace(/\/+$/, '').split('/');
+  const parts = githubPathParts(u);
   // orgs/<org>/projects/<n>  or  users/<user>/projects/<n>
   if (
     parts.length >= 4 &&

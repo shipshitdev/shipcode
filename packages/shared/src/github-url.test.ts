@@ -2,9 +2,46 @@ import { describe, expect, it } from 'vitest';
 import {
   githubCompareUrl,
   githubProjectsUrl,
+  githubRepoUrl,
   parseGithubProjectUrl,
+  parseGithubRemote,
   validateGithubProjectUrl,
 } from './github-url';
+
+describe('parseGithubRemote', () => {
+  it('parses scp-style GitHub remotes', () => {
+    expect(parseGithubRemote('git@github.com:acme/widget.git')).toEqual({
+      owner: 'acme',
+      repo: 'widget',
+    });
+  });
+
+  it('parses https GitHub remotes', () => {
+    expect(parseGithubRemote('https://github.com/acme/widget.git')).toEqual({
+      owner: 'acme',
+      repo: 'widget',
+    });
+  });
+
+  it('parses ssh-scheme GitHub remotes', () => {
+    expect(parseGithubRemote('ssh://git@github.com/acme/widget.git')).toEqual({
+      owner: 'acme',
+      repo: 'widget',
+    });
+  });
+
+  it('rejects non-GitHub remotes', () => {
+    expect(parseGithubRemote('https://gitlab.com/acme/widget.git')).toBeNull();
+  });
+});
+
+describe('githubRepoUrl', () => {
+  it('builds the canonical repo URL from a GitHub remote', () => {
+    expect(githubRepoUrl('https://github.com/acme/widget.git')).toBe(
+      'https://github.com/acme/widget',
+    );
+  });
+});
 
 describe('githubCompareUrl', () => {
   it('builds compare URL from scp-style remote', () => {
