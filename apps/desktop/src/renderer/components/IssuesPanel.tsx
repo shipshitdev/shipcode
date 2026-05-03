@@ -44,6 +44,7 @@ function automationIssueNumber(threadId: string): number {
 }
 
 function pipelineStatusFromThread(thread: Thread): IssuePipelineStatus {
+  if (thread.doneAt) return ISSUE_PIPELINE_STATUS.done;
   return thread.status === PIPELINE_PHASE.idle ? ISSUE_PIPELINE_STATUS.todo : thread.status;
 }
 
