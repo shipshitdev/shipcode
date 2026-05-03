@@ -138,14 +138,21 @@ function isMissingScopeError(message: string): boolean {
  * mismatch, network) so callers can treat priority sync as best-effort —
  * never throws.
  */
+export interface FetchProjectPrioritiesResult {
+  priorities: Map<number, IssuePriority>;
+  /** Issue numbers that are archived on the GitHub Project board. */
+  archivedIssueNumbers: Set<number>;
+}
+
 export async function fetchProjectPriorities(
   opts: FetchProjectPrioritiesOptions,
-): Promise<Map<number, IssuePriority>> {
+): Promise<FetchProjectPrioritiesResult> {
   const result = new Map<number, IssuePriority>();
+  const archivedIssueNumbers = new Set<number>();
   const parsed = parseGithubProjectUrl(opts.projectUrl);
   if (!parsed) {
     opts.onWarn?.(`[project-priority] unparseable project URL: ${opts.projectUrl}`);
-    return result;
+    return { priorities: result, archivedIssueNumbers };
   }
   const { ownerType, owner, number } = parsed;
   const isOrg = ownerType === 'orgs';
@@ -189,7 +196,7 @@ export async function fetchProjectPriorities(
       } else {
         opts.onWarn?.('[project-priority] gh api graphql failed', err);
       }
-      return result;
+      return { priorities: result, archivedIssueNumbers };
     }
 
     let parsedJson: ProjectV2Response;
@@ -197,13 +204,13 @@ export async function fetchProjectPriorities(
       parsedJson = JSON.parse(stdout) as ProjectV2Response;
     } catch (err) {
       opts.onWarn?.('[project-priority] failed to parse GraphQL response', err);
-      return result;
+      return { priorities: result, archivedIssueNumbers };
     }
 
     if (parsedJson.errors && parsedJson.errors.length > 0) {
       const messages = parsedJson.errors.map((e) => e.message ?? '<unknown>').join('; ');
       opts.onWarn?.(`[project-priority] GraphQL errors: ${messages}`);
-      return result;
+      return { priorities: result, archivedIssueNumbers };
     }
 
     const project = isOrg
@@ -211,15 +218,18 @@ export async function fetchProjectPriorities(
       : parsedJson.data?.user?.projectV2;
     if (!project) {
       // Project itself missing or inaccessible — bail with whatever we collected.
-      return result;
+      return { priorities: result, archivedIssueNumbers };
     }
 
     const items = project.items?.nodes ?? [];
     for (const item of items) {
-      if (item.isArchived) continue;
       if (item.content?.__typename !== 'Issue') continue;
       const issueNumber = item.content?.number;
       if (typeof issueNumber !== 'number') continue;
+      if (item.isArchived) {
+        archivedIssueNumbers.add(issueNumber);
+        continue;
+      }
 
       let priorityName: string | null = null;
       const values = item.fieldValues?.nodes ?? [];
@@ -237,11 +247,11 @@ export async function fetchProjectPriorities(
     }
 
     const pageInfo = project.items?.pageInfo;
-    if (!pageInfo?.hasNextPage) return result;
+    if (!pageInfo?.hasNextPage) return { priorities: result, archivedIssueNumbers };
     cursor = pageInfo.endCursor ?? null;
-    if (!cursor) return result;
+    if (!cursor) return { priorities: result, archivedIssueNumbers };
   }
 
   opts.onWarn?.(`[project-priority] hit page cap of ${maxPages}; truncating priority sync`);
-  return result;
+  return { priorities: result, archivedIssueNumbers };
 }

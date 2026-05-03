@@ -1,8 +1,9 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  _internals,
   DEFAULT_MAX_CONCURRENT_AGENTS,
   DEFAULT_MAX_TURNS,
   loadWorkflowPolicy,
@@ -21,6 +22,9 @@ function tempRepo(): string {
 
 describe('workflow-loader', () => {
   afterEach(() => {
+    _internals.policyCache.clear();
+    vi.useRealTimers();
+
     for (const dir of tempDirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -34,6 +38,25 @@ describe('workflow-loader', () => {
     expect(policy.promptTemplate).toBeNull();
     expect(policy.warning).toBeNull();
     expect(policy.agent.maxConcurrentAgents).toBe(DEFAULT_MAX_CONCURRENT_AGENTS);
+  });
+
+  it('evicts expired cache entries', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+
+    const first = tempRepo();
+    const second = tempRepo();
+    loadWorkflowPolicy(first);
+    loadWorkflowPolicy(second);
+
+    expect(_internals.policyCache.size).toBe(2);
+
+    vi.setSystemTime(new Date(Date.now() + _internals.policyCacheTtlMs + 1));
+    loadWorkflowPolicy(tempRepo());
+
+    expect(_internals.policyCache.has(first)).toBe(false);
+    expect(_internals.policyCache.has(second)).toBe(false);
+    expect(_internals.policyCache.size).toBe(1);
   });
 
   it('prefers .shipcode/WORKFLOW.md over root WORKFLOW.md', () => {

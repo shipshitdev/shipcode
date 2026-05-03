@@ -615,14 +615,24 @@ export function IssueDetailActions({
         <p className="text-[11px] font-semibold uppercase tracking-wide text-success">
           Pipeline Completed
         </p>
-        {!hasDiffs && <span className="text-[11px] text-muted">— no code changes</span>}
+        {verificationSummary ? (
+          <span className="text-[11px] text-muted" title={verificationSummary}>
+            — {verificationSummary.slice(0, 80)}
+            {verificationSummary.length > 80 ? '…' : ''}
+          </span>
+        ) : !hasDiffs ? (
+          <span className="text-[11px] text-muted">— no code changes</span>
+        ) : null}
         {thread?.totalCostUsd ? (
           <span className="text-[11px] text-muted">· ${thread.totalCostUsd.toFixed(4)}</span>
         ) : null}
       </div>
       <Button
+        type="button"
         size="sm"
-        onClick={onMarkAsDone}
+        onClick={() => {
+          onMarkAsDone();
+        }}
         disabled={isSubmitting}
         className="bg-purple-600 text-white hover:bg-purple-500"
       >

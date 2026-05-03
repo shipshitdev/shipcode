@@ -11,7 +11,7 @@ import type { IpcHandlerDeps } from './types';
 
 type InstantCli = 'claude' | 'codex';
 type RunningInstantSession = {
-  cli: InstantCli;
+  cli: InstantCli | 'shell';
   mode: 'run' | 'shell';
   processId: string;
 };
@@ -83,7 +83,7 @@ function registerExitTracking(
   queries: IpcHandlerDeps['queries'],
   threadId: string,
   processId: string,
-  cli: InstantCli,
+  cli: InstantCli | 'shell',
   mode: 'run' | 'shell',
 ) {
   const exitHandler = (exitedProcessId: string, exitCode: number) => {
@@ -299,6 +299,32 @@ export function registerInstantHandlers({
       return { threadId: thread.id };
     },
   );
+
+  // --- instant:bare-shell — spawns the user's login shell (no AI CLI) ---
+  ipcMain.handle('instant:bare-shell', async (_event, args: { projectId: string }) => {
+    const project = queries.projects.getById(args.projectId);
+    if (!project) throw new Error(`Project not found: ${args.projectId}`);
+
+    const userShell = process.env.SHELL || '/bin/zsh';
+    const title = `Terminal — ${project.name ?? project.path.split('/').pop()}`;
+    const thread = queries.threads.create(project.id, '', title, 'instant');
+
+    const proc = processManager.spawn('shell', userShell, ['-l'], project.path, thread.id, {
+      outputMode: 'raw',
+    });
+
+    runningInstants.set(thread.id, {
+      processId: proc.id,
+      cli: 'shell',
+      mode: 'shell',
+    });
+
+    log.info(`[instant] started bare shell for thread ${thread.id} (cwd=${project.path})`);
+
+    registerExitTracking(processManager, queries, thread.id, proc.id, 'shell', 'shell');
+
+    return { threadId: thread.id };
+  });
 
   ipcMain.handle(
     'instant:shell-input',

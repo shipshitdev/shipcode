@@ -126,7 +126,7 @@ describe('fetchProjectPriorities', () => {
       stderr: '',
     });
 
-    const out = await fetchProjectPriorities({ cwd: '/repo', projectUrl: ORG_URL });
+    const { priorities: out } = await fetchProjectPriorities({ cwd: '/repo', projectUrl: ORG_URL });
     expect(out.get(1)).toEqual({ rank: 'p0', raw: 'P0' });
     expect(out.get(2)).toEqual({ rank: 'p1', raw: 'P1' });
     expect(out.get(3)).toEqual({ rank: 'p2', raw: 'P2' });
@@ -147,7 +147,7 @@ describe('fetchProjectPriorities', () => {
       stderr: '',
     });
 
-    const out = await fetchProjectPriorities({ cwd: '/repo', projectUrl: ORG_URL });
+    const { priorities: out } = await fetchProjectPriorities({ cwd: '/repo', projectUrl: ORG_URL });
     expect(out.get(10)?.rank).toBe('p0');
     expect(out.get(11)?.rank).toBe('p1');
     expect(out.get(12)?.rank).toBe('p2');
@@ -162,7 +162,7 @@ describe('fetchProjectPriorities', () => {
       stderr: '',
     });
 
-    const out = await fetchProjectPriorities({ cwd: '/repo', projectUrl: ORG_URL });
+    const { priorities: out } = await fetchProjectPriorities({ cwd: '/repo', projectUrl: ORG_URL });
     expect(out.get(5)).toEqual({ rank: null, raw: 'Icebox' });
   });
 
@@ -181,7 +181,7 @@ describe('fetchProjectPriorities', () => {
       stderr: '',
     });
 
-    const out = await fetchProjectPriorities({ cwd: '/repo', projectUrl: ORG_URL });
+    const { priorities: out } = await fetchProjectPriorities({ cwd: '/repo', projectUrl: ORG_URL });
     expect(out.has(99)).toBe(false);
   });
 
@@ -202,7 +202,7 @@ describe('fetchProjectPriorities', () => {
         stderr: '',
       });
 
-    const out = await fetchProjectPriorities({ cwd: '/repo', projectUrl: ORG_URL });
+    const { priorities: out } = await fetchProjectPriorities({ cwd: '/repo', projectUrl: ORG_URL });
     expect(out.size).toBe(2);
     expect(out.get(1)?.rank).toBe('p0');
     expect(out.get(2)?.rank).toBe('p1');
@@ -220,9 +220,14 @@ describe('fetchProjectPriorities', () => {
       stderr: '',
     });
 
-    const out = await fetchProjectPriorities({ cwd: '/repo', projectUrl: ORG_URL });
+    const { priorities: out, archivedIssueNumbers } = await fetchProjectPriorities({
+      cwd: '/repo',
+      projectUrl: ORG_URL,
+    });
     expect(out.has(1)).toBe(false);
     expect(out.get(2)?.rank).toBe('p1');
+    expect(archivedIssueNumbers.has(1)).toBe(true);
+    expect(archivedIssueNumbers.has(2)).toBe(false);
   });
 
   it('excludes draft issues and PRs', async () => {
@@ -237,7 +242,7 @@ describe('fetchProjectPriorities', () => {
       stderr: '',
     });
 
-    const out = await fetchProjectPriorities({ cwd: '/repo', projectUrl: ORG_URL });
+    const { priorities: out } = await fetchProjectPriorities({ cwd: '/repo', projectUrl: ORG_URL });
     expect(out.size).toBe(1);
     expect(out.get(3)?.rank).toBe('p2');
   });
@@ -249,7 +254,11 @@ describe('fetchProjectPriorities', () => {
     });
 
     const onWarn = vi.fn();
-    const out = await fetchProjectPriorities({ cwd: '/repo', projectUrl: ORG_URL, onWarn });
+    const { priorities: out } = await fetchProjectPriorities({
+      cwd: '/repo',
+      projectUrl: ORG_URL,
+      onWarn,
+    });
     expect(out.size).toBe(0);
     expect(onWarn).toHaveBeenCalled();
   });
@@ -258,7 +267,11 @@ describe('fetchProjectPriorities', () => {
     mockExecFileAsync.mockRejectedValueOnce(new Error('gh: command failed'));
 
     const onWarn = vi.fn();
-    const out = await fetchProjectPriorities({ cwd: '/repo', projectUrl: ORG_URL, onWarn });
+    const { priorities: out } = await fetchProjectPriorities({
+      cwd: '/repo',
+      projectUrl: ORG_URL,
+      onWarn,
+    });
     expect(out.size).toBe(0);
     expect(onWarn).toHaveBeenCalled();
   });
@@ -269,7 +282,11 @@ describe('fetchProjectPriorities', () => {
     mockExecFileAsync.mockRejectedValueOnce(err);
 
     const onWarn = vi.fn();
-    const out = await fetchProjectPriorities({ cwd: '/repo', projectUrl: ORG_URL, onWarn });
+    const { priorities: out } = await fetchProjectPriorities({
+      cwd: '/repo',
+      projectUrl: ORG_URL,
+      onWarn,
+    });
     expect(out.size).toBe(0);
     expect(onWarn).toHaveBeenCalled();
     const msg = onWarn.mock.calls[0]?.[0] as string;
@@ -285,7 +302,10 @@ describe('fetchProjectPriorities', () => {
       stderr: '',
     });
 
-    const out = await fetchProjectPriorities({ cwd: '/repo', projectUrl: USER_URL });
+    const { priorities: out } = await fetchProjectPriorities({
+      cwd: '/repo',
+      projectUrl: USER_URL,
+    });
     expect(out.get(42)?.rank).toBe('p0');
 
     const args = mockExecFileAsync.mock.calls[0]?.[1] as string[];
@@ -296,7 +316,7 @@ describe('fetchProjectPriorities', () => {
 
   it('returns empty map for unparseable project URL', async () => {
     const onWarn = vi.fn();
-    const out = await fetchProjectPriorities({
+    const { priorities: out } = await fetchProjectPriorities({
       cwd: '/repo',
       projectUrl: 'https://example.com/not-a-project',
       onWarn,

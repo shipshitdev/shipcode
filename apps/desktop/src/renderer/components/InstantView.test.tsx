@@ -60,7 +60,7 @@ describe('InstantView', () => {
     } as never);
   });
 
-  it('opens the configured terminal from the empty state', async () => {
+  it('opens an embedded bare shell from the empty state', async () => {
     useAppStore.setState({
       activeProjectId: 'project-1',
       instantPaneThreadIds: [],
@@ -68,20 +68,25 @@ describe('InstantView', () => {
       canonicalTerminalStream: {},
     } as never);
 
-    render(<InstantView />);
+    invokeMock.mockResolvedValueOnce({ threadId: 'thread-shell-1' });
 
-    expect(screen.queryByRole('button', { name: /Claude CLI/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Codex CLI/i })).not.toBeInTheDocument();
+    render(<InstantView />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Terminal' }));
 
     await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith('project:open-path', {
+      expect(invokeMock).toHaveBeenCalledWith('instant:bare-shell', {
         projectId: 'project-1',
-        target: 'default-terminal',
       });
     });
-    expect(invokeMock).not.toHaveBeenCalledWith('instant:shell-start', expect.anything());
+
+    const state = useAppStore.getState();
+    expect(state.instantPaneThreadIds).toContain('thread-shell-1');
+    expect(state.instantPaneMetaByThread['thread-shell-1']).toEqual({
+      mode: 'live',
+      title: 'Terminal',
+      cli: 'shell',
+    });
   });
 
   it('keeps existing session panes visible', () => {
