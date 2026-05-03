@@ -1,5 +1,6 @@
 import type { GeneratorCli, ReasoningEffort } from '@shipcode/shared';
 import { runCliWithStdin } from './cli-stdin-runner';
+import { unwrapCliResultEnvelope } from './cli-result';
 import {
   mapReasoningEffortToClaudeThinkingTokens,
   mapReasoningEffortToCodex,
@@ -26,14 +27,6 @@ export interface EnhancePrdOptions {
   reasoningEffort?: ReasoningEffort;
   /** Request timeout in ms. Defaults to 3 minutes. */
   timeoutMs?: number;
-}
-
-function isCliResultEnvelope(value: unknown): value is { result: string } {
-  return (
-    value != null &&
-    typeof value === 'object' &&
-    typeof (value as { result?: unknown }).result === 'string'
-  );
 }
 
 /**
@@ -100,20 +93,7 @@ export async function enhancePrdDraft(opts: EnhancePrdOptions): Promise<Generate
     opts.reasoningEffort,
   );
 
-  // `claude -p --output-format json` returns an envelope
-  // `{ session_id, result, ... }`. Unwrap to `result`, with a raw-stdout
-  // fallback for older CLI versions that already return plain text.
-  let text = stdout;
-  try {
-    const envelope = JSON.parse(stdout) as unknown;
-    if (isCliResultEnvelope(envelope)) {
-      text = envelope.result;
-    }
-  } catch {
-    // not a JSON envelope — use raw stdout
-  }
-
-  return extractPrd(text);
+  return extractPrd(unwrapCliResultEnvelope(stdout));
 }
 
 /**
