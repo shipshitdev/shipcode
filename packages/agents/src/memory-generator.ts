@@ -1,9 +1,7 @@
-import { spawn } from 'node:child_process';
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { GeneratorCli, MemoryFileInfo, RepoMemoryStatus } from '@shipcode/shared';
-import { extractCliFailureMessage, formatCliSpawnFailure } from './cli-error';
-import { shellExecEnv } from './health-check';
+import { runCliWithStdin } from './cli-stdin-runner';
 
 const MEMORY_DIR = '.agents/memory';
 const OBSOLETE_CONTEXT_DIR = '.agents/context';
@@ -291,67 +289,19 @@ function runMemoryCliWithStdin(
   cwd: string,
   timeoutMs: number,
 ): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const command = cli;
-    const label = cli === 'claude' ? 'Claude CLI' : 'Codex CLI';
-    const args =
-      cli === 'claude'
-        ? [
-            '-p',
-            '--output-format',
-            'json',
-            '--max-turns',
-            '1',
-            '--tools',
-            '',
-            '--dangerously-skip-permissions',
-          ]
-        : [
-            '-a',
-            'never',
-            '-c',
-            'model_reasoning_effort=high',
-            'exec',
-            '-',
-            '--sandbox',
-            'read-only',
-          ];
-    const proc = spawn(command, args, {
-      cwd,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: shellExecEnv(),
-    });
+  const args =
+    cli === 'claude'
+      ? [
+          '-p',
+          '--output-format',
+          'json',
+          '--max-turns',
+          '1',
+          '--tools',
+          '',
+          '--dangerously-skip-permissions',
+        ]
+      : ['-a', 'never', '-c', 'model_reasoning_effort=high', 'exec', '-', '--sandbox', 'read-only'];
 
-    let stdout = '';
-    let stderr = '';
-    proc.stdout.on('data', (chunk) => {
-      stdout += chunk;
-    });
-    proc.stderr.on('data', (chunk) => {
-      stderr += chunk;
-    });
-
-    const timer = setTimeout(() => {
-      proc.kill('SIGTERM');
-      reject(new Error(`${label} timed out after ${timeoutMs}ms`));
-    }, timeoutMs);
-
-    proc.on('error', (err) => {
-      clearTimeout(timer);
-      reject(new Error(formatCliSpawnFailure(label, err.message)));
-    });
-
-    proc.on('close', (code) => {
-      clearTimeout(timer);
-      if (code === 0) {
-        resolve(stdout);
-        return;
-      }
-      const tidy = extractCliFailureMessage(stdout, stderr);
-      reject(new Error(`${label} exited ${code}: ${tidy}`));
-    });
-
-    proc.stdin.write(prompt);
-    proc.stdin.end();
-  });
+  return runCliWithStdin({ cli, args, input: prompt, cwd, timeoutMs });
 }
