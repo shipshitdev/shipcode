@@ -5,6 +5,7 @@ import {
   Columns3,
   ExternalLink,
   LayoutList,
+  Play,
   RefreshCw,
   SlidersHorizontal,
   Workflow,
@@ -29,6 +30,13 @@ import {
 } from '../primitives/select';
 import { BOARD_SORT_LABELS } from './constants';
 import type { BoardSortOrder, BoardView } from './types';
+
+const PRIORITY_LABELS: Record<'p0' | 'p1' | 'p2' | 'p3', string> = {
+  p0: 'P0 — Critical',
+  p1: 'P1 — High',
+  p2: 'P2 — Medium',
+  p3: 'P3 — Low',
+};
 
 interface BoardToolbarProps {
   baseBranch?: string;
@@ -55,6 +63,12 @@ interface BoardToolbarProps {
   projectsUrl?: string | null;
   onRepoClick?: (event: React.MouseEvent<HTMLAnchorElement>) => void;
   onProjectsClick?: (event: React.MouseEvent<HTMLAnchorElement>) => void;
+  // Auto-run
+  autoRunCount?: number;
+  autoRunPriorities?: Array<'p0' | 'p1' | 'p2' | 'p3'>;
+  onAutoRunPrioritiesChange?: (priorities: Array<'p0' | 'p1' | 'p2' | 'p3'>) => void;
+  onAutoRun?: () => void;
+  autoRunning?: boolean;
 }
 
 export function BoardToolbar({
@@ -82,6 +96,11 @@ export function BoardToolbar({
   projectsUrl,
   onRepoClick,
   onProjectsClick,
+  autoRunCount = 0,
+  autoRunPriorities = [],
+  onAutoRunPrioritiesChange,
+  onAutoRun,
+  autoRunning = false,
 }: BoardToolbarProps) {
   const localBranches = branches?.filter((branch) => !branch.includes('/')) ?? [];
   const remoteBranches = branches?.filter((branch) => branch.includes('/')) ?? [];
@@ -257,6 +276,60 @@ export function BoardToolbar({
             <Columns3 size={14} />
           </Button>
         </div>
+        {onAutoRun && (
+          <div className="flex shrink-0 items-center overflow-hidden rounded-md border border-border">
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn('gap-1.5 rounded-none', autoRunning && 'text-accent')}
+              onClick={onAutoRun}
+              disabled={autoRunning || autoRunCount === 0}
+              title={
+                autoRunCount === 0
+                  ? 'No eligible todo issues'
+                  : `Start ${autoRunCount} issue${autoRunCount === 1 ? '' : 's'} through the pipeline`
+              }
+            >
+              <Play size={12} className={autoRunning ? 'animate-pulse' : ''} />
+              Run ({autoRunCount})
+            </Button>
+            {onAutoRunPrioritiesChange && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className={cn(
+                      'rounded-none border-l border-border text-muted',
+                      autoRunPriorities.length > 0 && 'text-accent',
+                    )}
+                    title="Filter auto-run by priority"
+                  >
+                    <SlidersHorizontal size={10} />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {(Object.keys(PRIORITY_LABELS) as Array<'p0' | 'p1' | 'p2' | 'p3'>).map(
+                    (rank) => (
+                      <DropdownMenuCheckboxItem
+                        key={rank}
+                        checked={autoRunPriorities.includes(rank)}
+                        onCheckedChange={(checked) => {
+                          const next = checked
+                            ? [...autoRunPriorities, rank]
+                            : autoRunPriorities.filter((p) => p !== rank);
+                          onAutoRunPrioritiesChange(next);
+                        }}
+                      >
+                        {PRIORITY_LABELS[rank]}
+                      </DropdownMenuCheckboxItem>
+                    ),
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
+        )}
         {onTriageIssues && (
           <Button
             variant="outline"

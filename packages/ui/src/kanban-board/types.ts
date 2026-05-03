@@ -44,6 +44,12 @@ export interface KanbanBoardProps {
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
   onArchiveAllDone?: () => void;
   graphContent?: ReactNode;
+  // Auto-run: batch-start all eligible todo issues
+  autoRunCount?: number;
+  autoRunPriorities?: Array<'p0' | 'p1' | 'p2' | 'p3'>;
+  onAutoRunPrioritiesChange?: (priorities: Array<'p0' | 'p1' | 'p2' | 'p3'>) => void;
+  onAutoRun?: () => void;
+  autoRunning?: boolean;
 }
 
 export type ColumnKey = 'todo' | 'agent' | 'human' | 'done';

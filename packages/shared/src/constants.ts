@@ -56,7 +56,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   githubPollingEnabled: false,
   githubPollingIntervalMs: 30_000,
   githubBotUsername: '',
-  autoPickupEnabled: false,
+  autoRunPriorities: [],
   statusLabelMappings: DEFAULT_STATUS_LABEL_MAPPINGS as Record<string, string>,
   onboardingVersion: 0,
   projectSortOrder: 'recent',

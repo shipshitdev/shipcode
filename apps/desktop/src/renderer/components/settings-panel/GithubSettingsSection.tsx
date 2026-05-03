@@ -1,6 +1,13 @@
 import type { AppSettings } from '@shipcode/shared';
 import { Input, SettingsRow, Switch } from '@shipshitdev/ui';
 
+const PRIORITY_OPTIONS: Array<{ rank: 'p0' | 'p1' | 'p2' | 'p3'; label: string }> = [
+  { rank: 'p0', label: 'P0 — Critical' },
+  { rank: 'p1', label: 'P1 — High' },
+  { rank: 'p2', label: 'P2 — Medium' },
+  { rank: 'p3', label: 'P3 — Low' },
+];
+
 export function GithubSettingsSection({
   settings,
   onUpdate,
@@ -35,13 +42,32 @@ export function GithubSettingsSection({
             step={5000}
           />
         </SettingsRow>
-        <SettingsRow label="Auto-pickup issues" htmlFor="auto-pickup">
-          <Switch
-            id="auto-pickup"
-            checked={settings.autoPickupEnabled}
-            onCheckedChange={(checked: boolean) => onUpdate({ autoPickupEnabled: !!checked })}
-          />
-        </SettingsRow>
+      </section>
+
+      <section className="mb-8">
+        <h4 className="mb-3 text-secondary">Auto-Run Priority Filter</h4>
+        <p className="mb-3 text-xs text-muted">
+          {settings.autoRunPriorities.length === 0
+            ? 'All priorities eligible — Run (X) will include every todo issue.'
+            : `Only ${settings.autoRunPriorities.map((p) => p.toUpperCase()).join(', ')} issues will be included.`}
+        </p>
+        {PRIORITY_OPTIONS.map(({ rank, label }) => {
+          const isChecked = settings.autoRunPriorities.includes(rank);
+          return (
+            <SettingsRow key={rank} label={label} htmlFor={`auto-run-${rank}`}>
+              <Switch
+                id={`auto-run-${rank}`}
+                checked={isChecked}
+                onCheckedChange={(checked: boolean) => {
+                  const next = checked
+                    ? [...settings.autoRunPriorities, rank]
+                    : settings.autoRunPriorities.filter((p) => p !== rank);
+                  onUpdate({ autoRunPriorities: next });
+                }}
+              />
+            </SettingsRow>
+          );
+        })}
       </section>
     </>
   );

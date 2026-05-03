@@ -222,6 +222,28 @@ export function ThreadPanel() {
   const project: Project | null = panelData?.project ?? null;
   const settings: AppSettings | undefined = panelData?.settings;
   const threads: Thread[] = panelData?.threads ?? [];
+
+  // Auto-run state
+  const [autoRunPriorities, setAutoRunPriorities] = useState<Array<'p0' | 'p1' | 'p2' | 'p3'>>(
+    settings?.autoRunPriorities ?? [],
+  );
+  const [isAutoRunning, setIsAutoRunning] = useState(false);
+
+  // Sync local priority state when settings load/change
+  useEffect(() => {
+    if (settings?.autoRunPriorities) setAutoRunPriorities(settings.autoRunPriorities);
+  }, [settings?.autoRunPriorities]);
+
+  const { data: autoRunCountData } = useQuery<{ count: number }>({
+    queryKey: ['auto-run-count', activeProjectId, autoRunPriorities],
+    queryFn: () =>
+      window.shipcode.invoke('github:auto-run-count', {
+        projectId: activeProjectId ?? '',
+        priorities: autoRunPriorities,
+      }),
+    enabled: !!activeProjectId,
+    staleTime: 10_000,
+  });
   const latestPlanStatusByThreadId = panelData?.latestPlanStatusByThreadId ?? {};
   const branches: string[] = branchData ?? panelData?.branches ?? [];
   const threadById = useMemo(
@@ -643,6 +665,36 @@ export function ThreadPanel() {
               if (activeProjectId) refreshIssues.mutate(activeProjectId);
               log.error('[threadpanel] cancel failed', { issueNumber: issue.issueNumber, err });
             });
+        }}
+        autoRunCount={autoRunCountData?.count ?? 0}
+        autoRunPriorities={autoRunPriorities}
+        onAutoRunPrioritiesChange={(priorities) => {
+          setAutoRunPriorities(priorities);
+          window.shipcode
+            .invoke('settings:set', { autoRunPriorities: priorities })
+            .catch((err) => log.error('[threadpanel] save auto-run priorities failed', err));
+        }}
+        autoRunning={isAutoRunning}
+        onAutoRun={() => {
+          if (!activeProjectId || isAutoRunning) return;
+          setIsAutoRunning(true);
+          window.shipcode
+            .invoke('github:auto-run', {
+              projectId: activeProjectId,
+              priorities: autoRunPriorities,
+            })
+            .then(() => {
+              if (activeProjectId) refreshIssues.mutate(activeProjectId);
+              queryClient.invalidateQueries({
+                queryKey: ['auto-run-count', activeProjectId],
+              });
+            })
+            .catch((err) => {
+              if (activeProjectId) refreshIssues.mutate(activeProjectId);
+              log.error('[threadpanel] auto-run failed', err);
+              window.alert(`Auto-run failed: ${err?.message ?? err}`);
+            })
+            .finally(() => setIsAutoRunning(false));
         }}
       />
       <ThreadPanelArchiveDialog

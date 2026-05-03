@@ -189,7 +189,9 @@ export class SettingsQueries {
         ? parseInt(stored.githubPollingIntervalMs, 10)
         : DEFAULT_SETTINGS.githubPollingIntervalMs,
       githubBotUsername: stored.githubBotUsername ?? DEFAULT_SETTINGS.githubBotUsername,
-      autoPickupEnabled: parseBool(stored.autoPickupEnabled, DEFAULT_SETTINGS.autoPickupEnabled),
+      autoRunPriorities: stored.autoRunPriorities
+        ? (JSON.parse(stored.autoRunPriorities) as AppSettings['autoRunPriorities'])
+        : DEFAULT_SETTINGS.autoRunPriorities,
       statusLabelMappings: stored.statusLabelMappings
         ? JSON.parse(stored.statusLabelMappings)
         : DEFAULT_STATUS_LABEL_MAPPINGS,

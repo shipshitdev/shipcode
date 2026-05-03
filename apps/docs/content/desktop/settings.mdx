@@ -25,7 +25,7 @@ All settings persist in the local SQLite DB under the single `settings` row. The
 | `reviewerReasoningEffort` | `high` | Default reviewer effort. Exact options depend on the selected provider |
 | `executorReasoningEffort` | `high` | Default executor effort. Exact options depend on the selected provider |
 | `verifierReasoningEffort` | `high` | Default verifier effort. Exact options depend on the selected provider |
-| `autoPickupEnabled` | false | When on, ShipCode auto-pulls new `agent:*`-labeled issues from GitHub on a poll interval |
+| `autoRunPriorities` | `[]` | Priority filter for auto-run. Empty = all priorities. Example: `["p0", "p1"]` |
 | `githubPollingIntervalMs` | 60000 | GitHub polling interval when auto-pickup is enabled |
 | `githubBotUsername` | — | Label filter used to skip issues already handled by the bot |
 

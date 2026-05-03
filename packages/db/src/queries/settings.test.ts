@@ -34,7 +34,7 @@ describe('SettingsQueries', () => {
     expect(s.githubPollingEnabled).toBe(false);
     expect(s.githubPollingIntervalMs).toBe(30000);
     expect(s.githubBotUsername).toBe('');
-    expect(s.autoPickupEnabled).toBe(false);
+    expect(s.autoRunPriorities).toEqual([]);
     expect(s.onboardingVersion).toBe(0);
     expect(s.worktreeRoot).toBeNull();
     expect(s.projectOpenTarget).toBe('cursor');
@@ -159,7 +159,7 @@ describe('SettingsQueries', () => {
       githubPollingEnabled: true,
       githubPollingIntervalMs: 60000,
       githubBotUsername: 'bot',
-      autoPickupEnabled: true,
+      autoRunPriorities: ['p0', 'p1'],
       onboardingVersion: 3,
       projectOpenTarget: 'vscode',
       terminalOpenTarget: 'terminal',
@@ -177,7 +177,7 @@ describe('SettingsQueries', () => {
     expect(s.githubPollingIntervalMs).toBe(60000);
     expect(typeof s.githubPollingIntervalMs).toBe('number');
     expect(s.githubBotUsername).toBe('bot');
-    expect(s.autoPickupEnabled).toBe(true);
+    expect(s.autoRunPriorities).toEqual(['p0', 'p1']);
     expect(s.onboardingVersion).toBe(3);
     expect(typeof s.onboardingVersion).toBe('number');
     expect(s.projectOpenTarget).toBe('vscode');

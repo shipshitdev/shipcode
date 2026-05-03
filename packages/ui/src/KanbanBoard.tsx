@@ -156,6 +156,11 @@ export function KanbanBoard({
   onArchiveIssue,
   onArchiveAllDone,
   graphContent,
+  autoRunCount,
+  autoRunPriorities,
+  onAutoRunPrioritiesChange,
+  onAutoRun,
+  autoRunning,
 }: KanbanBoardProps) {
   const handleExternalClick = (url: string) => (event: React.MouseEvent<HTMLAnchorElement>) => {
     if (onOpenExternal) {
@@ -587,6 +592,11 @@ export function KanbanBoard({
         projectsUrl={projectsUrl}
         onRepoClick={repoUrl ? handleExternalClick(repoUrl) : undefined}
         onProjectsClick={projectsUrl ? handleExternalClick(projectsUrl) : undefined}
+        autoRunCount={autoRunCount}
+        autoRunPriorities={autoRunPriorities}
+        onAutoRunPrioritiesChange={onAutoRunPrioritiesChange}
+        onAutoRun={onAutoRun}
+        autoRunning={autoRunning}
       />
       {view === 'graph' && graphContent ? (
         <div className="min-h-0 flex-1">{graphContent}</div>

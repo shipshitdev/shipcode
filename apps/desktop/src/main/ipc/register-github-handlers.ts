@@ -844,6 +844,63 @@ export function registerGitHubHandlers({
     },
   );
 
+  // Auto-run: count eligible todo issues for the "Run (X)" button
+  ipcMain.handle(
+    'github:auto-run-count',
+    (
+      _event,
+      {
+        projectId,
+        priorities,
+      }: { projectId: string; priorities: Array<'p0' | 'p1' | 'p2' | 'p3'> },
+    ) => {
+      return { count: queries.githubIssues.countEligibleTodo(projectId, priorities) };
+    },
+  );
+
+  // Auto-run: batch-enqueue all eligible todo issues by priority
+  ipcMain.handle(
+    'github:auto-run',
+    async (
+      _event,
+      {
+        projectId,
+        priorities,
+      }: { projectId: string; priorities: Array<'p0' | 'p1' | 'p2' | 'p3'> },
+    ) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+
+      const eligible = queries.githubIssues.getEligibleTodoIssues(projectId, priorities);
+      let started = 0;
+      let queued = 0;
+
+      for (const issue of eligible) {
+        try {
+          const issueUrl = deriveGithubIssueUrl(project.gitRemote, issue.issueNumber);
+          const ghCliForAttach = new GhCli(project.path);
+          await attachIssueToConfiguredProjectBoard(
+            project,
+            ghCliForAttach,
+            issue.issueNumber,
+            issueUrl,
+            'github:auto-run',
+          );
+          const result = await scheduler.startOrQueue(projectId, issue.issueNumber);
+          if (result.queued) queued++;
+          else started++;
+        } catch (err) {
+          log.error(`[auto-run] failed to enqueue issue #${issue.issueNumber}:`, err);
+        }
+      }
+
+      log.info(
+        `[auto-run] batch complete: ${started} started, ${queued} queued out of ${eligible.length} eligible`,
+      );
+      return { started, queued };
+    },
+  );
+
   ipcMain.handle(
     'github:retry-issue',
     (_event, { projectId, issueNumber }: { projectId: string; issueNumber: number }) => {

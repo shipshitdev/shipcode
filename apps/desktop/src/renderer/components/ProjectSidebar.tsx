@@ -24,6 +24,7 @@ import {
   Activity,
   Archive,
   ArrowUpDown,
+  Braces,
   Check,
   Clock3,
   Code2,
@@ -86,6 +87,7 @@ const PROJECT_OPEN_TARGET_ICONS: Record<AppSettings['projectOpenTarget'], AppIco
   terminal: Terminal,
   ghostty: Ghost,
   vscode: Code2,
+  t3code: Braces,
 };
 
 export function ProjectSidebar() {

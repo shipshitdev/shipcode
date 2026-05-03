@@ -120,11 +120,11 @@ describe('settings leaf sections', () => {
     fireEvent.change(screen.getByLabelText('Poll interval (ms)'), {
       target: { value: '45000' },
     });
-    fireEvent.click(screen.getByRole('switch', { name: 'Auto-pickup issues' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'P0 — Critical' }));
 
     expect(onUpdate).toHaveBeenCalledWith({ githubPollingEnabled: true });
     expect(onUpdate).toHaveBeenCalledWith({ githubPollingIntervalMs: 45000 });
-    expect(onUpdate).toHaveBeenCalledWith({ autoPickupEnabled: true });
+    expect(onUpdate).toHaveBeenCalledWith({ autoRunPriorities: ['p0'] });
   });
 
   it('updates notification toggles and disables children when notifications are off', () => {

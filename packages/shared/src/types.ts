@@ -623,7 +623,8 @@ export interface AppSettings {
   githubPollingEnabled: boolean;
   githubPollingIntervalMs: number;
   githubBotUsername: string;
-  autoPickupEnabled: boolean;
+  /** Priority filter for kanban auto-run. Empty array = all priorities eligible. */
+  autoRunPriorities: Array<'p0' | 'p1' | 'p2' | 'p3'>;
   statusLabelMappings: StatusLabelMapping;
   onboardingVersion: number;
   // Sidebar project ordering preference (pinned projects always float to top first)

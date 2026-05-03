@@ -462,6 +462,60 @@ export class GitHubIssueQueries {
     return row ? this.toRecord(asRow<GitHubIssueCacheRow>(row)) : null;
   }
 
+  /**
+   * Return all todo issues eligible for auto-run, ordered by priority rank then fetched_at.
+   * When `priorities` is non-empty, only issues matching those ranks are returned.
+   * When empty, all todo issues (including unranked) are eligible.
+   */
+  getEligibleTodoIssues(
+    projectId: string,
+    priorities: Array<'p0' | 'p1' | 'p2' | 'p3'>,
+  ): GitHubIssueCacheRecord[] {
+    const hasPriorityFilter = priorities.length > 0;
+    const priorityClause = hasPriorityFilter
+      ? `AND gic.priority_rank IN (${priorities.map(() => '?').join(', ')})`
+      : '';
+    const sql = `SELECT gic.* FROM github_issue_cache gic
+       JOIN projects p ON p.id = gic.project_id
+      WHERE gic.project_id = ?
+        AND gic.pipeline_status = ?
+        AND gic.state = 'open'
+        AND gic.archived_at IS NULL
+        AND gic.is_quick_mode = 0
+        AND p.archived = 0
+        ${priorityClause}
+      ORDER BY
+        CASE gic.priority_rank WHEN 'p0' THEN 0 WHEN 'p1' THEN 1 WHEN 'p2' THEN 2 WHEN 'p3' THEN 3 ELSE 4 END ASC,
+        gic.fetched_at ASC`;
+    const params: string[] = [projectId, ISSUE_PIPELINE_STATUS.todo];
+    if (hasPriorityFilter) params.push(...priorities);
+    const rows = this.db.prepare(sql).all(...params);
+    return asRows<GitHubIssueCacheRow>(rows).map((r) => this.toRecord(r));
+  }
+
+  /**
+   * Count of todo issues eligible for auto-run (same filter as getEligibleTodoIssues).
+   */
+  countEligibleTodo(projectId: string, priorities: Array<'p0' | 'p1' | 'p2' | 'p3'>): number {
+    const hasPriorityFilter = priorities.length > 0;
+    const priorityClause = hasPriorityFilter
+      ? `AND gic.priority_rank IN (${priorities.map(() => '?').join(', ')})`
+      : '';
+    const sql = `SELECT COUNT(*) as cnt FROM github_issue_cache gic
+       JOIN projects p ON p.id = gic.project_id
+      WHERE gic.project_id = ?
+        AND gic.pipeline_status = ?
+        AND gic.state = 'open'
+        AND gic.archived_at IS NULL
+        AND gic.is_quick_mode = 0
+        AND p.archived = 0
+        ${priorityClause}`;
+    const params: string[] = [projectId, ISSUE_PIPELINE_STATUS.todo];
+    if (hasPriorityFilter) params.push(...priorities);
+    const row = this.db.prepare(sql).get(...params) as { cnt: number } | undefined;
+    return row?.cnt ?? 0;
+  }
+
   getOrphanedClaims(): GitHubIssueCacheRecord[] {
     const rows = this.db
       .prepare(

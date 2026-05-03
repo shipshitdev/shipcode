@@ -48,6 +48,16 @@ function formatTokens(run: Thread): string | null {
   return total > 0 ? formatTokenCount(total) : null;
 }
 
+function describeRun(run: Thread): string {
+  if (run.lastError) return run.lastError.slice(0, 120);
+  const parts: string[] = [];
+  const totalTokens = (run.totalTokensPrompt ?? 0) + (run.totalTokensCompletion ?? 0);
+  if (run.totalCostUsd > 0) parts.push(formatCost(run.totalCostUsd));
+  if (totalTokens > 0) parts.push(`${formatTokenCount(totalTokens)} tokens`);
+  if (run.executorResolvedModel) parts.push(run.executorResolvedModel);
+  return parts.length > 0 ? parts.join(' · ') : 'No details';
+}
+
 const STATUS_COLOR: Record<string, string> = {
   running: 'bg-agent/10 text-agent border-agent/25',
   completed: 'bg-success/12 text-success border-success/25',
@@ -151,24 +161,37 @@ export function AutomationDetail() {
                       type="button"
                       variant="ghost"
                       onClick={() => selectAutomationThread(run.id)}
-                      className="flex items-start gap-3 rounded-none px-6 py-3 text-left transition-colors hover:bg-hover"
+                      className="h-auto flex items-start gap-3 rounded-none px-6 py-3 text-left transition-colors hover:bg-hover"
                     >
                       <div className="mt-0.5 shrink-0">
                         <PhaseChip status={run.status} />
                       </div>
                       <div className="min-w-0 flex-1">
                         <span className="block truncate text-[12px] text-secondary">
-                          {run.lastError ? run.lastError.slice(0, 120) : run.status}
+                          {describeRun(run)}
                         </span>
-                        <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted">
+                        <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted">
                           <span>{formatTimestamp(run.createdAt)}</span>
                           {run.failureCount > 0 && (
-                            <span className="text-danger">
-                              {run.failureCount} {run.failureCount === 1 ? 'failure' : 'failures'}
-                            </span>
+                            <>
+                              <span>·</span>
+                              <span className="text-danger">
+                                {run.failureCount} {run.failureCount === 1 ? 'failure' : 'failures'}
+                              </span>
+                            </>
                           )}
-                          {hasCost && <span>{formatCost(run.totalCostUsd as number)}</span>}
-                          {tokens && <span>{tokens}</span>}
+                          {hasCost && (
+                            <>
+                              <span>·</span>
+                              <span>{formatCost(run.totalCostUsd as number)}</span>
+                            </>
+                          )}
+                          {tokens && (
+                            <>
+                              <span>·</span>
+                              <span>{tokens} tokens</span>
+                            </>
+                          )}
                         </div>
                       </div>
                       <span className="mt-0.5 shrink-0 text-[11px] text-muted">

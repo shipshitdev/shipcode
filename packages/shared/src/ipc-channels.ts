@@ -280,6 +280,14 @@ export interface IpcInvokeChannels {
   'github:refresh-issues': { args: { projectId: string }; result: GitHubIssueCacheRecord[] };
   'github:triage-issues': { args: { projectId: string }; result: GitHubIssueTriageResult };
   'github:start-issue': { args: { projectId: string; issueNumber: number }; result: undefined };
+  'github:auto-run-count': {
+    args: { projectId: string; priorities: Array<'p0' | 'p1' | 'p2' | 'p3'> };
+    result: { count: number };
+  };
+  'github:auto-run': {
+    args: { projectId: string; priorities: Array<'p0' | 'p1' | 'p2' | 'p3'> };
+    result: { started: number; queued: number };
+  };
   'github:retry-issue': { args: { projectId: string; issueNumber: number }; result: undefined };
   'github:mark-done': { args: { projectId: string; issueNumber: number }; result: undefined };
   'github:get-issue': {

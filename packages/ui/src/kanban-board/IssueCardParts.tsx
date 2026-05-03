@@ -281,22 +281,6 @@ function DraggableCardComponent({
             </div>
           )}
         <StalenessDot staleness={staleness} className="absolute right-2 bottom-2 z-10" />
-        {/* Full-height expand strip — shown on hover, sits behind the action buttons */}
-        {!isCreating && (
-          <Button
-            variant="ghost"
-            className="absolute inset-y-0 right-0 z-[5] h-auto w-8 rounded-none rounded-r-md text-muted/50 opacity-0 transition-opacity hover:bg-muted/10 hover:text-primary group-hover:opacity-100"
-            title="Open issue detail"
-            aria-label="Open issue detail"
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.stopPropagation();
-              onClick(issue);
-            }}
-          >
-            <PanelLeftOpen size={16} />
-          </Button>
-        )}
         <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-1">
           {branchName && onCopyBranchName && !isCreating && !isAutomation && (
             <Button
@@ -325,6 +309,22 @@ function DraggableCardComponent({
               }}
             >
               {branchCopyState === 'copied' ? <Check size={14} /> : <Copy size={14} />}
+            </Button>
+          )}
+          {!isCreating && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="text-muted/60 opacity-0 transition-opacity hover:bg-muted/10 hover:text-primary group-hover:opacity-100"
+              title="Open issue detail"
+              aria-label="Open issue detail"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                onClick(issue);
+              }}
+            >
+              <PanelLeftOpen size={14} />
             </Button>
           )}
           {isDoneState && onArchiveIssue && !isAutomation && (
@@ -403,10 +403,10 @@ function DraggableCardComponent({
             </span>
           )}
         </div>
-        <div className="relative z-10 mt-1 line-clamp-2 w-full min-w-0 pr-8 text-[13px] font-medium leading-snug text-primary">
+        <div className="relative z-10 mt-1 line-clamp-2 w-full min-w-0 text-[13px] font-medium leading-snug text-primary">
           {issue.title}
         </div>
-        <div className="relative z-10 mt-auto flex flex-wrap items-center gap-1.5 pr-8 pt-2">
+        <div className="relative z-10 mt-auto flex flex-wrap items-center gap-1.5 pt-2">
           {priorityBadge ? (
             <Badge
               variant={priorityBadge.variant}
