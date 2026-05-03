@@ -113,7 +113,7 @@ function TranscriptRow({
       return (
         <div
           className={cn(
-            'my-3 rounded-lg border px-3 py-2',
+            'mb-3 rounded-lg border px-3 py-2',
             lifecycleSeverity === 'error'
               ? 'border-danger/30 bg-danger/8'
               : 'border-warning/30 bg-warning/8',
@@ -154,7 +154,7 @@ function TranscriptRow({
     }
     case 'tool_start':
       return (
-        <div className="my-3 rounded-md border border-border/50 bg-secondary/50 px-3 py-2">
+        <div className="mb-3 rounded-md border border-border/50 bg-secondary/50 px-3 py-2">
           <div className="flex items-center gap-2">
             <Badge
               variant="default"
@@ -182,16 +182,9 @@ function TranscriptRow({
         : typeof event.durationMs === 'number'
           ? `${(event.durationMs / 1000).toFixed(1)}s`
           : 'Completed';
-      if (!failed) {
-        return (
-          <div className="flex items-center gap-1.5 pl-1">
-            <span className="text-[10px] text-success/80">✓</span>
-            <span className="font-mono text-[10px] text-muted/70">{detail}</span>
-          </div>
-        );
-      }
+      if (!failed) return null;
       return (
-        <div className="my-3 rounded-md border border-danger/30 bg-danger/8 px-3 py-2">
+        <div className="mb-3 rounded-md border border-danger/30 bg-danger/8 px-3 py-2">
           <div className="flex items-center justify-between gap-3">
             <TranscriptMeta createdAt={record.createdAt} compact={compact}>
               <span className="tracking-normal normal-case text-danger">Tool failed</span>
@@ -213,7 +206,7 @@ function TranscriptRow({
     }
     case 'thinking':
       return (
-        <div className="my-3 rounded-md border border-border/50 bg-secondary/40 px-3 py-2.5">
+        <div className="mb-3 rounded-md border border-border/50 bg-secondary/40 px-3 py-2.5">
           <TranscriptMeta createdAt={record.createdAt} compact={compact}>
             <span className="tracking-normal text-muted/80 normal-case">Reasoning</span>
           </TranscriptMeta>
@@ -229,7 +222,7 @@ function TranscriptRow({
       );
     case 'text':
       return (
-        <div className="my-3 rounded-lg border border-border/60 bg-elevated px-4 py-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.2)]">
+        <div className="mb-3 rounded-lg border border-border/60 bg-elevated px-4 py-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.2)]">
           <TranscriptMeta createdAt={record.createdAt} compact={compact}>
             <span className="tracking-normal text-primary/70 normal-case font-medium">
               Assistant
@@ -269,7 +262,7 @@ function TranscriptRow({
       return (
         <div
           className={cn(
-            'my-3 rounded-md border px-3 py-2.5',
+            'mb-3 rounded-md border px-3 py-2.5',
             severity === 'error'
               ? 'border-danger/30 bg-danger/8'
               : 'border-warning/30 bg-warning/8',
@@ -299,7 +292,7 @@ function TranscriptRow({
     }
     case 'error':
       return (
-        <div className="my-3 rounded-xl border border-danger/30 bg-danger/8 px-4 py-3">
+        <div className="mb-3 rounded-xl border border-danger/30 bg-danger/8 px-4 py-3">
           <TranscriptMeta createdAt={record.createdAt} compact={compact}>
             <span className="tracking-normal text-danger normal-case">Error</span>
           </TranscriptMeta>
@@ -315,7 +308,7 @@ function TranscriptRow({
       );
     case 'clarification_requested':
       return (
-        <div className="my-3 rounded-xl border border-warning/35 bg-warning/[0.06] px-4 py-3">
+        <div className="mb-3 rounded-xl border border-warning/35 bg-warning/[0.06] px-4 py-3">
           <TranscriptMeta createdAt={record.createdAt} compact={compact}>
             <Badge variant="warning" className="rounded-full px-2 py-0 text-[9px] tracking-normal">
               Clarification
@@ -543,7 +536,7 @@ export function TerminalTranscript({
           onScroll={handleScroll}
         >
           <div
-            className={cn('flex min-h-full w-full flex-col gap-5', compact ? 'p-3' : 'px-4 py-4')}
+            className={cn('flex min-h-full w-full flex-col gap-1.5', compact ? 'p-3' : 'px-4 py-4')}
           >
             {headerContent}
             {hasEvents ? plainRows : null}
@@ -569,7 +562,7 @@ export function TerminalTranscript({
           onScroll={handleScroll}
         >
           <div
-            className={cn('flex min-h-full w-full flex-col gap-5', compact ? 'p-3' : 'px-4 py-4')}
+            className={cn('flex min-h-full w-full flex-col gap-1.5', compact ? 'p-3' : 'px-4 py-4')}
           >
             {headerContent}
             {visibleEvents.map((record) => (
@@ -590,7 +583,7 @@ export function TerminalTranscript({
 
   const totalSize = virtualizer.getTotalSize();
   const padding = compact ? 12 : 16;
-  const gap = 20; // gap-5 = 1.25rem = 20px
+  const gap = 6; // gap-1.5 = 0.375rem = 6px
 
   return (
     <div className={cn('relative h-full', className)}>
@@ -599,7 +592,7 @@ export function TerminalTranscript({
         className="h-full overflow-y-auto overscroll-contain"
         onScroll={handleScroll}
       >
-        <div className={cn('flex w-full flex-col gap-5', compact ? 'p-3' : 'px-4 py-4')}>
+        <div className={cn('flex w-full flex-col gap-1.5', compact ? 'p-3' : 'px-4 py-4')}>
           {headerContent}
         </div>
 
@@ -637,7 +630,7 @@ export function TerminalTranscript({
           </div>
         ) : null}
 
-        <div className={cn('flex w-full flex-col gap-5', compact ? 'px-3 pb-3' : 'px-4 pb-4')}>
+        <div className={cn('flex w-full flex-col gap-1.5', compact ? 'px-3 pb-3' : 'px-4 pb-4')}>
           {footerContent}
         </div>
       </div>

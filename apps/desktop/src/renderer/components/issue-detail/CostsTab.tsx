@@ -143,9 +143,7 @@ export function CostsTab({
           ))}
         </div>
       ) : tasks.length === 0 ? (
-        <div className="rounded-md border border-dashed border-border bg-secondary/10 px-4 py-8 text-center text-[12px] text-muted">
-          No cost data yet.
-        </div>
+        <p className="text-[11px] text-muted">No cost data yet.</p>
       ) : (
         <>
           {/* Summary */}
@@ -260,7 +258,7 @@ export function CostsTab({
               <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-secondary">
                 Current Run Models
               </h4>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="flex flex-col gap-1.5">
                 {(
                   [
                     { label: 'Planner', model: thread.plannerResolvedModel },
@@ -271,11 +269,8 @@ export function CostsTab({
                 )
                   .filter((entry) => entry.model)
                   .map((entry) => (
-                    <div
-                      key={entry.label}
-                      className="flex flex-col gap-0.5 rounded-md border border-border bg-secondary p-2"
-                    >
-                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted">
+                    <div key={entry.label} className="flex flex-col gap-0.5">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">
                         {entry.label}
                       </span>
                       <span className="truncate text-[11px] text-primary">

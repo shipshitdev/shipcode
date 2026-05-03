@@ -247,9 +247,12 @@ export function PlanHistoryTab({
       {activeThreadId &&
       !isPlanHistoryLoading &&
       normalizedThreadPlanHistory.length === 0 &&
-      normalizedPlanHistory.length === 0 &&
-      threadPhase !== PIPELINE_PHASE.failed ? (
-        <PlanWaiting threadId={activeThreadId} />
+      normalizedPlanHistory.length === 0 ? (
+        threadPhase === PIPELINE_PHASE.failed ? (
+          <p className="text-[12px] text-muted">No plan was produced before the pipeline failed.</p>
+        ) : (
+          <PlanWaiting threadId={activeThreadId} />
+        )
       ) : null}
 
       {!activeThreadId &&

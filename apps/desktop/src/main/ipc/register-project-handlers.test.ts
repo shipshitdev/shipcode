@@ -356,13 +356,8 @@ describe('registerProjectHandlers', () => {
 
       expect(execFileMock).toHaveBeenCalledTimes(1);
       expect(execFileMock).toHaveBeenCalledWith(
-        'osascript',
-        expect.arrayContaining([
-          'tell application "Terminal"',
-          'activate',
-          expect.stringContaining("do script \"cd '/tmp/ShipCode'"),
-          'end tell',
-        ]),
+        'open',
+        ['-a', 'Terminal', project.path],
         { timeout: 10_000 },
         expect.any(Function),
       );

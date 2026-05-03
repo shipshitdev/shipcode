@@ -376,21 +376,7 @@ async function openProjectPath(projectPath: string, target: ProjectOpenTarget): 
 
   const appName = PROJECT_OPEN_APP_NAMES[target];
   if (target === 'terminal') {
-    const shellCommand = `cd ${quoteForShell(projectPath)}`;
-    await execFileAsync(
-      'osascript',
-      [
-        '-e',
-        'tell application "Terminal"',
-        '-e',
-        'activate',
-        '-e',
-        `do script ${quoteForAppleScript(shellCommand)}`,
-        '-e',
-        'end tell',
-      ],
-      { timeout: 10_000 },
-    );
+    await execFileAsync('open', ['-a', appName, projectPath], { timeout: 10_000 });
     return;
   }
 
@@ -402,14 +388,6 @@ async function openProjectPath(projectPath: string, target: ProjectOpenTarget): 
   }
 
   await execFileAsync('open', ['-a', appName, projectPath], { timeout: 10_000 });
-}
-
-function quoteForShell(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
-function quoteForAppleScript(value: string): string {
-  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
 
 export function registerProjectHandlers({

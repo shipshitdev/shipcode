@@ -19,7 +19,11 @@ export function PullRequestsPanel() {
   const [filter, setFilter] = useState<PullRequestListFilter>('open');
   const queryClient = useQueryClient();
 
-  const { data: pullRequests = [], isLoading } = useQuery<PullRequestListItem[]>({
+  const {
+    data: pullRequests = [],
+    isLoading,
+    isFetching,
+  } = useQuery<PullRequestListItem[]>({
     queryKey: ['pull-requests', activeProjectId, filter],
     queryFn: () => {
       if (!activeProjectId) return Promise.resolve([]);
@@ -63,12 +67,16 @@ export function PullRequestsPanel() {
           <div className="flex-1" />
           <Button
             variant="ghost"
-            className="h-6 w-6 p-0 text-secondary"
+            className={cn(
+              'h-6 w-6 p-0 text-muted hover:text-primary',
+              isFetching && '[&_svg]:animate-spin',
+            )}
             onClick={() =>
               queryClient.invalidateQueries({ queryKey: ['pull-requests', activeProjectId] })
             }
+            disabled={isFetching}
           >
-            <RefreshCw size={12} />
+            <RefreshCw size={14} />
           </Button>
         </div>
 

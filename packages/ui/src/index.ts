@@ -17,6 +17,7 @@ export { PageHeader } from './PageHeader';
 export { PhaseChip } from './PhaseChip';
 export { PipelineStatus } from './PipelineStatus';
 export { PlanViewer } from './PlanViewer';
+export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './primitives/tooltip';
 export { ReviewViewer } from './ReviewViewer';
 export { SideBySideDiffViewer } from './SideBySideDiffViewer';
 export {

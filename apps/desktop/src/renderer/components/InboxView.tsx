@@ -6,7 +6,7 @@ import {
   type NotificationRecord,
   type Thread,
 } from '@shipcode/shared';
-import { PageHeader } from '@shipcode/ui';
+import { PageHeader, Tooltip, TooltipContent, TooltipTrigger } from '@shipcode/ui';
 import {
   Badge,
   Button,
@@ -20,7 +20,7 @@ import {
   TableRow,
 } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowUpDown, RefreshCw, X } from 'lucide-react';
+import { ArrowUpDown, Maximize2, RefreshCw, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { NOTIFICATIONS_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
@@ -205,40 +205,51 @@ export function InboxView() {
       <TableCell className="w-[1%] whitespace-nowrap align-top text-right">
         <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
           {n.projectId !== null && (
-            <Button
-              variant="ghost"
-              className="h-5 px-1.5 text-[10px] font-medium text-muted hover:text-primary hover:bg-elevated"
-              onClick={() => goToIssue(n)}
-              disabled={navigatingId === n.id}
-              title="Open issue"
-              aria-label={`Open issue: ${n.title}`}
-            >
-              View
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => goToIssue(n)}
+                  disabled={navigatingId === n.id}
+                  aria-label={`Open issue: ${n.title}`}
+                >
+                  <Maximize2 size={13} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Open issue</TooltipContent>
+            </Tooltip>
           )}
           {(n.kind === 'failed' || n.kind === 'verification_exhausted') && n.threadId && (
-            <Button
-              variant="ghost"
-              className="h-5 gap-1 px-1.5 text-[10px] font-medium text-muted hover:text-primary hover:bg-elevated"
-              onClick={() => retryPipeline.mutate(n.threadId as string)}
-              disabled={retryPipeline.isPending && retryPipeline.variables === n.threadId}
-              title="Retry pipeline"
-              aria-label={`Retry pipeline: ${n.title}`}
-            >
-              <RefreshCw size={12} />
-              Retry
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => retryPipeline.mutate(n.threadId as string)}
+                  disabled={retryPipeline.isPending && retryPipeline.variables === n.threadId}
+                  aria-label={`Retry pipeline: ${n.title}`}
+                >
+                  <RefreshCw size={13} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Retry pipeline</TooltipContent>
+            </Tooltip>
           )}
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={() => dismiss.mutate(n.id)}
-            disabled={dismiss.isPending && dismiss.variables === n.id}
-            title="Dismiss"
-            aria-label={`Dismiss notification: ${n.title}`}
-          >
-            <X size={14} />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => dismiss.mutate(n.id)}
+                disabled={dismiss.isPending && dismiss.variables === n.id}
+                aria-label={`Dismiss notification: ${n.title}`}
+              >
+                <X size={13} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Dismiss</TooltipContent>
+          </Tooltip>
         </div>
       </TableCell>
     </TableRow>

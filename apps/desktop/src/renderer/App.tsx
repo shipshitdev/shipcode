@@ -1,5 +1,6 @@
 import type { AppSettings, Project, TelemetryStatus } from '@shipcode/shared';
 import { CURRENT_ONBOARDING_VERSION } from '@shipcode/shared';
+import { TooltipProvider } from '@shipcode/ui';
 import { Button, Skeleton } from '@shipshitdev/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { lazy, Suspense, useEffect } from 'react';
@@ -254,66 +255,68 @@ export function App() {
   const hideMainContentForTerminal = terminalVisible && terminalMaximized;
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
-      <Titlebar />
-      <UpdateBanner />
-      <HealthBanner />
-      <ProjectPathBanner project={activeProject ?? null} />
-      <div className="flex flex-1 overflow-hidden">
-        {settingsVisible ? (
-          <SettingsSidebar />
-        ) : (
-          !hasActiveIssue && !hasActiveAutomationThread && <ProjectSidebar />
-        )}
-        {/* Center column — main view above, terminal below. */}
-        <div className="flex flex-col flex-1 overflow-hidden min-h-0">
-          {!hideMainContentForTerminal && (
-            <Suspense fallback={<ViewLoadingFallback />}>
-              <div className="flex flex-1 overflow-hidden min-h-0 bg-primary">
-                {hasActiveIssue ? (
-                  <IssueDetail />
-                ) : hasActiveAutomationThread ? (
-                  <AutomationRunDetail />
-                ) : settingsVisible ? (
-                  <SettingsPanel />
-                ) : viewMode === 'activity' ? (
-                  <ActivityView />
-                ) : viewMode === 'costs' ? (
-                  <CostsView />
-                ) : viewMode === 'skills' ? (
-                  <SkillsView />
-                ) : viewMode === 'automations' ? (
-                  <AutomationsView />
-                ) : viewMode === 'inbox' ? (
-                  <InboxView />
-                ) : showOverview ? (
-                  <OverviewView />
-                ) : showMissingProject && activeProject ? (
-                  <ProjectMissingView project={activeProject} />
-                ) : (
-                  <ProjectView />
-                )}
-              </div>
-            </Suspense>
+    <TooltipProvider delayDuration={400}>
+      <div className="flex h-screen flex-col overflow-hidden">
+        <Titlebar />
+        <UpdateBanner />
+        <HealthBanner />
+        <ProjectPathBanner project={activeProject ?? null} />
+        <div className="flex flex-1 overflow-hidden">
+          {settingsVisible ? (
+            <SettingsSidebar />
+          ) : (
+            !hasActiveIssue && !hasActiveAutomationThread && <ProjectSidebar />
           )}
-          {terminalVisible && <TerminalDrawer />}
+          {/* Center column — main view above, terminal below. */}
+          <div className="flex flex-col flex-1 overflow-hidden min-h-0">
+            {!hideMainContentForTerminal && (
+              <Suspense fallback={<ViewLoadingFallback />}>
+                <div className="flex flex-1 overflow-hidden min-h-0 bg-primary">
+                  {hasActiveIssue ? (
+                    <IssueDetail />
+                  ) : hasActiveAutomationThread ? (
+                    <AutomationRunDetail />
+                  ) : settingsVisible ? (
+                    <SettingsPanel />
+                  ) : viewMode === 'activity' ? (
+                    <ActivityView />
+                  ) : viewMode === 'costs' ? (
+                    <CostsView />
+                  ) : viewMode === 'skills' ? (
+                    <SkillsView />
+                  ) : viewMode === 'automations' ? (
+                    <AutomationsView />
+                  ) : viewMode === 'inbox' ? (
+                    <InboxView />
+                  ) : showOverview ? (
+                    <OverviewView />
+                  ) : showMissingProject && activeProject ? (
+                    <ProjectMissingView project={activeProject} />
+                  ) : (
+                    <ProjectView />
+                  )}
+                </div>
+              </Suspense>
+            )}
+            {terminalVisible && <TerminalDrawer />}
+          </div>
         </div>
+        <CommandPalette />
+        <Suspense fallback={null}>
+          <CreateIssueModal />
+          <CreateAutomationModal />
+          <ProjectSettingsModal />
+          <AddProjectExplorer />
+        </Suspense>
+        <TelemetryConsentDialog
+          open={
+            settings.telemetryEnabled == null &&
+            telemetryStatus?.dsnConfigured === true &&
+            telemetryStatus.envDisabled === false
+          }
+        />
+        <NotificationToaster />
       </div>
-      <CommandPalette />
-      <Suspense fallback={null}>
-        <CreateIssueModal />
-        <CreateAutomationModal />
-        <ProjectSettingsModal />
-        <AddProjectExplorer />
-      </Suspense>
-      <TelemetryConsentDialog
-        open={
-          settings.telemetryEnabled == null &&
-          telemetryStatus?.dsnConfigured === true &&
-          telemetryStatus.envDisabled === false
-        }
-      />
-      <NotificationToaster />
-    </div>
+    </TooltipProvider>
   );
 }
