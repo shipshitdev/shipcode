@@ -147,6 +147,7 @@ export function KanbanBoard({
   onRerun,
   onMarkDone,
   onCancel,
+  onCreatePr,
   baseBranch,
   branches,
   onBaseBranchChange,
@@ -724,6 +725,7 @@ export function KanbanBoard({
                       onMarkDone={col.key === 'done' ? handleMarkDone : undefined}
                       onArchiveAllDone={col.key === 'done' ? onArchiveAllDone : undefined}
                       onArchiveIssue={col.key === 'done' ? onArchiveIssue : undefined}
+                      onCreatePr={onCreatePr}
                       rerunningId={pendingIssueIdByAction.retry ?? null}
                       cancellingId={pendingIssueIdByAction.cancel ?? null}
                       markingDoneId={pendingIssueIdByAction.done ?? null}
@@ -761,6 +763,7 @@ export function KanbanBoard({
                     repoUrl={repoUrl}
                     onArchiveAllDone={col.key === 'done' ? onArchiveAllDone : undefined}
                     onArchiveIssue={col.key === 'done' ? onArchiveIssue : undefined}
+                    onCreatePr={onCreatePr}
                     issueBranchNameById={issueBranchNameById}
                     branchCopyIssueId={branchCopyToast?.issueId ?? null}
                     branchCopyStatus={branchCopyToast?.status ?? null}

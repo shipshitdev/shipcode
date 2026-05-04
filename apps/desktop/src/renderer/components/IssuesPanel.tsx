@@ -713,6 +713,35 @@ export function IssuesPanel() {
               log.error('[threadpanel] cancel failed', { issueNumber: issue.issueNumber, err });
             });
         }}
+        onCreatePr={
+          project?.gitRemote
+            ? (issue) => {
+                if (!issue.threadId) return;
+                return window.shipcode
+                  .invoke<{ prNumber: number; prUrl: string }>('pipeline:create-pr', {
+                    threadId: issue.threadId,
+                  })
+                  .then((result) => {
+                    if (result.prUrl) {
+                      window.shipcode
+                        .invoke('shell:open-external', { url: result.prUrl })
+                        .catch(() => {});
+                    }
+                    if (activeProjectId) refreshIssues.mutate(activeProjectId);
+                  })
+                  .catch((err) => {
+                    if (activeProjectId) refreshIssues.mutate(activeProjectId);
+                    log.error('[threadpanel] create-pr failed', {
+                      issueNumber: issue.issueNumber,
+                      err,
+                    });
+                    window.alert(
+                      `Failed to create PR for issue #${issue.issueNumber}: ${err?.message ?? err}`,
+                    );
+                  });
+              }
+            : undefined
+        }
         autoRunCount={autoRunCountData?.count ?? 0}
         autoRunPriorities={autoRunPriorities}
         onAutoRunPrioritiesChange={(priorities) => {

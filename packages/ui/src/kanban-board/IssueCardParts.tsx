@@ -1,7 +1,19 @@
 'use client';
 
 import { useDraggable } from '@dnd-kit/core';
-import { Archive, Check, Copy, Loader2, Lock, Maximize2 } from 'lucide-react';
+import {
+  Archive,
+  Check,
+  Copy,
+  GitPullRequest,
+  Loader2,
+  Lock,
+  Maximize2,
+  MoreVertical,
+  Play,
+  RefreshCw,
+  Square,
+} from 'lucide-react';
 import { memo } from 'react';
 import { IssueHoverCard } from '@/kanban-board/IssueHoverCard';
 import { modelDisplay } from '@/lib/model-display';
@@ -13,6 +25,13 @@ import { cn } from '@/lib/utils';
 import { PhaseChip } from '@/PhaseChip';
 import { Badge } from '@/primitives/badge';
 import { Button } from '@/primitives/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/primitives/dropdown-menu';
 import { ACTIVE_STATUSES, DRAGGABLE_STATUSES, PHASE_ELAPSED_STATUSES } from './constants';
 import type {
   IssueApprovalBadge,
@@ -109,6 +128,7 @@ interface DraggableCardProps {
   onOpenPullRequest?: (url: string) => void;
   onCopyBranchName?: (issue: GitHubIssueCacheRecord, branchName: string) => void;
   onMarkDone?: (issue: GitHubIssueCacheRecord) => void;
+  onCreatePr?: (issue: GitHubIssueCacheRecord) => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
   issueGithubUrl?: string | null;
   branchName?: string | null;
@@ -138,6 +158,7 @@ function DraggableCardComponent({
   onOpenPullRequest,
   onCopyBranchName,
   onMarkDone,
+  onCreatePr,
   onArchiveIssue,
   issueGithubUrl,
   branchName,
@@ -294,35 +315,6 @@ function DraggableCardComponent({
           )}
         <StalenessDot staleness={staleness} className="absolute right-2 bottom-2 z-10" />
         <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-1">
-          {branchName && onCopyBranchName && !isCreating && !isAutomation && (
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className={cn(
-                'text-muted/60 opacity-0 transition-opacity hover:bg-muted/10 group-hover:opacity-100',
-                branchCopyState === 'copied'
-                  ? 'text-success hover:text-success'
-                  : branchCopyState === 'error'
-                    ? 'text-danger hover:text-danger'
-                    : 'hover:text-primary',
-              )}
-              title={
-                branchCopyState === 'copied'
-                  ? 'Copied!'
-                  : branchCopyState === 'error'
-                    ? 'Clipboard write failed'
-                    : `Copy branch name (${branchName})`
-              }
-              aria-label={`Copy branch name for issue #${issue.issueNumber}`}
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation();
-                onCopyBranchName(issue, branchName);
-              }}
-            >
-              {branchCopyState === 'copied' ? <Check size={14} /> : <Copy size={14} />}
-            </Button>
-          )}
           {!isCreating && (
             <Button
               variant="ghost"
@@ -339,26 +331,85 @@ function DraggableCardComponent({
               <Maximize2 size={14} />
             </Button>
           )}
-          {isDone && onArchiveIssue && !isAutomation && (
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="text-muted/60 opacity-0 transition-opacity hover:bg-muted/10 hover:text-muted group-hover:opacity-100"
-              title="Archive issue"
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation();
-                onArchiveIssue(issue);
-              }}
-            >
-              <Archive size={14} />
-            </Button>
+          {!isCreating && !readOnly && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  className="text-muted/60 opacity-0 transition-opacity hover:bg-muted/10 hover:text-primary group-hover:opacity-100"
+                  title="More actions"
+                  aria-label="More actions"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <MoreVertical size={14} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => event.stopPropagation()}
+              >
+                {branchName && onCopyBranchName && !isAutomation && (
+                  <DropdownMenuItem onClick={() => onCopyBranchName(issue, branchName)}>
+                    {branchCopyState === 'copied' ? <Check size={14} /> : <Copy size={14} />}
+                    {branchCopyState === 'copied' ? 'Copied!' : 'Copy branch'}
+                  </DropdownMenuItem>
+                )}
+                {isTodo && onStartPipeline && !isAutomation && (
+                  <DropdownMenuItem onClick={() => onStartPipeline(issue)}>
+                    <Play size={14} />
+                    Start Pipeline
+                  </DropdownMenuItem>
+                )}
+                {isActive && onCancel && (
+                  <DropdownMenuItem
+                    className="text-danger focus:text-danger"
+                    onClick={() => onCancel(issue)}
+                  >
+                    <Square size={14} />
+                    Cancel
+                  </DropdownMenuItem>
+                )}
+                {isFailed && onRerun && (
+                  <DropdownMenuItem onClick={() => onRerun(issue)}>
+                    <RefreshCw size={14} />
+                    Retry
+                  </DropdownMenuItem>
+                )}
+                {isCompleted && onCreatePr && !issue.linkedPrNumber && (
+                  <DropdownMenuItem onClick={() => onCreatePr(issue)}>
+                    <GitPullRequest size={14} />
+                    Create PR
+                  </DropdownMenuItem>
+                )}
+                {(isCompleted || isFailed) && onMarkDone && (
+                  <DropdownMenuItem onClick={() => onMarkDone(issue)}>
+                    <Check size={14} />
+                    Mark as Done
+                  </DropdownMenuItem>
+                )}
+                {isDone && onArchiveIssue && !isAutomation && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-muted focus:text-muted"
+                      onClick={() => onArchiveIssue(issue)}
+                    >
+                      <Archive size={14} />
+                      Archive
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
         <div
           className={cn(
             'relative flex min-w-0 items-center justify-between gap-2',
-            branchName && onCopyBranchName && !isAutomation ? 'pr-12' : 'pr-7',
+            readOnly ? 'pr-7' : 'pr-12',
           )}
         >
           <div className="flex min-w-0 flex-1 items-center gap-1.5">

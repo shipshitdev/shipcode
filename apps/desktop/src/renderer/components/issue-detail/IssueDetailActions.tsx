@@ -1,19 +1,10 @@
 import type { ClarificationAnswer, ClarificationRequest, Thread } from '@shipcode/shared';
 import { PIPELINE_PHASE } from '@shipcode/shared';
-import {
-  Badge,
-  Button,
-  cn,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  Textarea,
-} from '@shipshitdev/ui';
+import { Badge, Button, cn, Textarea } from '@shipshitdev/ui';
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
-import { ChevronDown, ChevronUp, Copy } from 'lucide-react';
+import { ChevronDown, ChevronUp, Copy, GitPullRequest } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { ApprovalSection } from './ApprovalSection';
 import {
   getFailurePresentation,
   PIPELINE_PREVIEW_PHASES,
@@ -57,6 +48,11 @@ interface IssueDetailActionsProps {
   onShowRawOutputChange: (show: boolean) => void;
   onStartPipeline: () => void;
   onSubmitClarification: (answers: ClarificationAnswer[]) => Promise<void>;
+  // Create PR
+  canCreatePr?: boolean;
+  isCreatingPr?: boolean;
+  createPrError?: string | null;
+  onCreatePr?: () => void;
 }
 
 function buildClarificationDraft(
@@ -260,108 +256,6 @@ function ClarificationSection({
   );
 }
 
-function ApprovalSection({
-  approveError,
-  canApprove,
-  isSubmitting,
-  onApprove,
-  onCancel,
-  onReject,
-}: {
-  approveError: string | null;
-  canApprove: boolean;
-  isSubmitting: boolean;
-  onApprove: () => void;
-  onCancel: () => void;
-  onReject: (feedback: string) => void;
-}) {
-  const [pendingAction, setPendingAction] = useState<'approve' | 'request_changes' | 'cancel'>(
-    'approve',
-  );
-  const [feedback, setFeedback] = useState('');
-
-  const handleReject = () => {
-    const trimmed = feedback.trim();
-    if (!trimmed) return;
-    onReject(trimmed);
-    setFeedback('');
-    setPendingAction('approve');
-  };
-
-  return (
-    <div className="rounded-md border border-border bg-secondary p-3">
-      <div
-        className={
-          pendingAction === 'request_changes'
-            ? 'mb-3 flex items-center gap-2'
-            : 'flex items-center gap-2'
-        }
-      >
-        <Select
-          value={pendingAction}
-          onValueChange={(value) =>
-            setPendingAction(value as 'approve' | 'request_changes' | 'cancel')
-          }
-          disabled={isSubmitting}
-        >
-          <SelectTrigger className="h-8 w-48 text-[12px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="approve">Approve &amp; Execute</SelectItem>
-            <SelectItem value="request_changes">Request Changes</SelectItem>
-            <SelectItem value="cancel">Cancel pipeline</SelectItem>
-          </SelectContent>
-        </Select>
-        {pendingAction === 'approve' && (
-          <Button
-            size="sm"
-            onClick={onApprove}
-            disabled={isSubmitting || !canApprove}
-            title={
-              !canApprove ? 'No plan content found - use Request Changes or Cancel' : undefined
-            }
-          >
-            <LoadingButtonContent loading={isSubmitting}>Confirm</LoadingButtonContent>
-          </Button>
-        )}
-        {pendingAction === 'cancel' && (
-          <Button size="sm" variant="destructive" onClick={onCancel} disabled={isSubmitting}>
-            <LoadingButtonContent loading={isSubmitting}>Confirm cancel</LoadingButtonContent>
-          </Button>
-        )}
-      </div>
-      {pendingAction === 'request_changes' && (
-        <div className="flex flex-col gap-2">
-          <Textarea
-            value={feedback}
-            onChange={(event) => setFeedback(event.target.value)}
-            placeholder="Tell the planner what to change before the next pass..."
-            rows={4}
-          />
-          <div className="flex justify-end">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handleReject}
-              disabled={!feedback.trim() || isSubmitting}
-            >
-              <LoadingButtonContent loading={isSubmitting}>
-                Resume planning with feedback
-              </LoadingButtonContent>
-            </Button>
-          </div>
-        </div>
-      )}
-      {approveError && (
-        <p className="mt-2 text-[11px] text-danger">
-          {approveError} <span className="text-muted">(full trace in devtools console)</span>
-        </p>
-      )}
-    </div>
-  );
-}
-
 export function IssueDetailActions({
   approveError,
   approvedAwaitingExecution,
@@ -390,6 +284,10 @@ export function IssueDetailActions({
   onShowRawOutputChange,
   onStartPipeline,
   onSubmitClarification,
+  canCreatePr,
+  isCreatingPr,
+  createPrError,
+  onCreatePr,
 }: IssueDetailActionsProps) {
   const failurePresentation = getFailurePresentation(
     thread?.lastError ?? failingPhaseOutput,
@@ -626,18 +524,34 @@ export function IssueDetailActions({
         {thread?.totalCostUsd ? (
           <span className="text-[11px] text-muted">· ${thread.totalCostUsd.toFixed(4)}</span>
         ) : null}
+        {createPrError && <span className="text-[11px] text-destructive">{createPrError}</span>}
       </div>
-      <Button
-        type="button"
-        size="sm"
-        onClick={() => {
-          onMarkAsDone();
-        }}
-        disabled={isSubmitting}
-        className="bg-purple-600 text-white hover:bg-purple-500"
-      >
-        Mark As Done
-      </Button>
+      <div className="flex items-center gap-2">
+        {canCreatePr && onCreatePr && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={onCreatePr}
+            disabled={isSubmitting || !!isCreatingPr}
+            className="gap-1"
+          >
+            <GitPullRequest className="h-3 w-3" />
+            <LoadingButtonContent loading={!!isCreatingPr}>Create PR</LoadingButtonContent>
+          </Button>
+        )}
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => {
+            onMarkAsDone();
+          }}
+          disabled={isSubmitting}
+          className="bg-purple-600 text-white hover:bg-purple-500"
+        >
+          Mark As Done
+        </Button>
+      </div>
     </div>
   ) : null;
 

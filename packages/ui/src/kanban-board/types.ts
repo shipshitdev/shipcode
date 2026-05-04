@@ -30,6 +30,7 @@ export interface KanbanBoardProps {
   onRerun?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
   onMarkDone?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
   onCancel?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
+  onCreatePr?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
   baseBranch?: string;
   branches?: string[];
   onBaseBranchChange?: (branch: string) => void;

@@ -45,7 +45,7 @@ import {
   DropdownMenuTrigger,
 } from '@shipshitdev/ui';
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Archive, ArrowLeft, Check, CircleCheck, CircleDot, Copy } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
@@ -527,6 +527,25 @@ export function IssueDetail() {
     !!latestPlan &&
     latestPlan.status !== 'approved';
   const canApprove = hasApprovalDecision && !!(latestPlan?.structured || latestPlan?.rawOutput);
+
+  // Create PR
+  const createPr = useMutation({
+    mutationFn: (tid: string) =>
+      window.shipcode.invoke<{ prNumber: number; prUrl: string }>('pipeline:create-pr', {
+        threadId: tid,
+      }),
+    onSuccess: (_data, tid) => {
+      queryClient.invalidateQueries({ queryKey: ['thread', tid] });
+      if (activeProjectId) {
+        queryClient.invalidateQueries({ queryKey: ['github-issues', activeProjectId] });
+      }
+    },
+  });
+  const canCreatePr =
+    activeIssue?.pipelineStatus === ISSUE_PIPELINE_STATUS.completed &&
+    !activeIssue.linkedPrNumber &&
+    !!thread?.githubRepo;
+
   if (!activeIssue) return null;
 
   const refreshIssueState = async () => {
@@ -1389,6 +1408,14 @@ export function IssueDetail() {
     onShowRawOutputChange: setShowRawOutput,
     onStartPipeline: () => void handleStartPipeline(),
     onSubmitClarification: handleSubmitClarification,
+    canCreatePr,
+    isCreatingPr: createPr.isPending,
+    createPrError: createPr.isError
+      ? createPr.error instanceof Error
+        ? createPr.error.message
+        : 'Failed to create PR'
+      : null,
+    onCreatePr: activeThreadId ? () => createPr.mutate(activeThreadId) : undefined,
   });
 
   const detailTabs = (

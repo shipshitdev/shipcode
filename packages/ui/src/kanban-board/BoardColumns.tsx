@@ -66,6 +66,7 @@ interface DroppableColumnProps {
   selectedIssueNumber?: number;
   onArchiveAllDone?: () => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
+  onCreatePr?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
   repoUrl?: string | null;
   issueBranchNameById?: Map<string, string>;
   branchCopyIssueId?: string | null;
@@ -96,6 +97,7 @@ export function DroppableColumn({
   selectedIssueNumber,
   onArchiveAllDone,
   onArchiveIssue,
+  onCreatePr,
   repoUrl,
   issueBranchNameById,
   branchCopyIssueId,
@@ -172,6 +174,7 @@ export function DroppableColumn({
             isKeyboardFocused={issue.id === focusedIssueId}
             isStartingPipeline={issue.id === startingPipelineId}
             onArchiveIssue={onArchiveIssue}
+            onCreatePr={onCreatePr}
             readOnly={readOnly}
             isFlashing={flashingIssueIds?.has(issue.id) ?? false}
           />
@@ -195,6 +198,7 @@ interface SectionBlockProps {
   onCopyBranchName?: (issue: GitHubIssueCacheRecord, branchName: string) => void;
   onMarkDone?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
+  onCreatePr?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
   onArchiveAllDone?: () => void;
   selectedIssueNumber?: number;
   rerunningId?: string | null;
@@ -228,6 +232,7 @@ function SectionBlock({
   onCopyBranchName,
   onMarkDone,
   onArchiveIssue,
+  onCreatePr,
   onArchiveAllDone,
   selectedIssueNumber,
   rerunningId,
@@ -343,6 +348,7 @@ function SectionBlock({
               isCancelling={issue.id === cancellingId}
               isMarkingDone={issue.id === markingDoneId}
               onArchiveIssue={columnKey === 'done' ? onArchiveIssue : undefined}
+              onCreatePr={onCreatePr}
               readOnly={readOnly}
               isFlashing={flashingIssueIds?.has(issue.id) ?? false}
             />
@@ -374,6 +380,7 @@ interface StackedColumnProps {
   onMarkDone?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
   onArchiveAllDone?: () => void;
   onArchiveIssue?: (issue: GitHubIssueCacheRecord) => void;
+  onCreatePr?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
   selectedIssueNumber?: number;
   rerunningId?: string | null;
   cancellingId?: string | null;
@@ -405,6 +412,7 @@ export function StackedColumn({
   onMarkDone,
   onArchiveAllDone,
   onArchiveIssue,
+  onCreatePr,
   selectedIssueNumber,
   rerunningId,
   cancellingId,
@@ -491,6 +499,7 @@ export function StackedColumn({
             onCopyBranchName={onCopyBranchName}
             onMarkDone={onMarkDone}
             onArchiveIssue={onArchiveIssue}
+            onCreatePr={onCreatePr}
             onArchiveAllDone={section.key === 'done' ? onArchiveAllDone : undefined}
             selectedIssueNumber={selectedIssueNumber}
             rerunningId={rerunningId}

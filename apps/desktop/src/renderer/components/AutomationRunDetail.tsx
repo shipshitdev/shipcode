@@ -2,6 +2,7 @@ import type { DiffRecord, PipelinePhase, PlanRecord, ReviewRecord, Thread } from
 import { formatCost, formatTokenCount, githubCompareUrl, PIPELINE_PHASE } from '@shipcode/shared';
 import { PhaseChip } from '@shipcode/ui';
 import { Badge, Button, cn, Tabs, TabsContent, TabsList, TabsTrigger } from '@shipshitdev/ui';
+import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -19,6 +20,7 @@ import {
   getAutomationRunTotalTokens,
 } from '../features/automations/run-presentation';
 import { useAppStore } from '../stores/app-store';
+import { ApprovalSection } from './issue-detail/ApprovalSection';
 import { DiffTab } from './issue-detail/DiffTab';
 import { ACTIVE_PHASES } from './issue-detail/helpers';
 import { PlanHistoryTab } from './issue-detail/PlanHistoryTab';
@@ -34,7 +36,8 @@ export function AutomationRunDetail() {
   const [expandedPlanId, setExpandedPlanId] = useState<string | null | undefined>(null);
   const [planHistoryCollapsed, setPlanHistoryCollapsed] = useState(false);
   const [copiedBranch, setCopiedBranch] = useState(false);
-  const [isMarkingDone, setIsMarkingDone] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [approveError, setApproveError] = useState<string | null>(null);
 
   const { data: thread } = useQuery<Thread | null>({
     queryKey: ['thread', threadId],
@@ -45,7 +48,10 @@ export function AutomationRunDetail() {
     enabled: !!threadId,
     refetchInterval: (query) => {
       const t = query.state.data;
-      return t && ACTIVE_PHASES.includes(t.status as PipelinePhase) ? 5_000 : false;
+      if (!t) return false;
+      if (ACTIVE_PHASES.includes(t.status as PipelinePhase)) return 5_000;
+      if (t.status === PIPELINE_PHASE.awaitingApproval) return 5_000;
+      return false;
     },
   });
 
@@ -94,12 +100,28 @@ export function AutomationRunDetail() {
     return [{ threadId, plans, runNumber: 1, isCurrentRun: true }];
   }, [threadId, plans]);
 
+  // Approval derived state
+  const latestPlan = plans[0] ?? null;
+  const threadPhase = thread?.status;
+  const approvedAwaitingExecution =
+    threadPhase === PIPELINE_PHASE.awaitingApproval && latestPlan?.status === 'approved';
+  const hasApprovalDecision =
+    threadPhase === PIPELINE_PHASE.awaitingApproval &&
+    !!latestPlan &&
+    latestPlan.status !== 'approved';
+  const canApprove = hasApprovalDecision && !!(latestPlan?.structured || latestPlan?.rawOutput);
+
   const handleClose = useCallback(() => selectAutomationThread(null), [selectAutomationThread]);
 
   const handleCancel = useCallback(async () => {
     if (!threadId) return;
-    await window.shipcode.invoke('pipeline:cancel', { threadId });
-    queryClient.invalidateQueries({ queryKey: ['thread', threadId] });
+    setIsSubmitting(true);
+    try {
+      await window.shipcode.invoke('pipeline:cancel', { threadId });
+      queryClient.invalidateQueries({ queryKey: ['thread', threadId] });
+    } finally {
+      setIsSubmitting(false);
+    }
   }, [threadId, queryClient]);
 
   const handleRetry = useCallback(async () => {
@@ -108,9 +130,41 @@ export function AutomationRunDetail() {
     queryClient.invalidateQueries({ queryKey: ['thread', threadId] });
   }, [threadId, queryClient]);
 
+  const handleApprove = useCallback(async () => {
+    if (!threadId || !canApprove) return;
+    setIsSubmitting(true);
+    setApproveError(null);
+    try {
+      await window.shipcode.invoke('pipeline:approve', { threadId });
+      queryClient.invalidateQueries({ queryKey: ['thread', threadId] });
+      queryClient.invalidateQueries({ queryKey: ['plan-history-automation', threadId] });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setApproveError(msg.split('\n')[0].slice(0, 280));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [threadId, canApprove, queryClient]);
+
+  const handleReject = useCallback(
+    async (feedback: string) => {
+      const trimmed = feedback.trim();
+      if (!threadId || !trimmed) return;
+      setIsSubmitting(true);
+      try {
+        await window.shipcode.invoke('pipeline:reject', { threadId, feedback: trimmed });
+        queryClient.invalidateQueries({ queryKey: ['thread', threadId] });
+        queryClient.invalidateQueries({ queryKey: ['plan-history-automation', threadId] });
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [threadId, queryClient],
+  );
+
   const handleMarkAsDone = useCallback(async () => {
     if (!threadId) return;
-    setIsMarkingDone(true);
+    setIsSubmitting(true);
     try {
       await window.shipcode.invoke('thread:mark-done', { threadId });
       queryClient.invalidateQueries({ queryKey: ['thread', threadId] });
@@ -123,7 +177,7 @@ export function AutomationRunDetail() {
         });
       }
     } finally {
-      setIsMarkingDone(false);
+      setIsSubmitting(false);
     }
   }, [threadId, thread?.projectId, thread?.automationId, queryClient]);
 
@@ -210,10 +264,10 @@ export function AutomationRunDetail() {
             size="sm"
             className="h-6 gap-1 px-2 text-[11px] border-purple-500/40 text-purple-400 hover:border-purple-500 hover:bg-purple-500/10"
             onClick={handleMarkAsDone}
-            disabled={isMarkingDone}
+            disabled={isSubmitting}
           >
             <CheckCircle2 className="h-3 w-3" />
-            {isMarkingDone ? 'Marking…' : 'Done'}
+            {isSubmitting ? 'Marking…' : 'Done'}
           </Button>
         )}
       </div>
@@ -227,6 +281,50 @@ export function AutomationRunDetail() {
             </span>
           )}
           <p className="mt-0.5 text-xs text-destructive">{thread.lastError}</p>
+        </div>
+      )}
+
+      {/* Approval section */}
+      {hasApprovalDecision && (
+        <div className="shrink-0 border-b border-border px-4 py-3">
+          <ApprovalSection
+            key={threadId ?? 'approval'}
+            approveError={approveError}
+            canApprove={canApprove}
+            isSubmitting={isSubmitting}
+            onApprove={handleApprove}
+            onCancel={handleCancel}
+            onReject={handleReject}
+          />
+        </div>
+      )}
+      {approvedAwaitingExecution && (
+        <div className="shrink-0 border-b border-border px-4 py-3">
+          <div className="rounded-md border border-border bg-secondary p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <Badge variant="success" className="text-[10px]">
+                    Approved
+                  </Badge>
+                  <Badge variant="warning" className="text-[10px]">
+                    Waiting For Execution Slot
+                  </Badge>
+                </div>
+                <p className="text-[12px] leading-relaxed text-secondary">
+                  Approval is confirmed. Execution starts when current slot frees up.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={handleCancel}
+                disabled={isSubmitting}
+              >
+                <LoadingButtonContent loading={isSubmitting}>Cancel</LoadingButtonContent>
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 
