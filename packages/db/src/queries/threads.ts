@@ -155,6 +155,12 @@ export class ThreadQueries {
       .run(id);
   }
 
+  clearDoneAt(id: string): void {
+    this.db
+      .prepare(`UPDATE threads SET done_at = NULL, updated_at = ${ISO_NOW_SQL} WHERE id = ?`)
+      .run(id);
+  }
+
   recordFailure(id: string, failurePhase: string, lastError?: string): void {
     this.db
       .prepare(

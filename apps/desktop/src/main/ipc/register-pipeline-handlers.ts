@@ -451,6 +451,11 @@ export function registerPipelineHandlers({
     const thread = queries.threads.getById(threadId);
     if (!thread) throw new Error(`Thread ${threadId} not found`);
 
+    // Clear any previous "done" marker so a retried thread doesn't stay classified as done.
+    if (thread.doneAt) {
+      queries.threads.clearDoneAt(threadId);
+    }
+
     const project = queries.projects.getById(thread.projectId);
     if (!project) throw new Error(`Project ${thread.projectId} not found`);
 

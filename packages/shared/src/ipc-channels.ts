@@ -168,6 +168,7 @@ export interface IpcInvokeChannels {
   'thread-panel:get-data': { args: { projectId: string }; result: ThreadPanelData };
   'thread:create': { args: { projectId: string; prompt: string }; result: Thread };
   'thread:get': { args: { threadId: string }; result: Thread | null };
+  'thread:mark-done': { args: { threadId: string }; result: undefined };
   'checkpoint:list': { args: { threadId: string }; result: PipelineCheckpoint[] };
   'checkpoint:restore': {
     args: { threadId: string; checkpointId: string };

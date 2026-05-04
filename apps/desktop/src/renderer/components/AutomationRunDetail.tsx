@@ -5,6 +5,7 @@ import { Badge, Button, cn, Tabs, TabsContent, TabsList, TabsTrigger } from '@sh
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
+  CheckCircle2,
   Copy,
   ExternalLink,
   GitBranch,
@@ -33,6 +34,7 @@ export function AutomationRunDetail() {
   const [expandedPlanId, setExpandedPlanId] = useState<string | null | undefined>(null);
   const [planHistoryCollapsed, setPlanHistoryCollapsed] = useState(false);
   const [copiedBranch, setCopiedBranch] = useState(false);
+  const [isMarkingDone, setIsMarkingDone] = useState(false);
 
   const { data: thread } = useQuery<Thread | null>({
     queryKey: ['thread', threadId],
@@ -106,6 +108,25 @@ export function AutomationRunDetail() {
     queryClient.invalidateQueries({ queryKey: ['thread', threadId] });
   }, [threadId, queryClient]);
 
+  const handleMarkAsDone = useCallback(async () => {
+    if (!threadId) return;
+    setIsMarkingDone(true);
+    try {
+      await window.shipcode.invoke('thread:mark-done', { threadId });
+      queryClient.invalidateQueries({ queryKey: ['thread', threadId] });
+      if (thread?.projectId) {
+        queryClient.invalidateQueries({ queryKey: ['thread-panel-data', thread.projectId] });
+      }
+      if (thread?.automationId) {
+        queryClient.invalidateQueries({
+          queryKey: ['automation-run-history', thread.automationId],
+        });
+      }
+    } finally {
+      setIsMarkingDone(false);
+    }
+  }, [threadId, thread?.projectId, thread?.automationId, queryClient]);
+
   const handleCopyBranch = useCallback((branch: string) => {
     navigator.clipboard.writeText(branch);
     setCopiedBranch(true);
@@ -138,6 +159,9 @@ export function AutomationRunDetail() {
   const totalTokens = thread ? getAutomationRunTotalTokens(thread) : 0;
   const isFailed =
     thread?.status === PIPELINE_PHASE.failed || thread?.status === PIPELINE_PHASE.idle;
+  const isCompleted = thread?.status === PIPELINE_PHASE.completed;
+  const isDone = !!thread?.doneAt;
+  const canMarkDone = (isFailed || isCompleted) && !isDone;
   const hasError = !!thread?.lastError;
 
   return (
@@ -178,6 +202,18 @@ export function AutomationRunDetail() {
           >
             <RefreshCw className="h-3 w-3" />
             Retry
+          </Button>
+        )}
+        {canMarkDone && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-6 gap-1 px-2 text-[11px] border-purple-500/40 text-purple-400 hover:border-purple-500 hover:bg-purple-500/10"
+            onClick={handleMarkAsDone}
+            disabled={isMarkingDone}
+          >
+            <CheckCircle2 className="h-3 w-3" />
+            {isMarkingDone ? 'Marking…' : 'Done'}
           </Button>
         )}
       </div>

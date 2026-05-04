@@ -638,6 +638,22 @@ export function registerProjectHandlers({
     return queries.threads.getById(threadId);
   });
 
+  ipcMain.handle('thread:mark-done', (_event, { threadId }: { threadId: string }) => {
+    const thread = queries.threads.getById(threadId);
+    if (!thread) throw new Error(`Thread ${threadId} not found`);
+
+    const MARKABLE_STATUSES: ReadonlySet<string> = new Set([
+      PIPELINE_PHASE.failed,
+      PIPELINE_PHASE.completed,
+      PIPELINE_PHASE.idle,
+    ]);
+    if (!MARKABLE_STATUSES.has(thread.status)) {
+      throw new Error(`Cannot mark thread as done while in ${thread.status} phase`);
+    }
+
+    queries.threads.markDone(threadId);
+  });
+
   ipcMain.handle('checkpoint:list', (_event, { threadId }: { threadId: string }) => {
     return queries.checkpoints.list(threadId);
   });

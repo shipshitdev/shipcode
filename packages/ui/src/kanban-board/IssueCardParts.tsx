@@ -173,7 +173,6 @@ function DraggableCardComponent({
   const isTodo = issue.pipelineStatus === ISSUE_PIPELINE_STATUS.todo;
   const isCompleted = issue.pipelineStatus === ISSUE_PIPELINE_STATUS.completed;
   const isDone = issue.pipelineStatus === ISSUE_PIPELINE_STATUS.done;
-  const isDoneState = isCompleted || isDone;
   const showPhaseElapsed =
     PHASE_ELAPSED_STATUSES.includes(issue.pipelineStatus) && !!issue.lastPhaseUpdate;
   const phaseSince =
@@ -416,8 +415,10 @@ function DraggableCardComponent({
             </span>
           )}
         </div>
-        <div className="relative z-10 mt-1 line-clamp-2 w-full min-w-0 text-[13px] font-medium leading-snug text-primary">
-          {issue.title}
+        <div className="relative z-10 mt-1 w-full min-w-0">
+          <span className="line-clamp-2 text-[13px] font-medium leading-snug text-primary">
+            {issue.title}
+          </span>
         </div>
         <div className="relative z-10 mt-auto flex flex-wrap items-center gap-1.5 pt-2">
           {priorityBadge ? (
@@ -669,8 +670,10 @@ export function DragOverlayCard({
       )}
     >
       <div className="font-mono text-[11px] text-muted">{referenceLabel}</div>
-      <div className="mt-1 line-clamp-2 w-full min-w-0 text-[13px] font-medium leading-snug text-primary">
-        {issue.title}
+      <div className="mt-1 w-full min-w-0">
+        <span className="line-clamp-2 text-[13px] font-medium leading-snug text-primary">
+          {issue.title}
+        </span>
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         {priorityBadge ? (

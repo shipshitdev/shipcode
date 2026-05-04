@@ -120,8 +120,10 @@ export function ActivePipelineCard({
         </span>
       </div>
 
-      <div className="relative z-10 mt-1 line-clamp-2 w-full min-w-0 text-[13px] font-medium leading-snug text-primary">
-        {title}
+      <div className="relative z-10 mt-1 w-full min-w-0">
+        <span className="line-clamp-2 text-[13px] font-medium leading-snug text-primary">
+          {title}
+        </span>
       </div>
 
       <div className="relative z-10 mt-auto flex flex-wrap items-center gap-1.5 pt-2">
