@@ -17,9 +17,11 @@ import {
   type GitHubPrCheckSummary,
   type GitHubPrReviewCommentSummary,
   isRealGithubIssueNumber,
+  MAX_NODE_VERIFICATION_RETRIES,
   MAX_TEST_RETRIES,
   MAX_VERIFICATION_RETRIES,
   PIPELINE_PHASE,
+  VERIFICATION_FENCE_TAG,
   parseUnifiedDiff,
   type ShipCodePlan,
 } from '@shipcode/shared';
@@ -280,6 +282,172 @@ export function createExecutionPhaseHandlers({
     );
   }
 
+  // ─── Per-node verification helpers ───────────────────────────────────────────
+
+  function captureNodeAnchorSha(context: PipelineContext): string {
+    const cwd = context.worktreePath ?? context.projectPath;
+    try {
+      return execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf-8' }).trim();
+    } catch {
+      return '';
+    }
+  }
+
+  function computeNodeDiff(context: PipelineContext, anchorSha: string): string {
+    if (!anchorSha) return '';
+    const cwd = context.worktreePath ?? context.projectPath;
+    try {
+      // Commit any uncommitted work so git diff captures it
+      const dirty = execFileSync('git', ['status', '--porcelain'], {
+        cwd,
+        encoding: 'utf-8',
+      }).trim();
+      if (dirty) {
+        execFileSync('git', ['add', '-A'], { cwd, encoding: 'utf-8' });
+        execFileSync('git', ['commit', '--no-verify', '-m', '[shipcode] node checkpoint'], {
+          cwd,
+          encoding: 'utf-8',
+        });
+      }
+      return execFileSync('git', ['diff', `${anchorSha}..HEAD`], {
+        cwd,
+        encoding: 'utf-8',
+        maxBuffer: 5 * 1024 * 1024,
+      });
+    } catch {
+      return '';
+    }
+  }
+
+  function buildNodeVerificationPrompt(
+    node: TaskNodeRecord,
+    diff: string,
+    threadId: string,
+    planId: string,
+  ): string {
+    const criteria = node.acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join('\n');
+
+    return `You are a code verifier evaluating a single task node from a larger implementation plan.
+
+<task_node>
+Key: ${node.stableKey}
+Title: ${node.title}
+Description: ${node.description.slice(0, 500)}
+</task_node>
+
+<acceptance_criteria>
+${criteria}
+</acceptance_criteria>
+
+<implementation_diff>
+${diff.slice(0, 60_000)}
+</implementation_diff>
+
+Review the diff above against the acceptance criteria for this specific node.
+Be STRICT about structural correctness (compilation errors, missing exports, broken interfaces)
+but LENIENT about completeness of later nodes — this node may be intentionally partial.
+
+Output ONLY a fenced block in this exact format:
+\`\`\`${VERIFICATION_FENCE_TAG}
+{
+  "threadId": "${threadId}",
+  "planId": "${planId}",
+  "result": "passed or failed",
+  "summary": "One sentence assessment",
+  "criteriaResults": [
+    { "criterion": "...", "passed": true, "evidence": "..." }
+  ],
+  "issues": [
+    { "severity": "blocker or warning", "description": "...", "filePath": "optional" }
+  ]
+}
+\`\`\`
+
+Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
+  }
+
+  function formatNodeVerificationFailureFeedback(
+    node: TaskNodeRecord,
+    retryAttempt: number,
+  ): string {
+    return [
+      '',
+      '',
+      '<node_verification_failure>',
+      `Node "${node.stableKey}: ${node.title}" failed verification on attempt ${retryAttempt}.`,
+      'Re-examine your implementation against these acceptance criteria before finishing:',
+      '',
+      ...node.acceptanceCriteria.map((c) => `- ${c}`),
+      '',
+      'Do NOT expand scope beyond this node. Fix only what is wrong here.',
+      '</node_verification_failure>',
+    ].join('\n');
+  }
+
+  /**
+   * Lightweight per-node verification: runs an LLM check against the node's
+   * acceptance criteria using only the node-scoped diff. Uses reasoningEffort: 'low'
+   * to minimize cost. Returns 'passed', 'retry', or 'failed'.
+   */
+  async function verifyNodeCompletion(
+    threadId: string,
+    _plan: ShipCodePlan,
+    node: TaskNodeRecord,
+  ): Promise<'passed' | 'retry' | 'failed'> {
+    const context = activePipelines.get(threadId);
+    if (!context) return 'failed';
+
+    const diff = computeNodeDiff(context, context.nodeAnchorSha ?? '');
+    if (!diff.trim()) {
+      // No changes produced — treat as needing retry
+      return 'retry';
+    }
+
+    const latestPlanRecord = deps.plans.getLatest(threadId);
+    const planId = latestPlanRecord?.id ?? '';
+    const prompt = buildNodeVerificationPrompt(node, diff, threadId, planId);
+
+    const verifyMaterials: PromptMaterial[] = [
+      {
+        kind: 'diff_summary',
+        label: `node ${node.stableKey} diff`,
+        content: diff.slice(0, 60_000),
+      },
+    ];
+
+    try {
+      const response = await runProviderPhase(context, 'verify', prompt, verifyMaterials, {
+        maxTurns: 1,
+        reasoningEffort: 'low',
+      });
+
+      if (context.cancelled) return 'failed';
+
+      const parser = new StreamParser();
+      parser.feed(response.rawOutput);
+      const result = parser.extractVerification();
+
+      if (result.success && result.data) {
+        if (result.data.result === 'passed') return 'passed';
+        // Verification found issues
+        if (context.nodeVerificationRetries < MAX_NODE_VERIFICATION_RETRIES) {
+          return 'retry';
+        }
+        return 'failed';
+      }
+
+      // Parse failure — retry if budget allows
+      if (context.nodeVerificationRetries < MAX_NODE_VERIFICATION_RETRIES) {
+        return 'retry';
+      }
+      return 'failed';
+    } catch {
+      return context.cancelled ? 'failed' : 'retry';
+    }
+  }
+
+  // ─── End per-node verification helpers ─────────────────────────────────────
+
   async function startExecution(threadId: string, plan: ShipCodePlan) {
     const context = activePipelines.get(threadId);
     if (!context) return;
@@ -416,7 +584,7 @@ export function createExecutionPhaseHandlers({
         ? deps.taskGraphs.getByPlanId(latestPlanRecord.id)
         : null;
     let activeTaskNode: TaskNodeRecord | null = null;
-    const usesTaskGraph = Boolean(taskGraph && deps.taskGraphs && taskGraph.nodes.length > 1);
+    const usesTaskGraph = Boolean(taskGraph && deps.taskGraphs && taskGraph.nodes.length >= 1);
     if (usesTaskGraph && taskGraph && deps.taskGraphs) {
       const isRetry =
         context.testRetries > 0 ||
@@ -428,6 +596,9 @@ export function createExecutionPhaseHandlers({
       );
       if (isRetry && hasTerminalNodesOnly) {
         taskGraph = deps.taskGraphs.resetForRetry(taskGraph.id);
+        // Reset per-node verification state so re-executed nodes start with a fresh budget
+        context.nodeVerificationRetries = 0;
+        context.nodeAnchorSha = null;
       }
 
       activeTaskNode = deps.taskGraphs.getNextReadyNode(taskGraph.id);
@@ -526,6 +697,11 @@ export function createExecutionPhaseHandlers({
       testFeedback +
       stabilizationFeedback;
 
+    // Capture HEAD before execution for per-node diff scoping
+    if (activeTaskNode) {
+      context.nodeAnchorSha = captureNodeAnchorSha(context);
+    }
+
     void (async () => {
       try {
         const response = await runProviderPhase(
@@ -543,10 +719,62 @@ export function createExecutionPhaseHandlers({
 
         if (response.exitCode === 0) {
           if (activeTaskNode && deps.taskGraphs) {
-            const updatedGraph = deps.taskGraphs.markNodeCompletedAndPromote(activeTaskNode.id);
-            void postTaskGraphComment(context, updatedGraph);
-            handlers.startExecution(threadId, plan);
+            // ─── Per-node verification gate ───
+            const nodeOutcome = await verifyNodeCompletion(threadId, plan, activeTaskNode);
+
+            if (nodeOutcome === 'passed') {
+              context.nodeVerificationRetries = 0;
+              context.nodeAnchorSha = null;
+              const updatedGraph = deps.taskGraphs.markNodeCompletedAndPromote(activeTaskNode.id);
+              void postTaskGraphComment(context, updatedGraph);
+              handlers.startExecution(threadId, plan);
+              return;
+            }
+
+            if (nodeOutcome === 'retry') {
+              // Budget check BEFORE scheduling — covers all retry sources (empty diff,
+              // provider error, LLM non-pass). Without this the loop is unbounded.
+              if (context.nodeVerificationRetries >= MAX_NODE_VERIFICATION_RETRIES) {
+                const failedGraph = deps.taskGraphs.markNodeFailed(activeTaskNode.id);
+                void postTaskGraphComment(context, failedGraph);
+                emitPhase(
+                  threadId,
+                  'failed',
+                  `Node "${activeTaskNode.stableKey}" failed verification after ${MAX_NODE_VERIFICATION_RETRIES + 1} attempts.`,
+                );
+                activePipelines.delete(threadId);
+                return;
+              }
+              context.nodeVerificationRetries++;
+              context.stabilizationFeedback = formatNodeVerificationFailureFeedback(
+                activeTaskNode,
+                context.nodeVerificationRetries,
+              );
+              deps.taskGraphs.updateNodeStatus(activeTaskNode.id, 'ready');
+              const delayMs = computeRetryDelayMs({
+                reason: 'continuation',
+                attempt: context.nodeVerificationRetries,
+              });
+              if (context.retryTimer) clearTimeout(context.retryTimer);
+              context.retryTimer = setTimeout(() => {
+                context.retryTimer = null;
+                if (context.cancelled || !activePipelines.has(threadId)) return;
+                handlers.startExecution(threadId, plan);
+              }, delayMs);
+              return;
+            }
+
+            // nodeOutcome === 'failed' — max retries exhausted
+            const failedGraph = deps.taskGraphs.markNodeFailed(activeTaskNode.id);
+            void postTaskGraphComment(context, failedGraph);
+            emitPhase(
+              threadId,
+              'failed',
+              `Node "${activeTaskNode.stableKey}" failed verification after ${MAX_NODE_VERIFICATION_RETRIES + 1} attempts.`,
+            );
+            activePipelines.delete(threadId);
             return;
+            // ─── End per-node verification gate ───
           }
 
           if (context.autonomous) {

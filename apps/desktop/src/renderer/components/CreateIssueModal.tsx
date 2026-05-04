@@ -30,9 +30,8 @@ import {
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
-import { ImageIcon, Mic, Square, Trash2 } from 'lucide-react';
+import { ImageIcon, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useVoiceInput } from '../hooks/useVoiceInput';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 
@@ -164,26 +163,6 @@ export function CreateIssueModal() {
   const senderIdRef = useRef<string>(crypto.randomUUID());
 
   const mode: 'create' | 'edit' = editingPrd ? 'edit' : 'create';
-
-  // ---------------------------------------------------------------------------
-  // Voice input
-  // ---------------------------------------------------------------------------
-
-  const {
-    isSupported: voiceSupported,
-    isListening,
-    startListening,
-    stopListening,
-    error: voiceError,
-  } = useVoiceInput({
-    onTranscript: (text) => {
-      if (isQuickMode) {
-        setQuickText(text);
-      } else {
-        setBody(text);
-      }
-    },
-  });
 
   // ---------------------------------------------------------------------------
   // Attachment session lifecycle
@@ -322,10 +301,9 @@ export function CreateIssueModal() {
   }, [createIssueModalOpen, isQuickMode]);
 
   const handleClose = useCallback(() => {
-    stopListening();
     void clearAttachmentSession();
     closeCreateIssueModal();
-  }, [stopListening, clearAttachmentSession, closeCreateIssueModal]);
+  }, [clearAttachmentSession, closeCreateIssueModal]);
 
   const resetDraftForSubmitAnother = useCallback(() => {
     setBody('');
@@ -582,12 +560,6 @@ export function CreateIssueModal() {
 
   const submitLabel = mode === 'edit' ? 'Save' : isQuickMode ? 'Run Quick Task' : 'Create';
 
-  const showMicButton =
-    voiceSupported &&
-    mode === 'create' &&
-    !submitting &&
-    (isQuickMode ? quickTextEmpty : bodyIsEmpty);
-
   const hasAttachments = attachments.length > 0;
 
   return (
@@ -652,18 +624,6 @@ export function CreateIssueModal() {
                   </LoadingButtonContent>
                 </Button>
               )}
-            </div>
-          )}
-
-          {voiceError && voiceError !== 'no-speech' && (
-            <div className="flex items-center gap-2 rounded-md border border-warning/30 bg-warning/10 px-2.5 py-2 text-xs text-warning">
-              <span className="min-w-0 flex-1">
-                {voiceError === 'not-allowed'
-                  ? 'Microphone access denied. Check system permissions.'
-                  : voiceError === 'network'
-                    ? 'Speech recognition service unavailable.'
-                    : 'Voice input failed. Try again.'}
-              </span>
             </div>
           )}
 
@@ -859,35 +819,16 @@ export function CreateIssueModal() {
         <Button variant="secondary" onClick={handleClose} disabled={submitting || enhancing}>
           Cancel
         </Button>
-        {showMicButton ? (
-          <Button
-            variant="secondary"
-            size="icon"
-            aria-label={isListening ? 'Stop recording' : 'Start voice input'}
-            onClick={isListening ? stopListening : startListening}
-            className={cn(isListening && 'border-danger/40 bg-danger/10 hover:bg-danger/20')}
-          >
-            {isListening ? (
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-danger" aria-hidden="true" />
-                <Square size={14} />
-              </span>
-            ) : (
-              <Mic size={16} />
-            )}
-          </Button>
-        ) : (
-          <Button
-            onClick={handleSubmit}
-            disabled={submitDisabled}
-            aria-label={mode === 'edit' ? 'Save PRD' : undefined}
-          >
-            <LoadingButtonContent loading={submitting}>
-              <span>{submitLabel}</span>
-              <Keycap>{isQuickMode ? '↩' : '⌘↩'}</Keycap>
-            </LoadingButtonContent>
-          </Button>
-        )}
+        <Button
+          onClick={handleSubmit}
+          disabled={submitDisabled}
+          aria-label={mode === 'edit' ? 'Save PRD' : undefined}
+        >
+          <LoadingButtonContent loading={submitting}>
+            <span>{submitLabel}</span>
+            <Keycap>{isQuickMode ? '↩' : '⌘↩'}</Keycap>
+          </LoadingButtonContent>
+        </Button>
       </ModalFooter>
     </Modal>
   );

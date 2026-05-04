@@ -248,6 +248,8 @@ export function createPipelineContextHelpers(
       clarificationAnswers: seed.clarificationAnswers ?? [],
       clarificationHistory: seed.clarificationHistory ?? [],
       verificationRetries: seed.verificationRetries ?? 0,
+      nodeVerificationRetries: seed.nodeVerificationRetries ?? 0,
+      nodeAnchorSha: seed.nodeAnchorSha ?? null,
       testRetries: seed.testRetries ?? 0,
       testOutput: seed.testOutput ?? null,
       githubIssueNumber: seed.githubIssueNumber ?? null,

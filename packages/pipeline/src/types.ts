@@ -259,6 +259,10 @@ export interface PipelineContext {
    * Consumed (cleared) after use.
    */
   previousPlanRawOutput: string | null;
+  /** Per-node verification retry counter. Reset to 0 when active node advances. */
+  nodeVerificationRetries: number;
+  /** Git SHA before current node's execution. Used to compute node-scoped diff. */
+  nodeAnchorSha: string | null;
   /**
    * Number of full plan→review→execute→verify turns completed so far.
    * Incremented after each turn; the loop exits when `turnCount >= maxTurns`

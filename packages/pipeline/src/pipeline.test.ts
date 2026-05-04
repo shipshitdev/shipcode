@@ -12,6 +12,7 @@ import {
   type GitHubIssueCacheRecord,
   type GitHubPrCheckSummary,
   type GitHubPrReviewCommentSummary,
+  MAX_NODE_VERIFICATION_RETRIES,
   MAX_REVIEW_ROUNDS,
   MAX_VERIFICATION_RETRIES,
   PIPELINE_MAX_RETRIES,
@@ -1267,10 +1268,27 @@ Custom prompt`,
     });
 
     it('executes task graph nodes one by one with specialist node prompts', async () => {
+      // Mock git commands for per-node verification (captureNodeAnchorSha, computeNodeDiff)
       mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd === 'git rev-parse HEAD') return 'anchor-sha-123';
         if (cmd === 'git status --porcelain') return ' M a.ts';
+        if (cmd === 'git add -A') return '';
+        if (cmd.startsWith('git commit --no-verify')) return '';
+        if (cmd.startsWith('git diff anchor-sha-123..HEAD')) return 'diff --git a/file.ts\n+code';
         return '';
       });
+
+      // Build a valid verification "passed" block the parser will accept
+      const verificationPassedBlock = (threadId: string, planId: string) =>
+        `\`\`\`shipcode-verification\n${JSON.stringify({
+          threadId,
+          planId,
+          result: 'passed',
+          summary: 'Node criteria met',
+          criteriaResults: [{ criterion: 'test', passed: true, evidence: 'done' }],
+          issues: [],
+        })}\n\`\`\``;
+
       const graph = makeTaskGraph();
       const taskGraphs = mock.deps.taskGraphs;
       if (!taskGraphs) throw new Error('Expected task graph deps');
@@ -1308,28 +1326,152 @@ Custom prompt`,
       });
 
       await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+
+      // proc-1: execute node-1
       await mock.trigger('exit', 'proc-1', 0);
       const spawnMock = vi.mocked(mock.deps.processManager.spawn);
+
+      // proc-2: verify node-1 (per-node verification)
       for (let i = 0; i < 100 && spawnMock.mock.calls.length < 2; i++) {
         await flush();
       }
+      await mock.trigger('output', 'proc-2', verificationPassedBlock('t1', 'plan-1'));
       await mock.trigger('exit', 'proc-2', 0);
+
+      // proc-3: execute node-2
+      for (let i = 0; i < 100 && spawnMock.mock.calls.length < 3; i++) {
+        await flush();
+      }
+      await mock.trigger('exit', 'proc-3', 0);
+
+      // proc-4: verify node-2 (per-node verification)
+      for (let i = 0; i < 100 && spawnMock.mock.calls.length < 4; i++) {
+        await flush();
+      }
+      await mock.trigger('output', 'proc-4', verificationPassedBlock('t1', 'plan-1'));
+      await mock.trigger('exit', 'proc-4', 0);
 
       expect(taskGraphs.updateNodeStatus).toHaveBeenNthCalledWith(1, 'node-1', 'running');
       expect(taskGraphs.markNodeCompletedAndPromote).toHaveBeenNthCalledWith(1, 'node-1');
       expect(taskGraphs.updateNodeStatus).toHaveBeenNthCalledWith(2, 'node-2', 'running');
       expect(taskGraphs.markNodeCompletedAndPromote).toHaveBeenNthCalledWith(2, 'node-2');
-      expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(2);
+      // 4 spawns: execute node-1, verify node-1, execute node-2, verify node-2
+      expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(4);
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'completed');
       expect(pipeline.getContext('t1')).toBeUndefined();
 
+      // Execute spawns are at indices 0 and 2 (verify spawns at 1 and 3)
       const firstPrompt = spawnMock.mock.calls[0][2][1];
-      const secondPrompt = spawnMock.mock.calls[1][2][1];
+      const secondPrompt = spawnMock.mock.calls[2][2][1];
       expect(firstPrompt).toContain('Create task graph tables');
       expect(firstPrompt).toContain('You are running as the database specialist executor');
       expect(firstPrompt).toContain('Hard rule: execute ONLY the active node');
       expect(secondPrompt).toContain('Wire task graph pipeline');
       expect(secondPrompt).toContain('You are running as the backend specialist executor');
+    });
+
+    it('empty node diff exhausts retry budget and marks node failed (no infinite loop)', async () => {
+      // Regression: verifyNodeCompletion returned 'retry' on the empty-diff path
+      // without checking MAX_NODE_VERIFICATION_RETRIES, causing an unbounded loop.
+      const graph = makeTaskGraph();
+      const taskGraphs = mock.deps.taskGraphs;
+      if (!taskGraphs) throw new Error('Expected task graph deps');
+      vi.mocked(taskGraphs.getByPlanId).mockImplementation(() => graph);
+      vi.mocked(taskGraphs.getNextReadyNode).mockImplementation(
+        () => graph.nodes.find((n) => n.status === 'ready') ?? null,
+      );
+      vi.mocked(taskGraphs.updateNodeStatus).mockImplementation((nodeId: string, status) => {
+        const node = graph.nodes.find((n) => n.id === nodeId);
+        if (!node) throw new Error(`missing node ${nodeId}`);
+        node.status = status;
+        return node;
+      });
+      vi.mocked(taskGraphs.markNodeFailed).mockImplementation(() => graph);
+
+      // Git diff always returns empty string — triggers the no-diff retry path
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd === 'git rev-parse HEAD') return 'anchor-sha-123';
+        if (cmd === 'git status --porcelain') return ' M a.ts';
+        if (cmd === 'git add -A') return '';
+        if (cmd.startsWith('git commit --no-verify')) return '';
+        if (cmd.startsWith('git diff')) return ''; // empty → 'retry' in verifyNodeCompletion
+        return '';
+      });
+
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        baseBranch: 'main',
+      });
+
+      // Pre-exhaust the budget so the very first retry triggers the ceiling
+      requireContext(pipeline).nodeVerificationRetries = MAX_NODE_VERIFICATION_RETRIES;
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+      await mock.trigger('exit', 'proc-1', 0);
+      await flush();
+
+      // Budget was at ceiling → no retry scheduled, node marked failed immediately
+      expect(taskGraphs.markNodeFailed).toHaveBeenCalledWith('node-1');
+      expect(pipeline.getContext('t1')).toBeUndefined();
+      // Only 1 spawn: the execute. Verify is never spawned (diff empty, budget hit first).
+      expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(1);
+    });
+
+    it('verifier provider exception exhausts retry budget and marks node failed', async () => {
+      // Regression: catch path in verifyNodeCompletion returned 'retry' without checking
+      // MAX_NODE_VERIFICATION_RETRIES, same unbounded loop risk as the empty-diff path.
+      const graph = makeTaskGraph();
+      const taskGraphs = mock.deps.taskGraphs;
+      if (!taskGraphs) throw new Error('Expected task graph deps');
+      vi.mocked(taskGraphs.getByPlanId).mockImplementation(() => graph);
+      vi.mocked(taskGraphs.getNextReadyNode).mockImplementation(
+        () => graph.nodes.find((n) => n.status === 'ready') ?? null,
+      );
+      vi.mocked(taskGraphs.updateNodeStatus).mockImplementation((nodeId: string, status) => {
+        const node = graph.nodes.find((n) => n.id === nodeId);
+        if (!node) throw new Error(`missing node ${nodeId}`);
+        node.status = status;
+        return node;
+      });
+      vi.mocked(taskGraphs.markNodeFailed).mockImplementation(() => graph);
+
+      // Non-empty diff so we reach runProviderPhase; 2nd spawn (verify) throws
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd === 'git rev-parse HEAD') return 'anchor-sha-123';
+        if (cmd === 'git status --porcelain') return ' M a.ts';
+        if (cmd === 'git add -A') return '';
+        if (cmd.startsWith('git commit --no-verify')) return '';
+        if (cmd.startsWith('git diff anchor-sha-123..HEAD')) return 'diff --git a/file.ts\n+code';
+        return '';
+      });
+
+      const spawnMock = vi.mocked(mock.deps.processManager.spawn);
+      spawnMock
+        // execute — normal (id must match mock.trigger('exit', 'proc-1', 0) below)
+        .mockImplementationOnce(() => ({ id: 'proc-1' }) as never)
+        .mockImplementationOnce(() => {
+          throw new Error('provider unavailable'); // verify — throws → caught → 'retry'
+        });
+
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        baseBranch: 'main',
+      });
+
+      // Pre-exhaust the budget
+      requireContext(pipeline).nodeVerificationRetries = MAX_NODE_VERIFICATION_RETRIES;
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+      await mock.trigger('exit', 'proc-1', 0);
+      await flush();
+
+      // Provider threw → catch returns 'retry' → budget ceiling → mark failed
+      expect(taskGraphs.markNodeFailed).toHaveBeenCalledWith('node-1');
+      expect(pipeline.getContext('t1')).toBeUndefined();
     });
 
     it('exit non-zero → emits failed', async () => {

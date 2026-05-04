@@ -291,7 +291,12 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
           rationale: 'Quick task — executed directly without plan/review.',
         },
       ],
-      acceptanceCriteria: ['Executor completes the quick task without errors.'],
+      acceptanceCriteria: [
+        `Implements: ${task.title}`,
+        ...(task.text.trim().length > 20
+          ? [`Satisfies instructions: ${task.text.trim().slice(0, 200)}`]
+          : []),
+      ],
       outOfScope: [],
       estimatedComplexity: 'low',
       dependencies: [],
@@ -299,6 +304,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
     const planRecord = deps.plans.create(threadId, '<quick-task-synthesized>', synthesizedPlan, 1);
     deps.plans.updateStatus(planRecord.id, 'approved');
+    deps.taskGraphs?.replaceForPlan(threadId, planRecord.id, synthesizedPlan);
 
     await handlers.startExecution(threadId, synthesizedPlan);
   }
@@ -338,7 +344,12 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
           rationale: 'Automation prompt — executed directly without plan/review.',
         },
       ],
-      acceptanceCriteria: ['Executor completes the automation prompt without errors.'],
+      acceptanceCriteria: [
+        `Implements automation: ${automationName}`,
+        ...(prompt.trim().length > 20
+          ? [`Satisfies prompt: ${prompt.trim().slice(0, 200)}`]
+          : []),
+      ],
       outOfScope: [],
       estimatedComplexity: 'medium',
       dependencies: [],
@@ -346,6 +357,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
     const planRecord = deps.plans.create(threadId, '<automation-synthesized>', synthesizedPlan, 1);
     deps.plans.updateStatus(planRecord.id, 'approved');
+    deps.taskGraphs?.replaceForPlan(threadId, planRecord.id, synthesizedPlan);
 
     await handlers.startExecution(threadId, synthesizedPlan);
   }

@@ -177,6 +177,11 @@ export const MAX_REVIEW_ROUNDS = 5;
 export const MAX_CLARIFICATION_ROUNDS = 2;
 export const MAX_VERIFICATION_RETRIES = 1;
 export const MAX_TEST_RETRIES = 3;
+/**
+ * Maximum per-node LLM verification retries before marking the node failed.
+ * Lighter than MAX_VERIFICATION_RETRIES (holistic end-of-pipeline check).
+ */
+export const MAX_NODE_VERIFICATION_RETRIES = 2;
 export const GITHUB_POLL_INTERVAL_MS = 30_000;
 export const STALE_LEASE_THRESHOLD_MS = 30 * 60 * 1000;
 export const ORPHAN_CLAIM_THRESHOLD_MS = 5 * 60 * 1000;
