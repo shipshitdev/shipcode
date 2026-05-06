@@ -1,14 +1,18 @@
 import { execFileSync } from 'node:child_process';
-import fs from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import {
   buildExecutionPrompt,
   buildPRBody,
   buildVerificationPrompt,
+  discoverRuntimeTests,
+  getRuntimeTestsDir,
   loadRepoContext,
   loadStructuredRepoContext,
   type PromptMaterial,
-  StreamParser,
+  type RunningServer,
   selectPromptMaterials,
+  ServerLifecycleManager,
+  StreamParser,
   summarizePromptMaterials,
 } from '@shipcode/agents/source';
 import { WorktreeManager } from '@shipcode/git';
@@ -185,6 +189,7 @@ export function createExecutionPhaseHandlers({
   const {
     emitPhase,
     emitTerminalLifecycle,
+    emitTerminalRaw,
     ensureRepoSetupContract,
     formatStabilizationFeedback,
     formatTestFixFeedback,
@@ -506,7 +511,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       return;
     }
 
-    if (!context.worktreePath || !fs.existsSync(context.worktreePath)) {
+    if (!context.worktreePath || !existsSync(context.worktreePath)) {
       try {
         const appSettings = deps.settings.get();
         const worktreeManager = new WorktreeManager(context.projectPath, {
@@ -855,7 +860,10 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     }
 
     const verifyCommands = getVerifyCommands(context);
-    if (verifyCommands.length === 0) {
+    const runtimeQa = context.repoSetupContract?.contract.runtimeQa;
+    const hasRuntimeQa = Boolean(runtimeQa?.server || runtimeQa?.testCommands?.length || runtimeQa?.discoverAgentTests);
+
+    if (verifyCommands.length === 0 && !hasRuntimeQa) {
       handlers.startVerification(threadId);
       return;
     }
@@ -870,6 +878,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       return;
     }
 
+    // --- Phase 1: Static verify commands (unit tests, typecheck, build) ---
     const outputs: string[] = [];
     for (const command of verifyCommands) {
       emitTerminalLifecycle(threadId, `[verify] $ ${command}\r\n`);
@@ -915,8 +924,145 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       }
     }
 
+    // --- Phase 2: Runtime QA (server lifecycle + runtime tests) ---
+    if (hasRuntimeQa && runtimeQa) {
+      const runtimeQaResult = await runRuntimeQa(threadId, context, cwd, runtimeQa);
+      if (!runtimeQaResult.ok) {
+        if (runtimeQaResult.fatal) {
+          emitPhase(threadId, 'failed', runtimeQaResult.error);
+          activePipelines.delete(threadId);
+        }
+        return;
+      }
+    }
+
     context.testRetries = 0;
     handlers.startVerification(threadId);
+  }
+
+  async function runRuntimeQa(
+    threadId: string,
+    context: PipelineContext,
+    cwd: string,
+    config: NonNullable<PipelineContext['repoSetupContract']>['contract']['runtimeQa'],
+  ): Promise<{ ok: true } | { ok: false; fatal: boolean; error: string }> {
+    if (!config) return { ok: true };
+
+    emitTerminalLifecycle(threadId, '[runtime-qa] Starting runtime QA\r\n');
+
+    const lifecycle = new ServerLifecycleManager(deps.processManager, (msg) =>
+      emitTerminalRaw(threadId, msg),
+    );
+    let server: RunningServer | undefined;
+
+    const cleanupServer = async () => {
+      if (server) {
+        await lifecycle.stop(server);
+        server = undefined;
+      }
+    };
+    context.runtimeQaCleanup = cleanupServer;
+
+    const onAbort = () => void cleanupServer();
+    context.abort.signal.addEventListener('abort', onAbort, { once: true });
+
+    try {
+      if (config.server) {
+        try {
+          server = await lifecycle.start(config.server, cwd, context.abort.signal, threadId);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          if (context.testRetries < MAX_TEST_RETRIES) {
+            context.testRetries++;
+            context.testOutput = `[runtime-qa] Server startup failed: ${message}`;
+            context.stabilizationFeedback = formatTestFixFeedback(context.testOutput, context.testRetries);
+            const delayMs = computeRetryDelayMs({ reason: 'continuation', attempt: context.testRetries });
+            if (context.retryTimer) clearTimeout(context.retryTimer);
+            context.retryTimer = setTimeout(() => {
+              context.retryTimer = null;
+              if (context.cancelled || !activePipelines.has(threadId)) return;
+              void startTestFix(threadId);
+            }, delayMs);
+            return { ok: false, fatal: false, error: message };
+          }
+          return { ok: false, fatal: true, error: `Runtime QA server startup failed: ${message}` };
+        }
+      }
+
+      const extraEnv: Record<string, string> = {};
+      if (server) {
+        extraEnv.BASE_URL = server.baseUrl;
+        if (config.server?.portEnvVar) {
+          extraEnv[config.server.portEnvVar] = String(server.port);
+        }
+      }
+
+      const allCommands = [...(config.testCommands ?? [])];
+      if (config.discoverAgentTests !== false) {
+        const discovered = discoverRuntimeTests(cwd);
+        if (discovered.length > 0) {
+          emitTerminalLifecycle(threadId, `[runtime-qa] Discovered ${discovered.length} agent test(s)\r\n`);
+          allCommands.push(...discovered);
+        }
+      }
+
+      const runtimeOutputs: string[] = [];
+      for (const command of allCommands) {
+        if (server?.crashed) {
+          const failMsg = '[runtime-qa] Server crashed during testing';
+          runtimeOutputs.push(failMsg);
+          context.runtimeQaOutput = runtimeOutputs.join('\n').slice(-16384);
+          context.testOutput = `${context.testOutput ?? ''}\n${context.runtimeQaOutput}`.slice(-16384);
+          if (context.testRetries < MAX_TEST_RETRIES) {
+            context.testRetries++;
+            context.stabilizationFeedback = formatTestFixFeedback(context.testOutput, context.testRetries);
+            const delayMs = computeRetryDelayMs({ reason: 'continuation', attempt: context.testRetries });
+            if (context.retryTimer) clearTimeout(context.retryTimer);
+            context.retryTimer = setTimeout(() => {
+              context.retryTimer = null;
+              if (context.cancelled || !activePipelines.has(threadId)) return;
+              void startTestFix(threadId);
+            }, delayMs);
+            return { ok: false, fatal: false, error: failMsg };
+          }
+          return { ok: false, fatal: true, error: failMsg };
+        }
+
+        emitTerminalLifecycle(threadId, `[runtime-qa] $ ${command}\r\n`);
+        try {
+          const result = await runShellCommand(threadId, cwd, command, context.abort.signal, { extraEnv });
+          runtimeOutputs.push(`[runtime-qa] ${command}\n${result.output}`);
+          context.runtimeQaOutput = runtimeOutputs.join('\n').slice(-16384);
+
+          if (result.exitCode !== 0) {
+            context.testOutput = `${context.testOutput ?? ''}\n${context.runtimeQaOutput}`.slice(-16384);
+            if (context.testRetries < MAX_TEST_RETRIES) {
+              context.testRetries++;
+              context.stabilizationFeedback = formatTestFixFeedback(context.testOutput, context.testRetries);
+              const delayMs = computeRetryDelayMs({ reason: 'continuation', attempt: context.testRetries });
+              if (context.retryTimer) clearTimeout(context.retryTimer);
+              context.retryTimer = setTimeout(() => {
+                context.retryTimer = null;
+                if (context.cancelled || !activePipelines.has(threadId)) return;
+                void startTestFix(threadId);
+              }, delayMs);
+              return { ok: false, fatal: false, error: `Runtime test failed: ${command}` };
+            }
+            return { ok: false, fatal: true, error: `Runtime QA exhausted retries on: ${command}` };
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          return { ok: false, fatal: true, error: `Runtime QA command error: ${message}` };
+        }
+      }
+
+      emitTerminalLifecycle(threadId, '[runtime-qa] All runtime tests passed\r\n');
+      return { ok: true };
+    } finally {
+      await cleanupServer();
+      context.runtimeQaCleanup = null;
+      context.abort.signal.removeEventListener('abort', onAbort);
+    }
   }
 
   async function startVerification(threadId: string) {
@@ -940,6 +1086,11 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     const plan = latestPlan.structured;
 
     try {
+      const runtimeTestDir = getRuntimeTestsDir(cwd);
+      if (existsSync(runtimeTestDir)) {
+        rmSync(runtimeTestDir, { recursive: true, force: true });
+      }
+
       const dirty = execFileSync('git', ['status', '--porcelain'], { cwd, encoding: 'utf-8' });
       if (dirty.trim()) {
         execFileSync('git', ['add', '-A'], { cwd, encoding: 'utf-8' });
@@ -998,6 +1149,15 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
               kind: 'verification_output' as const,
               label: 'test output',
               content: context.testOutput,
+            },
+          ]
+        : []),
+      ...(context.runtimeQaOutput
+        ? [
+            {
+              kind: 'verification_output' as const,
+              label: 'runtime QA output',
+              content: context.runtimeQaOutput,
             },
           ]
         : []),

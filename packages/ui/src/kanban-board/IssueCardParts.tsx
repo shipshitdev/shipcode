@@ -140,6 +140,7 @@ interface DraggableCardProps {
   isCancelling?: boolean;
   isMarkingDone?: boolean;
   isFlashing?: boolean;
+  onFetchPlanSteps?: (threadId: string) => Promise<import('./types').PlanStepSummary[] | null>;
 }
 
 function DraggableCardComponent({
@@ -170,6 +171,7 @@ function DraggableCardComponent({
   isCancelling,
   isMarkingDone,
   isFlashing = false,
+  onFetchPlanSteps,
 }: DraggableCardProps) {
   const isCreating = isIssueCreating(issue);
   const isAutomation = isAutomationIssue(issue);
@@ -201,7 +203,7 @@ function DraggableCardComponent({
   const linkedPrLabel = issue.linkedPrNumber ? `PR #${issue.linkedPrNumber}` : null;
 
   return (
-    <IssueHoverCard issue={issue} disabled={isDragging || isCreating}>
+    <IssueHoverCard issue={issue} disabled={isDragging || isCreating} onFetchPlanSteps={onFetchPlanSteps}>
       {/* biome-ignore lint/a11y/useSemanticElements: The card contains nested action buttons, so it cannot be a semantic button. */}
       <div
         ref={setNodeRef}

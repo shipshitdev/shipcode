@@ -73,6 +73,9 @@ export type { EnhancePrdOptions, GeneratedPrd } from './prd-generator';
 export { buildPrdPrompt, enhancePrdDraft, extractPrd } from './prd-generator';
 export type { ManagedProcess } from './process-manager';
 export { ProcessManager } from './process-manager';
+export { discoverRuntimeTests, getRuntimeTestsDir } from './runtime-test-discovery';
+export type { RunningServer } from './server-lifecycle';
+export { ServerLifecycleManager } from './server-lifecycle';
 export {
   detectProjectSetup,
   inspectProjectSetup,

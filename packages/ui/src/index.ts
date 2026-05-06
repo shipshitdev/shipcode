@@ -3,7 +3,7 @@ export { ActivePipelineCard } from '@/ActivePipelineCard';
 export { DiffViewer } from '@/DiffViewer';
 export { GitVisualizer } from '@/GitVisualizer';
 export { KanbanBoard } from '@/KanbanBoard';
-export type { IssuePriorityBadge } from '@/kanban-board/types';
+export type { IssuePriorityBadge, PlanStepSummary } from '@/kanban-board/types';
 export {
   AUTOMATION_ISSUE_NUMBER_BASE,
   isAutomationIssue,

@@ -167,6 +167,7 @@ export function KanbanBoard({
   onAutoRunPrioritiesChange,
   onAutoRun,
   autoRunning,
+  onFetchPlanSteps,
 }: KanbanBoardProps) {
   const handleExternalClick = (url: string) => (event: React.MouseEvent<HTMLAnchorElement>) => {
     if (onOpenExternal) {
@@ -742,6 +743,7 @@ export function KanbanBoard({
                       approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
                       flashingIssueIds={flashingIssueIds}
                       readOnly={readOnly}
+                      onFetchPlanSteps={onFetchPlanSteps}
                     />
                   );
                 }
@@ -777,6 +779,7 @@ export function KanbanBoard({
                     approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
                     flashingIssueIds={flashingIssueIds}
                     readOnly={readOnly}
+                    onFetchPlanSteps={onFetchPlanSteps}
                   />
                 );
               })}

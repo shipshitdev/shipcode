@@ -166,14 +166,12 @@ export function useIpc() {
         if (data.phase === PIPELINE_PHASE.planning) {
           focusThreadIfSelectedProject();
         }
+        queryClient.invalidateQueries({ queryKey: ['task-graph', data.threadId] });
         if (data.threadId === store.activeThreadId) {
           setPipelinePhase(data.phase);
           invalidatePlanQueriesForThread(data.threadId);
-          // Push-invalidate pipeline-tab queries so IssueDetail doesn't
-          // rely solely on polling for freshness.
           queryClient.invalidateQueries({ queryKey: ['checkpoints', data.threadId] });
           queryClient.invalidateQueries({ queryKey: ['diffs', data.threadId] });
-          queryClient.invalidateQueries({ queryKey: ['task-graph', data.threadId] });
           queryClient.invalidateQueries({ queryKey: ['thread', data.threadId] });
         }
         if (data.phase !== PIPELINE_PHASE.idle && data.phase !== PIPELINE_PHASE.planning) {

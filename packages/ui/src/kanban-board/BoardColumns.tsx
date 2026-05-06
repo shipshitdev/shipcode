@@ -16,6 +16,7 @@ import type {
   IssuePriorityBadge,
   IssueRevisionBadge,
   PhaseSection,
+  PlanStepSummary,
   RowTone,
 } from './types';
 import {
@@ -80,6 +81,7 @@ interface DroppableColumnProps {
   issueStalenessById?: Map<string, IssueStalenessResult | null>;
   approvedAwaitingExecutionIssueIds?: ReadonlySet<string>;
   flashingIssueIds?: ReadonlySet<string>;
+  onFetchPlanSteps?: (threadId: string) => Promise<PlanStepSummary[] | null>;
 }
 
 export function DroppableColumn({
@@ -111,6 +113,7 @@ export function DroppableColumn({
   issueStalenessById = EMPTY_STALENESS_MAP,
   approvedAwaitingExecutionIssueIds = EMPTY_APPROVED_AWAITING_EXECUTION,
   flashingIssueIds,
+  onFetchPlanSteps,
 }: DroppableColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id, disabled: !droppable || readOnly });
   const hasIssues = issues.length > 0;
@@ -177,6 +180,7 @@ export function DroppableColumn({
             onCreatePr={onCreatePr}
             readOnly={readOnly}
             isFlashing={flashingIssueIds?.has(issue.id) ?? false}
+            onFetchPlanSteps={onFetchPlanSteps}
           />
         ))}
       </div>
@@ -216,6 +220,7 @@ interface SectionBlockProps {
   issueStalenessById?: Map<string, IssueStalenessResult | null>;
   approvedAwaitingExecutionIssueIds?: ReadonlySet<string>;
   flashingIssueIds?: ReadonlySet<string>;
+  onFetchPlanSteps?: (threadId: string) => Promise<PlanStepSummary[] | null>;
 }
 
 function SectionBlock({
@@ -250,6 +255,7 @@ function SectionBlock({
   issueStalenessById = EMPTY_STALENESS_MAP,
   approvedAwaitingExecutionIssueIds = EMPTY_APPROVED_AWAITING_EXECUTION,
   flashingIssueIds,
+  onFetchPlanSteps,
 }: SectionBlockProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: `${columnKey}:${section.key}`,
@@ -351,6 +357,7 @@ function SectionBlock({
               onCreatePr={onCreatePr}
               readOnly={readOnly}
               isFlashing={flashingIssueIds?.has(issue.id) ?? false}
+              onFetchPlanSteps={onFetchPlanSteps}
             />
           ))}
         </div>
@@ -397,6 +404,7 @@ interface StackedColumnProps {
   issueStalenessById?: Map<string, IssueStalenessResult | null>;
   approvedAwaitingExecutionIssueIds?: ReadonlySet<string>;
   flashingIssueIds?: ReadonlySet<string>;
+  onFetchPlanSteps?: (threadId: string) => Promise<PlanStepSummary[] | null>;
 }
 
 export function StackedColumn({
@@ -429,6 +437,7 @@ export function StackedColumn({
   issueStalenessById = EMPTY_STALENESS_MAP,
   approvedAwaitingExecutionIssueIds = EMPTY_APPROVED_AWAITING_EXECUTION,
   flashingIssueIds,
+  onFetchPlanSteps,
 }: StackedColumnProps) {
   const columnIssues = useMemo(
     () =>
@@ -517,6 +526,7 @@ export function StackedColumn({
             issueStalenessById={issueStalenessById}
             approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
             flashingIssueIds={flashingIssueIds}
+            onFetchPlanSteps={onFetchPlanSteps}
           />
         ))}
       </div>

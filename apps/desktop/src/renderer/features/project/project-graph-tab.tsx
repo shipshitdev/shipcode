@@ -12,7 +12,7 @@ import {
   SelectionMode,
 } from '@xyflow/react';
 import { Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import '@xyflow/react/dist/style.css';
 import { useAppStore } from '../../stores/app-store';
 import { IssueGraphNode } from './issue-graph-node';
@@ -20,6 +20,15 @@ import { buildIssueFlowGraph, formatPreviewGroups } from './issue-graph-utils';
 
 const nodeTypes = { issueGraphNode: IssueGraphNode };
 const deleteKeyCode = ['Backspace', 'Delete'];
+
+function getResolvedTheme(): 'dark' | 'light' {
+  return (document.documentElement.dataset.theme as 'dark' | 'light') ?? 'dark';
+}
+const subscribeTheme = (cb: () => void) => {
+  const observer = new MutationObserver(cb);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  return () => observer.disconnect();
+};
 
 function sameSelectedIssueIds(previous: string[], next: string[]) {
   return (
@@ -31,6 +40,7 @@ export function ProjectGraphTab({ embedded = false }: { embedded?: boolean }) {
   const queryClient = useQueryClient();
   const activeProjectId = useAppStore((state) => state.activeProjectId);
   const selectIssue = useAppStore((state) => state.selectIssue);
+  const resolvedTheme = useSyncExternalStore(subscribeTheme, getResolvedTheme);
   const [selectedIssueIds, setSelectedIssueIds] = useState<string[]>([]);
   const [previewGroups, setPreviewGroups] = useState<string[][]>([]);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -239,7 +249,7 @@ export function ProjectGraphTab({ embedded = false }: { embedded?: boolean }) {
             nodes={flowGraph.nodes}
             edges={flowGraph.edges}
             nodeTypes={nodeTypes}
-            colorMode="dark"
+            colorMode={resolvedTheme}
             fitView
             selectionOnDrag
             selectionMode={SelectionMode.Partial}

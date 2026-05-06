@@ -1,4 +1,5 @@
 import type { TerminalEventRecord } from '@shipcode/shared';
+import { toast } from '../stores/toast-store';
 import { Button, cn } from '@shipshitdev/ui';
 import { useCallback, useEffect, useState } from 'react';
 import { useOpenProjectTerminal } from '../hooks/useOpenProjectTerminal';
@@ -77,7 +78,7 @@ function TerminalDrawerTranscript({
           failureOutput: output,
         });
       } catch (error) {
-        window.alert(error instanceof Error ? error.message : 'Auto Fix failed');
+        toast.error('Auto Fix failed', error instanceof Error ? error.message : undefined);
       } finally {
         setAutoFixingEventId(null);
       }
@@ -106,7 +107,7 @@ function TerminalDrawerTranscript({
         });
         setProjectTab('terminal');
       } catch (error) {
-        window.alert(error instanceof Error ? error.message : 'Failed to send error to terminal');
+        toast.error('Failed to send to terminal', error instanceof Error ? error.message : undefined);
       } finally {
         setSendingToTerminalEventId(null);
       }
@@ -155,7 +156,7 @@ export function TerminalDrawer({ isExiting = false }: { isExiting?: boolean }) {
 
   const handleOpenProjectTerminal = useCallback(() => {
     void openProjectTerminal().catch((error) => {
-      window.alert(error instanceof Error ? error.message : 'Failed to open terminal');
+      toast.error('Failed to open terminal', error instanceof Error ? error.message : undefined);
     });
   }, [openProjectTerminal]);
 

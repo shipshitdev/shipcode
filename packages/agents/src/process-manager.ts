@@ -91,6 +91,13 @@ export interface ManagedProcessSpawnOptions {
    * `null` matches the AppSettings default; `''` means project-local mode.
    */
   workspaceRoot?: string | null;
+  /**
+   * Spawn in a new process group so `kill(-pid)` terminates the entire
+   * child tree (server + its children). Used by ServerLifecycleManager.
+   */
+  detached?: boolean;
+  /** Extra env vars merged on top of the filtered shell env. */
+  extraEnv?: Record<string, string>;
 }
 
 export interface ManagedProcess {
@@ -104,6 +111,8 @@ export interface ManagedProcess {
   threadId?: string;
   outputMode: ManagedProcessOutputMode;
   stdinMode: 'tty' | 'pipe';
+  /** Process was spawned with `detached: true` — kill via process group. */
+  detached?: boolean;
   /**
    * Wall-clock time (ms since epoch) of the last lifecycle event observed
    * for this process — set on spawn and refreshed on every output chunk.
@@ -238,12 +247,17 @@ export class ProcessManager extends EventEmitter {
     const resolvedCommand = resolveCommand(command);
     let child: ChildProcessWithoutNullStreams;
 
+    const detached = options.detached ?? false;
+    const env = { ...filterEnv(cachedEnv), FORCE_COLOR: '1', ...options.extraEnv };
+
     try {
       child = spawnChild(resolvedCommand, args, {
         cwd,
-        env: { ...filterEnv(cachedEnv), FORCE_COLOR: '1' },
+        env,
         stdio: ['pipe', 'pipe', 'pipe'],
+        detached,
       });
+      if (detached) child.unref();
     } catch (err) {
       cachedEnv = null;
       const errorMsg = `Failed to spawn ${command} (resolved: ${resolvedCommand}): ${err instanceof Error ? err.message : err}`;
@@ -282,6 +296,7 @@ export class ProcessManager extends EventEmitter {
       exitCode: null,
       outputMode,
       stdinMode: 'pipe',
+      detached,
       lastEventAt: Date.now(),
     };
 
@@ -485,13 +500,21 @@ export class ProcessManager extends EventEmitter {
     }
   }
 
-  private killManagedProcess(process: ManagedProcess, signal?: string): void {
-    if (process.pty) {
-      if (signal) process.pty.kill(signal);
-      else process.pty.kill();
+  private killManagedProcess(proc: ManagedProcess, signal?: string): void {
+    if (proc.pty) {
+      if (signal) proc.pty.kill(signal);
+      else proc.pty.kill();
       return;
     }
-    if (signal) process.child?.kill(signal as NodeJS.Signals);
-    else process.child?.kill();
+    const sig = (signal ?? 'SIGTERM') as NodeJS.Signals;
+    if (proc.detached && proc.child?.pid) {
+      try {
+        process.kill(-proc.child.pid, sig);
+      } catch {
+        proc.child.kill(sig);
+      }
+      return;
+    }
+    proc.child?.kill(sig);
   }
 }

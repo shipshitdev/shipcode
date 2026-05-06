@@ -1,4 +1,5 @@
 import { clampError, type Project } from '@shipcode/shared';
+import { toast } from '../stores/toast-store';
 import { Button } from '@shipshitdev/ui';
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -34,7 +35,7 @@ export function ProjectMissingView({ project }: { project: Project }) {
     },
     onError: (err: unknown) => {
       log.error('[ProjectMissingView] relink failed', err);
-      window.alert(clampError(err));
+      toast.error('Failed to restore project', clampError(err));
     },
   });
 

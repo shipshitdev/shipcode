@@ -192,6 +192,19 @@ export const repoSetupEnvFileSchema = z.object({
   required: z.boolean().default(true),
 });
 
+export const runtimeQaServerSchema = z.object({
+  command: z.string().min(1),
+  readinessUrl: z.string().min(1),
+  startupTimeoutMs: z.number().int().min(1000).default(60_000),
+  portEnvVar: z.string().min(1).default('PORT'),
+});
+
+export const runtimeQaConfigSchema = z.object({
+  server: runtimeQaServerSchema.optional(),
+  testCommands: z.array(z.string().min(1)).default([]),
+  discoverAgentTests: z.boolean().default(true),
+});
+
 export const repoSetupContractSchema = z.object({
   version: z.literal(1).default(1),
   setupCommands: z.array(z.string().min(1)).default([]),
@@ -199,4 +212,5 @@ export const repoSetupContractSchema = z.object({
   envFiles: z.array(repoSetupEnvFileSchema).default([]),
   setupBeforeVerify: z.boolean().default(false),
   testingContext: z.string().min(1).nullable().optional().default(null),
+  runtimeQa: runtimeQaConfigSchema.optional(),
 });

@@ -42,6 +42,7 @@ export interface PipelineRuntime {
     cwd: string,
     command: string,
     signal: AbortSignal,
+    options?: { extraEnv?: Record<string, string>; timeoutMs?: number },
   ) => Promise<{ exitCode: number; output: string }>;
   prepareWorktree: (
     context: PipelineContext,

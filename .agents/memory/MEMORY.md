@@ -57,6 +57,12 @@ Where things live:
 - **Session logs:** `.agents/SESSIONS/YYYY-MM-DD.md` (committed)
 - **PRD style guide:** `skills/writing-prds/SKILL.md` (read by `ai:enhance-prd` handler from the target repo)
 
+## Sub-agents
+
+- Nine custom agents in `.claude/agents/` — use `subagent_type` to spawn.
+- **Routing:** `planner` (opus) for design, `explorer` (haiku) for research, specialists (`pipeline-dev`, `ui-dev`, `web-dev`) for domain work, `implementer` for cross-cutting, `test-writer` parallel with any implementer, `reviewer` post-implementation, `debugger` for root-cause investigation.
+- See: `agents.md`.
+
 ## Further reading
 
 - `overview.md` — app shape, packages, tech stack
@@ -66,3 +72,4 @@ Where things live:
 - `claude-cli.md` — stdin-not-argv rule for claude CLI
 - `ipc-errors.md` — clamp IPC errors at main-process boundary
 - `skills.md` — skills/memory folder layout, symlink rules
+- `agents.md` — custom sub-agent roster, routing rules, parallel patterns

@@ -26,6 +26,7 @@ import {
   TableRow,
 } from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
+import { Coins } from 'lucide-react';
 import { useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 import { ActivityHeatmap } from './heatmap/ActivityHeatmap';
@@ -245,8 +246,14 @@ export function CostsView() {
                 By Project
               </h2>
               {data.byProject.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-xs text-muted">
-                  No tasks yet.
+                <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-4 py-12 text-center">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/10">
+                    <Coins size={20} className="text-muted/50" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-muted">No cost data yet</p>
+                    <p className="text-xs text-muted/50">Run a pipeline to see cost breakdowns here.</p>
+                  </div>
                 </div>
               ) : (
                 <Card>
@@ -361,8 +368,11 @@ function CostTaskTable({
 }) {
   if (tasks.length === 0 && emptyMessage) {
     return (
-      <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-xs text-muted">
-        {emptyMessage}
+      <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-4 py-12 text-center">
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/10">
+          <Coins size={20} className="text-muted/50" />
+        </div>
+        <p className="text-sm font-medium text-muted">{emptyMessage}</p>
       </div>
     );
   }

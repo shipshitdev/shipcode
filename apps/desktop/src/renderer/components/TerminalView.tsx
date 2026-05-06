@@ -1,4 +1,5 @@
 import { PageHeader } from '@shipcode/ui';
+import { toast } from '../stores/toast-store';
 import { Button, cn } from '@shipshitdev/ui';
 import { Plus, Terminal } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
@@ -18,7 +19,7 @@ export function TerminalView() {
 
   const handleOpenTerminal = useCallback(() => {
     void openProjectTerminal().catch((error) => {
-      window.alert(error instanceof Error ? error.message : 'Failed to open terminal');
+      toast.error('Failed to open terminal', error instanceof Error ? error.message : undefined);
     });
   }, [openProjectTerminal]);
 

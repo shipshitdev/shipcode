@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { toast } from '../stores/toast-store';
 import { getShortcut, matchesShortcut, SHORTCUTS, type ShortcutId } from '../data/shortcuts';
 import { useAppStore } from '../stores/app-store';
 import { useOpenProjectTerminal } from './useOpenProjectTerminal';
@@ -17,7 +18,7 @@ export function useGlobalKeyboard() {
   useEffect(() => {
     const openTerminal = () => {
       void openProjectTerminal().catch((error) => {
-        window.alert(error instanceof Error ? error.message : 'Failed to open terminal');
+        toast.error('Failed to open terminal', error instanceof Error ? error.message : undefined);
       });
     };
     const actions: Partial<Record<ShortcutId, () => void>> = {

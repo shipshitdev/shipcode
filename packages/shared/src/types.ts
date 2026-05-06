@@ -827,6 +827,19 @@ export interface RepoSetupEnvFile {
   required: boolean;
 }
 
+export interface RuntimeQaServerConfig {
+  command: string;
+  readinessUrl: string;
+  startupTimeoutMs: number;
+  portEnvVar: string;
+}
+
+export interface RuntimeQaConfig {
+  server?: RuntimeQaServerConfig;
+  testCommands: string[];
+  discoverAgentTests: boolean;
+}
+
 export interface RepoSetupContract {
   version: 1;
   setupCommands: string[];
@@ -834,6 +847,7 @@ export interface RepoSetupContract {
   envFiles: RepoSetupEnvFile[];
   setupBeforeVerify: boolean;
   testingContext: string | null;
+  runtimeQa?: RuntimeQaConfig;
 }
 
 export type ProjectSetupStatus = 'configured' | 'missing' | 'invalid';

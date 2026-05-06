@@ -1,3 +1,4 @@
+import { toast } from '../stores/toast-store';
 import {
   bodyHasRequiredPrdSections,
   clampError,
@@ -436,7 +437,7 @@ export function CreateIssueModal() {
           if (showInlineErrors) {
             setError(`Failed to create "${title}": ${message}`);
           } else {
-            window.alert(`Failed to create issue "${title}": ${message}`);
+            toast.error(`Failed to create issue "${title}"`, message);
           }
         });
     },

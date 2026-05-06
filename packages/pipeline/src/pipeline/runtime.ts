@@ -118,15 +118,16 @@ export function createPipelineRuntime(
     cwd: string,
     command: string,
     signal: AbortSignal,
-    timeoutMs: number = SHELL_COMMAND_TIMEOUT_MS,
+    options?: { extraEnv?: Record<string, string>; timeoutMs?: number },
   ): Promise<{ exitCode: number; output: string }> {
+    const timeoutMs = options?.timeoutMs ?? SHELL_COMMAND_TIMEOUT_MS;
     return await new Promise((resolvePromise, rejectPromise) => {
       let settled = false;
       const chunks: string[] = [];
       const shell = resolveSetupShell();
       const child = spawn(shell.command, shell.args(command), {
         cwd,
-        env: shellExecEnv(),
+        env: { ...shellExecEnv(), ...options?.extraEnv },
         signal,
       });
 

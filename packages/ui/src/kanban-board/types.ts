@@ -51,6 +51,7 @@ export interface KanbanBoardProps {
   onAutoRunPrioritiesChange?: (priorities: Array<'p0' | 'p1' | 'p2' | 'p3'>) => void;
   onAutoRun?: () => void;
   autoRunning?: boolean;
+  onFetchPlanSteps?: (threadId: string) => Promise<PlanStepSummary[] | null>;
 }
 
 export type ColumnKey = 'todo' | 'agent' | 'human' | 'done';
@@ -97,3 +98,11 @@ export type IssuePriorityBadge = {
   variant: 'default' | 'warning' | 'info' | 'accent';
   rank: 'p0' | 'p1' | 'p2' | 'p3' | null;
 };
+
+export interface PlanStepSummary {
+  id: string;
+  order: number;
+  title: string;
+  status: 'ready' | 'pending' | 'running' | 'completed' | 'failed' | 'blocked';
+  agentRole: string;
+}

@@ -10,14 +10,16 @@ import {
   PIPELINE_PHASE,
   type Project,
   THREAD_KIND,
+  type TaskGraphWithNodes,
   type Thread,
 } from '@shipcode/shared';
 import { AUTOMATION_ISSUE_NUMBER_BASE, isAutomationIssue, KanbanBoard } from '@shipcode/ui';
 import { Button } from '@shipshitdev/ui';
+import { toast } from '../stores/toast-store';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
 import { RefreshCw, X } from 'lucide-react';
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 // ReactFlow + CSS is heavy — lazy-load since graph tab is rarely the default view.
 const ProjectGraphTab = lazy(() =>
@@ -390,7 +392,7 @@ export function IssuesPanel() {
           });
           refreshIssues.mutate(activeProjectId);
           log.error('[threadpanel] archive-issue failed', { err });
-          window.alert(`Failed to archive issue: ${err?.message ?? err}`);
+          toast.error('Failed to archive issue', err?.message ?? String(err));
         });
     } else {
       const doneIssues = issues.filter((issue) =>
@@ -417,8 +419,9 @@ export function IssuesPanel() {
           });
           refreshIssues.mutate(activeProjectId);
           if (failedCount > 0) {
-            window.alert(
-              `Archived ${archivedCount} issues. ${failedCount} could not be fully archived on GitHub and may still be visible in Done.`,
+            toast.error(
+              `Archived ${archivedCount}, ${failedCount} failed`,
+              `${failedCount} could not be fully archived on GitHub and may still be visible in Done.`,
             );
           }
         })
@@ -429,7 +432,7 @@ export function IssuesPanel() {
           });
           refreshIssues.mutate(activeProjectId);
           log.error('[threadpanel] archive-all-done failed', { err });
-          window.alert(`Failed to archive done issues: ${err?.message ?? err}`);
+          toast.error('Failed to archive done issues', err?.message ?? String(err));
         });
     }
   };
@@ -485,6 +488,32 @@ export function IssuesPanel() {
     if (isAutomationIssue(issue)) return;
     requestCommentComposer(issue.id);
   };
+
+  const handleFetchPlanSteps = useCallback(
+    async (threadId: string) => {
+      try {
+        const graph = await queryClient.ensureQueryData<TaskGraphWithNodes | null>({
+          queryKey: ['task-graph', threadId],
+          queryFn: async () => {
+            const result = await window.shipcode.invoke('task-graph:get-latest', { threadId });
+            return result && Array.isArray(result.nodes) ? result : null;
+          },
+          staleTime: 30_000,
+        });
+        if (!graph?.nodes?.length) return null;
+        return graph.nodes.map((n) => ({
+          id: n.id,
+          order: n.order,
+          title: n.title,
+          status: n.status,
+          agentRole: n.agentRole,
+        }));
+      } catch {
+        return null;
+      }
+    },
+    [queryClient],
+  );
 
   return (
     <div className="relative flex flex-1 min-h-0 min-w-0 flex-col bg-primary">
@@ -566,7 +595,7 @@ export function IssuesPanel() {
               queryClient.invalidateQueries({ queryKey: ['project', activeProjectId] });
               queryClient.invalidateQueries({ queryKey: ['thread-panel-data', activeProjectId] });
               log.error('[threadpanel] set-default-branch failed', err);
-              window.alert(`Failed to set base branch: ${err?.message ?? err}`);
+              toast.error('Failed to set base branch', err?.message ?? String(err));
             });
         }}
         onStartPipeline={(issue) => {
@@ -585,7 +614,7 @@ export function IssuesPanel() {
                 issueNumber: issue.issueNumber,
                 err,
               });
-              window.alert(`Failed to start issue #${issue.issueNumber}: ${err?.message ?? err}`);
+              toast.error(`Failed to start issue #${issue.issueNumber}`, err?.message ?? String(err));
             });
         }}
         onRetry={(issue) => {
@@ -609,7 +638,7 @@ export function IssuesPanel() {
                 issueNumber: issue.issueNumber,
                 err,
               });
-              window.alert(`Failed to retry issue #${issue.issueNumber}: ${err?.message ?? err}`);
+              toast.error(`Failed to retry issue #${issue.issueNumber}`, err?.message ?? String(err));
             });
         }}
         onArchiveIssue={(issue) => setArchiveConfirm({ type: 'one', issue })}
@@ -656,9 +685,7 @@ export function IssuesPanel() {
                 issueNumber: issue.issueNumber,
                 err,
               });
-              window.alert(
-                `Failed to mark issue #${issue.issueNumber} as done: ${err?.message ?? err}`,
-              );
+              toast.error(`Failed to mark issue #${issue.issueNumber} as done`, err?.message ?? String(err));
             });
         }}
         onRerun={(issue) => {
@@ -679,7 +706,7 @@ export function IssuesPanel() {
                   threadId: issue.threadId,
                   err,
                 });
-                window.alert(`Failed to retry automation run: ${err?.message ?? err}`);
+                toast.error('Failed to retry automation run', err?.message ?? String(err));
               });
           }
           patchIssueOptimistic(issue.id, {
@@ -697,7 +724,7 @@ export function IssuesPanel() {
             .catch((err) => {
               if (activeProjectId) refreshIssues.mutate(activeProjectId);
               log.error('[threadpanel] rerun failed', { issueNumber: issue.issueNumber, err });
-              window.alert(`Failed to re-run issue #${issue.issueNumber}: ${err?.message ?? err}`);
+              toast.error(`Failed to re-run issue #${issue.issueNumber}`, err?.message ?? String(err));
             });
         }}
         onCancel={(issue) => {
@@ -735,9 +762,7 @@ export function IssuesPanel() {
                       issueNumber: issue.issueNumber,
                       err,
                     });
-                    window.alert(
-                      `Failed to create PR for issue #${issue.issueNumber}: ${err?.message ?? err}`,
-                    );
+                    toast.error(`Failed to create PR for #${issue.issueNumber}`, err?.message ?? String(err));
                   });
               }
             : undefined
@@ -769,10 +794,11 @@ export function IssuesPanel() {
             .catch((err) => {
               if (activeProjectId) refreshIssues.mutate(activeProjectId);
               log.error('[threadpanel] auto-run failed', err);
-              window.alert(`Auto-run failed: ${err?.message ?? err}`);
+              toast.error('Auto-run failed', err?.message ?? String(err));
             })
             .finally(() => setIsAutoRunning(false));
         }}
+        onFetchPlanSteps={handleFetchPlanSteps}
       />
       <ThreadPanelArchiveDialog
         open={archiveConfirm !== null}
@@ -838,9 +864,7 @@ export function IssuesPanel() {
                       issueNumber: target.issueNumber,
                       err,
                     });
-                    window.alert(
-                      `Failed to restore issue #${target.issueNumber}: ${err?.message ?? err}`,
-                    );
+                    toast.error(`Failed to restore issue #${target.issueNumber}`, err?.message ?? String(err));
                   });
               }}
             >

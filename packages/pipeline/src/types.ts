@@ -275,6 +275,10 @@ export interface PipelineContext {
    * persists per-flow pass/fail results.
    */
   featureQaState: FeatureQaState | null;
+  /** Cleanup function for a running runtime QA server. Called on cancel. */
+  runtimeQaCleanup: (() => Promise<void>) | null;
+  /** Captured output from runtime QA test commands. Fed to verifier. */
+  runtimeQaOutput: string | null;
 }
 
 export interface ActivePipelineSummary {

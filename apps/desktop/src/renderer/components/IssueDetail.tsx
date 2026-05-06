@@ -1,3 +1,4 @@
+import { toast } from '../stores/toast-store';
 import type {
   ActivityEntry,
   AppSettings,
@@ -1050,7 +1051,7 @@ export function IssueDetail() {
       })
       .catch((err: Error) => {
         setShowArchiveConfirm(false);
-        window.alert(`Failed to archive issue: ${err?.message ?? err}`);
+        toast.error('Failed to archive issue', err?.message ?? String(err));
       });
   };
 

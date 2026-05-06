@@ -13,6 +13,7 @@ import {
 } from '@shipshitdev/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { Activity } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 
@@ -117,8 +118,16 @@ export function ActivityView() {
           )}
 
           {!isLoading && !isError && activity.length === 0 && (
-            <div className="rounded-lg border border-dashed border-border px-4 py-12 text-center text-xs text-muted">
-              No activity yet.
+            <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-4 py-16 text-center">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/10">
+                <Activity size={20} className="text-muted/50" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-muted">No activity yet</p>
+                <p className="text-xs text-muted/50">
+                  Pipeline runs and agent actions will appear here.
+                </p>
+              </div>
             </div>
           )}
 

@@ -23,6 +23,12 @@ export function PlanWaiting({ threadId }: { threadId: string }) {
 
   return (
     <div className="mb-5 py-4 text-center text-[13px]">
+      <div className="mb-3 flex justify-center">
+        <span className="relative flex h-3 w-3">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75" />
+          <span className="relative inline-flex h-3 w-3 rounded-full bg-accent" />
+        </span>
+      </div>
       <p className="text-muted">
         Waiting for plan generation
         {sinceStart !== null && (

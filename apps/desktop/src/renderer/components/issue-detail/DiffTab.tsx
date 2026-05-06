@@ -1,7 +1,7 @@
 import type { DiffRecord } from '@shipcode/shared';
 import { SideBySideDiffViewer } from '@shipcode/ui';
 import { Button, Modal } from '@shipshitdev/ui';
-import { Maximize2, X } from 'lucide-react';
+import { FileCode2, Maximize2, X } from 'lucide-react';
 import { useState } from 'react';
 
 export function DiffTab({ diffs, threadStatus }: { diffs: DiffRecord[]; threadStatus?: string }) {
@@ -10,15 +10,20 @@ export function DiffTab({ diffs, threadStatus }: { diffs: DiffRecord[]; threadSt
   if (diffs.length === 0) {
     const isTerminal = threadStatus === 'completed' || threadStatus === 'done';
     return (
-      <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
-        <p className="text-sm text-muted">
-          {isTerminal ? 'No code changes' : 'No code changes yet'}
-        </p>
-        <p className="text-xs text-muted/70">
-          {isTerminal
-            ? 'Pipeline completed without producing code changes.'
-            : 'Diff will appear here after execution produces changes.'}
-        </p>
+      <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/10">
+          <FileCode2 size={20} className="text-muted/50" />
+        </div>
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-muted">
+            {isTerminal ? 'No code changes' : 'No code changes yet'}
+          </p>
+          <p className="text-xs text-muted/50">
+            {isTerminal
+              ? 'Pipeline completed without producing code changes.'
+              : 'Diff will appear here after execution produces changes.'}
+          </p>
+        </div>
       </div>
     );
   }

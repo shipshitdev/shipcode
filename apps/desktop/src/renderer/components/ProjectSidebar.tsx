@@ -1,3 +1,4 @@
+import { toast } from '../stores/toast-store';
 import {
   type AppSettings,
   type CliProviderUsageMap,
@@ -181,7 +182,7 @@ export function ProjectSidebar() {
       invalidateProjects();
     },
     onError: (error: Error) => {
-      window.alert(error.message || 'Failed to archive project');
+      toast.error('Failed to archive project', error.message);
     },
   });
 
@@ -195,7 +196,7 @@ export function ProjectSidebar() {
       invalidateProjects();
     },
     onError: (error: Error) => {
-      window.alert(error.message || 'Failed to remove project');
+      toast.error('Failed to remove project', error.message);
     },
   });
 
@@ -218,7 +219,7 @@ export function ProjectSidebar() {
         .catch(() => {});
     },
     onError: (error: Error) => {
-      window.alert(error.message || 'Failed to relink project folder');
+      toast.error('Failed to relink project', error.message);
     },
   });
 
@@ -231,7 +232,7 @@ export function ProjectSidebar() {
       target: 'default' | AppSettings['projectOpenTarget'];
     }) => window.shipcode.invoke('project:open-path', { projectId, target }),
     onError: (error: Error) => {
-      window.alert(error.message || 'Failed to open project folder');
+      toast.error('Failed to open project folder', error.message);
     },
   });
 

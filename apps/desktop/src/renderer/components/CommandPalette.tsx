@@ -1,4 +1,5 @@
 import type { GitHubIssueCacheRecord, PlanRecord, Project } from '@shipcode/shared';
+import { toast } from '../stores/toast-store';
 import { PIPELINE_PHASE } from '@shipcode/shared';
 import {
   CommandDialog,
@@ -107,7 +108,7 @@ function CommandPaletteContent() {
   const runOpenTerminalAction = () => {
     runAction(() => {
       void openProjectTerminal().catch((error) => {
-        window.alert(error instanceof Error ? error.message : 'Failed to open terminal');
+        toast.error('Failed to open terminal', error instanceof Error ? error.message : undefined);
       });
     });
   };

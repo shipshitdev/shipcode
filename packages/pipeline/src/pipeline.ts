@@ -378,6 +378,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       if (context.activeProcessId) {
         deps.processManager.kill(context.activeProcessId);
       }
+      if (context.runtimeQaCleanup) {
+        void context.runtimeQaCleanup();
+      }
     }
 
     activePipelines.delete(threadId);

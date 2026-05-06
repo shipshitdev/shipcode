@@ -2,9 +2,11 @@ import type { GitHubIssueComment } from '@shipcode/shared';
 import { Button, Textarea } from '@shipshitdev/ui';
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw } from 'lucide-react';
+import { MessageSquare, RefreshCw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { timeAgo } from './helpers';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { PRD_PROSE_CLASSES, timeAgo } from './helpers';
 
 export function CommentsTab({
   projectId,
@@ -89,8 +91,11 @@ export function CommentsTab({
       {isLoading ? (
         <p className="py-4 text-center text-[13px] text-muted">Loading comments…</p>
       ) : comments.length === 0 ? (
-        <div className="rounded-md border border-dashed border-border bg-secondary/10 px-4 py-8 text-center text-[12px] text-muted">
-          No comments yet.
+        <div className="flex flex-col items-center gap-3 rounded-md border border-dashed border-border bg-secondary/10 px-4 py-10 text-center">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted/10">
+            <MessageSquare size={18} className="text-muted/50" />
+          </div>
+          <p className="text-[12px] text-muted">No comments yet.</p>
         </div>
       ) : (
         <div className="mb-4 overflow-hidden rounded-md border border-border bg-secondary/20">
@@ -105,9 +110,9 @@ export function CommentsTab({
                     {timeAgo(comment.createdAt)}
                   </span>
                 </div>
-                <p className="text-[12px] leading-relaxed text-secondary whitespace-pre-wrap break-words">
-                  {comment.body}
-                </p>
+                <div className={`text-[12px] leading-relaxed text-secondary break-words ${PRD_PROSE_CLASSES}`}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{comment.body}</ReactMarkdown>
+                </div>
               </div>
             ))}
           </div>

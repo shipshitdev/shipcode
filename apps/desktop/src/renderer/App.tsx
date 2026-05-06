@@ -8,6 +8,7 @@ import { AutomationRunDetail } from './components/AutomationRunDetail';
 import { CommandPalette } from './components/CommandPalette';
 import { HealthBanner } from './components/HealthBanner';
 import { IssueDetail } from './components/IssueDetail';
+import { GenericToaster } from './components/GenericToaster';
 import { NotificationToaster } from './components/NotificationToaster';
 import { OverviewView } from './components/OverviewView';
 import { ProjectMissingView } from './components/ProjectMissingView';
@@ -345,6 +346,7 @@ export function App() {
           }
         />
         <NotificationToaster />
+        <GenericToaster />
       </div>
     </TooltipProvider>
   );
