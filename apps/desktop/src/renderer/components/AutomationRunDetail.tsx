@@ -2,7 +2,10 @@ import type { DiffRecord, PipelinePhase, PlanRecord, ReviewRecord, Thread } from
 import { formatCost, formatTokenCount, githubCompareUrl, PIPELINE_PHASE } from '@shipcode/shared';
 import { PhaseChip } from '@shipcode/ui';
 import { Badge, Button, cn, Tabs, TabsContent, TabsList, TabsTrigger } from '@shipshitdev/ui';
+<<<<<<< Updated upstream
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
+=======
+>>>>>>> Stashed changes
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -11,6 +14,11 @@ import {
   ExternalLink,
   GitBranch,
   GitPullRequest,
+<<<<<<< Updated upstream
+=======
+  Maximize2,
+  Minimize2,
+>>>>>>> Stashed changes
   RefreshCw,
   Square,
 } from 'lucide-react';

@@ -13,6 +13,10 @@ import {
   stripAnsi,
 } from '@shipcode/shared';
 
+<<<<<<< Updated upstream
+=======
+const execFileAsync = promisify(execFile);
+>>>>>>> Stashed changes
 import { logEvent } from '../logger.service';
 import {
   assertCliPhaseModelsSupported,
@@ -689,6 +693,7 @@ export function registerPipelineHandlers({
     });
   });
 
+<<<<<<< Updated upstream
   const GH_TIMEOUT_MS = 30_000;
   const createPrInFlight = new Set<string>();
 
@@ -700,6 +705,11 @@ export function registerPipelineHandlers({
     createPrInFlight.add(threadId);
 
     try {
+=======
+  ipcMain.handle(
+    'pipeline:create-pr',
+    async (_event, { threadId }: { threadId: string }) => {
+>>>>>>> Stashed changes
       const thread = queries.threads.getById(threadId);
       if (!thread) throw new Error(`Thread ${threadId} not found`);
 
@@ -735,7 +745,11 @@ export function registerPipelineHandlers({
       const { stdout: existingPrJson } = await execFileAsync(
         'gh',
         ['pr', 'list', '--state', 'all', '--head', branch, '--json', 'number,url', '--limit', '1'],
+<<<<<<< Updated upstream
         { cwd, encoding: 'utf-8', timeout: GH_TIMEOUT_MS },
+=======
+        { cwd, encoding: 'utf-8' },
+>>>>>>> Stashed changes
       );
       const existingPrs = JSON.parse(existingPrJson) as Array<{ number: number; url: string }>;
       const existingPr = existingPrs[0];
@@ -750,6 +764,7 @@ export function registerPipelineHandlers({
         const { stdout: prOutput } = await execFileAsync(
           'gh',
           [
+<<<<<<< Updated upstream
             'pr',
             'create',
             '--draft',
@@ -763,6 +778,15 @@ export function registerPipelineHandlers({
             baseBranch,
           ],
           { cwd, encoding: 'utf-8', timeout: GH_TIMEOUT_MS },
+=======
+            'pr', 'create', '--draft',
+            '--title', title,
+            '--body', body,
+            '--head', branch,
+            '--base', baseBranch,
+          ],
+          { cwd, encoding: 'utf-8' },
+>>>>>>> Stashed changes
         );
         const prMatch = prOutput.match(/\/pull\/(\d+)/);
         if (!prMatch) {
@@ -775,6 +799,7 @@ export function registerPipelineHandlers({
       queries.threads.setGithubPr(threadId, prNumber);
 
       return { prNumber, prUrl };
+<<<<<<< Updated upstream
     } catch (err) {
       // Clamp error message for IPC — full trace stays in main-process console.
       const raw = err instanceof Error ? err.message : String(err);
@@ -784,6 +809,10 @@ export function registerPipelineHandlers({
       createPrInFlight.delete(threadId);
     }
   });
+=======
+    },
+  );
+>>>>>>> Stashed changes
 
   ipcMain.handle('pipeline:list-active', (): ActivePipelineSummary[] => {
     return buildActivePipelineSummaries(pipeline.listActive());

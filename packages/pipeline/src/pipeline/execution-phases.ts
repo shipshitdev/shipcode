@@ -147,6 +147,7 @@ export function extractTestFailureSummary(testOutput: string): string {
   return (lastMeaningful ?? 'Tests failed').trim().slice(0, 280);
 }
 
+<<<<<<< Updated upstream
 /**
  * Check if the worktree has any uncommitted or committed changes relative to
  * the fork point. Returns true if there are changes to commit/ship.
@@ -179,6 +180,8 @@ function worktreeHasChanges(context: PipelineContext): boolean {
   }
 }
 
+=======
+>>>>>>> Stashed changes
 export function createExecutionPhaseHandlers({
   deps,
   contextHelpers,
