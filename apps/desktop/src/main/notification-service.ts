@@ -94,11 +94,7 @@ export class NotificationService {
       this.dismissByThread(thread.id);
     }
 
-<<<<<<< Updated upstream
     const { title, body } = buildCopy(kind, thread, testSummary);
-=======
-    const { title, body } = buildCopy(kind, thread);
->>>>>>> Stashed changes
 
     const record = this.notifications.create({
       threadId: thread.id,

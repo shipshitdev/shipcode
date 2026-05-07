@@ -54,6 +54,7 @@ typography:
     fontSize: 13px
     fontWeight: 400
     lineHeight: 1.5
+    letterSpacing: -0.01em
   app-mono:
     fontFamily: '"SF Mono", SFMono-Regular, Consolas, Menlo, monospace'
     fontSize: 12px
@@ -64,17 +65,30 @@ typography:
     fontSize: 16px
     fontWeight: 400
     lineHeight: 1.5
+    letterSpacing: -0.01em
   web-mono:
     fontFamily: '"JetBrains Mono", "SF Mono", "Fira Code", monospace'
     fontSize: 14px
     fontWeight: 400
     lineHeight: 1.5
-  heading-xl:
+  heading-section:
     fontFamily: '"Inter", system-ui, sans-serif'
-    fontSize: 2.25rem
-    fontWeight: 800
+    fontSize: 1.875rem
+    fontWeight: 600
     lineHeight: 1.2
     letterSpacing: -0.03em
+  heading-lg:
+    fontFamily: '"Inter", system-ui, sans-serif'
+    fontSize: 3rem
+    fontWeight: 600
+    lineHeight: 1.1
+    letterSpacing: -0.03em
+  heading-display:
+    fontFamily: '"Inter", system-ui, sans-serif'
+    fontSize: 4.5rem
+    fontWeight: 600
+    lineHeight: 1
+    letterSpacing: -0.05em
 
 rounded:
   sm: 4px
@@ -274,16 +288,20 @@ All semantic colors shift slightly for legibility on light backgrounds.
 
 ### Desktop app
 
-Primary face is **DM Sans** at 13px base — dense enough for data tables, readable
-enough for extended use. Users can switch to system sans-serif or serif via settings.
-Monospace uses **SF Mono** for code blocks, diffs, and terminal output.
+Primary face is **DM Sans** at 13px base with `-0.01em` letter-spacing — dense enough
+for data tables, readable enough for extended use. Users can switch to system
+sans-serif or serif via settings. Monospace uses **SF Mono** for code blocks, diffs,
+and terminal output.
 
 Font size is user-configurable: 12px, 13px (default), 14px, 15px.
 
 ### Web / marketing
 
-**Inter** at 16px base for marketing readability. **JetBrains Mono** for code samples.
-Headings use Inter at 2.25rem/800 weight with tight letter-spacing (-0.03em).
+**Inter** at 16px base with `-0.01em` letter-spacing for marketing readability.
+**JetBrains Mono** for code samples. Three heading tiers:
+- `heading-section` (1.875rem / -0.03em) — section headers
+- `heading-lg` (3rem / -0.03em) — hero sub-headings
+- `heading-display` (4.5rem / -0.05em) — hero headline
 
 ### Scale (desktop)
 
@@ -324,9 +342,10 @@ variants. All use `rounded-md` (6px).
 
 ### Card
 
-`bg-secondary` with `border-border`. Used for stat cards, pipeline cards, and content
-panels. Stat cards support semantic tones (agent, success, warn, danger) via
-`bg-{color}/5` tinting.
+`bg-secondary` with inset `box-shadow` border (`shadow-border`). Elevated surfaces
+use inset shadow instead of CSS `border` for cleaner containment on dark backgrounds.
+Stat cards support semantic tones (agent, success, warn, danger) via `bg-{color}/5`
+tinting.
 
 ### Badge
 
@@ -345,10 +364,18 @@ completed (success), failed (danger).
   `danger` for failed/errored, `agent` for AI activity, `warning` for human attention.
 - **Do** use background layering (primary → secondary → tertiary → elevated) instead
   of heavy borders for visual hierarchy.
+- **Do** use inset `box-shadow` borders (`shadow-border`, `shadow-dialog`,
+  `shadow-dropdown`) on elevated surfaces (cards, dialogs, dropdowns, popovers).
+  Reserve CSS `border` for structural dividers (border-b on headers, border-r on
+  sidebars).
 - **Do** use `color-mix()` with agent color for glow/shimmer effects on active pipeline
   cards.
+- **Do** use negative letter-spacing on body text (`-0.01em`) and headings (`-0.03em`
+  to `-0.05em`).
 - **Don't** use `accent` for status indication — it's reserved for primary CTAs only.
 - **Don't** mix light-theme and dark-theme tokens — they're mutually exclusive sets
   switched via `data-theme` attribute.
 - **Don't** add new semantic colors without updating all three CSS files (desktop, web,
   docs) and this DESIGN.md.
+- **Don't** use CSS `border` for card/dialog/dropdown containment — use inset
+  `box-shadow` instead.

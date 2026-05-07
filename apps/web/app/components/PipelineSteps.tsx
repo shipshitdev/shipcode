@@ -33,7 +33,7 @@ export function PipelineSteps() {
   return (
     <section className="px-6 py-20">
       <div className="mx-auto max-w-5xl">
-        <h2 className="text-center text-xl font-semibold tracking-tight text-primary sm:text-3xl">
+        <h2 className="text-center text-xl font-semibold tracking-[-0.03em] text-primary sm:text-3xl">
           Four phases. Zero hand-holding.
         </h2>
         <p className="mx-auto mt-4 max-w-2xl text-center text-sm leading-6 text-secondary">

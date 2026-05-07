@@ -18,7 +18,7 @@ function TooltipContent({
       <TooltipPrimitive.Content
         sideOffset={sideOffset}
         className={cn(
-          'z-50 rounded-md border border-border bg-elevated px-2 py-1 text-[11px] font-medium text-primary shadow-md',
+          'z-50 rounded-md shadow-border bg-elevated px-2 py-1 text-[11px] font-medium text-primary',
           'animate-in fade-in-0 zoom-in-95',
           'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95',
           'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2',

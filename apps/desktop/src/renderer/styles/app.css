@@ -297,6 +297,27 @@
   color: var(--text-muted);
 }
 
+@utility shadow-border {
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+@utility shadow-border-strong {
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+@utility shadow-dialog {
+  box-shadow:
+    inset 0 0 0 1px var(--border),
+    0 25px 50px -12px rgba(0, 0, 0, 0.4);
+}
+
+@utility shadow-dropdown {
+  box-shadow:
+    inset 0 0 0 1px var(--border),
+    0 10px 15px -3px rgba(0, 0, 0, 0.3),
+    0 4px 6px -4px rgba(0, 0, 0, 0.3);
+}
+
 /* Electron-specific utilities */
 @utility app-region-drag {
   -webkit-app-region: drag;
@@ -323,6 +344,7 @@
     color: var(--text-primary);
     font-size: var(--app-font-size);
     line-height: 1.5;
+    letter-spacing: -0.01em;
     -webkit-font-smoothing: antialiased;
   }
 

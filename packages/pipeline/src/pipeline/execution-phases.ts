@@ -10,9 +10,9 @@ import {
   loadStructuredRepoContext,
   type PromptMaterial,
   type RunningServer,
-  selectPromptMaterials,
   ServerLifecycleManager,
   StreamParser,
+  selectPromptMaterials,
   summarizePromptMaterials,
 } from '@shipcode/agents/source';
 import { WorktreeManager } from '@shipcode/git';
@@ -25,9 +25,9 @@ import {
   MAX_TEST_RETRIES,
   MAX_VERIFICATION_RETRIES,
   PIPELINE_PHASE,
-  VERIFICATION_FENCE_TAG,
   parseUnifiedDiff,
   type ShipCodePlan,
+  VERIFICATION_FENCE_TAG,
 } from '@shipcode/shared';
 import {
   buildTaskNodePlan,
@@ -147,15 +147,9 @@ export function extractTestFailureSummary(testOutput: string): string {
   return (lastMeaningful ?? 'Tests failed').trim().slice(0, 280);
 }
 
-<<<<<<< Updated upstream
-/**
- * Check if the worktree has any uncommitted or committed changes relative to
- * the fork point. Returns true if there are changes to commit/ship.
- */
 function worktreeHasChanges(context: PipelineContext): boolean {
   const cwd = context.worktreePath ?? context.projectPath;
   try {
-    // Check for uncommitted changes (staged + unstaged)
     const status = execFileSync('git', ['status', '--porcelain'], {
       cwd,
       encoding: 'utf-8',
@@ -163,7 +157,6 @@ function worktreeHasChanges(context: PipelineContext): boolean {
     }).trim();
     if (status.length > 0) return true;
 
-    // Check for committed changes since fork point
     if (context.forkPointSha) {
       const diff = execFileSync('git', ['diff', '--name-only', `${context.forkPointSha}..HEAD`], {
         cwd,
@@ -175,13 +168,10 @@ function worktreeHasChanges(context: PipelineContext): boolean {
 
     return false;
   } catch {
-    // If git commands fail, assume changes exist to avoid false negatives
     return true;
   }
 }
 
-=======
->>>>>>> Stashed changes
 export function createExecutionPhaseHandlers({
   deps,
   contextHelpers,
@@ -864,7 +854,9 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
 
     const verifyCommands = getVerifyCommands(context);
     const runtimeQa = context.repoSetupContract?.contract.runtimeQa;
-    const hasRuntimeQa = Boolean(runtimeQa?.server || runtimeQa?.testCommands?.length || runtimeQa?.discoverAgentTests);
+    const hasRuntimeQa = Boolean(
+      runtimeQa?.server || runtimeQa?.testCommands?.length || runtimeQa?.discoverAgentTests,
+    );
 
     if (verifyCommands.length === 0 && !hasRuntimeQa) {
       handlers.startVerification(threadId);
@@ -978,8 +970,14 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
           if (context.testRetries < MAX_TEST_RETRIES) {
             context.testRetries++;
             context.testOutput = `[runtime-qa] Server startup failed: ${message}`;
-            context.stabilizationFeedback = formatTestFixFeedback(context.testOutput, context.testRetries);
-            const delayMs = computeRetryDelayMs({ reason: 'continuation', attempt: context.testRetries });
+            context.stabilizationFeedback = formatTestFixFeedback(
+              context.testOutput,
+              context.testRetries,
+            );
+            const delayMs = computeRetryDelayMs({
+              reason: 'continuation',
+              attempt: context.testRetries,
+            });
             if (context.retryTimer) clearTimeout(context.retryTimer);
             context.retryTimer = setTimeout(() => {
               context.retryTimer = null;
@@ -1004,7 +1002,10 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       if (config.discoverAgentTests !== false) {
         const discovered = discoverRuntimeTests(cwd);
         if (discovered.length > 0) {
-          emitTerminalLifecycle(threadId, `[runtime-qa] Discovered ${discovered.length} agent test(s)\r\n`);
+          emitTerminalLifecycle(
+            threadId,
+            `[runtime-qa] Discovered ${discovered.length} agent test(s)\r\n`,
+          );
           allCommands.push(...discovered);
         }
       }
@@ -1015,11 +1016,19 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
           const failMsg = '[runtime-qa] Server crashed during testing';
           runtimeOutputs.push(failMsg);
           context.runtimeQaOutput = runtimeOutputs.join('\n').slice(-16384);
-          context.testOutput = `${context.testOutput ?? ''}\n${context.runtimeQaOutput}`.slice(-16384);
+          context.testOutput = `${context.testOutput ?? ''}\n${context.runtimeQaOutput}`.slice(
+            -16384,
+          );
           if (context.testRetries < MAX_TEST_RETRIES) {
             context.testRetries++;
-            context.stabilizationFeedback = formatTestFixFeedback(context.testOutput, context.testRetries);
-            const delayMs = computeRetryDelayMs({ reason: 'continuation', attempt: context.testRetries });
+            context.stabilizationFeedback = formatTestFixFeedback(
+              context.testOutput,
+              context.testRetries,
+            );
+            const delayMs = computeRetryDelayMs({
+              reason: 'continuation',
+              attempt: context.testRetries,
+            });
             if (context.retryTimer) clearTimeout(context.retryTimer);
             context.retryTimer = setTimeout(() => {
               context.retryTimer = null;
@@ -1033,16 +1042,26 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
 
         emitTerminalLifecycle(threadId, `[runtime-qa] $ ${command}\r\n`);
         try {
-          const result = await runShellCommand(threadId, cwd, command, context.abort.signal, { extraEnv });
+          const result = await runShellCommand(threadId, cwd, command, context.abort.signal, {
+            extraEnv,
+          });
           runtimeOutputs.push(`[runtime-qa] ${command}\n${result.output}`);
           context.runtimeQaOutput = runtimeOutputs.join('\n').slice(-16384);
 
           if (result.exitCode !== 0) {
-            context.testOutput = `${context.testOutput ?? ''}\n${context.runtimeQaOutput}`.slice(-16384);
+            context.testOutput = `${context.testOutput ?? ''}\n${context.runtimeQaOutput}`.slice(
+              -16384,
+            );
             if (context.testRetries < MAX_TEST_RETRIES) {
               context.testRetries++;
-              context.stabilizationFeedback = formatTestFixFeedback(context.testOutput, context.testRetries);
-              const delayMs = computeRetryDelayMs({ reason: 'continuation', attempt: context.testRetries });
+              context.stabilizationFeedback = formatTestFixFeedback(
+                context.testOutput,
+                context.testRetries,
+              );
+              const delayMs = computeRetryDelayMs({
+                reason: 'continuation',
+                attempt: context.testRetries,
+              });
               if (context.retryTimer) clearTimeout(context.retryTimer);
               context.retryTimer = setTimeout(() => {
                 context.retryTimer = null;

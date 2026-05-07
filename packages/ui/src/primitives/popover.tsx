@@ -34,7 +34,7 @@ function PopoverContent({
           onPointerDownOutside?.(e);
         }}
         className={cn(
-          'z-50 rounded-md border border-border bg-primary shadow-lg outline-none app-region-no-drag',
+          'z-50 rounded-md shadow-dropdown bg-primary outline-none app-region-no-drag',
           className,
         )}
         {...props}

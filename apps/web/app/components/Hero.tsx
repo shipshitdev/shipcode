@@ -67,7 +67,7 @@ export function Hero() {
           className="animate-fade-in-up mt-20"
           style={{ animationDelay: '300ms', animationFillMode: 'both' }}
         >
-          <h2 className="text-xl font-semibold tracking-tight text-primary sm:text-2xl">
+          <h2 className="text-xl font-semibold tracking-[-0.03em] text-primary sm:text-2xl">
             Install in seconds
           </h2>
           <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-secondary">

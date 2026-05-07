@@ -35,7 +35,7 @@ function DropdownMenuContent({
           onPointerDownOutside?.(e);
         }}
         className={cn(
-          'z-50 min-w-[160px] overflow-hidden rounded-md border border-border bg-secondary py-1 shadow-lg app-region-no-drag',
+          'z-50 min-w-[160px] overflow-hidden rounded-md shadow-dropdown bg-secondary py-1 app-region-no-drag',
           className,
         )}
         {...props}
@@ -73,7 +73,7 @@ function DropdownMenuSubContent({
       <DropdownMenuPrimitive.SubContent
         sideOffset={sideOffset}
         className={cn(
-          'z-50 min-w-[160px] overflow-hidden rounded-md border border-border bg-secondary py-1 shadow-lg app-region-no-drag',
+          'z-50 min-w-[160px] overflow-hidden rounded-md shadow-dropdown bg-secondary py-1 app-region-no-drag',
           className,
         )}
         {...props}

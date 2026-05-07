@@ -24,6 +24,8 @@
   --color-done: #a855f7;
   --font-sans: "Inter", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", "SF Mono", "Fira Code", monospace;
+  --font-size-display: 4.5rem;
+  --font-size-heading-lg: 3rem;
 }
 
 @utility bg-primary {
@@ -51,6 +53,7 @@
 html {
   color-scheme: dark;
   scroll-behavior: smooth;
+  letter-spacing: -0.01em;
 }
 
 body {
