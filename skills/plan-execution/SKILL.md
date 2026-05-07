@@ -57,6 +57,16 @@ Throughout execution:
 - If you encounter a real blocker (missing file, broken dep, bad assumption in the plan), surface it clearly and stop — do not paper over it.
 </execution_method>
 
+<runtime_tests>
+You can write runtime tests in `.shipcode/runtime-tests/`.
+These auto-run after your code changes against a live server when the project has runtime QA configured.
+Available env vars: `BASE_URL` (server origin), the project's port env var (e.g. `PORT`).
+Write tests that verify your implementation works at runtime — HTTP requests, API assertions, etc.
+Supported files: `*.test.ts`, `*.test.js` (run via `bun run`), `*.test.sh` (run via `bash`).
+Files execute in lexicographic order. These are ephemeral — they run once and are cleaned before commit.
+Only write runtime tests when the plan involves API endpoints, server routes, or runtime behavior that unit tests cannot cover.
+</runtime_tests>
+
 <finding_bar>
 Do not add error handling, fallbacks, or validation for scenarios that cannot happen.
 Do not add comments explaining what the code obviously does.

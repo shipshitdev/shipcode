@@ -1,39 +1,43 @@
 /**
- * Canonical design tokens for ShipCode.
- *
- * Colors: shared across desktop and web.
- * Fonts: separate stacks — desktop is code-centric (monospace), web is marketing (readable).
- * Spacing: shared values.
- *
- * CSS consumers (desktop global.css, web globals.css) duplicate these values
- * because CSS cannot import JS. When changing a value, update all three locations.
- * The TS module is the source of truth for documentation and programmatic access.
+ * Canonical design tokens — synced with DESIGN.md (repo root).
+ * CSS consumers duplicate these values; update DESIGN.md + CSS when changing.
  */
 
 export const colors = {
-  bgPrimary: '#0d1117',
-  bgSecondary: '#161b22',
-  bgTertiary: '#21262d',
-  bgHover: '#30363d',
-  border: '#30363d',
-  textPrimary: '#e6edf3',
-  textSecondary: '#8b949e',
-  textMuted: '#484f58',
-  accent: '#58a6ff',
-  accentHover: '#79c0ff',
-  success: '#3fb950',
-  warning: '#d29922',
-  danger: '#f85149',
+  bgPrimary: '#050607',
+  bgSecondary: '#0c0d10',
+  bgTertiary: '#131518',
+  bgElevated: '#1a1c21',
+  bgHover: '#20232a',
+  border: 'rgba(255, 255, 255, 0.1)',
+  borderStrong: 'rgba(255, 255, 255, 0.18)',
+  textPrimary: '#f4f4f5',
+  textSecondary: '#b4b4bc',
+  textMuted: '#6b6b78',
+  accent: '#fafafa',
+  accentForeground: '#050607',
+  accentHover: '#e4e4e7',
+  success: '#10b981',
+  warning: '#f59e0b',
+  danger: '#ef4444',
+  info: '#3b82f6',
+  agent: '#38bdf8',
+  done: '#a855f7',
 } as const;
 
 export const fonts = {
-  desktopSans: "'SF Mono', 'Fira Code', 'JetBrains Mono', monospace",
-  desktopMono: "'SF Mono', 'Fira Code', monospace",
-  webSans: "'Inter', system-ui, sans-serif",
-  webMono: "'JetBrains Mono', 'SF Mono', 'Fira Code', monospace",
+  desktopSans: '"DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
+  desktopMono: '"SF Mono", SFMono-Regular, Consolas, Menlo, monospace',
+  webSans: '"Inter", system-ui, sans-serif',
+  webMono: '"JetBrains Mono", "SF Mono", "Fira Code", monospace',
 } as const;
 
 export const spacing = {
-  radius: '6px',
+  radiusSm: '4px',
+  radiusMd: '6px',
+  radiusLg: '10px',
+  radiusXl: '16px',
+  radius2xl: '20px',
   titlebarHeight: '38px',
+  titlebarHeightPlus: '42px',
 } as const;
