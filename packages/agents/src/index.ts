@@ -4,6 +4,16 @@ export type {
   CommitGroup,
 } from './auto-commit';
 export { generateCommitGroups, parseAndValidate } from './auto-commit';
+export type {
+  AutomationFormatProvider,
+  FormatAutomationPromptOptions,
+  FormattedAutomation,
+} from './automation-formatter';
+export {
+  buildAutomationFormatPrompt,
+  extractFormattedAutomation,
+  formatAutomationPrompt,
+} from './automation-formatter';
 export type { CodeReviewGraphContextOptions } from './code-review-graph-context';
 export { loadCodeReviewGraphContext } from './code-review-graph-context';
 export type { ContextGenerateResult } from './context-generator';
@@ -73,9 +83,6 @@ export type { EnhancePrdOptions, GeneratedPrd } from './prd-generator';
 export { buildPrdPrompt, enhancePrdDraft, extractPrd } from './prd-generator';
 export type { ManagedProcess } from './process-manager';
 export { ProcessManager } from './process-manager';
-export { discoverRuntimeTests, getRuntimeTestsDir } from './runtime-test-discovery';
-export type { RunningServer } from './server-lifecycle';
-export { ServerLifecycleManager } from './server-lifecycle';
 export {
   detectProjectSetup,
   inspectProjectSetup,
@@ -170,6 +177,9 @@ export { ClaudeNormalizer } from './providers/normalizers/claude-normalizer';
 export { CodexNormalizer } from './providers/normalizers/codex-normalizer';
 export type { LoadedRepoSetupContract } from './repo-setup-contract';
 export { loadRepoSetupContract } from './repo-setup-contract';
+export { discoverRuntimeTests, getRuntimeTestsDir } from './runtime-test-discovery';
+export type { RunningServer } from './server-lifecycle';
+export { ServerLifecycleManager } from './server-lifecycle';
 export type {
   BundledDefault,
   PhaseSkillKey,

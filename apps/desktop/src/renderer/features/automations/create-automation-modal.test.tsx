@@ -94,6 +94,9 @@ describe('CreateAutomationModal', () => {
           updatedAt: new Date().toISOString(),
         };
       }
+      if (channel === 'ai:format-automation') {
+        return { prompt: '# Automation: Smoke\n\n## Goal\nDo thing.' };
+      }
       return null;
     });
 
@@ -163,6 +166,37 @@ describe('CreateAutomationModal', () => {
           executorReasoningEffort: null,
         }),
       );
+    });
+  });
+
+  it('formats the prompt in place before submit', async () => {
+    renderWithProviders();
+
+    await screen.findByText('My Repo');
+
+    const promptInput = screen.getByPlaceholderText(/What should this run do\?/);
+    fireEvent.change(promptInput, { target: { value: 'do thing' } });
+
+    const format = screen.getByRole('button', { name: /Format/ });
+    await waitFor(() => expect(format).not.toBeDisabled());
+
+    fireEvent.click(format);
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(
+        'ai:format-automation',
+        expect.objectContaining({
+          projectId: 'project-1',
+          prompt: 'do thing',
+          provider: null,
+          modelId: null,
+          reasoningEffort: null,
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(promptInput).toHaveValue('# Automation: Smoke\n\n## Goal\nDo thing.');
     });
   });
 });

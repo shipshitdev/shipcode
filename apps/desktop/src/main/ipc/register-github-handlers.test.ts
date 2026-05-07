@@ -454,6 +454,58 @@ describe('registerGitHubHandlers', () => {
     });
   });
 
+  it('marks an automation issue done by updating the backing thread only', async () => {
+    const markDoneThread = vi.fn();
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+      },
+      githubIssues: buildGithubIssuesQueries(
+        {
+          getByNumber: vi.fn(),
+          updatePipelineStatus: vi.fn(),
+          updateState: vi.fn(),
+        },
+        [],
+      ),
+      threads: {
+        markDone: markDoneThread,
+        getById: vi.fn(() => null),
+        getByProjectAndGithubIssue: vi.fn(() => null),
+      },
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const markDone = handlers.get('issue:mark-done');
+    if (!markDone) throw new Error('issue:mark-done handler not registered');
+
+    await markDone(undefined, {
+      projectId: 'project-1',
+      issueId: 'automation:thread-auto-1',
+      issueNumber: -1_123_456,
+    });
+
+    expect(markDoneThread).toHaveBeenCalledWith('thread-auto-1');
+    expect(closeIssueMock).not.toHaveBeenCalled();
+    expect(queries.githubIssues.getByNumber).not.toHaveBeenCalled();
+    expect(queries.githubIssues.updatePipelineStatus).not.toHaveBeenCalled();
+    expect(queries.githubIssues.updateState).not.toHaveBeenCalled();
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('github:issues-updated', {
+      projectId: 'project-1',
+      issues: [],
+    });
+  });
+
   describe('github:refresh-issues priority sync', () => {
     const projectWithBoard = {
       ...baseProject,

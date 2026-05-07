@@ -26,6 +26,7 @@ import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Cron } from 'croner';
 import log from 'electron-log/renderer';
+import { Wand2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '../../stores/app-store';
 
@@ -180,13 +181,45 @@ export function CreateAutomationModal() {
     },
   });
 
+  const formatAutomation = useMutation({
+    mutationFn: async () => {
+      return window.shipcode.invoke<{ prompt: string }>('ai:format-automation', {
+        projectId,
+        prompt,
+        provider: provider === 'inherit' ? null : provider,
+        modelId: provider === 'inherit' ? null : executorModelId.trim() || null,
+        reasoningEffort: reasoning === 'inherit' ? null : reasoning,
+      });
+    },
+    onSuccess: (result) => {
+      setPrompt(result.prompt);
+    },
+    onError: (err) => {
+      log.error('[CreateAutomationModal] format failed', err);
+      setError(clampError(err));
+    },
+  });
+
   const submitDisabled =
-    createOrUpdate.isPending || !projectId || !name.trim() || !prompt.trim() || !!cronError;
+    createOrUpdate.isPending ||
+    formatAutomation.isPending ||
+    !projectId ||
+    !name.trim() ||
+    !prompt.trim() ||
+    !!cronError;
+  const formatDisabled =
+    formatAutomation.isPending || createOrUpdate.isPending || !projectId || !prompt.trim();
 
   const handleSubmit = () => {
     setError(null);
     if (submitDisabled) return;
     createOrUpdate.mutate();
+  };
+
+  const handleFormat = () => {
+    setError(null);
+    if (formatDisabled) return;
+    formatAutomation.mutate();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -250,9 +283,28 @@ export function CreateAutomationModal() {
         )}
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="auto-prompt" className="text-xs text-secondary">
-            Prompt
-          </Label>
+          <div className="flex items-center justify-between gap-2">
+            <Label htmlFor="auto-prompt" className="text-xs text-secondary">
+              Prompt
+            </Label>
+            <Button
+              type="button"
+              variant="secondary"
+              size="xs"
+              onClick={handleFormat}
+              disabled={formatDisabled}
+              title="Format this automation prompt into a clear agent-ready spec"
+            >
+              <LoadingButtonContent
+                loading={formatAutomation.isPending}
+                className="gap-1"
+                spinnerSize={10}
+              >
+                <Wand2 size={12} />
+                Format
+              </LoadingButtonContent>
+            </Button>
+          </div>
           <Textarea
             id="auto-prompt"
             value={prompt}

@@ -1,0 +1,132 @@
+import { EventEmitter } from 'node:events';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const mockSpawn = vi.hoisted(() => vi.fn());
+
+vi.mock('node:child_process', () => ({
+  exec: vi.fn(),
+  spawn: mockSpawn,
+}));
+
+vi.mock('./health-check', () => ({
+  shellExecEnv: () => ({ PATH: '/usr/bin' }),
+}));
+
+import { extractFormattedAutomation, formatAutomationPrompt } from './automation-formatter';
+
+function createFakeProc() {
+  const proc = new EventEmitter() as EventEmitter & {
+    stdout: EventEmitter;
+    stderr: EventEmitter;
+    stdin: { write: (chunk: string) => boolean; end: () => void };
+  };
+  proc.stdout = new EventEmitter();
+  proc.stderr = new EventEmitter();
+  const stdinWrites: string[] = [];
+  let stdinEnded = false;
+  proc.stdin = {
+    write: (chunk: string) => {
+      stdinWrites.push(chunk);
+      return true;
+    },
+    end: () => {
+      stdinEnded = true;
+    },
+  };
+  return {
+    proc,
+    stdinWrites,
+    isStdinEnded: () => stdinEnded,
+    close: (code: number, options?: { stdout?: string; stderr?: string }) => {
+      if (options?.stdout) proc.stdout.emit('data', options.stdout);
+      if (options?.stderr) proc.stderr.emit('data', options.stderr);
+      proc.emit('close', code);
+    },
+  };
+}
+
+describe('formatAutomationPrompt', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('pipes the formatter prompt through Claude stdin', async () => {
+    const fake = createFakeProc();
+    mockSpawn.mockReturnValueOnce(fake.proc);
+
+    const promise = formatAutomationPrompt({
+      rawPrompt: 'check CI every morning',
+      cwd: '/repo',
+      provider: 'claude',
+      modelId: 'claude-sonnet-4-6',
+      reasoningEffort: 'low',
+    });
+
+    await Promise.resolve();
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      'claude',
+      expect.arrayContaining(['-p', '--model', 'claude-sonnet-4-6', '--output-format', 'json']),
+      expect.objectContaining({ cwd: '/repo', stdio: ['pipe', 'pipe', 'pipe'] }),
+    );
+    expect(fake.stdinWrites[0]).toContain('Raw automation to format');
+    expect(fake.stdinWrites[0]).toContain('check CI every morning');
+    expect(fake.isStdinEnded()).toBe(true);
+
+    fake.close(0, {
+      stdout:
+        '```shipcode-automation\n{"prompt":"# Automation: CI check\\n\\n## Goal\\nCheck CI."}\n```',
+    });
+
+    await expect(promise).resolves.toEqual({
+      prompt: '# Automation: CI check\n\n## Goal\nCheck CI.',
+    });
+  });
+
+  it('uses Codex CLI when selected', async () => {
+    const fake = createFakeProc();
+    mockSpawn.mockReturnValueOnce(fake.proc);
+
+    const promise = formatAutomationPrompt({
+      rawPrompt: 'triage flaky tests',
+      cwd: '/repo',
+      provider: 'codex',
+      modelId: 'gpt-5.4-mini',
+      reasoningEffort: 'low',
+    });
+
+    await Promise.resolve();
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      'codex',
+      [
+        '-a',
+        'never',
+        '-m',
+        'gpt-5.4-mini',
+        '-c',
+        'model_reasoning_effort=low',
+        'exec',
+        '-',
+        '--sandbox',
+        'read-only',
+      ],
+      expect.objectContaining({ cwd: '/repo', stdio: ['pipe', 'pipe', 'pipe'] }),
+    );
+
+    fake.close(0, {
+      stdout:
+        '```shipcode-automation\n{"prompt":"# Automation: flaky test triage\\n\\n## Goal\\nTriage failures."}\n```',
+    });
+
+    await expect(promise).resolves.toEqual({
+      prompt: '# Automation: flaky test triage\n\n## Goal\nTriage failures.',
+    });
+  });
+});
+
+describe('extractFormattedAutomation', () => {
+  it('rejects responses without the automation envelope', () => {
+    expect(() => extractFormattedAutomation('plain text')).toThrow(/No `shipcode-automation`/);
+  });
+});

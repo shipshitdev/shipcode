@@ -5,6 +5,7 @@ import type {
   ActivityEntry,
   AgentConversationRecord,
   AgentState,
+  AgentType,
   AppSettings,
   AutoCommitResult,
   Automation,
@@ -479,6 +480,16 @@ export interface IpcInvokeChannels {
   'ai:enhance-prd': {
     args: { projectId: string; draftBody: string; attachmentSessionId: string | null };
     result: { body: string };
+  };
+  'ai:format-automation': {
+    args: {
+      projectId: string;
+      prompt: string;
+      provider?: AgentType | null;
+      modelId?: string | null;
+      reasoningEffort?: ReasoningEffort | null;
+    };
+    result: { prompt: string };
   };
 
   // PRD attachment lifecycle (image staging before issue creation)

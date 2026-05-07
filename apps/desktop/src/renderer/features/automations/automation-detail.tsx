@@ -5,6 +5,8 @@ import { Button, cn } from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
 import { Cron } from 'croner';
 import { ArrowLeft, Loader2 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useAppStore } from '../../stores/app-store';
 import { describeAutomationRun, getAutomationRunTotalTokens } from './run-presentation';
 
@@ -54,6 +56,15 @@ const STATUS_COLOR: Record<string, string> = {
   completed: 'bg-success/12 text-success border-success/25',
   failed: 'bg-danger/12 text-danger border-danger/25',
 };
+
+const AUTOMATION_PROMPT_PROSE_CLASSES =
+  'break-words text-[12px] leading-relaxed text-secondary ' +
+  '[&_h1]:mb-2 [&_h1]:text-sm [&_h1]:font-semibold [&_h1]:text-primary ' +
+  '[&_h2]:mb-1 [&_h2]:mt-3 [&_h2]:text-[12px] [&_h2]:font-semibold [&_h2]:text-primary ' +
+  '[&_p]:mb-2 [&_p:last-child]:mb-0 ' +
+  '[&_ul]:mb-2 [&_ul]:list-disc [&_ul]:pl-4 ' +
+  '[&_ol]:mb-2 [&_ol]:list-decimal [&_ol]:pl-4 ' +
+  '[&_li]:mb-0.5 [&_code]:rounded [&_code]:bg-tertiary [&_code]:px-1 [&_code]:font-mono [&_code]:text-[11px]';
 
 export function AutomationDetail() {
   const automationId = useAppStore((s) => s.activeAutomationDetailId);
@@ -128,6 +139,19 @@ export function AutomationDetail() {
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* Left: run history */}
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          {automation?.prompt && (
+            <div className="shrink-0 border-b border-border px-6 py-4">
+              <h4 className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted">
+                Prompt
+              </h4>
+              <div className="max-h-64 overflow-y-auto rounded-md border border-border bg-secondary px-3 py-2.5">
+                <div className={AUTOMATION_PROMPT_PROSE_CLASSES}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{automation.prompt}</ReactMarkdown>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="shrink-0 border-b border-border px-6 py-3">
             <h4 className="text-[10px] font-medium uppercase tracking-wider text-muted">
               All Runs ({runHistory.length})
@@ -267,20 +291,6 @@ export function AutomationDetail() {
                     {automation.executorModelId}
                   </p>
                 )}
-              </div>
-            )}
-
-            {/* Prompt */}
-            {automation?.prompt && (
-              <div className="min-w-0">
-                <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
-                  Prompt
-                </span>
-                <div className="mt-1 rounded-md border border-border bg-tertiary/40 px-2 py-1.5">
-                  <pre className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-secondary">
-                    {automation.prompt}
-                  </pre>
-                </div>
               </div>
             )}
 

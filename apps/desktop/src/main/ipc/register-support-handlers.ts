@@ -9,17 +9,20 @@ import {
   checkGhAuth,
   checkSystemHealthWithAuth,
   enhancePrdDraft,
+  formatAutomationPrompt,
   generateMemoryFiles,
   inspectRepoMemory,
   readMemoryFile,
   shellExecEnv,
 } from '@shipcode/agents';
 import {
+  type AgentType,
   clampError,
   type ExecutorModel,
   formatClockTime,
   type GeneratorCli,
   providerDisplay,
+  type ReasoningEffort,
 } from '@shipcode/shared';
 import log, { logProcessOutput } from '../logger.service';
 import { assertPrdRewriteModelSupported } from './helpers';
@@ -140,6 +143,69 @@ export function registerSupportHandlers({
       } catch (err) {
         log.error('[ai:enhance-prd]', err);
         throw new Error(supportHandlerError(err, 'Enhancement failed'));
+      }
+    },
+  );
+
+  ipcMain.handle(
+    'ai:format-automation',
+    async (
+      _event,
+      {
+        projectId,
+        prompt,
+        provider,
+        modelId,
+        reasoningEffort,
+      }: {
+        projectId: string;
+        prompt: string;
+        provider?: AgentType | null;
+        modelId?: string | null;
+        reasoningEffort?: ReasoningEffort | null;
+      },
+    ) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+
+      const settings = queries.settings.get();
+      const selectedProvider =
+        provider === 'claude' || provider === 'codex' || provider === 'openrouter'
+          ? provider
+          : settings.prdRewriteCli;
+      const selectedReasoningEffort =
+        reasoningEffort ??
+        (selectedProvider === 'openrouter'
+          ? settings.executorReasoningEffort
+          : settings.prdRewriteReasoningEffort);
+      const selectedModelId =
+        modelId?.trim() ||
+        (selectedProvider === 'claude'
+          ? settings.prdRewriteClaudeModel
+          : selectedProvider === 'codex'
+            ? settings.prdRewriteCodexModel
+            : settings.openrouterDefaultPaidModel);
+
+      if (selectedProvider !== 'openrouter') {
+        await assertPrdRewriteModelSupported(
+          selectedProvider,
+          selectedModelId,
+          selectedReasoningEffort,
+        );
+      }
+
+      try {
+        return await formatAutomationPrompt({
+          rawPrompt: prompt ?? '',
+          cwd: project.path,
+          provider: selectedProvider,
+          modelId: selectedModelId,
+          reasoningEffort: selectedReasoningEffort,
+          openRouterApiKey: process.env.OPENROUTER_API_KEY,
+        });
+      } catch (err) {
+        log.error('[ai:format-automation]', err);
+        throw new Error(supportHandlerError(err, 'Automation formatting failed'));
       }
     },
   );
