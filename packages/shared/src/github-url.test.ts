@@ -197,6 +197,11 @@ describe('validateGithubProjectUrl', () => {
     expect(r.ok).toBe(false);
   });
 
+  it('rejects project URLs with a .git-suffixed number', () => {
+    const r = validateGithubProjectUrl('https://github.com/orgs/acme/projects/3.git');
+    expect(r.ok).toBe(false);
+  });
+
   it('rejects garbage string', () => {
     const r = validateGithubProjectUrl('not a url');
     expect(r.ok).toBe(false);
@@ -246,6 +251,10 @@ describe('parseGithubProjectUrl', () => {
 
   it('returns null for a non-numeric project number', () => {
     expect(parseGithubProjectUrl('https://github.com/orgs/acme/projects/abc')).toBeNull();
+  });
+
+  it('returns null for a .git-suffixed project number', () => {
+    expect(parseGithubProjectUrl('https://github.com/orgs/acme/projects/3.git')).toBeNull();
   });
 
   it('returns null when the trailing /<n> segment is missing', () => {

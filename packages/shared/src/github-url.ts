@@ -40,12 +40,9 @@ function parseGithubUrl(raw: string): URL | null {
   }
 }
 
-function githubPathParts(url: URL): string[] {
-  return url.pathname
-    .replace(/^\/+/, '')
-    .replace(/\/+$/, '')
-    .replace(/\.git$/i, '')
-    .split('/');
+function githubPathParts(url: URL, options: { stripGitSuffix?: boolean } = {}): string[] {
+  const path = url.pathname.replace(/^\/+/, '').replace(/\/+$/, '');
+  return (options.stripGitSuffix ? path.replace(/\.git$/i, '') : path).split('/');
 }
 
 export function parseGithubRemote(remote: string | null | undefined): GithubRepoRef | null {
@@ -61,7 +58,7 @@ export function parseGithubRemote(remote: string | null | undefined): GithubRepo
   const url = parseGithubUrl(trimmed);
   if (!url) return null;
 
-  const parts = githubPathParts(url);
+  const parts = githubPathParts(url, { stripGitSuffix: true });
   if (parts.length < 2 || !parts[0] || !parts[1]) return null;
   return { owner: parts[0], repo: parts[1] };
 }

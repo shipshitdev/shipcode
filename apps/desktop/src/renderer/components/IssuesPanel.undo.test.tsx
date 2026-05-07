@@ -311,6 +311,77 @@ describe('IssuesPanel undo done move', () => {
     });
   });
 
+  it('does not offer GitHub reopen undo for quick/local done moves', async () => {
+    const quickIssue = makeIssue({
+      id: 'quick-1',
+      issueNumber: -236024417,
+      isQuickMode: true,
+      pipelineStatus: 'completed',
+    });
+
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'thread-panel:get-data') return panelData;
+      if (channel === 'github:list-issues') return [quickIssue];
+      if (channel === 'issue:mark-done') return undefined;
+      if (channel === 'github:refresh-issues') return [{ ...quickIssue, pipelineStatus: 'done' }];
+      return null;
+    });
+
+    renderWithProviders();
+
+    await screen.findByText(quickIssue.title);
+    fireEvent.click(await screen.findByRole('button', { name: 'Trigger mark done' }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('issue:mark-done', {
+        projectId: project.id,
+        issueId: quickIssue.id,
+        issueNumber: quickIssue.issueNumber,
+      });
+    });
+    expect(screen.queryByText(/Moved #/)).not.toBeInTheDocument();
+  });
+
+  it('marks automation cards done through their thread without showing GitHub undo', async () => {
+    const automationThread: Thread = {
+      ...awaitingApprovalThread,
+      id: 'automation-thread-1',
+      githubIssueNumber: null,
+      automationId: 'automation-1',
+      status: 'completed',
+      title: '[Auto] clean',
+    };
+
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'thread-panel:get-data') {
+        return {
+          ...panelData,
+          threads: [automationThread],
+          latestPlanStatusByThreadId: {},
+        } satisfies ThreadPanelData;
+      }
+      if (channel === 'github:list-issues') return [];
+      if (channel === 'issue:mark-done') return undefined;
+      if (channel === 'github:refresh-issues') return [];
+      return null;
+    });
+
+    renderWithProviders();
+
+    await screen.findByText('[Auto] clean');
+    fireEvent.click(await screen.findByRole('button', { name: 'Trigger mark done' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('board-status')).toHaveTextContent('done');
+    });
+    expect(invokeMock).toHaveBeenCalledWith('issue:mark-done', {
+      projectId: project.id,
+      issueId: `automation:${automationThread.id}`,
+      issueNumber: expect.any(Number),
+    });
+    expect(screen.queryByText(/Moved #/)).not.toBeInTheDocument();
+  });
+
   it('retries failed automation cards through pipeline retry and moves them to planning', async () => {
     const automationThread: Thread = {
       ...awaitingApprovalThread,

@@ -9,17 +9,17 @@ import {
   isRealGithubIssueNumber,
   PIPELINE_PHASE,
   type Project,
-  THREAD_KIND,
   type TaskGraphWithNodes,
+  THREAD_KIND,
   type Thread,
 } from '@shipcode/shared';
 import { AUTOMATION_ISSUE_NUMBER_BASE, isAutomationIssue, KanbanBoard } from '@shipcode/ui';
 import { Button } from '@shipshitdev/ui';
-import { toast } from '../stores/toast-store';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
 import { RefreshCw, X } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from '../stores/toast-store';
 
 // ReactFlow + CSS is heavy — lazy-load since graph tab is rarely the default view.
 const ProjectGraphTab = lazy(() =>
@@ -614,7 +614,10 @@ export function IssuesPanel() {
                 issueNumber: issue.issueNumber,
                 err,
               });
-              toast.error(`Failed to start issue #${issue.issueNumber}`, err?.message ?? String(err));
+              toast.error(
+                `Failed to start issue #${issue.issueNumber}`,
+                err?.message ?? String(err),
+              );
             });
         }}
         onRetry={(issue) => {
@@ -638,7 +641,10 @@ export function IssuesPanel() {
                 issueNumber: issue.issueNumber,
                 err,
               });
-              toast.error(`Failed to retry issue #${issue.issueNumber}`, err?.message ?? String(err));
+              toast.error(
+                `Failed to retry issue #${issue.issueNumber}`,
+                err?.message ?? String(err),
+              );
             });
         }}
         onArchiveIssue={(issue) => setArchiveConfirm({ type: 'one', issue })}
@@ -655,11 +661,22 @@ export function IssuesPanel() {
         }
         onMarkDone={(issue) => {
           if (!activeProjectId) return;
+          const isAutomation = isAutomationIssue(issue);
+          const markedDoneAt = new Date().toISOString();
           const nextStatus: IssuePipelineStatus = ISSUE_PIPELINE_STATUS.done;
           const nextState: GitHubIssueCacheRecord['state'] = 'closed';
-          patchIssueOptimistic(issue.id, { pipelineStatus: nextStatus, state: nextState });
+          if (isAutomation && issue.threadId) {
+            patchThreadOptimistic(issue.threadId, {
+              doneAt: markedDoneAt,
+              updatedAt: markedDoneAt,
+            });
+          } else {
+            patchIssueOptimistic(issue.id, { pipelineStatus: nextStatus, state: nextState });
+          }
+          const canUndoWithGithub =
+            !isAutomation && !issue.isQuickMode && isRealGithubIssueNumber(issue.issueNumber);
           setDoneUndo(
-            nextStatus === ISSUE_PIPELINE_STATUS.done
+            canUndoWithGithub
               ? {
                   issueId: issue.id,
                   issueNumber: issue.issueNumber,
@@ -676,16 +693,39 @@ export function IssuesPanel() {
               issueNumber: issue.issueNumber,
             })
             .then(() => {
-              if (activeProjectId) refreshIssues.mutate(activeProjectId);
+              if (activeProjectId) {
+                if (isAutomation) {
+                  queryClient.invalidateQueries({
+                    queryKey: ['thread-panel-data', activeProjectId],
+                  });
+                }
+                refreshIssues.mutate(activeProjectId);
+              }
             })
             .catch((err) => {
               setDoneUndo((current) => (current?.issueId === issue.id ? null : current));
-              if (activeProjectId) refreshIssues.mutate(activeProjectId);
+              if (isAutomation && issue.threadId) {
+                patchThreadOptimistic(issue.threadId, {
+                  doneAt: null,
+                  updatedAt: new Date().toISOString(),
+                });
+              }
+              if (activeProjectId) {
+                if (isAutomation) {
+                  queryClient.invalidateQueries({
+                    queryKey: ['thread-panel-data', activeProjectId],
+                  });
+                }
+                refreshIssues.mutate(activeProjectId);
+              }
               log.error('[threadpanel] close-issue failed', {
                 issueNumber: issue.issueNumber,
                 err,
               });
-              toast.error(`Failed to mark issue #${issue.issueNumber} as done`, err?.message ?? String(err));
+              toast.error(
+                `Failed to mark issue #${issue.issueNumber} as done`,
+                err?.message ?? String(err),
+              );
             });
         }}
         onRerun={(issue) => {
@@ -724,7 +764,10 @@ export function IssuesPanel() {
             .catch((err) => {
               if (activeProjectId) refreshIssues.mutate(activeProjectId);
               log.error('[threadpanel] rerun failed', { issueNumber: issue.issueNumber, err });
-              toast.error(`Failed to re-run issue #${issue.issueNumber}`, err?.message ?? String(err));
+              toast.error(
+                `Failed to re-run issue #${issue.issueNumber}`,
+                err?.message ?? String(err),
+              );
             });
         }}
         onCancel={(issue) => {
@@ -762,7 +805,10 @@ export function IssuesPanel() {
                       issueNumber: issue.issueNumber,
                       err,
                     });
-                    toast.error(`Failed to create PR for #${issue.issueNumber}`, err?.message ?? String(err));
+                    toast.error(
+                      `Failed to create PR for #${issue.issueNumber}`,
+                      err?.message ?? String(err),
+                    );
                   });
               }
             : undefined
@@ -864,7 +910,10 @@ export function IssuesPanel() {
                       issueNumber: target.issueNumber,
                       err,
                     });
-                    toast.error(`Failed to restore issue #${target.issueNumber}`, err?.message ?? String(err));
+                    toast.error(
+                      `Failed to restore issue #${target.issueNumber}`,
+                      err?.message ?? String(err),
+                    );
                   });
               }}
             >

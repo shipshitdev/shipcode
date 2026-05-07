@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import {
   DEFAULT_SETTINGS,
   type GitHubIssueCacheRecord,
@@ -163,6 +165,24 @@ describe('useIpc terminal scoping', () => {
     });
 
     expect(useAppStore.getState().githubIssues).toEqual([currentIssue]);
+  });
+
+  it('invalidates thread-panel data when GitHub issue updates arrive', () => {
+    const { queryClient } = renderHarness();
+    queryClient.setQueryData<ThreadPanelData>(['thread-panel-data', 'project-1'], {
+      project: null,
+      settings: DEFAULT_SETTINGS,
+      threads: [],
+      latestPlanStatusByThreadId: {},
+      branches: [],
+    });
+
+    listeners.get('github:issues-updated')?.({
+      projectId: 'project-1',
+      issues: [makeIssue({ id: 'updated' })],
+    });
+
+    expect(queryClient.getQueryState(['thread-panel-data', 'project-1'])?.isInvalidated).toBe(true);
   });
 
   it('does not retarget the terminal when a foreign project pipeline starts', async () => {

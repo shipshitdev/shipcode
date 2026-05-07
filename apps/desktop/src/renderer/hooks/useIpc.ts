@@ -237,6 +237,7 @@ export function useIpc() {
         }
         if (data.projectId) {
           queryClient.setQueryData(['github-issues', data.projectId], data.issues);
+          queryClient.invalidateQueries({ queryKey: ['thread-panel-data', data.projectId] });
         }
 
         if (data.projectId === store.activeProjectId && store.activeIssue) {
