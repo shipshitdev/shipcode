@@ -5,9 +5,8 @@ import { Button, cn } from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
 import { Cron } from 'croner';
 import { ArrowLeft, Loader2 } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { useAppStore } from '../../stores/app-store';
+import { AutomationPromptMarkdown } from './automation-prompt-markdown';
 import { describeAutomationRun, getAutomationRunTotalTokens } from './run-presentation';
 
 function formatRelative(date: Date | string | null): string {
@@ -56,15 +55,6 @@ const STATUS_COLOR: Record<string, string> = {
   completed: 'bg-success/12 text-success border-success/25',
   failed: 'bg-danger/12 text-danger border-danger/25',
 };
-
-const AUTOMATION_PROMPT_PROSE_CLASSES =
-  'break-words text-[12px] leading-relaxed text-secondary ' +
-  '[&_h1]:mb-2 [&_h1]:text-sm [&_h1]:font-semibold [&_h1]:text-primary ' +
-  '[&_h2]:mb-1 [&_h2]:mt-3 [&_h2]:text-[12px] [&_h2]:font-semibold [&_h2]:text-primary ' +
-  '[&_p]:mb-2 [&_p:last-child]:mb-0 ' +
-  '[&_ul]:mb-2 [&_ul]:list-disc [&_ul]:pl-4 ' +
-  '[&_ol]:mb-2 [&_ol]:list-decimal [&_ol]:pl-4 ' +
-  '[&_li]:mb-0.5 [&_code]:rounded [&_code]:bg-tertiary [&_code]:px-1 [&_code]:font-mono [&_code]:text-[11px]';
 
 export function AutomationDetail() {
   const automationId = useAppStore((s) => s.activeAutomationDetailId);
@@ -145,9 +135,7 @@ export function AutomationDetail() {
                 Prompt
               </h4>
               <div className="max-h-64 overflow-y-auto rounded-md border border-border bg-secondary px-3 py-2.5">
-                <div className={AUTOMATION_PROMPT_PROSE_CLASSES}>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{automation.prompt}</ReactMarkdown>
-                </div>
+                <AutomationPromptMarkdown prompt={automation.prompt} />
               </div>
             </div>
           )}

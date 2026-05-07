@@ -15,6 +15,7 @@ import {
   Square,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AutomationPromptMarkdown } from '../features/automations/automation-prompt-markdown';
 import {
   describeAutomationRun,
   getAutomationRunTotalTokens,
@@ -354,10 +355,8 @@ export function AutomationRunDetail() {
                   <h4 className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-muted">
                     Prompt
                   </h4>
-                  <div className="rounded-md border border-border bg-tertiary/40 px-3 py-2">
-                    <pre className="whitespace-pre-wrap text-xs leading-relaxed text-secondary">
-                      {thread.prompt}
-                    </pre>
+                  <div className="rounded-md border border-border bg-secondary px-3 py-2.5">
+                    <AutomationPromptMarkdown prompt={thread.prompt} />
                   </div>
                 </div>
               ) : (
