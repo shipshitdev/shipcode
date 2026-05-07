@@ -4,6 +4,17 @@ import os from 'node:os';
 import path from 'node:path';
 import type { IpcMain } from 'electron';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const mockFormatAutomationPrompt = vi.hoisted(() => vi.fn());
+
+vi.mock('@shipcode/agents', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@shipcode/agents')>();
+  return {
+    ...actual,
+    formatAutomationPrompt: mockFormatAutomationPrompt,
+  };
+});
+
 import { registerSupportHandlers } from './register-support-handlers';
 
 // ---------------------------------------------------------------------------
@@ -43,6 +54,8 @@ const queries = {
       prdRewriteClaudeModel: null,
       prdRewriteCodexModel: null,
       prdRewriteReasoningEffort: 'low',
+      executorReasoningEffort: 'medium',
+      openrouterDefaultPaidModel: 'openrouter/auto',
     })),
   },
   notifications: {
@@ -112,6 +125,69 @@ describe('ai:enhance-prd', () => {
         attachmentSessionId: 'some-session-id',
       }),
     ).rejects.toThrow(/not yet supported/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ai:format-automation
+// ---------------------------------------------------------------------------
+
+describe('ai:format-automation', () => {
+  it('formats automation prompts through the selected OpenRouter override', async () => {
+    mockFormatAutomationPrompt.mockResolvedValueOnce({
+      prompt: '# Automation: Smoke\n\n## Goal\nRun smoke tests.',
+    });
+    (queries.projects.getById as ReturnType<typeof vi.fn>).mockReturnValue({
+      id: 'p1',
+      path: '/tmp/proj',
+    });
+    const previousKey = process.env.OPENROUTER_API_KEY;
+    process.env.OPENROUTER_API_KEY = 'test-openrouter-key';
+
+    try {
+      const handler = getHandler('ai:format-automation');
+      const result = await handler(undefined, {
+        projectId: 'p1',
+        prompt: 'run smoke tests every morning',
+        provider: 'openrouter',
+        modelId: '',
+        reasoningEffort: null,
+      });
+
+      expect(result).toEqual({
+        prompt: '# Automation: Smoke\n\n## Goal\nRun smoke tests.',
+      });
+      expect(mockFormatAutomationPrompt).toHaveBeenCalledWith({
+        rawPrompt: 'run smoke tests every morning',
+        cwd: '/tmp/proj',
+        provider: 'openrouter',
+        modelId: 'openrouter/auto',
+        reasoningEffort: 'medium',
+        openRouterApiKey: 'test-openrouter-key',
+      });
+    } finally {
+      if (previousKey === undefined) {
+        delete process.env.OPENROUTER_API_KEY;
+      } else {
+        process.env.OPENROUTER_API_KEY = previousKey;
+      }
+    }
+  });
+
+  it('throws when the project is missing', async () => {
+    (queries.projects.getById as ReturnType<typeof vi.fn>).mockReturnValue(null);
+    const handler = getHandler('ai:format-automation');
+
+    await expect(
+      handler(undefined, {
+        projectId: 'missing',
+        prompt: 'format me',
+        provider: null,
+        modelId: null,
+        reasoningEffort: null,
+      }),
+    ).rejects.toThrow('not found');
+    expect(mockFormatAutomationPrompt).not.toHaveBeenCalled();
   });
 });
 
