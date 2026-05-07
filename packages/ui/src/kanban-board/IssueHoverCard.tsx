@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { PhaseChip } from '@/PhaseChip';
 import { Badge } from '@/primitives/badge';
 import { ACTIVE_STATUSES } from './constants';
+import { issueBodySnippet } from './issue-body-snippet';
 import type { PlanStepSummary } from './types';
 import { resolveIssuePriorityBadge } from './utils';
 
@@ -52,7 +53,9 @@ function PlanStepsSection({ steps }: { steps: PlanStepSummary[] }) {
                 isRunning && 'bg-agent/10',
               )}
             >
-              <span className={cn('w-3 shrink-0 text-center text-[10px] leading-none', icon.className)}>
+              <span
+                className={cn('w-3 shrink-0 text-center text-[10px] leading-none', icon.className)}
+              >
                 {icon.char}
               </span>
               <span
@@ -68,9 +71,7 @@ function PlanStepsSection({ steps }: { steps: PlanStepSummary[] }) {
           );
         })}
         {overflow > 0 && (
-          <span className="text-[10px] text-muted/60 pl-[18px]">
-            + {overflow} more
-          </span>
+          <span className="text-[10px] text-muted/60 pl-[18px]">+ {overflow} more</span>
         )}
       </div>
     </div>
@@ -92,6 +93,7 @@ export function IssueHoverCard({
 
   const isActive = ACTIVE_STATUSES.includes(issue.pipelineStatus);
   const canFetchSteps = !!(onFetchPlanSteps && issue.threadId && isActive);
+  const resetKey = `${issue.threadId ?? ''}:${issue.pipelineStatus}`;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -103,10 +105,11 @@ export function IssueHoverCard({
   }, []);
 
   useEffect(() => {
+    void resetKey;
     setPlanSteps(null);
     setPlanStepsLoading(false);
     abortRef.current?.abort();
-  }, [issue.threadId, issue.pipelineStatus]);
+  }, [resetKey]);
 
   const fetchSteps = useCallback(() => {
     if (!canFetchSteps || !onFetchPlanSteps || !issue.threadId) return;
@@ -151,12 +154,7 @@ export function IssueHoverCard({
   const priorityBadge = resolveIssuePriorityBadge(issue);
   const agentLabels = issue.labels?.filter((l) => l.startsWith('agent:')) ?? [];
   const lastUpdate = issue.lastPhaseUpdate ? new Date(issue.lastPhaseUpdate).getTime() : null;
-  const bodySnippet =
-    issue.body
-      ?.replace(/<!--[\s\S]*?-->/g, '')
-      .replace(/\n+/g, ' ')
-      .trim()
-      .slice(0, 200) ?? null;
+  const bodySnippet = issueBodySnippet(issue);
   const anchorChild = isValidElement<{ onPointerEnter?: () => void; onPointerLeave?: () => void }>(
     children,
   )
@@ -204,7 +202,9 @@ export function IssueHoverCard({
             ) : planStepsLoading ? (
               <p className="text-[11px] text-muted/60 leading-relaxed mb-2 mt-2">Loading plan…</p>
             ) : isPlanning ? (
-              <p className="text-[11px] text-muted/60 leading-relaxed mb-2 mt-2">Planning in progress…</p>
+              <p className="text-[11px] text-muted/60 leading-relaxed mb-2 mt-2">
+                Planning in progress…
+              </p>
             ) : (
               bodySnippet && (
                 <p className="text-[11px] text-secondary leading-relaxed line-clamp-3 mb-2">
