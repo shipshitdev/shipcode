@@ -151,6 +151,21 @@ async function runCli(
   });
 }
 
+function injectThinkingTokens(args: string[], req: ProviderRequest): void {
+  const tokens = mapReasoningEffortToClaudeThinkingTokens(
+    req.phaseHints?.reasoningEffort,
+    req.modelHint,
+  );
+  if (tokens !== null) {
+    args.splice(
+      args.indexOf('--dangerously-skip-permissions'),
+      0,
+      '--max-thinking-tokens',
+      String(tokens),
+    );
+  }
+}
+
 /** Build claude CLI args/stdin for a given phase. */
 function buildClaudeCommand(req: ProviderRequest): CliCommand {
   const modelArgs = req.modelHint ? ['--model', req.modelHint] : [];
@@ -166,10 +181,6 @@ function buildClaudeCommand(req: ProviderRequest): CliCommand {
       // drawer can display reasoning blocks. Token budget is controlled by
       // phaseHints.reasoningEffort (high=32000, medium=8000, low=omit).
       const maxTurns = String(req.phaseHints?.maxTurns ?? 1);
-      const thinkingTokens = mapReasoningEffortToClaudeThinkingTokens(
-        req.phaseHints?.reasoningEffort,
-        req.modelHint,
-      );
       const args = [
         '-p',
         ...modelArgs,
@@ -182,14 +193,7 @@ function buildClaudeCommand(req: ProviderRequest): CliCommand {
         '--disallowedTools',
         'Edit,Write,Bash,NotebookEdit',
       ];
-      if (thinkingTokens !== null) {
-        args.splice(
-          args.indexOf('--dangerously-skip-permissions'),
-          0,
-          '--max-thinking-tokens',
-          String(thinkingTokens),
-        );
-      }
+      injectThinkingTokens(args, req);
       return { args, stdin: req.prompt };
     }
     case 'execute': {
@@ -201,18 +205,7 @@ function buildClaudeCommand(req: ProviderRequest): CliCommand {
         'Edit,Write,Bash,Glob,Grep,Read',
         '--dangerously-skip-permissions',
       ];
-      const execThinking = mapReasoningEffortToClaudeThinkingTokens(
-        req.phaseHints?.reasoningEffort,
-        req.modelHint,
-      );
-      if (execThinking !== null) {
-        execArgs.splice(
-          execArgs.indexOf('--dangerously-skip-permissions'),
-          0,
-          '--max-thinking-tokens',
-          String(execThinking),
-        );
-      }
+      injectThinkingTokens(execArgs, req);
       return { args: execArgs, stdin: req.prompt };
     }
     case 'review':
