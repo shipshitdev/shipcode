@@ -4,6 +4,13 @@ import type { GitState } from '@shipcode/shared';
 import { normalizeBranches } from '@shipcode/shared';
 import { type SimpleGit, type StatusResult, simpleGit } from 'simple-git';
 
+function isUnavailableGitRepositoryError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /not a git repository|Cannot use simple-git on a directory that does not exist/i.test(
+    message,
+  );
+}
+
 export class GitService {
   private git: SimpleGit;
 
@@ -70,12 +77,22 @@ export class GitService {
    * passed `defaultBranch` appears first.
    */
   async fetch(): Promise<void> {
-    await this.git.fetch(['--prune']);
+    try {
+      await this.git.fetch(['--prune']);
+    } catch (error) {
+      if (isUnavailableGitRepositoryError(error)) return;
+      throw error;
+    }
   }
 
   async listBranches(defaultBranch: string): Promise<string[]> {
-    const result = await this.git.branch(['-a']);
-    return normalizeBranches({ raw: result.all, defaultBranch });
+    try {
+      const result = await this.git.branch(['-a']);
+      return normalizeBranches({ raw: result.all, defaultBranch });
+    } catch (error) {
+      if (isUnavailableGitRepositoryError(error)) return [];
+      throw error;
+    }
   }
 
   async getDefaultBranch(): Promise<string> {

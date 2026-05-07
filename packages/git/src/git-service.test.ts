@@ -102,6 +102,58 @@ describe('GitService', () => {
     await expect(git.getRemoteUrl()).resolves.toBe('https://github.com/shipshitdev/shipcode.git');
   });
 
+  it('normalizes branch names for a valid repository', async () => {
+    mainGitMock.branch.mockResolvedValueOnce({
+      all: ['main', 'feature/a', 'remotes/origin/main', 'remotes/origin/release'],
+    });
+
+    const git = new GitService('/repo/project');
+
+    await expect(git.listBranches('main')).resolves.toEqual([
+      'main',
+      'feature/a',
+      'origin/release',
+    ]);
+  });
+
+  it('returns no branches when the project path is not a git repository', async () => {
+    mainGitMock.branch.mockRejectedValueOnce(
+      new Error('fatal: not a git repository (or any of the parent directories): .git'),
+    );
+
+    const git = new GitService('/repo/project');
+
+    await expect(git.listBranches('main')).resolves.toEqual([]);
+  });
+
+  it('returns no branches when the project folder no longer exists', async () => {
+    mainGitMock.branch.mockRejectedValueOnce(
+      new Error('Cannot use simple-git on a directory that does not exist'),
+    );
+
+    const git = new GitService('/repo/project');
+
+    await expect(git.listBranches('main')).resolves.toEqual([]);
+  });
+
+  it('ignores fetch for a project path that is not a git repository', async () => {
+    mainGitMock.fetch.mockRejectedValueOnce(
+      new Error('fatal: not a git repository (or any of the parent directories): .git'),
+    );
+
+    const git = new GitService('/repo/project');
+
+    await expect(git.fetch()).resolves.toBeUndefined();
+  });
+
+  it('still surfaces branch listing failures unrelated to repository detection', async () => {
+    mainGitMock.branch.mockRejectedValueOnce(new Error('fatal: bad revision'));
+
+    const git = new GitService('/repo/project');
+
+    await expect(git.listBranches('main')).rejects.toThrow('fatal: bad revision');
+  });
+
   it('resolves relative git hook paths against the repository root', async () => {
     worktreeGitMock.revparse.mockResolvedValueOnce('/repo/project\n');
     worktreeGitMock.raw.mockImplementation(async (args: string[]) => {

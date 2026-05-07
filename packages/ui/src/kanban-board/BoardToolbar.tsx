@@ -204,36 +204,6 @@ export function BoardToolbar({
           </Select>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className={cn(
-              'shrink-0 gap-1.5',
-              approvalFilter === 'needs-approval' &&
-                'border-accent/40 bg-accent/10 text-accent hover:bg-accent/15 hover:text-accent',
-            )}
-            title="Show only issues awaiting approval"
-            onClick={() =>
-              onApprovalFilterChange(approvalFilter === 'needs-approval' ? 'all' : 'needs-approval')
-            }
-          >
-            <SlidersHorizontal size={12} />
-            Needs approval
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className={cn(
-              'shrink-0 gap-1.5',
-              stalenessFilter === 'stale' &&
-                'border-accent/40 bg-accent/10 text-accent hover:bg-accent/15 hover:text-accent',
-            )}
-            title="Show only stale issues"
-            onClick={() => onStalenessFilterChange(stalenessFilter === 'stale' ? 'all' : 'stale')}
-          >
-            <SlidersHorizontal size={12} />
-            Stale
-          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
