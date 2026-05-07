@@ -2,6 +2,7 @@
 
 import type { AppSettings, IntegrationStatus } from '@shipcode/shared';
 import { DEFAULT_SETTINGS } from '@shipcode/shared';
+import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PipelineSettingsSection } from './PipelineSettingsSection';
@@ -149,6 +150,27 @@ const integrationStatus: IntegrationStatus = {
 };
 
 describe('PipelineSettingsSection', () => {
+  it('labels PRD rewrite settings as shared format settings', () => {
+    render(
+      <PipelineSettingsSection
+        settings={DEFAULT_SETTINGS}
+        integrationStatus={integrationStatus}
+        onUpdate={vi.fn()}
+      />,
+    );
+
+    const modelsTab = screen.getByRole('tab', { name: 'Models' });
+    fireEvent.mouseDown(modelsTab, { button: 0 });
+    fireEvent.click(modelsTab);
+
+    expect(screen.getByText('Format CLI')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Powers Format in the PRD editor and automation prompt formatter/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Format model')).toBeInTheDocument();
+    expect(screen.getAllByText(/PRD and automation prompt formatting/i).length).toBeGreaterThan(0);
+  });
+
   it('applies a model preset as a single settings patch', () => {
     const onUpdate = vi.fn();
     const settings: AppSettings = { ...DEFAULT_SETTINGS };

@@ -14,6 +14,20 @@ vi.mock('./health-check', () => ({
 
 import { extractFormattedAutomation, formatAutomationPrompt } from './automation-formatter';
 
+function sseResponse(chunks: string[]): Response {
+  const encoder = new TextEncoder();
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+      controller.close();
+    },
+  });
+  return new Response(body, {
+    status: 200,
+    headers: { 'Content-Type': 'text/event-stream' },
+  });
+}
+
 function createFakeProc() {
   const proc = new EventEmitter() as EventEmitter & {
     stdout: EventEmitter;
@@ -48,6 +62,7 @@ function createFakeProc() {
 describe('formatAutomationPrompt', () => {
   afterEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('pipes the formatter prompt through Claude stdin', async () => {
@@ -122,6 +137,43 @@ describe('formatAutomationPrompt', () => {
     await expect(promise).resolves.toEqual({
       prompt: '# Automation: flaky test triage\n\n## Goal\nTriage failures.',
     });
+  });
+
+  it('uses OpenRouter chat when selected', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        sseResponse([
+          'data: {"choices":[{"index":0,"finish_reason":"stop","delta":{"content":"```shipcode-automation\\n{\\"prompt\\":\\"# Automation: dependency sweep\\\\n\\\\n## Goal\\\\nFind stale deps.\\"}\\n```"}}]}\n\n',
+          'data: [DONE]\n\n',
+        ]),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      formatAutomationPrompt({
+        rawPrompt: 'check outdated dependencies weekly',
+        cwd: '/repo',
+        provider: 'openrouter',
+        modelId: 'openrouter/auto',
+        reasoningEffort: 'low',
+        openRouterApiKey: 'test-key',
+      }),
+    ).resolves.toEqual({
+      prompt: '# Automation: dependency sweep\n\n## Goal\nFind stale deps.',
+    });
+
+    expect(mockSpawn).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [, init] = fetchMock.mock.calls[0];
+    const body = JSON.parse(init.body as string) as {
+      model: string;
+      messages: Array<{ role: string; content: string }>;
+      reasoning: { effort: string };
+    };
+    expect(body.model).toBe('openrouter/auto');
+    expect(body.reasoning.effort).toBe('low');
+    expect(body.messages.at(-1)?.content).toContain('check outdated dependencies weekly');
   });
 });
 

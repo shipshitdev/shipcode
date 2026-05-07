@@ -353,6 +353,7 @@ export class OpenRouterClient {
         while (newlineIdx !== -1) {
           const line = lineBuffer.slice(0, newlineIdx).replace(/\r$/, '');
           lineBuffer = lineBuffer.slice(newlineIdx + 1);
+          newlineIdx = lineBuffer.indexOf('\n');
 
           // Empty line = frame terminator. We don't buffer multi-line
           // events; OpenRouter only sends single-line `data:` frames.
@@ -423,7 +424,6 @@ export class OpenRouterClient {
               toolCallsById.set(idx, existing);
             }
           }
-          newlineIdx = lineBuffer.indexOf('\n');
         }
       }
 

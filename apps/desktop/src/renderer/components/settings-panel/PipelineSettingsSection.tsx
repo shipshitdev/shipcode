@@ -218,8 +218,8 @@ export function PipelineSettingsSection({
             </div>
 
             <SettingsRow
-              label="PRD rewrite CLI"
-              description="Which CLI powers `Rewrite with AI` in the PRD editor."
+              label="Format CLI"
+              description="Powers Format in the PRD editor and automation prompt formatter. Automations with an explicit executor override use that provider first; inherited automations use this default."
             >
               <Select
                 value={settings.prdRewriteCli}
@@ -247,8 +247,8 @@ export function PipelineSettingsSection({
               </Select>
             </SettingsRow>
             <SettingsRow
-              label="PRD rewrite model"
-              description="Preferred model for PRD rewrites on the selected CLI."
+              label="Format model"
+              description="Preferred model for PRD and automation prompt formatting on the selected CLI."
             >
               <Select
                 value={prdRewriteModelValue ?? '__default__'}
@@ -304,9 +304,11 @@ export function PipelineSettingsSection({
             </SettingsRow>
             <SettingsRow
               label={
-                prdRewriteProvider === 'claude' ? 'PRD thinking budget' : 'PRD reasoning effort'
+                prdRewriteProvider === 'claude'
+                  ? 'Format thinking budget'
+                  : 'Format reasoning effort'
               }
-              description="Reasoning setting for PRD rewrites."
+              description="Reasoning setting for PRD and automation prompt formatting."
             >
               <Select
                 value={prdRewriteDisplayedEffort}
