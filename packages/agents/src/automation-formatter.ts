@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { AgentType, ReasoningEffort } from '@shipcode/shared';
 import { unwrapCliResultEnvelope } from './cli-result';
 import { runCliWithStdin } from './cli-stdin-runner';
@@ -26,7 +27,20 @@ export interface FormatAutomationPromptOptions {
   openRouterApiKey?: string | null;
 }
 
+function rawAutomationDelimiter(rawPrompt: string): string {
+  const hash = createHash('sha256').update(rawPrompt).digest('hex').slice(0, 12).toUpperCase();
+  const base = `AUTOMATION_RAW_${hash}`;
+  let delimiter = base;
+  let suffix = 1;
+  while (rawPrompt.includes(delimiter)) {
+    delimiter = `${base}_${suffix}`;
+    suffix += 1;
+  }
+  return delimiter;
+}
+
 export function buildAutomationFormatPrompt(rawPrompt: string): string {
+  const rawDelimiter = rawAutomationDelimiter(rawPrompt);
   return `You are an automation spec formatter.
 
 Your job is to take a rough ShipCode automation idea, messy notes, transcript,
@@ -91,9 +105,9 @@ Only include this section if something remains ambiguous.
 
 Raw automation to format:
 
-<<<AUTOMATION_RAW
+<<<${rawDelimiter}
 ${rawPrompt}
-AUTOMATION_RAW
+${rawDelimiter}
 >>>
 
 Output contract:
