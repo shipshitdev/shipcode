@@ -6,7 +6,14 @@ import { assertWorkspaceSafe } from '@shipcode/shared/worktree-path';
 import { nanoid } from 'nanoid';
 import * as pty from 'node-pty';
 
-const ALLOWED_COMMANDS = new Set(['claude', 'codex', 'gemini', 'gh']);
+type AllowlistedAgentCommand = Extract<AgentType, 'claude' | 'codex' | 'gemini' | 'gh'>;
+
+const ALLOWED_AGENT_COMMANDS = new Set<AllowlistedAgentCommand>([
+  'claude',
+  'codex',
+  'gemini',
+  'gh',
+]);
 const TRUSTED_SHELLS = new Set([
   '/bin/bash',
   '/bin/zsh',
@@ -65,7 +72,10 @@ function getShellEnv(): Record<string, string> {
 }
 
 function resolveCommand(command: string): string {
-  if (!ALLOWED_COMMANDS.has(command)) return command;
+  if (TRUSTED_SHELLS.has(command)) return command;
+  if (!ALLOWED_AGENT_COMMANDS.has(command as AllowlistedAgentCommand)) {
+    throw new Error(`Command is not allowlisted for ProcessManager: ${command}`);
+  }
   const shell = process.env.SHELL;
   if (!shell || !TRUSTED_SHELLS.has(shell)) return command;
   try {
@@ -227,6 +237,11 @@ export class ProcessManager extends EventEmitter {
     return managed;
   }
 
+  /**
+   * Spawn an allowlisted CLI with stdin piped from `input`. This is the
+   * non-PTY subprocess surface for one-shot agent runs that must pass large
+   * prompts via stdin instead of argv.
+   */
   spawnWithStdin(
     type: AgentType,
     command: string,
