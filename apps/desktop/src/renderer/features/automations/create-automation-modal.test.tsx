@@ -199,4 +199,40 @@ describe('CreateAutomationModal', () => {
       expect(promptInput).toHaveValue('# Automation: Smoke\n\n## Goal\nDo thing.');
     });
   });
+
+  it('locks the prompt textarea while formatting is pending', async () => {
+    let resolveFormat!: (value: { prompt: string }) => void;
+    invokeMock.mockImplementation((channel: string) => {
+      if (channel === 'project:list-visible') return Promise.resolve([makeProject()]);
+      if (channel === 'ai:format-automation') {
+        return new Promise((resolve) => {
+          resolveFormat = resolve;
+        });
+      }
+      return Promise.resolve(null);
+    });
+
+    renderWithProviders();
+
+    await screen.findByText('My Repo');
+
+    const promptInput = screen.getByPlaceholderText(/What should this run do\?/);
+    fireEvent.change(promptInput, { target: { value: 'do thing' } });
+
+    const format = screen.getByRole('button', { name: /Format/ });
+    await waitFor(() => expect(format).not.toBeDisabled());
+
+    fireEvent.click(format);
+
+    await waitFor(() => expect(promptInput).toBeDisabled());
+
+    await act(async () => {
+      resolveFormat({ prompt: '# Automation: Smoke\n\n## Goal\nDo thing.' });
+    });
+
+    await waitFor(() => {
+      expect(promptInput).not.toBeDisabled();
+      expect(promptInput).toHaveValue('# Automation: Smoke\n\n## Goal\nDo thing.');
+    });
+  });
 });

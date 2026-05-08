@@ -312,6 +312,7 @@ export function CreateAutomationModal() {
             placeholder="What should this run do?"
             rows={6}
             className="text-[13px]"
+            disabled={formatAutomation.isPending}
           />
         </div>
 
