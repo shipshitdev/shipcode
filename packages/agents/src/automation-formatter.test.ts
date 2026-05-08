@@ -12,7 +12,11 @@ vi.mock('./health-check', () => ({
   shellExecEnv: () => ({ PATH: '/usr/bin' }),
 }));
 
-import { extractFormattedAutomation, formatAutomationPrompt } from './automation-formatter';
+import {
+  buildAutomationFormatPrompt,
+  extractFormattedAutomation,
+  formatAutomationPrompt,
+} from './automation-formatter';
 
 function sseResponse(chunks: string[]): Response {
   const encoder = new TextEncoder();
@@ -176,6 +180,25 @@ describe('formatAutomationPrompt', () => {
     expect(body.messages.at(-1)?.content).toContain('check outdated dependencies weekly');
   });
 
+  it('fails OpenRouter formatting before network calls when the API key is missing', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      formatAutomationPrompt({
+        rawPrompt: 'check deployments',
+        cwd: '/repo',
+        provider: 'openrouter',
+        modelId: 'openrouter/auto',
+        reasoningEffort: 'low',
+        openRouterApiKey: null,
+      }),
+    ).rejects.toThrow('OPENROUTER_API_KEY is not set');
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mockSpawn).not.toHaveBeenCalled();
+  });
+
   it('rejects empty raw prompts before spawning a formatter', async () => {
     await expect(
       formatAutomationPrompt({
@@ -186,6 +209,17 @@ describe('formatAutomationPrompt', () => {
     ).rejects.toThrow('Automation prompt is empty');
 
     expect(mockSpawn).not.toHaveBeenCalled();
+  });
+});
+
+describe('buildAutomationFormatPrompt', () => {
+  it('keeps frontmatter and CLI-looking tokens inside the raw automation block', () => {
+    const raw = '---\ntitle: nightly\n---\nRun `gh pr list --limit 10` and summarize.';
+    const prompt = buildAutomationFormatPrompt(raw);
+
+    expect(prompt).toContain('<<<AUTOMATION_RAW\n---\ntitle: nightly\n---');
+    expect(prompt).toContain('gh pr list --limit 10');
+    expect(prompt).toContain('AUTOMATION_RAW\n>>>');
   });
 });
 
