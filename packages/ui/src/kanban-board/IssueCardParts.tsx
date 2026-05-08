@@ -52,7 +52,6 @@ import {
   dragOverlayBorderClass,
   isAutomationIssue,
   isIssueCreating,
-  issuePresentationStatus,
   resolveIssuePriorityBadge,
 } from './utils';
 
@@ -535,7 +534,7 @@ function DraggableCardComponent({
 }: DraggableCardProps) {
   const isCreating = isIssueCreating(issue);
   const isAutomation = isAutomationIssue(issue);
-  const presentationStatus = issuePresentationStatus(issue, approvedAwaitingExecution);
+  const presentationStatus = issue.pipelineStatus;
   const referenceLabel = issueReferenceLabel(issue, isCreating);
   const draggable =
     !readOnly &&
@@ -902,7 +901,7 @@ export function DragOverlayCard({
 }) {
   const priorityBadge = resolveIssuePriorityBadge(issue);
   const isCreating = isIssueCreating(issue);
-  const presentationStatus = issuePresentationStatus(issue, approvedAwaitingExecution);
+  const presentationStatus = issue.pipelineStatus;
   const referenceLabel = issueReferenceLabel(issue, isCreating);
   return (
     <div

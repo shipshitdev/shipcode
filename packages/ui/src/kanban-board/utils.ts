@@ -43,10 +43,6 @@ export function isApprovedAwaitingExecutionIssue(
   );
 }
 
-export function isOrphanedAwaitingApprovalIssue(issue: GitHubIssueCacheRecord): boolean {
-  return issue.pipelineStatus === ISSUE_PIPELINE_STATUS.awaitingApproval && !issue.threadId;
-}
-
 export function isIssueCreating(issue: GitHubIssueCacheRecord): boolean {
   return issue.syncState === 'creating';
 }
@@ -57,22 +53,11 @@ export function isAutomationIssue(issue: GitHubIssueCacheRecord): boolean {
   return !issue.isQuickMode && issue.issueNumber <= AUTOMATION_ISSUE_NUMBER_BASE;
 }
 
-export function issuePresentationStatus(
-  issue: GitHubIssueCacheRecord,
-  approvedAwaitingExecution = false,
-): IssuePipelineStatus {
-  if (approvedAwaitingExecution) return issue.pipelineStatus;
-  return isOrphanedAwaitingApprovalIssue(issue) ? ISSUE_PIPELINE_STATUS.todo : issue.pipelineStatus;
-}
-
 export function issueMatchesColumn(
   issue: GitHubIssueCacheRecord,
   column: Pick<BoardColumn, 'key' | 'statuses'>,
   approvedAwaitingExecutionIssueIds?: ReadonlySet<string>,
 ): boolean {
-  if (isOrphanedAwaitingApprovalIssue(issue)) {
-    return column.statuses.includes(ISSUE_PIPELINE_STATUS.todo);
-  }
   if (isApprovedAwaitingExecutionIssue(issue, approvedAwaitingExecutionIssueIds)) {
     return column.key === 'agent';
   }
@@ -84,9 +69,6 @@ export function issueMatchesSection(
   section: Pick<PhaseSection, 'key' | 'statuses'>,
   approvedAwaitingExecutionIssueIds?: ReadonlySet<string>,
 ): boolean {
-  if (isOrphanedAwaitingApprovalIssue(issue)) {
-    return section.statuses.includes(ISSUE_PIPELINE_STATUS.todo);
-  }
   const approvedAwaitingExecution = isApprovedAwaitingExecutionIssue(
     issue,
     approvedAwaitingExecutionIssueIds,

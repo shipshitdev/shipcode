@@ -356,21 +356,6 @@ describe('IssueDetail', () => {
     });
   });
 
-  it('treats awaiting-approval issues without a thread as startable todo work', async () => {
-    invokeMock.mockResolvedValue([]);
-    useAppStore.setState({
-      activeIssue: makeIssue({ pipelineStatus: 'awaiting_approval', threadId: null }),
-      activeThreadId: null,
-      pipelinePhase: 'idle',
-    });
-
-    renderWithProviders();
-
-    expect(screen.getByRole('button', { name: 'Start pipeline' })).toBeInTheDocument();
-    expect(screen.queryByText('awaiting approval')).not.toBeInTheDocument();
-    expect(screen.getByText('todo')).toBeInTheDocument();
-  });
-
   it('retries a failed threaded issue through pipeline:retry instead of starting a new issue run', async () => {
     const thread = makeThread({ status: 'failed' });
 

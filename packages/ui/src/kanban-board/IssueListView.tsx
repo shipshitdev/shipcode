@@ -32,7 +32,6 @@ import {
   isApprovedAwaitingExecutionIssue,
   isAutomationIssue,
   isIssueCreating,
-  isOrphanedAwaitingApprovalIssue,
   issueMatchesColumn,
   issueMatchesSection,
   rowToneFor,
@@ -74,9 +73,7 @@ function DraggableListRow({
   onArchiveIssue,
   approvedAwaitingExecution = false,
 }: DraggableListRowProps) {
-  const presentationStatus = isOrphanedAwaitingApprovalIssue(issue)
-    ? ISSUE_PIPELINE_STATUS.todo
-    : issue.pipelineStatus;
+  const presentationStatus = issue.pipelineStatus;
   const isDone = presentationStatus === ISSUE_PIPELINE_STATUS.done;
   const isCreating = isIssueCreating(issue);
   const isAutomation = isAutomationIssue(issue);
