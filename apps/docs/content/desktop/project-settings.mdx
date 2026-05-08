@@ -47,7 +47,9 @@ The **Setup** tab edits the repo setup contract at `.shipcode/setup.json`. ShipC
 {
   "version": 1,
   "setupCommands": ["bun install --frozen-lockfile"],
-  "verifyCommands": ["bun run typecheck", "bun run test"],
+  "verifyCommands": [
+    "TURBO_SCM_BASE=\"${TURBO_SCM_BASE:-HEAD}\" bunx turbo run typecheck test build --affected --concurrency=1"
+  ],
   "runtimeQa": {
     "server": {
       "command": "bun run dev --host 127.0.0.1 --port $PORT",

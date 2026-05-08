@@ -23,7 +23,7 @@ afterEach(() => {
 });
 
 describe('project setup detection', () => {
-  it('suggests bun commands from package scripts', () => {
+  it('suggests bun commands from single-package scripts', () => {
     const projectDir = makeProject();
     writeFileSync(path.join(projectDir, 'bun.lock'), '');
     writeFileSync(
@@ -54,6 +54,57 @@ describe('project setup detection', () => {
       draft.profiles.find((profile: { kind: string }) => profile.kind === 'bun')?.suggestedContract
         .verifyCommands,
     ).toEqual(['bun run typecheck', 'bun run test', 'bun run build']);
+  });
+
+  it('suggests serialized affected turbo verification for bun workspaces', () => {
+    const projectDir = makeProject();
+    writeFileSync(path.join(projectDir, 'bun.lock'), '');
+    writeFileSync(path.join(projectDir, 'turbo.json'), JSON.stringify({ tasks: {} }));
+    writeFileSync(
+      path.join(projectDir, 'package.json'),
+      JSON.stringify({
+        name: 'demo',
+        workspaces: ['apps/*', 'packages/*'],
+        devDependencies: {
+          turbo: '2.9.10',
+        },
+        scripts: {
+          typecheck: 'turbo run typecheck',
+          test: 'turbo run test',
+          build: 'turbo run build',
+        },
+      }),
+    );
+
+    const draft = detectProjectSetup(projectDir);
+
+    expect(draft.suggestedContract.setupCommands).toEqual(['bun install --frozen-lockfile']);
+    expect(draft.suggestedContract.verifyCommands).toEqual([
+      'TURBO_SCM_BASE="${TURBO_SCM_BASE:-HEAD}" bunx turbo run typecheck test build --affected --concurrency=1',
+    ]);
+    expect(draft.suggestedContract.testingContext).toMatch(/Turborepo workspace/i);
+    expect(draft.suggestedContract.testingContext).toMatch(/--concurrency=1/);
+  });
+
+  it('does not suggest full root verification scripts for unscoped workspaces', () => {
+    const projectDir = makeProject();
+    writeFileSync(path.join(projectDir, 'bun.lock'), '');
+    writeFileSync(
+      path.join(projectDir, 'package.json'),
+      JSON.stringify({
+        name: 'demo',
+        workspaces: ['apps/*', 'packages/*'],
+        scripts: {
+          test: 'vitest run',
+          build: 'vite build',
+        },
+      }),
+    );
+
+    const draft = detectProjectSetup(projectDir);
+
+    expect(draft.suggestedContract.verifyCommands).toEqual([]);
+    expect(draft.suggestedContract.testingContext).toMatch(/Full root verification scripts/i);
   });
 
   it('detects xcode repos conservatively', () => {

@@ -2,6 +2,7 @@
 
 import { useDraggable } from '@dnd-kit/core';
 import {
+  AlertTriangle,
   Archive,
   Check,
   Copy,
@@ -18,7 +19,6 @@ import {
 import { memo } from 'react';
 import { IssueHoverCard } from '@/kanban-board/IssueHoverCard';
 import { modelDisplay } from '@/lib/model-display';
-import { useSharedSecondNow } from '@/lib/second-ticker';
 import type {
   GitHubIssueCacheRecord,
   IssuePipelineStatus,
@@ -30,7 +30,6 @@ import {
   isAgentRoutingLabel,
   phaseToProgress,
 } from '@/lib/shipcode';
-import { formatElapsedDuration } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { PhaseChip } from '@/PhaseChip';
 import { Badge } from '@/primitives/badge';
@@ -42,7 +41,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/primitives/dropdown-menu';
-import { ACTIVE_STATUSES, DRAGGABLE_STATUSES, PHASE_ELAPSED_STATUSES } from './constants';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/primitives/tooltip';
+import { ACTIVE_STATUSES, DRAGGABLE_STATUSES } from './constants';
 import type {
   IssueApprovalBadge,
   IssuePhaseChip,
@@ -58,13 +58,6 @@ import {
 
 const ISSUE_CARD_BASE_CLASS =
   'group relative flex min-h-[124px] flex-col overflow-hidden rounded-md border bg-elevated p-3 text-left transition-colors outline-none';
-
-function PhaseElapsed({ since }: { since: number }) {
-  const now = useSharedSecondNow();
-  const label = formatElapsedDuration(since, now);
-
-  return <span className="font-mono tabular-nums text-[10px] text-muted-foreground">{label}</span>;
-}
 
 function issueReferenceLabel(issue: GitHubIssueCacheRecord, isCreating: boolean): string {
   if (isCreating) return 'Creating';
@@ -537,16 +530,24 @@ export function StalenessDot({
   if (!staleness) return null;
 
   return (
-    <span
-      data-staleness-dot="true"
-      role="img"
-      aria-label={`Stale: ${staleness.title}`}
-      title={staleness.title}
-      className={cn(
-        'inline-flex h-2.5 w-2.5 shrink-0 rounded-full border border-danger/60 bg-danger shadow-[0_0_0_2px_rgba(239,68,68,0.14)]',
-        className,
-      )}
-    />
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          data-staleness-dot="true"
+          role="img"
+          aria-label={`Stale: ${staleness.title}`}
+          className={cn(
+            'inline-flex h-4 w-4 shrink-0 items-center justify-center text-danger',
+            className,
+          )}
+        >
+          <AlertTriangle size={14} className="drop-shadow-[0_0_2px_rgba(239,68,68,0.3)]" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-[240px]">
+        {staleness.title}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -647,10 +648,6 @@ function DraggableCardComponent({
   const isCompleted = presentationStatus === ISSUE_PIPELINE_STATUS.completed;
   const isDone = presentationStatus === ISSUE_PIPELINE_STATUS.done;
   const showBranchCopyAction = !!branchName && !!onCopyBranchName && !isAutomation && !readOnly;
-  const showPhaseElapsed =
-    PHASE_ELAPSED_STATUSES.includes(presentationStatus) && !!issue.lastPhaseUpdate;
-  const phaseSince =
-    showPhaseElapsed && issue.lastPhaseUpdate ? new Date(issue.lastPhaseUpdate).getTime() : 0;
   const linkedPrLabel = issue.linkedPrNumber ? `PR #${issue.linkedPrNumber}` : null;
 
   return (
@@ -894,14 +891,7 @@ function DraggableCardComponent({
                 </Badge>
               ))}
           </div>
-          {showPhaseElapsed && (
-            <span className="ml-auto flex shrink-0 items-center gap-1.5">
-              <span className="font-mono tabular-nums text-[10px] text-muted-foreground">
-                {phaseToProgress(presentationStatus)}%
-              </span>
-              <PhaseElapsed since={phaseSince} />
-            </span>
-          )}
+          {}
         </div>
         <div className="relative z-10 mt-1 w-full min-w-0">
           <span className="line-clamp-2 text-[13px] font-medium leading-snug text-primary">
@@ -918,18 +908,7 @@ function DraggableCardComponent({
               {priorityBadge.label}
             </Badge>
           ) : null}
-          {phaseChip && isActive && (
-            <Badge
-              variant="default"
-              className="whitespace-nowrap px-1.5 py-px text-[10px] font-medium normal-case tracking-normal"
-              title={`${phaseChip.phase} model: ${modelDisplay(phaseChip.model)}${
-                phaseChip.effort ? ` · ${phaseChip.effort}` : ''
-              }`}
-            >
-              {modelDisplay(phaseChip.model)}
-              {phaseChip.effort ? ` · ${phaseChip.effort}` : ''}
-            </Badge>
-          )}
+          {}
           {revisionBadge ? (
             <Badge
               variant={revisionBadge.variant}

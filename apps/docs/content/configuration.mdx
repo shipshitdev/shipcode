@@ -30,8 +30,7 @@ Repos can declare fresh-worktree setup in `.shipcode/setup.json`. This file is r
     "bun install --frozen-lockfile"
   ],
   "verifyCommands": [
-    "bun run typecheck",
-    "bun run test"
+    "TURBO_SCM_BASE=\"${TURBO_SCM_BASE:-HEAD}\" bunx turbo run typecheck test build --affected --concurrency=1"
   ],
   "runtimeQa": {
     "server": {

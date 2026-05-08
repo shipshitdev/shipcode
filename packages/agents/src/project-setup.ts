@@ -21,6 +21,26 @@ const EMPTY_CONTRACT: RepoSetupContract = {
 };
 
 type DetectedProfileWithoutSuggestion = Omit<DetectedProjectProfile, 'suggestedContract'>;
+type NodePackageManager = Extract<DetectedProjectKind, 'bun' | 'npm' | 'pnpm' | 'yarn'>;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function readPackageJson(packageJsonPath: string): Record<string, unknown> | null {
+  try {
+    const parsed: unknown = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function packageName(packageJson: Record<string, unknown> | null): string | null {
+  return typeof packageJson?.name === 'string' && packageJson.name.trim().length > 0
+    ? packageJson.name
+    : null;
+}
 
 function readTopLevelNames(projectPath: string): Set<string> {
   try {
@@ -30,9 +50,7 @@ function readTopLevelNames(projectPath: string): Set<string> {
   }
 }
 
-function packageRunner(
-  kind: Extract<DetectedProjectKind, 'bun' | 'npm' | 'pnpm' | 'yarn'>,
-): string {
+function packageRunner(kind: NodePackageManager): string {
   switch (kind) {
     case 'bun':
       return 'bun run';
@@ -42,6 +60,21 @@ function packageRunner(
       return 'pnpm run';
     case 'yarn':
       return 'yarn run';
+    default:
+      throw new Error(`Unsupported package manager: ${String(kind)}`);
+  }
+}
+
+function turboRunner(kind: NodePackageManager): string {
+  switch (kind) {
+    case 'bun':
+      return 'bunx turbo';
+    case 'npm':
+      return 'npx turbo';
+    case 'pnpm':
+      return 'pnpm exec turbo';
+    case 'yarn':
+      return 'yarn turbo';
     default:
       throw new Error(`Unsupported package manager: ${String(kind)}`);
   }
@@ -71,12 +104,11 @@ function inferNodeProfile(
   if (match) evidence.push(match.file);
   else evidence.push('no lockfile detected');
 
-  try {
-    const pkgRaw = JSON.parse(fs.readFileSync(path.join(projectPath, 'package.json'), 'utf-8')) as {
-      name?: string;
-    };
-    if (pkgRaw.name) evidence.push(`package:${pkgRaw.name}`);
-  } catch {
+  const pkgRaw = readPackageJson(path.join(projectPath, 'package.json'));
+  const name = packageName(pkgRaw);
+  if (name) {
+    evidence.push(`package:${name}`);
+  } else if (!pkgRaw) {
     evidence.push('package.json unreadable');
   }
 
@@ -161,33 +193,56 @@ function detectProfiles(projectPath: string): DetectedProjectProfile[] {
   }));
 }
 
-function readPackageScripts(packageJsonPath: string): Record<string, string> {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8')) as {
-      scripts?: unknown;
-    };
-    if (!parsed.scripts || typeof parsed.scripts !== 'object') return {};
+function packageScripts(packageJson: Record<string, unknown> | null): Record<string, string> {
+  if (!isRecord(packageJson?.scripts)) return {};
 
-    return Object.fromEntries(
-      Object.entries(parsed.scripts).filter(
-        (entry): entry is [string, string] =>
-          typeof entry[0] === 'string' &&
-          typeof entry[1] === 'string' &&
-          entry[1].trim().length > 0,
-      ),
-    );
-  } catch {
-    return {};
-  }
+  return Object.fromEntries(
+    Object.entries(packageJson.scripts).filter(
+      (entry): entry is [string, string] =>
+        typeof entry[0] === 'string' && typeof entry[1] === 'string' && entry[1].trim().length > 0,
+    ),
+  );
 }
 
-function detectNodeContract(
-  projectPath: string,
-  kind: Extract<DetectedProjectKind, 'bun' | 'npm' | 'pnpm' | 'yarn'>,
-): RepoSetupContract {
+function hasWorkspaceConfig(packageJson: Record<string, unknown> | null): boolean {
+  const workspaces = packageJson?.workspaces;
+  return Array.isArray(workspaces) || (isRecord(workspaces) && Array.isArray(workspaces.packages));
+}
+
+function dependencyNames(packageJson: Record<string, unknown> | null): Set<string> {
+  const names = new Set<string>();
+  for (const key of ['dependencies', 'devDependencies']) {
+    const deps = packageJson?.[key];
+    if (!isRecord(deps)) continue;
+    for (const name of Object.keys(deps)) {
+      names.add(name);
+    }
+  }
+  return names;
+}
+
+function hasTurboConfig(
+  topLevel: Set<string>,
+  packageJson: Record<string, unknown> | null,
+  scripts: Record<string, string>,
+): boolean {
+  return (
+    topLevel.has('turbo.json') ||
+    dependencyNames(packageJson).has('turbo') ||
+    Object.values(scripts).some((script) => /\bturbo\s+run\b/.test(script))
+  );
+}
+
+function buildTurboAffectedCommand(kind: NodePackageManager, scriptNames: string[]): string {
+  const tasks = scriptNames.join(' ');
+  return `TURBO_SCM_BASE="\${TURBO_SCM_BASE:-HEAD}" ${turboRunner(kind)} run ${tasks} --affected --concurrency=1`;
+}
+
+function detectNodeContract(projectPath: string, kind: NodePackageManager): RepoSetupContract {
   const topLevel = readTopLevelNames(projectPath);
   const packageJsonPath = path.join(projectPath, 'package.json');
-  const scripts = readPackageScripts(packageJsonPath);
+  const packageJson = readPackageJson(packageJsonPath);
+  const scripts = packageScripts(packageJson);
 
   const setupCommands: string[] = [];
   if (kind === 'bun') {
@@ -208,18 +263,31 @@ function detectNodeContract(
     setupCommands.push(topLevel.has('package-lock.json') ? 'npm ci' : 'npm install');
   }
 
-  const verifyCommands = ['typecheck', 'test', 'build']
-    .filter((name) => typeof scripts[name] === 'string')
-    .map((name) => `${packageRunner(kind)} ${name}`);
+  const verifyScriptNames = ['typecheck', 'test', 'build'].filter(
+    (name) => typeof scripts[name] === 'string',
+  );
+  const hasWorkspaces = hasWorkspaceConfig(packageJson);
+  const hasTurbo = hasTurboConfig(topLevel, packageJson, scripts);
+  const verifyCommands =
+    verifyScriptNames.length === 0
+      ? []
+      : hasTurbo
+        ? [buildTurboAffectedCommand(kind, verifyScriptNames)]
+        : hasWorkspaces
+          ? []
+          : verifyScriptNames.map((name) => `${packageRunner(kind)} ${name}`);
 
   return {
     ...EMPTY_CONTRACT,
     setupCommands,
     verifyCommands,
-    testingContext:
-      verifyCommands.length > 0
-        ? `Detected ${kind} package scripts for verification. Confirm these commands match the repo's real test workflow.`
-        : `Detected a ${kind} project, but no package scripts were found for typecheck/test/build. Add the right verification commands manually.`,
+    testingContext: hasTurbo
+      ? `Detected a ${kind} Turborepo workspace. Verification uses Turbo affected mode against HEAD and --concurrency=1 so ShipCode runs only packages impacted by worktree changes.`
+      : hasWorkspaces
+        ? `Detected a ${kind} workspace root, but no scoped workspace runner. Full root verification scripts are intentionally not suggested; add repo-specific scoped commands manually.`
+        : verifyCommands.length > 0
+          ? `Detected ${kind} package scripts for verification. Confirm these commands match the repo's real test workflow.`
+          : `Detected a ${kind} project, but no package scripts were found for typecheck/test/build. Add the right verification commands manually.`,
   };
 }
 

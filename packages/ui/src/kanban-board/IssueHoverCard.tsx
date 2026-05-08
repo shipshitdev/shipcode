@@ -2,18 +2,20 @@
 
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { cloneElement, isValidElement, useCallback, useEffect, useRef, useState } from 'react';
+import { modelDisplay } from '@/lib/model-display';
 import {
   displayAgentLabel,
   type GitHubIssueCacheRecord,
   isAgentRoutingLabel,
+  phaseToProgress,
 } from '@/lib/shipcode';
 import { formatElapsedDuration } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { PhaseChip } from '@/PhaseChip';
 import { Badge } from '@/primitives/badge';
-import { ACTIVE_STATUSES } from './constants';
+import { ACTIVE_STATUSES, PHASE_ELAPSED_STATUSES } from './constants';
 import { issueBodySnippet } from './issue-body-snippet';
-import type { PlanStepSummary } from './types';
+import type { IssuePhaseChip, PlanStepSummary } from './types';
 import { resolveIssuePriorityBadge } from './utils';
 
 const HOVER_DELAY_MS = 350;
@@ -21,6 +23,7 @@ const MAX_VISIBLE_STEPS = 8;
 
 interface IssueHoverCardProps {
   issue: GitHubIssueCacheRecord;
+  phaseChip?: IssuePhaseChip | null;
   disabled?: boolean;
   onFetchPlanSteps?: (threadId: string) => Promise<PlanStepSummary[] | null>;
   children: React.ReactNode;
@@ -84,6 +87,7 @@ function PlanStepsSection({ steps }: { steps: PlanStepSummary[] }) {
 
 export function IssueHoverCard({
   issue,
+  phaseChip,
   disabled = false,
   onFetchPlanSteps,
   children,
