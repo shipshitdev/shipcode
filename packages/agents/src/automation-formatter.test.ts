@@ -175,10 +175,37 @@ describe('formatAutomationPrompt', () => {
     expect(body.reasoning.effort).toBe('low');
     expect(body.messages.at(-1)?.content).toContain('check outdated dependencies weekly');
   });
+
+  it('rejects empty raw prompts before spawning a formatter', async () => {
+    await expect(
+      formatAutomationPrompt({
+        rawPrompt: '   ',
+        cwd: '/repo',
+        provider: 'claude',
+      }),
+    ).rejects.toThrow('Automation prompt is empty');
+
+    expect(mockSpawn).not.toHaveBeenCalled();
+  });
 });
 
 describe('extractFormattedAutomation', () => {
   it('rejects responses without the automation envelope', () => {
     expect(() => extractFormattedAutomation('plain text')).toThrow(/No `shipcode-automation`/);
+  });
+
+  it('rejects malformed automation JSON envelopes', () => {
+    expect(() => extractFormattedAutomation('```shipcode-automation\n{"prompt":\n```')).toThrow(
+      /Failed to parse automation JSON/,
+    );
+  });
+
+  it('rejects envelopes without a non-empty prompt string', () => {
+    expect(() => extractFormattedAutomation('```shipcode-automation\n{"prompt":""}\n```')).toThrow(
+      /Formatted automation prompt is empty/,
+    );
+    expect(() => extractFormattedAutomation('```shipcode-automation\n{"body":"x"}\n```')).toThrow(
+      /missing required `prompt`/,
+    );
   });
 });
