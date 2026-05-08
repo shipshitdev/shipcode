@@ -14,6 +14,25 @@ describe('routeFromLabels', () => {
     });
   });
 
+  it('routes legacy agent labels for existing issues', () => {
+    expect(routeFromLabels(['agent:codex'])).toEqual({
+      executorModel: 'codex',
+      command: 'codex',
+    });
+    expect(routeFromLabels(['agent:openrouter/free'])).toEqual({
+      executorModel: 'openrouter',
+      command: 'openrouter',
+      modelOverride: 'openrouter/free',
+    });
+  });
+
+  it('deduplicates equivalent legacy and namespaced labels', () => {
+    expect(routeFromLabels(['agent:codex', 'shipcode:agent:codex'])).toEqual({
+      executorModel: 'codex',
+      command: 'codex',
+    });
+  });
+
   it('falls back to namespaced Claude route when no route label exists', () => {
     expect(routeFromLabels(['enhancement'])).toEqual({
       executorModel: 'claude',

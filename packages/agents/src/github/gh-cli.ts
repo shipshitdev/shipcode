@@ -6,6 +6,7 @@ import {
   type GitHubPrCheckSummary,
   type GitHubPrReviewCommentSummary,
   isAgentRoutingLabel,
+  LEGACY_AGENT_LABELS,
   PRD_MANAGED_DISCRETE_LABELS,
   PRD_MANAGED_LABEL_PREFIXES,
   type PullRequestDetail,
@@ -345,7 +346,7 @@ export class GhCli {
   }
 
   async listAllAgentIssues(): Promise<GitHubIssue[]> {
-    const labels = SHIPCODE_AGENT_LABELS.map((label) => label.name);
+    const labels = [...SHIPCODE_AGENT_LABELS.map((label) => label.name), ...LEGACY_AGENT_LABELS];
     const buckets = await Promise.all(
       labels.map((label) => this.listIssues(label).catch(() => [])),
     );

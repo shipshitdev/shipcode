@@ -556,6 +556,10 @@ export interface IpcInvokeChannels {
     args: { featureId: string };
     result: FeatureQaResult | null;
   };
+  'feature-qa:get-server': {
+    args: { threadId: string };
+    result: { baseUrl: string; port: number } | null;
+  };
   'feature-qa:start-server': {
     args: { projectId: string; threadId: string };
     result: { baseUrl: string; port: number };

@@ -8,6 +8,7 @@ export interface GitHubLabelDefinition {
 
 export const SHIPCODE_LABEL_PREFIX = 'shipcode:' as const;
 export const SHIPCODE_AGENT_LABEL_PREFIX = `${SHIPCODE_LABEL_PREFIX}agent:` as const;
+export const LEGACY_AGENT_LABEL_PREFIX = 'agent:' as const;
 export const PIPELINE_LABEL_PREFIX = `${SHIPCODE_LABEL_PREFIX}pipeline:` as const;
 export const SHIPCODE_CI_BLOCKED_LABEL = `${SHIPCODE_LABEL_PREFIX}blocked:ci` as const;
 
@@ -15,8 +16,20 @@ export function isShipCodeAgentLabel(label: string): boolean {
   return label.startsWith(SHIPCODE_AGENT_LABEL_PREFIX);
 }
 
+export function isLegacyAgentLabel(label: string): boolean {
+  return label.startsWith(LEGACY_AGENT_LABEL_PREFIX);
+}
+
 export function isAgentRoutingLabel(label: string): boolean {
-  return isShipCodeAgentLabel(label);
+  return isShipCodeAgentLabel(label) || isLegacyAgentLabel(label);
+}
+
+export function normalizeAgentRoutingLabel(label: string): string {
+  if (isShipCodeAgentLabel(label)) return label;
+  if (isLegacyAgentLabel(label)) {
+    return `${SHIPCODE_AGENT_LABEL_PREFIX}${label.slice(LEGACY_AGENT_LABEL_PREFIX.length)}`;
+  }
+  return label;
 }
 
 export function isPipelineStateLabel(label: string): boolean {
@@ -32,6 +45,9 @@ export function agentLabelForExecutor(
 export function displayAgentLabel(label: string): string {
   if (label.startsWith(SHIPCODE_AGENT_LABEL_PREFIX)) {
     return label.slice(SHIPCODE_AGENT_LABEL_PREFIX.length);
+  }
+  if (label.startsWith(LEGACY_AGENT_LABEL_PREFIX)) {
+    return label.slice(LEGACY_AGENT_LABEL_PREFIX.length);
   }
   return label;
 }
@@ -63,6 +79,10 @@ export const SHIPCODE_AGENT_LABELS: readonly GitHubLabelDefinition[] = [
     description: 'Route this issue to OpenRouter free-tier routing.',
   },
 ] as const;
+
+export const LEGACY_AGENT_LABELS: readonly string[] = SHIPCODE_AGENT_LABELS.map((label) =>
+  label.name.replace(SHIPCODE_AGENT_LABEL_PREFIX, LEGACY_AGENT_LABEL_PREFIX),
+);
 
 export const SHIPCODE_CLASSIFICATION_LABELS: readonly GitHubLabelDefinition[] = [
   {

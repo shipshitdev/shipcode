@@ -12,6 +12,22 @@ interface ManualQaServerSession {
 
 const manualQaServers = new Map<string, ManualQaServerSession>();
 
+function getLiveManualQaServer(
+  threadId: string,
+  processManager: IpcHandlerDeps['processManager'],
+): { baseUrl: string; port: number } | null {
+  const session = manualQaServers.get(threadId);
+  if (!session) return null;
+
+  const proc = processManager.get(session.server.processId);
+  if (!proc || proc.state === 'exited') {
+    manualQaServers.delete(threadId);
+    return null;
+  }
+
+  return { baseUrl: session.server.baseUrl, port: session.server.port };
+}
+
 export function registerFeatureQaHandlers({
   ipcMain,
   processManager,
@@ -25,17 +41,15 @@ export function registerFeatureQaHandlers({
     return queries.featureQaResults.latestByFeature(args.featureId);
   });
 
+  ipcMain.handle('feature-qa:get-server', (_event, { threadId }: { threadId: string }) => {
+    return getLiveManualQaServer(threadId, processManager);
+  });
+
   ipcMain.handle(
     'feature-qa:start-server',
     async (_event, { projectId, threadId }: { projectId: string; threadId: string }) => {
-      const existing = manualQaServers.get(threadId);
-      if (existing) {
-        const proc = processManager.get(existing.server.processId);
-        if (proc && proc.state !== 'exited') {
-          return { baseUrl: existing.server.baseUrl, port: existing.server.port };
-        }
-        manualQaServers.delete(threadId);
-      }
+      const existing = getLiveManualQaServer(threadId, processManager);
+      if (existing) return existing;
 
       const project = queries.projects.getById(projectId);
       if (!project) throw new Error(`Project ${projectId} not found`);

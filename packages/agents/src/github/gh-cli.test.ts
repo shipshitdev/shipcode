@@ -232,7 +232,7 @@ describe('GhCli', () => {
 
       success(JSON.stringify(claudeIssues));
       success(JSON.stringify(codexIssues));
-      for (let i = 0; i < 3; i++) success('[]');
+      for (let i = 0; i < 8; i++) success('[]');
 
       const issues = await gh.listAllAgentIssues();
 
@@ -256,7 +256,7 @@ describe('GhCli', () => {
           },
         ]),
       );
-      for (let i = 0; i < 3; i++) success('[]');
+      for (let i = 0; i < 8; i++) success('[]');
 
       const issues = await gh.listAllAgentIssues();
 
@@ -265,7 +265,7 @@ describe('GhCli', () => {
     });
 
     it('handles both failing and returns empty', async () => {
-      for (let i = 0; i < 5; i++) failure();
+      for (let i = 0; i < 10; i++) failure();
 
       const issues = await gh.listAllAgentIssues();
       expect(issues).toEqual([]);

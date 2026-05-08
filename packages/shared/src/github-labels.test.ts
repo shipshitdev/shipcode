@@ -5,6 +5,7 @@ import {
   isAgentRoutingLabel,
   isPipelineStateLabel,
   macroColumnForStatus,
+  normalizeAgentRoutingLabel,
   PIPELINE_LABEL_PREFIX,
   pipelineLabelForStatus,
   SHIPCODE_LABEL_PREFIX,
@@ -122,9 +123,17 @@ describe('pipelineLabelForStatus', () => {
 });
 
 describe('label helpers', () => {
-  it('detects only namespaced routing labels', () => {
+  it('detects namespaced and legacy routing labels', () => {
     expect(isAgentRoutingLabel('shipcode:agent:codex')).toBe(true);
+    expect(isAgentRoutingLabel('agent:codex')).toBe(true);
     expect(isAgentRoutingLabel('shipcode:pipeline:queued')).toBe(false);
+  });
+
+  it('normalizes legacy routing labels to the ShipCode namespace', () => {
+    expect(normalizeAgentRoutingLabel('agent:openrouter/auto')).toBe(
+      'shipcode:agent:openrouter/auto',
+    );
+    expect(normalizeAgentRoutingLabel('shipcode:agent:codex')).toBe('shipcode:agent:codex');
   });
 
   it('detects only namespaced pipeline state labels', () => {
@@ -135,6 +144,7 @@ describe('label helpers', () => {
   it('formats agent labels for display', () => {
     expect(agentLabelForExecutor('codex')).toBe('shipcode:agent:codex');
     expect(displayAgentLabel('shipcode:agent:openrouter/auto')).toBe('openrouter/auto');
+    expect(displayAgentLabel('agent:codex')).toBe('codex');
   });
 });
 

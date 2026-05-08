@@ -1,4 +1,8 @@
-import { type ExecutorModel, isAgentRoutingLabel } from '@shipcode/shared';
+import {
+  type ExecutorModel,
+  isAgentRoutingLabel,
+  normalizeAgentRoutingLabel,
+} from '@shipcode/shared';
 
 export interface ModelRoute {
   executorModel: ExecutorModel;
@@ -29,7 +33,7 @@ const ROUTES: Record<string, ModelRoute> = {
 };
 
 export function routeFromLabels(labels: string[]): ModelRoute | { error: string } {
-  const agentLabels = labels.filter(isAgentRoutingLabel);
+  const agentLabels = labels.filter(isAgentRoutingLabel).map(normalizeAgentRoutingLabel);
 
   const uniqueAgentLabels = Array.from(new Set(agentLabels));
   if (uniqueAgentLabels.length > 1) {

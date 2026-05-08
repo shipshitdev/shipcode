@@ -34,7 +34,7 @@ import {
 } from '@shipshitdev/ui';
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { ExternalLink } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   formatProviderSelectionLabel,
   getModelOptions,
@@ -124,6 +124,29 @@ export function PipelineTab({
   );
   const [manualQaPending, setManualQaPending] = useState(false);
   const [manualQaError, setManualQaError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!activeThreadId) {
+      setManualQaServer(null);
+      return;
+    }
+
+    let cancelled = false;
+    window.shipcode
+      .invoke<{ baseUrl: string; port: number } | null>('feature-qa:get-server', {
+        threadId: activeThreadId,
+      })
+      .then((server) => {
+        if (!cancelled) setManualQaServer(server);
+      })
+      .catch(() => {
+        if (!cancelled) setManualQaServer(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeThreadId]);
 
   const startManualQa = async () => {
     if (!activeThreadId) return;
