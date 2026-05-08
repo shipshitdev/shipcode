@@ -386,6 +386,26 @@ function createWindow() {
     pipelineScheduler.onExecutionSlotFreed();
   };
 
+  // Startup: any persisted active thread has no live process after an app relaunch.
+  // Mark it failed immediately so Retry can do a semantic resume from the worktree.
+  for (const thread of queries.threads.getOrphaned()) {
+    const errorMsg =
+      'Pipeline interrupted while ShipCode was closed. Retry resumes from persisted plan, logs, checkpoint, and worktree state.';
+    const record = queries.terminalEvents.create(thread.id, {
+      kind: 'lifecycle',
+      message: errorMsg,
+    });
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('terminal:event', record);
+    }
+    transitionThreadPhase(requireMainWindow(), queries, emitter, {
+      threadId: thread.id,
+      phase: PIPELINE_PHASE.failed,
+      errorMessage: errorMsg,
+    });
+    log.info(`[startup] marked orphaned active thread ${thread.id} as interrupted`);
+  }
+
   // Startup: promote any queued items from a previous session.
   setTimeout(() => {
     const settings = queries.settings.get();

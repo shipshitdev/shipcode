@@ -85,6 +85,8 @@ const PROJECT_SETTINGS_SECTIONS = [
   },
 ] satisfies readonly SettingsNavigationItem<ProjectTab>[];
 
+const SETUP_REDETECT_BUSY_MIN_MS = 400;
+
 export function ProjectSettingsModal() {
   const queryClient = useQueryClient();
   const projectSettingsModalOpen = useAppStore((state) => state.projectSettingsModalOpen);
@@ -131,9 +133,11 @@ export function ProjectSettingsModal() {
   const [setupBeforeVerify, setSetupBeforeVerify] = useState(false);
   const [envFiles, setEnvFiles] = useState<LocalEnvFile[]>([]);
   const [setupSaveError, setSetupSaveError] = useState<string | null>(null);
+  const [manualSetupDetectPending, setManualSetupDetectPending] = useState(false);
 
   // Track open transition to apply initialTab only once
   const prevOpenRef = useRef(false);
+  const setupDetectTimeoutRef = useRef<number | null>(null);
 
   const { data: project } = useQuery<Project | null>({
     queryKey: ['project', projectSettingsModalProjectId],
@@ -182,6 +186,14 @@ export function ProjectSettingsModal() {
     staleTime: 0,
   });
 
+  useEffect(() => {
+    return () => {
+      if (setupDetectTimeoutRef.current !== null) {
+        window.clearTimeout(setupDetectTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // Seed all state on open transition
   useEffect(() => {
     const isOpening = projectSettingsModalOpen && !prevOpenRef.current;
@@ -223,6 +235,7 @@ export function ProjectSettingsModal() {
     setTouched(false);
     setSubmitError(null);
     setSetupSaveError(null);
+    setManualSetupDetectPending(false);
     setSyncResult(null);
     setSyncError(null);
     setContextGenerating(false);
@@ -495,6 +508,7 @@ export function ProjectSettingsModal() {
       queryClient.invalidateQueries({ queryKey: ['github-issues', projectSettingsModalProjectId] });
       queryClient.invalidateQueries({ queryKey: ['threads', projectSettingsModalProjectId] });
       queryClient.invalidateQueries({ queryKey: ['git-branches', projectSettingsModalProjectId] });
+      queryClient.invalidateQueries({ queryKey: ['project-setup', projectSettingsModalProjectId] });
       queryClient.invalidateQueries({
         queryKey: ['thread-panel-data', projectSettingsModalProjectId],
       });
@@ -626,6 +640,23 @@ export function ProjectSettingsModal() {
       setContextGenerating(false);
     }
   };
+
+  const handleSetupRedetect = useCallback(() => {
+    if (manualSetupDetectPending) return;
+    setManualSetupDetectPending(true);
+    const startedAt = Date.now();
+
+    void refetchSetup().finally(() => {
+      const remainingMs = Math.max(SETUP_REDETECT_BUSY_MIN_MS - (Date.now() - startedAt), 0);
+      if (setupDetectTimeoutRef.current !== null) {
+        window.clearTimeout(setupDetectTimeoutRef.current);
+      }
+      setupDetectTimeoutRef.current = window.setTimeout(() => {
+        setupDetectTimeoutRef.current = null;
+        setManualSetupDetectPending(false);
+      }, remainingMs);
+    });
+  }, [manualSetupDetectPending, refetchSetup]);
 
   const inputMatchesSaved = urlInput === (project?.githubProjectUrl ?? '');
   const hasSavedUrl = !!project?.githubProjectUrl;
@@ -787,13 +818,11 @@ export function ProjectSettingsModal() {
                     projectPath={project.path}
                     pathExists={pathExists}
                     submitError={setupSaveError}
-                    onRedetect={() => {
-                      void refetchSetup();
-                    }}
+                    onRedetect={handleSetupRedetect}
                     onApplyDetectedProfile={(profile) => {
                       applySetupContract(profile.suggestedContract);
                     }}
-                    detectPending={setupDetectPending}
+                    detectPending={setupDetectPending || manualSetupDetectPending}
                   />
                 )}
 

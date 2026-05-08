@@ -179,6 +179,8 @@ export function createPipelineContextHelpers(
         workflowPolicy: seed.workflowPolicy ?? existing.workflowPolicy,
         workflowWarningEmitted:
           seed.workflowWarningEmitted ?? existing.workflowWarningEmitted ?? false,
+        executionResumeContext:
+          seed.executionResumeContext ?? existing.executionResumeContext ?? null,
       });
       emitWorkflowWarning(deps, existing);
       return existing;
@@ -304,6 +306,7 @@ export function createPipelineContextHelpers(
       workflowWarningEmitted: seed.workflowWarningEmitted ?? false,
       abort: seed.abort ?? new AbortController(),
       stabilizationFeedback: seed.stabilizationFeedback ?? null,
+      executionResumeContext: seed.executionResumeContext ?? null,
       previousPlanRawOutput: seed.previousPlanRawOutput ?? null,
       turnCount: seed.turnCount ?? 0,
       featureQaState: seed.featureQaState ?? null,
@@ -387,6 +390,7 @@ export function createPipelineContextHelpers(
       cancelled: false,
       verifiedSha: null,
       stabilizationFeedback: null,
+      executionResumeContext: null,
       previousPlanRawOutput: null,
     });
   }

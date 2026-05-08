@@ -264,6 +264,11 @@ export interface PipelineContext {
    */
   stabilizationFeedback: string | null;
   /**
+   * Optional context for semantic resume after an interrupted execution.
+   * When set, the next execute pass appends it to the prompt and then clears it.
+   */
+  executionResumeContext: string | null;
+  /**
    * Raw output from a previous failed plan attempt. When set,
    * `startPlanGeneration` appends format-correction context so the
    * model can fix its output format instead of starting from scratch.

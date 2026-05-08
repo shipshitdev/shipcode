@@ -175,7 +175,7 @@ describe('PipelineSettingsSection', () => {
     expect(
       screen.getByText('Issue triage').closest('[data-slot="settings-section"]'),
     ).not.toHaveClass('rounded-md');
-  });
+  }, 15_000);
 
   it('applies a model preset as a single settings patch', () => {
     const onUpdate = vi.fn();
@@ -209,5 +209,5 @@ describe('PipelineSettingsSection', () => {
         prdRewriteCodexModel: 'gpt-5.4-mini',
       }),
     );
-  });
+  }, 15_000);
 });

@@ -15,6 +15,7 @@ import { ProjectSettingsContextTab } from './ProjectSettingsContextTab';
 import { ProjectSettingsGeneralTab } from './ProjectSettingsGeneralTab';
 import { ProjectSettingsGitHubTab } from './ProjectSettingsGitHubTab';
 import { ProjectSettingsModelsTab } from './ProjectSettingsModelsTab';
+import { ProjectSettingsNotificationsTab } from './ProjectSettingsNotificationsTab';
 import { ProjectSettingsPipelineTab } from './ProjectSettingsPipelineTab';
 import { ProjectSettingsSetupTab } from './ProjectSettingsSetupTab';
 
@@ -450,6 +451,100 @@ describe('project settings leaf tabs', () => {
     expect(onRedetect).toHaveBeenCalledTimes(1);
   });
 
+  it('renders setup missing-folder and env-file editing branches', () => {
+    const baseProps = {
+      setupCommandsText: 'bun install',
+      setSetupCommandsText: vi.fn(),
+      verifyCommandsText: 'bun test',
+      setVerifyCommandsText: vi.fn(),
+      testingContext: 'Use vitest.',
+      setTestingContext: vi.fn(),
+      runtimeQaServerCommand: 'bun dev',
+      setRuntimeQaServerCommand: vi.fn(),
+      runtimeQaReadinessUrl: 'http://127.0.0.1:$PORT',
+      setRuntimeQaReadinessUrl: vi.fn(),
+      runtimeQaStartupTimeoutMs: 60_000,
+      setRuntimeQaStartupTimeoutMs: vi.fn(),
+      runtimeQaPortEnvVar: 'PORT',
+      setRuntimeQaPortEnvVar: vi.fn(),
+      runtimeQaTestCommandsText: 'bun e2e',
+      setRuntimeQaTestCommandsText: vi.fn(),
+      runtimeQaDiscoverAgentTests: false,
+      setRuntimeQaDiscoverAgentTests: vi.fn(),
+      setupBeforeVerify: true,
+      setSetupBeforeVerify: vi.fn(),
+      envFiles: [
+        {
+          id: 'env-1',
+          source: '.env.example',
+          target: '.env',
+          required: false,
+        },
+      ],
+      addEnvFile: vi.fn(),
+      updateEnvFile: vi.fn(),
+      removeEnvFile: vi.fn(),
+      detectedProfiles: [],
+      inspection: {
+        status: 'invalid' as const,
+        path: '/tmp/shipcode/.shipcode/setup.json',
+        contract: null,
+        error: 'bad json',
+      },
+      projectPath: '/tmp/shipcode',
+      pathExists: true,
+      submitError: 'Save failed',
+      onRedetect: vi.fn(),
+      onApplyDetectedProfile: vi.fn(),
+      detectPending: true,
+    };
+
+    const { rerender } = render(<ProjectSettingsSetupTab {...baseProps} pathExists={false} />);
+    expect(screen.getByText(/repository folder is missing/)).toBeInTheDocument();
+
+    rerender(<ProjectSettingsSetupTab {...baseProps} />);
+
+    expect(screen.getByText('Existing setup file is invalid: bad json')).toBeInTheDocument();
+    expect(screen.getByText('Save failed')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Setup commands'), { target: { value: 'bun i' } });
+    fireEvent.change(screen.getByLabelText('Verify commands'), { target: { value: 'bun check' } });
+    fireEvent.change(screen.getByLabelText('Testing context'), {
+      target: { value: 'Run unit tests first.' },
+    });
+    fireEvent.change(screen.getByLabelText('Start command'), { target: { value: 'bun preview' } });
+    fireEvent.change(screen.getByLabelText('Readiness URL'), {
+      target: { value: 'http://localhost:3000' },
+    });
+    fireEvent.change(screen.getByLabelText('Runtime test commands'), {
+      target: { value: 'bun playwright' },
+    });
+    fireEvent.change(screen.getByLabelText('Startup timeout ms'), { target: { value: '0' } });
+    fireEvent.change(screen.getByLabelText('Port env var'), { target: { value: 'APP_PORT' } });
+    fireEvent.click(screen.getByLabelText('Discover agent runtime tests'));
+    fireEvent.change(screen.getByDisplayValue('.env.example'), { target: { value: '.env.local' } });
+    fireEvent.change(screen.getByDisplayValue('.env'), { target: { value: '' } });
+    fireEvent.click(screen.getByText('Required'));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add env file' }));
+    fireEvent.click(screen.getByLabelText('Setup before verification'));
+
+    expect(baseProps.setSetupCommandsText).toHaveBeenCalledWith('bun i');
+    expect(baseProps.setVerifyCommandsText).toHaveBeenCalledWith('bun check');
+    expect(baseProps.setTestingContext).toHaveBeenCalledWith('Run unit tests first.');
+    expect(baseProps.setRuntimeQaServerCommand).toHaveBeenCalledWith('bun preview');
+    expect(baseProps.setRuntimeQaReadinessUrl).toHaveBeenCalledWith('http://localhost:3000');
+    expect(baseProps.setRuntimeQaTestCommandsText).toHaveBeenCalledWith('bun playwright');
+    expect(baseProps.setRuntimeQaStartupTimeoutMs).toHaveBeenCalledWith(60_000);
+    expect(baseProps.setRuntimeQaPortEnvVar).toHaveBeenCalledWith('APP_PORT');
+    expect(baseProps.setRuntimeQaDiscoverAgentTests).toHaveBeenCalledWith(true);
+    expect(baseProps.updateEnvFile).toHaveBeenCalledWith('env-1', { source: '.env.local' });
+    expect(baseProps.updateEnvFile).toHaveBeenCalledWith('env-1', { target: undefined });
+    expect(baseProps.updateEnvFile).toHaveBeenCalledWith('env-1', { required: true });
+    expect(baseProps.removeEnvFile).toHaveBeenCalledWith('env-1');
+    expect(baseProps.addEnvFile).toHaveBeenCalledTimes(1);
+    expect(baseProps.setSetupBeforeVerify).toHaveBeenCalledWith(false);
+  });
+
   it('renders pipeline overrides and forwards the reset callback', () => {
     const onResetIssueOverrides = vi.fn();
     const setOverrides = vi.fn();
@@ -500,6 +595,94 @@ describe('project settings leaf tabs', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Reset All Issue Overrides' }));
 
     expect(onResetIssueOverrides).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders pipeline singular capacity, explicit overrides, pending reset, and reset errors', () => {
+    const onResetIssueOverrides = vi.fn();
+    const settings: AppSettings = {
+      ...DEFAULT_SETTINGS,
+      maxConcurrentPipelines: 1,
+      maxConcurrentExecutions: 1,
+      requireApproval: false,
+      pipelineSpeedProfile: 'thorough',
+      revisionCount: 0,
+    };
+
+    render(
+      <ProjectSettingsPipelineTab
+        settings={settings}
+        overrides={{
+          plannerModelOverride: null,
+          reviewerModelOverride: null,
+          executorModelOverride: null,
+          verifierModelOverride: null,
+          plannerModelIdOverride: null,
+          reviewerModelIdOverride: null,
+          executorModelIdOverride: null,
+          verifierModelIdOverride: null,
+          plannerReasoningEffortOverride: null,
+          reviewerReasoningEffortOverride: null,
+          executorReasoningEffortOverride: null,
+          verifierReasoningEffortOverride: null,
+          pipelineSpeedProfileOverride: 'smart_fast',
+          revisionCountOverride: 5,
+          requireApprovalOverride: true,
+          prdQualityGate: false,
+          discordRouting: 'inherit',
+          discordWebhookUrlOverride: null,
+          telegramRouting: 'inherit',
+          telegramChatIdOverride: null,
+        }}
+        setOverrides={vi.fn()}
+        onResetIssueOverrides={onResetIssueOverrides}
+        issueOverrideResetPending={true}
+        issueOverrideResetResult={null}
+        issueOverrideResetError="Reset failed"
+      />,
+    );
+
+    expect(screen.getByText('1 pipeline')).toBeInTheDocument();
+    expect(screen.getByText(/1 execution slot\/project/i)).toBeInTheDocument();
+    expect(screen.getByText('Reset failed')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Reset All Issue Overrides/ })).toBeDisabled();
+  });
+
+  it('renders notification routing overrides and forwards edits', () => {
+    const onDiscordRoutingChange = vi.fn();
+    const onDiscordWebhookChange = vi.fn();
+    const onTelegramRoutingChange = vi.fn();
+    const onTelegramChatIdChange = vi.fn();
+    const onNotifyGithubUserChange = vi.fn();
+
+    render(
+      <ProjectSettingsNotificationsTab
+        discordRouting="custom"
+        discordWebhookUrlOverride="https://discord.test/webhook"
+        telegramRouting="custom"
+        telegramChatIdOverride="-100"
+        notifyGithubUser="decod3rs"
+        onDiscordRoutingChange={onDiscordRoutingChange}
+        onDiscordWebhookChange={onDiscordWebhookChange}
+        onTelegramRoutingChange={onTelegramRoutingChange}
+        onTelegramChatIdChange={onTelegramChatIdChange}
+        onNotifyGithubUserChange={onNotifyGithubUserChange}
+      />,
+    );
+
+    expect(screen.getByText(/ShipCode pipeline events/)).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText('https://discord.com/api/webhooks/...'), {
+      target: { value: 'https://discord.test/next' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('-1001234567890'), {
+      target: { value: '-200' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('github-handle'), {
+      target: { value: 'shipcode-bot' },
+    });
+
+    expect(onDiscordWebhookChange).toHaveBeenCalledWith('https://discord.test/next');
+    expect(onTelegramChatIdChange).toHaveBeenCalledWith('-200');
+    expect(onNotifyGithubUserChange).toHaveBeenCalledWith('shipcode-bot');
   });
 
   it('renders GitHub readiness and non-label metadata requirements', async () => {

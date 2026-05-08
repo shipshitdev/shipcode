@@ -5,6 +5,7 @@ import { DEFAULT_SETTINGS } from '@shipcode/shared';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ArchivedSettingsSection } from './ArchivedSettingsSection';
+import { AutoCommitSettingsSection } from './AutoCommitSettingsSection';
 import { GithubSettingsSection } from './GithubSettingsSection';
 import { NotificationsSettingsSection } from './NotificationsSettingsSection';
 import { ShortcutsSection } from './ShortcutsSection';
@@ -125,6 +126,36 @@ describe('settings leaf sections', () => {
     expect(onUpdate).toHaveBeenCalledWith({ githubPollingEnabled: true });
     expect(onUpdate).toHaveBeenCalledWith({ githubPollingIntervalMs: 45000 });
     expect(onUpdate).toHaveBeenCalledWith({ autoRunPriorities: ['p0'] });
+  });
+
+  it('updates auto-commit and cleanup settings', () => {
+    const onUpdate = vi.fn();
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      autoCommitEnabled: false,
+      autoCommitModel: 'openrouter/auto',
+      cleanupCriteria: {
+        ...DEFAULT_SETTINGS.cleanupCriteria,
+        worktreeMergedPr: false,
+        localBranchNoRemote: false,
+      },
+    };
+
+    render(<AutoCommitSettingsSection settings={settings} onUpdate={onUpdate} />);
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Enabled' }));
+    fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'anthropic/claude' } });
+    fireEvent.click(screen.getByRole('switch', { name: 'Worktrees with merged PR' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Local branches with no remote' }));
+
+    expect(onUpdate).toHaveBeenCalledWith({ autoCommitEnabled: true });
+    expect(onUpdate).toHaveBeenCalledWith({ autoCommitModel: 'anthropic/claude' });
+    expect(onUpdate).toHaveBeenCalledWith({
+      cleanupCriteria: { ...settings.cleanupCriteria, worktreeMergedPr: true },
+    });
+    expect(onUpdate).toHaveBeenCalledWith({
+      cleanupCriteria: { ...settings.cleanupCriteria, localBranchNoRemote: true },
+    });
   });
 
   it('updates notification toggles and disables children when notifications are off', () => {

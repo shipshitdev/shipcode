@@ -27,6 +27,7 @@ import type {
 } from '@shipcode/shared';
 import {
   fallbackCliModelCapabilities,
+  getKnownModelLabel,
   getSupportedReasoningEfforts,
   normalizeReasoningModelId,
   OPENROUTER_API_BASE,
@@ -1524,9 +1525,10 @@ export function parseCodexDebugModels(
     options.push({
       value,
       label:
-        typeof model.display_name === 'string' && model.display_name.trim()
+        getKnownModelLabel(value) ??
+        (typeof model.display_name === 'string' && model.display_name.trim()
           ? model.display_name.trim()
-          : value,
+          : value),
       description:
         typeof model.description === 'string' && model.description.trim()
           ? model.description.trim()

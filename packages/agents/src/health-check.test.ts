@@ -283,7 +283,7 @@ describe('parseCodexDebugModels', () => {
         models: [
           {
             slug: 'gpt-5.4',
-            display_name: 'GPT-5.4',
+            display_name: 'gpt-5.4',
             description: 'Everyday coding',
             default_reasoning_level: 'medium',
             supported_reasoning_levels: [{ effort: 'low' }, { effort: 'medium' }],
@@ -308,6 +308,7 @@ describe('parseCodexDebugModels', () => {
 
     expect(result.source).toBe('catalog');
     expect(result.models.map((model) => model.value)).toEqual(['gpt-5.4', 'gpt-5.5']);
+    expect(result.models.map((model) => model.label)).toEqual(['GPT-5.4', 'GPT-5.5']);
     expect(result.models[1].supportedReasoningEfforts).toEqual(['low', 'xhigh']);
   });
 });

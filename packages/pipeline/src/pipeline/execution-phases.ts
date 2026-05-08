@@ -701,6 +701,8 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     context.testOutput = null;
     const stabilizationFeedback = context.stabilizationFeedback ?? '';
     context.stabilizationFeedback = null;
+    const executionResumeContext = context.executionResumeContext ?? '';
+    context.executionResumeContext = null;
     const executeMaterials: PromptMaterial[] = [
       {
         kind: 'issue_prompt',
@@ -744,7 +746,8 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       formatTaskGraphExecutionContract(executionTaskGraph, { activeNode: activeTaskNode }) +
       verificationFeedback +
       testFeedback +
-      stabilizationFeedback;
+      stabilizationFeedback +
+      executionResumeContext;
 
     // Capture HEAD before execution for per-node diff scoping
     if (activeTaskNode) {

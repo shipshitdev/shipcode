@@ -102,4 +102,87 @@ describe('registerAutomationHandlers', () => {
     await expect(handler(null, { id: 'missing' })).rejects.toThrow('Automation missing not found');
     expect(automationScheduler.fireNow).not.toHaveBeenCalled();
   });
+
+  it('lists, reads, creates, updates, deletes, and loads run history', async () => {
+    const automation = makeAutomation();
+    const updatedAutomation = makeAutomation({ name: 'Updated cleanup' });
+    const runs = [{ id: 'thread-1' }];
+    automations.listAll.mockReturnValue([automation]);
+    automations.list.mockReturnValue([automation]);
+    automations.getById.mockReturnValue(automation);
+    automations.create.mockReturnValue(automation);
+    automations.update.mockReturnValue(updatedAutomation);
+    threads.listByAutomationId.mockReturnValue(runs);
+
+    await expect(getHandler('automations:list-all')(null)).resolves.toEqual([automation]);
+    await expect(getHandler('automations:list')(null, { projectId: 'project-1' })).resolves.toEqual(
+      [automation],
+    );
+    await expect(getHandler('automations:get')(null, { id: 'auto-1' })).resolves.toEqual(
+      automation,
+    );
+    await expect(
+      getHandler('automations:create')(null, {
+        projectId: 'project-1',
+        name: 'Nightly cleanup',
+        prompt: 'Clean up stale worktrees',
+        cronExpr: '0 0 * * *',
+        enabled: true,
+      }),
+    ).resolves.toEqual(automation);
+    expect(automationScheduler.schedule).toHaveBeenCalledWith(automation);
+
+    await expect(
+      getHandler('automations:update')(null, {
+        id: 'auto-1',
+        name: 'Updated cleanup',
+        cronExpr: '0 1 * * *',
+      }),
+    ).resolves.toEqual(updatedAutomation);
+    expect(automations.update).toHaveBeenCalledWith('auto-1', {
+      name: 'Updated cleanup',
+      cronExpr: '0 1 * * *',
+    });
+    expect(automationScheduler.schedule).toHaveBeenCalledWith(updatedAutomation);
+
+    await expect(
+      getHandler('automations:run-history')(null, { automationId: 'auto-1' }),
+    ).resolves.toEqual(runs);
+    await expect(getHandler('automations:delete')(null, { id: 'auto-1' })).resolves.toBeUndefined();
+    expect(automationScheduler.unschedule).toHaveBeenCalledWith('auto-1');
+    expect(automations.delete).toHaveBeenCalledWith('auto-1');
+  });
+
+  it('schedules enabled automations and unschedules disabled automations', async () => {
+    const automation = makeAutomation();
+    automations.setEnabled.mockReturnValue(automation);
+
+    await expect(
+      getHandler('automations:set-enabled')(null, { id: 'auto-1', enabled: true }),
+    ).resolves.toEqual(automation);
+    expect(automationScheduler.schedule).toHaveBeenCalledWith(automation);
+
+    await expect(
+      getHandler('automations:set-enabled')(null, { id: 'auto-1', enabled: false }),
+    ).resolves.toEqual(automation);
+    expect(automationScheduler.unschedule).toHaveBeenCalledWith('auto-1');
+    expect(automations.setNextRunAt).toHaveBeenCalledWith('auto-1', null);
+  });
+
+  it('wraps invalid cron errors for create and update', async () => {
+    await expect(
+      getHandler('automations:create')(null, {
+        projectId: 'project-1',
+        name: 'Bad cron',
+        prompt: 'nope',
+        cronExpr: 'not cron',
+        enabled: true,
+      }),
+    ).rejects.toThrow();
+    await expect(
+      getHandler('automations:update')(null, { id: 'auto-1', cronExpr: 'still not cron' }),
+    ).rejects.toThrow();
+    expect(automations.create).not.toHaveBeenCalled();
+    expect(automations.update).not.toHaveBeenCalled();
+  });
 });

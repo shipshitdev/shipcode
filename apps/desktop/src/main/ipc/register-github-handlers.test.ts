@@ -18,6 +18,8 @@ const {
   listAllIssuesMock,
   fetchProjectPrioritiesMock,
   archiveProjectItemsMock,
+  addIssueCommentMock,
+  listIssueCommentsMock,
 } = vi.hoisted(() => ({
   closeIssueMock: vi.fn(),
   getRepoMetadataMock: vi.fn(),
@@ -25,6 +27,8 @@ const {
   listAllIssuesMock: vi.fn(async () => [] as Array<unknown>),
   fetchProjectPrioritiesMock: vi.fn(),
   archiveProjectItemsMock: vi.fn(async () => undefined),
+  addIssueCommentMock: vi.fn(async () => undefined),
+  listIssueCommentsMock: vi.fn(async () => [] as Array<unknown>),
 }));
 
 vi.mock('@shipcode/agents', async () => {
@@ -35,6 +39,8 @@ vi.mock('@shipcode/agents', async () => {
     reopenIssue = reopenIssueMock;
     listAllIssues = listAllIssuesMock;
     archiveProjectItems = archiveProjectItemsMock;
+    addIssueComment = addIssueCommentMock;
+    listIssueComments = listIssueCommentsMock;
   }
   return {
     ...actual,
@@ -172,6 +178,10 @@ describe('registerGitHubHandlers', () => {
     });
     archiveProjectItemsMock.mockReset();
     archiveProjectItemsMock.mockResolvedValue(undefined);
+    addIssueCommentMock.mockReset();
+    addIssueCommentMock.mockResolvedValue(undefined);
+    listIssueCommentsMock.mockReset();
+    listIssueCommentsMock.mockResolvedValue([]);
   });
 
   function buildGithubIssuesQueries(
@@ -618,6 +628,155 @@ describe('registerGitHubHandlers', () => {
     expect(archiveProjectItemsMock).not.toHaveBeenCalled();
     expect(archiveIssues).toHaveBeenCalledWith([quickIssue.id]);
     expect(result).toEqual({ archivedCount: 1, failedCount: 0 });
+  });
+
+  it('archives GitHub done issues and reports per-issue archive failures', async () => {
+    const openIssue = { ...baseIssue, id: 'issue-open', issueNumber: 42, state: 'open' };
+    const closedIssue = { ...baseIssue, id: 'issue-closed', issueNumber: 43, state: 'closed' };
+    const failedIssue = { ...baseIssue, id: 'issue-failed', issueNumber: 44, state: 'open' };
+    const archiveIssues = vi.fn();
+    archiveProjectItemsMock.mockImplementation(async (...args: unknown[]) => {
+      const issueNumber = args[0] as number;
+      if (issueNumber === 44) throw new Error('archive failed');
+    });
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+      },
+      githubIssues: buildGithubIssuesQueries(
+        {
+          listCompleted: vi.fn(() => [openIssue, closedIssue, failedIssue]),
+          archiveIssues,
+        },
+        [],
+      ),
+      threads: {
+        archiveDoneAutomationRuns: vi.fn(() => 1),
+        getById: vi.fn(() => null),
+        getByProjectAndGithubIssue: vi.fn(() => null),
+      },
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const archiveAllDone = handlers.get('github:archive-all-done');
+    if (!archiveAllDone) throw new Error('github:archive-all-done handler not registered');
+
+    await expect(archiveAllDone(undefined, { projectId: 'project-1' })).resolves.toEqual({
+      archivedCount: 3,
+      failedCount: 1,
+    });
+    expect(closeIssueMock).toHaveBeenCalledWith(42);
+    expect(closeIssueMock).toHaveBeenCalledWith(44);
+    expect(archiveProjectItemsMock).toHaveBeenCalledWith(43);
+    expect(archiveIssues).toHaveBeenCalledWith(['issue-open', 'issue-closed']);
+  });
+
+  it('lists comments with cache reuse and clears the cache after posting', async () => {
+    const comment = {
+      id: 1,
+      author: 'octocat',
+      body: 'hello',
+      createdAt: '2026-05-08T00:00:00.000Z',
+      url: 'https://github.test/comment/1',
+    };
+    listIssueCommentsMock.mockResolvedValue([comment]);
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+      },
+      githubIssues: buildGithubIssuesQueries(
+        {
+          getByNumber: vi.fn(() => baseIssue),
+        },
+        [baseIssue],
+      ),
+      threads: {
+        getById: vi.fn(() => null),
+        getByProjectAndGithubIssue: vi.fn(() => null),
+      },
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const listComments = handlers.get('github:list-comments');
+    const addComment = handlers.get('github:add-comment');
+    if (!listComments || !addComment) throw new Error('comment handlers not registered');
+
+    await expect(
+      listComments(undefined, { projectId: 'project-1', issueNumber: 42 }),
+    ).resolves.toEqual([comment]);
+    await expect(
+      listComments(undefined, { projectId: 'project-1', issueNumber: 42 }),
+    ).resolves.toEqual([comment]);
+    expect(listIssueCommentsMock).toHaveBeenCalledTimes(1);
+
+    await addComment(undefined, { projectId: 'project-1', issueNumber: 42, body: 'next' });
+    expect(addIssueCommentMock).toHaveBeenCalledWith(42, 'next');
+
+    await listComments(undefined, { projectId: 'project-1', issueNumber: 42 });
+    expect(listIssueCommentsMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects comment actions for quick tasks before calling GitHub', async () => {
+    const quickIssue = { ...baseIssue, issueNumber: -1_123, isQuickMode: true };
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+      },
+      githubIssues: buildGithubIssuesQueries(
+        {
+          getByNumber: vi.fn(() => quickIssue),
+        },
+        [quickIssue],
+      ),
+      threads: {
+        getById: vi.fn(() => null),
+        getByProjectAndGithubIssue: vi.fn(() => null),
+      },
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const listComments = handlers.get('github:list-comments');
+    const addComment = handlers.get('github:add-comment');
+    if (!listComments || !addComment) throw new Error('comment handlers not registered');
+
+    await expect(
+      addComment(undefined, { projectId: 'project-1', issueNumber: -1_123, body: 'nope' }),
+    ).rejects.toThrow('Quick tasks have no GitHub issue');
+    await expect(
+      listComments(undefined, { projectId: 'project-1', issueNumber: -1_123, force: true }),
+    ).rejects.toThrow('Quick tasks have no GitHub issue');
+    expect(addIssueCommentMock).not.toHaveBeenCalled();
+    expect(listIssueCommentsMock).not.toHaveBeenCalled();
   });
 
   describe('github:refresh-issues priority sync', () => {

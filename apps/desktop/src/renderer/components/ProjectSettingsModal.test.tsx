@@ -5,6 +5,7 @@ import {
   DEFAULT_SETTINGS,
   type IntegrationStatus,
   type Project,
+  type ProjectSetupDraft,
 } from '@shipcode/shared';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -209,6 +210,47 @@ describe('ProjectSettingsModal', () => {
     { name: 'do-dont.md', exists: false },
   ];
 
+  function makeProjectSetup(kind: 'unknown' | 'bun' = 'unknown'): ProjectSetupDraft {
+    const suggestedContract =
+      kind === 'bun'
+        ? {
+            version: 1 as const,
+            setupCommands: ['bun install --frozen-lockfile'],
+            verifyCommands: ['bun run typecheck'],
+            envFiles: [],
+            setupBeforeVerify: false,
+            testingContext: 'Detected bun package scripts for verification.',
+          }
+        : {
+            version: 1 as const,
+            setupCommands: [],
+            verifyCommands: [],
+            envFiles: [],
+            setupBeforeVerify: false,
+            testingContext: null,
+          };
+
+    return {
+      inspection: {
+        status: 'missing',
+        path: '/tmp/shipcode/.shipcode/setup.json',
+        contract: null,
+        error: null,
+      },
+      profiles: [
+        {
+          kind,
+          label: kind === 'bun' ? 'Bun' : 'Unknown',
+          recommended: true,
+          evidence:
+            kind === 'bun' ? ['package.json', 'bun.lock'] : ['No supported repo markers detected'],
+          suggestedContract,
+        },
+      ],
+      suggestedContract,
+    };
+  }
+
   beforeEach(() => {
     cleanup();
     invokeMock.mockReset();
@@ -331,6 +373,75 @@ describe('ProjectSettingsModal', () => {
     expect(screen.getByLabelText('Testing context')).toHaveValue(
       'Detected a Swift Package Manager repo.',
     );
+  });
+
+  it('refetches setup detection when Re-detect is clicked', async () => {
+    useAppStore.setState({
+      projectSettingsModalOpen: true,
+      projectSettingsModalProjectId: project.id,
+      projectSettingsModalInitialTab: 'setup',
+    });
+    let setupCalls = 0;
+
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'project:get') return project;
+      if (channel === 'settings:get') return DEFAULT_SETTINGS;
+      if (channel === 'integrations:check') return integrations;
+      if (channel === 'memory:list') {
+        return { files: contextFiles, hasObsoleteContextDirectory: false };
+      }
+      if (channel === 'project:get-setup') {
+        setupCalls += 1;
+        return setupCalls === 1 ? makeProjectSetup('unknown') : makeProjectSetup('bun');
+      }
+      return null;
+    });
+
+    renderWithProviders();
+
+    expect(await screen.findByRole('button', { name: 'Unknown recommended' })).toBeInTheDocument();
+
+    const redetectButton = screen.getByRole('button', { name: 'Re-detect' });
+    fireEvent.click(redetectButton);
+
+    expect(redetectButton).toBeDisabled();
+    await waitFor(() => expect(setupCalls).toBe(2));
+    expect(await screen.findByRole('button', { name: 'Bun recommended' })).toBeInTheDocument();
+  });
+
+  it('refreshes setup detection after relinking the repository folder', async () => {
+    let setupCalls = 0;
+    const relinkedProject = { ...project, path: '/tmp/relinked-shipcode' };
+
+    invokeMock.mockImplementation(async (channel) => {
+      if (channel === 'project:get') return project;
+      if (channel === 'settings:get') return DEFAULT_SETTINGS;
+      if (channel === 'integrations:check') return integrations;
+      if (channel === 'memory:list') {
+        return { files: contextFiles, hasObsoleteContextDirectory: false };
+      }
+      if (channel === 'project:get-setup') {
+        setupCalls += 1;
+        return setupCalls === 1 ? makeProjectSetup('unknown') : makeProjectSetup('bun');
+      }
+      if (channel === 'dialog:open-directory') return relinkedProject.path;
+      if (channel === 'project:relink-path') return relinkedProject;
+      if (channel === 'github:refresh-issues') return [];
+      return null;
+    });
+
+    renderWithProviders();
+
+    await waitFor(() => expect(setupCalls).toBe(1));
+    fireEvent.click(await screen.findByRole('button', { name: 'Change folder...' }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('project:relink-path', {
+        projectId: project.id,
+        path: relinkedProject.path,
+      });
+      expect(setupCalls).toBe(2);
+    });
   });
 
   it('saves a renamed project through project:set-name', async () => {

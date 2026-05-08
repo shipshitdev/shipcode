@@ -1230,6 +1230,24 @@ Custom prompt`,
       expect(mock.deps.processManager.spawn).not.toHaveBeenCalled();
     });
 
+    it('appends interrupted execution resume context once', async () => {
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        baseBranch: 'main',
+        executionResumeContext:
+          '\n\n<interrupted_run_context>\nContinue from the existing WIP.\n</interrupted_run_context>',
+      });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+
+      const executeCall = vi.mocked(mock.deps.processManager.spawn).mock.calls[0];
+      expect(executeCall[2][1]).toContain('<interrupted_run_context>');
+      expect(executeCall[2][1]).toContain('Continue from the existing WIP.');
+      expect(requireContext(pipeline).executionResumeContext).toBeNull();
+    });
+
     it('exit 0 + autonomous → starts verification (emits verifying)', async () => {
       // Need to set up execSync for verification phase
       mockExecSync.mockImplementation((cmd: string) => {
