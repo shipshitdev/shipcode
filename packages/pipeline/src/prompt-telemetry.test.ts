@@ -4,6 +4,16 @@ import { describe, expect, it, vi } from 'vitest';
 import { createPipeline } from './pipeline';
 import type { PipelineDeps, PipelineEvent } from './types';
 
+vi.mock('@shipcode/agents/source', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@shipcode/agents/source')>();
+  return {
+    ...actual,
+    loadCodeReviewGraphContext: vi.fn(() => []),
+    loadRepoContext: vi.fn(() => 'No repo memory files found.'),
+    loadStructuredRepoContext: vi.fn(() => []),
+  };
+});
+
 const plan: ShipCodePlan = {
   id: 'p1',
   threadId: 't1',
