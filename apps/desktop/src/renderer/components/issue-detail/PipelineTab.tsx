@@ -199,7 +199,7 @@ export function PipelineTab({
         <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-secondary">
           Agents
         </h4>
-        <div className="grid grid-cols-4 gap-2">
+        <div className="flex flex-col gap-3">
           {(
             [
               {
@@ -250,17 +250,17 @@ export function PipelineTab({
 
             return (
               <div key={role} className="min-w-0 flex flex-col gap-1">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                   {role}
                 </span>
                 {executorEditable ? (
-                  <div className="flex min-w-0 flex-col gap-1">
+                  <div className="flex min-w-0 gap-2">
                     <Select
                       value={phaseSelectValues[phase]}
                       onValueChange={(value: string) => onPhaseAgentChange(phase, value)}
                     >
                       <SelectTrigger
-                        className="h-6 min-w-0 w-full text-[11px]"
+                        className="h-6 min-w-0 flex-1 text-[11px]"
                         data-testid={`phase-provider-select-${phase}`}
                       >
                         <SelectValue>
@@ -335,7 +335,7 @@ export function PipelineTab({
                       value={displayedEffortValue}
                       onValueChange={(next) => onPhaseEffortChange(phase, next)}
                     >
-                      <SelectTrigger className="h-6 w-full text-[11px]">
+                      <SelectTrigger className="h-6 min-w-0 flex-1 text-[11px]">
                         <SelectValue>
                           {isEffortInherited ? (
                             <InheritValueDisplay
@@ -366,7 +366,7 @@ export function PipelineTab({
                       {MODEL_DISPLAY[displayModel] ?? displayModel}
                     </Badge>
                     {phaseEffortSelectValues[phase] !== '__inherit__' ? (
-                      <span className="shrink-0 text-[10px] text-muted">
+                      <span className="shrink-0 text-[10px] text-muted-foreground">
                         {formatReasoningEffortLabel(effortResolution.effective)}
                       </span>
                     ) : null}
@@ -418,7 +418,7 @@ export function PipelineTab({
       </div>
 
       <div className="mb-5 flex flex-col gap-1">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
           Human Approval
         </span>
         <Select value={requireApprovalSelectValue} onValueChange={onRequireApprovalChange}>
@@ -433,7 +433,7 @@ export function PipelineTab({
             <SelectItem value="false">Off</SelectItem>
           </SelectContent>
         </Select>
-        <span className="text-[11px] text-muted">
+        <span className="text-[11px] text-muted-foreground">
           {effectiveRequireApproval
             ? 'Pauses for approval before execution.'
             : 'Executes automatically after planning/revisions.'}
@@ -441,7 +441,7 @@ export function PipelineTab({
       </div>
 
       <div className="mb-5 flex flex-col gap-1">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
           Revisions
         </span>
         <Select value={revisionCountSelectValue} onValueChange={onRevisionCountChange}>
@@ -460,7 +460,7 @@ export function PipelineTab({
             <SelectItem value="5">5 revisions</SelectItem>
           </SelectContent>
         </Select>
-        <span className="text-[11px] text-muted">
+        <span className="text-[11px] text-muted-foreground">
           {`${effectiveRevisionCount} revision${effectiveRevisionCount === 1 ? '' : 's'} before approval/execution.`}
         </span>
       </div>
@@ -481,7 +481,7 @@ export function PipelineTab({
             {activeIssue.linkedPrNumber && linkedPrUrl ? (
               <div className="flex flex-col gap-1 rounded-md border border-border bg-secondary p-2">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] font-medium uppercase tracking-wide text-muted">
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                     Pull Request
                   </span>
                   <Badge
@@ -498,7 +498,7 @@ export function PipelineTab({
                   <Button
                     variant="ghost"
                     size="icon-xs"
-                    className="text-muted"
+                    className="text-muted-foreground"
                     onClick={() =>
                       window.shipcode.invoke('shell:open-external', { url: linkedPrUrl })
                     }
@@ -532,7 +532,7 @@ export function PipelineTab({
               PR Feedback
             </h4>
             {activeIssue.prLastSyncAt ? (
-              <span className="text-[10px] text-muted">
+              <span className="text-[10px] text-muted-foreground">
                 {new Date(activeIssue.prLastSyncAt).toLocaleString()}
               </span>
             ) : null}
@@ -562,7 +562,7 @@ export function PipelineTab({
                     <div className="text-[12px] font-medium text-primary">
                       {[check.workflowName, check.name].filter(Boolean).join(' / ')}
                     </div>
-                    <div className="mt-1 flex items-center gap-2 text-[11px] text-muted">
+                    <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
                       <span>{check.conclusion ?? check.status}</span>
                       {check.detailsUrl ? (
                         <Button
@@ -592,7 +592,7 @@ export function PipelineTab({
                     key={comment.url}
                     className="rounded-md border border-warning/20 bg-warning/5 p-2"
                   >
-                    <div className="text-[11px] text-muted">
+                    <div className="text-[11px] text-muted-foreground">
                       {[comment.author, comment.path, comment.line ? `:${comment.line}` : null]
                         .filter(Boolean)
                         .join(' · ')}
@@ -635,9 +635,9 @@ export function PipelineTab({
             <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">
               Checkpoints
             </h4>
-            <span className="text-[11px] text-muted">{checkpoints.length}</span>
+            <span className="text-[11px] text-muted-foreground">{checkpoints.length}</span>
           </div>
-          <div className="mb-2 text-[11px] text-muted">
+          <div className="mb-2 text-[11px] text-muted-foreground">
             Restoring a checkpoint rewinds code state only. It does not resume the same planner
             session.
           </div>
@@ -649,7 +649,7 @@ export function PipelineTab({
               >
                 <div className="min-w-0">
                   <div className="text-[12px] font-medium text-primary">{checkpoint.label}</div>
-                  <div className="truncate text-[11px] text-muted">
+                  <div className="truncate text-[11px] text-muted-foreground">
                     {checkpoint.branch ? `${checkpoint.branch} · ` : ''}
                     {checkpoint.commitSha.slice(0, 12)} ·{' '}
                     {new Date(checkpoint.createdAt).toLocaleString()}
@@ -675,7 +675,7 @@ export function PipelineTab({
             <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">
               Human QA
             </h4>
-            <span className="text-[11px] text-muted">{featureQaState.featureId}</span>
+            <span className="text-[11px] text-muted-foreground">{featureQaState.featureId}</span>
           </div>
           <div className="rounded-md border border-border bg-secondary p-3">
             <div className="space-y-3">
@@ -684,7 +684,7 @@ export function PipelineTab({
                   <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-secondary">
                     Worktree
                   </div>
-                  <div className="break-all font-mono text-[10px] text-muted">
+                  <div className="break-all font-mono text-[10px] text-muted-foreground">
                     {thread.worktreePath}
                   </div>
                 </div>
@@ -709,7 +709,7 @@ export function PipelineTab({
                         <ExternalLink size={10} />
                       </button>
                     ) : (
-                      <div className="mt-1 text-[11px] text-muted">
+                      <div className="mt-1 text-[11px] text-muted-foreground">
                         Starts the configured Runtime QA command in this worktree.
                       </div>
                     )}
@@ -756,7 +756,7 @@ export function PipelineTab({
                       className="rounded-sm border border-border bg-background p-2"
                     >
                       <div className="mb-1 text-[12px] font-medium text-primary">{flow.name}</div>
-                      <ol className="ml-4 list-decimal space-y-1 text-[11px] text-muted">
+                      <ol className="ml-4 list-decimal space-y-1 text-[11px] text-muted-foreground">
                         {flow.steps.map((step) => (
                           <li key={step}>{step}</li>
                         ))}
@@ -773,7 +773,7 @@ export function PipelineTab({
                   <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-secondary">
                     Expected states
                   </div>
-                  <ul className="ml-4 list-disc space-y-1 text-[11px] text-muted">
+                  <ul className="ml-4 list-disc space-y-1 text-[11px] text-muted-foreground">
                     {featureQaState.expectedStates.map((state) => (
                       <li key={state}>{state}</li>
                     ))}
@@ -785,7 +785,7 @@ export function PipelineTab({
                   <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-secondary">
                     Test data
                   </div>
-                  <ul className="ml-4 list-disc space-y-1 text-[11px] text-muted">
+                  <ul className="ml-4 list-disc space-y-1 text-[11px] text-muted-foreground">
                     {featureQaState.testDataAssumptions.map((assumption) => (
                       <li key={assumption}>{assumption}</li>
                     ))}
@@ -803,7 +803,7 @@ export function PipelineTab({
             <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">
               QA Results
             </h4>
-            <span className="text-[11px] text-muted">
+            <span className="text-[11px] text-muted-foreground">
               {qaResults.length} run{qaResults.length === 1 ? '' : 's'}
             </span>
           </div>
@@ -828,12 +828,12 @@ export function PipelineTab({
                     </Badge>
                     <span className="text-[12px] font-medium text-primary">{result.featureId}</span>
                   </div>
-                  <span className="text-[11px] text-muted">
+                  <span className="text-[11px] text-muted-foreground">
                     {new Date(result.runAt).toLocaleString()}
                   </span>
                 </div>
                 {result.summary ? (
-                  <div className="mb-2 text-[11px] text-muted">{result.summary}</div>
+                  <div className="mb-2 text-[11px] text-muted-foreground">{result.summary}</div>
                 ) : null}
                 {result.flowResults.length > 0 ? (
                   <div className="space-y-2">
@@ -845,7 +845,7 @@ export function PipelineTab({
                           </span>
                           <span className="font-medium text-primary">{flow.flowName}</span>
                           {flow.failureReason ? (
-                            <span className="text-muted">— {flow.failureReason}</span>
+                            <span className="text-muted-foreground">— {flow.failureReason}</span>
                           ) : null}
                         </div>
                         {flow.assertions?.length ? (
@@ -860,15 +860,15 @@ export function PipelineTab({
                                   </span>
                                   <span className="font-medium text-primary">{assertion.name}</span>
                                 </div>
-                                <div className="break-words text-muted">
+                                <div className="break-words text-muted-foreground">
                                   Expected: {assertion.expected}
                                 </div>
-                                <div className="break-words text-muted">
+                                <div className="break-words text-muted-foreground">
                                   Actual: {assertion.actual}
                                 </div>
                                 {assertion.evidencePath ? (
                                   <div className="flex items-center gap-2">
-                                    <div className="min-w-0 flex-1 break-all font-mono text-[10px] text-muted">
+                                    <div className="min-w-0 flex-1 break-all font-mono text-[10px] text-muted-foreground">
                                       {assertion.evidencePath}
                                     </div>
                                     <Button
@@ -892,7 +892,7 @@ export function PipelineTab({
                           <div className="ml-4 mt-1 space-y-0.5">
                             {flow.evidencePaths.slice(0, 3).map((path) => (
                               <div key={path} className="flex items-center gap-2">
-                                <div className="min-w-0 flex-1 break-all font-mono text-[10px] text-muted">
+                                <div className="min-w-0 flex-1 break-all font-mono text-[10px] text-muted-foreground">
                                   {path}
                                 </div>
                                 <Button
@@ -920,7 +920,7 @@ export function PipelineTab({
                     <div className="space-y-0.5">
                       {result.evidencePaths.slice(0, 5).map((path) => (
                         <div key={path} className="flex items-center gap-2">
-                          <div className="min-w-0 flex-1 break-all font-mono text-[10px] text-muted">
+                          <div className="min-w-0 flex-1 break-all font-mono text-[10px] text-muted-foreground">
                             {path}
                           </div>
                           <Button

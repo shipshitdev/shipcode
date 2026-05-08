@@ -56,7 +56,7 @@ import {
   CircleCheck,
   CircleDot,
   Copy,
-  GripVertical,
+
   Play,
   Square,
 } from 'lucide-react';
@@ -1634,12 +1634,9 @@ export function IssueDetail() {
             type="button"
             variant="ghost"
             aria-label="Resize detail sidebar"
-            className="peer absolute top-0 left-0 bottom-0 z-10 flex h-auto w-3 cursor-col-resize items-center justify-center rounded-none border-l border-transparent p-0 hover:border-accent/40 hover:bg-accent/20 active:bg-accent/30 transition-colors"
+            className="absolute top-0 left-0 bottom-0 h-auto w-1 cursor-col-resize rounded-none p-0 hover:bg-accent/20 active:bg-accent/30 transition-colors"
             onMouseDown={handleDetailResizeMouseDown}
           />
-          <div className="pointer-events-none absolute top-1/2 left-0 z-20 flex w-3 -translate-y-1/2 justify-center text-muted-foreground/35 transition-colors peer-hover:text-muted-foreground">
-            <GripVertical size={14} strokeWidth={1.75} />
-          </div>
           <div className="space-y-6 px-4 pt-2 pb-4">
             {/* Details */}
             {issueBadges && <div>{issueBadges}</div>}

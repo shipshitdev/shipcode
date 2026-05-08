@@ -104,7 +104,9 @@ export function OverviewView() {
   const openActivity = useAppStore((s) => s.openActivity);
   const openInbox = useAppStore((s) => s.openInbox);
 
+  const AGENT_CARD_LIMIT = 4;
   const PAGE_SIZE = 5;
+  const [showAllAgents, setShowAllAgents] = useState(false);
   const [activityPage, setActivityPage] = useState(1);
   const [tasksPage, setTasksPage] = useState(1);
 
@@ -129,6 +131,7 @@ export function OverviewView() {
   const animatedApprovals = useAnimatedNumber(stats?.pendingApprovals ?? 0);
   const animatedShipped = useAnimatedNumber(stats?.shippedLast7d ?? 0, 800);
   const running: ActivePipelineSummary[] = overview?.running ?? [];
+  const visibleAgents = showAllAgents ? running : running.slice(0, AGENT_CARD_LIMIT);
   const activity: ActivityEntry[] = overview?.activity ?? [];
   const activityTotal = overview?.activityTotal ?? 0;
   const recent: RecentTask[] = overview?.recent ?? [];
@@ -229,14 +232,33 @@ export function OverviewView() {
 
           {/* Running Agents — always first after stats */}
           <div>
-            <h2 className="text-sm font-semibold text-primary mb-3">Running Agents</h2>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-primary">Running Agents</h2>
+                {!showAllAgents && running.length > AGENT_CARD_LIMIT && (
+                  <span className="text-[11px] text-muted">
+                    +{running.length - AGENT_CARD_LIMIT} more
+                  </span>
+                )}
+              </div>
+              {running.length > AGENT_CARD_LIMIT && (
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => setShowAllAgents((prev) => !prev)}
+                  className="h-auto px-0 text-[11px] font-normal text-muted hover:bg-transparent capitalize"
+                >
+                  {showAllAgents ? 'Show less' : 'View all →'}
+                </Button>
+              )}
+            </div>
             {running.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted">
                 No agents running. Start a pipeline to see live status here.
               </div>
             ) : (
               <div className="flex flex-wrap gap-3">
-                {running.map((row) => (
+                {visibleAgents.map((row) => (
                   <div key={row.threadId} className="min-w-[280px] max-w-[360px] flex-1">
                     <ActivePipelineCard
                       projectName={row.projectName}
