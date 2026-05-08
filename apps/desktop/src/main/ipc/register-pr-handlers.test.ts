@@ -30,7 +30,7 @@ function makeDeps(
         getById: vi.fn(() => project),
       },
       githubIssues: {
-        getByLinkedPrNumber: vi.fn(() => ({ threadId: 'thread-1' })),
+        getByLinkedPrNumber: vi.fn((): { threadId: string } | null => ({ threadId: 'thread-1' })),
       },
       diffs: {
         list: vi.fn(() => [{ id: 'diff-1', filePath: 'src/app.ts' }]),

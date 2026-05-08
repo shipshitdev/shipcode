@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PhaseModelRow } from './PhaseModelRow';
@@ -103,5 +104,26 @@ describe('PhaseModelRow', () => {
     expect(screen.getByText('Thinking budget')).toBeInTheDocument();
     expect(screen.getByText('High')).toBeInTheDocument();
     expect(screen.queryByText('xhigh')).not.toBeInTheDocument();
+  });
+
+  it('renders Gemini as a CLI provider with standard reasoning controls', () => {
+    render(
+      <PhaseModelRow
+        label="Planner"
+        htmlFor="planner-model"
+        modelValue="gemini"
+        openrouterModelValue={null}
+        resolvedModelId="gemini-2.5-pro"
+        reasoningEffortValue="medium"
+        validProviders={['claude', 'codex', 'gemini', 'openrouter']}
+        onModelChange={vi.fn()}
+        onOpenrouterModelChange={vi.fn()}
+        onReasoningEffortChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Google')).toBeInTheDocument();
+    expect(screen.getByText('Reasoning effort')).toBeInTheDocument();
+    expect(screen.queryByText('Custom OpenRouter slug')).not.toBeInTheDocument();
   });
 });

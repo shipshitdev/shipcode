@@ -182,13 +182,13 @@ describe('model-resolution', () => {
 
   it('lets project overrides shadow the global defaults', () => {
     const project = makeProject({
-      plannerModelOverride: 'openrouter',
+      plannerModelOverride: 'gemini',
       reviewerModelOverride: 'claude',
       executorModelOverride: 'codex',
       verifierModelOverride: 'claude',
     });
 
-    expect(resolvePhaseModel(settings, project, 'planner')).toBe('openrouter');
+    expect(resolvePhaseModel(settings, project, 'planner')).toBe('gemini');
     expect(resolvePhaseModel(settings, project, 'reviewer')).toBe('claude');
     expect(resolvePhaseModel(settings, project, 'executor')).toBe('codex');
     expect(resolvePhaseModel(settings, project, 'verifier')).toBe('claude');
@@ -199,13 +199,13 @@ describe('model-resolution', () => {
     const issue = makeIssue({
       plannerModelOverride: 'openrouter',
       reviewerModelOverride: 'claude',
-      executorModelOverride: 'openrouter',
+      executorModelOverride: 'gemini',
       verifierModelOverride: 'claude',
     });
 
     expect(resolvePhaseModelForIssue(settings, project, issue, 'planner')).toBe('openrouter');
     expect(resolvePhaseModelForIssue(settings, project, issue, 'reviewer')).toBe('claude');
-    expect(resolveExecutorModelForIssue(settings, project, issue)).toBe('openrouter');
+    expect(resolveExecutorModelForIssue(settings, project, issue)).toBe('gemini');
     expect(resolvePhaseModelForIssue(settings, project, issue, 'verifier')).toBe('claude');
   });
 

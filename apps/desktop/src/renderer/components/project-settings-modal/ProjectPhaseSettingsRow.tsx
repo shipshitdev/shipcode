@@ -41,7 +41,9 @@ import {
 } from './shared';
 
 function asExecutorModel(value: Project['plannerModelOverride']): ExecutorModel | null {
-  if (value === 'claude' || value === 'codex' || value === 'openrouter') return value;
+  if (value === 'claude' || value === 'codex' || value === 'gemini' || value === 'openrouter') {
+    return value;
+  }
   return null;
 }
 

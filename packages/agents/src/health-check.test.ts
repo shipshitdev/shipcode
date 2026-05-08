@@ -29,6 +29,8 @@ import {
   checkCliProviderUsage,
   checkCodexAuth,
   checkDesktopApps,
+  checkGeminiAuth,
+  checkGeminiModelCapabilities,
   checkGhAuth,
   checkIntegrationStatus,
   checkOpenRouterAuth,
@@ -416,11 +418,12 @@ describe('parseGhProjectScope', () => {
 // checkSystemHealth
 // ---------------------------------------------------------------------------
 describe('checkSystemHealth', () => {
-  it('returns all 4 CLIs with correct availability', async () => {
+  it('returns provider CLIs with correct availability', async () => {
     execRouted({
       which: { stdout: '/usr/local/bin/tool\n' },
       'claude --version': { stdout: 'claude 1.0.0' },
       'codex --version': { stdout: 'codex 0.1.0' },
+      'gemini --version': { stdout: '0.1.0' },
       'git --version': { stdout: 'git version 2.43.0' },
       'gh --version': { stdout: 'gh version 2.40.1 (2024-01-01)' },
     });
@@ -428,6 +431,7 @@ describe('checkSystemHealth', () => {
     const result = await checkSystemHealth();
     expect(result.claude.available).toBe(true);
     expect(result.codex.available).toBe(true);
+    expect(result.gemini?.available).toBe(true);
     expect(result.git.available).toBe(true);
     expect(result.gh.available).toBe(true);
   });
@@ -438,10 +442,14 @@ describe('checkSystemHealth', () => {
         cb = opts;
         opts = {};
       }
-      // git and gh are available, claude and codex are not
+      // git and gh are available, provider CLIs are not
       if (cmd.includes('which git') || cmd.includes('which gh')) {
         (cb as ExecCallback)(null, { stdout: '/usr/bin/tool', stderr: '' });
-      } else if (cmd.includes('which claude') || cmd.includes('which codex')) {
+      } else if (
+        cmd.includes('which claude') ||
+        cmd.includes('which codex') ||
+        cmd.includes('which gemini')
+      ) {
         (cb as ExecCallback)(new Error('not found'));
       } else if (cmd.startsWith('git') || cmd.startsWith('gh')) {
         (cb as ExecCallback)(null, { stdout: 'version info', stderr: '' });
@@ -453,6 +461,7 @@ describe('checkSystemHealth', () => {
     const result = await checkSystemHealth();
     expect(result.claude.available).toBe(false);
     expect(result.codex.available).toBe(false);
+    expect(result.gemini?.available).toBe(false);
     expect(result.git.available).toBe(true);
     expect(result.gh.available).toBe(true);
   });
@@ -475,6 +484,8 @@ describe('checkSystemHealthWithAuth', () => {
         (cb as ExecCallback)(null, { stdout: 'Authenticated', stderr: '' });
       } else if (cmd.includes('printenv OPENAI_API_KEY')) {
         (cb as ExecCallback)(null, { stdout: 'sk-key', stderr: '' });
+      } else if (cmd.includes('printenv GEMINI_API_KEY')) {
+        (cb as ExecCallback)(null, { stdout: 'gemini-key', stderr: '' });
       } else {
         (cb as ExecCallback)(null, { stdout: 'version 1.0', stderr: '' });
       }
@@ -485,6 +496,27 @@ describe('checkSystemHealthWithAuth', () => {
     expect(result.claude.authenticated).toBe(true);
     expect(result.codex.available).toBe(true);
     expect(result.codex.authenticated).toBe(true);
+    expect(result.gemini?.available).toBe(true);
+    expect(result.gemini?.authenticated).toBe(true);
+  });
+
+  it('detects Gemini auth from environment', async () => {
+    execRouted({
+      'printenv GEMINI_API_KEY': { stdout: 'gemini-key\n' },
+    });
+
+    await expect(checkGeminiAuth()).resolves.toBe(true);
+  });
+
+  it('uses Gemini fallback model capabilities when the CLI is reachable', async () => {
+    execRouted({
+      'gemini --help': { stdout: 'Usage: gemini' },
+    });
+
+    const result = await checkGeminiModelCapabilities();
+    expect(result.provider).toBe('gemini');
+    expect(result.source).toBe('fallback');
+    expect(result.models.map((model) => model.value)).toContain('gemini-2.5-pro');
   });
 
   it('sets authenticated=false when CLI available but auth fails', async () => {
@@ -1077,13 +1109,17 @@ describe('checkIntegrationStatus', () => {
     execRouted({
       'which claude': { stdout: '/usr/local/bin/claude\n' },
       'which codex': { stdout: '/usr/local/bin/codex\n' },
+      'which gemini': { stdout: '/usr/local/bin/gemini\n' },
       'which git': { stdout: '/usr/bin/git\n' },
       'which gh': { stdout: '/usr/local/bin/gh\n' },
       'claude --version': { stdout: 'claude 1.0.0' },
       'codex --version': { stdout: 'codex 0.1.0' },
+      'gemini --version': { stdout: '0.1.0' },
+      'gemini --help': { stdout: 'Usage: gemini' },
       'git --version': { stdout: 'git version 2.43.0' },
       'gh --version': { stdout: 'gh version 2.40.1' },
       'claude auth status': { stdout: 'Authenticated' },
+      'printenv GEMINI_API_KEY': { stdout: 'gemini-key\n' },
       'printenv OPENAI_API_KEY': { stdout: 'sk-key\n' },
       'printenv OPENROUTER_API_KEY': { stdout: 'or-key\n' },
       'gh auth status': {
@@ -1102,6 +1138,10 @@ describe('checkIntegrationStatus', () => {
     const result = await checkIntegrationStatus(settings());
     expect(result.system.claude.authenticated).toBe(true);
     expect(result.system.codex.authenticated).toBe(true);
+    expect(result.system.gemini?.authenticated).toBe(true);
+    expect(result.modelCapabilities?.gemini.models.map((model) => model.value)).toContain(
+      'gemini-2.5-pro',
+    );
     expect(result.ghAuth.authenticated).toBe(true);
     expect(result.openrouter.authStatus).toBe('valid');
     expect(result.discord.validationStatus).toBe('missing');

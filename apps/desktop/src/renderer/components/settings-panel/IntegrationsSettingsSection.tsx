@@ -63,6 +63,13 @@ export function IntegrationsSettingsSection({
   };
 
   const getCliVersionLine = (version: string | null) => version?.split('\n')[0]?.trim() ?? null;
+  const missingCli = {
+    available: false,
+    version: null,
+    path: null,
+    error: null,
+    authenticated: false,
+  };
   const projectOpenTargets: ProjectOpenTarget[] = [
     'cursor',
     'finder',
@@ -237,6 +244,7 @@ export function IntegrationsSettingsSection({
             {[
               { key: 'claude', label: 'Claude CLI' },
               { key: 'codex', label: 'Codex CLI' },
+              { key: 'gemini', label: 'Gemini CLI' },
               { key: 'gh', label: 'GitHub CLI' },
             ].map(({ key, label }) => {
               const cli =
@@ -244,7 +252,9 @@ export function IntegrationsSettingsSection({
                   ? integrationStatus.system.claude
                   : key === 'codex'
                     ? integrationStatus.system.codex
-                    : integrationStatus.system.gh;
+                    : key === 'gemini'
+                      ? (integrationStatus.system.gemini ?? missingCli)
+                      : integrationStatus.system.gh;
               const ghScope =
                 key === 'gh'
                   ? integrationStatus.ghAuth.hasProjectScope === true
@@ -254,9 +264,14 @@ export function IntegrationsSettingsSection({
                       : null
                   : null;
               const versionLine = getCliVersionLine(cli.version);
-              const Icon = key === 'claude' ? Sparkles : key === 'codex' ? Terminal : FolderGit;
+              const Icon =
+                key === 'claude' || key === 'gemini'
+                  ? Sparkles
+                  : key === 'codex'
+                    ? Terminal
+                    : FolderGit;
               const modelCapabilities =
-                key === 'claude' || key === 'codex'
+                key === 'claude' || key === 'codex' || key === 'gemini'
                   ? integrationStatus.modelCapabilities?.[key]
                   : null;
 

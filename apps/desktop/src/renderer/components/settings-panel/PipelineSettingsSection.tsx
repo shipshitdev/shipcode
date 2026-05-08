@@ -596,7 +596,7 @@ export function PipelineSettingsSection({
                   : null
               }
               reasoningEffortValue={settings.plannerReasoningEffort}
-              validProviders={['claude', 'codex', 'openrouter']}
+              validProviders={['claude', 'codex', 'gemini', 'openrouter']}
               onModelChange={(value) =>
                 onUpdate({
                   plannerModel: value as AppSettings['plannerModel'],
@@ -644,7 +644,7 @@ export function PipelineSettingsSection({
                   : null
               }
               reasoningEffortValue={settings.reviewerReasoningEffort}
-              validProviders={['claude', 'codex', 'openrouter']}
+              validProviders={['claude', 'codex', 'gemini', 'openrouter']}
               onModelChange={(value) =>
                 onUpdate({
                   reviewerModel: value as AppSettings['reviewerModel'],
@@ -692,7 +692,7 @@ export function PipelineSettingsSection({
                   : null
               }
               reasoningEffortValue={settings.executorReasoningEffort}
-              validProviders={['claude', 'codex', 'openrouter']}
+              validProviders={['claude', 'codex', 'gemini', 'openrouter']}
               onModelChange={(value) =>
                 onUpdate({
                   executorModel: value as AppSettings['executorModel'],
@@ -740,7 +740,7 @@ export function PipelineSettingsSection({
                   : null
               }
               reasoningEffortValue={settings.verifierReasoningEffort}
-              validProviders={['claude', 'codex', 'openrouter']}
+              validProviders={['claude', 'codex', 'gemini', 'openrouter']}
               onModelChange={(value) =>
                 onUpdate({
                   verifierModel: value as AppSettings['verifierModel'],

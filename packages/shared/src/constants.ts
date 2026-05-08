@@ -1,5 +1,5 @@
 import { PINNED_MODEL_DEFAULTS } from './model-catalog';
-import { type AppSettings, PIPELINE_PHASE, type PipelinePhase } from './types';
+import { type AppSettings, type ExecutorModel, PIPELINE_PHASE, type PipelinePhase } from './types';
 
 export const DEFAULT_NOTIFICATION_EVENTS = {
   awaitingApproval: true,
@@ -16,6 +16,13 @@ export const DEFAULT_CHAT_NOTIFICATION_EVENTS = {
   verificationExhausted: true,
   ciBlocked: true,
 } as const;
+
+export const PIPELINE_EXECUTOR_PROVIDERS = [
+  'claude',
+  'codex',
+  'gemini',
+  'openrouter',
+] as const satisfies readonly ExecutorModel[];
 
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',

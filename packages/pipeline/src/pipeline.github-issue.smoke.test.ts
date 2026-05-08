@@ -12,6 +12,7 @@ import type { AgentProvider, ProcessManager } from '@shipcode/agents/source';
 import {
   createClaudeCliProvider,
   createCodexCliProvider,
+  createGeminiCliProvider,
   createProviderRegistry,
 } from '@shipcode/agents/source';
 import { DEFAULT_SETTINGS, type GitHubIssueCacheRecord } from '@shipcode/shared';
@@ -122,6 +123,7 @@ function createSmokeDeps() {
 
   const claudeProvider = createClaudeCliProvider(processManager);
   const codexProvider = createCodexCliProvider(processManager);
+  const geminiProvider = createGeminiCliProvider(processManager);
   const openrouterProvider: AgentProvider = {
     id: 'openrouter',
     supports: new Set(['plan', 'review', 'revision', 'verify']),
@@ -131,6 +133,7 @@ function createSmokeDeps() {
   const providers = createProviderRegistry({
     claude: claudeProvider,
     codex: codexProvider,
+    gemini: geminiProvider,
     openrouter: openrouterProvider,
   });
 

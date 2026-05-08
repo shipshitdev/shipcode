@@ -568,7 +568,7 @@ export interface PipelineCheckpoint {
 
 // === Pipeline Types ===
 
-export type AgentType = 'claude' | 'codex' | 'gh' | 'openrouter' | 'shell';
+export type AgentType = 'claude' | 'codex' | 'gemini' | 'gh' | 'openrouter' | 'shell';
 
 /**
  * The subset of AgentType that can drive a pipeline phase. Excludes
@@ -585,9 +585,11 @@ export type AgentType = 'claude' | 'codex' | 'gh' | 'openrouter' | 'shell';
  *  - SQLite stores strings; no enum ⇄ ordinal round-trip needed.
  *  - GitHub label values are already strings (`shipcode:agent:claude`, etc).
  */
-export type ExecutorModel = 'claude' | 'codex' | 'openrouter';
+export type ExecutorModel = 'claude' | 'codex' | 'gemini' | 'openrouter';
+export type TriageModel = Exclude<ExecutorModel, 'gemini'>;
 export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
 export type GeneratorCli = 'claude' | 'codex';
+export type PhaseCliProvider = Extract<ExecutorModel, 'claude' | 'codex' | 'gemini'>;
 export type ContextGeneratorCli = GeneratorCli;
 export type RevisionCount = 0 | 1 | 2 | 3 | 4 | 5;
 export type PipelineSpeedProfile = 'smart_fast' | 'thorough';
@@ -751,7 +753,7 @@ export interface AppSettings {
   reviewerModel: AgentType;
   verifierModel: AgentType;
   executorModel: AgentType;
-  triageModel: ExecutorModel;
+  triageModel: TriageModel;
   triageModelId: string | null;
   triageReasoningEffort: ReasoningEffort;
   triageAutoApplyThreshold: number;
@@ -1125,7 +1127,7 @@ export interface CliModelCapabilityOption {
 }
 
 export interface CliModelCapabilities {
-  provider: GeneratorCli;
+  provider: PhaseCliProvider;
   source: CliModelCapabilitySource;
   models: CliModelCapabilityOption[];
   error: string | null;
@@ -1198,6 +1200,7 @@ export interface DesktopAppHealthMap {
 export interface SystemHealth {
   claude: CliHealth;
   codex: CliHealth;
+  gemini?: CliHealth;
   git: CliHealth;
   gh: CliHealth;
 }
@@ -1249,7 +1252,7 @@ export interface ChatIntegrationHealth {
 
 export interface IntegrationStatus {
   system: SystemHealth;
-  modelCapabilities?: Record<GeneratorCli, CliModelCapabilities>;
+  modelCapabilities?: Record<PhaseCliProvider, CliModelCapabilities>;
   ghAuth: GhAuthStatus;
   openrouter: OpenRouterHealth;
   discord: ChatIntegrationHealth;

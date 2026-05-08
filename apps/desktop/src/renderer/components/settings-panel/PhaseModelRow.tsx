@@ -87,6 +87,11 @@ export function PhaseModelRow({
                 OpenAI{disabledProviders?.codex ? ` (${disabledProviders.codex})` : ''}
               </SelectItem>
             )}
+            {validProviders.includes('gemini') && (
+              <SelectItem value="gemini" disabled={!!disabledProviders?.gemini}>
+                Google{disabledProviders?.gemini ? ` (${disabledProviders.gemini})` : ''}
+              </SelectItem>
+            )}
             {validProviders.includes('openrouter') && (
               <SelectItem value="openrouter" disabled={!!disabledProviders?.openrouter}>
                 OpenRouter

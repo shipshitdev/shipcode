@@ -109,6 +109,7 @@ describe('pipeline prompt telemetry', () => {
     const create = vi.fn();
     const { deps } = makeDeps(create);
     const pipeline = createPipeline(deps);
+    pipeline.initializeContext('t1', { projectPath: '/tmp/project', repoPromptMaterials: [] });
 
     await pipeline.startPlanGeneration('t1', 'do stuff', '/tmp/project', null);
     await flush();
@@ -143,6 +144,7 @@ describe('pipeline prompt telemetry', () => {
     });
     const { deps } = makeDeps(create);
     const pipeline = createPipeline(deps);
+    pipeline.initializeContext('t1', { projectPath: '/tmp/project', repoPromptMaterials: [] });
 
     await pipeline.startPlanGeneration('t1', 'do stuff', '/tmp/project', null);
     await flush();

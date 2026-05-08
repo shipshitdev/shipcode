@@ -5,12 +5,14 @@ import type { ExecutorModel } from './types';
 export const PROVIDER_DISPLAY: Record<ExecutorModel, string> = {
   claude: 'Claude',
   codex: 'Codex',
+  gemini: 'Gemini',
   openrouter: 'OpenRouter',
 };
 
 export const MODEL_DISPLAY: Record<string, string> = { ...KNOWN_MODEL_LABELS };
 
 const CODEX_MODEL_PATTERN = /^gpt-5(?:[.-]|$)/i;
+const GEMINI_MODEL_PATTERN = /^gemini(?:[.-]|$)/i;
 
 function normalizeModel(value: string | null | undefined): string | null {
   const sanitized = sanitizeResolvedModel(value);
@@ -40,6 +42,10 @@ export function inferProviderFromModel(
 
     if (normalized === 'codex' || CODEX_MODEL_PATTERN.test(normalized)) {
       return 'codex';
+    }
+
+    if (normalized === 'gemini' || GEMINI_MODEL_PATTERN.test(normalized)) {
+      return 'gemini';
     }
 
     if (

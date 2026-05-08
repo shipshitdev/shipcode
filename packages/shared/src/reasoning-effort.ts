@@ -16,6 +16,12 @@ const CODEX_REASONING_EFFORTS = [
   'xhigh',
 ] as const satisfies readonly ReasoningEffort[];
 
+const GEMINI_REASONING_EFFORTS = [
+  'low',
+  'medium',
+  'high',
+] as const satisfies readonly ReasoningEffort[];
+
 const CLAUDE_REASONING_EFFORTS = [
   'none',
   'medium',
@@ -87,6 +93,10 @@ export function getSupportedReasoningEfforts(
     return CODEX_REASONING_EFFORTS;
   }
 
+  if (provider === 'gemini') {
+    return GEMINI_REASONING_EFFORTS;
+  }
+
   if (normalizedModelId && OPENROUTER_ADAPTIVE_CLAUDE_MODELS.has(normalizedModelId)) {
     return OPENROUTER_ADAPTIVE_CLAUDE_EFFORTS;
   }
@@ -140,6 +150,26 @@ export function resolveProviderReasoningEffort(
         effective: 'low',
         exact: false,
         message: `${normalizedModelId ?? 'Codex'} supports Low, Medium, High, and Extra high reasoning effort. Using ${formatReasoningEffortLabel('low')}.`,
+      };
+    }
+    return { configured, effective: configured, exact: true, message: null };
+  }
+
+  if (provider === 'gemini') {
+    if (configured === 'none' || configured === 'minimal') {
+      return {
+        configured,
+        effective: 'low',
+        exact: false,
+        message: `${normalizedModelId ?? 'Gemini'} supports Low, Medium, and High reasoning effort. Using ${formatReasoningEffortLabel('low')}.`,
+      };
+    }
+    if (configured === 'xhigh') {
+      return {
+        configured,
+        effective: 'high',
+        exact: false,
+        message: `${normalizedModelId ?? 'Gemini'} supports Low, Medium, and High reasoning effort. Using ${formatReasoningEffortLabel('high')}.`,
       };
     }
     return { configured, effective: configured, exact: true, message: null };

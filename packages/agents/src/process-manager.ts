@@ -7,8 +7,17 @@ import { assertWorkspaceSafe } from '@shipcode/shared/worktree-path';
 import { nanoid } from 'nanoid';
 import * as pty from 'node-pty';
 
-const ALLOWED_COMMANDS = new Set(['claude', 'codex', 'gh']);
-const TRUSTED_SHELLS = new Set([
+export type ProcessManagerAgentCommand = Extract<AgentType, 'claude' | 'codex' | 'gemini' | 'gh'>;
+export type ProcessManagerShellCommand = (typeof TRUSTED_SHELL_COMMANDS)[number];
+export type ProcessManagerCommand = ProcessManagerAgentCommand | ProcessManagerShellCommand;
+
+const ALLOWED_AGENT_COMMANDS = new Set<ProcessManagerAgentCommand>([
+  'claude',
+  'codex',
+  'gemini',
+  'gh',
+]);
+const TRUSTED_SHELL_COMMANDS = [
   '/bin/bash',
   '/bin/zsh',
   '/bin/sh',
@@ -18,7 +27,8 @@ const TRUSTED_SHELLS = new Set([
   '/usr/local/bin/zsh',
   '/opt/homebrew/bin/bash',
   '/opt/homebrew/bin/zsh',
-]);
+] as const;
+const TRUSTED_SHELLS = new Set<string>(TRUSTED_SHELL_COMMANDS);
 
 const SAFE_ENV_KEYS = new Set([
   'PATH',
@@ -34,6 +44,9 @@ const SAFE_ENV_KEYS = new Set([
   'ANTHROPIC_API_KEY',
   'OPENAI_API_KEY',
   'OPENROUTER_API_KEY',
+  'GEMINI_API_KEY',
+  'GOOGLE_API_KEY',
+  'GOOGLE_APPLICATION_CREDENTIALS',
 ]);
 
 function filterEnv(env: Record<string, string>): Record<string, string> {
@@ -42,6 +55,36 @@ function filterEnv(env: Record<string, string>): Record<string, string> {
     if (SAFE_ENV_KEYS.has(key)) filtered[key] = val;
   }
   return filtered;
+}
+
+function isTrustedShell(command: string): command is ProcessManagerShellCommand {
+  return TRUSTED_SHELLS.has(command);
+}
+
+function isAllowlistedAgentCommand(command: string): command is ProcessManagerAgentCommand {
+  return ALLOWED_AGENT_COMMANDS.has(command as ProcessManagerAgentCommand);
+}
+
+function assertProcessManagerCommand(command: string): asserts command is ProcessManagerCommand {
+  if (isTrustedShell(command) || isAllowlistedAgentCommand(command)) return;
+  throw new Error(`Command is not allowlisted for ProcessManager: ${command}`);
+}
+
+function mergeSafeEnv(
+  baseEnv: Record<string, string>,
+  extraEnv?: Record<string, string>,
+): Record<string, string> {
+  const env: Record<string, string> = { ...filterEnv(baseEnv), FORCE_COLOR: '1' };
+  for (const [key, val] of Object.entries(extraEnv ?? {})) {
+    if (!key || key.includes('=') || key.includes('\0') || val.includes('\0')) continue;
+    env[key] = val;
+  }
+  return env;
+}
+
+function assertWorkspacePolicy(cwd: string, options: ManagedProcessSpawnOptions): void {
+  if (options.workspaceRoot === undefined) return;
+  assertWorkspaceSafe({ workspacePath: cwd, workspaceRoot: options.workspaceRoot });
 }
 
 function getShellEnv(): Record<string, string> {
@@ -63,9 +106,10 @@ function getShellEnv(): Record<string, string> {
 }
 
 function resolveCommand(command: string): string {
-  if (!ALLOWED_COMMANDS.has(command)) return command;
+  assertProcessManagerCommand(command);
+  if (isTrustedShell(command)) return command;
   const shell = process.env.SHELL;
-  if (!shell || !TRUSTED_SHELLS.has(shell)) return command;
+  if (!shell || !isTrustedShell(shell)) return command;
   try {
     const resolved = execFileSync(shell, ['-ilc', `command -v ${command}`], {
       encoding: 'utf-8',
@@ -210,12 +254,10 @@ export class ProcessManager extends EventEmitter {
     const outputMode = options.outputMode ?? 'normalized';
 
     // Defense in depth: when the caller declares a workspaceRoot policy,
-    // assert the cwd before pty.spawn. A mismatch here means the pipeline
+    // assert the cwd before spawning. A mismatch here means the pipeline
     // is about to run an agent in the wrong directory — fail loud, never
     // continue.
-    if (options.workspaceRoot !== undefined) {
-      assertWorkspaceSafe({ workspacePath: cwd, workspaceRoot: options.workspaceRoot });
-    }
+    assertWorkspacePolicy(cwd, options);
 
     if (!cachedEnv) {
       cachedEnv = getShellEnv();
@@ -230,7 +272,7 @@ export class ProcessManager extends EventEmitter {
         cols: 120,
         rows: 30,
         cwd,
-        env: { ...filterEnv(cachedEnv), FORCE_COLOR: '1' },
+        env: mergeSafeEnv(cachedEnv, options.extraEnv),
       });
     } catch (err) {
       // Spawn failed (e.g. binary not found, alias instead of real path).
@@ -302,6 +344,16 @@ export class ProcessManager extends EventEmitter {
     return managed;
   }
 
+  /**
+   * Spawn an allowlisted CLI with stdin piped from `input`.
+   *
+   * Contract for CLI providers such as Gemini:
+   * - validates `cwd` with the same `workspaceRoot` policy as `spawn`
+   * - resolves only ProcessManager-allowlisted agent commands or trusted shells
+   * - merges a filtered login-shell env with sanitized `extraEnv`
+   * - tracks `stdinMode: 'pipe'`, streams stdout and stderr as output, emits
+   *   one exit event, and drops completed processes from the registry
+   */
   spawnWithStdin(
     type: AgentType,
     command: string,
@@ -314,9 +366,7 @@ export class ProcessManager extends EventEmitter {
     const id = nanoid();
     const outputMode = options.outputMode ?? 'normalized';
 
-    if (options.workspaceRoot !== undefined) {
-      assertWorkspaceSafe({ workspacePath: cwd, workspaceRoot: options.workspaceRoot });
-    }
+    assertWorkspacePolicy(cwd, options);
 
     if (!cachedEnv) {
       cachedEnv = getShellEnv();
@@ -326,7 +376,7 @@ export class ProcessManager extends EventEmitter {
     let child: ChildProcessWithoutNullStreams;
 
     const detached = options.detached ?? false;
-    const env = { ...filterEnv(cachedEnv), FORCE_COLOR: '1', ...options.extraEnv };
+    const env = mergeSafeEnv(cachedEnv, options.extraEnv);
 
     try {
       child = spawnChild(resolvedCommand, args, {

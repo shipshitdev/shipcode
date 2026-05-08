@@ -152,6 +152,7 @@ describe('pipeline prompt telemetry', () => {
     const promptTelemetryCreate = vi.fn();
     const { deps } = makeDeps({ promptTelemetryCreate });
     const pipeline = createPipeline(deps);
+    pipeline.initializeContext('t1', { projectPath: '/tmp/project', repoPromptMaterials: [] });
 
     await pipeline.startPlanGeneration('t1', 'Do the thing', '/tmp/project', null);
     await flush();
@@ -188,6 +189,7 @@ describe('pipeline prompt telemetry', () => {
       },
     });
     const pipeline = createPipeline(deps);
+    pipeline.initializeContext('t1', { projectPath: '/tmp/project', repoPromptMaterials: [] });
 
     await pipeline.startFromGitHubIssue(
       't1',
@@ -208,6 +210,7 @@ describe('pipeline prompt telemetry', () => {
     });
     const { deps } = makeDeps({ promptTelemetryCreate });
     const pipeline = createPipeline(deps);
+    pipeline.initializeContext('t1', { projectPath: '/tmp/project', repoPromptMaterials: [] });
 
     await pipeline.startPlanGeneration('t1', 'Do the thing', '/tmp/project', null);
     await flush();
@@ -229,6 +232,7 @@ describe('pipeline prompt telemetry', () => {
       },
     });
     const pipeline = createPipeline(deps);
+    pipeline.initializeContext('t1', { projectPath: '/tmp/project', repoPromptMaterials: [] });
 
     await pipeline.startFromGitHubIssue(
       't1',
