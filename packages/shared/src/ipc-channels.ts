@@ -568,6 +568,10 @@ export interface IpcInvokeChannels {
     args: { threadId: string };
     result: undefined;
   };
+  'feature-qa:open-evidence': {
+    args: { threadId: string; path: string };
+    result: undefined;
+  };
 
   // Agent conversation log
   'agent-conversations:list-by-thread': {

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 import type { FeatureQaResult, GitHubIssueCacheRecord, Thread } from '@shipcode/shared';
-import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PipelineTab } from './PipelineTab';
 
 function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssueCacheRecord {
@@ -179,6 +179,13 @@ function renderPipelineTab({
 }
 
 describe('PipelineTab', () => {
+  beforeEach(() => {
+    window.shipcode = {
+      invoke: (() => Promise.resolve(null)) as typeof window.shipcode.invoke,
+      on: vi.fn(() => () => {}) as unknown as typeof window.shipcode.on,
+    };
+  });
+
   afterEach(() => {
     cleanup();
   });
@@ -238,6 +245,31 @@ describe('PipelineTab', () => {
     expect(screen.getAllByText('/tmp/qa/create-button.png').length).toBeGreaterThan(0);
   });
 
+  it('opens attached QA evidence through IPC', () => {
+    const invoke = vi.fn(async () => null);
+    window.shipcode.invoke = invoke as unknown as typeof window.shipcode.invoke;
+
+    renderPipelineTab({
+      qaResults: [
+        {
+          featureId: 'issue-42',
+          status: 'failed',
+          summary: 'Visual QA failed.',
+          runAt: new Date().toISOString(),
+          evidencePaths: ['/tmp/qa/create-button.png'],
+          flowResults: [],
+        },
+      ],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /open/i }));
+
+    expect(invoke).toHaveBeenCalledWith('feature-qa:open-evidence', {
+      threadId: 'thread-1',
+      path: '/tmp/qa/create-button.png',
+    });
+  });
+
   it('renders human QA scenarios from the issue QA state', () => {
     renderPipelineTab({
       issueOverrides: {
@@ -270,5 +302,41 @@ describe('PipelineTab', () => {
     expect(
       screen.getByText('Success: The updated name remains visible after reload.'),
     ).toBeInTheDocument();
+  });
+
+  it('restores an already running manual QA server for the active thread', async () => {
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'feature-qa:get-server') {
+        return { baseUrl: 'http://localhost:4321', port: 4321 };
+      }
+      return null;
+    });
+    window.shipcode.invoke = invoke as unknown as typeof window.shipcode.invoke;
+
+    renderPipelineTab({
+      issueOverrides: {
+        body: `## QA State
+
+\`\`\`json
+{
+  "featureId": "issue-42",
+  "routes": ["/settings"],
+  "criticalFlows": [
+    {
+      "name": "Update profile name",
+      "steps": ["Open settings"],
+      "successCriteria": "Settings loads."
+    }
+  ],
+  "expectedStates": ["Loaded state"],
+  "testDataAssumptions": [],
+  "selectorReadiness": "ready"
+}
+\`\`\``,
+      },
+    });
+
+    expect(await screen.findByText('http://localhost:4321')).toBeInTheDocument();
+    expect(invoke).toHaveBeenCalledWith('feature-qa:get-server', { threadId: 'thread-1' });
   });
 });

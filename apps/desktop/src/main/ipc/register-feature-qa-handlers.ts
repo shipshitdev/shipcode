@@ -1,8 +1,11 @@
+import { existsSync, statSync } from 'node:fs';
+import path from 'node:path';
 import {
   inspectProjectSetup,
   type RunningServer,
   ServerLifecycleManager,
 } from '@shipcode/agents/source';
+import { shell } from 'electron';
 import type { IpcHandlerDeps } from './types';
 
 interface ManualQaServerSession {
@@ -26,6 +29,24 @@ function getLiveManualQaServer(
   }
 
   return { baseUrl: session.server.baseUrl, port: session.server.port };
+}
+
+function evidencePathsForThread(queries: IpcHandlerDeps['queries'], threadId: string): Set<string> {
+  const paths = new Set<string>();
+  for (const result of queries.featureQaResults.listByThread(threadId)) {
+    for (const evidencePath of result.evidencePaths ?? []) {
+      paths.add(path.resolve(evidencePath));
+    }
+    for (const flow of result.flowResults) {
+      for (const evidencePath of flow.evidencePaths ?? []) {
+        paths.add(path.resolve(evidencePath));
+      }
+      for (const assertion of flow.assertions ?? []) {
+        if (assertion.evidencePath) paths.add(path.resolve(assertion.evidencePath));
+      }
+    }
+  }
+  return paths;
 }
 
 export function registerFeatureQaHandlers({
@@ -89,4 +110,23 @@ export function registerFeatureQaHandlers({
     manualQaServers.delete(threadId);
     await session.lifecycle.stop(session.server);
   });
+
+  ipcMain.handle(
+    'feature-qa:open-evidence',
+    async (_event, { threadId, path: rawPath }: { threadId: string; path: string }) => {
+      const requestedPath = path.resolve(rawPath);
+      if (!evidencePathsForThread(queries, threadId).has(requestedPath)) {
+        throw new Error('Evidence path is not attached to this thread.');
+      }
+      if (!existsSync(requestedPath)) {
+        throw new Error(`Evidence path no longer exists: ${requestedPath}`);
+      }
+
+      const targetPath = statSync(requestedPath).isDirectory()
+        ? requestedPath
+        : path.dirname(requestedPath);
+      const openError = await shell.openPath(targetPath);
+      if (openError) throw new Error(openError);
+    },
+  );
 }

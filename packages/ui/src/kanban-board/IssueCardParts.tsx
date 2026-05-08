@@ -342,6 +342,22 @@ function DraggableCardComponent({
               <Maximize2 size={14} />
             </Button>
           )}
+          {branchName && onCopyBranchName && !isAutomation && !readOnly && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="text-muted/60 opacity-0 transition-opacity hover:bg-muted/10 hover:text-primary group-hover:opacity-100"
+              title={`Copy branch name (${branchName})`}
+              aria-label={`Copy branch name for issue #${issue.issueNumber}`}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                onCopyBranchName(issue, branchName);
+              }}
+            >
+              {branchCopyState === 'copied' ? <Check size={14} /> : <Copy size={14} />}
+            </Button>
+          )}
           {!isCreating && !readOnly && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

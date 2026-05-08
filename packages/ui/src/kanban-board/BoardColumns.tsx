@@ -21,7 +21,6 @@ import type {
 } from './types';
 import {
   isApprovedAwaitingExecutionIssue,
-  isAutomationIssue,
   issueMatchesColumn,
   issueMatchesSection,
   sectionToneFor,
@@ -97,7 +96,7 @@ export function DroppableColumn({
   onOpenPullRequest,
   onCopyBranchName,
   selectedIssueNumber,
-  onArchiveAllDone,
+  onArchiveAllDone: _onArchiveAllDone,
   onArchiveIssue,
   onCreatePr,
   repoUrl,
@@ -117,7 +116,6 @@ export function DroppableColumn({
 }: DroppableColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id, disabled: !droppable || readOnly });
   const hasIssues = issues.length > 0;
-  const hasArchivableIssues = issues.some((issue) => !isAutomationIssue(issue));
 
   return (
     <div
@@ -286,11 +284,16 @@ function SectionBlock({
           type="button"
           variant="ghost"
           aria-expanded={!collapsed}
-          className="flex min-w-0 flex-1 items-center gap-1.5 p-0 text-left text-[10px] font-semibold uppercase tracking-wide hover:bg-transparent"
+          className={cn(
+            'sticky top-0 flex min-w-0 flex-1 items-center gap-1.5 p-0 text-left text-[10px] font-semibold uppercase tracking-wide hover:bg-transparent',
+            SECTION_HEADER_CLASS[tone],
+          )}
           onClick={onToggle}
         >
-          {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-          <span className="min-w-0 truncate">{section.label}</span>
+          <span className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
+            {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+            <span className="min-w-0 truncate">{section.label}</span>
+          </span>
         </Button>
         <div className="flex items-center gap-1">
           {onArchiveAllDone && section.key === 'done' && !empty && (
@@ -459,7 +462,6 @@ export function StackedColumn({
     [approvedAwaitingExecutionIssueIds, column.sections, columnIssues],
   );
   const hasIssues = columnIssues.length > 0;
-  const hasArchivableIssues = columnIssues.some((issue) => !isAutomationIssue(issue));
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
 
   const toggleSection = useCallback((key: string) => {

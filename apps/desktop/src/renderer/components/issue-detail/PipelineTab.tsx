@@ -124,6 +124,7 @@ export function PipelineTab({
   );
   const [manualQaPending, setManualQaPending] = useState(false);
   const [manualQaError, setManualQaError] = useState<string | null>(null);
+  const [qaEvidenceError, setQaEvidenceError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!activeThreadId) {
@@ -179,6 +180,16 @@ export function PipelineTab({
       setManualQaError(clampError(error));
     } finally {
       setManualQaPending(false);
+    }
+  };
+
+  const openEvidence = async (path: string) => {
+    if (!activeThreadId) return;
+    setQaEvidenceError(null);
+    try {
+      await window.shipcode.invoke('feature-qa:open-evidence', { threadId: activeThreadId, path });
+    } catch (error) {
+      setQaEvidenceError(clampError(error));
     }
   };
 
@@ -860,8 +871,21 @@ export function PipelineTab({
                                   Actual: {assertion.actual}
                                 </div>
                                 {assertion.evidencePath ? (
-                                  <div className="break-all font-mono text-[10px] text-muted">
-                                    {assertion.evidencePath}
+                                  <div className="flex items-center gap-2">
+                                    <div className="min-w-0 flex-1 break-all font-mono text-[10px] text-muted">
+                                      {assertion.evidencePath}
+                                    </div>
+                                    <Button
+                                      variant="ghost"
+                                      size="xs"
+                                      className="h-5 px-1.5 text-[10px]"
+                                      onClick={() =>
+                                        void openEvidence(assertion.evidencePath ?? '')
+                                      }
+                                    >
+                                      <ExternalLink size={10} />
+                                      Open
+                                    </Button>
                                   </div>
                                 ) : null}
                               </div>
@@ -871,11 +895,19 @@ export function PipelineTab({
                         {flow.evidencePaths?.length ? (
                           <div className="ml-4 mt-1 space-y-0.5">
                             {flow.evidencePaths.slice(0, 3).map((path) => (
-                              <div
-                                key={path}
-                                className="break-all font-mono text-[10px] text-muted"
-                              >
-                                {path}
+                              <div key={path} className="flex items-center gap-2">
+                                <div className="min-w-0 flex-1 break-all font-mono text-[10px] text-muted">
+                                  {path}
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="xs"
+                                  className="h-5 px-1.5 text-[10px]"
+                                  onClick={() => void openEvidence(path)}
+                                >
+                                  <ExternalLink size={10} />
+                                  Open
+                                </Button>
                               </div>
                             ))}
                           </div>
@@ -891,11 +923,27 @@ export function PipelineTab({
                     </div>
                     <div className="space-y-0.5">
                       {result.evidencePaths.slice(0, 5).map((path) => (
-                        <div key={path} className="break-all font-mono text-[10px] text-muted">
-                          {path}
+                        <div key={path} className="flex items-center gap-2">
+                          <div className="min-w-0 flex-1 break-all font-mono text-[10px] text-muted">
+                            {path}
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            className="h-5 px-1.5 text-[10px]"
+                            onClick={() => void openEvidence(path)}
+                          >
+                            <ExternalLink size={10} />
+                            Open
+                          </Button>
                         </div>
                       ))}
                     </div>
+                  </div>
+                ) : null}
+                {qaEvidenceError ? (
+                  <div className="mt-2 rounded-sm border border-danger/30 bg-danger/10 px-2 py-1 text-[11px] text-danger">
+                    {qaEvidenceError}
                   </div>
                 ) : null}
               </div>

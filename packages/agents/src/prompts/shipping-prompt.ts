@@ -1,4 +1,9 @@
-import type { PlanReview, ShipCodePlan, VerificationResult } from '@shipcode/shared';
+import type {
+  FeatureQaResult,
+  PlanReview,
+  ShipCodePlan,
+  VerificationResult,
+} from '@shipcode/shared';
 import { interpolateSkill, resolveSkill, type SkillsRowSource } from '../skills/skill-loader';
 
 /**
@@ -15,6 +20,7 @@ export function buildPRBody(
   opts?: {
     projectId?: string | null;
     skills?: SkillsRowSource;
+    featureQaResults?: FeatureQaResult[];
   },
 ): string {
   const { skill } = resolveSkill('pr-generation', opts?.projectId ?? null, {
@@ -63,5 +69,41 @@ export function buildPRBody(
     body += `\n\n## Verification: ${icon}\n${verification.summary}`;
   }
 
+  if (opts?.featureQaResults?.length) {
+    body += `\n\n${formatFeatureQaEvidence(opts.featureQaResults)}`;
+  }
+
   return body;
+}
+
+function formatFeatureQaEvidence(results: FeatureQaResult[]): string {
+  const lines = ['## QA Evidence'];
+  for (const result of results.slice(0, 5)) {
+    lines.push('');
+    lines.push(`- **${result.featureId}**: ${result.status} — ${result.summary}`);
+    for (const flow of result.flowResults.slice(0, 5)) {
+      lines.push(
+        `  - ${flow.passed ? 'Passed' : 'Failed'}: ${flow.flowName}${flow.failureReason ? ` — ${flow.failureReason}` : ''}`,
+      );
+      for (const assertion of flow.assertions?.slice(0, 3) ?? []) {
+        lines.push(
+          `    - ${assertion.passed ? 'Passed' : 'Failed'}: ${assertion.name}; expected ${assertion.expected}; actual ${assertion.actual}`,
+        );
+      }
+    }
+    const evidencePaths = new Set<string>(result.evidencePaths ?? []);
+    for (const flow of result.flowResults) {
+      for (const path of flow.evidencePaths ?? []) evidencePaths.add(path);
+      for (const assertion of flow.assertions ?? []) {
+        if (assertion.evidencePath) evidencePaths.add(assertion.evidencePath);
+      }
+    }
+    if (evidencePaths.size > 0) {
+      lines.push('  - Local artifacts:');
+      for (const path of [...evidencePaths].slice(0, 5)) {
+        lines.push(`    - \`${path}\``);
+      }
+    }
+  }
+  return lines.join('\n');
 }

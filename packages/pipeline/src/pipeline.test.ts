@@ -1626,6 +1626,9 @@ Custom prompt`,
     });
 
     it('uses executor model override as modelHint and keeps the provider selection on the executor provider', async () => {
+      const projectDir = makeTempProject();
+      const worktreeDir = path.join(projectDir, 'worktree');
+      mkdirSync(worktreeDir, { recursive: true });
       const openrouterGenerate = vi.fn(async () => ({
         rawOutput: 'done',
         exitCode: 0,
@@ -1650,8 +1653,8 @@ Custom prompt`,
       const pipeline = createPipeline(deps);
 
       pipeline.initializeContext('t1', {
-        projectPath: '/proj',
-        worktreePath: '/worktree',
+        projectPath: projectDir,
+        worktreePath: worktreeDir,
         executorModel: 'openrouter',
         executorModelOverride: 'openrouter/auto',
         executorReasoningEffort: 'low',
@@ -1663,7 +1666,7 @@ Custom prompt`,
       expect(openrouterGenerate).toHaveBeenCalledWith(
         expect.objectContaining({
           phase: 'execute',
-          cwd: '/worktree',
+          cwd: worktreeDir,
           modelHint: 'openrouter/auto',
           phaseHints: expect.objectContaining({ reasoningEffort: 'low' }),
         }),
@@ -2499,21 +2502,24 @@ Custom prompt`,
       });
       const deps = { ...mock.deps, providers: registry };
       const pipeline = createPipeline(deps);
+      const projectDir = makeTempProject();
+      const worktreeDir = path.join(projectDir, 'worktree');
+      mkdirSync(worktreeDir, { recursive: true });
       const issue = { number: 11, title: 'Resume issue', body: 'Continue', labels: [] };
 
-      await pipeline.startFromGitHubIssue('t1', '/proj', issue, 'claude', {
+      await pipeline.startFromGitHubIssue('t1', projectDir, issue, 'claude', {
         plannerModel: 'openrouter',
-        worktreePath: '/worktree',
+        worktreePath: worktreeDir,
       });
       await flush();
 
       expect(openrouterGenerate).toHaveBeenCalledWith(
         expect.objectContaining({
           phase: 'plan',
-          cwd: '/worktree',
+          cwd: worktreeDir,
         }),
       );
-      expect(pipeline.getContext('t1')?.worktreePath).toBe('/worktree');
+      expect(pipeline.getContext('t1')?.worktreePath).toBe(worktreeDir);
     });
   });
 

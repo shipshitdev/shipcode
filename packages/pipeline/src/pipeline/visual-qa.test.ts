@@ -1,11 +1,16 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { FeatureQaState } from '@shipcode/shared';
+import {
+  extractFeatureQaState,
+  type FeatureQaState,
+  repoSetupContractSchema,
+} from '@shipcode/shared';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   collectQaEvidencePaths,
   formatVisualQaFailureFeedback,
+  getVisualQaToolingStatus,
   hasVisualQaAssertions,
   summarizeQaFlowResults,
   toQaStatus,
@@ -106,6 +111,66 @@ describe('visual QA runtime test generation', () => {
 
     const exclude = readFileSync(join(gitDir, 'info', 'exclude'), 'utf-8');
     expect(exclude).toContain('.shipcode/qa-artifacts/');
+  });
+
+  it('reports project-local Playwright as the preferred tooling', () => {
+    const binDir = join(root, 'node_modules', '.bin');
+    mkdirSync(binDir, { recursive: true });
+    const playwrightPath = join(binDir, 'playwright');
+    writeFileSync(playwrightPath, '#!/usr/bin/env bash\n');
+    chmodSync(playwrightPath, 0o755);
+
+    const status = getVisualQaToolingStatus(root);
+
+    expect(status).toEqual({
+      available: true,
+      runner: 'local',
+      message: 'Using project-local Playwright.',
+      warning: null,
+    });
+  });
+
+  it('dogfoods a PRD QA State with runtime QA server configuration', () => {
+    const setup = repoSetupContractSchema.parse({
+      version: 1,
+      setupCommands: [],
+      verifyCommands: [],
+      envFiles: [],
+      setupBeforeVerify: false,
+      testingContext: null,
+      runtimeQa: {
+        server: {
+          command: 'bun run dev --host 127.0.0.1',
+          readinessUrl: 'http://127.0.0.1:$PORT',
+          startupTimeoutMs: 60_000,
+          portEnvVar: 'PORT',
+        },
+        testCommands: [],
+        discoverAgentTests: true,
+      },
+    });
+    const prd = `# PRD: Move create button
+
+## QA State
+
+\`\`\`json
+${JSON.stringify(QA_STATE, null, 2)}
+\`\`\``;
+    const extracted = extractFeatureQaState(prd);
+
+    expect(setup.runtimeQa?.server?.command).toContain('bun run dev');
+    expect(extracted.status).toBe('present');
+    if (!extracted.qaState) throw new Error('Expected QA state');
+
+    const generated = writeVisualQaRuntimeTest(root, 'thread-1', extracted.qaState, 'dogfood-run');
+
+    expect(readFileSync(generated.runnerPath, 'utf-8')).toContain('playwright test');
+    expect(
+      readFileSync(
+        join(root, '.shipcode', 'runtime-tests', 'visual-qa.generated.spec.ts'),
+        'utf-8',
+      ),
+    ).toContain('Create button is pinned top left');
   });
 });
 

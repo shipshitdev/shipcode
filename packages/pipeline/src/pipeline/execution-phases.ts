@@ -42,6 +42,7 @@ import type { PipelineHelperEnv } from './shared';
 import {
   collectQaEvidencePaths,
   formatVisualQaFailureFeedback,
+  getVisualQaToolingStatus,
   hasVisualQaAssertions,
   summarizeQaFlowResults,
   toQaStatus,
@@ -931,6 +932,17 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       }
 
       try {
+        const tooling = getVisualQaToolingStatus(cwd);
+        if (!tooling.available) {
+          emitPhase(threadId, 'failed', tooling.message);
+          activePipelines.delete(threadId);
+          return;
+        }
+        emitTerminalLifecycle(threadId, `[runtime-qa] ${tooling.message}\r\n`);
+        if (tooling.warning) {
+          emitTerminalLifecycle(threadId, `[runtime-qa] Warning: ${tooling.warning}\r\n`);
+        }
+
         const generated = writeVisualQaRuntimeTest(cwd, threadId, context.featureQaState);
         emitTerminalLifecycle(
           threadId,
@@ -1555,6 +1567,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
         ? buildPRBody(plan, reviews, latestVerification?.structured ?? null, issueNumber, {
             projectId: context.projectId,
             skills: deps.skills,
+            featureQaResults: deps.featureQaResults?.listByThread(threadId) ?? [],
           })
         : [
             '## Summary',

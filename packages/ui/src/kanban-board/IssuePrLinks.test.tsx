@@ -787,7 +787,7 @@ describe('linked PR affordances', () => {
     expect(modelBadge.className).toContain('whitespace-nowrap');
     expect(modelBadge.getAttribute('title')).toBe('executor model: GPT-5.4 · medium');
     expect(view.container.querySelector('button[title="Open issue detail"]')).toBeTruthy();
-    expect(view.container.querySelector('.pr-7')).toBeTruthy();
+    expect(view.container.querySelector('.pr-12')).toBeTruthy();
     view.cleanup();
   });
 

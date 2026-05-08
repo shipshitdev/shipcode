@@ -1,5 +1,7 @@
 import {
+  accessSync,
   appendFileSync,
+  constants,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -26,8 +28,55 @@ export interface VisualQaRuntimeTest {
   runId: string;
 }
 
+export interface VisualQaToolingStatus {
+  available: boolean;
+  runner: 'local' | 'npx' | 'bunx' | null;
+  message: string;
+  warning: string | null;
+}
+
 export function hasVisualQaAssertions(qaState: FeatureQaState | null | undefined): boolean {
   return Boolean(qaState?.visualAssertions?.length);
+}
+
+export function getVisualQaToolingStatus(worktreePath: string): VisualQaToolingStatus {
+  const localPlaywright = join(worktreePath, 'node_modules', '.bin', 'playwright');
+  if (isExecutable(localPlaywright)) {
+    return {
+      available: true,
+      runner: 'local',
+      message: 'Using project-local Playwright.',
+      warning: null,
+    };
+  }
+
+  if (findExecutableOnPath('npx')) {
+    return {
+      available: true,
+      runner: 'npx',
+      message: 'Using npx to run @playwright/test.',
+      warning:
+        'Project-local Playwright was not found; Visual QA may download @playwright/test through npx.',
+    };
+  }
+
+  if (findExecutableOnPath('bunx')) {
+    return {
+      available: true,
+      runner: 'bunx',
+      message: 'Using bunx to run @playwright/test.',
+      warning:
+        'Project-local Playwright was not found; Visual QA may download @playwright/test through bunx.',
+    };
+  }
+
+  return {
+    available: false,
+    runner: null,
+    message:
+      'Visual QA requires Playwright tooling. Install @playwright/test in the project or ensure npx/bunx is available.',
+    warning: null,
+  };
 }
 
 export function writeVisualQaRuntimeTest(
@@ -117,6 +166,20 @@ export function formatVisualQaFailureFeedback(flowResults: FeatureQaFlowResult[]
 
 function buildVisualQaRunId(): string {
   return new Date().toISOString().replace(/[:.]/g, '-');
+}
+
+function isExecutable(path: string): boolean {
+  try {
+    accessSync(path, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function findExecutableOnPath(command: string): boolean {
+  const pathSegments = (process.env.PATH ?? '').split(':').filter(Boolean);
+  return pathSegments.some((segment) => isExecutable(join(segment, command)));
 }
 
 function ensureGitInfoExclude(worktreePath: string, patterns: string[]) {
