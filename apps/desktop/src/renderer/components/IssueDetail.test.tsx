@@ -278,6 +278,21 @@ describe('IssueDetail', () => {
     expect(screen.getByText('Start pipeline')).toBeInTheDocument();
   });
 
+  it('resizes the right detail sidebar from its drag handle', async () => {
+    invokeMock.mockResolvedValue([]);
+
+    renderWithProviders();
+
+    const resizeHandle = screen.getByRole('button', { name: 'Resize detail sidebar' });
+    expect(resizeHandle.parentElement).toHaveStyle({ width: '416px' });
+
+    fireEvent.mouseDown(resizeHandle, { clientX: 500 });
+    fireEvent.mouseMove(document, { clientX: 460 });
+    fireEvent.mouseUp(document);
+
+    expect(resizeHandle.parentElement).toHaveStyle({ width: '456px' });
+  });
+
   it('renders linked PR controls in the issue header and opens the PR URL', async () => {
     invokeMock.mockImplementation(async (channel) => {
       if (channel === 'project:get') return makeProject();
