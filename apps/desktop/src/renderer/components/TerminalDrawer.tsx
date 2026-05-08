@@ -1,9 +1,9 @@
 import type { TerminalEventRecord } from '@shipcode/shared';
-import { toast } from '../stores/toast-store';
 import { Button, cn } from '@shipshitdev/ui';
 import { useCallback, useEffect, useState } from 'react';
 import { useOpenProjectTerminal } from '../hooks/useOpenProjectTerminal';
 import { useAppStore } from '../stores/app-store';
+import { toast } from '../stores/toast-store';
 import { EMPTY_STREAM, PHASE_LABELS, type TerminalDrawerTarget } from './terminal-drawer/constants';
 import { TerminalDrawerEmptyState } from './terminal-drawer/TerminalDrawerEmptyState';
 import { TerminalDrawerHeader } from './terminal-drawer/TerminalDrawerHeader';
@@ -107,7 +107,10 @@ function TerminalDrawerTranscript({
         });
         setProjectTab('terminal');
       } catch (error) {
-        toast.error('Failed to send to terminal', error instanceof Error ? error.message : undefined);
+        toast.error(
+          'Failed to send to terminal',
+          error instanceof Error ? error.message : undefined,
+        );
       } finally {
         setSendingToTerminalEventId(null);
       }

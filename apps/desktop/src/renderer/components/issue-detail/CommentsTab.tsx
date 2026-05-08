@@ -110,7 +110,9 @@ export function CommentsTab({
                     {timeAgo(comment.createdAt)}
                   </span>
                 </div>
-                <div className={`text-[12px] leading-relaxed text-secondary break-words ${PRD_PROSE_CLASSES}`}>
+                <div
+                  className={`text-[12px] leading-relaxed text-secondary break-words ${PRD_PROSE_CLASSES}`}
+                >
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{comment.body}</ReactMarkdown>
                 </div>
               </div>
