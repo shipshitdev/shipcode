@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 import { memo } from 'react';
 import { IssueHoverCard } from '@/kanban-board/IssueHoverCard';
-import { modelDisplay } from '@/lib/model-display';
 import type {
   GitHubIssueCacheRecord,
   IssuePipelineStatus,
@@ -653,6 +652,7 @@ function DraggableCardComponent({
   return (
     <IssueHoverCard
       issue={issue}
+      phaseChip={phaseChip}
       disabled={!hoverCardEnabled || isDragging || isCreating}
       onFetchPlanSteps={onFetchPlanSteps}
     >
@@ -842,7 +842,7 @@ function DraggableCardComponent({
         </div>
         <div
           className={cn(
-            'relative flex min-w-0 items-center justify-between gap-2',
+            'relative flex min-w-0 items-center gap-2',
             readOnly ? 'pr-7' : showBranchCopyAction ? 'pr-20' : 'pr-14',
           )}
         >
@@ -891,7 +891,6 @@ function DraggableCardComponent({
                 </Badge>
               ))}
           </div>
-          {}
         </div>
         <div className="relative z-10 mt-1 w-full min-w-0">
           <span className="line-clamp-2 text-[13px] font-medium leading-snug text-primary">
@@ -908,7 +907,6 @@ function DraggableCardComponent({
               {priorityBadge.label}
             </Badge>
           ) : null}
-          {}
           {revisionBadge ? (
             <Badge
               variant={revisionBadge.variant}

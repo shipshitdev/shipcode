@@ -789,7 +789,7 @@ describe('linked PR affordances', () => {
     view.cleanup();
   });
 
-  it('keeps the active model badge on one line even with the issue-detail action present', () => {
+  it('omits model badge from card (moved to hover card)', () => {
     const view = renderIntoDom(
       <DndContext>
         <DraggableCard
@@ -816,14 +816,8 @@ describe('linked PR affordances', () => {
     const modelBadge = Array.from(view.container.querySelectorAll('span')).find((element) =>
       element.textContent?.includes('GPT-5.4 · medium'),
     );
-    if (!(modelBadge instanceof HTMLSpanElement)) {
-      throw new Error('Expected active model badge');
-    }
-
-    expect(modelBadge.className).toContain('whitespace-nowrap');
-    expect(modelBadge.getAttribute('title')).toBe('executor model: GPT-5.4 · medium');
+    expect(modelBadge).toBeUndefined();
     expect(view.container.querySelector('button[title="Open issue detail"]')).toBeTruthy();
-    expect(view.container.querySelector('.pr-14')).toBeTruthy();
     view.cleanup();
   });
 

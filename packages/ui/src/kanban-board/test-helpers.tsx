@@ -1,6 +1,7 @@
 import type { GitHubIssueCacheRecord, Project } from '@shipcode/shared';
 import { act, type ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
+import { TooltipProvider } from '@/primitives/tooltip';
 
 export function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssueCacheRecord {
   return {
@@ -96,14 +97,14 @@ export function renderIntoDom(element: ReactElement) {
   const root = createRoot(container);
 
   act(() => {
-    root.render(element);
+    root.render(<TooltipProvider>{element}</TooltipProvider>);
   });
 
   return {
     container,
     rerender: (nextElement: ReactElement) => {
       act(() => {
-        root.render(nextElement);
+        root.render(<TooltipProvider>{nextElement}</TooltipProvider>);
       });
     },
     cleanup: () => {

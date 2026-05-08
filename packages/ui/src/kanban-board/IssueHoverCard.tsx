@@ -265,6 +265,26 @@ export function IssueHoverCard({
             ))}
           </div>
 
+          {/* Model + progress for active issues */}
+          {isActive && (phaseChip || PHASE_ELAPSED_STATUSES.includes(issue.pipelineStatus)) && (
+            <div className="flex items-center gap-2 mb-2 text-[10px] text-muted-foreground">
+              {phaseChip && (
+                <Badge
+                  variant="default"
+                  className="whitespace-nowrap px-1.5 py-0 text-[10px] font-medium normal-case tracking-normal"
+                >
+                  {modelDisplay(phaseChip.model)}
+                  {phaseChip.effort ? ` · ${phaseChip.effort}` : ''}
+                </Badge>
+              )}
+              {PHASE_ELAPSED_STATUSES.includes(issue.pipelineStatus) && (
+                <span className="font-mono tabular-nums">
+                  {phaseToProgress(issue.pipelineStatus)}%
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Meta row: assignee + last activity */}
           <div className="flex items-center justify-between gap-2">
             {issue.assignee ? (

@@ -48,7 +48,7 @@ afterEach(() => {
 });
 
 describe('KanbanBoard staleness flags', () => {
-  it('renders a stale red dot with a reason title on stale cards', () => {
+  it('renders a stale warning icon with a reason label on stale cards', () => {
     const view = renderIntoDom(
       <KanbanBoard
         issues={[makeIssue()]}
@@ -61,8 +61,8 @@ describe('KanbanBoard staleness flags', () => {
 
     const dot = view.container.querySelector('[data-staleness-dot="true"]');
     expect(dot).not.toBeNull();
-    expect(dot?.getAttribute('title')).toContain('Queued');
-    expect(dot?.getAttribute('title')).toContain('no updates');
+    expect(dot?.getAttribute('aria-label')).toContain('Queued');
+    expect(dot?.getAttribute('aria-label')).toContain('no updates');
     view.cleanup();
   });
 
