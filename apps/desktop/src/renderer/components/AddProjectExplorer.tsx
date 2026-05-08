@@ -192,7 +192,7 @@ export function AddProjectExplorer() {
           className={cn(
             'rounded p-1 transition-colors',
             isAtRoot
-              ? 'text-muted cursor-not-allowed'
+              ? 'text-muted-foreground cursor-not-allowed'
               : 'text-secondary hover:text-primary hover:bg-hover',
           )}
           title="Go up (Backspace)"
@@ -225,13 +225,15 @@ export function AddProjectExplorer() {
             }
           }}
         />
-        {isFetching && <Loader2 size={14} className="animate-spin text-muted shrink-0" />}
+        {isFetching && (
+          <Loader2 size={14} className="animate-spin text-muted-foreground shrink-0" />
+        )}
       </div>
 
       {/* ── Directory listing ─────────────────────────────────────── */}
       <div ref={listRef} className="flex-1 overflow-y-auto min-h-0">
         {isLoading && !listing && (
-          <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted">
+          <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
             <Loader2 size={16} className="animate-spin" />
             Loading...
           </div>
@@ -252,7 +254,7 @@ export function AddProjectExplorer() {
         )}
 
         {!isLoading && !listError && entries.length === 0 && (
-          <div className="px-4 py-8 text-sm text-muted text-center">No folders here</div>
+          <div className="px-4 py-8 text-sm text-muted-foreground text-center">No folders here</div>
         )}
 
         {entries.map((entry, i) => (
@@ -267,9 +269,9 @@ export function AddProjectExplorer() {
             )}
             onClick={() => navigateTo(entry.absolutePath)}
           >
-            <Folder size={14} className="shrink-0 text-muted" />
+            <Folder size={14} className="shrink-0 text-muted-foreground" />
             <span className="truncate flex-1">{entry.name}</span>
-            <ChevronRight size={12} className="shrink-0 text-muted opacity-60" />
+            <ChevronRight size={12} className="shrink-0 text-muted-foreground opacity-60" />
           </Button>
         ))}
       </div>
@@ -278,7 +280,7 @@ export function AddProjectExplorer() {
       <div className="shrink-0 border-t border-border px-4 py-3">
         {addError && <p className="text-xs text-red-500 mb-2 line-clamp-2">{addError}</p>}
         <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-muted truncate flex-1" title={cwd}>
+          <p className="text-xs text-muted-foreground truncate flex-1" title={cwd}>
             {cwd}
           </p>
           <div className="flex items-center gap-2 shrink-0">

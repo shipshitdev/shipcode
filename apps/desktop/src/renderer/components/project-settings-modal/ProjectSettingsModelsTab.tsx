@@ -5,7 +5,7 @@ import type {
   OpenRouterModelValidation,
   Project,
 } from '@shipcode/shared';
-import { MODEL_CONFIG_PRESETS } from '@shipcode/shared';
+import { buildProjectModelPresetOverrides, MODEL_CONFIG_PRESETS } from '@shipcode/shared';
 import {
   Button,
   DropdownMenu,
@@ -18,6 +18,32 @@ import { ChevronDown } from 'lucide-react';
 import type { Dispatch, SetStateAction } from 'react';
 import { ProjectPhaseSettingsRow } from './ProjectPhaseSettingsRow';
 import { PHASE_META, type PhaseKey, type ProjectOverrideState } from './shared';
+
+function findSelectedPreset(overrides: ProjectOverrideState) {
+  return MODEL_CONFIG_PRESETS.find((preset) => {
+    const presetOverrides = buildProjectModelPresetOverrides(preset.key);
+    return Object.entries(presetOverrides).every(
+      ([key, value]) => overrides[key as keyof typeof presetOverrides] === value,
+    );
+  });
+}
+
+function hasModelOverride(overrides: ProjectOverrideState) {
+  return (
+    overrides.plannerModelOverride !== null ||
+    overrides.reviewerModelOverride !== null ||
+    overrides.executorModelOverride !== null ||
+    overrides.verifierModelOverride !== null ||
+    overrides.plannerModelIdOverride !== null ||
+    overrides.reviewerModelIdOverride !== null ||
+    overrides.executorModelIdOverride !== null ||
+    overrides.verifierModelIdOverride !== null ||
+    overrides.plannerReasoningEffortOverride !== null ||
+    overrides.reviewerReasoningEffortOverride !== null ||
+    overrides.executorReasoningEffortOverride !== null ||
+    overrides.verifierReasoningEffortOverride !== null
+  );
+}
 
 export function ProjectSettingsModelsTab({
   settings,
@@ -40,9 +66,13 @@ export function ProjectSettingsModelsTab({
   >;
   onApplyPreset: (preset: ModelConfigPresetKey) => void;
 }) {
+  const selectedPreset = findSelectedPreset(overrides);
+  const presetLabel =
+    selectedPreset?.label ?? (hasModelOverride(overrides) ? 'Custom' : 'Apply Preset');
+
   return (
     <div className="space-y-6">
-      <div className="text-xs text-muted">
+      <div className="text-xs text-muted-foreground">
         Project model overrides shadow the global defaults for this repo only. Leave any field on
         inherit to keep using the global phase setting.
       </div>
@@ -54,7 +84,7 @@ export function ProjectSettingsModelsTab({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="secondary" size="sm">
-              Apply Preset
+              {presetLabel}
               <ChevronDown size={14} />
             </Button>
           </DropdownMenuTrigger>
@@ -66,14 +96,14 @@ export function ProjectSettingsModelsTab({
                 className="flex flex-col items-start gap-0.5"
               >
                 <span>{preset.label}</span>
-                <span className="text-[11px] text-muted">{preset.description}</span>
+                <span className="text-[11px] text-muted-foreground">{preset.description}</span>
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
       </SettingsRow>
 
-      <div className="text-xs text-muted">
+      <div className="text-xs text-muted-foreground">
         Workflow order here is Planner → Reviewer → Executor → Verifier. Clarifying and Awaiting
         Approval are human checkpoints, so they do not have model rows.
       </div>

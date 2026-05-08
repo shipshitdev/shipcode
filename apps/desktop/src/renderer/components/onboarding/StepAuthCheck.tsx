@@ -28,7 +28,9 @@ function CliStatus({ label, health }: { label: string; health: CliHealth }) {
         )}
       </span>
       {health.version && (
-        <span className="ml-auto text-[11px] font-mono text-muted">{health.version}</span>
+        <span className="ml-auto text-[11px] font-mono text-muted-foreground">
+          {health.version}
+        </span>
       )}
     </div>
   );
@@ -69,7 +71,9 @@ export function StepAuthCheck({ authResult, onRecheck, isChecking }: Props) {
               )}
             </span>
             {ghAuth?.version && (
-              <span className="ml-auto text-[11px] font-mono text-muted">gh {ghAuth.version}</span>
+              <span className="ml-auto text-[11px] font-mono text-muted-foreground">
+                gh {ghAuth.version}
+              </span>
             )}
           </div>
         </div>

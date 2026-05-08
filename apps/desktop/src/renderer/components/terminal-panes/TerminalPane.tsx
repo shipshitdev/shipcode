@@ -77,7 +77,7 @@ export function TerminalPane({
         )}
         {!isBareShell && isRunning && showQuietHint ? (
           <span
-            className={`font-mono text-[10px] tabular-nums ${stale ? 'text-warning' : 'text-muted'}`}
+            className={`font-mono text-[10px] tabular-nums ${stale ? 'text-warning' : 'text-muted-foreground'}`}
           >
             {stale
               ? `No output ${formatDurationSeconds(quietSeconds)}`
@@ -99,7 +99,7 @@ export function TerminalPane({
           <Button
             variant="ghost"
             size="icon-xs"
-            className="text-muted"
+            className="text-muted-foreground"
             title="Close pane"
             onClick={() => onClose(threadId, isRunning)}
           >

@@ -309,6 +309,9 @@ export class SettingsQueries {
         ? stored.updateTrack
         : DEFAULT_SETTINGS.updateTrack,
       autoCommitEnabled: parseBool(stored.autoCommitEnabled, DEFAULT_SETTINGS.autoCommitEnabled),
+      autoCommitProvider: isExecutorModel(stored.autoCommitProvider)
+        ? stored.autoCommitProvider
+        : DEFAULT_SETTINGS.autoCommitProvider,
       autoCommitModel: stored.autoCommitModel || DEFAULT_SETTINGS.autoCommitModel,
       autoCommitMode: isAutoCommitMode(stored.autoCommitMode)
         ? stored.autoCommitMode
@@ -426,6 +429,11 @@ export class SettingsQueries {
     if ('autoCommitMode' in patch && patch.autoCommitMode != null) {
       if (!isAutoCommitMode(patch.autoCommitMode)) {
         throw new Error('autoCommitMode must be split|single');
+      }
+    }
+    if ('autoCommitProvider' in patch && patch.autoCommitProvider != null) {
+      if (!isExecutorModel(patch.autoCommitProvider)) {
+        throw new Error('autoCommitProvider must be claude|codex|openrouter');
       }
     }
     if ('autoCommitModel' in patch && patch.autoCommitModel != null) {

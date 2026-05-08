@@ -282,7 +282,7 @@ export function App() {
               </div>
               <div className="flex flex-col items-center gap-2 text-center">
                 <h1 className="text-lg font-semibold text-red-400">Preload bridge failed</h1>
-                <p className="max-w-sm text-sm text-muted">
+                <p className="max-w-sm text-sm text-muted-foreground">
                   The Electron preload script didn't load. Try rebuilding with{' '}
                   <code className="rounded bg-red-500/10 px-1.5 py-0.5 text-xs text-red-300">
                     bun run build:preload
@@ -304,7 +304,7 @@ export function App() {
                   animation: 'spin 0.9s linear infinite',
                 }}
               />
-              <span className="text-xs font-medium tracking-[0.25em] text-muted uppercase">
+              <span className="text-xs font-medium tracking-[0.25em] text-muted-foreground uppercase">
                 ShipCode
               </span>
             </>

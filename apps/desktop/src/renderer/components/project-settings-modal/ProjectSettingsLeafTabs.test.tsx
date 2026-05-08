@@ -10,6 +10,7 @@ import type {
   ProjectReadinessReport,
 } from '@shipcode/shared';
 import {
+  buildProjectModelPresetOverrides,
   DEFAULT_SETTINGS,
   PIPELINE_EXECUTOR_PROVIDERS,
   SHIPCODE_DEFAULT_LABELS,
@@ -757,7 +758,7 @@ describe('project settings leaf tabs', () => {
       openrouterDefaultPaidModel: 'openrouter/auto',
     };
 
-    render(
+    const { rerender } = render(
       <ProjectSettingsModelsTab
         settings={settings}
         projectDraft={makeProject()}
@@ -791,6 +792,7 @@ describe('project settings leaf tabs', () => {
     );
 
     expect(screen.getByText('Model Presets')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Apply Preset' })).toBeInTheDocument();
     expect(screen.getByText('Planner')).toBeInTheDocument();
     expect(screen.getByText('Verifier')).toBeInTheDocument();
 
@@ -806,6 +808,31 @@ describe('project settings leaf tabs', () => {
     expect(onApplyPreset).toHaveBeenNthCalledWith(1, 'claude');
     expect(onApplyPreset).toHaveBeenNthCalledWith(2, 'codex');
     expect(onApplyPreset).toHaveBeenNthCalledWith(3, 'hybrid');
+
+    rerender(
+      <ProjectSettingsModelsTab
+        settings={settings}
+        projectDraft={makeProject()}
+        overrides={{
+          ...buildProjectModelPresetOverrides('codex'),
+          revisionCountOverride: null,
+          requireApprovalOverride: null,
+          pipelineSpeedProfileOverride: null,
+          prdQualityGate: null,
+          discordRouting: 'inherit',
+          discordWebhookUrlOverride: null,
+          telegramRouting: 'inherit',
+          telegramChatIdOverride: null,
+        }}
+        setOverrides={setOverrides}
+        integrationStatus={integrationStatus}
+        modelValidation={{}}
+        setModelValidation={setModelValidation}
+        onApplyPreset={onApplyPreset}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Codex' })).toBeInTheDocument();
   });
 
   it('renders project phase OpenRouter warnings and validates custom slugs on blur', async () => {

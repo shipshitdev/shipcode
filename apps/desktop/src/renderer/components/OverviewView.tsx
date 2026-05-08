@@ -64,7 +64,7 @@ function StatCard({ label, value, subtitle, tone = 'default', icon, onClick }: S
           {icon && <div style={{ color: iconColor }}>{icon}</div>}
         </div>
         <div className="mt-1 text-xs uppercase tracking-wide text-secondary">{label}</div>
-        {subtitle ? <div className="mt-2 text-[11px] text-muted">{subtitle}</div> : null}
+        {subtitle ? <div className="mt-2 text-[11px] text-muted-foreground">{subtitle}</div> : null}
       </CardContent>
     </Card>
   );
@@ -236,7 +236,7 @@ export function OverviewView() {
               <div className="flex items-center gap-2">
                 <h2 className="text-sm font-semibold text-primary">Running Agents</h2>
                 {!showAllAgents && running.length > AGENT_CARD_LIMIT && (
-                  <span className="text-[11px] text-muted">
+                  <span className="text-[11px] text-muted-foreground">
                     +{running.length - AGENT_CARD_LIMIT} more
                   </span>
                 )}
@@ -246,14 +246,14 @@ export function OverviewView() {
                   variant="ghost"
                   size="xs"
                   onClick={() => setShowAllAgents((prev) => !prev)}
-                  className="h-auto px-0 text-[11px] font-normal text-muted hover:bg-transparent capitalize"
+                  className="h-auto px-0 text-[11px] font-normal text-muted-foreground hover:bg-transparent capitalize"
                 >
                   {showAllAgents ? 'Show less' : 'View all →'}
                 </Button>
               )}
             </div>
             {running.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted">
+              <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
                 No agents running. Start a pipeline to see live status here.
               </div>
             ) : (
@@ -313,7 +313,7 @@ export function OverviewView() {
               <Card>
                 <CardContent className="p-0">
                   {(analytics?.averagePhaseDurations.length ?? 0) === 0 ? (
-                    <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted">
+                    <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
                       No phase timing data yet.
                     </div>
                   ) : (
@@ -334,7 +334,7 @@ export function OverviewView() {
                             <TableCell className="text-right text-[11px] text-primary">
                               {formatDuration(phase.averageMs)}
                             </TableCell>
-                            <TableCell className="text-right text-[11px] text-muted">
+                            <TableCell className="text-right text-[11px] text-muted-foreground">
                               {formatDuration(phase.p75Ms)}
                             </TableCell>
                           </TableRow>
@@ -348,7 +348,7 @@ export function OverviewView() {
               <Card>
                 <CardContent className="p-0">
                   {(analytics?.slowestRecentRuns.length ?? 0) === 0 ? (
-                    <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted">
+                    <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
                       No completed PR runs yet.
                     </div>
                   ) : (
@@ -371,7 +371,7 @@ export function OverviewView() {
                                 {run.githubPrNumber ? `#${run.githubPrNumber} ` : ''}
                                 {run.title}
                               </div>
-                              <div className="truncate text-[11px] text-muted">
+                              <div className="truncate text-[11px] text-muted-foreground">
                                 {run.projectName ?? 'Unknown project'}
                                 {run.bottleneckPhase
                                   ? ` · ${run.bottleneckPhase.replace(/_/g, ' ')}`
@@ -400,7 +400,7 @@ export function OverviewView() {
                   variant="ghost"
                   size="xs"
                   onClick={openActivity}
-                  className="h-auto px-0 text-[11px] font-normal text-muted hover:bg-transparent capitalize"
+                  className="h-auto px-0 text-[11px] font-normal text-muted-foreground hover:bg-transparent capitalize"
                 >
                   View all →
                 </Button>
@@ -408,7 +408,7 @@ export function OverviewView() {
               <Card>
                 <CardContent className="p-0">
                   {activity.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted">
+                    <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
                       No activity yet.
                     </div>
                   ) : (
@@ -445,11 +445,11 @@ export function OverviewView() {
                                 <div className="truncate text-[12px] text-primary">
                                   {entry.title}
                                 </div>
-                                <div className="truncate text-[11px] text-muted">
+                                <div className="truncate text-[11px] text-muted-foreground">
                                   {entry.subtitle || '–'}
                                 </div>
                               </TableCell>
-                              <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-muted">
+                              <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-muted-foreground">
                                 {formatRelativeTime(entry.createdAt)}
                               </TableCell>
                             </TableRow>
@@ -479,7 +479,7 @@ export function OverviewView() {
                   variant="ghost"
                   size="xs"
                   onClick={openInbox}
-                  className="h-auto px-0 text-[11px] font-normal text-muted hover:bg-transparent capitalize"
+                  className="h-auto px-0 text-[11px] font-normal text-muted-foreground hover:bg-transparent capitalize"
                 >
                   View all →
                 </Button>
@@ -487,7 +487,7 @@ export function OverviewView() {
               <Card>
                 <CardContent className="p-0">
                   {recent.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted">
+                    <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
                       No recent tasks.
                     </div>
                   ) : (
@@ -514,11 +514,11 @@ export function OverviewView() {
                                 {task.githubIssueNumber ? `#${task.githubIssueNumber} ` : ''}
                                 {task.title}
                               </div>
-                              <div className="truncate text-[11px] text-muted">
+                              <div className="truncate text-[11px] text-muted-foreground">
                                 {task.projectName} · {task.phase.replace(/_/g, ' ')}
                               </div>
                             </TableCell>
-                            <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-muted align-top pt-2.5">
+                            <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-muted-foreground align-top pt-2.5">
                               {formatRelativeTime(task.updatedAt)}
                             </TableCell>
                           </TableRow>

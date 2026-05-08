@@ -56,7 +56,6 @@ import {
   CircleCheck,
   CircleDot,
   Copy,
-
   Play,
   Square,
 } from 'lucide-react';
@@ -1126,7 +1125,7 @@ export function IssueDetail() {
         <Button
           variant="ghost"
           size="icon-sm"
-          className="text-muted"
+          className="text-muted-foreground"
           onClick={() => selectIssue(null)}
           title="Back to board"
           aria-label="Back to board"
@@ -1141,7 +1140,7 @@ export function IssueDetail() {
           <Button
             variant="ghost"
             size="icon-xs"
-            className="text-muted"
+            className="text-muted-foreground"
             onClick={() => setShowArchiveConfirm(true)}
             title="Archive issue"
           >
@@ -1259,20 +1258,20 @@ export function IssueDetail() {
     <div className="mt-1 flex flex-wrap items-center pl-10 text-[11px]">
       {/* Issue number */}
       {activeIssue.isQuickMode ? (
-        <span className="font-mono text-muted">Quick</span>
+        <span className="font-mono text-muted-foreground">Quick</span>
       ) : isAutomationIssue(activeIssue) ? (
-        <span className="font-mono text-muted">[Auto]</span>
+        <span className="font-mono text-muted-foreground">[Auto]</span>
       ) : githubIssueUrl ? (
         <button
           type="button"
           onClick={handleOpenOnGithub}
-          className="font-mono text-muted transition-colors hover:text-primary"
+          className="font-mono text-muted-foreground transition-colors hover:text-primary"
           title="Open this issue on GitHub"
         >
           #{activeIssue.issueNumber}
         </button>
       ) : (
-        <span className="font-mono text-muted">#{activeIssue.issueNumber}</span>
+        <span className="font-mono text-muted-foreground">#{activeIssue.issueNumber}</span>
       )}
 
       {/* State — open/closed dropdown */}
@@ -1285,7 +1284,9 @@ export function IssueDetail() {
                 type="button"
                 className={cn(
                   'flex items-center gap-1 font-medium transition-colors disabled:opacity-50',
-                  activeIssue.state === 'open' ? 'text-success' : 'text-muted hover:text-primary',
+                  activeIssue.state === 'open'
+                    ? 'text-success'
+                    : 'text-muted-foreground hover:text-primary',
                 )}
                 disabled={isTogglingState}
               >
@@ -1316,7 +1317,7 @@ export function IssueDetail() {
                 disabled={activeIssue.state === 'closed'}
                 onClick={() => void handleToggleIssueState('closed')}
               >
-                <CircleCheck className="mr-2 h-3.5 w-3.5 text-muted" />
+                <CircleCheck className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
                 Close issue
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -1337,7 +1338,7 @@ export function IssueDetail() {
                 ? 'text-success'
                 : branchCopyState === 'error'
                   ? 'text-danger'
-                  : 'text-muted hover:text-primary',
+                  : 'text-muted-foreground hover:text-primary',
             )}
             title={
               branchCopyState === 'copied'

@@ -36,7 +36,7 @@ export function ProjectSettingsPipelineTab({
 }) {
   return (
     <div className="space-y-6">
-      <div className="text-xs text-muted">
+      <div className="text-xs text-muted-foreground">
         Project pipeline overrides shadow the global workflow defaults for this repo only.
       </div>
 
@@ -57,7 +57,7 @@ export function ProjectSettingsPipelineTab({
             </div>
           </div>
         </SettingsRow>
-        <div className="mt-2 text-xs text-muted">
+        <div className="mt-2 text-xs text-muted-foreground">
           Approved issues move to <span className="text-primary">Waiting For Execution</span> until
           one of this project's execution slots opens.
         </div>

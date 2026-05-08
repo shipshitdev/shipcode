@@ -21,7 +21,7 @@ export function PrdTab({
       <div className="flex shrink-0 items-center justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-[13px] font-semibold text-primary">Issue brief</h3>
-          <p className="mt-0.5 truncate text-[11px] text-muted">
+          <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
             GitHub issue #{activeIssue.issueNumber} source content
           </p>
         </div>
@@ -55,7 +55,7 @@ export function PrdTab({
           </div>
         </div>
       ) : (
-        <div className="rounded-md bg-secondary p-3 text-[13px] text-muted">
+        <div className="rounded-md bg-secondary p-3 text-[13px] text-muted-foreground">
           This issue has no PRD body yet. Click &quot;Edit PRD&quot; to author one.
         </div>
       )}

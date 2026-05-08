@@ -44,7 +44,7 @@ const STATUS_CONFIG: Record<
     label: 'Pending',
     icon: Clock,
     badgeVariant: 'default',
-    className: 'text-muted',
+    className: 'text-muted-foreground',
   },
   running: {
     label: 'Running',
@@ -120,7 +120,7 @@ export function TaskGraphViewer({
           <div className="text-[13px] font-semibold text-primary">
             {completedCount}/{orderedNodes.length}
           </div>
-          <div className="text-[10px] uppercase tracking-wide text-muted">Done</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Done</div>
         </div>
       </header>
 
@@ -139,13 +139,13 @@ export function TaskGraphViewer({
 
       <div className="mb-3 grid grid-cols-2 gap-2 text-[11px] text-secondary">
         <div className="rounded-sm border border-border bg-tertiary px-2 py-1.5">
-          <span className="text-muted">Active</span>
+          <span className="text-muted-foreground">Active</span>
           <div className="truncate font-medium text-primary">
             {activeNode ? activeNode.stableKey : 'None'}
           </div>
         </div>
         <div className="rounded-sm border border-border bg-tertiary px-2 py-1.5">
-          <span className="text-muted">Ready</span>
+          <span className="text-muted-foreground">Ready</span>
           <div className="font-medium text-primary">{readyCount}</div>
         </div>
       </div>
@@ -166,7 +166,9 @@ export function TaskGraphViewer({
                 <StatusIcon size={16} className={cn('mt-0.5 shrink-0', status.className)} />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-mono text-[11px] text-muted">{node.stableKey}</span>
+                    <span className="font-mono text-[11px] text-muted-foreground">
+                      {node.stableKey}
+                    </span>
                     <span className="text-[12px] font-medium text-primary">{node.title}</span>
                   </div>
                   <div className="mt-1 flex flex-wrap gap-1">
@@ -192,7 +194,7 @@ export function TaskGraphViewer({
                         </code>
                       ))}
                       {files.remaining > 0 ? (
-                        <span className="rounded-sm bg-tertiary px-1.5 py-0.5 text-[11px] text-muted">
+                        <span className="rounded-sm bg-tertiary px-1.5 py-0.5 text-[11px] text-muted-foreground">
                           +{files.remaining}
                         </span>
                       ) : null}
@@ -203,7 +205,7 @@ export function TaskGraphViewer({
                   <Button
                     variant="ghost"
                     size="xs"
-                    className="h-6 shrink-0 px-1.5 text-[11px] text-muted"
+                    className="h-6 shrink-0 px-1.5 text-[11px] text-muted-foreground"
                     onClick={() => {
                       if (issueUrl) onOpenIssue?.(issueUrl);
                     }}
@@ -214,7 +216,7 @@ export function TaskGraphViewer({
                     <ExternalLink size={12} />
                   </Button>
                 ) : (
-                  <Circle size={14} className="mt-0.5 shrink-0 text-muted" />
+                  <Circle size={14} className="mt-0.5 shrink-0 text-muted-foreground" />
                 )}
               </div>
             </li>

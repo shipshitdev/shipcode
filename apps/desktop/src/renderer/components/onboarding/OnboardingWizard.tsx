@@ -33,11 +33,11 @@ export function StepGitHubReadiness() {
             className="flex items-center justify-between gap-3 rounded-md bg-tertiary px-3 py-2"
           >
             <span className="font-medium text-primary">{label}</span>
-            <span className="text-right font-mono text-[11px] text-muted">{value}</span>
+            <span className="text-right font-mono text-[11px] text-muted-foreground">{value}</span>
           </div>
         ))}
       </div>
-      <p className="mt-4 text-[12px] italic text-muted">
+      <p className="mt-4 text-[12px] italic text-muted-foreground">
         Product taxonomy should be an Area or Component field, not repo labels.
       </p>
     </div>
@@ -120,12 +120,12 @@ export function OnboardingWizard({ onComplete }: Props) {
               <div
                 key={label}
                 className={`flex items-center gap-1.5 text-xs ${
-                  i === step ? 'text-accent' : i < step ? 'text-success' : 'text-muted'
+                  i === step ? 'text-accent' : i < step ? 'text-success' : 'text-muted-foreground'
                 }`}
               >
                 <span
                   className={`w-2 h-2 rounded-full ${
-                    i === step ? 'bg-accent' : i < step ? 'bg-success' : 'bg-text-muted'
+                    i === step ? 'bg-accent' : i < step ? 'bg-success' : 'bg-text-muted-foreground'
                   }`}
                 />
                 <span>{label}</span>

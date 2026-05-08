@@ -1,4 +1,3 @@
-import { toast } from '../stores/toast-store';
 import {
   type AppSettings,
   type CliProviderUsageMap,
@@ -52,6 +51,7 @@ import type { ComponentType } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NOTIFICATIONS_STALE_TIME, STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { type ProjectTab, useAppStore } from '../stores/app-store';
+import { toast } from '../stores/toast-store';
 import { ProjectProviderWarningPopover } from './ProjectProviderWarningPopover';
 
 const PROJECT_TAB_ITEMS: Array<{
@@ -332,7 +332,7 @@ export function ProjectSidebar() {
           >
             <Plus size={14} className="shrink-0 text-secondary" />
             <span className="flex-1 truncate">New Issue</span>
-            <kbd className="hidden group-hover/item:inline text-[10px] text-muted font-mono">
+            <kbd className="hidden group-hover/item:inline text-[10px] text-muted-foreground font-mono">
               ⌘N
             </kbd>
           </Button>
@@ -345,7 +345,7 @@ export function ProjectSidebar() {
           >
             <Search size={14} className="shrink-0 text-secondary" />
             <span className="flex-1 truncate">Search</span>
-            <kbd className="hidden group-hover/item:inline text-[10px] text-muted font-mono">
+            <kbd className="hidden group-hover/item:inline text-[10px] text-muted-foreground font-mono">
               ⌘K
             </kbd>
           </Button>
@@ -447,7 +447,7 @@ export function ProjectSidebar() {
           </Button>
         </div>
 
-        <div className="mt-3 flex items-center justify-between px-4 text-[10px] font-semibold uppercase tracking-wider text-muted">
+        <div className="mt-3 flex items-center justify-between px-4 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           <span>Projects</span>
           <div className="flex items-center gap-1">
             <DropdownMenu>
@@ -455,7 +455,7 @@ export function ProjectSidebar() {
                 <Button
                   variant="ghost"
                   size="icon-xs"
-                  className="text-muted"
+                  className="text-muted-foreground"
                   title={`Sort: ${SORT_LABELS[sortOrder]}`}
                   aria-label="Sort projects"
                 >
@@ -476,7 +476,7 @@ export function ProjectSidebar() {
             <Button
               variant="ghost"
               size="icon-xs"
-              className="text-muted app-region-no-drag"
+              className="text-muted-foreground app-region-no-drag"
               title="Add repository"
               aria-label="Add repository"
               onClick={() => openAddProjectExplorer()}
@@ -600,7 +600,7 @@ export function ProjectSidebar() {
                               size="icon-xs"
                               className={cn(
                                 'opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100',
-                                warningBadgeLabel ? 'text-warning' : 'text-muted',
+                                warningBadgeLabel ? 'text-warning' : 'text-muted-foreground',
                               )}
                               aria-label={`More actions for ${project.name}`}
                               title={warningTitle}
@@ -707,7 +707,7 @@ export function ProjectSidebar() {
                             key={key}
                             variant="ghost"
                             className={cn(
-                              'h-auto w-full justify-start gap-2 pl-3 pr-5 py-1.5 text-[12px] font-normal text-muted app-region-no-drag',
+                              'h-auto w-full justify-start gap-2 pl-3 pr-5 py-1.5 text-[12px] font-normal text-muted-foreground app-region-no-drag',
                               projectTab === key && 'bg-tertiary/60 text-primary font-medium',
                             )}
                             onClick={(e) => {

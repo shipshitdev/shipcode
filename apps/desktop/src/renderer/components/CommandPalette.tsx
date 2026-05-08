@@ -1,5 +1,4 @@
 import type { GitHubIssueCacheRecord, PlanRecord, Project } from '@shipcode/shared';
-import { toast } from '../stores/toast-store';
 import { PIPELINE_PHASE } from '@shipcode/shared';
 import {
   CommandDialog,
@@ -16,6 +15,7 @@ import { getShortcut } from '../data/shortcuts';
 import { useOpenProjectTerminal } from '../hooks/useOpenProjectTerminal';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
+import { toast } from '../stores/toast-store';
 
 /**
  * Thin wrapper: only subscribes to open/toggle. When closed the inner
@@ -127,7 +127,9 @@ function CommandPaletteContent() {
                 value={`${project.name} #${issue.issueNumber} ${issue.title}`}
                 onSelect={() => runAction(() => navigateToIssue(project.id, issue))}
               >
-                <span className="shrink-0 text-muted font-mono text-xs">#{issue.issueNumber}</span>
+                <span className="shrink-0 text-muted-foreground font-mono text-xs">
+                  #{issue.issueNumber}
+                </span>
                 <span className="flex-1 truncate">{issue.title}</span>
                 <CommandShortcut>{project.name}</CommandShortcut>
               </CommandItem>

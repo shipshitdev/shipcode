@@ -1,4 +1,3 @@
-import { toast } from '../stores/toast-store';
 import {
   bodyHasRequiredPrdSections,
   clampError,
@@ -35,6 +34,7 @@ import { ImageIcon, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
+import { toast } from '../stores/toast-store';
 
 /**
  * Derive a GitHub issue title from a PRD body. Prefers the first `# ` heading,
@@ -610,7 +610,7 @@ export function CreateIssueModal() {
             <div className="flex items-center gap-2 rounded-md border border-danger/30 bg-danger/10 px-2.5 py-2 text-xs text-danger">
               <span className="min-w-0 flex-1">
                 <span className="line-clamp-1">{clampedError}</span>
-                <span className="ml-2 text-muted">(full trace in devtools console)</span>
+                <span className="ml-2 text-muted-foreground">(full trace in devtools console)</span>
               </span>
               {!isQuickMode && (
                 <Button
@@ -760,17 +760,17 @@ export function CreateIssueModal() {
                   key={a.originalPath}
                   className="flex items-center gap-2 rounded-md border border-border bg-tertiary/30 px-2.5 py-1.5 text-xs"
                 >
-                  <ImageIcon className="h-3.5 w-3.5 shrink-0 text-muted" />
+                  <ImageIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                   <span className="min-w-0 flex-1 truncate text-secondary" title={a.fileName}>
                     {a.fileName}
                   </span>
-                  <span className="shrink-0 text-muted">{formatBytes(a.sizeBytes)}</span>
+                  <span className="shrink-0 text-muted-foreground">{formatBytes(a.sizeBytes)}</span>
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon-xs"
                     aria-label={`Remove ${a.fileName}`}
-                    className="shrink-0 rounded p-0.5 text-muted transition-colors hover:text-danger"
+                    className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-danger"
                     onClick={(e) => {
                       e.stopPropagation();
                       void handleRemoveAttachment(a);

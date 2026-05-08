@@ -16,7 +16,9 @@ export function SettingsSection({ title, description, children, className }: Set
       {hasHeader ? (
         <div className="mb-3">
           {title ? <h4 className="text-[13px] font-medium text-secondary">{title}</h4> : null}
-          {description ? <p className="mt-1 text-[11px] text-muted">{description}</p> : null}
+          {description ? (
+            <p className="mt-1 text-[11px] text-muted-foreground">{description}</p>
+          ) : null}
         </div>
       ) : null}
       {children}

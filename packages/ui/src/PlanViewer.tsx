@@ -10,7 +10,7 @@ interface PlanViewerProps {
 export function PlanViewer({ plan }: PlanViewerProps) {
   if (!plan) {
     return (
-      <div className="flex items-center justify-center h-full p-4 text-muted">
+      <div className="flex items-center justify-center h-full p-4 text-muted-foreground">
         <p>Waiting for plan generation...</p>
       </div>
     );
@@ -98,7 +98,7 @@ export function PlanViewer({ plan }: PlanViewerProps) {
           <ul className="list-none p-0">
             {plan.acceptanceCriteria.map((criteria) => (
               <li key={criteria} className="flex items-start gap-2 py-1 text-[13px]">
-                <Square size={12} className="mt-1 shrink-0 text-muted" />
+                <Square size={12} className="mt-1 shrink-0 text-muted-foreground" />
                 <span>{criteria}</span>
               </li>
             ))}
@@ -115,7 +115,7 @@ export function PlanViewer({ plan }: PlanViewerProps) {
             {plan.outOfScope.map((item) => (
               <li
                 key={item}
-                className="py-1 pl-4 text-[13px] relative before:content-['—'] before:absolute before:left-0 before:text-muted"
+                className="py-1 pl-4 text-[13px] relative before:content-['—'] before:absolute before:left-0 before:text-muted-foreground"
               >
                 {item}
               </li>

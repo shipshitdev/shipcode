@@ -39,7 +39,7 @@ export function PullRequestsPanel() {
 
   if (!activeProjectId) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-muted">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         Select a project to view pull requests
       </div>
     );
@@ -68,7 +68,7 @@ export function PullRequestsPanel() {
           <Button
             variant="ghost"
             className={cn(
-              'h-6 w-6 p-0 text-muted hover:text-primary',
+              'h-6 w-6 p-0 text-muted-foreground hover:text-primary',
               isFetching && '[&_svg]:animate-spin',
             )}
             onClick={() =>
@@ -83,13 +83,13 @@ export function PullRequestsPanel() {
         {/* PR list */}
         <div className="flex-1 overflow-y-auto">
           {isLoading ? (
-            <div className="flex items-center justify-center p-8 text-xs text-muted">
+            <div className="flex items-center justify-center p-8 text-xs text-muted-foreground">
               Loading...
             </div>
           ) : pullRequests.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 p-8 text-center">
-              <GitPullRequest size={24} className="text-muted" />
-              <p className="text-xs text-muted">No pull requests found</p>
+              <GitPullRequest size={24} className="text-muted-foreground" />
+              <p className="text-xs text-muted-foreground">No pull requests found</p>
             </div>
           ) : (
             pullRequests.map((pr) => (
@@ -104,17 +104,19 @@ export function PullRequestsPanel() {
                 onClick={() => setActivePrNumber(pr.number)}
               >
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] font-mono text-muted">#{pr.number}</span>
+                  <span className="text-[11px] font-mono text-muted-foreground">#{pr.number}</span>
                   <span className="flex-1 truncate text-xs text-primary">{pr.title}</span>
                 </div>
                 <div className="mt-1 flex items-center gap-2">
-                  {pr.author && <span className="text-[10px] text-muted">{pr.author}</span>}
-                  <span className="text-[10px] text-muted">
+                  {pr.author && (
+                    <span className="text-[10px] text-muted-foreground">{pr.author}</span>
+                  )}
+                  <span className="text-[10px] text-muted-foreground">
                     {pr.headRefName} ← {pr.baseRefName}
                   </span>
                   <div className="flex-1" />
                   {pr.isDraft && (
-                    <span className="rounded bg-secondary/50 px-1 py-0.5 text-[9px] font-medium text-muted">
+                    <span className="rounded bg-secondary/50 px-1 py-0.5 text-[9px] font-medium text-muted-foreground">
                       DRAFT
                     </span>
                   )}
@@ -140,7 +142,7 @@ export function PullRequestsPanel() {
         {activePrNumber ? (
           <PullRequestDetailPanel prNumber={activePrNumber} />
         ) : (
-          <div className="flex flex-1 items-center justify-center text-sm text-muted">
+          <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
             Select a pull request to view details
           </div>
         )}

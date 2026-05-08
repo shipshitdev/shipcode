@@ -34,7 +34,7 @@ function TerminalHeaderIconButton({
           <Button
             variant="ghost"
             size="icon-xs"
-            className="text-muted hover:bg-hover/70 hover:text-primary"
+            className="text-muted-foreground hover:bg-hover/70 hover:text-primary"
             disabled={disabled}
             onClick={onClick}
             aria-label={ariaLabel}
@@ -107,9 +107,9 @@ export function TerminalDrawerHeader({
                     size="xs"
                     className="h-auto min-w-0 gap-1.5 px-1 py-0 text-xs font-normal text-secondary hover:bg-transparent hover:text-primary"
                   >
-                    <span className="font-mono text-muted">{displayTarget.label}</span>
+                    <span className="font-mono text-muted-foreground">{displayTarget.label}</span>
                     <span className="truncate max-w-[240px]">{displayTarget.title}</span>
-                    <ChevronDown size={11} className="text-muted shrink-0" />
+                    <ChevronDown size={11} className="text-muted-foreground shrink-0" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" side="top">
@@ -121,7 +121,9 @@ export function TerminalDrawerHeader({
                         target.threadId === terminalThreadId && 'bg-hover text-primary',
                       )}
                     >
-                      <span className="font-mono text-muted text-xs">{target.label}</span>
+                      <span className="font-mono text-muted-foreground text-xs">
+                        {target.label}
+                      </span>
                       <span className="truncate max-w-[280px]">{target.title}</span>
                     </DropdownMenuItem>
                   ))}
@@ -135,12 +137,12 @@ export function TerminalDrawerHeader({
                 className="h-auto min-w-0 gap-1.5 px-1 py-0 text-xs font-normal text-secondary hover:bg-transparent hover:text-primary"
                 title={`Open issue detail for ${displayTarget.label}`}
               >
-                <span className="font-mono text-muted">{displayTarget.label}</span>
+                <span className="font-mono text-muted-foreground">{displayTarget.label}</span>
                 <span className="truncate hover:text-primary">{displayTarget.title}</span>
               </Button>
             ) : (
               <div className="flex h-auto min-w-0 items-center gap-1.5 px-1 py-0 text-xs font-normal text-secondary">
-                <span className="font-mono text-muted">{displayTarget.label}</span>
+                <span className="font-mono text-muted-foreground">{displayTarget.label}</span>
                 <span className="truncate">{displayTarget.title}</span>
               </div>
             ))}
@@ -157,12 +159,14 @@ export function TerminalDrawerHeader({
           )}
 
           {currentModel && pipelinePhase !== PIPELINE_PHASE.idle && (
-            <span className="text-xs font-mono text-muted shrink-0 truncate max-w-[180px]">
+            <span className="text-xs font-mono text-muted-foreground shrink-0 truncate max-w-[180px]">
               {currentModel}
             </span>
           )}
 
-          {startedAt && <span className="text-xs font-mono text-muted shrink-0">{startedAt}</span>}
+          {startedAt && (
+            <span className="text-xs font-mono text-muted-foreground shrink-0">{startedAt}</span>
+          )}
         </div>
       </div>
 

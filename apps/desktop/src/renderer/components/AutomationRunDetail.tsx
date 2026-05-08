@@ -264,7 +264,7 @@ export function AutomationRunDetail() {
           size="icon-xs"
           onClick={handleClose}
           aria-label="Back to board"
-          className="rounded p-0.5 text-muted transition-colors hover:text-primary"
+          className="rounded p-0.5 text-muted-foreground transition-colors hover:text-primary"
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
@@ -402,7 +402,7 @@ export function AutomationRunDetail() {
             <TabsContent value="run" className="p-6">
               {thread?.prompt ? (
                 <div>
-                  <h4 className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-muted">
+                  <h4 className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                     Prompt
                   </h4>
                   <div className="rounded-md border border-border bg-secondary px-3 py-2.5">
@@ -410,7 +410,7 @@ export function AutomationRunDetail() {
                   </div>
                 </div>
               ) : (
-                <p className="text-[12px] text-muted">No prompt recorded.</p>
+                <p className="text-[12px] text-muted-foreground">No prompt recorded.</p>
               )}
             </TabsContent>
 
@@ -441,7 +441,7 @@ export function AutomationRunDetail() {
 
             <TabsContent value="history" className="p-6">
               {runHistory.length === 0 ? (
-                <p className="text-[12px] text-muted">No previous runs.</p>
+                <p className="text-[12px] text-muted-foreground">No previous runs.</p>
               ) : (
                 <div className="flex flex-col divide-y divide-border rounded-md border border-border">
                   {runHistory.map((run) => (
@@ -459,7 +459,7 @@ export function AutomationRunDetail() {
                       <span className="min-w-0 flex-1 truncate text-[12px] text-secondary">
                         {describeAutomationRun(run)}
                       </span>
-                      <span className="shrink-0 text-[11px] text-muted">
+                      <span className="shrink-0 text-[11px] text-muted-foreground">
                         {new Date(run.createdAt).toLocaleString(undefined, {
                           month: 'short',
                           day: 'numeric',
@@ -488,7 +488,7 @@ export function AutomationRunDetail() {
               <div className="grid grid-cols-2 gap-3">
                 {thread?.totalCostUsd != null && (
                   <div>
-                    <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                       Cost
                     </span>
                     <p className="mt-0.5 text-sm text-primary">{formatCost(thread.totalCostUsd)}</p>
@@ -496,7 +496,7 @@ export function AutomationRunDetail() {
                 )}
                 {totalTokens > 0 && (
                   <div>
-                    <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                       Tokens
                     </span>
                     <p className="mt-0.5 text-sm text-primary">{formatTokenCount(totalTokens)}</p>
@@ -510,7 +510,7 @@ export function AutomationRunDetail() {
               <div className="grid grid-cols-1 gap-3">
                 {thread.executorResolvedModel && (
                   <div>
-                    <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                       Executor
                     </span>
                     <p className="mt-0.5 truncate text-sm text-primary">
@@ -520,7 +520,7 @@ export function AutomationRunDetail() {
                 )}
                 {thread.verifierResolvedModel && (
                   <div>
-                    <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                       Verifier
                     </span>
                     <p className="mt-0.5 truncate text-sm text-primary">
@@ -534,7 +534,7 @@ export function AutomationRunDetail() {
             {/* Branch */}
             {thread?.worktreeBranch && (
               <div>
-                <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
+                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                   Branch
                 </span>
                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
@@ -548,7 +548,7 @@ export function AutomationRunDetail() {
                     onClick={() => {
                       if (thread.worktreeBranch) handleCopyBranch(thread.worktreeBranch);
                     }}
-                    className="rounded p-0.5 text-muted transition-colors hover:text-primary"
+                    className="rounded p-0.5 text-muted-foreground transition-colors hover:text-primary"
                     title="Copy branch name"
                   >
                     <Copy className="h-3 w-3" />
@@ -557,7 +557,7 @@ export function AutomationRunDetail() {
                     <Button
                       variant="ghost"
                       size="icon-xs"
-                      className="text-muted"
+                      className="text-muted-foreground"
                       onClick={() =>
                         navigateToGitWorktree(thread.projectId, thread.worktreePath as string)
                       }
@@ -576,7 +576,7 @@ export function AutomationRunDetail() {
                       <Button
                         variant="ghost"
                         size="icon-xs"
-                        className="text-muted"
+                        className="text-muted-foreground"
                         onClick={() =>
                           window.shipcode.invoke('shell:open-external', { url: compareUrl })
                         }
@@ -618,7 +618,7 @@ export function AutomationRunDetail() {
             {/* Pull Request */}
             {thread?.githubPrNumber && thread.githubRepo && (
               <div>
-                <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
+                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                   Pull Request
                 </span>
                 <div className="mt-1 flex items-center gap-1.5">
@@ -628,7 +628,7 @@ export function AutomationRunDetail() {
                   <Button
                     variant="ghost"
                     size="icon-xs"
-                    className="text-muted"
+                    className="text-muted-foreground"
                     onClick={() =>
                       window.shipcode.invoke('shell:open-external', {
                         url: `https://github.com/${thread.githubRepo}/pull/${thread.githubPrNumber}`,
@@ -644,7 +644,7 @@ export function AutomationRunDetail() {
 
             {/* Timestamps */}
             {thread && (
-              <div className="space-y-0.5 text-[11px] text-muted">
+              <div className="space-y-0.5 text-[11px] text-muted-foreground">
                 <p>
                   Created{' '}
                   {new Date(thread.createdAt).toLocaleString(undefined, {

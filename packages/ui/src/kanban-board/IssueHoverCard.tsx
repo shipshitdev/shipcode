@@ -30,9 +30,9 @@ const STEP_STATUS_ICON: Record<PlanStepSummary['status'], { char: string; classN
   running: { char: '●', className: 'text-agent animate-pulse' },
   completed: { char: '✓', className: 'text-success' },
   failed: { char: '✕', className: 'text-danger' },
-  ready: { char: '○', className: 'text-muted/50' },
-  pending: { char: '○', className: 'text-muted/50' },
-  blocked: { char: '⊘', className: 'text-muted/50' },
+  ready: { char: '○', className: 'text-muted-foreground/50' },
+  pending: { char: '○', className: 'text-muted-foreground/50' },
+  blocked: { char: '⊘', className: 'text-muted-foreground/50' },
 };
 
 function PlanStepsSection({ steps }: { steps: PlanStepSummary[] }) {
@@ -42,7 +42,7 @@ function PlanStepsSection({ steps }: { steps: PlanStepSummary[] }) {
 
   return (
     <div className="mb-2">
-      <div className="mb-1 mt-2 border-t border-border/40 pt-2 text-[10px] font-semibold uppercase tracking-wide text-muted">
+      <div className="mb-1 mt-2 border-t border-border/40 pt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
         Plan
       </div>
       <div className="flex flex-col gap-0.5">
@@ -66,7 +66,7 @@ function PlanStepsSection({ steps }: { steps: PlanStepSummary[] }) {
                 className={cn(
                   'text-[11px] leading-tight truncate',
                   isRunning ? 'text-primary font-medium' : 'text-secondary',
-                  step.status === 'completed' && 'text-muted',
+                  step.status === 'completed' && 'text-muted-foreground',
                 )}
               >
                 {step.title}
@@ -75,7 +75,7 @@ function PlanStepsSection({ steps }: { steps: PlanStepSummary[] }) {
           );
         })}
         {overflow > 0 && (
-          <span className="text-[10px] text-muted/60 pl-[18px]">+ {overflow} more</span>
+          <span className="text-[10px] text-muted-foreground/60 pl-[18px]">+ {overflow} more</span>
         )}
       </div>
     </div>
@@ -190,7 +190,9 @@ export function IssueHoverCard({
         >
           {/* Issue number + status */}
           <div className="flex items-center justify-between gap-2 mb-2">
-            <span className="text-[11px] font-mono text-muted">#{issue.issueNumber}</span>
+            <span className="text-[11px] font-mono text-muted-foreground">
+              #{issue.issueNumber}
+            </span>
             <PhaseChip status={issue.pipelineStatus} />
           </div>
 
@@ -204,9 +206,11 @@ export function IssueHoverCard({
             planSteps && planSteps.length > 0 ? (
               <PlanStepsSection steps={planSteps} />
             ) : planStepsLoading ? (
-              <p className="text-[11px] text-muted/60 leading-relaxed mb-2 mt-2">Loading plan…</p>
+              <p className="text-[11px] text-muted-foreground/60 leading-relaxed mb-2 mt-2">
+                Loading plan…
+              </p>
             ) : isPlanning ? (
-              <p className="text-[11px] text-muted/60 leading-relaxed mb-2 mt-2">
+              <p className="text-[11px] text-muted-foreground/60 leading-relaxed mb-2 mt-2">
                 Planning in progress…
               </p>
             ) : (
@@ -260,12 +264,12 @@ export function IssueHoverCard({
           {/* Meta row: assignee + last activity */}
           <div className="flex items-center justify-between gap-2">
             {issue.assignee ? (
-              <span className="text-[10px] text-muted truncate">@{issue.assignee}</span>
+              <span className="text-[10px] text-muted-foreground truncate">@{issue.assignee}</span>
             ) : (
               <span />
             )}
             {lastUpdate && (
-              <div className="text-[10px] text-muted shrink-0">
+              <div className="text-[10px] text-muted-foreground shrink-0">
                 {isActive ? 'Running' : 'Last activity'} {formatElapsedDuration(lastUpdate)} ago
               </div>
             )}

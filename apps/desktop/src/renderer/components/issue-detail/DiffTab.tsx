@@ -12,13 +12,13 @@ export function DiffTab({ diffs, threadStatus }: { diffs: DiffRecord[]; threadSt
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/10">
-          <FileCode2 size={20} className="text-muted/50" />
+          <FileCode2 size={20} className="text-muted-foreground/50" />
         </div>
         <div className="space-y-1">
-          <p className="text-sm font-medium text-muted">
+          <p className="text-sm font-medium text-muted-foreground">
             {isTerminal ? 'No code changes' : 'No code changes yet'}
           </p>
-          <p className="text-xs text-muted/50">
+          <p className="text-xs text-muted-foreground/50">
             {isTerminal
               ? 'Pipeline completed without producing code changes.'
               : 'Diff will appear here after execution produces changes.'}
@@ -36,7 +36,7 @@ export function DiffTab({ diffs, threadStatus }: { diffs: DiffRecord[]; threadSt
             Code Changes
           </h4>
           <div className="flex items-center gap-2">
-            <span className="text-[11px] text-muted">
+            <span className="text-[11px] text-muted-foreground">
               {diffs.length} file{diffs.length === 1 ? '' : 's'}
             </span>
             <Button

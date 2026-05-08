@@ -41,14 +41,14 @@ const severityBorderColor = (severity: ReviewFinding['severity']) => {
     case 'minor':
       return 'border-warning';
     case 'nit':
-      return 'border-text-muted';
+      return 'border-text-muted-foreground';
   }
 };
 
 export function ReviewViewer({ review }: ReviewViewerProps) {
   if (!review) {
     return (
-      <div className="flex items-center justify-center h-full p-4 text-muted">
+      <div className="flex items-center justify-center h-full p-4 text-muted-foreground">
         <p>Waiting for review...</p>
       </div>
     );
@@ -85,12 +85,14 @@ export function ReviewViewer({ review }: ReviewViewerProps) {
                 <Badge variant={severityVariant(finding.severity)} className="uppercase">
                   {finding.severity}
                 </Badge>
-                <span className="text-[11px] text-muted font-mono">{finding.id}</span>
+                <span className="text-[11px] text-muted-foreground font-mono">{finding.id}</span>
                 <Badge>{finding.category}</Badge>
               </div>
               <p className="text-[13px]">{finding.description}</p>
               {finding.filePath && (
-                <code className="block mt-1 text-[11px] text-muted">{finding.filePath}</code>
+                <code className="block mt-1 text-[11px] text-muted-foreground">
+                  {finding.filePath}
+                </code>
               )}
               {finding.suggestion && (
                 <div className="mt-1.5 p-1.5 px-2 bg-tertiary rounded text-xs">

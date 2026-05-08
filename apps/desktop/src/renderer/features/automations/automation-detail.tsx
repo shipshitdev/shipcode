@@ -86,12 +86,12 @@ export function AutomationDetail() {
           size="icon-xs"
           onClick={openAutomations}
           aria-label="Back to automations"
-          className="rounded p-0.5 text-muted transition-colors hover:text-primary"
+          className="rounded p-0.5 text-muted-foreground transition-colors hover:text-primary"
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
         {isAutomationLoading ? (
-          <Loader2 className="h-4 w-4 animate-spin text-muted" />
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
         ) : (
           <>
             <h3 className="min-w-0 flex-1 truncate text-sm font-medium text-primary">
@@ -117,7 +117,7 @@ export function AutomationDetail() {
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           {automation?.prompt && (
             <div className="shrink-0 border-b border-border px-6 py-4">
-              <h4 className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted">
+              <h4 className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                 Prompt
               </h4>
               <div className="max-h-64 overflow-y-auto rounded-md border border-border bg-secondary px-3 py-2.5">
@@ -127,7 +127,7 @@ export function AutomationDetail() {
           )}
 
           <div className="shrink-0 border-b border-border px-6 py-3">
-            <h4 className="text-[10px] font-medium uppercase tracking-wider text-muted">
+            <h4 className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
               All Runs ({runHistory.length})
             </h4>
           </div>
@@ -135,10 +135,12 @@ export function AutomationDetail() {
           <div className="flex-1 overflow-y-auto">
             {isHistoryLoading ? (
               <div className="flex justify-center py-12">
-                <Loader2 className="h-5 w-5 animate-spin text-muted" />
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
             ) : runHistory.length === 0 ? (
-              <p className="px-6 py-8 text-center text-[12px] text-muted">No runs yet.</p>
+              <p className="px-6 py-8 text-center text-[12px] text-muted-foreground">
+                No runs yet.
+              </p>
             ) : (
               <div className="flex flex-col divide-y divide-border">
                 {runHistory.map((run) => {
@@ -159,7 +161,7 @@ export function AutomationDetail() {
                         <span className="block truncate text-[12px] text-secondary">
                           {describeAutomationRun(run, { errorMaxLength: 120 })}
                         </span>
-                        <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted">
+                        <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
                           <span>{formatTimestamp(run.createdAt)}</span>
                           {run.failureCount > 0 && (
                             <>
@@ -183,7 +185,7 @@ export function AutomationDetail() {
                           )}
                         </div>
                       </div>
-                      <span className="mt-0.5 shrink-0 text-[11px] text-muted">
+                      <span className="mt-0.5 shrink-0 text-[11px] text-muted-foreground">
                         {formatAutomationRelativeTime(run.createdAt)}
                       </span>
                     </Button>
@@ -200,7 +202,7 @@ export function AutomationDetail() {
             {/* Project */}
             {project && (
               <div className="min-w-0">
-                <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
+                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                   Project
                 </span>
                 <p className="mt-0.5 truncate text-sm text-primary">{project.name}</p>
@@ -210,20 +212,22 @@ export function AutomationDetail() {
             {/* Schedule */}
             {automation && (
               <div className="min-w-0">
-                <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
+                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                   Schedule
                 </span>
                 <p className="mt-0.5 break-all font-mono text-sm text-primary">
                   {automation.cronExpr}
                 </p>
-                <p className="mt-0.5 text-[11px] text-muted">{describeCron(automation.cronExpr)}</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {describeCron(automation.cronExpr)}
+                </p>
               </div>
             )}
 
             {/* Status */}
             {automation && (
               <div>
-                <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
+                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                   Status
                 </span>
                 <p className="mt-0.5 text-sm text-primary">
@@ -235,7 +239,7 @@ export function AutomationDetail() {
             {/* Run Stats */}
             {automation && (
               <div>
-                <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
+                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                   Total Runs
                 </span>
                 <p className="mt-0.5 text-sm text-primary">{automation.runCount}</p>
@@ -244,7 +248,7 @@ export function AutomationDetail() {
 
             {automation?.lastStartedAt && (
               <div>
-                <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
+                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                   Last Run
                 </span>
                 <p className="mt-0.5 text-sm text-primary">
@@ -256,12 +260,12 @@ export function AutomationDetail() {
             {/* Executor Override */}
             {automation?.executorProvider && (
               <div className="min-w-0">
-                <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
+                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                   Executor
                 </span>
                 <p className="mt-0.5 text-sm text-primary">{automation.executorProvider}</p>
                 {automation.executorModelId && (
-                  <p className="mt-0.5 truncate text-[11px] text-muted">
+                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
                     {automation.executorModelId}
                   </p>
                 )}
@@ -270,7 +274,7 @@ export function AutomationDetail() {
 
             {/* Timestamps */}
             {automation && (
-              <div className="space-y-0.5 text-[11px] text-muted">
+              <div className="space-y-0.5 text-[11px] text-muted-foreground">
                 <p>Created {formatTimestamp(automation.createdAt)}</p>
                 <p>Updated {formatTimestamp(automation.updatedAt)}</p>
               </div>

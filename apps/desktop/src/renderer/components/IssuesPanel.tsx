@@ -1004,7 +1004,7 @@ export function IssuesPanel() {
             <Button
               variant="ghost"
               size="icon-xs"
-              className="text-muted hover:bg-transparent hover:text-primary"
+              className="text-muted-foreground hover:bg-transparent hover:text-primary"
               title="Dismiss undo"
               aria-label="Dismiss undo"
               onClick={() => setDoneUndo(null)}
@@ -1025,7 +1025,9 @@ export function IssuesPanel() {
           >
             <RefreshCw
               size={12}
-              className={archiveFeedback.tone === 'pending' ? 'animate-spin text-muted' : ''}
+              className={
+                archiveFeedback.tone === 'pending' ? 'animate-spin text-muted-foreground' : ''
+              }
             />
             {archiveFeedback.message}
           </div>

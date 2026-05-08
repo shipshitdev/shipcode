@@ -123,7 +123,7 @@ export function ProjectSettingsSetupTab({
             </Button>
           ))}
         </div>
-        <div className="mt-2 space-y-1 text-[11px] text-muted">
+        <div className="mt-2 space-y-1 text-[11px] text-muted-foreground">
           {detectedProfiles.map((profile: ProjectSetupDraft['profiles'][number]) => (
             <div key={`${profile.kind}:evidence`}>
               {profile.label}: {profile.evidence.join(', ')}
@@ -176,7 +176,7 @@ export function ProjectSettingsSetupTab({
       <div className="rounded-md border border-border bg-secondary/30 p-3">
         <div className="mb-3">
           <div className="text-[12px] font-medium text-primary">Runtime QA</div>
-          <div className="text-[11px] text-muted">
+          <div className="text-[11px] text-muted-foreground">
             Commands ShipCode runs inside the feature worktree so browser and human QA target the
             implementation under review.
           </div>
@@ -258,7 +258,7 @@ export function ProjectSettingsSetupTab({
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
             <div className="text-[12px] font-medium text-primary">Env files</div>
-            <div className="text-[11px] text-muted">
+            <div className="text-[11px] text-muted-foreground">
               Files copied from repo root into the worktree before execution.
             </div>
           </div>
@@ -269,7 +269,7 @@ export function ProjectSettingsSetupTab({
 
         <div className="space-y-3">
           {envFiles.length === 0 ? (
-            <div className="text-[11px] text-muted">No env files configured.</div>
+            <div className="text-[11px] text-muted-foreground">No env files configured.</div>
           ) : null}
 
           {envFiles.map((file) => (

@@ -247,7 +247,10 @@ export function BoardToolbar({
           <Button
             variant="ghost"
             size="icon-sm"
-            className={cn('rounded-none text-muted', view === 'list' && 'bg-accent/15 text-accent')}
+            className={cn(
+              'rounded-none text-muted-foreground',
+              view === 'list' && 'bg-accent/15 text-accent',
+            )}
             onClick={() => onViewChange('list')}
             title="List view"
           >
@@ -258,7 +261,7 @@ export function BoardToolbar({
               variant="ghost"
               size="icon-sm"
               className={cn(
-                'rounded-none border-l border-border text-muted',
+                'rounded-none border-l border-border text-muted-foreground',
                 view === 'graph' && 'bg-accent/15 text-accent',
               )}
               onClick={() => onViewChange('graph')}
@@ -271,7 +274,7 @@ export function BoardToolbar({
             variant="ghost"
             size="icon-sm"
             className={cn(
-              'rounded-none border-l border-border text-muted',
+              'rounded-none border-l border-border text-muted-foreground',
               view === 'kanban' && 'bg-accent/15 text-accent',
             )}
             onClick={() => onViewChange('kanban')}
@@ -304,7 +307,7 @@ export function BoardToolbar({
                     variant="ghost"
                     size="icon-sm"
                     className={cn(
-                      'rounded-none border-l border-border text-muted',
+                      'rounded-none border-l border-border text-muted-foreground',
                       autoRunPriorities.length > 0 && 'text-accent',
                     )}
                     title="Filter auto-run by priority"

@@ -39,13 +39,13 @@ export function PipelineStatus({ currentPhase, onPhaseClick }: PipelineStatusPro
             <Button
               variant="ghost"
               size="sm"
-              className="h-auto gap-1.5 px-1.5 py-1 text-xs font-normal text-muted hover:not-disabled:text-secondary disabled:cursor-default disabled:opacity-100"
+              className="h-auto gap-1.5 px-1.5 py-1 text-xs font-normal text-muted-foreground hover:not-disabled:text-secondary disabled:cursor-default disabled:opacity-100"
               onClick={() => onPhaseClick?.(phase.key)}
               disabled={isFuture}
             >
               <span
                 className={cn(
-                  'relative inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold border-2 border-text-muted text-muted',
+                  'relative inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold border-2 border-text-muted-foreground text-muted-foreground',
                   isActive && !isFailed && 'bg-accent border-accent text-bg-primary',
                   isCompleted && 'bg-success border-success text-bg-primary',
                   isFailed && isActive && 'bg-danger border-danger text-bg-primary',
@@ -76,7 +76,10 @@ export function PipelineStatus({ currentPhase, onPhaseClick }: PipelineStatusPro
             </Button>
             {index < PHASES.length - 1 && (
               <span
-                className={cn('w-4 h-0.5 shrink-0 bg-text-muted', isCompleted && 'bg-success')}
+                className={cn(
+                  'w-4 h-0.5 shrink-0 bg-text-muted-foreground',
+                  isCompleted && 'bg-success',
+                )}
               />
             )}
           </div>

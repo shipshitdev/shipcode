@@ -60,7 +60,7 @@ export function GithubSettingsSection({
             }}
           />
         </SettingsRow>
-        <p className="mb-3 mt-2 text-xs text-muted">
+        <p className="mb-3 mt-2 text-xs text-muted-foreground">
           {settings.autoRunPriorities.length === 0
             ? 'All priorities eligible — Run (X) will include every todo issue.'
             : `Only ${settings.autoRunPriorities.map((p) => p.toUpperCase()).join(', ')} issues will be included.`}

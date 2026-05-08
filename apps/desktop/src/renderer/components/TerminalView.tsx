@@ -89,8 +89,8 @@ export function TerminalView() {
 
   if (terminalPaneThreadIds.length === 0) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 text-muted">
-        <Terminal size={32} className="text-muted" />
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 text-muted-foreground">
+        <Terminal size={32} className="text-muted-foreground" />
         <p className="text-sm">No terminal sessions open</p>
         {openTerminalButton}
       </div>

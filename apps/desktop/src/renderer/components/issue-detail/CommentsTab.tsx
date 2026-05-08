@@ -89,13 +89,13 @@ export function CommentsTab({
       </div>
 
       {isLoading ? (
-        <p className="py-4 text-center text-[13px] text-muted">Loading comments…</p>
+        <p className="py-4 text-center text-[13px] text-muted-foreground">Loading comments…</p>
       ) : comments.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-md border border-dashed border-border bg-secondary/10 px-4 py-10 text-center">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted/10">
-            <MessageSquare size={18} className="text-muted/50" />
+            <MessageSquare size={18} className="text-muted-foreground/50" />
           </div>
-          <p className="text-[12px] text-muted">No comments yet.</p>
+          <p className="text-[12px] text-muted-foreground">No comments yet.</p>
         </div>
       ) : (
         <div className="mb-4 overflow-hidden rounded-md border border-border bg-secondary/20">
@@ -106,7 +106,7 @@ export function CommentsTab({
                   <span className="text-[11px] font-medium text-primary">
                     {comment.author ?? 'unknown'}
                   </span>
-                  <span className="shrink-0 text-[10px] text-muted">
+                  <span className="shrink-0 text-[10px] text-muted-foreground">
                     {timeAgo(comment.createdAt)}
                   </span>
                 </div>

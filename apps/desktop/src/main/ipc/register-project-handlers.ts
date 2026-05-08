@@ -970,8 +970,6 @@ export function registerProjectHandlers({
     async (_event, { projectId, worktreePath }: { projectId: string; worktreePath: string }) => {
       const project = queries.projects.getById(projectId);
       if (!project) throw new Error(`Project ${projectId} not found`);
-      const apiKey = process.env.OPENROUTER_API_KEY;
-      if (!apiKey) throw new Error('OPENROUTER_API_KEY is not set');
       if (isWorktreeLocked(worktreePath)) {
         throw new Error('Auto-commit already running for this worktree');
       }
@@ -981,6 +979,11 @@ export function registerProjectHandlers({
         throw new Error('Pipeline is active in this worktree — cannot auto-commit');
       }
       const settings = queries.settings.get();
+      const apiKey =
+        settings.autoCommitProvider === 'openrouter' ? process.env.OPENROUTER_API_KEY : undefined;
+      if (settings.autoCommitProvider === 'openrouter' && !apiKey) {
+        throw new Error('OPENROUTER_API_KEY is not set');
+      }
       const controller = new AbortController();
       try {
         return await withWorktreeLock(worktreePath, () =>
@@ -988,6 +991,7 @@ export function registerProjectHandlers({
             project,
             worktreePath,
             apiKey,
+            provider: settings.autoCommitProvider,
             model: settings.autoCommitModel,
             mode: settings.autoCommitMode,
             signal: controller.signal,

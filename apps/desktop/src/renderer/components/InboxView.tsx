@@ -235,7 +235,7 @@ export function InboxView() {
       </TableCell>
       <TableCell className="w-[144px] whitespace-nowrap align-top text-right">
         <div className="relative flex min-h-7 items-start justify-end">
-          <span className="pt-0.5 text-[11px] text-muted transition-opacity group-hover:opacity-0 group-focus-within:opacity-0">
+          <span className="pt-0.5 text-[11px] text-muted-foreground transition-opacity group-hover:opacity-0 group-focus-within:opacity-0">
             {formatRelativeTime(n.createdAt)}
           </span>
           <div className="absolute right-0 top-0 flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
@@ -316,7 +316,7 @@ export function InboxView() {
               variant="ghost"
               size="sm"
               onClick={() => setSortOrder((s) => (s === 'newest' ? 'oldest' : 'newest'))}
-              className="h-7 gap-1.5 text-[11px] text-muted"
+              className="h-7 gap-1.5 text-[11px] text-muted-foreground"
               title={sortOrder === 'newest' ? 'Showing newest first' : 'Showing oldest first'}
             >
               <ArrowUpDown size={12} />
@@ -381,13 +381,13 @@ export function InboxView() {
           )}
 
           {!isLoading && !isError && active.length === 0 && (
-            <div className="rounded-lg border border-dashed border-border px-4 py-12 text-center text-xs text-muted">
+            <div className="rounded-lg border border-dashed border-border px-4 py-12 text-center text-xs text-muted-foreground">
               All caught up. No pending notifications.
             </div>
           )}
 
           {!isLoading && !isError && active.length > 0 && visibleNotifications.length === 0 && (
-            <div className="rounded-lg border border-dashed border-border px-4 py-12 text-center text-xs text-muted">
+            <div className="rounded-lg border border-dashed border-border px-4 py-12 text-center text-xs text-muted-foreground">
               No notifications match the current filter.
             </div>
           )}

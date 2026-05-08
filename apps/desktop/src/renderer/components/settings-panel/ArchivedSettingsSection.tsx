@@ -32,7 +32,7 @@ export function ArchivedSettingsSection({
             description="Archived projects are hidden from the sidebar but remain navigable via Activity and notifications. They re-appear automatically when new work arrives, or you can restore one manually here."
           >
             {archivedProjects.length === 0 ? (
-              <p className="text-[13px] text-muted">No archived projects.</p>
+              <p className="text-[13px] text-muted-foreground">No archived projects.</p>
             ) : (
               <div className="space-y-1">
                 {archivedProjects.map((project) => (
@@ -42,7 +42,9 @@ export function ArchivedSettingsSection({
                   >
                     <div className="min-w-0 flex-1">
                       <div className="text-[13px] text-primary truncate">{project.name}</div>
-                      <div className="text-[11px] text-muted truncate">{project.path}</div>
+                      <div className="text-[11px] text-muted-foreground truncate">
+                        {project.path}
+                      </div>
                     </div>
                     <Button
                       size="sm"
@@ -65,7 +67,7 @@ export function ArchivedSettingsSection({
             description="Archived issues are closed on GitHub and hidden from the board. Restoring brings them back locally but does not reopen them on GitHub."
           >
             {archivedIssues.length === 0 ? (
-              <p className="text-[13px] text-muted">No archived issues.</p>
+              <p className="text-[13px] text-muted-foreground">No archived issues.</p>
             ) : (
               <div className="space-y-1">
                 {archivedIssues.map((issue) => (

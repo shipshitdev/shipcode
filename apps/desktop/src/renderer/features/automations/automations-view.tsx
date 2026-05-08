@@ -71,7 +71,7 @@ export function AutomationsView() {
         ) : automations.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center text-secondary">
             <p className="text-[15px]">No automations yet.</p>
-            <p className="mt-1 text-[13px] text-muted">
+            <p className="mt-1 text-[13px] text-muted-foreground">
               Create one to run tasks on a schedule, like daily smoke tests or weekly cleanups.
             </p>
             <Button className="mt-4" onClick={() => openCreateAutomationModal()}>
@@ -150,7 +150,7 @@ function AutomationCard({
               <ChevronDown
                 size={14}
                 className={cn(
-                  'shrink-0 text-muted transition-transform',
+                  'shrink-0 text-muted-foreground transition-transform',
                   historyOpen && 'rotate-180',
                 )}
               />
@@ -172,7 +172,7 @@ function AutomationCard({
             <div className="mt-1 min-w-0 truncate pl-[22px] text-[12px] font-normal text-secondary">
               {projectName} · {describeCron(automation.cronExpr)}
             </div>
-            <div className="mt-1 min-w-0 truncate pl-[22px] text-[11px] font-normal text-muted">
+            <div className="mt-1 min-w-0 truncate pl-[22px] text-[11px] font-normal text-muted-foreground">
               {automation.lastStartedAt
                 ? `Last run ${formatAutomationRelativeTime(automation.lastStartedAt)} · ${automation.runCount} total`
                 : 'Never run'}
@@ -229,15 +229,15 @@ function AutomationCard({
 
         {historyOpen && (
           <div className="border-t border-border bg-tertiary/30 px-4 py-3">
-            <h4 className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted">
+            <h4 className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
               Run History
             </h4>
             {isHistoryLoading ? (
               <div className="flex justify-center py-4">
-                <Loader2 className="h-4 w-4 animate-spin text-muted" />
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
               </div>
             ) : runHistory.length === 0 ? (
-              <p className="py-2 text-[12px] text-muted">No runs yet.</p>
+              <p className="py-2 text-[12px] text-muted-foreground">No runs yet.</p>
             ) : (
               <div className="flex flex-col gap-1">
                 {runHistory.slice(0, RUN_HISTORY_LIMIT).map((thread) => (
@@ -252,7 +252,7 @@ function AutomationCard({
                     <span className="flex-1 truncate text-[12px] text-secondary">
                       {describeAutomationRun(thread)}
                     </span>
-                    <span className="text-[11px] text-muted">
+                    <span className="text-[11px] text-muted-foreground">
                       {formatAutomationRelativeTime(thread.createdAt)}
                     </span>
                   </Button>

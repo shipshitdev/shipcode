@@ -33,7 +33,7 @@ function buildTerminalTheme() {
     magenta: '#a855f7',
     cyan: '#06b6d4',
     white: readCssColor('--text-primary', '#f4f4f5'),
-    brightBlack: readCssColor('--text-muted', '#6b6b78'),
+    brightBlack: readCssColor('--text-muted-foreground', '#6b6b78'),
     brightRed: '#f87171',
     brightGreen: '#34d399',
     brightYellow: '#fbbf24',

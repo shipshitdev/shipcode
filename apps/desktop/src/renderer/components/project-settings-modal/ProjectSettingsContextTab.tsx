@@ -51,11 +51,13 @@ export function ProjectSettingsContextTab({
                   {file?.exists ? (
                     <span className="h-2 w-2 shrink-0 rounded-full bg-green-500" />
                   ) : (
-                    <span className="w-2 shrink-0 text-center text-muted">-</span>
+                    <span className="w-2 shrink-0 text-center text-muted-foreground">-</span>
                   )}
                   <span className="font-mono text-[12px] text-primary">{name}</span>
                   {file?.exists && file.size != null ? (
-                    <span className="ml-auto text-[11px] text-muted">{formatBytes(file.size)}</span>
+                    <span className="ml-auto text-[11px] text-muted-foreground">
+                      {formatBytes(file.size)}
+                    </span>
                   ) : null}
                 </div>
               );

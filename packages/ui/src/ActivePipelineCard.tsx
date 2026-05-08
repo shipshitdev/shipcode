@@ -20,7 +20,7 @@ function PhaseElapsed({ since }: { since: number }) {
   const now = useSharedSecondNow();
   const label = formatElapsedDuration(since, now);
 
-  return <span className="font-mono tabular-nums text-[10px] text-muted">{label}</span>;
+  return <span className="font-mono tabular-nums text-[10px] text-muted-foreground">{label}</span>;
 }
 
 export interface ActivePipelineCardProps {
@@ -109,13 +109,15 @@ export function ActivePipelineCard({
 
       <div className="relative z-10 flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-[11px] text-muted">{projectName}</span>
+          <span className="truncate text-[11px] text-muted-foreground">{projectName}</span>
           {issueNumber != null && (
             <span className="shrink-0 font-mono text-[11px] text-secondary">#{issueNumber}</span>
           )}
         </div>
         <span className="flex items-center gap-1.5">
-          <span className="font-mono tabular-nums text-[10px] text-muted">{progress}%</span>
+          <span className="font-mono tabular-nums text-[10px] text-muted-foreground">
+            {progress}%
+          </span>
           {isAgentActive && <PhaseElapsed since={startedAt} />}
         </span>
       </div>

@@ -316,7 +316,7 @@ export function ActivityHeatmap({
       )}
 
       <div className="flex gap-1.5">
-        <div className="flex flex-col justify-between py-0.5 text-[9px] leading-none text-muted">
+        <div className="flex flex-col justify-between py-0.5 text-[9px] leading-none text-muted-foreground">
           {DAY_LABEL.map((d, i) => (
             <span key={d} className={cn(cellSizeClass, i % 2 === 1 ? 'opacity-100' : 'opacity-0')}>
               {d}
@@ -369,7 +369,7 @@ export function ActivityHeatmap({
         </section>
       </div>
 
-      <div className="flex items-center justify-end gap-1.5 text-[10px] text-muted">
+      <div className="flex items-center justify-end gap-1.5 text-[10px] text-muted-foreground">
         <span>Less</span>
         {([0, 1, 2, 3, 4] as const).map((b) => (
           <span

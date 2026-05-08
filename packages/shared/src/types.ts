@@ -838,6 +838,7 @@ export interface AppSettings {
   updateTrack: UpdateTrack;
   // Auto-commit (Git tab "Auto-commit" button)
   autoCommitEnabled: boolean;
+  autoCommitProvider: ExecutorModel;
   autoCommitModel: string;
   autoCommitMode: 'split' | 'single';
   // Branch / worktree cleanup criteria (Git tab "Cleanup" button)

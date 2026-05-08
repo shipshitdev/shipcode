@@ -260,7 +260,7 @@ export function PipelineSettingsSection({
                     className="flex flex-col items-start gap-0.5"
                   >
                     <span>{preset.label}</span>
-                    <span className="text-[11px] text-muted">{preset.description}</span>
+                    <span className="text-[11px] text-muted-foreground">{preset.description}</span>
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>

@@ -251,7 +251,7 @@ export function ProjectSettingsGeneralTab({
         </SettingsRow>
         <div className="flex flex-col gap-2">
           {syncResult ? (
-            <span className="text-[11px] text-muted">
+            <span className="text-[11px] text-muted-foreground">
               Attached {syncResult.attached}, already present {syncResult.alreadyPresent}
               {syncResult.failed > 0 ? `, failed ${syncResult.failed}` : ''}
             </span>
@@ -275,7 +275,9 @@ export function ProjectSettingsGeneralTab({
                   </li>
                 ))}
                 {syncResult.errors.length > 5 ? (
-                  <li className="text-muted">(+{syncResult.errors.length - 5} more - see logs)</li>
+                  <li className="text-muted-foreground">
+                    (+{syncResult.errors.length - 5} more - see logs)
+                  </li>
                 ) : null}
               </ul>
             </div>

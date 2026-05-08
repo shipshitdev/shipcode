@@ -120,11 +120,11 @@ export function ActivityView() {
           {!isLoading && !isError && activity.length === 0 && (
             <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-4 py-16 text-center">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/10">
-                <Activity size={20} className="text-muted/50" />
+                <Activity size={20} className="text-muted-foreground/50" />
               </div>
               <div className="space-y-1">
-                <p className="text-sm font-medium text-muted">No activity yet</p>
-                <p className="text-xs text-muted/50">
+                <p className="text-sm font-medium text-muted-foreground">No activity yet</p>
+                <p className="text-xs text-muted-foreground/50">
                   Pipeline runs and agent actions will appear here.
                 </p>
               </div>
@@ -135,7 +135,7 @@ export function ActivityView() {
             !isError &&
             groups.map((group) => (
               <div key={group.label} className="mb-6">
-                <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                   {group.label}
                 </div>
                 <Card>
@@ -157,7 +157,7 @@ export function ActivityView() {
                               }}
                             >
                               <TableCell className="w-px whitespace-nowrap pr-2 align-top pt-2.5">
-                                <span className="inline-flex items-center justify-center rounded border border-border bg-tertiary px-1 py-0.5 text-[9px] uppercase text-muted">
+                                <span className="inline-flex items-center justify-center rounded border border-border bg-tertiary px-1 py-0.5 text-[9px] uppercase text-muted-foreground">
                                   {entry.actor}
                                 </span>
                               </TableCell>
@@ -166,12 +166,12 @@ export function ActivityView() {
                                   {entry.title}
                                 </div>
                                 {entry.subtitle && (
-                                  <div className="truncate text-[11px] text-muted">
+                                  <div className="truncate text-[11px] text-muted-foreground">
                                     {entry.subtitle}
                                   </div>
                                 )}
                               </TableCell>
-                              <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-muted">
+                              <TableCell className="w-px whitespace-nowrap text-right text-[10px] text-muted-foreground">
                                 {formatRelativeTime(entry.createdAt)}
                               </TableCell>
                             </TableRow>

@@ -80,16 +80,16 @@ export function PlanHistoryTab({
               aria-label={planHistoryCollapseLabel}
             >
               {planHistoryCollapsed ? (
-                <ChevronDown size={16} strokeWidth={2.25} className="text-muted" />
+                <ChevronDown size={16} strokeWidth={2.25} className="text-muted-foreground" />
               ) : (
-                <ChevronUp size={16} strokeWidth={2.25} className="text-muted" />
+                <ChevronUp size={16} strokeWidth={2.25} className="text-muted-foreground" />
               )}
             </Button>
             {canToggleRunScope ? (
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 px-2 text-[11px] text-muted"
+                className="h-7 px-2 text-[11px] text-muted-foreground"
                 onClick={() => onShowAllPlanRunsChange(!isShowingAllPlanRuns)}
               >
                 {runScopeLabel}
@@ -113,11 +113,11 @@ export function PlanHistoryTab({
                           Current run
                         </Badge>
                       ) : null}
-                      <span className="text-[11px] text-muted">
+                      <span className="text-[11px] text-muted-foreground">
                         {runGroup.plans.length} version{runGroup.plans.length === 1 ? '' : 's'}
                       </span>
                     </div>
-                    <span className="text-[11px] text-muted">
+                    <span className="text-[11px] text-muted-foreground">
                       {new Date(runGroup.plans[0].createdAt).toLocaleString()}
                     </span>
                   </div>
@@ -142,7 +142,7 @@ export function PlanHistoryTab({
                             <Button
                               variant="ghost"
                               size="icon-xs"
-                              className="shrink-0 text-muted hover:text-primary"
+                              className="shrink-0 text-muted-foreground hover:text-primary"
                               aria-label="View plan full screen"
                               onClick={() => onFullScreenPlan(plan.id)}
                             >
@@ -157,7 +157,7 @@ export function PlanHistoryTab({
                               onClick={() => onPlanExpandedChange(isExpanded ? null : plan.id)}
                             >
                               <div className="flex min-w-0 flex-1 items-center gap-2">
-                                <span className="font-mono text-xs font-semibold text-muted">
+                                <span className="font-mono text-xs font-semibold text-muted-foreground">
                                   v{plan.version}
                                 </span>
                                 {statusPresentation.style === 'phase-chip' ? (
@@ -169,18 +169,24 @@ export function PlanHistoryTab({
                                 ) : (
                                   <Badge
                                     variant={statusPresentation.badgeVariant}
-                                    className="text-[10px] text-muted border-border/70 bg-secondary/40"
+                                    className="text-[10px] text-muted-foreground border-border/70 bg-secondary/40"
                                   >
                                     {statusPresentation.label}
                                   </Badge>
                                 )}
-                                <span className="ml-auto shrink-0 text-[11px] text-muted">
+                                <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">
                                   {new Date(plan.createdAt).toLocaleString()}
                                 </span>
                                 {isExpanded ? (
-                                  <ChevronDown size={12} className="shrink-0 text-muted" />
+                                  <ChevronDown
+                                    size={12}
+                                    className="shrink-0 text-muted-foreground"
+                                  />
                                 ) : (
-                                  <ChevronRight size={12} className="shrink-0 text-muted" />
+                                  <ChevronRight
+                                    size={12}
+                                    className="shrink-0 text-muted-foreground"
+                                  />
                                 )}
                               </div>
                             </Button>
@@ -204,7 +210,7 @@ export function PlanHistoryTab({
                                   ) : null}
                                   {!inlineDisplayPlan && !review?.structured ? (
                                     isDetailLoading ? (
-                                      <p className="text-xs italic text-muted">
+                                      <p className="text-xs italic text-muted-foreground">
                                         Loading plan details…
                                       </p>
                                     ) : (
@@ -212,8 +218,10 @@ export function PlanHistoryTab({
                                         <p className="text-xs font-medium text-warning">
                                           Structured plan unavailable
                                         </p>
-                                        <p className="text-xs text-muted">{parseFailureMessage}</p>
-                                        <p className="text-xs text-muted">
+                                        <p className="text-xs text-muted-foreground">
+                                          {parseFailureMessage}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
                                           Raw planner transcript is hidden in Plans. Use the
                                           terminal drawer for subprocess output.
                                         </p>
@@ -249,7 +257,9 @@ export function PlanHistoryTab({
       normalizedThreadPlanHistory.length === 0 &&
       normalizedPlanHistory.length === 0 ? (
         threadPhase === PIPELINE_PHASE.failed ? (
-          <p className="text-[12px] text-muted">No plan was produced before the pipeline failed.</p>
+          <p className="text-[12px] text-muted-foreground">
+            No plan was produced before the pipeline failed.
+          </p>
         ) : (
           <PlanWaiting threadId={activeThreadId} />
         )
@@ -259,7 +269,7 @@ export function PlanHistoryTab({
       !isPlanHistoryLoading &&
       normalizedPlanHistory.length === 0 &&
       normalizedThreadPlanHistory.length === 0 ? (
-        <div className="rounded-md border border-dashed border-border bg-secondary/10 px-4 py-8 text-center text-[12px] text-muted">
+        <div className="rounded-md border border-dashed border-border bg-secondary/10 px-4 py-8 text-center text-[12px] text-muted-foreground">
           No plans generated yet. Start a pipeline to generate a plan.
         </div>
       ) : null}

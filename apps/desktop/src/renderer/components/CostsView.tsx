@@ -59,7 +59,7 @@ const PHASE_COLOR: Partial<Record<PipelinePhase, string>> = {
   awaiting_approval: 'bg-warning/15 text-warning border-warning/30',
   completed: 'bg-success/15 text-success border-success/30',
   failed: 'bg-danger/15 text-danger border-danger/30',
-  idle: 'bg-secondary text-muted border-border',
+  idle: 'bg-secondary text-muted-foreground border-border',
 };
 
 type DisplayMode = '$' | 'tokens';
@@ -161,7 +161,9 @@ export function CostsView() {
               size="xs"
               onClick={() => setDisplayMode('$')}
               className={cn(
-                displayMode === '$' ? 'bg-tertiary text-primary font-medium' : 'text-muted',
+                displayMode === '$'
+                  ? 'bg-tertiary text-primary font-medium'
+                  : 'text-muted-foreground',
               )}
               aria-label="Show costs in US dollars"
             >
@@ -172,7 +174,9 @@ export function CostsView() {
               size="xs"
               onClick={() => setDisplayMode('tokens')}
               className={cn(
-                displayMode === 'tokens' ? 'bg-tertiary text-primary font-medium' : 'text-muted',
+                displayMode === 'tokens'
+                  ? 'bg-tertiary text-primary font-medium'
+                  : 'text-muted-foreground',
               )}
               aria-label="Show costs in tokens"
             >
@@ -226,7 +230,7 @@ export function CostsView() {
           <section className="rounded-xl border border-border bg-elevated p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-primary">Activity</h3>
-              <p className="text-[11px] text-muted">All projects</p>
+              <p className="text-[11px] text-muted-foreground">All projects</p>
             </div>
             <ActivityHeatmap scope="global" surface="global" />
           </section>
@@ -242,17 +246,17 @@ export function CostsView() {
             </div>
           ) : data ? (
             <section>
-              <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
+              <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 By Project
               </h2>
               {data.byProject.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-4 py-12 text-center">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/10">
-                    <Coins size={20} className="text-muted/50" />
+                    <Coins size={20} className="text-muted-foreground/50" />
                   </div>
                   <div className="space-y-1">
-                    <p className="text-sm font-medium text-muted">No cost data yet</p>
-                    <p className="text-xs text-muted/50">
+                    <p className="text-sm font-medium text-muted-foreground">No cost data yet</p>
+                    <p className="text-xs text-muted-foreground/50">
                       Run a pipeline to see cost breakdowns here.
                     </p>
                   </div>
@@ -309,7 +313,7 @@ export function CostsView() {
 
           {selectedProjectId && data && (
             <section>
-              <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
+              <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 {data.byProject.find((p) => p.projectId === selectedProjectId)?.projectName ??
                   'Project'}{' '}
                 Cost Details
@@ -327,7 +331,7 @@ export function CostsView() {
           )}
 
           <section>
-            <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
+            <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               Top Tasks by Cost
             </h2>
             <CostTaskTable
@@ -372,9 +376,9 @@ function CostTaskTable({
     return (
       <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-4 py-12 text-center">
         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/10">
-          <Coins size={20} className="text-muted/50" />
+          <Coins size={20} className="text-muted-foreground/50" />
         </div>
-        <p className="text-sm font-medium text-muted">{emptyMessage}</p>
+        <p className="text-sm font-medium text-muted-foreground">{emptyMessage}</p>
       </div>
     );
   }
@@ -412,7 +416,7 @@ function CostTaskTable({
                       {task.phase.replace(/_/g, ' ')}
                     </span>
                   </TableCell>
-                  <TableCell className="text-[11px] text-muted whitespace-nowrap">
+                  <TableCell className="text-[11px] text-muted-foreground whitespace-nowrap">
                     {task.updatedAt ? formatDateTime(task.updatedAt) : '—'}
                   </TableCell>
                   <TableCell>
@@ -420,10 +424,10 @@ function CostTaskTable({
                       {task.title}
                     </div>
                     {showProjectName && (
-                      <div className="text-[11px] text-muted">{task.projectName}</div>
+                      <div className="text-[11px] text-muted-foreground">{task.projectName}</div>
                     )}
                   </TableCell>
-                  <TableCell className="text-[11px] text-muted whitespace-nowrap">
+                  <TableCell className="text-[11px] text-muted-foreground whitespace-nowrap">
                     {task.provider}
                   </TableCell>
                   <TableCell className="text-[11px] text-primary whitespace-nowrap">
@@ -458,9 +462,11 @@ function CostTaskTable({
 function StatCard({ label, value, subtitle }: { label: string; value: string; subtitle?: string }) {
   return (
     <div className="rounded-lg border border-border bg-secondary p-4">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">{label}</div>
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </div>
       <div className="mt-1 text-2xl font-bold text-primary">{value}</div>
-      {subtitle && <div className="mt-0.5 text-[11px] text-muted">{subtitle}</div>}
+      {subtitle && <div className="mt-0.5 text-[11px] text-muted-foreground">{subtitle}</div>}
     </div>
   );
 }

@@ -21,6 +21,7 @@ import {
   Terminal,
   X,
 } from 'lucide-react';
+import { PolarAngleAxis, RadialBar, RadialBarChart } from 'recharts';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 import { ProjectProviderWarningPopover } from './ProjectProviderWarningPopover';
@@ -92,7 +93,7 @@ function ProviderWindowBar({
     <div className="flex flex-col gap-1">
       <div className="flex min-w-0 items-baseline justify-between gap-3 text-[10px] text-secondary">
         <span className="min-w-0 shrink truncate">{window.label}</span>
-        <span className="min-w-0 max-w-[72%] truncate text-right tabular-nums text-muted">
+        <span className="min-w-0 max-w-[72%] truncate text-right tabular-nums text-muted-foreground">
           {left == null ? '—' : `${left}% left`}
           {window.resetDescription ? ` · ${window.resetDescription}` : ''}
         </span>
@@ -132,12 +133,12 @@ function ProviderDetailRow({
         <ProviderStatusDot tone={tone} state={status.state} title={`${label}: ${status.state}`} />
         <span className="text-[11px] font-medium tracking-tight text-primary">{label}</span>
         {status.loginMethod ? (
-          <span className="rounded-sm border border-border/70 px-1 text-[9px] uppercase tracking-wide text-muted">
+          <span className="rounded-sm border border-border/70 px-1 text-[9px] uppercase tracking-wide text-muted-foreground">
             {status.loginMethod}
           </span>
         ) : null}
         {status.version ? (
-          <span className="ml-auto truncate text-[10px] tabular-nums text-muted">
+          <span className="ml-auto truncate text-[10px] tabular-nums text-muted-foreground">
             v{status.version}
           </span>
         ) : null}
@@ -146,7 +147,7 @@ function ProviderDetailRow({
       {status.creditsRemaining != null ? (
         <div className="text-[10px] text-secondary">
           <span className="tabular-nums text-primary">{status.creditsRemaining}</span>
-          <span className="text-muted"> credits remaining</span>
+          <span className="text-muted-foreground"> credits remaining</span>
         </div>
       ) : null}
 
@@ -164,12 +165,12 @@ function ProviderDetailRow({
       ) : (
         <div className="text-[10px] text-secondary">
           {status.message ?? 'Usage data unavailable.'}
-          <span className="ml-1 text-muted">Retries on the next check.</span>
+          <span className="ml-1 text-muted-foreground">Retries on the next check.</span>
         </div>
       )}
 
       {(checked || status.stale) && (
-        <div className="flex items-center justify-between gap-2 text-[10px] text-muted">
+        <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
           <span>{checked ? `Checked ${checked}` : ''}</span>
           {status.stale ? (
             <span className="rounded-sm border border-warning/30 bg-warning/10 px-1 text-warning">
@@ -237,14 +238,14 @@ function ProviderStatusBadge({
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <div className="text-[11px] font-medium text-primary">CLI availability</div>
-            <div className="text-[10px] text-muted">
+            <div className="text-[10px] text-muted-foreground">
               Soft quota status from the local Claude and Codex CLIs.
             </div>
           </div>
           <Button
             variant="ghost"
             size="icon-xs"
-            className="mt-0.5 h-5 w-5 shrink-0 text-muted hover:text-primary"
+            className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground hover:text-primary"
             onClick={onRefresh}
             disabled={isRefreshing}
             title="Refresh CLI status"
@@ -303,36 +304,42 @@ function cpuColorClass(percent: number | null): {
   };
 }
 
+function cpuGaugeColor(percent: number | null): string {
+  if (percent == null || percent <= 50) return 'var(--color-success)';
+  if (percent <= 70) return 'var(--color-warning)';
+  return 'var(--color-danger)';
+}
+
 function CpuGauge({ percent }: { percent: number | null }) {
-  const radius = 36;
-  const strokeWidth = 6;
-  const circumference = Math.PI * radius;
-  const clamped = percent == null ? 0 : Math.max(0, Math.min(100, percent));
-  const offset = circumference - (clamped / 100) * circumference;
   const colors = cpuColorClass(percent);
+  const clamped = percent == null ? 0 : Math.max(0, Math.min(100, percent));
+  const data = [{ value: clamped, fill: cpuGaugeColor(percent) }];
 
   return (
-    <div className="flex flex-col items-center gap-1">
-      <svg width={88} height={52} viewBox="0 0 88 52" className="overflow-visible">
-        <path
-          d="M 6 48 A 36 36 0 0 1 82 48"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={strokeWidth}
-          className="text-tertiary"
-          strokeLinecap="round"
-        />
-        <path
-          d="M 6 48 A 36 36 0 0 1 82 48"
-          fill="none"
-          strokeWidth={strokeWidth}
-          className={colors.stroke}
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          style={{ transition: 'stroke-dashoffset 0.6s ease-out' }}
-        />
-      </svg>
+    <div className="flex flex-col items-center gap-0.5">
+      <div className="h-[56px] w-[88px]">
+        <RadialBarChart
+          width={88}
+          height={88}
+          cx={44}
+          cy={48}
+          innerRadius={30}
+          outerRadius={42}
+          barSize={6}
+          data={data}
+          startAngle={180}
+          endAngle={0}
+        >
+          <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
+          <RadialBar
+            dataKey="value"
+            cornerRadius={4}
+            background={{ fill: 'var(--color-tertiary)' }}
+            animationDuration={600}
+            animationEasing="ease-out"
+          />
+        </RadialBarChart>
+      </div>
       <span className={cn('text-lg font-semibold tabular-nums', colors.text)}>
         {percent == null ? '—' : `${Math.round(percent)}%`}
       </span>
@@ -365,8 +372,7 @@ function ResourceUsageBadge() {
 
   if (!snapshot) return null;
 
-  const cpuValue =
-    snapshot.cpuPercent == null ? '—' : `${Math.round(snapshot.cpuPercent)}%`;
+  const cpuValue = snapshot.cpuPercent == null ? '—' : `${Math.round(snapshot.cpuPercent)}%`;
   const colors = cpuColorClass(snapshot.cpuPercent);
   const topTasks = snapshot.tasks.slice(0, 8);
 
@@ -389,7 +395,7 @@ function ResourceUsageBadge() {
             <span className="text-secondary">CPU </span>
             <span className={cn('inline-block w-[3ch] text-right', colors.text)}>{cpuValue}</span>
           </span>
-          {isFetching ? <Loader2 size={10} className="animate-spin text-muted" /> : null}
+          {isFetching ? <Loader2 size={10} className="animate-spin text-muted-foreground" /> : null}
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -402,7 +408,7 @@ function ResourceUsageBadge() {
             <CpuGauge percent={snapshot.cpuPercent} />
             <div>
               <div className="text-[11px] font-medium text-primary">CPU usage</div>
-              <div className="text-[10px] text-muted">
+              <div className="text-[10px] text-muted-foreground">
                 {snapshot.cpuPercent == null
                   ? `${snapshot.cpuCoreCount} cores · warming up`
                   : `${snapshot.cpuCoreCount} cores · ${snapshot.cpuPercent}% host CPU`}
@@ -425,7 +431,7 @@ function ResourceUsageBadge() {
                 >
                   <div className="min-w-0">
                     <div className="truncate text-[12px] font-medium text-primary">{title}</div>
-                    <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted">
+                    <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
                       <span className="uppercase">{task.type}</span>
                       <span>{formatPhaseLabel(task.phase)}</span>
                       {task.projectName ? (
@@ -439,12 +445,12 @@ function ResourceUsageBadge() {
                       <div className={task.highCpu ? 'text-warning' : 'text-primary'}>
                         {task.cpuPercent.toFixed(1)}%
                       </div>
-                      <div className="text-muted">{formatBytes(task.memoryBytes)}</div>
+                      <div className="text-muted-foreground">{formatBytes(task.memoryBytes)}</div>
                     </div>
                     <Button
                       variant="ghost"
                       size="icon-xs"
-                      className="h-6 w-6 shrink-0 text-muted hover:text-danger"
+                      className="h-6 w-6 shrink-0 text-muted-foreground hover:text-danger"
                       title="Kill process"
                       aria-label={`Kill ${title}`}
                       disabled={killProcess.isPending}
@@ -458,7 +464,7 @@ function ResourceUsageBadge() {
             })}
           </div>
         ) : (
-          <div className="rounded-md border border-border/80 px-2.5 py-2 text-[11px] text-muted">
+          <div className="rounded-md border border-border/80 px-2.5 py-2 text-[11px] text-muted-foreground">
             No managed processes are running.
           </div>
         )}
@@ -554,8 +560,8 @@ export function Titlebar() {
         </button>
         {activeProject ? (
           <>
-            <span className="text-muted">ShipCode</span>
-            <span className="text-muted">/</span>
+            <span className="text-muted-foreground">ShipCode</span>
+            <span className="text-muted-foreground">/</span>
             <span className="truncate text-primary">{activeProject.name}</span>
             {projectWarningLabel && settings ? (
               <ProjectProviderWarningPopover

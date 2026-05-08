@@ -93,14 +93,14 @@ export function IssueDetailDialogs({
           {fullScreenDisplayPlan && <PlanViewer plan={fullScreenDisplayPlan} />}
           {fullScreenReview?.structured && <ReviewViewer review={fullScreenReview.structured} />}
           {!fullScreenDisplayPlan && isFullScreenPlanLoading && (
-            <div className="p-6 text-sm text-muted">Loading plan details…</div>
+            <div className="p-6 text-sm text-muted-foreground">Loading plan details…</div>
           )}
           {!fullScreenDisplayPlan && fullScreenPlan && !isFullScreenPlanLoading && (
             <div className="p-6">
               <div className="space-y-2 rounded-md border border-warning/30 bg-warning/10 px-4 py-3">
                 <p className="text-sm font-medium text-warning">Structured plan unavailable</p>
-                <p className="text-sm text-muted">{fullScreenParseFailureMessage}</p>
-                <p className="text-sm text-muted">
+                <p className="text-sm text-muted-foreground">{fullScreenParseFailureMessage}</p>
+                <p className="text-sm text-muted-foreground">
                   Raw planner transcript is hidden here. Use the terminal drawer for subprocess
                   output.
                 </p>

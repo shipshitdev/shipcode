@@ -305,7 +305,7 @@ export function SkillsView() {
       <div className="flex flex-1 overflow-hidden">
         <aside className="w-[260px] shrink-0 overflow-y-auto border-r border-border bg-primary">
           <div className="p-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted mb-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
               Pipeline Skills
             </h3>
             <p className="text-[11px] text-secondary mb-4 leading-relaxed">
@@ -315,7 +315,7 @@ export function SkillsView() {
 
             {/* Scope picker */}
             <div className="mb-4">
-              <label className="block text-[10px] font-semibold uppercase tracking-wider text-muted mb-1">
+              <label className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
                 Scope
               </label>
               <Select value={scope} onValueChange={setScope}>
@@ -355,7 +355,9 @@ export function SkillsView() {
                           <span className="font-medium">{meta.label}</span>
                           <SourceBadge source={row.source} quarantined={isQuarantined} />
                         </div>
-                        <p className="text-[11px] text-muted leading-snug">{meta.description}</p>
+                        <p className="text-[11px] text-muted-foreground leading-snug">
+                          {meta.description}
+                        </p>
                       </div>
                     </Button>
                   </li>
@@ -364,7 +366,7 @@ export function SkillsView() {
             </ul>
 
             <div className="mt-6 border-t border-border pt-4">
-              <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted">
+              <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 PRD Skill
               </h4>
               <div className="rounded border border-border bg-secondary/30 p-3">
@@ -393,10 +395,10 @@ export function SkillsView() {
 
                 {activeProjectId && writingPrdsInfo ? (
                   <>
-                    <div className="mt-3 rounded border border-border bg-primary/60 px-2 py-1.5 font-mono text-[10px] leading-snug text-muted break-all">
+                    <div className="mt-3 rounded border border-border bg-primary/60 px-2 py-1.5 font-mono text-[10px] leading-snug text-muted-foreground break-all">
                       {writingPrdsInfo.absolutePath}
                     </div>
-                    <p className="mt-2 text-[11px] leading-snug text-muted">
+                    <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
                       {writingPrdsInfo.exists
                         ? 'Edit this file in your normal editor. ShipCode reads it directly when you enhance a PRD.'
                         : 'This repo is using ShipCode’s built-in fallback because the file is missing. Open the repo to add or inspect the skill location.'}
@@ -413,7 +415,7 @@ export function SkillsView() {
                     </Button>
                   </>
                 ) : (
-                  <p className="mt-3 text-[11px] leading-snug text-muted">
+                  <p className="mt-3 text-[11px] leading-snug text-muted-foreground">
                     Pick a project from the sidebar to inspect that repo&apos;s
                     <span className="mx-1 font-mono">skills/writing-prds/SKILL.md</span>
                     file.
@@ -446,7 +448,9 @@ export function SkillsView() {
                         <span className="font-medium text-primary">
                           {PHASE_LABELS[row.phase].label}
                         </span>{' '}
-                        <span className="text-muted">({row.projectId ? 'project' : 'global'})</span>
+                        <span className="text-muted-foreground">
+                          ({row.projectId ? 'project' : 'global'})
+                        </span>
                         : <span className="text-red-300">{row.statusReason}</span>
                       </li>
                     ) : null,
@@ -465,7 +469,7 @@ export function SkillsView() {
                     <p className="text-[12px] text-secondary mt-0.5">
                       {PHASE_LABELS[activePhase].description}
                     </p>
-                    <div className="mt-2 flex items-center gap-3 text-[11px] text-muted">
+                    <div className="mt-2 flex items-center gap-3 text-[11px] text-muted-foreground">
                       <span>
                         Source:{' '}
                         <SourceBadge
@@ -528,7 +532,7 @@ export function SkillsView() {
                   <div className="mb-2 flex items-center justify-between gap-3">
                     <label
                       htmlFor="skill-rewrite-instructions"
-                      className="text-[11px] font-semibold uppercase tracking-wider text-muted"
+                      className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
                     >
                       Rewrite instructions
                     </label>
@@ -567,7 +571,7 @@ export function SkillsView() {
                 </div>
 
                 <div className="mt-6 rounded border border-border bg-secondary/40 p-3">
-                  <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted mb-2">
+                  <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
                     Required slots
                   </h4>
                   <div className="flex flex-wrap gap-1.5">
@@ -581,7 +585,7 @@ export function SkillsView() {
                       </Badge>
                     ))}
                   </div>
-                  <p className="mt-2 text-[11px] text-muted">
+                  <p className="mt-2 text-[11px] text-muted-foreground">
                     These slots MUST appear in the skill body. Saving without them will be rejected.
                   </p>
                 </div>

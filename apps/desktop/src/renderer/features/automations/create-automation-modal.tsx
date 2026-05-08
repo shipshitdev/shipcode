@@ -407,7 +407,7 @@ export function CreateAutomationModal() {
           {cronError ? (
             <div className="text-xs text-danger">{cronError}</div>
           ) : (
-            <div className="text-[11px] text-muted">UTC. Standard 5-field cron.</div>
+            <div className="text-[11px] text-muted-foreground">UTC. Standard 5-field cron.</div>
           )}
         </div>
 

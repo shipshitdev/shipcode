@@ -27,7 +27,9 @@ export function PullRequestDetailPanel({ prNumber }: { prNumber: number }) {
 
   if (isLoading || !detail) {
     return (
-      <div className="flex flex-1 items-center justify-center text-xs text-muted">Loading...</div>
+      <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
+        Loading...
+      </div>
     );
   }
 
@@ -38,7 +40,7 @@ export function PullRequestDetailPanel({ prNumber }: { prNumber: number }) {
         <div className="flex items-center gap-2">
           <GitPullRequest size={16} className="shrink-0 text-secondary" />
           <h2 className="text-sm font-medium text-primary">{detail.title}</h2>
-          <span className="text-xs font-mono text-muted">#{detail.number}</span>
+          <span className="text-xs font-mono text-muted-foreground">#{detail.number}</span>
           <div className="flex-1" />
           <Button
             variant="ghost"
@@ -49,7 +51,7 @@ export function PullRequestDetailPanel({ prNumber }: { prNumber: number }) {
             GitHub
           </Button>
         </div>
-        <div className="mt-1 flex items-center gap-2 text-[11px] text-muted">
+        <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
           {detail.author && <span>{detail.author}</span>}
           <span>·</span>
           <span>
@@ -65,13 +67,13 @@ export function PullRequestDetailPanel({ prNumber }: { prNumber: number }) {
           >
             {detail.state}
           </span>
-          {detail.isDraft && <span className="text-muted">(Draft)</span>}
+          {detail.isDraft && <span className="text-muted-foreground">(Draft)</span>}
         </div>
       </div>
 
       {/* Diff stats */}
       <div className="mb-4 flex items-center gap-3 rounded-md border border-border bg-secondary/30 px-3 py-2 text-xs">
-        <span className="text-muted">{detail.changedFiles} files changed</span>
+        <span className="text-muted-foreground">{detail.changedFiles} files changed</span>
         <span className="text-green-400">+{detail.additions}</span>
         <span className="text-red-400">-{detail.deletions}</span>
       </div>
@@ -83,7 +85,7 @@ export function PullRequestDetailPanel({ prNumber }: { prNumber: number }) {
             <SideBySideDiffViewer diffs={detail.diffs} className="h-full" />
           </div>
         ) : (
-          <div className="rounded-md border border-border bg-secondary/30 px-3 py-2 text-[11px] text-muted">
+          <div className="rounded-md border border-border bg-secondary/30 px-3 py-2 text-[11px] text-muted-foreground">
             {detail.linkedThreadId
               ? 'No local execution diff is stored for this PR yet.'
               : 'This PR is not linked to a ShipCode pipeline thread, so no local execution diff is available.'}
@@ -105,7 +107,9 @@ export function PullRequestDetailPanel({ prNumber }: { prNumber: number }) {
               >
                 <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
                 <span className="flex-1 truncate text-primary">{check.name}</span>
-                {check.workflowName && <span className="text-muted">{check.workflowName}</span>}
+                {check.workflowName && (
+                  <span className="text-muted-foreground">{check.workflowName}</span>
+                )}
                 {check.detailsUrl && (
                   <Button
                     variant="ghost"
@@ -139,7 +143,7 @@ export function PullRequestDetailPanel({ prNumber }: { prNumber: number }) {
                     <span className="font-medium text-primary">{comment.author}</span>
                   )}
                   {comment.path && (
-                    <span className="font-mono text-muted">
+                    <span className="font-mono text-muted-foreground">
                       {comment.path}
                       {comment.line != null ? `:${comment.line}` : ''}
                     </span>
@@ -172,7 +176,7 @@ export function PullRequestDetailPanel({ prNumber }: { prNumber: number }) {
 
       {/* Linked Issues */}
       {detail.linkedIssueNumbers.length > 0 && (
-        <div className="mt-4 text-[11px] text-muted">
+        <div className="mt-4 text-[11px] text-muted-foreground">
           Linked issues: {detail.linkedIssueNumbers.map((n) => `#${n}`).join(', ')}
         </div>
       )}

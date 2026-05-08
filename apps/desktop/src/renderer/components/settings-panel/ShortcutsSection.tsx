@@ -15,7 +15,7 @@ export function ShortcutsSection() {
   return (
     <>
       <h3 className="mb-1">Keyboard Shortcuts</h3>
-      <p className="mb-6 text-xs text-muted">
+      <p className="mb-6 text-xs text-muted-foreground">
         Reference of every shortcut in ShipCode. Custom key bindings are not supported yet.
       </p>
       {(Object.entries(byCategory) as [ShortcutCategory, ShortcutDef[]][]).map(
@@ -29,7 +29,7 @@ export function ShortcutsSection() {
                 >
                   <div className="min-w-0 flex-1">
                     <div className="text-[13px] text-primary">{shortcut.label}</div>
-                    <div className="text-[11px] text-muted">{shortcut.description}</div>
+                    <div className="text-[11px] text-muted-foreground">{shortcut.description}</div>
                   </div>
                   <kbd className="shrink-0 rounded border border-border bg-primary px-2 py-1 font-mono text-[12px] tracking-widest text-secondary">
                     {shortcut.glyph}

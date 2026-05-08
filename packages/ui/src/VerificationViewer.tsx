@@ -39,7 +39,7 @@ export function VerificationViewer({ verification }: VerificationViewerProps) {
                 </span>
                 <div className="min-w-0">
                   <div className="text-primary">{cr.criterion}</div>
-                  <div className="text-xs text-muted mt-0.5">{cr.evidence}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{cr.evidence}</div>
                 </div>
               </li>
             ))}
@@ -72,7 +72,7 @@ export function VerificationViewer({ verification }: VerificationViewerProps) {
                 </Badge>
                 <span>{issue.description}</span>
                 {issue.filePath && (
-                  <code className="text-xs text-muted bg-tertiary px-1.5 py-0.5 rounded shrink-0">
+                  <code className="text-xs text-muted-foreground bg-tertiary px-1.5 py-0.5 rounded shrink-0">
                     {issue.filePath}
                   </code>
                 )}

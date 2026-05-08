@@ -1,10 +1,10 @@
 import { clampError, type Project } from '@shipcode/shared';
-import { toast } from '../stores/toast-store';
 import { Button } from '@shipshitdev/ui';
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import log from 'electron-log/renderer';
 import { useAppStore } from '../stores/app-store';
+import { toast } from '../stores/toast-store';
 
 export function ProjectMissingView({ project }: { project: Project }) {
   const queryClient = useQueryClient();
@@ -53,7 +53,7 @@ export function ProjectMissingView({ project }: { project: Project }) {
           Relink the moved repository folder to keep the same project, issues, threads, and history.
         </p>
         <div className="mt-4 rounded-md border border-border bg-primary/40 px-3 py-2">
-          <div className="text-[11px] text-muted">Saved path</div>
+          <div className="text-[11px] text-muted-foreground">Saved path</div>
           <div className="mt-1 break-all font-mono text-xs text-primary">{project.path}</div>
         </div>
         <div className="mt-5 flex flex-wrap gap-2">

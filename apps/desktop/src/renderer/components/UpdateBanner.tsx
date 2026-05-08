@@ -74,7 +74,7 @@ export function UpdateBanner() {
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 px-2 text-[11px] text-muted hover:bg-accent/10 hover:text-accent"
+          className="h-7 px-2 text-[11px] text-muted-foreground hover:bg-accent/10 hover:text-accent"
           onClick={() => setDismissedTag(status.releaseTag)}
         >
           Dismiss

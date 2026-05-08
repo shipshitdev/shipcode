@@ -59,7 +59,7 @@ function TranscriptMeta({
   return (
     <div
       className={cn(
-        'flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.12em] text-muted',
+        'flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.12em] text-muted-foreground',
         compact && 'text-[9px]',
       )}
     >
@@ -268,7 +268,7 @@ function TranscriptRow({
       return (
         <div className="flex items-center gap-3 py-1">
           <div className="h-px flex-1 bg-border/70" />
-          <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted">
+          <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
             Turn {event.turn}
           </span>
           <div className="h-px flex-1 bg-border/70" />
@@ -353,7 +353,7 @@ function TranscriptRow({
       return (
         <div className="mb-3 rounded-md border border-border/50 bg-secondary/40 px-3 py-2.5">
           <TranscriptMeta createdAt={record.createdAt} compact={compact}>
-            <span className="tracking-normal text-muted/80 normal-case">Reasoning</span>
+            <span className="tracking-normal text-muted-foreground/80 normal-case">Reasoning</span>
           </TranscriptMeta>
           <pre
             className={cn(
@@ -395,7 +395,7 @@ function TranscriptRow({
             <TranscriptMeta createdAt={record.createdAt} compact={compact} />
             <pre
               className={cn(
-                'flex-1 whitespace-pre-wrap break-words font-mono text-muted/70',
+                'flex-1 whitespace-pre-wrap break-words font-mono text-muted-foreground/70',
                 compact ? 'text-[10px] leading-4' : 'text-[11px] leading-[1.5]',
               )}
             >
@@ -663,7 +663,7 @@ export function TerminalTranscript({
           <Button
             variant="ghost"
             size="xs"
-            className="rounded-full border border-border bg-primary/60 px-3 text-muted"
+            className="rounded-full border border-border bg-primary/60 px-3 text-muted-foreground"
             onClick={() => setShowAllEvents(true)}
           >
             Show {hiddenEventCount} older event{hiddenEventCount === 1 ? '' : 's'}
@@ -676,7 +676,7 @@ export function TerminalTranscript({
           <Button
             variant="ghost"
             size="xs"
-            className="rounded-full border border-border bg-primary/60 px-3 text-muted"
+            className="rounded-full border border-border bg-primary/60 px-3 text-muted-foreground"
             onClick={() => setShowAllEvents(false)}
           >
             Show latest {DEFAULT_VISIBLE_EVENT_LIMIT}
@@ -701,7 +701,7 @@ export function TerminalTranscript({
 
       {!hasEvents && !pendingLabel ? (
         <div className="flex min-h-full items-center justify-center">
-          <div className="rounded-xl border border-dashed border-border/80 bg-primary/20 px-4 py-3 text-[12px] text-muted">
+          <div className="rounded-xl border border-dashed border-border/80 bg-primary/20 px-4 py-3 text-[12px] text-muted-foreground">
             {emptyMessage}
           </div>
         </div>

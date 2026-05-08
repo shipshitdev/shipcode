@@ -39,7 +39,7 @@ const SECTION_HEADER_CLASS: Record<RowTone, string> = {
 };
 
 const SECTION_COUNT_CLASS: Record<RowTone, string> = {
-  default: 'border-border/60 bg-tertiary text-muted',
+  default: 'border-border/60 bg-tertiary text-muted-foreground',
   success: 'border-success/20 bg-success/15 text-success',
   done: 'border-done/20 bg-done/15 text-done',
   agent: 'border-agent/20 bg-agent/15 text-agent',
@@ -148,8 +148,8 @@ export function DroppableColumn({
           <span
             className={cn(
               'min-w-[18px] rounded-full border border-transparent bg-tertiary px-1.5 py-px text-center text-[10px] font-medium',
-              !hasIssues && 'text-muted/70',
-              hasIssues && 'text-muted',
+              !hasIssues && 'text-muted-foreground/70',
+              hasIssues && 'text-muted-foreground',
             )}
           >
             {issues.length}
@@ -320,7 +320,7 @@ function SectionBlock({
             <Button
               variant="ghost"
               size="icon-xs"
-              className="text-muted/60 hover:bg-muted/10 hover:text-muted"
+              className="text-muted-foreground/60 hover:bg-muted/10 hover:text-muted-foreground"
               title="Archive all done issues"
               onClick={onArchiveAllDone}
             >
@@ -330,7 +330,9 @@ function SectionBlock({
           <span
             className={cn(
               'min-w-[18px] rounded-full border px-1.5 py-px text-center text-[10px] font-medium',
-              compact ? 'border-border/60 bg-tertiary text-muted' : SECTION_COUNT_CLASS[tone],
+              compact
+                ? 'border-border/60 bg-tertiary text-muted-foreground'
+                : SECTION_COUNT_CLASS[tone],
               empty && 'opacity-75',
             )}
           >
@@ -527,8 +529,8 @@ export function StackedColumn({
           <span
             className={cn(
               'min-w-[18px] rounded-full border border-transparent bg-tertiary px-1.5 py-px text-center text-[10px] font-medium',
-              !hasIssues && 'text-muted/70',
-              hasIssues && 'text-muted',
+              !hasIssues && 'text-muted-foreground/70',
+              hasIssues && 'text-muted-foreground',
             )}
           >
             {columnIssues.length}

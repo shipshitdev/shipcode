@@ -50,7 +50,9 @@ export function NotificationsSettingsSection({
           />
         </SettingsRow>
 
-        <p className="mt-4 mb-1 text-xs uppercase tracking-wide text-muted">Notify me when</p>
+        <p className="mt-4 mb-1 text-xs uppercase tracking-wide text-muted-foreground">
+          Notify me when
+        </p>
 
         <SettingsRow label="Needs approval" htmlFor="notify-awaiting-approval">
           <Switch

@@ -19,7 +19,7 @@ export interface StartupProgressProps {
 }
 
 const STATUS_CLASS: Record<StartupProgressStepStatus, string> = {
-  pending: 'text-muted',
+  pending: 'text-muted-foreground',
   active: 'text-agent',
   complete: 'text-success',
   error: 'text-danger',
@@ -29,7 +29,7 @@ function StepIcon({ status }: { status: StartupProgressStepStatus }) {
   if (status === 'complete') return <CheckCircle2 size={16} className="text-success" />;
   if (status === 'error') return <XCircle size={16} className="text-danger" />;
   if (status === 'active') return <Loader2 size={16} className="animate-spin text-agent" />;
-  return <Circle size={16} className="text-muted" />;
+  return <Circle size={16} className="text-muted-foreground" />;
 }
 
 export function StartupProgress({ title, subtitle, steps, className }: StartupProgressProps) {
@@ -69,7 +69,7 @@ export function StartupProgress({ title, subtitle, steps, className }: StartupPr
                   {step.label}
                 </span>
                 {step.detail ? (
-                  <span className="mt-0.5 block text-[11px] leading-4 text-muted">
+                  <span className="mt-0.5 block text-[11px] leading-4 text-muted-foreground">
                     {step.detail}
                   </span>
                 ) : null}

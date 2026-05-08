@@ -14,7 +14,7 @@ function SelectTrigger({
   return (
     <SelectPrimitive.Trigger
       className={cn(
-        'flex h-8 items-center justify-between rounded-lg border border-border bg-tertiary px-3 py-1.5 text-[13px] text-primary placeholder:text-muted focus:outline-none focus:border-border-strong disabled:cursor-not-allowed disabled:opacity-50 [&>span]:truncate',
+        'flex h-8 items-center justify-between rounded-lg border border-border bg-tertiary px-3 py-1.5 text-[13px] text-primary placeholder:text-muted-foreground focus:outline-none focus:border-border-strong disabled:cursor-not-allowed disabled:opacity-50 [&>span]:truncate',
         className,
       )}
       {...props}
@@ -90,7 +90,7 @@ function SelectLabel({ className, ...props }: React.ComponentProps<typeof Select
   return (
     <SelectPrimitive.Label
       className={cn(
-        'px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted',
+        'px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground',
         className,
       )}
       {...props}

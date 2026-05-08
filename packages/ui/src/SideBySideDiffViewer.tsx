@@ -120,7 +120,7 @@ export function SideBySideDiffViewer({ diffs, className }: SideBySideDiffViewerP
 
   if (diffs.length === 0) {
     return (
-      <div className="flex items-center justify-center h-32 text-muted text-sm">
+      <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
         No changes to display
       </div>
     );
@@ -132,7 +132,7 @@ export function SideBySideDiffViewer({ diffs, className }: SideBySideDiffViewerP
       <div className="flex min-h-0 flex-1">
         {/* File list */}
         <div className="w-64 shrink-0 border-r border-border overflow-y-auto bg-secondary/30">
-          <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted">
+          <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
             {diffs.length} file{diffs.length === 1 ? '' : 's'} changed
           </div>
           {diffs.map((diff) => (
@@ -207,7 +207,7 @@ export function SideBySideDiffViewer({ diffs, className }: SideBySideDiffViewerP
                         {/* Left side (old) */}
                         <td
                           className={cn(
-                            'w-[1px] select-none whitespace-nowrap border-r border-border/50 px-2 py-0 text-right text-muted/50 text-[11px]',
+                            'w-[1px] select-none whitespace-nowrap border-r border-border/50 px-2 py-0 text-right text-muted-foreground/50 text-[11px]',
                             line.leftNum !== null && line.rightNum === null && 'bg-danger/10',
                           )}
                         >
@@ -232,7 +232,7 @@ export function SideBySideDiffViewer({ diffs, className }: SideBySideDiffViewerP
                         {/* Right side (new) */}
                         <td
                           className={cn(
-                            'w-[1px] select-none whitespace-nowrap border-r border-border/50 px-2 py-0 text-right text-muted/50 text-[11px]',
+                            'w-[1px] select-none whitespace-nowrap border-r border-border/50 px-2 py-0 text-right text-muted-foreground/50 text-[11px]',
                             line.rightNum !== null && line.leftNum === null && 'bg-success/10',
                           )}
                         >
@@ -259,7 +259,7 @@ export function SideBySideDiffViewer({ diffs, className }: SideBySideDiffViewerP
                 </tbody>
               </table>
             ) : (
-              <div className="flex items-center justify-center h-32 text-sm text-muted">
+              <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">
                 No diff content available for this file
               </div>
             )}

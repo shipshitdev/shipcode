@@ -34,7 +34,7 @@ export function ProjectSettingsNotificationsTab({
 }) {
   return (
     <div className="space-y-6">
-      <div className="text-xs text-muted">
+      <div className="text-xs text-muted-foreground">
         GitHub's built-in integrations forward issue events to Discord and Slack automatically. The
         routing below is for ShipCode pipeline events (plan started, execution failed, etc.) that
         don't create GitHub activity.

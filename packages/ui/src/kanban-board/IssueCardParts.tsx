@@ -63,7 +63,7 @@ function PhaseElapsed({ since }: { since: number }) {
   const now = useSharedSecondNow();
   const label = formatElapsedDuration(since, now);
 
-  return <span className="font-mono tabular-nums text-[10px] text-muted">{label}</span>;
+  return <span className="font-mono tabular-nums text-[10px] text-muted-foreground">{label}</span>;
 }
 
 function issueReferenceLabel(issue: GitHubIssueCacheRecord, isCreating: boolean): string {
@@ -728,7 +728,7 @@ function DraggableCardComponent({
             <Button
               variant="ghost"
               size="icon-xs"
-              className="text-muted/60 opacity-0 transition-opacity hover:bg-muted/10 hover:text-primary group-hover:opacity-100"
+              className="text-muted-foreground/60 opacity-0 transition-opacity hover:bg-muted/10 hover:text-primary group-hover:opacity-100"
               title="Open issue detail"
               aria-label="Open issue detail"
               onPointerDown={(event) => event.stopPropagation()}
@@ -744,7 +744,7 @@ function DraggableCardComponent({
             <Button
               variant="ghost"
               size="icon-xs"
-              className="text-muted/60 opacity-0 transition-opacity hover:bg-muted/10 hover:text-primary group-hover:opacity-100"
+              className="text-muted-foreground/60 opacity-0 transition-opacity hover:bg-muted/10 hover:text-primary group-hover:opacity-100"
               title={`Copy branch name (${branchName})`}
               aria-label={`Copy branch name for issue #${issue.issueNumber}`}
               onPointerDown={(event) => event.stopPropagation()}
@@ -762,7 +762,7 @@ function DraggableCardComponent({
                 <Button
                   variant="ghost"
                   size="icon-xs"
-                  className="text-muted/60 opacity-0 transition-opacity hover:bg-muted/10 hover:text-primary group-hover:opacity-100"
+                  className="text-muted-foreground/60 opacity-0 transition-opacity hover:bg-muted/10 hover:text-primary group-hover:opacity-100"
                   title="More actions"
                   aria-label="More actions"
                   onPointerDown={(event) => event.stopPropagation()}
@@ -831,7 +831,7 @@ function DraggableCardComponent({
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
-                      className="text-muted focus:text-muted"
+                      className="text-muted-foreground focus:text-muted-foreground"
                       onClick={() => onArchiveIssue(issue)}
                     >
                       <Archive size={14} />
@@ -896,7 +896,7 @@ function DraggableCardComponent({
           </div>
           {showPhaseElapsed && (
             <span className="ml-auto flex shrink-0 items-center gap-1.5">
-              <span className="font-mono tabular-nums text-[10px] text-muted">
+              <span className="font-mono tabular-nums text-[10px] text-muted-foreground">
                 {phaseToProgress(presentationStatus)}%
               </span>
               <PhaseElapsed since={phaseSince} />
@@ -1018,7 +1018,7 @@ export function DragOverlayCard({
         dragOverlayBorderClass(presentationStatus, approvedAwaitingExecution),
       )}
     >
-      <div className="font-mono text-[11px] text-muted">{referenceLabel}</div>
+      <div className="font-mono text-[11px] text-muted-foreground">{referenceLabel}</div>
       <div className="mt-1 w-full min-w-0">
         <span className="line-clamp-2 text-[13px] font-medium leading-snug text-primary">
           {issue.title}

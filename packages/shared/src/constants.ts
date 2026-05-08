@@ -93,6 +93,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   devLogLevel: 'debug',
   updateTrack: 'master',
   autoCommitEnabled: true,
+  autoCommitProvider: 'openrouter',
   autoCommitModel: 'openrouter/auto',
   autoCommitMode: 'split',
   cleanupCriteria: {

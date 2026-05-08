@@ -21,9 +21,11 @@ function formatCostValue(usd: number): string {
 function InsightStatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="flex-1 min-w-0 rounded-lg border border-border bg-secondary p-4">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">{label}</div>
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </div>
       <div className="mt-1 text-2xl font-bold text-primary">{value}</div>
-      {sub && <div className="mt-0.5 text-[11px] text-muted">{sub}</div>}
+      {sub && <div className="mt-0.5 text-[11px] text-muted-foreground">{sub}</div>}
     </div>
   );
 }
@@ -57,7 +59,7 @@ export function ProjectInsights() {
 
   if (!activeProjectId) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-muted">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         Select a project to view insights.
       </div>
     );
@@ -88,7 +90,7 @@ export function ProjectInsights() {
           <section className="rounded-xl border border-border bg-elevated p-4">
             <div className="mb-3">
               <h3 className="text-sm font-semibold text-primary">Activity</h3>
-              <p className="text-[11px] text-muted">
+              <p className="text-[11px] text-muted-foreground">
                 Daily tokens, cost, runs, and PRs across this project.
               </p>
             </div>

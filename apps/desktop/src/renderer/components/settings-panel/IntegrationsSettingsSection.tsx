@@ -231,7 +231,7 @@ export function IntegrationsSettingsSection({
       </div>
 
       {!integrationStatus ? (
-        <div className="text-[13px] text-muted">Loading integration status...</div>
+        <div className="text-[13px] text-muted-foreground">Loading integration status...</div>
       ) : (
         <Tabs defaultValue="cli">
           <TabsList className="mb-5">

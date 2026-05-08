@@ -39,7 +39,7 @@ export function SettingsNavigation<TKey extends string>({
             className="h-auto w-full justify-start gap-2 pl-3 pr-5 py-2 text-[13px] font-normal text-secondary app-region-no-drag"
             onClick={onBack}
           >
-            <span className="shrink-0 text-muted">
+            <span className="shrink-0 text-muted-foreground">
               <ChevronLeft size={14} />
             </span>
             {backLabel}
@@ -58,7 +58,7 @@ export function SettingsNavigation<TKey extends string>({
             )}
             onClick={() => onSelect(key)}
           >
-            <span className="shrink-0 text-muted">{icon}</span>
+            <span className="shrink-0 text-muted-foreground">{icon}</span>
             {label}
           </Button>
         ))}

@@ -169,12 +169,18 @@ function TreeNode({
           expanded ? (
             <FolderOpen
               size={12}
-              className={cn('shrink-0', entry.isModified ? 'text-amber-500' : 'text-muted')}
+              className={cn(
+                'shrink-0',
+                entry.isModified ? 'text-amber-500' : 'text-muted-foreground',
+              )}
             />
           ) : (
             <Folder
               size={12}
-              className={cn('shrink-0', entry.isModified ? 'text-amber-500' : 'text-muted')}
+              className={cn(
+                'shrink-0',
+                entry.isModified ? 'text-amber-500' : 'text-muted-foreground',
+              )}
             />
           )
         ) : (
@@ -183,7 +189,10 @@ function TreeNode({
             return (
               <Icon
                 size={12}
-                className={cn('shrink-0', entry.isModified ? 'text-amber-500' : 'text-muted')}
+                className={cn(
+                  'shrink-0',
+                  entry.isModified ? 'text-amber-500' : 'text-muted-foreground',
+                )}
               />
             );
           })()
@@ -197,7 +206,7 @@ function TreeNode({
         <div>
           {isLoading && (
             <div
-              className="flex items-center gap-1 py-0.5 text-[10px] text-muted"
+              className="flex items-center gap-1 py-0.5 text-[10px] text-muted-foreground"
               style={{ paddingLeft: 6 + (depth + 1) * 10 }}
             >
               <Loader2 size={10} className="animate-spin" />
@@ -255,11 +264,11 @@ function FileViewer({
         <div className="flex items-center gap-2 truncate text-xs text-secondary">
           {(() => {
             const Icon = getFileIcon(relativePath);
-            return <Icon size={12} className="shrink-0 text-muted" />;
+            return <Icon size={12} className="shrink-0 text-muted-foreground" />;
           })()}
           <span className="truncate font-mono">{relativePath}</span>
           {file && !file.isBinary && (
-            <span className="text-[10px] text-muted">{formatBytes(file.sizeBytes)}</span>
+            <span className="text-[10px] text-muted-foreground">{formatBytes(file.sizeBytes)}</span>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -285,14 +294,14 @@ function FileViewer({
       <div className="flex-1 min-h-0 overflow-auto">
         {mode === 'source' ? (
           fileLoading ? (
-            <div className="flex h-full items-center justify-center text-xs text-muted">
+            <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
               <Loader2 size={14} className="mr-2 animate-spin" />
               loading file
             </div>
           ) : !file ? (
-            <div className="p-4 text-xs text-muted">No file selected</div>
+            <div className="p-4 text-xs text-muted-foreground">No file selected</div>
           ) : file.isBinary ? (
-            <div className="p-4 text-xs text-muted">
+            <div className="p-4 text-xs text-muted-foreground">
               Binary file ({formatBytes(file.sizeBytes)}) — preview unavailable.
             </div>
           ) : (
@@ -307,14 +316,16 @@ function FileViewer({
             </>
           )
         ) : diffLoading ? (
-          <div className="flex h-full items-center justify-center text-xs text-muted">
+          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
             <Loader2 size={14} className="mr-2 animate-spin" />
             loading diff
           </div>
         ) : hasDiff && diff ? (
           <SideBySideDiffViewer diffs={[diff]} className="h-full" />
         ) : (
-          <div className="p-4 text-xs text-muted">No uncommitted changes for this file.</div>
+          <div className="p-4 text-xs text-muted-foreground">
+            No uncommitted changes for this file.
+          </div>
         )}
       </div>
     </div>
@@ -369,7 +380,7 @@ export function CodeBrowser() {
 
   if (!activeProjectId) {
     return (
-      <div className="flex flex-1 items-center justify-center text-xs text-muted">
+      <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
         Select a project to browse code.
       </div>
     );
@@ -379,11 +390,11 @@ export function CodeBrowser() {
     <div className="flex flex-1 min-h-0">
       <aside className="flex w-72 shrink-0 flex-col border-r border-border bg-secondary/20">
         <div className="shrink-0 border-b border-border px-3 py-2">
-          <span className="block pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
+          <span className="block pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
             Worktree
           </span>
           {worktreesLoading ? (
-            <div className="flex items-center gap-1 text-xs text-muted">
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
               <Loader2 size={12} className="animate-spin" /> loading
             </div>
           ) : (
@@ -408,7 +419,7 @@ export function CodeBrowser() {
             </Select>
           )}
           {activeWorktree && (
-            <div className="pt-1.5 text-[10px] text-muted">
+            <div className="pt-1.5 text-[10px] text-muted-foreground">
               <div className="truncate font-mono" title={activeWorktree.branch}>
                 {activeWorktree.branch}
               </div>
@@ -421,7 +432,7 @@ export function CodeBrowser() {
 
         <div className="flex-1 min-h-0 overflow-auto py-1">
           {treeLoading && (
-            <div className="flex items-center gap-1 px-3 py-1 text-xs text-muted">
+            <div className="flex items-center gap-1 px-3 py-1 text-xs text-muted-foreground">
               <Loader2 size={12} className="animate-spin" /> loading tree
             </div>
           )}
@@ -448,7 +459,7 @@ export function CodeBrowser() {
             relativePath={selectedPath}
           />
         ) : (
-          <div className="flex flex-1 items-center justify-center text-xs text-muted">
+          <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
             Select a file to view its contents.
           </div>
         )}

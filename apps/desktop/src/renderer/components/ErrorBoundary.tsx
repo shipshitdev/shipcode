@@ -96,7 +96,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
           <div className="flex flex-col gap-1.5">
             <h1 className="text-lg font-semibold text-red-400">Something went wrong</h1>
-            <p className="text-sm text-muted">
+            <p className="text-sm text-muted-foreground">
               A render error crashed the UI. Copy the trace below and paste it into Claude to debug.
             </p>
           </div>

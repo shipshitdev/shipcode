@@ -66,7 +66,7 @@ export function InAppNotification({
           variant="ghost"
           size="icon-xs"
           onClick={onDismiss}
-          className="shrink-0 text-muted hover:bg-transparent hover:text-primary"
+          className="shrink-0 text-muted-foreground hover:bg-transparent hover:text-primary"
           title={dismissLabel}
           aria-label={dismissLabel}
         >

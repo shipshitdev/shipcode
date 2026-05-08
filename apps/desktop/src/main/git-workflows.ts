@@ -5,6 +5,7 @@ import type {
   CleanupAnalyzeResult,
   CleanupApplyResult,
   CleanupItem,
+  ExecutorModel,
   Project,
 } from '@shipcode/shared';
 import { stripAnsi } from '@shipcode/shared';
@@ -35,7 +36,8 @@ function isLikelyHookFailure(message: string): boolean {
 export async function runAutoCommitWorkflow(args: {
   project: Project;
   worktreePath: string;
-  apiKey: string;
+  apiKey?: string;
+  provider: ExecutorModel;
   model: string;
   mode: 'split' | 'single';
   signal: AbortSignal;
@@ -65,7 +67,9 @@ export async function runAutoCommitWorkflow(args: {
 
   const result = await generateCommitGroups({
     apiKey: args.apiKey,
+    provider: args.provider,
     model: args.model,
+    cwd: args.worktreePath,
     dirtyFiles,
     diff,
     signal: args.signal,

@@ -17,12 +17,12 @@ const PHASE_COLOR: Record<string, string> = {
   completed: 'bg-success/12 text-success border-success/20',
   done: 'bg-done/18 text-done border-done/35',
   failed: 'bg-danger/15 text-danger border-danger/30',
-  todo: 'bg-tertiary text-muted border-border',
-  queued: 'bg-tertiary text-muted border-border',
-  idle: 'bg-tertiary text-muted border-border',
+  todo: 'bg-tertiary text-muted-foreground border-border',
+  queued: 'bg-tertiary text-muted-foreground border-border',
+  idle: 'bg-tertiary text-muted-foreground border-border',
 };
 
-const FALLBACK = 'bg-tertiary text-muted border-border';
+const FALLBACK = 'bg-tertiary text-muted-foreground border-border';
 
 export function PhaseChip({
   status,

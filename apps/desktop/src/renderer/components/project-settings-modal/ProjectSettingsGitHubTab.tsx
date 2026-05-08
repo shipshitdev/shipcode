@@ -33,11 +33,13 @@ function LabelCategory({ title, labels, existingNames }: LabelCategoryProps) {
                 className="inline-block h-2.5 w-2.5 rounded-full"
                 style={{ backgroundColor: `#${label.color}` }}
               />
-              <span className={isPresent ? 'text-primary' : 'text-muted'}>{label.name}</span>
+              <span className={isPresent ? 'text-primary' : 'text-muted-foreground'}>
+                {label.name}
+              </span>
               {isPresent ? (
                 <span className="text-[10px] text-success">present</span>
               ) : (
-                <span className="text-[10px] text-muted">missing</span>
+                <span className="text-[10px] text-muted-foreground">missing</span>
               )}
             </div>
           );
@@ -72,7 +74,7 @@ function StatusColumnMapping({
 }) {
   if (!hasProjectUrl) {
     return (
-      <div className="text-[12px] text-muted">
+      <div className="text-[12px] text-muted-foreground">
         Set a GitHub Project URL in the General tab to enable board column sync.
       </div>
     );
@@ -97,7 +99,7 @@ function StatusColumnMapping({
           <div key={col.key} className="flex items-center gap-2 text-[12px]">
             <span className="inline-block h-2.5 w-2.5 rounded-full bg-success" />
             <span className="font-medium text-primary">{col.label}</span>
-            <span className="text-muted">→</span>
+            <span className="text-muted-foreground">→</span>
             <span className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] text-primary">
               {mapping[col.key]?.name}
             </span>
@@ -106,7 +108,7 @@ function StatusColumnMapping({
         {unmapped.map((col) => (
           <div key={col.key} className="flex items-center gap-2 text-[12px]">
             <span className="inline-block h-2.5 w-2.5 rounded-full bg-warning" />
-            <span className="font-medium text-muted">{col.label}</span>
+            <span className="font-medium text-muted-foreground">{col.label}</span>
             <span className="text-[10px] text-warning">not mapped</span>
           </div>
         ))}
@@ -127,7 +129,7 @@ function ReadinessItemRow({ item }: { item: ProjectReadinessItem }) {
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="truncate text-[12px] font-medium text-primary">{item.label}</div>
-          <div className="mt-0.5 text-[11px] text-muted">{item.message}</div>
+          <div className="mt-0.5 text-[11px] text-muted-foreground">{item.message}</div>
         </div>
         <Badge variant={readinessVariant(item.status)}>{item.status}</Badge>
       </div>
@@ -161,7 +163,7 @@ function ProjectReadinessSummary({
   onRefresh: () => void;
 }) {
   if (loading) {
-    return <div className="text-[12px] text-muted">Checking GitHub readiness...</div>;
+    return <div className="text-[12px] text-muted-foreground">Checking GitHub readiness...</div>;
   }
 
   if (error) {
@@ -252,13 +254,13 @@ export function ProjectSettingsGitHubTab({
 
   return (
     <div className="space-y-4">
-      <div className="text-xs text-muted">
+      <div className="text-xs text-muted-foreground">
         ShipCode owns only the <code>shipcode:*</code> labels. Type, priority, complexity, blast
         radius, and product taxonomy belong in GitHub issue types and Projects fields.
       </div>
 
       {readinessQuery.isLoading ? (
-        <div className="text-[12px] text-muted">Checking GitHub readiness...</div>
+        <div className="text-[12px] text-muted-foreground">Checking GitHub readiness...</div>
       ) : (
         <>
           <ProjectReadinessSummary
@@ -322,7 +324,7 @@ export function ProjectSettingsGitHubTab({
           </SettingsRow>
 
           {readinessQuery.data?.labelSync.created.length ? (
-            <div className="text-[11px] text-muted">
+            <div className="text-[11px] text-muted-foreground">
               Created {readinessQuery.data.labelSync.created.length} missing ShipCode label
               {readinessQuery.data.labelSync.created.length === 1 ? '' : 's'}.
             </div>

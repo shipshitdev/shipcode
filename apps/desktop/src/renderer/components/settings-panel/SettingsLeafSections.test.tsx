@@ -294,6 +294,7 @@ describe('settings leaf sections', () => {
     const settings = {
       ...DEFAULT_SETTINGS,
       autoCommitEnabled: false,
+      autoCommitProvider: 'codex' as const,
       autoCommitModel: 'openrouter/auto',
       cleanupCriteria: {
         ...DEFAULT_SETTINGS.cleanupCriteria,
@@ -302,15 +303,24 @@ describe('settings leaf sections', () => {
       },
     };
 
-    render(<AutoCommitSettingsSection settings={settings} onUpdate={onUpdate} />);
+    render(
+      <AutoCommitSettingsSection
+        settings={settings}
+        integrationStatus={integrationStatus}
+        onUpdate={onUpdate}
+      />,
+    );
 
     fireEvent.click(screen.getByRole('switch', { name: 'Enabled' }));
-    fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'anthropic/claude' } });
+    fireEvent.change(screen.getByLabelText('Custom model'), {
+      target: { value: 'gpt-5.4-mini' },
+    });
+    fireEvent.blur(screen.getByLabelText('Custom model'));
     fireEvent.click(screen.getByRole('switch', { name: 'Worktrees with merged PR' }));
     fireEvent.click(screen.getByRole('switch', { name: 'Local branches with no remote' }));
 
     expect(onUpdate).toHaveBeenCalledWith({ autoCommitEnabled: true });
-    expect(onUpdate).toHaveBeenCalledWith({ autoCommitModel: 'anthropic/claude' });
+    expect(onUpdate).toHaveBeenCalledWith({ autoCommitModel: 'gpt-5.4-mini' });
     expect(onUpdate).toHaveBeenCalledWith({
       cleanupCriteria: { ...settings.cleanupCriteria, worktreeMergedPr: true },
     });

@@ -23,7 +23,7 @@ export function DiffViewer({ diffs, activeFile, onFileSelect }: DiffViewerProps)
 
   if (diffs.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-muted">
+      <div className="flex items-center justify-center h-full text-muted-foreground">
         <p>No changes to display</p>
       </div>
     );

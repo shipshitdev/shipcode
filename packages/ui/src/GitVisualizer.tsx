@@ -81,7 +81,7 @@ export function GitVisualizer({
           <GitCompareArrows size={15} className="text-secondary" />
           <div className="min-w-0 flex-1">
             <div className="truncate text-xs font-semibold text-primary">Git Visualizer</div>
-            <div className="truncate text-[11px] text-muted">
+            <div className="truncate text-[11px] text-muted-foreground">
               {worktrees.length} worktree{worktrees.length === 1 ? '' : 's'} · {branches.length}{' '}
               branch{branches.length === 1 ? '' : 'es'}
             </div>
@@ -100,7 +100,7 @@ export function GitVisualizer({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="px-3 pb-2 pt-3 text-[10px] font-semibold uppercase tracking-wide text-muted">
+          <div className="px-3 pb-2 pt-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
             Worktrees
           </div>
           <div className="space-y-1 px-2">
@@ -136,7 +136,7 @@ export function GitVisualizer({
                   <div className="mt-1 truncate text-xs text-secondary">
                     {worktreeTitle(worktree)}
                   </div>
-                  <div className="mt-1 flex min-w-0 items-center gap-2 text-[11px] text-muted">
+                  <div className="mt-1 flex min-w-0 items-center gap-2 text-[11px] text-muted-foreground">
                     <GitCommitHorizontal size={12} className="shrink-0" />
                     <span className="font-mono">{formatShortSha(worktree.commitHash)}</span>
                     <span className="truncate">{formatDirtySummary(worktree)}</span>
@@ -145,7 +145,7 @@ export function GitVisualizer({
                     <div
                       className={cn(
                         'mt-1 truncate text-[11px]',
-                        hasLocalCommits ? 'text-amber-500' : 'text-muted',
+                        hasLocalCommits ? 'text-amber-500' : 'text-muted-foreground',
                       )}
                     >
                       {divergence}
@@ -156,7 +156,7 @@ export function GitVisualizer({
             })}
           </div>
 
-          <div className="px-3 pb-2 pt-4 text-[10px] font-semibold uppercase tracking-wide text-muted">
+          <div className="px-3 pb-2 pt-4 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
             Branches
           </div>
           <div className="space-y-1 px-2 pb-4">
@@ -186,7 +186,7 @@ export function GitVisualizer({
                 <div className="truncate text-xs font-semibold text-primary">
                   {worktreeTitle(selectedWorktree)}
                 </div>
-                <div className="truncate font-mono text-[11px] text-muted">
+                <div className="truncate font-mono text-[11px] text-muted-foreground">
                   {selectedWorktree.path}
                 </div>
               </div>

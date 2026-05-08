@@ -29,7 +29,7 @@ export function PlanWaiting({ threadId }: { threadId: string }) {
           <span className="relative inline-flex h-3 w-3 rounded-full bg-accent" />
         </span>
       </div>
-      <p className="text-muted">
+      <p className="text-muted-foreground">
         Waiting for plan generation
         {sinceStart !== null && (
           <>
@@ -39,7 +39,7 @@ export function PlanWaiting({ threadId }: { threadId: string }) {
         )}
       </p>
       {lastActivity && !stale && sinceOutput !== null && (
-        <p className="mt-1 text-[11px] text-muted opacity-60">
+        <p className="mt-1 text-[11px] text-muted-foreground opacity-60">
           Last output: {formatDurationSeconds(sinceOutput)} ago
         </p>
       )}

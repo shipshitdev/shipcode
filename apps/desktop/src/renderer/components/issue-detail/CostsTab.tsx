@@ -58,7 +58,7 @@ function StepAttempts({ threadId }: { threadId: string }) {
     );
   }
   if (steps.length === 0) {
-    return <p className="px-3 py-2 text-[11px] text-muted">No attempts recorded.</p>;
+    return <p className="px-3 py-2 text-[11px] text-muted-foreground">No attempts recorded.</p>;
   }
 
   return (
@@ -79,10 +79,12 @@ function StepAttempts({ threadId }: { threadId: string }) {
                 <span className="text-[11px] font-medium text-primary">
                   {phaseLabel} · attempt {step.attempt}
                 </span>
-                <span className="text-[10px] text-muted">{modelLabel}</span>
-                {step.provider && <span className="text-[10px] text-muted">({step.provider})</span>}
+                <span className="text-[10px] text-muted-foreground">{modelLabel}</span>
+                {step.provider && (
+                  <span className="text-[10px] text-muted-foreground">({step.provider})</span>
+                )}
               </div>
-              <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[10px] text-muted">
+              <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
                 <span>{formatDuration(step.durationMs)}</span>
                 {tokens > 0 && (
                   <span>{tokens >= 1000 ? `${Math.round(tokens / 1000)}k` : tokens} tok</span>
@@ -98,7 +100,9 @@ function StepAttempts({ threadId }: { threadId: string }) {
                 </p>
               )}
             </div>
-            <span className="shrink-0 text-[10px] text-muted">{timeAgo(step.startedAt)}</span>
+            <span className="shrink-0 text-[10px] text-muted-foreground">
+              {timeAgo(step.startedAt)}
+            </span>
           </div>
         );
       })}
@@ -149,33 +153,35 @@ function PromptTelemetryCard({ record }: { record: PromptTelemetryRecord }) {
             {STEP_PHASE_LABEL[record.phase] ?? record.phase}
             {record.attempt != null ? ` · attempt ${record.attempt}` : ''}
           </div>
-          <div className="mt-0.5 truncate text-[10px] text-muted">
+          <div className="mt-0.5 truncate text-[10px] text-muted-foreground">
             {[record.provider, modelLabel].filter(Boolean).join(' · ') || 'Provider pending'}
           </div>
         </div>
-        <span className="shrink-0 text-[10px] text-muted">{timeAgo(record.createdAt)}</span>
+        <span className="shrink-0 text-[10px] text-muted-foreground">
+          {timeAgo(record.createdAt)}
+        </span>
       </div>
 
       <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
-        <span className="text-muted">Payload</span>
+        <span className="text-muted-foreground">Payload</span>
         <span className="text-right font-mono text-primary">{formatBytes(record.promptBytes)}</span>
-        <span className="text-muted">Lines</span>
+        <span className="text-muted-foreground">Lines</span>
         <span className="text-right font-mono text-primary">
           {record.promptLines.toLocaleString()}
         </span>
-        <span className="text-muted">Characters</span>
+        <span className="text-muted-foreground">Characters</span>
         <span className="text-right font-mono text-primary">
           {record.promptCharacters.toLocaleString()}
         </span>
         {promptTokens ? (
           <>
-            <span className="text-muted">Prompt tokens</span>
+            <span className="text-muted-foreground">Prompt tokens</span>
             <span className="text-right font-mono text-primary">{promptTokens}</span>
           </>
         ) : null}
         {record.costUsd != null && record.costUsd > 0 ? (
           <>
-            <span className="text-muted">Cost</span>
+            <span className="text-muted-foreground">Cost</span>
             <span className="text-right font-mono text-primary">{formatCost(record.costUsd)}</span>
           </>
         ) : null}
@@ -183,7 +189,7 @@ function PromptTelemetryCard({ record }: { record: PromptTelemetryRecord }) {
 
       {selectedMaterials ? (
         <div className="mt-2 border-t border-border pt-2">
-          <div className="mb-1 flex items-center justify-between gap-2 text-[10px] uppercase tracking-wide text-muted">
+          <div className="mb-1 flex items-center justify-between gap-2 text-[10px] uppercase tracking-wide text-muted-foreground">
             <span>Context Materials</span>
             <span>{selectedMaterials.count}</span>
           </div>
@@ -201,7 +207,7 @@ function PromptTelemetryCard({ record }: { record: PromptTelemetryRecord }) {
               {selectedMaterials.labels.map((label) => (
                 <div
                   key={label}
-                  className="truncate font-mono text-[10px] text-muted"
+                  className="truncate font-mono text-[10px] text-muted-foreground"
                   title={label}
                 >
                   {label}
@@ -211,7 +217,7 @@ function PromptTelemetryCard({ record }: { record: PromptTelemetryRecord }) {
           ) : null}
         </div>
       ) : (
-        <div className="mt-2 border-t border-border pt-2 text-[10px] text-muted">
+        <div className="mt-2 border-t border-border pt-2 text-[10px] text-muted-foreground">
           No selected material breakdown recorded.
         </div>
       )}
@@ -258,7 +264,7 @@ function ThreadAnalyticsPanel({
           Timeline
         </h4>
         {phaseTimeline.length === 0 ? (
-          <p className="rounded-md border border-dashed border-border px-3 py-3 text-[11px] text-muted">
+          <p className="rounded-md border border-dashed border-border px-3 py-3 text-[11px] text-muted-foreground">
             No phase timing data yet.
           </p>
         ) : (
@@ -275,7 +281,7 @@ function ThreadAnalyticsPanel({
                       <div className="truncate text-[10px] text-danger">{phase.errorMessage}</div>
                     ) : null}
                   </div>
-                  <span className="shrink-0 text-[10px] text-muted">
+                  <span className="shrink-0 text-[10px] text-muted-foreground">
                     {formatDuration(phase.durationMs)}
                   </span>
                 </div>
@@ -296,7 +302,7 @@ function ThreadAnalyticsPanel({
             ))}
           </div>
         ) : (
-          <p className="rounded-md border border-dashed border-border px-3 py-3 text-[11px] text-muted">
+          <p className="rounded-md border border-dashed border-border px-3 py-3 text-[11px] text-muted-foreground">
             No prompt telemetry yet.
           </p>
         )}
@@ -308,17 +314,19 @@ function ThreadAnalyticsPanel({
         </h4>
         <div className="grid grid-cols-3 gap-2">
           <div className="rounded-md border border-border bg-secondary p-2">
-            <div className="text-[10px] uppercase tracking-wide text-muted">Score</div>
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Score</div>
             <div className="text-[14px] font-semibold text-primary">{skillFallback.score}</div>
           </div>
           <div className="rounded-md border border-border bg-secondary p-2">
-            <div className="text-[10px] uppercase tracking-wide text-muted">Fallbacks</div>
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              Fallbacks
+            </div>
             <div className="text-[14px] font-semibold text-primary">
               {formatPercent(skillFallback.fallbackRate)}
             </div>
           </div>
           <div className="rounded-md border border-border bg-secondary p-2">
-            <div className="text-[10px] uppercase tracking-wide text-muted">Retries</div>
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Retries</div>
             <div className="text-[14px] font-semibold text-primary">
               {formatPercent(skillFallback.retryRate)}
             </div>
@@ -332,7 +340,7 @@ function ThreadAnalyticsPanel({
                 className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5 last:border-b-0"
               >
                 <span className="truncate text-[11px] text-primary">{skill.skillKey}</span>
-                <span className="shrink-0 text-[10px] text-muted">
+                <span className="shrink-0 text-[10px] text-muted-foreground">
                   {skill.source}
                   {skill.fallbackUsed ? ' · fallback' : ''}
                 </span>
@@ -398,7 +406,7 @@ export function CostsTab({
         </div>
       ) : tasks.length === 0 ? (
         <>
-          <p className="text-[11px] text-muted">No cost data yet.</p>
+          <p className="text-[11px] text-muted-foreground">No cost data yet.</p>
           <ThreadAnalyticsPanel analytics={threadAnalytics} isLoading={threadAnalyticsLoading} />
         </>
       ) : (
@@ -406,7 +414,7 @@ export function CostsTab({
           {/* Summary */}
           <div className="mb-4 grid grid-cols-2 gap-2">
             <div className="flex flex-col gap-1 rounded-md border border-border bg-secondary p-2">
-              <span className="text-[10px] font-medium uppercase tracking-wide text-muted">
+              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                 Total Cost
               </span>
               <span className="text-[14px] font-semibold text-primary">
@@ -414,7 +422,7 @@ export function CostsTab({
               </span>
             </div>
             <div className="flex flex-col gap-1 rounded-md border border-border bg-secondary p-2">
-              <span className="text-[10px] font-medium uppercase tracking-wide text-muted">
+              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                 Total Tokens
               </span>
               <span className="text-[14px] font-semibold text-primary">
@@ -462,12 +470,12 @@ export function CostsTab({
                       aria-expanded={isExpanded}
                       className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-secondary/40"
                     >
-                      <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border bg-tertiary text-[10px] font-medium text-muted">
+                      <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border bg-tertiary text-[10px] font-medium text-muted-foreground">
                         {tasks.length - index}
                       </span>
                       <span
                         aria-hidden="true"
-                        className="shrink-0 select-none text-[10px] text-muted"
+                        className="shrink-0 select-none text-[10px] text-muted-foreground"
                       >
                         {isExpanded ? '▾' : '▸'}
                       </span>
@@ -488,17 +496,17 @@ export function CostsTab({
                           <span className="text-[12px] font-medium text-primary">
                             {formatCost(task.costUsd)}
                           </span>
-                          <span className="text-[10px] text-muted">
+                          <span className="text-[10px] text-muted-foreground">
                             {formatTokens(task.tokensPrompt, task.tokensCompletion)}
                           </span>
                         </div>
                         {task.model && (
-                          <p className="mt-0.5 text-[10px] text-muted">
+                          <p className="mt-0.5 text-[10px] text-muted-foreground">
                             {MODEL_DISPLAY[task.model] ?? task.model}
                           </p>
                         )}
                       </div>
-                      <span className="shrink-0 text-[10px] text-muted">
+                      <span className="shrink-0 text-[10px] text-muted-foreground">
                         {timeAgo(task.updatedAt)}
                       </span>
                     </Button>
@@ -527,7 +535,7 @@ export function CostsTab({
                   .filter((entry) => entry.model)
                   .map((entry) => (
                     <div key={entry.label} className="flex flex-col gap-0.5">
-                      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                         {entry.label}
                       </span>
                       <span className="truncate text-[11px] text-primary">

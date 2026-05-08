@@ -107,7 +107,8 @@ export function ApprovalSection({
       )}
       {approveError && (
         <p className="mt-2 text-[11px] text-danger">
-          {approveError} <span className="text-muted">(full trace in devtools console)</span>
+          {approveError}{' '}
+          <span className="text-muted-foreground">(full trace in devtools console)</span>
         </p>
       )}
     </div>

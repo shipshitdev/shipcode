@@ -57,7 +57,7 @@ export function ProjectProviderWarningPopover({
       <PopoverContent align="start" sideOffset={6} className="w-[360px] bg-elevated p-2 shadow-lg">
         <div className="mb-2 px-1">
           <div className="text-[11px] font-medium text-primary">Selected models vs CLI status</div>
-          <div className="text-[10px] text-muted">
+          <div className="text-[10px] text-muted-foreground">
             These phases are configured to use providers that are currently blocked or running low.
           </div>
         </div>

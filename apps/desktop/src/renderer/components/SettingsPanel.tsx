@@ -79,7 +79,10 @@ export function SettingsPanel() {
     {
       queryKey: ['integrations'],
       queryFn: () => window.shipcode.invoke('integrations:check'),
-      enabled: settingsSection === 'integrations' || settingsSection === 'pipeline',
+      enabled:
+        settingsSection === 'integrations' ||
+        settingsSection === 'pipeline' ||
+        settingsSection === 'auto-commit',
       staleTime: 30_000,
     },
   );
@@ -152,7 +155,11 @@ export function SettingsPanel() {
           />
         )}
         {settingsSection === 'auto-commit' && (
-          <AutoCommitSettingsSection settings={settings} onUpdate={update} />
+          <AutoCommitSettingsSection
+            settings={settings}
+            integrationStatus={integrationStatus}
+            onUpdate={update}
+          />
         )}
         {settingsSection === 'shortcuts' && <ShortcutsSection />}
         {settingsSection === 'archived' && (

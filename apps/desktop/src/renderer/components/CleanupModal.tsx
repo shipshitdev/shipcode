@@ -271,7 +271,10 @@ export function CleanupModal({ open, onClose, projectId, criteria }: CleanupModa
                       : 'text-sm font-semibold text-primary'
                   }
                 >
-                  {label} <span className="text-xs font-normal text-muted">({items.length})</span>
+                  {label}{' '}
+                  <span className="text-xs font-normal text-muted-foreground">
+                    ({items.length})
+                  </span>
                 </h4>
                 <Button
                   variant="ghost"
@@ -305,7 +308,7 @@ export function CleanupModal({ open, onClose, projectId, criteria }: CleanupModa
                         <div className="truncate font-mono text-primary">{desc.primary}</div>
                         {desc.secondary ? (
                           <div
-                            className={`truncate ${blocked ? 'text-destructive' : 'text-muted'}`}
+                            className={`truncate ${blocked ? 'text-destructive' : 'text-muted-foreground'}`}
                           >
                             {desc.secondary}
                           </div>

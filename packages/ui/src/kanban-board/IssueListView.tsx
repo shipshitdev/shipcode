@@ -162,7 +162,9 @@ function DraggableListRow({
             tone === 'warning' && 'bg-warning',
             tone === 'agent' && 'bg-agent',
             tone === 'default' &&
-              (issue.pipelineStatus === ISSUE_PIPELINE_STATUS.done ? 'bg-done' : 'bg-text-muted'),
+              (issue.pipelineStatus === ISSUE_PIPELINE_STATUS.done
+                ? 'bg-done'
+                : 'bg-text-muted-foreground'),
           )}
         />
       )}
@@ -253,16 +255,16 @@ function DraggableListRow({
         ) : null}
       </span>
       <span className="flex shrink-0 items-center gap-1 text-xs text-secondary">
-        <User size={11} className="text-muted" />
+        <User size={11} className="text-muted-foreground" />
         {issue.assignee ?? '—'}
       </span>
-      <span className="shrink-0 text-xs text-muted">{formatDate(issue.fetchedAt)}</span>
+      <span className="shrink-0 text-xs text-muted-foreground">{formatDate(issue.fetchedAt)}</span>
       <span className="flex shrink-0 items-center gap-1">
         {!isCreating && (
           <Button
             variant="ghost"
             size="icon-xs"
-            className="text-muted/70 hover:bg-muted/10 hover:text-primary"
+            className="text-muted-foreground/70 hover:bg-muted/10 hover:text-primary"
             title="Open issue detail"
             aria-label="Open issue detail"
             onPointerDown={(event) => event.stopPropagation()}
@@ -278,7 +280,7 @@ function DraggableListRow({
           <Button
             variant="ghost"
             size="icon-xs"
-            className="text-muted/50 opacity-0 transition-opacity hover:bg-muted/10 hover:text-muted group-hover:opacity-100"
+            className="text-muted-foreground/50 opacity-0 transition-opacity hover:bg-muted/10 hover:text-muted-foreground group-hover:opacity-100"
             title="Archive issue"
             onPointerDown={(event) => event.stopPropagation()}
             onClick={(event) => {
@@ -349,7 +351,7 @@ function ListSectionBlock({
         <span
           className={cn(
             'ml-1 min-w-[18px] rounded-full border px-1.5 py-px text-center text-[10px] font-medium',
-            tone === 'default' && 'border-border/60 bg-tertiary text-muted',
+            tone === 'default' && 'border-border/60 bg-tertiary text-muted-foreground',
             tone === 'success' && 'border-success/20 bg-success/15 text-success',
             tone === 'done' && 'border-done/20 bg-done/15 text-done',
             tone === 'agent' && 'border-agent/20 bg-agent/15 text-agent',
@@ -476,7 +478,7 @@ export function IssueListView({
                   style={columnDotColor ? { backgroundColor: columnDotColor } : undefined}
                 />
                 {label}
-                <span className="ml-0.5 font-normal normal-case tracking-normal text-muted">
+                <span className="ml-0.5 font-normal normal-case tracking-normal text-muted-foreground">
                   ({columnIssues.length})
                 </span>
               </Button>
@@ -530,7 +532,7 @@ export function IssueListView({
                       />
                     ))}
                     {columnIssues.length === 0 && (
-                      <p className="py-1 pl-2 text-xs text-muted">No issues</p>
+                      <p className="py-1 pl-2 text-xs text-muted-foreground">No issues</p>
                     )}
                   </>
                 )}

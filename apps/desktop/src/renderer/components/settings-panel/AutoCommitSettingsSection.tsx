@@ -1,4 +1,4 @@
-import type { AppSettings } from '@shipcode/shared';
+import type { AppSettings, ExecutorModel, IntegrationStatus } from '@shipcode/shared';
 import { SettingsSection } from '@shipcode/ui';
 import {
   Input,
@@ -10,14 +10,41 @@ import {
   SettingsRow,
   Switch,
 } from '@shipshitdev/ui';
+import { getModelOptions, PROVIDER_DISPLAY } from '../model-provider-options';
+
+const AUTO_COMMIT_PROVIDERS: ExecutorModel[] = ['claude', 'codex', 'openrouter'];
+
+function defaultModelForProvider(
+  provider: ExecutorModel,
+  integrationStatus: IntegrationStatus | undefined,
+): string {
+  if (provider === 'openrouter') return 'openrouter/auto';
+  return getModelOptions(provider, integrationStatus)[0]?.value ?? provider;
+}
 
 export function AutoCommitSettingsSection({
   settings,
+  integrationStatus,
   onUpdate,
 }: {
   settings: AppSettings;
+  integrationStatus?: IntegrationStatus;
   onUpdate: (patch: Partial<AppSettings>) => void;
 }) {
+  const provider = settings.autoCommitProvider;
+  const modelOptions = getModelOptions(provider, integrationStatus);
+  const knownModelValues = new Set(modelOptions.map((option) => option.value));
+  const usesProviderDefault = settings.autoCommitModel === provider;
+  const modelSelection = usesProviderDefault ? '__default__' : settings.autoCommitModel;
+
+  const updateProvider = (value: string) => {
+    const nextProvider = value as ExecutorModel;
+    onUpdate({
+      autoCommitProvider: nextProvider,
+      autoCommitModel: defaultModelForProvider(nextProvider, integrationStatus),
+    });
+  };
+
   const updateCriteria = (key: keyof AppSettings['cleanupCriteria'], value: boolean) => {
     onUpdate({
       cleanupCriteria: { ...settings.cleanupCriteria, [key]: value },
@@ -32,7 +59,7 @@ export function AutoCommitSettingsSection({
         <SettingsRow
           label="Enabled"
           htmlFor="auto-commit-enabled"
-          description="Adds an Auto-commit button to the Git tab."
+          description="Shows Auto-commit in the Git tab."
         >
           <Switch
             id="auto-commit-enabled"
@@ -41,16 +68,70 @@ export function AutoCommitSettingsSection({
           />
         </SettingsRow>
         <SettingsRow
+          label="Provider"
+          htmlFor="auto-commit-provider"
+          description="CLI or OpenRouter provider used for commit grouping and messages."
+        >
+          <Select value={provider} onValueChange={updateProvider}>
+            <SelectTrigger id="auto-commit-provider" className="w-[180px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {AUTO_COMMIT_PROVIDERS.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {PROVIDER_DISPLAY[option]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </SettingsRow>
+        <SettingsRow
           label="Model"
           htmlFor="auto-commit-model"
-          description="OpenRouter model id. Default lets OpenRouter pick the cheapest fast model."
+          description="Model used to group changed files and write commit messages."
+        >
+          <Select
+            value={modelSelection}
+            onValueChange={(value: string) =>
+              onUpdate({ autoCommitModel: value === '__default__' ? provider : value })
+            }
+          >
+            <SelectTrigger id="auto-commit-model" className="w-[260px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__default__">{PROVIDER_DISPLAY[provider]} default</SelectItem>
+              {!usesProviderDefault && !knownModelValues.has(settings.autoCommitModel) ? (
+                <SelectItem value={settings.autoCommitModel}>{settings.autoCommitModel}</SelectItem>
+              ) : null}
+              {modelOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </SettingsRow>
+        <SettingsRow
+          label="Custom model"
+          htmlFor="auto-commit-custom-model"
+          description="Optional raw model id when the preset list is not enough."
         >
           <Input
-            id="auto-commit-model"
+            id="auto-commit-custom-model"
             className="w-[260px]"
-            value={settings.autoCommitModel}
-            onChange={(e) => onUpdate({ autoCommitModel: e.target.value })}
-            placeholder="openrouter/auto"
+            defaultValue={
+              !usesProviderDefault && !knownModelValues.has(settings.autoCommitModel)
+                ? settings.autoCommitModel
+                : ''
+            }
+            placeholder={provider === 'openrouter' ? 'anthropic/claude-sonnet-4.6' : ''}
+            onBlur={(event) => {
+              const value = event.target.value.trim();
+              if (value) {
+                onUpdate({ autoCommitModel: value });
+              }
+            }}
           />
         </SettingsRow>
         <SettingsRow

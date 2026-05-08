@@ -731,7 +731,7 @@ export function ProjectSettingsModal() {
       onKeyDown={handleKeyDown}
     >
       {!project || !settings || !projectDraft ? (
-        <div className="px-6 py-4 text-xs text-muted">Loading project…</div>
+        <div className="px-6 py-4 text-xs text-muted-foreground">Loading project…</div>
       ) : (
         <div className="flex min-h-0 flex-1">
           <SettingsNavigation
@@ -928,7 +928,7 @@ export function ProjectSettingsModal() {
         >
           <LoadingButtonContent loading={saveMutation.isPending || setupSaveMutation.isPending}>
             <span>Save</span>
-            <Keycap>⌘↩</Keycap>
+            <Keycap className="border-transparent bg-black/10 text-current shadow-none">⌘↩</Keycap>
           </LoadingButtonContent>
         </Button>
       </ModalFooter>

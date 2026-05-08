@@ -135,7 +135,7 @@ export const COLUMN_DOT_CLASS: Record<ColumnKey, string> = {
   agent: 'bg-agent',
   human: 'bg-warning',
   done: 'bg-done',
-  deferred: 'bg-text-muted',
+  deferred: 'bg-text-muted-foreground',
 };
 
 /** Maps GitHub ProjectV2SingleSelectFieldOption color enum → CSS hex. */

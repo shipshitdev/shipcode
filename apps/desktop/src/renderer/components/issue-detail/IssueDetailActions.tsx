@@ -184,7 +184,7 @@ function ClarificationSection({
               </div>
               <p className="text-[12px] leading-relaxed text-secondary">{question.prompt}</p>
               {question.description && (
-                <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
+                <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
                   {question.description}
                 </p>
               )}
@@ -248,7 +248,7 @@ function ClarificationSection({
         <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || !canSubmit}>
           <LoadingButtonContent loading={isSubmitting}>Resume planning</LoadingButtonContent>
         </Button>
-        <p className="text-[11px] text-muted">
+        <p className="text-[11px] text-muted-foreground">
           ShipCode will start a fresh planning pass with these answers folded into the prompt.
         </p>
       </div>
@@ -300,7 +300,7 @@ export function IssueDetailActions({
       : PIPELINE_PREVIEW_PHASES.filter((phase) => phase.id !== 'review');
   const pipelineStartCard = canStartPipeline ? (
     <div className="rounded-lg border border-border bg-tertiary p-4 shadow-[0_1px_0_0_rgba(0,0,0,0.3)]">
-      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
+      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
         Ready
       </div>
       <h4 className="mb-1.5 text-[14px] font-semibold leading-snug text-primary">
@@ -318,7 +318,10 @@ export function IssueDetailActions({
 
       <ol className="mb-5 flex items-center gap-2 overflow-x-auto whitespace-nowrap [&::-webkit-scrollbar]:hidden">
         {previewPhases.map((phase, index) => (
-          <li key={phase.id} className="inline-flex shrink-0 items-center gap-2 text-muted">
+          <li
+            key={phase.id}
+            className="inline-flex shrink-0 items-center gap-2 text-muted-foreground"
+          >
             <span className="flex h-4 w-4 items-center justify-center rounded-full border border-border bg-tertiary font-mono text-[8px] font-medium">
               {index + 1}
             </span>
@@ -342,7 +345,7 @@ export function IssueDetailActions({
           variant="link"
           size="xs"
           onClick={onEditPrd}
-          className="px-0 text-muted hover:text-primary"
+          className="px-0 text-muted-foreground hover:text-primary"
         >
           Edit
         </Button>
@@ -483,7 +486,9 @@ export function IssueDetailActions({
           </pre>
         )}
       </div>
-      {retrySummary ? <p className="mb-3 text-[11px] text-muted">{retrySummary}</p> : null}
+      {retrySummary ? (
+        <p className="mb-3 text-[11px] text-muted-foreground">{retrySummary}</p>
+      ) : null}
       <div className="flex gap-2">
         <Button
           size="sm"
@@ -514,15 +519,17 @@ export function IssueDetailActions({
           Pipeline Completed
         </p>
         {verificationSummary ? (
-          <span className="text-[11px] text-muted" title={verificationSummary}>
+          <span className="text-[11px] text-muted-foreground" title={verificationSummary}>
             — {verificationSummary.slice(0, 80)}
             {verificationSummary.length > 80 ? '…' : ''}
           </span>
         ) : !hasDiffs ? (
-          <span className="text-[11px] text-muted">— no code changes</span>
+          <span className="text-[11px] text-muted-foreground">— no code changes</span>
         ) : null}
         {thread?.totalCostUsd ? (
-          <span className="text-[11px] text-muted">· ${thread.totalCostUsd.toFixed(4)}</span>
+          <span className="text-[11px] text-muted-foreground">
+            · ${thread.totalCostUsd.toFixed(4)}
+          </span>
         ) : null}
         {createPrError && <span className="text-[11px] text-destructive">{createPrError}</span>}
       </div>
