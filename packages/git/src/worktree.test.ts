@@ -36,11 +36,17 @@ describe('WorktreeManager', () => {
     );
   });
 
-  it('formats manual thread branches and issue directories without title slugs', () => {
+  it('formats manual thread branches and paths from title slugs when available', () => {
     const manager = new WorktreeManager('/repo/project', {
       worktreeRoot: '/tmp/shipcode-worktrees',
     });
 
+    expect(manager.getBranchName('thread-1', 'Tighten Quick Flow!')).toBe(
+      'shipcode/tighten-quick-flow',
+    );
+    expect(manager.getWorktreePath('thread-1', 'Tighten Quick Flow!')).toBe(
+      '/tmp/shipcode-worktrees/project-9a1fd1/tighten-quick-flow',
+    );
     expect(manager.getBranchName('thread-1')).toBe('shipcode/thread-1');
     expect(manager.getWorktreePath('thread-1')).toBe(
       '/tmp/shipcode-worktrees/project-9a1fd1/thread-1',
@@ -135,6 +141,33 @@ branch refs/heads/feature/not-ours
       'shipcode/thread-1',
       '/tmp/shipcode-worktrees/project-9a1fd1/thread-1',
       'develop',
+    ]);
+  });
+
+  it('creates non-issue worktrees from a short title slug', async () => {
+    gitMock.raw.mockResolvedValueOnce('').mockResolvedValueOnce('');
+    const manager = new WorktreeManager('/repo/project', {
+      worktreeRoot: '/tmp/shipcode-worktrees',
+    });
+
+    await expect(
+      manager.create('YS_jeq0nszO3vTJZRWSeg', 'Tighten Quick Flow', 'main'),
+    ).resolves.toEqual({
+      worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/tighten-quick-flow',
+      branch: 'shipcode/tighten-quick-flow',
+    });
+
+    expect(gitMock.raw).toHaveBeenLastCalledWith([
+      '-c',
+      'branch.autoSetupMerge=false',
+      '-c',
+      'push.autoSetupRemote=false',
+      'worktree',
+      'add',
+      '-b',
+      'shipcode/tighten-quick-flow',
+      '/tmp/shipcode-worktrees/project-9a1fd1/tighten-quick-flow',
+      'main',
     ]);
   });
 

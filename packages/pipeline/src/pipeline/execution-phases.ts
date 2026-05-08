@@ -565,7 +565,11 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
               context.githubIssueTitle ?? '',
               context.baseBranch || undefined,
             )
-          : await worktreeManager.create(threadId, context.baseBranch || undefined);
+          : await worktreeManager.create(
+              threadId,
+              context.githubIssueTitle ?? deps.threads.getById(threadId)?.title ?? '',
+              context.baseBranch || undefined,
+            );
         context.worktreePath = worktree.worktreePath;
         deps.threads.setWorktree(threadId, worktree.branch, worktree.worktreePath);
       } catch (error) {

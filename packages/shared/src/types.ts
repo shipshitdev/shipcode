@@ -770,8 +770,8 @@ export interface AppSettings {
   worktreeRoot: string | null;
   // null = default (~/), else absolute or ~-prefixed path for the Add Project explorer start dir
   addProjectStartsIn: string | null;
-  // Branch naming format for worktrees. Tokens: {id} = issue number, {slug} = slugified title.
-  // Default: 'ship/{id}-{slug}'. Falls back to 'shipcode/{threadId}' for non-issue threads.
+  // Branch naming format for issue worktrees. Tokens: {id} = issue number, {slug} = slugified title.
+  // Default: 'ship/{id}-{slug}'. Non-issue threads use 'shipcode/{slug}'.
   worktreeBranchFormat: string;
   // Default review→revise cycles before falling through to execute/awaiting_approval.
   // 0 = skip review/revise entirely for the fastest path.

@@ -1,11 +1,18 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { checkDesktopApps } from '@shipcode/agents';
+import {
+  checkCliProviderUsage,
+  checkDesktopApps,
+  checkIntegrationStatus,
+  checkSystemHealthWithAuth,
+  detectProjectSetup,
+  validateOpenRouterModel,
+} from '@shipcode/agents';
 import type { Project } from '@shipcode/shared';
 import { resolveWorktreeParent } from '@shipcode/shared/worktree-path';
 import type { IpcMain } from 'electron';
-import { shell } from 'electron';
+import { dialog, shell } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const handlers = new Map<string, (...args: unknown[]) => unknown>();
@@ -44,9 +51,12 @@ vi.mock('../logger.service', () => ({
 
 vi.mock('electron', () => ({
   app: undefined,
-  dialog: {},
+  dialog: {
+    showOpenDialog: vi.fn(),
+  },
   shell: {
     openPath: vi.fn(),
+    openExternal: vi.fn(),
   },
 }));
 
@@ -973,5 +983,166 @@ describe('registerProjectHandlers', () => {
 
     existsSpy.mockRestore();
     readdirSpy.mockRestore();
+  });
+
+  it('serves simple project, thread, plan, settings, health, and shell IPC handlers', async () => {
+    const visibleProject = { ...baseProject, id: 'project-visible', path: '/tmp/visible' };
+    const archivedProject = { ...baseProject, id: 'project-archived', path: '/tmp/archived' };
+    const thread = { id: 'thread-1', projectId: baseProject.id, status: 'idle' };
+    const plan = { id: 'plan-1', threadId: 'thread-1', status: 'approved' };
+    const review = { id: 'review-1', planId: 'plan-1' };
+    const diff = { id: 'diff-1', threadId: 'thread-1' };
+    const checkpoint = { id: 'checkpoint-1', threadId: 'thread-1' };
+    const settings = { projectOpenTarget: 'cursor', telemetryEnabled: false };
+    const queries = {
+      projects: {
+        list: vi.fn(() => [baseProject]),
+        listVisible: vi.fn(() => [visibleProject]),
+        listArchived: vi.fn(() => [archivedProject]),
+        getById: vi.fn(() => baseProject),
+        pin: vi.fn(),
+        unarchive: vi.fn(),
+      },
+      threads: {
+        list: vi.fn(() => [thread]),
+        create: vi.fn((_projectId: string, prompt: string, title: string) => ({
+          id: 'thread-created',
+          prompt,
+          title,
+        })),
+        getById: vi.fn(() => thread),
+      },
+      checkpoints: {
+        list: vi.fn(() => [checkpoint]),
+      },
+      plans: {
+        getLatest: vi.fn(() => plan),
+        getById: vi.fn(() => plan),
+        list: vi.fn(() => [plan]),
+        listByIssue: vi.fn(() => [plan]),
+        updateStructured: vi.fn(),
+      },
+      reviews: {
+        getByPlanId: vi.fn(() => review),
+        listByPlanIds: vi.fn(() => [review]),
+      },
+      diffs: {
+        list: vi.fn(() => [diff]),
+      },
+      settings: {
+        get: vi.fn(() => settings),
+        set: vi.fn(),
+      },
+    };
+    const existsSpy = vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+    vi.mocked(detectProjectSetup).mockReturnValue({
+      status: 'ready',
+      path: '/tmp/visible',
+    } as never);
+    vi.mocked(checkSystemHealthWithAuth).mockResolvedValue({ ok: true } as never);
+    vi.mocked(checkCliProviderUsage).mockResolvedValue({ providers: [] } as never);
+    vi.mocked(checkIntegrationStatus).mockResolvedValue({ github: { ok: true } } as never);
+    vi.mocked(validateOpenRouterModel).mockResolvedValue({ ok: true } as never);
+    vi.mocked(dialog.showOpenDialog).mockResolvedValue({
+      canceled: false,
+      filePaths: ['/tmp/selected'],
+    } as never);
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+    });
+
+    expect(handlers.get('project:list')?.()).toEqual([
+      expect.objectContaining({ id: baseProject.id, pathExists: true }),
+    ]);
+    expect(handlers.get('project:list-visible')?.()).toEqual([
+      expect.objectContaining({ id: 'project-visible', pathExists: true }),
+    ]);
+    expect(handlers.get('project:list-archived')?.()).toEqual([
+      expect.objectContaining({ id: 'project-archived', pathExists: true }),
+    ]);
+    await expect(
+      handlers.get('project:detect-setup')?.(undefined, { path: '/tmp/visible' }),
+    ).resolves.toEqual({ status: 'ready', path: '/tmp/visible' });
+    await expect(handlers.get('project:detect-setup')?.(undefined, {})).rejects.toThrow(
+      'Project path not found for setup detection',
+    );
+    await expect(
+      handlers.get('project:get-setup')?.(undefined, { projectId: baseProject.id }),
+    ).resolves.toEqual({ status: 'ready', path: '/tmp/visible' });
+
+    handlers.get('project:pin')?.(undefined, { projectId: baseProject.id, pinned: true });
+    handlers.get('project:unarchive')?.(undefined, { projectId: baseProject.id });
+    expect(queries.projects.pin).toHaveBeenCalledWith(baseProject.id, true);
+    expect(queries.projects.unarchive).toHaveBeenCalledWith(baseProject.id);
+
+    expect(handlers.get('thread:list')?.(undefined, { projectId: baseProject.id })).toEqual([
+      thread,
+    ]);
+    expect(
+      handlers.get('thread:create')?.(undefined, {
+        projectId: baseProject.id,
+        prompt: 'x'.repeat(70),
+      }),
+    ).toEqual({ id: 'thread-created', prompt: 'x'.repeat(70), title: `${'x'.repeat(60)}...` });
+    expect(handlers.get('thread:get')?.(undefined, { threadId: 'thread-1' })).toEqual(thread);
+    expect(handlers.get('checkpoint:list')?.(undefined, { threadId: 'thread-1' })).toEqual([
+      checkpoint,
+    ]);
+    expect(handlers.get('plan:get')?.(undefined, { threadId: 'thread-1' })).toEqual(plan);
+    expect(handlers.get('plan:get-by-id')?.(undefined, { planId: 'plan-1' })).toEqual(plan);
+    expect(handlers.get('plan:list')?.(undefined, { threadId: 'thread-1' })).toEqual([plan]);
+    expect(
+      handlers.get('plan:list-for-issue')?.(undefined, {
+        projectId: baseProject.id,
+        issueNumber: 1,
+      }),
+    ).toEqual([plan]);
+    handlers.get('plan:update')?.(undefined, {
+      planId: 'plan-1',
+      structured: { objective: 'Ship' },
+    });
+    expect(queries.plans.updateStructured).toHaveBeenCalledWith('plan-1', { objective: 'Ship' });
+    expect(handlers.get('review:get')?.(undefined, { planId: 'plan-1' })).toEqual(review);
+    expect(handlers.get('review:list-by-plans')?.(undefined, { planIds: ['plan-1'] })).toEqual([
+      review,
+    ]);
+    expect(handlers.get('diff:list')?.(undefined, { threadId: 'thread-1' })).toEqual([diff]);
+    expect(handlers.get('settings:get')?.()).toEqual(settings);
+    handlers.get('settings:set')?.(undefined, { telemetryEnabled: true });
+    expect(queries.settings.set).toHaveBeenCalledWith({ telemetryEnabled: true });
+    expect(handlers.get('telemetry:get-status')?.()).toEqual(expect.any(Object));
+
+    await expect(handlers.get('health:check')?.(undefined, { force: true })).resolves.toEqual({
+      ok: true,
+    });
+    await expect(
+      handlers.get('provider-usage:check')?.(undefined, { force: true }),
+    ).resolves.toEqual({ providers: [] });
+    await expect(handlers.get('integrations:check')?.(undefined, { force: true })).resolves.toEqual(
+      { github: { ok: true } },
+    );
+    await expect(
+      handlers.get('integrations:validate-openrouter-model')?.(undefined, {
+        modelId: 'openrouter/auto',
+      }),
+    ).resolves.toEqual({ ok: true });
+    await expect(handlers.get('dialog:open-directory')?.()).resolves.toBe('/tmp/selected');
+
+    await handlers.get('shell:open-external')?.(undefined, {
+      url: 'https://github.com/shipshitdev/shipcode',
+    });
+    await handlers.get('shell:open-external')?.(undefined, { url: 'javascript:alert(1)' });
+    expect(shell.openExternal).toHaveBeenCalledTimes(1);
+    expect(shell.openExternal).toHaveBeenCalledWith('https://github.com/shipshitdev/shipcode');
+
+    existsSpy.mockRestore();
   });
 });

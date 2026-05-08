@@ -61,25 +61,28 @@ export class WorktreeManager {
 
   /** Branch name for an issue-based worktree. */
   getBranchName(issueNumber: number, title: string): string;
-  /** Legacy branch name for non-issue (manual thread) worktrees. */
-  getBranchName(threadId: string): string;
+  /** Branch name for non-issue worktrees. Uses the title slug when available. */
+  getBranchName(threadId: string, title?: string): string;
   getBranchName(idOrNumber: string | number, title?: string): string {
     if (typeof idOrNumber === 'number') {
       return this.formatIssueBranch(idOrNumber, title ?? '');
     }
+    const slug = title ? slugify(title) : '';
+    if (slug) return `shipcode/${slug}`;
     return `shipcode/${idOrNumber}`;
   }
 
   /** Worktree path for an issue-based worktree. */
   getWorktreePath(issueNumber: number, title: string): string;
-  /** Legacy worktree path for non-issue (manual thread) worktrees. */
-  getWorktreePath(threadId: string): string;
+  /** Worktree path for non-issue worktrees. Uses the title slug when available. */
+  getWorktreePath(threadId: string, title?: string): string;
   getWorktreePath(idOrNumber: string | number, title?: string): string {
     const parent = resolveWorktreeParent(this.projectPath, this.options.worktreeRoot ?? null);
     if (typeof idOrNumber === 'number') {
       return path.join(parent, this.formatIssueDir(idOrNumber, title ?? ''));
     }
-    return path.join(parent, idOrNumber);
+    const slug = title ? slugify(title) : '';
+    return path.join(parent, slug || idOrNumber);
   }
 
   /**
@@ -115,10 +118,15 @@ export class WorktreeManager {
     baseBranch?: string,
   ): Promise<{ worktreePath: string; branch: string }>;
   /**
-   * Create a worktree for a manual thread (legacy threadId-based name).
+   * Create a worktree for a non-issue thread. Pass a title for slug-based names.
    */
   async create(
     threadId: string,
+    baseBranch?: string,
+  ): Promise<{ worktreePath: string; branch: string }>;
+  async create(
+    threadId: string,
+    title: string,
     baseBranch?: string,
   ): Promise<{ worktreePath: string; branch: string }>;
   async create(
@@ -127,10 +135,13 @@ export class WorktreeManager {
     baseBranch?: string,
   ): Promise<{ worktreePath: string; branch: string }> {
     const parent = resolveWorktreeParent(this.projectPath, this.options.worktreeRoot ?? null);
+    const threadTitle =
+      typeof idOrNumber === 'string' && baseBranch !== undefined ? titleOrBase : undefined;
     const base =
       typeof idOrNumber === 'number'
         ? (baseBranch ?? (await this.getDefaultBranch()))
-        : (titleOrBase ?? (await this.getDefaultBranch()));
+        : ((baseBranch !== undefined ? baseBranch : titleOrBase) ??
+          (await this.getDefaultBranch()));
 
     await this.prune();
 
@@ -148,8 +159,8 @@ export class WorktreeManager {
         dirName = dirName + suffix;
       }
     } else {
-      branch = this.getBranchName(idOrNumber);
-      dirName = idOrNumber;
+      branch = this.getBranchName(idOrNumber, threadTitle);
+      dirName = threadTitle ? slugify(threadTitle) || idOrNumber : idOrNumber;
     }
 
     // Retry loop: if a concurrent start grabs the branch between our check
@@ -177,12 +188,14 @@ export class WorktreeManager {
         const rawBranch =
           typeof idOrNumber === 'number'
             ? this.formatIssueBranch(idOrNumber, titleOrBase ?? '')
-            : this.getBranchName(idOrNumber);
+            : this.getBranchName(idOrNumber, threadTitle);
         branch = `${rawBranch}-${nextN}`;
         const rawDir =
           typeof idOrNumber === 'number'
             ? this.formatIssueDir(idOrNumber, titleOrBase ?? '')
-            : String(idOrNumber);
+            : threadTitle
+              ? slugify(threadTitle) || idOrNumber
+              : idOrNumber;
         dirName = `${rawDir}-${nextN}`;
       }
     }

@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import type { Project } from '@shipcode/shared';
 import type { IpcMain } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,6 +9,9 @@ const mockInspectProjectSetup = vi.hoisted(() => vi.fn());
 const mockLoadRepoContext = vi.hoisted(() => vi.fn());
 const mockRewriteSkillDraft = vi.hoisted(() => vi.fn());
 const mockAssertPrdRewriteModelSupported = vi.hoisted(() => vi.fn());
+const mockValidateSkill = vi.hoisted(() => vi.fn());
+const mockBuildSkillRow = vi.hoisted(() => vi.fn());
+const mockOpenPath = vi.hoisted(() => vi.fn());
 
 vi.mock('@shipcode/agents', () => ({
   DEFAULT_SKILLS: {
@@ -21,12 +26,18 @@ vi.mock('@shipcode/agents', () => ({
   inspectProjectSetup: mockInspectProjectSetup,
   loadRepoContext: mockLoadRepoContext,
   rewriteSkillDraft: mockRewriteSkillDraft,
-  validateSkill: vi.fn(() => null),
+  validateSkill: mockValidateSkill,
 }));
 
 vi.mock('./helpers', () => ({
   assertPrdRewriteModelSupported: mockAssertPrdRewriteModelSupported,
-  buildSkillRow: vi.fn(),
+  buildSkillRow: mockBuildSkillRow,
+}));
+
+vi.mock('electron', () => ({
+  shell: {
+    openPath: mockOpenPath,
+  },
 }));
 
 vi.mock('../logger.service', () => ({
@@ -136,8 +147,79 @@ describe('registerSkillsHandlers', () => {
       content: '---\nname: plan-generation\n---\nUse {{USER_PROMPT}} with Review.',
     });
     mockAssertPrdRewriteModelSupported.mockResolvedValue(undefined);
+    mockValidateSkill.mockReturnValue(null);
+    mockBuildSkillRow.mockImplementation(
+      (_queries: unknown, phase: string, projectId: string | null) => ({
+        id: `${projectId ?? 'global'}:${phase}`,
+        projectId,
+        phase,
+        source: projectId ? 'project' : 'default',
+        status: 'ok',
+        content: 'skill content',
+      }),
+    );
+    mockOpenPath.mockResolvedValue('');
 
     registerSkillsHandlers({ ipcMain, queries } as never);
+  });
+
+  it('lists, reads, writes, resets, and reports quarantined skills', async () => {
+    const listForView = getHandler('skills:list-for-view');
+    const read = getHandler('skills:read');
+    const write = getHandler('skills:write');
+    const reset = getHandler('skills:reset');
+    const listQuarantined = getHandler('skills:list-quarantined');
+    queries.skills.listQuarantined.mockReturnValue([
+      {
+        phase: 'plan-generation',
+        projectId: 'project-1',
+        statusReason: 'Missing USER_PROMPT',
+        updatedAt: '2026-05-08T00:00:00.000Z',
+      },
+    ] as never);
+
+    expect(listForView(null, { projectId: 'project-1' })).toEqual([
+      expect.objectContaining({
+        phase: 'plan-generation',
+        requiredSlots: ['USER_PROMPT'],
+        projectRow: expect.objectContaining({ projectId: 'project-1' }),
+        globalRow: expect.objectContaining({ projectId: null }),
+        active: expect.objectContaining({ projectId: 'project-1' }),
+      }),
+    ]);
+    expect(read(null, { projectId: null, phase: 'plan-generation' })).toEqual(
+      expect.objectContaining({ id: 'global:plan-generation' }),
+    );
+    expect(
+      write(null, { projectId: 'project-1', phase: 'plan-generation', content: 'next' }),
+    ).toEqual({
+      ok: true,
+      row: expect.objectContaining({ id: 'project-1:plan-generation' }),
+    });
+    expect(queries.skills.set).toHaveBeenCalledWith('project-1', 'plan-generation', 'next', '1', 1);
+    expect(reset(null, { projectId: 'project-1', phase: 'plan-generation' })).toEqual(
+      expect.objectContaining({ id: 'project-1:plan-generation' }),
+    );
+    expect(queries.skills.delete).toHaveBeenCalledWith('project-1', 'plan-generation');
+    expect(listQuarantined()).toEqual([
+      {
+        phase: 'plan-generation',
+        projectId: 'project-1',
+        statusReason: 'Missing USER_PROMPT',
+        updatedAt: '2026-05-08T00:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('returns validation errors without persisting invalid skills', () => {
+    mockValidateSkill.mockReturnValueOnce('Missing required slot USER_PROMPT');
+    const write = getHandler('skills:write');
+
+    expect(write(null, { projectId: null, phase: 'plan-generation', content: 'bad' })).toEqual({
+      ok: false,
+      error: 'Missing required slot USER_PROMPT',
+    });
+    expect(queries.skills.set).not.toHaveBeenCalled();
   });
 
   it('rewrites a skill with project setup, repo memory, and configured model settings', async () => {
@@ -177,6 +259,44 @@ describe('registerSkillsHandlers', () => {
     expect(mockRewriteSkillDraft.mock.calls[0][0].projectContext).toContain('Repo memory');
   });
 
+  it('rewrites with no project context and clamps model rewrite failures', async () => {
+    const handler = getHandler('skills:rewrite');
+    mockRewriteSkillDraft.mockRejectedValueOnce(new Error(`first line\n${'x'.repeat(1_000)}`));
+
+    await expect(
+      handler(null, {
+        projectId: null,
+        contextProjectId: null,
+        phase: 'plan-generation',
+        content: 'draft',
+        instruction: 'tighten it',
+      }),
+    ).rejects.toThrow('first line');
+    expect(mockRewriteSkillDraft).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: process.cwd(),
+        projectContext:
+          'No active project selected. Rewrite for the selected scope without repo-specific assumptions.',
+      }),
+    );
+  });
+
+  it('rejects rewrite requests with missing context projects', async () => {
+    const handler = getHandler('skills:rewrite');
+    queries.projects.getById.mockReturnValueOnce(null);
+
+    await expect(
+      handler(null, {
+        projectId: null,
+        contextProjectId: 'missing-project',
+        phase: 'plan-generation',
+        content: 'draft',
+        instruction: 'adapt',
+      }),
+    ).rejects.toThrow('Project missing-project not found');
+    expect(mockRewriteSkillDraft).not.toHaveBeenCalled();
+  });
+
   it('rejects blank rewrite instructions before calling the model', async () => {
     const handler = getHandler('skills:rewrite');
 
@@ -190,5 +310,31 @@ describe('registerSkillsHandlers', () => {
       }),
     ).rejects.toThrow('Rewrite instructions are required');
     expect(mockRewriteSkillDraft).not.toHaveBeenCalled();
+  });
+
+  it('reports and opens writing PRD skill paths with fallback targets', async () => {
+    const existsSpy = vi
+      .spyOn(fs, 'existsSync')
+      .mockReturnValueOnce(true)
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
+    const getInfo = getHandler('skills:get-writing-prds-info');
+    const openWritingPrds = getHandler('skills:open-writing-prds');
+
+    expect(getInfo(null, { projectId: 'project-1' })).toEqual({
+      projectId: 'project-1',
+      projectPath: '/repo',
+      absolutePath: path.join('/repo', 'skills', 'writing-prds', 'SKILL.md'),
+      exists: true,
+      usingFallback: false,
+      openTargetPath: path.join('/repo', 'skills', 'writing-prds', 'SKILL.md'),
+    });
+
+    await expect(openWritingPrds(null, { projectId: 'project-1' })).resolves.toBeUndefined();
+    expect(mockOpenPath).toHaveBeenCalledWith(path.join('/repo', 'skills', 'writing-prds'));
+
+    mockOpenPath.mockResolvedValueOnce('cannot open');
+    await expect(openWritingPrds(null, { projectId: 'project-1' })).rejects.toThrow('cannot open');
+    existsSpy.mockRestore();
   });
 });
