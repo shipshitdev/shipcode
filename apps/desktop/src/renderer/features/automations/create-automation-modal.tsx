@@ -27,7 +27,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Cron } from 'croner';
 import log from 'electron-log/renderer';
 import { Wand2 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../../stores/app-store';
 
 const PRESETS: Array<{ id: string; label: string; cron: string | null }> = [
@@ -76,6 +76,7 @@ export function CreateAutomationModal() {
   const editingId = useAppStore((s) => s.editingAutomationId);
   const close = useAppStore((s) => s.closeCreateAutomationModal);
   const activeProjectId = useAppStore((s) => s.activeProjectId);
+  const initializedFormKeyRef = useRef<string | null>(null);
 
   const isEdit = editingId !== null;
 
@@ -105,9 +106,22 @@ export function CreateAutomationModal() {
   const [reasoning, setReasoning] = useState<'inherit' | ReasoningEffort>('inherit');
   const [error, setError] = useState<string | null>(null);
 
-  // Reset form when opening
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      initializedFormKeyRef.current = null;
+      return;
+    }
+
+    const formKey = isEdit ? `edit:${editingId}` : 'create';
+    const fallbackProjectId = activeProjectId ?? projects[0]?.id ?? '';
+
+    if (initializedFormKeyRef.current === formKey) {
+      if (!isEdit && fallbackProjectId) {
+        setProjectId((current) => current || fallbackProjectId);
+      }
+      return;
+    }
+
     if (isEdit && existing) {
       setProjectId(existing.projectId);
       setName(existing.name);
@@ -119,8 +133,9 @@ export function CreateAutomationModal() {
       setProvider(existing.executorProvider ?? 'inherit');
       setExecutorModelId(existing.executorModelId ?? '');
       setReasoning(existing.executorReasoningEffort ?? 'inherit');
+      initializedFormKeyRef.current = formKey;
     } else if (!isEdit) {
-      setProjectId(activeProjectId ?? projects[0]?.id ?? '');
+      setProjectId(fallbackProjectId);
       setName('');
       setPrompt('');
       setPresetId('hourly');
@@ -129,9 +144,10 @@ export function CreateAutomationModal() {
       setProvider('inherit');
       setExecutorModelId('');
       setReasoning('inherit');
+      initializedFormKeyRef.current = formKey;
     }
     setError(null);
-  }, [open, isEdit, existing, activeProjectId, projects]);
+  }, [open, isEdit, editingId, existing, activeProjectId, projects]);
 
   const cronExpr = useMemo(() => {
     if (presetId === 'custom') return customCron.trim();

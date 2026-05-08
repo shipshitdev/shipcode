@@ -169,6 +169,56 @@ describe('CreateAutomationModal', () => {
     });
   });
 
+  it('does not clear typed fields when projects finish loading after open', async () => {
+    let resolveProjects!: (value: Project[]) => void;
+    invokeMock.mockImplementation((channel: string, args?: unknown) => {
+      if (channel === 'project:list-visible') {
+        return new Promise((resolve) => {
+          resolveProjects = resolve;
+        });
+      }
+      if (channel === 'automations:create') {
+        return Promise.resolve({
+          id: 'auto-new',
+          projectId: 'project-1',
+          name: 'Smoke',
+          prompt: 'do thing',
+          cronExpr: '0 * * * *',
+          enabled: true,
+          executorProvider: null,
+          executorModelId: null,
+          executorReasoningEffort: null,
+          lastStartedAt: null,
+          lastCompletedAt: null,
+          lastStatus: null,
+          nextRunAt: null,
+          runCount: 0,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+      }
+      return Promise.resolve(args ?? null);
+    });
+    act(() => {
+      useAppStore.setState({ activeProjectId: null });
+    });
+
+    renderWithProviders();
+
+    const nameInput = await screen.findByPlaceholderText(/Daily smoke test/);
+    const promptInput = screen.getByPlaceholderText(/What should this run do\?/);
+    fireEvent.change(nameInput, { target: { value: 'Smoke' } });
+    fireEvent.change(promptInput, { target: { value: 'do thing' } });
+
+    await act(async () => {
+      resolveProjects([makeProject()]);
+    });
+
+    expect(await screen.findByText('My Repo')).toBeInTheDocument();
+    expect(nameInput).toHaveValue('Smoke');
+    expect(promptInput).toHaveValue('do thing');
+  });
+
   it('formats the prompt in place before submit', async () => {
     renderWithProviders();
 
