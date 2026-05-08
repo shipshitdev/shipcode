@@ -4,6 +4,7 @@ import { Activity } from 'lucide-react';
 import { act, type ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { describe, expect, it, vi } from 'vitest';
+import { Button } from '@/primitives/button';
 import { Checkbox } from '@/primitives/checkbox';
 import {
   Command,
@@ -54,6 +55,16 @@ function renderIntoDom(element: ReactElement) {
 }
 
 describe('primitive component coverage', () => {
+  it('does not turn aria labels into native browser tooltips', () => {
+    const view = renderIntoDom(<Button aria-label="Verbose action label">Icon</Button>);
+
+    expect(view.container.querySelector('button')?.getAttribute('aria-label')).toBe(
+      'Verbose action label',
+    );
+    expect(view.container.querySelector('button')?.hasAttribute('title')).toBe(false);
+    view.cleanup();
+  });
+
   it('renders form primitives with forwarded props and state classes', () => {
     const onCheckedChange = vi.fn();
     const view = renderIntoDom(

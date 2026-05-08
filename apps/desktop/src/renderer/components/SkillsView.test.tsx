@@ -108,7 +108,7 @@ describe('SkillsView', () => {
 
     renderWithProviders();
 
-    expect(await screen.findByText('Other Skills')).toBeInTheDocument();
+    expect(await screen.findByText('PRD Skill')).toBeInTheDocument();
     expect(screen.getByText('writing-prds')).toBeInTheDocument();
     expect(screen.getByText('Repo file')).toBeInTheDocument();
     expect(screen.getByText('Present')).toBeInTheDocument();

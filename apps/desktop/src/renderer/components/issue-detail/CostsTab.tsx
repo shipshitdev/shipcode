@@ -132,20 +132,35 @@ function ThreadAnalyticsPanel({
   }
   if (!analytics) return null;
 
+  const phaseTimeline = Array.isArray(analytics.phaseTimeline) ? analytics.phaseTimeline : [];
+  const promptByPhase = Array.isArray(analytics.promptByPhase) ? analytics.promptByPhase : [];
+  const skillResolutions = Array.isArray(analytics.skillResolutions)
+    ? analytics.skillResolutions
+    : [];
+  const skillFallback = analytics.skillFallback ?? {
+    totalResolutions: 0,
+    fallbackCount: 0,
+    fallbackRate: 0,
+    parseFailureRate: 0,
+    retryRate: 0,
+    downstreamSuccessRate: 0,
+    score: 0,
+  };
+
   return (
     <div className="mt-4 space-y-4">
       <div>
         <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-secondary">
           Timeline
         </h4>
-        {analytics.phaseTimeline.length === 0 ? (
+        {phaseTimeline.length === 0 ? (
           <p className="rounded-md border border-dashed border-border px-3 py-3 text-[11px] text-muted">
             No phase timing data yet.
           </p>
         ) : (
           <div className="overflow-hidden rounded-md border border-border bg-secondary/20">
             <div className="divide-y divide-border">
-              {analytics.phaseTimeline.slice(0, 8).map((phase) => (
+              {phaseTimeline.slice(0, 8).map((phase) => (
                 <div key={phase.id} className="flex items-center gap-3 px-3 py-2">
                   <PhaseChip status={phase.phase} />
                   <div className="min-w-0 flex-1">
@@ -170,13 +185,13 @@ function ThreadAnalyticsPanel({
         <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-secondary">
           Prompt / Context
         </h4>
-        {analytics.promptByPhase.length === 0 ? (
+        {promptByPhase.length === 0 ? (
           <p className="rounded-md border border-dashed border-border px-3 py-3 text-[11px] text-muted">
             No prompt telemetry yet.
           </p>
         ) : (
           <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-            {analytics.promptByPhase.map((phase) => (
+            {promptByPhase.map((phase) => (
               <div key={phase.phase} className="rounded-md border border-border bg-secondary p-2">
                 <div className="mb-1 flex items-center justify-between gap-2">
                   <span className="text-[11px] font-medium uppercase tracking-wide text-secondary">
@@ -204,26 +219,24 @@ function ThreadAnalyticsPanel({
         <div className="grid grid-cols-3 gap-2">
           <div className="rounded-md border border-border bg-secondary p-2">
             <div className="text-[10px] uppercase tracking-wide text-muted">Score</div>
-            <div className="text-[14px] font-semibold text-primary">
-              {analytics.skillFallback.score}
-            </div>
+            <div className="text-[14px] font-semibold text-primary">{skillFallback.score}</div>
           </div>
           <div className="rounded-md border border-border bg-secondary p-2">
             <div className="text-[10px] uppercase tracking-wide text-muted">Fallbacks</div>
             <div className="text-[14px] font-semibold text-primary">
-              {formatPercent(analytics.skillFallback.fallbackRate)}
+              {formatPercent(skillFallback.fallbackRate)}
             </div>
           </div>
           <div className="rounded-md border border-border bg-secondary p-2">
             <div className="text-[10px] uppercase tracking-wide text-muted">Retries</div>
             <div className="text-[14px] font-semibold text-primary">
-              {formatPercent(analytics.skillFallback.retryRate)}
+              {formatPercent(skillFallback.retryRate)}
             </div>
           </div>
         </div>
-        {analytics.skillResolutions.length > 0 ? (
+        {skillResolutions.length > 0 ? (
           <div className="mt-2 overflow-hidden rounded-md border border-border bg-tertiary/30">
-            {analytics.skillResolutions.slice(0, 6).map((skill) => (
+            {skillResolutions.slice(0, 6).map((skill) => (
               <div
                 key={skill.id}
                 className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5 last:border-b-0"

@@ -9,6 +9,12 @@ const ALL_REASONING_EFFORTS = [
   'high',
   'xhigh',
 ] as const satisfies readonly ReasoningEffort[];
+const CODEX_REASONING_EFFORTS = [
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+] as const satisfies readonly ReasoningEffort[];
 
 const CLAUDE_REASONING_EFFORTS = [
   'none',
@@ -78,7 +84,7 @@ export function getSupportedReasoningEfforts(
   }
 
   if (provider === 'codex') {
-    return ALL_REASONING_EFFORTS;
+    return CODEX_REASONING_EFFORTS;
   }
 
   if (normalizedModelId && OPENROUTER_ADAPTIVE_CLAUDE_MODELS.has(normalizedModelId)) {
@@ -128,6 +134,14 @@ export function resolveProviderReasoningEffort(
   }
 
   if (provider === 'codex') {
+    if (configured === 'none' || configured === 'minimal') {
+      return {
+        configured,
+        effective: 'low',
+        exact: false,
+        message: `${normalizedModelId ?? 'Codex'} supports Low, Medium, High, and Max reasoning effort. Using ${formatReasoningEffortLabel('low')}.`,
+      };
+    }
     return { configured, effective: configured, exact: true, message: null };
   }
 

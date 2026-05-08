@@ -13,6 +13,7 @@ export const CLAUDE_MODEL_IDS = {
 export type ClaudeModelId = (typeof CLAUDE_MODEL_IDS)[keyof typeof CLAUDE_MODEL_IDS];
 
 export const CODEX_FALLBACK_MODEL_IDS = {
+  gpt55: 'gpt-5.5',
   gpt54: 'gpt-5.4',
   gpt54Mini: 'gpt-5.4-mini',
 } as const;
@@ -41,6 +42,7 @@ export const CLAUDE_MODEL_OPTIONS = [
 // Codex publishes the real model catalog via `codex debug models`. These are
 // conservative fallbacks only, used when an old CLI cannot report capabilities.
 export const CODEX_FALLBACK_MODEL_OPTIONS = [
+  { value: CODEX_FALLBACK_MODEL_IDS.gpt55, label: 'GPT-5.5' },
   { value: CODEX_FALLBACK_MODEL_IDS.gpt54, label: 'GPT-5.4' },
   { value: CODEX_FALLBACK_MODEL_IDS.gpt54Mini, label: 'GPT-5.4 Mini' },
 ] as const satisfies readonly KnownModelOption<CodexFallbackModelId>[];
@@ -71,7 +73,7 @@ export const PINNED_MODEL_DEFAULTS = {
     triage: CLAUDE_MODEL_IDS.haiku45,
   },
   codex: {
-    phase: CODEX_FALLBACK_MODEL_IDS.gpt54,
+    phase: CODEX_FALLBACK_MODEL_IDS.gpt55,
     prdRewrite: CODEX_FALLBACK_MODEL_IDS.gpt54Mini,
     triage: CODEX_FALLBACK_MODEL_IDS.gpt54Mini,
   },

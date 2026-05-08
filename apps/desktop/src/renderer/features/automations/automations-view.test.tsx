@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import type { Automation, Project } from '@shipcode/shared';
+import { TooltipProvider } from '@shipcode/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
@@ -70,7 +71,9 @@ function renderWithProviders() {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <AutomationsView />
+      <TooltipProvider>
+        <AutomationsView />
+      </TooltipProvider>
     </QueryClientProvider>,
   );
 }

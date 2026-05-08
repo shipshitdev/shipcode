@@ -53,12 +53,11 @@ const Button = forwardRef<
     ref,
   ) => {
     const Comp = asChild ? Slot : 'button';
-    const resolvedTitle = title ?? (typeof ariaLabel === 'string' ? ariaLabel : undefined);
 
     return (
       <Comp
         ref={ref}
-        title={resolvedTitle}
+        title={title}
         aria-label={ariaLabel}
         className={cn(buttonVariants({ variant, size }), className)}
         {...props}

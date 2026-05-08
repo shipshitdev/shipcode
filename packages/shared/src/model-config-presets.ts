@@ -1,4 +1,4 @@
-import { CLAUDE_MODEL_IDS, CODEX_FALLBACK_MODEL_IDS, PINNED_MODEL_DEFAULTS } from './model-catalog';
+import { CLAUDE_MODEL_IDS, PINNED_MODEL_DEFAULTS } from './model-catalog';
 import type { ResolvedPhaseModel } from './model-resolution';
 import { resolveProviderReasoningEffort } from './reasoning-effort';
 import type { AppSettings, ExecutorModel, Project, ReasoningEffort } from './types';
@@ -63,6 +63,10 @@ const SHARED_PRD_MODELS = {
   claude: PINNED_MODEL_DEFAULTS.claude.prdRewrite,
   codex: PINNED_MODEL_DEFAULTS.codex.prdRewrite,
 } as const;
+const SHARED_PHASE_MODELS = {
+  claude: PINNED_MODEL_DEFAULTS.claude.phase,
+  codex: PINNED_MODEL_DEFAULTS.codex.phase,
+} as const;
 
 export const MODEL_CONFIG_PRESETS: readonly ModelConfigPreset[] = [
   {
@@ -86,10 +90,10 @@ export const MODEL_CONFIG_PRESETS: readonly ModelConfigPreset[] = [
     label: 'Codex',
     description: 'OpenAI across planning, review, execution, and verification.',
     phases: {
-      planner: makePhasePreset('codex', CODEX_FALLBACK_MODEL_IDS.gpt54, 'planner'),
-      reviewer: makePhasePreset('codex', CODEX_FALLBACK_MODEL_IDS.gpt54, 'reviewer'),
-      executor: makePhasePreset('codex', CODEX_FALLBACK_MODEL_IDS.gpt54, 'executor'),
-      verifier: makePhasePreset('codex', CODEX_FALLBACK_MODEL_IDS.gpt54, 'verifier'),
+      planner: makePhasePreset('codex', SHARED_PHASE_MODELS.codex, 'planner'),
+      reviewer: makePhasePreset('codex', SHARED_PHASE_MODELS.codex, 'reviewer'),
+      executor: makePhasePreset('codex', SHARED_PHASE_MODELS.codex, 'executor'),
+      verifier: makePhasePreset('codex', SHARED_PHASE_MODELS.codex, 'verifier'),
     },
     prdRewrite: {
       cli: 'codex',
@@ -102,10 +106,10 @@ export const MODEL_CONFIG_PRESETS: readonly ModelConfigPreset[] = [
     label: 'Hybrid',
     description: 'Claude for plan/execute/verify, Codex for review.',
     phases: {
-      planner: makePhasePreset('claude', CLAUDE_MODEL_IDS.sonnet46, 'planner'),
-      reviewer: makePhasePreset('codex', CODEX_FALLBACK_MODEL_IDS.gpt54, 'reviewer'),
-      executor: makePhasePreset('claude', CLAUDE_MODEL_IDS.sonnet46, 'executor'),
-      verifier: makePhasePreset('claude', CLAUDE_MODEL_IDS.sonnet46, 'verifier'),
+      planner: makePhasePreset('claude', SHARED_PHASE_MODELS.claude, 'planner'),
+      reviewer: makePhasePreset('codex', SHARED_PHASE_MODELS.codex, 'reviewer'),
+      executor: makePhasePreset('claude', SHARED_PHASE_MODELS.claude, 'executor'),
+      verifier: makePhasePreset('claude', SHARED_PHASE_MODELS.claude, 'verifier'),
     },
     prdRewrite: {
       cli: 'claude',

@@ -12,7 +12,6 @@ import type {
   PromptTelemetryMaterialSummary,
   PromptTelemetryPhase,
   PromptTelemetryRecord,
-  SkillResolutionLogRecord,
 } from '@shipcode/shared';
 import { asRows } from '../utils';
 import { PhaseLogQueries } from './pipeline-phase-log';

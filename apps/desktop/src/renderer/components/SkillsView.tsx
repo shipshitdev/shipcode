@@ -365,7 +365,7 @@ export function SkillsView() {
 
             <div className="mt-6 border-t border-border pt-4">
               <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted">
-                Other Skills
+                PRD Skill
               </h4>
               <div className="rounded border border-border bg-secondary/30 p-3">
                 <div className="flex items-start justify-between gap-2">
@@ -385,8 +385,8 @@ export function SkillsView() {
                       ) : null}
                     </div>
                     <p className="mt-1 text-[11px] leading-snug text-secondary">
-                      PRD enhancement style guide. Owned by the active repo, not ShipCode&apos;s
-                      DB-backed pipeline skill system.
+                      Controls AI PRD enhancement. This is a repo file, not a DB-backed pipeline
+                      phase override.
                     </p>
                   </div>
                 </div>
@@ -505,7 +505,26 @@ export function SkillsView() {
                   </div>
                 </header>
 
-                <div className="mb-4 rounded border border-border bg-secondary/30 p-3">
+                <Textarea
+                  aria-label="Skill content"
+                  value={draft}
+                  onChange={(e) => {
+                    setDraft(e.target.value);
+                    setDraftDirty(true);
+                    setValidationError(null);
+                  }}
+                  rows={28}
+                  spellCheck={false}
+                  className="font-mono text-[12px] leading-relaxed"
+                />
+
+                {validationError && (
+                  <div className="mt-3 rounded border border-red-500/40 bg-red-500/5 p-3 text-[12px] text-red-300">
+                    {validationError}
+                  </div>
+                )}
+
+                <div className="mt-4 rounded border border-border bg-secondary/30 p-3">
                   <div className="mb-2 flex items-center justify-between gap-3">
                     <label
                       htmlFor="skill-rewrite-instructions"
@@ -546,25 +565,6 @@ export function SkillsView() {
                     </div>
                   ) : null}
                 </div>
-
-                <Textarea
-                  aria-label="Skill content"
-                  value={draft}
-                  onChange={(e) => {
-                    setDraft(e.target.value);
-                    setDraftDirty(true);
-                    setValidationError(null);
-                  }}
-                  rows={28}
-                  spellCheck={false}
-                  className="font-mono text-[12px] leading-relaxed"
-                />
-
-                {validationError && (
-                  <div className="mt-3 rounded border border-red-500/40 bg-red-500/5 p-3 text-[12px] text-red-300">
-                    {validationError}
-                  </div>
-                )}
 
                 <div className="mt-6 rounded border border-border bg-secondary/40 p-3">
                   <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted mb-2">

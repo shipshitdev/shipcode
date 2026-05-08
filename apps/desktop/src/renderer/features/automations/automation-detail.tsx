@@ -7,22 +7,8 @@ import { Cron } from 'croner';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useAppStore } from '../../stores/app-store';
 import { AutomationPromptMarkdown } from './automation-prompt-markdown';
+import { formatAutomationRelativeTime } from './automation-time';
 import { describeAutomationRun, getAutomationRunTotalTokens } from './run-presentation';
-
-function formatRelative(date: Date | string | null): string {
-  if (!date) return '—';
-  const d = typeof date === 'string' ? new Date(date) : date;
-  const diffMs = d.getTime() - Date.now();
-  const past = diffMs < 0;
-  const abs = Math.abs(diffMs);
-  const minutes = Math.round(abs / 60_000);
-  const hours = Math.round(abs / 3_600_000);
-  const days = Math.round(abs / 86_400_000);
-  if (minutes < 1) return past ? 'just now' : 'in <1m';
-  if (minutes < 60) return past ? `${minutes}m ago` : `in ${minutes}m`;
-  if (hours < 48) return past ? `${hours}h ago` : `in ${hours}h`;
-  return past ? `${days}d ago` : `in ${days}d`;
-}
 
 function formatTimestamp(date: string | null): string {
   if (!date) return '—';
@@ -39,7 +25,7 @@ function describeCron(expr: string): string {
     const job = new Cron(expr, { paused: true });
     const next = job.nextRun();
     if (!next) return expr;
-    return `Next run ${formatRelative(next)}`;
+    return `Next run ${formatAutomationRelativeTime(next)}`;
   } catch {
     return `Invalid: ${expr}`;
   }
@@ -198,7 +184,7 @@ export function AutomationDetail() {
                         </div>
                       </div>
                       <span className="mt-0.5 shrink-0 text-[11px] text-muted">
-                        {formatRelative(run.createdAt)}
+                        {formatAutomationRelativeTime(run.createdAt)}
                       </span>
                     </Button>
                   );
@@ -262,7 +248,7 @@ export function AutomationDetail() {
                   Last Run
                 </span>
                 <p className="mt-0.5 text-sm text-primary">
-                  {formatRelative(automation.lastStartedAt)}
+                  {formatAutomationRelativeTime(automation.lastStartedAt)}
                 </p>
               </div>
             )}

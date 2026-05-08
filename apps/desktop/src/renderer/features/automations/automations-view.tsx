@@ -1,11 +1,12 @@
 import type { Automation, Project, Thread } from '@shipcode/shared';
-import { PageHeader, PhaseChip } from '@shipcode/ui';
+import { PageHeader, PhaseChip, Tooltip, TooltipContent, TooltipTrigger } from '@shipcode/ui';
 import { Button, Card, CardContent, cn, Switch } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Cron } from 'croner';
 import { ChevronDown, Loader2, Pencil, Play, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useAppStore } from '../../stores/app-store';
+import { formatAutomationRelativeTime } from './automation-time';
 import { describeAutomationRun } from './run-presentation';
 
 const RUN_HISTORY_LIMIT = 5;
@@ -15,25 +16,10 @@ function describeCron(expr: string): string {
     const job = new Cron(expr, { paused: true });
     const next = job.nextRun();
     if (!next) return expr;
-    return `${expr} · next ${formatRelative(next)}`;
+    return `${expr} · next ${formatAutomationRelativeTime(next)}`;
   } catch {
     return `Invalid: ${expr}`;
   }
-}
-
-function formatRelative(date: Date | string | null): string {
-  if (!date) return '—';
-  const d = typeof date === 'string' ? new Date(date) : date;
-  const diffMs = d.getTime() - Date.now();
-  const past = diffMs < 0;
-  const abs = Math.abs(diffMs);
-  const minutes = Math.round(abs / 60_000);
-  const hours = Math.round(abs / 3_600_000);
-  const days = Math.round(abs / 86_400_000);
-  if (minutes < 1) return past ? 'just now' : 'in <1m';
-  if (minutes < 60) return past ? `${minutes}m ago` : `in ${minutes}m`;
-  if (hours < 48) return past ? `${hours}h ago` : `in ${hours}h`;
-  return past ? `${days}d ago` : `in ${days}d`;
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -156,20 +142,25 @@ function AutomationCard({
           <Button
             type="button"
             variant="ghost"
-            className="flex-1 text-left"
+            className="h-auto min-w-0 flex-1 flex-col items-stretch justify-start rounded-md px-3 py-2 text-left hover:bg-hover/70"
             onClick={() => setHistoryOpen((o) => !o)}
             aria-label={`${historyOpen ? 'Collapse' : 'Expand'} run history for ${automation.name}`}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 items-center gap-2">
               <ChevronDown
                 size={14}
-                className={cn('text-muted transition-transform', historyOpen && 'rotate-180')}
+                className={cn(
+                  'shrink-0 text-muted transition-transform',
+                  historyOpen && 'rotate-180',
+                )}
               />
-              <span className="text-[14px] font-medium text-primary">{automation.name}</span>
+              <span className="min-w-0 truncate text-[14px] font-medium text-primary">
+                {automation.name}
+              </span>
               {automation.lastStatus ? (
                 <span
                   className={cn(
-                    'rounded-full border px-2 py-0.5 text-[10px] font-medium',
+                    'shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium',
                     STATUS_COLOR[automation.lastStatus] ??
                       'bg-tertiary text-secondary border-border',
                   )}
@@ -178,12 +169,12 @@ function AutomationCard({
                 </span>
               ) : null}
             </div>
-            <div className="mt-1 pl-[22px] text-[12px] text-secondary">
+            <div className="mt-1 min-w-0 truncate pl-[22px] text-[12px] font-normal text-secondary">
               {projectName} · {describeCron(automation.cronExpr)}
             </div>
-            <div className="mt-1 pl-[22px] text-[11px] text-muted">
+            <div className="mt-1 min-w-0 truncate pl-[22px] text-[11px] font-normal text-muted">
               {automation.lastStartedAt
-                ? `Last run ${formatRelative(automation.lastStartedAt)} · ${automation.runCount} total`
+                ? `Last run ${formatAutomationRelativeTime(automation.lastStartedAt)} · ${automation.runCount} total`
                 : 'Never run'}
             </div>
           </Button>
@@ -194,38 +185,45 @@ function AutomationCard({
               onCheckedChange={(checked) => onToggleEnabled(checked)}
               aria-label={automation.enabled ? 'Disable' : 'Enable'}
             />
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => runNow.mutate()}
-              disabled={runNow.isPending}
-              aria-label="Run now"
-              title="Run now"
-            >
-              {runNow.isPending ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <Play size={14} />
-              )}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onEdit}
-              aria-label="Edit automation"
-              title="Edit"
-            >
-              <Pencil size={14} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onDelete}
-              aria-label="Delete automation"
-              title="Delete"
-            >
-              <Trash2 size={14} />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => runNow.mutate()}
+                  disabled={runNow.isPending}
+                  aria-label="Run now"
+                >
+                  {runNow.isPending ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Play size={14} />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Run now</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={onEdit} aria-label="Edit automation">
+                  <Pencil size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Edit</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={onDelete}
+                  aria-label="Delete automation"
+                >
+                  <Trash2 size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Delete</TooltipContent>
+            </Tooltip>
           </div>
         </div>
 
@@ -255,7 +253,7 @@ function AutomationCard({
                       {describeAutomationRun(thread)}
                     </span>
                     <span className="text-[11px] text-muted">
-                      {formatRelative(thread.createdAt)}
+                      {formatAutomationRelativeTime(thread.createdAt)}
                     </span>
                   </Button>
                 ))}

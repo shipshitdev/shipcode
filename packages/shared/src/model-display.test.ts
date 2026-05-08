@@ -9,7 +9,7 @@ import {
 describe('modelDisplay', () => {
   it('returns friendly labels for known model keys', () => {
     expect(modelDisplay('claude')).toBe('Sonnet 4.6');
-    expect(modelDisplay('codex')).toBe('GPT-5.4');
+    expect(modelDisplay('codex')).toBe('GPT-5.5');
     expect(modelDisplay('claude-opus-4-6')).toBe('Opus 4.6');
   });
 

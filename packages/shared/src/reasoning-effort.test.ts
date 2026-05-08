@@ -7,15 +7,13 @@ import {
 } from './reasoning-effort';
 
 describe('reasoning-effort', () => {
-  it('returns conservative Claude capabilities and full Codex capabilities', () => {
+  it('returns conservative Claude capabilities and Codex GPT-5.5/5.4 capabilities', () => {
     expect(getSupportedReasoningEfforts('claude', 'claude-sonnet-4-6')).toEqual([
       'none',
       'medium',
       'high',
     ]);
-    expect(getSupportedReasoningEfforts('codex', 'gpt-5.4')).toEqual([
-      'none',
-      'minimal',
+    expect(getSupportedReasoningEfforts('codex', 'gpt-5.5')).toEqual([
       'low',
       'medium',
       'high',
@@ -47,10 +45,10 @@ describe('reasoning-effort', () => {
     });
   });
 
-  it('keeps Codex efforts exact across GPT-5.4 models', () => {
-    expect(resolveProviderReasoningEffort('codex', 'minimal', 'gpt-5.4')).toEqual({
-      configured: 'minimal',
-      effective: 'minimal',
+  it('keeps supported Codex efforts exact across GPT-5.5 and GPT-5.4 models', () => {
+    expect(resolveProviderReasoningEffort('codex', 'xhigh', 'gpt-5.5')).toEqual({
+      configured: 'xhigh',
+      effective: 'xhigh',
       exact: true,
       message: null,
     });
@@ -59,6 +57,17 @@ describe('reasoning-effort', () => {
       effective: 'xhigh',
       exact: true,
       message: null,
+    });
+  });
+
+  it('maps legacy disabled Codex efforts to low', () => {
+    expect(resolveProviderReasoningEffort('codex', 'minimal', 'gpt-5.4')).toMatchObject({
+      effective: 'low',
+      exact: false,
+    });
+    expect(resolveProviderReasoningEffort('codex', 'none', 'gpt-5.5')).toMatchObject({
+      effective: 'low',
+      exact: false,
     });
   });
 
