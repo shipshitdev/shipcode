@@ -634,6 +634,8 @@ describe('linked PR affordances', () => {
     expect(headerRow?.className).not.toContain('opacity');
     expect(executingHeader.className).toContain('bg-transparent');
     expect(executingHeader.className).not.toContain('bg-agent');
+    expect(headerRow?.nextElementSibling?.className).toContain('p-1.5');
+    expect(headerRow?.nextElementSibling?.className).not.toContain('pt-0');
     expect(executingHeader.getAttribute('aria-expanded')).toBe('true');
     expect(view.container.textContent).toContain('Executing issue');
 
@@ -717,6 +719,33 @@ describe('linked PR affordances', () => {
     view.cleanup();
 
     expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not run elapsed timers for approval waits', () => {
+    const setIntervalSpy = vi.spyOn(window, 'setInterval');
+    const startedAt = Date.now() - 5_000;
+
+    const view = renderIntoDom(
+      <DndContext>
+        <DraggableCard
+          issue={makeIssue({
+            id: 'issue-awaiting-approval',
+            issueNumber: 207,
+            title: 'Needs approval',
+            pipelineStatus: 'awaiting_approval',
+            linkedPrNumber: null,
+            linkedPrUrl: null,
+            lastPhaseUpdate: new Date(startedAt).toISOString(),
+          })}
+          onClick={vi.fn()}
+          readOnly
+        />
+      </DndContext>,
+    );
+
+    expect(view.container.textContent).not.toContain('5s');
+    expect(setIntervalSpy).not.toHaveBeenCalled();
+    view.cleanup();
   });
 
   it('left-aligns wrapped stacked section labels', () => {
@@ -844,7 +873,7 @@ describe('linked PR affordances', () => {
     );
 
     const card = view.container.querySelector('[data-issue-card-id="issue-todo"]');
-    expect(card?.className).toContain('min-h-[108px]');
+    expect(card?.className).toContain('min-h-[124px]');
     expect(view.container.textContent).toContain('todo');
     view.cleanup();
   });

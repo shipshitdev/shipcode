@@ -49,6 +49,7 @@ import {
   migrateV47,
   migrateV48,
   migrateV49,
+  migrateV50,
 } from './schema';
 import { createTestDb } from './test-helpers';
 import { asRow } from './utils';
@@ -1245,5 +1246,30 @@ describe('migrateV49', () => {
 
   it('is idempotent', () => {
     expect(() => migrateV49(db)).not.toThrow();
+  });
+});
+
+describe('migrateV50', () => {
+  let db: ReturnType<typeof createTestDb>;
+
+  beforeEach(() => {
+    db = createTestDb();
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('adds archived_at column to threads', () => {
+    const columns = db.prepare("SELECT name FROM pragma_table_info('threads')").all() as Array<{
+      name: string;
+    }>;
+    const colNames = columns.map((column) => column.name);
+
+    expect(colNames).toContain('archived_at');
+  });
+
+  it('is idempotent', () => {
+    expect(() => migrateV50(db)).not.toThrow();
   });
 });

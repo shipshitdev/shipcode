@@ -29,7 +29,7 @@ function makeGraph(): ProjectIssueGraph {
         issueNumber: 1,
         title: 'One',
         state: 'open',
-        pipelineStatus: ISSUE_PIPELINE_STATUS.pending,
+        pipelineStatus: ISSUE_PIPELINE_STATUS.todo,
         threadId: 'thread-1',
       },
       {
@@ -38,7 +38,7 @@ function makeGraph(): ProjectIssueGraph {
         issueNumber: 2,
         title: 'Two',
         state: 'open',
-        pipelineStatus: ISSUE_PIPELINE_STATUS.pending,
+        pipelineStatus: ISSUE_PIPELINE_STATUS.todo,
         threadId: 'thread-2',
       },
     ],
@@ -72,7 +72,7 @@ function makeDeps(graph = makeGraph()) {
       id: 'issue-2',
       projectId: 'project-1',
       issueNumber: 2,
-      pipelineStatus: ISSUE_PIPELINE_STATUS.pending,
+      pipelineStatus: ISSUE_PIPELINE_STATUS.todo,
       threadId: 'thread-2',
     },
   ];
@@ -185,7 +185,7 @@ describe('registerIssueGraphHandlers', () => {
       threadId: 'thread-2',
       phase: PIPELINE_PHASE.failed,
     });
-    notifyIssueGraphPipelinePhaseChange({ threadId: 'thread-3', phase: PIPELINE_PHASE.plan });
+    notifyIssueGraphPipelinePhaseChange({ threadId: 'thread-3', phase: PIPELINE_PHASE.planning });
   });
 
   it('refreshes body-derived dependency edges and skips unknown issue references', () => {

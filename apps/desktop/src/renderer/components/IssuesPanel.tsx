@@ -264,6 +264,7 @@ export function IssuesPanel() {
         (thread) =>
           thread.kind === THREAD_KIND.pipeline &&
           thread.automationId !== null &&
+          !thread.archivedAt &&
           !issueThreadIds.has(thread.id),
       )
       .map((thread) => automationThreadToIssue(thread, activeProjectId));
@@ -395,13 +396,21 @@ export function IssuesPanel() {
           toast.error('Failed to archive issue', err?.message ?? String(err));
         });
     } else {
-      const doneIssues = issues.filter((issue) =>
+      const doneIssues = boardIssues.filter((issue) =>
         DONE_PIPELINE_STATUSES.includes(issue.pipelineStatus),
       );
-      archiveIssuesOptimistic(doneIssues.map((issue) => issue.id));
+      archiveIssuesOptimistic(
+        doneIssues.filter((issue) => !isAutomationIssue(issue)).map((issue) => issue.id),
+      );
+      const archivedAt = new Date().toISOString();
+      for (const issue of doneIssues) {
+        if (isAutomationIssue(issue) && issue.threadId) {
+          patchThreadOptimistic(issue.threadId, { archivedAt, updatedAt: archivedAt });
+        }
+      }
       setArchiveFeedback({
         tone: 'pending',
-        message: `Archiving ${doneIssues.length} done issue${doneIssues.length === 1 ? '' : 's'} on GitHub…`,
+        message: `Archiving ${doneIssues.length} done issue${doneIssues.length === 1 ? '' : 's'}…`,
       });
       window.shipcode
         .invoke('github:archive-all-done', { projectId: activeProjectId })
@@ -415,7 +424,7 @@ export function IssuesPanel() {
             message:
               failedCount > 0
                 ? `Archived ${archivedCount} issues. ${failedCount} still need GitHub cleanup or retry.`
-                : `Archived ${archivedCount} issues. GitHub Projects can take 1-2 minutes to reflect it.`,
+                : `Archived ${archivedCount} issues.`,
           });
           refreshIssues.mutate(activeProjectId);
           if (failedCount > 0) {
@@ -455,7 +464,7 @@ export function IssuesPanel() {
 
   const patchThreadOptimistic = (
     threadId: string,
-    patch: Partial<Pick<Thread, 'status' | 'doneAt' | 'updatedAt'>>,
+    patch: Partial<Pick<Thread, 'status' | 'doneAt' | 'updatedAt' | 'archivedAt'>>,
   ) => {
     queryClient.setQueryData<IssuesPanelData | undefined>(
       ['thread-panel-data', activeProjectId],
@@ -649,7 +658,7 @@ export function IssuesPanel() {
         }}
         onArchiveIssue={(issue) => setArchiveConfirm({ type: 'one', issue })}
         onArchiveAllDone={() => {
-          const doneCount = issues.filter((i) =>
+          const doneCount = boardIssues.filter((i) =>
             DONE_PIPELINE_STATUSES.includes(i.pipelineStatus),
           ).length;
           setArchiveConfirm({ type: 'all', count: doneCount });

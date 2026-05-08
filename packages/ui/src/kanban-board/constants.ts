@@ -163,10 +163,8 @@ export const ACTIVE_STATUSES: IssuePipelineStatus[] = [
 
 export const PHASE_ELAPSED_STATUSES: IssuePipelineStatus[] = [
   ISSUE_PIPELINE_STATUS.planning,
-  ISSUE_PIPELINE_STATUS.clarifying,
   ISSUE_PIPELINE_STATUS.reviewing,
   ISSUE_PIPELINE_STATUS.revising,
-  ISSUE_PIPELINE_STATUS.awaitingApproval,
   ISSUE_PIPELINE_STATUS.executing,
   ISSUE_PIPELINE_STATUS.testing,
   ISSUE_PIPELINE_STATUS.verifying,

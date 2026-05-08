@@ -88,7 +88,9 @@ describe('registerPullRequestHandlers', () => {
       diffs: [{ id: 'diff-1', filePath: 'src/app.ts' }],
     });
 
-    deps.queries.githubIssues.getByLinkedPrNumber.mockReturnValueOnce(null);
+    deps.queries.githubIssues.getByLinkedPrNumber.mockReturnValueOnce(
+      null as unknown as { threadId: string },
+    );
     await expect(
       detailHandler(undefined, { projectId: 'project-1', prNumber: 12 }),
     ).resolves.toEqual({

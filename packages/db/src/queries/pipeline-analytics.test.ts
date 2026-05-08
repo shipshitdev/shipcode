@@ -38,7 +38,33 @@ describe('pipeline analytics persistence', () => {
 
     expect(rows.map((row) => row.phase)).toEqual(['planning', 'executing', 'completed']);
     expect(rows.every((row) => row.completedAt !== null)).toBe(true);
-    expect(rows.every((row) => row.durationMs !== null)).toBe(true);
+    expect(rows.find((row) => row.phase === 'planning')?.durationMs).not.toBeNull();
+    expect(rows.find((row) => row.phase === 'executing')?.durationMs).not.toBeNull();
+    expect(rows.find((row) => row.phase === 'completed')?.durationMs).toBeNull();
+  });
+
+  it('does not accrue human-blocked approval wait time', () => {
+    phaseLogs.create({
+      threadId,
+      phase: 'planning',
+      startedAt: new Date(Date.now() - 60_000).toISOString(),
+    });
+    phaseLogs.transition(threadId, 'awaiting_approval');
+    phaseLogs.transition(threadId, 'executing');
+
+    const rows = phaseLogs.listByThread(threadId);
+    const planning = rows.find((row) => row.phase === 'planning');
+    const awaitingApproval = rows.find((row) => row.phase === 'awaiting_approval');
+    const executing = rows.find((row) => row.phase === 'executing');
+
+    expect(planning?.durationMs ?? 0).toBeGreaterThan(0);
+    expect(awaitingApproval).toMatchObject({
+      completedAt: awaitingApproval?.startedAt,
+      durationMs: null,
+      terminalStatus: 'awaiting_approval',
+    });
+    expect(executing?.completedAt).toBeNull();
+    expect(rows.filter((row) => row.completedAt === null)).toHaveLength(1);
   });
 
   it('records skill resolution rows', () => {

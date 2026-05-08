@@ -239,6 +239,7 @@ export interface Thread {
   totalTokensCompletion: number;
   totalCostUsd: number;
   doneAt: string | null;
+  archivedAt?: string | null;
 }
 
 export type PromptTelemetryPhase = 'plan' | 'review' | 'revision' | 'verify' | 'execute';

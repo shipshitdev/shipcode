@@ -20,7 +20,13 @@ interface PipelinePhaseLogRow {
   metadata_json: string | null;
 }
 
-const TERMINAL_PHASES = new Set<PipelinePhase>(['completed', 'failed', 'idle']);
+const UNTIMERED_PHASES = new Set<PipelinePhase>([
+  'awaiting_approval',
+  'clarifying',
+  'completed',
+  'failed',
+  'idle',
+]);
 
 export class PhaseLogQueries {
   constructor(private db: DatabaseSync) {}
@@ -35,8 +41,8 @@ export class PhaseLogQueries {
       metadata: null,
     });
 
-    if (TERMINAL_PHASES.has(phase)) {
-      this.closeOpenRows(threadId, phase, errorMessage ?? null, now);
+    if (UNTIMERED_PHASES.has(phase)) {
+      this.closeOpenRows(threadId, phase, errorMessage ?? null, now, { durationMs: null });
     }
   }
 
@@ -85,6 +91,7 @@ export class PhaseLogQueries {
     terminalStatus: PipelinePhaseTerminalStatus,
     errorMessage: string | null,
     completedAt: string,
+    options?: { durationMs?: number | null },
   ): void {
     const rows = asRows<Pick<PipelinePhaseLogRow, 'id' | 'started_at'>>(
       this.db
@@ -102,9 +109,11 @@ export class PhaseLogQueries {
       const startedAtMs = Date.parse(row.started_at);
       const completedAtMs = Date.parse(completedAt);
       const durationMs =
-        Number.isFinite(startedAtMs) && Number.isFinite(completedAtMs)
-          ? Math.max(0, completedAtMs - startedAtMs)
-          : null;
+        'durationMs' in (options ?? {})
+          ? (options?.durationMs ?? null)
+          : Number.isFinite(startedAtMs) && Number.isFinite(completedAtMs)
+            ? Math.max(0, completedAtMs - startedAtMs)
+            : null;
 
       this.db
         .prepare(

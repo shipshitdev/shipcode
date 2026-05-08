@@ -56,7 +56,7 @@ import {
 } from './utils';
 
 const ISSUE_CARD_BASE_CLASS =
-  'group relative flex min-h-[108px] flex-col overflow-hidden rounded-md border bg-elevated p-3 text-left transition-colors outline-none';
+  'group relative flex min-h-[124px] flex-col overflow-hidden rounded-md border bg-elevated p-3 text-left transition-colors outline-none';
 
 function PhaseElapsed({ since }: { since: number }) {
   const now = useSharedSecondNow();
@@ -93,7 +93,7 @@ export function IssueExternalBlockers({ issue }: { issue: GitHubIssueCacheRecord
 }
 
 const ACTION_BADGE_CLASS =
-  'absolute inset-0 inline-flex h-full items-center justify-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide opacity-0 transition-opacity group-hover:opacity-100';
+  'absolute inset-0 inline-flex h-full min-h-5 items-center justify-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium leading-none uppercase tracking-wide opacity-0 transition-opacity group-hover:opacity-100';
 const PLAN_ACTION_BADGE_CLASS =
   'border-agent/25 bg-agent/10 text-agent hover:border-agent/35 hover:bg-agent/15 hover:text-agent';
 const DANGER_ACTION_BADGE_CLASS =

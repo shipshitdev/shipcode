@@ -47,6 +47,31 @@ function restartOrReloadElectron(args: ElectronOnStartArgs): void {
   void args.startup(undefined, { env: electronStartupEnv() });
 }
 
+function shipcodeUiSourceAlias(): Plugin {
+  const uiSrc = path.resolve(__dirname, '../../packages/ui/src');
+  const rendererSrc = path.resolve(__dirname, './src/renderer');
+
+  return {
+    name: 'shipcode-ui-source-alias',
+    enforce: 'pre',
+    async resolveId(source, importer, options) {
+      if (source === '@shipcode/ui') {
+        return path.join(uiSrc, 'index.ts');
+      }
+
+      if (!source.startsWith('@/')) return null;
+
+      const importerPath = importer ? path.resolve(importer) : '';
+      const baseDir = importerPath.startsWith(`${uiSrc}${path.sep}`) ? uiSrc : rendererSrc;
+
+      return this.resolve(path.join(baseDir, source.slice(2)), importer, {
+        ...options,
+        skipSelf: true,
+      });
+    },
+  };
+}
+
 function stripInvalidFreezeOutputOption(config: UserConfig): void {
   const output = config.build?.rollupOptions?.output;
   if (!output) return;
@@ -134,6 +159,7 @@ export default defineConfig(async ({ command, mode }) => {
   const config: UserConfig = {
     plugins: [
       react(),
+      shipcodeUiSourceAlias(),
       electron([
         {
           entry: 'src/main/index.ts',
@@ -188,10 +214,6 @@ export default defineConfig(async ({ command, mode }) => {
             __dirname,
             '../../packages/ui/src/vendor/radix-compose-refs.ts',
           ),
-        },
-        {
-          find: '@',
-          replacement: path.resolve(__dirname, './src/renderer'),
         },
       ],
     },

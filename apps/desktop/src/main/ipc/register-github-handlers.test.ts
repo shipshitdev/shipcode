@@ -17,12 +17,14 @@ const {
   reopenIssueMock,
   listAllIssuesMock,
   fetchProjectPrioritiesMock,
+  archiveProjectItemsMock,
 } = vi.hoisted(() => ({
   closeIssueMock: vi.fn(),
   getRepoMetadataMock: vi.fn(),
   reopenIssueMock: vi.fn(),
   listAllIssuesMock: vi.fn(async () => [] as Array<unknown>),
   fetchProjectPrioritiesMock: vi.fn(),
+  archiveProjectItemsMock: vi.fn(async () => undefined),
 }));
 
 vi.mock('@shipcode/agents', async () => {
@@ -32,7 +34,7 @@ vi.mock('@shipcode/agents', async () => {
     getRepoMetadata = getRepoMetadataMock;
     reopenIssue = reopenIssueMock;
     listAllIssues = listAllIssuesMock;
-    archiveProjectItems = vi.fn(async () => undefined);
+    archiveProjectItems = archiveProjectItemsMock;
   }
   return {
     ...actual,
@@ -168,6 +170,8 @@ describe('registerGitHubHandlers', () => {
       priorities: new Map(),
       archivedIssueNumbers: new Set(),
     });
+    archiveProjectItemsMock.mockReset();
+    archiveProjectItemsMock.mockResolvedValue(undefined);
   });
 
   function buildGithubIssuesQueries(
@@ -513,6 +517,53 @@ describe('registerGitHubHandlers', () => {
     expect(queries.githubIssues.getByNumber).not.toHaveBeenCalled();
     expect(queries.githubIssues.updatePipelineStatus).not.toHaveBeenCalled();
     expect(queries.githubIssues.updateState).not.toHaveBeenCalled();
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('github:issues-updated', {
+      projectId: 'project-1',
+      issues: [],
+    });
+  });
+
+  it('archives done automation runs locally when archiving all done issues', async () => {
+    const archiveDoneAutomationRuns = vi.fn(() => 3);
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+      },
+      githubIssues: buildGithubIssuesQueries(
+        {
+          listCompleted: vi.fn(() => []),
+          archiveIssues: vi.fn(),
+        },
+        [],
+      ),
+      threads: {
+        archiveDoneAutomationRuns,
+        getById: vi.fn(() => null),
+        getByProjectAndGithubIssue: vi.fn(() => null),
+      },
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const archiveAllDone = handlers.get('github:archive-all-done');
+    if (!archiveAllDone) throw new Error('github:archive-all-done handler not registered');
+
+    const result = await archiveAllDone(undefined, { projectId: 'project-1' });
+
+    expect(archiveDoneAutomationRuns).toHaveBeenCalledWith('project-1');
+    expect(closeIssueMock).not.toHaveBeenCalled();
+    expect(archiveProjectItemsMock).not.toHaveBeenCalled();
+    expect(queries.githubIssues.archiveIssues).not.toHaveBeenCalled();
+    expect(result).toEqual({ archivedCount: 3, failedCount: 0 });
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('github:issues-updated', {
       projectId: 'project-1',
       issues: [],

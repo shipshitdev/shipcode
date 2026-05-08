@@ -80,7 +80,7 @@ class MockResizeObserver {
 
 function TerminalPaneHarness({
   threadId = 'thread-1',
-  mode = 'history',
+  mode = 'replay',
   isRunning = false,
 }: {
   threadId?: string;

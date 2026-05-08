@@ -59,6 +59,7 @@ interface ThreadRow {
   total_tokens_completion: number | null;
   total_cost_usd: number | null;
   done_at: string | null;
+  archived_at: string | null;
 }
 
 export class ThreadQueries {
@@ -67,7 +68,7 @@ export class ThreadQueries {
   list(projectId: string): Thread[] {
     const rows = this.db
       .prepare(
-        "SELECT * FROM threads WHERE project_id = ? AND kind = 'pipeline' ORDER BY updated_at DESC",
+        "SELECT * FROM threads WHERE project_id = ? AND kind = 'pipeline' AND archived_at IS NULL ORDER BY updated_at DESC",
       )
       .all(projectId);
     return asRows<ThreadRow>(rows).map(mapThread);
@@ -159,6 +160,21 @@ export class ThreadQueries {
     this.db
       .prepare(`UPDATE threads SET done_at = NULL, updated_at = ${ISO_NOW_SQL} WHERE id = ?`)
       .run(id);
+  }
+
+  archiveDoneAutomationRuns(projectId: string): number {
+    const result = this.db
+      .prepare(
+        `UPDATE threads
+            SET archived_at = ${ISO_NOW_SQL}, updated_at = ${ISO_NOW_SQL}
+          WHERE project_id = ?
+            AND kind = ?
+            AND automation_id IS NOT NULL
+            AND archived_at IS NULL
+            AND (done_at IS NOT NULL OR status = ?)`,
+      )
+      .run(projectId, THREAD_KIND.pipeline, PIPELINE_PHASE.completed);
+    return Number(result.changes ?? 0);
   }
 
   recordFailure(id: string, failurePhase: string, lastError?: string): void {
@@ -523,6 +539,7 @@ function mapThread(row: ThreadRow): Thread {
     totalTokensCompletion: row.total_tokens_completion ?? 0,
     totalCostUsd: row.total_cost_usd ?? 0,
     doneAt: row.done_at ?? null,
+    archivedAt: row.archived_at ?? null,
   };
 }
 

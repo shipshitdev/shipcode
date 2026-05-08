@@ -116,7 +116,7 @@ export function ActivePipelineCard({
         </div>
         <span className="flex items-center gap-1.5">
           <span className="font-mono tabular-nums text-[10px] text-muted">{progress}%</span>
-          <PhaseElapsed since={startedAt} />
+          {isAgentActive && <PhaseElapsed since={startedAt} />}
         </span>
       </div>
 

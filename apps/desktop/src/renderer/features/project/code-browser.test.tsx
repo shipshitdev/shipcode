@@ -128,7 +128,10 @@ describe('CodeBrowser', () => {
           fileEntry({ name: 'package.json', relativePath: 'package.json', isModified: true }),
         ];
       }
-      if (channel === 'code:list-tree' && args.relativePath === 'src') {
+      if (
+        channel === 'code:list-tree' &&
+        (args as { relativePath?: string } | undefined)?.relativePath === 'src'
+      ) {
         return [
           fileEntry(),
           fileEntry({ name: 'styles.css', relativePath: 'src/styles.css' }),

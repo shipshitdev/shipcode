@@ -661,6 +661,7 @@ export function registerGitHubHandlers({
       const ghCli = new GhCli(project.path);
       const succeededIds: string[] = [];
       let failedCount = 0;
+      const localAutomationArchivedCount = queries.threads.archiveDoneAutomationRuns(projectId);
 
       for (const issue of doneIssues) {
         try {
@@ -680,7 +681,7 @@ export function registerGitHubHandlers({
       }
 
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
-      return { archivedCount: succeededIds.length, failedCount };
+      return { archivedCount: succeededIds.length + localAutomationArchivedCount, failedCount };
     },
   );
 

@@ -69,7 +69,8 @@ export function migrate(db: DatabaseSync): void {
       verifier_model TEXT NOT NULL DEFAULT 'claude',
       executor_model TEXT NOT NULL DEFAULT 'claude',
       created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-      updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      archived_at TEXT
     );
 
     CREATE TABLE IF NOT EXISTS plans (
@@ -1484,5 +1485,18 @@ export function migrateV49(db: DatabaseSync): void {
     `);
 
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (49)`);
+  });
+}
+
+export function migrateV50(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 50) return;
+
+  transaction(db, () => {
+    execAlterTableIfMissing(db, 'ALTER TABLE threads ADD COLUMN archived_at TEXT');
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (50)`);
   });
 }

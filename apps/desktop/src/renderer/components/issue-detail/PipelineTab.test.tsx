@@ -196,6 +196,7 @@ describe('PipelineTab', () => {
     expect(screen.getByText('Agents')).toBeInTheDocument();
     expect(screen.getByText('Branch')).toBeInTheDocument();
     expect(screen.getByText('ship/42-issue-title')).toBeInTheDocument();
+    expect(screen.queryByText('Pipeline')).not.toBeInTheDocument();
   });
 
   it('shows a waiting message before a diff exists', () => {

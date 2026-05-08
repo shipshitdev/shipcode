@@ -338,6 +338,25 @@ describe('UI component regression coverage', () => {
 
     expect(view.container.textContent).toContain('Waiting for slot');
     expect(view.container.textContent).not.toContain('awaiting approval');
+    expect(view.container.textContent).not.toContain('5s');
+    view.cleanup();
+  });
+
+  it('does not run the elapsed timer for human approval waits', () => {
+    const setIntervalSpy = vi.spyOn(window, 'setInterval');
+    const view = renderIntoDom(
+      <ActivePipelineCard
+        projectName="shipcode"
+        title="Needs approval"
+        phase="awaiting_approval"
+        startedAt={Date.now() - 5_000}
+        onClick={vi.fn()}
+      />,
+    );
+
+    expect(view.container.textContent).toContain('48%');
+    expect(view.container.textContent).not.toContain('5s');
+    expect(setIntervalSpy).not.toHaveBeenCalled();
     view.cleanup();
   });
 });

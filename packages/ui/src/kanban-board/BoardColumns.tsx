@@ -333,7 +333,7 @@ function SectionBlock({
       {!empty && !collapsed && (
         <div
           className={cn(
-            'flex flex-col gap-1 p-1.5 pt-0',
+            'flex flex-col gap-1 p-1.5',
             section.droppable &&
               isOver &&
               'rounded-md border border-dashed border-accent bg-tertiary',

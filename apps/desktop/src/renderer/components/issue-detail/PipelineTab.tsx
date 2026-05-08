@@ -199,7 +199,7 @@ export function PipelineTab({
         <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-secondary">
           Agents
         </h4>
-        <div className="flex flex-col gap-1.5">
+        <div className="grid grid-cols-4 gap-2">
           {(
             [
               {
@@ -249,13 +249,12 @@ export function PipelineTab({
             );
 
             return (
-              <div key={role} className="flex flex-col gap-1">
-                {/* Full-width subtitle */}
+              <div key={role} className="min-w-0 flex flex-col gap-1">
                 <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">
                   {role}
                 </span>
                 {executorEditable ? (
-                  <div className="grid grid-cols-2 gap-1.5">
+                  <div className="flex min-w-0 flex-col gap-1">
                     <Select
                       value={phaseSelectValues[phase]}
                       onValueChange={(value: string) => onPhaseAgentChange(phase, value)}
@@ -329,7 +328,6 @@ export function PipelineTab({
                         })}
                       </SelectContent>
                     </Select>
-                    {/* Effort — second col */}
                     <Select
                       value={displayedEffortValue}
                       onValueChange={(next) => onPhaseEffortChange(phase, next)}
@@ -467,16 +465,11 @@ export function PipelineTab({
       {thread ? (
         <div className="mb-5">
           <div className="mb-2 flex items-center justify-between">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">
-              Pipeline
-            </h4>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">Branch</h4>
           </div>
           <div className="grid grid-cols-2 gap-2">
             {thread.worktreeBranch ? (
               <div className="flex flex-col gap-1 rounded-md border border-border bg-secondary p-2">
-                <span className="text-[10px] font-medium uppercase tracking-wide text-muted">
-                  Branch
-                </span>
                 <span className="truncate font-mono text-[11px] text-primary">
                   {thread.worktreeBranch}
                 </span>

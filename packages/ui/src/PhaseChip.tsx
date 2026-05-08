@@ -35,7 +35,7 @@ export function PhaseChip({
   return (
     <span
       className={cn(
-        'inline-flex items-center justify-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide',
+        'inline-flex min-h-5 items-center justify-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium leading-none uppercase tracking-wide',
         PHASE_COLOR[status] ?? FALLBACK,
         className,
       )}

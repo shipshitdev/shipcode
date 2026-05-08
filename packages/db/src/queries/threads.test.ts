@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from '../test-helpers';
+import { AutomationQueries } from './automations';
 import { PlanQueries } from './plans';
 import { ProjectQueries } from './projects';
 import { ThreadQueries } from './threads';
@@ -9,6 +10,7 @@ describe('ThreadQueries', () => {
   let db: DatabaseSync;
   let projects: ProjectQueries;
   let plans: PlanQueries;
+  let automations: AutomationQueries;
   let threads: ThreadQueries;
   let projectId: string;
 
@@ -16,6 +18,7 @@ describe('ThreadQueries', () => {
     db = createTestDb();
     projects = new ProjectQueries(db);
     plans = new PlanQueries(db);
+    automations = new AutomationQueries(db);
     threads = new ThreadQueries(db);
     projectId = projects.add('/tmp/test-project').id;
   });
@@ -42,6 +45,40 @@ describe('ThreadQueries', () => {
 
     const list = threads.list(projectId);
     expect(list.length).toBe(2);
+  });
+
+  it('archiveDoneAutomationRuns() hides completed automation threads from list()', () => {
+    const done = threads.create(projectId, 'done prompt', 'Done automation');
+    const completed = threads.create(projectId, 'completed prompt', 'Completed automation');
+    const active = threads.create(projectId, 'active prompt', 'Active automation');
+    const manual = threads.create(projectId, 'manual prompt', 'Manual thread');
+    const automation = automations.create({
+      projectId,
+      name: 'Nightly cleanup',
+      prompt: 'clean',
+      cronExpr: '0 0 * * *',
+    });
+
+    threads.setAutomationId(done.id, automation.id);
+    threads.setAutomationId(completed.id, automation.id);
+    threads.setAutomationId(active.id, automation.id);
+    threads.markDone(done.id);
+    threads.updateStatus(completed.id, 'completed');
+    threads.updateStatus(active.id, 'executing');
+    threads.updateStatus(manual.id, 'completed');
+
+    expect(threads.archiveDoneAutomationRuns(projectId)).toBe(2);
+
+    expect(threads.list(projectId).map((thread) => thread.id)).toEqual(
+      expect.arrayContaining([active.id, manual.id]),
+    );
+    expect(threads.list(projectId).map((thread) => thread.id)).not.toEqual(
+      expect.arrayContaining([done.id, completed.id]),
+    );
+    expect(threads.getById(done.id)?.archivedAt).toBeTruthy();
+    expect(threads.getById(completed.id)?.archivedAt).toBeTruthy();
+    expect(threads.getById(active.id)?.archivedAt).toBeNull();
+    expect(threads.getById(manual.id)?.archivedAt).toBeNull();
   });
 
   it('getById() returns thread or null', () => {

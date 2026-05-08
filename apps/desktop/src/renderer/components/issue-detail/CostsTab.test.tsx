@@ -87,7 +87,29 @@ function makeAnalytics(overrides: Partial<PipelineThreadAnalytics> = {}): Pipeli
       },
     ],
     providerAttempts: [],
-    promptTelemetry: [],
+    promptTelemetry: [
+      {
+        id: 'prompt-1',
+        threadId: 'thread-1',
+        phase: 'plan',
+        invocationId: 'invoke-1',
+        attempt: 1,
+        provider: 'codex',
+        model: 'gpt-5.4',
+        promptCharacters: 1100,
+        promptBytes: 1234,
+        promptLines: 20,
+        selectedMaterials: {
+          count: 3,
+          labels: ['issue prompt', 'repo context', 'testing context'],
+          kinds: ['issue_prompt', 'repo_file_context', 'testing_context'],
+        },
+        promptTokens: 456,
+        completionTokens: 123,
+        costUsd: 0.01,
+        createdAt: new Date().toISOString(),
+      },
+    ],
     skillResolutions: [
       {
         id: 'skill-1',
@@ -166,6 +188,7 @@ describe('CostsTab', () => {
       if (channel === 'pipeline-analytics:get-thread') {
         return makeAnalytics({
           phaseTimeline: [],
+          promptTelemetry: [],
           promptByPhase: [],
           skillResolutions: [],
           skillFallback: undefined as unknown as PipelineThreadAnalytics['skillFallback'],
@@ -230,11 +253,18 @@ describe('CostsTab', () => {
     const firstRun = screen.getAllByRole('button', { expanded: false })[0];
     fireEvent.click(firstRun);
 
-    expect(await screen.findByText('Plan · attempt 1')).toBeInTheDocument();
-    expect(screen.getByText('runtime: Tests failed')).toBeInTheDocument();
+    expect((await screen.findAllByText('Plan · attempt 1')).length).toBeGreaterThan(0);
+    expect(await screen.findByText('runtime: Tests failed')).toBeInTheDocument();
     expect(screen.getByText('Timeline')).toBeInTheDocument();
     expect(screen.getByText('1.5s')).toBeInTheDocument();
-    expect(screen.getByText('1,234 avg bytes · 20 avg lines')).toBeInTheDocument();
+    expect(screen.getByText('Payload')).toBeInTheDocument();
+    expect(screen.getByText('1.2 KB')).toBeInTheDocument();
+    expect(screen.getByText('Lines')).toBeInTheDocument();
+    expect(screen.getByText('20')).toBeInTheDocument();
+    expect(screen.getByText('Context Materials')).toBeInTheDocument();
+    expect(screen.getByText('Issue Prompt')).toBeInTheDocument();
+    expect(screen.getByText('Repo File Context')).toBeInTheDocument();
+    expect(screen.getByText('testing context')).toBeInTheDocument();
     expect(
       within(screen.getByText('Skill Resolution').parentElement as HTMLElement).getByText('88'),
     ).toBeInTheDocument();
