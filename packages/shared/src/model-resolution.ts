@@ -172,6 +172,7 @@ export const PHASE_DESCRIPTORS: readonly ResolvedPhaseDescriptor[] = [
       ISSUE_PIPELINE_STATUS.clarifying,
       ISSUE_PIPELINE_STATUS.revising,
       ISSUE_PIPELINE_STATUS.awaitingApproval,
+      ISSUE_PIPELINE_STATUS.paused,
     ],
   },
   {

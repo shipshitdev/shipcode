@@ -180,6 +180,7 @@ export const PIPELINE_PHASE = {
   testing: 'testing',
   verifying: 'verifying',
   shipping: 'shipping',
+  paused: 'paused',
   completed: 'completed',
   failed: 'failed',
 } as const;
@@ -225,6 +226,8 @@ export interface Thread {
   lastError: string | null;
   failurePhase: string | null;
   failureCount: number;
+  pausedPhase: PipelinePhase | null;
+  pausedAt: string | null;
   createdAt: string;
   updatedAt: string;
   // Tier 3 telemetry: what openrouter/auto (or claude/codex) actually
@@ -821,6 +824,10 @@ export interface AppSettings {
   /** Max concurrent pipelines per project in execution phases (executing/testing/verifying/shipping).
    *  Approved pipelines wait in awaiting_approval until a project execution slot opens. */
   maxConcurrentExecutions: number;
+  /** Max concurrent CPU-heavy local command phases across all projects. */
+  maxConcurrentCpuTasks: number;
+  /** Pause new CPU-heavy local command phases when host CPU is at or above this percentage. */
+  cpuThrottleThresholdPercent: number;
   /** Default number of terminal panes when opening the Instant view. */
   instantDefaultPanes: 1 | 2 | 4;
   /** Persisted log level for the electron-log file transport. Console stays at 'info'. */
@@ -964,6 +971,34 @@ export interface DeveloperInfo {
     git: string | null;
     gh: string | null;
   };
+}
+
+export interface ProcessResourceTask {
+  processId: string;
+  type: AgentType;
+  state: AgentState;
+  pid: number | null;
+  childPids: number[];
+  threadId: string | null;
+  projectId: string | null;
+  projectName: string | null;
+  threadTitle: string | null;
+  phase: PipelinePhase | null;
+  cwd: string;
+  command: string;
+  cpuPercent: number;
+  memoryBytes: number;
+  startedAt: number;
+  lastEventAt: number;
+  highCpu: boolean;
+}
+
+export interface SystemResourceSnapshot {
+  capturedAt: string;
+  cpuPercent: number | null;
+  cpuCoreCount: number;
+  highCpu: boolean;
+  tasks: ProcessResourceTask[];
 }
 
 export type UpdateTrack = 'master' | 'stable' | 'nightly';
@@ -1397,6 +1432,7 @@ export const ISSUE_PIPELINE_STATUS = {
   testing: PIPELINE_PHASE.testing,
   verifying: PIPELINE_PHASE.verifying,
   shipping: PIPELINE_PHASE.shipping,
+  paused: PIPELINE_PHASE.paused,
   completed: PIPELINE_PHASE.completed,
   done: 'done',
   deferred: 'deferred',
@@ -1496,6 +1532,30 @@ export interface VerificationRecord {
   result: 'passed' | 'failed';
   retryCount: number;
   createdAt: string;
+}
+
+// === Project Failure Ledger ===
+
+export type ProjectFailureStatus = 'in_progress' | 'resolved';
+
+export interface ProjectFailureRecord {
+  id: string;
+  projectId: string;
+  baseBranch: string | null;
+  fingerprint: string;
+  status: ProjectFailureStatus;
+  ownerThreadId: string | null;
+  firstSeenThreadId: string | null;
+  seenThreadIds: string[];
+  command: string;
+  summary: string;
+  outputExcerpt: string;
+  implicatedFiles: string[];
+  resolvedByThreadId: string | null;
+  resolvedCommitSha: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // === Agent Conversation Log ===

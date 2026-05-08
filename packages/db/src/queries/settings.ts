@@ -284,6 +284,18 @@ export class SettingsQueries {
         10,
         DEFAULT_SETTINGS.maxConcurrentExecutions,
       ),
+      maxConcurrentCpuTasks: clampInt(
+        stored.maxConcurrentCpuTasks,
+        1,
+        10,
+        DEFAULT_SETTINGS.maxConcurrentCpuTasks,
+      ),
+      cpuThrottleThresholdPercent: clampNumber(
+        stored.cpuThrottleThresholdPercent,
+        50,
+        100,
+        DEFAULT_SETTINGS.cpuThrottleThresholdPercent,
+      ),
       instantDefaultPanes: clampInt(
         stored.instantDefaultPanes,
         1,
@@ -336,6 +348,17 @@ export class SettingsQueries {
       const n = Number(patch.maxConcurrentExecutions);
       if (!Number.isFinite(n) || n < 1 || n > 10)
         throw new Error('maxConcurrentExecutions must be 1–10');
+    }
+    if ('maxConcurrentCpuTasks' in patch && patch.maxConcurrentCpuTasks != null) {
+      const n = Number(patch.maxConcurrentCpuTasks);
+      if (!Number.isFinite(n) || n < 1 || n > 10)
+        throw new Error('maxConcurrentCpuTasks must be 1–10');
+    }
+    if ('cpuThrottleThresholdPercent' in patch && patch.cpuThrottleThresholdPercent != null) {
+      const n = Number(patch.cpuThrottleThresholdPercent);
+      if (!Number.isFinite(n) || n < 50 || n > 100) {
+        throw new Error('cpuThrottleThresholdPercent must be 50–100');
+      }
     }
     for (const key of [
       'plannerReasoningEffort',

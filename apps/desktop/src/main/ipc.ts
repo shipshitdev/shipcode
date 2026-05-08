@@ -21,6 +21,7 @@ import { registerSupportHandlers } from './ipc/register-support-handlers';
 import type { Queries } from './ipc/types';
 import log, { logEvent } from './logger.service';
 import type { NotificationService } from './notification-service';
+import type { ResourceMonitor } from './resource-monitor';
 import { captureIpcFailure } from './telemetry';
 import type { UpdateService } from './update-service';
 
@@ -35,6 +36,7 @@ export function registerIpcHandlers(
   chatNotificationService: ChatNotificationService,
   updateService: UpdateService,
   automationScheduler: AutomationSchedulerLike,
+  resourceMonitor: ResourceMonitor,
 ): void {
   for (const thread of queries.threads.getOrphaned()) {
     transitionThreadPhase(mainWindow, queries, emitter, {
@@ -85,6 +87,7 @@ export function registerIpcHandlers(
     emitter,
     notificationService,
     chatNotificationService,
+    resourceMonitor,
   } as const;
 
   ipcMain.on('diagnostics:renderer-ipc', (_event, payload: unknown) => {

@@ -48,6 +48,8 @@ interface ThreadRow {
   last_error: string | null;
   failure_phase: string | null;
   failure_count: number;
+  paused_phase: ThreadStatus | null;
+  paused_at: string | null;
   created_at: string;
   updated_at: string;
   planner_resolved_model: string | null;
@@ -133,16 +135,48 @@ export class ThreadQueries {
   }
 
   updateStatus(id: string, status: ThreadStatus, lastError?: string): void {
+    if (status === PIPELINE_PHASE.paused) {
+      const current = this.getById(id);
+      const pausedPhase =
+        current?.status && current.status !== PIPELINE_PHASE.paused
+          ? current.status
+          : current?.pausedPhase;
+      this.db
+        .prepare(
+          `UPDATE threads
+              SET status = ?,
+                  paused_phase = ?,
+                  paused_at = ${ISO_NOW_SQL},
+                  last_error = ?,
+                  updated_at = ${ISO_NOW_SQL}
+            WHERE id = ?`,
+        )
+        .run(status, pausedPhase ?? null, lastError ?? null, id);
+      return;
+    }
+
     if (lastError !== undefined) {
       this.db
         .prepare(
-          `UPDATE threads SET status = ?, last_error = ?, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
+          `UPDATE threads
+              SET status = ?,
+                  last_error = ?,
+                  paused_phase = NULL,
+                  paused_at = NULL,
+                  updated_at = ${ISO_NOW_SQL}
+            WHERE id = ?`,
         )
         .run(status, lastError, id);
     } else {
       this.db
         .prepare(
-          `UPDATE threads SET status = ?, last_error = NULL, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
+          `UPDATE threads
+              SET status = ?,
+                  last_error = NULL,
+                  paused_phase = NULL,
+                  paused_at = NULL,
+                  updated_at = ${ISO_NOW_SQL}
+            WHERE id = ?`,
         )
         .run(status, id);
     }
@@ -180,7 +214,15 @@ export class ThreadQueries {
   recordFailure(id: string, failurePhase: string, lastError?: string): void {
     this.db
       .prepare(
-        `UPDATE threads SET status = ?, last_error = ?, failure_phase = ?, failure_count = failure_count + 1, updated_at = ${ISO_NOW_SQL} WHERE id = ?`,
+        `UPDATE threads
+            SET status = ?,
+                last_error = ?,
+                failure_phase = ?,
+                failure_count = failure_count + 1,
+                paused_phase = NULL,
+                paused_at = NULL,
+                updated_at = ${ISO_NOW_SQL}
+          WHERE id = ?`,
       )
       .run(PIPELINE_PHASE.failed, lastError ?? null, failurePhase, id);
   }
@@ -528,6 +570,8 @@ function mapThread(row: ThreadRow): Thread {
     lastError: row.last_error ?? null,
     failurePhase: row.failure_phase ?? null,
     failureCount: row.failure_count ?? 0,
+    pausedPhase: row.paused_phase ?? null,
+    pausedAt: row.paused_at ? (toIsoUtc(row.paused_at) ?? row.paused_at) : null,
     createdAt: toIsoUtc(row.created_at) ?? row.created_at,
     updatedAt: toIsoUtc(row.updated_at) ?? row.updated_at,
     plannerResolvedModel: row.planner_resolved_model ?? null,

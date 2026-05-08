@@ -8,6 +8,8 @@ import type {
 } from '@shipcode/shared';
 import {
   clarificationAnswerSchema,
+  EXECUTION_PHASES,
+  PAUSABLE_PIPELINE_PHASES,
   PIPELINE_PHASE,
   resolveExecutorModelForIssue,
   resolveRequireApproval,
@@ -39,6 +41,8 @@ const INTERRUPTED_EXECUTION_MARKERS = [
   'interrupted by an app refresh',
   'Agent process stalled',
 ] as const;
+const PAUSABLE_PHASE_SET = new Set<string>(PAUSABLE_PIPELINE_PHASES);
+const EXECUTION_PHASE_SET = new Set<string>(EXECUTION_PHASES);
 
 function clampAutoFixFailureOutput(output: string): string {
   const cleaned = stripAnsi(output).trim();
@@ -55,6 +59,13 @@ function clampResumeText(value: string, max: number, label: string): string {
 }
 
 function isInterruptedExecutionThread(thread: Thread): boolean {
+  if (
+    thread.status === PIPELINE_PHASE.paused &&
+    thread.pausedPhase &&
+    EXECUTION_PHASE_SET.has(thread.pausedPhase)
+  ) {
+    return true;
+  }
   if (
     thread.failurePhase !== PIPELINE_PHASE.executing &&
     thread.status !== PIPELINE_PHASE.executing
@@ -118,6 +129,8 @@ async function buildExecutionResumeContext(
 ): Promise<string | null> {
   if (!isInterruptedExecutionThread(thread) || !thread.worktreePath) return null;
 
+  const isPaused = thread.status === PIPELINE_PHASE.paused;
+  const interruptedPhase = isPaused ? thread.pausedPhase : (thread.failurePhase ?? thread.status);
   const checkpoint = queries.checkpoints.getLatest(thread.id);
   const diffBase = checkpoint?.commitSha ?? 'HEAD';
   const [status, changedFiles, diffStat, diffExcerpt] = await Promise.all([
@@ -138,10 +151,12 @@ async function buildExecutionResumeContext(
 
   const sections = [
     '<interrupted_run_context>',
-    'The previous execution was interrupted. This is a semantic resume, not a clean restart.',
+    isPaused
+      ? 'The previous execution was paused by the user. This is a semantic resume, not a clean restart.'
+      : 'The previous execution was interrupted. This is a semantic resume, not a clean restart.',
     '',
-    `Interrupted phase: ${thread.failurePhase ?? thread.status}`,
-    `Last error: ${thread.lastError ?? 'Unknown interruption'}`,
+    `Interrupted phase: ${interruptedPhase ?? thread.status}`,
+    `Last error: ${thread.lastError ?? (isPaused ? 'Paused by user' : 'Unknown interruption')}`,
     `Worktree: ${thread.worktreePath}`,
     checkpoint
       ? `Checkpoint before execution: ${checkpoint.label} (${checkpoint.commitSha.slice(0, 12)})`
@@ -582,6 +597,141 @@ export function registerPipelineHandlers({
     }
     return record;
   };
+
+  ipcMain.handle('pipeline:pause', (_event, { threadId }: { threadId: string }) => {
+    const thread = queries.threads.getById(threadId);
+    if (!thread) throw new Error(`Thread ${threadId} not found`);
+    if (!PAUSABLE_PHASE_SET.has(thread.status)) {
+      throw new Error(`Cannot pause task while in ${thread.status} phase`);
+    }
+
+    emitTerminalEvent(threadId, {
+      kind: 'lifecycle',
+      message: `Paused by user during ${thread.status}. Resume will continue from persisted worktree state.`,
+    });
+    pipeline.pause(threadId);
+  });
+
+  function getLatestStructuredPlan(threadId: string) {
+    const latestPlan = queries.plans.getLatest(threadId);
+    const structuredPlan = latestPlan?.structured;
+    if (!latestPlan || !structuredPlan) {
+      throw new Error('No structured plan found for paused task');
+    }
+    return { latestPlan, structuredPlan };
+  }
+
+  function buildRevisionResumeFeedback(planId: string): string {
+    const review = queries.reviews.getByPlanId(planId);
+    if (review?.structured) {
+      const suggestedChanges = review.structured.suggestedChanges.join('\n');
+      const findings = review.structured.findings
+        .map(
+          (finding) =>
+            `[${finding.severity}] ${finding.description}${
+              finding.suggestion ? ` - ${finding.suggestion}` : ''
+            }`,
+        )
+        .join('\n');
+      return [suggestedChanges, findings ? `Findings:\n${findings}` : null]
+        .filter(Boolean)
+        .join('\n\n');
+    }
+    if (review?.rawOutput?.trim()) return review.rawOutput.trim();
+    return 'Resume the interrupted revision pass using the latest plan and reviewer context.';
+  }
+
+  ipcMain.handle('pipeline:resume', async (_event, { threadId }: { threadId: string }) => {
+    if (pipeline.listActive().some((summary) => summary.threadId === threadId)) {
+      throw new Error('Task is already running');
+    }
+
+    const thread = queries.threads.getById(threadId);
+    if (!thread) throw new Error(`Thread ${threadId} not found`);
+    if (thread.status !== PIPELINE_PHASE.paused) {
+      throw new Error(`Cannot resume task while in ${thread.status} phase`);
+    }
+    if (!thread.pausedPhase || !PAUSABLE_PHASE_SET.has(thread.pausedPhase)) {
+      throw new Error('Paused task is missing a resumable phase');
+    }
+
+    const project = queries.projects.getById(thread.projectId);
+    if (!project) throw new Error(`Project ${thread.projectId} not found`);
+    const issue =
+      thread.githubIssueNumber != null
+        ? queries.githubIssues.getByNumber(project.id, thread.githubIssueNumber)
+        : null;
+
+    pipeline.rehydrateContext(threadId, project.path, issue?.title);
+    notificationService.dismissByThread(threadId);
+    logEvent('pipeline:start-context', {
+      threadId,
+      source: 'pipeline:resume',
+      projectPath: project.path,
+      githubIssueNumber: thread.githubIssueNumber ?? null,
+      autonomous: thread.autonomous,
+      requireApproval: resolveEffectiveRequireApproval(threadId),
+      reviewRound: thread.reviewRound,
+    });
+
+    emitTerminalEvent(threadId, {
+      kind: 'lifecycle',
+      message: `Resuming paused task from ${thread.pausedPhase}.`,
+    });
+
+    if (thread.pausedPhase === PIPELINE_PHASE.planning) {
+      await pipeline.startPlanGeneration(
+        threadId,
+        thread.prompt,
+        project.path,
+        thread.worktreePath,
+      );
+      return;
+    }
+
+    const { latestPlan, structuredPlan } = getLatestStructuredPlan(threadId);
+
+    if (thread.pausedPhase === PIPELINE_PHASE.reviewing) {
+      await pipeline.startReview(threadId, structuredPlan);
+      return;
+    }
+
+    if (thread.pausedPhase === PIPELINE_PHASE.revising) {
+      await pipeline.startRevision(
+        threadId,
+        structuredPlan,
+        buildRevisionResumeFeedback(latestPlan.id),
+      );
+      return;
+    }
+
+    if (thread.pausedPhase === PIPELINE_PHASE.executing) {
+      const context = pipeline.getContext(threadId);
+      const resumeContext = await buildExecutionResumeContext(thread, queries);
+      if (context && resumeContext) {
+        context.executionResumeContext = resumeContext;
+      }
+      await pipeline.startExecution(threadId, structuredPlan);
+      return;
+    }
+
+    if (thread.pausedPhase === PIPELINE_PHASE.testing) {
+      await pipeline.startTesting(threadId);
+      return;
+    }
+
+    if (thread.pausedPhase === PIPELINE_PHASE.verifying) {
+      await pipeline.startVerification(threadId);
+      return;
+    }
+
+    if (thread.pausedPhase === PIPELINE_PHASE.shipping) {
+      await pipeline.startCommitAndPush(threadId);
+      return;
+    }
+
+    throw new Error(`Unsupported paused phase: ${thread.pausedPhase}`);
+  });
 
   const retryPipelineThread = async (
     threadId: string,

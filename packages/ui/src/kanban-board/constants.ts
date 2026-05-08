@@ -72,6 +72,7 @@ export const COLUMNS: BoardColumn[] = [
     statuses: [
       ISSUE_PIPELINE_STATUS.clarifying,
       ISSUE_PIPELINE_STATUS.awaitingApproval,
+      ISSUE_PIPELINE_STATUS.paused,
       ISSUE_PIPELINE_STATUS.failed,
     ],
     sections: [
@@ -91,6 +92,12 @@ export const COLUMNS: BoardColumn[] = [
         key: 'failed',
         label: 'Failed',
         statuses: [ISSUE_PIPELINE_STATUS.failed],
+        droppable: false,
+      },
+      {
+        key: 'paused',
+        label: 'Paused',
+        statuses: [ISSUE_PIPELINE_STATUS.paused],
         droppable: false,
       },
     ],
@@ -149,6 +156,7 @@ export const DRAGGABLE_STATUSES: IssuePipelineStatus[] = [
   ISSUE_PIPELINE_STATUS.completed,
   ISSUE_PIPELINE_STATUS.failed,
   ISSUE_PIPELINE_STATUS.awaitingApproval,
+  ISSUE_PIPELINE_STATUS.paused,
 ];
 
 export const ACTIVE_STATUSES: IssuePipelineStatus[] = [

@@ -172,6 +172,8 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     lastError: null,
     failurePhase: null,
     failureCount: 0,
+    pausedPhase: null,
+    pausedAt: null,
     createdAt: '2026-04-22T10:00:00.000Z',
     updatedAt: '2026-04-22T10:00:00.000Z',
     plannerResolvedModel: null,

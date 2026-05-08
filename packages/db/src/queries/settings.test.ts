@@ -34,6 +34,8 @@ describe('SettingsQueries', () => {
     expect(s.githubPollingEnabled).toBe(false);
     expect(s.githubPollingIntervalMs).toBe(30000);
     expect(s.githubBotUsername).toBe('');
+    expect(s.maxConcurrentCpuTasks).toBe(1);
+    expect(s.cpuThrottleThresholdPercent).toBe(85);
     expect(s.autoRunPriorities).toEqual([]);
     expect(s.onboardingVersion).toBe(0);
     expect(s.worktreeRoot).toBeNull();
@@ -94,6 +96,8 @@ describe('SettingsQueries', () => {
       fontSize: 15,
       telemetryEnabled: true,
       terminalScrollback: 5000,
+      maxConcurrentCpuTasks: 2,
+      cpuThrottleThresholdPercent: 75,
       projectOpenTarget: 'finder',
       terminalOpenTarget: 'ghostty',
       prdRewriteCli: 'codex',
@@ -108,6 +112,8 @@ describe('SettingsQueries', () => {
     expect(s.fontSize).toBe(15);
     expect(s.telemetryEnabled).toBe(true);
     expect(s.terminalScrollback).toBe(5000);
+    expect(s.maxConcurrentCpuTasks).toBe(2);
+    expect(s.cpuThrottleThresholdPercent).toBe(75);
     expect(s.projectOpenTarget).toBe('finder');
     expect(s.terminalOpenTarget).toBe('ghostty');
     expect(s.prdRewriteCli).toBe('codex');
@@ -275,6 +281,25 @@ describe('SettingsQueries', () => {
       expect(() => settings.set({ maxConcurrentExecutions: 0 })).toThrow('maxConcurrentExecutions');
       expect(() => settings.set({ maxConcurrentExecutions: 11 })).toThrow(
         'maxConcurrentExecutions',
+      );
+    });
+  });
+
+  describe('cpu task guard settings', () => {
+    it('round-trips valid values', () => {
+      settings.set({ maxConcurrentCpuTasks: 3, cpuThrottleThresholdPercent: 90 });
+      expect(settings.get().maxConcurrentCpuTasks).toBe(3);
+      expect(settings.get().cpuThrottleThresholdPercent).toBe(90);
+    });
+
+    it('rejects values outside the allowed ranges', () => {
+      expect(() => settings.set({ maxConcurrentCpuTasks: 0 })).toThrow('maxConcurrentCpuTasks');
+      expect(() => settings.set({ maxConcurrentCpuTasks: 11 })).toThrow('maxConcurrentCpuTasks');
+      expect(() => settings.set({ cpuThrottleThresholdPercent: 49 })).toThrow(
+        'cpuThrottleThresholdPercent',
+      );
+      expect(() => settings.set({ cpuThrottleThresholdPercent: 101 })).toThrow(
+        'cpuThrottleThresholdPercent',
       );
     });
   });

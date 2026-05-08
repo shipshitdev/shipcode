@@ -391,12 +391,38 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     runtime.emitPhase(threadId, 'idle');
   }
 
+  function pause(threadId: string) {
+    const context = activePipelines.get(threadId);
+    if (context) {
+      context.cancelled = true;
+      if (context.retryTimer) {
+        clearTimeout(context.retryTimer);
+        context.retryTimer = null;
+      }
+      try {
+        context.abort.abort();
+      } catch {
+        // best effort
+      }
+      if (context.activeProcessId) {
+        deps.processManager.kill(context.activeProcessId);
+      }
+      if (context.runtimeQaCleanup) {
+        void context.runtimeQaCleanup();
+      }
+    }
+
+    activePipelines.delete(threadId);
+    runtime.emitPhase(threadId, 'paused');
+  }
+
   return {
     rehydrateContext: contextHelpers.rehydrateContext,
     startPlanGeneration: handlers.startPlanGeneration,
     startReview: handlers.startReview,
     startRevision: handlers.startRevision,
     startExecution: handlers.startExecution,
+    startTesting: handlers.startTesting,
     startVerification: handlers.startVerification,
     startCommitAndPush: handlers.startCommitAndPush,
     startShipping: handlers.startShipping,
@@ -406,6 +432,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     startFromAutomation,
     initializeContext: contextHelpers.ensureContext,
     cancel,
+    pause,
     getContext: (threadId: string) => activePipelines.get(threadId),
     listActive: contextHelpers.listActive,
     listActiveInPhases: contextHelpers.listActiveInPhases,

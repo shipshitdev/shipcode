@@ -101,6 +101,8 @@ const makeThread = (overrides: Partial<Thread> = {}): Thread => {
     lastError: null,
     failurePhase: null,
     failureCount: 0,
+    pausedPhase: null,
+    pausedAt: null,
   };
   return { ...base, ...overrides };
 };

@@ -85,4 +85,99 @@ describe('UpdateService.checkNow', () => {
     expect(status.hasUpdate).toBe(true);
     expect(status.latest).toBe('0.2.0');
   });
+
+  it('treats current or older stable tags as up-to-date', async () => {
+    appGetVersionMock.mockReturnValue('1.2.3');
+    global.fetch = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            tag_name: 'v1.2.3',
+            html_url: 'https://example.test/current',
+            published_at: '2026-04-27T00:00:00Z',
+            draft: false,
+            prerelease: false,
+          }),
+          { status: 200 },
+        ),
+    ) as typeof fetch;
+
+    const svc = new UpdateService(makeWindow());
+    const status = await svc.checkNow();
+
+    expect(status.state).toBe('up-to-date');
+    expect(status.hasUpdate).toBe(false);
+    expect(status.latest).toBe('1.2.3');
+    expect(status.releaseUrl).toBe('https://example.test/current');
+  });
+
+  it('skips draft and prerelease responses without surfacing an update', async () => {
+    global.fetch = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            tag_name: 'v99.0.0-beta.1',
+            html_url: 'https://example.test/prerelease',
+            published_at: '2026-04-27T00:00:00Z',
+            draft: false,
+            prerelease: true,
+          }),
+          { status: 200 },
+        ),
+    ) as typeof fetch;
+
+    const svc = new UpdateService(makeWindow());
+    const status = await svc.checkNow();
+
+    expect(status.state).toBe('up-to-date');
+    expect(status.hasUpdate).toBe(false);
+    expect(status.latest).toBeNull();
+    expect(status.error).toBeNull();
+  });
+
+  it('falls back to release name when tag_name is missing', async () => {
+    global.fetch = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            name: 'v0.3.0',
+            html_url: 'https://example.test/name-release',
+            published_at: '2026-04-27T00:00:00Z',
+            draft: false,
+            prerelease: false,
+          }),
+          { status: 200 },
+        ),
+    ) as typeof fetch;
+
+    const svc = new UpdateService(makeWindow());
+    const status = await svc.checkNow();
+
+    expect(status.state).toBe('available');
+    expect(status.latest).toBe('0.3.0');
+    expect(status.releaseTag).toBe('v0.3.0');
+  });
+
+  it('coalesces concurrent update checks into one fetch', async () => {
+    let resolveFetch: (response: Response) => void = () => {};
+    global.fetch = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveFetch = resolve;
+        }),
+    ) as typeof fetch;
+
+    const svc = new UpdateService(makeWindow());
+    const first = svc.checkNow();
+    const second = svc.checkNow();
+    resolveFetch(
+      new Response(JSON.stringify({ tag_name: 'v0.2.0', draft: false, prerelease: false }), {
+        status: 200,
+      }),
+    );
+
+    await expect(first).resolves.toMatchObject({ state: 'available' });
+    await expect(second).resolves.toMatchObject({ state: 'available' });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
 });

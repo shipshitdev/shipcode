@@ -107,6 +107,7 @@ function issueCardToneClass({
   isCompleted,
   isDone,
   isFailed,
+  isPaused,
   isAwaiting,
   isActive,
   approvedAwaitingExecution,
@@ -116,6 +117,7 @@ function issueCardToneClass({
   isCompleted: boolean;
   isDone: boolean;
   isFailed: boolean;
+  isPaused: boolean;
   isAwaiting: boolean;
   isActive: boolean;
   approvedAwaitingExecution: boolean;
@@ -135,6 +137,11 @@ function issueCardToneClass({
     return isSelected
       ? 'border-danger/65 bg-danger/[0.09] opacity-85'
       : 'border-danger/35 bg-danger/[0.045] opacity-70 hover:border-danger/55 hover:bg-danger/[0.06] hover:opacity-80';
+  }
+  if (isPaused) {
+    return isSelected
+      ? 'border-warning bg-warning/[0.07]'
+      : 'border-warning/30 bg-warning/[0.03] hover:border-warning/50';
   }
   if (approvedAwaitingExecution) {
     return isSelected
@@ -191,7 +198,8 @@ function IssueProgressBar({
       : approvedAwaitingExecution
         ? 'bg-agent'
         : status === ISSUE_PIPELINE_STATUS.awaitingApproval ||
-            status === ISSUE_PIPELINE_STATUS.clarifying
+            status === ISSUE_PIPELINE_STATUS.clarifying ||
+            status === ISSUE_PIPELINE_STATUS.paused
           ? 'bg-warning'
           : 'bg-agent';
 
@@ -221,14 +229,19 @@ function PhaseAction({
   isAutomation,
   isTodo,
   isActive,
+  isPaused,
   isFailed,
   isCompleted,
   approvedAwaitingExecution,
   isStartingPipeline,
+  isPausing,
+  isResuming,
   isCancelling,
   isRerunning,
   isMarkingDone,
   onStartPipeline,
+  onPause,
+  onResume,
   onCancel,
   onRerun,
   onMarkDone,
@@ -240,14 +253,19 @@ function PhaseAction({
   isAutomation: boolean;
   isTodo: boolean;
   isActive: boolean;
+  isPaused: boolean;
   isFailed: boolean;
   isCompleted: boolean;
   approvedAwaitingExecution: boolean;
   isStartingPipeline?: boolean;
+  isPausing?: boolean;
+  isResuming?: boolean;
   isCancelling?: boolean;
   isRerunning?: boolean;
   isMarkingDone?: boolean;
   onStartPipeline?: (issue: GitHubIssueCacheRecord) => void;
+  onPause?: (issue: GitHubIssueCacheRecord) => void;
+  onResume?: (issue: GitHubIssueCacheRecord) => void;
   onCancel?: (issue: GitHubIssueCacheRecord) => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
   onMarkDone?: (issue: GitHubIssueCacheRecord) => void;
@@ -304,6 +322,68 @@ function PhaseAction({
           ) : (
             'PLAN'
           )}
+        </Button>
+      </span>
+    );
+  }
+
+  if (isActive && onPause) {
+    return (
+      <span className="relative inline-flex items-center">
+        <span
+          className={cn(
+            'pointer-events-none transition-opacity group-hover:opacity-0',
+            isPausing && 'opacity-0',
+          )}
+        >
+          <PhaseChip status={status} />
+        </span>
+        <Button
+          variant="ghost"
+          size="xs"
+          className={cn(ACTION_BADGE_CLASS, DANGER_ACTION_BADGE_CLASS, isPausing && 'opacity-100')}
+          title={isPausing ? 'Pausing task' : 'Pause task'}
+          aria-label={isPausing ? 'Pausing task' : 'Pause task'}
+          disabled={isPausing}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (isPausing) return;
+            onPause(issue);
+          }}
+        >
+          {isPausing ? <Loader2 size={10} className="animate-spin" /> : <Square size={10} />}
+        </Button>
+      </span>
+    );
+  }
+
+  if (isPaused && onResume) {
+    return (
+      <span className="relative inline-flex items-center">
+        <span
+          className={cn(
+            'pointer-events-none transition-opacity group-hover:opacity-0',
+            isResuming && 'opacity-0',
+          )}
+        >
+          <PhaseChip status={status} />
+        </span>
+        <Button
+          variant="ghost"
+          size="xs"
+          className={cn(ACTION_BADGE_CLASS, PLAN_ACTION_BADGE_CLASS, isResuming && 'opacity-100')}
+          title={isResuming ? 'Resuming task' : 'Resume task'}
+          aria-label={isResuming ? 'Resuming task' : 'Resume task'}
+          disabled={isResuming}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (isResuming) return;
+            onResume(issue);
+          }}
+        >
+          {isResuming ? <Loader2 size={10} className="animate-spin" /> : <Play size={10} />}
         </Button>
       </span>
     );
@@ -480,6 +560,8 @@ interface DraggableCardProps {
   readOnly?: boolean;
   onClick: (issue: GitHubIssueCacheRecord) => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void;
+  onPause?: (issue: GitHubIssueCacheRecord) => void;
+  onResume?: (issue: GitHubIssueCacheRecord) => void;
   onCancel?: (issue: GitHubIssueCacheRecord) => void;
   onStartPipeline?: (issue: GitHubIssueCacheRecord) => void;
   onOpenPullRequest?: (url: string) => void;
@@ -494,6 +576,8 @@ interface DraggableCardProps {
   isKeyboardFocused?: boolean;
   isRerunning?: boolean;
   isStartingPipeline?: boolean;
+  isPausing?: boolean;
+  isResuming?: boolean;
   isCancelling?: boolean;
   isMarkingDone?: boolean;
   isFlashing?: boolean;
@@ -512,6 +596,8 @@ function DraggableCardComponent({
   readOnly = false,
   onClick,
   onRerun,
+  onPause,
+  onResume,
   onCancel,
   onStartPipeline,
   onOpenPullRequest,
@@ -526,6 +612,8 @@ function DraggableCardComponent({
   isKeyboardFocused,
   isRerunning,
   isStartingPipeline,
+  isPausing,
+  isResuming,
   isCancelling,
   isMarkingDone,
   isFlashing = false,
@@ -549,6 +637,7 @@ function DraggableCardComponent({
 
   const isFailed = presentationStatus === ISSUE_PIPELINE_STATUS.failed;
   const isClarifying = presentationStatus === ISSUE_PIPELINE_STATUS.clarifying;
+  const isPaused = presentationStatus === ISSUE_PIPELINE_STATUS.paused;
   const isAwaitingApproval =
     presentationStatus === ISSUE_PIPELINE_STATUS.awaitingApproval && !approvedAwaitingExecution;
   const isAwaiting = isAwaitingApproval || isClarifying;
@@ -581,6 +670,7 @@ function DraggableCardComponent({
             isCompleted,
             isDone,
             isFailed,
+            isPaused,
             isAwaiting,
             isActive,
             approvedAwaitingExecution,
@@ -695,6 +785,18 @@ function DraggableCardComponent({
                   <DropdownMenuItem onClick={() => onStartPipeline(issue)}>
                     <Play size={14} />
                     Start Pipeline
+                  </DropdownMenuItem>
+                )}
+                {isActive && onPause && (
+                  <DropdownMenuItem onClick={() => onPause(issue)}>
+                    <Square size={14} />
+                    Pause
+                  </DropdownMenuItem>
+                )}
+                {isPaused && onResume && (
+                  <DropdownMenuItem onClick={() => onResume(issue)}>
+                    <Play size={14} />
+                    Resume
                   </DropdownMenuItem>
                 )}
                 {isActive && onCancel && (
@@ -871,14 +973,19 @@ function DraggableCardComponent({
             isAutomation={isAutomation}
             isTodo={isTodo}
             isActive={isActive}
+            isPaused={isPaused}
             isFailed={isFailed}
             isCompleted={isCompleted}
             approvedAwaitingExecution={approvedAwaitingExecution}
             isStartingPipeline={isStartingPipeline}
+            isPausing={isPausing}
+            isResuming={isResuming}
             isCancelling={isCancelling}
             isRerunning={isRerunning}
             isMarkingDone={isMarkingDone}
             onStartPipeline={onStartPipeline}
+            onPause={onPause}
+            onResume={onResume}
             onCancel={onCancel}
             onRerun={onRerun}
             onMarkDone={onMarkDone}

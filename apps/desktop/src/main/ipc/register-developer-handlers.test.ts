@@ -39,6 +39,12 @@ vi.mock('../logger.service', () => ({
 }));
 
 function makeDeps(isDestroyed = false) {
+  const resourceMonitor = {
+    getSnapshot: vi.fn(async () => ({ cpuPercent: 12, tasks: [] })),
+  };
+  const processManager = {
+    kill: vi.fn(),
+  };
   return {
     ipcMain: {
       handle: vi.fn((channel: string, listener: (...args: unknown[]) => unknown) => {
@@ -51,6 +57,8 @@ function makeDeps(isDestroyed = false) {
         openDevTools: vi.fn(),
       },
     },
+    processManager,
+    resourceMonitor,
   };
 }
 
@@ -109,5 +117,18 @@ describe('registerDeveloperHandlers', () => {
     handlers.get('developer:set-log-level')?.(undefined, { level: 'debug' });
     const log = await import('../logger.service');
     expect(log.default.transports.file.level).toBe('debug');
+  });
+
+  it('returns process resource usage and kills managed processes', async () => {
+    const deps = makeDeps();
+    registerDeveloperHandlers(deps as never, {} as never);
+
+    await expect(handlers.get('process:list-resource-usage')?.()).resolves.toMatchObject({
+      cpuPercent: 12,
+      tasks: [],
+    });
+
+    handlers.get('process:kill')?.(undefined, { processId: 'proc-1' });
+    expect(deps.processManager.kill).toHaveBeenCalledWith('proc-1');
   });
 });

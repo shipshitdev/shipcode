@@ -36,6 +36,7 @@ import type {
   PhaseSkillKey,
   PipelinePhase,
   PlanReview,
+  ProjectFailureRecord,
   ReasoningEffort,
   ShipCodePlan,
   VerificationResult,
@@ -63,6 +64,18 @@ export interface PromptTelemetryPersistenceDiagnostic {
   nonFatal: true;
 }
 
+export interface CpuTaskGateDecision {
+  allowed: boolean;
+  reason?: string;
+  cpuPercent?: number | null;
+  thresholdPercent?: number | null;
+}
+
+export interface CpuTaskGate {
+  canStartCpuTask(): CpuTaskGateDecision;
+  retryDelayMs?: number;
+}
+
 export interface PipelineTaskGraphQueries {
   replaceForPlan(
     threadId: string,
@@ -80,6 +93,20 @@ export interface PipelineTaskGraphQueries {
   updateNodeGithubIssueNumber(nodeId: string, issueNumber: number): TaskGraphWithNodes;
 }
 
+export interface ProjectFailureLedgerQueries {
+  claimOrCreate(input: {
+    projectId: string;
+    baseBranch: string | null;
+    fingerprint: string;
+    threadId: string;
+    command: string;
+    summary: string;
+    outputExcerpt: string;
+    implicatedFiles: string[];
+  }): ProjectFailureRecord;
+  resolveOwnedByThread(threadId: string, commitSha: string): number;
+}
+
 // Typed event contract -- both desktop and CLI adapters must handle these
 export type PipelineEvent =
   | { type: 'pipeline:phase'; threadId: string; phase: PipelinePhase }
@@ -91,6 +118,7 @@ export type PipelineEvent =
         | 'quick-task:start'
         | 'pipeline:start'
         | 'pipeline:retry'
+        | 'pipeline:resume'
         | 'pipeline:approve'
         | 'automation:tick';
       projectPath: string;
@@ -295,6 +323,10 @@ export interface PipelineContext {
   runtimeQaCleanup: (() => Promise<void>) | null;
   /** Captured output from runtime QA test commands. Fed to verifier. */
   runtimeQaOutput: string | null;
+  /** Timestamp when this thread started waiting for a CPU-heavy local command slot. */
+  cpuQueueStartedAt: number | null;
+  /** Last terminal notice emitted while waiting for a CPU-heavy local command slot. */
+  cpuQueueLastNotifiedAt: number | null;
 }
 
 export interface ActivePipelineSummary {
@@ -320,6 +352,7 @@ export interface PipelineDeps {
   githubIssues: GitHubIssueQueries;
   checkpoints: CheckpointQueries;
   projects: ProjectQueries;
+  projectFailures?: ProjectFailureLedgerQueries;
   settings: SettingsQueries;
   providers: ProviderRegistry;
   /** Per-phase prompt skill overrides (project + global). The pipeline passes
@@ -351,6 +384,8 @@ export interface PipelineDeps {
    * exists in the PRD.
    */
   featureQaResults?: FeatureQaResultQueries;
+  /** Optional host-resource gate for local shell test/runtime QA commands. */
+  cpuTaskGate?: CpuTaskGate;
 }
 
 export interface Pipeline {
@@ -363,6 +398,7 @@ export interface Pipeline {
   startReview: (threadId: string, plan: ShipCodePlan) => Promise<void>;
   startRevision: (threadId: string, plan: ShipCodePlan, reviewFeedback: string) => Promise<void>;
   startExecution: (threadId: string, plan: ShipCodePlan) => Promise<void>;
+  startTesting: (threadId: string) => Promise<void>;
   startVerification: (threadId: string) => Promise<void>;
   startCommitAndPush: (threadId: string) => Promise<void>;
   startShipping: (threadId: string) => Promise<void>;
@@ -448,6 +484,7 @@ export interface Pipeline {
     seed: Partial<PipelineContext> & Pick<PipelineContext, 'projectPath'>,
   ) => PipelineContext;
   cancel: (threadId: string) => void;
+  pause: (threadId: string) => void;
   getContext: (threadId: string) => PipelineContext | undefined;
   listActive: () => ActivePipelineSummary[];
   listActiveInPhases: (phases: readonly string[]) => ActivePipelineSummary[];

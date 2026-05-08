@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import '@testing-library/jest-dom/vitest';
 import type { Project, SystemHealth } from '@shipcode/shared';
 import { DEFAULT_SETTINGS } from '@shipcode/shared';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
@@ -93,7 +94,10 @@ describe('Titlebar', () => {
   beforeEach(() => {
     cleanup();
     invokeMock.mockReset();
-    window.shipcode.invoke = invokeMock as unknown as typeof window.shipcode.invoke;
+    window.shipcode = {
+      invoke: invokeMock as unknown as typeof window.shipcode.invoke,
+      on: vi.fn(() => () => {}) as unknown as typeof window.shipcode.on,
+    };
 
     useAppStore.setState({
       activeProjectId: null,
@@ -167,6 +171,59 @@ describe('Titlebar', () => {
     expect(trigger).toBeInTheDocument();
     expect(trigger.querySelector('[title^="Codex:"]')).not.toBeNull();
     expect(trigger.querySelector('[title^="Claude:"]')).not.toBeNull();
+  });
+
+  it('shows high-CPU managed tasks and can kill a selected process', async () => {
+    invokeMock.mockImplementation(async (channel, args) => {
+      if (channel === 'settings:get') return DEFAULT_SETTINGS;
+      if (channel === 'health:check') return readyHealth;
+      if (channel === 'provider-usage:check') return makeUsageMap();
+      if (channel === 'process:list-resource-usage') {
+        return {
+          capturedAt: '2026-05-08T10:00:00.000Z',
+          cpuPercent: 92,
+          cpuCoreCount: 8,
+          highCpu: true,
+          tasks: [
+            {
+              processId: 'proc-hot',
+              type: 'shell',
+              state: 'running',
+              pid: 1234,
+              childPids: [1235],
+              threadId: 'thread-1',
+              projectId: 'project-1',
+              projectName: 'ShipCode',
+              threadTitle: 'Run all tests',
+              phase: 'testing',
+              cwd: '/tmp/shipcode',
+              command: '/bin/zsh',
+              cpuPercent: 148.2,
+              memoryBytes: 512 * 1024 * 1024,
+              startedAt: Date.now(),
+              lastEventAt: Date.now(),
+              highCpu: true,
+            },
+          ],
+        };
+      }
+      if (channel === 'process:kill') return { killed: args };
+      return null;
+    });
+
+    renderWithProviders();
+
+    const trigger = await screen.findByRole('button', { name: 'CPU usage' });
+    expect(trigger).toHaveTextContent('CPU 92%');
+    fireEvent.click(trigger);
+
+    expect(await screen.findByText('Run all tests')).toBeInTheDocument();
+    expect(screen.getByText('148.2%')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Kill Run all tests' }));
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('process:kill', { processId: 'proc-hot' });
+    });
   });
 
   it('opens a popover with the full CLI summary when the pill is clicked and closes on Escape', async () => {

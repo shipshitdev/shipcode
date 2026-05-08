@@ -12,6 +12,7 @@ const STATUS_STYLES: Record<IssuePipelineStatus, string> = {
   reviewing: 'border-agent/60 bg-elevated',
   revising: 'border-agent/60 bg-elevated',
   awaiting_approval: 'border-warning/60 bg-elevated',
+  paused: 'border-warning/60 bg-elevated',
   executing: 'border-success/60 bg-elevated',
   testing: 'border-success/60 bg-elevated',
   verifying: 'border-success/60 bg-elevated',
@@ -41,7 +42,13 @@ export function IssueGraphNode({ data, selected }: NodeProps) {
           <div className="line-clamp-2 text-sm font-medium text-primary">{payload.title}</div>
         </div>
         <Badge
-          variant={payload.pipelineStatus === ISSUE_PIPELINE_STATUS.failed ? 'danger' : 'info'}
+          variant={
+            payload.pipelineStatus === ISSUE_PIPELINE_STATUS.failed
+              ? 'danger'
+              : payload.pipelineStatus === ISSUE_PIPELINE_STATUS.paused
+                ? 'warning'
+                : 'info'
+          }
           className="text-[10px]"
         >
           {payload.pipelineStatus}

@@ -1,15 +1,21 @@
 import type { ActivityQueries, NotificationsQueries, SettingsQueries } from '@shipcode/db';
 import type { NotificationRecord, Thread } from '@shipcode/shared';
 import type { BrowserWindow } from 'electron';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { setBadgeMock, notificationShowMock, notificationOnMock, notificationIsSupportedMock } =
-  vi.hoisted(() => ({
-    setBadgeMock: vi.fn(),
-    notificationShowMock: vi.fn(),
-    notificationOnMock: vi.fn(),
-    notificationIsSupportedMock: vi.fn(() => true),
-  }));
+const {
+  setBadgeMock,
+  notificationShowMock,
+  notificationOnMock,
+  notificationIsSupportedMock,
+  notificationClickHandlers,
+} = vi.hoisted(() => ({
+  setBadgeMock: vi.fn(),
+  notificationShowMock: vi.fn(),
+  notificationOnMock: vi.fn(),
+  notificationIsSupportedMock: vi.fn(() => true),
+  notificationClickHandlers: [] as Array<() => void>,
+}));
 
 vi.mock('electron', () => {
   class NotificationMock {
@@ -17,6 +23,7 @@ vi.mock('electron', () => {
 
     on(event: string, handler: () => void) {
       notificationOnMock(event, handler);
+      if (event === 'click') notificationClickHandlers.push(handler);
       return this;
     }
 
@@ -68,6 +75,8 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     lastError: null,
     failurePhase: null,
     failureCount: 0,
+    pausedPhase: null,
+    pausedAt: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     plannerResolvedModel: null,
@@ -130,6 +139,8 @@ describe('NotificationService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    notificationClickHandlers.length = 0;
+    notificationIsSupportedMock.mockReturnValue(true);
     (notificationQueries.listActive as ReturnType<typeof vi.fn>).mockReturnValue([]);
     (notificationQueries.listByThread as ReturnType<typeof vi.fn>).mockReturnValue([]);
     (settingsQueries.get as ReturnType<typeof vi.fn>).mockReturnValue({
@@ -145,6 +156,10 @@ describe('NotificationService', () => {
         ciBlocked: true,
       },
     });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it.skipIf(process.platform !== 'darwin')('refreshBadge counts completed notifications', () => {
@@ -195,6 +210,7 @@ describe('NotificationService', () => {
     );
     expect(webContentsSendMock).toHaveBeenCalledWith('notification:fire', record);
     expect(notificationShowMock).toHaveBeenCalledTimes(1);
+    expect(notificationQueries.dismissByThread).toHaveBeenCalledWith(thread.id);
   });
 
   it('fires approval-needed notifications with direct copy', () => {
@@ -223,5 +239,103 @@ describe('NotificationService', () => {
       body: 'Review pricing page is waiting for approval before execution',
     });
     expect(webContentsSendMock).toHaveBeenCalledWith('notification:fire', record);
+  });
+
+  it('suppresses a generic failure immediately after verification exhausted', () => {
+    const thread = makeThread({ status: 'failed' });
+    const service = new NotificationService(
+      mainWindow,
+      notificationQueries,
+      settingsQueries,
+      activityQueries,
+    );
+
+    service.markVerificationExhausted(thread.id);
+    service.fire('failed', thread);
+
+    expect(notificationQueries.create).not.toHaveBeenCalled();
+    expect(webContentsSendMock).not.toHaveBeenCalledWith('notification:fire', expect.anything());
+  });
+
+  it('dedupes identical thread notifications inside the dedupe window', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-08T10:00:00Z'));
+    const thread = makeThread({ status: 'failed' });
+    const service = new NotificationService(
+      mainWindow,
+      notificationQueries,
+      settingsQueries,
+      activityQueries,
+    );
+    (notificationQueries.create as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeNotificationRecord({ kind: 'failed' }),
+    );
+
+    service.fire('failed', thread);
+    service.fire('failed', thread);
+    vi.setSystemTime(new Date('2026-05-08T10:00:03Z'));
+    service.fire('failed', thread);
+
+    expect(notificationQueries.create).toHaveBeenCalledTimes(2);
+  });
+
+  it('focuses the thread when an OS notification is clicked', () => {
+    const thread = makeThread({ status: 'failed' });
+    const service = new NotificationService(
+      mainWindow,
+      notificationQueries,
+      settingsQueries,
+      activityQueries,
+    );
+    (mainWindow.isMinimized as ReturnType<typeof vi.fn>).mockReturnValueOnce(true);
+    (notificationQueries.create as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeNotificationRecord({ kind: 'failed' }),
+    );
+
+    service.fire('failed', thread);
+    notificationClickHandlers[0]?.();
+
+    expect(mainWindow.restore).toHaveBeenCalled();
+    expect(mainWindow.show).toHaveBeenCalled();
+    expect(mainWindow.focus).toHaveBeenCalled();
+    expect(webContentsSendMock).toHaveBeenCalledWith('notification:focus-thread', {
+      threadId: thread.id,
+      projectId: thread.projectId,
+    });
+  });
+
+  it('does not create records when notifications or event kinds are disabled', () => {
+    const service = new NotificationService(
+      mainWindow,
+      notificationQueries,
+      settingsQueries,
+      activityQueries,
+    );
+
+    (settingsQueries.get as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+      notificationsEnabled: false,
+      notificationEvents: {
+        awaitingApproval: true,
+        failed: true,
+        completed: true,
+        verificationExhausted: true,
+        ciBlocked: true,
+      },
+    });
+    service.fire('completed', makeThread());
+
+    (settingsQueries.get as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+      notificationsEnabled: true,
+      notificationEvents: {
+        awaitingApproval: true,
+        failed: true,
+        completed: false,
+        verificationExhausted: true,
+        ciBlocked: true,
+      },
+    });
+    service.fire('completed', makeThread({ id: 'thread-2' }));
+
+    expect(notificationQueries.create).not.toHaveBeenCalled();
   });
 });

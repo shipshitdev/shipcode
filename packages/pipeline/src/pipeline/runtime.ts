@@ -1,4 +1,4 @@
-import { execFile, spawn } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
@@ -124,52 +124,76 @@ export function createPipelineRuntime(
       let settled = false;
       const chunks: string[] = [];
       const shell = resolveSetupShell();
-      const child = spawn(shell.command, shell.args(command), {
+      const managed = deps.processManager.spawnWithStdin(
+        'shell',
+        shell.command,
+        shell.args(command),
         cwd,
-        env: { ...shellExecEnv(), ...options?.extraEnv },
-        signal,
-      });
+        '',
+        threadId,
+        {
+          detached: true,
+          extraEnv: { ...shellExecEnv(), ...options?.extraEnv },
+        },
+      );
+
+      const cleanup = () => {
+        clearTimeout(timer);
+        deps.processManager.removeListener('output', onOutput);
+        deps.processManager.removeListener('exit', onExit);
+        signal.removeEventListener('abort', onAbort);
+      };
+
+      const rejectOnce = (error: Error) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        rejectPromise(error);
+      };
 
       const timer = setTimeout(() => {
         if (settled) return;
-        settled = true;
         emitTerminalRaw(
           threadId,
           `\r\n[shipcode] Command timed out after ${Math.round(timeoutMs / 60_000)}m — killing process.\r\n`,
         );
-        child.kill('SIGTERM');
+        deps.processManager.kill(managed.id);
         setTimeout(() => {
           try {
-            child.kill('SIGKILL');
+            const proc = deps.processManager.get(managed.id);
+            if (proc && proc.state !== 'exited') deps.processManager.kill(managed.id, 'SIGKILL');
           } catch {}
         }, 5_000);
-        rejectPromise(
+        rejectOnce(
           new Error(
             `Command timed out after ${Math.round(timeoutMs / 60_000)} minutes: ${command}`,
           ),
         );
       }, timeoutMs);
 
-      const onData = (chunk: Buffer) => {
-        const text = chunk.toString();
-        chunks.push(text);
-        emitTerminalRaw(threadId, text);
+      const onOutput = (processId: string, chunk: string) => {
+        if (processId !== managed.id) return;
+        chunks.push(chunk);
+        emitTerminalRaw(threadId, chunk);
       };
 
-      child.stdout?.on('data', onData);
-      child.stderr?.on('data', onData);
-      child.on('error', (err) => {
-        if (settled) return;
+      const onExit = (processId: string, exitCode: number) => {
+        if (processId !== managed.id || settled) return;
         settled = true;
-        clearTimeout(timer);
-        rejectPromise(err);
-      });
-      child.on('close', (code) => {
+        const output = chunks.join('');
+        cleanup();
+        resolvePromise({ exitCode, output });
+      };
+
+      const onAbort = () => {
         if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        resolvePromise({ exitCode: code ?? 1, output: chunks.join('') });
-      });
+        deps.processManager.kill(managed.id);
+        rejectOnce(new Error(`Command aborted: ${command}`));
+      };
+
+      deps.processManager.on('output', onOutput);
+      deps.processManager.on('exit', onExit);
+      signal.addEventListener('abort', onAbort, { once: true });
     });
   }
 

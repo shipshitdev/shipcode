@@ -71,6 +71,8 @@ import {
   migrateV48,
   migrateV49,
   migrateV50,
+  migrateV51,
+  migrateV52,
 } from './schema';
 
 export { ActivityQueries } from './queries/activity';
@@ -96,6 +98,7 @@ export { PipelineAnalyticsQueries } from './queries/pipeline-analytics';
 export { PhaseLogQueries } from './queries/pipeline-phase-log';
 export { PipelineStepQueries } from './queries/pipeline-steps';
 export { PlanQueries } from './queries/plans';
+export { ProjectFailureQueries } from './queries/project-failures';
 export { ProjectQueries } from './queries/projects';
 export { PromptTelemetryQueries } from './queries/prompt-telemetry';
 export { ReviewQueries } from './queries/reviews';
@@ -176,6 +179,8 @@ export function getDatabase(dataDir: string): DatabaseSync {
   migrateV48(db);
   migrateV49(db);
   migrateV50(db);
+  migrateV51(db);
+  migrateV52(db);
 
   // Startup cleanup: reset unclaimed queued issues to todo on every launch.
   // An unclaimed queued issue has no active worker holding it — it's stale state

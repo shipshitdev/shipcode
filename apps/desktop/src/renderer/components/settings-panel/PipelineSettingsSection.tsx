@@ -154,6 +154,44 @@ export function PipelineSettingsSection({
               />
             </SettingsRow>
             <SettingsRow
+              label="Max concurrent CPU tasks"
+              htmlFor="max-concurrent-cpu-tasks"
+              description="How many local test/build/runtime QA command phases can run across all projects."
+            >
+              <Input
+                id="max-concurrent-cpu-tasks"
+                type="number"
+                className="w-[80px]"
+                value={settings.maxConcurrentCpuTasks}
+                onChange={(e) => {
+                  const value = Number.parseInt(e.target.value, 10);
+                  if (value >= 1 && value <= 10) onUpdate({ maxConcurrentCpuTasks: value });
+                }}
+                min={1}
+                max={10}
+                step={1}
+              />
+            </SettingsRow>
+            <SettingsRow
+              label="CPU throttle threshold"
+              htmlFor="cpu-throttle-threshold"
+              description="New local test/build/runtime QA command phases wait while host CPU is at or above this level."
+            >
+              <Input
+                id="cpu-throttle-threshold"
+                type="number"
+                className="w-[80px]"
+                value={settings.cpuThrottleThresholdPercent}
+                onChange={(e) => {
+                  const value = Number.parseInt(e.target.value, 10);
+                  if (value >= 50 && value <= 100) onUpdate({ cpuThrottleThresholdPercent: value });
+                }}
+                min={50}
+                max={100}
+                step={1}
+              />
+            </SettingsRow>
+            <SettingsRow
               label="Default speed profile"
               description="Smart fast runs contained work in one execution pass. Thorough keeps task-graph decomposition and node verification."
             >

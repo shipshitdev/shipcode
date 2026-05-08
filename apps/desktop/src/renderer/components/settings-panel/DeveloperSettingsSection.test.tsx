@@ -4,8 +4,39 @@ import type { DeveloperInfo } from '@shipcode/shared';
 import { DEFAULT_SETTINGS } from '@shipcode/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DeveloperSettingsSection } from './DeveloperSettingsSection';
+
+vi.mock('@shipshitdev/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@shipshitdev/ui')>();
+
+  return {
+    ...actual,
+    Select: ({
+      children,
+      onValueChange,
+      value,
+    }: {
+      children: ReactNode;
+      onValueChange: (value: string) => void;
+      value: string;
+    }) => (
+      <div data-select-value={value}>
+        {children}
+        {['error', 'warn', 'info', 'debug'].map((next) => (
+          <button key={next} type="button" onClick={() => onValueChange(next)}>
+            {next}
+          </button>
+        ))}
+      </div>
+    ),
+    SelectContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+    SelectItem: ({ children }: { children: ReactNode; value: string }) => <div>{children}</div>,
+    SelectTrigger: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+    SelectValue: () => <span />,
+  };
+});
 
 const MOCK_UPDATE_STATUS = {
   current: '0.1.0',
@@ -135,7 +166,11 @@ describe('DeveloperSettingsSection', () => {
       wrapper: createWrapper(),
     });
 
-    // The Select is rendered with the default 'debug' value
-    expect(screen.getByText('Debug')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'info' }));
+
+    expect(onUpdate).toHaveBeenCalledWith({ devLogLevel: 'info' });
+    expect(window.shipcode.invoke).toHaveBeenCalledWith('developer:set-log-level', {
+      level: 'info',
+    });
   });
 });

@@ -26,6 +26,7 @@ const ACTIVE_PHASES: PipelinePhase[] = [
 const BLOCKED_PHASES: PipelinePhase[] = [
   PIPELINE_PHASE.clarifying,
   PIPELINE_PHASE.awaitingApproval,
+  PIPELINE_PHASE.paused,
 ];
 
 // Pre-built Sets for O(1) membership checks in getStats(). Derived from

@@ -7,7 +7,7 @@ import type { UpdateService } from '../update-service';
 import type { IpcHandlerDeps } from './types';
 
 export function registerDeveloperHandlers(
-  { ipcMain, mainWindow }: IpcHandlerDeps,
+  { ipcMain, mainWindow, processManager, resourceMonitor }: IpcHandlerDeps,
   updateService: UpdateService,
 ): void {
   ipcMain.handle('developer:get-info', async (): Promise<DeveloperInfo> => {
@@ -52,6 +52,21 @@ export function registerDeveloperHandlers(
       log.transports.file.level = level;
     },
   );
+
+  ipcMain.handle('process:list-resource-usage', () => {
+    if (resourceMonitor) return resourceMonitor.getSnapshot();
+    return {
+      capturedAt: new Date().toISOString(),
+      cpuPercent: 0,
+      cpuCoreCount: os.cpus().length,
+      highCpu: false,
+      tasks: [],
+    };
+  });
+
+  ipcMain.handle('process:kill', (_event, { processId }: { processId: string }) => {
+    processManager.kill(processId);
+  });
 
   ipcMain.handle('update:get-status', () => updateService.getStatus());
 

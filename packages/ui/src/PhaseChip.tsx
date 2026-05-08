@@ -12,6 +12,7 @@ const PHASE_COLOR: Record<string, string> = {
   testing: AGENT_PHASE_CLASSES,
   verifying: AGENT_PHASE_CLASSES,
   shipping: AGENT_PHASE_CLASSES,
+  paused: 'bg-warning/12 text-warning border-warning/25',
   awaiting_approval: 'bg-warning/15 text-warning border-warning/30',
   completed: 'bg-success/12 text-success border-success/20',
   done: 'bg-done/18 text-done border-done/35',

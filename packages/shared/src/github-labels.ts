@@ -158,6 +158,11 @@ export const SHIPCODE_PIPELINE_LABELS: readonly GitHubLabelDefinition[] = [
     description: 'Agent is opening or merging a PR.',
   },
   {
+    name: 'shipcode:pipeline:paused',
+    color: '6e7781',
+    description: 'Pipeline is paused and can be resumed.',
+  },
+  {
     name: 'shipcode:pipeline:failed',
     color: 'b60205',
     description: 'Pipeline encountered an error.',
@@ -192,6 +197,7 @@ const AGENT_LOOP_STATUSES = new Set<IssuePipelineStatus>([
 const HUMAN_STATUSES = new Set<IssuePipelineStatus>([
   ISSUE_PIPELINE_STATUS.clarifying,
   ISSUE_PIPELINE_STATUS.awaitingApproval,
+  ISSUE_PIPELINE_STATUS.paused,
   ISSUE_PIPELINE_STATUS.failed,
 ]);
 
@@ -241,6 +247,8 @@ export function pipelineLabelForStatus(
       return 'shipcode:pipeline:verifying';
     case ISSUE_PIPELINE_STATUS.shipping:
       return 'shipcode:pipeline:shipping';
+    case ISSUE_PIPELINE_STATUS.paused:
+      return 'shipcode:pipeline:paused';
     case ISSUE_PIPELINE_STATUS.failed:
       return 'shipcode:pipeline:failed';
     default:

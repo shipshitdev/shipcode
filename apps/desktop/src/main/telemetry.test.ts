@@ -99,4 +99,65 @@ describe('telemetry', () => {
       disabledReason: 'missing-dsn',
     });
   });
+
+  it('sanitizes messages, breadcrumbs, arrays, and long strings before capture', async () => {
+    const adapter = makeAdapter();
+    const controller = new MainTelemetryController(async () => adapter, {
+      SHIPCODE_SENTRY_DSN: 'dsn',
+    });
+
+    await controller.configure({ telemetryEnabled: true });
+    controller.captureMessage('pipeline warning', {
+      tags: {
+        surface: 'pipeline',
+        projectId: null,
+        threadId: 'thread-1',
+      },
+      extra: {
+        terminalOutput: 'raw terminal text',
+        items: Array.from({ length: 25 }, (_, index) => ({ index, tokenValue: `token-${index}` })),
+        longValue: 'x'.repeat(520),
+      },
+    });
+    controller.addBreadcrumb({
+      category: 'ipc',
+      rawPayload: 'secret payload',
+      safe: 'visible',
+    });
+
+    expect(adapter.captureMessage).toHaveBeenCalledWith(
+      'pipeline warning',
+      expect.objectContaining({
+        tags: { surface: 'pipeline', threadId: 'thread-1' },
+        extra: {
+          terminalOutput: '[redacted]',
+          items: expect.arrayContaining([expect.objectContaining({ tokenValue: '[redacted]' })]),
+          longValue: `${'x'.repeat(500)}...`,
+        },
+      }),
+    );
+    expect(
+      (adapter.captureMessage as ReturnType<typeof vi.fn>).mock.calls[0][1]?.extra.items,
+    ).toHaveLength(20);
+    expect(adapter.addBreadcrumb).toHaveBeenCalledWith({
+      category: 'ipc',
+      rawPayload: '[redacted]',
+      safe: 'visible',
+    });
+  });
+
+  it('ignores capture calls before telemetry is initialized', () => {
+    const adapter = makeAdapter();
+    const controller = new MainTelemetryController(async () => adapter, {
+      SHIPCODE_SENTRY_DSN: 'dsn',
+    });
+
+    controller.captureException(new Error('ignored'));
+    controller.captureMessage('ignored');
+    controller.addBreadcrumb({ category: 'ignored' });
+
+    expect(adapter.captureException).not.toHaveBeenCalled();
+    expect(adapter.captureMessage).not.toHaveBeenCalled();
+    expect(adapter.addBreadcrumb).not.toHaveBeenCalled();
+  });
 });

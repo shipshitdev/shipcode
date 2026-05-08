@@ -312,6 +312,8 @@ export function createPipelineContextHelpers(
       featureQaState: seed.featureQaState ?? null,
       runtimeQaCleanup: null,
       runtimeQaOutput: null,
+      cpuQueueStartedAt: seed.cpuQueueStartedAt ?? null,
+      cpuQueueLastNotifiedAt: seed.cpuQueueLastNotifiedAt ?? null,
     };
     activePipelines.set(threadId, context);
     emitWorkflowWarning(deps, context);

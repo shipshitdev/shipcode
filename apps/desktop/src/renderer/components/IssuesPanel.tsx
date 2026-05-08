@@ -227,6 +227,10 @@ export function IssuesPanel() {
   const project: Project | null = panelData?.project ?? null;
   const settings: AppSettings | undefined = panelData?.settings;
   const threads: Thread[] = panelData?.threads ?? [];
+  const threadById = useMemo(
+    () => new Map(threads.map((thread) => [thread.id, thread])),
+    [threads],
+  );
 
   // Auto-run state
   const [autoRunPriorities, setAutoRunPriorities] = useState<Array<'p0' | 'p1' | 'p2' | 'p3'>>(
@@ -464,7 +468,9 @@ export function IssuesPanel() {
 
   const patchThreadOptimistic = (
     threadId: string,
-    patch: Partial<Pick<Thread, 'status' | 'doneAt' | 'updatedAt' | 'archivedAt'>>,
+    patch: Partial<
+      Pick<Thread, 'status' | 'doneAt' | 'updatedAt' | 'archivedAt' | 'pausedPhase' | 'pausedAt'>
+    >,
   ) => {
     queryClient.setQueryData<IssuesPanelData | undefined>(
       ['thread-panel-data', activeProjectId],
@@ -742,6 +748,8 @@ export function IssuesPanel() {
             patchThreadOptimistic(issue.threadId, {
               status: PIPELINE_PHASE.planning,
               doneAt: null,
+              pausedPhase: null,
+              pausedAt: null,
               updatedAt: new Date().toISOString(),
             });
             return window.shipcode
@@ -777,6 +785,71 @@ export function IssuesPanel() {
                 `Failed to re-run issue #${issue.issueNumber}`,
                 err?.message ?? String(err),
               );
+            });
+        }}
+        onPause={(issue) => {
+          if (!issue.threadId) return;
+          const pausedAt = new Date().toISOString();
+          patchIssueOptimistic(issue.id, { pipelineStatus: ISSUE_PIPELINE_STATUS.paused });
+          patchThreadOptimistic(issue.threadId, {
+            status: PIPELINE_PHASE.paused,
+            pausedPhase: issue.pipelineStatus as Thread['pausedPhase'],
+            pausedAt,
+            updatedAt: pausedAt,
+          });
+          return window.shipcode
+            .invoke('pipeline:pause', { threadId: issue.threadId })
+            .then(() => {
+              if (activeProjectId) {
+                refreshIssues.mutate(activeProjectId);
+                queryClient.invalidateQueries({
+                  queryKey: ['thread-panel-data', activeProjectId],
+                });
+              }
+            })
+            .catch((err) => {
+              if (activeProjectId) {
+                refreshIssues.mutate(activeProjectId);
+                queryClient.invalidateQueries({
+                  queryKey: ['thread-panel-data', activeProjectId],
+                });
+              }
+              log.error('[threadpanel] pause failed', { issueNumber: issue.issueNumber, err });
+              toast.error('Failed to pause task', err?.message ?? String(err));
+            });
+        }}
+        onResume={(issue) => {
+          if (!issue.threadId) return;
+          const resumedAt = new Date().toISOString();
+          const thread = threadById.get(issue.threadId);
+          const nextStatus = (thread?.pausedPhase ??
+            PIPELINE_PHASE.executing) as IssuePipelineStatus;
+          patchIssueOptimistic(issue.id, { pipelineStatus: nextStatus });
+          patchThreadOptimistic(issue.threadId, {
+            status: nextStatus as Thread['status'],
+            pausedPhase: null,
+            pausedAt: null,
+            updatedAt: resumedAt,
+          });
+          return window.shipcode
+            .invoke('pipeline:resume', { threadId: issue.threadId })
+            .then(() => {
+              if (activeProjectId) {
+                refreshIssues.mutate(activeProjectId);
+                queryClient.invalidateQueries({
+                  queryKey: ['thread-panel-data', activeProjectId],
+                });
+              }
+            })
+            .catch((err) => {
+              if (activeProjectId) {
+                refreshIssues.mutate(activeProjectId);
+                queryClient.invalidateQueries({
+                  queryKey: ['thread-panel-data', activeProjectId],
+                });
+              }
+              log.error('[threadpanel] resume failed', { issueNumber: issue.issueNumber, err });
+              toast.error('Failed to resume task', err?.message ?? String(err));
             });
         }}
         onCancel={(issue) => {

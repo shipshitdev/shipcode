@@ -133,6 +133,8 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     lastError: null,
     failurePhase: null,
     failureCount: 0,
+    pausedPhase: null,
+    pausedAt: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     plannerResolvedModel: null,

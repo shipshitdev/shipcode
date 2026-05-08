@@ -5,12 +5,14 @@ import type {
   CliProviderUsageWindow,
   Project,
   SystemHealth,
+  SystemResourceSnapshot,
 } from '@shipcode/shared';
-import { getProjectProviderWarnings } from '@shipcode/shared';
+import { formatBytes, getProjectProviderWarnings } from '@shipcode/shared';
 import { ShipCodeLogoMark } from '@shipcode/ui';
 import { Button, cn, Popover, PopoverContent, PopoverTrigger } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  Cpu,
   Loader2,
   PanelLeftClose,
   PanelLeftOpen,
@@ -263,6 +265,132 @@ function ProviderStatusBadge({
   );
 }
 
+function formatPhaseLabel(phase: string | null): string {
+  return phase ? phase.replace(/_/g, ' ') : 'process';
+}
+
+function ResourceUsageBadge() {
+  const queryClient = useQueryClient();
+  const { data: snapshot, isFetching } = useQuery<SystemResourceSnapshot | null>({
+    queryKey: ['process-resources'],
+    queryFn: async () => {
+      try {
+        return await window.shipcode.invoke<SystemResourceSnapshot>('process:list-resource-usage');
+      } catch {
+        return null;
+      }
+    },
+    refetchInterval: 2_000,
+    staleTime: 1_000,
+  });
+
+  const killProcess = useMutation({
+    mutationFn: (processId: string) => window.shipcode.invoke('process:kill', { processId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['process-resources'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'running'] });
+    },
+  });
+
+  if (!snapshot) return null;
+
+  const cpuLabel =
+    snapshot.cpuPercent == null ? 'CPU --' : `CPU ${Math.round(snapshot.cpuPercent)}%`;
+  const topTasks = snapshot.tasks.slice(0, 8);
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label="CPU usage"
+          className={cn(
+            'flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 app-region-no-drag',
+            snapshot.highCpu
+              ? 'border-warning/25 bg-warning/5 hover:bg-warning/10'
+              : 'border-border/80 bg-secondary/40 hover:bg-secondary/60',
+          )}
+        >
+          <Cpu size={12} className={snapshot.highCpu ? 'text-warning' : 'text-secondary'} />
+          <span className="text-[10px] font-medium tracking-[0.08em] text-secondary uppercase tabular-nums">
+            {cpuLabel}
+          </span>
+          {isFetching ? <Loader2 size={10} className="animate-spin text-muted" /> : null}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        sideOffset={6}
+        className="w-[calc(100vw-24px)] max-w-[560px] rounded-xl bg-primary p-4 shadow-2xl shadow-black/40"
+      >
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <div className="text-[11px] font-medium text-primary">CPU usage</div>
+            <div className="text-[10px] text-muted">
+              {snapshot.cpuPercent == null
+                ? `${snapshot.cpuCoreCount} cores · warming up`
+                : `${snapshot.cpuCoreCount} cores · ${snapshot.cpuPercent}% host CPU`}
+            </div>
+          </div>
+        </div>
+
+        {topTasks.length > 0 ? (
+          <div className="space-y-1.5">
+            {topTasks.map((task) => {
+              const title = task.threadTitle ?? `${task.type} ${task.processId.slice(0, 8)}`;
+              return (
+                <div
+                  key={task.processId}
+                  className={cn(
+                    'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md border px-2.5 py-2',
+                    task.highCpu ? 'border-warning/25 bg-warning/5' : 'border-border/80',
+                  )}
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-[12px] font-medium text-primary">{title}</div>
+                    <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted">
+                      <span className="uppercase">{task.type}</span>
+                      <span>{formatPhaseLabel(task.phase)}</span>
+                      {task.projectName ? (
+                        <span className="truncate">{task.projectName}</span>
+                      ) : null}
+                      <span className="font-mono">pid {task.pid ?? 'n/a'}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="text-right text-[10px] tabular-nums text-secondary">
+                      <div className={task.highCpu ? 'text-warning' : 'text-primary'}>
+                        {task.cpuPercent.toFixed(1)}%
+                      </div>
+                      <div className="text-muted">{formatBytes(task.memoryBytes)}</div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="h-6 w-6 shrink-0 text-muted hover:text-danger"
+                      title="Kill process"
+                      aria-label={`Kill ${title}`}
+                      disabled={killProcess.isPending}
+                      onClick={() => killProcess.mutate(task.processId)}
+                    >
+                      <X size={12} />
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="rounded-md border border-border/80 px-2.5 py-2 text-[11px] text-muted">
+            No managed processes are running.
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export function Titlebar() {
   const queryClient = useQueryClient();
   const settingsVisible = useAppStore((state) => state.settingsVisible);
@@ -367,6 +495,7 @@ export function Titlebar() {
         )}
       </div>
       <div className="flex items-center gap-2">
+        <ResourceUsageBadge />
         {providerUsage ? (
           <ProviderStatusBadge
             providerUsage={providerUsage}

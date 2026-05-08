@@ -1,0 +1,199 @@
+// @vitest-environment jsdom
+
+import { DEFAULT_SETTINGS, type TelemetryStatus } from '@shipcode/shared';
+import '@testing-library/jest-dom/vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { GeneralSettingsSection } from './GeneralSettingsSection';
+
+vi.mock('@shipshitdev/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@shipshitdev/ui')>();
+
+  return {
+    ...actual,
+    Select: ({
+      children,
+      onValueChange,
+      value,
+    }: {
+      children: ReactNode;
+      onValueChange: (value: string) => void;
+      value: string;
+    }) => (
+      <div data-select-value={value}>
+        {children}
+        {['system', 'dark', 'light', 'dm-sans', 'serif', '12', '13', '14', '15'].map((next) => (
+          <button key={next} type="button" onClick={() => onValueChange(next)}>
+            {next}
+          </button>
+        ))}
+      </div>
+    ),
+    SelectContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+    SelectItem: ({ children }: { children: ReactNode; value: string }) => <div>{children}</div>,
+    SelectTrigger: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+    SelectValue: () => <span />,
+  };
+});
+
+afterEach(() => {
+  cleanup();
+});
+
+function renderGeneral({
+  telemetryStatus,
+  settings = DEFAULT_SETTINGS,
+  worktreeRootError = null,
+}: {
+  telemetryStatus?: TelemetryStatus;
+  settings?: typeof DEFAULT_SETTINGS;
+  worktreeRootError?: string | null;
+} = {}) {
+  const onUpdate = vi.fn();
+  const onUpdateWorktreeRoot = vi.fn();
+
+  render(
+    <GeneralSettingsSection
+      settings={settings}
+      telemetryStatus={telemetryStatus}
+      worktreeRootError={worktreeRootError}
+      onUpdate={onUpdate}
+      onUpdateWorktreeRoot={onUpdateWorktreeRoot}
+    />,
+  );
+
+  return { onUpdate, onUpdateWorktreeRoot };
+}
+
+describe('GeneralSettingsSection', () => {
+  it('updates appearance controls through settings patches', () => {
+    const { onUpdate } = renderGeneral();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'dark' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'serif' })[1]);
+    fireEvent.click(screen.getAllByRole('button', { name: '15' })[2]);
+
+    expect(onUpdate).toHaveBeenCalledWith({ theme: 'dark' });
+    expect(onUpdate).toHaveBeenCalledWith({ fontStyle: 'serif' });
+    expect(onUpdate).toHaveBeenCalledWith({ fontSize: 15 });
+  });
+
+  it('disables telemetry when the environment disables reporting', () => {
+    const { onUpdate } = renderGeneral({
+      telemetryStatus: {
+        enabled: false,
+        dsnConfigured: true,
+        envDisabled: true,
+        release: '0.1.0',
+        environment: 'test',
+      },
+      settings: { ...DEFAULT_SETTINGS, telemetryEnabled: true },
+    });
+
+    expect(screen.getByText(/disabled by SHIPCODE_TELEMETRY_ENABLED=false/i)).toBeInTheDocument();
+    expect(screen.getByText(/Current state:\s*disabled by environment/i)).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Send anonymous error reports' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Send anonymous error reports' }));
+    expect(onUpdate).not.toHaveBeenCalledWith({ telemetryEnabled: expect.any(Boolean) });
+  });
+
+  it('renders telemetry consent states for missing DSN, enabled, disabled, and waiting', () => {
+    const missingDsnStatus = {
+      enabled: true,
+      dsnConfigured: false,
+      envDisabled: false,
+      release: '0.1.0',
+      environment: 'test',
+    } satisfies TelemetryStatus;
+
+    const { rerender } = render(
+      <GeneralSettingsSection
+        settings={{ ...DEFAULT_SETTINGS, telemetryEnabled: true }}
+        telemetryStatus={missingDsnStatus}
+        worktreeRootError={null}
+        onUpdate={vi.fn()}
+        onUpdateWorktreeRoot={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/allowed, but no Sentry DSN is configured/i)).toBeInTheDocument();
+
+    rerender(
+      <GeneralSettingsSection
+        settings={{ ...DEFAULT_SETTINGS, telemetryEnabled: true }}
+        telemetryStatus={{ ...missingDsnStatus, dsnConfigured: true }}
+        worktreeRootError={null}
+        onUpdate={vi.fn()}
+        onUpdateWorktreeRoot={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/Current state:\s*enabled/i)).toBeInTheDocument();
+
+    rerender(
+      <GeneralSettingsSection
+        settings={{ ...DEFAULT_SETTINGS, telemetryEnabled: false }}
+        telemetryStatus={{ ...missingDsnStatus, dsnConfigured: true }}
+        worktreeRootError={null}
+        onUpdate={vi.fn()}
+        onUpdateWorktreeRoot={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/Current state:\s*disabled/i)).toBeInTheDocument();
+
+    rerender(
+      <GeneralSettingsSection
+        settings={{ ...DEFAULT_SETTINGS, telemetryEnabled: null }}
+        telemetryStatus={{ ...missingDsnStatus, dsnConfigured: true }}
+        worktreeRootError={null}
+        onUpdate={vi.fn()}
+        onUpdateWorktreeRoot={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/Current state:\s*waiting for consent/i)).toBeInTheDocument();
+  });
+
+  it('normalizes worktree, branch, add-project, and setup updates', () => {
+    const { onUpdate, onUpdateWorktreeRoot } = renderGeneral({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        worktreeRoot: '/tmp/shipcode',
+        worktreeBranchFormat: 'shipcode/{id}-{slug}',
+        addProjectStartsIn: '~/code',
+      },
+      worktreeRootError: 'Relative paths are rejected.',
+    });
+
+    expect(screen.getByText('Relative paths are rejected.')).toBeInTheDocument();
+
+    fireEvent.blur(screen.getByLabelText('Worktree root'), { target: { value: '   ' } });
+    expect(onUpdateWorktreeRoot).toHaveBeenCalledWith(null);
+
+    fireEvent.blur(screen.getByLabelText('Worktree root'), {
+      target: { value: '  ~/worktrees  ' },
+    });
+    expect(onUpdateWorktreeRoot).toHaveBeenCalledWith('~/worktrees');
+
+    fireEvent.blur(screen.getByLabelText('Branch format'), { target: { value: '   ' } });
+    expect(onUpdate).toHaveBeenCalledWith({
+      worktreeBranchFormat: DEFAULT_SETTINGS.worktreeBranchFormat,
+    });
+
+    fireEvent.blur(screen.getByLabelText('Branch format'), {
+      target: { value: '  ai/{id}-{slug}  ' },
+    });
+    expect(onUpdate).toHaveBeenCalledWith({ worktreeBranchFormat: 'ai/{id}-{slug}' });
+
+    fireEvent.blur(screen.getByLabelText('Start browsing in'), { target: { value: '   ' } });
+    expect(onUpdate).toHaveBeenCalledWith({ addProjectStartsIn: null });
+
+    fireEvent.blur(screen.getByLabelText('Start browsing in'), {
+      target: { value: '  ~/src  ' },
+    });
+    expect(onUpdate).toHaveBeenCalledWith({ addProjectStartsIn: '~/src' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Re-run Setup' }));
+    expect(onUpdate).toHaveBeenCalledWith({ onboardingVersion: 0 });
+  });
+});

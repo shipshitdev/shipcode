@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, rmSync } from 'node:fs';
 import {
   buildExecutionPrompt,
@@ -29,6 +30,7 @@ import {
   PIPELINE_PHASE,
   parseUnifiedDiff,
   type ShipCodePlan,
+  stripAnsi,
   VERIFICATION_FENCE_TAG,
 } from '@shipcode/shared';
 import {
@@ -56,6 +58,8 @@ const DEFAULT_CONTINUATION_PROMPT_TEMPLATE = `The previous turn failed verificat
 Prior failure reason: {{ prior_failure_reason }}
 
 Do NOT re-read the original PRD — you already have it in context. Focus only on fixing the verification failures above.`;
+const CPU_QUEUE_NOTICE_INTERVAL_MS = 30_000;
+const DEFAULT_CPU_QUEUE_RETRY_MS = 5_000;
 
 /**
  * Build a continuation prompt for a new turn after verify failure.
@@ -170,6 +174,50 @@ function extractTestFailureSummary(testOutput: string): string {
     .reverse()
     .find((l) => l.trim().length > 0);
   return (lastMeaningful ?? 'Tests failed').trim().slice(0, 280);
+}
+
+interface TestFailureFingerprint {
+  fingerprint: string;
+  summary: string;
+  outputExcerpt: string;
+  implicatedFiles: string[];
+}
+
+function buildTestFailureFingerprint(command: string, output: string): TestFailureFingerprint {
+  const summary = extractTestFailureSummary(output);
+  const implicatedFiles = extractImplicatedFiles(`${command}\n${output}`);
+  const normalizedOutput = output
+    .split('\n')
+    .map((line) =>
+      stripAnsi(line)
+        .replace(/\b\d+(?:\.\d+)?\s?(ms|s)\b/gi, '<duration>')
+        .replace(/:\d+:\d+\b/g, ':<line>:<col>')
+        .replace(/\s+/g, ' ')
+        .trim(),
+    )
+    .filter(Boolean)
+    .slice(-40)
+    .join('\n')
+    .toLowerCase();
+  const source = [
+    command.trim(),
+    summary.toLowerCase(),
+    implicatedFiles.join(','),
+    normalizedOutput,
+  ]
+    .filter(Boolean)
+    .join('\n');
+  return {
+    fingerprint: createHash('sha256').update(source).digest('hex').slice(0, 32),
+    summary,
+    outputExcerpt: output.trim().slice(-8192),
+    implicatedFiles,
+  };
+}
+
+function extractImplicatedFiles(value: string): string[] {
+  const matches = value.match(/[A-Za-z0-9_./-]+\.(?:test|spec)\.[cm]?[jt]sx?/g) ?? [];
+  return Array.from(new Set(matches.map((file) => file.replace(/^\.\//, '')))).slice(0, 20);
 }
 
 function worktreeHasChanges(context: PipelineContext): boolean {
@@ -305,12 +353,23 @@ export function createExecutionPhaseHandlers({
     );
   }
 
-  function scheduleTestFixRetry(
+  function scheduleCoordinatedTestFixRetry(
     threadId: string,
     context: NonNullable<ReturnType<typeof activePipelines.get>>,
+    command: string,
     testOutput: string,
   ): boolean {
-    context.testOutput = `${context.testOutput ?? ''}\n${testOutput}`.slice(-16384);
+    context.testOutput = context.testOutput?.includes(testOutput)
+      ? context.testOutput
+      : `${context.testOutput ?? ''}\n${testOutput}`.slice(-16384);
+    const blockMessage = claimSharedTestFailure(threadId, context, command, context.testOutput);
+    if (blockMessage) {
+      emitTerminalLifecycle(threadId, `[shared-failure] ${blockMessage}\r\n`);
+      emitPhase(threadId, 'failed', blockMessage);
+      activePipelines.delete(threadId);
+      return true;
+    }
+
     if (context.testRetries >= MAX_TEST_RETRIES) return false;
 
     context.testRetries++;
@@ -326,6 +385,86 @@ export function createExecutionPhaseHandlers({
       void startTestFix(threadId);
     }, delayMs);
     return true;
+  }
+
+  function queueTestingIfCpuBusy(
+    threadId: string,
+    context: NonNullable<ReturnType<typeof activePipelines.get>>,
+  ): boolean {
+    const settings = deps.settings.get();
+    const maxConcurrentCpuTasks = Math.max(1, settings.maxConcurrentCpuTasks ?? 1);
+    const runningCpuTasks = contextHelpers
+      .listActiveInPhases([PIPELINE_PHASE.testing])
+      .filter((summary) => summary.threadId !== threadId).length;
+    const gate = deps.cpuTaskGate?.canStartCpuTask() ?? { allowed: true };
+
+    const blockedBySlot = runningCpuTasks >= maxConcurrentCpuTasks;
+    const blockedByCpu = !gate.allowed;
+    if (!blockedBySlot && !blockedByCpu) {
+      context.cpuQueueStartedAt = null;
+      context.cpuQueueLastNotifiedAt = null;
+      return false;
+    }
+
+    const now = Date.now();
+    context.cpuQueueStartedAt ??= now;
+    const shouldNotify =
+      context.cpuQueueLastNotifiedAt == null ||
+      now - context.cpuQueueLastNotifiedAt >= CPU_QUEUE_NOTICE_INTERVAL_MS;
+    if (shouldNotify) {
+      context.cpuQueueLastNotifiedAt = now;
+      const reasons = [
+        blockedBySlot
+          ? `${runningCpuTasks}/${maxConcurrentCpuTasks} CPU-heavy task slots are busy`
+          : null,
+        blockedByCpu && gate.reason ? gate.reason : null,
+      ].filter((reason): reason is string => Boolean(reason));
+      emitTerminalLifecycle(
+        threadId,
+        `[cpu-queue] Waiting to start local tests: ${reasons.join('; ')}\r\n`,
+      );
+    }
+
+    const retryMs = deps.cpuTaskGate?.retryDelayMs ?? DEFAULT_CPU_QUEUE_RETRY_MS;
+    if (context.retryTimer) clearTimeout(context.retryTimer);
+    context.retryTimer = setTimeout(() => {
+      context.retryTimer = null;
+      if (context.cancelled || !activePipelines.has(threadId)) return;
+      void handlers.startTesting(threadId);
+    }, retryMs);
+    return true;
+  }
+
+  function claimSharedTestFailure(
+    threadId: string,
+    context: NonNullable<ReturnType<typeof activePipelines.get>>,
+    command: string,
+    testOutput: string,
+  ): string | null {
+    if (!deps.projectFailures || !context.projectId) return null;
+
+    const fingerprint = buildTestFailureFingerprint(command, testOutput);
+    const record = deps.projectFailures.claimOrCreate({
+      projectId: context.projectId,
+      baseBranch: context.baseBranch,
+      fingerprint: fingerprint.fingerprint,
+      threadId,
+      command,
+      summary: fingerprint.summary,
+      outputExcerpt: fingerprint.outputExcerpt,
+      implicatedFiles: fingerprint.implicatedFiles,
+    });
+
+    if (record.status === 'resolved') {
+      const sha = record.resolvedCommitSha ? ` at ${record.resolvedCommitSha.slice(0, 12)}` : '';
+      return `Shared test failure already resolved by ${record.resolvedByThreadId ?? 'another thread'}${sha}. Rebase or cherry-pick that fix before retrying this worktree.`;
+    }
+
+    if (record.ownerThreadId && record.ownerThreadId !== threadId) {
+      return `Shared test failure is already being fixed by ${record.ownerThreadId}. This worktree is blocked to avoid a duplicate fix and merge conflict.`;
+    }
+
+    return null;
   }
 
   // ─── Per-node verification helpers ───────────────────────────────────────────
@@ -946,6 +1085,8 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       return;
     }
 
+    if (queueTestingIfCpuBusy(threadId, context)) return;
+
     emitPhase(threadId, 'testing');
 
     const cwd = context.worktreePath ?? context.projectPath;
@@ -961,7 +1102,15 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
         const message =
           `[runtime-qa] Visual QA requires stable selectors, but selectorReadiness is ` +
           `"${context.featureQaState.selectorReadiness}". Add stable data-testid selectors for the visual QA targets.`;
-        if (scheduleTestFixRetry(threadId, context, message)) return;
+        if (
+          scheduleCoordinatedTestFixRetry(
+            threadId,
+            context,
+            'runtime-qa:selector-readiness',
+            message,
+          )
+        )
+          return;
         emitPhase(threadId, 'failed', message);
         activePipelines.delete(threadId);
         return;
@@ -1012,19 +1161,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
         outputs.push(result.output);
         context.testOutput = outputs.join('\n').slice(-16384);
         if (result.exitCode !== 0) {
-          if (context.testRetries < MAX_TEST_RETRIES) {
-            context.testRetries++;
-            const delayMs = computeRetryDelayMs({
-              reason: 'continuation',
-              attempt: context.testRetries,
-            });
-            if (context.retryTimer) clearTimeout(context.retryTimer);
-            context.retryTimer = setTimeout(() => {
-              context.retryTimer = null;
-              if (context.cancelled || !activePipelines.has(threadId)) return;
-              void startTestFix(threadId);
-            }, delayMs);
-          } else {
+          if (!scheduleCoordinatedTestFixRetry(threadId, context, command, result.output)) {
             const testSummary = extractTestFailureSummary(context.testOutput ?? '');
             deps.emitter.emit({
               type: 'pipeline:verification-exhausted',
@@ -1102,23 +1239,14 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
           server = await lifecycle.start(config.server, cwd, context.abort.signal, threadId);
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-          if (context.testRetries < MAX_TEST_RETRIES) {
-            context.testRetries++;
-            context.testOutput = `[runtime-qa] Server startup failed: ${message}`;
-            context.stabilizationFeedback = formatTestFixFeedback(
-              context.testOutput,
-              context.testRetries,
-            );
-            const delayMs = computeRetryDelayMs({
-              reason: 'continuation',
-              attempt: context.testRetries,
-            });
-            if (context.retryTimer) clearTimeout(context.retryTimer);
-            context.retryTimer = setTimeout(() => {
-              context.retryTimer = null;
-              if (context.cancelled || !activePipelines.has(threadId)) return;
-              void startTestFix(threadId);
-            }, delayMs);
+          if (
+            scheduleCoordinatedTestFixRetry(
+              threadId,
+              context,
+              config.server.command,
+              `[runtime-qa] Server startup failed: ${message}`,
+            )
+          ) {
             return { ok: false, fatal: false, error: message };
           }
           return { ok: false, fatal: true, error: `Runtime QA server startup failed: ${message}` };
@@ -1171,22 +1299,9 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
           context.testOutput = `${context.testOutput ?? ''}\n${context.runtimeQaOutput}`.slice(
             -16384,
           );
-          if (context.testRetries < MAX_TEST_RETRIES) {
-            context.testRetries++;
-            context.stabilizationFeedback = formatTestFixFeedback(
-              context.testOutput,
-              context.testRetries,
-            );
-            const delayMs = computeRetryDelayMs({
-              reason: 'continuation',
-              attempt: context.testRetries,
-            });
-            if (context.retryTimer) clearTimeout(context.retryTimer);
-            context.retryTimer = setTimeout(() => {
-              context.retryTimer = null;
-              if (context.cancelled || !activePipelines.has(threadId)) return;
-              void startTestFix(threadId);
-            }, delayMs);
+          if (
+            scheduleCoordinatedTestFixRetry(threadId, context, 'runtime-qa:server-crashed', failMsg)
+          ) {
             return { ok: false, fatal: false, error: failMsg };
           }
           return { ok: false, fatal: true, error: failMsg };
@@ -1209,7 +1324,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
             persistQaFlowResults();
             const visualFeedback = formatVisualQaFailureFeedback(commandQaResults);
             const output = `${context.runtimeQaOutput}${visualFeedback}`;
-            if (scheduleTestFixRetry(threadId, context, output)) {
+            if (scheduleCoordinatedTestFixRetry(threadId, context, command, output)) {
               return { ok: false, fatal: false, error: `Runtime test failed: ${command}` };
             }
             return {
@@ -1282,6 +1397,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
 
     const headSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf-8' }).trim();
     context.verifiedSha = headSha;
+    deps.projectFailures?.resolveOwnedByThread(threadId, headSha);
 
     let diff: string;
     try {

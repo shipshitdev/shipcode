@@ -27,6 +27,8 @@ export {
 export type { TemplateContext } from './template-renderer';
 export { renderTemplate, TemplateRenderError } from './template-renderer';
 export type {
+  CpuTaskGate,
+  CpuTaskGateDecision,
   Pipeline,
   PipelineContext,
   PipelineDeps,

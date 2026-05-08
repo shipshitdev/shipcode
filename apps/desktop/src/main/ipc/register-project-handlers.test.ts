@@ -17,27 +17,35 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const handlers = new Map<string, (...args: unknown[]) => unknown>();
 
-const { createIssueMock, execMock, execFileMock, worktreeMoveMock, worktreeRepairMock } =
-  vi.hoisted(() => ({
-    createIssueMock: vi.fn(),
-    execMock: vi.fn((_command: string, optionsOrCallback?: unknown, maybeCallback?: unknown) => {
+const {
+  createIssueMock,
+  execMock,
+  execFileMock,
+  worktreeListMock,
+  worktreeMoveMock,
+  worktreeRepairMock,
+  worktreeRemoveMock,
+} = vi.hoisted(() => ({
+  createIssueMock: vi.fn(),
+  execMock: vi.fn((_command: string, optionsOrCallback?: unknown, maybeCallback?: unknown) => {
+    const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback;
+    if (typeof callback === 'function') {
+      callback(null, '', '');
+    }
+  }),
+  execFileMock: vi.fn(
+    (_file: string, _args: string[], optionsOrCallback?: unknown, maybeCallback?: unknown) => {
       const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback;
       if (typeof callback === 'function') {
         callback(null, '', '');
       }
-    }),
-    execFileMock: vi.fn(
-      (_file: string, _args: string[], optionsOrCallback?: unknown, maybeCallback?: unknown) => {
-        const callback =
-          typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback;
-        if (typeof callback === 'function') {
-          callback(null, '', '');
-        }
-      },
-    ),
-    worktreeMoveMock: vi.fn(async () => undefined),
-    worktreeRepairMock: vi.fn(async () => undefined),
-  }));
+    },
+  ),
+  worktreeListMock: vi.fn(async (): Promise<Array<{ path: string; branch: string }>> => []),
+  worktreeMoveMock: vi.fn(async () => undefined),
+  worktreeRepairMock: vi.fn(async () => undefined),
+  worktreeRemoveMock: vi.fn(async () => ({ success: true, error: null })),
+}));
 
 vi.mock('../logger.service', () => ({
   default: {
@@ -97,8 +105,10 @@ vi.mock('@shipcode/git', () => ({
     getDefaultBranch = vi.fn(async () => 'main');
   },
   WorktreeManager: class {
+    list = worktreeListMock;
     move = worktreeMoveMock;
     repair = worktreeRepairMock;
+    remove = worktreeRemoveMock;
   },
 }));
 
@@ -369,6 +379,68 @@ describe('registerProjectHandlers', () => {
     expect(worktreeMoveMock).not.toHaveBeenCalled();
     expect(queries.threads.clearWorktree).toHaveBeenCalledWith('thread-12');
     expect(queries.threads.setWorktree).not.toHaveBeenCalled();
+    expect(queries.projects.updatePath).toHaveBeenCalledWith('project-1', nextProjectPath);
+  });
+
+  it('repairs and moves ShipCode worktrees discovered from git even when no thread tracks them', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'shipcode-relink-orphan-'));
+    const oldProjectPath = path.join(tmp, 'old-repo');
+    const nextProjectPath = path.join(tmp, 'new-repo');
+    const worktreeRoot = path.join(tmp, 'worktrees');
+    fs.mkdirSync(nextProjectPath, { recursive: true });
+
+    const oldParent = resolveWorktreeParent(oldProjectPath, worktreeRoot);
+    const nextParent = resolveWorktreeParent(nextProjectPath, worktreeRoot);
+    const oldWorktreePath = path.join(oldParent, 'orphaned-worktree');
+    const nextWorktreePath = path.join(nextParent, 'orphaned-worktree');
+    fs.mkdirSync(oldWorktreePath, { recursive: true });
+    worktreeListMock.mockResolvedValueOnce([
+      {
+        path: oldWorktreePath,
+        branch: 'shipcode/orphaned-worktree',
+      },
+    ]);
+
+    let project = { ...baseProject, path: oldProjectPath };
+    const queries = {
+      projects: {
+        getById: vi.fn(() => project),
+        getByPath: vi.fn(() => null),
+        updatePath: vi.fn((_id: string, projectPath: string) => {
+          project = { ...project, path: projectPath };
+        }),
+        updateGitInfo: vi.fn(),
+      },
+      settings: {
+        get: vi.fn(() => ({ projectOpenTarget: 'cursor', worktreeRoot })),
+      },
+      threads: {
+        list: vi.fn(() => []),
+        setWorktree: vi.fn(),
+        clearWorktree: vi.fn(),
+      },
+    };
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+    });
+
+    const relinkPath = handlers.get('project:relink-path');
+    if (!relinkPath) throw new Error('project:relink-path handler not registered');
+
+    await relinkPath(undefined, { projectId: 'project-1', path: nextProjectPath });
+
+    expect(worktreeRepairMock).toHaveBeenCalledWith([oldWorktreePath]);
+    expect(worktreeMoveMock).toHaveBeenCalledWith(oldWorktreePath, nextWorktreePath);
+    expect(queries.threads.setWorktree).not.toHaveBeenCalled();
+    expect(queries.threads.clearWorktree).not.toHaveBeenCalled();
     expect(queries.projects.updatePath).toHaveBeenCalledWith('project-1', nextProjectPath);
   });
 
@@ -864,6 +936,109 @@ describe('registerProjectHandlers', () => {
       ignoreAttentionOnly: false,
     });
 
+    existsSpy.mockRestore();
+  });
+
+  it('removes a project after cleaning up tracked worktrees by persisted path and branch', async () => {
+    const worktreeThread = {
+      id: 'thread-1',
+      worktreeBranch: 'ship/42-fix',
+      worktreePath: '/tmp/worktrees/project/thread-1',
+    };
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+        hasLiveWork: vi.fn(() => false),
+        removeIfIdle: vi.fn(() => true),
+      },
+      settings: {
+        get: vi.fn(() => ({ worktreeRoot: '/tmp/worktrees' })),
+      },
+      threads: {
+        list: vi.fn(() => [
+          worktreeThread,
+          { id: 'thread-2', worktreeBranch: null, worktreePath: null },
+        ]),
+      },
+    };
+    const existsSpy = vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+    });
+
+    const remove = handlers.get('project:remove');
+    if (!remove) throw new Error('project:remove handler not registered');
+
+    await expect(remove(undefined, { projectId: baseProject.id })).resolves.toBeUndefined();
+
+    expect(queries.projects.hasLiveWork).toHaveBeenCalledWith(baseProject.id, {
+      ignoreAttentionOnly: false,
+    });
+    expect(worktreeRemoveMock).toHaveBeenCalledTimes(1);
+    expect(worktreeRemoveMock).toHaveBeenCalledWith(
+      worktreeThread.worktreePath,
+      worktreeThread.worktreeBranch,
+    );
+    expect(queries.projects.removeIfIdle).toHaveBeenCalledWith(baseProject.id, {
+      ignoreAttentionOnly: false,
+    });
+
+    existsSpy.mockRestore();
+  });
+
+  it('keeps the project row when tracked worktree cleanup fails during removal', async () => {
+    worktreeRemoveMock.mockResolvedValueOnce({
+      success: false,
+      error: 'branch is checked out elsewhere',
+    });
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+        hasLiveWork: vi.fn(() => false),
+        removeIfIdle: vi.fn(),
+      },
+      settings: {
+        get: vi.fn(() => ({ worktreeRoot: '/tmp/worktrees' })),
+      },
+      threads: {
+        list: vi.fn(() => [
+          {
+            id: 'thread-1',
+            worktreeBranch: 'ship/42-fix',
+            worktreePath: '/tmp/worktrees/project/thread-1',
+          },
+        ]),
+      },
+    };
+    const existsSpy = vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+    });
+
+    const remove = handlers.get('project:remove');
+    if (!remove) throw new Error('project:remove handler not registered');
+
+    await expect(remove(undefined, { projectId: baseProject.id })).rejects.toThrow(
+      'Failed to clean up 1 worktree(s). Project not removed:',
+    );
+
+    expect(queries.projects.removeIfIdle).not.toHaveBeenCalled();
     existsSpy.mockRestore();
   });
 

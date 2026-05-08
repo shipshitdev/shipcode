@@ -44,7 +44,7 @@ type KeyboardFocusColumn = {
   issues: GitHubIssueCacheRecord[];
 };
 
-type PendingIssueAction = 'start' | 'retry' | 'cancel' | 'done' | 'reset';
+type PendingIssueAction = 'start' | 'retry' | 'pause' | 'resume' | 'cancel' | 'done' | 'reset';
 type IssueActionHandler = (issue: GitHubIssueCacheRecord) => void | Promise<void>;
 const MIN_ACTION_PENDING_MS = 650;
 
@@ -148,6 +148,8 @@ export function KanbanBoard({
   onRetry,
   onRerun,
   onMarkDone,
+  onPause,
+  onResume,
   onCancel,
   onCreatePr,
   baseBranch,
@@ -419,6 +421,16 @@ export function KanbanBoard({
     [onCancel, runIssueAction],
   );
 
+  const handlePause = useCallback(
+    (issue: GitHubIssueCacheRecord) => runIssueAction('pause', issue, onPause),
+    [onPause, runIssueAction],
+  );
+
+  const handleResume = useCallback(
+    (issue: GitHubIssueCacheRecord) => runIssueAction('resume', issue, onResume),
+    [onResume, runIssueAction],
+  );
+
   const handleMarkDone = useCallback(
     (issue: GitHubIssueCacheRecord) => runIssueAction('done', issue, onMarkDone),
     [onMarkDone, runIssueAction],
@@ -562,6 +574,10 @@ export function KanbanBoard({
         handleRerun(focusedIssue);
         return;
       }
+      if (focusedIssue.pipelineStatus === ISSUE_PIPELINE_STATUS.paused && onResume && !readOnly) {
+        handleResume(focusedIssue);
+        return;
+      }
       setKeyboardActionToast('Pipeline can only start from Todo cards.');
     };
 
@@ -570,11 +586,13 @@ export function KanbanBoard({
   }, [
     focusedIssue,
     handleRerun,
+    handleResume,
     handleStartPipeline,
     keyboardFocusColumns,
     onCommentIssue,
     onIssueClick,
     onRerun,
+    onResume,
     onStartPipeline,
     readOnly,
     shortcutsEnabled,
@@ -621,6 +639,7 @@ export function KanbanBoard({
       dropId === 'todo' &&
       (issue.pipelineStatus === ISSUE_PIPELINE_STATUS.failed ||
         issue.pipelineStatus === ISSUE_PIPELINE_STATUS.clarifying ||
+        issue.pipelineStatus === ISSUE_PIPELINE_STATUS.paused ||
         issue.pipelineStatus === ISSUE_PIPELINE_STATUS.awaitingApproval) &&
       onRetry
     ) {
@@ -725,6 +744,8 @@ export function KanbanBoard({
                       issues={visibleIssues}
                       onIssueClick={onIssueClick}
                       onRerun={handleRerun}
+                      onPause={handlePause}
+                      onResume={handleResume}
                       onCancel={handleCancel}
                       onOpenPullRequest={onOpenPullRequest}
                       onCopyBranchName={handleCopyBranchName}
@@ -734,6 +755,8 @@ export function KanbanBoard({
                       onArchiveIssue={col.key === 'done' ? onArchiveIssue : undefined}
                       onCreatePr={onCreatePr}
                       rerunningId={pendingIssueIdByAction.retry ?? null}
+                      pausingId={pendingIssueIdByAction.pause ?? null}
+                      resumingId={pendingIssueIdByAction.resume ?? null}
                       cancellingId={pendingIssueIdByAction.cancel ?? null}
                       markingDoneId={pendingIssueIdByAction.done ?? null}
                       selectedIssueNumber={selectedIssueNumber}

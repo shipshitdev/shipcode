@@ -1,10 +1,10 @@
 import { PageHeader } from '@shipcode/ui';
-import { toast } from '../stores/toast-store';
 import { Button, cn } from '@shipshitdev/ui';
 import { Plus, Terminal } from 'lucide-react';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useOpenProjectTerminal } from '../hooks/useOpenProjectTerminal';
 import { type TerminalPaneMode, useAppStore } from '../stores/app-store';
+import { toast } from '../stores/toast-store';
 import { TerminalPane } from './terminal-panes/TerminalPane';
 
 const MAX_PANES = 4;
@@ -16,6 +16,27 @@ export function TerminalView() {
   const removeTerminalPane = useAppStore((state) => state.removeTerminalPane);
   const activeProjectId = useAppStore((state) => state.activeProjectId);
   const { openProjectTerminal, openingTerminal } = useOpenProjectTerminal();
+  const livePaneRef = useRef<Array<{ threadId: string; isRunning: boolean }>>([]);
+
+  useEffect(() => {
+    livePaneRef.current = terminalPaneThreadIds.map((threadId) => {
+      const meta = terminalPaneMetaByThread[threadId];
+      return {
+        threadId,
+        isRunning: meta?.mode === 'live' && meta.state !== 'exited',
+      };
+    });
+  }, [terminalPaneMetaByThread, terminalPaneThreadIds]);
+
+  useEffect(() => {
+    return () => {
+      for (const pane of livePaneRef.current) {
+        if (pane.isRunning) {
+          void window.shipcode.invoke('instant:cancel', { threadId: pane.threadId });
+        }
+      }
+    };
+  }, []);
 
   const handleOpenTerminal = useCallback(() => {
     void openProjectTerminal().catch((error) => {

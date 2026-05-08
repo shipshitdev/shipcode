@@ -150,6 +150,64 @@ const integrationStatus: IntegrationStatus = {
 };
 
 describe('PipelineSettingsSection', () => {
+  it('updates runtime limits and trims testing fields on blur', () => {
+    const onUpdate = vi.fn();
+    const settings: AppSettings = {
+      ...DEFAULT_SETTINGS,
+      requireApproval: false,
+      maxConcurrentPipelines: 3,
+      maxConcurrentExecutions: 2,
+      testCommand: 'bun test',
+      testingContext: 'Use Vitest.',
+    };
+
+    render(
+      <PipelineSettingsSection
+        settings={settings}
+        integrationStatus={integrationStatus}
+        onUpdate={onUpdate}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Require approval before execution' }));
+    expect(onUpdate).toHaveBeenCalledWith({ requireApproval: true });
+
+    fireEvent.change(screen.getByLabelText('Max concurrent pipelines'), {
+      target: { value: '0' },
+    });
+    fireEvent.change(screen.getByLabelText('Max concurrent pipelines'), {
+      target: { value: '8' },
+    });
+    fireEvent.change(screen.getByLabelText('Max concurrent executions per project'), {
+      target: { value: '11' },
+    });
+    fireEvent.change(screen.getByLabelText('Max concurrent executions per project'), {
+      target: { value: '4' },
+    });
+
+    expect(onUpdate).not.toHaveBeenCalledWith({ maxConcurrentPipelines: 0 });
+    expect(onUpdate).toHaveBeenCalledWith({ maxConcurrentPipelines: 8 });
+    expect(onUpdate).not.toHaveBeenCalledWith({ maxConcurrentExecutions: 11 });
+    expect(onUpdate).toHaveBeenCalledWith({ maxConcurrentExecutions: 4 });
+
+    const testingTab = screen.getByRole('tab', { name: 'Testing' });
+    fireEvent.mouseDown(testingTab, { button: 0 });
+    fireEvent.click(testingTab);
+
+    fireEvent.blur(screen.getByPlaceholderText('e.g. bun run test'), {
+      target: { value: '  bun run verify  ' },
+    });
+    fireEvent.blur(
+      screen.getByPlaceholderText(
+        'e.g. Tests use Vitest, colocated as *.test.ts, use vi.mock() for mocking.',
+      ),
+      { target: { value: '   ' } },
+    );
+
+    expect(onUpdate).toHaveBeenCalledWith({ testCommand: 'bun run verify' });
+    expect(onUpdate).toHaveBeenCalledWith({ testingContext: null });
+  });
+
   it('labels PRD rewrite settings as shared format settings', () => {
     render(
       <PipelineSettingsSection
@@ -210,4 +268,26 @@ describe('PipelineSettingsSection', () => {
       }),
     );
   }, 15_000);
+
+  it('updates CPU task guard settings from runtime controls', () => {
+    const onUpdate = vi.fn();
+
+    render(
+      <PipelineSettingsSection
+        settings={DEFAULT_SETTINGS}
+        integrationStatus={integrationStatus}
+        onUpdate={onUpdate}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('Max concurrent CPU tasks'), {
+      target: { value: '2' },
+    });
+    fireEvent.change(screen.getByLabelText('CPU throttle threshold'), {
+      target: { value: '90' },
+    });
+
+    expect(onUpdate).toHaveBeenCalledWith({ maxConcurrentCpuTasks: 2 });
+    expect(onUpdate).toHaveBeenCalledWith({ cpuThrottleThresholdPercent: 90 });
+  });
 });

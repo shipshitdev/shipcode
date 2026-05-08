@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 
-import type { GitHubIssueCacheRecord, Project } from '@shipcode/shared';
+import type { GitHubIssueCacheRecord, IntegrationStatus, Project } from '@shipcode/shared';
 import { DEFAULT_SETTINGS } from '@shipcode/shared';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ArchivedSettingsSection } from './ArchivedSettingsSection';
 import { AutoCommitSettingsSection } from './AutoCommitSettingsSection';
 import { GithubSettingsSection } from './GithubSettingsSection';
+import { IntegrationsSettingsSection } from './IntegrationsSettingsSection';
 import { NotificationsSettingsSection } from './NotificationsSettingsSection';
 import { ShortcutsSection } from './ShortcutsSection';
 
@@ -96,6 +97,159 @@ function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
     ...overrides,
   };
 }
+
+const integrationStatus: IntegrationStatus = {
+  system: {
+    claude: {
+      available: false,
+      version: null,
+      path: null,
+      error: 'Claude CLI missing',
+      authenticated: false,
+    },
+    codex: {
+      available: true,
+      version: 'codex 0.1.0\nextra line',
+      path: '/usr/local/bin/codex',
+      error: null,
+      authenticated: false,
+    },
+    git: {
+      available: true,
+      version: 'git version 2.43.0',
+      path: '/usr/bin/git',
+      error: null,
+      authenticated: true,
+    },
+    gh: {
+      available: true,
+      version: 'gh version 2.40.1',
+      path: '/usr/local/bin/gh',
+      error: null,
+      authenticated: true,
+    },
+  },
+  modelCapabilities: {
+    claude: {
+      provider: 'claude',
+      source: 'fallback',
+      models: [],
+      error: 'No Claude models reported',
+      checkedAt: '2026-05-08T10:00:00.000Z',
+    },
+    codex: {
+      provider: 'codex',
+      source: 'catalog',
+      models: [
+        {
+          value: 'gpt-5.4-mini',
+          label: 'GPT-5.4 mini',
+          description: null,
+          defaultReasoningEffort: 'medium',
+          supportedReasoningEfforts: ['low', 'medium', 'high'],
+        },
+      ],
+      error: null,
+      checkedAt: '2026-05-08T10:00:00.000Z',
+    },
+  },
+  ghAuth: {
+    installed: true,
+    authenticated: true,
+    username: 'decod3rs',
+    version: '2.40.1',
+    error: null,
+    hasProjectScope: false,
+  },
+  openrouter: {
+    enabled: true,
+    keyPresent: false,
+    authStatus: 'missing_key',
+    message: 'OpenRouter key is missing',
+    label: null,
+    modelChecks: [
+      {
+        key: 'planner',
+        label: 'Planner model',
+        modelId: null,
+        status: 'unverified',
+        message: 'Skipped without a key',
+      },
+    ],
+  },
+  discord: {
+    enabled: true,
+    configured: true,
+    destinationConfigured: true,
+    validationStatus: 'invalid',
+    message: 'Discord webhook failed validation',
+    lastDeliveryStatus: {
+      provider: 'discord',
+      destination: 'https://discord.test/webhook',
+      lastAttemptAt: '2026-05-08T09:00:00.000Z',
+      lastSuccessAt: null,
+      lastError: 'HTTP 401',
+    },
+  },
+  telegram: {
+    enabled: true,
+    configured: true,
+    destinationConfigured: true,
+    validationStatus: 'valid',
+    message: null,
+    lastDeliveryStatus: {
+      provider: 'telegram',
+      destination: '-100',
+      lastAttemptAt: '2026-05-08T10:00:00.000Z',
+      lastSuccessAt: '2026-05-08T10:00:00.000Z',
+      lastError: null,
+    },
+  },
+  desktopApps: {
+    cursor: {
+      key: 'cursor',
+      label: 'Cursor',
+      available: true,
+      path: '/Applications/Cursor.app',
+      error: null,
+    },
+    finder: {
+      key: 'finder',
+      label: 'Finder',
+      available: true,
+      path: '/System/Library/CoreServices/Finder.app',
+      error: null,
+    },
+    terminal: {
+      key: 'terminal',
+      label: 'Terminal',
+      available: true,
+      path: '/System/Applications/Utilities/Terminal.app',
+      error: null,
+    },
+    ghostty: {
+      key: 'ghostty',
+      label: 'Ghostty',
+      available: false,
+      path: null,
+      error: 'Ghostty is not installed',
+    },
+    vscode: {
+      key: 'vscode',
+      label: 'Visual Studio Code',
+      available: true,
+      path: '/Applications/Visual Studio Code.app',
+      error: null,
+    },
+    t3code: {
+      key: 't3code',
+      label: 'T3 Code',
+      available: false,
+      path: null,
+      error: 'T3 Code is not installed',
+    },
+  },
+};
 
 afterEach(() => {
   cleanup();
@@ -217,5 +371,91 @@ describe('settings leaf sections', () => {
     expect(screen.getByText('#42 Restore issue')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
     expect(onUnarchiveIssue).toHaveBeenCalledWith('issue-2');
+  });
+
+  it('renders integration status branches and forwards chat setting actions', async () => {
+    const onUpdate = vi.fn();
+    const onRefetch = vi.fn();
+    const onTestChat = vi.fn(async (provider: 'discord' | 'telegram') => `${provider} ok`);
+
+    render(
+      <IntegrationsSettingsSection
+        integrationStatus={undefined}
+        integrationsFetching={true}
+        settings={DEFAULT_SETTINGS}
+        onUpdate={onUpdate}
+        onRefetch={onRefetch}
+        onTestChat={onTestChat}
+      />,
+    );
+
+    expect(screen.getByText('Loading integration status...')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Re-check' })).toBeDisabled();
+
+    cleanup();
+
+    render(
+      <IntegrationsSettingsSection
+        integrationStatus={integrationStatus}
+        integrationsFetching={false}
+        settings={{
+          ...DEFAULT_SETTINGS,
+          discordWebhookUrl: 'https://discord.test/webhook',
+          telegramBotToken: 'token',
+          telegramDefaultChatId: '-100',
+        }}
+        onUpdate={onUpdate}
+        onRefetch={onRefetch}
+        onTestChat={onTestChat}
+      />,
+    );
+
+    expect(screen.getByText('Claude CLI missing')).toBeInTheDocument();
+    expect(screen.getByText('No Claude models reported')).toBeInTheDocument();
+    expect(screen.getByText('codex 0.1.0')).toBeInTheDocument();
+    expect(screen.getByText('project scope missing')).toBeInTheDocument();
+    expect(screen.getByText(/gh auth refresh -s project/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Re-check' }));
+    expect(onRefetch).toHaveBeenCalledTimes(1);
+
+    const apiKeysTab = screen.getByRole('tab', { name: 'API Keys' });
+    fireEvent.mouseDown(apiKeysTab, { button: 0 });
+    fireEvent.click(apiKeysTab);
+
+    expect(screen.getByText('OPENROUTER_API_KEY missing')).toBeInTheDocument();
+    expect(screen.getByText('OpenRouter key is missing')).toBeInTheDocument();
+    expect(screen.getByText('disabled')).toBeInTheDocument();
+    expect(screen.getByText('Last delivery: HTTP 401')).toBeInTheDocument();
+    expect(screen.getByText(/Last delivery succeeded at/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Enable Discord chat alerts'));
+    fireEvent.change(screen.getByPlaceholderText('https://discord.com/api/webhooks/...'), {
+      target: { value: '' },
+    });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Send test message' })[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText('discord ok')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Enable Telegram chat alerts'));
+    fireEvent.change(screen.getByPlaceholderText('Bot token'), { target: { value: '' } });
+    fireEvent.change(screen.getByPlaceholderText('Default chat ID'), {
+      target: { value: '-200' },
+    });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Send test message' })[1]);
+
+    await waitFor(() => {
+      expect(screen.getByText('telegram ok')).toBeInTheDocument();
+    });
+
+    expect(onUpdate).toHaveBeenCalledWith({ discordEnabled: true });
+    expect(onUpdate).toHaveBeenCalledWith({ discordWebhookUrl: null });
+    expect(onUpdate).toHaveBeenCalledWith({ telegramEnabled: true });
+    expect(onUpdate).toHaveBeenCalledWith({ telegramBotToken: null });
+    expect(onUpdate).toHaveBeenCalledWith({ telegramDefaultChatId: '-200' });
+    expect(onTestChat).toHaveBeenCalledWith('discord');
+    expect(onTestChat).toHaveBeenCalledWith('telegram');
   });
 });

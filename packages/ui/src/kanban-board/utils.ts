@@ -90,7 +90,8 @@ export function dragOverlayBorderClass(
   if (status === ISSUE_PIPELINE_STATUS.failed) return 'border-danger';
   if (
     status === ISSUE_PIPELINE_STATUS.awaitingApproval ||
-    status === ISSUE_PIPELINE_STATUS.clarifying
+    status === ISSUE_PIPELINE_STATUS.clarifying ||
+    status === ISSUE_PIPELINE_STATUS.paused
   ) {
     return 'border-warning';
   }
@@ -192,7 +193,8 @@ function badgeVariantForIssueStatus(status: IssuePipelineStatus): IssueRevisionB
   if (status === ISSUE_PIPELINE_STATUS.failed) return 'danger';
   if (
     status === ISSUE_PIPELINE_STATUS.awaitingApproval ||
-    status === ISSUE_PIPELINE_STATUS.clarifying
+    status === ISSUE_PIPELINE_STATUS.clarifying ||
+    status === ISSUE_PIPELINE_STATUS.paused
   ) {
     return 'warning';
   }
@@ -389,7 +391,8 @@ export function rowToneFor(
   if (status === ISSUE_PIPELINE_STATUS.failed) return 'danger';
   if (
     status === ISSUE_PIPELINE_STATUS.awaitingApproval ||
-    status === ISSUE_PIPELINE_STATUS.clarifying
+    status === ISSUE_PIPELINE_STATUS.clarifying ||
+    status === ISSUE_PIPELINE_STATUS.paused
   ) {
     return 'warning';
   }

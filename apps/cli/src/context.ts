@@ -17,6 +17,7 @@ import {
   getDatabase,
   PipelineStepQueries,
   PlanQueries,
+  ProjectFailureQueries,
   ProjectQueries,
   ReviewQueries,
   SettingsQueries,
@@ -38,6 +39,7 @@ export interface CliContext {
   reviews: ReviewQueries;
   diffs: DiffQueries;
   verifications: VerificationQueries;
+  projectFailures: ProjectFailureQueries;
   githubIssues: GitHubIssueQueries;
   settings: SettingsQueries;
   skills: SkillsQueries;
@@ -66,6 +68,7 @@ export function createCliContext(cwd: string): CliContext {
   const reviews = new ReviewQueries(db);
   const diffs = new DiffQueries(db);
   const verifications = new VerificationQueries(db);
+  const projectFailures = new ProjectFailureQueries(db);
   const githubIssues = new GitHubIssueQueries(db);
   const settings = new SettingsQueries(db);
   const skills = new SkillsQueries(db);
@@ -102,6 +105,7 @@ export function createCliContext(cwd: string): CliContext {
     reviews,
     diffs,
     verifications,
+    projectFailures,
     githubIssues,
     checkpoints,
     projects,
@@ -122,6 +126,7 @@ export function createCliContext(cwd: string): CliContext {
     reviews,
     diffs,
     verifications,
+    projectFailures,
     githubIssues,
     settings,
     skills,

@@ -80,6 +80,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   testingContext: null,
   maxConcurrentPipelines: 3,
   maxConcurrentExecutions: 3,
+  maxConcurrentCpuTasks: 1,
+  cpuThrottleThresholdPercent: 85,
   instantDefaultPanes: 1,
   devLogLevel: 'debug',
   updateTrack: 'master',
@@ -109,6 +111,16 @@ export const AGENT_RUNNING_PHASES: readonly PipelinePhase[] = [
 ] as const;
 
 export const EXECUTION_PHASES = [
+  PIPELINE_PHASE.executing,
+  PIPELINE_PHASE.testing,
+  PIPELINE_PHASE.verifying,
+  PIPELINE_PHASE.shipping,
+] as const;
+
+export const PAUSABLE_PIPELINE_PHASES: readonly PipelinePhase[] = [
+  PIPELINE_PHASE.planning,
+  PIPELINE_PHASE.reviewing,
+  PIPELINE_PHASE.revising,
   PIPELINE_PHASE.executing,
   PIPELINE_PHASE.testing,
   PIPELINE_PHASE.verifying,

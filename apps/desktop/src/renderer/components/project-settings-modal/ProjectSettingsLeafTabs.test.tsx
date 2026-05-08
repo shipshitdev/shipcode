@@ -4,6 +4,7 @@ import type {
   AppSettings,
   ContextFileInfo,
   IntegrationStatus,
+  OpenRouterModelValidation,
   Project,
   ProjectReadinessReport,
 } from '@shipcode/shared';
@@ -11,6 +12,7 @@ import { DEFAULT_SETTINGS, SHIPCODE_DEFAULT_LABELS } from '@shipcode/shared';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderWithQueryClient } from '../../test/render';
+import { ProjectPhaseSettingsRow } from './ProjectPhaseSettingsRow';
 import { ProjectSettingsContextTab } from './ProjectSettingsContextTab';
 import { ProjectSettingsGeneralTab } from './ProjectSettingsGeneralTab';
 import { ProjectSettingsGitHubTab } from './ProjectSettingsGitHubTab';
@@ -797,5 +799,97 @@ describe('project settings leaf tabs', () => {
     expect(onApplyPreset).toHaveBeenNthCalledWith(1, 'claude');
     expect(onApplyPreset).toHaveBeenNthCalledWith(2, 'codex');
     expect(onApplyPreset).toHaveBeenNthCalledWith(3, 'hybrid');
+  });
+
+  it('renders project phase OpenRouter warnings and validates custom slugs on blur', async () => {
+    const setOverrides = vi.fn();
+    const setModelValidation = vi.fn();
+    const validation: OpenRouterModelValidation = {
+      modelId: 'anthropic/claude-opus-4.1',
+      status: 'invalid',
+      message: 'Model is not available to this key',
+    };
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'integrations:validate-openrouter-model') return validation;
+      return null;
+    });
+    window.shipcode = {
+      ...window.shipcode,
+      invoke: invoke as typeof window.shipcode.invoke,
+    };
+    const settings: AppSettings = {
+      ...DEFAULT_SETTINGS,
+      plannerModel: 'codex',
+      plannerReasoningEffort: 'xhigh',
+    };
+    const overrides = {
+      plannerModelOverride: 'openrouter' as const,
+      reviewerModelOverride: null,
+      executorModelOverride: null,
+      verifierModelOverride: null,
+      plannerModelIdOverride: 'legacy/model',
+      reviewerModelIdOverride: null,
+      executorModelIdOverride: null,
+      verifierModelIdOverride: null,
+      plannerReasoningEffortOverride: 'xhigh' as const,
+      reviewerReasoningEffortOverride: null,
+      executorReasoningEffortOverride: null,
+      verifierReasoningEffortOverride: null,
+      revisionCountOverride: null,
+      requireApprovalOverride: null,
+      pipelineSpeedProfileOverride: null,
+      prdQualityGate: null,
+      discordRouting: 'inherit' as const,
+      discordWebhookUrlOverride: null,
+      telegramRouting: 'inherit' as const,
+      telegramChatIdOverride: null,
+    };
+
+    render(
+      <ProjectPhaseSettingsRow
+        phase="planner"
+        label="Planner"
+        validProviders={['claude', 'codex', 'openrouter']}
+        settings={settings}
+        projectDraft={makeProject()}
+        overrides={overrides}
+        setOverrides={setOverrides}
+        integrationStatus={{
+          ...integrationStatus,
+          openrouter: {
+            ...integrationStatus.openrouter,
+            authStatus: 'missing_key',
+            message: 'OpenRouter key is missing',
+          },
+        }}
+        modelValidation={{ planner: validation }}
+        setModelValidation={setModelValidation}
+      />,
+    );
+
+    expect(screen.getByText('OpenRouter key is missing')).toBeInTheDocument();
+    expect(screen.getByText('Model is not available to this key')).toBeInTheDocument();
+    expect(screen.getByText(/may remap unsupported effort levels/i)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Custom OpenRouter slug'), {
+      target: { value: '  anthropic/claude-opus-4.1  ' },
+    });
+    fireEvent.blur(screen.getByLabelText('Custom OpenRouter slug'));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('integrations:validate-openrouter-model', {
+        modelId: 'anthropic/claude-opus-4.1',
+      });
+    });
+
+    const overrideUpdater = setOverrides.mock.calls.at(-1)?.[0];
+    expect(typeof overrideUpdater).toBe('function');
+    expect(overrideUpdater(overrides)).toMatchObject({
+      plannerModelIdOverride: 'anthropic/claude-opus-4.1',
+    });
+
+    const validationUpdater = setModelValidation.mock.calls.at(-1)?.[0];
+    expect(typeof validationUpdater).toBe('function');
+    expect(validationUpdater({})).toEqual({ planner: validation });
   });
 });

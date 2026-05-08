@@ -83,6 +83,11 @@ const PHASE_ACTIVITY: Partial<
     title: (t) => `${t.title} — shipping`,
     subtitle: 'Committing and pushing',
   },
+  [PIPELINE_PHASE.paused]: {
+    kind: 'phase_change',
+    title: (t) => `${t.title} — paused`,
+    subtitle: 'Resume when ready',
+  },
   [PIPELINE_PHASE.completed]: {
     kind: 'pipeline_completed',
     title: (t) => `${t.title} — completed`,
@@ -94,6 +99,7 @@ const PHASE_ACTIVITY: Partial<
 const SLOT_FREEING_PHASES = new Set<PipelinePhase>([
   PIPELINE_PHASE.clarifying,
   PIPELINE_PHASE.awaitingApproval,
+  PIPELINE_PHASE.paused,
   PIPELINE_PHASE.completed,
   PIPELINE_PHASE.failed,
   PIPELINE_PHASE.idle,
@@ -102,6 +108,7 @@ const SLOT_FREEING_PHASES = new Set<PipelinePhase>([
 const TERMINAL_PHASES = new Set<PipelinePhase>([
   PIPELINE_PHASE.completed,
   PIPELINE_PHASE.failed,
+  PIPELINE_PHASE.paused,
   PIPELINE_PHASE.idle,
 ]);
 
@@ -231,7 +238,9 @@ export function createElectronEmitter(
             ? 'codex'
             : event.phase === PIPELINE_PHASE.completed || event.phase === PIPELINE_PHASE.clarifying
               ? 'system'
-              : 'claude',
+              : event.phase === PIPELINE_PHASE.paused
+                ? 'human'
+                : 'claude',
         title: meta.title(thread),
         subtitle: meta.subtitle ?? null,
         metadata: { phase: event.phase },

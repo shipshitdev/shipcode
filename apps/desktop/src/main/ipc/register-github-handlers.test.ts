@@ -481,6 +481,66 @@ describe('registerGitHubHandlers', () => {
     });
   });
 
+  it('marks a GitHub issue completed without closing it when PR evidence exists', async () => {
+    const issueWithPr = {
+      ...baseIssue,
+      linkedPrNumber: 123,
+      state: 'open',
+      pipelineStatus: 'todo',
+      threadId: reusableThread.id,
+    };
+    const refreshedIssues = [
+      {
+        ...issueWithPr,
+        pipelineStatus: 'completed',
+      },
+    ];
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+      },
+      githubIssues: buildGithubIssuesQueries(
+        {
+          getByNumber: vi.fn(() => issueWithPr),
+          updatePipelineStatus: vi.fn(),
+          updateState: vi.fn(),
+        },
+        refreshedIssues,
+      ),
+      threads: {
+        getById: vi.fn(() => ({ ...reusableThread, status: 'completed' })),
+        getByProjectAndGithubIssue: vi.fn(() => reusableThread),
+      },
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const markDone = handlers.get('github:mark-done');
+    if (!markDone) throw new Error('github:mark-done handler not registered');
+
+    await markDone(undefined, { projectId: 'project-1', issueNumber: 42 });
+
+    expect(closeIssueMock).not.toHaveBeenCalled();
+    expect(queries.githubIssues.updateState).toHaveBeenCalledWith(issueWithPr.id, 'open');
+    expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(
+      issueWithPr.id,
+      'completed',
+    );
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('github:issues-updated', {
+      projectId: 'project-1',
+      issues: refreshedIssues,
+    });
+  });
+
   it('marks an automation issue done by updating the backing thread only', async () => {
     const markDoneThread = vi.fn();
     const queries = {

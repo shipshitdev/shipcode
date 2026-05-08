@@ -1,6 +1,7 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
-import { execFileSync, spawn as spawnChild } from 'node:child_process';
+import { execFile, execFileSync, spawn as spawnChild } from 'node:child_process';
 import { EventEmitter } from 'node:events';
+import { promisify } from 'node:util';
 import type { AgentState, AgentType } from '@shipcode/shared';
 import { assertWorkspaceSafe } from '@shipcode/shared/worktree-path';
 import { nanoid } from 'nanoid';
@@ -78,6 +79,7 @@ function resolveCommand(command: string): string {
 }
 
 let cachedEnv: Record<string, string> | null = null;
+const execFileAsync = promisify(execFile);
 
 export type ManagedProcessOutputMode = 'normalized' | 'raw';
 
@@ -107,6 +109,7 @@ export interface ManagedProcess {
   pty: pty.IPty | null;
   child?: ChildProcessWithoutNullStreams;
   cwd: string;
+  command: string;
   exitCode: number | null;
   threadId?: string;
   outputMode: ManagedProcessOutputMode;
@@ -119,6 +122,77 @@ export interface ManagedProcess {
    * `killStalled` reads this to decide whether the process has gone silent.
    */
   lastEventAt: number;
+  startedAt: number;
+}
+
+export interface ManagedProcessResourceUsage {
+  processId: string;
+  type: AgentType;
+  state: AgentState;
+  pid: number | null;
+  childPids: number[];
+  threadId: string | null;
+  cwd: string;
+  command: string;
+  cpuPercent: number;
+  memoryBytes: number;
+  startedAt: number;
+  lastEventAt: number;
+}
+
+interface PsRow {
+  pid: number;
+  ppid: number;
+  cpuPercent: number;
+  rssKb: number;
+}
+
+function managedPid(proc: ManagedProcess): number | null {
+  if (proc.child?.pid) return proc.child.pid;
+  const ptyPid = (proc.pty as { pid?: number } | null)?.pid;
+  return typeof ptyPid === 'number' && Number.isFinite(ptyPid) ? ptyPid : null;
+}
+
+function parsePsRows(stdout: string): PsRow[] {
+  const rows: PsRow[] = [];
+  for (const line of stdout.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const [pidRaw, ppidRaw, cpuRaw, rssRaw] = trimmed.split(/\s+/, 4);
+    const pid = Number(pidRaw);
+    const ppid = Number(ppidRaw);
+    const cpuPercent = Number(cpuRaw);
+    const rssKb = Number(rssRaw);
+    if (
+      !Number.isFinite(pid) ||
+      !Number.isFinite(ppid) ||
+      !Number.isFinite(cpuPercent) ||
+      !Number.isFinite(rssKb)
+    ) {
+      continue;
+    }
+    rows.push({ pid, ppid, cpuPercent, rssKb });
+  }
+  return rows;
+}
+
+function collectDescendantPids(rootPid: number, rows: PsRow[]): Set<number> {
+  const childrenByParent = new Map<number, number[]>();
+  for (const row of rows) {
+    const children = childrenByParent.get(row.ppid) ?? [];
+    children.push(row.pid);
+    childrenByParent.set(row.ppid, children);
+  }
+
+  const descendants = new Set<number>();
+  const pending = [...(childrenByParent.get(rootPid) ?? [])];
+  while (pending.length > 0) {
+    const pid = pending.pop();
+    if (pid == null || descendants.has(pid)) continue;
+    descendants.add(pid);
+    pending.push(...(childrenByParent.get(pid) ?? []));
+  }
+  return descendants;
 }
 
 export class ProcessManager extends EventEmitter {
@@ -169,11 +243,13 @@ export class ProcessManager extends EventEmitter {
         state: 'exited',
         pty: null,
         cwd,
+        command,
         exitCode: 127,
         threadId,
         outputMode,
         stdinMode: 'tty',
         lastEventAt: Date.now(),
+        startedAt: Date.now(),
       };
       this.processes.set(id, managed);
 
@@ -196,10 +272,12 @@ export class ProcessManager extends EventEmitter {
       pty: ptyProcess,
       threadId,
       cwd,
+      command,
       exitCode: null,
       outputMode,
       stdinMode: 'tty',
       lastEventAt: Date.now(),
+      startedAt: Date.now(),
     };
 
     this.processes.set(id, managed);
@@ -267,11 +345,13 @@ export class ProcessManager extends EventEmitter {
         state: 'exited',
         pty: null,
         cwd,
+        command,
         exitCode: 127,
         threadId,
         outputMode,
         stdinMode: 'pipe',
         lastEventAt: Date.now(),
+        startedAt: Date.now(),
       };
       this.processes.set(id, managed);
 
@@ -293,11 +373,13 @@ export class ProcessManager extends EventEmitter {
       child,
       threadId,
       cwd,
+      command,
       exitCode: null,
       outputMode,
       stdinMode: 'pipe',
       detached,
       lastEventAt: Date.now(),
+      startedAt: Date.now(),
     };
 
     this.processes.set(id, managed);
@@ -347,10 +429,10 @@ export class ProcessManager extends EventEmitter {
     return managed;
   }
 
-  kill(processId: string): void {
+  kill(processId: string, signal?: string): void {
     const process = this.processes.get(processId);
     if (process && process.state !== 'exited') {
-      this.killManagedProcess(process);
+      this.killManagedProcess(process, signal);
       this.updateState(processId, 'exited');
     }
   }
@@ -381,6 +463,73 @@ export class ProcessManager extends EventEmitter {
     return Array.from(this.processes.values()).filter(
       (p) => p.state === 'running' || p.state === 'starting',
     );
+  }
+
+  async listResourceUsage(): Promise<ManagedProcessResourceUsage[]> {
+    const active = this.listActive();
+    if (active.length === 0) return [];
+
+    let psRows: PsRow[] = [];
+    try {
+      const { stdout } = await execFileAsync('ps', ['-axo', 'pid=,ppid=,pcpu=,rss='], {
+        encoding: 'utf8',
+        maxBuffer: 2 * 1024 * 1024,
+      });
+      psRows = parsePsRows(stdout);
+    } catch {
+      psRows = [];
+    }
+
+    const rowByPid = new Map(psRows.map((row) => [row.pid, row]));
+    return active
+      .map((proc) => {
+        const pid = managedPid(proc);
+        if (pid == null) {
+          return {
+            processId: proc.id,
+            type: proc.type,
+            state: proc.state,
+            pid: null,
+            childPids: [],
+            threadId: proc.threadId ?? null,
+            cwd: proc.cwd,
+            command: proc.command,
+            cpuPercent: 0,
+            memoryBytes: 0,
+            startedAt: proc.startedAt,
+            lastEventAt: proc.lastEventAt,
+          };
+        }
+
+        const descendantPids = collectDescendantPids(pid, psRows);
+        const pids = [pid, ...descendantPids];
+        const totals = pids.reduce(
+          (acc, processPid) => {
+            const row = rowByPid.get(processPid);
+            if (!row) return acc;
+            acc.cpuPercent += row.cpuPercent;
+            acc.memoryBytes += row.rssKb * 1024;
+            return acc;
+          },
+          { cpuPercent: 0, memoryBytes: 0 },
+        );
+
+        return {
+          processId: proc.id,
+          type: proc.type,
+          state: proc.state,
+          pid,
+          childPids: [...descendantPids].sort((a, b) => a - b),
+          threadId: proc.threadId ?? null,
+          cwd: proc.cwd,
+          command: proc.command,
+          cpuPercent: Number(totals.cpuPercent.toFixed(1)),
+          memoryBytes: totals.memoryBytes,
+          startedAt: proc.startedAt,
+          lastEventAt: proc.lastEventAt,
+        };
+      })
+      .sort((a, b) => b.cpuPercent - a.cpuPercent);
   }
 
   killAll(): void {

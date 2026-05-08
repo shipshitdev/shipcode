@@ -1,7 +1,7 @@
 import type { ProjectQueries, SettingsQueries } from '@shipcode/db';
 import type { Project, Thread } from '@shipcode/shared';
 import { DEFAULT_SETTINGS } from '@shipcode/shared';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatNotificationService } from './chat-notification-service';
 
 vi.mock('./logger.service', () => ({
@@ -84,6 +84,8 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     lastError: null,
     failurePhase: null,
     failureCount: 0,
+    pausedPhase: null,
+    pausedAt: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     plannerResolvedModel: null,
@@ -116,6 +118,10 @@ describe('ChatNotificationService', () => {
       telegramDefaultChatId: '-1001234567890',
     });
     getProjectMock.mockReturnValue(makeProject());
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('sends actionable events to both configured providers', async () => {
@@ -192,5 +198,72 @@ describe('ChatNotificationService', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('skips delivery when the project no longer exists', async () => {
+    getProjectMock.mockReturnValue(null);
+    const service = new ChatNotificationService(
+      { get: getSettingsMock, set: setSettingsMock } as unknown as SettingsQueries,
+      { getById: getProjectMock } as unknown as ProjectQueries,
+    );
+
+    service.fire('completed', makeThread({ status: 'completed' }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(setSettingsMock).not.toHaveBeenCalled();
+  });
+
+  it('respects project-level disabled routing', async () => {
+    getProjectMock.mockReturnValue(
+      makeProject({
+        discordRouting: 'disabled',
+        telegramRouting: 'disabled',
+      }),
+    );
+    const service = new ChatNotificationService(
+      { get: getSettingsMock, set: setSettingsMock } as unknown as SettingsQueries,
+      { getById: getProjectMock } as unknown as ProjectQueries,
+    );
+
+    await expect(service.sendTest('discord', 'project-1')).resolves.toEqual({
+      ok: false,
+      message: 'Discord is not configured for this scope',
+    });
+    await expect(service.sendTest('telegram', 'project-1')).resolves.toEqual({
+      ok: false,
+      message: 'Telegram is not configured for this scope',
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('records a failed delivery status after retry exhaustion', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('rate limited by provider', { status: 429 })),
+    );
+    const service = new ChatNotificationService(
+      { get: getSettingsMock, set: setSettingsMock } as unknown as SettingsQueries,
+      { getById: getProjectMock } as unknown as ProjectQueries,
+    );
+
+    const resultPromise = service.sendTest('discord');
+    await vi.advanceTimersByTimeAsync(2_000);
+    const result = await resultPromise;
+
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(result).toMatchObject({
+      ok: false,
+      message: expect.stringContaining('HTTP 429'),
+    });
+    expect(setSettingsMock).toHaveBeenCalledWith({
+      discordLastDeliveryStatus: expect.objectContaining({
+        provider: 'discord',
+        destination: 'discord-webhook',
+        lastSuccessAt: null,
+        lastError: expect.stringContaining('HTTP 429'),
+      }),
+    });
   });
 });

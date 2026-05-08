@@ -201,6 +201,12 @@ function getRelinkedWorktreePath(
   return path.join(newParent, path.relative(path.resolve(oldParent), path.resolve(worktreePath)));
 }
 
+interface RelinkWorktreeEntry {
+  path: string;
+  branch: string;
+  threadId: string | null;
+}
+
 async function repairProjectWorktreesAfterRelink(
   project: Project,
   nextProjectPath: string,
@@ -213,11 +219,32 @@ async function repairProjectWorktreesAfterRelink(
   const oldParent = resolveWorktreeParent(project.path, settings.worktreeRoot);
   const nextParent = resolveWorktreeParent(nextProjectPath, settings.worktreeRoot);
   const threads = queries.threads.list(project.id);
+  const entries = new Map<string, RelinkWorktreeEntry>();
 
   for (const thread of threads) {
     if (!thread.worktreePath || !thread.worktreeBranch) continue;
+    entries.set(thread.worktreePath, {
+      path: thread.worktreePath,
+      branch: thread.worktreeBranch,
+      threadId: thread.id,
+    });
+  }
 
-    const currentPath = thread.worktreePath;
+  try {
+    for (const worktree of await manager.list()) {
+      const existing = entries.get(worktree.path);
+      entries.set(worktree.path, {
+        path: worktree.path,
+        branch: worktree.branch,
+        threadId: existing?.threadId ?? null,
+      });
+    }
+  } catch (error) {
+    log.warn('[project:relink-path] worktree list failed during relink:', error);
+  }
+
+  for (const entry of entries.values()) {
+    const currentPath = entry.path;
     const relinkedPath = getRelinkedWorktreePath(currentPath, oldParent, nextParent);
     const currentExists = fs.existsSync(currentPath);
     const relinkedExists = relinkedPath ? fs.existsSync(relinkedPath) : false;
@@ -233,7 +260,9 @@ async function repairProjectWorktreesAfterRelink(
         try {
           await fsp.mkdir(path.dirname(relinkedPath), { recursive: true });
           await manager.move(currentPath, relinkedPath);
-          queries.threads.setWorktree(thread.id, thread.worktreeBranch, relinkedPath);
+          if (entry.threadId) {
+            queries.threads.setWorktree(entry.threadId, entry.branch, relinkedPath);
+          }
         } catch (error) {
           log.warn(
             `[project:relink-path] worktree move failed for ${currentPath} -> ${relinkedPath}:`,
@@ -250,12 +279,14 @@ async function repairProjectWorktreesAfterRelink(
       } catch (error) {
         log.warn(`[project:relink-path] worktree repair failed for ${relinkedPath}:`, error);
       }
-      queries.threads.setWorktree(thread.id, thread.worktreeBranch, relinkedPath);
+      if (entry.threadId) {
+        queries.threads.setWorktree(entry.threadId, entry.branch, relinkedPath);
+      }
       continue;
     }
 
-    if (relinkedPath) {
-      queries.threads.clearWorktree(thread.id);
+    if (relinkedPath && entry.threadId) {
+      queries.threads.clearWorktree(entry.threadId);
     }
   }
 }

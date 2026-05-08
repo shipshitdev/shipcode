@@ -96,6 +96,34 @@ describe('TerminalView', () => {
     expect(screen.getByRole('button', { name: 'Open' })).toBeInTheDocument();
   });
 
+  it('cancels running live panes when leaving the terminal page', () => {
+    useAppStore.setState({
+      terminalPaneThreadIds: ['thread-live', 'thread-replay'],
+      terminalPaneMetaByThread: {
+        'thread-live': {
+          mode: 'live',
+          cli: 'shell',
+          title: 'Terminal',
+          state: 'running',
+        },
+        'thread-replay': {
+          mode: 'replay',
+          cli: 'claude',
+          title: 'Old run',
+          state: 'running',
+        },
+      },
+    } as never);
+
+    const view = render(<TerminalView />);
+    view.unmount();
+
+    expect(invokeMock).toHaveBeenCalledWith('instant:cancel', { threadId: 'thread-live' });
+    expect(invokeMock).not.toHaveBeenCalledWith('instant:cancel', {
+      threadId: 'thread-replay',
+    });
+  });
+
   it('does not rerender the terminal grid when unrelated terminal streams update', () => {
     const onRender = vi.fn();
     render(

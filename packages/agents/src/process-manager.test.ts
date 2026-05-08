@@ -1,13 +1,22 @@
 import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockPtySpawn, mockChildSpawn } = vi.hoisted(() => ({
-  mockPtySpawn: vi.fn(),
-  mockChildSpawn: vi.fn(),
-}));
+const { mockPtySpawn, mockChildSpawn, mockExecFile, mockExecFileAsync } = vi.hoisted(() => {
+  const mockExecFileAsync = vi.fn();
+  const mockExecFile = Object.assign(vi.fn(), {
+    [Symbol.for('nodejs.util.promisify.custom')]: mockExecFileAsync,
+  });
+  return {
+    mockPtySpawn: vi.fn(),
+    mockChildSpawn: vi.fn(),
+    mockExecFile,
+    mockExecFileAsync,
+  };
+});
 
 vi.mock('node-pty', () => ({ spawn: mockPtySpawn }));
 vi.mock('node:child_process', () => ({
+  execFile: mockExecFile,
   execFileSync: vi.fn(() => ''),
   spawn: mockChildSpawn,
 }));
@@ -15,6 +24,7 @@ vi.mock('node:child_process', () => ({
 import { ProcessManager } from './process-manager';
 
 interface MockPty {
+  pid: number;
   onData: (cb: (data: string) => void) => void;
   onExit: (cb: ({ exitCode }: { exitCode: number }) => void) => void;
   kill: (signal?: string) => void;
@@ -26,6 +36,7 @@ interface MockPty {
 function createMockPty(): MockPty {
   let exitCb: ((arg: { exitCode: number }) => void) | null = null;
   return {
+    pid: 101,
     onData: vi.fn(),
     onExit: (cb) => {
       exitCb = cb;
@@ -38,6 +49,7 @@ function createMockPty(): MockPty {
 }
 
 interface MockChild extends EventEmitter {
+  pid: number;
   stdout: EventEmitter;
   stderr: EventEmitter;
   stdin: EventEmitter & {
@@ -54,6 +66,7 @@ interface MockChild extends EventEmitter {
 
 function createMockChild(): MockChild {
   const child = new EventEmitter() as MockChild;
+  child.pid = 201;
   child.stdout = new EventEmitter();
   child.stderr = new EventEmitter();
   child.stdin = Object.assign(new EventEmitter(), {
@@ -80,6 +93,14 @@ describe('ProcessManager registry hygiene', () => {
     manager = new ProcessManager();
     mockPtySpawn.mockReset();
     mockChildSpawn.mockReset();
+    mockExecFile.mockReset();
+    mockExecFileAsync.mockReset();
+    mockExecFileAsync.mockResolvedValue({ stdout: '', stderr: '' });
+    mockExecFile.mockImplementation(
+      (_file: string, _args: string[], _options: unknown, cb: unknown) => {
+        if (typeof cb === 'function') cb(null, '', '');
+      },
+    );
   });
 
   afterEach(() => {
@@ -165,6 +186,31 @@ describe('ProcessManager registry hygiene', () => {
 
     expect(child.kill).toHaveBeenCalledTimes(1);
     expect(proc.state).toBe('exited');
+  });
+
+  it('reports managed process CPU and memory including descendants', async () => {
+    const child = createMockChild();
+    child.pid = 300;
+    mockChildSpawn.mockReturnValueOnce(child);
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: ['300 1 12.5 1000', '301 300 20.0 2000', '302 301 7.5 500', '400 1 99.0 9999'].join(
+        '\n',
+      ),
+      stderr: '',
+    });
+
+    const proc = manager.spawnWithStdin('shell', '/bin/zsh', ['-lc', 'bun test'], '/tmp', '');
+    const usage = await manager.listResourceUsage();
+
+    expect(usage).toEqual([
+      expect.objectContaining({
+        processId: proc.id,
+        pid: 300,
+        childPids: [301, 302],
+        cpuPercent: 40,
+        memoryBytes: 3_500 * 1024,
+      }),
+    ]);
   });
 
   it('killAllAndWait resolves only after every pty emits exit', async () => {

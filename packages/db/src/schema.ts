@@ -1500,3 +1500,62 @@ export function migrateV50(db: DatabaseSync): void {
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (50)`);
   });
 }
+
+export function migrateV51(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 51) return;
+
+  transaction(db, () => {
+    // Project-level shared test failure ledger. Worktrees stay isolated, but
+    // repeated failures should be claimed once per project/base/fingerprint
+    // so parallel tasks do not independently patch the same root cause.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS project_failures (
+        id                    TEXT PRIMARY KEY,
+        project_id            TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        base_branch           TEXT,
+        fingerprint           TEXT NOT NULL,
+        status                TEXT NOT NULL CHECK(status IN ('in_progress', 'resolved')),
+        owner_thread_id       TEXT REFERENCES threads(id) ON DELETE SET NULL,
+        first_seen_thread_id  TEXT REFERENCES threads(id) ON DELETE SET NULL,
+        seen_thread_ids       TEXT NOT NULL DEFAULT '[]',
+        command               TEXT NOT NULL,
+        summary               TEXT NOT NULL,
+        output_excerpt        TEXT NOT NULL,
+        implicated_files      TEXT NOT NULL DEFAULT '[]',
+        resolved_by_thread_id TEXT REFERENCES threads(id) ON DELETE SET NULL,
+        resolved_commit_sha   TEXT,
+        resolved_at           TEXT,
+        created_at            TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        updated_at            TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_project_failures_unique
+        ON project_failures(project_id, COALESCE(base_branch, ''), fingerprint);
+      CREATE INDEX IF NOT EXISTS idx_project_failures_project_status
+        ON project_failures(project_id, status, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_project_failures_owner
+        ON project_failures(owner_thread_id, status);
+      CREATE INDEX IF NOT EXISTS idx_project_failures_first_seen
+        ON project_failures(first_seen_thread_id, created_at);
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (51)`);
+  });
+}
+
+export function migrateV52(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 52) return;
+
+  transaction(db, () => {
+    execAlterTableIfMissing(db, 'ALTER TABLE threads ADD COLUMN paused_phase TEXT');
+    execAlterTableIfMissing(db, 'ALTER TABLE threads ADD COLUMN paused_at TEXT');
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (52)`);
+  });
+}

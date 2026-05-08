@@ -62,6 +62,7 @@ import {
   PipelineAnalyticsQueries,
   PipelineStepQueries,
   PlanQueries,
+  ProjectFailureQueries,
   ProjectQueries,
   PromptTelemetryQueries,
   ReviewQueries,
@@ -88,6 +89,7 @@ import { notifyIssueGraphPipelinePhaseChange } from './ipc/register-issue-graph-
 import { NotificationService } from './notification-service';
 import { createElectronEmitter } from './pipeline-bridge';
 import { PipelineScheduler } from './pipeline-scheduler';
+import { ResourceMonitor } from './resource-monitor';
 import { SplashScreen } from './splash-screen';
 import { UpdateService } from './update-service';
 
@@ -264,6 +266,7 @@ function createWindow() {
     agentConversations: new AgentConversationQueries(db),
     skillResolutionLogs: new SkillResolutionLogQueries(db),
     featureQaResults: new FeatureQaResultQueries(db),
+    projectFailures: new ProjectFailureQueries(db),
     taskGraphs: new TaskGraphQueries(db),
   };
   threadQueries = queries.threads;
@@ -289,6 +292,7 @@ function createWindow() {
   // onPipelineTerminal is set after pipeline is created (late-binding).
   let onPipelineTerminal: ((event: { threadId: string; phase: PipelinePhase }) => void) | undefined;
   let onExecutionSlotFreed: (() => void) | undefined;
+  let resourceMonitor: ResourceMonitor | null = null;
   const emitter = createElectronEmitter(mainWindow, {
     activity: queries.activity,
     terminalEvents: queries.terminalEvents,
@@ -334,9 +338,15 @@ function createWindow() {
     agentConversations: queries.agentConversations,
     skillResolutionLogs: queries.skillResolutionLogs,
     featureQaResults: queries.featureQaResults,
+    projectFailures: queries.projectFailures,
+    cpuTaskGate: {
+      canStartCpuTask: () => resourceMonitor?.canStartCpuTask() ?? { allowed: true },
+      retryDelayMs: 5_000,
+    },
   };
   pipeline = createPipeline(pipelineDeps as Parameters<typeof createPipeline>[0]);
   const activePipeline = requirePipeline();
+  resourceMonitor = new ResourceMonitor(processManager, queries, activePipeline);
 
   const pipelineScheduler = new PipelineScheduler({
     queries,
@@ -439,6 +449,7 @@ function createWindow() {
     chatNotificationService,
     updateService,
     automationScheduler,
+    resourceMonitor,
   );
 
   // Watchdog: reset threads stuck in active phases (handles renderer refresh + crash scenarios).

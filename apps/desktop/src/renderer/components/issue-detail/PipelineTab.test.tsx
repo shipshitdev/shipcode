@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 
-import type { FeatureQaResult, GitHubIssueCacheRecord, Thread } from '@shipcode/shared';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import type {
+  FeatureQaResult,
+  GitHubIssueCacheRecord,
+  PipelineCheckpoint,
+  Thread,
+} from '@shipcode/shared';
+import '@testing-library/jest-dom/vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PipelineTab } from './PipelineTab';
 
@@ -83,6 +89,8 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     lastError: null,
     failurePhase: null,
     failureCount: 0,
+    pausedPhase: null,
+    pausedAt: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     plannerResolvedModel: null,
@@ -100,16 +108,32 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
 
 function renderPipelineTab({
   issueOverrides = {},
+  activeThreadId = 'thread-1',
+  checkpoints = [],
+  hasPrFeedbackBlockers = false,
+  isSubmitting = false,
+  linkedPrUrl = null,
+  onRestoreCheckpoint = vi.fn(),
+  onStabilizePr = vi.fn(),
   qaResults = [],
+  thread = makeThread(),
 }: {
   issueOverrides?: Partial<GitHubIssueCacheRecord>;
+  activeThreadId?: string | null;
+  checkpoints?: PipelineCheckpoint[];
+  hasPrFeedbackBlockers?: boolean;
+  isSubmitting?: boolean;
+  linkedPrUrl?: string | null;
+  onRestoreCheckpoint?: (checkpoint: PipelineCheckpoint) => void;
+  onStabilizePr?: () => void;
   qaResults?: FeatureQaResult[];
+  thread?: Thread | null;
 } = {}) {
   render(
     <PipelineTab
       activeIssue={makeIssue(issueOverrides)}
-      activeThreadId="thread-1"
-      checkpoints={[]}
+      activeThreadId={activeThreadId}
+      checkpoints={checkpoints}
       currentPhaseReasoningEfforts={{
         planner: 'high',
         reviewer: 'high',
@@ -131,7 +155,7 @@ function renderPipelineTab({
       effectiveRequireApproval={false}
       effectiveRevisionCount={1}
       executorEditable={false}
-      hasPrFeedbackBlockers={false}
+      hasPrFeedbackBlockers={hasPrFeedbackBlockers}
       inheritedPhaseReasoningEfforts={{
         planner: 'high',
         reviewer: 'high',
@@ -140,8 +164,8 @@ function renderPipelineTab({
       }}
       inheritedRequireApproval={true}
       inheritedRevisionCount={0}
-      isSubmitting={false}
-      linkedPrUrl={null}
+      isSubmitting={isSubmitting}
+      linkedPrUrl={linkedPrUrl}
       phaseEffortSelectValues={{
         planner: '__inherit__',
         reviewer: '__inherit__',
@@ -165,15 +189,15 @@ function renderPipelineTab({
       requireApprovalSelectValue="__inherit__"
       revisionCountSelectValue="__inherit__"
       taskGraph={null}
-      thread={makeThread()}
+      thread={thread}
       githubIssueUrl="https://github.com/acme/repo/issues/42"
       onPhaseAgentChange={vi.fn()}
       onPhaseEffortChange={vi.fn()}
       onRequireApprovalChange={vi.fn()}
       onRevisionCountChange={vi.fn()}
       onPhaseOpenRouterSlugBlur={vi.fn()}
-      onRestoreCheckpoint={vi.fn()}
-      onStabilizePr={vi.fn()}
+      onRestoreCheckpoint={onRestoreCheckpoint}
+      onStabilizePr={onStabilizePr}
     />,
   );
 }
@@ -339,5 +363,210 @@ describe('PipelineTab', () => {
 
     expect(await screen.findByText('http://localhost:4321')).toBeInTheDocument();
     expect(invoke).toHaveBeenCalledWith('feature-qa:get-server', { threadId: 'thread-1' });
+  });
+
+  it('opens and stops the manual QA server through IPC', async () => {
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'feature-qa:get-server') return null;
+      if (channel === 'feature-qa:start-server') {
+        return { baseUrl: 'http://localhost:5173', port: 5173 };
+      }
+      return null;
+    });
+    window.shipcode.invoke = invoke as unknown as typeof window.shipcode.invoke;
+
+    renderPipelineTab({
+      issueOverrides: {
+        body: `## QA State
+
+\`\`\`json
+{
+  "featureId": "issue-42",
+  "routes": ["/settings"],
+  "criticalFlows": [
+    {
+      "name": "Update profile name",
+      "steps": ["Open settings"],
+      "successCriteria": "Settings loads."
+    }
+  ],
+  "expectedStates": [],
+  "testDataAssumptions": [],
+  "selectorReadiness": "ready"
+}
+\`\`\``,
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+
+    expect(await screen.findByText('http://localhost:5173')).toBeInTheDocument();
+    expect(invoke).toHaveBeenCalledWith('feature-qa:start-server', {
+      projectId: 'project-1',
+      threadId: 'thread-1',
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('feature-qa:stop-server', { threadId: 'thread-1' });
+    });
+    expect(
+      await screen.findByText(/starts the configured runtime qa command/i),
+    ).toBeInTheDocument();
+  });
+
+  it('clamps and renders manual QA startup errors', async () => {
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'feature-qa:get-server') return null;
+      if (channel === 'feature-qa:start-server') {
+        throw new Error(`dev server failed\n${'x'.repeat(1000)}`);
+      }
+      return null;
+    });
+    window.shipcode.invoke = invoke as unknown as typeof window.shipcode.invoke;
+
+    renderPipelineTab({
+      issueOverrides: {
+        body: `## QA State
+
+\`\`\`json
+{
+  "featureId": "issue-42",
+  "routes": [],
+  "criticalFlows": [
+    {
+      "name": "Open settings",
+      "steps": ["Open settings"],
+      "successCriteria": "Settings loads."
+    }
+  ],
+  "expectedStates": [],
+  "testDataAssumptions": [],
+  "selectorReadiness": "ready"
+}
+\`\`\``,
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+
+    const error = await screen.findByText(/^dev server failed/);
+    expect(error.textContent?.length).toBeLessThanOrEqual(320);
+  });
+
+  it('renders PR feedback blockers and runs the stabilization action', () => {
+    const onStabilizePr = vi.fn();
+
+    renderPipelineTab({
+      issueOverrides: {
+        linkedPrNumber: 77,
+        linkedPrUrl: 'https://github.com/acme/repo/pull/77',
+        linkedPrIsDraft: true,
+        ciBlocked: true,
+        failingChecks: [
+          {
+            name: 'test',
+            workflowName: 'CI',
+            status: 'completed',
+            conclusion: 'failure',
+            detailsUrl: 'https://github.com/acme/repo/actions/runs/1',
+          },
+        ],
+        unresolvedReviewCommentCount: 1,
+        unresolvedReviewComments: [
+          {
+            id: 'comment-1',
+            author: 'octocat',
+            body: 'Please cover the regression.',
+            path: 'src/foo.ts',
+            line: 12,
+            url: 'https://github.com/acme/repo/pull/77#discussion_r1',
+          },
+        ],
+        prLastSyncAt: '2026-05-01T10:00:00.000Z',
+      },
+      hasPrFeedbackBlockers: true,
+      linkedPrUrl: 'https://github.com/acme/repo/pull/77',
+      onStabilizePr,
+    });
+
+    expect(screen.getByText('Draft')).toBeInTheDocument();
+    expect(screen.getByText('1 failing check')).toBeInTheDocument();
+    expect(screen.getByText('1 unresolved review')).toBeInTheDocument();
+    expect(screen.getByText('CI / test')).toBeInTheDocument();
+    expect(screen.getByText('Please cover the regression.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /run stabilization pass/i }));
+
+    expect(onStabilizePr).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens PR feedback links through shell IPC', () => {
+    const invoke = vi.fn(async () => null);
+    window.shipcode.invoke = invoke as unknown as typeof window.shipcode.invoke;
+
+    renderPipelineTab({
+      issueOverrides: {
+        linkedPrNumber: 77,
+        failingChecks: [
+          {
+            name: 'test',
+            workflowName: 'CI',
+            status: 'completed',
+            conclusion: 'failure',
+            detailsUrl: 'https://github.com/acme/repo/actions/runs/1',
+          },
+        ],
+        unresolvedReviewCommentCount: 1,
+        unresolvedReviewComments: [
+          {
+            id: 'comment-1',
+            author: 'octocat',
+            body: 'Please cover the regression.',
+            path: 'src/foo.ts',
+            line: 12,
+            url: 'https://github.com/acme/repo/pull/77#discussion_r1',
+          },
+        ],
+      },
+      linkedPrUrl: 'https://github.com/acme/repo/pull/77',
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open pull request on GitHub' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Comment' }));
+
+    expect(invoke).toHaveBeenCalledWith('shell:open-external', {
+      url: 'https://github.com/acme/repo/pull/77',
+    });
+    expect(invoke).toHaveBeenCalledWith('shell:open-external', {
+      url: 'https://github.com/acme/repo/actions/runs/1',
+    });
+    expect(invoke).toHaveBeenCalledWith('shell:open-external', {
+      url: 'https://github.com/acme/repo/pull/77#discussion_r1',
+    });
+  });
+
+  it('renders checkpoints and passes the selected checkpoint back for restore', () => {
+    const checkpoint: PipelineCheckpoint = {
+      id: 'checkpoint-1',
+      threadId: 'thread-1',
+      label: 'Before verifier retry',
+      commitSha: 'abcdef1234567890',
+      branch: 'ship/42-issue-title',
+      createdAt: '2026-05-01T10:00:00.000Z',
+    };
+    const onRestoreCheckpoint = vi.fn();
+
+    renderPipelineTab({ checkpoints: [checkpoint], onRestoreCheckpoint });
+
+    expect(screen.getByText('Checkpoints')).toBeInTheDocument();
+    expect(screen.getByText('Before verifier retry')).toBeInTheDocument();
+    expect(screen.getByText(/ship\/42-issue-title .* abcdef123456/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
+
+    expect(onRestoreCheckpoint).toHaveBeenCalledWith(checkpoint);
   });
 });

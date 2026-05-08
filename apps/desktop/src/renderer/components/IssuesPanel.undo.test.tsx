@@ -123,6 +123,8 @@ const awaitingApprovalThread: Thread = {
   lastError: null,
   failurePhase: null,
   failureCount: 0,
+  pausedPhase: null,
+  pausedAt: null,
   doneAt: null,
   createdAt: '2026-04-14T00:00:00.000Z',
   updatedAt: '2026-04-14T00:00:00.000Z',

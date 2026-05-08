@@ -179,6 +179,21 @@ function makeTempProject() {
   return dir;
 }
 
+function materializeMockStdinArgs(args: string[], stdin: string): string[] {
+  const promptFlagIndex = args.indexOf('-p');
+  if (promptFlagIndex !== -1 && args[promptFlagIndex + 1] === '-') {
+    return args.map((arg, index) => (index === promptFlagIndex + 1 ? stdin : arg));
+  }
+  if (promptFlagIndex !== -1) {
+    return [...args.slice(0, promptFlagIndex + 1), stdin, ...args.slice(promptFlagIndex + 1)];
+  }
+  const execIndex = args.indexOf('exec');
+  if (execIndex !== -1 && args[execIndex + 1] === '-') {
+    return args.map((arg, index) => (index === execIndex + 1 ? stdin : arg));
+  }
+  return args;
+}
+
 function planBlock(json: string = PLAN_JSON) {
   return `\`\`\`shipcode-plan\n${json}\n\`\`\``;
 }
@@ -222,6 +237,8 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     lastError: null,
     failurePhase: null,
     failureCount: 0,
+    pausedPhase: null,
+    pausedAt: null,
     createdAt: '',
     updatedAt: '',
     plannerResolvedModel: null,
@@ -460,13 +477,113 @@ function requireContext(
   return context;
 }
 
+function seedVerifyCommandContext(
+  pipeline: ReturnType<typeof createPipeline>,
+  command: string,
+): PipelineContext {
+  const projectDir = makeTempProject();
+  const worktreeDir = path.join(projectDir, 'worktree');
+  mkdirSync(worktreeDir, { recursive: true });
+  const context = pipeline.initializeContext('t1', {
+    projectPath: projectDir,
+    projectId: 'project-1',
+    worktreePath: worktreeDir,
+    autonomous: true,
+    githubIssueNumber: null,
+    baseBranch: 'main',
+  });
+  context.repoSetupLoaded = true;
+  context.repoSetupContract = {
+    path: path.join(projectDir, '.shipcode', 'setup.json'),
+    contract: {
+      version: 1,
+      setupCommands: [],
+      verifyCommands: [command],
+      envFiles: [],
+      setupBeforeVerify: false,
+      testingContext: null,
+    },
+  };
+  return context;
+}
+
 function createMockDeps() {
   const emittedEvents: PipelineEvent[] = [];
   const listeners: Record<string, Array<(...args: unknown[]) => void>> = {};
   let spawnCount = 0;
 
+  const emitMockProcessEvent = (event: string, ...args: unknown[]) => {
+    const handlers = [...(listeners[event] ?? [])];
+    handlers.forEach((handler) => {
+      handler(...args);
+    });
+  };
+
+  const simulateShellCommand = (processId: string, cwd: string, args: string[]) => {
+    const command = args.at(-1) ?? '';
+    setImmediate(() => {
+      if (command === 'printf setup > .setup-ran') {
+        writeFileSync(path.join(cwd, '.setup-ran'), 'setup');
+        emitMockProcessEvent('exit', processId, 0);
+        return;
+      }
+
+      if (command === 'shipcode-setup-probe') {
+        writeFileSync(path.join(cwd, '.setup-ran'), 'hydrated');
+        emitMockProcessEvent('exit', processId, 0);
+        return;
+      }
+
+      if (command === `printf 'typecheck ok\\ntests ok\\n'`) {
+        emitMockProcessEvent('output', processId, 'typecheck ok\ntests ok\n');
+        emitMockProcessEvent('exit', processId, 0);
+        return;
+      }
+
+      if (command.includes('FAIL packages/foo.test.ts')) {
+        emitMockProcessEvent(
+          'output',
+          processId,
+          'FAIL packages/foo.test.ts\nAssertionError: expected true to be false\n',
+        );
+        emitMockProcessEvent('exit', processId, 1);
+        return;
+      }
+
+      if (command.includes('process.exit(0)')) {
+        emitMockProcessEvent('exit', processId, 0);
+      }
+    });
+  };
+
   const processManager = {
     spawn: vi.fn(() => ({ id: `proc-${++spawnCount}` })),
+    spawnWithStdin: vi.fn(
+      (
+        type: 'claude' | 'codex' | 'shell',
+        command: string,
+        args: string[],
+        cwd: string,
+        input: string,
+        threadId?: string,
+        options?: Parameters<ProcessManager['spawn']>[5],
+      ) => {
+        if (type === 'shell') {
+          const process = { id: `proc-${++spawnCount}` };
+          simulateShellCommand(process.id, cwd, args);
+          return process;
+        }
+        return processManager.spawn(
+          type,
+          command,
+          materializeMockStdinArgs(args, input),
+          cwd,
+          threadId,
+          options,
+        );
+      },
+    ),
+    get: vi.fn(() => ({ state: 'running' })),
     kill: vi.fn(),
     on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
       const eventListeners = listeners[event] ?? [];
@@ -486,10 +603,7 @@ function createMockDeps() {
    */
   const trigger = async (event: string, ...args: unknown[]) => {
     // Copy the array to avoid mutation during iteration when handlers remove themselves
-    const handlers = [...(listeners[event] ?? [])];
-    handlers.forEach((h) => {
-      h(...args);
-    });
+    emitMockProcessEvent(event, ...args);
     // Let provider.generate() promise + completion IIFE settle
     await new Promise((r) => setImmediate(r));
     await new Promise((r) => setImmediate(r));
@@ -586,6 +700,28 @@ function createMockDeps() {
       },
       projects: {
         getById: vi.fn(() => makeProject()),
+      },
+      projectFailures: {
+        claimOrCreate: vi.fn((input: { threadId: string; fingerprint: string }) => ({
+          id: 'failure-1',
+          projectId: 'project-1',
+          baseBranch: 'main',
+          fingerprint: input.fingerprint,
+          status: 'in_progress',
+          ownerThreadId: input.threadId,
+          firstSeenThreadId: input.threadId,
+          seenThreadIds: [input.threadId],
+          command: 'bun test',
+          summary: 'Tests failed',
+          outputExcerpt: '',
+          implicatedFiles: [],
+          resolvedByThreadId: null,
+          resolvedCommitSha: null,
+          resolvedAt: null,
+          createdAt: '',
+          updatedAt: '',
+        })),
+        resolveOwnedByThread: vi.fn(() => 0),
       },
       settings,
       providers,
@@ -2106,6 +2242,105 @@ Custom prompt`,
 
       // Should NOT have re-entered execution after cancel
       expect(mock.deps.threads.updateStatus).not.toHaveBeenCalledWith('t1', 'executing');
+    });
+  });
+
+  describe('shared test failure ledger', () => {
+    const failingCommand =
+      "node -e \"console.error('FAIL packages/foo.test.ts'); console.error('AssertionError: expected true to be false'); process.exit(1)\"";
+
+    it('claims a new test failure and schedules one focused test-fix pass', async () => {
+      useRetryFakeTimers();
+      const pipeline = createPipeline(mock.deps);
+      seedVerifyCommandContext(pipeline, failingCommand);
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+      await mock.trigger('output', 'proc-1', 'execution done');
+      await mock.trigger('exit', 'proc-1', 0);
+      await mock.trigger('output', 'proc-2', 'FAIL packages/foo.test.ts\n');
+      const exitP = mock.trigger('exit', 'proc-2', 1);
+      await vi.advanceTimersByTimeAsync(0);
+      await exitP;
+
+      expect(mock.deps.projectFailures?.claimOrCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectId: 'project-1',
+          baseBranch: 'main',
+          threadId: 't1',
+          command: failingCommand,
+          summary: expect.stringContaining('FAIL packages/foo.test.ts'),
+          implicatedFiles: ['packages/foo.test.ts'],
+        }),
+      );
+      expect(pipeline.getContext('t1')?.retryTimer).not.toBeNull();
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'executing');
+    });
+
+    it('blocks duplicate fixes when another thread owns the same test failure', async () => {
+      const projectFailures = mock.deps.projectFailures;
+      if (!projectFailures) throw new Error('Expected project failure deps');
+      vi.mocked(projectFailures.claimOrCreate).mockReturnValueOnce({
+        id: 'failure-1',
+        projectId: 'project-1',
+        baseBranch: 'main',
+        fingerprint: 'fp-1',
+        status: 'in_progress',
+        ownerThreadId: 'owner-thread',
+        firstSeenThreadId: 'owner-thread',
+        seenThreadIds: ['owner-thread', 't1'],
+        command: failingCommand,
+        summary: 'FAIL packages/foo.test.ts',
+        outputExcerpt: '',
+        implicatedFiles: ['packages/foo.test.ts'],
+        resolvedByThreadId: null,
+        resolvedCommitSha: null,
+        resolvedAt: null,
+        createdAt: '',
+        updatedAt: '',
+      });
+      const pipeline = createPipeline(mock.deps);
+      seedVerifyCommandContext(pipeline, failingCommand);
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+      await mock.trigger('output', 'proc-1', 'execution done');
+      await mock.trigger('exit', 'proc-1', 0);
+      await mock.trigger('output', 'proc-2', 'FAIL packages/foo.test.ts\n');
+      await mock.trigger('exit', 'proc-2', 1);
+      await flush();
+
+      expect(mock.deps.threads.recordFailure).toHaveBeenCalledWith(
+        't1',
+        expect.any(String),
+        expect.stringContaining('already being fixed by owner-thread'),
+      );
+      expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('marks owned shared failures resolved after tests pass and verification commits', async () => {
+      const passingCommand = 'node -e "process.exit(0)"';
+      const pipeline = createPipeline(mock.deps);
+      const context = seedVerifyCommandContext(pipeline, passingCommand);
+      context.forkPointSha = 'abc123';
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git diff')) return 'some diff';
+        if (cmd.startsWith('git status')) return 'M fixed.ts';
+        if (cmd.startsWith('git rev-parse HEAD')) return 'resolvedsha123';
+        if (cmd.startsWith('git rev-parse')) return 'ship/test';
+        return '';
+      });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+      await mock.trigger('output', 'proc-1', 'execution done');
+      await mock.trigger('exit', 'proc-1', 0);
+      await mock.trigger('exit', 'proc-2', 0);
+      await flush();
+
+      expect(mock.deps.projectFailures?.resolveOwnedByThread).toHaveBeenCalledWith(
+        't1',
+        'resolvedsha123',
+      );
     });
   });
 

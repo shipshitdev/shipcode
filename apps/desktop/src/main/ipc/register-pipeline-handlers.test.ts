@@ -73,6 +73,8 @@ function makeThread(overrides: Record<string, unknown> = {}) {
     lastError: null,
     failurePhase: null,
     failureCount: 0,
+    pausedPhase: null,
+    pausedAt: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     plannerResolvedModel: null,
@@ -83,6 +85,7 @@ function makeThread(overrides: Record<string, unknown> = {}) {
     totalTokensPrompt: 0,
     totalTokensCompletion: 0,
     totalCostUsd: 0,
+    doneAt: null,
     ...overrides,
   };
 }
@@ -106,6 +109,7 @@ describe('registerPipelineHandlers', () => {
     threads: {
       getById: ReturnType<typeof vi.fn>;
       updateStatus: ReturnType<typeof vi.fn>;
+      clearDoneAt: ReturnType<typeof vi.fn>;
       resetFailureTracking: ReturnType<typeof vi.fn>;
       resolveClarification: ReturnType<typeof vi.fn>;
       clearClarification: ReturnType<typeof vi.fn>;
@@ -127,6 +131,8 @@ describe('registerPipelineHandlers', () => {
     };
     githubIssues: {
       getByNumber: ReturnType<typeof vi.fn>;
+      getByThreadId: ReturnType<typeof vi.fn>;
+      list: ReturnType<typeof vi.fn>;
     };
     settings: {
       get: ReturnType<typeof vi.fn>;
@@ -164,13 +170,16 @@ describe('registerPipelineHandlers', () => {
   let pipeline: {
     listActive: ReturnType<typeof vi.fn>;
     startReview: ReturnType<typeof vi.fn>;
+    startRevision: ReturnType<typeof vi.fn>;
     startExecution: ReturnType<typeof vi.fn>;
+    startTesting: ReturnType<typeof vi.fn>;
     startVerification: ReturnType<typeof vi.fn>;
     startCommitAndPush: ReturnType<typeof vi.fn>;
     rehydrateContext: ReturnType<typeof vi.fn>;
     startPlanGeneration: ReturnType<typeof vi.fn>;
     getContext: ReturnType<typeof vi.fn>;
     initializeContext: ReturnType<typeof vi.fn>;
+    pause: ReturnType<typeof vi.fn>;
   };
 
   let notificationService: {
@@ -199,6 +208,7 @@ describe('registerPipelineHandlers', () => {
       threads: {
         getById: vi.fn(() => makeThread()),
         updateStatus: vi.fn(),
+        clearDoneAt: vi.fn(),
         resetFailureTracking: vi.fn(),
         resolveClarification: vi.fn(),
         clearClarification: vi.fn(),
@@ -234,6 +244,8 @@ describe('registerPipelineHandlers', () => {
       },
       githubIssues: {
         getByNumber: vi.fn(() => null),
+        getByThreadId: vi.fn(() => null),
+        list: vi.fn(() => []),
       },
       settings: {
         get: vi.fn(() => ({
@@ -296,13 +308,16 @@ describe('registerPipelineHandlers', () => {
     pipeline = {
       listActive: vi.fn(() => []),
       startReview: vi.fn(async () => undefined),
+      startRevision: vi.fn(async () => undefined),
       startExecution: vi.fn(async () => undefined),
+      startTesting: vi.fn(async () => undefined),
       startVerification: vi.fn(async () => undefined),
       startCommitAndPush: vi.fn(async () => undefined),
       rehydrateContext: vi.fn(),
       startPlanGeneration: vi.fn(async () => undefined),
       getContext: vi.fn(() => ({})),
       initializeContext: vi.fn(),
+      pause: vi.fn(),
     };
 
     notificationService = {
@@ -322,6 +337,76 @@ describe('registerPipelineHandlers', () => {
       notificationService: notificationService as never,
       chatNotificationService: {} as never,
       processManager: {} as never,
+      resourceMonitor: {} as never,
+    });
+  });
+
+  describe('terminal:list', () => {
+    it('returns persisted terminal events without building fallbacks', () => {
+      const persisted = [
+        {
+          id: 'event-1',
+          threadId: 'thread-1',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          event: { kind: 'raw' as const, content: 'persisted output' },
+        },
+      ];
+      queries.terminalEvents.listByThread.mockReturnValue(persisted);
+
+      const handler = handlers.get('terminal:list');
+      if (!handler) throw new Error('terminal:list handler not registered');
+
+      expect(handler(undefined, { threadId: 'thread-1', limit: 25 })).toBe(persisted);
+      expect(queries.plans.getLatest).not.toHaveBeenCalled();
+      expect(queries.reviews.getByPlanId).not.toHaveBeenCalled();
+      expect(queries.verifications.getLatest).not.toHaveBeenCalled();
+    });
+
+    it('builds a sorted limited fallback transcript from plan, review, and verification output', () => {
+      queries.plans.getLatest.mockReturnValue({
+        id: 'plan-1',
+        threadId: 'thread-1',
+        version: 1,
+        rawOutput: 'plan output',
+        structured: JSON.parse(PLAN_JSON),
+        status: 'awaiting_approval',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      });
+      queries.reviews.getByPlanId.mockReturnValue({
+        id: 'review-1',
+        planId: 'plan-1',
+        rawOutput: 'review output',
+        structured: null,
+        decision: 'approve',
+        createdAt: '2026-01-03T00:00:00.000Z',
+      });
+      queries.verifications.getLatest.mockReturnValue({
+        id: 'verification-1',
+        threadId: 'thread-1',
+        planId: 'plan-1',
+        rawOutput: 'verification output',
+        structured: null,
+        result: 'failed',
+        retryCount: 0,
+        createdAt: '2026-01-02T00:00:00.000Z',
+      });
+
+      const handler = handlers.get('terminal:list');
+      if (!handler) throw new Error('terminal:list handler not registered');
+
+      const result = handler(undefined, { threadId: 'thread-1', limit: 2 }) as Array<{
+        id: string;
+        event: { kind: string; content: string };
+      }>;
+
+      expect(result.map((record) => record.id)).toEqual([
+        'fallback-verification-verification-1',
+        'fallback-review-review-1',
+      ]);
+      expect(result.map((record) => record.event.content)).toEqual([
+        'verification output',
+        'review output',
+      ]);
     });
   });
 
@@ -462,6 +547,251 @@ describe('registerPipelineHandlers', () => {
         '/tmp/project',
         '/tmp/worktree',
       );
+    });
+
+    it('rejects invalid selected options before resolving the clarification', async () => {
+      const clarificationRequest = {
+        id: 'clarify-1',
+        threadId: 'thread-1',
+        phase: 'plan' as const,
+        summary: 'Need one choice before planning.',
+        questions: [
+          {
+            id: 'scope',
+            title: 'Scope',
+            prompt: 'Which scope should the plan target?',
+            description: null,
+            choices: [{ id: 'narrow', label: 'Narrow', description: 'Ship the smallest version.' }],
+            allowFreeform: false,
+            freeformPlaceholder: null,
+          },
+        ],
+      };
+      queries.threads.getById.mockReturnValue(
+        makeThread({
+          status: 'clarifying',
+          clarificationRequest,
+        }),
+      );
+
+      const handler = handlers.get('pipeline:answer-clarification');
+      if (!handler) throw new Error('pipeline:answer-clarification handler not registered');
+
+      await expect(
+        handler(undefined, {
+          threadId: 'thread-1',
+          answers: [{ questionId: 'scope', selectedChoiceId: 'wide', freeformText: null }],
+        }),
+      ).rejects.toThrow('Invalid option selected for "Scope"');
+
+      expect(queries.threads.resolveClarification).not.toHaveBeenCalled();
+      expect(pipeline.startPlanGeneration).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('pipeline:reject', () => {
+    it('supersedes the current plan and restarts planning with reviewer feedback', async () => {
+      const handler = handlers.get('pipeline:reject');
+      if (!handler) throw new Error('pipeline:reject handler not registered');
+
+      await handler(undefined, { threadId: 'thread-1', feedback: 'tighten the scope' });
+
+      expect(pipeline.rehydrateContext).toHaveBeenCalledWith('thread-1', '/tmp/project', undefined);
+      expect(queries.plans.supersedeAll).toHaveBeenCalledWith('thread-1');
+      expect(notificationService.dismissByThread).toHaveBeenCalledWith('thread-1');
+      expect(pipeline.startPlanGeneration).toHaveBeenCalledWith(
+        'thread-1',
+        'Fix it\n\nFeedback from review:\ntighten the scope',
+        '/tmp/project',
+        '/tmp/worktree',
+      );
+    });
+  });
+
+  describe('pipeline:pause', () => {
+    it('stops an active task and leaves persistent pause metadata to the phase transition', () => {
+      queries.threads.getById.mockReturnValue(makeThread({ status: 'executing' }));
+
+      const handler = handlers.get('pipeline:pause');
+      if (!handler) throw new Error('pipeline:pause handler not registered');
+
+      handler(undefined, { threadId: 'thread-1' });
+
+      expect(queries.terminalEvents.create).toHaveBeenCalledWith(
+        'thread-1',
+        expect.objectContaining({
+          kind: 'lifecycle',
+          message: expect.stringContaining('Paused by user during executing'),
+        }),
+      );
+      expect(pipeline.pause).toHaveBeenCalledWith('thread-1');
+    });
+
+    it('rejects phases that cannot be paused', () => {
+      queries.threads.getById.mockReturnValue(makeThread({ status: 'completed' }));
+
+      const handler = handlers.get('pipeline:pause');
+      if (!handler) throw new Error('pipeline:pause handler not registered');
+
+      expect(() => handler(undefined, { threadId: 'thread-1' })).toThrow(
+        'Cannot pause task while in completed phase',
+      );
+      expect(pipeline.pause).not.toHaveBeenCalled();
+      expect(queries.terminalEvents.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('pipeline:resume', () => {
+    it('resumes paused execution with worktree context', async () => {
+      const context: { executionResumeContext?: string } = {};
+      queries.threads.getById.mockReturnValue(
+        makeThread({
+          status: 'paused',
+          pausedPhase: 'executing',
+          lastError: 'Paused by user',
+        }),
+      );
+      pipeline.getContext.mockReturnValue(context);
+
+      const handler = handlers.get('pipeline:resume');
+      if (!handler) throw new Error('pipeline:resume handler not registered');
+
+      await handler(undefined, { threadId: 'thread-1' });
+
+      expect(pipeline.rehydrateContext).toHaveBeenCalledWith('thread-1', '/tmp/project', undefined);
+      expect(notificationService.dismissByThread).toHaveBeenCalledWith('thread-1');
+      expect(context.executionResumeContext).toContain('previous execution was paused by the user');
+      expect(pipeline.startExecution).toHaveBeenCalledWith(
+        'thread-1',
+        expect.objectContaining({ objective: 'Test plan' }),
+      );
+    });
+
+    it('continues paused testing from the testing phase', async () => {
+      queries.threads.getById.mockReturnValue(
+        makeThread({
+          status: 'paused',
+          pausedPhase: 'testing',
+        }),
+      );
+
+      const handler = handlers.get('pipeline:resume');
+      if (!handler) throw new Error('pipeline:resume handler not registered');
+
+      await handler(undefined, { threadId: 'thread-1' });
+
+      expect(pipeline.startTesting).toHaveBeenCalledWith('thread-1');
+      expect(pipeline.startExecution).not.toHaveBeenCalled();
+    });
+
+    it('resumes paused planning without requiring a structured plan', async () => {
+      queries.threads.getById.mockReturnValue(
+        makeThread({
+          status: 'paused',
+          pausedPhase: 'planning',
+          worktreePath: null,
+        }),
+      );
+      queries.plans.getLatest.mockReturnValue(null);
+
+      const handler = handlers.get('pipeline:resume');
+      if (!handler) throw new Error('pipeline:resume handler not registered');
+
+      await handler(undefined, { threadId: 'thread-1' });
+
+      expect(pipeline.startPlanGeneration).toHaveBeenCalledWith(
+        'thread-1',
+        'Fix it',
+        '/tmp/project',
+        null,
+      );
+      expect(pipeline.startExecution).not.toHaveBeenCalled();
+    });
+
+    it('resumes paused review with the latest structured plan', async () => {
+      queries.threads.getById.mockReturnValue(
+        makeThread({
+          status: 'paused',
+          pausedPhase: 'reviewing',
+        }),
+      );
+
+      const handler = handlers.get('pipeline:resume');
+      if (!handler) throw new Error('pipeline:resume handler not registered');
+
+      await handler(undefined, { threadId: 'thread-1' });
+
+      expect(pipeline.startReview).toHaveBeenCalledWith(
+        'thread-1',
+        expect.objectContaining({ objective: 'Test plan' }),
+      );
+    });
+
+    it('resumes paused revision with structured reviewer feedback', async () => {
+      queries.threads.getById.mockReturnValue(
+        makeThread({
+          status: 'paused',
+          pausedPhase: 'revising',
+        }),
+      );
+      queries.reviews.getByPlanId.mockReturnValue({
+        id: 'review-1',
+        planId: 'plan-1',
+        rawOutput: 'raw review',
+        structured: {
+          decision: 'request_changes',
+          summary: 'Needs revision',
+          suggestedChanges: ['Keep the diff smaller'],
+          findings: [
+            {
+              severity: 'major',
+              description: 'Missing regression test',
+              suggestion: 'Add a focused Vitest case',
+            },
+          ],
+        },
+        createdAt: new Date().toISOString(),
+      });
+
+      const handler = handlers.get('pipeline:resume');
+      if (!handler) throw new Error('pipeline:resume handler not registered');
+
+      await handler(undefined, { threadId: 'thread-1' });
+
+      expect(pipeline.startRevision).toHaveBeenCalledWith(
+        'thread-1',
+        expect.objectContaining({ objective: 'Test plan' }),
+        expect.stringContaining('Keep the diff smaller'),
+      );
+      expect(pipeline.startRevision).toHaveBeenCalledWith(
+        'thread-1',
+        expect.any(Object),
+        expect.stringContaining('[major] Missing regression test - Add a focused Vitest case'),
+      );
+    });
+
+    it('resumes paused verification and shipping phases directly', async () => {
+      const handler = handlers.get('pipeline:resume');
+      if (!handler) throw new Error('pipeline:resume handler not registered');
+
+      queries.threads.getById.mockReturnValue(
+        makeThread({
+          status: 'paused',
+          pausedPhase: 'verifying',
+        }),
+      );
+      await handler(undefined, { threadId: 'thread-1' });
+      expect(pipeline.startVerification).toHaveBeenCalledWith('thread-1');
+
+      vi.clearAllMocks();
+      queries.threads.getById.mockReturnValue(
+        makeThread({
+          status: 'paused',
+          pausedPhase: 'shipping',
+        }),
+      );
+      await handler(undefined, { threadId: 'thread-1' });
+      expect(pipeline.startCommitAndPush).toHaveBeenCalledWith('thread-1');
     });
   });
 
@@ -634,6 +964,96 @@ describe('registerPipelineHandlers', () => {
 
       expect(pipeline.startVerification).toHaveBeenCalledWith('thread-1');
       expect(pipeline.startExecution).not.toHaveBeenCalled();
+    });
+
+    it('clears doneAt and continues to commit when the latest verification passed', async () => {
+      queries.threads.getById.mockReturnValue(
+        makeThread({ status: 'failed', doneAt: '2026-01-01T00:00:00.000Z' }),
+      );
+      queries.verifications.getLatest.mockReturnValue({
+        id: 'verification-1',
+        threadId: 'thread-1',
+        planId: 'plan-1',
+        rawOutput: 'raw',
+        structured: {
+          threadId: 'thread-1',
+          planId: 'plan-1',
+          result: 'passed',
+          summary: 'Looks good',
+          criteriaResults: [],
+          issues: [],
+        },
+        result: 'passed',
+        retryCount: 0,
+        createdAt: new Date().toISOString(),
+      });
+
+      const handler = handlers.get('pipeline:retry');
+      if (!handler) throw new Error('pipeline:retry handler not registered');
+
+      await handler(undefined, { threadId: 'thread-1' });
+
+      expect(queries.threads.clearDoneAt).toHaveBeenCalledWith('thread-1');
+      expect(pipeline.startCommitAndPush).toHaveBeenCalledWith('thread-1');
+      expect(pipeline.startExecution).not.toHaveBeenCalled();
+    });
+
+    it('clones a borrowed structured plan and sends it back through review', async () => {
+      queries.threads.getById.mockReturnValue(makeThread({ status: 'failed' }));
+      queries.plans.getLatest.mockReturnValue({
+        id: 'plan-failed',
+        threadId: 'thread-1',
+        version: 1,
+        rawOutput: 'unparseable plan',
+        structured: null,
+        status: 'failed',
+        createdAt: new Date().toISOString(),
+      });
+      queries.plans.getLatestStructured.mockReturnValue({
+        id: 'plan-borrowed',
+        threadId: 'thread-old',
+        version: 2,
+        rawOutput: 'borrowed raw output',
+        structured: {
+          ...JSON.parse(PLAN_JSON),
+          threadId: 'thread-old',
+          version: 2,
+        },
+        status: 'approved',
+        createdAt: new Date().toISOString(),
+      });
+      queries.plans.getMaxVersion.mockReturnValue(4);
+      queries.plans.create.mockReturnValue({
+        id: 'plan-clone',
+        threadId: 'thread-1',
+        version: 5,
+        rawOutput: 'borrowed raw output',
+        structured: {
+          ...JSON.parse(PLAN_JSON),
+          threadId: 'thread-1',
+          version: 5,
+        },
+        status: 'pending_review',
+        createdAt: new Date().toISOString(),
+      });
+
+      const handler = handlers.get('pipeline:retry');
+      if (!handler) throw new Error('pipeline:retry handler not registered');
+
+      await handler(undefined, { threadId: 'thread-1' });
+
+      expect(queries.plans.supersedeAll).toHaveBeenCalledWith('thread-1');
+      expect(queries.plans.create).toHaveBeenCalledWith(
+        'thread-1',
+        'borrowed raw output',
+        expect.objectContaining({ threadId: 'thread-1', version: 5 }),
+        5,
+      );
+      expect(queries.plans.updateStatus).toHaveBeenCalledWith('plan-clone', 'pending_review');
+      expect(pipeline.startReview).toHaveBeenCalledWith(
+        'thread-1',
+        expect.objectContaining({ threadId: 'thread-1', version: 5 }),
+      );
     });
   });
 

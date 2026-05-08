@@ -50,6 +50,7 @@ import {
   migrateV48,
   migrateV49,
   migrateV50,
+  migrateV52,
 } from './schema';
 import { createTestDb } from './test-helpers';
 import { asRow } from './utils';
@@ -1271,5 +1272,31 @@ describe('migrateV50', () => {
 
   it('is idempotent', () => {
     expect(() => migrateV50(db)).not.toThrow();
+  });
+});
+
+describe('migrateV52', () => {
+  let db: ReturnType<typeof createTestDb>;
+
+  beforeEach(() => {
+    db = createTestDb();
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('adds paused state columns to threads', () => {
+    const columns = db.prepare("SELECT name FROM pragma_table_info('threads')").all() as Array<{
+      name: string;
+    }>;
+    const colNames = columns.map((column) => column.name);
+
+    expect(colNames).toContain('paused_phase');
+    expect(colNames).toContain('paused_at');
+  });
+
+  it('is idempotent', () => {
+    expect(() => migrateV52(db)).not.toThrow();
   });
 });

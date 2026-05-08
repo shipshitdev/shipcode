@@ -16,6 +16,7 @@ import type {
   PipelineAnalyticsQueries,
   PipelineStepQueries,
   PlanQueries,
+  ProjectFailureQueries,
   ProjectQueries,
   PromptTelemetryQueries,
   ReviewQueries,
@@ -31,6 +32,7 @@ import type { Pipeline, PipelineEmitter } from '@shipcode/pipeline';
 import type { BrowserWindow, IpcMain } from 'electron';
 import type { ChatNotificationService } from '../chat-notification-service';
 import type { NotificationService } from '../notification-service';
+import type { ResourceMonitor } from '../resource-monitor';
 
 export interface Queries {
   projects: ProjectQueries;
@@ -58,6 +60,7 @@ export interface Queries {
   agentConversations: AgentConversationQueries;
   skillResolutionLogs: SkillResolutionLogQueries;
   featureQaResults: FeatureQaResultQueries;
+  projectFailures?: ProjectFailureQueries;
   taskGraphs?: TaskGraphQueries;
 }
 
@@ -70,4 +73,5 @@ export interface IpcHandlerDeps {
   emitter: PipelineEmitter;
   notificationService: NotificationService;
   chatNotificationService: ChatNotificationService;
+  resourceMonitor?: ResourceMonitor;
 }

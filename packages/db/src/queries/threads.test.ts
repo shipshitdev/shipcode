@@ -113,6 +113,36 @@ describe('ThreadQueries', () => {
     expect(threads.getById(t.id)?.status).toBe('planning');
   });
 
+  it('updateStatus() persists and clears paused phase metadata', () => {
+    const t = threads.create(projectId, 'a', 'A');
+    threads.updateStatus(t.id, 'executing');
+    threads.updateStatus(t.id, 'paused');
+
+    const paused = threads.getById(t.id);
+    expect(paused?.status).toBe('paused');
+    expect(paused?.pausedPhase).toBe('executing');
+    expect(paused?.pausedAt).toBeTruthy();
+
+    threads.updateStatus(t.id, 'executing');
+    const resumed = threads.getById(t.id);
+    expect(resumed?.status).toBe('executing');
+    expect(resumed?.pausedPhase).toBeNull();
+    expect(resumed?.pausedAt).toBeNull();
+  });
+
+  it('recordFailure() clears paused phase metadata', () => {
+    const t = threads.create(projectId, 'a', 'A');
+    threads.updateStatus(t.id, 'executing');
+    threads.updateStatus(t.id, 'paused');
+
+    threads.recordFailure(t.id, 'executing', 'Boom');
+
+    const failed = threads.getById(t.id);
+    expect(failed?.status).toBe('failed');
+    expect(failed?.pausedPhase).toBeNull();
+    expect(failed?.pausedAt).toBeNull();
+  });
+
   it('setWorktree() and clearWorktree()', () => {
     const t = threads.create(projectId, 'a', 'A');
     threads.setWorktree(t.id, 'feat/branch', '/tmp/wt');

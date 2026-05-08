@@ -204,6 +204,8 @@ interface SectionBlockProps {
   readOnly?: boolean;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
+  onPause?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
+  onResume?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
   onCancel?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
   onOpenPullRequest?: (url: string) => void;
   onCopyBranchName?: (issue: GitHubIssueCacheRecord, branchName: string) => void;
@@ -213,6 +215,8 @@ interface SectionBlockProps {
   onArchiveAllDone?: () => void;
   selectedIssueNumber?: number;
   rerunningId?: string | null;
+  pausingId?: string | null;
+  resumingId?: string | null;
   cancellingId?: string | null;
   markingDoneId?: string | null;
   repoUrl?: string | null;
@@ -241,6 +245,8 @@ function SectionBlock({
   readOnly = false,
   onIssueClick,
   onRerun,
+  onPause,
+  onResume,
   onCancel,
   onOpenPullRequest,
   onCopyBranchName,
@@ -250,6 +256,8 @@ function SectionBlock({
   onArchiveAllDone,
   selectedIssueNumber,
   rerunningId,
+  pausingId,
+  resumingId,
   cancellingId,
   markingDoneId,
   repoUrl,
@@ -354,6 +362,8 @@ function SectionBlock({
               )}
               onClick={onIssueClick}
               onRerun={onRerun}
+              onPause={onPause}
+              onResume={onResume}
               onCancel={onCancel}
               onOpenPullRequest={onOpenPullRequest}
               onCopyBranchName={onCopyBranchName}
@@ -366,6 +376,8 @@ function SectionBlock({
               isSelected={issue.issueNumber === selectedIssueNumber}
               isKeyboardFocused={issue.id === focusedIssueId}
               isRerunning={issue.id === rerunningId}
+              isPausing={issue.id === pausingId}
+              isResuming={issue.id === resumingId}
               isCancelling={issue.id === cancellingId}
               isMarkingDone={issue.id === markingDoneId}
               onArchiveIssue={columnKey === 'done' ? onArchiveIssue : undefined}
@@ -397,6 +409,8 @@ interface StackedColumnProps {
   readOnly?: boolean;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
   onRerun?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
+  onPause?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
+  onResume?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
   onCancel?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
   onOpenPullRequest?: (url: string) => void;
   onCopyBranchName?: (issue: GitHubIssueCacheRecord, branchName: string) => void;
@@ -406,6 +420,8 @@ interface StackedColumnProps {
   onCreatePr?: (issue: GitHubIssueCacheRecord) => void | Promise<void>;
   selectedIssueNumber?: number;
   rerunningId?: string | null;
+  pausingId?: string | null;
+  resumingId?: string | null;
   cancellingId?: string | null;
   markingDoneId?: string | null;
   repoUrl?: string | null;
@@ -432,6 +448,8 @@ export function StackedColumn({
   readOnly = false,
   onIssueClick,
   onRerun,
+  onPause,
+  onResume,
   onCancel,
   onOpenPullRequest,
   onCopyBranchName,
@@ -441,6 +459,8 @@ export function StackedColumn({
   onCreatePr,
   selectedIssueNumber,
   rerunningId,
+  pausingId,
+  resumingId,
   cancellingId,
   markingDoneId,
   repoUrl,
@@ -527,6 +547,8 @@ export function StackedColumn({
             readOnly={readOnly}
             onIssueClick={onIssueClick}
             onRerun={onRerun}
+            onPause={onPause}
+            onResume={onResume}
             onCancel={onCancel}
             onOpenPullRequest={onOpenPullRequest}
             onCopyBranchName={onCopyBranchName}
@@ -536,6 +558,8 @@ export function StackedColumn({
             onArchiveAllDone={section.key === 'done' ? onArchiveAllDone : undefined}
             selectedIssueNumber={selectedIssueNumber}
             rerunningId={rerunningId}
+            pausingId={pausingId}
+            resumingId={resumingId}
             cancellingId={cancellingId}
             markingDoneId={markingDoneId}
             repoUrl={repoUrl}

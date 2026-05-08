@@ -61,6 +61,7 @@ import type {
   ReviewRecord,
   ShipCodePlan,
   SystemHealth,
+  SystemResourceSnapshot,
   TelemetryStatus,
   TerminalEventRecord,
   Thread,
@@ -197,6 +198,8 @@ export interface IpcInvokeChannels {
   'pipeline:approve': { args: { threadId: string }; result: undefined };
   'pipeline:reject': { args: { threadId: string; feedback: string }; result: undefined };
   'pipeline:stabilize-pr': { args: { threadId: string }; result: undefined };
+  'pipeline:pause': { args: { threadId: string }; result: undefined };
+  'pipeline:resume': { args: { threadId: string }; result: undefined };
   'pipeline:cancel': { args: { threadId: string }; result: undefined };
   'pipeline:skip-review': { args: { threadId: string }; result: undefined };
   'pipeline:create-pr': {
@@ -709,6 +712,8 @@ export interface IpcInvokeChannels {
   'developer:open-devtools': { args: undefined; result: undefined };
   'developer:open-log-directory': { args: undefined; result: undefined };
   'developer:set-log-level': { args: { level: AppSettings['devLogLevel'] }; result: undefined };
+  'process:list-resource-usage': { args: undefined; result: SystemResourceSnapshot };
+  'process:kill': { args: { processId: string }; result: undefined };
 
   // Auto-update version checking (notify-only; install via brew)
   'update:get-status': { args: undefined; result: UpdateStatus };
