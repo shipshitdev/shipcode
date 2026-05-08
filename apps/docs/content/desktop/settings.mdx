@@ -11,9 +11,15 @@ All settings persist in the local SQLite DB under the single `settings` row. The
 | Setting | Default | Purpose |
 |---------|---------|---------|
 | `theme` | `system` | Light / dark / follow OS |
+| `fontStyle` | `dm-sans` | Renderer font family style |
+| `fontSize` | 13 | Base renderer font size |
 | `projectSortOrder` | `recent` | Sidebar project ordering — alpha / recent / added |
-| `terminalScrollback` | 5000 | Max lines retained in the Terminal drawer per thread |
+| `projectOpenTarget` | `cursor` | Default app for opening project folders |
+| `terminalOpenTarget` | `terminal` | Default app for opening terminal sessions |
+| `terminalScrollback` | 10000 | Max lines retained in the Terminal drawer per thread |
 | `worktreeRoot` | `~/.shipcode/worktrees` | Where isolated pipeline worktrees live — set to a blank string for legacy project-local behavior |
+| `worktreeBranchFormat` | `ship/{id}-{slug}` | Branch template for generated worktree branches |
+| `addProjectStartsIn` | — | Optional starting folder for the add-project file browser |
 
 ### Pipeline
 
@@ -21,12 +27,16 @@ All settings persist in the local SQLite DB under the single `settings` row. The
 |---------|---------|---------|
 | `requireApproval` | false | App default for the human approval gate. Project and issue overrides can require approval for a narrower scope, or turn it off for a specific repo / issue |
 | `revisionCount` | 0 | Default number of review → revise cycles before approval or execution. `0` skips plan review for the fastest path; per-project and per-issue overrides can raise or lower it |
+| `maxConcurrentPipelines` | 3 | Workspace-wide active pipeline cap |
+| `maxConcurrentExecutions` | 3 | Per-project execution cap after planning/approval |
+| `pipelineSpeedProfile` | `smart_fast` | Default scheduling/execution profile |
 | `plannerReasoningEffort` | `high` | Default planner effort. Exact options depend on the selected provider |
 | `reviewerReasoningEffort` | `high` | Default reviewer effort. Exact options depend on the selected provider |
-| `executorReasoningEffort` | `high` | Default executor effort. Exact options depend on the selected provider |
+| `executorReasoningEffort` | `medium` | Default executor effort. Exact options depend on the selected provider |
 | `verifierReasoningEffort` | `high` | Default verifier effort. Exact options depend on the selected provider |
 | `autoRunPriorities` | `[]` | Priority filter for auto-run. Empty = all priorities. Example: `["p0", "p1"]` |
-| `githubPollingIntervalMs` | 60000 | GitHub polling interval when auto-pickup is enabled |
+| `autoRunMaxTasks` | 0 | Maximum tasks launched by auto-run. `0` means all matching tasks |
+| `githubPollingIntervalMs` | 30000 | GitHub polling interval when auto-pickup is enabled |
 | `githubBotUsername` | — | Label filter used to skip issues already handled by the bot |
 
 ### Models
@@ -37,6 +47,9 @@ All settings persist in the local SQLite DB under the single `settings` row. The
 | `plannerModel` | `claude` | Global default planner model |
 | `reviewerModel` | `codex` | Global default reviewer model |
 | `verifierModel` | `claude` | Global default verifier model |
+| `triageModel` | `claude` | Provider for board review / Todo triage |
+| `triageAutoApplyThreshold` | `0.85` | Confidence threshold for auto-applying triage labels |
+| `prdRewriteCli` | `claude` | Format provider for PRD editing and automation prompt formatting |
 
 All four phase models are editable here. These are the **global defaults** that new projects inherit unless they opt into a project-level override.
 
@@ -68,9 +81,26 @@ OpenRouter-specific toggles (`openrouterEnabled`, tier defaults, per-phase overr
 | `notificationEvents.completed` | on | Fire when a PR is opened; the item stays in Inbox until dismissed |
 | `notificationEvents.verificationExhausted` | on | Fire when the verifier runs out of retries |
 
-### Archived Projects
+### Auto-commit
 
-Unarchive projects that have been hidden from the sidebar. Archived projects retain all their threads, plans, and cost history.
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| `autoCommitEnabled` | true | Enables AI-generated commits from the Git tab |
+| `autoCommitModel` | `openrouter/auto` | OpenRouter model used to group and write commit messages |
+| `autoCommitMode` | `split` | Commit grouping behavior |
+| `cleanupCriteria` | see defaults | Controls which merged/closed branches and worktrees appear in cleanup |
+
+### Archived
+
+Unarchive projects that have been hidden from the sidebar and restore locally archived issues. Archived projects retain all their threads, plans, and cost history.
+
+### Developer
+
+Diagnostic actions for copying app/version info, opening Chrome DevTools, opening the log directory, and changing the file log level.
+
+### About
+
+Version and update-track controls.
 
 ### Shortcuts
 
@@ -83,8 +113,13 @@ Some settings are per-project rather than global:
 - `githubProjectUrl` override for the Kanban `board` quick-link
 - Per-project `requireApprovalOverride`
 - Per-project `revisionCountOverride`
+- Per-project `pipelineSpeedProfileOverride`
+- Per-project `prdQualityGate`
 - Per-project planner / reviewer / executor / verifier model overrides
 - Per-project planner / reviewer / executor / verifier effort overrides
+- Per-project Discord/Telegram routing overrides
+- Repo memory/context generator settings
+- `.shipcode/setup.json` setup, verification, runtime QA, and env-file configuration
 
 Issue-level overrides are narrower by design: the human approval gate, revision count, and phase models can be overridden from Issue Detail, and those overrides apply to the next run of that issue only.
 

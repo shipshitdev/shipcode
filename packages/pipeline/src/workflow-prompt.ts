@@ -1,7 +1,7 @@
 import { renderTemplate, type TemplateContext } from './template-renderer';
 import type { PipelineContext, PipelineDeps } from './types';
 
-export function buildWorkflowTemplateContext(
+function buildWorkflowTemplateContext(
   context: PipelineContext,
   deps: PipelineDeps,
   phase: TemplateContext['phase'],

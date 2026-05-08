@@ -68,6 +68,8 @@ describe('web component coverage', () => {
     expect(view.container.textContent).toContain('ShipCode');
     expect(view.container.textContent).toContain('Docs');
     expect(view.container.textContent).toContain('GitHub');
+    expect(view.container.innerHTML).toContain('x="184" y="192" width="176" height="500"');
+    expect(view.container.innerHTML).toContain('x="424" y="192" width="176" height="560"');
 
     act(() => {
       Object.defineProperty(window, 'scrollY', {

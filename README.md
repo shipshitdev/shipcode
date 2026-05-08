@@ -8,7 +8,7 @@ AI Agents that ship working code. GitHub issue in, reviewed PR out.
 
 > [Watch the launch video (MP4)](https://github.com/shipshitdev/shipcode/releases/download/v0.1.0/shipcode-launch.mp4)
 
-Label a GitHub issue with `shipcode:agent:claude` or `shipcode:agent:codex`, and ShipCode handles the rest: plan, adversarial review, implement, verify, and ship a PR. No human gates until the PR is created.
+Label a GitHub issue with `shipcode:agent:claude`, `shipcode:agent:codex`, `shipcode:agent:openrouter`, `shipcode:agent:openrouter/auto`, or `shipcode:agent:openrouter/free`, and ShipCode handles the rest: plan, adversarial review, implement, verify, and ship a PR. Approval gates are configurable globally, per project, and per issue.
 
 ## Install
 
@@ -23,23 +23,23 @@ npx @shipshitdev/shipcode                      # CLI
 ## How it works
 
 ```
-GitHub Issue (labeled shipcode:agent:claude)
+GitHub Issue (labeled shipcode:agent:claude / codex / openrouter)
        |
        v
     PLAN (Opus 4.6) --- rewrite issue into spec + structured plan
        |
        v
-    REVIEW (Codex, high reasoning) --- adversarial critique
+    REVIEW (configured model) --- adversarial critique
        |
        +-- APPROVE --> EXECUTE
        +-- REVISE (max 2 rounds) --> re-review
        +-- REJECT --> FAILED
        |
        v
-    EXECUTE (routed model) --- implement in git worktree
+    EXECUTE (routed model) --- implement in isolated git worktree
        |
        v
-    VERIFY (Opus 4.6) --- check diff against acceptance criteria
+    VERIFY (configured model) --- test, runtime QA, check diff against acceptance criteria
        |
        v
     SHIP --- push branch, create PR, link to issue
@@ -56,6 +56,7 @@ apps/
   cli/              CLI tool (published as '@shipshitdev/shipcode' on npm)
   docs/             Documentation (Nextra)
 packages/
+  pipeline/         Pipeline state machine
   shared/           Types, schemas, constants
   agents/           Process manager, prompts, GitHub CLI wrapper
   db/               SQLite persistence (node:sqlite)
@@ -113,6 +114,9 @@ gh auth status
 |-------|--------|
 | `shipcode:agent:claude` | Claude implements the issue |
 | `shipcode:agent:codex` | Codex implements the issue |
+| `shipcode:agent:openrouter` | OpenRouter implements the issue with the configured executor model |
+| `shipcode:agent:openrouter/auto` | OpenRouter chooses the model through its auto router |
+| `shipcode:agent:openrouter/free` | OpenRouter stays on the configured free-tier model |
 
 ### Pipeline state labels (set automatically)
 
@@ -120,16 +124,19 @@ gh auth status
 |-------|---------|
 | `shipcode:pipeline:queued` | Issue picked up, waiting for pipeline slot |
 | `shipcode:pipeline:planning` | Planner is generating a plan |
+| `shipcode:pipeline:reviewing` | Reviewer is critiquing the plan |
 | `shipcode:pipeline:executing` | Executor is implementing changes |
+| `shipcode:pipeline:testing` | Test/runtime QA commands are running |
 | `shipcode:pipeline:verifying` | Verifier is checking the result |
+| `shipcode:pipeline:shipping` | Branch push and PR creation are running |
 | `shipcode:pipeline:failed` | Pipeline failed |
 
 ## Key design decisions
 
 - **`gh` CLI over GitHub API** -- no OAuth, no token management, uses existing auth
-- **Adversarial review** -- Opus plans, Codex critiques with high reasoning. Different model families catch different blind spots
-- **Max 2 review rounds** -- diminishing returns after 2, prevents cost runaway
-- **PR is the human gate** -- fully autonomous until PR creation. You review the PR, not the plan
+- **Adversarial review** -- configurable planner/reviewer models catch different blind spots before execution
+- **Configurable review rounds** -- default is fast-path zero revisions, with project and issue overrides up to 5
+- **Optional approval gates** -- stay fully autonomous by default, or pause before execution when the task needs a human checkpoint
 - **Fork-point SHA for diffs** -- stable diffs even when base branch moves
 
 ## License

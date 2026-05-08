@@ -229,6 +229,11 @@ function _loadWorkflowPolicyUncached(repoPath: string): WorkflowPolicy {
   }
 }
 
+/**
+ * Exported for cache eviction tests.
+ *
+ * @knipignore
+ */
 export const _internals = {
   policyCache: _policyCache,
   policyCacheTtlMs: POLICY_CACHE_TTL_MS,

@@ -11,10 +11,7 @@ export type SuppressedFenceTag =
   | 'shipcode-review'
   | 'shipcode-verification';
 
-export const FENCE_ACTIONS: Record<
-  SuppressedFenceTag,
-  { label: string; action: 'open-issue-detail' }
-> = {
+const FENCE_ACTIONS: Record<SuppressedFenceTag, { label: string; action: 'open-issue-detail' }> = {
   [PLAN_FENCE_TAG]: { label: 'Plan drafted', action: 'open-issue-detail' as const },
   [REVIEW_FENCE_TAG]: { label: 'AI review complete', action: 'open-issue-detail' as const },
   [VERIFICATION_FENCE_TAG]: {
@@ -32,7 +29,7 @@ const OPENING_FENCES = (Object.keys(FENCE_ACTIONS) as SuppressedFenceTag[]).map(
   tag,
 }));
 
-export function findOpeningFence(
+function findOpeningFence(
   text: string,
 ): { index: number; length: number; tag: SuppressedFenceTag } | null {
   let match: { index: number; length: number; tag: SuppressedFenceTag } | null = null;
@@ -47,7 +44,7 @@ export function findOpeningFence(
   return match;
 }
 
-export function getDeferredFencePrefix(text: string): string {
+function getDeferredFencePrefix(text: string): string {
   let longest = '';
 
   for (const { marker } of OPENING_FENCES) {

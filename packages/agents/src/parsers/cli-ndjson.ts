@@ -38,7 +38,7 @@ function parseJsonLine(line: string): Record<string, unknown> | null {
  * line carries `usage.input_tokens`, `usage.output_tokens`, and
  * `total_cost_usd`.
  */
-export function extractClaudeUsage(buffer: string): CliUsage | null {
+function extractClaudeUsage(buffer: string): CliUsage | null {
   const lines = buffer.split('\n');
   for (let i = lines.length - 1; i >= 0; i--) {
     const parsed = parseJsonLine(lines[i]);
@@ -60,7 +60,7 @@ export function extractClaudeUsage(buffer: string): CliUsage | null {
  * `{"type":"response.completed","response":{"usage":{...}}}` event, or
  * occasionally on intermediate `response.output_item.done` lines.
  */
-export function extractCodexUsage(buffer: string): CliUsage | null {
+function extractCodexUsage(buffer: string): CliUsage | null {
   const lines = buffer.split('\n');
   for (let i = lines.length - 1; i >= 0; i--) {
     const parsed = parseJsonLine(lines[i]);
@@ -138,7 +138,7 @@ export function extractCodexModel(buffer: string): string | null {
  * `{"type":"result","result":"..."}` line. With extended thinking the
  * `result` field may be an array of content blocks instead.
  */
-export function extractClaudeText(buffer: string): string | null {
+function extractClaudeText(buffer: string): string | null {
   const lines = buffer.split('\n');
   for (let i = lines.length - 1; i >= 0; i--) {
     const parsed = parseJsonLine(lines[i]);
@@ -160,7 +160,7 @@ export function extractClaudeText(buffer: string): string | null {
  * `agent_message` events. JSON.parse unescapes the text so downstream
  * fenced-block regexes see real newlines.
  */
-export function extractCodexText(buffer: string): string | null {
+function extractCodexText(buffer: string): string | null {
   const agentTexts: string[] = [];
   for (const line of buffer.split('\n')) {
     const parsed = parseJsonLine(line);

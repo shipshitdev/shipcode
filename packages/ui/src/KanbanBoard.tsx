@@ -135,6 +135,8 @@ export function KanbanBoard({
   approvedAwaitingExecutionIssueIds,
   flashingIssueIds,
   readOnly = false,
+  presentationMode = 'app',
+  issueHoverCards = true,
   keyboardShortcutsEnabled,
   onIssueClick,
   onCommentIssue,
@@ -207,6 +209,7 @@ export function KanbanBoard({
   >({});
   const pendingActionTimeouts = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const shortcutsEnabled = keyboardShortcutsEnabled ?? !readOnly;
+  const compact = presentationMode === 'compact';
   const threadById = useMemo(
     () => new Map(threads.map((thread) => [thread.id, thread])),
     [threads],
@@ -708,7 +711,12 @@ export function KanbanBoard({
             />
           )}
           {view !== 'list' && (
-            <div className="flex min-h-0 flex-1 gap-0.5 overflow-x-auto overflow-y-hidden p-3 px-2">
+            <div
+              className={cn(
+                'flex min-h-0 flex-1 gap-0.5 overflow-y-hidden p-3 px-2',
+                compact ? 'overflow-x-hidden' : 'overflow-x-auto',
+              )}
+            >
               {COLUMNS.map((col) => {
                 if (col.sections) {
                   return (
@@ -743,6 +751,8 @@ export function KanbanBoard({
                       approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
                       flashingIssueIds={flashingIssueIds}
                       readOnly={readOnly}
+                      compact={compact}
+                      issueHoverCards={issueHoverCards}
                       onFetchPlanSteps={onFetchPlanSteps}
                     />
                   );
@@ -779,6 +789,8 @@ export function KanbanBoard({
                     approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
                     flashingIssueIds={flashingIssueIds}
                     readOnly={readOnly}
+                    compact={compact}
+                    issueHoverCards={issueHoverCards}
                     onFetchPlanSteps={onFetchPlanSteps}
                   />
                 );

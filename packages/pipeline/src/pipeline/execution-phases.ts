@@ -89,6 +89,11 @@ function normalizeFeatureQaResults(
 // 3 lines started with `{`, which let backtick-fenced shipcode-plan
 // blocks leak into `lastError` and dump the plan JSON onto the failure
 // panel.
+/**
+ * Exported for focused transcript parsing regression tests.
+ *
+ * @knipignore
+ */
 export function extractExecutionErrorSnippet(rawOutput: string): string {
   const lines = rawOutput.split('\n');
   const tail = lines.slice(-30);
@@ -135,7 +140,7 @@ export function extractExecutionErrorSnippet(rawOutput: string): string {
  * last_error and notification bodies. Looks for common test failure
  * patterns across Jest, Vitest, Go test, pytest, and plain exit output.
  */
-export function extractTestFailureSummary(testOutput: string): string {
+function extractTestFailureSummary(testOutput: string): string {
   if (!testOutput.trim()) return 'Tests failed (no output captured)';
 
   const lines = testOutput.split('\n');

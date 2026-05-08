@@ -18,14 +18,14 @@ const steps = [
     title: 'Execute',
     description:
       'Each task runs in an isolated git worktree. The agent writes code, runs tests, and self-corrects on failures.',
-    detail: 'Per-node verification ensures each step meets acceptance criteria.',
+    detail: 'Worktree isolation keeps local branches and dirty state separated.',
   },
   {
     number: '04',
-    title: 'Verify',
+    title: 'Verify + Ship',
     description:
-      'Full diff review against the original spec. Typecheck, test suite, and criteria-scoped code quality pass.',
-    detail: 'Automatic retries with targeted fixes on failure.',
+      'Test output, runtime QA, visual QA evidence, and full diff review are checked before ShipCode opens the PR.',
+    detail: 'Automatic retries and PR stabilization handle blockers before handoff.',
   },
 ] as const;
 
@@ -34,11 +34,11 @@ export function PipelineSteps() {
     <section className="px-6 py-20">
       <div className="mx-auto max-w-5xl">
         <h2 className="text-center text-xl font-semibold tracking-[-0.03em] text-primary sm:text-3xl">
-          Four phases. Zero hand-holding.
+          Four checkpoints. One pipeline.
         </h2>
         <p className="mx-auto mt-4 max-w-2xl text-center text-sm leading-6 text-secondary">
-          Every issue goes through a full pipeline before it becomes a PR. Each phase uses a
-          different model optimized for that job.
+          Every issue goes through planning, review, execution, testing, verification, and shipping
+          before it becomes a PR.
         </p>
 
         <div className="mt-14 grid gap-px overflow-hidden rounded-2xl border border-white/8 bg-white/[0.03] sm:grid-cols-2 lg:grid-cols-4">

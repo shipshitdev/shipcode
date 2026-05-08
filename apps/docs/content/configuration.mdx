@@ -33,6 +33,18 @@ Repos can declare fresh-worktree setup in `.shipcode/setup.json`. This file is r
     "bun run typecheck",
     "bun run test"
   ],
+  "runtimeQa": {
+    "server": {
+      "command": "bun run dev --host 127.0.0.1 --port $PORT",
+      "readinessUrl": "http://127.0.0.1:$PORT",
+      "startupTimeoutMs": 60000,
+      "portEnvVar": "PORT"
+    },
+    "testCommands": [
+      "bun run test:e2e"
+    ],
+    "discoverAgentTests": true
+  },
   "setupBeforeVerify": false,
   "testingContext": "Tests use Vitest and live next to source files as *.test.ts."
 }
@@ -41,7 +53,12 @@ Repos can declare fresh-worktree setup in `.shipcode/setup.json`. This file is r
 - `envFiles`: copied from the repo root into the worktree before execution. Use `target` to write to a different relative path inside the worktree.
 - `setupCommands`: run inside the worktree before the execute phase starts.
 - `verifyCommands`: run inside the worktree after execute and before the verifier model runs.
+- `runtimeQa.server`: optional dev server command, readiness URL, startup timeout, and port environment variable used for browser/runtime QA.
+- `runtimeQa.testCommands`: optional browser, E2E, or runtime checks run against the feature worktree.
+- `runtimeQa.discoverAgentTests`: when `true`, generated agent QA tests can be discovered and run during runtime QA.
 - `setupBeforeVerify`: when `true`, reruns `setupCommands` before `verifyCommands`.
 - `testingContext`: repo-owned testing guidance injected into the execute prompt.
 
 If the file is missing, ShipCode falls back to the existing per-install settings (`testCommand`, `testingContext`) and current behavior.
+
+When a PRD contains a `## QA State` section with visual assertions, ShipCode can generate a temporary Playwright visual QA test during verification. The generated artifacts live under `.shipcode/qa-artifacts/` in the worktree and are excluded from commits.

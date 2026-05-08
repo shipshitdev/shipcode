@@ -62,14 +62,13 @@ Watch mode (rebuild on change):
 bun run --filter shipcode dev
 ```
 
-## Executors
+## Providers
 
-The CLI supports four agent types, matching the desktop app:
+The CLI supports the same execution providers as the desktop app:
 
 - `claude` — Claude Code CLI
 - `codex` — OpenAI Codex CLI
 - `openrouter` — OpenRouter provider (any model, routed through their API)
-- `gh` — data-plane only, not an executor
 
 Executor selection happens per-issue via GitHub labels (`shipcode:agent:claude`, `shipcode:agent:codex`, `shipcode:agent:openrouter`, `shipcode:agent:openrouter/auto`, `shipcode:agent:openrouter/free`). Unknown or missing labels fall back to `shipcode:agent:claude`.
 

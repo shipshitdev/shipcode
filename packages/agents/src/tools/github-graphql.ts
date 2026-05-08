@@ -203,6 +203,11 @@ function redactToken(body: string, token: string): string {
  * This is a deliberately small scanner — pulling in the `graphql`
  * package costs ~200KB to count braces.
  */
+/**
+ * Exported for focused scanner tests; production uses it through githubGraphqlTool.
+ *
+ * @knipignore
+ */
 export function countTopLevelOperations(source: string): number {
   const cleaned = stripCommentsAndStrings(source);
   let count = 0;

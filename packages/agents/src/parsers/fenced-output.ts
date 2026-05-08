@@ -88,22 +88,22 @@ export function extractFencedBlock<T>(
   };
 }
 
-export function findFencedBlocks(text: string, tag: string): RegExpMatchArray[] {
+function findFencedBlocks(text: string, tag: string): RegExpMatchArray[] {
   // Require \n before the closing fence so that ``` inside JSON string
   // values don't terminate the match early.
   const fenceRegex = new RegExp(`\`\`\`${tag}[^\n]*\n([\\s\\S]*?)\n\`\`\``, 'gm');
   return Array.from(text.matchAll(fenceRegex));
 }
 
-export function formatFencedArtifact(tag: string, data: unknown): string {
+function formatFencedArtifact(tag: string, data: unknown): string {
   return `\`\`\`${tag}\n${JSON.stringify(data, null, 2)}\n\`\`\``;
 }
 
-export function compactArtifact(text: string): string {
+function compactArtifact(text: string): string {
   return clampTextBlock(text, MAX_PIPELINE_RAW_OUTPUT_CHARS);
 }
 
-export function tryExtractJson(text: string): string | null {
+function tryExtractJson(text: string): string | null {
   const clean = stripAnsi(text);
   const marker = clean.search(/"(?:objective|planId|criteriaResults)"/);
   if (marker === -1) return null;

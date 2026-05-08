@@ -25,8 +25,8 @@ export function ShipCodeLogoMark({ size, className, ...props }: ShipCodeLogoMark
         stroke="#30363d"
         strokeWidth="4"
       />
-      <rect x="184" y="312" width="176" height="500" rx="56" ry="56" fill="#45aaf2" />
-      <rect x="424" y="252" width="176" height="560" rx="56" ry="56" fill="#20bf6b" />
+      <rect x="184" y="192" width="176" height="500" rx="56" ry="56" fill="#45aaf2" />
+      <rect x="424" y="192" width="176" height="560" rx="56" ry="56" fill="#20bf6b" />
       <rect x="664" y="192" width="176" height="620" rx="56" ry="56" fill="#a55eea" />
     </svg>
   );

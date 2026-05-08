@@ -9,7 +9,8 @@ The ShipCode pipeline is a state machine that processes GitHub issues through mu
 | Plan | Opus 4.6 | Rewrites issue into spec + structured plan |
 | Review | Codex (high reasoning) — set during onboarding | Adversarial critique during configured revision rounds |
 | Execute | Routed per `shipcode:agent:*` label (claude / codex / openrouter) — configurable in Settings | Implements in isolated git worktree |
-| Verify | Opus 4.6 — set during onboarding | Checks diff against acceptance criteria |
+| Test / Runtime QA | Repo setup contract + generated QA | Runs setup, test commands, browser/runtime QA, and optional visual QA evidence |
+| Verify | Opus 4.6 — set during onboarding | Checks diff, test output, runtime QA evidence, and acceptance criteria |
 | Ship | gh CLI | Push branch, create PR, link to issue |
 
 All four phase defaults can be changed after onboarding from the desktop **Settings → Pipeline** panel. Project and issue overrides can further replace those defaults per repository or per issue.
@@ -17,7 +18,7 @@ All four phase defaults can be changed after onboarding from the desktop **Setti
 ## State Machine
 
 ```
-Todo → Planning → Reviewing ⇄ Revising → (Awaiting Approval) → Executing → Verifying → Shipping → Completed
+Todo → Planning → Reviewing ⇄ Revising → (Awaiting Approval) → Executing → Testing → Verifying → Shipping → Completed
                                                                                                  ↘ Failed
 ```
 
@@ -25,8 +26,15 @@ Todo → Planning → Reviewing ⇄ Revising → (Awaiting Approval) → Executi
 - Kanban/list cards surface that effective gate with an `Approval` badge, and Inbox can filter directly to approval-gated work with `Needs approval`.
 - After a run is approved, it can still wait for an execution slot if that project's runtime capacity is full. The board shows that as **Waiting For Execution** even though the internal pipeline phase remains `awaiting_approval`.
 - **Revising** loops back to **Reviewing** up to the configured revision count. New installs default to `0`, which skips plan review for the fastest first run.
+- **Testing** runs configured verification commands, runtime QA server checks, browser/E2E commands, and generated visual QA when available.
 - **Shipping** runs after **Verifying** and uses `gh` CLI to push the branch, open the PR, and link it back to the issue.
 - Any phase can transition to **Failed** on error.
+
+## Task Graphs and QA State
+
+Large plans can be split into a task graph. The graph is persisted, shown in Issue Detail, and can execute node-by-node with specialist prompts when the planner determines that decomposition is safer than one direct execution pass.
+
+Feature PRDs can also include a `## QA State` block. During verification, ShipCode extracts that contract and records runtime/visual QA results alongside test output so the verifier has concrete evidence instead of only reading the diff.
 
 The exact phase enum lives in [`packages/shared/src/types.ts`](https://github.com/shipshitdev/shipcode/blob/master/packages/shared/src/types.ts) as the `ThreadStatus` and `PipelinePhase` unions.
 

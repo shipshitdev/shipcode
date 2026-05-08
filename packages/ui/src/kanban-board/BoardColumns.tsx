@@ -80,6 +80,8 @@ interface DroppableColumnProps {
   issueStalenessById?: Map<string, IssueStalenessResult | null>;
   approvedAwaitingExecutionIssueIds?: ReadonlySet<string>;
   flashingIssueIds?: ReadonlySet<string>;
+  compact?: boolean;
+  issueHoverCards?: boolean;
   onFetchPlanSteps?: (threadId: string) => Promise<PlanStepSummary[] | null>;
 }
 
@@ -112,6 +114,8 @@ export function DroppableColumn({
   issueStalenessById = EMPTY_STALENESS_MAP,
   approvedAwaitingExecutionIssueIds = EMPTY_APPROVED_AWAITING_EXECUTION,
   flashingIssueIds,
+  compact = false,
+  issueHoverCards = true,
   onFetchPlanSteps,
 }: DroppableColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id, disabled: !droppable || readOnly });
@@ -121,7 +125,8 @@ export function DroppableColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        'flex min-h-0 max-w-[300px] min-w-[240px] flex-1 flex-col overflow-hidden rounded-md border border-border/40 bg-secondary transition-colors',
+        'flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border/40 bg-secondary transition-colors',
+        compact ? 'min-w-0 max-w-none basis-0' : 'max-w-[300px] min-w-[240px]',
         isOver && droppable && 'bg-tertiary ring-2 ring-accent',
       )}
     >
@@ -178,6 +183,7 @@ export function DroppableColumn({
             onCreatePr={onCreatePr}
             readOnly={readOnly}
             isFlashing={flashingIssueIds?.has(issue.id) ?? false}
+            hoverCardEnabled={issueHoverCards}
             onFetchPlanSteps={onFetchPlanSteps}
           />
         ))}
@@ -218,6 +224,8 @@ interface SectionBlockProps {
   issueStalenessById?: Map<string, IssueStalenessResult | null>;
   approvedAwaitingExecutionIssueIds?: ReadonlySet<string>;
   flashingIssueIds?: ReadonlySet<string>;
+  compact?: boolean;
+  issueHoverCards?: boolean;
   onFetchPlanSteps?: (threadId: string) => Promise<PlanStepSummary[] | null>;
 }
 
@@ -253,6 +261,8 @@ function SectionBlock({
   issueStalenessById = EMPTY_STALENESS_MAP,
   approvedAwaitingExecutionIssueIds = EMPTY_APPROVED_AWAITING_EXECUTION,
   flashingIssueIds,
+  compact = false,
+  issueHoverCards = true,
   onFetchPlanSteps,
 }: SectionBlockProps) {
   const { setNodeRef, isOver } = useDroppable({
@@ -275,7 +285,7 @@ function SectionBlock({
         className={cn(
           'sticky top-0 z-10 flex w-full items-center justify-between gap-2 border-b border-transparent px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide backdrop-blur supports-[backdrop-filter]:bg-secondary/85',
           'transition-colors',
-          SECTION_HEADER_CLASS[tone],
+          compact ? 'bg-secondary/95 text-secondary' : SECTION_HEADER_CLASS[tone],
           empty && 'opacity-60',
           section.droppable && isOver && 'border-accent/50 bg-tertiary/95',
         )}
@@ -286,7 +296,7 @@ function SectionBlock({
           aria-expanded={!collapsed}
           className={cn(
             'sticky top-0 flex min-w-0 flex-1 items-center gap-1.5 p-0 text-left text-[10px] font-semibold uppercase tracking-wide hover:bg-transparent',
-            SECTION_HEADER_CLASS[tone],
+            compact ? 'bg-transparent text-current' : SECTION_HEADER_CLASS[tone],
           )}
           onClick={onToggle}
         >
@@ -310,7 +320,7 @@ function SectionBlock({
           <span
             className={cn(
               'min-w-[18px] rounded-full border px-1.5 py-px text-center text-[10px] font-medium',
-              SECTION_COUNT_CLASS[tone],
+              compact ? 'border-border/60 bg-tertiary text-muted' : SECTION_COUNT_CLASS[tone],
               empty && 'opacity-75',
             )}
           >
@@ -360,6 +370,7 @@ function SectionBlock({
               onCreatePr={onCreatePr}
               readOnly={readOnly}
               isFlashing={flashingIssueIds?.has(issue.id) ?? false}
+              hoverCardEnabled={issueHoverCards}
               onFetchPlanSteps={onFetchPlanSteps}
             />
           ))}
@@ -407,6 +418,8 @@ interface StackedColumnProps {
   issueStalenessById?: Map<string, IssueStalenessResult | null>;
   approvedAwaitingExecutionIssueIds?: ReadonlySet<string>;
   flashingIssueIds?: ReadonlySet<string>;
+  compact?: boolean;
+  issueHoverCards?: boolean;
   onFetchPlanSteps?: (threadId: string) => Promise<PlanStepSummary[] | null>;
 }
 
@@ -440,6 +453,8 @@ export function StackedColumn({
   issueStalenessById = EMPTY_STALENESS_MAP,
   approvedAwaitingExecutionIssueIds = EMPTY_APPROVED_AWAITING_EXECUTION,
   flashingIssueIds,
+  compact = false,
+  issueHoverCards = true,
   onFetchPlanSteps,
 }: StackedColumnProps) {
   const columnIssues = useMemo(
@@ -469,7 +484,12 @@ export function StackedColumn({
   }, []);
 
   return (
-    <div className="flex min-h-0 min-w-[280px] max-w-[360px] flex-[1.3] flex-col overflow-hidden rounded-md border border-border/40 bg-secondary">
+    <div
+      className={cn(
+        'flex min-h-0 flex-col overflow-hidden rounded-md border border-border/40 bg-secondary',
+        compact ? 'min-w-0 max-w-none flex-1 basis-0' : 'min-w-[280px] max-w-[360px] flex-[1.3]',
+      )}
+    >
       <div className="flex shrink-0 items-center justify-between border-b border-border px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wide text-primary">
         <span className="flex items-center gap-1.5">
           <span
@@ -528,6 +548,8 @@ export function StackedColumn({
             issueStalenessById={issueStalenessById}
             approvedAwaitingExecutionIssueIds={approvedAwaitingExecutionIssueIds}
             flashingIssueIds={flashingIssueIds}
+            compact={compact}
+            issueHoverCards={issueHoverCards}
             onFetchPlanSteps={onFetchPlanSteps}
           />
         ))}

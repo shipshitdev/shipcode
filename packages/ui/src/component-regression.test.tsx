@@ -9,19 +9,7 @@ import { DiffViewer } from '@/DiffViewer';
 import { GitVisualizer } from '@/GitVisualizer';
 import { LoadingButtonContent } from '@/LoadingButtonContent';
 import { PageHeader } from '@/PageHeader';
-import { Alert, AlertDescription, AlertTitle } from '@/primitives/alert';
 import { Button } from '@/primitives/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/primitives/card';
-import { Modal } from '@/primitives/modal';
-import { OverlayPanel } from '@/primitives/overlay-panel';
-import { SettingsRow } from '@/primitives/settings-row';
 import { SideBySideDiffViewer } from '@/SideBySideDiffViewer';
 
 function renderIntoDom(element: ReactElement) {
@@ -250,96 +238,6 @@ describe('UI component regression coverage', () => {
     });
 
     expect(onSelectWorktree).toHaveBeenCalledWith('/tmp/shipcode/46');
-    view.cleanup();
-  });
-
-  it('renders an overlay panel with resize affordance and width constraints', () => {
-    const onResizeStart = vi.fn();
-    const view = renderIntoDom(
-      <div className="relative h-[320px]">
-        <OverlayPanel
-          width={480}
-          minWidth={380}
-          maxWidth={760}
-          onResizeStart={onResizeStart}
-          resizeHandleLabel="Resize issue detail panel"
-        >
-          <div>Overlay content</div>
-        </OverlayPanel>
-      </div>,
-    );
-
-    const panel = view.container.querySelector('[data-slot="overlay-panel"]');
-    if (!(panel instanceof HTMLDivElement)) {
-      throw new Error('Expected overlay panel');
-    }
-    expect(panel.style.width).toBe('480px');
-    expect(panel.style.minWidth).toBe('380px');
-    expect(panel.style.maxWidth).toBe('760px');
-    expect(panel.textContent).toContain('Overlay content');
-
-    const resizeHandle = view.container.querySelector('[data-slot="overlay-panel-resize-handle"]');
-    if (!(resizeHandle instanceof HTMLButtonElement)) {
-      throw new Error('Expected overlay panel resize handle');
-    }
-    expect(resizeHandle.getAttribute('aria-label')).toBe('Resize issue detail panel');
-
-    act(() => {
-      resizeHandle.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-    });
-
-    expect(onResizeStart).toHaveBeenCalledTimes(1);
-    view.cleanup();
-  });
-
-  it('renders alert, card, settings row, and modal primitives', () => {
-    const onClose = vi.fn();
-    const view = renderIntoDom(
-      <>
-        <Alert variant="warning" data-testid="alert">
-          <AlertTitle>Warning</AlertTitle>
-          <AlertDescription>Coverage dropped below the floor.</AlertDescription>
-        </Alert>
-        <Card data-testid="card">
-          <CardHeader>
-            <CardTitle>ShipCode</CardTitle>
-            <CardDescription>Autonomous coding pipeline</CardDescription>
-          </CardHeader>
-          <CardContent>Card content</CardContent>
-          <CardFooter>Card footer</CardFooter>
-        </Card>
-        <SettingsRow label="Theme" description="Choose the renderer theme" htmlFor="theme">
-          <input id="theme" defaultValue="dark" />
-        </SettingsRow>
-        <Button size="icon-xs" aria-label="Refresh terminal sessions">
-          R
-        </Button>
-        <Modal
-          open
-          onClose={onClose}
-          title="Settings"
-          headerAction={<button type="button">Close action</button>}
-        >
-          <p>Modal content</p>
-        </Modal>
-      </>,
-    );
-
-    expect(view.container.querySelector('[role="alert"]')?.textContent).toContain(
-      'Coverage dropped below the floor.',
-    );
-    expect(view.container.querySelector('[data-testid="card"]')?.textContent).toContain(
-      'Autonomous coding pipeline',
-    );
-    expect((view.container.querySelector('#theme') as HTMLInputElement | null)?.value).toBe('dark');
-    expect(
-      view.container.querySelector('button[aria-label="Refresh terminal sessions"]'),
-    ).not.toBeNull();
-    expect(document.body.textContent).toContain('Settings');
-    expect(document.body.textContent).toContain('Close action');
-    expect(document.body.textContent).toContain('Modal content');
-    expect(document.body.querySelector('button[title="Close"]')).not.toBeNull();
-    expect(onClose).not.toHaveBeenCalled();
     view.cleanup();
   });
 

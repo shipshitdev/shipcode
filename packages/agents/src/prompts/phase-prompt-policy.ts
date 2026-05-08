@@ -22,6 +22,11 @@ export interface PhasePromptPolicy {
   defaultReasoningEffort: ReasoningEffort;
 }
 
+/**
+ * Exported for policy shape regression tests.
+ *
+ * @knipignore
+ */
 export const PHASE_PROMPT_POLICY: Record<PromptPhase, PhasePromptPolicy> = {
   plan: {
     phase: 'plan',
@@ -70,7 +75,7 @@ export function toPipelinePromptScope(phase: PromptPhase): PhasePromptPolicy {
   return getPhasePromptPolicy(phase);
 }
 
-export function isPromptMaterialAllowed(phase: PromptPhase, kind: PromptMaterialKind): boolean {
+function isPromptMaterialAllowed(phase: PromptPhase, kind: PromptMaterialKind): boolean {
   return getPhasePromptPolicy(phase).allowedMaterialKinds.includes(kind);
 }
 

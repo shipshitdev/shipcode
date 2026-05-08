@@ -42,6 +42,11 @@ export function loadStructuredRepoContext(projectPath: string): PromptMaterial[]
   return [...slices.repoContextFiles, ...slices.testingContext];
 }
 
+/**
+ * Exported for prompt policy regression tests.
+ *
+ * @knipignore
+ */
 export function loadRepoContextSlices(projectPath: string): RepoContextSlices {
   let names: string[] = [];
   try {

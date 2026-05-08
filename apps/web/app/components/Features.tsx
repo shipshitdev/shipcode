@@ -5,14 +5,14 @@ const features = [
       'Claude, Codex, or OpenRouter — pick the best model for each pipeline phase. Swap providers without rewriting prompts.',
   },
   {
-    title: 'Parallel pipeline scheduling',
+    title: 'Automations and scheduling',
     description:
-      'Run multiple issues simultaneously with per-project concurrency caps. Queue drains automatically as slots open.',
+      'Run cron-like recurring prompts, auto-run Todo work, and drain queued jobs through workspace and project capacity caps.',
   },
   {
     title: 'Task graph execution',
     description:
-      'Complex issues decompose into a dependency graph. Tasks execute in topological order with per-node verification.',
+      'Complex issues can decompose into a dependency graph. Tasks execute in topological order with per-node context.',
   },
   {
     title: 'Isolated worktrees',
@@ -20,14 +20,14 @@ const features = [
       'Every pipeline runs in its own git worktree. No branch conflicts, no stash juggling, no dirty state leaking between tasks.',
   },
   {
-    title: 'Verification with retries',
+    title: 'Runtime QA with retries',
     description:
-      'Typecheck, test suite, and spec-scoped review after every execution. Failures trigger targeted auto-fixes before giving up.',
+      'Typecheck, test suite, browser/runtime QA, and visual QA evidence feed the verifier before a PR ships.',
   },
   {
-    title: 'Visual Kanban board',
+    title: 'Desktop control surface',
     description:
-      'Track every issue through plan → review → execute → verify in real time. See which model is running, which phase is active.',
+      'Track issues, PRs, worktrees, code, costs, insights, terminal output, and scheduled automations in one app.',
   },
 ] as const;
 

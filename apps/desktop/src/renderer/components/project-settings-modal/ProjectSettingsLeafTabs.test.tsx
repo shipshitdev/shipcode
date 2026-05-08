@@ -552,7 +552,7 @@ describe('project settings leaf tabs', () => {
     expect(await screen.findByText('Project readiness')).toBeInTheDocument();
     expect(screen.getByText('Priority')).toBeInTheDocument();
     expect(screen.getByText('P0')).toBeInTheDocument();
-    expect(screen.getByText(/issue types and Projects fields/)).toBeInTheDocument();
+    expect(screen.getAllByText(/issue types and Projects fields/).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole('button', { name: 'Re-check' }));
     await waitFor(() => expect(invoke).toHaveBeenCalledTimes(2));

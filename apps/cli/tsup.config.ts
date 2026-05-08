@@ -10,7 +10,6 @@ export default defineConfig({
   outDir: 'dist',
   clean: true,
   banner: { js: '#!/usr/bin/env node' },
-  external: ['yaml'],
   noExternal: [
     '@shipcode/shared',
     '@shipcode/db',

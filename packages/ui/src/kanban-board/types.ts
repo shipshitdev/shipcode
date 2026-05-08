@@ -18,6 +18,8 @@ export interface KanbanBoardProps {
   approvedAwaitingExecutionIssueIds?: ReadonlySet<string>;
   flashingIssueIds?: ReadonlySet<string>;
   readOnly?: boolean;
+  presentationMode?: 'app' | 'compact';
+  issueHoverCards?: boolean;
   keyboardShortcutsEnabled?: boolean;
   onIssueClick: (issue: GitHubIssueCacheRecord) => void;
   onCommentIssue?: (issue: GitHubIssueCacheRecord) => void;

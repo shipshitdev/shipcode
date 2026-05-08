@@ -16,8 +16,8 @@ export function Hero() {
             to reviewed PR.
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-secondary md:text-xl">
-            AI pipeline that plans, reviews, executes, and verifies — from GitHub issue to merged
-            PR.
+            AI pipeline that plans, reviews, executes, tests, verifies, and opens the PR from a
+            GitHub issue.
           </p>
         </div>
 

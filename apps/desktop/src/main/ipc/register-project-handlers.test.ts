@@ -384,6 +384,84 @@ describe('registerProjectHandlers', () => {
     });
   });
 
+  it('opens the project in Finder when the configured default opener is unavailable', async () => {
+    await withDarwin(async () => {
+      const project = { ...baseProject, path: '/tmp/ShipCode Worktree' };
+      const existsSpy = vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+      vi.mocked(checkDesktopApps).mockResolvedValue({
+        ...makeDesktopApps(),
+        cursor: {
+          key: 'cursor',
+          label: 'Cursor',
+          available: false,
+          path: null,
+          error: 'Cursor missing',
+        },
+      } as never);
+
+      const { openPath } = registerOpenPathHandler(project);
+
+      await openPath(undefined, { projectId: project.id, target: 'default' });
+
+      expect(shell.openPath).toHaveBeenCalledWith(project.path);
+      expect(execFileMock).not.toHaveBeenCalled();
+      existsSpy.mockRestore();
+    });
+  });
+
+  it('rejects project open requests for missing folders and unsupported platforms', async () => {
+    const existsSpy = vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+    vi.mocked(checkDesktopApps).mockResolvedValue(makeDesktopApps() as never);
+    const { openPath } = registerOpenPathHandler(baseProject);
+
+    await expect(
+      openPath(undefined, { projectId: baseProject.id, target: 'cursor' }),
+    ).rejects.toThrow(`Project folder does not exist: ${baseProject.path}`);
+
+    existsSpy.mockReturnValue(true);
+    const platform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'linux' });
+    try {
+      await expect(
+        openPath(undefined, { projectId: baseProject.id, target: 'cursor' }),
+      ).rejects.toThrow('Project opener actions are currently supported on macOS only');
+    } finally {
+      Object.defineProperty(process, 'platform', { value: platform });
+    }
+
+    existsSpy.mockRestore();
+  });
+
+  it('rejects default terminal open requests when no terminal app is available', async () => {
+    await withDarwin(async () => {
+      const existsSpy = vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+      vi.mocked(checkDesktopApps).mockResolvedValue({
+        ...makeDesktopApps(),
+        terminal: {
+          key: 'terminal',
+          label: 'Terminal',
+          available: false,
+          path: null,
+          error: 'Terminal missing',
+        },
+        ghostty: {
+          key: 'ghostty',
+          label: 'Ghostty',
+          available: false,
+          path: null,
+          error: 'Ghostty missing',
+        },
+      } as never);
+      const { openPath } = registerOpenPathHandler(baseProject);
+
+      await expect(
+        openPath(undefined, { projectId: baseProject.id, target: 'default-terminal' }),
+      ).rejects.toThrow('No supported terminal app is available');
+
+      existsSpy.mockRestore();
+    });
+  });
+
   it('updates a project name through project:set-name', async () => {
     const updatedProject = { ...baseProject, name: 'Gateway Remastered' };
     const queries = {
@@ -417,6 +495,40 @@ describe('registerProjectHandlers', () => {
 
     expect(queries.projects.updateName).toHaveBeenCalledWith(baseProject.id, 'Gateway Remastered');
     expect(result.name).toBe('Gateway Remastered');
+  });
+
+  it('rejects empty project names and missing projects during rename', async () => {
+    const queries = {
+      projects: {
+        getById: vi.fn().mockReturnValueOnce(baseProject).mockReturnValueOnce(null),
+        updateName: vi.fn(),
+      },
+      settings: {
+        get: vi.fn(() => ({ projectOpenTarget: 'cursor' })),
+      },
+    };
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+    });
+
+    const setName = handlers.get('project:set-name');
+    if (!setName) throw new Error('project:set-name handler not registered');
+
+    await expect(setName(undefined, { projectId: baseProject.id, name: '   ' })).rejects.toThrow(
+      'Project name is required',
+    );
+    await expect(setName(undefined, { projectId: baseProject.id, name: 'Next' })).rejects.toThrow(
+      `Project ${baseProject.id} not found`,
+    );
+    expect(queries.projects.updateName).not.toHaveBeenCalled();
   });
 
   it('opens the project in Ghostty with an explicit working directory', async () => {
@@ -697,5 +809,169 @@ describe('registerProjectHandlers', () => {
       starterIssueCreatedAt: '2026-04-20T00:00:00.000Z',
     });
     expect(result.starterIssueNumber).toBe(55);
+  });
+
+  it('archives projects with the correct idle guard for present and missing folders', async () => {
+    const existsSpy = vi
+      .spyOn(fs, 'existsSync')
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+        archiveIfIdle: vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(false),
+      },
+      settings: {
+        get: vi.fn(() => ({ projectOpenTarget: 'cursor' })),
+      },
+    };
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+    });
+
+    const archive = handlers.get('project:archive');
+    if (!archive) throw new Error('project:archive handler not registered');
+
+    await expect(archive(undefined, { projectId: baseProject.id })).rejects.toThrow(
+      'Cannot archive this missing project while a pipeline is still active. Stop running pipelines first.',
+    );
+    expect(queries.projects.archiveIfIdle).toHaveBeenCalledWith(baseProject.id, {
+      ignoreAttentionOnly: true,
+    });
+
+    await expect(archive(undefined, { projectId: baseProject.id })).rejects.toThrow(
+      'Cannot archive a project with active work. Stop running pipelines and dismiss notifications first.',
+    );
+    expect(queries.projects.archiveIfIdle).toHaveBeenLastCalledWith(baseProject.id, {
+      ignoreAttentionOnly: false,
+    });
+
+    existsSpy.mockRestore();
+  });
+
+  it('marks only idle, failed, and completed threads as done', async () => {
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+      },
+      settings: {
+        get: vi.fn(() => ({ projectOpenTarget: 'cursor' })),
+      },
+      threads: {
+        getById: vi
+          .fn()
+          .mockReturnValueOnce(null)
+          .mockReturnValueOnce({ id: 'thread-1', status: 'executing' })
+          .mockReturnValueOnce({ id: 'thread-1', status: 'failed' }),
+        markDone: vi.fn(),
+      },
+    };
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+    });
+
+    const markDone = handlers.get('thread:mark-done');
+    if (!markDone) throw new Error('thread:mark-done handler not registered');
+
+    expect(() => markDone(undefined, { threadId: 'thread-1' })).toThrow(
+      'Thread thread-1 not found',
+    );
+    expect(() => markDone(undefined, { threadId: 'thread-1' })).toThrow(
+      'Cannot mark thread as done while in executing phase',
+    );
+    markDone(undefined, { threadId: 'thread-1' });
+
+    expect(queries.threads.markDone).toHaveBeenCalledWith('thread-1');
+  });
+
+  it('resolves filesystem start directories and lists child directories with error states', async () => {
+    const homeDir = os.homedir();
+    const queries = {
+      projects: {},
+      settings: {
+        get: vi
+          .fn()
+          .mockReturnValueOnce({})
+          .mockReturnValueOnce({ addProjectStartsIn: '~' })
+          .mockReturnValueOnce({ addProjectStartsIn: '~/dev' })
+          .mockReturnValueOnce({ addProjectStartsIn: '/tmp/missing' })
+          .mockReturnValue({ addProjectStartsIn: 'relative' }),
+      },
+    };
+    const existsSpy = vi
+      .spyOn(fs, 'existsSync')
+      .mockReturnValueOnce(true)
+      .mockReturnValueOnce(true)
+      .mockReturnValueOnce(true)
+      .mockReturnValueOnce(false)
+      .mockReturnValue(true);
+    const readdirSpy = vi
+      .spyOn(fs.promises, 'readdir')
+      .mockResolvedValueOnce([
+        { name: 'zeta', isDirectory: () => true },
+        { name: '.hidden', isDirectory: () => true },
+        { name: 'alpha', isDirectory: () => true },
+        { name: 'file.txt', isDirectory: () => false },
+      ] as never)
+      .mockRejectedValueOnce(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+      .mockRejectedValueOnce(Object.assign(new Error('denied'), { code: 'EACCES' }));
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+    });
+
+    const resolveStartDir = handlers.get('fs:resolve-start-dir');
+    const listDirectories = handlers.get('fs:list-directories');
+    if (!resolveStartDir || !listDirectories) {
+      throw new Error('filesystem handlers not registered');
+    }
+
+    expect(resolveStartDir()).toEqual({ resolvedPath: homeDir });
+    expect(resolveStartDir()).toEqual({ resolvedPath: homeDir });
+    expect(resolveStartDir()).toEqual({ resolvedPath: path.join(homeDir, 'dev') });
+    expect(resolveStartDir()).toEqual({ resolvedPath: homeDir });
+    expect(resolveStartDir()).toEqual({ resolvedPath: homeDir });
+
+    await expect(listDirectories(undefined, { dirPath: '/tmp' })).resolves.toEqual({
+      entries: [
+        { name: 'alpha', absolutePath: '/tmp/alpha' },
+        { name: 'zeta', absolutePath: '/tmp/zeta' },
+      ],
+      error: null,
+    });
+    await expect(listDirectories(undefined, { dirPath: '/missing' })).resolves.toEqual({
+      entries: [],
+      error: 'not-found',
+    });
+    await expect(listDirectories(undefined, { dirPath: '/denied' })).resolves.toEqual({
+      entries: [],
+      error: 'permission-denied',
+    });
+
+    existsSpy.mockRestore();
+    readdirSpy.mockRestore();
   });
 });

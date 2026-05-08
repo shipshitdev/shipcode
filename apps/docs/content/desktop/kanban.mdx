@@ -1,6 +1,6 @@
 # Kanban Board
 
-The Kanban board is the main view inside a project. Each column corresponds to a phase of the ShipCode pipeline, and each card is a GitHub issue.
+The Kanban board lives under the project **Issues** tab. Each column corresponds to a phase of the ShipCode pipeline, and each card is a GitHub issue, automation run, or quick-mode task.
 
 ## Columns
 
@@ -10,6 +10,7 @@ The Kanban board is the main view inside a project. Each column corresponds to a
 | Planning | `planning` | Planner is rewriting the issue into a structured plan |
 | Reviewing | `reviewing` / `revising` | Reviewer is critiquing the plan for the configured revision count |
 | Executing | `executing` | Executor is implementing the plan in an isolated git worktree |
+| Testing | `testing` | Setup, test, runtime QA, or generated visual QA commands are running |
 | Verifying | `verifying` | Verifier is checking the diff against acceptance criteria |
 | Done | `completed` / `done` | `completed`: ShipCode finished and a PR exists. `done`: the issue is explicitly closed/finalized. |
 | Failed | `failed` | Pipeline errored out — check the terminal drawer or Inbox |
@@ -18,7 +19,7 @@ The board still groups work by phase, but the model choice is now shown on each 
 
 - Global Settings provide the default for every phase
 - Project Settings can override planner / reviewer / executor / verifier per project
-- Issue Detail can override the executor per issue
+- Issue Detail can override planner / reviewer / executor / verifier per issue
 
 Each active card shows a compact chip with the effective model and the effective effort for that card's current phase.
 
@@ -30,9 +31,9 @@ After you approve a run, it no longer stays under the human approval section. If
 
 ## Drag to launch
 
-Drag any Todo card into **Planning** to start the pipeline on that issue. The drag honors the `shipcode:agent:*` label on the GitHub issue and spawns the correct executor.
+Drag any Todo card into **Planning** to start the pipeline on that issue. The drag honors the `shipcode:agent:*` label on the GitHub issue and spawns the correct executor unless a narrower project or issue override applies.
 
-The Kanban component lives in [`packages/ui/src/KanbanBoard.tsx`](https://github.com/shipshitdev/shipcode/blob/master/packages/ui/src/KanbanBoard.tsx) and is mounted by `apps/desktop/src/renderer/components/ThreadPanel.tsx`.
+The Kanban component lives in [`packages/ui/src/KanbanBoard.tsx`](https://github.com/shipshitdev/shipcode/blob/master/packages/ui/src/KanbanBoard.tsx) and is mounted by [`apps/desktop/src/renderer/components/IssuesPanel.tsx`](https://github.com/shipshitdev/shipcode/blob/master/apps/desktop/src/renderer/components/IssuesPanel.tsx).
 
 ## List view
 
@@ -40,18 +41,26 @@ Click the toggle in the Kanban header to switch to a flat list view. The list mi
 
 The header also has a `Needs approval` filter. Enable it to show only issues whose effective workflow will pause for human approval before execution. Approved runs that are only waiting for execution capacity are excluded from this filter.
 
+## Board review and auto-run
+
+The board can run model-assisted triage over Todo issues. The triage model classifies priority and can auto-apply high-confidence labels using the threshold configured in **Settings → Pipeline → Models → Issue triage**.
+
+Auto-run starts matching Todo issues without manually dragging each card. The global GitHub settings control priority filters and max tasks per run, while the project runtime capacity controls how many executions can run at once.
+
 ## Card actions
 
 Click a card to open the Issue Detail overlay, which shows:
 
 - The GitHub issue PRD (body) with an **Edit PRD** button that opens the Create/Edit modal stacked on top
 - The generated plan (with a [full-screen viewer](/desktop/plan-viewer))
+- The task graph, when the planner split a complex issue into executable nodes
 - Review rounds and reviewer verdicts
 - The diff (once the executor has produced one)
+- Runtime QA and feature QA evidence when the PRD includes a QA State contract
 - Cost + token totals for the thread
 - Effective revision count for the next run, with issue-level override control
 - Effective planner / reviewer / executor / verifier models for the next run
-- Executor override control with an `Inherit` reset back to project/global defaults
+- Phase override controls with an `Inherit` reset back to project/global defaults
 
 ## Header quick-links
 

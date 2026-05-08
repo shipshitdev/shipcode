@@ -6,6 +6,11 @@ import type { IpcHandlerDeps } from './types';
 
 const QUICK_TITLE_MAX = 60;
 
+/**
+ * Exported for focused title truncation tests.
+ *
+ * @knipignore
+ */
 export function deriveQuickTitle(text: string): string {
   const trimmed = text.trim();
   if (trimmed.length <= QUICK_TITLE_MAX) return trimmed;

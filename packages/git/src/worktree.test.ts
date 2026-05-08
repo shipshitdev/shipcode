@@ -17,7 +17,9 @@ import { WorktreeManager } from './worktree';
 
 describe('WorktreeManager', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    Object.values(gitMock).forEach((mock) => {
+      mock.mockReset();
+    });
   });
 
   it('formats issue-based branch names and worktree paths from the current settings', () => {
@@ -32,6 +34,19 @@ describe('WorktreeManager', () => {
     expect(manager.getWorktreePath(42, 'Fix OpenRouter Tier 1!')).toBe(
       '/tmp/shipcode-worktrees/project-9a1fd1/42-fix-openrouter-tier-1',
     );
+  });
+
+  it('formats manual thread branches and issue directories without title slugs', () => {
+    const manager = new WorktreeManager('/repo/project', {
+      worktreeRoot: '/tmp/shipcode-worktrees',
+    });
+
+    expect(manager.getBranchName('thread-1')).toBe('shipcode/thread-1');
+    expect(manager.getWorktreePath('thread-1')).toBe(
+      '/tmp/shipcode-worktrees/project-9a1fd1/thread-1',
+    );
+    expect(manager.getBranchName(42, '')).toBe('ship/42');
+    expect(manager.getWorktreePath(42, '')).toBe('/tmp/shipcode-worktrees/project-9a1fd1/42');
   });
 
   it('parses git worktree list output and keeps only ShipCode-managed branches', async () => {
@@ -95,6 +110,74 @@ branch refs/heads/feature/not-ours
     ]);
   });
 
+  it('creates manual worktrees from the resolved default branch', async () => {
+    gitMock.raw
+      .mockResolvedValueOnce('origin/develop\n')
+      .mockResolvedValueOnce('')
+      .mockResolvedValueOnce('');
+    const manager = new WorktreeManager('/repo/project', {
+      worktreeRoot: '/tmp/shipcode-worktrees',
+    });
+
+    await expect(manager.create('thread-1')).resolves.toEqual({
+      worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/thread-1',
+      branch: 'shipcode/thread-1',
+    });
+
+    expect(gitMock.raw).toHaveBeenLastCalledWith([
+      '-c',
+      'branch.autoSetupMerge=false',
+      '-c',
+      'push.autoSetupRemote=false',
+      'worktree',
+      'add',
+      '-b',
+      'shipcode/thread-1',
+      '/tmp/shipcode-worktrees/project-9a1fd1/thread-1',
+      'develop',
+    ]);
+  });
+
+  it('suffixes issue branch and directory names when an existing branch collides', async () => {
+    gitMock.raw
+      .mockResolvedValueOnce('')
+      .mockResolvedValueOnce('')
+      .mockRejectedValueOnce(new Error('branch not found'))
+      .mockResolvedValueOnce('');
+    const manager = new WorktreeManager('/repo/project', {
+      worktreeRoot: '/tmp/shipcode-worktrees',
+    });
+
+    await expect(manager.create(42, 'Fix OpenRouter', 'main')).resolves.toEqual({
+      worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/42-fix-openrouter-2',
+      branch: 'ship/42-fix-openrouter-2',
+    });
+  });
+
+  it('retries concurrent branch collisions and gives up after the retry limit', async () => {
+    gitMock.raw
+      .mockResolvedValueOnce('')
+      .mockRejectedValueOnce(new Error('branch not found'))
+      .mockRejectedValueOnce(new Error('branch already exists'))
+      .mockRejectedValueOnce(new Error('is already checked out'))
+      .mockResolvedValueOnce('');
+    const manager = new WorktreeManager('/repo/project', {
+      worktreeRoot: '/tmp/shipcode-worktrees',
+    });
+
+    await expect(manager.create(42, 'Fix OpenRouter', 'main')).resolves.toEqual({
+      worktreePath: '/tmp/shipcode-worktrees/project-9a1fd1/42-fix-openrouter-3',
+      branch: 'ship/42-fix-openrouter-3',
+    });
+
+    gitMock.raw
+      .mockResolvedValueOnce('')
+      .mockRejectedValueOnce(new Error('branch not found'))
+      .mockRejectedValue(new Error('already exists'));
+
+    await expect(manager.create(43, 'Retry forever', 'main')).rejects.toThrow('already exists');
+  });
+
   it('treats already-removed worktrees and branches as successful cleanup', async () => {
     gitMock.raw.mockRejectedValueOnce(new Error('path is not a working tree'));
     gitMock.deleteLocalBranch.mockRejectedValueOnce(new Error('branch not found'));
@@ -109,6 +192,25 @@ branch refs/heads/feature/not-ours
     });
   });
 
+  it('reports worktree remove and branch delete failures separately', async () => {
+    const manager = new WorktreeManager('/repo/project');
+
+    gitMock.raw.mockRejectedValueOnce(new Error('permission denied'));
+    await expect(manager.remove('/tmp/worktree', 'ship/42')).resolves.toEqual({
+      worktreeRemoved: false,
+      branchDeleted: false,
+      error: 'worktree remove: permission denied',
+    });
+
+    gitMock.raw.mockResolvedValueOnce('');
+    gitMock.deleteLocalBranch.mockRejectedValueOnce(new Error('branch checked out'));
+    await expect(manager.remove('/tmp/worktree', 'ship/42')).resolves.toEqual({
+      worktreeRemoved: true,
+      branchDeleted: false,
+      error: 'branch delete: branch checked out',
+    });
+  });
+
   it('repairs concrete worktree paths through git worktree repair', async () => {
     const manager = new WorktreeManager('/repo/project');
 
@@ -120,6 +222,14 @@ branch refs/heads/feature/not-ours
       '/tmp/worktree-a',
       '/tmp/worktree-b',
     ]);
+  });
+
+  it('skips repair when no paths are provided', async () => {
+    const manager = new WorktreeManager('/repo/project');
+
+    await manager.repair([]);
+
+    expect(gitMock.raw).not.toHaveBeenCalled();
   });
 
   it('prunes stale worktree metadata through git worktree prune', async () => {
@@ -151,5 +261,42 @@ branch refs/heads/feature/not-ours
     expect(gitMock.checkout).toHaveBeenCalledWith('develop');
     expect(gitMock.raw).toHaveBeenCalledWith(['merge', '--squash', 'ship/42-fix-openrouter']);
     expect(gitMock.commit).toHaveBeenCalledWith('feat: merge ship/42-fix-openrouter (squashed)');
+  });
+
+  it('uses normal merge and default-branch fallbacks', async () => {
+    const manager = new WorktreeManager('/repo/project');
+
+    gitMock.raw.mockRejectedValueOnce(new Error('origin head unavailable'));
+    gitMock.branchLocal.mockResolvedValueOnce({
+      current: 'release',
+      all: ['main', 'master'],
+    });
+    await manager.merge('ship/42-fix-openrouter');
+    expect(gitMock.checkout).toHaveBeenCalledWith('release');
+    expect(gitMock.merge).toHaveBeenCalledWith(['ship/42-fix-openrouter', '--no-ff']);
+
+    gitMock.raw.mockRejectedValueOnce(new Error('origin head unavailable'));
+    gitMock.branchLocal.mockResolvedValueOnce({
+      current: '',
+      all: ['main'],
+    });
+    await manager.merge('ship/43-fix-openrouter');
+    expect(gitMock.checkout).toHaveBeenLastCalledWith('main');
+
+    gitMock.raw.mockRejectedValueOnce(new Error('origin head unavailable'));
+    gitMock.branchLocal.mockResolvedValueOnce({
+      current: '',
+      all: ['master'],
+    });
+    await manager.merge('ship/44-fix-openrouter');
+    expect(gitMock.checkout).toHaveBeenLastCalledWith('master');
+
+    gitMock.raw.mockRejectedValueOnce(new Error('origin head unavailable'));
+    gitMock.branchLocal.mockResolvedValueOnce({
+      current: '',
+      all: [],
+    });
+    await manager.merge('ship/45-fix-openrouter');
+    expect(gitMock.checkout).toHaveBeenLastCalledWith('main');
   });
 });

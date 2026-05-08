@@ -1,6 +1,6 @@
 # Inbox
 
-The Inbox view is a focused triage queue for threads that need human attention. Where [Mission Control](/desktop/mission-control) is a broad dashboard, the Inbox is the "what should I look at next" list.
+The Inbox view is a focused triage queue for threads that need human attention. Where [Overview](/desktop/overview) is a broad dashboard, the Inbox is the "what should I look at next" list.
 
 The component is [`apps/desktop/src/renderer/components/InboxView.tsx`](https://github.com/shipshitdev/shipcode/blob/master/apps/desktop/src/renderer/components/InboxView.tsx).
 
@@ -27,7 +27,7 @@ Each row shows:
 
 ## "Go to issue"
 
-Clicking a row navigates you into the thread's project and opens the IssueDetail overlay — same behavior as Mission Control click-through. This is the main reason the Inbox exists as a separate surface: it's optimized for "see the problem, open it, fix it, move on" without sidebar juggling.
+Clicking a row navigates you into the thread's project and opens the IssueDetail overlay. This is the main reason the Inbox exists as a separate surface: it's optimized for "see the problem, open it, fix it, move on" without sidebar juggling.
 
 ## Filtering
 
@@ -40,5 +40,5 @@ When the `Needs approval` filter is enabled, Inbox hides failures, completed run
 
 ## Related
 
-- [Mission Control](/desktop/mission-control) — broader dashboard across all activity
+- [Overview](/desktop/overview) — broader dashboard across all activity
 - [Settings → Notifications](/desktop/settings) — toggle OS + badge notifications for the same events that populate the Inbox

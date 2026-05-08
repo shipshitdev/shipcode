@@ -37,15 +37,30 @@ function readEnv(name: string, env: EnvLike): string | null {
   return value ? value : null;
 }
 
+/**
+ * Exported for focused telemetry status tests.
+ *
+ * @knipignore
+ */
 export function isTelemetryDisabledByEnv(env: EnvLike = process.env): boolean {
   const raw = readEnv('SHIPCODE_TELEMETRY_ENABLED', env) ?? readEnv('TELEMETRY_ENABLED', env);
   return raw ? DISABLED_VALUES.has(raw.toLowerCase()) : false;
 }
 
+/**
+ * Exported for focused telemetry status tests.
+ *
+ * @knipignore
+ */
 export function getTelemetryDsn(env: EnvLike = process.env): string | null {
   return readEnv('SHIPCODE_SENTRY_DSN', env) ?? readEnv('SENTRY_DSN', env);
 }
 
+/**
+ * Exported for focused telemetry status tests.
+ *
+ * @knipignore
+ */
 export function resolveTelemetryStatus(
   settings: Pick<AppSettings, 'telemetryEnabled'>,
   initialized = false,
@@ -119,6 +134,11 @@ function sanitizeEvent(event: Record<string, unknown> | null): Record<string, un
   return event;
 }
 
+/**
+ * Exported for focused telemetry lifecycle tests.
+ *
+ * @knipignore
+ */
 export class MainTelemetryController {
   private adapter: SentryMainAdapter | null = null;
   private loadingAdapter: Promise<SentryMainAdapter> | null = null;

@@ -8,7 +8,9 @@ import type {
 } from '@shipcode/shared';
 import { act, type ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+import { ShipCodeLogoMark } from '@/brand/ShipCodeLogoMark';
 import { PipelineStatus } from '@/PipelineStatus';
 import { PlanViewer } from '@/PlanViewer';
 import { ReviewViewer } from '@/ReviewViewer';
@@ -184,6 +186,15 @@ const taskGraph: TaskGraphWithNodes = {
 };
 
 describe('root UI components', () => {
+  it('keeps the shared ShipCode logo geometry aligned with app icons', () => {
+    const html = renderToStaticMarkup(<ShipCodeLogoMark />);
+
+    expect(html).toContain('viewBox="0 0 1024 1024"');
+    expect(html).toContain('x="184" y="192" width="176" height="500"');
+    expect(html).toContain('x="424" y="192" width="176" height="560"');
+    expect(html).toContain('x="664" y="192" width="176" height="620"');
+  });
+
   it('renders settings sections without card chrome', () => {
     const view = renderIntoDom(
       <SettingsSection title="Models" description="Shared phase defaults.">
