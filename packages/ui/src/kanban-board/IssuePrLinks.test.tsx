@@ -824,6 +824,43 @@ describe('linked PR affordances', () => {
     expect(columns[1]?.className).toContain('min-w-[280px]');
     view.cleanup();
   });
+
+  it('allows compact marketing columns to fit without horizontal scrolling', () => {
+    const view = renderIntoDom(
+      <DndContext>
+        <DroppableColumn
+          id="todo"
+          columnKey="todo"
+          label="Todo"
+          issues={[]}
+          droppable
+          compact
+          issueHoverCards={false}
+          onIssueClick={vi.fn()}
+          issuePhaseChipById={new Map()}
+          issueRevisionBadgeById={new Map()}
+          issueApprovalBadgeById={new Map()}
+          issuePriorityBadgeById={new Map()}
+        />
+        <StackedColumn
+          {...({
+            column: COLUMNS.find((column) => column.key === 'human'),
+            issues: [],
+            compact: true,
+            issueHoverCards: false,
+            onIssueClick: vi.fn(),
+          } as unknown as ComponentProps<typeof StackedColumn>)}
+        />
+      </DndContext>,
+    );
+
+    const columns = Array.from(view.container.children);
+    expect(columns[0]?.className).toContain('min-w-0');
+    expect(columns[0]?.className).not.toContain('min-w-[240px]');
+    expect(columns[1]?.className).toContain('min-w-0');
+    expect(columns[1]?.className).not.toContain('min-w-[280px]');
+    view.cleanup();
+  });
 });
 
 describe('priority badge rendering', () => {

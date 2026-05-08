@@ -1,3 +1,5 @@
+const discordUrl = process.env.NEXT_PUBLIC_DISCORD_URL ?? 'https://discord.com/invite/AXvM4TBAEB';
+
 export function Footer() {
   return (
     <footer className="px-6 py-8">
@@ -23,7 +25,7 @@ export function Footer() {
             GitHub
           </a>
           <a
-            href="https://discord.gg/shipcode"
+            href={discordUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="transition-colors hover:text-secondary"

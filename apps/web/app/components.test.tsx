@@ -138,6 +138,7 @@ describe('web component coverage', () => {
 
     expect(html).toContain('© 2026 shipshit.dev');
     expect(html).toContain('https://github.com/shipshitdev/shipcode');
+    expect(html).toContain('https://discord.com/invite/AXvM4TBAEB');
     expect(html).toContain('/docs');
   });
 });
