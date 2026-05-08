@@ -26,6 +26,7 @@ export function phaseToProgress(phase: PipelinePhase | IssuePipelineStatus): num
     [PIPELINE_PHASE.shipping]: 96,
     [PIPELINE_PHASE.completed]: 92,
     [ISSUE_PIPELINE_STATUS.done]: 100,
+    [ISSUE_PIPELINE_STATUS.deferred]: 0,
     [PIPELINE_PHASE.failed]: 0,
   };
   return MAP[phase] ?? 0;

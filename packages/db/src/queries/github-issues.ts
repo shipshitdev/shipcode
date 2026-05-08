@@ -306,6 +306,26 @@ export class GitHubIssueQueries {
     return Number(result.changes) > 0;
   }
 
+  resetStaleAwaitingApproval(projectId: string): number {
+    const result = this.db
+      .prepare(
+        `UPDATE github_issue_cache
+           SET pipeline_status = ?, last_phase_update = NULL
+         WHERE project_id = ?
+           AND pipeline_status = ?
+           AND (
+             thread_id IS NULL
+             OR NOT EXISTS (
+               SELECT 1
+                 FROM plans
+                WHERE plans.thread_id = github_issue_cache.thread_id
+             )
+           )`,
+      )
+      .run(ISSUE_PIPELINE_STATUS.todo, projectId, ISSUE_PIPELINE_STATUS.awaitingApproval);
+    return Number(result.changes);
+  }
+
   reconcileCompletedFromEvidence(id: string): boolean {
     const result = this.db
       .prepare(

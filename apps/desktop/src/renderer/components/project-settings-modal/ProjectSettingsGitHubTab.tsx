@@ -60,6 +60,7 @@ const MACRO_COLUMNS: Array<{
   { key: 'inProgress', label: 'In Progress', description: 'Agent loop running' },
   { key: 'humanReview', label: 'Human Review', description: 'Awaiting manual review' },
   { key: 'done', label: 'Done', description: 'Completed / shipped' },
+  { key: 'deferred', label: 'Deferred', description: 'Intentionally postponed' },
 ];
 
 function StatusColumnMapping({
@@ -86,8 +87,8 @@ function StatusColumnMapping({
     );
   }
 
-  const mapped = MACRO_COLUMNS.filter((c) => mapping[c.key] !== null);
-  const unmapped = MACRO_COLUMNS.filter((c) => mapping[c.key] === null);
+  const mapped = MACRO_COLUMNS.filter((c) => mapping[c.key] != null);
+  const unmapped = MACRO_COLUMNS.filter((c) => mapping[c.key] == null);
 
   return (
     <div className="space-y-2">

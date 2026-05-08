@@ -56,7 +56,7 @@ export interface KanbanBoardProps {
   onFetchPlanSteps?: (threadId: string) => Promise<PlanStepSummary[] | null>;
 }
 
-export type ColumnKey = 'todo' | 'agent' | 'human' | 'done';
+export type ColumnKey = 'todo' | 'agent' | 'human' | 'done' | 'deferred';
 export type BoardSortOrder = 'priority' | 'id-desc' | 'id-asc' | 'title';
 export type RowTone = 'default' | 'success' | 'done' | 'agent' | 'danger' | 'warning';
 

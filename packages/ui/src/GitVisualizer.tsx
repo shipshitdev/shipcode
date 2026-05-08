@@ -114,7 +114,7 @@ export function GitVisualizer({
                   type="button"
                   variant="ghost"
                   className={cn(
-                    'w-full rounded-md border px-2.5 py-2 text-left transition-colors',
+                    'h-auto w-full flex-col items-stretch gap-0 whitespace-normal rounded-md border px-2.5 py-2 text-left transition-colors',
                     selected
                       ? 'border-accent/40 bg-accent/10'
                       : 'border-transparent hover:border-border hover:bg-hover',
@@ -123,12 +123,12 @@ export function GitVisualizer({
                 >
                   <div className="flex min-w-0 items-center gap-2">
                     <GitBranch size={13} className="shrink-0 text-secondary" />
-                    <span className="truncate font-mono text-xs text-primary">
+                    <span className="min-w-0 flex-1 truncate font-mono text-xs text-primary">
                       {worktree.branch}
                     </span>
                     <Badge
                       variant={worktree.isDirty || hasLocalCommits ? 'warning' : 'success'}
-                      className="ml-auto shrink-0"
+                      className="shrink-0"
                     >
                       {worktree.isDirty ? 'dirty' : hasLocalCommits ? 'ahead' : 'clean'}
                     </Badge>

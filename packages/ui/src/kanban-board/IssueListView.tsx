@@ -32,6 +32,7 @@ import {
   isApprovedAwaitingExecutionIssue,
   isAutomationIssue,
   isIssueCreating,
+  isOrphanedAwaitingApprovalIssue,
   issueMatchesColumn,
   issueMatchesSection,
   rowToneFor,
@@ -73,7 +74,10 @@ function DraggableListRow({
   onArchiveIssue,
   approvedAwaitingExecution = false,
 }: DraggableListRowProps) {
-  const isDone = issue.pipelineStatus === ISSUE_PIPELINE_STATUS.done;
+  const presentationStatus = isOrphanedAwaitingApprovalIssue(issue)
+    ? ISSUE_PIPELINE_STATUS.todo
+    : issue.pipelineStatus;
+  const isDone = presentationStatus === ISSUE_PIPELINE_STATUS.done;
   const isCreating = isIssueCreating(issue);
   const isAutomation = isAutomationIssue(issue);
   const referenceLabel = isCreating
@@ -85,16 +89,16 @@ function DraggableListRow({
         : `#${issue.issueNumber}`;
   const isDraggable =
     !isCreating &&
-    DRAGGABLE_STATUSES.includes(issue.pipelineStatus) &&
-    (!isAutomation || issue.pipelineStatus === ISSUE_PIPELINE_STATUS.completed);
+    DRAGGABLE_STATUSES.includes(presentationStatus) &&
+    (!isAutomation || presentationStatus === ISSUE_PIPELINE_STATUS.completed);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: issue.id,
     data: issue,
     disabled: !isDraggable,
   });
   const isSelected = selectedIssueNumber === issue.issueNumber;
-  const tone = rowToneFor(issue.pipelineStatus, approvedAwaitingExecution);
-  const isActive = ACTIVE_STATUSES.includes(issue.pipelineStatus);
+  const tone = rowToneFor(presentationStatus, approvedAwaitingExecution);
+  const isActive = ACTIVE_STATUSES.includes(presentationStatus);
 
   return (
     // biome-ignore lint/a11y/useSemanticElements: The row contains nested action buttons, so it cannot be a semantic button.

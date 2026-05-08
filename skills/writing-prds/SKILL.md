@@ -27,7 +27,7 @@ metadata.
 Use native GitHub and Projects fields instead:
 
 - **Issue type:** `Feature`, `Bug`, or `Task`.
-- **Project status:** `Todo`, `In Progress`, `Done`, or `On hold`.
+- **Project status:** `Todo`, `In Progress`, `Human Review`, `Done`, or `Deferred`.
 - **Project priority:** `P0`, `P1`, `P2`, or `P3`.
 - **Project complexity:** `Low`, `Medium`, or `High`.
 - **Project blast radius:** `Contained`, `Cross-package`, `Cross-app`, or `Infra`.
@@ -174,7 +174,7 @@ Before marking a PRD ready for the pipeline to consume, every one of these must 
 - [ ] Every external dependency in `Dependencies` is named (package, PRD path, or URL), not described vaguely.
 - [ ] `Verification Plan` names either test file paths, suite names, or concrete manual steps — not "write some tests".
 
-If any gate fails, keep it in draft/on-hold workflow state and do not offer "Start pipeline" in the kanban.
+If any gate fails, keep it in draft/deferred workflow state and do not offer "Start pipeline" in the kanban.
 
 ## Workflow
 
@@ -197,7 +197,7 @@ If any gate fails, keep it in draft/on-hold workflow state and do not offer "Sta
 
 6. **Draft the PRD body** using the template above, in a scratch buffer. Fill every required section. If you can't fill a section, ask the user — don't hallucinate requirements.
 
-7. **Run the quality gates** against the draft. If any fail, keep the issue in draft/on-hold workflow state and tell the user which gates failed. If they all pass, mark it ready through native project/app state.
+7. **Run the quality gates** against the draft. If any fail, keep the issue in draft/deferred workflow state and tell the user which gates failed. If they all pass, mark it ready through native project/app state.
 
 8. **Create the GitHub issue.** Preferred: use the desktop app's Create PRD modal (which calls the `github:create-issue` IPC handler — the handler wraps `gh issue create` and upserts the cache). Alternative for CLI contexts: `gh issue create --title "<Human Readable Title>" --body-file -` with the PRD markdown piped on stdin.
 
@@ -206,7 +206,7 @@ If any gate fails, keep it in draft/on-hold workflow state and do not offer "Sta
 ### When the user says "plan the X PRD"
 
 1. Fetch the current issue body via the cache (`github_issue_cache.body`) or `gh issue view <N> --json body --jq .body` if the cache may be stale. Read it fully before producing anything.
-2. Verify the issue is ready through native project/app state — never plan a draft/on-hold issue.
+2. Verify the issue is ready through native project/app state — never plan a draft/deferred issue.
 3. Translate directly: Executive Summary → objective, Feature Phase Breakdown → exactly three ordered plan steps, Success Criteria → acceptanceCriteria, Out of Scope → outOfScope, project complexity → estimatedComplexity.
 4. The plan phase owns file changes and step breakdown — do not copy those out of the PRD (there shouldn't be any).
 

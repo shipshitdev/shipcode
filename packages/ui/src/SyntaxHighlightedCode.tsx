@@ -1,7 +1,13 @@
 'use client';
 
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useState } from 'react';
-import { type BundledLanguage, codeToTokens, type ThemedToken } from 'shiki';
+import {
+  type BundledLanguage,
+  createHighlighter,
+  createJavaScriptRegexEngine,
+  type Highlighter,
+  type ThemedToken,
+} from 'shiki';
 import { cn } from '@/lib/utils';
 
 type HighlightToken = ThemedToken;
@@ -43,6 +49,34 @@ const LANGUAGE_BY_FILENAME: Record<string, BundledLanguage> = {
   makefile: 'make',
 };
 
+const HIGHLIGHT_THEME = 'dark-plus';
+
+let highlighterPromise: Promise<Highlighter> | null = null;
+const loadedLanguagePromises = new Map<BundledLanguage, Promise<void>>();
+
+function getSyntaxHighlighter(): Promise<Highlighter> {
+  highlighterPromise ??= createHighlighter({
+    engine: createJavaScriptRegexEngine({ forgiving: true }),
+    langs: [],
+    themes: [HIGHLIGHT_THEME],
+  });
+
+  return highlighterPromise;
+}
+
+async function loadLanguage(language: BundledLanguage): Promise<Highlighter> {
+  const highlighter = await getSyntaxHighlighter();
+  let loadedLanguagePromise = loadedLanguagePromises.get(language);
+
+  if (!loadedLanguagePromise) {
+    loadedLanguagePromise = highlighter.loadLanguage(language).then(() => undefined);
+    loadedLanguagePromises.set(language, loadedLanguagePromise);
+  }
+
+  await loadedLanguagePromise;
+  return highlighter;
+}
+
 function normalizeLanguage(value: string | undefined): BundledLanguage | 'text' {
   if (!value) return 'text';
   const key = value.toLowerCase();
@@ -77,16 +111,22 @@ function useHighlightedTokens(
       };
     }
 
-    codeToTokens(code, {
-      lang: language,
-      theme: 'dark-plus',
-    })
+    loadLanguage(language)
+      .then((highlighter) =>
+        highlighter.codeToTokens(code, {
+          lang: language,
+          theme: HIGHLIGHT_THEME,
+        }),
+      )
       .then((result) => {
         if (!cancelled) {
           setTokens(result.tokens);
         }
       })
-      .catch(() => {
+      .catch((error) => {
+        if (typeof process !== 'undefined' && process.env.NODE_ENV !== 'production') {
+          console.warn('Syntax highlighting failed', error);
+        }
         if (!cancelled) {
           setTokens(null);
         }

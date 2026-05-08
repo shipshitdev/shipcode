@@ -624,9 +624,16 @@ describe('linked PR affordances', () => {
       throw new Error('Expected Executing section header');
     }
 
-    expect(executingHeader.className).toContain('sticky');
-    expect(executingHeader.className).toContain('top-0');
-    expect(executingHeader.className).toContain('bg-agent');
+    const headerRow = executingHeader.parentElement;
+    expect(headerRow?.className).toContain('sticky');
+    expect(headerRow?.className).toContain('top-0');
+    expect(headerRow?.className).toContain(
+      'bg-[color-mix(in_srgb,var(--agent)_18%,var(--bg-secondary))]',
+    );
+    expect(headerRow?.className).not.toContain('backdrop-blur');
+    expect(headerRow?.className).not.toContain('opacity');
+    expect(executingHeader.className).toContain('bg-transparent');
+    expect(executingHeader.className).not.toContain('bg-agent');
     expect(executingHeader.getAttribute('aria-expanded')).toBe('true');
     expect(view.container.textContent).toContain('Executing issue');
 
@@ -787,7 +794,58 @@ describe('linked PR affordances', () => {
     expect(modelBadge.className).toContain('whitespace-nowrap');
     expect(modelBadge.getAttribute('title')).toBe('executor model: GPT-5.4 · medium');
     expect(view.container.querySelector('button[title="Open issue detail"]')).toBeTruthy();
-    expect(view.container.querySelector('.pr-12')).toBeTruthy();
+    expect(view.container.querySelector('.pr-14')).toBeTruthy();
+    view.cleanup();
+  });
+
+  it('reserves enough card header space when branch copy adds a third action icon', () => {
+    const view = renderIntoDom(
+      <DndContext>
+        <DraggableCard
+          issue={makeIssue({
+            id: 'issue-with-branch',
+            issueNumber: 207,
+            title: 'Issue with branch actions',
+            pipelineStatus: 'awaiting_approval',
+            linkedPrNumber: null,
+            linkedPrUrl: null,
+            lastPhaseUpdate: new Date(Date.now() - 90_000).toISOString(),
+          })}
+          branchName="shipcode/issue-207"
+          onClick={vi.fn()}
+          onCopyBranchName={vi.fn()}
+        />
+      </DndContext>,
+    );
+
+    expect(view.container.querySelector('button[title="Open issue detail"]')).toBeTruthy();
+    expect(view.container.querySelector('button[title^="Copy branch name"]')).toBeTruthy();
+    expect(view.container.querySelector('button[title="More actions"]')).toBeTruthy();
+    expect(view.container.querySelector('.pr-20')).toBeTruthy();
+    view.cleanup();
+  });
+
+  it('keeps todo cards tall enough for two-line titles and the phase action row', () => {
+    const view = renderIntoDom(
+      <DndContext>
+        <DraggableCard
+          issue={makeIssue({
+            id: 'issue-todo',
+            issueNumber: 124,
+            title: 'Evaluate Codex app-server as experimental provider transport',
+            pipelineStatus: 'todo',
+            linkedPrNumber: null,
+            linkedPrUrl: null,
+          })}
+          onClick={vi.fn()}
+          onStartPipeline={vi.fn()}
+        />
+      </DndContext>,
+    );
+
+    const card = view.container.querySelector('[data-issue-card-id="issue-todo"]');
+    expect(card?.className).toContain('min-h-[108px]');
+    expect(view.container.textContent).toContain('todo');
     view.cleanup();
   });
 
@@ -823,6 +881,21 @@ describe('linked PR affordances', () => {
     expect(columns[0]?.className).toContain('min-w-[240px]');
     expect(columns[1]?.className).toContain('min-w-[280px]');
     view.cleanup();
+  });
+
+  it('keeps Deferred as the final kanban column after Done', () => {
+    expect(COLUMNS.map((column) => column.key)).toEqual([
+      'todo',
+      'agent',
+      'human',
+      'done',
+      'deferred',
+    ]);
+    expect(COLUMNS.at(-1)).toMatchObject({
+      key: 'deferred',
+      label: 'Deferred',
+      statuses: ['deferred'],
+    });
   });
 
   it('allows compact marketing columns to fit without horizontal scrolling', () => {

@@ -115,6 +115,12 @@ export const COLUMNS: BoardColumn[] = [
       },
     ],
   },
+  {
+    key: 'deferred',
+    label: 'Deferred',
+    droppable: false,
+    statuses: [ISSUE_PIPELINE_STATUS.deferred],
+  },
 ];
 
 export const COLUMN_DOT_CLASS: Record<ColumnKey, string> = {
@@ -122,6 +128,7 @@ export const COLUMN_DOT_CLASS: Record<ColumnKey, string> = {
   agent: 'bg-agent',
   human: 'bg-warning',
   done: 'bg-done',
+  deferred: 'bg-text-muted',
 };
 
 /** Maps GitHub ProjectV2SingleSelectFieldOption color enum → CSS hex. */
@@ -171,6 +178,7 @@ export const LIST_COLUMN_LABEL: Record<ColumnKey, string> = {
   agent: 'In Progress',
   human: 'Needs Attention',
   done: 'Done',
+  deferred: 'Deferred',
 };
 
 export const LIST_COLUMN_DROP_ID: Partial<Record<ColumnKey, string>> = {

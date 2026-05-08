@@ -20,6 +20,7 @@ interface PageOpts {
     isArchived?: boolean;
     contentType?: string;
     issueNumber?: number;
+    repoFullName?: string;
     priorityName?: string | null;
     extraFieldName?: string;
     extraFieldValue?: string;
@@ -33,9 +34,17 @@ function buildPage(opts: PageOpts): string {
     isArchived: n.isArchived ?? false,
     content:
       n.contentType === undefined
-        ? { __typename: 'Issue', number: n.issueNumber ?? 0 }
+        ? {
+            __typename: 'Issue',
+            number: n.issueNumber ?? 0,
+            repository: n.repoFullName ? { nameWithOwner: n.repoFullName } : undefined,
+          }
         : n.contentType === 'Issue'
-          ? { __typename: 'Issue', number: n.issueNumber ?? 0 }
+          ? {
+              __typename: 'Issue',
+              number: n.issueNumber ?? 0,
+              repository: n.repoFullName ? { nameWithOwner: n.repoFullName } : undefined,
+            }
           : { __typename: n.contentType },
     fieldValues: {
       nodes: [
@@ -245,6 +254,28 @@ describe('fetchProjectPriorities', () => {
     const { priorities: out } = await fetchProjectPriorities({ cwd: '/repo', projectUrl: ORG_URL });
     expect(out.size).toBe(1);
     expect(out.get(3)?.rank).toBe('p2');
+  });
+
+  it('filters by repoFullName to avoid cross-repo issue number collisions', async () => {
+    mockExecFileAsync.mockResolvedValueOnce({
+      stdout: buildPage({
+        nodes: [
+          { issueNumber: 50, repoFullName: 'acme/other', priorityName: 'P0' },
+          { issueNumber: 50, repoFullName: 'acme/widgets', priorityName: 'P2' },
+          { issueNumber: 51, repoFullName: 'acme/widgets', priorityName: 'P1' },
+        ],
+      }),
+      stderr: '',
+    });
+
+    const { priorities: out } = await fetchProjectPriorities({
+      cwd: '/repo',
+      projectUrl: ORG_URL,
+      repoFullName: 'acme/widgets',
+    });
+    expect(out.get(50)).toEqual({ rank: 'p2', raw: 'P2' });
+    expect(out.get(51)).toEqual({ rank: 'p1', raw: 'P1' });
+    expect(out.size).toBe(2);
   });
 
   it('returns empty map on GraphQL error response without throwing', async () => {

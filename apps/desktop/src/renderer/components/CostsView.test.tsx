@@ -132,7 +132,7 @@ function makeIssue(): GitHubIssueCacheRecord {
     agentModel: null,
     agentReasoningEffort: null,
     lastActivityAt: null,
-  } as GitHubIssueCacheRecord;
+  } as unknown as GitHubIssueCacheRecord;
 }
 
 describe('CostsView', () => {
@@ -183,7 +183,8 @@ describe('CostsView', () => {
       model: null,
       updatedAt: '',
     });
-    invokeMock.mockImplementation(async (channel: string, args?: { projectId?: string }) => {
+    invokeMock.mockImplementation(async (channel: string, rawArgs?: unknown) => {
+      const args = rawArgs as { projectId?: string } | undefined;
       if (channel === 'costs:get-summary') return makeSummary();
       if (channel === 'costs:list-tasks') return args?.projectId ? [projectTask] : [topTask];
       if (channel === 'costs:count-tasks') return 1;
@@ -216,7 +217,8 @@ describe('CostsView', () => {
   });
 
   it('renders task pagination', async () => {
-    invokeMock.mockImplementation(async (channel: string, args?: { offset?: number }) => {
+    invokeMock.mockImplementation(async (channel: string, rawArgs?: unknown) => {
+      const args = rawArgs as { offset?: number } | undefined;
       if (channel === 'costs:get-summary') return makeSummary();
       if (channel === 'costs:list-tasks') {
         return [

@@ -83,6 +83,7 @@ describe('pipelineLabelForStatus', () => {
   it('returns null for non-agent-loop statuses', () => {
     expect(pipelineLabelForStatus(ISSUE_PIPELINE_STATUS.todo)).toBeNull();
     expect(pipelineLabelForStatus(ISSUE_PIPELINE_STATUS.done)).toBeNull();
+    expect(pipelineLabelForStatus(ISSUE_PIPELINE_STATUS.deferred)).toBeNull();
     expect(pipelineLabelForStatus(ISSUE_PIPELINE_STATUS.completed)).toBeNull();
     expect(pipelineLabelForStatus(ISSUE_PIPELINE_STATUS.awaitingApproval)).toBeNull();
   });
@@ -173,5 +174,9 @@ describe('macroColumnForStatus', () => {
   it('maps done statuses → done', () => {
     expect(macroColumnForStatus(ISSUE_PIPELINE_STATUS.completed)).toBe('done');
     expect(macroColumnForStatus(ISSUE_PIPELINE_STATUS.done)).toBe('done');
+  });
+
+  it('maps deferred → deferred', () => {
+    expect(macroColumnForStatus(ISSUE_PIPELINE_STATUS.deferred)).toBe('deferred');
   });
 });

@@ -208,6 +208,7 @@ export function macroColumnForStatus(status: IssuePipelineStatus): GhMacroColumn
   if (status === ISSUE_PIPELINE_STATUS.todo) return 'todo';
   if (AGENT_LOOP_STATUSES.has(status)) return 'in_progress';
   if (HUMAN_STATUSES.has(status)) return 'human_review';
+  if (status === ISSUE_PIPELINE_STATUS.deferred) return 'deferred';
   if (DONE_STATUSES.has(status)) return 'done';
   // Fallback — shouldn't happen with typed status
   return 'todo';
@@ -216,7 +217,7 @@ export function macroColumnForStatus(status: IssuePipelineStatus): GhMacroColumn
 /**
  * Maps an IssuePipelineStatus to the `shipcode:pipeline:<state>` label that should be
  * set on the GitHub issue, or null if no pipeline label applies (todo, done,
- * awaiting_approval, completed).
+ * deferred, awaiting_approval, completed).
  */
 export function pipelineLabelForStatus(
   status: IssuePipelineStatus,

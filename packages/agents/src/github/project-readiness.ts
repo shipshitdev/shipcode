@@ -16,7 +16,8 @@ const execFileAsync = promisify(execFile);
 const TODO_PATTERN = /^(todo|to[- ]?do|backlog|open|triage)$/i;
 const IN_PROGRESS_PATTERN = /^(in[- ]?progress|doing|active|agent[- ]?loop|working|started)$/i;
 const HUMAN_REVIEW_PATTERN =
-  /^(human[- ]?review|review|needs[- ]?(human|review|attention)|blocked|on[- ]?hold|waiting)$/i;
+  /^(human[- ]?review|review|needs[- ]?(human|review|attention)|waiting)$/i;
+const DEFERRED_PATTERN = /^(deferred|postponed|later|someday)$/i;
 const DONE_PATTERN = /^(done|closed|completed|shipped|resolved|merged)$/i;
 
 interface ProjectFieldNode {
@@ -258,7 +259,7 @@ function detectStatusMapping(statusField: ProjectFieldNode | undefined): {
   if (!statusField || statusField.__typename !== 'ProjectV2SingleSelectField') {
     return {
       mapping: null,
-      missing: ['Todo', 'In Progress', 'Human Review or On hold', 'Done'],
+      missing: ['Todo', 'In Progress', 'Human Review', 'Done', 'Deferred'],
       options: [],
     };
   }
@@ -267,6 +268,7 @@ function detectStatusMapping(statusField: ProjectFieldNode | undefined): {
   let todo: GhStatusOption | null = null;
   let inProgress: GhStatusOption | null = null;
   let humanReview: GhStatusOption | null = null;
+  let deferred: GhStatusOption | null = null;
   let done: GhStatusOption | null = null;
 
   for (const option of options) {
@@ -276,6 +278,8 @@ function detectStatusMapping(statusField: ProjectFieldNode | undefined): {
       inProgress = { name: option, color: colorOf(statusField, option) };
     } else if (!humanReview && HUMAN_REVIEW_PATTERN.test(option)) {
       humanReview = { name: option, color: colorOf(statusField, option) };
+    } else if (!deferred && DEFERRED_PATTERN.test(option)) {
+      deferred = { name: option, color: colorOf(statusField, option) };
     } else if (!done && DONE_PATTERN.test(option)) {
       done = { name: option, color: colorOf(statusField, option) };
     }
@@ -284,9 +288,10 @@ function detectStatusMapping(statusField: ProjectFieldNode | undefined): {
   const missing: string[] = [];
   if (!todo) missing.push('Todo');
   if (!inProgress) missing.push('In Progress');
-  if (!humanReview) missing.push('Human Review or On hold');
+  if (!humanReview) missing.push('Human Review');
   if (!done) missing.push('Done');
-  return { mapping: { todo, inProgress, humanReview, done }, missing, options };
+  if (!deferred) missing.push('Deferred');
+  return { mapping: { todo, inProgress, humanReview, deferred, done }, missing, options };
 }
 
 function addFieldReadinessItems(

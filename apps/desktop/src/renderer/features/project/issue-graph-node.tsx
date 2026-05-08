@@ -18,6 +18,7 @@ const STATUS_STYLES: Record<IssuePipelineStatus, string> = {
   shipping: 'border-success/60 bg-elevated',
   completed: 'border-success/60 bg-elevated',
   done: 'border-success/60 bg-elevated',
+  deferred: 'border-border-strong bg-elevated',
   failed: 'border-danger/60 bg-elevated',
 };
 

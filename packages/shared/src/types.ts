@@ -1398,6 +1398,7 @@ export const ISSUE_PIPELINE_STATUS = {
   shipping: PIPELINE_PHASE.shipping,
   completed: PIPELINE_PHASE.completed,
   done: 'done',
+  deferred: 'deferred',
   failed: PIPELINE_PHASE.failed,
 } as const;
 
@@ -1407,7 +1408,7 @@ export type IssuePipelineStatus =
 // === GitHub Projects v2 Status Sync Types ===
 
 /** ShipCode macro columns that map to GH Projects v2 Status field options. */
-export type GhMacroColumn = 'todo' | 'in_progress' | 'human_review' | 'done';
+export type GhMacroColumn = 'todo' | 'in_progress' | 'human_review' | 'deferred' | 'done';
 
 /** A single GitHub Projects v2 Status field option with its display color. */
 export interface GhStatusOption {
@@ -1425,6 +1426,7 @@ export interface GhStatusMapping {
   todo: GhStatusOption | null;
   inProgress: GhStatusOption | null;
   humanReview: GhStatusOption | null;
+  deferred?: GhStatusOption | null;
   done: GhStatusOption | null;
 }
 

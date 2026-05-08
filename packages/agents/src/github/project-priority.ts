@@ -14,6 +14,13 @@ export interface IssuePriority {
 export interface FetchProjectPrioritiesOptions {
   cwd: string;
   projectUrl: string;
+  /**
+   * Filter returned priorities to issues belonging to this repo only.
+   * Format: `owner/repo` (e.g. `"shipshitdev/shipcode"`).
+   * GH Projects v2 boards can contain issues from multiple repos, so issue
+   * numbers alone are not globally unique.
+   */
+  repoFullName?: string;
   /** Hard cap on pages (defensive against runaway loops). Default 50 (5000 items). */
   maxPages?: number;
   /** Optional structured warn callback so the caller can route to its logger. */
@@ -32,7 +39,11 @@ interface FieldValueNode {
 
 interface ProjectItemNode {
   isArchived?: boolean;
-  content?: { __typename?: string; number?: number };
+  content?: {
+    __typename?: string;
+    number?: number;
+    repository?: { nameWithOwner?: string };
+  };
   fieldValues?: { nodes?: FieldValueNode[] };
 }
 
@@ -82,7 +93,10 @@ const ORG_QUERY = `
             isArchived
             content {
               __typename
-              ... on Issue { number }
+              ... on Issue {
+                number
+                repository { nameWithOwner }
+              }
             }
             fieldValues(first: 50) {
               nodes {
@@ -110,7 +124,10 @@ const USER_QUERY = `
             isArchived
             content {
               __typename
-              ... on Issue { number }
+              ... on Issue {
+                number
+                repository { nameWithOwner }
+              }
             }
             fieldValues(first: 50) {
               nodes {
@@ -158,6 +175,7 @@ export async function fetchProjectPriorities(
   const isOrg = ownerType === 'orgs';
   const query = isOrg ? ORG_QUERY : USER_QUERY;
   const maxPages = opts.maxPages ?? 50;
+  const repoFilter = opts.repoFullName?.toLowerCase() ?? null;
 
   let cursor: string | null = null;
   for (let page = 0; page < maxPages; page++) {
@@ -226,6 +244,10 @@ export async function fetchProjectPriorities(
       if (item.content?.__typename !== 'Issue') continue;
       const issueNumber = item.content?.number;
       if (typeof issueNumber !== 'number') continue;
+      if (repoFilter) {
+        const itemRepo = item.content?.repository?.nameWithOwner?.toLowerCase();
+        if (itemRepo && itemRepo !== repoFilter) continue;
+      }
       if (item.isArchived) {
         archivedIssueNumbers.add(issueNumber);
         continue;

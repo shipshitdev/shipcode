@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb } from '../test-helpers';
 import { GitHubIssueQueries } from './github-issues';
+import { PlanQueries } from './plans';
 import { ProjectQueries } from './projects';
 import { ThreadQueries } from './threads';
 
@@ -485,6 +486,29 @@ describe('GitHubIssueQueries', () => {
 
       expect(issues.resetToTodo(record.id)).toBe(false);
       expect(issues.getByNumber(projectId, 1)?.pipelineStatus).toBe('completed');
+    });
+
+    it('resetStaleAwaitingApproval() clears approval rows without a generated plan', () => {
+      const noThread = issues.upsert(makeIssue({ issueNumber: 10 }));
+      issues.updatePipelineStatus(noThread.id, 'awaiting_approval');
+
+      const threads = new ThreadQueries(db);
+      const threadWithoutPlan = threads.create(projectId, 'prompt', 'title');
+      const withoutPlan = issues.upsert(makeIssue({ issueNumber: 11 }));
+      issues.linkThread(withoutPlan.id, threadWithoutPlan.id);
+      issues.updatePipelineStatus(withoutPlan.id, 'awaiting_approval');
+
+      const threadWithPlan = threads.create(projectId, 'prompt', 'title');
+      const plans = new PlanQueries(db);
+      plans.create(threadWithPlan.id, 'raw', null, 1);
+      const withPlan = issues.upsert(makeIssue({ issueNumber: 12 }));
+      issues.linkThread(withPlan.id, threadWithPlan.id);
+      issues.updatePipelineStatus(withPlan.id, 'awaiting_approval');
+
+      expect(issues.resetStaleAwaitingApproval(projectId)).toBe(2);
+      expect(issues.getByNumber(projectId, 10)?.pipelineStatus).toBe('todo');
+      expect(issues.getByNumber(projectId, 11)?.pipelineStatus).toBe('todo');
+      expect(issues.getByNumber(projectId, 12)?.pipelineStatus).toBe('awaiting_approval');
     });
   });
 

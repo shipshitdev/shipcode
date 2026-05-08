@@ -34,7 +34,7 @@ function projectResponse(opts: {
     {
       __typename: 'ProjectV2SingleSelectField',
       name: 'Status',
-      options: ['Todo', 'In Progress', 'Human Review', 'Done'],
+      options: ['Todo', 'In Progress', 'Human Review', 'Done', 'Deferred'],
     },
     {
       __typename: 'ProjectV2SingleSelectField',
@@ -113,6 +113,7 @@ describe('checkProjectReadiness', () => {
       'ready',
     ]);
     expect(report.statusMapping?.humanReview).toEqual({ name: 'Human Review', color: null });
+    expect(report.statusMapping?.deferred).toEqual({ name: 'Deferred', color: null });
   });
 
   it('creates missing ShipCode labels before reporting readiness', async () => {
@@ -310,7 +311,7 @@ describe('checkProjectReadiness', () => {
             {
               __typename: 'ProjectV2SingleSelectField',
               name: 'Status',
-              options: ['Backlog', 'Doing', 'On Hold', 'Merged'],
+              options: ['Backlog', 'Doing', 'Review', 'Merged', 'Deferred'],
             },
             {
               __typename: 'ProjectV2SingleSelectField',
@@ -341,7 +342,8 @@ describe('checkProjectReadiness', () => {
     expect(report.ok).toBe(true);
     expect(report.statusMapping?.todo).toEqual({ name: 'Backlog', color: null });
     expect(report.statusMapping?.inProgress).toEqual({ name: 'Doing', color: 'BLUE' });
-    expect(report.statusMapping?.humanReview).toEqual({ name: 'On Hold', color: null });
+    expect(report.statusMapping?.humanReview).toEqual({ name: 'Review', color: null });
+    expect(report.statusMapping?.deferred).toEqual({ name: 'Deferred', color: null });
     expect(report.statusMapping?.done).toEqual({ name: 'Merged', color: null });
   });
 
@@ -392,7 +394,7 @@ describe('checkProjectReadiness', () => {
     expect(wrongShapeReport.ok).toBe(false);
     expect(
       wrongShapeReport.items.find((item) => item.key === 'project-field:status')?.missing,
-    ).toEqual(['Todo', 'In Progress', 'Human Review or On hold', 'Done']);
+    ).toEqual(['Todo', 'In Progress', 'Human Review', 'Done', 'Deferred']);
     expect(
       wrongShapeReport.items.find((item) => item.key === 'project-field:priority')?.message,
     ).toBe('"Priority" must be a single-select field.');

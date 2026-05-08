@@ -11,6 +11,7 @@ import { LoadingButtonContent } from '@/LoadingButtonContent';
 import { PageHeader } from '@/PageHeader';
 import { Button } from '@/primitives/button';
 import { SideBySideDiffViewer } from '@/SideBySideDiffViewer';
+import { SyntaxHighlightedCode } from '@/SyntaxHighlightedCode';
 
 function renderIntoDom(element: ReactElement) {
   const container = document.createElement('div');
@@ -36,6 +37,20 @@ function renderIntoDom(element: ReactElement) {
       document.body.innerHTML = '';
     },
   };
+}
+
+async function waitForHighlightedSpans(container: HTMLElement) {
+  const started = Date.now();
+
+  while (Date.now() - started < 2_000) {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+
+    if (container.querySelector('span[style*="color"]')) return;
+  }
+
+  throw new Error(`Expected syntax-highlighted token spans: ${container.innerHTML}`);
 }
 
 const diffRecords: DiffRecord[] = [
@@ -137,6 +152,25 @@ const worktrees: GitWorktreeSummary[] = [
 ];
 
 describe('UI component regression coverage', () => {
+  it('renders syntax-highlighted source tokens with inline colors', async () => {
+    const view = renderIntoDom(
+      <SyntaxHighlightedCode code={'{\n  "name": "@shipcode/agents"\n}'} filePath="package.json" />,
+    );
+
+    await waitForHighlightedSpans(view.container);
+
+    const coloredTokens = Array.from(view.container.querySelectorAll('span')).filter((span) =>
+      span.getAttribute('style')?.includes('color:'),
+    );
+
+    expect(coloredTokens.some((span) => span.textContent === '"name"')).toBe(true);
+    expect(new Set(coloredTokens.map((span) => span.getAttribute('style'))).size).toBeGreaterThan(
+      1,
+    );
+
+    view.cleanup();
+  });
+
   it('renders diff states, selection, and empty fallback', () => {
     const onFileSelect = vi.fn();
     const view = renderIntoDom(

@@ -81,6 +81,15 @@ brew tap shipshitdev/tap
 brew install --cask shipcode
 ```
 
+> macOS warning: the v0.1.0 desktop build is unsigned and not notarized yet.
+> If macOS blocks the app after Homebrew installs it, run:
+>
+> ```bash
+> xattr -cr "/Applications/ShipCode.app"
+> ```
+>
+> This is a temporary pre-release workaround until ShipCode ships with Developer ID signing and notarization.
+
 **CLI (Node.js >= 22.5.0):**
 
 ```bash

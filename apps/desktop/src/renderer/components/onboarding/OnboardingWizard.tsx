@@ -23,7 +23,7 @@ export function StepGitHubReadiness() {
         {[
           ['Labels', 'shipcode:* only'],
           ['Issue type', 'Feature'],
-          ['Status', 'Todo, In Progress, Human Review or On hold, Done'],
+          ['Status', 'Todo, In Progress, Human Review, Done, Deferred'],
           ['Priority', 'P0, P1, P2, P3'],
           ['Complexity', 'Low, Medium, High'],
           ['Blast radius', 'Contained, Cross-Package, Cross-App, Infra'],
@@ -37,9 +37,9 @@ export function StepGitHubReadiness() {
           </div>
         ))}
       </div>
-      <div className="mt-4 rounded-md border border-border bg-secondary/30 px-3 py-2 text-[12px] text-muted">
+      <p className="mt-4 text-[12px] italic text-muted">
         Product taxonomy should be an Area or Component field, not repo labels.
-      </div>
+      </p>
     </div>
   );
 }

@@ -26,6 +26,7 @@ import {
   isRealGithubIssueNumber,
   PIPELINE_PHASE,
   parseGithubProjectUrl,
+  parseGithubRemote,
   SHIPCODE_DEFAULT_LABELS,
 } from '@shipcode/shared';
 import log, { logEvent } from '../logger.service';
@@ -189,6 +190,19 @@ export function registerGitHubHandlers({
         }
 
         const ghCli = new GhCli(project.path);
+        const githubRemoteRef = parseGithubRemote(project.gitRemote);
+        let githubRepoFullName =
+          project.githubRepoFullName ??
+          (githubRemoteRef ? `${githubRemoteRef.owner}/${githubRemoteRef.repo}` : null);
+        if (!project.githubRepoFullName) {
+          try {
+            const metadata = await ghCli.getRepoMetadata();
+            githubRepoFullName = metadata.githubRepoFullName;
+            queries.projects.updateGithubRepoIdentity(project.id, metadata);
+          } catch (err) {
+            log.warn('[github:refresh-issues] repo identity backfill failed', err);
+          }
+        }
         const issues = await ghCli.listAllIssues();
         logEvent('github:refresh-issues:listAllIssues', {
           projectId,
@@ -232,6 +246,16 @@ export function registerGitHubHandlers({
           );
         }
 
+        const staleAwaitingApprovalCount = force
+          ? queries.githubIssues.resetStaleAwaitingApproval(projectId)
+          : 0;
+        if (staleAwaitingApprovalCount > 0) {
+          logEvent('github:refresh-issues:stale-awaiting-approval-reset', {
+            projectId,
+            count: staleAwaitingApprovalCount,
+          });
+        }
+
         const cachedAfterIssueSync = queries.githubIssues.list(projectId);
         const issuesByNumber = new Map(
           cachedAfterIssueSync.map(
@@ -248,6 +272,7 @@ export function registerGitHubHandlers({
             const priorityResult = await fetchProjectPriorities({
               cwd: project.path,
               projectUrl: project.githubProjectUrl,
+              repoFullName: githubRepoFullName ?? undefined,
               onWarn: (msg, err) => log.warn(msg, err),
             });
             archivedIssueNumbers = priorityResult.archivedIssueNumbers;
@@ -275,13 +300,14 @@ export function registerGitHubHandlers({
               const statuses = await fetchProjectStatuses({
                 cwd: project.path,
                 projectUrl: project.githubProjectUrl,
-                repoFullName: project.githubRepoFullName ?? undefined,
+                repoFullName: githubRepoFullName ?? undefined,
                 onWarn: (msg, err) => log.warn(msg, err),
               });
               const ACTIVE_PIPELINE_STATUSES = new Set<IssuePipelineStatus>([
                 ISSUE_PIPELINE_STATUS.queued,
                 ISSUE_PIPELINE_STATUS.planning,
                 ISSUE_PIPELINE_STATUS.clarifying,
+                ISSUE_PIPELINE_STATUS.awaitingApproval,
                 ISSUE_PIPELINE_STATUS.reviewing,
                 ISSUE_PIPELINE_STATUS.revising,
                 ISSUE_PIPELINE_STATUS.executing,
@@ -301,8 +327,8 @@ export function registerGitHubHandlers({
                 let targetStatus: IssuePipelineStatus | null = null;
                 if (macroColumn === 'todo') targetStatus = ISSUE_PIPELINE_STATUS.todo;
                 else if (macroColumn === 'in_progress') targetStatus = ISSUE_PIPELINE_STATUS.queued;
-                else if (macroColumn === 'human_review')
-                  targetStatus = ISSUE_PIPELINE_STATUS.awaitingApproval;
+                else if (macroColumn === 'human_review') targetStatus = null;
+                else if (macroColumn === 'deferred') targetStatus = ISSUE_PIPELINE_STATUS.deferred;
                 else if (macroColumn === 'done') targetStatus = ISSUE_PIPELINE_STATUS.done;
 
                 if (targetStatus && targetStatus !== cachedIssue.pipelineStatus) {
@@ -826,7 +852,11 @@ export function registerGitHubHandlers({
       const project = queries.projects.getById(projectId);
       if (!project) throw new Error(`Project ${projectId} not found`);
 
-      const parsed = parseGithubProjectUrl(project.githubProjectUrl);
+      const projectUrl = project.githubProjectUrl;
+      if (!projectUrl) {
+        throw new Error('No GitHub Projects v2 URL set. Paste a board URL above and save first.');
+      }
+      const parsed = parseGithubProjectUrl(projectUrl);
       if (!parsed) {
         throw new Error('No GitHub Projects v2 URL set. Paste a board URL above and save first.');
       }
@@ -835,6 +865,19 @@ export function registerGitHubHandlers({
         .list(projectId)
         .filter((i) => !i.isQuickMode && isRealGithubIssueNumber(i.issueNumber));
       const ghCli = new GhCli(project.path);
+      const githubRemoteRef = parseGithubRemote(project.gitRemote);
+      let githubRepoFullName =
+        project.githubRepoFullName ??
+        (githubRemoteRef ? `${githubRemoteRef.owner}/${githubRemoteRef.repo}` : null);
+      if (!project.githubRepoFullName) {
+        try {
+          const metadata = await ghCli.getRepoMetadata();
+          githubRepoFullName = metadata.githubRepoFullName;
+          queries.projects.updateGithubRepoIdentity(project.id, metadata);
+        } catch (err) {
+          log.warn('[github:sync-to-project-board] repo identity backfill failed', err);
+        }
+      }
 
       let attached = 0;
       let alreadyPresent = 0;
@@ -861,6 +904,35 @@ export function registerGitHubHandlers({
           errors.push(`#${issue.issueNumber}: ${clampError(err)}`);
           log.warn(`[github:sync-to-project-board] #${issue.issueNumber} failed:`, err);
         }
+      }
+
+      try {
+        const priorityResult = await fetchProjectPriorities({
+          cwd: project.path,
+          projectUrl,
+          repoFullName: githubRepoFullName ?? undefined,
+          onWarn: (msg, err) => log.warn(msg, err),
+        });
+        const now = new Date().toISOString();
+        for (const issue of issues) {
+          const p = priorityResult.priorities.get(issue.issueNumber) ?? {
+            rank: null,
+            raw: null,
+          };
+          queries.githubIssues.setPriority({
+            id: issue.id,
+            rank: p.rank,
+            raw: p.raw,
+            fetchedAt: now,
+          });
+        }
+        const refreshedIssues = queries.githubIssues.list(projectId);
+        mainWindow.webContents.send('github:issues-updated', {
+          projectId,
+          issues: refreshedIssues,
+        });
+      } catch (err) {
+        log.warn('[github:sync-to-project-board] priority sync failed', err);
       }
 
       log.info(

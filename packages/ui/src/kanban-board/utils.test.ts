@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   compareIssues,
   isApprovedAwaitingExecutionIssue,
+  isOrphanedAwaitingApprovalIssue,
   issueMatchesColumn,
   issueMatchesSection,
   resolveIssueApprovalBadge,
@@ -400,9 +401,24 @@ describe('resolveIssueRevisionBadge', () => {
 });
 
 describe('approved-awaiting-execution helpers', () => {
+  it('routes awaiting-approval issues without a thread back to todo presentation', () => {
+    const issue = makeIssue(51, 'Orphaned approval');
+    issue.pipelineStatus = 'awaiting_approval';
+
+    expect(isOrphanedAwaitingApprovalIssue(issue)).toBe(true);
+    expect(issueMatchesColumn(issue, { key: 'todo', statuses: ['todo'] })).toBe(true);
+    expect(issueMatchesColumn(issue, { key: 'human', statuses: ['awaiting_approval'] })).toBe(
+      false,
+    );
+    expect(issueMatchesSection(issue, { key: 'awaiting', statuses: ['awaiting_approval'] })).toBe(
+      false,
+    );
+  });
+
   it('flags approved awaiting-approval issues as execution-slot waiters', () => {
     const issue = makeIssue(52, 'Waiting for execution');
     issue.pipelineStatus = 'awaiting_approval';
+    issue.threadId = 'thread-52';
 
     expect(isApprovedAwaitingExecutionIssue(issue, new Set([issue.id]))).toBe(true);
     expect(isApprovedAwaitingExecutionIssue(issue, new Set())).toBe(false);
@@ -411,6 +427,7 @@ describe('approved-awaiting-execution helpers', () => {
   it('routes approved waiters to the agent column and waiting-execution section', () => {
     const issue = makeIssue(53, 'Approved waiter');
     issue.pipelineStatus = 'awaiting_approval';
+    issue.threadId = 'thread-53';
     const approvedIds = new Set([issue.id]);
 
     expect(issueMatchesColumn(issue, { key: 'agent', statuses: ['queued'] }, approvedIds)).toBe(

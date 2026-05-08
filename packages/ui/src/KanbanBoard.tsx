@@ -329,9 +329,7 @@ export function KanbanBoard({
         COLUMNS.filter((column) => !column.sections).map((column) => [
           column.key,
           visibleIssues.filter((issue) =>
-            approvedAwaitingExecutionIssueIds?.has(issue.id)
-              ? column.key === 'agent'
-              : column.statuses.includes(issue.pipelineStatus),
+            issueMatchesColumn(issue, column, approvedAwaitingExecutionIssueIds),
           ),
         ]),
       ),

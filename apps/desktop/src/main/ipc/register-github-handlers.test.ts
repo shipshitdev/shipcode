@@ -11,18 +11,25 @@ vi.mock('../logger.service', () => ({
   logEvent: vi.fn(),
 }));
 
-const { closeIssueMock, reopenIssueMock, listAllIssuesMock, fetchProjectPrioritiesMock } =
-  vi.hoisted(() => ({
-    closeIssueMock: vi.fn(),
-    reopenIssueMock: vi.fn(),
-    listAllIssuesMock: vi.fn(async () => [] as Array<unknown>),
-    fetchProjectPrioritiesMock: vi.fn(),
-  }));
+const {
+  closeIssueMock,
+  getRepoMetadataMock,
+  reopenIssueMock,
+  listAllIssuesMock,
+  fetchProjectPrioritiesMock,
+} = vi.hoisted(() => ({
+  closeIssueMock: vi.fn(),
+  getRepoMetadataMock: vi.fn(),
+  reopenIssueMock: vi.fn(),
+  listAllIssuesMock: vi.fn(async () => [] as Array<unknown>),
+  fetchProjectPrioritiesMock: vi.fn(),
+}));
 
 vi.mock('@shipcode/agents', async () => {
   const actual = await vi.importActual<typeof import('@shipcode/agents')>('@shipcode/agents');
   class MockGhCli {
     closeIssue = closeIssueMock;
+    getRepoMetadata = getRepoMetadataMock;
     reopenIssue = reopenIssueMock;
     listAllIssues = listAllIssuesMock;
     archiveProjectItems = vi.fn(async () => undefined);
@@ -148,6 +155,11 @@ describe('registerGitHubHandlers', () => {
     handlers.clear();
     vi.clearAllMocks();
     closeIssueMock.mockReset();
+    getRepoMetadataMock.mockReset();
+    getRepoMetadataMock.mockResolvedValue({
+      githubRepoId: 'repo-1',
+      githubRepoFullName: 'acme/repo',
+    });
     reopenIssueMock.mockReset();
     listAllIssuesMock.mockReset();
     listAllIssuesMock.mockImplementation(async () => []);
@@ -168,6 +180,7 @@ describe('registerGitHubHandlers', () => {
       linkThread: vi.fn(),
       list: vi.fn(() => listResult),
       reconcileCompletedFromEvidence: vi.fn(),
+      resetStaleAwaitingApproval: vi.fn(() => 0),
       runInTransaction: vi.fn((fn: () => unknown) => fn()),
       ...overrides,
     };
@@ -524,7 +537,10 @@ describe('registerGitHubHandlers', () => {
     function buildQueries(project: typeof projectWithBoard | typeof projectWithoutBoard) {
       const cachedAfterUpsert = [{ ...baseIssue, fetchedAt: new Date().toISOString() }];
       return {
-        projects: { getById: vi.fn(() => project) },
+        projects: {
+          getById: vi.fn(() => project),
+          updateGithubRepoIdentity: vi.fn(),
+        },
         githubIssues: buildGithubIssuesQueries({
           list: vi
             .fn()

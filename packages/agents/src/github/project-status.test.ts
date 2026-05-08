@@ -22,6 +22,7 @@ const DEFAULT_MAPPING: GhStatusMapping = {
   todo: { name: 'Todo', color: null },
   inProgress: { name: 'In Progress', color: null },
   humanReview: { name: 'Human Review', color: null },
+  deferred: { name: 'Deferred', color: null },
   done: { name: 'Done', color: null },
 };
 
@@ -137,6 +138,7 @@ describe('normalizeStatusOption', () => {
     expect(normalizeStatusOption('Todo', DEFAULT_MAPPING).macroColumn).toBe('todo');
     expect(normalizeStatusOption('In Progress', DEFAULT_MAPPING).macroColumn).toBe('in_progress');
     expect(normalizeStatusOption('Human Review', DEFAULT_MAPPING).macroColumn).toBe('human_review');
+    expect(normalizeStatusOption('Deferred', DEFAULT_MAPPING).macroColumn).toBe('deferred');
     expect(normalizeStatusOption('Done', DEFAULT_MAPPING).macroColumn).toBe('done');
   });
 
@@ -399,10 +401,10 @@ describe('validateProjectStatusField', () => {
     vi.clearAllMocks();
   });
 
-  it('returns ok=true with full mapping when all 4 macro columns detected', async () => {
+  it('returns ok=true with full mapping when all macro columns detected', async () => {
     mockExecFileAsync.mockResolvedValueOnce({
       stdout: buildFieldsPage({
-        statusOptions: ['Todo', 'In Progress', 'Human Review', 'Done'],
+        statusOptions: ['Todo', 'In Progress', 'Human Review', 'Done', 'Deferred'],
       }),
       stderr: '',
     });
@@ -417,14 +419,21 @@ describe('validateProjectStatusField', () => {
       inProgress: { name: 'In Progress', color: null },
       humanReview: { name: 'Human Review', color: null },
       done: { name: 'Done', color: null },
+      deferred: { name: 'Deferred', color: null },
     });
-    expect(result.availableOptions).toEqual(['Todo', 'In Progress', 'Human Review', 'Done']);
+    expect(result.availableOptions).toEqual([
+      'Todo',
+      'In Progress',
+      'Human Review',
+      'Done',
+      'Deferred',
+    ]);
   });
 
   it('detects alternative option names', async () => {
     mockExecFileAsync.mockResolvedValueOnce({
       stdout: buildFieldsPage({
-        statusOptions: ['Backlog', 'Active', 'Review', 'Shipped'],
+        statusOptions: ['Backlog', 'Active', 'Review', 'Shipped', 'Later'],
       }),
       stderr: '',
     });
@@ -439,6 +448,7 @@ describe('validateProjectStatusField', () => {
       inProgress: { name: 'Active', color: null },
       humanReview: { name: 'Review', color: null },
       done: { name: 'Shipped', color: null },
+      deferred: { name: 'Later', color: null },
     });
   });
 
@@ -459,7 +469,7 @@ describe('validateProjectStatusField', () => {
   it('returns ok=false with partial mapping when some columns missing', async () => {
     mockExecFileAsync.mockResolvedValueOnce({
       stdout: buildFieldsPage({
-        statusOptions: ['Todo', 'Done', 'On Hold'],
+        statusOptions: ['Todo', 'Done', 'Deferred'],
       }),
       stderr: '',
     });
@@ -471,6 +481,7 @@ describe('validateProjectStatusField', () => {
     expect(result.ok).toBe(false);
     expect(result.mapping?.todo).toEqual({ name: 'Todo', color: null });
     expect(result.mapping?.done).toEqual({ name: 'Done', color: null });
+    expect(result.mapping?.deferred).toEqual({ name: 'Deferred', color: null });
     expect(result.mapping?.inProgress).toBeNull();
     expect(result.reason).toContain('inProgress');
   });
@@ -495,10 +506,10 @@ describe('validateProjectStatusField', () => {
     expect(result.reason).toContain('unparseable');
   });
 
-  it('matches "Codex Review" as human_review and "On Hold" as human_review fallback', async () => {
+  it('matches "Codex Review" as human_review', async () => {
     mockExecFileAsync.mockResolvedValueOnce({
       stdout: buildFieldsPage({
-        statusOptions: ['Todo', 'In Progress', 'Codex Review', 'Done'],
+        statusOptions: ['Todo', 'In Progress', 'Codex Review', 'Done', 'Deferred'],
       }),
       stderr: '',
     });
@@ -514,8 +525,8 @@ describe('validateProjectStatusField', () => {
   it('captures color enum from GitHub status options', async () => {
     mockExecFileAsync.mockResolvedValueOnce({
       stdout: buildFieldsPage({
-        statusOptions: ['Todo', 'In Progress', 'Human Review', 'Done'],
-        statusColors: ['GREEN', 'YELLOW', 'ORANGE', 'PURPLE'],
+        statusOptions: ['Todo', 'In Progress', 'Human Review', 'Done', 'Deferred'],
+        statusColors: ['GREEN', 'YELLOW', 'ORANGE', 'PURPLE', 'GRAY'],
       }),
       stderr: '',
     });
@@ -530,6 +541,7 @@ describe('validateProjectStatusField', () => {
       inProgress: { name: 'In Progress', color: 'YELLOW' },
       humanReview: { name: 'Human Review', color: 'ORANGE' },
       done: { name: 'Done', color: 'PURPLE' },
+      deferred: { name: 'Deferred', color: 'GRAY' },
     });
   });
 });

@@ -27,12 +27,15 @@ import {
 } from './utils';
 
 const SECTION_HEADER_CLASS: Record<RowTone, string> = {
-  default: 'border-border/60 bg-secondary/95 text-secondary',
-  success: 'border-success/20 bg-success/[0.08] text-success',
-  done: 'border-done/20 bg-done/[0.08] text-done',
-  agent: 'border-agent/20 bg-agent/[0.08] text-agent',
-  danger: 'border-danger/20 bg-danger/[0.08] text-danger',
-  warning: 'border-warning/20 bg-warning/[0.08] text-warning',
+  default: 'border-border/60 bg-secondary text-secondary',
+  success:
+    'border-success/20 bg-[color-mix(in_srgb,var(--success)_18%,var(--bg-secondary))] text-success',
+  done: 'border-done/20 bg-[color-mix(in_srgb,var(--done)_18%,var(--bg-secondary))] text-done',
+  agent: 'border-agent/20 bg-[color-mix(in_srgb,var(--agent)_18%,var(--bg-secondary))] text-agent',
+  danger:
+    'border-danger/20 bg-[color-mix(in_srgb,var(--danger)_18%,var(--bg-secondary))] text-danger',
+  warning:
+    'border-warning/20 bg-[color-mix(in_srgb,var(--warning)_18%,var(--bg-secondary))] text-warning',
 };
 
 const SECTION_COUNT_CLASS: Record<RowTone, string> = {
@@ -283,11 +286,10 @@ function SectionBlock({
     >
       <div
         className={cn(
-          'sticky top-0 z-10 flex w-full items-center justify-between gap-2 border-b border-transparent px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide backdrop-blur supports-[backdrop-filter]:bg-secondary/85',
+          'sticky top-0 z-10 flex w-full items-center justify-between gap-2 border-b border-transparent px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide',
           'transition-colors',
-          compact ? 'bg-secondary/95 text-secondary' : SECTION_HEADER_CLASS[tone],
-          empty && 'opacity-60',
-          section.droppable && isOver && 'border-accent/50 bg-tertiary/95',
+          compact ? 'bg-secondary text-secondary' : SECTION_HEADER_CLASS[tone],
+          section.droppable && isOver && 'border-accent/50 bg-tertiary text-primary',
         )}
       >
         <Button
@@ -295,8 +297,8 @@ function SectionBlock({
           variant="ghost"
           aria-expanded={!collapsed}
           className={cn(
-            'sticky top-0 flex min-w-0 flex-1 items-center gap-1.5 p-0 text-left text-[10px] font-semibold uppercase tracking-wide hover:bg-transparent',
-            compact ? 'bg-transparent text-current' : SECTION_HEADER_CLASS[tone],
+            'flex min-w-0 flex-1 items-center gap-1.5 bg-transparent p-0 text-left text-[10px] font-semibold uppercase tracking-wide text-current hover:bg-transparent hover:text-current',
+            empty && 'text-current/70',
           )}
           onClick={onToggle}
         >

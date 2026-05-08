@@ -1,3 +1,5 @@
 {
+  "buildCommand": "cd ../.. && bun run sync:docs && bun run --filter @shipcode/web build",
+  "installCommand": "cd ../.. && bun install",
   "outputDirectory": "out"
 }

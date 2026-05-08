@@ -63,6 +63,9 @@ export function normalizeStatusOption(
   if (mapping.humanReview?.name && lower === mapping.humanReview.name.toLowerCase()) {
     return { macroColumn: 'human_review', raw: trimmed };
   }
+  if (mapping.deferred?.name && lower === mapping.deferred.name.toLowerCase()) {
+    return { macroColumn: 'deferred', raw: trimmed };
+  }
   if (mapping.done?.name && lower === mapping.done.name.toLowerCase()) {
     return { macroColumn: 'done', raw: trimmed };
   }
@@ -252,7 +255,8 @@ const FIELDS_USER_QUERY = `
 const TODO_PATTERN = /^(todo|to[- ]?do|backlog|open|triage)$/i;
 const IN_PROGRESS_PATTERN = /^(in[- ]?progress|doing|active|agent[- ]?loop|working|started)$/i;
 const HUMAN_REVIEW_PATTERN =
-  /^(human[- ]?review|review|needs[- ]?(human|review|attention)|blocked|on[- ]?hold|codex[- ]?review|waiting)$/i;
+  /^(human[- ]?review|review|needs[- ]?(human|review|attention)|codex[- ]?review|waiting)$/i;
+const DEFERRED_PATTERN = /^(deferred|postponed|later|someday)$/i;
 const DONE_PATTERN = /^(done|closed|completed|shipped|resolved|merged)$/i;
 
 function isMissingScopeError(message: string): boolean {
@@ -470,6 +474,7 @@ export async function validateProjectStatusField(opts: {
   let todo: GhStatusOption | null = null;
   let inProgress: GhStatusOption | null = null;
   let humanReview: GhStatusOption | null = null;
+  let deferred: GhStatusOption | null = null;
   let done: GhStatusOption | null = null;
 
   const colorOf = (name: string): string | null =>
@@ -481,15 +486,17 @@ export async function validateProjectStatusField(opts: {
       inProgress = { name: opt, color: colorOf(opt) };
     else if (!humanReview && HUMAN_REVIEW_PATTERN.test(opt))
       humanReview = { name: opt, color: colorOf(opt) };
+    else if (!deferred && DEFERRED_PATTERN.test(opt)) deferred = { name: opt, color: colorOf(opt) };
     else if (!done && DONE_PATTERN.test(opt)) done = { name: opt, color: colorOf(opt) };
   }
 
-  const mapping: GhStatusMapping = { todo, inProgress, humanReview, done };
+  const mapping: GhStatusMapping = { todo, inProgress, humanReview, deferred, done };
   const missing: string[] = [];
   if (!todo) missing.push('todo');
   if (!inProgress) missing.push('inProgress');
   if (!humanReview) missing.push('humanReview');
   if (!done) missing.push('done');
+  if (!deferred) missing.push('deferred');
 
   if (missing.length > 0) {
     return {

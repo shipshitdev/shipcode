@@ -511,6 +511,8 @@ export function IssueDetail() {
               ? 'Retry will start a fresh planning pass. This resumes the workflow, not the same live planner session.'
               : null;
   const threadPhase = currentPipelinePhase;
+  const orphanedAwaitingApproval =
+    !activeThreadId && activeIssue?.pipelineStatus === ISSUE_PIPELINE_STATUS.awaitingApproval;
   const canStartPipeline =
     !activeThreadId &&
     !!activeProjectId &&
@@ -1119,8 +1121,9 @@ export function IssueDetail() {
     </>
   );
 
-  const headerStatus =
-    activeThreadId && threadPhase !== PIPELINE_PHASE.idle
+  const headerStatus = orphanedAwaitingApproval
+    ? ISSUE_PIPELINE_STATUS.todo
+    : activeThreadId && threadPhase !== PIPELINE_PHASE.idle
       ? threadPhase
       : activeIssue.pipelineStatus;
   const headerStatusAnimated =

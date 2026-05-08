@@ -43,7 +43,7 @@ gh label list --limit 200 --json name
 ### Workflow State
 
 Workflow state is represented in the typed GitHub Projects v2 `Status`
-single-select field (`Todo`, `In Progress`, `Done`, `On hold`). ShipCode also
+single-select field (`Todo`, `In Progress`, `Human Review`, `Done`, `Deferred`). ShipCode also
 uses namespaced `shipcode:pipeline:*` labels for transient agent-loop sub-states
 and debugging.
 
