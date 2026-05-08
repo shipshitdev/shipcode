@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom/vitest';
-import type { FeatureQaResult, GitHubIssueCacheRecord, Thread } from '@shipcode/shared';
+import type {
+  FeatureQaResult,
+  GitHubIssueCacheRecord,
+  IntegrationStatus,
+  Thread,
+} from '@shipcode/shared';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PipelineTab } from './PipelineTab';
@@ -101,9 +106,13 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
 
 function renderPipelineTab({
   issueOverrides = {},
+  executorEditable = false,
+  integrationStatus,
   qaResults = [],
 }: {
   issueOverrides?: Partial<GitHubIssueCacheRecord>;
+  executorEditable?: boolean;
+  integrationStatus?: IntegrationStatus;
   qaResults?: FeatureQaResult[];
 } = {}) {
   render(
@@ -118,7 +127,10 @@ function renderPipelineTab({
         verifier: 'high',
       }}
       currentPhaseSelections={{
-        planner: { provider: 'claude', modelId: null },
+        planner: {
+          provider: executorEditable ? 'gemini' : 'claude',
+          modelId: executorEditable ? 'missing-gemini-model' : null,
+        },
         reviewer: { provider: 'codex', modelId: null },
         executor: { provider: 'claude', modelId: null },
         verifier: { provider: 'claude', modelId: null },
@@ -131,7 +143,7 @@ function renderPipelineTab({
       }}
       effectiveRequireApproval={false}
       effectiveRevisionCount={1}
-      executorEditable={false}
+      executorEditable={executorEditable}
       hasPrFeedbackBlockers={false}
       inheritedPhaseReasoningEfforts={{
         planner: 'high',
@@ -141,6 +153,7 @@ function renderPipelineTab({
       }}
       inheritedRequireApproval={true}
       inheritedRevisionCount={0}
+      integrationStatus={integrationStatus}
       isSubmitting={false}
       linkedPrUrl={null}
       phaseEffortSelectValues={{
@@ -152,7 +165,7 @@ function renderPipelineTab({
       phaseModelValidation={{}}
       qaResults={qaResults}
       phaseSelectValues={{
-        planner: '__inherit__',
+        planner: executorEditable ? 'gemini::missing-gemini-model' : '__inherit__',
         reviewer: '__inherit__',
         executor: '__inherit__',
         verifier: '__inherit__',
@@ -205,6 +218,27 @@ describe('PipelineTab', () => {
     expect(screen.getByText('Human Approval')).toBeInTheDocument();
     expect(screen.getByText('Revisions')).toBeInTheDocument();
     expect(screen.getByText('1 revision before approval/execution.')).toBeInTheDocument();
+  });
+
+  it('renders Gemini in editable thread-level phase selectors with degraded readiness', () => {
+    renderPipelineTab({
+      executorEditable: true,
+      integrationStatus: {
+        modelCapabilities: {
+          gemini: {
+            provider: 'gemini',
+            source: 'unavailable',
+            models: [],
+            error: 'Gemini CLI is not authenticated.',
+            checkedAt: '2026-05-08T00:00:00.000Z',
+          },
+        },
+      } as unknown as IntegrationStatus,
+    });
+
+    expect(screen.getByText('missing-gemini-model (Unavailable)')).toBeInTheDocument();
+    expect(screen.getByText(/missing-gemini-model is not reported/)).toBeInTheDocument();
+    expect(screen.getByText('Human Approval')).toBeInTheDocument();
   });
 
   it('renders visual QA assertion evidence', () => {

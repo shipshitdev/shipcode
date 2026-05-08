@@ -260,7 +260,10 @@ export function PipelineTab({
                       value={phaseSelectValues[phase]}
                       onValueChange={(value: string) => onPhaseAgentChange(phase, value)}
                     >
-                      <SelectTrigger className="h-6 min-w-0 w-full text-[11px]">
+                      <SelectTrigger
+                        className="h-6 min-w-0 w-full text-[11px]"
+                        data-testid={`phase-provider-select-${phase}`}
+                      >
                         <SelectValue>
                           {phaseSelectValues[phase] === '__inherit__' ? (
                             <InheritValueDisplay

@@ -154,10 +154,11 @@ export async function assertCliPhaseModelsSupported(phaseModels: PhaseModels): P
   }>;
 
   for (const phase of phases) {
-    if (phase.provider === 'openrouter') continue;
+    const cliProvider = phase.provider;
+    if (cliProvider === 'openrouter') continue;
     const selection = assessCliSelectionAvailabilityFromCapabilities(
       capabilities,
-      phase.provider,
+      cliProvider,
       phase.modelId,
       phase.effort,
     );

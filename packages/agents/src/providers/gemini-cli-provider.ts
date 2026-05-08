@@ -61,14 +61,10 @@ async function runGeminiCli(
         options,
       );
     } else {
-      process = processManager.spawn(
-        'gemini',
-        'gemini',
-        ['-p', command.stdin, ...command.args.slice(2)],
-        req.cwd,
-        req.threadId,
-        options,
-      );
+      return {
+        rawOutput: 'Gemini CLI stdin execution is unavailable',
+        exitCode: 1,
+      };
     }
   } catch (err) {
     return { rawOutput: err instanceof Error ? err.message : String(err), exitCode: 127 };
@@ -158,11 +154,16 @@ function parseGeminiOutput(rawOutput: string): { text: string; resolvedModel?: s
   }
 }
 
-function clampGeminiFailure(rawOutput: string): string {
-  const line = stripAnsi(rawOutput)
+function clampGeminiFailure(rawOutput: string, prompt: string): string {
+  const promptText = stripAnsi(prompt).trim();
+  const lines = stripAnsi(rawOutput)
     .split('\n')
     .map((entry) => entry.trim())
-    .find(Boolean);
+    .filter(Boolean)
+    .filter((entry) => !promptText || (!promptText.includes(entry) && !entry.includes(promptText)));
+  const line =
+    lines.find((entry) => /\b(error|failed|unauthorized|auth|permission|denied)\b/i.test(entry)) ??
+    lines[0];
   return (line ?? 'Gemini CLI failed').slice(0, 280);
 }
 
@@ -199,7 +200,7 @@ export function createGeminiCliProvider(processManager: ProcessManager): AgentPr
               ? {
                   providerError: {
                     kind: 'unknown' as const,
-                    message: clampGeminiFailure(result.rawOutput),
+                    message: clampGeminiFailure(result.rawOutput, req.prompt),
                     retryable: true,
                   },
                 }

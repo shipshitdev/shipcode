@@ -80,11 +80,23 @@ describe('gemini-cli-provider', () => {
     const provider = createGeminiCliProvider(processManager as unknown as ProcessManager);
     const resultPromise = provider.generate(req());
 
-    processManager.emit('output', 'proc-1', 'Auth failed\nPROMPT\n'.repeat(50));
+    processManager.emit('output', 'proc-1', 'PROMPT\nAuth failed\n'.repeat(50));
     processManager.emit('exit', 'proc-1', 1);
 
     const result = await resultPromise;
     expect(result.providerError?.message).toBe('Auth failed');
+    expect(result.providerError?.message).not.toContain('PROMPT');
+  });
+
+  it('does not fall back to passing the prompt through argv', async () => {
+    const processManager = new FakeProcessManager();
+    processManager.spawnWithStdin = undefined as unknown as FakeProcessManager['spawnWithStdin'];
+    const provider = createGeminiCliProvider(processManager as unknown as ProcessManager);
+
+    const result = await provider.generate(req());
+
+    expect(processManager.spawn).not.toHaveBeenCalled();
+    expect(result.exitCode).toBe(1);
     expect(result.providerError?.message).not.toContain('PROMPT');
   });
 
