@@ -89,10 +89,7 @@ export function registerAutomationHandlers(
     // fireNow routes through pipelineScheduler so capacity caps still apply.
     // We deliberately don't await the full pipeline run — only the
     // start-or-queue decision — so the IPC call returns promptly.
-    void automationScheduler.fireNow(id).catch((err) => {
-      log.error(`[automations:run-now] fire failed for ${id}:`, err);
-    });
-    return { queued: false };
+    return automationScheduler.fireNow(id);
   });
 
   handleAutomation(

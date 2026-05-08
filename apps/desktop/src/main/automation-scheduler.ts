@@ -9,7 +9,7 @@ export interface AutomationSchedulerLike {
   stop(): void;
   schedule(automation: Automation): void;
   unschedule(id: string): void;
-  fireNow(id: string): Promise<void>;
+  fireNow(id: string): Promise<{ queued: boolean }>;
 }
 
 export interface AutomationSchedulerDeps {
@@ -29,7 +29,7 @@ export interface AutomationSchedulerDeps {
  */
 export class AutomationScheduler implements AutomationSchedulerLike {
   private jobs = new Map<string, Cron>();
-  private inFlight = new Map<string, Promise<void>>();
+  private inFlight = new Map<string, Promise<{ queued: boolean }>>();
 
   constructor(private readonly deps: AutomationSchedulerDeps) {}
 
@@ -85,8 +85,8 @@ export class AutomationScheduler implements AutomationSchedulerLike {
     }
   }
 
-  async fireNow(id: string): Promise<void> {
-    await this._fire(id);
+  async fireNow(id: string): Promise<{ queued: boolean }> {
+    return this._fire(id);
   }
 
   stop(): void {
@@ -96,19 +96,16 @@ export class AutomationScheduler implements AutomationSchedulerLike {
     this.jobs.clear();
   }
 
-  private _fire(automationId: string): Promise<void> {
+  private _fire(automationId: string): Promise<{ queued: boolean }> {
     const existing = this.inFlight.get(automationId);
     if (existing) return existing;
 
-    const promise = this.deps.pipelineScheduler
-      .startOrQueueAutomation(automationId)
-      .then(() => undefined)
-      .finally(() => {
-        this.inFlight.delete(automationId);
-        const job = this.jobs.get(automationId);
-        const next = job?.nextRun() ?? null;
-        this.deps.automations.setNextRunAt(automationId, next ? next.toISOString() : null);
-      });
+    const promise = this.deps.pipelineScheduler.startOrQueueAutomation(automationId).finally(() => {
+      this.inFlight.delete(automationId);
+      const job = this.jobs.get(automationId);
+      const next = job?.nextRun() ?? null;
+      this.deps.automations.setNextRunAt(automationId, next ? next.toISOString() : null);
+    });
 
     this.inFlight.set(automationId, promise);
     return promise;

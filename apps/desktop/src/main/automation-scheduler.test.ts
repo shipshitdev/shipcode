@@ -123,9 +123,17 @@ describe('AutomationScheduler', () => {
   });
 
   it('fireNow() routes through pipelineScheduler.startOrQueueAutomation', async () => {
-    await scheduler.fireNow('auto-1');
+    const result = await scheduler.fireNow('auto-1');
+
+    expect(result).toEqual({ queued: false });
     expect(pipelineScheduler.startOrQueueAutomation).toHaveBeenCalledWith('auto-1');
     expect(queries.setNextRunAt).toHaveBeenCalledWith('auto-1', null);
+  });
+
+  it('fireNow() returns the scheduler queue decision', async () => {
+    pipelineScheduler.startOrQueueAutomation.mockResolvedValueOnce({ queued: true });
+
+    await expect(scheduler.fireNow('auto-queued')).resolves.toEqual({ queued: true });
   });
 
   it('in-flight guard: concurrent fires of same id share one promise', async () => {
