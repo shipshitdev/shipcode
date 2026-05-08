@@ -28,10 +28,12 @@ import { ProjectSettingsNotificationsTab } from './project-settings-modal/Projec
 import { ProjectSettingsPipelineTab } from './project-settings-modal/ProjectSettingsPipelineTab';
 import { ProjectSettingsSetupTab } from './project-settings-modal/ProjectSettingsSetupTab';
 import {
+  buildRuntimeQaConfig,
   commandsToText,
   type LocalEnvFile,
   makeEnvFileId,
   normalizeEnvFiles,
+  runtimeQaCommandsToText,
   textToCommands,
 } from './project-settings-modal/setup-utils';
 import {
@@ -120,6 +122,12 @@ export function ProjectSettingsModal() {
   const [setupCommandsText, setSetupCommandsText] = useState('');
   const [verifyCommandsText, setVerifyCommandsText] = useState('');
   const [testingContext, setTestingContext] = useState('');
+  const [runtimeQaServerCommand, setRuntimeQaServerCommand] = useState('');
+  const [runtimeQaReadinessUrl, setRuntimeQaReadinessUrl] = useState('');
+  const [runtimeQaStartupTimeoutMs, setRuntimeQaStartupTimeoutMs] = useState(60_000);
+  const [runtimeQaPortEnvVar, setRuntimeQaPortEnvVar] = useState('PORT');
+  const [runtimeQaTestCommandsText, setRuntimeQaTestCommandsText] = useState('');
+  const [runtimeQaDiscoverAgentTests, setRuntimeQaDiscoverAgentTests] = useState(true);
   const [setupBeforeVerify, setSetupBeforeVerify] = useState(false);
   const [envFiles, setEnvFiles] = useState<LocalEnvFile[]>([]);
   const [setupSaveError, setSetupSaveError] = useState<string | null>(null);
@@ -255,6 +263,12 @@ export function ProjectSettingsModal() {
     setSetupCommandsText(commandsToText(contract.setupCommands));
     setVerifyCommandsText(commandsToText(contract.verifyCommands));
     setTestingContext(contract.testingContext ?? '');
+    setRuntimeQaServerCommand(contract.runtimeQa?.server?.command ?? '');
+    setRuntimeQaReadinessUrl(contract.runtimeQa?.server?.readinessUrl ?? '');
+    setRuntimeQaStartupTimeoutMs(contract.runtimeQa?.server?.startupTimeoutMs ?? 60_000);
+    setRuntimeQaPortEnvVar(contract.runtimeQa?.server?.portEnvVar ?? 'PORT');
+    setRuntimeQaTestCommandsText(runtimeQaCommandsToText(contract.runtimeQa));
+    setRuntimeQaDiscoverAgentTests(contract.runtimeQa?.discoverAgentTests ?? true);
     setSetupBeforeVerify(contract.setupBeforeVerify);
     setEnvFiles(normalizeEnvFiles(contract.envFiles));
     setSetupSaveError(null);
@@ -294,6 +308,12 @@ export function ProjectSettingsModal() {
     setSetupCommandsText(commandsToText(contract.setupCommands));
     setVerifyCommandsText(commandsToText(contract.verifyCommands));
     setTestingContext(contract.testingContext ?? '');
+    setRuntimeQaServerCommand(contract.runtimeQa?.server?.command ?? '');
+    setRuntimeQaReadinessUrl(contract.runtimeQa?.server?.readinessUrl ?? '');
+    setRuntimeQaStartupTimeoutMs(contract.runtimeQa?.server?.startupTimeoutMs ?? 60_000);
+    setRuntimeQaPortEnvVar(contract.runtimeQa?.server?.portEnvVar ?? 'PORT');
+    setRuntimeQaTestCommandsText(runtimeQaCommandsToText(contract.runtimeQa));
+    setRuntimeQaDiscoverAgentTests(contract.runtimeQa?.discoverAgentTests ?? true);
     setSetupBeforeVerify(contract.setupBeforeVerify);
     setEnvFiles(normalizeEnvFiles(contract.envFiles));
     setSetupSaveError(null);
@@ -350,6 +370,14 @@ export function ProjectSettingsModal() {
           .filter((file) => file.source.length > 0),
         setupBeforeVerify,
         testingContext: testingContext.trim() || null,
+        runtimeQa: buildRuntimeQaConfig({
+          serverCommand: runtimeQaServerCommand,
+          readinessUrl: runtimeQaReadinessUrl,
+          startupTimeoutMs: runtimeQaStartupTimeoutMs,
+          portEnvVar: runtimeQaPortEnvVar,
+          testCommandsText: runtimeQaTestCommandsText,
+          discoverAgentTests: runtimeQaDiscoverAgentTests,
+        }),
       };
       return window.shipcode.invoke('project:save-setup', {
         projectId: projectSettingsModalProjectId,
@@ -732,6 +760,18 @@ export function ProjectSettingsModal() {
                     setVerifyCommandsText={setVerifyCommandsText}
                     testingContext={testingContext}
                     setTestingContext={setTestingContext}
+                    runtimeQaServerCommand={runtimeQaServerCommand}
+                    setRuntimeQaServerCommand={setRuntimeQaServerCommand}
+                    runtimeQaReadinessUrl={runtimeQaReadinessUrl}
+                    setRuntimeQaReadinessUrl={setRuntimeQaReadinessUrl}
+                    runtimeQaStartupTimeoutMs={runtimeQaStartupTimeoutMs}
+                    setRuntimeQaStartupTimeoutMs={setRuntimeQaStartupTimeoutMs}
+                    runtimeQaPortEnvVar={runtimeQaPortEnvVar}
+                    setRuntimeQaPortEnvVar={setRuntimeQaPortEnvVar}
+                    runtimeQaTestCommandsText={runtimeQaTestCommandsText}
+                    setRuntimeQaTestCommandsText={setRuntimeQaTestCommandsText}
+                    runtimeQaDiscoverAgentTests={runtimeQaDiscoverAgentTests}
+                    setRuntimeQaDiscoverAgentTests={setRuntimeQaDiscoverAgentTests}
                     setupBeforeVerify={setupBeforeVerify}
                     setSetupBeforeVerify={setSetupBeforeVerify}
                     envFiles={envFiles}

@@ -1,5 +1,5 @@
 import type { FeatureQaFlowResult } from '@shipcode/shared';
-import { parseFeatureQaFlowResults } from '@shipcode/shared';
+import { parseFeatureQaFlowResults } from '@shipcode/shared/source';
 
 /**
  * Extract `<qa_results>` JSON from raw verification output.

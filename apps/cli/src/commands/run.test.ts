@@ -113,7 +113,7 @@ describe('runCommand', () => {
       number: 42,
       title: 'Add OpenRouter issue routing',
       body: 'Implement it',
-      labels: ['agent:openrouter/auto'],
+      labels: ['shipcode:agent:openrouter/auto'],
     });
     routeFromLabelsMock.mockReturnValue({
       executorModel: 'openrouter',
@@ -140,7 +140,7 @@ describe('runCommand', () => {
         number: 42,
         title: 'Add OpenRouter issue routing',
         body: 'Implement it',
-        labels: ['agent:openrouter/auto'],
+        labels: ['shipcode:agent:openrouter/auto'],
       },
       'openrouter',
       {

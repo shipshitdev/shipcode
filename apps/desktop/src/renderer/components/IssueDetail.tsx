@@ -1,4 +1,3 @@
-import { toast } from '../stores/toast-store';
 import type {
   ActivityEntry,
   AppSettings,
@@ -20,8 +19,10 @@ import type {
 } from '@shipcode/shared';
 import {
   deriveGithubIssueUrl,
+  displayAgentLabel,
   formatIssueBranch,
   ISSUE_PIPELINE_STATUS,
+  isAgentRoutingLabel,
   PIPELINE_PHASE,
   resolveEffectivePhaseReasoningEffort,
   resolveExecutorModelForIssue,
@@ -51,6 +52,7 @@ import { Archive, ArrowLeft, Check, CircleCheck, CircleDot, Copy } from 'lucide-
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
+import { toast } from '../stores/toast-store';
 import { CostsTab } from './issue-detail/CostsTab';
 import {
   ACTIVE_PHASES,
@@ -1348,13 +1350,11 @@ export function IssueDetail() {
           {activeIssue.linkedPrIsDraft ? 'Draft PR' : 'Ready PR'}
         </Badge>
       )}
-      {activeIssue.labels
-        .filter((l) => l.startsWith('agent:'))
-        .map((l) => (
-          <Badge key={l} className="text-[10px] bg-accent/15 text-accent">
-            {l}
-          </Badge>
-        ))}
+      {activeIssue.labels.filter(isAgentRoutingLabel).map((l) => (
+        <Badge key={l} className="text-[10px] bg-accent/15 text-accent" title={l}>
+          {displayAgentLabel(l)}
+        </Badge>
+      ))}
       {activeIssue.ciBlocked && (
         <Badge variant="danger" className="text-[10px] uppercase">
           CI blocked

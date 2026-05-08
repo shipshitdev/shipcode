@@ -118,6 +118,89 @@ describe('extractFeatureQaState', () => {
     const result = extractFeatureQaState(body);
     expect(result.status).toBe('invalid');
   });
+
+  it('extracts visual assertions and evidence policy', () => {
+    const qaJson = JSON.stringify({
+      ...JSON.parse(VALID_QA_JSON),
+      visualAssertions: [
+        {
+          name: 'Create button is pinned top left',
+          route: '/dashboard',
+          targetSelector: '[data-testid="create-button"]',
+          containerSelector: '[data-testid="toolbar"]',
+          assertion: 'top-left-of-container',
+          tolerancePx: 24,
+          viewport: { width: 1440, height: 900 },
+        },
+      ],
+      evidencePolicy: {
+        screenshot: 'always',
+        trace: 'on-failure',
+        video: 'on-failure',
+      },
+    });
+
+    const body = buildPrd(`## QA State\n\n\`\`\`json\n${qaJson}\n\`\`\``);
+    const result = extractFeatureQaState(body);
+
+    expect(result.status).toBe('present');
+    expect(result.qaState?.visualAssertions).toEqual([
+      {
+        name: 'Create button is pinned top left',
+        route: '/dashboard',
+        targetSelector: '[data-testid="create-button"]',
+        containerSelector: '[data-testid="toolbar"]',
+        assertion: 'top-left-of-container',
+        tolerancePx: 24,
+        viewport: { width: 1440, height: 900 },
+      },
+    ]);
+    expect(result.qaState?.evidencePolicy).toEqual({
+      screenshot: 'always',
+      trace: 'on-failure',
+      video: 'on-failure',
+    });
+  });
+
+  it('rejects container-position visual assertions without a container selector', () => {
+    const qaJson = JSON.stringify({
+      ...JSON.parse(VALID_QA_JSON),
+      visualAssertions: [
+        {
+          name: 'Create button is pinned top left',
+          route: '/dashboard',
+          targetSelector: '[data-testid="create-button"]',
+          assertion: 'top-left-of-container',
+        },
+      ],
+    });
+
+    const body = buildPrd(`## QA State\n\n\`\`\`json\n${qaJson}\n\`\`\``);
+    const result = extractFeatureQaState(body);
+
+    expect(result.status).toBe('invalid');
+    expect(result.reason).toContain('containerSelector');
+  });
+
+  it('rejects relational visual assertions without a reference selector', () => {
+    const qaJson = JSON.stringify({
+      ...JSON.parse(VALID_QA_JSON),
+      visualAssertions: [
+        {
+          name: 'Create button is left of save',
+          route: '/dashboard',
+          targetSelector: '[data-testid="create-button"]',
+          assertion: 'left-of',
+        },
+      ],
+    });
+
+    const body = buildPrd(`## QA State\n\n\`\`\`json\n${qaJson}\n\`\`\``);
+    const result = extractFeatureQaState(body);
+
+    expect(result.status).toBe('invalid');
+    expect(result.reason).toContain('referenceSelector');
+  });
 });
 
 describe('buildQaStateGapMessage', () => {

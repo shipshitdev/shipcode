@@ -113,7 +113,10 @@ describe('onboardCommand', () => {
         return;
       }
       if (cmd === 'gh label list --json name -q ".[].name"') {
-        callback(null, { stdout: 'agent:claude\nagent:codex\nagent:openrouter\n', stderr: '' });
+        callback(null, {
+          stdout: 'shipcode:agent:claude\nshipcode:agent:codex\nshipcode:agent:openrouter\n',
+          stderr: '',
+        });
         return;
       }
       callback(new Error(`unexpected exec: ${cmd}`));
@@ -192,7 +195,7 @@ describe('onboardCommand', () => {
         return;
       }
       if (cmd === 'gh label list --json name -q ".[].name"') {
-        callback(null, { stdout: 'agent:claude\n', stderr: '' });
+        callback(null, { stdout: 'shipcode:agent:claude\n', stderr: '' });
         return;
       }
       callback(new Error(`unexpected exec: ${cmd}`));

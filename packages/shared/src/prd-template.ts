@@ -54,6 +54,40 @@ export const PRD_TEMPLATE = `# PRD: <name>
 - tests: <test file paths or suite names>
 - manual: <manual QA steps>
 
+## QA State
+\`\`\`json
+{
+  "featureId": "<issue-or-feature-slug>",
+  "routes": ["/path-under-test"],
+  "criticalFlows": [
+    {
+      "name": "<flow name>",
+      "steps": ["<ordered user or system action>"],
+      "successCriteria": "<machine-checkable success condition>"
+    }
+  ],
+  "expectedStates": ["<state the feature must reach>"],
+  "testDataAssumptions": ["<seed/auth/data assumptions>"],
+  "selectorReadiness": "ready",
+  "visualAssertions": [
+    {
+      "name": "<assertion name>",
+      "route": "/path-under-test",
+      "targetSelector": "[data-testid=\\"target\\"]",
+      "assertion": "top-left-of-container",
+      "containerSelector": "[data-testid=\\"container\\"]",
+      "tolerancePx": 24,
+      "viewport": { "width": 1440, "height": 900 }
+    }
+  ],
+  "evidencePolicy": {
+    "screenshot": "always",
+    "trace": "on-failure",
+    "video": "on-failure"
+  }
+}
+\`\`\`
+
 ## Risks & Open Questions
 - <Unknowns, edge cases, things that could kill the plan mid-execution.>
 `;

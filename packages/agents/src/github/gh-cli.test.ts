@@ -81,7 +81,7 @@ describe('GhCli', () => {
           number: 1,
           title: 'Bug report',
           body: 'Something broke',
-          labels: [{ name: 'bug' }, { name: 'agent:claude' }],
+          labels: [{ name: 'shipcode:bug' }, { name: 'shipcode:agent:claude' }],
           assignees: [{ login: 'alice' }],
           state: 'OPEN',
           url: 'https://github.com/owner/repo/issues/1',
@@ -89,14 +89,14 @@ describe('GhCli', () => {
       ];
       success(JSON.stringify(raw));
 
-      const issues = await gh.listIssues('agent:claude');
+      const issues = await gh.listIssues('shipcode:agent:claude');
 
       expect(issues).toEqual([
         {
           number: 1,
           title: 'Bug report',
           body: 'Something broke',
-          labels: ['bug', 'agent:claude'],
+          labels: ['shipcode:bug', 'shipcode:agent:claude'],
           assignee: 'alice',
           state: 'open',
           url: 'https://github.com/owner/repo/issues/1',
@@ -108,7 +108,7 @@ describe('GhCli', () => {
           'issue',
           'list',
           '--label',
-          'agent:claude',
+          'shipcode:agent:claude',
           '--state',
           'open',
           '--json',
@@ -194,7 +194,7 @@ describe('GhCli', () => {
           number: 1,
           title: 'Shared',
           body: '',
-          labels: [{ name: 'agent:claude' }],
+          labels: [{ name: 'shipcode:agent:claude' }],
           assignees: [],
           state: 'OPEN',
           url: '',
@@ -203,7 +203,7 @@ describe('GhCli', () => {
           number: 2,
           title: 'Claude only',
           body: '',
-          labels: [{ name: 'agent:claude' }],
+          labels: [{ name: 'shipcode:agent:claude' }],
           assignees: [],
           state: 'OPEN',
           url: '',
@@ -214,7 +214,7 @@ describe('GhCli', () => {
           number: 1,
           title: 'Shared',
           body: '',
-          labels: [{ name: 'agent:codex' }],
+          labels: [{ name: 'shipcode:agent:codex' }],
           assignees: [],
           state: 'OPEN',
           url: '',
@@ -223,7 +223,7 @@ describe('GhCli', () => {
           number: 3,
           title: 'Codex only',
           body: '',
-          labels: [{ name: 'agent:codex' }],
+          labels: [{ name: 'shipcode:agent:codex' }],
           assignees: [],
           state: 'OPEN',
           url: '',
@@ -232,6 +232,7 @@ describe('GhCli', () => {
 
       success(JSON.stringify(claudeIssues));
       success(JSON.stringify(codexIssues));
+      for (let i = 0; i < 3; i++) success('[]');
 
       const issues = await gh.listAllAgentIssues();
 
@@ -241,7 +242,7 @@ describe('GhCli', () => {
     });
 
     it('handles one label query failing', async () => {
-      failure('agent:claude not found');
+      failure('shipcode:agent:claude not found');
       success(
         JSON.stringify([
           {
@@ -255,6 +256,7 @@ describe('GhCli', () => {
           },
         ]),
       );
+      for (let i = 0; i < 3; i++) success('[]');
 
       const issues = await gh.listAllAgentIssues();
 
@@ -263,8 +265,7 @@ describe('GhCli', () => {
     });
 
     it('handles both failing and returns empty', async () => {
-      failure();
-      failure();
+      for (let i = 0; i < 5; i++) failure();
 
       const issues = await gh.listAllAgentIssues();
       expect(issues).toEqual([]);
@@ -445,11 +446,11 @@ describe('GhCli', () => {
       );
       success('');
 
-      await gh.setIssueLabelPresence(42, 'blocked:ci', true);
+      await gh.setIssueLabelPresence(42, 'shipcode:blocked:ci', true);
 
       expect(mockExecFileAsync).toHaveBeenLastCalledWith(
         'gh',
-        ['issue', 'edit', '42', '--add-label', 'blocked:ci'],
+        ['issue', 'edit', '42', '--add-label', 'shipcode:blocked:ci'],
         ghExecOptions,
       );
     });
@@ -460,7 +461,7 @@ describe('GhCli', () => {
           number: 42,
           title: 'Issue',
           body: '',
-          labels: [{ name: 'blocked:ci' }],
+          labels: [{ name: 'shipcode:blocked:ci' }],
           assignees: [],
           state: 'OPEN',
           url: 'https://github.com/o/r/issues/42',
@@ -468,11 +469,11 @@ describe('GhCli', () => {
       );
       success('');
 
-      await gh.setIssueLabelPresence(42, 'blocked:ci', false);
+      await gh.setIssueLabelPresence(42, 'shipcode:blocked:ci', false);
 
       expect(mockExecFileAsync).toHaveBeenLastCalledWith(
         'gh',
-        ['issue', 'edit', '42', '--remove-label', 'blocked:ci'],
+        ['issue', 'edit', '42', '--remove-label', 'shipcode:blocked:ci'],
         ghExecOptions,
       );
     });
@@ -488,7 +489,7 @@ describe('GhCli', () => {
         issueNumber: 42,
         title: 'Updated title',
         body: 'Updated body',
-        labels: ['status:queued'],
+        labels: ['shipcode:pipeline:queued'],
       });
 
       fake.complete(0);
@@ -825,65 +826,6 @@ describe('GhCli', () => {
     });
   });
 
-  describe('setStatusLabel', () => {
-    it('removes existing status:* labels without adding a new one', async () => {
-      const labelsResponse = {
-        labels: [{ name: 'status:queued' }, { name: 'status:in-progress' }, { name: 'bug' }],
-      };
-
-      success(JSON.stringify(labelsResponse)); // view
-      success(''); // remove status:queued
-      success(''); // remove status:in-progress
-
-      await gh.setStatusLabel(10, 'status:ready-to-merge');
-
-      // View call
-      expect(mockExecFileAsync.mock.calls[0][1]).toEqual([
-        'issue',
-        'view',
-        '10',
-        '--json',
-        'labels',
-      ]);
-      // Remove calls
-      expect(mockExecFileAsync.mock.calls[1][1]).toContain('--remove-label');
-      expect(mockExecFileAsync.mock.calls[1][1]).toContain('status:queued');
-      expect(mockExecFileAsync.mock.calls[2][1]).toContain('--remove-label');
-      expect(mockExecFileAsync.mock.calls[2][1]).toContain('status:in-progress');
-      expect(mockExecFileAsync).toHaveBeenCalledTimes(3);
-    });
-
-    it('does nothing after fetch when no status:* labels exist', async () => {
-      const labelsResponse = { labels: [{ name: 'bug' }] };
-
-      success(JSON.stringify(labelsResponse)); // view
-
-      await gh.setStatusLabel(5, 'status:queued');
-
-      expect(mockExecFileAsync).toHaveBeenCalledTimes(1);
-    });
-
-    it('handles fetch failure gracefully', async () => {
-      failure('view failed'); // view fails
-
-      await gh.setStatusLabel(5, 'status:in-progress');
-
-      expect(mockExecFileAsync).toHaveBeenCalledTimes(1);
-    });
-
-    it('handles removal failure and continues', async () => {
-      const labelsResponse = { labels: [{ name: 'status:queued' }] };
-
-      success(JSON.stringify(labelsResponse)); // view
-      failure('remove failed'); // remove fails
-
-      await gh.setStatusLabel(5, 'status:in-progress');
-
-      expect(mockExecFileAsync).toHaveBeenCalledTimes(2);
-      expect(mockExecFileAsync.mock.calls[1][1]).toContain('--remove-label');
-    });
-  });
-
   describe('getRepoSlug', () => {
     it('returns trimmed nameWithOwner', async () => {
       success('  owner/repo  \n');
@@ -949,7 +891,7 @@ describe('GhCli', () => {
       success('');
 
       await gh.createLabel({
-        name: 'agent:claude',
+        name: 'shipcode:agent:claude',
         color: '1f6feb',
         description: 'Route to Claude.',
       });
@@ -959,7 +901,7 @@ describe('GhCli', () => {
         [
           'label',
           'create',
-          'agent:claude',
+          'shipcode:agent:claude',
           '--color',
           '1f6feb',
           '--description',
@@ -993,17 +935,21 @@ describe('GhCli', () => {
   describe('ensureLabels', () => {
     it('creates missing labels and reports already present ones', async () => {
       // listRepoLabels call
-      success(JSON.stringify([{ name: 'bug' }, { name: 'enhancement' }]));
-      // createLabel call for 'agent:claude'
+      success(JSON.stringify([{ name: 'shipcode:bug' }, { name: 'enhancement' }]));
+      // createLabel call for 'shipcode:agent:claude'
       success('');
 
       const result = await gh.ensureLabels([
-        { name: 'bug', color: 'd73a4a', description: 'desc' },
-        { name: 'agent:claude', color: '1f6feb', description: 'Route to Claude.' },
+        { name: 'shipcode:bug', color: 'd73a4a', description: 'desc' },
+        {
+          name: 'shipcode:agent:claude',
+          color: '1f6feb',
+          description: 'Route to Claude.',
+        },
       ]);
 
-      expect(result.alreadyPresent).toEqual(['bug']);
-      expect(result.created).toEqual(['agent:claude']);
+      expect(result.alreadyPresent).toEqual(['shipcode:bug']);
+      expect(result.created).toEqual(['shipcode:agent:claude']);
       expect(result.failed).toEqual([]);
     });
 

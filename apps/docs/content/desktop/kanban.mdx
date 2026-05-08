@@ -6,7 +6,7 @@ The Kanban board is the main view inside a project. Each column corresponds to a
 
 | Column | Pipeline phase | Contents |
 |--------|----------------|----------|
-| Todo | — | Unclaimed issues with an `agent:*` label but no active pipeline |
+| Todo | — | Unclaimed issues with a `shipcode:agent:*` label but no active pipeline |
 | Planning | `planning` | Planner is rewriting the issue into a structured plan |
 | Reviewing | `reviewing` / `revising` | Reviewer is critiquing the plan for the configured revision count |
 | Executing | `executing` | Executor is implementing the plan in an isolated git worktree |
@@ -30,7 +30,7 @@ After you approve a run, it no longer stays under the human approval section. If
 
 ## Drag to launch
 
-Drag any Todo card into **Planning** to start the pipeline on that issue. The drag honors the `agent:*` label on the GitHub issue and spawns the correct executor.
+Drag any Todo card into **Planning** to start the pipeline on that issue. The drag honors the `shipcode:agent:*` label on the GitHub issue and spawns the correct executor.
 
 The Kanban component lives in [`packages/ui/src/KanbanBoard.tsx`](https://github.com/shipshitdev/shipcode/blob/master/packages/ui/src/KanbanBoard.tsx) and is mounted by `apps/desktop/src/renderer/components/ThreadPanel.tsx`.
 

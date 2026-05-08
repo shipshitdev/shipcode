@@ -10,6 +10,18 @@ export function ProjectSettingsSetupTab({
   setVerifyCommandsText,
   testingContext,
   setTestingContext,
+  runtimeQaServerCommand,
+  setRuntimeQaServerCommand,
+  runtimeQaReadinessUrl,
+  setRuntimeQaReadinessUrl,
+  runtimeQaStartupTimeoutMs,
+  setRuntimeQaStartupTimeoutMs,
+  runtimeQaPortEnvVar,
+  setRuntimeQaPortEnvVar,
+  runtimeQaTestCommandsText,
+  setRuntimeQaTestCommandsText,
+  runtimeQaDiscoverAgentTests,
+  setRuntimeQaDiscoverAgentTests,
   setupBeforeVerify,
   setSetupBeforeVerify,
   envFiles,
@@ -31,6 +43,18 @@ export function ProjectSettingsSetupTab({
   setVerifyCommandsText: (value: string) => void;
   testingContext: string;
   setTestingContext: (value: string) => void;
+  runtimeQaServerCommand: string;
+  setRuntimeQaServerCommand: (value: string) => void;
+  runtimeQaReadinessUrl: string;
+  setRuntimeQaReadinessUrl: (value: string) => void;
+  runtimeQaStartupTimeoutMs: number;
+  setRuntimeQaStartupTimeoutMs: (value: number) => void;
+  runtimeQaPortEnvVar: string;
+  setRuntimeQaPortEnvVar: (value: string) => void;
+  runtimeQaTestCommandsText: string;
+  setRuntimeQaTestCommandsText: (value: string) => void;
+  runtimeQaDiscoverAgentTests: boolean;
+  setRuntimeQaDiscoverAgentTests: (value: boolean) => void;
   setupBeforeVerify: boolean;
   setSetupBeforeVerify: (value: boolean) => void;
   envFiles: LocalEnvFile[];
@@ -147,6 +171,87 @@ export function ProjectSettingsSetupTab({
           placeholder="Explain the repo's test conventions, frameworks, and any caveats."
           rows={4}
         />
+      </div>
+
+      <div className="rounded-md border border-border bg-secondary/30 p-3">
+        <div className="mb-3">
+          <div className="text-[12px] font-medium text-primary">Runtime QA</div>
+          <div className="text-[11px] text-muted">
+            Commands ShipCode runs inside the feature worktree so browser and human QA target the
+            implementation under review.
+          </div>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-[1.4fr_1fr]">
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="runtime-qa-server-command" className="text-[11px] text-secondary">
+              Start command
+            </Label>
+            <Input
+              id="runtime-qa-server-command"
+              value={runtimeQaServerCommand}
+              onChange={(e) => setRuntimeQaServerCommand(e.target.value)}
+              placeholder="bun run dev --host 127.0.0.1 --port $PORT"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="runtime-qa-readiness-url" className="text-[11px] text-secondary">
+              Readiness URL
+            </Label>
+            <Input
+              id="runtime-qa-readiness-url"
+              value={runtimeQaReadinessUrl}
+              onChange={(e) => setRuntimeQaReadinessUrl(e.target.value)}
+              placeholder="http://127.0.0.1:$PORT"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="runtime-qa-test-commands" className="text-[11px] text-secondary">
+              Runtime test commands
+            </Label>
+            <Textarea
+              id="runtime-qa-test-commands"
+              value={runtimeQaTestCommandsText}
+              onChange={(e) => setRuntimeQaTestCommandsText(e.target.value)}
+              placeholder="One browser or E2E command per line"
+              rows={4}
+            />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-1">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="runtime-qa-timeout" className="text-[11px] text-secondary">
+                Startup timeout ms
+              </Label>
+              <Input
+                id="runtime-qa-timeout"
+                type="number"
+                min={1000}
+                value={runtimeQaStartupTimeoutMs}
+                onChange={(e) =>
+                  setRuntimeQaStartupTimeoutMs(Math.max(1000, Number(e.target.value) || 60_000))
+                }
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="runtime-qa-port-env" className="text-[11px] text-secondary">
+                Port env var
+              </Label>
+              <Input
+                id="runtime-qa-port-env"
+                value={runtimeQaPortEnvVar}
+                onChange={(e) => setRuntimeQaPortEnvVar(e.target.value)}
+                placeholder="PORT"
+              />
+            </div>
+            <label className="flex items-center gap-2 text-[11px] text-secondary">
+              <Checkbox
+                checked={runtimeQaDiscoverAgentTests}
+                onCheckedChange={(checked) => setRuntimeQaDiscoverAgentTests(checked === true)}
+              />
+              Discover agent runtime tests
+            </label>
+          </div>
+        </div>
       </div>
 
       <div className="rounded-md border border-border bg-secondary/30 p-3">

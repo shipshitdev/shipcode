@@ -19,7 +19,12 @@ import { IssueHoverCard } from '@/kanban-board/IssueHoverCard';
 import { modelDisplay } from '@/lib/model-display';
 import { useSharedSecondNow } from '@/lib/second-ticker';
 import type { GitHubIssueCacheRecord, IssueStalenessResult } from '@/lib/shipcode';
-import { ISSUE_PIPELINE_STATUS, phaseToProgress } from '@/lib/shipcode';
+import {
+  displayAgentLabel,
+  ISSUE_PIPELINE_STATUS,
+  isAgentRoutingLabel,
+  phaseToProgress,
+} from '@/lib/shipcode';
 import { formatElapsedDuration } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { PhaseChip } from '@/PhaseChip';
@@ -203,7 +208,11 @@ function DraggableCardComponent({
   const linkedPrLabel = issue.linkedPrNumber ? `PR #${issue.linkedPrNumber}` : null;
 
   return (
-    <IssueHoverCard issue={issue} disabled={isDragging || isCreating} onFetchPlanSteps={onFetchPlanSteps}>
+    <IssueHoverCard
+      issue={issue}
+      disabled={isDragging || isCreating}
+      onFetchPlanSteps={onFetchPlanSteps}
+    >
       {/* biome-ignore lint/a11y/useSemanticElements: The card contains nested action buttons, so it cannot be a semantic button. */}
       <div
         ref={setNodeRef}
@@ -519,10 +528,15 @@ function DraggableCardComponent({
             </Badge>
           ) : null}
           {issue.labels
-            .filter((label) => !readOnly && label.startsWith('agent:'))
+            .filter((label) => !readOnly && isAgentRoutingLabel(label))
             .map((label) => (
-              <Badge key={label} variant="accent" className="px-1.5 py-px text-[10px] font-medium">
-                {label}
+              <Badge
+                key={label}
+                variant="accent"
+                className="px-1.5 py-px text-[10px] font-medium"
+                title={label}
+              >
+                {displayAgentLabel(label)}
               </Badge>
             ))}
           <IssueExternalBlockers issue={issue} />

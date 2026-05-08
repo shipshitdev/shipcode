@@ -72,6 +72,41 @@ describe('FeatureQaResultQueries', () => {
     expect(record.evidencePaths).toEqual(['/tmp/screenshot.png', '/tmp/trace.zip']);
   });
 
+  it('stores visual assertion evidence on flow results', () => {
+    const record = qaResults.insert({
+      threadId: 't1',
+      featureId: 'issue-6',
+      status: 'failed',
+      flowResults: [
+        {
+          flowName: 'Create button is pinned top left',
+          passed: false,
+          failureReason: 'Button rendered in bottom right.',
+          evidencePaths: ['/tmp/qa/create-button.png'],
+          assertions: [
+            {
+              name: 'Create button is pinned top left',
+              passed: false,
+              expected: 'target left/top within 24px of container left/top',
+              actual: 'target x=900, y=700, w=80, h=32 container x=0, y=0, w=1200, h=80',
+              evidencePath: '/tmp/qa/create-button.png',
+            },
+          ],
+        },
+      ],
+      summary: 'Visual QA failed.',
+      evidencePaths: ['/tmp/qa/create-button.png'],
+    });
+
+    expect(record.flowResults[0].assertions?.[0]).toEqual({
+      name: 'Create button is pinned top left',
+      passed: false,
+      expected: 'target left/top within 24px of container left/top',
+      actual: 'target x=900, y=700, w=80, h=32 container x=0, y=0, w=1200, h=80',
+      evidencePath: '/tmp/qa/create-button.png',
+    });
+  });
+
   it('lists results by thread in reverse chronological order', () => {
     qaResults.insert({
       threadId: 't1',

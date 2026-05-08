@@ -10,6 +10,8 @@ import type {
 } from '@shipcode/shared';
 import {
   assessCliModelAvailability,
+  clampError,
+  extractFeatureQaState,
   formatReasoningEffortLabel,
   getCapabilitySupportedReasoningEfforts,
   getSupportedReasoningEfforts,
@@ -32,6 +34,7 @@ import {
 } from '@shipshitdev/ui';
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { ExternalLink } from 'lucide-react';
+import { useState } from 'react';
 import {
   formatProviderSelectionLabel,
   getModelOptions,
@@ -114,6 +117,47 @@ export function PipelineTab({
     ? (issueNumber: number) =>
         githubIssueUrl.replace(/\/issues\/\d+(?:[#?].*)?$/, `/issues/${issueNumber}`)
     : undefined;
+  const qaExtraction = activeIssue.body ? extractFeatureQaState(activeIssue.body) : null;
+  const featureQaState = qaExtraction?.status === 'present' ? qaExtraction.qaState : null;
+  const [manualQaServer, setManualQaServer] = useState<{ baseUrl: string; port: number } | null>(
+    null,
+  );
+  const [manualQaPending, setManualQaPending] = useState(false);
+  const [manualQaError, setManualQaError] = useState<string | null>(null);
+
+  const startManualQa = async () => {
+    if (!activeThreadId) return;
+    setManualQaPending(true);
+    setManualQaError(null);
+    try {
+      const server = await window.shipcode.invoke<{ baseUrl: string; port: number }>(
+        'feature-qa:start-server',
+        {
+          projectId: activeIssue.projectId,
+          threadId: activeThreadId,
+        },
+      );
+      setManualQaServer(server);
+    } catch (error) {
+      setManualQaError(clampError(error));
+    } finally {
+      setManualQaPending(false);
+    }
+  };
+
+  const stopManualQa = async () => {
+    if (!activeThreadId) return;
+    setManualQaPending(true);
+    setManualQaError(null);
+    try {
+      await window.shipcode.invoke('feature-qa:stop-server', { threadId: activeThreadId });
+      setManualQaServer(null);
+    } catch (error) {
+      setManualQaError(clampError(error));
+    } finally {
+      setManualQaPending(false);
+    }
+  };
 
   return (
     <>
@@ -595,6 +639,134 @@ export function PipelineTab({
         </div>
       ) : null}
 
+      {featureQaState ? (
+        <div className="mb-5">
+          <div className="mb-2 flex items-center justify-between">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">
+              Human QA
+            </h4>
+            <span className="text-[11px] text-muted">{featureQaState.featureId}</span>
+          </div>
+          <div className="rounded-md border border-border bg-secondary p-3">
+            <div className="space-y-3">
+              {thread?.worktreePath ? (
+                <div>
+                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-secondary">
+                    Worktree
+                  </div>
+                  <div className="break-all font-mono text-[10px] text-muted">
+                    {thread.worktreePath}
+                  </div>
+                </div>
+              ) : null}
+              <div>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div>
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-secondary">
+                      Test server
+                    </div>
+                    {manualQaServer ? (
+                      <button
+                        type="button"
+                        className="mt-1 inline-flex items-center gap-1 break-all font-mono text-[10px] text-accent hover:underline"
+                        onClick={() =>
+                          window.shipcode.invoke('shell:open-external', {
+                            url: manualQaServer.baseUrl,
+                          })
+                        }
+                      >
+                        {manualQaServer.baseUrl}
+                        <ExternalLink size={10} />
+                      </button>
+                    ) : (
+                      <div className="mt-1 text-[11px] text-muted">
+                        Starts the configured Runtime QA command in this worktree.
+                      </div>
+                    )}
+                  </div>
+                  <Button
+                    variant={manualQaServer ? 'outline' : 'secondary'}
+                    size="xs"
+                    onClick={manualQaServer ? stopManualQa : startManualQa}
+                    disabled={!activeThreadId || !thread?.worktreePath || manualQaPending}
+                  >
+                    <LoadingButtonContent loading={manualQaPending}>
+                      {manualQaServer ? 'Stop' : 'Start'}
+                    </LoadingButtonContent>
+                  </Button>
+                </div>
+                {manualQaError ? (
+                  <div className="rounded-sm border border-danger/30 bg-danger/10 px-2 py-1 text-[11px] text-danger">
+                    {manualQaError}
+                  </div>
+                ) : null}
+              </div>
+              {featureQaState.routes.length > 0 ? (
+                <div>
+                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-secondary">
+                    Feature scope
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {featureQaState.routes.map((route) => (
+                      <Badge key={route} variant="default">
+                        {route}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              <div>
+                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-secondary">
+                  Scenarios
+                </div>
+                <div className="space-y-2">
+                  {featureQaState.criticalFlows.map((flow) => (
+                    <div
+                      key={flow.name}
+                      className="rounded-sm border border-border bg-background p-2"
+                    >
+                      <div className="mb-1 text-[12px] font-medium text-primary">{flow.name}</div>
+                      <ol className="ml-4 list-decimal space-y-1 text-[11px] text-muted">
+                        {flow.steps.map((step) => (
+                          <li key={step}>{step}</li>
+                        ))}
+                      </ol>
+                      <div className="mt-2 text-[11px] text-secondary">
+                        Success: {flow.successCriteria}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {featureQaState.expectedStates.length > 0 ? (
+                <div>
+                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-secondary">
+                    Expected states
+                  </div>
+                  <ul className="ml-4 list-disc space-y-1 text-[11px] text-muted">
+                    {featureQaState.expectedStates.map((state) => (
+                      <li key={state}>{state}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {featureQaState.testDataAssumptions.length > 0 ? (
+                <div>
+                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-secondary">
+                    Test data
+                  </div>
+                  <ul className="ml-4 list-disc space-y-1 text-[11px] text-muted">
+                    {featureQaState.testDataAssumptions.map((assumption) => (
+                      <li key={assumption}>{assumption}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {qaResults.length > 0 ? (
         <div className="mb-5">
           <div className="mb-2 flex items-center justify-between">
@@ -634,18 +806,73 @@ export function PipelineTab({
                   <div className="mb-2 text-[11px] text-muted">{result.summary}</div>
                 ) : null}
                 {result.flowResults.length > 0 ? (
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     {result.flowResults.map((flow) => (
-                      <div key={flow.flowName} className="flex items-start gap-2 text-[11px]">
-                        <span className={flow.passed ? 'text-green-500' : 'text-red-500'}>
-                          {flow.passed ? '✓' : '✗'}
-                        </span>
-                        <span className="font-medium text-primary">{flow.flowName}</span>
-                        {flow.failureReason ? (
-                          <span className="text-muted">— {flow.failureReason}</span>
+                      <div key={flow.flowName} className="text-[11px]">
+                        <div className="flex items-start gap-2">
+                          <span className={flow.passed ? 'text-green-500' : 'text-red-500'}>
+                            {flow.passed ? '✓' : '✗'}
+                          </span>
+                          <span className="font-medium text-primary">{flow.flowName}</span>
+                          {flow.failureReason ? (
+                            <span className="text-muted">— {flow.failureReason}</span>
+                          ) : null}
+                        </div>
+                        {flow.assertions?.length ? (
+                          <div className="ml-4 mt-1 space-y-1 border-l border-border pl-2">
+                            {flow.assertions.map((assertion) => (
+                              <div key={assertion.name} className="space-y-0.5">
+                                <div className="flex items-center gap-1">
+                                  <span
+                                    className={assertion.passed ? 'text-green-500' : 'text-red-500'}
+                                  >
+                                    {assertion.passed ? '✓' : '✗'}
+                                  </span>
+                                  <span className="font-medium text-primary">{assertion.name}</span>
+                                </div>
+                                <div className="break-words text-muted">
+                                  Expected: {assertion.expected}
+                                </div>
+                                <div className="break-words text-muted">
+                                  Actual: {assertion.actual}
+                                </div>
+                                {assertion.evidencePath ? (
+                                  <div className="break-all font-mono text-[10px] text-muted">
+                                    {assertion.evidencePath}
+                                  </div>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                        {flow.evidencePaths?.length ? (
+                          <div className="ml-4 mt-1 space-y-0.5">
+                            {flow.evidencePaths.slice(0, 3).map((path) => (
+                              <div
+                                key={path}
+                                className="break-all font-mono text-[10px] text-muted"
+                              >
+                                {path}
+                              </div>
+                            ))}
+                          </div>
                         ) : null}
                       </div>
                     ))}
+                  </div>
+                ) : null}
+                {result.evidencePaths?.length ? (
+                  <div className="mt-2 border-t border-border pt-2">
+                    <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-secondary">
+                      Evidence
+                    </div>
+                    <div className="space-y-0.5">
+                      {result.evidencePaths.slice(0, 5).map((path) => (
+                        <div key={path} className="break-all font-mono text-[10px] text-muted">
+                          {path}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ) : null}
               </div>

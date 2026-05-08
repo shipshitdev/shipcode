@@ -389,6 +389,17 @@ Throughout execution:
 - If you encounter a real blocker (missing file, broken dep, bad assumption in the plan), surface it clearly and stop — do not paper over it.
 </execution_method>
 
+<runtime_tests>
+You can write runtime tests in \`.shipcode/runtime-tests/\`.
+These auto-run after your code changes against a live server when the project has runtime QA configured.
+Available env vars: \`BASE_URL\` (server origin), the project's port env var (e.g. \`PORT\`).
+Write tests that verify your implementation works at runtime — HTTP requests, API assertions, etc.
+Supported files: \`*.test.ts\`, \`*.test.js\` (run via \`bun run\`), \`*.test.sh\` (run via \`bash\`).
+Files execute in lexicographic order. These are ephemeral — they run once and are cleaned before commit.
+Only write runtime tests when the plan involves API endpoints, server routes, or runtime behavior that unit tests cannot cover.
+If the prompt includes a feature QA contract with visual assertions, add stable selectors (\`data-testid\` or an existing project-standard equivalent) for every target, container, and reference element involved. Visual QA will fail the run if required selectors are missing or if asserted geometry does not match.
+</runtime_tests>
+
 <finding_bar>
 Do not add error handling, fallbacks, or validation for scenarios that cannot happen.
 Do not add comments explaining what the code obviously does.
@@ -406,7 +417,7 @@ If a step requires a tool or command, run it; do not pretend it succeeded.
 {{APPROVED_PLAN}}
 </approved_plan>
 `,
-    version: '82c7e88d74bc952a',
+    version: '39a9e0fca3a7acbc',
     requiredSlots: ['APPROVED_PLAN'] as const,
     schemaVersion: 1,
   },

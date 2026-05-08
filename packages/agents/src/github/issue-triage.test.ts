@@ -72,7 +72,7 @@ function makeStubClient(): OpenRouterClient {
   return {
     chat: vi.fn(async () => ({
       content:
-        '```shipcode-issue-triage\n{"issues":[{"issueNumber":12,"confidence":0.9,"suggestedAgent":"codex","suggestedLabels":["agent:codex"],"shouldStart":true,"needsHuman":false,"rationale":"Ready"}]}\n```',
+        '```shipcode-issue-triage\n{"issues":[{"issueNumber":12,"confidence":0.9,"suggestedAgent":"codex","suggestedLabels":["shipcode:agent:codex"],"shouldStart":true,"needsHuman":false,"rationale":"Ready"}]}\n```',
       toolCalls: [],
       finishReason: 'stop',
       model: 'qwen/qwen3-coder:free',
@@ -87,13 +87,13 @@ describe('issue triage', () => {
 
     expect(prompt).toContain('"number": 12');
     expect(prompt).toContain('```shipcode-issue-triage');
-    expect(prompt).toContain('agent:codex');
+    expect(prompt).toContain('shipcode:agent:codex');
   });
 
   it('extracts and normalizes triage recommendations', () => {
     const result = extractTriageRecommendations(`
 \`\`\`shipcode-issue-triage
-{"issues":[{"issueNumber":12,"confidence":2,"suggestedAgent":"codex","suggestedLabels":["agent:codex","not-real"],"shouldStart":true,"needsHuman":false,"rationale":"Ready"}]}
+{"issues":[{"issueNumber":12,"confidence":2,"suggestedAgent":"codex","suggestedLabels":["shipcode:agent:codex","not-real"],"shouldStart":true,"needsHuman":false,"rationale":"Ready"}]}
 \`\`\`
 `);
 
@@ -102,7 +102,7 @@ describe('issue triage', () => {
         issueNumber: 12,
         confidence: 1,
         suggestedAgent: 'codex',
-        suggestedLabels: ['agent:codex'],
+        suggestedLabels: ['shipcode:agent:codex'],
         shouldStart: true,
         needsHuman: false,
         rationale: 'Ready',

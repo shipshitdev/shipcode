@@ -47,4 +47,38 @@ More text after.`;
     expect(results).toHaveLength(1);
     expect(results[0]).toEqual({ flowName: 'test', passed: true });
   });
+
+  it('extracts evidence paths and assertion details from visual QA output', () => {
+    const raw = `<qa_results>
+[
+  {
+    "flowName": "Create button is pinned top left",
+    "passed": false,
+    "failureReason": "target x=900, y=700, w=80, h=32 container x=0, y=0, w=1200, h=80",
+    "evidencePaths": ["/tmp/qa/create-button.png", "/tmp/qa"],
+    "assertions": [
+      {
+        "name": "Create button is pinned top left",
+        "passed": false,
+        "expected": "target left/top within 24px of container left/top",
+        "actual": "target x=900, y=700, w=80, h=32 container x=0, y=0, w=1200, h=80",
+        "evidencePath": "/tmp/qa/create-button.png"
+      }
+    ]
+  }
+]
+</qa_results>`;
+
+    const results = extractQaFlowResults(raw);
+
+    expect(results).toHaveLength(1);
+    expect(results[0].evidencePaths).toEqual(['/tmp/qa/create-button.png', '/tmp/qa']);
+    expect(results[0].assertions?.[0]).toEqual({
+      name: 'Create button is pinned top left',
+      passed: false,
+      expected: 'target left/top within 24px of container left/top',
+      actual: 'target x=900, y=700, w=80, h=32 container x=0, y=0, w=1200, h=80',
+      evidencePath: '/tmp/qa/create-button.png',
+    });
+  });
 });

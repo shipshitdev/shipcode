@@ -1,21 +1,6 @@
 import { PINNED_MODEL_DEFAULTS } from './model-catalog';
 import { type AppSettings, PIPELINE_PHASE, type PipelinePhase } from './types';
 
-export const DEFAULT_STATUS_LABEL_MAPPINGS: Record<string, string> = {
-  todo: '',
-  queued: '',
-  planning: '',
-  reviewing: '',
-  revising: '',
-  executing: '',
-  testing: '',
-  verifying: '',
-  shipping: '',
-  completed: '',
-  done: '',
-  failed: '',
-};
-
 export const DEFAULT_NOTIFICATION_EVENTS = {
   awaitingApproval: true,
   failed: true,
@@ -58,7 +43,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   githubBotUsername: '',
   autoRunPriorities: [],
   autoRunMaxTasks: 0,
-  statusLabelMappings: DEFAULT_STATUS_LABEL_MAPPINGS as Record<string, string>,
   onboardingVersion: 0,
   projectSortOrder: 'recent',
   worktreeRoot: null,

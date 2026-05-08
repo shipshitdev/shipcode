@@ -5,6 +5,7 @@ import type {
   GitHubIssueCacheRecord,
   ReasoningEffort,
 } from '@shipcode/shared';
+import { SHIPCODE_AGENT_LABELS, SHIPCODE_CLASSIFICATION_LABELS } from '@shipcode/shared';
 import { extractCliFailureMessage, formatCliSpawnFailure } from '../cli-error';
 import { unwrapCliResultEnvelope } from '../cli-result';
 import { shellExecEnv } from '../health-check';
@@ -18,12 +19,10 @@ import {
 const TRIAGE_FENCE_TAG = 'shipcode-issue-triage';
 const TRIAGE_TIMEOUT_MS = 120_000;
 const TRIAGE_LABELS = [
-  'agent:claude',
-  'agent:codex',
-  'agent:openrouter',
-  'agent:openrouter/auto',
-  'agent:openrouter/free',
-  'deferred',
+  ...SHIPCODE_AGENT_LABELS.map((label) => label.name),
+  ...SHIPCODE_CLASSIFICATION_LABELS.filter((label) => label.name.endsWith(':deferred')).map(
+    (label) => label.name,
+  ),
 ] as const;
 
 export interface IssueTriageRecommendation {
@@ -131,9 +130,9 @@ Suggest only labels from this routing/system allowlist. Do not encode issue type
 ${TRIAGE_LABELS.map((label) => `- ${label}`).join('\n')}
 
 Guidance:
-- Use agent:claude for broad implementation work, multi-file product work, or when local Claude Code is the best default.
-- Use agent:codex for focused code edits, tests, TypeScript/React work, or when OpenAI/Codex is a good fit.
-- Use agent:openrouter/auto when the issue is suitable for low-cost routing and not high-risk.
+- Use shipcode:agent:claude for broad implementation work, multi-file product work, or when local Claude Code is the best default.
+- Use shipcode:agent:codex for focused code edits, tests, TypeScript/React work, or when OpenAI/Codex is a good fit.
+- Use shipcode:agent:openrouter/auto when the issue is suitable for low-cost routing and not high-risk.
 - Mark needsHuman=true when the issue lacks acceptance criteria, asks an ambiguous product decision, or conflicts with existing labels.
 - Mark shouldStart=true only when the issue is specific enough to hand to the pipeline now.
 - Use confidence 0..1. Be conservative; below 0.85 will not be auto-applied by default.
@@ -143,7 +142,7 @@ ${JSON.stringify(compactIssues, null, 2)}
 
 Output exactly one fenced block:
 \`\`\`${TRIAGE_FENCE_TAG}
-{"issues":[{"issueNumber":123,"confidence":0.92,"suggestedAgent":"codex","suggestedLabels":["agent:codex"],"shouldStart":true,"needsHuman":false,"rationale":"Specific bug with clear acceptance criteria."}]}
+{"issues":[{"issueNumber":123,"confidence":0.92,"suggestedAgent":"codex","suggestedLabels":["shipcode:agent:codex"],"shouldStart":true,"needsHuman":false,"rationale":"Specific bug with clear acceptance criteria."}]}
 \`\`\`
 `;
 }

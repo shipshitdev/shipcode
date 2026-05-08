@@ -65,6 +65,7 @@ Write tests that verify your implementation works at runtime — HTTP requests, 
 Supported files: `*.test.ts`, `*.test.js` (run via `bun run`), `*.test.sh` (run via `bash`).
 Files execute in lexicographic order. These are ephemeral — they run once and are cleaned before commit.
 Only write runtime tests when the plan involves API endpoints, server routes, or runtime behavior that unit tests cannot cover.
+If the prompt includes a feature QA contract with visual assertions, add stable selectors (`data-testid` or an existing project-standard equivalent) for every target, container, and reference element involved. Visual QA will fail the run if required selectors are missing or if asserted geometry does not match.
 </runtime_tests>
 
 <finding_bar>

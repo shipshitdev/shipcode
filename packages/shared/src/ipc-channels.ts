@@ -556,6 +556,14 @@ export interface IpcInvokeChannels {
     args: { featureId: string };
     result: FeatureQaResult | null;
   };
+  'feature-qa:start-server': {
+    args: { projectId: string; threadId: string };
+    result: { baseUrl: string; port: number };
+  };
+  'feature-qa:stop-server': {
+    args: { threadId: string };
+    result: undefined;
+  };
 
   // Agent conversation log
   'agent-conversations:list-by-thread': {

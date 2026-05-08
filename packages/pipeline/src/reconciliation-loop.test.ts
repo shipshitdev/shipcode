@@ -116,7 +116,7 @@ describe('createReconciliationLoop', () => {
       const contexts = new Map([['t1', { githubIssueNumber: 5, projectPath: '/proj' }]]);
       const pipeline = createMockPipeline(contexts);
       const issueProvider = createMockIssueStateProvider({
-        5: { state: 'open', labels: ['enhancement', 'agent:claude'] },
+        5: { state: 'open', labels: ['enhancement', 'shipcode:agent:claude'] },
       });
 
       deps = { pipeline, issueStateProvider: issueProvider, log: vi.fn() };

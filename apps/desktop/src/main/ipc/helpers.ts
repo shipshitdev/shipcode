@@ -23,6 +23,7 @@ import {
   resolvePhaseModelForIssue,
   resolvePhaseModelId,
   resolvePhaseModelIdForIssue,
+  SHIPCODE_CI_BLOCKED_LABEL,
 } from '@shipcode/shared';
 import type { BrowserWindow } from 'electron';
 import type { ChatNotificationService } from '../chat-notification-service';
@@ -213,8 +214,8 @@ export async function syncLinkedPullRequestFeedback(
         failingChecks: [],
         unresolvedReviewComments: [],
       });
-      queries.githubIssues.setCachedLabelPresence(issue.id, 'blocked:ci', false);
-      await ghCli.setIssueLabelPresence(issue.issueNumber, 'blocked:ci', false);
+      queries.githubIssues.setCachedLabelPresence(issue.id, SHIPCODE_CI_BLOCKED_LABEL, false);
+      await ghCli.setIssueLabelPresence(issue.issueNumber, SHIPCODE_CI_BLOCKED_LABEL, false);
     }
     queries.githubIssues.reconcileCompletedFromEvidence(issue.id);
     return;
@@ -232,19 +233,22 @@ export async function syncLinkedPullRequestFeedback(
   queries.githubIssues.reconcileCompletedFromEvidence(issue.id);
 
   if (feedback.ciBlocked !== issue.ciBlocked) {
-    queries.githubIssues.setCachedLabelPresence(issue.id, 'blocked:ci', feedback.ciBlocked);
-    await ghCli.setIssueLabelPresence(issue.issueNumber, 'blocked:ci', feedback.ciBlocked);
+    queries.githubIssues.setCachedLabelPresence(
+      issue.id,
+      SHIPCODE_CI_BLOCKED_LABEL,
+      feedback.ciBlocked,
+    );
+    await ghCli.setIssueLabelPresence(
+      issue.issueNumber,
+      SHIPCODE_CI_BLOCKED_LABEL,
+      feedback.ciBlocked,
+    );
     if (feedback.ciBlocked) {
       notificationService.fire('ci_blocked', thread);
       chatNotificationService.fire('ci_blocked', thread);
     }
   } else if (feedback.ciBlocked) {
-    queries.githubIssues.setCachedLabelPresence(issue.id, 'blocked:ci', true);
-  }
-
-  if (issue.labels.some((entry) => entry.startsWith('status:'))) {
-    queries.githubIssues.clearCachedStatusLabels(issue.id);
-    await ghCli.setStatusLabel(issue.issueNumber, 'status:in-progress');
+    queries.githubIssues.setCachedLabelPresence(issue.id, SHIPCODE_CI_BLOCKED_LABEL, true);
   }
 }
 

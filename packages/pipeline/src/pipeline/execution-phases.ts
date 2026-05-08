@@ -39,6 +39,14 @@ import type { PipelineContext } from '../types';
 import { renderWorkflowPromptTemplate } from '../workflow-prompt';
 import { extractQaFlowResults } from './qa-result-parser';
 import type { PipelineHelperEnv } from './shared';
+import {
+  collectQaEvidencePaths,
+  formatVisualQaFailureFeedback,
+  hasVisualQaAssertions,
+  summarizeQaFlowResults,
+  toQaStatus,
+  writeVisualQaRuntimeTest,
+} from './visual-qa';
 
 const DEFAULT_CONTINUATION_PROMPT_TEMPLATE = `The previous turn failed verification. Address the remaining gaps and fix the issues.
 
@@ -278,6 +286,29 @@ export function createExecutionPhaseHandlers({
     context.promptMaterialSummaries[phase] = summarizePromptMaterials(
       selectPromptMaterials(phase, materials),
     );
+  }
+
+  function scheduleTestFixRetry(
+    threadId: string,
+    context: NonNullable<ReturnType<typeof activePipelines.get>>,
+    testOutput: string,
+  ): boolean {
+    context.testOutput = `${context.testOutput ?? ''}\n${testOutput}`.slice(-16384);
+    if (context.testRetries >= MAX_TEST_RETRIES) return false;
+
+    context.testRetries++;
+    context.stabilizationFeedback = formatTestFixFeedback(context.testOutput, context.testRetries);
+    const delayMs = computeRetryDelayMs({
+      reason: 'continuation',
+      attempt: context.testRetries,
+    });
+    if (context.retryTimer) clearTimeout(context.retryTimer);
+    context.retryTimer = setTimeout(() => {
+      context.retryTimer = null;
+      if (context.cancelled || !activePipelines.has(threadId)) return;
+      void startTestFix(threadId);
+    }, delayMs);
+    return true;
   }
 
   // ─── Per-node verification helpers ───────────────────────────────────────────
@@ -854,8 +885,12 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
 
     const verifyCommands = getVerifyCommands(context);
     const runtimeQa = context.repoSetupContract?.contract.runtimeQa;
+    const hasVisualQa = hasVisualQaAssertions(context.featureQaState);
     const hasRuntimeQa = Boolean(
-      runtimeQa?.server || runtimeQa?.testCommands?.length || runtimeQa?.discoverAgentTests,
+      runtimeQa?.server ||
+        runtimeQa?.testCommands?.length ||
+        runtimeQa?.discoverAgentTests ||
+        hasVisualQa,
     );
 
     if (verifyCommands.length === 0 && !hasRuntimeQa) {
@@ -871,6 +906,42 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       emitPhase(threadId, 'failed', `Verification preflight failed: ${preparation.error}`);
       activePipelines.delete(threadId);
       return;
+    }
+
+    if (hasVisualQa && context.featureQaState) {
+      if (context.featureQaState.selectorReadiness !== 'ready') {
+        const message =
+          `[runtime-qa] Visual QA requires stable selectors, but selectorReadiness is ` +
+          `"${context.featureQaState.selectorReadiness}". Add stable data-testid selectors for the visual QA targets.`;
+        if (scheduleTestFixRetry(threadId, context, message)) return;
+        emitPhase(threadId, 'failed', message);
+        activePipelines.delete(threadId);
+        return;
+      }
+
+      const visualRoutes = context.featureQaState.visualAssertions ?? [];
+      const hasRelativeRoute = visualRoutes.some((assertion) => assertion.route.startsWith('/'));
+      if (hasRelativeRoute && !runtimeQa?.server) {
+        const message =
+          '[runtime-qa] Visual QA uses relative routes but the repo setup contract has no runtimeQa.server. ' +
+          'Configure .shipcode/setup.json runtimeQa.server so ShipCode can start the app under test.';
+        emitPhase(threadId, 'failed', message);
+        activePipelines.delete(threadId);
+        return;
+      }
+
+      try {
+        const generated = writeVisualQaRuntimeTest(cwd, threadId, context.featureQaState);
+        emitTerminalLifecycle(
+          threadId,
+          `[runtime-qa] Generated visual QA Playwright test ${generated.runId}\r\n`,
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        emitPhase(threadId, 'failed', `Visual QA generation failed: ${message}`);
+        activePipelines.delete(threadId);
+        return;
+      }
     }
 
     // --- Phase 1: Static verify commands (unit tests, typecheck, build) ---
@@ -920,8 +991,13 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     }
 
     // --- Phase 2: Runtime QA (server lifecycle + runtime tests) ---
-    if (hasRuntimeQa && runtimeQa) {
-      const runtimeQaResult = await runRuntimeQa(threadId, context, cwd, runtimeQa);
+    if (hasRuntimeQa) {
+      const runtimeQaResult = await runRuntimeQa(
+        threadId,
+        context,
+        cwd,
+        runtimeQa ?? { testCommands: [], discoverAgentTests: true },
+      );
       if (!runtimeQaResult.ok) {
         if (runtimeQaResult.fatal) {
           emitPhase(threadId, 'failed', runtimeQaResult.error);
@@ -999,7 +1075,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       }
 
       const allCommands = [...(config.testCommands ?? [])];
-      if (config.discoverAgentTests !== false) {
+      if (config.discoverAgentTests !== false || hasVisualQaAssertions(context.featureQaState)) {
         const discovered = discoverRuntimeTests(cwd);
         if (discovered.length > 0) {
           emitTerminalLifecycle(
@@ -1011,6 +1087,23 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       }
 
       const runtimeOutputs: string[] = [];
+      const qaFlowResults: ReturnType<typeof extractQaFlowResults> = [];
+      const persistQaFlowResults = () => {
+        if (!context.featureQaState || qaFlowResults.length === 0) return;
+        try {
+          deps.featureQaResults?.insert({
+            threadId,
+            featureId: context.featureQaState.featureId,
+            status: toQaStatus(qaFlowResults),
+            flowResults: qaFlowResults,
+            summary: summarizeQaFlowResults(qaFlowResults),
+            evidencePaths: collectQaEvidencePaths(qaFlowResults),
+          });
+        } catch (err) {
+          console.error('[pipeline] runtime feature QA result insert failed:', err);
+        }
+      };
+
       for (const command of allCommands) {
         if (server?.crashed) {
           const failMsg = '[runtime-qa] Server crashed during testing';
@@ -1047,30 +1140,24 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
           });
           runtimeOutputs.push(`[runtime-qa] ${command}\n${result.output}`);
           context.runtimeQaOutput = runtimeOutputs.join('\n').slice(-16384);
+          const commandQaResults = extractQaFlowResults(result.output);
+          if (commandQaResults.length > 0) {
+            qaFlowResults.push(...commandQaResults);
+          }
 
-          if (result.exitCode !== 0) {
-            context.testOutput = `${context.testOutput ?? ''}\n${context.runtimeQaOutput}`.slice(
-              -16384,
-            );
-            if (context.testRetries < MAX_TEST_RETRIES) {
-              context.testRetries++;
-              context.stabilizationFeedback = formatTestFixFeedback(
-                context.testOutput,
-                context.testRetries,
-              );
-              const delayMs = computeRetryDelayMs({
-                reason: 'continuation',
-                attempt: context.testRetries,
-              });
-              if (context.retryTimer) clearTimeout(context.retryTimer);
-              context.retryTimer = setTimeout(() => {
-                context.retryTimer = null;
-                if (context.cancelled || !activePipelines.has(threadId)) return;
-                void startTestFix(threadId);
-              }, delayMs);
+          const hasFailedQaResult = commandQaResults.some((flow) => !flow.passed);
+          if (result.exitCode !== 0 || hasFailedQaResult) {
+            persistQaFlowResults();
+            const visualFeedback = formatVisualQaFailureFeedback(commandQaResults);
+            const output = `${context.runtimeQaOutput}${visualFeedback}`;
+            if (scheduleTestFixRetry(threadId, context, output)) {
               return { ok: false, fatal: false, error: `Runtime test failed: ${command}` };
             }
-            return { ok: false, fatal: true, error: `Runtime QA exhausted retries on: ${command}` };
+            return {
+              ok: false,
+              fatal: true,
+              error: `Runtime QA exhausted retries on: ${command}`,
+            };
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
@@ -1078,6 +1165,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
         }
       }
 
+      persistQaFlowResults();
       emitTerminalLifecycle(threadId, '[runtime-qa] All runtime tests passed\r\n');
       return { ok: true };
     } finally {
@@ -1251,17 +1339,13 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
             try {
               const qaFlowResults = extractQaFlowResults(response.rawOutput);
               if (qaFlowResults.length > 0) {
-                const qaStatus = qaFlowResults.every((f) => f.passed)
-                  ? 'passed'
-                  : qaFlowResults.some((f) => f.passed)
-                    ? 'partial'
-                    : 'failed';
                 deps.featureQaResults?.insert({
                   threadId,
                   featureId: context.featureQaState.featureId,
-                  status: qaStatus as 'passed' | 'failed' | 'partial',
+                  status: toQaStatus(qaFlowResults),
                   flowResults: qaFlowResults,
                   summary: result.data.summary,
+                  evidencePaths: collectQaEvidencePaths(qaFlowResults),
                 });
               }
             } catch (err) {

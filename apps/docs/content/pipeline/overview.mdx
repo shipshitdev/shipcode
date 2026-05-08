@@ -8,7 +8,7 @@ The ShipCode pipeline is a state machine that processes GitHub issues through mu
 |-------|---------------|-------------|
 | Plan | Opus 4.6 | Rewrites issue into spec + structured plan |
 | Review | Codex (high reasoning) — set during onboarding | Adversarial critique during configured revision rounds |
-| Execute | Routed per `agent:*` label (claude / codex / openrouter) — configurable in Settings | Implements in isolated git worktree |
+| Execute | Routed per `shipcode:agent:*` label (claude / codex / openrouter) — configurable in Settings | Implements in isolated git worktree |
 | Verify | Opus 4.6 — set during onboarding | Checks diff against acceptance criteria |
 | Ship | gh CLI | Push branch, create PR, link to issue |
 

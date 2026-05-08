@@ -5,8 +5,7 @@ import {
   type GitHubIssueComment,
   type GitHubPrCheckSummary,
   type GitHubPrReviewCommentSummary,
-  type GitHubStatusLabel,
-  parseGithubProjectUrl,
+  isAgentRoutingLabel,
   PRD_MANAGED_DISCRETE_LABELS,
   PRD_MANAGED_LABEL_PREFIXES,
   type PullRequestDetail,
@@ -14,6 +13,8 @@ import {
   type PullRequestListItem,
   type PullRequestReviewDecision,
   type PullRequestState,
+  parseGithubProjectUrl,
+  SHIPCODE_AGENT_LABELS,
 } from '@shipcode/shared';
 import { shellExecEnv } from '../health-check';
 
@@ -250,7 +251,7 @@ export class GhCli {
     const toRemove = current.filter((label) => {
       const managed =
         this.isManagedPrdLabel(label) ||
-        (!!options?.removeAgentLabels && label.startsWith('agent:'));
+        (!!options?.removeAgentLabels && isAgentRoutingLabel(label));
       return managed && !next.includes(label);
     });
     const toAdd = next.filter((label) => !current.includes(label));
@@ -344,14 +345,14 @@ export class GhCli {
   }
 
   async listAllAgentIssues(): Promise<GitHubIssue[]> {
-    const [claude, codex] = await Promise.all([
-      this.listIssues('agent:claude').catch(() => []),
-      this.listIssues('agent:codex').catch(() => []),
-    ]);
+    const labels = SHIPCODE_AGENT_LABELS.map((label) => label.name);
+    const buckets = await Promise.all(
+      labels.map((label) => this.listIssues(label).catch(() => [])),
+    );
     // Deduplicate by issue number
     const seen = new Set<number>();
     const merged: GitHubIssue[] = [];
-    for (const issue of [...claude, ...codex]) {
+    for (const issue of buckets.flat()) {
       if (!seen.has(issue.number)) {
         seen.add(issue.number);
         merged.push(issue);
@@ -1438,33 +1439,6 @@ export class GhCli {
         ),
       ),
     );
-  }
-
-  async setStatusLabel(issueNumber: number, _label: GitHubStatusLabel): Promise<void> {
-    // Workflow state is represented by the typed Projects v2 Status field.
-    // This legacy method is cleanup-only so older callers do not recreate status:* labels.
-    try {
-      const { stdout } = await execFileAsync(
-        'gh',
-        ['issue', 'view', String(issueNumber), '--json', 'labels'],
-        { cwd: this.cwd, env: this.env },
-      );
-      const { labels } = JSON.parse(stdout) as { labels: Array<{ name: string }> };
-      const statusLabels = (labels ?? []).map((l) => l.name).filter((n) => n.startsWith('status:'));
-
-      for (const old of statusLabels) {
-        try {
-          await execFileAsync('gh', ['issue', 'edit', String(issueNumber), '--remove-label', old], {
-            cwd: this.cwd,
-            env: this.env,
-          });
-        } catch {
-          // Label removal is best-effort
-        }
-      }
-    } catch {
-      // Issue fetch is best-effort
-    }
   }
 
   async getRepoSlug(): Promise<string> {

@@ -17,9 +17,11 @@ import type {
   ReasoningEffort,
 } from '@shipcode/shared';
 import {
+  agentLabelForExecutor,
   clampError,
   deriveGithubIssueUrl,
   ISSUE_PIPELINE_STATUS,
+  isAgentRoutingLabel,
   isRealGithubIssueNumber,
   PIPELINE_PHASE,
   parseGithubProjectUrl,
@@ -110,13 +112,13 @@ function mergeTriageLabels(
 ): string[] {
   const next = currentLabels.filter(
     (label) =>
-      !label.startsWith('agent:') &&
+      !isAgentRoutingLabel(label) &&
       !label.startsWith('complexity:') &&
       !label.startsWith('blast:'),
   );
   const labels = [...recommendation.suggestedLabels];
-  if (recommendation.suggestedAgent && !labels.some((label) => label.startsWith('agent:'))) {
-    labels.push(`agent:${recommendation.suggestedAgent}`);
+  if (recommendation.suggestedAgent && !labels.some(isAgentRoutingLabel)) {
+    labels.push(agentLabelForExecutor(recommendation.suggestedAgent));
   }
   return Array.from(new Set([...next, ...labels]));
 }

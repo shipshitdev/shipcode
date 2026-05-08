@@ -451,7 +451,7 @@ export type AgentType = 'claude' | 'codex' | 'gh' | 'openrouter' | 'shell';
  *  - Enums compile to runtime objects (bundle weight in a published
  *    CLI package). String literals are zero-cost at runtime.
  *  - SQLite stores strings; no enum ⇄ ordinal round-trip needed.
- *  - GitHub label values are already strings (`agent:claude`, etc).
+ *  - GitHub label values are already strings (`shipcode:agent:claude`, etc).
  */
 export type ExecutorModel = 'claude' | 'codex' | 'openrouter';
 export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
@@ -633,7 +633,6 @@ export interface AppSettings {
   autoRunPriorities: Array<'p0' | 'p1' | 'p2' | 'p3'>;
   /** Max issues to start per auto-run click. 0 = unlimited (all eligible). */
   autoRunMaxTasks: number;
-  statusLabelMappings: StatusLabelMapping;
   onboardingVersion: number;
   // Sidebar project ordering preference (pinned projects always float to top first)
   projectSortOrder: 'alpha' | 'recent' | 'added';
@@ -906,10 +905,6 @@ export interface IntegrationDeliveryStatus {
   lastAttemptAt: string | null;
   lastSuccessAt: string | null;
   lastError: string | null;
-}
-
-export interface StatusLabelMapping {
-  [pipelineStatus: string]: string;
 }
 
 // === CLI Health ===
@@ -1345,6 +1340,10 @@ export interface FeatureQaState {
   testDataAssumptions: string[];
   /** Whether stable selectors exist for critical controls. */
   selectorReadiness: 'ready' | 'partial' | 'missing';
+  /** Machine-checkable visual/layout assertions that must pass in a browser. */
+  visualAssertions?: FeatureQaVisualAssertion[];
+  /** Artifact capture policy for generated browser QA. */
+  evidencePolicy?: FeatureQaEvidencePolicy;
 }
 
 export interface FeatureQaCriticalFlow {
@@ -1354,6 +1353,38 @@ export interface FeatureQaCriticalFlow {
   steps: string[];
   /** What constitutes success for this flow. */
   successCriteria: string;
+}
+
+export type FeatureQaVisualAssertionKind =
+  | 'top-left-of-container'
+  | 'top-right-of-container'
+  | 'bottom-left-of-container'
+  | 'bottom-right-of-container'
+  | 'visible'
+  | 'not-overlapping'
+  | 'above'
+  | 'below'
+  | 'left-of'
+  | 'right-of';
+
+export interface FeatureQaVisualAssertion {
+  name: string;
+  route: string;
+  targetSelector: string;
+  assertion: FeatureQaVisualAssertionKind;
+  containerSelector?: string;
+  referenceSelector?: string;
+  tolerancePx?: number;
+  viewport?: {
+    width: number;
+    height: number;
+  };
+}
+
+export interface FeatureQaEvidencePolicy {
+  screenshot: 'always' | 'on-failure';
+  trace: 'always' | 'on-failure' | 'on-retry';
+  video: 'always' | 'on-failure' | 'on-retry' | 'off';
 }
 
 /**
@@ -1376,6 +1407,18 @@ export interface FeatureQaFlowResult {
   passed: boolean;
   /** Failure reason if not passed. */
   failureReason?: string;
+  /** Optional paths to screenshots, traces, videos, or JSON evidence for this flow. */
+  evidencePaths?: string[];
+  /** Machine assertion results collected for this flow. */
+  assertions?: FeatureQaAssertionResult[];
+}
+
+export interface FeatureQaAssertionResult {
+  name: string;
+  passed: boolean;
+  expected: string;
+  actual: string;
+  evidencePath?: string;
 }
 
 export interface PipelineModelResolvedEvent {
@@ -1386,19 +1429,6 @@ export interface PipelineModelResolvedEvent {
   tokensUsed?: { prompt: number; completion: number };
   costUsd?: number;
 }
-
-// === GitHub Status Labels ===
-
-export type GitHubStatusLabel =
-  | 'status:queued'
-  | 'status:in-progress'
-  | 'status:needs-review'
-  | 'status:ready-to-merge'
-  | 'status:done'
-  | 'status:ready-for-review'
-  | 'status:failed'
-  | 'status:needs-human-review'
-  | 'status:invalid-config';
 
 // === Onboarding Types ===
 

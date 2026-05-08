@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import type { GitHubIssueCacheRecord, Thread } from '@shipcode/shared';
+import type { FeatureQaResult, GitHubIssueCacheRecord, Thread } from '@shipcode/shared';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PipelineTab } from './PipelineTab';
@@ -12,7 +12,7 @@ function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
     issueNumber: 42,
     title: 'Issue title',
     body: 'body',
-    labels: ['agent:claude'],
+    labels: ['shipcode:agent:claude'],
     assignee: null,
     state: 'open',
     pipelineStatus: 'verifying',
@@ -98,10 +98,16 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
   };
 }
 
-function renderPipelineTab() {
+function renderPipelineTab({
+  issueOverrides = {},
+  qaResults = [],
+}: {
+  issueOverrides?: Partial<GitHubIssueCacheRecord>;
+  qaResults?: FeatureQaResult[];
+} = {}) {
   render(
     <PipelineTab
-      activeIssue={makeIssue()}
+      activeIssue={makeIssue(issueOverrides)}
       activeThreadId="thread-1"
       checkpoints={[]}
       currentPhaseReasoningEfforts={{
@@ -143,7 +149,7 @@ function renderPipelineTab() {
         verifier: '__inherit__',
       }}
       phaseModelValidation={{}}
-      qaResults={[]}
+      qaResults={qaResults}
       phaseSelectValues={{
         planner: '__inherit__',
         reviewer: '__inherit__',
@@ -191,5 +197,78 @@ describe('PipelineTab', () => {
     expect(screen.getByText('Human Approval')).toBeInTheDocument();
     expect(screen.getByText('Revisions')).toBeInTheDocument();
     expect(screen.getByText('1 revision before approval/execution.')).toBeInTheDocument();
+  });
+
+  it('renders visual QA assertion evidence', () => {
+    renderPipelineTab({
+      qaResults: [
+        {
+          featureId: 'issue-42',
+          status: 'failed',
+          summary: 'Visual QA failed.',
+          runAt: new Date().toISOString(),
+          evidencePaths: ['/tmp/qa/create-button.png'],
+          flowResults: [
+            {
+              flowName: 'Create button is pinned top left',
+              passed: false,
+              failureReason: 'wrong corner',
+              evidencePaths: ['/tmp/qa/create-button.png'],
+              assertions: [
+                {
+                  name: 'Create button is pinned top left',
+                  passed: false,
+                  expected: 'target left/top within 24px of container left/top',
+                  actual: 'target x=900, y=700, w=80, h=32',
+                  evidencePath: '/tmp/qa/create-button.png',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(screen.getByText('QA Results')).toBeInTheDocument();
+    expect(screen.getAllByText('Create button is pinned top left')).toHaveLength(2);
+    expect(
+      screen.getByText('Expected: target left/top within 24px of container left/top'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Actual: target x=900, y=700, w=80, h=32')).toBeInTheDocument();
+    expect(screen.getAllByText('/tmp/qa/create-button.png').length).toBeGreaterThan(0);
+  });
+
+  it('renders human QA scenarios from the issue QA state', () => {
+    renderPipelineTab({
+      issueOverrides: {
+        body: `## QA State
+
+\`\`\`json
+{
+  "featureId": "issue-42",
+  "routes": ["/settings"],
+  "criticalFlows": [
+    {
+      "name": "Update profile name",
+      "steps": ["Open settings", "Change the profile name", "Save the form"],
+      "successCriteria": "The updated name remains visible after reload."
+    }
+  ],
+  "expectedStates": ["Saved state", "Validation error state"],
+  "testDataAssumptions": ["A signed-in user exists."],
+  "selectorReadiness": "ready"
+}
+\`\`\``,
+      },
+    });
+
+    expect(screen.getByText('Human QA')).toBeInTheDocument();
+    expect(screen.getByText('/tmp/worktree')).toBeInTheDocument();
+    expect(screen.getByText('/settings')).toBeInTheDocument();
+    expect(screen.getByText('Update profile name')).toBeInTheDocument();
+    expect(screen.getByText('Save the form')).toBeInTheDocument();
+    expect(
+      screen.getByText('Success: The updated name remains visible after reload.'),
+    ).toBeInTheDocument();
   });
 });

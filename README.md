@@ -8,7 +8,7 @@ AI Agents that ship working code. GitHub issue in, reviewed PR out.
 
 > [Watch the launch video (MP4)](https://github.com/shipshitdev/shipcode/releases/download/v0.1.0/shipcode-launch.mp4)
 
-Label a GitHub issue with `agent:claude` or `agent:codex`, and ShipCode handles the rest: plan, adversarial review, implement, verify, and ship a PR. No human gates until the PR is created.
+Label a GitHub issue with `shipcode:agent:claude` or `shipcode:agent:codex`, and ShipCode handles the rest: plan, adversarial review, implement, verify, and ship a PR. No human gates until the PR is created.
 
 ## Install
 
@@ -23,7 +23,7 @@ npx @shipshitdev/shipcode                      # CLI
 ## How it works
 
 ```
-GitHub Issue (labeled agent:claude)
+GitHub Issue (labeled shipcode:agent:claude)
        |
        v
     PLAN (Opus 4.6) --- rewrite issue into spec + structured plan
@@ -111,18 +111,18 @@ gh auth status
 
 | Label | Effect |
 |-------|--------|
-| `agent:claude` | Claude implements the issue |
-| `agent:codex` | Codex implements the issue |
+| `shipcode:agent:claude` | Claude implements the issue |
+| `shipcode:agent:codex` | Codex implements the issue |
 
-### Pipeline status labels (set automatically)
+### Pipeline state labels (set automatically)
 
 | Label | Meaning |
 |-------|---------|
-| `status:queued` | Issue picked up, waiting for pipeline slot |
-| `status:in-progress` | Pipeline is running (plan/review/execute/verify) |
-| `status:ready-for-review` | PR created, ready for human review |
-| `status:failed` | Pipeline failed |
-| `status:needs-human-review` | Autonomous review found unresolvable issues |
+| `shipcode:pipeline:queued` | Issue picked up, waiting for pipeline slot |
+| `shipcode:pipeline:planning` | Planner is generating a plan |
+| `shipcode:pipeline:executing` | Executor is implementing changes |
+| `shipcode:pipeline:verifying` | Verifier is checking the result |
+| `shipcode:pipeline:failed` | Pipeline failed |
 
 ## Key design decisions
 

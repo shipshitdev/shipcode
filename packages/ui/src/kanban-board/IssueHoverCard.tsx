@@ -2,7 +2,11 @@
 
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { cloneElement, isValidElement, useCallback, useEffect, useRef, useState } from 'react';
-import type { GitHubIssueCacheRecord } from '@/lib/shipcode';
+import {
+  displayAgentLabel,
+  type GitHubIssueCacheRecord,
+  isAgentRoutingLabel,
+} from '@/lib/shipcode';
 import { formatElapsedDuration } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { PhaseChip } from '@/PhaseChip';
@@ -152,7 +156,7 @@ export function IssueHoverCard({
   }, []);
 
   const priorityBadge = resolveIssuePriorityBadge(issue);
-  const agentLabels = issue.labels?.filter((l) => l.startsWith('agent:')) ?? [];
+  const agentLabels = issue.labels?.filter(isAgentRoutingLabel) ?? [];
   const lastUpdate = issue.lastPhaseUpdate ? new Date(issue.lastPhaseUpdate).getTime() : null;
   const bodySnippet = issueBodySnippet(issue);
   const anchorChild = isValidElement<{ onPointerEnter?: () => void; onPointerLeave?: () => void }>(
@@ -248,7 +252,7 @@ export function IssueHoverCard({
             )}
             {agentLabels.map((label) => (
               <Badge key={label} variant="default" className="text-[10px] px-1.5 py-0 text-accent">
-                {label.replace('agent:', '')}
+                {displayAgentLabel(label)}
               </Badge>
             ))}
           </div>

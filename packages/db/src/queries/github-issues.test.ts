@@ -327,24 +327,13 @@ describe('GitHubIssueQueries', () => {
   });
 
   it('setCachedLabelPresence() adds and removes a local GitHub marker label', () => {
-    const record = issues.upsert(makeIssue({ labels: ['agent:claude'] }));
+    const record = issues.upsert(makeIssue({ labels: ['shipcode:agent:claude'] }));
 
-    issues.setCachedLabelPresence(record.id, 'blocked:ci', true);
-    expect(issues.getByNumber(projectId, 1)?.labels).toContain('blocked:ci');
+    issues.setCachedLabelPresence(record.id, 'shipcode:blocked:ci', true);
+    expect(issues.getByNumber(projectId, 1)?.labels).toContain('shipcode:blocked:ci');
 
-    issues.setCachedLabelPresence(record.id, 'blocked:ci', false);
-    expect(issues.getByNumber(projectId, 1)?.labels).not.toContain('blocked:ci');
-  });
-
-  it('clearCachedStatusLabels() removes existing local status labels idempotently', () => {
-    const record = issues.upsert(
-      makeIssue({ labels: ['agent:claude', 'status:in-progress', 'status:queued'] }),
-    );
-
-    issues.clearCachedStatusLabels(record.id);
-    issues.clearCachedStatusLabels(record.id);
-
-    expect(issues.getByNumber(projectId, 1)?.labels).toEqual(['agent:claude']);
+    issues.setCachedLabelPresence(record.id, 'shipcode:blocked:ci', false);
+    expect(issues.getByNumber(projectId, 1)?.labels).not.toContain('shipcode:blocked:ci');
   });
 
   it('linkThread() sets the thread_id', () => {

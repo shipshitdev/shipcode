@@ -21,7 +21,7 @@ const makeIssue = (overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssue
   issueNumber: 42,
   title: 'Issue title',
   body: '## Spec body\n\n- first item',
-  labels: ['agent:claude'],
+  labels: ['shipcode:agent:claude'],
   assignee: null,
   state: 'open',
   pipelineStatus: 'todo',

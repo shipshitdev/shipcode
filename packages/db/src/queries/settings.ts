@@ -9,7 +9,6 @@ import {
   DEFAULT_CHAT_NOTIFICATION_EVENTS,
   DEFAULT_NOTIFICATION_EVENTS,
   DEFAULT_SETTINGS,
-  DEFAULT_STATUS_LABEL_MAPPINGS,
 } from '@shipcode/shared';
 import { expandWorktreeRoot } from '@shipcode/shared/worktree-path';
 import { transaction } from '../utils';
@@ -200,9 +199,6 @@ export class SettingsQueries {
         ? (JSON.parse(stored.autoRunPriorities) as AppSettings['autoRunPriorities'])
         : DEFAULT_SETTINGS.autoRunPriorities,
       autoRunMaxTasks: clampInt(stored.autoRunMaxTasks, 0, 100, DEFAULT_SETTINGS.autoRunMaxTasks),
-      statusLabelMappings: stored.statusLabelMappings
-        ? JSON.parse(stored.statusLabelMappings)
-        : DEFAULT_STATUS_LABEL_MAPPINGS,
       onboardingVersion: stored.onboardingVersion
         ? parseInt(stored.onboardingVersion, 10)
         : DEFAULT_SETTINGS.onboardingVersion,

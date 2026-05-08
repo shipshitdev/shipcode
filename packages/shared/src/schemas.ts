@@ -148,6 +148,61 @@ export const featureQaCriticalFlowSchema = z.object({
   successCriteria: z.string().min(1),
 });
 
+export const featureQaVisualAssertionKindSchema = z.enum([
+  'top-left-of-container',
+  'top-right-of-container',
+  'bottom-left-of-container',
+  'bottom-right-of-container',
+  'visible',
+  'not-overlapping',
+  'above',
+  'below',
+  'left-of',
+  'right-of',
+]);
+
+export const featureQaViewportSchema = z.object({
+  width: z.number().int().min(1),
+  height: z.number().int().min(1),
+});
+
+export const featureQaVisualAssertionSchema = z
+  .object({
+    name: z.string().min(1),
+    route: z.string().min(1),
+    targetSelector: z.string().min(1),
+    assertion: featureQaVisualAssertionKindSchema,
+    containerSelector: z.string().min(1).optional(),
+    referenceSelector: z.string().min(1).optional(),
+    tolerancePx: z.number().int().min(0).optional(),
+    viewport: featureQaViewportSchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.assertion.endsWith('-of-container') && !value.containerSelector) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['containerSelector'],
+        message: `${value.assertion} requires containerSelector`,
+      });
+    }
+    if (
+      ['not-overlapping', 'above', 'below', 'left-of', 'right-of'].includes(value.assertion) &&
+      !value.referenceSelector
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['referenceSelector'],
+        message: `${value.assertion} requires referenceSelector`,
+      });
+    }
+  });
+
+export const featureQaEvidencePolicySchema = z.object({
+  screenshot: z.enum(['always', 'on-failure']).default('always'),
+  trace: z.enum(['always', 'on-failure', 'on-retry']).default('on-failure'),
+  video: z.enum(['always', 'on-failure', 'on-retry', 'off']).default('on-failure'),
+});
+
 export const featureQaStateSchema = z.object({
   featureId: z.string().min(1),
   routes: z.array(z.string().min(1)),
@@ -155,12 +210,24 @@ export const featureQaStateSchema = z.object({
   expectedStates: z.array(z.string().min(1)),
   testDataAssumptions: z.array(z.string()),
   selectorReadiness: z.enum(['ready', 'partial', 'missing']),
+  visualAssertions: z.array(featureQaVisualAssertionSchema).optional(),
+  evidencePolicy: featureQaEvidencePolicySchema.optional(),
+});
+
+export const featureQaAssertionResultSchema = z.object({
+  name: z.string().min(1),
+  passed: z.boolean(),
+  expected: z.string().min(1),
+  actual: z.string().min(1),
+  evidencePath: z.string().min(1).optional(),
 });
 
 export const featureQaFlowResultSchema = z.object({
   flowName: z.string().min(1),
   passed: z.boolean(),
   failureReason: z.string().optional(),
+  evidencePaths: z.array(z.string().min(1)).optional(),
+  assertions: z.array(featureQaAssertionResultSchema).optional(),
 });
 
 /**

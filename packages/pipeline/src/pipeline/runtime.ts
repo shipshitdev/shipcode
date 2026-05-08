@@ -14,10 +14,9 @@ import {
   toPersistedPromptTelemetryMaterials,
 } from '@shipcode/agents/source';
 import {
-  type GitHubStatusLabel,
+  isPipelineStateLabel,
   isRealGithubIssueNumber,
   macroColumnForStatus,
-  PIPELINE_LABEL_PREFIX,
   pipelineLabelForStatus,
 } from '@shipcode/shared';
 import {
@@ -724,7 +723,7 @@ export function createPipelineRuntime(
     const targetLabel = pipelineLabelForStatus(opts.pipelineStatus);
     try {
       const issue = await ghCli.getIssue(opts.issueNumber);
-      const currentPipelineLabels = issue.labels.filter((l) => l.startsWith(PIPELINE_LABEL_PREFIX));
+      const currentPipelineLabels = issue.labels.filter(isPipelineStateLabel);
       for (const old of currentPipelineLabels) {
         if (old !== targetLabel) {
           await ghCli.setIssueLabelPresence(opts.issueNumber, old, false);
@@ -833,21 +832,6 @@ export function createPipelineRuntime(
 
     for (const node of graph.nodes) {
       if (!isRealGithubIssueNumber(node.githubIssueNumber)) continue;
-      const statusLabel: GitHubStatusLabel =
-        node.status === 'completed'
-          ? 'status:done'
-          : node.status === 'failed' || node.status === 'blocked'
-            ? 'status:failed'
-            : node.status === 'running'
-              ? 'status:in-progress'
-              : 'status:queued';
-
-      try {
-        await ghCli.setStatusLabel(node.githubIssueNumber, statusLabel);
-      } catch (error) {
-        console.error('[pipeline] Failed to sync task issue status label:', error);
-      }
-
       try {
         if (node.status === 'completed') {
           await ghCli.closeIssue(node.githubIssueNumber);

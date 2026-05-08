@@ -129,6 +129,14 @@ Shipcode's verification phase (`packages/pipeline/src/pipeline.ts:380`) runs
 `buildVerificationPrompt(plan, diff, plan.acceptanceCriteria)` — the clearer
 this section is, the fewer verification retries you burn.>
 
+## QA State
+<Optional but required for features where ShipCode should collect browser QA evidence.
+Include a fenced JSON block matching `FeatureQaState`.
+Use `visualAssertions` for layout or placement requirements that should be proven by Playwright.
+For example: target selector, route, assertion (`top-left-of-container`, `not-overlapping`, etc.),
+container/reference selector, tolerance, and viewport.
+Set `selectorReadiness` to `ready` only when stable selectors are part of the contract.>
+
 ## Risks & Open Questions
 <Unknowns, edge cases, things that could kill the plan mid-execution.
 Open questions get tracked here until answered, then deleted.>
