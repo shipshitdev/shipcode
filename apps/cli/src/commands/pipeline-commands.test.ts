@@ -18,6 +18,7 @@ const {
   getReviewByPlanIdMock,
   updatePlanStatusMock,
   getLatestCheckpointMock,
+  getLatestVerificationMock,
 } = vi.hoisted(() => ({
   createCliContextMock: vi.fn(),
   requireOnboardingMock: vi.fn(),
@@ -36,6 +37,7 @@ const {
   getReviewByPlanIdMock: vi.fn(),
   updatePlanStatusMock: vi.fn(),
   getLatestCheckpointMock: vi.fn(),
+  getLatestVerificationMock: vi.fn(),
 }));
 
 vi.mock('../context', () => ({
@@ -114,6 +116,9 @@ describe('pipeline CLI commands', () => {
       checkpoints: {
         getLatest: getLatestCheckpointMock,
       },
+      verifications: {
+        getLatest: getLatestVerificationMock,
+      },
     });
     getThreadForIssueOrExitMock.mockReturnValue({
       id: 'thread-1',
@@ -144,6 +149,7 @@ describe('pipeline CLI commands', () => {
       phase: 'executing',
       reason: 'verification failed',
     });
+    getLatestVerificationMock.mockReturnValue(null);
   });
 
   it('does not create a context when onboarding is incomplete', async () => {
