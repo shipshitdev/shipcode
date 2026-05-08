@@ -329,6 +329,51 @@ export interface PipelineContext {
   cpuQueueLastNotifiedAt: number | null;
 }
 
+/**
+ * Read-only snapshot of context fields relevant to a single provider call.
+ * Created by `snapshotPhaseInput` before each `runProviderPhase` invocation
+ * so the provider sees a frozen view — mutations go through the return value
+ * of `runProviderPhase`, not through direct context access.
+ */
+export interface PhaseInput {
+  readonly threadId: string;
+  readonly projectPath: string;
+  readonly projectId: string | null;
+  readonly worktreePath: string | null;
+  readonly baseBranch: string;
+  readonly forkPointSha: string;
+  readonly githubIssueNumber: number | null;
+  readonly githubIssueTitle: string | null;
+  readonly githubRepo: string | null;
+  readonly autonomous: boolean;
+}
+
+/**
+ * Fields on PipelineContext that are scoped to a single phase and should be
+ * cleared between transitions. `resetPhaseState` nulls these before handing
+ * control to the next phase handler.
+ */
+export type PhaseLocalField =
+  | 'stabilizationFeedback'
+  | 'executionResumeContext'
+  | 'previousPlanRawOutput'
+  | 'testOutput'
+  | 'runtimeQaOutput'
+  | 'runtimeQaCleanup'
+  | 'cpuQueueStartedAt'
+  | 'cpuQueueLastNotifiedAt';
+
+export const PHASE_LOCAL_FIELDS: readonly PhaseLocalField[] = [
+  'stabilizationFeedback',
+  'executionResumeContext',
+  'previousPlanRawOutput',
+  'testOutput',
+  'runtimeQaOutput',
+  'runtimeQaCleanup',
+  'cpuQueueStartedAt',
+  'cpuQueueLastNotifiedAt',
+] as const;
+
 export interface ActivePipelineSummary {
   threadId: string;
   projectId: string | null;

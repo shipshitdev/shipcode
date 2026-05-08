@@ -12,9 +12,52 @@ import {
   resolveProviderReasoningEffort,
   type SkillResolutionSource,
 } from '@shipcode/shared';
-import type { PipelineContext, PipelineDeps, PipelineExecutorModel } from '../types';
+import {
+  PHASE_LOCAL_FIELDS,
+  type PhaseInput,
+  type PhaseLocalField,
+  type PipelineContext,
+  type PipelineDeps,
+  type PipelineExecutorModel,
+} from '../types';
 import { loadWorkflowPolicy } from '../workflow-loader';
 import type { PipelineContextHelpers } from './shared';
+
+/**
+ * Create a frozen snapshot of context fields for a single provider call.
+ * The provider receives this instead of the full mutable PipelineContext.
+ */
+export function snapshotPhaseInput(context: PipelineContext): PhaseInput {
+  return Object.freeze({
+    threadId: context.threadId,
+    projectPath: context.projectPath,
+    projectId: context.projectId,
+    worktreePath: context.worktreePath,
+    baseBranch: context.baseBranch,
+    forkPointSha: context.forkPointSha,
+    githubIssueNumber: context.githubIssueNumber,
+    githubIssueTitle: context.githubIssueTitle,
+    githubRepo: context.githubRepo,
+    autonomous: context.autonomous,
+  });
+}
+
+/**
+ * Clear phase-local fields on PipelineContext before entering the next phase.
+ * Fields that were explicitly set for the upcoming phase (e.g. stabilizationFeedback
+ * set by startStabilization before entering execute) are preserved by the caller
+ * setting them *after* calling resetPhaseState.
+ */
+export function resetPhaseState(
+  context: PipelineContext,
+  preserve: readonly PhaseLocalField[] = [],
+): void {
+  const preserved = new Set<PhaseLocalField>(preserve);
+  for (const field of PHASE_LOCAL_FIELDS) {
+    if (preserved.has(field)) continue;
+    (context as unknown as Record<string, unknown>)[field] = null;
+  }
+}
 
 function buildPhasePromptScopes(): PipelineContext['phasePromptScopes'] {
   return {

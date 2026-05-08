@@ -6,6 +6,7 @@ export {
 } from './issue-group-scheduler';
 export { mapPhaseToIssuePipelineStatus, syncThreadAndIssuePhase } from './phase-sync';
 export { createPipeline } from './pipeline';
+export { resetPhaseState, snapshotPhaseInput } from './pipeline/context';
 export type {
   IssueStateProvider,
   ReconciliationLoop,
@@ -29,12 +30,15 @@ export { renderTemplate, TemplateRenderError } from './template-renderer';
 export type {
   CpuTaskGate,
   CpuTaskGateDecision,
+  PhaseInput,
+  PhaseLocalField,
   Pipeline,
   PipelineContext,
   PipelineDeps,
   PipelineEmitter,
   PipelineEvent,
 } from './types';
+export { PHASE_LOCAL_FIELDS } from './types';
 export type { WorkflowAgentPolicy, WorkflowLoadWarning, WorkflowPolicy } from './workflow-loader';
 export {
   DEFAULT_MAX_CONCURRENT_AGENTS,

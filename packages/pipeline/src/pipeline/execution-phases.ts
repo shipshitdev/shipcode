@@ -41,6 +41,7 @@ import {
 import { computeRetryDelayMs } from '../retry-scheduler';
 import type { PipelineContext } from '../types';
 import { renderWorkflowPromptTemplate } from '../workflow-prompt';
+import { resetPhaseState } from './context';
 import { extractQaFlowResults } from './qa-result-parser';
 import type { PipelineHelperEnv } from './shared';
 import {
@@ -802,6 +803,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
               : deps.taskGraphs.updateGraphStatus(taskGraph.id, 'completed');
           void postTaskGraphComment(context, completedGraph);
           if (context.autonomous) {
+            resetPhaseState(context);
             handlers.startTesting(threadId);
           } else {
             // Check if any code was actually changed
@@ -922,6 +924,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
               context.nodeAnchorSha = null;
               const updatedGraph = deps.taskGraphs.markNodeCompletedAndPromote(activeTaskNode.id);
               void postTaskGraphComment(context, updatedGraph);
+              resetPhaseState(context);
               handlers.startExecution(threadId, plan);
               return;
             }
@@ -984,6 +987,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
           }
 
           if (context.autonomous) {
+            resetPhaseState(context);
             handlers.startTesting(threadId);
           } else {
             // Check if executor actually produced code changes
@@ -1052,7 +1056,8 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       return;
     }
 
-    // Inject focused test-fix feedback via the stabilization slot (consumed-once).
+    // Reset phase state, then inject focused test-fix feedback (consumed-once).
+    resetPhaseState(context);
     context.stabilizationFeedback = formatTestFixFeedback(testOutput, context.testRetries);
 
     await handlers.startExecution(threadId, structuredPlan);
@@ -1081,6 +1086,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     );
 
     if (verifyCommands.length === 0 && !hasRuntimeQa) {
+      resetPhaseState(context);
       handlers.startVerification(threadId);
       return;
     }
@@ -1204,6 +1210,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     }
 
     context.testRetries = 0;
+    resetPhaseState(context, ['testOutput', 'runtimeQaOutput']);
     handlers.startVerification(threadId);
   }
 
@@ -1529,6 +1536,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
           }
 
           if (result.data.result === 'passed') {
+            resetPhaseState(context);
             handlers.startCommitAndPush(threadId);
           } else if (context.verificationRetries < MAX_VERIFICATION_RETRIES) {
             context.verificationRetries++;
@@ -1540,6 +1548,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
             context.retryTimer = setTimeout(() => {
               context.retryTimer = null;
               if (context.cancelled || !activePipelines.has(threadId)) return;
+              resetPhaseState(context);
               handlers.startExecution(threadId, plan);
             }, delayMs);
           } else {
@@ -1582,6 +1591,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
               context.retryTimer = setTimeout(() => {
                 context.retryTimer = null;
                 if (context.cancelled || !activePipelines.has(threadId)) return;
+                resetPhaseState(context);
                 handlers.startPlanGeneration(
                   threadId,
                   continuationPrompt,
@@ -1664,6 +1674,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       }).trim();
       execFileSync('git', ['push', 'origin', branch, '--set-upstream'], { cwd, encoding: 'utf-8' });
 
+      resetPhaseState(context);
       handlers.startShipping(threadId);
     } catch (firstErr) {
       try {
@@ -1675,6 +1686,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
           cwd,
           encoding: 'utf-8',
         });
+        resetPhaseState(context);
         handlers.startShipping(threadId);
       } catch (secondErr) {
         const message = secondErr instanceof Error ? secondErr.message : String(secondErr);
@@ -1874,6 +1886,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
     }
 
     context.cancelled = false;
+    resetPhaseState(context);
     context.stabilizationFeedback = formatStabilizationFeedback(inputs);
     context.verifiedSha = null;
     await handlers.startExecution(threadId, latestPlan.structured);

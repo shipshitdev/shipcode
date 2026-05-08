@@ -33,6 +33,7 @@ import type { TaskGraphWithNodes } from '@shipcode/shared/source';
 import { computeRetryDelayMs } from '../retry-scheduler';
 import type { PipelineContext } from '../types';
 import { renderWorkflowPromptTemplate } from '../workflow-prompt';
+import { resetPhaseState } from './context';
 import type { PipelineHelperEnv } from './shared';
 
 const NO_VALID_PLAN_REASON = 'Plan generation failed — no valid shipcode-plan block was produced.';
@@ -237,6 +238,7 @@ export function createPlanningPhaseHandlers({
 
     if (revisionCount > 0) {
       deps.plans.updateStatus(plan.id, 'pending_review');
+      resetPhaseState(context);
       handlers.startReview(threadId, structuredPlan);
       return;
     }
@@ -282,6 +284,7 @@ export function createPlanningPhaseHandlers({
       hasCriticalOrMajor: false,
       reasons,
     });
+    resetPhaseState(context);
     handlers.startExecution(threadId, structuredPlan);
   }
 
@@ -636,6 +639,7 @@ export function createPlanningPhaseHandlers({
                 hasCriticalOrMajor: false,
                 reasons,
               });
+              resetPhaseState(context);
               handlers.startExecution(threadId, latestStructuredPlan);
             }
           } else if (result.data.decision === 'request_changes') {
@@ -652,6 +656,7 @@ export function createPlanningPhaseHandlers({
                       `[${finding.severity}] ${finding.description}${finding.suggestion ? ` — ${finding.suggestion}` : ''}`,
                   )
                   .join('\n');
+              resetPhaseState(context);
               handlers.startRevision(threadId, latestStructuredPlan, feedback);
             } else {
               const hasCriticalOrMajor = result.data.findings.some(
@@ -697,6 +702,7 @@ export function createPlanningPhaseHandlers({
                   hasCriticalOrMajor,
                   reasons,
                 });
+                resetPhaseState(context);
                 handlers.startExecution(threadId, latestStructuredPlan);
               }
             }
@@ -794,6 +800,7 @@ export function createPlanningPhaseHandlers({
           const newPlan = deps.plans.create(threadId, result.raw, result.data, plan.version + 1);
           deps.plans.updateStatus(newPlan.id, 'pending_review');
           deps.emitter.emit({ type: 'plan:parsed', threadId, plan: result.data });
+          resetPhaseState(context);
           handlers.startReview(threadId, result.data);
         } else {
           deps.plans.supersedeAll(threadId);

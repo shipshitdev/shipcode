@@ -31,6 +31,26 @@ import type { GithubGraphqlDeps } from '../tools/types';
 export type ProviderPhase = 'plan' | 'review' | 'revision' | 'verify' | 'execute';
 
 /**
+ * Declarative per-phase tool policy. The pipeline passes these as
+ * `phaseHints` so that toolset scoping is data, not code buried in
+ * `buildClaudeCommand`. When a hint is present it takes precedence
+ * over the hardcoded defaults.
+ */
+export const PHASE_TOOL_POLICIES: Record<
+  ProviderPhase,
+  { allowedTools?: string[]; disallowedTools?: string[]; sandbox?: 'read-only' | 'workspace-write' }
+> = {
+  plan: { disallowedTools: ['Edit', 'Write', 'Bash', 'NotebookEdit'], sandbox: 'read-only' },
+  revision: { disallowedTools: ['Edit', 'Write', 'Bash', 'NotebookEdit'], sandbox: 'read-only' },
+  review: { disallowedTools: ['Edit', 'Write', 'Bash', 'NotebookEdit'], sandbox: 'read-only' },
+  verify: { disallowedTools: ['Edit', 'Write', 'Bash', 'NotebookEdit'], sandbox: 'read-only' },
+  execute: {
+    allowedTools: ['Edit', 'Write', 'Bash', 'Glob', 'Grep', 'Read'],
+    sandbox: 'workspace-write',
+  },
+};
+
+/**
  * Phase-specific hints the pipeline passes to the provider. Providers are
  * free to ignore anything they don't understand — these are not part of
  * the completion contract. Intended for the CLI provider to carry through

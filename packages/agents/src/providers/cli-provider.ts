@@ -15,7 +15,13 @@ import { measurePromptPayload } from '../prompt-scope';
 import { StreamParser } from '../stream-parser';
 import { stripAnsi } from './output-summary';
 import { mapReasoningEffortToClaudeThinkingTokens, mapReasoningEffortToCodex } from './reasoning';
-import type { AgentProvider, ProviderPhase, ProviderRequest, ProviderResponse } from './types';
+import {
+  type AgentProvider,
+  PHASE_TOOL_POLICIES,
+  type ProviderPhase,
+  type ProviderRequest,
+  type ProviderResponse,
+} from './types';
 
 interface CliRunResult {
   rawOutput: string;
@@ -151,20 +157,27 @@ async function runCli(
   });
 }
 
+/**
+ * Resolve the tool policy for a phase. Explicit phaseHints override the
+ * declarative defaults so callers can customize per-run.
+ */
+function resolveToolPolicy(req: ProviderRequest) {
+  const defaults = PHASE_TOOL_POLICIES[req.phase];
+  return {
+    allowedTools: req.phaseHints?.allowedTools ?? defaults.allowedTools,
+    disallowedTools: req.phaseHints?.disallowedTools ?? defaults.disallowedTools,
+  };
+}
+
 /** Build claude CLI args/stdin for a given phase. */
 function buildClaudeCommand(req: ProviderRequest): CliCommand {
   const modelArgs = req.modelHint ? ['--model', req.modelHint] : [];
+  const { allowedTools, disallowedTools } = resolveToolPolicy(req);
+
   switch (req.phase) {
     case 'plan':
     case 'revision':
     case 'verify': {
-      // Analysis phases: stream-json for real-time terminal output,
-      // no file-mutating tools. --verbose is required by stream-json mode.
-      // Planning/verification are intentionally single-shot at the runtime layer;
-      // review/revision loops are controlled by the revision-count pipeline setting.
-      // --max-thinking-tokens enables extended thinking so the terminal
-      // drawer can display reasoning blocks. Token budget is controlled by
-      // phaseHints.reasoningEffort (high=32000, medium=8000, low=omit).
       const maxTurns = String(req.phaseHints?.maxTurns ?? 1);
       const thinkingTokens = mapReasoningEffortToClaudeThinkingTokens(
         req.phaseHints?.reasoningEffort,
@@ -179,9 +192,9 @@ function buildClaudeCommand(req: ProviderRequest): CliCommand {
         '--max-turns',
         maxTurns,
         '--dangerously-skip-permissions',
-        '--disallowedTools',
-        'Edit,Write,Bash,NotebookEdit',
       ];
+      if (disallowedTools) args.push('--disallowedTools', disallowedTools.join(','));
+      if (allowedTools) args.push('--allowedTools', allowedTools.join(','));
       if (thinkingTokens !== null) {
         args.splice(
           args.indexOf('--dangerously-skip-permissions'),
@@ -193,14 +206,10 @@ function buildClaudeCommand(req: ProviderRequest): CliCommand {
       return { args, stdin: req.prompt };
     }
     case 'execute': {
-      // Execution: full tool surface, no JSON wrapping, no turn limit.
-      const execArgs = [
-        '-p',
-        ...modelArgs,
-        '--allowedTools',
-        'Edit,Write,Bash,Glob,Grep,Read',
-        '--dangerously-skip-permissions',
-      ];
+      const execArgs = ['-p', ...modelArgs];
+      if (allowedTools) execArgs.push('--allowedTools', allowedTools.join(','));
+      if (disallowedTools) execArgs.push('--disallowedTools', disallowedTools.join(','));
+      execArgs.push('--dangerously-skip-permissions');
       const execThinking = mapReasoningEffortToClaudeThinkingTokens(
         req.phaseHints?.reasoningEffort,
         req.modelHint,
@@ -215,11 +224,10 @@ function buildClaudeCommand(req: ProviderRequest): CliCommand {
       }
       return { args: execArgs, stdin: req.prompt };
     }
-    case 'review':
-      // Claude does not review in the current pipeline (codex does).
+    case 'review': // Claude does not review in the current pipeline (codex does).
       // Kept for symmetry; always 1 turn (structural, not configurable).
-      return {
-        args: [
+      {
+        const args = [
           '-p',
           ...modelArgs,
           '--output-format',
@@ -227,11 +235,11 @@ function buildClaudeCommand(req: ProviderRequest): CliCommand {
           '--max-turns',
           '1',
           '--dangerously-skip-permissions',
-          '--disallowedTools',
-          'Edit,Write,Bash,NotebookEdit',
-        ],
-        stdin: req.prompt,
-      };
+        ];
+        if (disallowedTools) args.push('--disallowedTools', disallowedTools.join(','));
+        if (allowedTools) args.push('--allowedTools', allowedTools.join(','));
+        return { args, stdin: req.prompt };
+      }
   }
 }
 
@@ -256,7 +264,8 @@ function buildClaudeStdin(req: ProviderRequest): string {
  * full issue bodies.
  */
 function buildCodexCommand(req: ProviderRequest): CliCommand {
-  const sandbox = req.phase === 'execute' ? 'workspace-write' : 'read-only';
+  const defaultPolicy = PHASE_TOOL_POLICIES[req.phase];
+  const sandbox = req.phaseHints?.sandbox ?? defaultPolicy.sandbox ?? 'read-only';
   const topLevelFlags: string[] = ['-a', 'never'];
   if (req.modelHint) topLevelFlags.push('-m', req.modelHint);
   // Default to high reasoning so thinking output is always visible in the terminal.
