@@ -141,12 +141,34 @@ describe('SettingsQueries', () => {
   });
 
   it('set() serializes objects as JSON', () => {
-    const mappings = { todo: 'label:todo', planning: 'label:planning' };
-    settings.set({ statusLabelMappings: mappings });
-    const row = db
-      .prepare("SELECT value FROM settings WHERE key = 'statusLabelMappings'")
-      .get() as { value: string };
-    expect(JSON.parse(row.value)).toEqual(mappings);
+    const events = {
+      awaitingApproval: true,
+      failed: true,
+      completed: false,
+      verificationExhausted: true,
+      ciBlocked: true,
+    };
+    settings.set({ notificationEvents: events });
+    const row = db.prepare("SELECT value FROM settings WHERE key = 'notificationEvents'").get() as {
+      value: string;
+    };
+    expect(JSON.parse(row.value)).toEqual(events);
+  });
+
+  it('round-trips cleanup criteria with merged local and remote branch toggles', () => {
+    settings.set({
+      cleanupCriteria: {
+        ...DEFAULT_SETTINGS.cleanupCriteria,
+        localBranchMerged: false,
+        remoteBranchMerged: false,
+      },
+    });
+
+    expect(settings.get().cleanupCriteria).toEqual({
+      ...DEFAULT_SETTINGS.cleanupCriteria,
+      localBranchMerged: false,
+      remoteBranchMerged: false,
+    });
   });
 
   it('round-trip: set then get returns correct types', () => {

@@ -399,7 +399,9 @@ export class SettingsQueries {
       const required: (keyof CleanupCriteria)[] = [
         'worktreeMergedPr',
         'worktreeClosedPr',
+        'localBranchMerged',
         'localBranchNoRemote',
+        'remoteBranchMerged',
         'worktreeNoPrCleanTree',
       ];
       for (const k of required) {

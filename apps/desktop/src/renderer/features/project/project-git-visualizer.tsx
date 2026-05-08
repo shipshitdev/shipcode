@@ -184,7 +184,7 @@ export function ProjectGitVisualizer() {
         variant="outline"
         onClick={() => setCleanupOpen(true)}
         disabled={autoCommit.isPending}
-        title="Cleanup worktrees & branches"
+        title="Cleanup merged worktrees & branches"
       >
         <Trash2 size={13} />
         Cleanup

@@ -104,6 +104,17 @@ export function AutoCommitSettingsSection({
           />
         </SettingsRow>
         <SettingsRow
+          label="Local branches already merged"
+          htmlFor="cleanup-local-merged"
+          description="Show ShipCode local branches whose commits are already in the default branch."
+        >
+          <Switch
+            id="cleanup-local-merged"
+            checked={settings.cleanupCriteria.localBranchMerged}
+            onCheckedChange={(checked: boolean) => updateCriteria('localBranchMerged', !!checked)}
+          />
+        </SettingsRow>
+        <SettingsRow
           label="Local branches with no remote"
           htmlFor="cleanup-orphan"
           description="Show local branches that have no upstream and no active worktree."
@@ -112,6 +123,17 @@ export function AutoCommitSettingsSection({
             id="cleanup-orphan"
             checked={settings.cleanupCriteria.localBranchNoRemote}
             onCheckedChange={(checked: boolean) => updateCriteria('localBranchNoRemote', !!checked)}
+          />
+        </SettingsRow>
+        <SettingsRow
+          label="Remote branches already merged"
+          htmlFor="cleanup-remote-merged"
+          description="Show ShipCode remote branches whose commits are already in the default branch."
+        >
+          <Switch
+            id="cleanup-remote-merged"
+            checked={settings.cleanupCriteria.remoteBranchMerged}
+            onCheckedChange={(checked: boolean) => updateCriteria('remoteBranchMerged', !!checked)}
           />
         </SettingsRow>
         <SettingsRow

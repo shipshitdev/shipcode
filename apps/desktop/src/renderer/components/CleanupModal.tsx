@@ -19,11 +19,22 @@ interface CleanupModalProps {
 const KIND_LABELS: Record<CleanupItem['kind'], string> = {
   'worktree-merged-pr': 'Worktrees with merged PR',
   'worktree-closed-pr': 'Worktrees with closed PR',
+  'worktree-no-pr-clean': 'Clean merged worktrees without PR',
+  'local-branch-merged': 'Local branches (merged)',
   'local-branch-no-remote': 'Local branches with no remote',
   'remote-branch-merged': 'Remote branches (merged)',
 };
 
 const REMOTE_KINDS = new Set<CleanupItem['kind']>(['remote-branch-merged']);
+const WORKTREE_KINDS = new Set<CleanupItem['kind']>([
+  'worktree-merged-pr',
+  'worktree-closed-pr',
+  'worktree-no-pr-clean',
+]);
+const LOCAL_BRANCH_KINDS = new Set<CleanupItem['kind']>([
+  'local-branch-merged',
+  'local-branch-no-remote',
+]);
 
 function formatCleanupDivergence(item: CleanupItem): string | null {
   if (!('aheadCount' in item)) return null;
@@ -41,9 +52,25 @@ function describeItem(item: CleanupItem): { primary: string; secondary?: string 
   switch (item.kind) {
     case 'worktree-merged-pr':
     case 'worktree-closed-pr':
+    case 'worktree-no-pr-clean':
       return {
-        primary: `${item.branch}  ·  PR #${item.prNumber}`,
+        primary:
+          'prNumber' in item && item.prNumber
+            ? `${item.branch}  ·  PR #${item.prNumber}`
+            : item.branch,
         secondary: [item.worktreePath, item.dirty ? 'LOCAL WORK' : null, divergence]
+          .filter(Boolean)
+          .join('  ·  '),
+      };
+    case 'local-branch-merged':
+      return {
+        primary: item.branch,
+        secondary: [
+          item.remoteBranch ? `tracks ${item.remoteBranch}` : null,
+          item.prNumber ? `PR #${item.prNumber}` : null,
+          `last commit ${item.lastCommitDate}`,
+          divergence,
+        ]
           .filter(Boolean)
           .join('  ·  '),
       };
@@ -54,16 +81,36 @@ function describeItem(item: CleanupItem): { primary: string; secondary?: string 
       };
     case 'remote-branch-merged':
       return {
-        primary: item.branch,
-        secondary: `PR #${item.prNumber}`,
+        primary: `${item.remote}/${item.branch}`,
+        secondary: [
+          item.prNumber ? `PR #${item.prNumber}` : null,
+          `last commit ${item.lastCommitDate}`,
+          divergence,
+        ]
+          .filter(Boolean)
+          .join('  ·  '),
       };
   }
+}
+
+function itemHasLocalWork(item: CleanupItem): boolean {
+  const dirty = WORKTREE_KINDS.has(item.kind) && 'dirty' in item && item.dirty;
+  const ahead = 'aheadCount' in item && (item.aheadCount ?? 0) > 0;
+  return dirty || ahead;
+}
+
+function itemHasMergeProof(item: CleanupItem): boolean {
+  return !('compareRef' in item) || item.compareRef != null;
+}
+
+function isSelectableCleanupItem(item: CleanupItem): boolean {
+  return !itemHasLocalWork(item) && itemHasMergeProof(item);
 }
 
 export function CleanupModal({ open, onClose, projectId, criteria }: CleanupModalProps) {
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [acknowledgedRemote, setAcknowledgedRemote] = useState(false);
+  const [acknowledgedCleanup, setAcknowledgedCleanup] = useState(false);
   const [applyResult, setApplyResult] = useState<CleanupApplyResult | null>(null);
 
   const {
@@ -83,10 +130,16 @@ export function CleanupModal({ open, onClose, projectId, criteria }: CleanupModa
   useEffect(() => {
     if (!open) {
       setSelected(new Set());
-      setAcknowledgedRemote(false);
+      setAcknowledgedCleanup(false);
       setApplyResult(null);
     }
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !analysis) return;
+    setSelected(new Set(analysis.items.filter(isSelectableCleanupItem).map((item) => item.id)));
+    setAcknowledgedCleanup(false);
+  }, [analysis, open]);
 
   const grouped = useMemo(() => {
     if (!analysis) return [] as Array<{ kind: CleanupItem['kind']; items: CleanupItem[] }>;
@@ -107,6 +160,27 @@ export function CleanupModal({ open, onClose, projectId, criteria }: CleanupModa
     return false;
   }, [analysis, selected]);
 
+  const selectedItems = useMemo(() => {
+    if (!analysis) return [] as CleanupItem[];
+    return analysis.items.filter((item) => selected.has(item.id));
+  }, [analysis, selected]);
+
+  const confirmationGroups = useMemo(() => {
+    const worktrees: Array<{ branch: string; path: string }> = [];
+    const localBranches: string[] = [];
+    const remoteBranches: string[] = [];
+    for (const item of selectedItems) {
+      if (WORKTREE_KINDS.has(item.kind) && 'worktreePath' in item) {
+        worktrees.push({ branch: item.branch, path: item.worktreePath });
+      } else if (LOCAL_BRANCH_KINDS.has(item.kind)) {
+        localBranches.push(item.branch);
+      } else if (item.kind === 'remote-branch-merged') {
+        remoteBranches.push(`${item.remote}/${item.branch}`);
+      }
+    }
+    return { worktrees, localBranches, remoteBranches };
+  }, [selectedItems]);
+
   const apply = useMutation({
     mutationFn: () =>
       window.shipcode.invoke<CleanupApplyResult>('git:cleanup-apply', {
@@ -119,7 +193,7 @@ export function CleanupModal({ open, onClose, projectId, criteria }: CleanupModa
       queryClient.invalidateQueries({ queryKey: ['cleanup-analyze', projectId] });
       void refetchAnalyze();
       setSelected(new Set());
-      setAcknowledgedRemote(false);
+      setAcknowledgedCleanup(false);
     },
   });
 
@@ -132,7 +206,7 @@ export function CleanupModal({ open, onClose, projectId, criteria }: CleanupModa
     });
   };
 
-  const toggleAll = (kind: CleanupItem['kind'], items: CleanupItem[]) => {
+  const toggleAll = (_kind: CleanupItem['kind'], items: CleanupItem[]) => {
     setSelected((prev) => {
       const next = new Set(prev);
       const allSelected = items.every((it) => next.has(it.id));
@@ -141,17 +215,13 @@ export function CleanupModal({ open, onClose, projectId, criteria }: CleanupModa
           next.delete(it.id);
           continue;
         }
-        const isWorktree = kind === 'worktree-merged-pr' || kind === 'worktree-closed-pr';
-        const dirty = isWorktree && 'dirty' in it && it.dirty === true;
-        const hasLocalCommits = 'aheadCount' in it && (it.aheadCount ?? 0) > 0;
-        if (!dirty && !hasLocalCommits) next.add(it.id);
+        if (isSelectableCleanupItem(it)) next.add(it.id);
       }
       return next;
     });
   };
 
-  const applyDisabled =
-    apply.isPending || selected.size === 0 || (hasRemoteSelection && !acknowledgedRemote);
+  const applyDisabled = apply.isPending || selected.size === 0 || !acknowledgedCleanup;
 
   return (
     <Modal
@@ -215,10 +285,7 @@ export function CleanupModal({ open, onClose, projectId, criteria }: CleanupModa
               <ul className="space-y-1">
                 {items.map((item) => {
                   const desc = describeItem(item);
-                  const isWorktree =
-                    item.kind === 'worktree-merged-pr' || item.kind === 'worktree-closed-pr';
-                  const dirtyBlocked = isWorktree && item.dirty;
-                  const localCommitsBlocked = 'aheadCount' in item && (item.aheadCount ?? 0) > 0;
+                  const blocked = !isSelectableCleanupItem(item);
                   return (
                     <li
                       key={item.id}
@@ -227,7 +294,7 @@ export function CleanupModal({ open, onClose, projectId, criteria }: CleanupModa
                       <Checkbox
                         id={`cleanup-${item.id}`}
                         checked={selected.has(item.id)}
-                        disabled={dirtyBlocked || localCommitsBlocked}
+                        disabled={blocked}
                         onCheckedChange={() => toggle(item.id)}
                         className="mt-0.5"
                       />
@@ -238,11 +305,7 @@ export function CleanupModal({ open, onClose, projectId, criteria }: CleanupModa
                         <div className="truncate font-mono text-primary">{desc.primary}</div>
                         {desc.secondary ? (
                           <div
-                            className={`truncate ${
-                              dirtyBlocked || localCommitsBlocked
-                                ? 'text-destructive'
-                                : 'text-muted'
-                            }`}
+                            className={`truncate ${blocked ? 'text-destructive' : 'text-muted'}`}
                           >
                             {desc.secondary}
                           </div>
@@ -256,19 +319,78 @@ export function CleanupModal({ open, onClose, projectId, criteria }: CleanupModa
           );
         })}
 
-        {hasRemoteSelection ? (
-          <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3">
-            <div className="text-sm font-semibold text-destructive">Remote deletion warning</div>
+        {selectedItems.length > 0 ? (
+          <div
+            className={`rounded-md border p-3 ${
+              hasRemoteSelection
+                ? 'border-destructive/40 bg-destructive/10'
+                : 'border-border bg-secondary/10'
+            }`}
+          >
+            <div
+              className={`text-sm font-semibold ${
+                hasRemoteSelection ? 'text-destructive' : 'text-primary'
+              }`}
+            >
+              Confirm cleanup
+            </div>
             <p className="mt-1 text-xs text-secondary">
-              Deleting a remote branch is irreversible from the desktop app. Branch protection rules
-              may still reject the push.
+              ShipCode verified these selected branches are merged into{' '}
+              <span className="font-mono text-primary">
+                {analysis?.baseRef ?? 'the default branch'}
+              </span>{' '}
+              and will re-check before deleting anything.
             </p>
+            {hasRemoteSelection ? (
+              <p className="mt-1 text-xs text-secondary">
+                Remote branch deletion removes refs from origin; branch protection rules may reject
+                the push.
+              </p>
+            ) : null}
+            <div className="mt-3 max-h-40 space-y-3 overflow-y-auto rounded-md border border-border bg-primary/70 p-2 text-[11px]">
+              {confirmationGroups.worktrees.length > 0 ? (
+                <div>
+                  <div className="mb-1 font-semibold text-primary">Worktrees</div>
+                  <ul className="space-y-1 font-mono text-secondary">
+                    {confirmationGroups.worktrees.map((worktree) => (
+                      <li key={`${worktree.branch}:${worktree.path}`} className="break-all">
+                        {worktree.branch} · {worktree.path}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {confirmationGroups.localBranches.length > 0 ? (
+                <div>
+                  <div className="mb-1 font-semibold text-primary">Local branches</div>
+                  <ul className="space-y-1 font-mono text-secondary">
+                    {confirmationGroups.localBranches.map((branch) => (
+                      <li key={branch} className="break-all">
+                        {branch}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {confirmationGroups.remoteBranches.length > 0 ? (
+                <div>
+                  <div className="mb-1 font-semibold text-primary">Remote branches</div>
+                  <ul className="space-y-1 font-mono text-secondary">
+                    {confirmationGroups.remoteBranches.map((branch) => (
+                      <li key={branch} className="break-all">
+                        {branch}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
             <label className="mt-2 flex items-center gap-2 text-xs text-primary">
               <Checkbox
-                checked={acknowledgedRemote}
-                onCheckedChange={(checked: boolean) => setAcknowledgedRemote(!!checked)}
+                checked={acknowledgedCleanup}
+                onCheckedChange={(checked: boolean) => setAcknowledgedCleanup(!!checked)}
               />
-              I understand and want to delete the selected remote branches.
+              I reviewed this exact list and want to delete only these selected cleanup items.
             </label>
           </div>
         ) : null}

@@ -4,7 +4,9 @@ import { analyzeCleanup, type CleanupAnalysisInput } from './cleanup-analyzer';
 const ALL_ON = {
   worktreeMergedPr: true,
   worktreeClosedPr: true,
+  localBranchMerged: true,
   localBranchNoRemote: true,
+  remoteBranchMerged: true,
   worktreeNoPrCleanTree: false,
 };
 
@@ -23,7 +25,9 @@ describe('analyzeCleanup', () => {
   it('flags merged-PR worktrees', () => {
     const items = analyzeCleanup(
       input({
-        worktrees: [{ path: '/wt/a', branch: 'feat/a', dirty: false }],
+        worktrees: [
+          { path: '/wt/a', branch: 'feat/a', dirty: false, aheadCount: 0, compareRef: 'main' },
+        ],
         pullRequests: [
           {
             number: 1,
@@ -39,21 +43,19 @@ describe('analyzeCleanup', () => {
     expect(items[0].kind).toBe('worktree-merged-pr');
   });
 
-  it('flags closed-unmerged-PR worktrees with dirty flag propagated', () => {
+  it('does not flag closed-PR worktrees with local work', () => {
     const items = analyzeCleanup(
       input({
-        worktrees: [{ path: '/wt/b', branch: 'feat/b', dirty: true }],
+        worktrees: [
+          { path: '/wt/b', branch: 'feat/b', dirty: true, aheadCount: 0, compareRef: 'main' },
+        ],
         pullRequests: [{ number: 2, url: 'u', state: 'closed', headRef: 'feat/b', merged: false }],
       }),
     );
-    expect(items).toHaveLength(1);
-    expect(items[0].kind).toBe('worktree-closed-pr');
-    if (items[0].kind === 'worktree-closed-pr') {
-      expect(items[0].dirty).toBe(true);
-    }
+    expect(items).toHaveLength(0);
   });
 
-  it('treats local commits ahead of the compare ref as unsafe worktree state', () => {
+  it('does not flag worktrees with local commits ahead of the compare ref', () => {
     const items = analyzeCleanup(
       input({
         worktrees: [
@@ -69,13 +71,7 @@ describe('analyzeCleanup', () => {
         pullRequests: [{ number: 2, url: 'u', state: 'closed', headRef: 'feat/b', merged: false }],
       }),
     );
-    expect(items).toHaveLength(1);
-    expect(items[0].kind).toBe('worktree-closed-pr');
-    if (items[0].kind === 'worktree-closed-pr') {
-      expect(items[0].dirty).toBe(true);
-      expect(items[0].aheadCount).toBe(2);
-      expect(items[0].compareRef).toBe('develop');
-    }
+    expect(items).toHaveLength(0);
   });
 
   it('does not suggest no-PR worktrees that are clean but ahead of the compare ref', () => {
@@ -99,7 +95,9 @@ describe('analyzeCleanup', () => {
   it('never returns protected branches', () => {
     const items = analyzeCleanup(
       input({
-        worktrees: [{ path: '/wt/main', branch: 'main', dirty: false }],
+        worktrees: [
+          { path: '/wt/main', branch: 'main', dirty: false, aheadCount: 0, compareRef: 'main' },
+        ],
         pullRequests: [{ number: 9, url: 'u', state: 'merged', headRef: 'main', merged: true }],
         branches: [{ name: 'main', hasRemote: false, lastCommitDate: '2026-01-01' }],
       }),
@@ -110,7 +108,9 @@ describe('analyzeCleanup', () => {
   it('respects criteria toggles', () => {
     const items = analyzeCleanup(
       input({
-        worktrees: [{ path: '/wt/a', branch: 'feat/a', dirty: false }],
+        worktrees: [
+          { path: '/wt/a', branch: 'feat/a', dirty: false, aheadCount: 0, compareRef: 'main' },
+        ],
         pullRequests: [{ number: 1, url: 'u', state: 'merged', headRef: 'feat/a', merged: true }],
         criteria: { ...ALL_ON, worktreeMergedPr: false },
       }),
@@ -122,8 +122,20 @@ describe('analyzeCleanup', () => {
     const items = analyzeCleanup(
       input({
         branches: [
-          { name: 'orphan', hasRemote: false, lastCommitDate: '2026-01-01' },
-          { name: 'tracked', hasRemote: true, lastCommitDate: '2026-02-01' },
+          {
+            name: 'orphan',
+            hasRemote: false,
+            lastCommitDate: '2026-01-01',
+            aheadCount: 0,
+            compareRef: 'main',
+          },
+          {
+            name: 'tracked',
+            hasRemote: true,
+            lastCommitDate: '2026-02-01',
+            aheadCount: 0,
+            compareRef: 'main',
+          },
         ],
       }),
     );
@@ -137,10 +149,75 @@ describe('analyzeCleanup', () => {
   it('skips local branches that already have an active worktree', () => {
     const items = analyzeCleanup(
       input({
-        worktrees: [{ path: '/wt/a', branch: 'orphan', dirty: false }],
-        branches: [{ name: 'orphan', hasRemote: false, lastCommitDate: '2026-01-01' }],
+        worktrees: [
+          { path: '/wt/a', branch: 'orphan', dirty: false, aheadCount: 0, compareRef: 'main' },
+        ],
+        branches: [
+          {
+            name: 'orphan',
+            hasRemote: false,
+            lastCommitDate: '2026-01-01',
+            aheadCount: 0,
+            compareRef: 'main',
+          },
+        ],
       }),
     );
+    expect(items).toHaveLength(0);
+  });
+
+  it('flags merged local and remote ShipCode branches', () => {
+    const items = analyzeCleanup(
+      input({
+        branches: [
+          {
+            name: 'ship/44-done',
+            hasRemote: true,
+            remoteName: 'origin/ship/44-done',
+            lastCommitDate: '2026-01-01',
+            aheadCount: 0,
+            compareRef: 'origin/main',
+          },
+        ],
+        remoteBranches: [
+          {
+            name: 'ship/44-done',
+            remote: 'origin',
+            lastCommitDate: '2026-01-01',
+            aheadCount: 0,
+            compareRef: 'origin/main',
+          },
+        ],
+      }),
+    );
+
+    expect(items.map((item) => item.kind)).toEqual(['local-branch-merged', 'remote-branch-merged']);
+  });
+
+  it('skips remote branches when a matching worktree has local work', () => {
+    const items = analyzeCleanup(
+      input({
+        worktrees: [
+          {
+            path: '/wt/a',
+            branch: 'ship/44-done',
+            dirty: true,
+            aheadCount: 0,
+            compareRef: 'origin/main',
+          },
+        ],
+        remoteBranches: [
+          {
+            name: 'ship/44-done',
+            remote: 'origin',
+            lastCommitDate: '2026-01-01',
+            aheadCount: 0,
+            compareRef: 'origin/main',
+          },
+        ],
+      }),
+    );
+
     expect(items).toHaveLength(0);
   });
 });

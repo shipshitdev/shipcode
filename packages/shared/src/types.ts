@@ -721,7 +721,9 @@ export interface TelemetryStatus {
 export interface CleanupCriteria {
   worktreeMergedPr: boolean;
   worktreeClosedPr: boolean;
+  localBranchMerged: boolean;
   localBranchNoRemote: boolean;
+  remoteBranchMerged: boolean;
   worktreeNoPrCleanTree: boolean;
 }
 
@@ -752,6 +754,27 @@ export type CleanupItem =
     }
   | {
       id: string;
+      kind: 'worktree-no-pr-clean';
+      worktreePath: string;
+      branch: string;
+      dirty: boolean;
+      aheadCount: number;
+      behindCount: number;
+      compareRef: string | null;
+    }
+  | {
+      id: string;
+      kind: 'local-branch-merged';
+      branch: string;
+      lastCommitDate: string;
+      aheadCount: number;
+      behindCount: number;
+      compareRef: string | null;
+      remoteBranch: string | null;
+      prNumber: number | null;
+    }
+  | {
+      id: string;
       kind: 'local-branch-no-remote';
       branch: string;
       lastCommitDate: string;
@@ -763,7 +786,12 @@ export type CleanupItem =
       id: string;
       kind: 'remote-branch-merged';
       branch: string;
-      prNumber: number;
+      remote: string;
+      lastCommitDate: string;
+      aheadCount: number;
+      behindCount: number;
+      compareRef: string | null;
+      prNumber: number | null;
     };
 
 export interface AutoCommitResult {
@@ -781,6 +809,7 @@ export interface AutoCommitResult {
 export interface CleanupAnalyzeResult {
   items: CleanupItem[];
   protectedBranches: string[];
+  baseRef: string | null;
 }
 
 export interface CleanupApplyResult {

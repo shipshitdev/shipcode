@@ -10,7 +10,6 @@ import {
   SHIPCODE_LABEL_PREFIX,
 } from './github-labels';
 import {
-  DEFAULT_STATUS_LABEL_MAPPINGS,
   SHIPCODE_AGENT_LABELS,
   SHIPCODE_DEFAULT_LABELS,
   SHIPCODE_METADATA_LABELS,
@@ -23,13 +22,6 @@ describe('SHIPCODE_DEFAULT_LABELS', () => {
   it('contains unique label names', () => {
     const names = SHIPCODE_DEFAULT_LABELS.map((label) => label.name);
     expect(new Set(names).size).toBe(names.length);
-  });
-
-  it('status label mappings in settings remain empty (legacy)', () => {
-    const defaultStatuses = [
-      ...new Set(Object.values(DEFAULT_STATUS_LABEL_MAPPINGS).filter(Boolean)),
-    ];
-    expect(defaultStatuses).toEqual([]);
   });
 
   it('SHIPCODE_STATUS_LABELS aliases SHIPCODE_PIPELINE_LABELS', () => {

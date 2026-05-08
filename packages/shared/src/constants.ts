@@ -88,7 +88,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   cleanupCriteria: {
     worktreeMergedPr: true,
     worktreeClosedPr: true,
+    localBranchMerged: true,
     localBranchNoRemote: true,
+    remoteBranchMerged: true,
     worktreeNoPrCleanTree: false,
   },
 };

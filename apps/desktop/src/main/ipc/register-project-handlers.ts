@@ -1150,6 +1150,10 @@ export function registerProjectHandlers({
         project,
         criteria: settings.cleanupCriteria,
         activeSummaries: pipeline.listActive(),
+        managedBranches: queries.threads
+          .list(project.id)
+          .map((thread) => thread.worktreeBranch)
+          .filter((branch): branch is string => !!branch),
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -1169,6 +1173,10 @@ export function registerProjectHandlers({
           project,
           criteria: settings.cleanupCriteria,
           activeSummaries: pipeline.listActive(),
+          managedBranches: queries.threads
+            .list(project.id)
+            .map((thread) => thread.worktreeBranch)
+            .filter((branch): branch is string => !!branch),
         });
         return await runCleanupApply({
           project,

@@ -116,26 +116,33 @@ export async function runAutoCommitWorkflow(args: {
 
 /**
  * Pure analyze pass for the cleanup modal. Live `gh` PR fetch — no cache.
- * Includes a dirty-tree probe so the UI can warn before destructive actions.
+ * Includes dirty-tree and merged-into-default checks before surfacing candidates.
  */
 export async function runCleanupAnalyze(args: {
   project: Project;
   criteria: import('@shipcode/shared').CleanupCriteria;
   activeSummaries: ActiveWorktreeOwner[];
+  managedBranches?: string[];
 }): Promise<CleanupAnalyzeResult> {
   const git = new GitService(args.project.path);
   const wt = new WorktreeManager(args.project.path);
 
-  const [worktreeList, branchList, defaultBranch] = await Promise.all([
+  try {
+    await git.fetch();
+  } catch (err) {
+    log.warn(`[cleanup] git fetch failed: ${(err as Error).message}`);
+  }
+
+  const defaultBranch = args.project.defaultBranch || (await git.getDefaultBranch());
+  const baseRef = await git.resolveFirstExistingRef([`origin/${defaultBranch}`, defaultBranch]);
+
+  const [worktreeList, branchList, remoteBranchList] = await Promise.all([
     wt.list(),
     git.listLocalBranchesWithMeta(),
-    git.getDefaultBranch(),
+    git.listRemoteBranchesWithMeta('origin'),
   ]);
 
-  const worktreeBranchSet = new Set(worktreeList.map((w) => w.branch));
-  const protectedBranches = Array.from(
-    new Set([defaultBranch, 'main', 'master', ...worktreeBranchSet]),
-  );
+  const protectedBranches = Array.from(new Set([defaultBranch, 'main', 'master']));
 
   // Live PR fetch — no DB cache exists for PRs.
   let prs: Awaited<ReturnType<GhCli['listPullRequests']>> = [];
@@ -151,7 +158,7 @@ export async function runCleanupAnalyze(args: {
     await Promise.all(
       worktreeList.map(async (w) => {
         try {
-          return [w.path, await git.getStatus(w.path, defaultBranch)] as const;
+          return [w.path, await git.getStatus(w.path, baseRef ?? defaultBranch)] as const;
         } catch {
           return [w.path, null] as const;
         }
@@ -161,7 +168,24 @@ export async function runCleanupAnalyze(args: {
 
   const branches = await Promise.all(
     branchList.map(async (branch) => {
-      const divergence = await git.getBranchDivergence(branch.name, defaultBranch);
+      const divergence = baseRef
+        ? await git.getBranchDivergence(branch.name, baseRef)
+        : { aheadCount: 0, behindCount: 0, compareRef: null };
+      return {
+        ...branch,
+        aheadCount: divergence.aheadCount,
+        behindCount: divergence.behindCount,
+        compareRef: divergence.compareRef,
+      };
+    }),
+  );
+
+  const remoteBranches = await Promise.all(
+    remoteBranchList.map(async (branch) => {
+      const fullRef = `${branch.remote}/${branch.name}`;
+      const divergence = baseRef
+        ? await git.getBranchDivergence(fullRef, baseRef)
+        : { aheadCount: 0, behindCount: 0, compareRef: null };
       return {
         ...branch,
         aheadCount: divergence.aheadCount,
@@ -184,6 +208,7 @@ export async function runCleanupAnalyze(args: {
       };
     }),
     branches,
+    remoteBranches,
     pullRequests: prs.map((pr) => ({
       number: pr.number,
       url: pr.url,
@@ -193,6 +218,7 @@ export async function runCleanupAnalyze(args: {
     })),
     criteria: args.criteria,
     protectedBranches,
+    managedBranches: [...(args.managedBranches ?? []), ...worktreeList.map((w) => w.branch)],
   });
 
   // Refuse to surface a worktree that has an active pipeline operating on it.
@@ -200,13 +226,17 @@ export async function runCleanupAnalyze(args: {
     args.activeSummaries.map((s) => s.worktreePath).filter((p): p is string => !!p),
   );
   const filtered = items.filter((it) => {
-    if (it.kind === 'worktree-merged-pr' || it.kind === 'worktree-closed-pr') {
+    if (
+      it.kind === 'worktree-merged-pr' ||
+      it.kind === 'worktree-closed-pr' ||
+      it.kind === 'worktree-no-pr-clean'
+    ) {
       return !activeWorktreePaths.has(it.worktreePath);
     }
     return true;
   });
 
-  return { items: filtered, protectedBranches };
+  return { items: filtered, protectedBranches, baseRef };
 }
 
 /**
@@ -225,37 +255,63 @@ export async function runCleanupApply(args: {
   const succeeded: string[] = [];
   const failed: Array<{ itemId: string; error: string }> = [];
   const selectedIds = new Set(args.itemIds);
+  const processedIds = new Set<string>();
+
+  const assertMerged = async (ref: string, compareRef: string | null, label: string) => {
+    if (!compareRef || !(await git.isRefMergedInto(ref, compareRef))) {
+      throw new Error(`${label} is not verified merged into ${compareRef ?? 'the default branch'}`);
+    }
+  };
 
   for (const item of args.items) {
     if (!selectedIds.has(item.id)) continue;
+    processedIds.add(item.id);
     try {
-      if (item.kind === 'worktree-merged-pr' || item.kind === 'worktree-closed-pr') {
-        if (item.dirty) {
-          if (item.aheadCount > 0) {
-            throw new Error(
-              `worktree has ${item.aheadCount} local commit${item.aheadCount === 1 ? '' : 's'} ahead of ${item.compareRef ?? 'the compare ref'} — refusing to remove: ${item.worktreePath}`,
-            );
-          }
+      if (
+        item.kind === 'worktree-merged-pr' ||
+        item.kind === 'worktree-closed-pr' ||
+        item.kind === 'worktree-no-pr-clean'
+      ) {
+        const status = await git.getStatus(item.worktreePath, item.compareRef ?? undefined);
+        if (status.isDirty) {
           throw new Error(`worktree dirty — refusing to remove: ${item.worktreePath}`);
         }
+        if (status.aheadCount > 0) {
+          throw new Error(
+            `worktree has ${status.aheadCount} local commit${status.aheadCount === 1 ? '' : 's'} ahead of ${status.compareRef ?? 'the compare ref'} — refusing to remove: ${item.worktreePath}`,
+          );
+        }
+        await assertMerged(item.branch, item.compareRef, `branch ${item.branch}`);
         const result = await args.lockFor(item.worktreePath, async () => {
           return wt.remove(item.worktreePath, item.branch);
         });
         if (result.error) throw new Error(result.error);
-      } else if (item.kind === 'local-branch-no-remote') {
+      } else if (item.kind === 'local-branch-no-remote' || item.kind === 'local-branch-merged') {
         if ((item.aheadCount ?? 0) > 0) {
           throw new Error(
             `branch has ${item.aheadCount} local commit${item.aheadCount === 1 ? '' : 's'} ahead of ${item.compareRef ?? 'the compare ref'} — refusing to delete: ${item.branch}`,
           );
         }
+        await assertMerged(item.branch, item.compareRef ?? null, `branch ${item.branch}`);
         await git.deleteLocalBranch(item.branch);
       } else if (item.kind === 'remote-branch-merged') {
-        await git.deleteRemoteBranch(item.branch);
+        await assertMerged(
+          `${item.remote}/${item.branch}`,
+          item.compareRef,
+          `remote branch ${item.remote}/${item.branch}`,
+        );
+        await git.deleteRemoteBranch(item.branch, item.remote);
       }
       succeeded.push(item.id);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       failed.push({ itemId: item.id, error: message });
+    }
+  }
+
+  for (const itemId of selectedIds) {
+    if (!processedIds.has(itemId)) {
+      failed.push({ itemId, error: 'not eligible after clean/merged re-check' });
     }
   }
 

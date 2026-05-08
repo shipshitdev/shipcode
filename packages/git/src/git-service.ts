@@ -172,6 +172,27 @@ export class GitService {
     await this.git.push([remote, '--delete', branch]);
   }
 
+  async hasRef(ref: string): Promise<boolean> {
+    return this.refExists(this.git, ref);
+  }
+
+  async resolveFirstExistingRef(refs: string[]): Promise<string | null> {
+    for (const ref of refs) {
+      if (await this.hasRef(ref)) return ref;
+    }
+    return null;
+  }
+
+  async isRefMergedInto(ref: string, compareRef: string): Promise<boolean> {
+    if (!(await this.hasRef(ref)) || !(await this.hasRef(compareRef))) return false;
+    try {
+      await this.git.raw(['merge-base', '--is-ancestor', ref, compareRef]);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * Batch-check dirty state across many worktree paths.
    * Returns Map<path, isDirty>.
@@ -300,7 +321,7 @@ export class GitService {
    * Detects remote-tracking via `git for-each-ref` upstream-shortname.
    */
   async listLocalBranchesWithMeta(): Promise<
-    Array<{ name: string; hasRemote: boolean; lastCommitDate: string }>
+    Array<{ name: string; hasRemote: boolean; remoteName: string | null; lastCommitDate: string }>
   > {
     const raw = await this.git.raw([
       'for-each-ref',
@@ -316,8 +337,33 @@ export class GitService {
         return {
           name,
           hasRemote: !!upstream && upstream.length > 0,
+          remoteName: upstream && upstream.length > 0 ? upstream : null,
           lastCommitDate: date ?? '',
         };
       });
+  }
+
+  async listRemoteBranchesWithMeta(
+    remote = 'origin',
+  ): Promise<Array<{ name: string; remote: string; lastCommitDate: string }>> {
+    const raw = await this.git.raw([
+      'for-each-ref',
+      '--format=%(refname:short)\t%(committerdate:iso-strict)',
+      `refs/remotes/${remote}`,
+    ]);
+    const prefix = `${remote}/`;
+    return raw
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .map((line) => {
+        const [fullName, date] = line.split('\t');
+        return {
+          name: fullName.startsWith(prefix) ? fullName.slice(prefix.length) : fullName,
+          remote,
+          lastCommitDate: date ?? '',
+        };
+      })
+      .filter((branch) => branch.name !== 'HEAD');
   }
 }

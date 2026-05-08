@@ -11,6 +11,16 @@ export interface PullRequestSnapshot {
 export interface BranchSnapshot {
   name: string;
   hasRemote: boolean;
+  remoteName?: string | null;
+  lastCommitDate: string;
+  aheadCount?: number;
+  behindCount?: number;
+  compareRef?: string | null;
+}
+
+export interface RemoteBranchSnapshot {
+  name: string;
+  remote: string;
   lastCommitDate: string;
   aheadCount?: number;
   behindCount?: number;
@@ -27,9 +37,11 @@ export interface CleanupAnalysisInput {
     compareRef?: string | null;
   }>;
   branches: BranchSnapshot[];
+  remoteBranches?: RemoteBranchSnapshot[];
   pullRequests: PullRequestSnapshot[];
   criteria: CleanupCriteria;
   protectedBranches: string[];
+  managedBranches?: string[];
 }
 
 /**
@@ -40,10 +52,17 @@ export interface CleanupAnalysisInput {
 export function analyzeCleanup(input: CleanupAnalysisInput): CleanupItem[] {
   const items: CleanupItem[] = [];
   const protectedSet = new Set(input.protectedBranches);
+  const managedSet = new Set(input.managedBranches ?? []);
   const prByHead = new Map<string, PullRequestSnapshot>();
   for (const pr of input.pullRequests) {
     prByHead.set(pr.headRef, pr);
   }
+
+  const isVerifiedMerged = (value: { aheadCount?: number; compareRef?: string | null }) =>
+    value.compareRef != null && (value.aheadCount ?? 0) === 0;
+  const isManagedBranch = (branch: string) =>
+    managedSet.has(branch) || prByHead.has(branch) || /^(shipcode\/|ship\/\d+)/.test(branch);
+  const worktreeBranches = new Set(input.worktrees.map((wt) => wt.branch));
 
   for (const wt of input.worktrees) {
     if (protectedSet.has(wt.branch)) continue;
@@ -51,14 +70,16 @@ export function analyzeCleanup(input: CleanupAnalysisInput): CleanupItem[] {
     const behindCount = wt.behindCount ?? 0;
     const compareRef = wt.compareRef ?? null;
     const hasLocalWork = wt.dirty || aheadCount > 0;
+    if (hasLocalWork || !isVerifiedMerged({ aheadCount, compareRef })) continue;
     const pr = prByHead.get(wt.branch);
     if (!pr) {
-      if (input.criteria.worktreeNoPrCleanTree && !hasLocalWork) {
+      if (input.criteria.worktreeNoPrCleanTree && isManagedBranch(wt.branch)) {
         items.push({
           id: `wt-no-pr:${wt.path}`,
-          kind: 'local-branch-no-remote',
+          kind: 'worktree-no-pr-clean',
+          worktreePath: wt.path,
           branch: wt.branch,
-          lastCommitDate: '',
+          dirty: false,
           aheadCount,
           behindCount,
           compareRef,
@@ -99,12 +120,34 @@ export function analyzeCleanup(input: CleanupAnalysisInput): CleanupItem[] {
     }
   }
 
-  if (input.criteria.localBranchNoRemote) {
-    const worktreeBranches = new Set(input.worktrees.map((wt) => wt.branch));
-    for (const branch of input.branches) {
-      if (protectedSet.has(branch.name)) continue;
-      if (branch.hasRemote) continue;
-      if (worktreeBranches.has(branch.name)) continue;
+  for (const branch of input.branches) {
+    if (protectedSet.has(branch.name)) continue;
+    if (worktreeBranches.has(branch.name)) continue;
+    if (!isVerifiedMerged(branch)) continue;
+
+    const pr = prByHead.get(branch.name);
+    const remoteBranch = branch.remoteName?.startsWith('origin/')
+      ? branch.remoteName.slice('origin/'.length)
+      : (branch.remoteName ?? null);
+
+    if (branch.hasRemote) {
+      if (input.criteria.localBranchMerged && isManagedBranch(branch.name)) {
+        items.push({
+          id: `branch-merged:${branch.name}`,
+          kind: 'local-branch-merged',
+          branch: branch.name,
+          lastCommitDate: branch.lastCommitDate,
+          aheadCount: branch.aheadCount ?? 0,
+          behindCount: branch.behindCount ?? 0,
+          compareRef: branch.compareRef ?? null,
+          remoteBranch,
+          prNumber: pr?.number ?? null,
+        });
+      }
+      continue;
+    }
+
+    if (input.criteria.localBranchNoRemote) {
       items.push({
         id: `branch-no-remote:${branch.name}`,
         kind: 'local-branch-no-remote',
@@ -113,6 +156,31 @@ export function analyzeCleanup(input: CleanupAnalysisInput): CleanupItem[] {
         aheadCount: branch.aheadCount ?? 0,
         behindCount: branch.behindCount ?? 0,
         compareRef: branch.compareRef ?? null,
+      });
+    }
+  }
+
+  if (input.criteria.remoteBranchMerged) {
+    const unsafeWorktreeBranches = new Set(
+      input.worktrees.filter((wt) => wt.dirty || (wt.aheadCount ?? 0) > 0).map((wt) => wt.branch),
+    );
+
+    for (const branch of input.remoteBranches ?? []) {
+      if (protectedSet.has(branch.name)) continue;
+      if (unsafeWorktreeBranches.has(branch.name)) continue;
+      if (!isVerifiedMerged(branch)) continue;
+      if (!isManagedBranch(branch.name)) continue;
+      const pr = prByHead.get(branch.name);
+      items.push({
+        id: `remote-merged:${branch.remote}/${branch.name}`,
+        kind: 'remote-branch-merged',
+        branch: branch.name,
+        remote: branch.remote,
+        lastCommitDate: branch.lastCommitDate,
+        aheadCount: branch.aheadCount ?? 0,
+        behindCount: branch.behindCount ?? 0,
+        compareRef: branch.compareRef ?? null,
+        prNumber: pr?.number ?? null,
       });
     }
   }
