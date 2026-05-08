@@ -237,7 +237,6 @@ function ThreadAnalyticsPanel({
   if (!analytics) return null;
 
   const phaseTimeline = Array.isArray(analytics.phaseTimeline) ? analytics.phaseTimeline : [];
-  const promptByPhase = Array.isArray(analytics.promptByPhase) ? analytics.promptByPhase : [];
   const promptTelemetry = Array.isArray(analytics.promptTelemetry) ? analytics.promptTelemetry : [];
   const skillResolutions = Array.isArray(analytics.skillResolutions)
     ? analytics.skillResolutions
@@ -296,44 +295,10 @@ function ThreadAnalyticsPanel({
               <PromptTelemetryCard key={record.id} record={record} />
             ))}
           </div>
-        ) : promptByPhase.length === 0 ? (
+        ) : (
           <p className="rounded-md border border-dashed border-border px-3 py-3 text-[11px] text-muted">
             No prompt telemetry yet.
           </p>
-        ) : (
-          // Older analytics rows may only have phase-level aggregates. Show them
-          // full-width, but prefer invocation-level records whenever available.
-          <div className="flex flex-col gap-2">
-            {promptByPhase.map((phase) => (
-              <div key={phase.phase} className="rounded-md border border-border bg-secondary p-2">
-                <div className="mb-1 flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-medium uppercase tracking-wide text-secondary">
-                    {STEP_PHASE_LABEL[phase.phase] ?? phase.phase}
-                  </span>
-                  <span className="text-[10px] text-muted">{phase.promptCount} prompt(s)</span>
-                </div>
-                <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
-                  <span className="text-muted">Avg size</span>
-                  <span className="text-right font-mono text-primary">
-                    {formatBytes(phase.averageBytes)}
-                  </span>
-                  <span className="text-muted">Avg lines</span>
-                  <span className="text-right font-mono text-primary">
-                    {phase.averageLines.toLocaleString()}
-                  </span>
-                </div>
-                <div
-                  className="mt-1 truncate text-[10px] text-muted"
-                  title={phase.materialKinds.join(', ')}
-                >
-                  {phase.materialCount} materials
-                  {phase.materialKinds.length > 0
-                    ? ` · ${phase.materialKinds.map(formatPromptMaterialKind).join(', ')}`
-                    : ''}
-                </div>
-              </div>
-            ))}
-          </div>
         )}
       </div>
 

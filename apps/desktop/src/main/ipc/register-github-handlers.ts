@@ -655,15 +655,19 @@ export function registerGitHubHandlers({
       const project = queries.projects.getById(projectId);
       if (!project) throw new Error(`Project ${projectId} not found`);
 
-      const doneIssues = queries.githubIssues
-        .listCompleted(projectId)
-        .filter((i) => !i.isQuickMode && isRealGithubIssueNumber(i.issueNumber));
+      const doneIssues = queries.githubIssues.listCompleted(projectId);
+      const githubDoneIssues = doneIssues.filter(
+        (i) => !i.isQuickMode && isRealGithubIssueNumber(i.issueNumber),
+      );
+      const localDoneIssueIds = doneIssues
+        .filter((i) => i.isQuickMode || !isRealGithubIssueNumber(i.issueNumber))
+        .map((i) => i.id);
       const ghCli = new GhCli(project.path);
       const succeededIds: string[] = [];
       let failedCount = 0;
       const localAutomationArchivedCount = queries.threads.archiveDoneAutomationRuns(projectId);
 
-      for (const issue of doneIssues) {
+      for (const issue of githubDoneIssues) {
         try {
           if (issue.state !== 'closed') {
             await ghCli.closeIssue(issue.issueNumber);
@@ -676,12 +680,16 @@ export function registerGitHubHandlers({
         }
       }
 
-      if (succeededIds.length > 0) {
-        queries.githubIssues.archiveIssues(succeededIds);
+      const archivedIssueIds = [...localDoneIssueIds, ...succeededIds];
+      if (archivedIssueIds.length > 0) {
+        queries.githubIssues.archiveIssues(archivedIssueIds);
       }
 
       sendGithubIssuesUpdated(mainWindow, queries, projectId);
-      return { archivedCount: succeededIds.length + localAutomationArchivedCount, failedCount };
+      return {
+        archivedCount: archivedIssueIds.length + localAutomationArchivedCount,
+        failedCount,
+      };
     },
   );
 

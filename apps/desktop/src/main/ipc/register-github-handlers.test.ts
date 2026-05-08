@@ -570,6 +570,56 @@ describe('registerGitHubHandlers', () => {
     });
   });
 
+  it('archives done quick tasks locally when archiving all done issues', async () => {
+    const quickIssue = {
+      ...baseIssue,
+      id: 'quick-1',
+      issueNumber: -236024417,
+      isQuickMode: true,
+      state: 'open',
+      pipelineStatus: 'done',
+    };
+    const archiveIssues = vi.fn();
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+      },
+      githubIssues: buildGithubIssuesQueries(
+        {
+          listCompleted: vi.fn(() => [quickIssue]),
+          archiveIssues,
+        },
+        [],
+      ),
+      threads: {
+        archiveDoneAutomationRuns: vi.fn(() => 0),
+        getById: vi.fn(() => null),
+        getByProjectAndGithubIssue: vi.fn(() => null),
+      },
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const archiveAllDone = handlers.get('github:archive-all-done');
+    if (!archiveAllDone) throw new Error('github:archive-all-done handler not registered');
+
+    const result = await archiveAllDone(undefined, { projectId: 'project-1' });
+
+    expect(closeIssueMock).not.toHaveBeenCalled();
+    expect(archiveProjectItemsMock).not.toHaveBeenCalled();
+    expect(archiveIssues).toHaveBeenCalledWith([quickIssue.id]);
+    expect(result).toEqual({ archivedCount: 1, failedCount: 0 });
+  });
+
   describe('github:refresh-issues priority sync', () => {
     const projectWithBoard = {
       ...baseProject,
