@@ -55,6 +55,16 @@ const REASONING_OPTIONS: Array<{ value: 'inherit' | ReasoningEffort; label: stri
   { value: 'xhigh', label: 'Extra high' },
 ];
 
+interface FormatAutomationVariables {
+  requestId: number;
+  formKey: string;
+  projectId: string;
+  prompt: string;
+  provider: 'inherit' | AgentType;
+  modelId: string;
+  reasoning: 'inherit' | ReasoningEffort;
+}
+
 function presetForCron(cron: string): string {
   const found = PRESETS.find((p) => p.cron === cron);
   return found ? found.id : 'custom';
@@ -77,8 +87,11 @@ export function CreateAutomationModal() {
   const close = useAppStore((s) => s.closeCreateAutomationModal);
   const activeProjectId = useAppStore((s) => s.activeProjectId);
   const initializedFormKeyRef = useRef<string | null>(null);
+  const nextFormatRequestIdRef = useRef(0);
+  const latestFormatRequestRef = useRef<{ id: number; formKey: string } | null>(null);
 
   const isEdit = editingId !== null;
+  const currentFormKey = isEdit ? `edit:${editingId}` : 'create';
 
   const { data: projects = [] } = useQuery<Project[]>({
     queryKey: ['projects-visible'],
@@ -109,13 +122,13 @@ export function CreateAutomationModal() {
   useEffect(() => {
     if (!open) {
       initializedFormKeyRef.current = null;
+      latestFormatRequestRef.current = null;
       return;
     }
 
-    const formKey = isEdit ? `edit:${editingId}` : 'create';
     const fallbackProjectId = activeProjectId ?? projects[0]?.id ?? '';
 
-    if (initializedFormKeyRef.current === formKey) {
+    if (initializedFormKeyRef.current === currentFormKey) {
       if (!isEdit && fallbackProjectId) {
         setProjectId((current) => current || fallbackProjectId);
       }
@@ -133,7 +146,7 @@ export function CreateAutomationModal() {
       setProvider(existing.executorProvider ?? 'inherit');
       setExecutorModelId(existing.executorModelId ?? '');
       setReasoning(existing.executorReasoningEffort ?? 'inherit');
-      initializedFormKeyRef.current = formKey;
+      initializedFormKeyRef.current = currentFormKey;
     } else if (!isEdit) {
       setProjectId(fallbackProjectId);
       setName('');
@@ -144,10 +157,10 @@ export function CreateAutomationModal() {
       setProvider('inherit');
       setExecutorModelId('');
       setReasoning('inherit');
-      initializedFormKeyRef.current = formKey;
+      initializedFormKeyRef.current = currentFormKey;
     }
     setError(null);
-  }, [open, isEdit, editingId, existing, activeProjectId, projects]);
+  }, [open, isEdit, currentFormKey, existing, activeProjectId, projects]);
 
   const cronExpr = useMemo(() => {
     if (presetId === 'custom') return customCron.trim();
@@ -198,33 +211,57 @@ export function CreateAutomationModal() {
   });
 
   const formatAutomation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (variables: FormatAutomationVariables) => {
       return window.shipcode.invoke<{ prompt: string }>('ai:format-automation', {
-        projectId,
-        prompt,
-        provider: provider === 'inherit' ? null : provider,
-        modelId: provider === 'inherit' ? null : executorModelId.trim() || null,
-        reasoningEffort: reasoning === 'inherit' ? null : reasoning,
+        projectId: variables.projectId,
+        prompt: variables.prompt,
+        provider: variables.provider === 'inherit' ? null : variables.provider,
+        modelId: variables.provider === 'inherit' ? null : variables.modelId.trim() || null,
+        reasoningEffort: variables.reasoning === 'inherit' ? null : variables.reasoning,
       });
     },
-    onSuccess: (result) => {
+    onSuccess: (result, variables) => {
+      if (
+        latestFormatRequestRef.current?.id !== variables.requestId ||
+        latestFormatRequestRef.current.formKey !== variables.formKey ||
+        initializedFormKeyRef.current !== variables.formKey
+      ) {
+        return;
+      }
       setPrompt(result.prompt);
     },
-    onError: (err) => {
+    onError: (err, variables) => {
+      if (
+        latestFormatRequestRef.current?.id !== variables.requestId ||
+        latestFormatRequestRef.current.formKey !== variables.formKey
+      ) {
+        return;
+      }
       log.error('[CreateAutomationModal] format failed', err);
       setError(clampError(err));
     },
+    onSettled: (_result, _error, variables) => {
+      if (
+        variables &&
+        latestFormatRequestRef.current?.id === variables.requestId &&
+        latestFormatRequestRef.current.formKey === variables.formKey
+      ) {
+        latestFormatRequestRef.current = null;
+      }
+    },
   });
 
+  const formatPendingForCurrentForm =
+    formatAutomation.isPending && latestFormatRequestRef.current?.formKey === currentFormKey;
   const submitDisabled =
     createOrUpdate.isPending ||
-    formatAutomation.isPending ||
+    formatPendingForCurrentForm ||
     !projectId ||
     !name.trim() ||
     !prompt.trim() ||
     !!cronError;
   const formatDisabled =
-    formatAutomation.isPending || createOrUpdate.isPending || !projectId || !prompt.trim();
+    formatPendingForCurrentForm || createOrUpdate.isPending || !projectId || !prompt.trim();
 
   const handleSubmit = () => {
     setError(null);
@@ -235,7 +272,18 @@ export function CreateAutomationModal() {
   const handleFormat = () => {
     setError(null);
     if (formatDisabled) return;
-    formatAutomation.mutate();
+    nextFormatRequestIdRef.current += 1;
+    const requestId = nextFormatRequestIdRef.current;
+    latestFormatRequestRef.current = { id: requestId, formKey: currentFormKey };
+    formatAutomation.mutate({
+      requestId,
+      formKey: currentFormKey,
+      projectId,
+      prompt,
+      provider,
+      modelId: executorModelId,
+      reasoning,
+    });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -312,7 +360,7 @@ export function CreateAutomationModal() {
               title="Format this automation prompt into a clear agent-ready spec"
             >
               <LoadingButtonContent
-                loading={formatAutomation.isPending}
+                loading={formatPendingForCurrentForm}
                 className="gap-1"
                 spinnerSize={10}
               >
@@ -328,7 +376,7 @@ export function CreateAutomationModal() {
             placeholder="What should this run do?"
             rows={6}
             className="text-[13px]"
-            disabled={formatAutomation.isPending}
+            disabled={formatPendingForCurrentForm}
           />
         </div>
 

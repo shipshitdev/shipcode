@@ -285,4 +285,48 @@ describe('CreateAutomationModal', () => {
       expect(promptInput).toHaveValue('# Automation: Smoke\n\n## Goal\nDo thing.');
     });
   });
+
+  it('ignores a stale format response after the modal is reopened', async () => {
+    let resolveFormat!: (value: { prompt: string }) => void;
+    invokeMock.mockImplementation((channel: string) => {
+      if (channel === 'project:list-visible') return Promise.resolve([makeProject()]);
+      if (channel === 'ai:format-automation') {
+        return new Promise((resolve) => {
+          resolveFormat = resolve;
+        });
+      }
+      return Promise.resolve(null);
+    });
+
+    renderWithProviders();
+
+    await screen.findByText('My Repo');
+
+    const promptInput = screen.getByPlaceholderText(/What should this run do\?/);
+    fireEvent.change(promptInput, { target: { value: 'old prompt' } });
+
+    const format = screen.getByRole('button', { name: /Format/ });
+    await waitFor(() => expect(format).not.toBeDisabled());
+    fireEvent.click(format);
+    await waitFor(() => expect(promptInput).toBeDisabled());
+
+    act(() => {
+      useAppStore.setState({ createAutomationModalOpen: false });
+    });
+    act(() => {
+      useAppStore.setState({ createAutomationModalOpen: true });
+    });
+
+    const reopenedPromptInput = await screen.findByPlaceholderText(/What should this run do\?/);
+    await waitFor(() => {
+      expect(reopenedPromptInput).not.toBeDisabled();
+      expect(reopenedPromptInput).toHaveValue('');
+    });
+
+    await act(async () => {
+      resolveFormat({ prompt: '# Automation: Old\n\n## Goal\nStale result.' });
+    });
+
+    expect(reopenedPromptInput).toHaveValue('');
+  });
 });
