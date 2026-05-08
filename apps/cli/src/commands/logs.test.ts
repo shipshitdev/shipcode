@@ -1,16 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const {
-  createCliContextMock,
-  requireOnboardingMock,
-  getThreadForIssueOrExitMock,
-  listByThreadMock,
-} = vi.hoisted(() => ({
-  createCliContextMock: vi.fn(),
-  requireOnboardingMock: vi.fn(),
-  getThreadForIssueOrExitMock: vi.fn(),
-  listByThreadMock: vi.fn(),
-}));
+const { createCliContextMock, requireOnboardingMock, getThreadByIssueMock, listByThreadMock } =
+  vi.hoisted(() => ({
+    createCliContextMock: vi.fn(),
+    requireOnboardingMock: vi.fn(),
+    getThreadByIssueMock: vi.fn(),
+    listByThreadMock: vi.fn(),
+  }));
 
 vi.mock('../context', () => ({
   createCliContext: createCliContextMock,
@@ -20,26 +16,31 @@ vi.mock('./guard', () => ({
   requireOnboarding: requireOnboardingMock,
 }));
 
-vi.mock('./issue-helpers', () => ({
-  parseIssueNumber: (value: string) => Number(value),
-  getThreadForIssueOrExit: getThreadForIssueOrExitMock,
-}));
-
 import { logsCommand } from './logs';
 
 describe('logsCommand', () => {
   const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+  const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
   const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+  vi.spyOn(process, 'exit').mockImplementation((code?: string | number | null) => {
+    throw new Error(`process.exit:${code ?? ''}`);
+  });
 
   beforeEach(() => {
     vi.clearAllMocks();
     requireOnboardingMock.mockReturnValue(true);
     createCliContextMock.mockReturnValue({
+      project: {
+        id: 'project-1',
+      },
+      threads: {
+        getByProjectAndGithubIssue: getThreadByIssueMock,
+      },
       terminalEvents: {
         listByThread: listByThreadMock,
       },
     });
-    getThreadForIssueOrExitMock.mockReturnValue({
+    getThreadByIssueMock.mockReturnValue({
       id: 'thread-1',
       title: 'Add terminal log output',
       status: 'running',
@@ -53,14 +54,29 @@ describe('logsCommand', () => {
     await logsCommand('42');
 
     expect(createCliContextMock).not.toHaveBeenCalled();
-    expect(getThreadForIssueOrExitMock).not.toHaveBeenCalled();
+    expect(getThreadByIssueMock).not.toHaveBeenCalled();
+  });
+
+  it('exits on invalid issue numbers before looking up a thread', async () => {
+    await expect(logsCommand('abc')).rejects.toThrow('process.exit:1');
+
+    expect(errorSpy).toHaveBeenCalledWith('Invalid issue number:', 'abc');
+    expect(getThreadByIssueMock).not.toHaveBeenCalled();
+  });
+
+  it('exits when no thread exists for the issue', async () => {
+    getThreadByIssueMock.mockReturnValueOnce(null);
+
+    await expect(logsCommand('42')).rejects.toThrow('process.exit:1');
+
+    expect(errorSpy).toHaveBeenCalledWith('No thread found for issue #42 in this project.');
   });
 
   it('prints a friendly empty state when a thread has no terminal events', async () => {
     await logsCommand('42');
 
     expect(createCliContextMock).toHaveBeenCalledWith(process.cwd());
-    expect(getThreadForIssueOrExitMock).toHaveBeenCalledWith(expect.any(Object), 42);
+    expect(getThreadByIssueMock).toHaveBeenCalledWith('project-1', 42);
     expect(logSpy).toHaveBeenCalledWith('Logs for issue #42: Add terminal log output');
     expect(logSpy).toHaveBeenCalledWith('Status: running\n');
     expect(logSpy).toHaveBeenCalledWith('No terminal events recorded.');
@@ -116,6 +132,14 @@ describe('logsCommand', () => {
         createdAt: '2026-05-08T12:00:12.000Z',
         event: { kind: 'turn_start' },
       },
+      {
+        createdAt: '2026-05-08T12:00:13.000Z',
+        event: { kind: 'turn_end' },
+      },
+      {
+        createdAt: '2026-05-08T12:00:14.000Z',
+        event: { kind: 'action', summary: 'hidden action' },
+      },
     ]);
 
     await logsCommand('42');
@@ -131,5 +155,7 @@ describe('logsCommand', () => {
     expect(logSpy).toHaveBeenCalledWith('[12:00:09] Clarification answered (2 questions)');
     expect(logSpy).toHaveBeenCalledWith('[12:00:10] Done — cost: $0.1235');
     expect(logSpy).toHaveBeenCalledWith('[12:00:11] Done');
+    expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining('hidden action'));
+    expect(writeSpy).not.toHaveBeenCalledWith(expect.stringContaining('hidden action'));
   });
 });

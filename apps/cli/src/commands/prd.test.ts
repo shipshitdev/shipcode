@@ -104,10 +104,35 @@ describe('prdCommand', () => {
       reasoningEffort: 'low',
     });
     expect(logSpy).toHaveBeenCalledWith('Found existing issue #12: Coverage PRD');
+    expect(logSpy).toHaveBeenCalledWith('\nTo update issue #12:');
     expect(logSpy).toHaveBeenCalledWith('  gh issue edit 12 --body-file <file>');
   });
 
-  it('uses the fallback template and new issue instructions when no match is found', async () => {
+  it('generates a new draft with the repo skill when issue search returns no matches', async () => {
+    execSyncMock.mockReturnValueOnce(JSON.stringify([]));
+
+    await prdCommand('New coverage plan');
+
+    expect(readFileSyncMock).toHaveBeenCalledWith(
+      expect.stringContaining('skills/writing-prds/SKILL.md'),
+      'utf-8',
+    );
+    expect(enhancePrdDraftMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        draftBody: '# New coverage plan\n\nTODO: Fill in PRD sections.',
+        skillContent: 'PRD skill content',
+      }),
+    );
+    expect(logSpy).toHaveBeenCalledWith(
+      'No existing issue found for "New coverage plan". Generating new PRD...\n',
+    );
+    expect(logSpy).toHaveBeenCalledWith('\nTo create a new issue:');
+    expect(logSpy).toHaveBeenCalledWith(
+      '  gh issue create --title "New coverage plan" --body-file <file>',
+    );
+  });
+
+  it('uses the fallback template and new issue instructions when search fails', async () => {
     existsSyncMock.mockReturnValueOnce(false);
     execSyncMock.mockImplementationOnce(() => {
       throw new Error('gh unavailable');

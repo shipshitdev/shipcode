@@ -40,9 +40,25 @@ export async function retryCommand(issueNumber: string) {
       await pipeline.startExecution(thread.id, latestPlan.structured);
       break;
     }
-    case 'verifying':
-      await pipeline.startVerification(thread.id);
+    case 'verifying': {
+      const latestPlan = ctx.plans.getLatest(thread.id);
+      if (!latestPlan?.structured) {
+        console.error('No plan found for retry.');
+        process.exit(1);
+      }
+
+      const latestVerification = ctx.verifications.getLatest(thread.id);
+      if (
+        latestVerification?.planId === latestPlan.id &&
+        latestVerification.result === 'failed' &&
+        latestVerification.structured
+      ) {
+        await pipeline.startExecution(thread.id, latestPlan.structured);
+      } else {
+        await pipeline.startVerification(thread.id);
+      }
       break;
+    }
     case 'shipping':
       await pipeline.startShipping(thread.id);
       break;
