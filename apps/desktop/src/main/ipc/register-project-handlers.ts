@@ -1354,6 +1354,7 @@ export function registerProjectHandlers({
           verifierReasoningEffortOverride: import('@shipcode/shared').Project['verifierReasoningEffortOverride'];
           revisionCountOverride: import('@shipcode/shared').Project['revisionCountOverride'];
           requireApprovalOverride: import('@shipcode/shared').Project['requireApprovalOverride'];
+          pipelineSpeedProfileOverride: import('@shipcode/shared').Project['pipelineSpeedProfileOverride'];
           prdQualityGate: import('@shipcode/shared').Project['prdQualityGate'];
         };
       },

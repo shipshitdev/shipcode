@@ -130,6 +130,13 @@ describe('visual QA runtime test generation', () => {
     });
   });
 
+  it('reports unavailable Playwright tooling before runtime QA starts', () => {
+    const status = getVisualQaToolingStatus(root, '');
+
+    expect(status.available).toBe(false);
+    expect(status.message).toContain('Visual QA requires Playwright tooling');
+  });
+
   it('dogfoods a PRD QA State with runtime QA server configuration', () => {
     const setup = repoSetupContractSchema.parse({
       version: 1,

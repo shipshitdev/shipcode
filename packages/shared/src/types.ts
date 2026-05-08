@@ -108,6 +108,7 @@ export interface Project {
   verifierReasoningEffortOverride: ReasoningEffort | null;
   revisionCountOverride: RevisionCount | null;
   requireApprovalOverride?: boolean | null;
+  pipelineSpeedProfileOverride?: PipelineSpeedProfile | null;
   prdQualityGate?: boolean | null;
   discordRouting: ProjectNotificationRoutingMode;
   discordWebhookUrlOverride: string | null;
@@ -338,6 +339,133 @@ export interface PipelineStepCompletionUpdate {
   conversationId?: string | null;
 }
 
+// === Pipeline analytics ===
+
+export type PipelinePhaseTerminalStatus = PipelinePhase | PipelineStepStatus | 'unknown';
+
+export interface PipelinePhaseLogRecord {
+  id: string;
+  threadId: string;
+  phase: PipelinePhase;
+  startedAt: string;
+  completedAt: string | null;
+  durationMs: number | null;
+  terminalStatus: PipelinePhaseTerminalStatus | null;
+  errorMessage: string | null;
+  metadata: Record<string, unknown> | null;
+}
+
+export interface PipelinePhaseLogInsert {
+  threadId: string;
+  phase: PipelinePhase;
+  startedAt?: string;
+  metadata?: Record<string, unknown> | null;
+}
+
+export type SkillResolutionSource = 'project' | 'global' | 'bundled' | 'fallback' | 'unknown';
+
+export interface SkillResolutionLogRecord {
+  id: string;
+  threadId: string;
+  providerPhase: PromptTelemetryPhase;
+  skillKey: string;
+  source: SkillResolutionSource;
+  baseVersion: string | null;
+  fallbackUsed: boolean;
+  errorCode: string | null;
+  errorMessage: string | null;
+  createdAt: string;
+}
+
+export interface SkillResolutionLogInsert {
+  threadId: string;
+  providerPhase: PromptTelemetryPhase;
+  skillKey: string;
+  source: SkillResolutionSource;
+  baseVersion?: string | null;
+  fallbackUsed?: boolean;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+}
+
+export interface PipelineTimeToPrSummary {
+  sampleSize: number;
+  medianMs: number | null;
+  p75Ms: number | null;
+  p95Ms: number | null;
+}
+
+export interface PipelinePhaseDurationSummary {
+  phase: PipelinePhase;
+  runCount: number;
+  averageMs: number;
+  medianMs: number;
+  p75Ms: number;
+  p95Ms: number;
+}
+
+export interface PipelineTokensByPhase {
+  phase: PromptTelemetryPhase;
+  promptTokens: number;
+  completionTokens: number;
+  costUsd: number;
+  attemptCount: number;
+}
+
+export interface PipelinePromptByPhase {
+  phase: PromptTelemetryPhase;
+  promptCount: number;
+  averageCharacters: number;
+  averageBytes: number;
+  averageLines: number;
+  materialCount: number;
+  materialKinds: string[];
+}
+
+export interface PipelineSlowRunSummary {
+  threadId: string;
+  title: string;
+  projectName: string | null;
+  githubPrNumber: number | null;
+  durationMs: number;
+  completedAt: string | null;
+  bottleneckPhase: PipelinePhase | null;
+  bottleneckDurationMs: number | null;
+}
+
+export interface PipelineSkillFallbackSummary {
+  totalResolutions: number;
+  fallbackCount: number;
+  fallbackRate: number;
+  parseFailureRate: number;
+  retryRate: number;
+  downstreamSuccessRate: number;
+  score: number;
+}
+
+export interface PipelineAnalyticsOverview {
+  timeToPr: PipelineTimeToPrSummary;
+  averagePhaseDurations: PipelinePhaseDurationSummary[];
+  slowestRecentRuns: PipelineSlowRunSummary[];
+  tokensByPhase: PipelineTokensByPhase[];
+  promptByPhase: PipelinePromptByPhase[];
+  skillFallback: PipelineSkillFallbackSummary;
+}
+
+export interface PipelineThreadAnalytics {
+  threadId: string;
+  phaseTimeline: PipelinePhaseLogRecord[];
+  providerAttempts: PipelineStepRecord[];
+  promptTelemetry: PromptTelemetryRecord[];
+  skillResolutions: SkillResolutionLogRecord[];
+  tokensByPhase: PipelineTokensByPhase[];
+  promptByPhase: PipelinePromptByPhase[];
+  bottleneckPhase: PipelinePhase | null;
+  bottleneckDurationMs: number | null;
+  totalDurationMs: number | null;
+  skillFallback: PipelineSkillFallbackSummary;
+}
+
 // === Terminal Types ===
 
 export interface ClarificationChoice {
@@ -458,6 +586,7 @@ export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | '
 export type GeneratorCli = 'claude' | 'codex';
 export type ContextGeneratorCli = GeneratorCli;
 export type RevisionCount = 0 | 1 | 2 | 3 | 4 | 5;
+export type PipelineSpeedProfile = 'smart_fast' | 'thorough';
 
 export type AgentState = 'starting' | 'running' | 'idle' | 'errored' | 'exited';
 
@@ -646,6 +775,9 @@ export interface AppSettings {
   // Default review→revise cycles before falling through to execute/awaiting_approval.
   // 0 = skip review/revise entirely for the fastest path.
   revisionCount: RevisionCount;
+  // Controls task-graph decomposition. smart_fast preserves final tests/verifier
+  // while skipping redundant per-node gates for contained low-risk work.
+  pipelineSpeedProfile: PipelineSpeedProfile;
   // When true, pipeline pauses at awaiting_approval after review loop for human sign-off.
   // When false (default), it proceeds directly to execution.
   requireApproval: boolean;

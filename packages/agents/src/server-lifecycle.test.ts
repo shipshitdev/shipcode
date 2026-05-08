@@ -10,7 +10,7 @@ vi.mock('node:net', () => ({
   createServer: mockCreateServer,
 }));
 
-import { ServerLifecycleManager, type RunningServer } from './server-lifecycle';
+import { type RunningServer, ServerLifecycleManager } from './server-lifecycle';
 
 function createMockProcessManager(): ProcessManager & EventEmitter {
   const emitter = new EventEmitter();
@@ -58,10 +58,7 @@ describe('ServerLifecycleManager', () => {
     emitLog = vi.fn() as unknown as (msg: string) => void;
     manager = new ServerLifecycleManager(pm, emitLog);
     abortController = new AbortController();
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: true }),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
   });
 
   afterEach(() => {
@@ -112,24 +109,28 @@ describe('ServerLifecycleManager', () => {
   });
 
   it('stops server and kills via ProcessManager on readiness timeout', async () => {
+    vi.useFakeTimers();
     mockFreePort(8888);
 
     const managed = { id: 'proc-timeout', state: 'running' } as ManagedProcess;
     vi.mocked(pm.spawnWithStdin).mockReturnValue(managed);
     vi.mocked(pm.get).mockReturnValue({ ...managed, state: 'exited' } as ManagedProcess);
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockRejectedValue(new Error('ECONNREFUSED')),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')));
 
-    await expect(
-      manager.start(
+    try {
+      const startPromise = manager.start(
         { ...config, startupTimeoutMs: 300 },
         '/project',
         abortController.signal,
         't1',
-      ),
-    ).rejects.toThrow(/readiness timeout/i);
+      );
+      const expectedTimeout = expect(startPromise).rejects.toThrow(/readiness timeout/i);
+
+      await vi.advanceTimersByTimeAsync(301);
+      await expectedTimeout;
+    } finally {
+      vi.useRealTimers();
+    }
 
     expect(pm.kill).toHaveBeenCalledWith('proc-timeout');
   });
@@ -162,9 +163,7 @@ describe('ServerLifecycleManager', () => {
       }),
     );
 
-    await expect(
-      manager.start(config, '/project', abortController.signal, 't1'),
-    ).rejects.toThrow();
+    await expect(manager.start(config, '/project', abortController.signal, 't1')).rejects.toThrow();
 
     expect(pm.kill).toHaveBeenCalledWith('proc-abort');
   });

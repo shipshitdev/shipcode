@@ -3,6 +3,7 @@ import { REVIEW_FENCE_TAG } from '@shipcode/shared';
 import { buildScopedContext, type PromptMaterial } from '../prompt-scope';
 import {
   interpolateSkill,
+  type ResolveResult,
   resolveSkill,
   type SkillsRowSource,
   type SkillValidationError,
@@ -37,6 +38,7 @@ export interface ReviewPromptDeps {
   skills: SkillsRowSource;
   /** Called when the resolver fell back from an override to a lower tier (e.g. user override quarantined). */
   onFallback?: (phase: 'adversarial-review', error: SkillValidationError | undefined) => void;
+  onResolved?: (phase: 'adversarial-review', result: ResolveResult) => void;
 }
 
 export interface ReviewPromptOptions {
@@ -56,11 +58,9 @@ export function buildReviewPrompt(
   deps: ReviewPromptDeps,
   opts: ReviewPromptOptions = {},
 ): string {
-  const { skill, fallbackUsed, error } = resolveSkill(
-    'adversarial-review',
-    context.projectId,
-    deps,
-  );
+  const resolution = resolveSkill('adversarial-review', context.projectId, deps);
+  deps.onResolved?.('adversarial-review', resolution);
+  const { skill, fallbackUsed, error } = resolution;
   if (fallbackUsed) {
     deps.onFallback?.('adversarial-review', error);
   }

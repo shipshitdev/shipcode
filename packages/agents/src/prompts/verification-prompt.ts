@@ -3,6 +3,7 @@ import { VERIFICATION_FENCE_TAG } from '@shipcode/shared';
 import { buildScopedContext, type PromptMaterial } from '../prompt-scope';
 import {
   interpolateSkill,
+  type ResolveResult,
   resolveSkill,
   type SkillsRowSource,
   type SkillValidationError,
@@ -38,6 +39,7 @@ export interface VerificationPromptContext {
 export interface VerificationPromptDeps {
   skills: SkillsRowSource;
   onFallback?: (phase: 'plan-verification', error: SkillValidationError | undefined) => void;
+  onResolved?: (phase: 'plan-verification', result: ResolveResult) => void;
 }
 
 export interface VerificationPromptOptions {
@@ -60,7 +62,9 @@ export function buildVerificationPrompt(
   testOutput?: string | null,
   opts: VerificationPromptOptions = {},
 ): string {
-  const { skill, fallbackUsed, error } = resolveSkill('plan-verification', context.projectId, deps);
+  const resolution = resolveSkill('plan-verification', context.projectId, deps);
+  deps.onResolved?.('plan-verification', resolution);
+  const { skill, fallbackUsed, error } = resolution;
   if (fallbackUsed) {
     deps.onFallback?.('plan-verification', error);
   }

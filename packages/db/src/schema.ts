@@ -46,6 +46,7 @@ export function migrate(db: DatabaseSync): void {
       reviewer_reasoning_effort_override TEXT,
       executor_reasoning_effort_override TEXT,
       verifier_reasoning_effort_override TEXT,
+      pipeline_speed_profile_override TEXT,
       discord_routing TEXT NOT NULL DEFAULT 'inherit',
       discord_webhook_url_override TEXT,
       telegram_routing TEXT NOT NULL DEFAULT 'inherit',
@@ -1430,5 +1431,58 @@ export function migrateV48(db: DatabaseSync): void {
     execAlterTableIfMissing(db, 'ALTER TABLE threads ADD COLUMN done_at TEXT');
 
     db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (48)`);
+  });
+}
+
+export function migrateV49(db: DatabaseSync): void {
+  const row = db
+    .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
+    .get() as { version: number } | undefined;
+  if (row && row.version >= 49) return;
+
+  transaction(db, () => {
+    execAlterTableIfMissing(
+      db,
+      'ALTER TABLE projects ADD COLUMN pipeline_speed_profile_override TEXT',
+    );
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS pipeline_phase_log (
+        id              TEXT PRIMARY KEY,
+        thread_id       TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+        phase           TEXT NOT NULL,
+        started_at      TEXT NOT NULL,
+        completed_at    TEXT,
+        duration_ms     INTEGER,
+        terminal_status TEXT,
+        error_message   TEXT,
+        metadata_json   TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_pipeline_phase_log_thread
+        ON pipeline_phase_log(thread_id, started_at);
+      CREATE INDEX IF NOT EXISTS idx_pipeline_phase_log_phase
+        ON pipeline_phase_log(phase, completed_at);
+
+      CREATE TABLE IF NOT EXISTS skill_resolution_log (
+        id             TEXT PRIMARY KEY,
+        thread_id      TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+        provider_phase TEXT NOT NULL,
+        skill_key      TEXT NOT NULL,
+        source         TEXT NOT NULL DEFAULT 'unknown',
+        base_version   TEXT,
+        fallback_used  INTEGER NOT NULL DEFAULT 0,
+        error_code     TEXT,
+        error_message  TEXT,
+        created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_skill_resolution_thread
+        ON skill_resolution_log(thread_id, created_at);
+      CREATE INDEX IF NOT EXISTS idx_skill_resolution_skill
+        ON skill_resolution_log(skill_key, source, fallback_used);
+    `);
+
+    db.exec(`INSERT OR REPLACE INTO schema_version (version) VALUES (49)`);
   });
 }

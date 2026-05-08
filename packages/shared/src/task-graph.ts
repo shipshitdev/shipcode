@@ -1,4 +1,4 @@
-import type { ExecutorModel, ReasoningEffort, ShipCodePlan } from './types';
+import type { ExecutorModel, PipelineSpeedProfile, ReasoningEffort, ShipCodePlan } from './types';
 
 export type TaskGraphMode = 'direct' | 'internal' | 'github-subissues';
 export type TaskGraphStatus = 'active' | 'superseded' | 'completed' | 'failed';
@@ -23,6 +23,12 @@ export interface TaskGraphAssessment {
   suggestedNodeCount: number;
   surfaces: TaskSurface[];
 }
+
+export interface TaskGraphAssessmentOptions {
+  speedProfile?: PipelineSpeedProfile;
+}
+
+export interface TaskGraphBuildOptions extends TaskGraphAssessmentOptions {}
 
 export interface TaskGraphDraft {
   assessment: TaskGraphAssessment;
@@ -217,7 +223,12 @@ export function suggestedReasoningForTask(
   return 'medium';
 }
 
-export function assessPlanScope(plan: ShipCodePlan): TaskGraphAssessment {
+export function assessPlanScope(
+  plan: ShipCodePlan,
+  options: TaskGraphAssessmentOptions = {},
+): TaskGraphAssessment {
+  const speedProfile = options.speedProfile ?? 'smart_fast';
+  const thorough = speedProfile === 'thorough';
   const stepCount = plan.steps.length;
   const files = uniqueSorted([
     ...plan.files.map((file) => file.path),
@@ -239,7 +250,7 @@ export function assessPlanScope(plan: ShipCodePlan): TaskGraphAssessment {
     reasons.push('Planner estimated high complexity');
   }
 
-  if (stepCount > 2) {
+  if (thorough && stepCount > 2) {
     risk += Math.min(0.25, (stepCount - 2) * 0.05);
     reasons.push(`${stepCount} planned steps`);
   }
@@ -266,9 +277,23 @@ export function assessPlanScope(plan: ShipCodePlan): TaskGraphAssessment {
 
   const riskScore = riskClamp(risk);
   let mode: TaskGraphMode = 'direct';
-  if (riskScore >= 0.75 || stepCount >= 7 || fileCount >= 10 || surfaces.length >= 4) {
+  if (thorough) {
+    if (riskScore >= 0.75 || stepCount >= 7 || fileCount >= 10 || surfaces.length >= 4) {
+      mode = 'github-subissues';
+    } else if (riskScore >= 0.35 || stepCount > 2 || fileCount > 3 || surfaces.length > 1) {
+      mode = 'internal';
+    }
+  } else if (riskScore >= 0.75 || fileCount >= 10 || surfaces.length >= 4) {
     mode = 'github-subissues';
-  } else if (riskScore >= 0.35 || stepCount > 2 || fileCount > 3 || surfaces.length > 1) {
+  } else if (
+    riskScore >= 0.35 ||
+    plan.estimatedComplexity === 'high' ||
+    fileCount > 3 ||
+    surfaces.length > 1 ||
+    surfaces.includes('security') ||
+    surfaces.includes('database') ||
+    surfaces.includes('infra')
+  ) {
     mode = 'internal';
   }
 
@@ -286,8 +311,11 @@ export function assessPlanScope(plan: ShipCodePlan): TaskGraphAssessment {
   };
 }
 
-export function buildTaskGraphDraftFromPlan(plan: ShipCodePlan): TaskGraphDraft {
-  const assessment = assessPlanScope(plan);
+export function buildTaskGraphDraftFromPlan(
+  plan: ShipCodePlan,
+  options: TaskGraphBuildOptions = {},
+): TaskGraphDraft {
+  const assessment = assessPlanScope(plan, options);
   const planFiles = uniqueSorted(plan.files.map((file) => file.path));
   const allCriteria = plan.acceptanceCriteria.length
     ? plan.acceptanceCriteria

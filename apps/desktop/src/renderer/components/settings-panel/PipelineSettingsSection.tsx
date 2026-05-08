@@ -153,6 +153,27 @@ export function PipelineSettingsSection({
               />
             </SettingsRow>
             <SettingsRow
+              label="Default speed profile"
+              description="Smart fast runs contained work in one execution pass. Thorough keeps task-graph decomposition and node verification."
+            >
+              <Select
+                value={settings.pipelineSpeedProfile}
+                onValueChange={(value) =>
+                  onUpdate({
+                    pipelineSpeedProfile: value as AppSettings['pipelineSpeedProfile'],
+                  })
+                }
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="smart_fast">Smart fast</SelectItem>
+                  <SelectItem value="thorough">Thorough</SelectItem>
+                </SelectContent>
+              </Select>
+            </SettingsRow>
+            <SettingsRow
               label="Default revisions"
               description="How many review-to-revise cycles ShipCode runs before approval or execution. 0 skips plan review for the fastest path."
             >

@@ -4,6 +4,7 @@ import {
   type ShipCodePlan,
   type TaskEdgeRecord,
   type TaskGraphAssessment,
+  type TaskGraphBuildOptions,
   type TaskGraphMode,
   type TaskGraphStatus,
   type TaskGraphWithNodes,
@@ -58,8 +59,13 @@ interface TaskEdgeRow {
 export class TaskGraphQueries {
   constructor(private db: DatabaseSync) {}
 
-  replaceForPlan(threadId: string, planId: string, plan: ShipCodePlan): TaskGraphWithNodes {
-    const draft = buildTaskGraphDraftFromPlan(plan);
+  replaceForPlan(
+    threadId: string,
+    planId: string,
+    plan: ShipCodePlan,
+    options: TaskGraphBuildOptions = {},
+  ): TaskGraphWithNodes {
+    const draft = buildTaskGraphDraftFromPlan(plan, options);
     const graphId = nanoid();
     const nodeIdByStableKey = new Map<string, string>();
 

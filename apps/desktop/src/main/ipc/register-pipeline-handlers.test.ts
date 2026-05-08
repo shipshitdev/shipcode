@@ -4,6 +4,16 @@ import { registerPipelineHandlers } from './register-pipeline-handlers';
 
 const execFileMock = vi.hoisted(() => vi.fn());
 
+vi.mock('../logger.service', () => ({
+  default: {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  },
+  logEvent: vi.fn(),
+}));
+
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp') },
 }));

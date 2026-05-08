@@ -34,14 +34,15 @@ export class AutomationScheduler implements AutomationSchedulerLike {
   constructor(private readonly deps: AutomationSchedulerDeps) {}
 
   start(): void {
+    const nowIso = new Date().toISOString();
+    const overdueAutomations = this.deps.automations.listDue(nowIso);
     const automations = this.deps.automations.listEnabled();
+
     for (const automation of automations) {
       this.schedule(automation);
     }
 
-    const nowIso = new Date().toISOString();
-    const due = this.deps.automations.listDue(nowIso);
-    for (const automation of due) {
+    for (const automation of overdueAutomations) {
       const job = this.jobs.get(automation.id);
       const next = job?.nextRun() ?? null;
       this.deps.automations.setNextRunAt(automation.id, next ? next.toISOString() : null);

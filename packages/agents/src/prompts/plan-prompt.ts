@@ -4,6 +4,7 @@ import { buildScopedContext, type PromptMaterial } from '../prompt-scope';
 import {
   interpolateSkill,
   type PhaseSkillKey,
+  type ResolveResult,
   resolveSkill,
   type SkillsRowSource,
   type SkillValidationError,
@@ -124,6 +125,7 @@ export interface PlanPromptContext {
 export interface PlanPromptDeps {
   skills: SkillsRowSource;
   onFallback?: (phase: PhaseSkillKey, error: SkillValidationError | undefined) => void;
+  onResolved?: (phase: PhaseSkillKey, result: ResolveResult) => void;
 }
 
 export interface PlanPromptOptions {
@@ -145,7 +147,9 @@ export function buildPlanPrompt(
   opts: PlanPromptOptions = {},
   testCommand?: string | null,
 ): string {
-  const { skill, fallbackUsed, error } = resolveSkill('plan-generation', context.projectId, deps);
+  const resolution = resolveSkill('plan-generation', context.projectId, deps);
+  deps.onResolved?.('plan-generation', resolution);
+  const { skill, fallbackUsed, error } = resolution;
   if (fallbackUsed) {
     deps.onFallback?.('plan-generation', error);
   }
@@ -188,7 +192,9 @@ export function buildRevisionPrompt(
   testCommand?: string | null,
   opts: RevisionPromptOptions = {},
 ): string {
-  const { skill, fallbackUsed, error } = resolveSkill('plan-revision', context.projectId, deps);
+  const resolution = resolveSkill('plan-revision', context.projectId, deps);
+  deps.onResolved?.('plan-revision', resolution);
+  const { skill, fallbackUsed, error } = resolution;
   if (fallbackUsed) {
     deps.onFallback?.('plan-revision', error);
   }

@@ -49,6 +49,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   addProjectStartsIn: null,
   worktreeBranchFormat: 'ship/{id}-{slug}',
   revisionCount: 0,
+  pipelineSpeedProfile: 'smart_fast',
   requireApproval: false,
   plannerReasoningEffort: 'high',
   reviewerReasoningEffort: 'high',

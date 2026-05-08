@@ -22,6 +22,7 @@ import {
   MAX_CLARIFICATION_ROUNDS,
   PIPELINE_MAX_RETRIES,
   type PlanRecord,
+  resolvePipelineSpeedProfile,
   resolveRequireApproval,
   resolveRequireApprovalForIssue,
   resolveRevisionCount,
@@ -206,6 +207,12 @@ export function createPlanningPhaseHandlers({
       : resolveRequireApproval(settings, project);
   }
 
+  function getSpeedProfileForContext(context: ReturnType<typeof ensureContext>) {
+    const settings = deps.settings.get();
+    const project = context.projectId ? deps.projects.getById(context.projectId) : null;
+    return resolvePipelineSpeedProfile(settings, project);
+  }
+
   async function continueFromStructuredPlan(
     threadId: string,
     context: ReturnType<typeof ensureContext>,
@@ -214,11 +221,14 @@ export function createPlanningPhaseHandlers({
   ) {
     let taskGraph: TaskGraphWithNodes | null = null;
     try {
-      taskGraph = deps.taskGraphs?.replaceForPlan(threadId, plan.id, structuredPlan) ?? null;
+      taskGraph =
+        deps.taskGraphs?.replaceForPlan(threadId, plan.id, structuredPlan, {
+          speedProfile: getSpeedProfileForContext(context),
+        }) ?? null;
     } catch (error) {
       console.error(`[pipeline] task graph persistence failed for thread ${threadId}:`, error);
     }
-    if (taskGraph) {
+    if (taskGraph && taskGraph.mode !== 'direct') {
       await postTaskGraphComment(context, taskGraph);
     }
 

@@ -44,6 +44,7 @@ export type ProjectOverrideState = Pick<
   | 'verifierReasoningEffortOverride'
   | 'revisionCountOverride'
   | 'requireApprovalOverride'
+  | 'pipelineSpeedProfileOverride'
   | 'prdQualityGate'
   | 'discordRouting'
   | 'discordWebhookUrlOverride'
@@ -66,6 +67,7 @@ export const EMPTY_OVERRIDES: ProjectOverrideState = {
   verifierReasoningEffortOverride: null,
   revisionCountOverride: null,
   requireApprovalOverride: null,
+  pipelineSpeedProfileOverride: null,
   prdQualityGate: null,
   discordRouting: 'inherit',
   discordWebhookUrlOverride: null,

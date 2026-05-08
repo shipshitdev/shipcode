@@ -747,6 +747,11 @@ export function createPipelineRuntime(
     phase: Parameters<typeof deps.threads.updateStatus>[1],
     error?: string,
   ) {
+    try {
+      deps.phaseLogs?.transition(threadId, phase, error ?? null);
+    } catch (logError) {
+      console.error(`[pipeline] phase log transition failed for thread ${threadId}:`, logError);
+    }
     syncThreadAndIssuePhase(deps.threads, deps.githubIssues, threadId, phase, error, {
       getProject: (pid) => deps.projects.getById(pid),
       syncToGithub: async (opts) => {

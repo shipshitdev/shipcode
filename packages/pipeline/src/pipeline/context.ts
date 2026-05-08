@@ -1,12 +1,16 @@
 import {
+  type ResolveResult,
   resolvePhaseReasoningEffort,
   type SkillValidationError,
   toPipelinePromptScope,
 } from '@shipcode/agents/source';
 import {
+  type PhaseSkillKey,
+  type PromptTelemetryPhase,
   resolvePhaseModelForIssue,
   resolvePhaseModelIdForIssue,
   resolveProviderReasoningEffort,
+  type SkillResolutionSource,
 } from '@shipcode/shared';
 import type { PipelineContext, PipelineDeps, PipelineExecutorModel } from '../types';
 import { loadWorkflowPolicy } from '../workflow-loader';
@@ -20,6 +24,18 @@ function buildPhasePromptScopes(): PipelineContext['phasePromptScopes'] {
     verify: toPipelinePromptScope('verify'),
     execute: toPipelinePromptScope('execute'),
   };
+}
+
+const PROMPT_PHASE_BY_SKILL: Partial<Record<PhaseSkillKey, PromptTelemetryPhase>> = {
+  'plan-generation': 'plan',
+  'adversarial-review': 'review',
+  'plan-revision': 'revision',
+  'plan-execution': 'execute',
+  'plan-verification': 'verify',
+};
+
+function toSkillResolutionSource(source: ResolveResult['skill']['source']): SkillResolutionSource {
+  return source === 'default' ? 'bundled' : source;
 }
 
 function emitWorkflowWarning(deps: PipelineDeps, context: PipelineContext): void {
@@ -376,10 +392,7 @@ export function createPipelineContextHelpers(
   }
 
   function skillCallSite(context: PipelineContext) {
-    const onFallback = (
-      phase: import('@shipcode/shared').PhaseSkillKey,
-      error: SkillValidationError | undefined,
-    ) => {
+    const onFallback = (phase: PhaseSkillKey, error: SkillValidationError | undefined) => {
       deps.emitter.emit({
         type: 'skill:fallback',
         threadId: context.threadId,
@@ -387,9 +400,30 @@ export function createPipelineContextHelpers(
         reason: error?.message ?? 'override quarantined',
       });
     };
+    const onResolved = (phase: PhaseSkillKey, result: ResolveResult) => {
+      const providerPhase = PROMPT_PHASE_BY_SKILL[phase];
+      if (!providerPhase) return;
+      try {
+        deps.skillResolutionLogs?.create({
+          threadId: context.threadId,
+          providerPhase,
+          skillKey: phase,
+          source: toSkillResolutionSource(result.skill.source),
+          baseVersion: result.skill.baseVersion,
+          fallbackUsed: result.fallbackUsed,
+          errorCode: result.error?.code ?? null,
+          errorMessage: result.error?.message ?? null,
+        });
+      } catch (error) {
+        console.error(
+          `[pipeline] skill resolution log failed for thread ${context.threadId}:`,
+          error,
+        );
+      }
+    };
     return {
       context: { projectId: context.projectId },
-      deps: { skills: deps.skills, onFallback },
+      deps: { skills: deps.skills, onFallback, onResolved },
     };
   }
 

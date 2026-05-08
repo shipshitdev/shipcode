@@ -39,7 +39,10 @@ export function hasVisualQaAssertions(qaState: FeatureQaState | null | undefined
   return Boolean(qaState?.visualAssertions?.length);
 }
 
-export function getVisualQaToolingStatus(worktreePath: string): VisualQaToolingStatus {
+export function getVisualQaToolingStatus(
+  worktreePath: string,
+  pathValue = process.env.PATH ?? '',
+): VisualQaToolingStatus {
   const localPlaywright = join(worktreePath, 'node_modules', '.bin', 'playwright');
   if (isExecutable(localPlaywright)) {
     return {
@@ -50,7 +53,7 @@ export function getVisualQaToolingStatus(worktreePath: string): VisualQaToolingS
     };
   }
 
-  if (findExecutableOnPath('npx')) {
+  if (findExecutableOnPath('npx', pathValue)) {
     return {
       available: true,
       runner: 'npx',
@@ -60,7 +63,7 @@ export function getVisualQaToolingStatus(worktreePath: string): VisualQaToolingS
     };
   }
 
-  if (findExecutableOnPath('bunx')) {
+  if (findExecutableOnPath('bunx', pathValue)) {
     return {
       available: true,
       runner: 'bunx',
@@ -177,8 +180,8 @@ function isExecutable(path: string): boolean {
   }
 }
 
-function findExecutableOnPath(command: string): boolean {
-  const pathSegments = (process.env.PATH ?? '').split(':').filter(Boolean);
+function findExecutableOnPath(command: string, pathValue: string): boolean {
+  const pathSegments = pathValue.split(':').filter(Boolean);
   return pathSegments.some((segment) => isExecutable(join(segment, command)));
 }
 

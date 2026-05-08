@@ -21,7 +21,7 @@ import {
   type Thread,
   type VerificationRecord,
 } from '@shipcode/shared';
-import type { TaskGraphWithNodes } from '@shipcode/shared/source';
+import type { TaskGraphAssessment, TaskGraphWithNodes } from '@shipcode/shared/source';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPipeline } from './pipeline';
 import type { PipelineContext, PipelineDeps, PipelineEvent } from './types';
@@ -718,6 +718,7 @@ describe('createPipeline', () => {
         't1',
         'plan-1',
         expect.objectContaining({ id: 'p1' }),
+        { speedProfile: 'smart_fast' },
       );
       expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'approved');
       expect(mock.deps.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'awaiting_approval');
@@ -1265,6 +1266,55 @@ Custom prompt`,
 
       expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'completed');
       expect(pipeline.getContext('t1')).toBeUndefined();
+    });
+
+    it('direct task graph runs one execute pass and skips node verification', async () => {
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.startsWith('git diff')) return 'some diff output';
+        if (cmd.startsWith('git status')) return '';
+        return '';
+      });
+      const graph = {
+        ...makeTaskGraph(),
+        mode: 'direct',
+        assessment: {
+          mode: 'direct',
+          shouldDecompose: false,
+          riskScore: 0.1,
+          reasons: ['Contained plan with one low-risk execution surface'],
+          suggestedNodeCount: 1,
+          surfaces: ['frontend'],
+        } satisfies TaskGraphAssessment,
+        nodes: [makeTaskGraph().nodes[0]],
+        edges: [],
+      } satisfies TaskGraphWithNodes;
+      const taskGraphs = mock.deps.taskGraphs;
+      if (!taskGraphs) throw new Error('Expected task graph deps');
+      vi.mocked(taskGraphs.getByPlanId).mockImplementation(() => graph);
+      vi.mocked(taskGraphs.updateGraphStatus).mockImplementation((_graphId, status) => ({
+        ...graph,
+        status,
+      }));
+
+      const pipeline = createPipeline(mock.deps);
+      pipeline.initializeContext('t1', {
+        projectPath: '/proj',
+        worktreePath: '/worktree',
+        baseBranch: 'main',
+        autonomous: true,
+        forkPointSha: 'abc123',
+      });
+
+      await pipeline.startExecution('t1', JSON.parse(PLAN_JSON));
+      await mock.trigger('exit', 'proc-1', 0);
+      await flush();
+
+      expect(taskGraphs.getNextReadyNode).not.toHaveBeenCalled();
+      expect(taskGraphs.updateNodeStatus).not.toHaveBeenCalled();
+      expect(taskGraphs.markNodeCompletedAndPromote).not.toHaveBeenCalled();
+      expect(taskGraphs.updateGraphStatus).toHaveBeenCalledWith('graph-1', 'completed');
+      expect(mock.deps.processManager.spawn).toHaveBeenCalledTimes(2);
+      expect(mock.deps.threads.updateStatus).toHaveBeenCalledWith('t1', 'verifying');
     });
 
     it('executes task graph nodes one by one with specialist node prompts', async () => {

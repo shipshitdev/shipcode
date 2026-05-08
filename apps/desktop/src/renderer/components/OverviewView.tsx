@@ -3,8 +3,10 @@ import {
   type ActivityEntry,
   type DashboardOverview,
   type DashboardStats,
+  formatCost,
   formatRelativeTime,
   type GitHubIssueCacheRecord,
+  type PipelineAnalyticsOverview,
   type RecentTask,
 } from '@shipcode/shared';
 import { ActivePipelineCard, PageHeader, PhaseChip } from '@shipcode/ui';
@@ -21,7 +23,7 @@ import {
   TableRow,
 } from '@shipshitdev/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, Bot, ListTodo, PackageCheck } from 'lucide-react';
+import { Bell, Bot, Gauge, ListTodo, PackageCheck, Timer } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useAnimatedNumber } from '../hooks/useAnimatedNumber';
 import { useAppStore } from '../stores/app-store';
@@ -80,6 +82,17 @@ function StatCard({ label, value, subtitle, tone = 'default', icon, onClick }: S
   return card;
 }
 
+function formatDuration(ms: number | null | undefined): string {
+  if (ms == null) return '—';
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+  const minutes = Math.floor(ms / 60_000);
+  const seconds = Math.round((ms % 60_000) / 1000);
+  if (minutes < 60) return `${minutes}m ${seconds}s`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${minutes % 60}m`;
+}
+
 export function OverviewView() {
   const queryClient = useQueryClient();
   const selectProject = useAppStore((s) => s.selectProject);
@@ -105,6 +118,11 @@ export function OverviewView() {
         recentOffset: (tasksPage - 1) * PAGE_SIZE,
       }),
   });
+  const { data: analytics } = useQuery<PipelineAnalyticsOverview>({
+    queryKey: ['pipeline-analytics', 'overview'],
+    queryFn: () =>
+      window.shipcode.invoke<PipelineAnalyticsOverview>('pipeline-analytics:get-overview'),
+  });
   const stats: DashboardStats | undefined = overview?.stats;
   const animatedAgents = useAnimatedNumber(stats?.agentsRunning ?? 0);
   const animatedTasks = useAnimatedNumber(stats?.tasksInProgress ?? 0);
@@ -120,6 +138,9 @@ export function OverviewView() {
   const tasksTotalPages = Math.max(1, Math.ceil(recentTotal / PAGE_SIZE));
   const activitySlice = activity;
   const tasksSlice = recent;
+  const bottleneck = analytics?.averagePhaseDurations[0] ?? null;
+  const analyticsCost =
+    analytics?.tokensByPhase.reduce((sum, phase) => sum + phase.costUsd, 0) ?? 0;
 
   // Click-through from Mission Control rows: switch project, fetch its issues,
   // and open the IssueDetail sidebar for the matching threadId. Falls back to
@@ -234,6 +255,118 @@ export function OverviewView() {
                 ))}
               </div>
             )}
+          </div>
+
+          <div>
+            <h2 className="text-sm font-semibold text-primary mb-3">Iteration Analytics</h2>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+              <StatCard
+                label="Median Time To PR"
+                value={formatDuration(analytics?.timeToPr.medianMs)}
+                subtitle={`${analytics?.timeToPr.sampleSize ?? 0} shipped sample${analytics?.timeToPr.sampleSize === 1 ? '' : 's'}`}
+                icon={<Timer size={18} />}
+              />
+              <StatCard
+                label="P75 Time To PR"
+                value={formatDuration(analytics?.timeToPr.p75Ms)}
+                subtitle={`p95 ${formatDuration(analytics?.timeToPr.p95Ms)}`}
+                icon={<Timer size={18} />}
+              />
+              <StatCard
+                label="Bottleneck Phase"
+                value={bottleneck ? bottleneck.phase.replace(/_/g, ' ') : '—'}
+                subtitle={bottleneck ? `avg ${formatDuration(bottleneck.averageMs)}` : 'no data'}
+                tone={bottleneck ? 'agent' : 'default'}
+                icon={<Gauge size={18} />}
+              />
+              <StatCard
+                label="Tokens / Cost"
+                value={formatCost(analyticsCost)}
+                subtitle={`${analytics?.tokensByPhase.reduce((sum, phase) => sum + phase.promptTokens + phase.completionTokens, 0).toLocaleString() ?? 0} tokens`}
+                icon={<Bot size={18} />}
+              />
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <Card>
+                <CardContent className="p-0">
+                  {(analytics?.averagePhaseDurations.length ?? 0) === 0 ? (
+                    <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted">
+                      No phase timing data yet.
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Phase</TableHead>
+                          <TableHead className="text-right">Avg</TableHead>
+                          <TableHead className="text-right">P75</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(analytics?.averagePhaseDurations ?? []).slice(0, 5).map((phase) => (
+                          <TableRow key={phase.phase}>
+                            <TableCell>
+                              <PhaseChip status={phase.phase} />
+                            </TableCell>
+                            <TableCell className="text-right text-[11px] text-primary">
+                              {formatDuration(phase.averageMs)}
+                            </TableCell>
+                            <TableCell className="text-right text-[11px] text-muted">
+                              {formatDuration(phase.p75Ms)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="p-0">
+                  {(analytics?.slowestRecentRuns.length ?? 0) === 0 ? (
+                    <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted">
+                      No completed PR runs yet.
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Slow Run</TableHead>
+                          <TableHead className="text-right">Duration</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(analytics?.slowestRecentRuns ?? []).map((run) => (
+                          <TableRow
+                            key={run.threadId}
+                            className="cursor-pointer hover:bg-hover"
+                            onClick={() => selectThread(run.threadId)}
+                          >
+                            <TableCell className="max-w-0">
+                              <div className="truncate text-[12px] text-primary">
+                                {run.githubPrNumber ? `#${run.githubPrNumber} ` : ''}
+                                {run.title}
+                              </div>
+                              <div className="truncate text-[11px] text-muted">
+                                {run.projectName ?? 'Unknown project'}
+                                {run.bottleneckPhase
+                                  ? ` · ${run.bottleneckPhase.replace(/_/g, ' ')}`
+                                  : ''}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right text-[11px] text-primary">
+                              {formatDuration(run.durationMs)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </div>
 
           {/* Activity + Recent tasks */}

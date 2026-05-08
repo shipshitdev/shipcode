@@ -4,6 +4,7 @@ import type {
   CleanupCriteria,
   IntegrationDeliveryStatus,
   NotificationEventToggles,
+  PipelineSpeedProfile,
 } from '@shipcode/shared';
 import {
   DEFAULT_CHAT_NOTIFICATION_EVENTS,
@@ -76,9 +77,16 @@ const EXECUTOR_MODELS = ['claude', 'codex', 'openrouter'] as const;
 const DEV_LOG_LEVELS = ['error', 'warn', 'info', 'debug'] as const;
 const UPDATE_TRACKS = ['master', 'stable', 'nightly'] as const;
 const AUTO_COMMIT_MODES = ['split', 'single'] as const;
+const PIPELINE_SPEED_PROFILES = ['smart_fast', 'thorough'] as const;
 
 function isAutoCommitMode(value: unknown): value is AppSettings['autoCommitMode'] {
   return typeof value === 'string' && (AUTO_COMMIT_MODES as readonly string[]).includes(value);
+}
+
+function isPipelineSpeedProfile(value: unknown): value is PipelineSpeedProfile {
+  return (
+    typeof value === 'string' && (PIPELINE_SPEED_PROFILES as readonly string[]).includes(value)
+  );
 }
 
 function parseCleanupCriteria(raw: string | undefined): CleanupCriteria {
@@ -209,6 +217,9 @@ export class SettingsQueries {
       addProjectStartsIn: readNullable(stored.addProjectStartsIn) ?? null,
       worktreeBranchFormat: stored.worktreeBranchFormat || DEFAULT_SETTINGS.worktreeBranchFormat,
       revisionCount: readRevisionCount(stored.revisionCount, DEFAULT_SETTINGS.revisionCount),
+      pipelineSpeedProfile: isPipelineSpeedProfile(stored.pipelineSpeedProfile)
+        ? stored.pipelineSpeedProfile
+        : DEFAULT_SETTINGS.pipelineSpeedProfile,
       requireApproval: parseBool(stored.requireApproval, DEFAULT_SETTINGS.requireApproval),
       plannerReasoningEffort: isReasoningEffort(stored.plannerReasoningEffort)
         ? (stored.plannerReasoningEffort as AppSettings['plannerReasoningEffort'])
@@ -310,6 +321,11 @@ export class SettingsQueries {
     if ('revisionCount' in patch && patch.revisionCount != null) {
       const n = Number(patch.revisionCount);
       if (!Number.isFinite(n) || n < 0 || n > 5) throw new Error('revisionCount must be 0–5');
+    }
+    if ('pipelineSpeedProfile' in patch && patch.pipelineSpeedProfile != null) {
+      if (!isPipelineSpeedProfile(patch.pipelineSpeedProfile)) {
+        throw new Error('pipelineSpeedProfile must be smart_fast|thorough');
+      }
     }
     if ('maxConcurrentPipelines' in patch && patch.maxConcurrentPipelines != null) {
       const n = Number(patch.maxConcurrentPipelines);

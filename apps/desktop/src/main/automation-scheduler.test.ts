@@ -84,6 +84,25 @@ describe('AutomationScheduler', () => {
     expect(queries.setNextRunAt).toHaveBeenCalledTimes(2);
   });
 
+  it('start() checks for missed ticks before schedule() overwrites next_run_at', () => {
+    const events: string[] = [];
+    const overdue = makeAutomation({ id: 'overdue' });
+    queries.listEnabled.mockReturnValue([overdue]);
+    queries.listDue.mockImplementation(() => {
+      events.push(`listDue:${queries.setNextRunAt.mock.calls.length}`);
+      return [overdue];
+    });
+    queries.setNextRunAt.mockImplementation(() => {
+      events.push('setNextRunAt');
+    });
+
+    scheduler.start();
+
+    expect(events[0]).toBe('listDue:0');
+    expect(queries.setNextRunAt).toHaveBeenCalledTimes(2);
+    expect(pipelineScheduler.startOrQueueAutomation).not.toHaveBeenCalled();
+  });
+
   it('schedule() ignores disabled automations', () => {
     scheduler.schedule(makeAutomation({ enabled: false }));
     expect(queries.setNextRunAt).not.toHaveBeenCalled();

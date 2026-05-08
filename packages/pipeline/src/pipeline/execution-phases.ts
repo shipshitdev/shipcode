@@ -13,11 +13,13 @@ import {
   ServerLifecycleManager,
   StreamParser,
   selectPromptMaterials,
+  shellExecEnv,
   summarizePromptMaterials,
 } from '@shipcode/agents/source';
 import { WorktreeManager } from '@shipcode/git';
 import {
   EXECUTION_PHASES,
+  type FeatureQaResult,
   type GitHubPrCheckSummary,
   type GitHubPrReviewCommentSummary,
   isRealGithubIssueNumber,
@@ -71,6 +73,15 @@ function buildContinuationPrompt(context: PipelineContext, failureReason: string
     .replace(/\{\{\s*prior_failure_reason\s*\}\}/g, failureReason)
     .replace(/\{\{\s*turn_count\s*\}\}/g, String(context.turnCount))
     .trim();
+}
+
+function normalizeFeatureQaResults(
+  results: Array<Omit<FeatureQaResult, 'evidencePaths'> & { evidencePaths?: string[] | null }>,
+): FeatureQaResult[] {
+  return results.map((result) => ({
+    ...result,
+    evidencePaths: result.evidencePaths ?? undefined,
+  }));
 }
 
 // Extract a short, human-readable error from an executor transcript.
@@ -614,7 +625,9 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
         ? deps.taskGraphs.getByPlanId(latestPlanRecord.id)
         : null;
     let activeTaskNode: TaskNodeRecord | null = null;
-    const usesTaskGraph = Boolean(taskGraph && deps.taskGraphs && taskGraph.nodes.length >= 1);
+    const usesTaskGraph = Boolean(
+      taskGraph && deps.taskGraphs && taskGraph.mode !== 'direct' && taskGraph.nodes.length >= 1,
+    );
     if (usesTaskGraph && taskGraph && deps.taskGraphs) {
       const isRetry =
         context.testRetries > 0 ||
@@ -716,13 +729,14 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       activePipelines.delete(threadId);
       return;
     }
+    const executionTaskGraph = usesTaskGraph ? taskGraph : null;
     const executionPrompt =
       (workflowExecutionPrompt ??
         buildExecutionPrompt(executionPlan, skill.context, skill.deps, {
           promptMaterials: executeMaterials,
           testingContext: getTestingContext(context),
         })) +
-      formatTaskGraphExecutionContract(taskGraph, { activeNode: activeTaskNode }) +
+      formatTaskGraphExecutionContract(executionTaskGraph, { activeNode: activeTaskNode }) +
       verificationFeedback +
       testFeedback +
       stabilizationFeedback;
@@ -807,6 +821,17 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
             // ─── End per-node verification gate ───
           }
 
+          if (taskGraph?.mode === 'direct' && deps.taskGraphs && taskGraph.status !== 'completed') {
+            try {
+              deps.taskGraphs.updateGraphStatus(taskGraph.id, 'completed');
+            } catch (error) {
+              console.error(
+                `[pipeline] direct task graph completion failed for ${threadId}:`,
+                error,
+              );
+            }
+          }
+
           if (context.autonomous) {
             handlers.startTesting(threadId);
           } else {
@@ -830,6 +855,16 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
           if (activeTaskNode && deps.taskGraphs) {
             const failedGraph = deps.taskGraphs.markNodeFailed(activeTaskNode.id);
             void postTaskGraphComment(context, failedGraph);
+          } else if (
+            taskGraph?.mode === 'direct' &&
+            deps.taskGraphs &&
+            taskGraph.status !== 'failed'
+          ) {
+            try {
+              deps.taskGraphs.updateGraphStatus(taskGraph.id, 'failed');
+            } catch (error) {
+              console.error(`[pipeline] direct task graph failure failed for ${threadId}:`, error);
+            }
           }
           emitPhase(
             threadId,
@@ -932,7 +967,7 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
       }
 
       try {
-        const tooling = getVisualQaToolingStatus(cwd);
+        const tooling = getVisualQaToolingStatus(cwd, shellExecEnv().PATH);
         if (!tooling.available) {
           emitPhase(threadId, 'failed', tooling.message);
           activePipelines.delete(threadId);
@@ -1562,12 +1597,15 @@ Pass criteria: ALL acceptance criteria passed with no blocker-severity issues.`;
 
       // Get latest verification
       const latestVerification = deps.verifications.getLatest(threadId);
+      const featureQaResults = normalizeFeatureQaResults(
+        deps.featureQaResults?.listByThread(threadId) ?? [],
+      );
 
       const body = plan
         ? buildPRBody(plan, reviews, latestVerification?.structured ?? null, issueNumber, {
             projectId: context.projectId,
             skills: deps.skills,
-            featureQaResults: deps.featureQaResults?.listByThread(threadId) ?? [],
+            featureQaResults,
           })
         : [
             '## Summary',

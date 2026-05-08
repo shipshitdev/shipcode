@@ -12,11 +12,15 @@ import type {
   HeatmapQueries,
   IssueEdgeQueries,
   NotificationsQueries,
+  PhaseLogQueries,
+  PipelineAnalyticsQueries,
   PipelineStepQueries,
   PlanQueries,
   ProjectQueries,
+  PromptTelemetryQueries,
   ReviewQueries,
   SettingsQueries,
+  SkillResolutionLogQueries,
   SkillsQueries,
   TerminalEventQueries,
   ThreadQueries,
@@ -47,8 +51,12 @@ export interface Queries {
   costs: CostsQueries;
   skills: SkillsQueries;
   terminalEvents: TerminalEventQueries;
+  phaseLogs: PhaseLogQueries;
+  pipelineAnalytics: PipelineAnalyticsQueries;
   pipelineSteps: PipelineStepQueries;
+  promptTelemetry: PromptTelemetryQueries;
   agentConversations: AgentConversationQueries;
+  skillResolutionLogs: SkillResolutionLogQueries;
   featureQaResults: FeatureQaResultQueries;
   taskGraphs?: TaskGraphQueries;
 }

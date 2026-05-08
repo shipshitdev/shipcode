@@ -151,13 +151,20 @@ describe('NotificationToaster', () => {
     expect(screen.getByText('Build failed')).toBeInTheDocument();
 
     await act(async () => {
-      vi.advanceTimersByTime(4_100);
+      vi.advanceTimersByTime(4_000);
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(220);
     });
 
     expect(screen.queryByText('Build failed')).not.toBeInTheDocument();
     expect(screen.getByText('Approval needed')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+
+    await act(async () => {
+      vi.advanceTimersByTime(220);
+    });
 
     expect(window.shipcode.invoke).toHaveBeenCalledWith('notification:dismiss', {
       id: 'sticky-1',

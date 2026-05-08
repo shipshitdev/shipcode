@@ -13,12 +13,14 @@ import type {
   DiffQueries,
   FeatureQaResultQueries,
   GitHubIssueQueries,
+  PhaseLogQueries,
   PipelineStepQueries,
   PlanQueries,
   ProjectQueries,
   PromptTelemetryQueries,
   ReviewQueries,
   SettingsQueries,
+  SkillResolutionLogQueries,
   SkillsQueries,
   ThreadQueries,
   VerificationQueries,
@@ -38,7 +40,11 @@ import type {
   ShipCodePlan,
   VerificationResult,
 } from '@shipcode/shared';
-import type { TaskGraphWithNodes, TaskNodeStatus } from '@shipcode/shared/source';
+import type {
+  TaskGraphBuildOptions,
+  TaskGraphWithNodes,
+  TaskNodeStatus,
+} from '@shipcode/shared/source';
 import type { WorkflowLoadWarning, WorkflowPolicy } from './workflow-loader';
 
 // Temporary alias while pipeline adopts the shared executor-model type directly.
@@ -58,7 +64,12 @@ export interface PromptTelemetryPersistenceDiagnostic {
 }
 
 export interface PipelineTaskGraphQueries {
-  replaceForPlan(threadId: string, planId: string, plan: ShipCodePlan): TaskGraphWithNodes;
+  replaceForPlan(
+    threadId: string,
+    planId: string,
+    plan: ShipCodePlan,
+    options?: TaskGraphBuildOptions,
+  ): TaskGraphWithNodes;
   getByPlanId(planId: string): TaskGraphWithNodes | null;
   getNextReadyNode(graphId: string): TaskGraphWithNodes['nodes'][number] | null;
   updateNodeStatus(nodeId: string, status: TaskNodeStatus): unknown;
@@ -312,6 +323,8 @@ export interface PipelineDeps {
   /** Internal task graph persistence for decomposed plan execution contracts. */
   taskGraphs?: PipelineTaskGraphQueries;
   promptTelemetry?: PromptTelemetryQueries;
+  /** Closed phase durations across non-provider work such as testing and shipping. */
+  phaseLogs?: PhaseLogQueries;
   /**
    * Lifecycle envelope for individual provider invocations. When provided,
    * the runtime emits one started -> completed/failed/aborted row per phase
@@ -325,6 +338,8 @@ export interface PipelineDeps {
    * dialogue is queryable and viewable in the Conversations tab.
    */
   agentConversations?: AgentConversationQueries;
+  /** Local skill resolution/fallback telemetry for prompt skill performance. */
+  skillResolutionLogs?: SkillResolutionLogQueries;
   /**
    * Feature QA result persistence. When provided, the pipeline persists
    * per-flow QA results after verification when a ## QA State section

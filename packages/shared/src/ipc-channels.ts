@@ -37,16 +37,19 @@ import type {
   NotificationRecord,
   OnboardingRepo,
   OpenRouterModelValidation,
+  PipelineAnalyticsOverview,
   PipelineCheckpoint,
   PipelineModelResolvedEvent,
   PipelinePhase,
   PipelineStepRecord,
+  PipelineThreadAnalytics,
   PlanRecord,
   PlanReview,
   Project,
   ProjectOpenTarget,
   ProjectSetupDraft,
   ProjectSetupInspection,
+  PromptTelemetryRecord,
   PullRequestDetailResponse,
   PullRequestListFilter,
   PullRequestListItem,
@@ -582,6 +585,18 @@ export interface IpcInvokeChannels {
   'pipeline-steps:list-by-thread': {
     args: { threadId: string };
     result: PipelineStepRecord[];
+  };
+  'prompt-telemetry:list-by-thread': {
+    args: { threadId: string };
+    result: PromptTelemetryRecord[];
+  };
+  'pipeline-analytics:get-overview': {
+    args: undefined;
+    result: PipelineAnalyticsOverview;
+  };
+  'pipeline-analytics:get-thread': {
+    args: { threadId: string };
+    result: PipelineThreadAnalytics;
   };
   'activity-heatmap:query': {
     args: HeatmapQueryArgs;

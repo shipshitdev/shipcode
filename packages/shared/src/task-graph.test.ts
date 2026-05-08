@@ -63,6 +63,71 @@ describe('inferTaskSurfaces', () => {
 });
 
 describe('assessPlanScope', () => {
+  it('keeps required three-step low-risk plans on the smart fast direct path', () => {
+    const threeStepPlan = plan({
+      steps: [
+        {
+          order: 1,
+          description: 'Update copy',
+          files: ['apps/desktop/src/renderer/components/Settings.tsx'],
+          rationale: 'Matches request',
+        },
+        {
+          order: 2,
+          description: 'Adjust empty state',
+          files: ['apps/desktop/src/renderer/components/Settings.tsx'],
+          rationale: 'Same surface',
+        },
+        {
+          order: 3,
+          description: 'Run focused test',
+          files: ['apps/desktop/src/renderer/components/Settings.tsx'],
+          rationale: 'Verify behavior',
+        },
+      ],
+    });
+
+    expect(assessPlanScope(threeStepPlan).mode).toBe('direct');
+    expect(assessPlanScope(threeStepPlan, { speedProfile: 'thorough' }).mode).toBe('internal');
+  });
+
+  it('still decomposes sensitive surfaces on the smart fast profile', () => {
+    expect(
+      assessPlanScope(
+        plan({
+          objective: 'Rotate webhook secret handling',
+          files: [
+            {
+              path: 'packages/db/src/schema.ts',
+              action: 'modify',
+              description: 'token storage',
+            },
+          ],
+          steps: [
+            {
+              order: 1,
+              description: 'Update encrypted token schema',
+              files: ['packages/db/src/schema.ts'],
+              rationale: 'Security sensitive',
+            },
+            {
+              order: 2,
+              description: 'Wire token migration',
+              files: ['packages/db/src/schema.ts'],
+              rationale: 'Database change',
+            },
+            {
+              order: 3,
+              description: 'Cover token behavior',
+              files: ['packages/db/src/schema.ts'],
+              rationale: 'Regression coverage',
+            },
+          ],
+        }),
+      ).mode,
+    ).toBe('internal');
+  });
+
   it.each<[TaskGraphMode, ShipCodePlan]>([
     ['direct', plan()],
     [

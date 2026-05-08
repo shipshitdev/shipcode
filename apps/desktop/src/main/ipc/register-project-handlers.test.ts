@@ -32,6 +32,16 @@ const { createIssueMock, execMock, execFileMock, worktreeMoveMock, worktreeRepai
     worktreeRepairMock: vi.fn(async () => undefined),
   }));
 
+vi.mock('../logger.service', () => ({
+  default: {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  },
+  logEvent: vi.fn(),
+}));
+
 vi.mock('electron', () => ({
   app: undefined,
   dialog: {},

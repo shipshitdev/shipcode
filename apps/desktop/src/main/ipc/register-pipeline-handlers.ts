@@ -890,6 +890,21 @@ export function registerPipelineHandlers({
     return queries.pipelineSteps.listByThread(threadId);
   });
 
+  ipcMain.handle(
+    'prompt-telemetry:list-by-thread',
+    (_event, { threadId }: { threadId: string }) => {
+      return queries.promptTelemetry.listByThread(threadId);
+    },
+  );
+
+  ipcMain.handle('pipeline-analytics:get-overview', () => {
+    return queries.pipelineAnalytics.getOverview();
+  });
+
+  ipcMain.handle('pipeline-analytics:get-thread', (_event, { threadId }: { threadId: string }) => {
+    return queries.pipelineAnalytics.getThread(threadId);
+  });
+
   // GitHub-style contribution heatmap (cost / tokens / runs / PRs). One IPC
   // serves three surfaces: global Costs dashboard, per-project Insights tab,
   // and per-issue CostsTab embedded mini-heatmap. Scope discriminates which

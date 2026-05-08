@@ -15,8 +15,11 @@ export function useAnimatedNumber(target: number, duration = 600): number {
   const startTimeRef = useRef<number | null>(null);
 
   useEffect(() => {
-    // Respect prefers-reduced-motion
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const prefersReducedMotion =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (prefersReducedMotion) {
       setDisplayed(target);
       prevRef.current = target;
       return;

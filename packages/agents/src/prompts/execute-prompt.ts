@@ -2,6 +2,7 @@ import type { ShipCodePlan } from '@shipcode/shared';
 import { buildScopedContext, type PromptMaterial } from '../prompt-scope';
 import {
   interpolateSkill,
+  type ResolveResult,
   resolveSkill,
   type SkillsRowSource,
   type SkillValidationError,
@@ -14,6 +15,7 @@ export interface ExecutePromptContext {
 export interface ExecutePromptDeps {
   skills: SkillsRowSource;
   onFallback?: (phase: 'plan-execution', error: SkillValidationError | undefined) => void;
+  onResolved?: (phase: 'plan-execution', result: ResolveResult) => void;
 }
 
 export interface ExecutePromptOptions {
@@ -62,7 +64,9 @@ export function buildExecutionPrompt(
   deps: ExecutePromptDeps,
   opts: ExecutePromptOptions = {},
 ): string {
-  const { skill, fallbackUsed, error } = resolveSkill('plan-execution', context.projectId, deps);
+  const resolution = resolveSkill('plan-execution', context.projectId, deps);
+  deps.onResolved?.('plan-execution', resolution);
+  const { skill, fallbackUsed, error } = resolution;
   if (fallbackUsed) {
     deps.onFallback?.('plan-execution', error);
   }

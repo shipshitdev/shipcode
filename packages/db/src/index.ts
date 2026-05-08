@@ -69,6 +69,7 @@ import {
   migrateV46,
   migrateV47,
   migrateV48,
+  migrateV49,
 } from './schema';
 
 export { ActivityQueries } from './queries/activity';
@@ -90,12 +91,15 @@ export { HeatmapQueries } from './queries/heatmap';
 // Issue graph persistence backs the project-level dependency view.
 export { IssueEdgeQueries } from './queries/issue-edges';
 export { NotificationsQueries } from './queries/notifications';
+export { PipelineAnalyticsQueries } from './queries/pipeline-analytics';
+export { PhaseLogQueries } from './queries/pipeline-phase-log';
 export { PipelineStepQueries } from './queries/pipeline-steps';
 export { PlanQueries } from './queries/plans';
 export { ProjectQueries } from './queries/projects';
 export { PromptTelemetryQueries } from './queries/prompt-telemetry';
 export { ReviewQueries } from './queries/reviews';
 export { SettingsQueries } from './queries/settings';
+export { SkillResolutionLogQueries } from './queries/skill-resolution-log';
 export type { SkillRow } from './queries/skills';
 export { SkillsQueries } from './queries/skills';
 export { TaskGraphQueries } from './queries/task-graphs';
@@ -169,6 +173,7 @@ export function getDatabase(dataDir: string): DatabaseSync {
   migrateV46(db);
   migrateV47(db);
   migrateV48(db);
+  migrateV49(db);
 
   // Startup cleanup: reset unclaimed queued issues to todo on every launch.
   // An unclaimed queued issue has no active worker holding it — it's stale state

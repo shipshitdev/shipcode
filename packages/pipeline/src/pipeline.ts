@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { buildWorkpadProtocol } from '@shipcode/agents/source';
 import {
+  resolvePipelineSpeedProfile,
   resolveRequireApproval,
   resolveRequireApprovalForIssue,
   type ShipCodePlan,
@@ -263,6 +264,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     const requireApproval = project
       ? resolveRequireApproval(settings, project)
       : settings.requireApproval;
+    const speedProfile = resolvePipelineSpeedProfile(settings, project);
 
     deps.emitter.emit({
       type: 'pipeline:start-context',
@@ -304,7 +306,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
     const planRecord = deps.plans.create(threadId, '<quick-task-synthesized>', synthesizedPlan, 1);
     deps.plans.updateStatus(planRecord.id, 'approved');
-    deps.taskGraphs?.replaceForPlan(threadId, planRecord.id, synthesizedPlan);
+    deps.taskGraphs?.replaceForPlan(threadId, planRecord.id, synthesizedPlan, { speedProfile });
 
     await handlers.startExecution(threadId, synthesizedPlan);
   }
@@ -346,9 +348,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       ],
       acceptanceCriteria: [
         `Implements automation: ${automationName}`,
-        ...(prompt.trim().length > 20
-          ? [`Satisfies prompt: ${prompt.trim().slice(0, 200)}`]
-          : []),
+        ...(prompt.trim().length > 20 ? [`Satisfies prompt: ${prompt.trim().slice(0, 200)}`] : []),
       ],
       outOfScope: [],
       estimatedComplexity: 'medium',
@@ -357,7 +357,11 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
 
     const planRecord = deps.plans.create(threadId, '<automation-synthesized>', synthesizedPlan, 1);
     deps.plans.updateStatus(planRecord.id, 'approved');
-    deps.taskGraphs?.replaceForPlan(threadId, planRecord.id, synthesizedPlan);
+    const context = activePipelines.get(threadId);
+    const project = context?.projectId ? deps.projects.getById(context.projectId) : null;
+    deps.taskGraphs?.replaceForPlan(threadId, planRecord.id, synthesizedPlan, {
+      speedProfile: resolvePipelineSpeedProfile(deps.settings.get(), project),
+    });
 
     await handlers.startExecution(threadId, synthesizedPlan);
   }

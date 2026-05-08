@@ -3,9 +3,11 @@ import type {
   PipelineStepPhase,
   PipelineStepRecord,
   PipelineStepStatus,
+  PipelineThreadAnalytics,
   Thread,
 } from '@shipcode/shared';
 import { formatCost, MODEL_DISPLAY, PIPELINE_PHASE } from '@shipcode/shared';
+import { PhaseChip } from '@shipcode/ui';
 import { Badge, Button, Skeleton } from '@shipshitdev/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -109,6 +111,137 @@ function formatTokens(prompt: number, completion: number): string {
   return `${total} tokens`;
 }
 
+function formatPercent(value: number): string {
+  return `${Math.round(value * 100)}%`;
+}
+
+function ThreadAnalyticsPanel({
+  analytics,
+  isLoading,
+}: {
+  analytics: PipelineThreadAnalytics | undefined;
+  isLoading: boolean;
+}) {
+  if (isLoading) {
+    return (
+      <div className="mt-4 space-y-2">
+        <Skeleton className="h-20 rounded-md" />
+        <Skeleton className="h-24 rounded-md" />
+      </div>
+    );
+  }
+  if (!analytics) return null;
+
+  return (
+    <div className="mt-4 space-y-4">
+      <div>
+        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-secondary">
+          Timeline
+        </h4>
+        {analytics.phaseTimeline.length === 0 ? (
+          <p className="rounded-md border border-dashed border-border px-3 py-3 text-[11px] text-muted">
+            No phase timing data yet.
+          </p>
+        ) : (
+          <div className="overflow-hidden rounded-md border border-border bg-secondary/20">
+            <div className="divide-y divide-border">
+              {analytics.phaseTimeline.slice(0, 8).map((phase) => (
+                <div key={phase.id} className="flex items-center gap-3 px-3 py-2">
+                  <PhaseChip status={phase.phase} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[11px] text-primary">
+                      {phase.terminalStatus ?? 'running'}
+                    </div>
+                    {phase.errorMessage ? (
+                      <div className="truncate text-[10px] text-danger">{phase.errorMessage}</div>
+                    ) : null}
+                  </div>
+                  <span className="shrink-0 text-[10px] text-muted">
+                    {formatDuration(phase.durationMs)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div>
+        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-secondary">
+          Prompt / Context
+        </h4>
+        {analytics.promptByPhase.length === 0 ? (
+          <p className="rounded-md border border-dashed border-border px-3 py-3 text-[11px] text-muted">
+            No prompt telemetry yet.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+            {analytics.promptByPhase.map((phase) => (
+              <div key={phase.phase} className="rounded-md border border-border bg-secondary p-2">
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-medium uppercase tracking-wide text-secondary">
+                    {STEP_PHASE_LABEL[phase.phase] ?? phase.phase}
+                  </span>
+                  <span className="text-[10px] text-muted">{phase.promptCount} prompt(s)</span>
+                </div>
+                <div className="text-[11px] text-primary">
+                  {phase.averageBytes.toLocaleString()} avg bytes · {phase.averageLines} avg lines
+                </div>
+                <div className="mt-1 truncate text-[10px] text-muted">
+                  {phase.materialCount} materials
+                  {phase.materialKinds.length > 0 ? ` · ${phase.materialKinds.join(', ')}` : ''}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-secondary">
+          Skill Resolution
+        </h4>
+        <div className="grid grid-cols-3 gap-2">
+          <div className="rounded-md border border-border bg-secondary p-2">
+            <div className="text-[10px] uppercase tracking-wide text-muted">Score</div>
+            <div className="text-[14px] font-semibold text-primary">
+              {analytics.skillFallback.score}
+            </div>
+          </div>
+          <div className="rounded-md border border-border bg-secondary p-2">
+            <div className="text-[10px] uppercase tracking-wide text-muted">Fallbacks</div>
+            <div className="text-[14px] font-semibold text-primary">
+              {formatPercent(analytics.skillFallback.fallbackRate)}
+            </div>
+          </div>
+          <div className="rounded-md border border-border bg-secondary p-2">
+            <div className="text-[10px] uppercase tracking-wide text-muted">Retries</div>
+            <div className="text-[14px] font-semibold text-primary">
+              {formatPercent(analytics.skillFallback.retryRate)}
+            </div>
+          </div>
+        </div>
+        {analytics.skillResolutions.length > 0 ? (
+          <div className="mt-2 overflow-hidden rounded-md border border-border bg-tertiary/30">
+            {analytics.skillResolutions.slice(0, 6).map((skill) => (
+              <div
+                key={skill.id}
+                className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5 last:border-b-0"
+              >
+                <span className="truncate text-[11px] text-primary">{skill.skillKey}</span>
+                <span className="shrink-0 text-[10px] text-muted">
+                  {skill.source}
+                  {skill.fallbackUsed ? ' · fallback' : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function CostsTab({
   projectId,
   issueNumber,
@@ -133,6 +266,15 @@ export function CostsTab({
   const totalCost = tasks.reduce((sum, t) => sum + t.costUsd, 0);
   const totalTokens = tasks.reduce((sum, t) => sum + t.tokensPrompt + t.tokensCompletion, 0);
   const [expandedThreadId, setExpandedThreadId] = useState<string | null>(null);
+  const { data: threadAnalytics, isLoading: threadAnalyticsLoading } =
+    useQuery<PipelineThreadAnalytics>({
+      queryKey: ['pipeline-analytics', 'thread', thread?.id],
+      queryFn: () =>
+        window.shipcode.invoke<PipelineThreadAnalytics>('pipeline-analytics:get-thread', {
+          threadId: thread?.id ?? '',
+        }),
+      enabled: Boolean(thread?.id),
+    });
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -152,7 +294,10 @@ export function CostsTab({
           ))}
         </div>
       ) : tasks.length === 0 ? (
-        <p className="text-[11px] text-muted">No cost data yet.</p>
+        <>
+          <p className="text-[11px] text-muted">No cost data yet.</p>
+          <ThreadAnalyticsPanel analytics={threadAnalytics} isLoading={threadAnalyticsLoading} />
+        </>
       ) : (
         <>
           {/* Summary */}
@@ -290,6 +435,7 @@ export function CostsTab({
               </div>
             </div>
           )}
+          <ThreadAnalyticsPanel analytics={threadAnalytics} isLoading={threadAnalyticsLoading} />
         </>
       )}
     </div>

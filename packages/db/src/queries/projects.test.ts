@@ -134,6 +134,7 @@ describe('ProjectQueries', () => {
     expect(p.verifierReasoningEffortOverride).toBeNull();
     expect(p.revisionCountOverride).toBeNull();
     expect(p.requireApprovalOverride).toBeNull();
+    expect(p.pipelineSpeedProfileOverride).toBeNull();
     expect(p.discordRouting).toBe('inherit');
     expect(p.discordWebhookUrlOverride).toBeNull();
     expect(p.telegramRouting).toBe('inherit');
@@ -157,6 +158,7 @@ describe('ProjectQueries', () => {
       verifierReasoningEffortOverride: 'medium',
       revisionCountOverride: 3,
       requireApprovalOverride: true,
+      pipelineSpeedProfileOverride: 'thorough',
       prdQualityGate: true,
     });
 
@@ -177,6 +179,7 @@ describe('ProjectQueries', () => {
     expect(updated.verifierReasoningEffortOverride).toBe('medium');
     expect(updated.revisionCountOverride).toBe(3);
     expect(updated.requireApprovalOverride).toBe(true);
+    expect(updated.pipelineSpeedProfileOverride).toBe('thorough');
     expect(updated.prdQualityGate).toBe(true);
 
     projects.updateModelOverrides(p.id, {
@@ -194,6 +197,7 @@ describe('ProjectQueries', () => {
       verifierReasoningEffortOverride: null,
       revisionCountOverride: null,
       requireApprovalOverride: null,
+      pipelineSpeedProfileOverride: null,
       prdQualityGate: null,
     });
 
@@ -214,6 +218,7 @@ describe('ProjectQueries', () => {
     expect(updated.verifierReasoningEffortOverride).toBeNull();
     expect(updated.revisionCountOverride).toBeNull();
     expect(updated.requireApprovalOverride).toBeNull();
+    expect(updated.pipelineSpeedProfileOverride).toBeNull();
     expect(updated.prdQualityGate).toBeNull();
   });
 

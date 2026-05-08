@@ -8,6 +8,7 @@ import {
   type IssuePipelineStatus,
   PIPELINE_PHASE,
   type PipelinePhase,
+  type PipelineSpeedProfile,
   type Project,
   type ReasoningEffort,
   type RevisionCount,
@@ -65,6 +66,7 @@ type ProjectRevisionOverride = Pick<Project, 'revisionCountOverride'>;
 type IssueRevisionOverride = Pick<GitHubIssueCacheRecord, 'revisionCountOverride'>;
 type ProjectApprovalOverride = Pick<Project, 'requireApprovalOverride'>;
 type IssueApprovalOverride = Pick<GitHubIssueCacheRecord, 'requireApprovalOverride'>;
+type ProjectSpeedProfileOverride = Pick<Project, 'pipelineSpeedProfileOverride'>;
 
 type ThreadPhaseState = Pick<
   Thread,
@@ -238,6 +240,11 @@ function asNullableBoolean(value: boolean | null | undefined): boolean | null {
   return typeof value === 'boolean' ? value : null;
 }
 
+function asPipelineSpeedProfile(value: string | null | undefined): PipelineSpeedProfile | null {
+  if (value === 'smart_fast' || value === 'thorough') return value;
+  return null;
+}
+
 export function resolveRevisionCount(
   settings: Pick<AppSettings, 'revisionCount'>,
   project: ProjectRevisionOverride | null | undefined,
@@ -260,6 +267,17 @@ export function resolveRequireApproval(
   project: ProjectApprovalOverride | null | undefined,
 ): boolean {
   return resolveRequireApprovalState(settings, project).required;
+}
+
+export function resolvePipelineSpeedProfile(
+  settings: Pick<AppSettings, 'pipelineSpeedProfile'>,
+  project: ProjectSpeedProfileOverride | null | undefined,
+): PipelineSpeedProfile {
+  return (
+    asPipelineSpeedProfile(project?.pipelineSpeedProfileOverride) ??
+    asPipelineSpeedProfile(settings.pipelineSpeedProfile) ??
+    'smart_fast'
+  );
 }
 
 export function resolveRequireApprovalForIssue(

@@ -4,6 +4,15 @@ import { DEFAULT_SETTINGS } from '@shipcode/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatNotificationService } from './chat-notification-service';
 
+vi.mock('./logger.service', () => ({
+  default: {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  },
+}));
+
 function makeProject(overrides: Partial<Project> = {}): Project {
   return {
     id: 'project-1',

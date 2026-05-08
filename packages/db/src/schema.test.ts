@@ -48,6 +48,7 @@ import {
   migrateV46,
   migrateV47,
   migrateV48,
+  migrateV49,
 } from './schema';
 import { createTestDb } from './test-helpers';
 import { asRow } from './utils';
@@ -1215,5 +1216,34 @@ describe('migrateV48', () => {
 
   it('is idempotent', () => {
     expect(() => migrateV48(db)).not.toThrow();
+  });
+});
+
+describe('migrateV49', () => {
+  let db: ReturnType<typeof createTestDb>;
+
+  beforeEach(() => {
+    db = createTestDb();
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('adds speed profile override and analytics tables', () => {
+    const projectColumns = db
+      .prepare("SELECT name FROM pragma_table_info('projects')")
+      .all() as Array<{
+      name: string;
+    }>;
+    const projectColumnNames = projectColumns.map((column) => column.name);
+
+    expect(projectColumnNames).toContain('pipeline_speed_profile_override');
+    expect(tableExists(db, 'pipeline_phase_log')).toBe(true);
+    expect(tableExists(db, 'skill_resolution_log')).toBe(true);
+  });
+
+  it('is idempotent', () => {
+    expect(() => migrateV49(db)).not.toThrow();
   });
 });

@@ -1,5 +1,9 @@
 import type { AppSettings, Project } from '@shipcode/shared';
-import { resolveRequireApproval, resolveRevisionCount } from '@shipcode/shared';
+import {
+  resolvePipelineSpeedProfile,
+  resolveRequireApproval,
+  resolveRevisionCount,
+} from '@shipcode/shared';
 import {
   Button,
   Select,
@@ -60,6 +64,35 @@ export function ProjectSettingsPipelineTab({
       </section>
 
       <section>
+        <SettingsRow
+          label="Speed Profile"
+          description="Choose the fast low-risk path or force the full task-graph verification path for this project."
+        >
+          <Select
+            value={overrides.pipelineSpeedProfileOverride ?? '__inherit__'}
+            onValueChange={(value) =>
+              setOverrides((current) => ({
+                ...current,
+                pipelineSpeedProfileOverride:
+                  value === '__inherit__'
+                    ? null
+                    : (value as Project['pipelineSpeedProfileOverride']),
+              }))
+            }
+          >
+            <SelectTrigger className="w-[220px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__inherit__">
+                {`Inherit app default (${resolvePipelineSpeedProfile(settings, null) === 'smart_fast' ? 'Smart fast' : 'Thorough'})`}
+              </SelectItem>
+              <SelectItem value="smart_fast">Smart fast</SelectItem>
+              <SelectItem value="thorough">Thorough</SelectItem>
+            </SelectContent>
+          </Select>
+        </SettingsRow>
+
         <SettingsRow
           label="Human Approval"
           description="Override whether this project pauses for human sign-off before execution."

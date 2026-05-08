@@ -46,6 +46,7 @@ interface ProjectRow {
   verifier_reasoning_effort_override: Project['verifierReasoningEffortOverride'];
   revision_count_override: Project['revisionCountOverride'];
   require_approval_override: number | null;
+  pipeline_speed_profile_override: Project['pipelineSpeedProfileOverride'];
   prd_quality_gate: number | null;
   discord_routing: Project['discordRouting'];
   discord_webhook_url_override: string | null;
@@ -454,9 +455,17 @@ export class ProjectQueries {
       verifierReasoningEffortOverride: Project['verifierReasoningEffortOverride'];
       revisionCountOverride: Project['revisionCountOverride'];
       requireApprovalOverride: Project['requireApprovalOverride'];
+      pipelineSpeedProfileOverride: Project['pipelineSpeedProfileOverride'];
       prdQualityGate: Project['prdQualityGate'];
     },
   ): void {
+    if (
+      overrides.pipelineSpeedProfileOverride != null &&
+      overrides.pipelineSpeedProfileOverride !== 'smart_fast' &&
+      overrides.pipelineSpeedProfileOverride !== 'thorough'
+    ) {
+      throw new Error('pipelineSpeedProfileOverride must be smart_fast|thorough|null');
+    }
     this.db
       .prepare(
         `UPDATE projects
@@ -474,6 +483,7 @@ export class ProjectQueries {
                verifier_reasoning_effort_override = ?,
                revision_count_override = ?,
                require_approval_override = ?,
+               pipeline_speed_profile_override = ?,
                prd_quality_gate = ?,
                updated_at = ${ISO_NOW_SQL}
          WHERE id = ?`,
@@ -495,6 +505,7 @@ export class ProjectQueries {
         overrides.requireApprovalOverride == null
           ? null
           : Number(overrides.requireApprovalOverride),
+        overrides.pipelineSpeedProfileOverride ?? null,
         overrides.prdQualityGate == null ? null : Number(overrides.prdQualityGate),
         id,
       );
@@ -582,6 +593,7 @@ function mapProject(row: ProjectRow): Project {
     revisionCountOverride: row.revision_count_override ?? null,
     requireApprovalOverride:
       row.require_approval_override == null ? null : row.require_approval_override === 1,
+    pipelineSpeedProfileOverride: row.pipeline_speed_profile_override ?? null,
     prdQualityGate: row.prd_quality_gate == null ? null : row.prd_quality_gate === 1,
     discordRouting: row.discord_routing ?? 'inherit',
     discordWebhookUrlOverride: row.discord_webhook_url_override ?? null,
