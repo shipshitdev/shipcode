@@ -2,6 +2,12 @@ import type { IpcMain } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerInstantHandlers } from './register-instant-handlers';
 
+const mockAssertPrdRewriteModelSupported = vi.hoisted(() => vi.fn());
+
+vi.mock('./helpers', () => ({
+  assertPrdRewriteModelSupported: mockAssertPrdRewriteModelSupported,
+}));
+
 vi.mock('../logger.service', () => ({
   default: {
     error: vi.fn(),
