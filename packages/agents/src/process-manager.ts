@@ -7,6 +7,8 @@ import { nanoid } from 'nanoid';
 import * as pty from 'node-pty';
 
 type AllowlistedAgentCommand = Extract<AgentType, 'claude' | 'codex' | 'gemini' | 'gh'>;
+type TrustedShellCommand = (typeof TRUSTED_SHELL_COMMANDS)[number];
+type ProcessManagerCommand = AllowlistedAgentCommand | TrustedShellCommand;
 
 const ALLOWED_AGENT_COMMANDS = new Set<AllowlistedAgentCommand>([
   'claude',
@@ -14,7 +16,7 @@ const ALLOWED_AGENT_COMMANDS = new Set<AllowlistedAgentCommand>([
   'gemini',
   'gh',
 ]);
-const TRUSTED_SHELLS = new Set([
+const TRUSTED_SHELL_COMMANDS = [
   '/bin/bash',
   '/bin/zsh',
   '/bin/sh',
@@ -24,7 +26,8 @@ const TRUSTED_SHELLS = new Set([
   '/usr/local/bin/zsh',
   '/opt/homebrew/bin/bash',
   '/opt/homebrew/bin/zsh',
-]);
+] as const;
+const TRUSTED_SHELLS = new Set<string>(TRUSTED_SHELL_COMMANDS);
 
 const SAFE_ENV_KEYS = new Set([
   'PATH',
@@ -53,6 +56,31 @@ function filterEnv(env: Record<string, string>): Record<string, string> {
   return filtered;
 }
 
+function isTrustedShell(command: string): command is TrustedShellCommand {
+  return TRUSTED_SHELLS.has(command);
+}
+
+function isAllowlistedAgentCommand(command: string): command is AllowlistedAgentCommand {
+  return ALLOWED_AGENT_COMMANDS.has(command as AllowlistedAgentCommand);
+}
+
+function assertProcessManagerCommand(command: string): asserts command is ProcessManagerCommand {
+  if (isTrustedShell(command) || isAllowlistedAgentCommand(command)) return;
+  throw new Error(`Command is not allowlisted for ProcessManager: ${command}`);
+}
+
+function mergeSafeEnv(
+  baseEnv: Record<string, string>,
+  extraEnv?: Record<string, string>,
+): Record<string, string> {
+  const env: Record<string, string> = { ...filterEnv(baseEnv), FORCE_COLOR: '1' };
+  for (const [key, val] of Object.entries(extraEnv ?? {})) {
+    if (!key || key.includes('=') || key.includes('\0') || val.includes('\0')) continue;
+    env[key] = val;
+  }
+  return env;
+}
+
 function getShellEnv(): Record<string, string> {
   try {
     const shell = process.env.SHELL ?? '/bin/zsh';
@@ -72,12 +100,10 @@ function getShellEnv(): Record<string, string> {
 }
 
 function resolveCommand(command: string): string {
-  if (TRUSTED_SHELLS.has(command)) return command;
-  if (!ALLOWED_AGENT_COMMANDS.has(command as AllowlistedAgentCommand)) {
-    throw new Error(`Command is not allowlisted for ProcessManager: ${command}`);
-  }
+  assertProcessManagerCommand(command);
+  if (isTrustedShell(command)) return command;
   const shell = process.env.SHELL;
-  if (!shell || !TRUSTED_SHELLS.has(shell)) return command;
+  if (!shell || !isTrustedShell(shell)) return command;
   try {
     const resolved = execFileSync(shell, ['-ilc', `command -v ${command}`], {
       encoding: 'utf-8',
@@ -169,7 +195,7 @@ export class ProcessManager extends EventEmitter {
         cols: 120,
         rows: 30,
         cwd,
-        env: { ...filterEnv(cachedEnv), FORCE_COLOR: '1' },
+        env: mergeSafeEnv(cachedEnv, options.extraEnv),
       });
     } catch (err) {
       // Spawn failed (e.g. binary not found, alias instead of real path).
@@ -266,7 +292,7 @@ export class ProcessManager extends EventEmitter {
     let child: ChildProcessWithoutNullStreams;
 
     const detached = options.detached ?? false;
-    const env = { ...filterEnv(cachedEnv), FORCE_COLOR: '1', ...options.extraEnv };
+    const env = mergeSafeEnv(cachedEnv, options.extraEnv);
 
     try {
       child = spawnChild(resolvedCommand, args, {
