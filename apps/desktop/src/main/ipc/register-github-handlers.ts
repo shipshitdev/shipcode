@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
+  checkProjectReadiness,
   enhancePrdDraft,
   fetchProjectPriorities,
   fetchProjectStatuses,
@@ -890,6 +891,37 @@ export function registerGitHubHandlers({
         `[github:ensure-shipcode-labels] project=${projectId} created=${result.created.length} alreadyPresent=${result.alreadyPresent.length} failed=${result.failed.length}`,
       );
       return result;
+    },
+  );
+
+  ipcMain.handle(
+    'github:check-project-readiness',
+    async (_event, { projectId }: { projectId: string }) => {
+      const project = queries.projects.getById(projectId);
+      if (!project) throw new Error(`Project ${projectId} not found`);
+      if (!fs.existsSync(project.path)) {
+        throw new Error(
+          `Project path no longer exists: ${project.path}. Re-add the repository from a valid path.`,
+        );
+      }
+
+      const report = await checkProjectReadiness({
+        cwd: project.path,
+        projectUrl: project.githubProjectUrl,
+        repairLabels: true,
+        onWarn: (msg, err) => log.warn(msg, err),
+      });
+
+      if (report.statusMapping) {
+        queries.projects.setGithubStatusMapping(projectId, report.statusMapping);
+      } else if (project.githubProjectUrl) {
+        queries.projects.clearGithubStatusMapping(projectId);
+      }
+
+      log.info(
+        `[github:check-project-readiness] project=${projectId} ok=${report.ok} items=${report.items.length} labelsCreated=${report.labelSync.created.length}`,
+      );
+      return report;
     },
   );
 

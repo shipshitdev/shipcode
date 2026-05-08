@@ -65,7 +65,7 @@ describe('OverviewView', () => {
               activeProcessId: 'process-14',
               githubIssueNumber: 14,
               modelProvider: 'codex',
-              model: 'codex',
+              model: 'gpt-5.4',
               reasoningEffort: 'high',
             },
           ],

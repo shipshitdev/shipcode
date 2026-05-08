@@ -6,9 +6,43 @@ import { useEffect, useState } from 'react';
 import { StepAuthCheck, useAuthCheck } from './StepAuthCheck';
 import { StepModelPrefs } from './StepModelPrefs';
 
-type Step = 0 | 1;
+type Step = 0 | 1 | 2;
 
-const STEP_LABELS = ['AI Auth', 'Models'];
+const STEP_LABELS = ['AI Auth', 'Models', 'GitHub'];
+
+export function StepGitHubReadiness() {
+  return (
+    <div>
+      <h3 className="text-[15px] font-semibold mb-2">GitHub readiness</h3>
+      <p className="text-secondary text-[13px] mb-4 leading-relaxed">
+        ShipCode owns the <code>shipcode:*</code> labels. When a repository is added, ShipCode
+        repairs those labels and checks that issue metadata lives in GitHub issue types and Projects
+        fields.
+      </p>
+      <div className="space-y-2 text-[12px]">
+        {[
+          ['Labels', 'shipcode:* only'],
+          ['Issue type', 'Feature'],
+          ['Status', 'Todo, In Progress, Human Review or On hold, Done'],
+          ['Priority', 'P0, P1, P2, P3'],
+          ['Complexity', 'Low, Medium, High'],
+          ['Blast radius', 'Contained, Cross-Package, Cross-App, Infra'],
+        ].map(([label, value]) => (
+          <div
+            key={label}
+            className="flex items-center justify-between gap-3 rounded-md bg-tertiary px-3 py-2"
+          >
+            <span className="font-medium text-primary">{label}</span>
+            <span className="text-right font-mono text-[11px] text-muted">{value}</span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 rounded-md border border-border bg-secondary/30 px-3 py-2 text-[12px] text-muted">
+        Product taxonomy should be an Area or Component field, not repo labels.
+      </div>
+    </div>
+  );
+}
 
 interface AuthResult extends SystemHealth {
   ghAuth: GhAuthStatus;
@@ -48,7 +82,7 @@ export function OnboardingWizard({ onComplete }: Props) {
   }
 
   function handleNext() {
-    if (step < 1) {
+    if (step < 2) {
       setStep((step + 1) as Step);
     }
   }
@@ -74,7 +108,7 @@ export function OnboardingWizard({ onComplete }: Props) {
   }
 
   const canNext = step === 0 ? canAdvanceFromAuth : true;
-  const isLastStep = step === 1;
+  const isLastStep = step === 2;
 
   return (
     <div className="flex items-center justify-center h-screen bg-primary [app-region:drag]">
@@ -119,6 +153,7 @@ export function OnboardingWizard({ onComplete }: Props) {
               singleAgentMode={singleAgentMode}
             />
           )}
+          {step === 2 && <StepGitHubReadiness />}
         </div>
 
         <div className="flex items-center gap-2 px-6 py-4 border-t border-border">

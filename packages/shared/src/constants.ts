@@ -96,7 +96,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   },
 };
 
-export const CURRENT_ONBOARDING_VERSION = 1;
+export const CURRENT_ONBOARDING_VERSION = 2;
 
 export const AGENT_RUNNING_PHASES: readonly PipelinePhase[] = [
   PIPELINE_PHASE.planning,

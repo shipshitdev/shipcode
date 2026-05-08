@@ -3,6 +3,7 @@
 import type { SystemHealth } from '@shipcode/shared';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { StepGitHubReadiness } from './OnboardingWizard';
 import { StepAuthCheck } from './StepAuthCheck';
 import { StepModelPrefs } from './StepModelPrefs';
 
@@ -137,5 +138,15 @@ describe('onboarding leaf steps', () => {
     expect(
       screen.getByText(/Review will be skipped during pipeline execution/i),
     ).toBeInTheDocument();
+  });
+
+  it('renders explicit GitHub readiness requirements', () => {
+    render(<StepGitHubReadiness />);
+
+    expect(screen.getByText('GitHub readiness')).toBeInTheDocument();
+    expect(screen.getByText('shipcode:* only')).toBeInTheDocument();
+    expect(screen.getByText('Feature')).toBeInTheDocument();
+    expect(screen.getByText('P0, P1, P2, P3')).toBeInTheDocument();
+    expect(screen.getByText(/Area or Component field/)).toBeInTheDocument();
   });
 });

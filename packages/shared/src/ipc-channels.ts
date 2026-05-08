@@ -47,6 +47,7 @@ import type {
   PlanReview,
   Project,
   ProjectOpenTarget,
+  ProjectReadinessReport,
   ProjectSetupDraft,
   ProjectSetupInspection,
   PromptTelemetryRecord,
@@ -357,6 +358,10 @@ export interface IpcInvokeChannels {
       alreadyPresent: string[];
       failed: Array<{ name: string; error: string }>;
     };
+  };
+  'github:check-project-readiness': {
+    args: { projectId: string };
+    result: ProjectReadinessReport;
   };
   'github:archive-issue': {
     args: { projectId: string; issueId: string; issueNumber: number };

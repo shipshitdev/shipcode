@@ -1428,6 +1428,39 @@ export interface GhStatusMapping {
   done: GhStatusOption | null;
 }
 
+// === GitHub Project Readiness Types ===
+
+export type ProjectReadinessItemStatus = 'ready' | 'missing' | 'warning' | 'error';
+
+export type ProjectReadinessItemKind = 'labels' | 'github-project' | 'project-field' | 'issue-type';
+
+export interface ProjectReadinessItem {
+  key: string;
+  kind: ProjectReadinessItemKind;
+  label: string;
+  required: boolean;
+  status: ProjectReadinessItemStatus;
+  message: string;
+  present?: string[];
+  missing?: string[];
+}
+
+export interface ProjectReadinessLabelSync {
+  created: string[];
+  alreadyPresent: string[];
+  failed: Array<{ name: string; error: string }>;
+}
+
+export interface ProjectReadinessReport {
+  ok: boolean;
+  checkedAt: string;
+  projectUrl: string | null;
+  labelSync: ProjectReadinessLabelSync;
+  labelNames: string[];
+  statusMapping: GhStatusMapping | null;
+  items: ProjectReadinessItem[];
+}
+
 // === Verification Types ===
 
 export interface VerificationResult {

@@ -1,11 +1,19 @@
 // @vitest-environment jsdom
 
-import type { AppSettings, ContextFileInfo, IntegrationStatus, Project } from '@shipcode/shared';
-import { DEFAULT_SETTINGS } from '@shipcode/shared';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import type {
+  AppSettings,
+  ContextFileInfo,
+  IntegrationStatus,
+  Project,
+  ProjectReadinessReport,
+} from '@shipcode/shared';
+import { DEFAULT_SETTINGS, SHIPCODE_DEFAULT_LABELS } from '@shipcode/shared';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { renderWithQueryClient } from '../../test/render';
 import { ProjectSettingsContextTab } from './ProjectSettingsContextTab';
 import { ProjectSettingsGeneralTab } from './ProjectSettingsGeneralTab';
+import { ProjectSettingsGitHubTab } from './ProjectSettingsGitHubTab';
 import { ProjectSettingsModelsTab } from './ProjectSettingsModelsTab';
 import { ProjectSettingsPipelineTab } from './ProjectSettingsPipelineTab';
 import { ProjectSettingsSetupTab } from './ProjectSettingsSetupTab';
@@ -492,6 +500,62 @@ describe('project settings leaf tabs', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Reset All Issue Overrides' }));
 
     expect(onResetIssueOverrides).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders GitHub readiness and non-label metadata requirements', async () => {
+    const readiness: ProjectReadinessReport = {
+      ok: false,
+      checkedAt: '2026-05-08T00:00:00.000Z',
+      projectUrl: 'https://github.com/orgs/shipshitdev/projects/1',
+      labelSync: { created: [], alreadyPresent: [], failed: [] },
+      labelNames: SHIPCODE_DEFAULT_LABELS.map((label) => label.name),
+      statusMapping: null,
+      items: [
+        {
+          key: 'shipcode-labels',
+          kind: 'labels',
+          label: 'ShipCode labels',
+          required: true,
+          status: 'ready',
+          message: 'All ShipCode labels are present.',
+        },
+        {
+          key: 'project-field:priority',
+          kind: 'project-field',
+          label: 'Priority',
+          required: true,
+          status: 'missing',
+          message: 'Priority is missing options ShipCode writes.',
+          missing: ['P0', 'P1', 'P2', 'P3'],
+        },
+      ],
+    };
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'github:check-project-readiness') return readiness;
+      return null;
+    });
+    window.shipcode = {
+      ...window.shipcode,
+      invoke: invoke as typeof window.shipcode.invoke,
+    };
+
+    renderWithQueryClient(
+      <ProjectSettingsGitHubTab
+        pathExists
+        projectId="project-1"
+        isActive
+        statusMapping={null}
+        hasProjectUrl
+      />,
+    );
+
+    expect(await screen.findByText('Project readiness')).toBeInTheDocument();
+    expect(screen.getByText('Priority')).toBeInTheDocument();
+    expect(screen.getByText('P0')).toBeInTheDocument();
+    expect(screen.getByText(/issue types and Projects fields/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Re-check' }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledTimes(2));
   });
 
   it('renders model preset actions and forwards the apply callback', () => {

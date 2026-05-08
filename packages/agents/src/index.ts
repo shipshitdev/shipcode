@@ -38,6 +38,7 @@ export type {
   PriorityRank,
 } from './github/project-priority';
 export { fetchProjectPriorities, normalizePriorityOption } from './github/project-priority';
+export { checkProjectReadiness } from './github/project-readiness';
 export type {
   FetchProjectStatusesOptions,
   IssueGhStatus,

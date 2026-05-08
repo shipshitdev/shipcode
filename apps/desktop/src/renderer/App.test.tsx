@@ -113,7 +113,7 @@ const baseSettings: AppSettings = {
   theme: 'dark',
   fontStyle: 'dm-sans',
   fontSize: 14,
-  onboardingVersion: 1,
+  onboardingVersion: 2,
   notificationSoundEnabled: false,
 };
 

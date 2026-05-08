@@ -200,6 +200,12 @@ export async function onboardCommand() {
     console.log('  ⚠ Could not check labels');
   }
 
+  console.log('\nGitHub metadata model...');
+  console.log('  ✓ ShipCode owns only shipcode:* labels');
+  console.log(
+    '  ⚠ Configure a GitHub Projects board URL in desktop Project Settings to validate Feature issue type, Status, Priority, Complexity, and Blast radius',
+  );
+
   // 7. Summary
   console.log('\n─────────────────────────────');
   console.log('ShipCode is ready!');

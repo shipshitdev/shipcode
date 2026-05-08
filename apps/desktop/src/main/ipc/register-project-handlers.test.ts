@@ -54,6 +54,7 @@ vi.mock('@shipcode/agents', () => ({
   GhCli: class {
     createIssue = createIssueMock;
     getRepoMetadata = vi.fn();
+    ensureLabels = vi.fn(async () => ({ created: [], alreadyPresent: [], failed: [] }));
   },
   checkCliProviderUsage: vi.fn(),
   checkDesktopApps: vi.fn(),

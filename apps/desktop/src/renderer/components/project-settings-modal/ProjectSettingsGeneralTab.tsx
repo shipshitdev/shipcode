@@ -203,7 +203,7 @@ export function ProjectSettingsGeneralTab({
         <SettingsRow
           label="GitHub Projects board URL"
           htmlFor="github-project-url"
-          description="Leave blank to hide the Kanban board button. Paste a full GitHub Projects v2 URL to link it to the real board."
+          description="Required for readiness checks, board sync, and metadata fields. Paste a full GitHub Projects v2 URL."
         >
           <div className="flex w-[320px] flex-col gap-1">
             <Input

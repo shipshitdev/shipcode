@@ -58,4 +58,14 @@ describe('requireOnboarding', () => {
 
     expect(requireOnboarding()).toBe(true);
   });
+
+  it('returns false when settings cannot be read', () => {
+    existsSyncMock.mockReturnValueOnce(true);
+    getDatabaseMock.mockImplementationOnce(() => {
+      throw new Error('database locked');
+    });
+
+    expect(requireOnboarding()).toBe(false);
+    expect(logSpy).toHaveBeenCalledWith('ShipCode setup is incomplete. Run: shipcode onboard');
+  });
 });

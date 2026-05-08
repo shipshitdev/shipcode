@@ -1,15 +1,17 @@
 import {
   type GhStatusMapping,
   type GitHubLabelDefinition,
+  type ProjectReadinessItem,
+  type ProjectReadinessReport,
   SHIPCODE_AGENT_LABELS,
   SHIPCODE_CLASSIFICATION_LABELS,
   SHIPCODE_DEFAULT_LABELS,
   SHIPCODE_METADATA_LABELS,
   SHIPCODE_PIPELINE_LABELS,
 } from '@shipcode/shared';
-import { Button, SettingsRow } from '@shipshitdev/ui';
+import { Badge, Button, SettingsRow } from '@shipshitdev/ui';
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 interface LabelCategoryProps {
@@ -112,6 +114,93 @@ function StatusColumnMapping({
   );
 }
 
+function readinessVariant(status: ProjectReadinessItem['status']) {
+  if (status === 'ready') return 'success' as const;
+  if (status === 'warning') return 'warning' as const;
+  return 'danger' as const;
+}
+
+function ReadinessItemRow({ item }: { item: ProjectReadinessItem }) {
+  return (
+    <div className="rounded-md border border-border bg-secondary/30 px-3 py-2">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate text-[12px] font-medium text-primary">{item.label}</div>
+          <div className="mt-0.5 text-[11px] text-muted">{item.message}</div>
+        </div>
+        <Badge variant={readinessVariant(item.status)}>{item.status}</Badge>
+      </div>
+      {item.missing && item.missing.length > 0 ? (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {item.missing.map((value) => (
+            <span
+              key={value}
+              className="rounded-sm bg-warning/10 px-1.5 py-0.5 font-mono text-[10px] text-warning"
+            >
+              {value}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ProjectReadinessSummary({
+  readiness,
+  loading,
+  fetching,
+  error,
+  onRefresh,
+}: {
+  readiness: ProjectReadinessReport | undefined;
+  loading: boolean;
+  fetching: boolean;
+  error: unknown;
+  onRefresh: () => void;
+}) {
+  if (loading) {
+    return <div className="text-[12px] text-muted">Checking GitHub readiness...</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-[12px] text-danger">
+        {String(error)}
+      </div>
+    );
+  }
+
+  if (!readiness) return null;
+
+  const requiredItems = readiness.items.filter((item) => item.required);
+  const optionalItems = readiness.items.filter((item) => !item.required);
+
+  return (
+    <div className="space-y-3">
+      <SettingsRow
+        label="Project readiness"
+        description="ShipCode labels are repaired automatically; issue metadata is validated against GitHub issue types and Projects fields."
+      >
+        <Button variant="secondary" size="sm" onClick={onRefresh} disabled={fetching}>
+          <LoadingButtonContent loading={fetching}>
+            {readiness.ok ? 'Ready' : 'Re-check'}
+          </LoadingButtonContent>
+        </Button>
+      </SettingsRow>
+
+      <div className="grid gap-2">
+        {requiredItems.map((item) => (
+          <ReadinessItemRow key={item.key} item={item} />
+        ))}
+        {optionalItems.map((item) => (
+          <ReadinessItemRow key={item.key} item={item} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function ProjectSettingsGitHubTab({
   pathExists,
   projectId,
@@ -127,32 +216,29 @@ export function ProjectSettingsGitHubTab({
 }) {
   const queryClient = useQueryClient();
 
-  const { data: repoLabels, isLoading } = useQuery<
-    Array<{ name: string; color: string; description: string }>
-  >({
-    queryKey: ['repo-labels', projectId],
-    queryFn: () => window.shipcode.invoke('github:list-repo-labels', { projectId }),
+  const readinessQuery = useQuery<ProjectReadinessReport>({
+    queryKey: ['project-readiness', projectId],
+    queryFn: () => window.shipcode.invoke('github:check-project-readiness', { projectId }),
     enabled: pathExists && isActive,
     staleTime: 0,
   });
 
-  const existingNames = useMemo(() => new Set(repoLabels?.map((l) => l.name) ?? []), [repoLabels]);
+  const existingNames = useMemo(
+    () => new Set(readinessQuery.data?.labelNames ?? []),
+    [readinessQuery.data?.labelNames],
+  );
 
   const missingCount = useMemo(
     () => SHIPCODE_DEFAULT_LABELS.filter((l) => !existingNames.has(l.name)).length,
     [existingNames],
   );
 
-  const syncMutation = useMutation<{
-    created: string[];
-    alreadyPresent: string[];
-    failed: Array<{ name: string; error: string }>;
-  }>({
-    mutationFn: () => window.shipcode.invoke('github:ensure-shipcode-labels', { projectId }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['repo-labels', projectId] });
-    },
-  });
+  const mappedStatus = readinessQuery.data?.statusMapping ?? statusMapping;
+
+  async function refreshReadiness() {
+    await readinessQuery.refetch();
+    queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+  }
 
   if (!pathExists) {
     return (
@@ -166,19 +252,29 @@ export function ProjectSettingsGitHubTab({
   return (
     <div className="space-y-4">
       <div className="text-xs text-muted">
-        ShipCode uses these labels to route issues to agents and attach concise metadata. Workflow
-        state belongs in the typed GitHub Projects Status field.
+        ShipCode owns only the <code>shipcode:*</code> labels. Type, priority, complexity, blast
+        radius, and product taxonomy belong in GitHub issue types and Projects fields.
       </div>
 
-      {isLoading ? (
-        <div className="text-[12px] text-muted">Loading repo labels…</div>
+      {readinessQuery.isLoading ? (
+        <div className="text-[12px] text-muted">Checking GitHub readiness...</div>
       ) : (
         <>
+          <ProjectReadinessSummary
+            readiness={readinessQuery.data}
+            loading={readinessQuery.isLoading}
+            fetching={readinessQuery.isFetching}
+            error={readinessQuery.error}
+            onRefresh={() => {
+              void refreshReadiness();
+            }}
+          />
+
           <SettingsRow
             label="Board column sync"
             description="Maps ShipCode pipeline columns to your GitHub Projects v2 Status field."
           >
-            <StatusColumnMapping mapping={statusMapping} hasProjectUrl={hasProjectUrl} />
+            <StatusColumnMapping mapping={mappedStatus} hasProjectUrl={hasProjectUrl} />
           </SettingsRow>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -206,15 +302,17 @@ export function ProjectSettingsGitHubTab({
 
           <SettingsRow
             label="Label sync"
-            description="Create any missing ShipCode labels in the connected GitHub repo."
+            description="Readiness checks create missing ShipCode labels automatically."
           >
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => syncMutation.mutate()}
-              disabled={syncMutation.isPending || missingCount === 0}
+              onClick={() => {
+                void refreshReadiness();
+              }}
+              disabled={readinessQuery.isFetching || missingCount === 0}
             >
-              <LoadingButtonContent loading={syncMutation.isPending}>
+              <LoadingButtonContent loading={readinessQuery.isFetching}>
                 {missingCount === 0
                   ? 'All labels present'
                   : `Sync ${missingCount} missing label${missingCount === 1 ? '' : 's'}`}
@@ -222,26 +320,25 @@ export function ProjectSettingsGitHubTab({
             </Button>
           </SettingsRow>
 
-          {syncMutation.isSuccess && syncMutation.data ? (
+          {readinessQuery.data?.labelSync.created.length ? (
             <div className="text-[11px] text-muted">
-              Created {syncMutation.data.created.length}
-              {syncMutation.data.failed.length > 0
-                ? `, ${syncMutation.data.failed.length} failed`
-                : ''}
+              Created {readinessQuery.data.labelSync.created.length} missing ShipCode label
+              {readinessQuery.data.labelSync.created.length === 1 ? '' : 's'}.
             </div>
           ) : null}
 
-          {syncMutation.isError ? (
+          {readinessQuery.isError ? (
             <div className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-[12px] text-danger">
-              {String(syncMutation.error)}
+              {String(readinessQuery.error)}
             </div>
           ) : null}
 
-          {syncMutation.data?.failed && syncMutation.data.failed.length > 0 ? (
+          {readinessQuery.data?.labelSync.failed &&
+          readinessQuery.data.labelSync.failed.length > 0 ? (
             <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-[11px] text-warning">
               <div className="font-medium">Failed labels:</div>
               <ul className="mt-1 space-y-0.5">
-                {syncMutation.data.failed.map((f: { name: string; error: string }) => (
+                {readinessQuery.data.labelSync.failed.map((f: { name: string; error: string }) => (
                   <li key={f.name}>
                     {f.name}: {f.error}
                   </li>

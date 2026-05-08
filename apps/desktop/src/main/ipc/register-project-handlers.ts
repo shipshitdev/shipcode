@@ -38,6 +38,7 @@ import {
   PIPELINE_PHASE,
   parseGithubRemote,
   parseUnifiedDiff,
+  SHIPCODE_DEFAULT_LABELS,
   SHIPCODE_PIPELINE_LABELS,
   validateGithubProjectUrl,
 } from '@shipcode/shared';
@@ -437,6 +438,15 @@ export function registerProjectHandlers({
         const repoIdentity = await resolveGithubRepoIdentity(projectPath, remote, repo);
         if (repoIdentity) {
           queries.projects.updateGithubRepoIdentity(project.id, repoIdentity);
+          try {
+            const ghCli = new GhCli(projectPath);
+            const labelResult = await ghCli.ensureLabels(SHIPCODE_DEFAULT_LABELS);
+            log.info(
+              `[project:add] ShipCode label readiness created=${labelResult.created.length} alreadyPresent=${labelResult.alreadyPresent.length} failed=${labelResult.failed.length}`,
+            );
+          } catch (error) {
+            log.warn('[project:add] failed to ensure ShipCode labels:', error);
+          }
           await ensureStarterIssue({ mainWindow, queries, projectId: project.id });
         }
 
