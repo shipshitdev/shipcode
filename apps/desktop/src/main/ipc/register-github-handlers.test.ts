@@ -593,6 +593,239 @@ describe('registerGitHubHandlers', () => {
     });
   });
 
+  it('archives an open GitHub issue by closing it, archiving its project item, and archiving locally', async () => {
+    const openIssue = {
+      ...baseIssue,
+      id: 'issue-open',
+      state: 'open',
+      pipelineStatus: 'done',
+    };
+    const refreshedIssues = [{ ...openIssue, archivedAt: new Date().toISOString() }];
+    const archiveIssues = vi.fn();
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+      },
+      githubIssues: buildGithubIssuesQueries(
+        {
+          list: vi
+            .fn(() => [openIssue])
+            .mockReturnValueOnce([openIssue])
+            .mockReturnValue(refreshedIssues),
+          updatePipelineStatus: vi.fn(),
+          updateState: vi.fn(),
+          archiveIssues,
+        },
+        refreshedIssues,
+      ),
+      threads: {
+        getById: vi.fn(() => null),
+        getByProjectAndGithubIssue: vi.fn(() => null),
+      },
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const archiveIssue = handlers.get('github:archive-issue');
+    if (!archiveIssue) throw new Error('github:archive-issue handler not registered');
+
+    await expect(
+      archiveIssue(undefined, {
+        projectId: 'project-1',
+        issueId: openIssue.id,
+        issueNumber: 42,
+      }),
+    ).resolves.toEqual({ archivedCount: 1 });
+
+    expect(closeIssueMock).toHaveBeenCalledWith(42);
+    expect(archiveProjectItemsMock).toHaveBeenCalledWith(42);
+    expect(queries.githubIssues.updateState).toHaveBeenCalledWith(openIssue.id, 'closed');
+    expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(openIssue.id, 'done');
+    expect(archiveIssues).toHaveBeenCalledWith([openIssue.id]);
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('github:issues-updated', {
+      projectId: 'project-1',
+      issues: refreshedIssues,
+    });
+  });
+
+  it('archives a quick task locally without GitHub calls', async () => {
+    const quickIssue = {
+      ...baseIssue,
+      id: 'quick-1',
+      issueNumber: -236024417,
+      isQuickMode: true,
+      state: 'open',
+      pipelineStatus: 'done',
+    };
+    const archiveIssues = vi.fn();
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+      },
+      githubIssues: buildGithubIssuesQueries(
+        {
+          list: vi.fn(() => [quickIssue]),
+          updatePipelineStatus: vi.fn(),
+          updateState: vi.fn(),
+          archiveIssues,
+        },
+        [],
+      ),
+      threads: {
+        getById: vi.fn(() => null),
+        getByProjectAndGithubIssue: vi.fn(() => null),
+      },
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const archiveIssue = handlers.get('github:archive-issue');
+    if (!archiveIssue) throw new Error('github:archive-issue handler not registered');
+
+    await archiveIssue(undefined, {
+      projectId: 'project-1',
+      issueId: quickIssue.id,
+      issueNumber: quickIssue.issueNumber,
+    });
+
+    expect(closeIssueMock).not.toHaveBeenCalled();
+    expect(archiveProjectItemsMock).not.toHaveBeenCalled();
+    expect(queries.githubIssues.updateState).not.toHaveBeenCalled();
+    expect(queries.githubIssues.updatePipelineStatus).toHaveBeenCalledWith(quickIssue.id, 'done');
+    expect(archiveIssues).toHaveBeenCalledWith([quickIssue.id]);
+  });
+
+  it('reports project-board archive failures before local archive mutations', async () => {
+    const openIssue = {
+      ...baseIssue,
+      id: 'issue-open',
+      state: 'open',
+      pipelineStatus: 'done',
+    };
+    archiveProjectItemsMock.mockRejectedValue(new Error('project archive failed'));
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+      },
+      githubIssues: buildGithubIssuesQueries(
+        {
+          list: vi.fn(() => [openIssue]),
+          updatePipelineStatus: vi.fn(),
+          updateState: vi.fn(),
+          archiveIssues: vi.fn(),
+        },
+        [openIssue],
+      ),
+      threads: {
+        getById: vi.fn(() => null),
+        getByProjectAndGithubIssue: vi.fn(() => null),
+      },
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const archiveIssue = handlers.get('github:archive-issue');
+    if (!archiveIssue) throw new Error('github:archive-issue handler not registered');
+
+    await expect(
+      archiveIssue(undefined, {
+        projectId: 'project-1',
+        issueId: openIssue.id,
+        issueNumber: 42,
+      }),
+    ).rejects.toThrow(
+      'Issue #42 was closed on GitHub but could not be archived from the GitHub project board.',
+    );
+
+    expect(closeIssueMock).toHaveBeenCalledWith(42);
+    expect(queries.githubIssues.updateState).not.toHaveBeenCalled();
+    expect(queries.githubIssues.updatePipelineStatus).not.toHaveBeenCalled();
+    expect(queries.githubIssues.archiveIssues).not.toHaveBeenCalled();
+  });
+
+  it('reports local archive failures after successful GitHub archive work', async () => {
+    const closedIssue = {
+      ...baseIssue,
+      id: 'issue-closed',
+      state: 'closed',
+      pipelineStatus: 'done',
+    };
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+      },
+      githubIssues: buildGithubIssuesQueries(
+        {
+          list: vi.fn(() => [closedIssue]),
+          updatePipelineStatus: vi.fn(() => {
+            throw new Error('db failed');
+          }),
+          updateState: vi.fn(),
+          archiveIssues: vi.fn(),
+        },
+        [closedIssue],
+      ),
+      threads: {
+        getById: vi.fn(() => null),
+        getByProjectAndGithubIssue: vi.fn(() => null),
+      },
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const archiveIssue = handlers.get('github:archive-issue');
+    if (!archiveIssue) throw new Error('github:archive-issue handler not registered');
+
+    await expect(
+      archiveIssue(undefined, {
+        projectId: 'project-1',
+        issueId: closedIssue.id,
+        issueNumber: 42,
+      }),
+    ).rejects.toThrow('Issue #42 could not be archived locally. Refresh the board to sync.');
+
+    expect(closeIssueMock).not.toHaveBeenCalled();
+    expect(archiveProjectItemsMock).toHaveBeenCalledWith(42);
+    expect(queries.githubIssues.updateState).toHaveBeenCalledWith(closedIssue.id, 'closed');
+    expect(queries.githubIssues.archiveIssues).not.toHaveBeenCalled();
+  });
+
   it('archives done automation runs locally when archiving all done issues', async () => {
     const archiveDoneAutomationRuns = vi.fn(() => 3);
     const queries = {

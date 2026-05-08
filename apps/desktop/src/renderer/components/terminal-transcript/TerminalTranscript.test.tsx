@@ -178,6 +178,120 @@ describe('TerminalTranscript', () => {
     expect(screen.queryByText('older copy')).not.toBeInTheDocument();
   });
 
+  it('shows pending and empty states when no transcript events exist', () => {
+    const { rerender } = renderTranscript(
+      <TerminalTranscript events={[]} pendingLabel="Waiting for Codex" />,
+    );
+
+    expect(screen.getByText('Waiting for Codex…')).toBeInTheDocument();
+
+    rerender(
+      <TooltipProvider>
+        <TerminalTranscript events={[]} emptyMessage="No execution output captured." />
+      </TooltipProvider>,
+    );
+
+    expect(screen.getByText('No execution output captured.')).toBeInTheDocument();
+    expect(screen.queryByText('Waiting for Codex…')).not.toBeInTheDocument();
+  });
+
+  it('renders action rows as callbacks when an action handler is provided', () => {
+    const action = { kind: 'action' as const, label: 'Open issue', action: 'open-issue-detail' };
+    const onAction = vi.fn();
+
+    renderTranscript(
+      <TerminalTranscript
+        events={[makeTextEvent({ id: 'event-action', event: action })]}
+        onAction={onAction}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open issue' }));
+
+    expect(screen.getByText('Ready')).toBeInTheDocument();
+    expect(onAction).toHaveBeenCalledWith(action);
+  });
+
+  it('renders lifecycle warnings without failure actions when no handlers are present', () => {
+    renderTranscript(
+      <TerminalTranscript
+        events={[
+          makeTextEvent({
+            id: 'event-lifecycle-warning',
+            event: { kind: 'lifecycle', message: 'Warning: deprecated option --legacy' },
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('Warning: deprecated option --legacy')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /auto fix/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /send failure to terminal/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('renders tool starts, turn summaries, completion summaries, and clarification copy', () => {
+    renderTranscript(
+      <TerminalTranscript
+        events={[
+          makeTextEvent({
+            id: 'event-tool-start',
+            event: { kind: 'tool_start', name: 'Bash', summary: 'bun test' },
+          }),
+          makeTextEvent({
+            id: 'event-turn-start',
+            event: { kind: 'turn_start', turn: 3 },
+          }),
+          makeTextEvent({
+            id: 'event-turn-end',
+            event: {
+              kind: 'turn_end',
+              turn: 3,
+              tokensUsed: { prompt: 1200, completion: 300 },
+              costUsd: 0.0123,
+            },
+          }),
+          makeTextEvent({
+            id: 'event-thinking',
+            event: { kind: 'thinking', content: '\u001b[31mchecking failure path\u001b[0m' },
+          }),
+          makeTextEvent({
+            id: 'event-clarification-requested',
+            event: {
+              kind: 'clarification_requested',
+              summary: 'Need deployment target',
+              questionCount: 1,
+            },
+          }),
+          makeTextEvent({
+            id: 'event-clarification-answered',
+            event: { kind: 'clarification_answered', questionCount: 2 },
+          }),
+          makeTextEvent({
+            id: 'event-done',
+            event: {
+              kind: 'done',
+              totalTokens: { prompt: 2400, completion: 600 },
+              totalCostUsd: 0.0456,
+            },
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('Bash')).toBeInTheDocument();
+    expect(screen.getByText('bun test')).toBeInTheDocument();
+    expect(screen.getByText('Turn 3')).toBeInTheDocument();
+    expect(screen.getByText('1200+300 tok · $0.0123')).toBeInTheDocument();
+    expect(screen.getByText('checking failure path')).toBeInTheDocument();
+    expect(screen.getByText('Need deployment target')).toBeInTheDocument();
+    expect(screen.getByText('1 question waiting in the issue detail panel.')).toBeInTheDocument();
+    expect(screen.getByText('Clarification answered')).toBeInTheDocument();
+    expect(screen.getByText('2 responses')).toBeInTheDocument();
+    expect(screen.getByText('2400+600 tok · $0.0456')).toBeInTheDocument();
+  });
+
   it('renders large transcripts as a capped latest window until expanded', () => {
     const events = Array.from({ length: 305 }, (_, index) =>
       makeTextEvent({
