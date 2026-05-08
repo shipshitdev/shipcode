@@ -1,6 +1,11 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import {
+  diffActionVariant,
+  sideBySideFileActionColor,
+  sideBySideFileActionIcon,
+} from '@/lib/file-action';
 import type { DiffRecord } from '@/lib/shipcode';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/primitives/badge';
@@ -99,27 +104,6 @@ function parseSideBySideLines(diffContent: string): SideBySideLine[] {
   return result;
 }
 
-const actionColor: Record<string, string> = {
-  create: 'text-success',
-  delete: 'text-danger',
-  modify: 'text-warning',
-  rename: 'text-accent',
-};
-
-const actionVariant: Record<string, 'success' | 'danger' | 'warning' | 'default'> = {
-  create: 'success',
-  delete: 'danger',
-  modify: 'warning',
-  rename: 'default',
-};
-
-const actionIcon: Record<string, string> = {
-  create: '+',
-  delete: '-',
-  modify: '~',
-  rename: '→',
-};
-
 export function SideBySideDiffViewer({ diffs, className }: SideBySideDiffViewerProps) {
   const [activeFile, setActiveFile] = useState<string>(diffs[0]?.filePath ?? '');
 
@@ -165,8 +149,13 @@ export function SideBySideDiffViewer({ diffs, className }: SideBySideDiffViewerP
               )}
               onClick={() => setActiveFile(diff.filePath)}
             >
-              <span className={cn('shrink-0 font-mono text-[11px]', actionColor[diff.action])}>
-                {actionIcon[diff.action] ?? '~'}
+              <span
+                className={cn(
+                  'shrink-0 font-mono text-[11px]',
+                  sideBySideFileActionColor(diff.action),
+                )}
+              >
+                {sideBySideFileActionIcon(diff.action)}
               </span>
               <span className="truncate">{diff.filePath}</span>
             </Button>
@@ -179,10 +168,7 @@ export function SideBySideDiffViewer({ diffs, className }: SideBySideDiffViewerP
           {activeDiff && (
             <div className="flex items-center gap-2 border-b border-border bg-secondary/50 px-4 py-2">
               <code className="text-xs text-primary">{activeDiff.filePath}</code>
-              <Badge
-                variant={actionVariant[activeDiff.action] ?? 'default'}
-                className="text-[10px]"
-              >
+              <Badge variant={diffActionVariant(activeDiff.action)} className="text-[10px]">
                 {activeDiff.action}
               </Badge>
             </div>
