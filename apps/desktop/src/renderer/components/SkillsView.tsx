@@ -1,4 +1,4 @@
-import type { PhaseSkillKey } from '@shipcode/shared';
+import { clampError, type PhaseSkillKey } from '@shipcode/shared';
 import { PageHeader } from '@shipcode/ui';
 import {
   Badge,
@@ -14,6 +14,7 @@ import {
 } from '@shipshitdev/ui';
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '../stores/app-store';
 
@@ -56,6 +57,10 @@ interface WritingPrdsSkillInfoView {
   openTargetPath: string;
 }
 
+interface SkillRewriteResult {
+  content: string;
+}
+
 const PHASE_LABELS: Record<PhaseSkillKey, { label: string; description: string }> = {
   'plan-generation': {
     label: 'Planner',
@@ -93,6 +98,9 @@ export function SkillsView() {
   const [draft, setDraft] = useState<string>('');
   const [draftDirty, setDraftDirty] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [rewriteInstruction, setRewriteInstruction] = useState('');
+  const [rewriteError, setRewriteError] = useState<string | null>(null);
+  const [rewriteNotice, setRewriteNotice] = useState<string | null>(null);
 
   const projectId = scope === SCOPE_GLOBAL ? null : scope;
 
@@ -138,6 +146,9 @@ export function SkillsView() {
     setDraft(editingRow?.content ?? '');
     setDraftDirty(false);
     setValidationError(null);
+    setRewriteInstruction('');
+    setRewriteError(null);
+    setRewriteNotice(null);
   }, [editingRow]);
 
   const writeMutation = useMutation({
@@ -165,6 +176,40 @@ export function SkillsView() {
     },
     onError: (err: unknown) => {
       setValidationError(err instanceof Error ? err.message : String(err));
+    },
+  });
+
+  const rewriteMutation = useMutation({
+    mutationFn: ({
+      instruction,
+      content,
+    }: {
+      instruction: string;
+      content: string;
+    }): Promise<SkillRewriteResult> =>
+      window.shipcode.invoke<SkillRewriteResult>('skills:rewrite', {
+        projectId,
+        contextProjectId: activeProjectId,
+        phase: activePhase,
+        content,
+        instruction,
+      }),
+    onSuccess: (result) => {
+      const err = clientValidate(result.content);
+      if (err) {
+        setRewriteError(err);
+        setValidationError(err);
+        return;
+      }
+      setDraft(result.content);
+      setDraftDirty(true);
+      setValidationError(null);
+      setRewriteError(null);
+      setRewriteNotice('Draft rewritten. Review and save when ready.');
+    },
+    onError: (err: unknown) => {
+      setRewriteError(clampError(err));
+      setRewriteNotice(null);
     },
   });
 
@@ -210,6 +255,17 @@ export function SkillsView() {
       return;
     }
     writeMutation.mutate({ content: draft });
+  };
+
+  const handleRewrite = () => {
+    const instruction = rewriteInstruction.trim();
+    if (!instruction) {
+      setRewriteError('Enter rewrite instructions first.');
+      return;
+    }
+    setRewriteError(null);
+    setRewriteNotice(null);
+    rewriteMutation.mutate({ instruction, content: draft });
   };
 
   const quarantinedRows = useMemo(
@@ -449,7 +505,50 @@ export function SkillsView() {
                   </div>
                 </header>
 
+                <div className="mb-4 rounded border border-border bg-secondary/30 p-3">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <label
+                      htmlFor="skill-rewrite-instructions"
+                      className="text-[11px] font-semibold uppercase tracking-wider text-muted"
+                    >
+                      Rewrite instructions
+                    </label>
+                    <Button
+                      variant="secondary"
+                      onClick={handleRewrite}
+                      disabled={rewriteMutation.isPending || !rewriteInstruction.trim()}
+                    >
+                      <LoadingButtonContent loading={rewriteMutation.isPending}>
+                        <Sparkles size={13} aria-hidden="true" />
+                        Rewrite draft
+                      </LoadingButtonContent>
+                    </Button>
+                  </div>
+                  <Textarea
+                    id="skill-rewrite-instructions"
+                    value={rewriteInstruction}
+                    onChange={(e) => {
+                      setRewriteInstruction(e.target.value);
+                      setRewriteError(null);
+                      setRewriteNotice(null);
+                    }}
+                    rows={3}
+                    placeholder="Example: adapt this phase for a board with Backlog, Ready, In progress, Review, and Done; require verifier evidence before Review."
+                    className="text-[12px] leading-relaxed"
+                  />
+                  {rewriteError ? (
+                    <div className="mt-2 rounded border border-red-500/40 bg-red-500/5 p-2 text-[11px] text-red-300">
+                      {rewriteError}
+                    </div>
+                  ) : rewriteNotice ? (
+                    <div className="mt-2 rounded border border-green-500/30 bg-green-500/5 p-2 text-[11px] text-green-300">
+                      {rewriteNotice}
+                    </div>
+                  ) : null}
+                </div>
+
                 <Textarea
+                  aria-label="Skill content"
                   value={draft}
                   onChange={(e) => {
                     setDraft(e.target.value);

@@ -180,6 +180,12 @@ export { loadRepoSetupContract } from './repo-setup-contract';
 export { discoverRuntimeTests, getRuntimeTestsDir } from './runtime-test-discovery';
 export type { RunningServer } from './server-lifecycle';
 export { ServerLifecycleManager } from './server-lifecycle';
+export type { RewriteSkillOptions, RewrittenSkill } from './skill-rewriter';
+export {
+  buildSkillRewritePrompt,
+  extractRewrittenSkill,
+  rewriteSkillDraft,
+} from './skill-rewriter';
 export type {
   BundledDefault,
   PhaseSkillKey,

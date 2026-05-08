@@ -1,9 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { DEFAULT_SKILLS, PHASE_SKILL_KEYS, validateSkill } from '@shipcode/agents';
-import type { PhaseSkillKey } from '@shipcode/shared';
+import {
+  DEFAULT_SKILLS,
+  inspectProjectSetup,
+  loadRepoContext,
+  PHASE_SKILL_KEYS,
+  rewriteSkillDraft,
+  validateSkill,
+} from '@shipcode/agents';
+import { clampError, clampTextBlock, type PhaseSkillKey, type Project } from '@shipcode/shared';
 import { shell } from 'electron';
-import { buildSkillRow } from './helpers';
+import log from '../logger.service';
+import { assertPrdRewriteModelSupported, buildSkillRow } from './helpers';
 import type { IpcHandlerDeps } from './types';
 
 function getWritingPrdsPaths(projectPath: string) {
@@ -16,6 +24,72 @@ function getWritingPrdsPaths(projectPath: string) {
     exists,
     openTargetPath: exists ? skillPath : fs.existsSync(skillDir) ? skillDir : projectPath,
   };
+}
+
+function formatStatusMapping(project: Project): string {
+  const mapping = project.githubStatusMapping;
+  if (!mapping) return 'GitHub Projects status mapping: not configured';
+
+  const parts = [
+    ['todo', mapping.todo],
+    ['in_progress', mapping.inProgress],
+    ['human_review', mapping.humanReview],
+    ['done', mapping.done],
+  ] as const;
+
+  return `GitHub Projects status mapping: ${parts
+    .map(([key, option]) => `${key}=${option?.name ?? 'unmapped'}`)
+    .join(', ')}`;
+}
+
+function buildSkillRewriteProjectContext(project: Project | null): string {
+  if (!project) {
+    return 'No active project selected. Rewrite for the selected scope without repo-specific assumptions.';
+  }
+
+  const lines = [
+    `Project: ${project.name}`,
+    `Path: ${project.path}`,
+    `Git remote: ${project.gitRemote ?? 'not configured'}`,
+    `GitHub repo: ${project.githubRepoFullName ?? 'not configured'}`,
+    `GitHub project board: ${project.githubProjectUrl ?? 'not configured'}`,
+    formatStatusMapping(project),
+  ];
+
+  try {
+    const setup = inspectProjectSetup(project.path);
+    lines.push(`Setup status: ${setup.status}`);
+    if (setup.error) lines.push(`Setup error: ${setup.error}`);
+    if (setup.contract) {
+      lines.push(
+        `Setup commands: ${
+          setup.contract.setupCommands.length > 0
+            ? setup.contract.setupCommands.join(' && ')
+            : 'none'
+        }`,
+      );
+      lines.push(
+        `Verification commands: ${
+          setup.contract.verifyCommands.length > 0
+            ? setup.contract.verifyCommands.join(' && ')
+            : 'none'
+        }`,
+      );
+      if (setup.contract.testingContext) {
+        lines.push(`Testing context: ${setup.contract.testingContext}`);
+      }
+    }
+  } catch (err) {
+    lines.push(`Setup inspection failed: ${clampError(err)}`);
+  }
+
+  try {
+    lines.push(`Repo memory:\n${clampTextBlock(loadRepoContext(project.path), 10_000)}`);
+  } catch (err) {
+    lines.push(`Repo memory unavailable: ${clampError(err)}`);
+  }
+
+  return lines.join('\n');
 }
 
 export function registerSkillsHandlers({ ipcMain, queries }: IpcHandlerDeps): void {
@@ -70,6 +144,71 @@ export function registerSkillsHandlers({ ipcMain, queries }: IpcHandlerDeps): vo
     (_event, { projectId, phase }: { projectId: string | null; phase: PhaseSkillKey }) => {
       queries.skills.delete(projectId, phase);
       return buildSkillRow(queries, phase, projectId);
+    },
+  );
+
+  ipcMain.handle(
+    'skills:rewrite',
+    async (
+      _event,
+      {
+        projectId,
+        contextProjectId,
+        phase,
+        content,
+        instruction,
+      }: {
+        projectId: string | null;
+        contextProjectId?: string | null;
+        phase: PhaseSkillKey;
+        content: string;
+        instruction: string;
+      },
+    ) => {
+      const trimmedInstruction = instruction.trim();
+      if (!trimmedInstruction) throw new Error('Rewrite instructions are required');
+
+      const bundled = DEFAULT_SKILLS[phase];
+      if (!bundled) throw new Error(`Unknown skill phase: ${phase}`);
+
+      const effectiveContextProjectId = contextProjectId ?? projectId;
+      const contextProject =
+        effectiveContextProjectId !== null
+          ? queries.projects.getById(effectiveContextProjectId)
+          : null;
+      if (effectiveContextProjectId !== null && !contextProject) {
+        throw new Error(`Project ${effectiveContextProjectId} not found`);
+      }
+
+      const settings = queries.settings.get();
+      const modelId =
+        settings.prdRewriteCli === 'claude'
+          ? settings.prdRewriteClaudeModel
+          : settings.prdRewriteCodexModel;
+
+      await assertPrdRewriteModelSupported(
+        settings.prdRewriteCli,
+        modelId,
+        settings.prdRewriteReasoningEffort,
+      );
+
+      try {
+        return await rewriteSkillDraft({
+          phase,
+          currentContent: content,
+          bundledContent: bundled.content,
+          requiredSlots: bundled.requiredSlots,
+          userInstruction: trimmedInstruction,
+          projectContext: buildSkillRewriteProjectContext(contextProject),
+          cwd: contextProject?.path ?? process.cwd(),
+          cli: settings.prdRewriteCli,
+          modelId,
+          reasoningEffort: settings.prdRewriteReasoningEffort,
+        });
+      } catch (err) {
+        log.error('[skills:rewrite]', err);
+        throw new Error(clampError(err));
+      }
     },
   );
 

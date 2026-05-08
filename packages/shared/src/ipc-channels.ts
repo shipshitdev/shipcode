@@ -622,6 +622,16 @@ export interface IpcInvokeChannels {
     args: { projectId: string | null; phase: string; content: string };
     result: unknown;
   };
+  'skills:rewrite': {
+    args: {
+      projectId: string | null;
+      contextProjectId?: string | null;
+      phase: string;
+      content: string;
+      instruction: string;
+    };
+    result: { content: string };
+  };
   'skills:reset': { args: { projectId: string | null; phase: string }; result: unknown };
   'skills:list-quarantined': { args: undefined; result: unknown };
   'skills:get-writing-prds-info': {
