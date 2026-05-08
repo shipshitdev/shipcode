@@ -44,6 +44,9 @@ Before writing the plan, walk the codebase mentally:
 - Decide what is in scope and what is explicitly out of scope.
 - If the PRD includes `Feature Phase Breakdown`, preserve its three-phase order in the plan steps.
 - If the PRD does not include `Feature Phase Breakdown`, synthesize exactly three ordered phases using the foundation → behavior → hardening structure above.
+- Measure twice, cut once: resolve file ownership, dependency order, validation strategy, and cleanup boundaries before writing the JSON.
+- Identify whether any work can be executed in parallel by separate agents. Only mark work as parallel-safe when file ownership is disjoint, there is no shared migration/schema/API contract being edited at the same time, and each track can be verified independently.
+- If work is parallel-safe, make the boundary obvious in the affected step descriptions and rationales by naming the independent surface and its owned files. If work is not parallel-safe, state the sequencing dependency in the relevant step rationale.
 - Identify the failure modes and where each step could go wrong.
 - Identify acceptance criteria that the verifier can check from a diff alone.
 
@@ -55,6 +58,7 @@ Then produce the plan. Every `files` entry must list a real, addressable path. E
 - Each step is an atomic execution phase and independently verifiable.
 - The `files` array lists ALL files that will be created, modified, or deleted — no surprises in the diff.
 - Every file in `files` appears in at least one step, and every step file appears in `files`.
+- Each step description must be executor-ready: include the concrete behavior to implement, the owned surface, and any ordering or parallelization constraint the executor must preserve.
 - `acceptanceCriteria` are written so a verifier with only the diff can check them.
 - `acceptanceCriteria` and `outOfScope` must both be non-empty.
 - `outOfScope` explicitly states what this plan does NOT do, including any assumption you made on the user's behalf.
@@ -77,6 +81,7 @@ Your plan MUST be valid JSON inside a code fence per the schema below.
 Every file path you reference must be a path you would actually edit — no placeholders, no `path/to/file.ts`.
 Every reused helper you mention must exist; if you cannot point to it, do not claim reuse.
 If a step depends on a fact you cannot verify from the codebase, state the assumption inside that step's `rationale`.
+Do not plan scratch files, temporary folders, dead compatibility shims, or cleanup-only artifacts. If a temporary runtime artifact is unavoidable, keep it under an existing ignored runtime/test location and state how it is removed before commit.
 </grounding_rules>
 
 <repository_context>

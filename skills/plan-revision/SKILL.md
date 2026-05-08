@@ -49,11 +49,14 @@ For each finding in the review:
 3. Make the minimum change that resolves the finding without introducing new risk.
 4. If the finding exposes a missing file, missing step, or missing acceptance criterion, add it explicitly.
 5. If the finding exposes an unstated assumption, move it to `outOfScope` or encode it in a step's `rationale`.
+6. If the finding changes file ownership or dependency order, update the affected step rationale so any parallel-safe work remains disjoint and any serial dependency is explicit.
 
 After processing all findings, re-walk the plan as if you were the reviewer:
 - Cross-check `files` against `steps` — every file touched by at least one step.
 - Cross-check `acceptanceCriteria` — verifiable from a diff.
 - Cross-check the three ordered phases — step 1 is foundation/spec plumbing, step 2 is primary behavior, and step 3 is hardening/verification.
+- Cross-check cleanliness — no scratch files, dead compatibility shims, duplicate implementations, or cleanup-only artifacts are introduced.
+- Cross-check parallelization hints — only independent, disjoint file sets are described as parallel-safe.
 - Re-check the attack surface from the reviewer skill: missing failure paths, unstated assumptions, mismatch with codebase patterns.
 </revision_method>
 

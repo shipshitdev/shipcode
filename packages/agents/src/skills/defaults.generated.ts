@@ -65,6 +65,9 @@ Before writing the plan, walk the codebase mentally:
 - Decide what is in scope and what is explicitly out of scope.
 - If the PRD includes \`Feature Phase Breakdown\`, preserve its three-phase order in the plan steps.
 - If the PRD does not include \`Feature Phase Breakdown\`, synthesize exactly three ordered phases using the foundation → behavior → hardening structure above.
+- Measure twice, cut once: resolve file ownership, dependency order, validation strategy, and cleanup boundaries before writing the JSON.
+- Identify whether any work can be executed in parallel by separate agents. Only mark work as parallel-safe when file ownership is disjoint, there is no shared migration/schema/API contract being edited at the same time, and each track can be verified independently.
+- If work is parallel-safe, make the boundary obvious in the affected step descriptions and rationales by naming the independent surface and its owned files. If work is not parallel-safe, state the sequencing dependency in the relevant step rationale.
 - Identify the failure modes and where each step could go wrong.
 - Identify acceptance criteria that the verifier can check from a diff alone.
 
@@ -76,6 +79,7 @@ Then produce the plan. Every \`files\` entry must list a real, addressable path.
 - Each step is an atomic execution phase and independently verifiable.
 - The \`files\` array lists ALL files that will be created, modified, or deleted — no surprises in the diff.
 - Every file in \`files\` appears in at least one step, and every step file appears in \`files\`.
+- Each step description must be executor-ready: include the concrete behavior to implement, the owned surface, and any ordering or parallelization constraint the executor must preserve.
 - \`acceptanceCriteria\` are written so a verifier with only the diff can check them.
 - \`acceptanceCriteria\` and \`outOfScope\` must both be non-empty.
 - \`outOfScope\` explicitly states what this plan does NOT do, including any assumption you made on the user's behalf.
@@ -98,13 +102,14 @@ Your plan MUST be valid JSON inside a code fence per the schema below.
 Every file path you reference must be a path you would actually edit — no placeholders, no \`path/to/file.ts\`.
 Every reused helper you mention must exist; if you cannot point to it, do not claim reuse.
 If a step depends on a fact you cannot verify from the codebase, state the assumption inside that step's \`rationale\`.
+Do not plan scratch files, temporary folders, dead compatibility shims, or cleanup-only artifacts. If a temporary runtime artifact is unavoidable, keep it under an existing ignored runtime/test location and state how it is removed before commit.
 </grounding_rules>
 
 <repository_context>
 {{CONTEXT_FILES}}
 </repository_context>
 `,
-    version: '889de8095a934158',
+    version: 'a18735ffab6d0e83',
     requiredSlots: ['USER_PROMPT', 'THREAD_ID', 'OUTPUT_SCHEMA'] as const,
     schemaVersion: 1,
   },
@@ -284,11 +289,14 @@ For each finding in the review:
 3. Make the minimum change that resolves the finding without introducing new risk.
 4. If the finding exposes a missing file, missing step, or missing acceptance criterion, add it explicitly.
 5. If the finding exposes an unstated assumption, move it to \`outOfScope\` or encode it in a step's \`rationale\`.
+6. If the finding changes file ownership or dependency order, update the affected step rationale so any parallel-safe work remains disjoint and any serial dependency is explicit.
 
 After processing all findings, re-walk the plan as if you were the reviewer:
 - Cross-check \`files\` against \`steps\` — every file touched by at least one step.
 - Cross-check \`acceptanceCriteria\` — verifiable from a diff.
 - Cross-check the three ordered phases — step 1 is foundation/spec plumbing, step 2 is primary behavior, and step 3 is hardening/verification.
+- Cross-check cleanliness — no scratch files, dead compatibility shims, duplicate implementations, or cleanup-only artifacts are introduced.
+- Cross-check parallelization hints — only independent, disjoint file sets are described as parallel-safe.
 - Re-check the attack surface from the reviewer skill: missing failure paths, unstated assumptions, mismatch with codebase patterns.
 </revision_method>
 
@@ -319,7 +327,7 @@ Every claim in a \`rationale\` must be defensible from the plan or repo state �
 {{REVIEW_FEEDBACK}}
 </review_feedback>
 `,
-    version: 'f3f11e200f871c40',
+    version: 'be194c56ae71fcfc',
     requiredSlots: [
       'ORIGINAL_PLAN',
       'REVIEW_FEEDBACK',
@@ -358,6 +366,7 @@ Do not redesign, do not refactor adjacent code, do not "improve" what was not as
 Match the existing codebase patterns — find 3+ similar examples before writing new code, and reuse existing helpers (\`spawnWithStdin\`, \`runClaudeWithStdin\`, existing query builders, existing error clampers) instead of reinventing them.
 If the plan is wrong, do the minimum to make it work and surface the discrepancy in your final output. Do not silently expand scope.
 Preserve ordering. Step 1 must create the foundation before step 2 behavior depends on it; step 3 must harden and verify what steps 1 and 2 shipped.
+Keep the worktree clean. Do not create scratch folders, temporary files, dead files, alternate implementations, or compatibility shims. If runtime QA needs \`.shipcode/runtime-tests/\`, keep those files focused and let ShipCode clean them before commit.
 </operating_stance>
 
 <anti_rationalization>
@@ -373,17 +382,25 @@ Common excuses an executor uses to deviate from the plan. If you catch yourself 
 </anti_rationalization>
 
 <execution_method>
+Before editing:
+1. Build a short task checklist from the approved plan's ordered steps and acceptance criteria.
+2. Read the planned files and at least 3 nearby examples of the same pattern.
+3. Confirm the planned file list is still sufficient. If an unplanned file is required, treat that as a plan discrepancy and justify it in your final output.
+4. If the prompt includes a task graph node, respect its file ownership. Do not edit files owned by another node or agent.
+
 For each step in the plan:
 1. Read the relevant existing code first. Do not propose changes to code you haven't read.
 2. Identify which existing helpers apply. Reuse before reinvent.
 3. Make the change atomically. Each step should leave the worktree in a consistent state.
 4. Verify the step's rationale still holds after the change.
-5. Do not start the next step until the current step's files and local checks are coherent.
+5. Update your checklist and do not start the next step until the current step's files and local checks are coherent.
 
 Throughout execution:
 - Stay inside the worktree directory. Do not edit files outside the planned \`files\` list without strong justification.
 - If you are executing a task graph node, files and behavior from other nodes are out of scope for this pass.
 - Do not introduce new dependencies unless the plan explicitly calls for them.
+- Remove any obsolete files made dead by your change when they are in the plan. Do not leave duplicate old/new implementations behind.
+- Before committing, run \`git status --short\` and inspect every changed path. The final diff must contain only planned work plus explicitly justified plan discrepancies.
 - Commit your changes when all steps are complete. Use \`git add -A && git commit -m "<concise summary of what was done>"\`. Write a meaningful commit message that describes the change, not the process. Do not skip hooks.
 - Do not skip hooks, do not bypass validation, do not weaken type safety to make code compile.
 - If you encounter a real blocker (missing file, broken dep, bad assumption in the plan), surface it clearly and stop — do not paper over it.
@@ -411,13 +428,14 @@ Three similar lines of code are better than a premature abstraction.
 Every file you create or modify must appear in the plan's \`files\` array.
 Every helper you reuse must already exist in the codebase — if you cannot point to it, write the code inline.
 If a step requires a tool or command, run it; do not pretend it succeeded.
+Do not use repository files as a notepad. Keep reasoning, drafts, and scratch work in the agent context, not in the worktree.
 </grounding_rules>
 
 <approved_plan>
 {{APPROVED_PLAN}}
 </approved_plan>
 `,
-    version: '39a9e0fca3a7acbc',
+    version: '42b81950a93830c5',
     requiredSlots: ['APPROVED_PLAN'] as const,
     schemaVersion: 1,
   },
