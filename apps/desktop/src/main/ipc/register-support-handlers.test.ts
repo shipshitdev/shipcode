@@ -93,7 +93,7 @@ const queries = {
 const processManager = {
   on: vi.fn(),
   get: vi.fn(),
-} as never;
+};
 
 const notificationService = {
   listActive: vi.fn(() => []),
@@ -132,7 +132,7 @@ beforeEach(() => {
     ipcMain,
     mainWindow: mainWindow as never,
     queries: queries as unknown as never,
-    processManager,
+    processManager: processManager as never,
     pipeline: {} as never,
     emitter: {} as never,
     notificationService,
@@ -440,7 +440,7 @@ describe('process manager forwarding', () => {
       ipcMain,
       mainWindow: destroyedWindow as never,
       queries: queries as unknown as never,
-      processManager,
+      processManager: processManager as never,
       pipeline: {} as never,
       emitter: {} as never,
       notificationService,

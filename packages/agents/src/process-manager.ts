@@ -6,7 +6,7 @@ import { assertWorkspaceSafe } from '@shipcode/shared/worktree-path';
 import { nanoid } from 'nanoid';
 import * as pty from 'node-pty';
 
-const ALLOWED_COMMANDS = new Set(['claude', 'codex', 'gh']);
+const ALLOWED_COMMANDS = new Set(['claude', 'codex', 'gemini', 'gh']);
 const TRUSTED_SHELLS = new Set([
   '/bin/bash',
   '/bin/zsh',
@@ -33,6 +33,9 @@ const SAFE_ENV_KEYS = new Set([
   'ANTHROPIC_API_KEY',
   'OPENAI_API_KEY',
   'OPENROUTER_API_KEY',
+  'GEMINI_API_KEY',
+  'GOOGLE_API_KEY',
+  'GOOGLE_APPLICATION_CREDENTIALS',
 ]);
 
 function filterEnv(env: Record<string, string>): Record<string, string> {

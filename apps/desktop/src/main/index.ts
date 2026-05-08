@@ -38,6 +38,7 @@ import path from 'node:path';
 import {
   createClaudeCliProvider,
   createCodexCliProvider,
+  createGeminiCliProvider,
   createOpenRouterProvider,
   createProviderRegistry,
   GhCli,
@@ -307,6 +308,7 @@ function createWindow() {
   const providers = createProviderRegistry({
     claude: createClaudeCliProvider(processManager),
     codex: createCodexCliProvider(processManager),
+    gemini: createGeminiCliProvider(processManager),
     openrouter: createOpenRouterProvider({
       getApiKey: () => process.env.OPENROUTER_API_KEY,
       getSettings: () => queries.settings.get(),

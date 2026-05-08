@@ -9,6 +9,7 @@ import {
 export const PROVIDER_DISPLAY: Record<ExecutorModel, string> = {
   claude: 'Anthropic',
   codex: 'OpenAI',
+  gemini: 'Google',
   openrouter: 'OpenRouter',
 };
 
@@ -16,7 +17,7 @@ export function getModelOptions(
   provider: ExecutorModel,
   integrationStatus?: IntegrationStatus,
 ): ReadonlyArray<{ value: string; label: string }> {
-  if (provider === 'claude' || provider === 'codex') {
+  if (provider === 'claude' || provider === 'codex' || provider === 'gemini') {
     return getCapabilityModelOptions(integrationStatus, provider);
   }
   return OPENROUTER_MODEL_OPTIONS;

@@ -151,10 +151,11 @@ let systemHealthInFlight: Promise<SystemHealth> | null = null;
 let systemHealthWithAuthCache: TimedCacheEntry<SystemHealth> | null = null;
 let systemHealthWithAuthInFlight: Promise<SystemHealth> | null = null;
 let cliModelCapabilitiesCache: TimedCacheEntry<
-  Record<'claude' | 'codex', CliModelCapabilities>
+  Record<'claude' | 'codex' | 'gemini', CliModelCapabilities>
 > | null = null;
-let cliModelCapabilitiesInFlight: Promise<Record<'claude' | 'codex', CliModelCapabilities>> | null =
-  null;
+let cliModelCapabilitiesInFlight: Promise<
+  Record<'claude' | 'codex' | 'gemini', CliModelCapabilities>
+> | null = null;
 const providerUsageCache = new Map<
   CliProviderUsageProvider,
   TimedCacheEntry<CliProviderUsageStatus>
@@ -169,6 +170,14 @@ const DESKTOP_APP_LABELS: Record<ProjectOpenTarget, string> = {
   ghostty: 'Ghostty',
   vscode: 'Visual Studio Code',
   t3code: 'T3 Code',
+};
+
+const MISSING_CLI_HEALTH: CliHealth = {
+  available: false,
+  version: null,
+  path: null,
+  error: null,
+  authenticated: false,
 };
 
 async function checkCli(command: string, versionFlag: string = '--version'): Promise<CliHealth> {
@@ -1115,6 +1124,19 @@ export async function checkCodexAuth(): Promise<boolean> {
   return fileExists(codexAuthPath);
 }
 
+export async function checkGeminiAuth(): Promise<boolean> {
+  if ((await readEnvVar('GEMINI_API_KEY')) || (await readEnvVar('GOOGLE_API_KEY'))) {
+    return true;
+  }
+
+  try {
+    await execAsync('gemini auth status', { timeout: 10_000, env: shellExecEnv() });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export type OpenRouterAuthStatus =
   | { ok: true; label?: string }
   | {
@@ -1437,14 +1459,15 @@ export async function checkSystemHealth(options: CacheOptions = {}): Promise<Sys
   }
 
   systemHealthInFlight = (async () => {
-    const [claude, codex, git, gh] = await Promise.all([
+    const [claude, codex, gemini, git, gh] = await Promise.all([
       checkCli('claude', '--version'),
       checkCli('codex', '--version'),
+      checkCli('gemini', '--version'),
       checkCli('git', '--version'),
       checkCli('gh', '--version'),
     ]);
 
-    const result = { claude, codex, git, gh };
+    const result = { claude, codex, gemini, git, gh };
     systemHealthCache = createTimedCacheEntry(result);
     return result;
   })();
@@ -1467,16 +1490,19 @@ export async function checkSystemHealthWithAuth(options: CacheOptions = {}): Pro
   }
 
   systemHealthWithAuthInFlight = (async () => {
-    const [health, claudeAuth, codexAuth] = await Promise.all([
+    const [health, claudeAuth, codexAuth, geminiAuth] = await Promise.all([
       checkSystemHealth(options),
       checkClaudeAuth(),
       checkCodexAuth(),
+      checkGeminiAuth(),
     ]);
 
-    const result = {
+    const gemini = health.gemini ?? MISSING_CLI_HEALTH;
+    const result: SystemHealth = {
       ...health,
       claude: { ...health.claude, authenticated: health.claude.available && claudeAuth },
       codex: { ...health.codex, authenticated: health.codex.available && codexAuth },
+      gemini: { ...gemini, authenticated: gemini.available && geminiAuth },
     };
     systemHealthWithAuthCache = createTimedCacheEntry(result);
     return result;
@@ -1588,19 +1614,40 @@ export async function checkClaudeModelCapabilities(): Promise<CliModelCapabiliti
   }
 }
 
+export async function checkGeminiModelCapabilities(): Promise<CliModelCapabilities> {
+  const checkedAt = new Date().toISOString();
+  try {
+    await execAsync('gemini --help', {
+      timeout: CLI_MODEL_CATALOG_TIMEOUT_MS,
+      maxBuffer: 512_000,
+      env: shellExecEnv(),
+    });
+    return fallbackCliModelCapabilities('gemini', checkedAt);
+  } catch (error) {
+    return {
+      provider: 'gemini',
+      source: 'unavailable',
+      models: [],
+      error: `Gemini CLI unavailable: ${summarizeExecFailure(error)}`,
+      checkedAt,
+    };
+  }
+}
+
 export async function checkCliModelCapabilities(
   options: CacheOptions = {},
-): Promise<Record<'claude' | 'codex', CliModelCapabilities>> {
+): Promise<Record<'claude' | 'codex' | 'gemini', CliModelCapabilities>> {
   const cached = getFreshCachedValue(cliModelCapabilitiesCache, CLI_MODEL_CAPABILITIES_TTL_MS);
   if (!options.force && cached) return cached;
   if (cliModelCapabilitiesInFlight) return cliModelCapabilitiesInFlight;
 
   cliModelCapabilitiesInFlight = (async () => {
-    const [claude, codex] = await Promise.all([
+    const [claude, codex, gemini] = await Promise.all([
       checkClaudeModelCapabilities(),
       checkCodexModelCapabilities(),
+      checkGeminiModelCapabilities(),
     ]);
-    const result = { claude, codex };
+    const result = { claude, codex, gemini };
     cliModelCapabilitiesCache = createTimedCacheEntry(result);
     return result;
   })();

@@ -340,10 +340,16 @@ export function registerSupportHandlers({
     if ((state === 'running' || state === 'exited') && proc?.threadId) {
       const ts = formatClockTime(new Date());
       const agentColor =
-        type === 'claude' ? '\x1b[36m' : type === 'codex' ? '\x1b[33m' : '\x1b[35m';
+        type === 'claude'
+          ? '\x1b[36m'
+          : type === 'codex'
+            ? '\x1b[33m'
+            : type === 'gemini'
+              ? '\x1b[32m'
+              : '\x1b[35m';
       const exitColor = state === 'exited' ? '\x1b[2m' : '';
       const typeLabel =
-        type === 'claude' || type === 'codex' || type === 'openrouter'
+        type === 'claude' || type === 'codex' || type === 'gemini' || type === 'openrouter'
           ? `${providerDisplay(type as ExecutorModel)}${type === 'openrouter' ? '' : ' CLI'}`
           : type;
       emitTerminalEvent(proc.threadId, {

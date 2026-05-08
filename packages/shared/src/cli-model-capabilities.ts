@@ -1,6 +1,7 @@
 import {
   CLAUDE_MODEL_OPTIONS,
   CODEX_FALLBACK_MODEL_OPTIONS,
+  GEMINI_FALLBACK_MODEL_OPTIONS,
   type KnownModelOption,
 } from './model-catalog';
 import { getSupportedReasoningEfforts } from './reasoning-effort';
@@ -8,8 +9,8 @@ import type {
   CliModelCapabilities,
   CliModelCapabilityOption,
   ExecutorModel,
-  GeneratorCli,
   IntegrationStatus,
+  PhaseCliProvider,
   ReasoningEffort,
 } from './types';
 
@@ -19,7 +20,7 @@ export interface ModelAvailabilityAssessment {
 }
 
 function optionToCapability(
-  provider: GeneratorCli,
+  provider: PhaseCliProvider,
   option: KnownModelOption,
 ): CliModelCapabilityOption {
   return {
@@ -32,10 +33,15 @@ function optionToCapability(
 }
 
 export function fallbackCliModelCapabilities(
-  provider: GeneratorCli,
+  provider: PhaseCliProvider,
   checkedAt = new Date(0).toISOString(),
 ): CliModelCapabilities {
-  const options = provider === 'claude' ? CLAUDE_MODEL_OPTIONS : CODEX_FALLBACK_MODEL_OPTIONS;
+  const options =
+    provider === 'claude'
+      ? CLAUDE_MODEL_OPTIONS
+      : provider === 'codex'
+        ? CODEX_FALLBACK_MODEL_OPTIONS
+        : GEMINI_FALLBACK_MODEL_OPTIONS;
   return {
     provider,
     source: 'fallback',
@@ -43,21 +49,23 @@ export function fallbackCliModelCapabilities(
     error:
       provider === 'claude'
         ? null
-        : 'Codex model catalog could not be read; using conservative ShipCode presets.',
+        : provider === 'codex'
+          ? 'Codex model catalog could not be read; using conservative ShipCode presets.'
+          : 'Gemini model catalog could not be read; using conservative ShipCode presets.',
     checkedAt,
   };
 }
 
 export function getProviderModelCapabilities(
   integrationStatus: IntegrationStatus | undefined,
-  provider: Extract<ExecutorModel, 'claude' | 'codex'>,
+  provider: PhaseCliProvider,
 ): CliModelCapabilities {
   return getProviderModelCapabilitiesFromMap(integrationStatus?.modelCapabilities, provider);
 }
 
 export function getProviderModelCapabilitiesFromMap(
-  modelCapabilities: Partial<Record<GeneratorCli, CliModelCapabilities>> | null | undefined,
-  provider: Extract<ExecutorModel, 'claude' | 'codex'>,
+  modelCapabilities: Partial<Record<PhaseCliProvider, CliModelCapabilities>> | null | undefined,
+  provider: PhaseCliProvider,
 ): CliModelCapabilities {
   return (
     modelCapabilities?.[provider] ??
@@ -100,8 +108,8 @@ export function assessCliModelAvailability(
 }
 
 export function assessCliModelAvailabilityFromCapabilities(
-  modelCapabilities: Partial<Record<GeneratorCli, CliModelCapabilities>> | null | undefined,
-  provider: Extract<ExecutorModel, 'claude' | 'codex'>,
+  modelCapabilities: Partial<Record<PhaseCliProvider, CliModelCapabilities>> | null | undefined,
+  provider: PhaseCliProvider,
   modelId: string | null | undefined,
 ): ModelAvailabilityAssessment {
   if (!modelId) return { available: true, message: null };
@@ -110,7 +118,8 @@ export function assessCliModelAvailabilityFromCapabilities(
     return { available: true, message: null };
   }
 
-  const providerLabel = provider === 'claude' ? 'Claude CLI' : 'Codex CLI';
+  const providerLabel =
+    provider === 'claude' ? 'Claude CLI' : provider === 'codex' ? 'Codex CLI' : 'Gemini CLI';
   const sourceDetail =
     capabilities.source === 'catalog'
       ? 'installed CLI catalog'
@@ -139,8 +148,8 @@ export function assessCliReasoningEffortAvailability(
 }
 
 export function assessCliReasoningEffortAvailabilityFromCapabilities(
-  modelCapabilities: Partial<Record<GeneratorCli, CliModelCapabilities>> | null | undefined,
-  provider: Extract<ExecutorModel, 'claude' | 'codex'>,
+  modelCapabilities: Partial<Record<PhaseCliProvider, CliModelCapabilities>> | null | undefined,
+  provider: PhaseCliProvider,
   modelId: string | null | undefined,
   effort: ReasoningEffort,
 ): ModelAvailabilityAssessment {
@@ -154,13 +163,13 @@ export function assessCliReasoningEffortAvailabilityFromCapabilities(
   const modelLabel = modelId ? ` for ${modelId}` : '';
   return {
     available: false,
-    message: `${provider === 'claude' ? 'Claude CLI' : 'Codex CLI'} does not report ${effort} effort${modelLabel}. Choose a supported effort or update the CLI.`,
+    message: `${provider === 'claude' ? 'Claude CLI' : provider === 'codex' ? 'Codex CLI' : 'Gemini CLI'} does not report ${effort} effort${modelLabel}. Choose a supported effort or update the CLI.`,
   };
 }
 
 export function assessCliSelectionAvailabilityFromCapabilities(
-  modelCapabilities: Partial<Record<GeneratorCli, CliModelCapabilities>> | null | undefined,
-  provider: Extract<ExecutorModel, 'claude' | 'codex'>,
+  modelCapabilities: Partial<Record<PhaseCliProvider, CliModelCapabilities>> | null | undefined,
+  provider: PhaseCliProvider,
   modelId: string | null | undefined,
   effort: ReasoningEffort,
 ): ModelAvailabilityAssessment {

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import '@testing-library/jest-dom/vitest';
 import type {
   AppSettings,
   ContextFileInfo,
@@ -7,7 +8,11 @@ import type {
   Project,
   ProjectReadinessReport,
 } from '@shipcode/shared';
-import { DEFAULT_SETTINGS, SHIPCODE_DEFAULT_LABELS } from '@shipcode/shared';
+import {
+  DEFAULT_SETTINGS,
+  PIPELINE_EXECUTOR_PROVIDERS,
+  SHIPCODE_DEFAULT_LABELS,
+} from '@shipcode/shared';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderWithQueryClient } from '../../test/render';
@@ -603,6 +608,8 @@ describe('project settings leaf tabs', () => {
     expect(screen.getByText('Model Presets')).toBeInTheDocument();
     expect(screen.getByText('Planner')).toBeInTheDocument();
     expect(screen.getByText('Verifier')).toBeInTheDocument();
+
+    expect(PIPELINE_EXECUTOR_PROVIDERS).toContain('gemini');
 
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Apply Preset' }));
     fireEvent.click(screen.getByText('Claude'));

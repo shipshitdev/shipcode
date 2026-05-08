@@ -5,7 +5,12 @@ import type {
   ReviewRecord,
   ShipCodePlan,
 } from '@shipcode/shared';
-import { PIPELINE_PHASE, shipCodePlanSchema, stripAnsi } from '@shipcode/shared';
+import {
+  PIPELINE_EXECUTOR_PROVIDERS,
+  PIPELINE_PHASE,
+  shipCodePlanSchema,
+  stripAnsi,
+} from '@shipcode/shared';
 
 export { formatRelativeTime as timeAgo } from '@shipcode/shared';
 export { stripAnsi };
@@ -35,10 +40,10 @@ export const PHASE_PROVIDER_OPTIONS: Record<
   'planner' | 'reviewer' | 'executor' | 'verifier',
   ExecutorModel[]
 > = {
-  planner: ['claude', 'codex', 'openrouter'],
-  reviewer: ['claude', 'codex', 'openrouter'],
-  executor: ['claude', 'codex', 'openrouter'],
-  verifier: ['claude', 'codex', 'openrouter'],
+  planner: [...PIPELINE_EXECUTOR_PROVIDERS],
+  reviewer: [...PIPELINE_EXECUTOR_PROVIDERS],
+  executor: [...PIPELINE_EXECUTOR_PROVIDERS],
+  verifier: [...PIPELINE_EXECUTOR_PROVIDERS],
 };
 
 export type PlanStatusBadgeVariant =
@@ -116,7 +121,10 @@ export function decodePhaseOption(value: string): {
 } {
   const [providerRaw, modelIdRaw] = value.split('::');
   const provider =
-    providerRaw === 'claude' || providerRaw === 'codex' || providerRaw === 'openrouter'
+    providerRaw === 'claude' ||
+    providerRaw === 'codex' ||
+    providerRaw === 'gemini' ||
+    providerRaw === 'openrouter'
       ? providerRaw
       : 'claude';
   return { provider, modelId: modelIdRaw === '__default__' ? null : modelIdRaw };

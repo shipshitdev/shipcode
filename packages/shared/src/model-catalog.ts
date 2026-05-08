@@ -21,6 +21,14 @@ export const CODEX_FALLBACK_MODEL_IDS = {
 export type CodexFallbackModelId =
   (typeof CODEX_FALLBACK_MODEL_IDS)[keyof typeof CODEX_FALLBACK_MODEL_IDS];
 
+export const GEMINI_FALLBACK_MODEL_IDS = {
+  pro: 'gemini-2.5-pro',
+  flash: 'gemini-2.5-flash',
+} as const;
+
+export type GeminiFallbackModelId =
+  (typeof GEMINI_FALLBACK_MODEL_IDS)[keyof typeof GEMINI_FALLBACK_MODEL_IDS];
+
 export const OPENROUTER_MODEL_IDS = {
   autoPaid: 'openrouter/auto',
   autoFree: 'openrouter/free',
@@ -47,6 +55,11 @@ export const CODEX_FALLBACK_MODEL_OPTIONS = [
   { value: CODEX_FALLBACK_MODEL_IDS.gpt54Mini, label: 'GPT-5.4 Mini' },
 ] as const satisfies readonly KnownModelOption<CodexFallbackModelId>[];
 
+export const GEMINI_FALLBACK_MODEL_OPTIONS = [
+  { value: GEMINI_FALLBACK_MODEL_IDS.pro, label: 'Gemini 2.5 Pro' },
+  { value: GEMINI_FALLBACK_MODEL_IDS.flash, label: 'Gemini 2.5 Flash' },
+] as const satisfies readonly KnownModelOption<GeminiFallbackModelId>[];
+
 export const OPENROUTER_MODEL_OPTIONS = [
   { value: OPENROUTER_MODEL_IDS.autoPaid, label: 'Auto (paid)' },
   { value: OPENROUTER_MODEL_IDS.autoFree, label: 'Auto (free)' },
@@ -58,12 +71,16 @@ export const OPENROUTER_MODEL_OPTIONS = [
 export type CuratedModelId =
   | (typeof CLAUDE_MODEL_OPTIONS)[number]['value']
   | (typeof CODEX_FALLBACK_MODEL_OPTIONS)[number]['value']
+  | (typeof GEMINI_FALLBACK_MODEL_OPTIONS)[number]['value']
   | (typeof OPENROUTER_MODEL_OPTIONS)[number]['value'];
 
 const CURATED_MODEL_LABELS = Object.fromEntries(
-  [...CLAUDE_MODEL_OPTIONS, ...CODEX_FALLBACK_MODEL_OPTIONS, ...OPENROUTER_MODEL_OPTIONS].map(
-    (option) => [option.value, option.label],
-  ),
+  [
+    ...CLAUDE_MODEL_OPTIONS,
+    ...CODEX_FALLBACK_MODEL_OPTIONS,
+    ...GEMINI_FALLBACK_MODEL_OPTIONS,
+    ...OPENROUTER_MODEL_OPTIONS,
+  ].map((option) => [option.value, option.label]),
 ) as Record<CuratedModelId, string>;
 
 export const PINNED_MODEL_DEFAULTS = {
@@ -77,6 +94,9 @@ export const PINNED_MODEL_DEFAULTS = {
     prdRewrite: CODEX_FALLBACK_MODEL_IDS.gpt54Mini,
     triage: CODEX_FALLBACK_MODEL_IDS.gpt54Mini,
   },
+  gemini: {
+    phase: GEMINI_FALLBACK_MODEL_IDS.pro,
+  },
   openrouter: {
     paid: OPENROUTER_MODEL_IDS.autoPaid,
     free: OPENROUTER_MODEL_IDS.autoFree,
@@ -87,6 +107,7 @@ export const PINNED_MODEL_DEFAULTS = {
 export const KNOWN_MODEL_LABELS: Record<string, string> = {
   claude: CURATED_MODEL_LABELS[PINNED_MODEL_DEFAULTS.claude.phase],
   codex: CURATED_MODEL_LABELS[PINNED_MODEL_DEFAULTS.codex.phase],
+  gemini: CURATED_MODEL_LABELS[PINNED_MODEL_DEFAULTS.gemini.phase],
   openrouter: 'OpenRouter',
   ...CURATED_MODEL_LABELS,
   'anthropic/claude-sonnet-4-6': CURATED_MODEL_LABELS[OPENROUTER_MODEL_IDS.claudeSonnet46],

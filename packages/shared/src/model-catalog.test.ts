@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CLAUDE_MODEL_OPTIONS,
   CODEX_FALLBACK_MODEL_OPTIONS,
+  GEMINI_FALLBACK_MODEL_OPTIONS,
   getKnownModelLabel,
   OPENROUTER_MODEL_IDS,
   PINNED_MODEL_DEFAULTS,
@@ -20,6 +21,9 @@ describe('model-catalog', () => {
         prdRewrite: 'gpt-5.4-mini',
         triage: 'gpt-5.4-mini',
       },
+      gemini: {
+        phase: 'gemini-2.5-pro',
+      },
       openrouter: {
         paid: 'openrouter/auto',
         free: 'openrouter/free',
@@ -35,6 +39,15 @@ describe('model-catalog', () => {
       'gpt-5.4',
       'gpt-5.4-mini',
     ]);
+  });
+
+  it('exposes Gemini fallback options and labels', () => {
+    expect(GEMINI_FALLBACK_MODEL_OPTIONS.map((option) => option.value)).toEqual([
+      'gemini-2.5-pro',
+      'gemini-2.5-flash',
+    ]);
+    expect(getKnownModelLabel('gemini')).toBe('Gemini 2.5 Pro');
+    expect(getKnownModelLabel('gemini-2.5-flash')).toBe('Gemini 2.5 Flash');
   });
 
   it('normalizes friendly labels for provider aliases and upstream slugs', () => {

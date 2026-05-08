@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import type { AppSettings, IntegrationStatus } from '@shipcode/shared';
-import { DEFAULT_SETTINGS } from '@shipcode/shared';
+import { DEFAULT_SETTINGS, PIPELINE_EXECUTOR_PROVIDERS } from '@shipcode/shared';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -24,6 +24,13 @@ const integrationStatus: IntegrationStatus = {
       available: true,
       version: 'codex 0.1.0',
       path: '/usr/local/bin/codex',
+      error: null,
+      authenticated: true,
+    },
+    gemini: {
+      available: true,
+      version: '0.1.0',
+      path: '/usr/local/bin/gemini',
       error: null,
       authenticated: true,
     },
@@ -209,5 +216,21 @@ describe('PipelineSettingsSection', () => {
         prdRewriteCodexModel: 'gpt-5.4-mini',
       }),
     );
+  });
+
+  it('shows Gemini in global phase provider controls', () => {
+    render(
+      <PipelineSettingsSection
+        settings={DEFAULT_SETTINGS}
+        integrationStatus={integrationStatus}
+        onUpdate={vi.fn()}
+      />,
+    );
+
+    const modelsTab = screen.getByRole('tab', { name: 'Models' });
+    fireEvent.mouseDown(modelsTab, { button: 0 });
+    fireEvent.click(modelsTab);
+    expect(PIPELINE_EXECUTOR_PROVIDERS).toContain('gemini');
+    expect(screen.getByText('Pipeline phases')).toBeInTheDocument();
   });
 });

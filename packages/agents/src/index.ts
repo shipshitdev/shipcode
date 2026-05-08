@@ -58,6 +58,8 @@ export {
   checkCodexAuth,
   checkCodexModelCapabilities,
   checkDesktopApps,
+  checkGeminiAuth,
+  checkGeminiModelCapabilities,
   checkGhAuth,
   checkIntegrationStatus,
   checkOpenRouterAuth,
