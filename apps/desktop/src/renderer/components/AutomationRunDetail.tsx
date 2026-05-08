@@ -1,5 +1,11 @@
 import type { DiffRecord, PipelinePhase, PlanRecord, ReviewRecord, Thread } from '@shipcode/shared';
-import { formatCost, formatTokenCount, githubCompareUrl, PIPELINE_PHASE } from '@shipcode/shared';
+import {
+  clampError,
+  formatCost,
+  formatTokenCount,
+  githubCompareUrl,
+  PIPELINE_PHASE,
+} from '@shipcode/shared';
 import { PhaseChip } from '@shipcode/ui';
 import { Badge, Button, cn, Tabs, TabsContent, TabsList, TabsTrigger } from '@shipshitdev/ui';
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
@@ -170,8 +176,7 @@ export function AutomationRunDetail() {
       queryClient.invalidateQueries({ queryKey: ['thread', threadId] });
       queryClient.invalidateQueries({ queryKey: ['plan-history-automation', threadId] });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setApproveError(msg.split('\n')[0].slice(0, 280));
+      setApproveError(clampError(err));
     } finally {
       setIsSubmitting(false);
     }

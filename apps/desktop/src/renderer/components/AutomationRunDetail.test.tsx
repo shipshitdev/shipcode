@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import type { Thread } from '@shipcode/shared';
+import type { PlanRecord, Thread } from '@shipcode/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -53,6 +53,30 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     totalTokensCompletion: 0,
     totalCostUsd: 0,
     doneAt: null,
+    ...overrides,
+  };
+}
+
+function makePlan(overrides: Partial<PlanRecord> = {}): PlanRecord {
+  return {
+    id: 'plan-1',
+    threadId: 'thread-1',
+    version: 1,
+    rawOutput: 'raw plan',
+    status: 'pending_review',
+    createdAt: new Date().toISOString(),
+    structured: {
+      id: 'plan-1',
+      threadId: 'thread-1',
+      version: 1,
+      objective: 'Run automation',
+      files: [],
+      steps: [],
+      acceptanceCriteria: [],
+      outOfScope: [],
+      estimatedComplexity: 'low',
+      dependencies: [],
+    },
     ...overrides,
   };
 }
@@ -142,6 +166,28 @@ describe('AutomationRunDetail', () => {
     renderWithProviders();
 
     expect(await screen.findByText('No prompt recorded.')).toBeInTheDocument();
+  });
+
+  it('clamps approval errors with the shared renderer error helper', async () => {
+    const rawError = `${'Approval is already confirmed. '.repeat(20)}\nWaiting for an execution slot.`;
+    const expectedError = `${rawError.split('\n')[0].slice(0, 279)}…`;
+
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'thread:get') return makeThread({ status: 'awaiting_approval' });
+      if (channel === 'plan:list') return [makePlan()];
+      if (channel === 'diff:list') return [];
+      if (channel === 'automations:run-history') return [];
+      if (channel === 'review:list-by-plans') return {};
+      if (channel === 'pipeline:approve') throw new Error(rawError);
+      return null;
+    });
+
+    renderWithProviders();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm' }));
+
+    expect(await screen.findByText(expectedError)).toBeInTheDocument();
+    expect(screen.queryByText(/Waiting for an execution slot\./)).not.toBeInTheDocument();
   });
 
   it('closes the run detail from the back button and Escape key', async () => {

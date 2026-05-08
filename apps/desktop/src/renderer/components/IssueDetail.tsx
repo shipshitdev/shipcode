@@ -18,6 +18,7 @@ import type {
   VerificationRecord,
 } from '@shipcode/shared';
 import {
+  clampError,
   deriveGithubIssueUrl,
   displayAgentLabel,
   formatIssueBranch,
@@ -641,8 +642,7 @@ export function IssueDetail() {
       await window.shipcode.invoke('pipeline:approve', { threadId: activeThreadId });
       await refreshIssueState();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setApproveError(msg.split('\n')[0].slice(0, 280));
+      setApproveError(clampError(err));
     } finally {
       setIsSubmitting(false);
     }

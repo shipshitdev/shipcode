@@ -816,6 +816,8 @@ describe('IssueDetail', () => {
   it('shows a clear approval error when the approve action races with a queued execution state', async () => {
     const thread = makeThread();
     const plan = makePlan();
+    const rawError = `${'Approval is already confirmed. '.repeat(20)}\nWaiting for an execution slot.`;
+    const expectedError = `${rawError.split('\n')[0].slice(0, 279)}…`;
 
     useAppStore.setState({
       activeThreadId: thread.id,
@@ -828,7 +830,7 @@ describe('IssueDetail', () => {
       if (channel === 'plan:list') return [plan];
       if (channel === 'review:list-by-plans') return {};
       if (channel === 'pipeline:approve') {
-        throw new Error('Approval is already confirmed. Waiting for an execution slot.');
+        throw new Error(rawError);
       }
       return args ?? null;
     });
@@ -837,9 +839,8 @@ describe('IssueDetail', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Confirm' }));
 
-    expect(
-      await screen.findByText(/Approval is already confirmed\. Waiting for an execution slot\./),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(expectedError)).toBeInTheDocument();
+    expect(screen.queryByText(/Waiting for an execution slot\./)).not.toBeInTheDocument();
   });
 
   it('shows waiting-for-execution messaging after a plan is already approved', async () => {

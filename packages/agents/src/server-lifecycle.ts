@@ -1,4 +1,4 @@
-import { createServer, type AddressInfo } from 'node:net';
+import { type AddressInfo, createServer } from 'node:net';
 import type { RuntimeQaServerConfig } from '@shipcode/shared';
 import type { ProcessManager } from './process-manager';
 
@@ -26,11 +26,7 @@ function substitutePort(urlStr: string, port: number): string {
   return parsed.toString().replace(/\/$/, '');
 }
 
-async function pollHttp(
-  url: string,
-  timeoutMs: number,
-  signal: AbortSignal,
-): Promise<void> {
+async function pollHttp(url: string, timeoutMs: number, signal: AbortSignal): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   let delay = 100;
   const maxDelay = 2000;

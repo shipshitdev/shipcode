@@ -191,13 +191,25 @@
 
 /* Terminal drawer enter/exit */
 @keyframes terminal-enter {
-  from { transform: translateY(100%); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 @keyframes terminal-exit {
-  from { transform: translateY(0); opacity: 1; }
-  to { transform: translateY(100%); opacity: 0; }
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(100%);
+    opacity: 0;
+  }
 }
 
 @utility animate-terminal-enter {
@@ -210,8 +222,14 @@
 
 /* Settings section content fade-in */
 @keyframes settings-section-enter {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @utility animate-settings-enter {
@@ -220,8 +238,12 @@
 
 /* View crossfade on navigation */
 @keyframes view-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @utility animate-view-enter {
@@ -230,13 +252,25 @@
 
 /* Notification toast enter/exit — slide from right */
 @keyframes toast-enter {
-  from { opacity: 0; transform: translateX(100%) scale(0.95); }
-  to { opacity: 1; transform: translateX(0) scale(1); }
+  from {
+    opacity: 0;
+    transform: translateX(100%) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
 }
 
 @keyframes toast-exit {
-  from { opacity: 1; transform: translateX(0) scale(1); }
-  to { opacity: 0; transform: translateX(100%) scale(0.95); }
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%) scale(0.95);
+  }
 }
 
 @utility animate-toast-enter {

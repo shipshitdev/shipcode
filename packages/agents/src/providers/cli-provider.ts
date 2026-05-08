@@ -169,6 +169,21 @@ function resolveToolPolicy(req: ProviderRequest) {
   };
 }
 
+function injectThinkingTokens(args: string[], req: ProviderRequest): void {
+  const tokens = mapReasoningEffortToClaudeThinkingTokens(
+    req.phaseHints?.reasoningEffort,
+    req.modelHint,
+  );
+  if (tokens !== null) {
+    args.splice(
+      args.indexOf('--dangerously-skip-permissions'),
+      0,
+      '--max-thinking-tokens',
+      String(tokens),
+    );
+  }
+}
+
 /** Build claude CLI args/stdin for a given phase. */
 function buildClaudeCommand(req: ProviderRequest): CliCommand {
   const modelArgs = req.modelHint ? ['--model', req.modelHint] : [];
@@ -179,10 +194,6 @@ function buildClaudeCommand(req: ProviderRequest): CliCommand {
     case 'revision':
     case 'verify': {
       const maxTurns = String(req.phaseHints?.maxTurns ?? 1);
-      const thinkingTokens = mapReasoningEffortToClaudeThinkingTokens(
-        req.phaseHints?.reasoningEffort,
-        req.modelHint,
-      );
       const args = [
         '-p',
         ...modelArgs,
@@ -195,14 +206,7 @@ function buildClaudeCommand(req: ProviderRequest): CliCommand {
       ];
       if (disallowedTools) args.push('--disallowedTools', disallowedTools.join(','));
       if (allowedTools) args.push('--allowedTools', allowedTools.join(','));
-      if (thinkingTokens !== null) {
-        args.splice(
-          args.indexOf('--dangerously-skip-permissions'),
-          0,
-          '--max-thinking-tokens',
-          String(thinkingTokens),
-        );
-      }
+      injectThinkingTokens(args, req);
       return { args, stdin: req.prompt };
     }
     case 'execute': {
@@ -210,18 +214,7 @@ function buildClaudeCommand(req: ProviderRequest): CliCommand {
       if (allowedTools) execArgs.push('--allowedTools', allowedTools.join(','));
       if (disallowedTools) execArgs.push('--disallowedTools', disallowedTools.join(','));
       execArgs.push('--dangerously-skip-permissions');
-      const execThinking = mapReasoningEffortToClaudeThinkingTokens(
-        req.phaseHints?.reasoningEffort,
-        req.modelHint,
-      );
-      if (execThinking !== null) {
-        execArgs.splice(
-          execArgs.indexOf('--dangerously-skip-permissions'),
-          0,
-          '--max-thinking-tokens',
-          String(execThinking),
-        );
-      }
+      injectThinkingTokens(execArgs, req);
       return { args: execArgs, stdin: req.prompt };
     }
     case 'review': // Claude does not review in the current pipeline (codex does).

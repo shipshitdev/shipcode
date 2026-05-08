@@ -252,7 +252,9 @@ export function CostsView() {
                   </div>
                   <div className="space-y-1">
                     <p className="text-sm font-medium text-muted">No cost data yet</p>
-                    <p className="text-xs text-muted/50">Run a pipeline to see cost breakdowns here.</p>
+                    <p className="text-xs text-muted/50">
+                      Run a pipeline to see cost breakdowns here.
+                    </p>
                   </div>
                 </div>
               ) : (
