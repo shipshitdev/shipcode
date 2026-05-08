@@ -20,6 +20,12 @@ export { ReviewViewer } from '@/ReviewViewer';
 export type { SettingsSectionProps } from '@/SettingsSection';
 export { SettingsSection } from '@/SettingsSection';
 export { SideBySideDiffViewer } from '@/SideBySideDiffViewer';
+export type {
+  StartupProgressProps,
+  StartupProgressStep,
+  StartupProgressStepStatus,
+} from '@/StartupProgress';
+export { StartupProgress } from '@/StartupProgress';
 export {
   languageFromFilePath,
   SyntaxHighlightedCode,

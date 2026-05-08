@@ -15,6 +15,7 @@ import { PipelineStatus } from '@/PipelineStatus';
 import { PlanViewer } from '@/PlanViewer';
 import { ReviewViewer } from '@/ReviewViewer';
 import { SettingsSection } from '@/SettingsSection';
+import { StartupProgress } from '@/StartupProgress';
 import { TaskGraphViewer } from '@/TaskGraphViewer';
 import { VerificationViewer } from '@/VerificationViewer';
 
@@ -247,6 +248,31 @@ describe('root UI components', () => {
     expect(onPhaseClick).toHaveBeenNthCalledWith(1, 'planning');
     expect(onPhaseClick).toHaveBeenNthCalledWith(2, 'clarifying');
     expect(onPhaseClick).toHaveBeenNthCalledWith(3, 'reviewing');
+    view.cleanup();
+  });
+
+  it('renders startup progress with status-specific labels', () => {
+    const view = renderIntoDom(
+      <StartupProgress
+        title="Starting ShipCode"
+        subtitle="Preparing the desktop app."
+        steps={[
+          { id: 'bridge', label: 'Connect desktop bridge', status: 'complete' },
+          {
+            id: 'settings',
+            label: 'Load settings',
+            detail: 'Reading app preferences',
+            status: 'active',
+          },
+          { id: 'projects', label: 'Restore workspace', status: 'pending' },
+        ]}
+      />,
+    );
+
+    expect(view.container.textContent).toContain('Starting ShipCode');
+    expect(view.container.textContent).toContain('Connect desktop bridge');
+    expect(view.container.textContent).toContain('Reading app preferences');
+    expect(view.container.querySelector('[aria-busy="true"]')).not.toBeNull();
     view.cleanup();
   });
 

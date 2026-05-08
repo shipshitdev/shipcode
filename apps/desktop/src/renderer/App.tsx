@@ -1,14 +1,14 @@
 import type { AppSettings, Project, TelemetryStatus } from '@shipcode/shared';
 import { CURRENT_ONBOARDING_VERSION } from '@shipcode/shared';
-import { TooltipProvider } from '@shipcode/ui';
+import { StartupProgress, type StartupProgressStep, TooltipProvider } from '@shipcode/ui';
 import { Button, Skeleton } from '@shipshitdev/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { lazy, Suspense, useEffect } from 'react';
 import { AutomationRunDetail } from './components/AutomationRunDetail';
 import { CommandPalette } from './components/CommandPalette';
+import { GenericToaster } from './components/GenericToaster';
 import { HealthBanner } from './components/HealthBanner';
 import { IssueDetail } from './components/IssueDetail';
-import { GenericToaster } from './components/GenericToaster';
 import { NotificationToaster } from './components/NotificationToaster';
 import { OverviewView } from './components/OverviewView';
 import { ProjectMissingView } from './components/ProjectMissingView';
@@ -49,6 +49,51 @@ function ViewLoadingFallback() {
         <Skeleton className="h-32 rounded-xl" />
       </div>
     </div>
+  );
+}
+
+function AppStartupProgress({
+  bridgeReady,
+  settingsReady,
+  telemetryReady,
+}: {
+  bridgeReady: boolean;
+  settingsReady: boolean;
+  telemetryReady: boolean;
+}) {
+  const steps: StartupProgressStep[] = [
+    {
+      id: 'bridge',
+      label: 'Connect desktop bridge',
+      detail: bridgeReady ? 'Preload bridge is available.' : 'Waiting for Electron preload.',
+      status: bridgeReady ? 'complete' : 'error',
+    },
+    {
+      id: 'settings',
+      label: 'Load settings',
+      detail: settingsReady ? 'Preferences loaded.' : 'Reading local app settings.',
+      status: settingsReady ? 'complete' : bridgeReady ? 'active' : 'pending',
+    },
+    {
+      id: 'telemetry',
+      label: 'Prepare error reporting',
+      detail: telemetryReady ? 'Telemetry preference resolved.' : 'Checking local consent state.',
+      status: telemetryReady ? 'complete' : settingsReady ? 'active' : 'pending',
+    },
+    {
+      id: 'workspace',
+      label: 'Restore workspace',
+      detail: settingsReady ? 'Opening the last selected view.' : 'Waiting for settings.',
+      status: settingsReady ? 'active' : 'pending',
+    },
+  ];
+
+  return (
+    <StartupProgress
+      title="Starting ShipCode"
+      subtitle={bridgeReady ? 'Loading your workspace.' : 'The desktop bridge is not ready.'}
+      steps={steps}
+    />
   );
 }
 
@@ -196,6 +241,16 @@ export function App() {
 
   if (!settings) {
     const isBridgeMissing = !window.shipcode?.invoke;
+
+    if (!isBridgeMissing) {
+      return (
+        <AppStartupProgress
+          bridgeReady={!isBridgeMissing}
+          settingsReady={!!settings}
+          telemetryReady={!!telemetryStatus}
+        />
+      );
+    }
 
     return (
       <div

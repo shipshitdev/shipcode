@@ -1,4 +1,5 @@
 import type { CliHealth, GhAuthStatus, SystemHealth } from '@shipcode/shared';
+import { StartupProgress, type StartupProgressStep } from '@shipcode/ui';
 import { Badge, Button } from '@shipshitdev/ui';
 import { LoadingButtonContent } from '@shipshitdev/ui/common';
 import { useMutation } from '@tanstack/react-query';
@@ -48,7 +49,9 @@ export function StepAuthCheck({ authResult, onRecheck, isChecking }: Props) {
         proceed.
       </p>
 
-      {authResult ? (
+      {!authResult ? (
+        <AuthCheckProgress />
+      ) : (
         <div className="flex flex-col gap-2 mb-4">
           <CliStatus label="Claude CLI" health={authResult.claude} />
           <CliStatus label="Codex CLI" health={authResult.codex} />
@@ -70,8 +73,6 @@ export function StepAuthCheck({ authResult, onRecheck, isChecking }: Props) {
             )}
           </div>
         </div>
-      ) : (
-        <div className="py-6 text-center text-muted">Checking CLI status...</div>
       )}
 
       {authResult && aiAuthCount === 1 && (
@@ -102,6 +103,38 @@ export function StepAuthCheck({ authResult, onRecheck, isChecking }: Props) {
         </Button>
       </div>
     </div>
+  );
+}
+
+function AuthCheckProgress() {
+  const steps: StartupProgressStep[] = [
+    {
+      id: 'claude',
+      label: 'Check Claude CLI login',
+      detail: 'Verifying the CLI is installed and authenticated.',
+      status: 'active',
+    },
+    {
+      id: 'codex',
+      label: 'Check Codex CLI login',
+      detail: 'Verifying the CLI is installed and authenticated.',
+      status: 'active',
+    },
+    {
+      id: 'github',
+      label: 'Check GitHub CLI login',
+      detail: 'Verifying gh auth and project scope.',
+      status: 'active',
+    },
+  ];
+
+  return (
+    <StartupProgress
+      title="Checking login state"
+      subtitle="ShipCode uses your local CLI sessions."
+      steps={steps}
+      className="min-h-0 justify-start bg-transparent px-0 py-1"
+    />
   );
 }
 

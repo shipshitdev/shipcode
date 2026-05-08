@@ -88,6 +88,7 @@ import { notifyIssueGraphPipelinePhaseChange } from './ipc/register-issue-graph-
 import { NotificationService } from './notification-service';
 import { createElectronEmitter } from './pipeline-bridge';
 import { PipelineScheduler } from './pipeline-scheduler';
+import { SplashScreen } from './splash-screen';
 import { UpdateService } from './update-service';
 
 let mainWindow: BrowserWindow | null = null;
@@ -97,6 +98,7 @@ let threadQueries: ThreadQueries | null = null;
 let updateService: UpdateService | null = null;
 let confirmQuit = false;
 let quitConfirmationInFlight = false;
+const splashScreen = new SplashScreen();
 
 function formatActivePipelineNames(
   active: Array<{ threadId: string }>,
@@ -201,6 +203,9 @@ const RENDERER_URL = process.env.VITE_DEV_SERVER_URL;
 const RENDERER_HTML = path.join(DIST, 'index.html');
 
 function createWindow() {
+  splashScreen.create();
+  splashScreen.update('window', 'active', 'Creating the main desktop window.');
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -219,14 +224,19 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
+    splashScreen.close();
   });
 
   // Initialize database
+  splashScreen.completeThrough('window');
+  splashScreen.update('database', 'active', 'Opening ShipCode local data.');
   const dataDir = path.join(app.getPath('userData'), 'data');
   fs.mkdirSync(dataDir, { recursive: true });
   const db = getDatabase(dataDir);
 
   // Initialize services
+  splashScreen.completeThrough('database');
+  splashScreen.update('services', 'active', 'Starting notifications, agents, and telemetry.');
   processManager = new ProcessManager();
   const queries = {
     projects: new ProjectQueries(db),
@@ -274,6 +284,8 @@ function createWindow() {
   const chatNotificationService = new ChatNotificationService(queries.settings, queries.projects);
 
   // Initialize pipeline state machine.
+  splashScreen.completeThrough('services');
+  splashScreen.update('pipeline', 'active', 'Restoring queues and pipeline state.');
   // onPipelineTerminal is set after pipeline is created (late-binding).
   let onPipelineTerminal: ((event: { threadId: string; phase: PipelinePhase }) => void) | undefined;
   let onExecutionSlotFreed: (() => void) | undefined;
@@ -377,6 +389,7 @@ function createWindow() {
   // Startup: promote any queued items from a previous session.
   setTimeout(() => {
     const settings = queries.settings.get();
+    splashScreen.update('pipeline', 'active', 'Promoting queued work from the last session.');
     for (let i = 0; i < settings.maxConcurrentPipelines; i++) {
       onPipelineTerminal?.({ threadId: '', phase: PIPELINE_PHASE.idle });
     }
@@ -393,6 +406,8 @@ function createWindow() {
   updateService.start();
 
   // Register IPC handlers
+  splashScreen.completeThrough('pipeline');
+  splashScreen.update('ipc', 'active', 'Registering renderer IPC handlers.');
   registerIpcHandlers(
     ipcMain,
     requireMainWindow(),
@@ -464,12 +479,18 @@ function createWindow() {
   });
 
   // Load renderer
+  splashScreen.completeThrough('ipc');
+  splashScreen.update('renderer', 'active', 'Loading the ShipCode workspace.');
   if (RENDERER_URL) {
     mainWindow.loadURL(RENDERER_URL);
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
     mainWindow.loadFile(RENDERER_HTML);
   }
+
+  mainWindow.webContents.once('did-fail-load', (_event, _code, description) => {
+    splashScreen.update('renderer', 'error', description || 'Renderer failed to load.');
+  });
 
   mainWindow.on('close', async (event) => {
     if (confirmQuit) return;

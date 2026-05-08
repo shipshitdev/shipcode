@@ -1,0 +1,215 @@
+import type { ProjectIssueGraph } from '@shipcode/shared';
+import { ISSUE_PIPELINE_STATUS, PIPELINE_PHASE } from '@shipcode/shared';
+import type { IpcMain } from 'electron';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const handlers = new Map<string, (...args: unknown[]) => unknown>();
+const { startOrQueueMock } = vi.hoisted(() => ({
+  startOrQueueMock: vi.fn(async () => undefined),
+}));
+
+vi.mock('../pipeline-scheduler', () => ({
+  PipelineScheduler: vi.fn().mockImplementation(function MockPipelineScheduler() {
+    return {
+      startOrQueue: startOrQueueMock,
+    };
+  } as never),
+}));
+
+const { notifyIssueGraphPipelinePhaseChange, refreshIssueBodyEdges, registerIssueGraphHandlers } =
+  await import('./register-issue-graph-handlers');
+
+function makeGraph(): ProjectIssueGraph {
+  return {
+    projectId: 'project-1',
+    nodes: [
+      {
+        issueId: 'issue-1',
+        projectId: 'project-1',
+        issueNumber: 1,
+        title: 'One',
+        state: 'open',
+        pipelineStatus: ISSUE_PIPELINE_STATUS.pending,
+        threadId: 'thread-1',
+      },
+      {
+        issueId: 'issue-2',
+        projectId: 'project-1',
+        issueNumber: 2,
+        title: 'Two',
+        state: 'open',
+        pipelineStatus: ISSUE_PIPELINE_STATUS.pending,
+        threadId: 'thread-2',
+      },
+    ],
+    edges: [
+      {
+        id: 'edge-1',
+        projectId: 'project-1',
+        sourceIssueId: 'issue-1',
+        targetIssueId: 'issue-2',
+        sourceIssueNumber: 1,
+        targetIssueNumber: 2,
+        edgeType: 'blocks',
+        origin: 'manual',
+        createdAt: '2026-05-08T10:00:00.000Z',
+        updatedAt: '2026-05-08T10:00:00.000Z',
+      },
+    ],
+  };
+}
+
+function makeDeps(graph = makeGraph()) {
+  const issues = [
+    {
+      id: 'issue-1',
+      projectId: 'project-1',
+      issueNumber: 1,
+      pipelineStatus: ISSUE_PIPELINE_STATUS.completed,
+      threadId: 'thread-1',
+    },
+    {
+      id: 'issue-2',
+      projectId: 'project-1',
+      issueNumber: 2,
+      pipelineStatus: ISSUE_PIPELINE_STATUS.pending,
+      threadId: 'thread-2',
+    },
+  ];
+
+  return {
+    ipcMain: {
+      handle: vi.fn((channel: string, listener: (...args: unknown[]) => unknown) => {
+        handlers.set(channel, listener);
+      }),
+    } as unknown as IpcMain,
+    mainWindow: {
+      isDestroyed: vi.fn(() => false),
+      webContents: {
+        isDestroyed: vi.fn(() => false),
+        send: vi.fn(),
+      },
+    },
+    queries: {
+      issueEdges: {
+        loadProjectGraph: vi.fn(() => graph),
+        createManualEdge: vi.fn(),
+        deleteEdge: vi.fn(),
+      },
+      githubIssues: {
+        list: vi.fn(() => issues),
+        getByThreadId: vi.fn(
+          (threadId: string) => issues.find((issue) => issue.threadId === threadId) ?? null,
+        ),
+      },
+    },
+    pipeline: {},
+    emitter: {},
+  };
+}
+
+describe('registerIssueGraphHandlers', () => {
+  beforeEach(() => {
+    handlers.clear();
+    startOrQueueMock.mockClear();
+  });
+
+  it('registers graph CRUD and preview handlers', async () => {
+    const deps = makeDeps();
+    registerIssueGraphHandlers(deps as never);
+
+    expect(handlers.get('issue-graph:get')?.(undefined, { projectId: 'project-1' })).toEqual(
+      makeGraph(),
+    );
+
+    expect(() =>
+      handlers.get('issue-graph:create-edge')?.(undefined, {
+        projectId: 'project-1',
+        sourceIssueId: 'issue-1',
+        targetIssueId: 'issue-1',
+      }),
+    ).toThrow('Cannot create a self edge');
+
+    handlers.get('issue-graph:create-edge')?.(undefined, {
+      projectId: 'project-1',
+      sourceIssueId: 'issue-1',
+      targetIssueId: 'issue-2',
+      edgeType: 'reference',
+    });
+    expect(deps.queries.issueEdges.createManualEdge).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      sourceIssueId: 'issue-1',
+      targetIssueId: 'issue-2',
+      edgeType: 'reference',
+    });
+
+    handlers.get('issue-graph:delete-edge')?.(undefined, {
+      projectId: 'project-1',
+      edgeId: 'edge-1',
+    });
+    expect(deps.queries.issueEdges.deleteEdge).toHaveBeenCalledWith('edge-1');
+
+    expect(
+      handlers.get('issue-graph:preview-run')?.(undefined, {
+        projectId: 'project-1',
+        selectedIssueIds: ['issue-1', 'issue-2'],
+      }),
+    ).toMatchObject({ issueOrder: ['issue-1', 'issue-2'] });
+  });
+
+  it('confirms grouped runs and starts newly unblocked issues on phase changes', async () => {
+    const deps = makeDeps();
+    registerIssueGraphHandlers(deps as never);
+
+    const confirm = handlers.get('issue-graph:confirm-run');
+    if (!confirm) throw new Error('issue-graph:confirm-run handler missing');
+
+    await expect(
+      confirm(undefined, { projectId: 'project-1', selectedIssueIds: [] }),
+    ).rejects.toThrow('Select at least one issue');
+
+    await expect(
+      confirm(undefined, { projectId: 'project-1', selectedIssueIds: ['issue-1', 'issue-2'] }),
+    ).resolves.toMatchObject({
+      preview: { issueOrder: ['issue-1', 'issue-2'] },
+    });
+    expect(startOrQueueMock).toHaveBeenCalledWith('project-1', 1);
+
+    notifyIssueGraphPipelinePhaseChange({
+      threadId: 'thread-1',
+      phase: PIPELINE_PHASE.completed,
+    });
+    expect(startOrQueueMock).toHaveBeenCalledWith('project-1', 2);
+
+    notifyIssueGraphPipelinePhaseChange({
+      threadId: 'thread-2',
+      phase: PIPELINE_PHASE.failed,
+    });
+    notifyIssueGraphPipelinePhaseChange({ threadId: 'thread-3', phase: PIPELINE_PHASE.plan });
+  });
+
+  it('refreshes body-derived dependency edges and skips unknown issue references', () => {
+    const issueEdges = {
+      replaceBodyEdges: vi.fn(),
+    };
+    const issuesByNumber = new Map([
+      [1, { id: 'issue-1' }],
+      [2, { id: 'issue-2' }],
+    ]);
+
+    refreshIssueBodyEdges(
+      issueEdges as never,
+      {
+        id: 'issue-1',
+        projectId: 'project-1',
+        issueNumber: 1,
+        body: 'Depends on #2 and blocks #99.',
+      },
+      issuesByNumber,
+    );
+
+    expect(issueEdges.replaceBodyEdges).toHaveBeenCalledWith('project-1', 'issue-1', [
+      { sourceIssueId: 'issue-2', targetIssueId: 'issue-1', edgeType: 'depends_on' },
+    ]);
+  });
+});
