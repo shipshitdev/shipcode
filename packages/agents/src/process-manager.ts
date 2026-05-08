@@ -6,11 +6,11 @@ import { assertWorkspaceSafe } from '@shipcode/shared/worktree-path';
 import { nanoid } from 'nanoid';
 import * as pty from 'node-pty';
 
-type AllowlistedAgentCommand = Extract<AgentType, 'claude' | 'codex' | 'gemini' | 'gh'>;
-type TrustedShellCommand = (typeof TRUSTED_SHELL_COMMANDS)[number];
-type ProcessManagerCommand = AllowlistedAgentCommand | TrustedShellCommand;
+export type ProcessManagerAgentCommand = Extract<AgentType, 'claude' | 'codex' | 'gemini' | 'gh'>;
+export type ProcessManagerShellCommand = (typeof TRUSTED_SHELL_COMMANDS)[number];
+export type ProcessManagerCommand = ProcessManagerAgentCommand | ProcessManagerShellCommand;
 
-const ALLOWED_AGENT_COMMANDS = new Set<AllowlistedAgentCommand>([
+const ALLOWED_AGENT_COMMANDS = new Set<ProcessManagerAgentCommand>([
   'claude',
   'codex',
   'gemini',
@@ -56,12 +56,12 @@ function filterEnv(env: Record<string, string>): Record<string, string> {
   return filtered;
 }
 
-function isTrustedShell(command: string): command is TrustedShellCommand {
+function isTrustedShell(command: string): command is ProcessManagerShellCommand {
   return TRUSTED_SHELLS.has(command);
 }
 
-function isAllowlistedAgentCommand(command: string): command is AllowlistedAgentCommand {
-  return ALLOWED_AGENT_COMMANDS.has(command as AllowlistedAgentCommand);
+function isAllowlistedAgentCommand(command: string): command is ProcessManagerAgentCommand {
+  return ALLOWED_AGENT_COMMANDS.has(command as ProcessManagerAgentCommand);
 }
 
 function assertProcessManagerCommand(command: string): asserts command is ProcessManagerCommand {
@@ -79,6 +79,11 @@ function mergeSafeEnv(
     env[key] = val;
   }
   return env;
+}
+
+function assertWorkspacePolicy(cwd: string, options: ManagedProcessSpawnOptions): void {
+  if (options.workspaceRoot === undefined) return;
+  assertWorkspaceSafe({ workspacePath: cwd, workspaceRoot: options.workspaceRoot });
 }
 
 function getShellEnv(): Record<string, string> {
@@ -175,12 +180,10 @@ export class ProcessManager extends EventEmitter {
     const outputMode = options.outputMode ?? 'normalized';
 
     // Defense in depth: when the caller declares a workspaceRoot policy,
-    // assert the cwd before pty.spawn. A mismatch here means the pipeline
+    // assert the cwd before spawning. A mismatch here means the pipeline
     // is about to run an agent in the wrong directory — fail loud, never
     // continue.
-    if (options.workspaceRoot !== undefined) {
-      assertWorkspaceSafe({ workspacePath: cwd, workspaceRoot: options.workspaceRoot });
-    }
+    assertWorkspacePolicy(cwd, options);
 
     if (!cachedEnv) {
       cachedEnv = getShellEnv();
@@ -264,9 +267,14 @@ export class ProcessManager extends EventEmitter {
   }
 
   /**
-   * Spawn an allowlisted CLI with stdin piped from `input`. This is the
-   * non-PTY subprocess surface for one-shot agent runs that must pass large
-   * prompts via stdin instead of argv.
+   * Spawn an allowlisted CLI with stdin piped from `input`.
+   *
+   * Contract for CLI providers such as Gemini:
+   * - validates `cwd` with the same `workspaceRoot` policy as `spawn`
+   * - resolves only ProcessManager-allowlisted agent commands or trusted shells
+   * - merges a filtered login-shell env with sanitized `extraEnv`
+   * - tracks `stdinMode: 'pipe'`, streams stdout and stderr as output, emits
+   *   one exit event, and drops completed processes from the registry
    */
   spawnWithStdin(
     type: AgentType,
@@ -280,9 +288,7 @@ export class ProcessManager extends EventEmitter {
     const id = nanoid();
     const outputMode = options.outputMode ?? 'normalized';
 
-    if (options.workspaceRoot !== undefined) {
-      assertWorkspaceSafe({ workspacePath: cwd, workspaceRoot: options.workspaceRoot });
-    }
+    assertWorkspacePolicy(cwd, options);
 
     if (!cachedEnv) {
       cachedEnv = getShellEnv();
