@@ -209,6 +209,8 @@ const threadDefaults = {
   kind: 'pipeline' as const,
   failurePhase: null,
   failureCount: 0,
+  pausedPhase: null,
+  pausedAt: null,
 };
 
 const threads: Thread[] = [

@@ -56,6 +56,8 @@ import {
   CircleDot,
   Copy,
   GripVertical,
+  Play,
+  Square,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { STABLE_APP_STATE_STALE_TIME } from '../query-stale-times';
@@ -672,6 +674,28 @@ export function IssueDetail() {
     }
   };
 
+  const handlePause = async () => {
+    if (!activeThreadId) return;
+    setIsSubmitting(true);
+    try {
+      await window.shipcode.invoke('pipeline:pause', { threadId: activeThreadId });
+      await refreshIssueState();
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResume = async () => {
+    if (!activeThreadId) return;
+    setIsSubmitting(true);
+    try {
+      await window.shipcode.invoke('pipeline:resume', { threadId: activeThreadId });
+      await refreshIssueState();
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleSubmitClarification = async (answers: ClarificationAnswer[]) => {
     if (!activeThreadId || !thread?.clarificationRequest) return;
     setIsSubmitting(true);
@@ -687,6 +711,7 @@ export function IssueDetail() {
   };
 
   const phaseIsActive = ACTIVE_PHASES.includes(threadPhase as PipelinePhase);
+  const phaseIsPaused = threadPhase === PIPELINE_PHASE.paused;
 
   const handlePhaseAgentChange = async (
     phase: 'planner' | 'reviewer' | 'executor' | 'verifier',
@@ -1172,13 +1197,33 @@ export function IssueDetail() {
       <Button
         variant="ghost"
         size="xs"
-        className="absolute inset-0 h-auto rounded px-1.5 py-0.5 text-[10px] font-medium text-danger/70 opacity-0 transition-opacity hover:bg-danger/10 hover:text-danger group-hover:opacity-100"
-        title="Cancel pipeline"
-        onClick={handleCancel}
+        className="absolute inset-0 h-auto rounded px-1.5 py-0.5 text-[10px] font-medium text-warning/80 opacity-0 transition-opacity hover:bg-warning/10 hover:text-warning group-hover:opacity-100"
+        title="Pause task"
+        aria-label="Pause task"
+        onClick={handlePause}
         disabled={isSubmitting}
       >
         <LoadingButtonContent loading={isSubmitting} className="gap-1" spinnerSize={10}>
-          CANCEL
+          <Square size={10} />
+        </LoadingButtonContent>
+      </Button>
+    </span>
+  ) : phaseIsPaused ? (
+    <span className="group relative inline-flex items-center">
+      <span className="pointer-events-none transition-opacity group-hover:opacity-0">
+        {issueStatusChip}
+      </span>
+      <Button
+        variant="ghost"
+        size="xs"
+        className="absolute inset-0 h-auto rounded px-1.5 py-0.5 text-[10px] font-medium text-agent/70 opacity-0 transition-opacity hover:bg-agent/10 hover:text-agent group-hover:opacity-100"
+        title="Resume task"
+        aria-label="Resume task"
+        onClick={handleResume}
+        disabled={isSubmitting}
+      >
+        <LoadingButtonContent loading={isSubmitting} className="gap-1" spinnerSize={10}>
+          <Play size={10} />
         </LoadingButtonContent>
       </Button>
     </span>

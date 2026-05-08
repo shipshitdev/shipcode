@@ -1,11 +1,17 @@
 // @vitest-environment jsdom
 
-import { formatRelativeTime, type NotificationRecord } from '@shipcode/shared';
+import {
+  formatRelativeTime,
+  type GitHubIssueCacheRecord,
+  type NotificationRecord,
+  type Thread,
+} from '@shipcode/shared';
 import { TooltipProvider } from '@shipcode/ui';
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useAppStore } from '../stores/app-store';
 import { InboxView } from './InboxView';
 
 function renderWithProviders() {
@@ -25,6 +31,52 @@ function renderWithProviders() {
       </TooltipProvider>
     </QueryClientProvider>,
   );
+}
+
+function makeIssue(overrides: Partial<GitHubIssueCacheRecord> = {}): GitHubIssueCacheRecord {
+  return {
+    id: 'issue-1',
+    projectId: 'project-1',
+    issueNumber: 42,
+    title: 'Fallback issue',
+    body: 'Issue body',
+    labels: [],
+    assignee: null,
+    state: 'open',
+    pipelineStatus: 'todo',
+    threadId: 'current-thread',
+    claimedAt: null,
+    claimedBy: null,
+    lastPhaseUpdate: null,
+    lastStatusLabel: null,
+    plannerModelOverride: null,
+    reviewerModelOverride: null,
+    executorModelOverride: null,
+    verifierModelOverride: null,
+    plannerModelIdOverride: null,
+    reviewerModelIdOverride: null,
+    executorModelIdOverride: null,
+    verifierModelIdOverride: null,
+    plannerReasoningEffortOverride: null,
+    reviewerReasoningEffortOverride: null,
+    executorReasoningEffortOverride: null,
+    verifierReasoningEffortOverride: null,
+    revisionCountOverride: null,
+    linkedPrNumber: null,
+    linkedPrUrl: null,
+    linkedPrIsDraft: false,
+    ciBlocked: false,
+    failingChecks: [],
+    unresolvedReviewComments: [],
+    unresolvedReviewCommentCount: 0,
+    prLastSyncAt: null,
+    fetchedAt: '2026-04-21T10:00:00.000Z',
+    priorityRank: null,
+    priorityRaw: null,
+    priorityFetchedAt: null,
+    isQuickMode: false,
+    ...overrides,
+  };
 }
 
 describe('InboxView', () => {
@@ -56,6 +108,15 @@ describe('InboxView', () => {
   });
 
   beforeEach(() => {
+    useAppStore.setState({
+      activeProjectId: 'existing-project',
+      activeThreadId: null,
+      activeIssue: null,
+      activeAutomationThreadId: null,
+      viewMode: 'inbox',
+      githubIssues: [],
+      notifications: notifications,
+    });
     (window as typeof window & { shipcode: typeof window.shipcode }).shipcode = {
       invoke: vi.fn(async (channel: string) => {
         if (channel === 'notification:list') return notifications;
@@ -103,5 +164,70 @@ describe('InboxView', () => {
     expect(
       within(cells[2]).getByRole('button', { name: /Dismiss notification/i }),
     ).toBeInTheDocument();
+  });
+
+  it('opens the issue matched by github issue number when the notification has a stale thread id', async () => {
+    const fallbackIssue = makeIssue({ threadId: 'replacement-thread', issueNumber: 42 });
+    vi.mocked(window.shipcode.invoke).mockImplementation(async (channel: string) => {
+      if (channel === 'notification:list') return notifications;
+      if (channel === 'github:list-issues') return [fallbackIssue];
+      if (channel === 'thread:get') {
+        return { id: 'thread-1', projectId: 'project-1', githubIssueNumber: 42 } as Thread;
+      }
+      return null;
+    });
+
+    renderWithProviders();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Open issue: Approval needed/i }));
+
+    await waitFor(() => {
+      expect(useAppStore.getState().activeProjectId).toBe('project-1');
+      expect(useAppStore.getState().activeIssue?.id).toBe(fallbackIssue.id);
+      expect(useAppStore.getState().activeThreadId).toBe('replacement-thread');
+    });
+  });
+
+  it('opens an automation thread when no linked issue exists for the notification thread', async () => {
+    vi.mocked(window.shipcode.invoke).mockImplementation(async (channel: string) => {
+      if (channel === 'notification:list') return notifications;
+      if (channel === 'github:list-issues') return [];
+      if (channel === 'thread:get') {
+        return {
+          id: 'thread-2',
+          projectId: 'project-1',
+          automationId: 'automation-1',
+        } as Thread;
+      }
+      return null;
+    });
+
+    renderWithProviders();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Open issue: Execution failed/i }));
+
+    await waitFor(() => {
+      expect(useAppStore.getState().activeAutomationThreadId).toBe('thread-2');
+      expect(useAppStore.getState().activeIssue).toBeNull();
+      expect(useAppStore.getState().activeThreadId).toBe('thread-2');
+    });
+  });
+
+  it('restores the previous project and inbox view when issue navigation fails', async () => {
+    vi.mocked(window.shipcode.invoke).mockImplementation(async (channel: string) => {
+      if (channel === 'notification:list') return notifications;
+      if (channel === 'github:list-issues') throw new Error('network down');
+      return null;
+    });
+
+    renderWithProviders();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Open issue: Approval needed/i }));
+
+    await waitFor(() => {
+      expect(useAppStore.getState().activeProjectId).toBe('existing-project');
+      expect(useAppStore.getState().viewMode).toBe('inbox');
+      expect(useAppStore.getState().activeIssue).toBeNull();
+    });
   });
 });

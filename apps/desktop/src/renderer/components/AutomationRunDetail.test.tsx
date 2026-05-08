@@ -166,22 +166,42 @@ describe('AutomationRunDetail', () => {
     expect(useAppStore.getState().activeAutomationThreadId).toBeNull();
   });
 
-  it('cancels active runs through the pipeline cancel action', async () => {
+  it('pauses active runs through the persistent pipeline action', async () => {
     invokeMock.mockImplementation(async (channel: string) => {
       if (channel === 'thread:get') return makeThread({ status: 'executing' });
       if (channel === 'plan:list') return [];
       if (channel === 'diff:list') return [];
       if (channel === 'automations:run-history') return [];
-      if (channel === 'pipeline:cancel') return undefined;
+      if (channel === 'pipeline:pause') return undefined;
       return null;
     });
 
     renderWithProviders();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Pause task' }));
 
     await waitFor(() =>
-      expect(invokeMock).toHaveBeenCalledWith('pipeline:cancel', { threadId: 'thread-1' }),
+      expect(invokeMock).toHaveBeenCalledWith('pipeline:pause', { threadId: 'thread-1' }),
+    );
+  });
+
+  it('resumes paused runs through the persistent pipeline action', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'thread:get')
+        return makeThread({ status: 'paused', pausedPhase: 'executing' });
+      if (channel === 'plan:list') return [];
+      if (channel === 'diff:list') return [];
+      if (channel === 'automations:run-history') return [];
+      if (channel === 'pipeline:resume') return undefined;
+      return null;
+    });
+
+    renderWithProviders();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Resume task' }));
+
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith('pipeline:resume', { threadId: 'thread-1' }),
     );
   });
 

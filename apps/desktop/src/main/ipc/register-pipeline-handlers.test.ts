@@ -425,7 +425,7 @@ describe('registerPipelineHandlers', () => {
 
       await handler(undefined, { threadId: 'thread-1' });
 
-      expect(pipeline.startReview).toHaveBeenCalledWith(
+      expect(pipeline.startExecution).toHaveBeenCalledWith(
         'thread-1',
         expect.objectContaining({ objective: 'Test plan' }),
       );
@@ -729,7 +729,7 @@ describe('registerPipelineHandlers', () => {
 
       await handler(undefined, { threadId: 'thread-1' });
 
-      expect(pipeline.startExecution).toHaveBeenCalledWith(
+      expect(pipeline.startReview).toHaveBeenCalledWith(
         'thread-1',
         expect.objectContaining({ objective: 'Test plan' }),
       );
@@ -1253,7 +1253,7 @@ describe('registerPipelineHandlers', () => {
         'failed',
         expect.stringContaining('No worktree exists yet'),
       );
-      expect(pipeline.startExecution).toHaveBeenCalledWith(
+      expect(pipeline.startReview).toHaveBeenCalledWith(
         'thread-1',
         expect.objectContaining({ objective: 'Test plan' }),
       );
@@ -1284,7 +1284,7 @@ describe('registerPipelineHandlers', () => {
         'failed',
         expect.stringContaining('No checkpoint exists yet'),
       );
-      expect(pipeline.startReview).toHaveBeenCalledWith(
+      expect(pipeline.startExecution).toHaveBeenCalledWith(
         'thread-1',
         expect.objectContaining({ objective: 'Test plan' }),
       );

@@ -326,7 +326,28 @@ describe('useIpc terminal scoping', () => {
     expect(useAppStore.getState().terminalPaneMetaByThread['thread-live']?.state).toBe('exited');
   });
 
+  it('maps running agent state and ignores unsupported lifecycle states', () => {
+    renderHarness();
+
+    listeners.get('agent:state')?.({
+      processId: 'proc-running',
+      type: 'codex',
+      state: 'running',
+      threadId: 'thread-running',
+    });
+    listeners.get('agent:state')?.({
+      processId: 'proc-queued',
+      type: 'codex',
+      state: 'queued',
+      threadId: 'thread-queued',
+    });
+
+    expect(useAppStore.getState().processToThread['proc-running']).toBe('thread-running');
+    expect(useAppStore.getState().processToThread['proc-queued']).toBeUndefined();
+  });
+
   it('formats provider and model consistently for terminal headers', () => {
+    useAppStore.setState({ terminalThreadId: 'thread-terminal' });
     renderHarness();
 
     listeners.get('pipeline:model-resolved')?.({
@@ -335,8 +356,15 @@ describe('useIpc terminal scoping', () => {
       requestedModel: 'gpt-5.4',
       resolvedModel: 'codex',
     });
+    listeners.get('pipeline:model-resolved')?.({
+      threadId: null,
+      phase: 'execute',
+      requestedModel: 'claude-sonnet-4-5',
+      resolvedModel: 'claude',
+    });
 
     expect(useAppStore.getState().currentModels['thread-1']).toBe('Codex / GPT-5.4');
+    expect(useAppStore.getState().currentModels['thread-terminal']).toBe('claude-sonnet-4-5');
   });
 
   it('invalidates plan-history queries when phase event fires for the active thread', () => {
@@ -368,5 +396,109 @@ describe('useIpc terminal scoping', () => {
 
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['plan-history', 'thread-1'] });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['issue-plan-history'] });
+  });
+
+  it('maps agent output to threads and throttles last-activity updates', () => {
+    const nowSpy = vi.spyOn(Date, 'now');
+    nowSpy.mockReturnValueOnce(1_000).mockReturnValueOnce(1_000);
+
+    renderHarness();
+
+    listeners.get('agent:output')?.({
+      processId: 'proc-1',
+      threadId: 'thread-1',
+    });
+
+    expect(useAppStore.getState().processToThread['proc-1']).toBe('thread-1');
+    expect(useAppStore.getState().lastActivityByThread['thread-1']).toBe(1_000);
+
+    nowSpy.mockReturnValue(1_250);
+    listeners.get('agent:output')?.({
+      processId: 'proc-1',
+      threadId: 'thread-1',
+    });
+    expect(useAppStore.getState().lastActivityByThread['thread-1']).toBe(1_000);
+
+    nowSpy.mockReturnValueOnce(1_600).mockReturnValueOnce(1_600);
+    listeners.get('agent:output')?.({
+      processId: 'proc-1',
+      threadId: 'thread-1',
+    });
+    expect(useAppStore.getState().lastActivityByThread['thread-1']).toBe(1_600);
+  });
+
+  it('invalidates requested dashboard query groups and defaults to all groups', () => {
+    const { queryClient } = renderHarness();
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+
+    listeners.get('dashboard:invalidate')?.({ kinds: ['stats', 'running'] });
+    listeners.get('dashboard:invalidate')?.({});
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['dashboard', 'stats'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['dashboard', 'running'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['dashboard', 'activity'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['dashboard', 'recent'] });
+  });
+
+  it('adds, focuses, and dismisses notifications from IPC events', () => {
+    const { queryClient } = renderHarness();
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+
+    listeners.get('notification:fire')?.({
+      id: 'notification-1',
+      threadId: 'thread-1',
+      projectId: 'project-2',
+      kind: 'completed',
+      title: 'Done',
+      body: 'Finished',
+      createdAt: '2026-04-16T00:00:00.000Z',
+      dismissedAt: null,
+    });
+
+    expect(useAppStore.getState().notifications).toHaveLength(1);
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['notifications'] });
+
+    listeners.get('notification:focus-thread')?.({
+      projectId: 'project-2',
+      threadId: 'thread-2',
+    });
+
+    expect(useAppStore.getState().activeProjectId).toBe('project-2');
+    expect(useAppStore.getState().activeThreadId).toBe('thread-2');
+    expect(useAppStore.getState().viewMode).toBe('project');
+
+    listeners.get('notification:focus-thread')?.({
+      projectId: null,
+      threadId: 'thread-3',
+    });
+    expect(useAppStore.getState().activeProjectId).toBe('project-2');
+    expect(useAppStore.getState().activeThreadId).toBe('thread-3');
+
+    listeners.get('notification:dismiss')?.({ id: 'notification-1' });
+    expect(useAppStore.getState().notifications).toEqual([]);
+  });
+
+  it('flushes pending terminal events and unsubscribes on cleanup', () => {
+    vi.useFakeTimers();
+    const unsubscribe = vi.fn();
+    window.shipcode.on = vi.fn((event: string, cb: (...args: unknown[]) => void) => {
+      listeners.set(event, cb);
+      return unsubscribe;
+    }) as unknown as typeof window.shipcode.on;
+
+    const { unmount } = renderHarness();
+
+    listeners.get('terminal:event')?.({
+      id: 'event-1',
+      threadId: 'thread-1',
+      event: { kind: 'raw', content: 'cleanup' },
+      createdAt: new Date('2026-04-16T00:00:00.000Z').toISOString(),
+    });
+
+    unmount();
+
+    expect(useAppStore.getState().canonicalTerminalStream['thread-1']).toHaveLength(1);
+    expect(unsubscribe).toHaveBeenCalled();
+    vi.useRealTimers();
   });
 });

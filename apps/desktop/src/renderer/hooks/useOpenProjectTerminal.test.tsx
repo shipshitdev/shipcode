@@ -6,11 +6,14 @@ import { useAppStore } from '../stores/app-store';
 import { useOpenProjectTerminal } from './useOpenProjectTerminal';
 
 function TerminalHarness({ onError }: { onError: (error: unknown) => void }) {
-  const { openProjectTerminal } = useOpenProjectTerminal();
+  const { openProjectTerminal, openingTerminal } = useOpenProjectTerminal();
   return (
-    <button type="button" onClick={() => void openProjectTerminal().catch(onError)}>
-      Open terminal
-    </button>
+    <>
+      <span data-testid="opening">{String(openingTerminal)}</span>
+      <button type="button" onClick={() => void openProjectTerminal().catch(onError)}>
+        Open terminal
+      </button>
+    </>
   );
 }
 
@@ -48,6 +51,48 @@ describe('useOpenProjectTerminal', () => {
     });
     expect(onError).not.toHaveBeenCalled();
     expect(useAppStore.getState().terminalPaneThreadIds).toContain('thread-shell-1');
+  });
+
+  it('tracks opening state until bare shell creation settles', async () => {
+    let resolveShell: (value: { threadId: string }) => void = () => {};
+    invokeMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveShell = resolve;
+      }),
+    );
+
+    const onError = vi.fn();
+    render(<TerminalHarness onError={onError} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open terminal' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('opening')).toHaveTextContent('true');
+    });
+
+    resolveShell({ threadId: 'thread-shell-2' });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('opening')).toHaveTextContent('false');
+    });
+    expect(useAppStore.getState().terminalPaneThreadIds).toContain('thread-shell-2');
+  });
+
+  it('rejects before spawning when no project is selected', async () => {
+    const onError = vi.fn();
+    useAppStore.setState({ activeProjectId: null } as never);
+
+    render(<TerminalHarness onError={onError} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open terminal' }));
+
+    await waitFor(() => {
+      expect(onError).toHaveBeenCalledWith(expect.any(Error));
+    });
+    expect((onError.mock.calls[0]?.[0] as Error).message).toBe(
+      'Select a project before opening a terminal',
+    );
+    expect(invokeMock).not.toHaveBeenCalled();
   });
 
   it('rejects before spawning when the terminal pane cap is reached', async () => {

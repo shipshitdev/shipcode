@@ -405,6 +405,58 @@ describe('IssueDetail', () => {
     });
   });
 
+  it('pauses an active threaded issue from the issue header', async () => {
+    const thread = makeThread({ status: 'executing' });
+
+    useAppStore.setState({
+      activeThreadId: thread.id,
+      activeIssue: makeIssue({ threadId: thread.id, pipelineStatus: 'executing' }),
+      pipelinePhase: 'executing',
+    });
+
+    invokeMock.mockImplementation(async (channel, args) => {
+      if (channel === 'thread:get') return thread;
+      if (channel === 'plan:list') return [];
+      if (channel === 'review:list-by-plans') return {};
+      if (channel === 'pipeline:pause') return undefined;
+      return args ?? null;
+    });
+
+    renderWithProviders();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Pause task' }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('pipeline:pause', { threadId: thread.id });
+    });
+  });
+
+  it('resumes a paused threaded issue from the issue header', async () => {
+    const thread = makeThread({ status: 'paused', pausedPhase: 'executing' });
+
+    useAppStore.setState({
+      activeThreadId: thread.id,
+      activeIssue: makeIssue({ threadId: thread.id, pipelineStatus: 'paused' }),
+      pipelinePhase: 'paused',
+    });
+
+    invokeMock.mockImplementation(async (channel, args) => {
+      if (channel === 'thread:get') return thread;
+      if (channel === 'plan:list') return [];
+      if (channel === 'review:list-by-plans') return {};
+      if (channel === 'pipeline:resume') return undefined;
+      return args ?? null;
+    });
+
+    renderWithProviders();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Resume task' }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('pipeline:resume', { threadId: thread.id });
+    });
+  });
+
   it('surfaces execution retry copy when the latest verification failed with structured findings', async () => {
     const thread = makeThread({
       status: 'failed',

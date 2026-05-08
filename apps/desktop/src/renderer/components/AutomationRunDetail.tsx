@@ -11,6 +11,7 @@ import {
   ExternalLink,
   GitBranch,
   GitPullRequest,
+  Play,
   RefreshCw,
   Square,
 } from 'lucide-react';
@@ -57,6 +58,7 @@ export function AutomationRunDetail() {
   });
 
   const isActive = !!thread && ACTIVE_PHASES.includes(thread.status as PipelinePhase);
+  const isPaused = thread?.status === PIPELINE_PHASE.paused;
 
   const { data: plans = [], isLoading: isPlanHistoryLoading } = useQuery<PlanRecord[]>({
     queryKey: ['plan-history-automation', threadId],
@@ -124,6 +126,34 @@ export function AutomationRunDetail() {
       setIsSubmitting(false);
     }
   }, [threadId, queryClient]);
+
+  const handlePause = useCallback(async () => {
+    if (!threadId) return;
+    setIsSubmitting(true);
+    try {
+      await window.shipcode.invoke('pipeline:pause', { threadId });
+      queryClient.invalidateQueries({ queryKey: ['thread', threadId] });
+      if (thread?.projectId) {
+        queryClient.invalidateQueries({ queryKey: ['thread-panel-data', thread.projectId] });
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [threadId, thread?.projectId, queryClient]);
+
+  const handleResume = useCallback(async () => {
+    if (!threadId) return;
+    setIsSubmitting(true);
+    try {
+      await window.shipcode.invoke('pipeline:resume', { threadId });
+      queryClient.invalidateQueries({ queryKey: ['thread', threadId] });
+      if (thread?.projectId) {
+        queryClient.invalidateQueries({ queryKey: ['thread-panel-data', thread.projectId] });
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [threadId, thread?.projectId, queryClient]);
 
   const handleRetry = useCallback(async () => {
     if (!threadId) return;
@@ -240,12 +270,27 @@ export function AutomationRunDetail() {
         {isActive && (
           <Button
             variant="outline"
-            size="sm"
-            className="h-6 gap-1 px-2 text-[11px] text-destructive hover:bg-destructive/10"
-            onClick={handleCancel}
+            size="icon-xs"
+            className="text-warning hover:bg-warning/10"
+            title="Pause task"
+            aria-label="Pause task"
+            onClick={handlePause}
+            disabled={isSubmitting}
           >
             <Square className="h-3 w-3" />
-            Cancel
+          </Button>
+        )}
+        {isPaused && (
+          <Button
+            variant="outline"
+            size="icon-xs"
+            className="text-agent hover:bg-agent/10"
+            title="Resume task"
+            aria-label="Resume task"
+            onClick={handleResume}
+            disabled={isSubmitting}
+          >
+            <Play className="h-3 w-3" />
           </Button>
         )}
         {isFailed && (

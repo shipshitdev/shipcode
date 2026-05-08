@@ -21,6 +21,15 @@ const {
   createIssueMock,
   execMock,
   execFileMock,
+  gitCommitMock,
+  gitFetchMock,
+  gitGetDiffAgainstHeadMock,
+  gitGetDiffStatMock,
+  gitGetRemoteUrlMock,
+  gitGetStatusMock,
+  gitListBranchesMock,
+  gitPushMock,
+  validateProjectStatusFieldMock,
   worktreeListMock,
   worktreeMoveMock,
   worktreeRepairMock,
@@ -41,6 +50,26 @@ const {
       }
     },
   ),
+  gitCommitMock: vi.fn(async () => ({ hash: 'abc123' })),
+  gitFetchMock: vi.fn(async () => undefined),
+  gitGetDiffAgainstHeadMock: vi.fn(async () => ''),
+  gitGetDiffStatMock: vi.fn(async () => ''),
+  gitGetRemoteUrlMock: vi.fn(async () => 'git@github.com:shipshitdev/shipcode.git'),
+  gitGetStatusMock: vi.fn(async () => ({
+    branch: 'main',
+    commitHash: 'abc123',
+    isDirty: false,
+    untrackedCount: 0,
+    stagedCount: 0,
+    modifiedCount: 0,
+    aheadCount: 0,
+    behindCount: 0,
+    compareRef: 'origin/main',
+    preCommitHookPath: null,
+  })),
+  gitListBranchesMock: vi.fn(async () => ['main', 'develop']),
+  gitPushMock: vi.fn(async () => ({ pushed: true })),
+  validateProjectStatusFieldMock: vi.fn(),
   worktreeListMock: vi.fn(async (): Promise<Array<{ path: string; branch: string }>> => []),
   worktreeMoveMock: vi.fn(async () => undefined),
   worktreeRepairMock: vi.fn(async () => undefined),
@@ -85,6 +114,7 @@ vi.mock('@shipcode/agents', () => ({
     error: null,
   })),
   validateOpenRouterModel: vi.fn(),
+  validateProjectStatusField: validateProjectStatusFieldMock,
   writeProjectSetup: vi.fn(),
 }));
 
@@ -101,8 +131,15 @@ const { registerProjectHandlers } = await import('./register-project-handlers');
 
 vi.mock('@shipcode/git', () => ({
   GitService: class {
-    getRemoteUrl = vi.fn(async () => 'git@github.com:shipshitdev/shipcode.git');
+    commit = gitCommitMock;
+    fetch = gitFetchMock;
+    getDiffAgainstHead = gitGetDiffAgainstHeadMock;
+    getDiffStat = gitGetDiffStatMock;
+    getRemoteUrl = gitGetRemoteUrlMock;
     getDefaultBranch = vi.fn(async () => 'main');
+    getStatus = gitGetStatusMock;
+    listBranches = gitListBranchesMock;
+    push = gitPushMock;
   },
   WorktreeManager: class {
     list = worktreeListMock;
@@ -380,6 +417,71 @@ describe('registerProjectHandlers', () => {
     expect(queries.threads.clearWorktree).toHaveBeenCalledWith('thread-12');
     expect(queries.threads.setWorktree).not.toHaveBeenCalled();
     expect(queries.projects.updatePath).toHaveBeenCalledWith('project-1', nextProjectPath);
+  });
+
+  it('repairs relinked worktrees that already exist at the new project path', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'shipcode-relink-existing-'));
+    const oldProjectPath = path.join(tmp, 'old-repo');
+    const nextProjectPath = path.join(tmp, 'new-repo');
+    const worktreeRoot = path.join(tmp, 'worktrees');
+    fs.mkdirSync(nextProjectPath, { recursive: true });
+
+    const oldParent = resolveWorktreeParent(oldProjectPath, worktreeRoot);
+    const nextParent = resolveWorktreeParent(nextProjectPath, worktreeRoot);
+    const oldWorktreePath = path.join(oldParent, '88-existing');
+    const nextWorktreePath = path.join(nextParent, '88-existing');
+    fs.mkdirSync(nextWorktreePath, { recursive: true });
+
+    let project = { ...baseProject, path: oldProjectPath };
+    const queries = {
+      projects: {
+        getById: vi.fn(() => project),
+        getByPath: vi.fn(() => null),
+        updatePath: vi.fn((_id: string, projectPath: string) => {
+          project = { ...project, path: projectPath };
+        }),
+        updateGitInfo: vi.fn(),
+      },
+      settings: {
+        get: vi.fn(() => ({ projectOpenTarget: 'cursor', worktreeRoot })),
+      },
+      threads: {
+        list: vi.fn(() => [
+          {
+            id: 'thread-88',
+            worktreeBranch: 'ship/88-existing',
+            worktreePath: oldWorktreePath,
+          },
+        ]),
+        setWorktree: vi.fn(),
+        clearWorktree: vi.fn(),
+      },
+    };
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+    });
+
+    const relinkPath = handlers.get('project:relink-path');
+    if (!relinkPath) throw new Error('project:relink-path handler not registered');
+
+    await relinkPath(undefined, { projectId: 'project-1', path: nextProjectPath });
+
+    expect(worktreeRepairMock).toHaveBeenCalledWith([nextWorktreePath]);
+    expect(worktreeMoveMock).not.toHaveBeenCalled();
+    expect(queries.threads.setWorktree).toHaveBeenCalledWith(
+      'thread-88',
+      'ship/88-existing',
+      nextWorktreePath,
+    );
+    expect(queries.threads.clearWorktree).not.toHaveBeenCalled();
   });
 
   it('repairs and moves ShipCode worktrees discovered from git even when no thread tracks them', async () => {
@@ -1042,6 +1144,97 @@ describe('registerProjectHandlers', () => {
     existsSpy.mockRestore();
   });
 
+  it('uses distinct removal guard errors for active present and missing projects', async () => {
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+        hasLiveWork: vi.fn(() => true),
+        removeIfIdle: vi.fn(),
+      },
+      settings: {
+        get: vi.fn(() => ({ worktreeRoot: '/tmp/worktrees' })),
+      },
+      threads: {
+        list: vi.fn(() => []),
+      },
+    };
+    const existsSpy = vi
+      .spyOn(fs, 'existsSync')
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+    });
+
+    const remove = handlers.get('project:remove');
+    if (!remove) throw new Error('project:remove handler not registered');
+
+    await expect(remove(undefined, { projectId: baseProject.id })).rejects.toThrow(
+      'Cannot remove this missing project while a pipeline is still active. Stop running pipelines first.',
+    );
+    expect(queries.projects.hasLiveWork).toHaveBeenCalledWith(baseProject.id, {
+      ignoreAttentionOnly: true,
+    });
+
+    await expect(remove(undefined, { projectId: baseProject.id })).rejects.toThrow(
+      'Cannot remove a project with active work. Stop running pipelines and dismiss notifications first.',
+    );
+    expect(queries.projects.hasLiveWork).toHaveBeenLastCalledWith(baseProject.id, {
+      ignoreAttentionOnly: false,
+    });
+    expect(queries.projects.removeIfIdle).not.toHaveBeenCalled();
+
+    existsSpy.mockRestore();
+  });
+
+  it('keeps the project row when work appears after removal cleanup', async () => {
+    const queries = {
+      projects: {
+        getById: vi.fn(() => baseProject),
+        hasLiveWork: vi.fn(() => false),
+        removeIfIdle: vi.fn(() => false),
+      },
+      settings: {
+        get: vi.fn(() => ({ worktreeRoot: '/tmp/worktrees' })),
+      },
+      threads: {
+        list: vi.fn(() => []),
+      },
+    };
+    const existsSpy = vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+    });
+
+    const remove = handlers.get('project:remove');
+    if (!remove) throw new Error('project:remove handler not registered');
+
+    await expect(remove(undefined, { projectId: baseProject.id })).rejects.toThrow(
+      'New work appeared during cleanup. Project not removed. Retry after stopping pipelines.',
+    );
+    expect(queries.projects.removeIfIdle).toHaveBeenCalledWith(baseProject.id, {
+      ignoreAttentionOnly: false,
+    });
+
+    existsSpy.mockRestore();
+  });
+
   it('marks only idle, failed, and completed threads as done', async () => {
     const queries = {
       projects: {
@@ -1158,6 +1351,141 @@ describe('registerProjectHandlers', () => {
 
     existsSpy.mockRestore();
     readdirSpy.mockRestore();
+  });
+
+  it('lists code tree entries with ignore filtering, sorting, sizes, and dirty markers', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'shipcode-code-tree-'));
+    fs.mkdirSync(path.join(tmp, 'src'), { recursive: true });
+    fs.mkdirSync(path.join(tmp, 'node_modules'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'src', 'app.ts'), 'export const app = true;\n');
+    fs.writeFileSync(path.join(tmp, 'README.md'), '# ShipCode\n');
+    fs.writeFileSync(path.join(tmp, '.DS_Store'), '');
+    gitGetStatusMock.mockResolvedValueOnce({
+      branch: 'main',
+      commitHash: 'abc123',
+      isDirty: true,
+      untrackedCount: 0,
+      stagedCount: 0,
+      modifiedCount: 2,
+      aheadCount: 0,
+      behindCount: 0,
+      compareRef: 'origin/main',
+      preCommitHookPath: null,
+    });
+    gitGetDiffStatMock.mockResolvedValueOnce('src/app.ts | 2 +-\nREADME.md | 1 +');
+
+    const queries = {
+      projects: {
+        getById: vi.fn(() => ({ ...baseProject, path: tmp })),
+      },
+      settings: {
+        get: vi.fn(() => ({ worktreeRoot: '/tmp/worktrees' })),
+      },
+    };
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+    });
+
+    const listTree = handlers.get('code:list-tree');
+    if (!listTree) throw new Error('code:list-tree handler not registered');
+
+    await expect(
+      listTree(undefined, { projectId: baseProject.id, worktreePath: tmp }),
+    ).resolves.toEqual([
+      { name: 'src', relativePath: 'src', type: 'dir', sizeBytes: null, isModified: true },
+      {
+        name: 'README.md',
+        relativePath: 'README.md',
+        type: 'file',
+        sizeBytes: Buffer.byteLength('# ShipCode\n'),
+        isModified: true,
+      },
+    ]);
+    expect(gitGetDiffStatMock).toHaveBeenCalledWith(tmp);
+  });
+
+  it('reads text, binary, truncated, and escaping code files from a project worktree', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'shipcode-code-read-'));
+    fs.writeFileSync(path.join(tmp, 'plain.txt'), 'plain text');
+    fs.writeFileSync(path.join(tmp, 'binary.dat'), Buffer.from([0x41, 0x00, 0x42]));
+    fs.writeFileSync(path.join(tmp, 'large.txt'), Buffer.alloc(512 * 1024 + 1, 'a'));
+
+    const queries = {
+      projects: {
+        getById: vi.fn(() => ({ ...baseProject, path: tmp })),
+      },
+      settings: {
+        get: vi.fn(() => ({ worktreeRoot: '/tmp/worktrees' })),
+      },
+    };
+
+    registerProjectHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+      emitter: {} as never,
+      notificationService: {} as never,
+    });
+
+    const readFile = handlers.get('code:read-file');
+    if (!readFile) throw new Error('code:read-file handler not registered');
+
+    await expect(
+      readFile(undefined, {
+        projectId: baseProject.id,
+        worktreePath: tmp,
+        relativePath: 'plain.txt',
+      }),
+    ).resolves.toEqual({
+      relativePath: 'plain.txt',
+      content: 'plain text',
+      isBinary: false,
+      sizeBytes: Buffer.byteLength('plain text'),
+      truncated: false,
+    });
+    await expect(
+      readFile(undefined, {
+        projectId: baseProject.id,
+        worktreePath: tmp,
+        relativePath: 'binary.dat',
+      }),
+    ).resolves.toEqual({
+      relativePath: 'binary.dat',
+      content: '',
+      isBinary: true,
+      sizeBytes: 3,
+      truncated: false,
+    });
+    await expect(
+      readFile(undefined, {
+        projectId: baseProject.id,
+        worktreePath: tmp,
+        relativePath: 'large.txt',
+      }),
+    ).resolves.toMatchObject({
+      relativePath: 'large.txt',
+      isBinary: false,
+      sizeBytes: 512 * 1024 + 1,
+      truncated: true,
+    });
+    await expect(
+      readFile(undefined, {
+        projectId: baseProject.id,
+        worktreePath: tmp,
+        relativePath: '../outside.txt',
+      }),
+    ).rejects.toThrow('Path escapes worktree');
   });
 
   it('serves simple project, thread, plan, settings, health, and shell IPC handlers', async () => {

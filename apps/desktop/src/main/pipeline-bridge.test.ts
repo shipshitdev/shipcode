@@ -12,6 +12,10 @@ vi.mock('./logger.service', () => ({
   logEvent: vi.fn(),
 }));
 
+vi.mock('./telemetry', () => ({
+  capturePipelineFailure: vi.fn(),
+}));
+
 import { createElectronEmitter } from './pipeline-bridge';
 
 function makeMainWindow() {
@@ -55,6 +59,8 @@ function makeThread(overrides: Record<string, unknown> = {}) {
     lastError: null,
     failurePhase: null,
     failureCount: 0,
+    pausedPhase: null,
+    pausedAt: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     plannerResolvedModel: null,
@@ -93,7 +99,11 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
     chatNotifications: {
       fire: vi.fn(),
     },
+    automations: {
+      recordRunFinished: vi.fn(),
+    },
     onPipelineTerminal: vi.fn(),
+    onExecutionSlotFreed: vi.fn(),
     ...overrides,
   };
 }
@@ -163,5 +173,88 @@ describe('createElectronEmitter onPipelineTerminal (slot-freed) callback', () =>
         phase: 'completed',
       } as PipelineEvent),
     ).not.toThrow();
+  });
+});
+
+describe('createElectronEmitter event forwarding and terminal bookkeeping', () => {
+  let mainWindow: ReturnType<typeof makeMainWindow>;
+  let deps: ReturnType<typeof makeDeps>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mainWindow = makeMainWindow();
+    deps = makeDeps();
+  });
+
+  it('persists canonical terminal events and forwards the saved record to the renderer', () => {
+    const emitter = createElectronEmitter(mainWindow as never, deps as never);
+    const terminalEvent = { kind: 'text' as const, content: 'hello' };
+
+    emitter.emit({
+      type: 'terminal:event',
+      threadId: 'thread-1',
+      event: terminalEvent,
+    } as PipelineEvent);
+
+    expect(deps.terminalEvents.create).toHaveBeenCalledWith('thread-1', terminalEvent);
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith(
+      'terminal:event',
+      expect.objectContaining({ id: 'evt-1', threadId: 'thread-1' }),
+    );
+    expect(deps.threads.getById).not.toHaveBeenCalled();
+  });
+
+  it('forwards raw pipeline output as agent output without writing activity or terminal records', () => {
+    const emitter = createElectronEmitter(mainWindow as never, deps as never);
+
+    emitter.emit({
+      type: 'pipeline:output',
+      threadId: 'thread-1',
+      chunk: 'installing deps\n',
+    } as PipelineEvent);
+
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('agent:output', {
+      processId: 'test-thread-1',
+      chunk: 'installing deps\n',
+      threadId: 'thread-1',
+    });
+    expect(deps.terminalEvents.create).not.toHaveBeenCalled();
+    expect(deps.activity.create).not.toHaveBeenCalled();
+  });
+
+  it('records automation completion and frees execution slots only for terminal phases', () => {
+    deps.threads.getById = vi.fn(() => makeThread({ automationId: 'auto-1' }));
+    const emitter = createElectronEmitter(mainWindow as never, deps as never);
+
+    emitter.emit({
+      type: 'pipeline:phase',
+      threadId: 'thread-1',
+      phase: 'completed',
+    } as PipelineEvent);
+
+    expect(deps.onExecutionSlotFreed).toHaveBeenCalledTimes(1);
+    expect(deps.automations.recordRunFinished).toHaveBeenCalledWith('auto-1', 'completed');
+    expect(deps.notifications.fire).toHaveBeenCalledWith(
+      'completed',
+      expect.objectContaining({ id: 'thread-1' }),
+    );
+    expect(deps.chatNotifications.fire).toHaveBeenCalledWith(
+      'completed',
+      expect.objectContaining({ id: 'thread-1' }),
+    );
+  });
+
+  it('does not free execution slots while waiting for approval', () => {
+    const emitter = createElectronEmitter(mainWindow as never, deps as never);
+
+    emitter.emit({
+      type: 'pipeline:phase',
+      threadId: 'thread-1',
+      phase: 'awaiting_approval',
+    } as PipelineEvent);
+
+    expect(deps.onPipelineTerminal).toHaveBeenCalledTimes(1);
+    expect(deps.onExecutionSlotFreed).not.toHaveBeenCalled();
+    expect(deps.automations.recordRunFinished).not.toHaveBeenCalled();
   });
 });
