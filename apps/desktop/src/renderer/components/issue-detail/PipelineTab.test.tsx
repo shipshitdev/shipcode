@@ -468,7 +468,7 @@ describe('PipelineTab', () => {
           {
             name: 'test',
             workflowName: 'CI',
-            status: 'completed',
+            status: 'failed',
             conclusion: 'failure',
             detailsUrl: 'https://github.com/acme/repo/actions/runs/1',
           },
@@ -476,9 +476,9 @@ describe('PipelineTab', () => {
         unresolvedReviewCommentCount: 1,
         unresolvedReviewComments: [
           {
-            id: 'comment-1',
             author: 'octocat',
             body: 'Please cover the regression.',
+            createdAt: '2026-05-01T10:00:00.000Z',
             path: 'src/foo.ts',
             line: 12,
             url: 'https://github.com/acme/repo/pull/77#discussion_r1',
@@ -513,7 +513,7 @@ describe('PipelineTab', () => {
           {
             name: 'test',
             workflowName: 'CI',
-            status: 'completed',
+            status: 'failed',
             conclusion: 'failure',
             detailsUrl: 'https://github.com/acme/repo/actions/runs/1',
           },
@@ -521,9 +521,9 @@ describe('PipelineTab', () => {
         unresolvedReviewCommentCount: 1,
         unresolvedReviewComments: [
           {
-            id: 'comment-1',
             author: 'octocat',
             body: 'Please cover the regression.',
+            createdAt: '2026-05-01T10:00:00.000Z',
             path: 'src/foo.ts',
             line: 12,
             url: 'https://github.com/acme/repo/pull/77#discussion_r1',
@@ -552,6 +552,9 @@ describe('PipelineTab', () => {
     const checkpoint: PipelineCheckpoint = {
       id: 'checkpoint-1',
       threadId: 'thread-1',
+      projectId: 'project-1',
+      phase: 'verifying',
+      reason: 'manual restore test',
       label: 'Before verifier retry',
       commitSha: 'abcdef1234567890',
       branch: 'ship/42-issue-title',

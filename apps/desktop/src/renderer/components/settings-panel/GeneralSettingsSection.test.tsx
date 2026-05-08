@@ -66,6 +66,18 @@ function renderGeneral({
   return { onUpdate, onUpdateWorktreeRoot };
 }
 
+function makeTelemetryStatus(overrides: Partial<TelemetryStatus> = {}): TelemetryStatus {
+  return {
+    enabled: true,
+    initialized: true,
+    envDisabled: false,
+    dsnConfigured: true,
+    pendingConsent: false,
+    disabledReason: null,
+    ...overrides,
+  };
+}
+
 describe('GeneralSettingsSection', () => {
   it('updates appearance controls through settings patches', () => {
     const { onUpdate } = renderGeneral();
@@ -81,13 +93,13 @@ describe('GeneralSettingsSection', () => {
 
   it('disables telemetry when the environment disables reporting', () => {
     const { onUpdate } = renderGeneral({
-      telemetryStatus: {
+      telemetryStatus: makeTelemetryStatus({
         enabled: false,
         dsnConfigured: true,
         envDisabled: true,
-        release: '0.1.0',
-        environment: 'test',
-      },
+        initialized: false,
+        disabledReason: 'disabled-by-env',
+      }),
       settings: { ...DEFAULT_SETTINGS, telemetryEnabled: true },
     });
 
@@ -100,13 +112,12 @@ describe('GeneralSettingsSection', () => {
   });
 
   it('renders telemetry consent states for missing DSN, enabled, disabled, and waiting', () => {
-    const missingDsnStatus = {
+    const missingDsnStatus = makeTelemetryStatus({
       enabled: true,
       dsnConfigured: false,
-      envDisabled: false,
-      release: '0.1.0',
-      environment: 'test',
-    } satisfies TelemetryStatus;
+      initialized: false,
+      disabledReason: 'missing-dsn',
+    });
 
     const { rerender } = render(
       <GeneralSettingsSection

@@ -741,6 +741,262 @@ describe('registerGitHubHandlers', () => {
     expect(archiveIssues).toHaveBeenCalledWith(['issue-open', 'issue-closed']);
   });
 
+  it('lists and unarchives archived issues through local cache queries', () => {
+    const archivedIssues = [{ ...baseIssue, archivedAt: '2026-05-08T00:00:00.000Z' }];
+    const queries = {
+      githubIssues: {
+        listArchived: vi.fn(() => archivedIssues),
+        clearArchivedAt: vi.fn(),
+      },
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const listArchived = handlers.get('github:list-archived');
+    const unarchiveIssue = handlers.get('github:unarchive-issue');
+    if (!listArchived || !unarchiveIssue) throw new Error('archive handlers not registered');
+
+    expect(listArchived()).toEqual(archivedIssues);
+    expect(unarchiveIssue(undefined, { issueId: 'issue-1' })).toBeUndefined();
+    expect(queries.githubIssues.clearArchivedAt).toHaveBeenCalledWith('issue-1');
+  });
+
+  it('caps auto-run count when a positive maxTasks limit is provided', () => {
+    const queries = {
+      githubIssues: {
+        countEligibleTodo: vi.fn(() => 7),
+      },
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const autoRunCount = handlers.get('github:auto-run-count');
+    if (!autoRunCount) throw new Error('github:auto-run-count handler not registered');
+
+    expect(
+      autoRunCount(undefined, { projectId: 'project-1', priorities: ['p0', 'p1'], maxTasks: 3 }),
+    ).toEqual({ count: 3 });
+    expect(
+      autoRunCount(undefined, { projectId: 'project-1', priorities: ['p0'], maxTasks: 0 }),
+    ).toEqual({ count: 7 });
+    expect(queries.githubIssues.countEligibleTodo).toHaveBeenCalledWith('project-1', ['p0', 'p1']);
+  });
+
+  it('retry cancels an active canonical thread before resetting the issue to todo', () => {
+    const activeThread = { ...reusableThread, status: 'executing' };
+    const queries = {
+      githubIssues: buildGithubIssuesQueries(
+        {
+          getByNumber: vi.fn(() => ({ ...baseIssue, threadId: activeThread.id })),
+          resetToTodo: vi.fn(() => true),
+          reconcileCompletedFromEvidence: vi.fn(),
+        },
+        [baseIssue],
+      ),
+      threads: {
+        getById: vi.fn(() => activeThread),
+        getByProjectAndGithubIssue: vi.fn(() => null),
+        updateStatus: vi.fn(),
+      },
+    };
+    const pipeline = {
+      cancel: vi.fn(),
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: pipeline as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const retryIssue = handlers.get('github:retry-issue');
+    if (!retryIssue) throw new Error('github:retry-issue handler not registered');
+
+    expect(retryIssue(undefined, { projectId: 'project-1', issueNumber: 42 })).toBeUndefined();
+    expect(pipeline.cancel).toHaveBeenCalledWith(activeThread.id);
+    expect(queries.threads.updateStatus).toHaveBeenCalledWith(activeThread.id, 'idle');
+    expect(queries.githubIssues.resetToTodo).toHaveBeenCalledWith(baseIssue.id);
+    expect(queries.githubIssues.reconcileCompletedFromEvidence).not.toHaveBeenCalled();
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('github:issues-updated', {
+      projectId: 'project-1',
+      issues: [baseIssue],
+    });
+  });
+
+  it('retry leaves completed threads running state untouched and reconciles when resetToTodo fails', () => {
+    const completedThread = { ...reusableThread, status: 'completed' };
+    const queries = {
+      githubIssues: buildGithubIssuesQueries(
+        {
+          getByNumber: vi.fn(() => ({ ...baseIssue, threadId: completedThread.id })),
+          resetToTodo: vi.fn(() => false),
+          reconcileCompletedFromEvidence: vi.fn(),
+        },
+        [baseIssue],
+      ),
+      threads: {
+        getById: vi.fn(() => completedThread),
+        getByProjectAndGithubIssue: vi.fn(() => null),
+        updateStatus: vi.fn(),
+      },
+    };
+    const pipeline = {
+      cancel: vi.fn(),
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: pipeline as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const retryIssue = handlers.get('github:retry-issue');
+    if (!retryIssue) throw new Error('github:retry-issue handler not registered');
+
+    retryIssue(undefined, { projectId: 'project-1', issueNumber: 42 });
+
+    expect(pipeline.cancel).not.toHaveBeenCalled();
+    expect(queries.threads.updateStatus).not.toHaveBeenCalled();
+    expect(queries.githubIssues.resetToTodo).toHaveBeenCalledWith(baseIssue.id);
+    expect(queries.githubIssues.reconcileCompletedFromEvidence).toHaveBeenCalledWith(baseIssue.id);
+  });
+
+  it('trims blank model id overrides to null and broadcasts the refreshed issue', () => {
+    const refreshedIssue = { ...baseIssue, executorModelIdOverride: null };
+    const queries = {
+      githubIssues: buildGithubIssuesQueries({
+        getByNumber: vi.fn(() => refreshedIssue),
+        updatePhaseModelIdOverride: vi.fn(),
+      }),
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const setModelId = handlers.get('github:set-phase-model-id-override');
+    if (!setModelId) throw new Error('github:set-phase-model-id-override handler not registered');
+
+    expect(
+      setModelId(undefined, {
+        projectId: 'project-1',
+        issueNumber: 42,
+        phase: 'executor',
+        modelId: '   ',
+      }),
+    ).toEqual(refreshedIssue);
+    expect(queries.githubIssues.updatePhaseModelIdOverride).toHaveBeenCalledWith(
+      baseIssue.id,
+      'executor',
+      null,
+    );
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('github:issues-updated', {
+      projectId: 'project-1',
+      issues: [baseIssue],
+    });
+  });
+
+  it('rejects invalid override values before mutating issue overrides', () => {
+    const queries = {
+      githubIssues: buildGithubIssuesQueries({
+        updatePhaseModelOverride: vi.fn(),
+        updateRevisionCountOverride: vi.fn(),
+        updateRequireApprovalOverride: vi.fn(),
+        updatePhaseReasoningEffortOverride: vi.fn(),
+      }),
+    };
+
+    registerGitHubHandlers({
+      ipcMain,
+      mainWindow: mainWindow as never,
+      queries: queries as never,
+      pipeline: {} as never,
+      emitter: { emit: vi.fn() } as never,
+      notificationService: {} as never,
+      chatNotificationService: {} as never,
+      processManager: {} as never,
+    });
+
+    const setPhaseModel = handlers.get('github:set-phase-model-override');
+    const setRevisionCount = handlers.get('github:set-revision-count-override');
+    const setRequireApproval = handlers.get('github:set-require-approval-override');
+    const setReasoningEffort = handlers.get('github:set-phase-reasoning-effort-override');
+    if (!setPhaseModel || !setRevisionCount || !setRequireApproval || !setReasoningEffort) {
+      throw new Error('override handlers not registered');
+    }
+
+    expect(() =>
+      setPhaseModel(undefined, {
+        projectId: 'project-1',
+        issueNumber: 42,
+        phase: 'executor',
+        model: 'gpt',
+      }),
+    ).toThrow('Invalid executor model: gpt');
+    expect(() =>
+      setRevisionCount(undefined, {
+        projectId: 'project-1',
+        issueNumber: 42,
+        revisionCount: 6,
+      }),
+    ).toThrow('Invalid revision count override: 6');
+    expect(() =>
+      setRequireApproval(undefined, {
+        projectId: 'project-1',
+        issueNumber: 42,
+        requireApproval: 'yes',
+      }),
+    ).toThrow('Invalid requireApproval override: yes');
+    expect(() =>
+      setReasoningEffort(undefined, {
+        projectId: 'project-1',
+        issueNumber: 42,
+        phase: 'planner',
+        effort: 'extreme',
+      }),
+    ).toThrow('Invalid planner reasoning effort: extreme');
+
+    expect(queries.githubIssues.updatePhaseModelOverride).not.toHaveBeenCalled();
+    expect(queries.githubIssues.updateRevisionCountOverride).not.toHaveBeenCalled();
+    expect(queries.githubIssues.updateRequireApprovalOverride).not.toHaveBeenCalled();
+    expect(queries.githubIssues.updatePhaseReasoningEffortOverride).not.toHaveBeenCalled();
+  });
+
   it('lists comments with cache reuse and clears the cache after posting', async () => {
     const comment = {
       id: 1,

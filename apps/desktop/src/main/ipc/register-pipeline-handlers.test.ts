@@ -115,6 +115,7 @@ describe('registerPipelineHandlers', () => {
       clearClarification: ReturnType<typeof vi.fn>;
       clearPendingClarification: ReturnType<typeof vi.fn>;
       setPhaseModels: ReturnType<typeof vi.fn>;
+      setGithubPr: ReturnType<typeof vi.fn>;
     };
     plans: {
       getLatest: ReturnType<typeof vi.fn>;
@@ -150,6 +151,7 @@ describe('registerPipelineHandlers', () => {
     activity: {
       listRecent: ReturnType<typeof vi.fn>;
       countRecent: ReturnType<typeof vi.fn>;
+      listByIssue: ReturnType<typeof vi.fn>;
     };
     dashboard: {
       getStats: ReturnType<typeof vi.fn>;
@@ -160,6 +162,7 @@ describe('registerPipelineHandlers', () => {
       getSummary: ReturnType<typeof vi.fn>;
       listTasks: ReturnType<typeof vi.fn>;
       countTasks: ReturnType<typeof vi.fn>;
+      listTasksForIssue: ReturnType<typeof vi.fn>;
     };
     checkpoints: {
       list: ReturnType<typeof vi.fn>;
@@ -175,6 +178,7 @@ describe('registerPipelineHandlers', () => {
     startTesting: ReturnType<typeof vi.fn>;
     startVerification: ReturnType<typeof vi.fn>;
     startCommitAndPush: ReturnType<typeof vi.fn>;
+    startStabilization: ReturnType<typeof vi.fn>;
     rehydrateContext: ReturnType<typeof vi.fn>;
     startPlanGeneration: ReturnType<typeof vi.fn>;
     getContext: ReturnType<typeof vi.fn>;
@@ -214,6 +218,7 @@ describe('registerPipelineHandlers', () => {
         clearClarification: vi.fn(),
         clearPendingClarification: vi.fn(),
         setPhaseModels: vi.fn(),
+        setGithubPr: vi.fn(),
       },
       plans: {
         getLatest: vi.fn(() => ({
@@ -267,6 +272,7 @@ describe('registerPipelineHandlers', () => {
       activity: {
         listRecent: vi.fn(() => []),
         countRecent: vi.fn(() => 0),
+        listByIssue: vi.fn(() => []),
       },
       dashboard: {
         getStats: vi.fn(() => ({
@@ -288,6 +294,7 @@ describe('registerPipelineHandlers', () => {
         getSummary: vi.fn(() => ({})),
         listTasks: vi.fn(() => []),
         countTasks: vi.fn(() => 0),
+        listTasksForIssue: vi.fn(() => []),
       },
       checkpoints: {
         list: vi.fn(() => []),
@@ -313,6 +320,7 @@ describe('registerPipelineHandlers', () => {
       startTesting: vi.fn(async () => undefined),
       startVerification: vi.fn(async () => undefined),
       startCommitAndPush: vi.fn(async () => undefined),
+      startStabilization: vi.fn(async () => undefined),
       rehydrateContext: vi.fn(),
       startPlanGeneration: vi.fn(async () => undefined),
       getContext: vi.fn(() => ({})),
@@ -417,7 +425,7 @@ describe('registerPipelineHandlers', () => {
 
       await handler(undefined, { threadId: 'thread-1' });
 
-      expect(pipeline.startExecution).toHaveBeenCalledWith(
+      expect(pipeline.startReview).toHaveBeenCalledWith(
         'thread-1',
         expect.objectContaining({ objective: 'Test plan' }),
       );
@@ -721,7 +729,7 @@ describe('registerPipelineHandlers', () => {
 
       await handler(undefined, { threadId: 'thread-1' });
 
-      expect(pipeline.startReview).toHaveBeenCalledWith(
+      expect(pipeline.startExecution).toHaveBeenCalledWith(
         'thread-1',
         expect.objectContaining({ objective: 'Test plan' }),
       );
@@ -792,6 +800,108 @@ describe('registerPipelineHandlers', () => {
       );
       await handler(undefined, { threadId: 'thread-1' });
       expect(pipeline.startCommitAndPush).toHaveBeenCalledWith('thread-1');
+    });
+
+    it('rejects resume when the task is already active', async () => {
+      pipeline.listActive.mockReturnValue([
+        {
+          threadId: 'thread-1',
+          projectPath: '/tmp/project',
+          phase: 'executing',
+          startedAt: Date.now(),
+          activeProcessId: 'proc-1',
+        },
+      ]);
+
+      const handler = handlers.get('pipeline:resume');
+      if (!handler) throw new Error('pipeline:resume handler not registered');
+
+      await expect(handler(undefined, { threadId: 'thread-1' })).rejects.toThrow(
+        'Task is already running',
+      );
+      expect(queries.threads.getById).not.toHaveBeenCalled();
+    });
+
+    it('resumes paused revision with raw reviewer output when structured feedback is unavailable', async () => {
+      queries.threads.getById.mockReturnValue(
+        makeThread({
+          status: 'paused',
+          pausedPhase: 'revising',
+        }),
+      );
+      queries.reviews.getByPlanId.mockReturnValue({
+        id: 'review-1',
+        planId: 'plan-1',
+        rawOutput: '  raw reviewer feedback  ',
+        structured: null,
+        decision: 'request_changes',
+        createdAt: new Date().toISOString(),
+      });
+
+      const handler = handlers.get('pipeline:resume');
+      if (!handler) throw new Error('pipeline:resume handler not registered');
+
+      await handler(undefined, { threadId: 'thread-1' });
+
+      expect(pipeline.startRevision).toHaveBeenCalledWith(
+        'thread-1',
+        expect.objectContaining({ objective: 'Test plan' }),
+        'raw reviewer feedback',
+      );
+    });
+  });
+
+  describe('pipeline:stabilize-pr', () => {
+    it('starts stabilization for a linked PR with CI or review blockers', async () => {
+      queries.githubIssues.getByNumber.mockReturnValue({
+        id: 'issue-42',
+        projectId: 'project-1',
+        number: 42,
+        title: 'Fix bug',
+        linkedPrNumber: 17,
+        linkedPrUrl: 'https://github.com/acme/repo/pull/17',
+        ciBlocked: true,
+        failingChecks: [{ name: 'test', conclusion: 'failure' }],
+        unresolvedReviewCommentCount: 1,
+        unresolvedReviewComments: [{ body: 'Please add a regression test' }],
+      });
+
+      const handler = handlers.get('pipeline:stabilize-pr');
+      if (!handler) throw new Error('pipeline:stabilize-pr handler not registered');
+
+      await handler(undefined, { threadId: 'thread-1' });
+
+      expect(pipeline.rehydrateContext).toHaveBeenCalledWith('thread-1', '/tmp/project', 'Fix bug');
+      expect(notificationService.dismissByThread).toHaveBeenCalledWith('thread-1');
+      expect(pipeline.startStabilization).toHaveBeenCalledWith('thread-1', {
+        prNumber: 17,
+        prUrl: 'https://github.com/acme/repo/pull/17',
+        failingChecks: [{ name: 'test', conclusion: 'failure' }],
+        unresolvedReviewComments: [{ body: 'Please add a regression test' }],
+      });
+    });
+
+    it('rejects stabilization when the linked PR has no blockers', async () => {
+      queries.githubIssues.getByNumber.mockReturnValue({
+        id: 'issue-42',
+        projectId: 'project-1',
+        number: 42,
+        title: 'Fix bug',
+        linkedPrNumber: 17,
+        linkedPrUrl: 'https://github.com/acme/repo/pull/17',
+        ciBlocked: false,
+        failingChecks: [],
+        unresolvedReviewCommentCount: 0,
+        unresolvedReviewComments: [],
+      });
+
+      const handler = handlers.get('pipeline:stabilize-pr');
+      if (!handler) throw new Error('pipeline:stabilize-pr handler not registered');
+
+      await expect(handler(undefined, { threadId: 'thread-1' })).rejects.toThrow(
+        'The linked pull request has no unresolved CI or review blockers',
+      );
+      expect(pipeline.startStabilization).not.toHaveBeenCalled();
     });
   });
 
@@ -1101,6 +1211,24 @@ describe('registerPipelineHandlers', () => {
       );
     });
 
+    it('rejects blank failure output before touching the worktree', async () => {
+      queries.threads.getById.mockReturnValue(makeThread({ status: 'failed' }));
+
+      const handler = handlers.get('pipeline:auto-fix');
+      if (!handler) throw new Error('pipeline:auto-fix handler not registered');
+
+      await expect(
+        handler(undefined, {
+          threadId: 'thread-1',
+          failureOutput: '  \n\t  ',
+        }),
+      ).rejects.toThrow('No failure output available for Auto Fix');
+
+      expect(execFileMock).not.toHaveBeenCalled();
+      expect(queries.terminalEvents.create).not.toHaveBeenCalled();
+      expect(pipeline.startExecution).not.toHaveBeenCalled();
+    });
+
     it('falls back to retry routing when no worktree exists yet', async () => {
       queries.threads.getById.mockReturnValue(makeThread({ status: 'failed', worktreePath: null }));
 
@@ -1125,10 +1253,199 @@ describe('registerPipelineHandlers', () => {
         'failed',
         expect.stringContaining('No worktree exists yet'),
       );
+      expect(pipeline.startExecution).toHaveBeenCalledWith(
+        'thread-1',
+        expect.objectContaining({ objective: 'Test plan' }),
+      );
+    });
+
+    it('falls back to retry routing when no checkpoint exists yet', async () => {
+      queries.threads.getById.mockReturnValue(makeThread({ status: 'failed' }));
+      queries.checkpoints.getLatest.mockReturnValue(null);
+
+      const handler = handlers.get('pipeline:auto-fix');
+      if (!handler) throw new Error('pipeline:auto-fix handler not registered');
+
+      await handler(undefined, {
+        threadId: 'thread-1',
+        failureOutput: 'vitest failed',
+      });
+
+      expect(execFileMock).not.toHaveBeenCalled();
+      expect(queries.terminalEvents.create).toHaveBeenCalledWith(
+        'thread-1',
+        expect.objectContaining({
+          kind: 'lifecycle',
+          message: expect.stringContaining('No checkpoint exists yet'),
+        }),
+      );
+      expect(queries.threads.updateStatus).toHaveBeenCalledWith(
+        'thread-1',
+        'failed',
+        expect.stringContaining('No checkpoint exists yet'),
+      );
       expect(pipeline.startReview).toHaveBeenCalledWith(
         'thread-1',
         expect.objectContaining({ objective: 'Test plan' }),
       );
+    });
+
+    it('emits a clamped terminal error when checkpoint restore fails', async () => {
+      queries.threads.getById.mockReturnValue(makeThread({ status: 'failed' }));
+      execFileMock.mockImplementationOnce(
+        (
+          _command: string,
+          _args: string[],
+          _options: Record<string, unknown>,
+          callback: (error: Error | null, stdout: string, stderr: string) => void,
+        ) => {
+          callback(new Error('fatal: could not reset worktree\nfull git trace'), '', '');
+        },
+      );
+
+      const handler = handlers.get('pipeline:auto-fix');
+      if (!handler) throw new Error('pipeline:auto-fix handler not registered');
+
+      await expect(
+        handler(undefined, {
+          threadId: 'thread-1',
+          failureOutput: 'vitest failed',
+        }),
+      ).rejects.toThrow('fatal: could not reset worktree');
+
+      expect(execFileMock).toHaveBeenCalledTimes(1);
+      expect(queries.terminalEvents.create).toHaveBeenCalledWith(
+        'thread-1',
+        expect.objectContaining({
+          kind: 'error',
+          message: 'Auto Fix checkpoint restore failed: fatal: could not reset worktree',
+        }),
+      );
+      expect(queries.threads.updateStatus).not.toHaveBeenCalledWith(
+        'thread-1',
+        'failed',
+        expect.any(String),
+      );
+    });
+  });
+
+  describe('pipeline:create-pr', () => {
+    it('returns an existing pull request for the run branch without creating a new one', async () => {
+      queries.threads.getById.mockReturnValue(
+        makeThread({
+          status: 'completed',
+          worktreeBranch: 'shipcode/thread-1',
+          githubPrNumber: null,
+        }),
+      );
+      execFileMock.mockImplementationOnce(
+        (
+          _command: string,
+          _args: string[],
+          _options: Record<string, unknown>,
+          callback: (error: Error | null, stdout: string, stderr: string) => void,
+        ) => {
+          callback(
+            null,
+            {
+              stdout: JSON.stringify([{ number: 17, url: 'https://github.com/acme/repo/pull/17' }]),
+              stderr: '',
+            } as unknown as string,
+            '',
+          );
+        },
+      );
+
+      const handler = handlers.get('pipeline:create-pr');
+      if (!handler) throw new Error('pipeline:create-pr handler not registered');
+
+      await expect(handler(undefined, { threadId: 'thread-1' })).resolves.toEqual({
+        prNumber: 17,
+        prUrl: 'https://github.com/acme/repo/pull/17',
+      });
+
+      expect(execFileMock).toHaveBeenCalledTimes(1);
+      expect(execFileMock).toHaveBeenCalledWith(
+        'gh',
+        [
+          'pr',
+          'list',
+          '--state',
+          'all',
+          '--head',
+          'shipcode/thread-1',
+          '--json',
+          'number,url',
+          '--limit',
+          '1',
+        ],
+        expect.objectContaining({ cwd: '/tmp/worktree' }),
+        expect.any(Function),
+      );
+      expect(queries.threads.setGithubPr).toHaveBeenCalledWith('thread-1', 17);
+    });
+
+    it('creates a draft pull request when no existing branch PR is found', async () => {
+      queries.threads.getById.mockReturnValue(
+        makeThread({
+          status: 'completed',
+          worktreeBranch: 'shipcode/thread-1',
+          githubPrNumber: null,
+        }),
+      );
+      execFileMock
+        .mockImplementationOnce(
+          (
+            _command: string,
+            _args: string[],
+            _options: Record<string, unknown>,
+            callback: (error: Error | null, stdout: string, stderr: string) => void,
+          ) => {
+            callback(null, { stdout: '[]', stderr: '' } as unknown as string, '');
+          },
+        )
+        .mockImplementationOnce(
+          (
+            _command: string,
+            _args: string[],
+            _options: Record<string, unknown>,
+            callback: (error: Error | null, stdout: string, stderr: string) => void,
+          ) => {
+            callback(
+              null,
+              {
+                stdout: 'https://github.com/acme/repo/pull/18\n',
+                stderr: '',
+              } as unknown as string,
+              '',
+            );
+          },
+        );
+
+      const handler = handlers.get('pipeline:create-pr');
+      if (!handler) throw new Error('pipeline:create-pr handler not registered');
+
+      await expect(handler(undefined, { threadId: 'thread-1' })).resolves.toEqual({
+        prNumber: 18,
+        prUrl: 'https://github.com/acme/repo/pull/18',
+      });
+
+      expect(execFileMock).toHaveBeenNthCalledWith(
+        2,
+        'gh',
+        expect.arrayContaining([
+          'pr',
+          'create',
+          '--draft',
+          '--head',
+          'shipcode/thread-1',
+          '--base',
+          'main',
+        ]),
+        expect.objectContaining({ cwd: '/tmp/worktree' }),
+        expect.any(Function),
+      );
+      expect(queries.threads.setGithubPr).toHaveBeenCalledWith('thread-1', 18);
     });
   });
 });

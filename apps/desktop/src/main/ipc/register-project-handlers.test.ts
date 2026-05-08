@@ -997,7 +997,7 @@ describe('registerProjectHandlers', () => {
   it('keeps the project row when tracked worktree cleanup fails during removal', async () => {
     worktreeRemoveMock.mockResolvedValueOnce({
       success: false,
-      error: 'branch is checked out elsewhere',
+      error: 'branch is checked out elsewhere' as never,
     });
     const queries = {
       projects: {

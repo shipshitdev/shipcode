@@ -208,7 +208,7 @@ describe('registerFeatureQaHandlers', () => {
 
   it('evicts exited manual QA servers and validates start-server prerequisites', async () => {
     const deps = makeDeps([]);
-    vi.mocked(deps.processManager.get).mockReturnValueOnce(null);
+    vi.mocked(deps.processManager.get).mockReturnValueOnce(null as never);
 
     registerFeatureQaHandlers(deps as never);
     const start = handlers.get('feature-qa:start-server');
@@ -218,7 +218,7 @@ describe('registerFeatureQaHandlers', () => {
     await start(undefined, { projectId: 'project-1', threadId: 'thread-1' });
     expect(get(undefined, { threadId: 'thread-1' })).toBeNull();
 
-    vi.mocked(deps.queries.projects.getById).mockReturnValueOnce(null);
+    vi.mocked(deps.queries.projects.getById).mockReturnValueOnce(null as never);
     await expect(
       start(undefined, { projectId: 'missing-project', threadId: 'thread-1' }),
     ).rejects.toThrow('Project missing-project not found');
@@ -235,7 +235,7 @@ describe('registerFeatureQaHandlers', () => {
     vi.mocked(deps.queries.threads.getById).mockReturnValueOnce({
       id: 'thread-1',
       projectId: 'project-1',
-      worktreePath: null,
+      worktreePath: null as never,
     });
     await expect(
       start(undefined, { projectId: 'project-1', threadId: 'thread-1' }),
