@@ -1,6 +1,6 @@
 import { type AgentState, formatDurationSeconds, type TerminalEventRecord } from '@shipcode/shared';
 import { Badge, Button } from '@shipshitdev/ui';
-import { Square, X } from 'lucide-react';
+import { X, XCircle } from 'lucide-react';
 import { useMemo } from 'react';
 import { useSharedSecondNow } from '../../hooks/useSharedSecondNow';
 import type { TerminalPaneMode } from '../../stores/app-store';
@@ -93,7 +93,7 @@ export function TerminalPane({
               title="Stop"
               onClick={() => onCancel(threadId)}
             >
-              <Square size={12} />
+              <XCircle size={12} />
             </Button>
           )}
           <Button

@@ -166,6 +166,52 @@ describe('InboxView', () => {
     ).toBeInTheDocument();
   });
 
+  it('removes a failed notification immediately after retry is clicked', async () => {
+    let listedNotifications = [...notifications];
+    let resolveRetry: () => void = () => {};
+    const retryStarted = new Promise<void>((resolve) => {
+      resolveRetry = () => {
+        listedNotifications = listedNotifications.filter((n) => n.id !== 'notification-2');
+        resolve();
+      };
+    });
+
+    vi.mocked(window.shipcode.invoke).mockImplementation(
+      async (channel: string, args?: unknown) => {
+        if (channel === 'notification:list') return listedNotifications;
+        if (channel === 'pipeline:retry') return retryStarted;
+        if (channel === 'github:list-issues') return [];
+        if (channel === 'thread:get') return null;
+        return args ?? null;
+      },
+    );
+
+    renderWithProviders();
+
+    const title = await screen.findByText('Execution failed for demo task');
+    const row = title.closest('tr');
+    expect(row).not.toBeNull();
+
+    fireEvent.click(
+      within(row as HTMLTableRowElement).getByRole('button', { name: /Retry pipeline/i }),
+    );
+
+    await waitFor(() => {
+      expect(window.shipcode.invoke).toHaveBeenCalledWith('pipeline:retry', {
+        threadId: 'thread-2',
+      });
+    });
+    await waitFor(() => {
+      expect(screen.queryByText('Execution failed for demo task')).not.toBeInTheDocument();
+    });
+
+    resolveRetry();
+
+    await waitFor(() => {
+      expect(screen.queryByText('Execution failed for demo task')).not.toBeInTheDocument();
+    });
+  });
+
   it('opens the issue matched by github issue number when the notification has a stale thread id', async () => {
     const fallbackIssue = makeIssue({ threadId: 'replacement-thread', issueNumber: 42 });
     vi.mocked(window.shipcode.invoke).mockImplementation(async (channel: string) => {

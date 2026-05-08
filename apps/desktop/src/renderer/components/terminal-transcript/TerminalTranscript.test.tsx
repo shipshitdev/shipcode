@@ -196,7 +196,11 @@ describe('TerminalTranscript', () => {
   });
 
   it('renders action rows as callbacks when an action handler is provided', () => {
-    const action = { kind: 'action' as const, label: 'Open issue', action: 'open-issue-detail' };
+    const action = {
+      kind: 'action',
+      label: 'Open issue',
+      action: 'open-issue-detail',
+    } as const;
     const onAction = vi.fn();
 
     renderTranscript(

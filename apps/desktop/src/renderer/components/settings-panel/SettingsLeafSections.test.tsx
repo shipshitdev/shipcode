@@ -152,6 +152,13 @@ const integrationStatus: IntegrationStatus = {
       error: null,
       checkedAt: '2026-05-08T10:00:00.000Z',
     },
+    gemini: {
+      provider: 'gemini',
+      source: 'fallback',
+      models: [],
+      error: 'No Gemini models reported',
+      checkedAt: '2026-05-08T10:00:00.000Z',
+    },
   },
   ghAuth: {
     installed: true,

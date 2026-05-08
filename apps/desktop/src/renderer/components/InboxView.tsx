@@ -21,13 +21,18 @@ import {
 } from '@shipshitdev/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowUpDown, Maximize2, RefreshCw, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { NOTIFICATIONS_STALE_TIME } from '../query-stale-times';
 import { useAppStore } from '../stores/app-store';
 
 const PAGE_SIZE = 25;
 
 type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info' | 'accent';
+
+type RetryPipelineInput = {
+  threadId: string;
+  notificationId: string;
+};
 
 const KIND_BADGE_VARIANT: Record<NotificationKind, BadgeVariant> = {
   awaiting_approval: 'warning',
@@ -71,6 +76,16 @@ export function InboxView() {
     staleTime: NOTIFICATIONS_STALE_TIME,
   });
 
+  const removeNotificationFromInbox = useCallback(
+    (id: string) => {
+      removeNotification(id);
+      queryClient.setQueryData<NotificationRecord[]>(['notifications'], (current) =>
+        current ? current.filter((notification) => notification.id !== id) : current,
+      );
+    },
+    [queryClient, removeNotification],
+  );
+
   const active = filterAttentionRequiredNotifications(
     notifications.filter((n) => n.dismissedAt === null),
   );
@@ -106,8 +121,26 @@ export function InboxView() {
   });
 
   const retryPipeline = useMutation({
-    mutationFn: (threadId: string) => window.shipcode.invoke('pipeline:retry', { threadId }),
-    onSuccess: () => {
+    mutationFn: ({ threadId }: RetryPipelineInput) =>
+      window.shipcode.invoke('pipeline:retry', { threadId }),
+    onMutate: async ({ notificationId }) => {
+      await queryClient.cancelQueries({ queryKey: ['notifications'] });
+      const previousNotifications = queryClient.getQueryData<NotificationRecord[]>([
+        'notifications',
+      ]);
+      removeNotificationFromInbox(notificationId);
+      return { previousNotifications };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previousNotifications) {
+        queryClient.setQueryData<NotificationRecord[]>(
+          ['notifications'],
+          context.previousNotifications,
+        );
+      }
+    },
+    onSuccess: (_result, { notificationId }) => {
+      removeNotificationFromInbox(notificationId);
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
   });
@@ -122,14 +155,15 @@ export function InboxView() {
     const unsubFire = window.shipcode.on('notification:fire', () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
     });
-    const unsubDismiss = window.shipcode.on('notification:dismiss', () => {
+    const unsubDismiss = window.shipcode.on('notification:dismiss', ({ id }) => {
+      removeNotificationFromInbox(id);
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
     });
     return () => {
       unsubFire();
       unsubDismiss();
     };
-  }, [queryClient]);
+  }, [queryClient, removeNotificationFromInbox]);
 
   // Switch project, fetch its issues, locate the one linked to the notification's
   // threadId, then open the IssueDetail sidebar via selectIssue. Without the
@@ -227,8 +261,12 @@ export function InboxView() {
                   <Button
                     variant="ghost"
                     size="icon-xs"
-                    onClick={() => retryPipeline.mutate(n.threadId as string)}
-                    disabled={retryPipeline.isPending && retryPipeline.variables === n.threadId}
+                    onClick={() =>
+                      retryPipeline.mutate({ threadId: n.threadId, notificationId: n.id })
+                    }
+                    disabled={
+                      retryPipeline.isPending && retryPipeline.variables?.threadId === n.threadId
+                    }
                     aria-label={`Retry pipeline: ${n.title}`}
                   >
                     <RefreshCw size={13} />

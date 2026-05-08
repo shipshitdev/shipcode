@@ -269,6 +269,77 @@ function formatPhaseLabel(phase: string | null): string {
   return phase ? phase.replace(/_/g, ' ') : 'process';
 }
 
+function cpuColorClass(percent: number | null): {
+  text: string;
+  border: string;
+  bg: string;
+  hover: string;
+  stroke: string;
+} {
+  if (percent == null || percent <= 50) {
+    return {
+      text: 'text-success',
+      border: 'border-border/80',
+      bg: 'bg-secondary/40',
+      hover: 'hover:bg-secondary/60',
+      stroke: 'stroke-success',
+    };
+  }
+  if (percent <= 70) {
+    return {
+      text: 'text-warning',
+      border: 'border-warning/25',
+      bg: 'bg-warning/5',
+      hover: 'hover:bg-warning/10',
+      stroke: 'stroke-warning',
+    };
+  }
+  return {
+    text: 'text-danger',
+    border: 'border-danger/25',
+    bg: 'bg-danger/5',
+    hover: 'hover:bg-danger/10',
+    stroke: 'stroke-danger',
+  };
+}
+
+function CpuGauge({ percent }: { percent: number | null }) {
+  const radius = 36;
+  const strokeWidth = 6;
+  const circumference = Math.PI * radius;
+  const clamped = percent == null ? 0 : Math.max(0, Math.min(100, percent));
+  const offset = circumference - (clamped / 100) * circumference;
+  const colors = cpuColorClass(percent);
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <svg width={88} height={52} viewBox="0 0 88 52" className="overflow-visible">
+        <path
+          d="M 6 48 A 36 36 0 0 1 82 48"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          className="text-tertiary"
+          strokeLinecap="round"
+        />
+        <path
+          d="M 6 48 A 36 36 0 0 1 82 48"
+          fill="none"
+          strokeWidth={strokeWidth}
+          className={colors.stroke}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          style={{ transition: 'stroke-dashoffset 0.6s ease-out' }}
+        />
+      </svg>
+      <span className={cn('text-lg font-semibold tabular-nums', colors.text)}>
+        {percent == null ? '—' : `${Math.round(percent)}%`}
+      </span>
+    </div>
+  );
+}
+
 function ResourceUsageBadge() {
   const queryClient = useQueryClient();
   const { data: snapshot, isFetching } = useQuery<SystemResourceSnapshot | null>({
@@ -294,8 +365,9 @@ function ResourceUsageBadge() {
 
   if (!snapshot) return null;
 
-  const cpuLabel =
-    snapshot.cpuPercent == null ? 'CPU --' : `CPU ${Math.round(snapshot.cpuPercent)}%`;
+  const cpuValue =
+    snapshot.cpuPercent == null ? '—' : `${Math.round(snapshot.cpuPercent)}%`;
+  const colors = cpuColorClass(snapshot.cpuPercent);
   const topTasks = snapshot.tasks.slice(0, 8);
 
   return (
@@ -307,14 +379,15 @@ function ResourceUsageBadge() {
           aria-label="CPU usage"
           className={cn(
             'flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 app-region-no-drag',
-            snapshot.highCpu
-              ? 'border-warning/25 bg-warning/5 hover:bg-warning/10'
-              : 'border-border/80 bg-secondary/40 hover:bg-secondary/60',
+            colors.border,
+            colors.bg,
+            colors.hover,
           )}
         >
-          <Cpu size={12} className={snapshot.highCpu ? 'text-warning' : 'text-secondary'} />
-          <span className="text-[10px] font-medium tracking-[0.08em] text-secondary uppercase tabular-nums">
-            {cpuLabel}
+          <Cpu size={12} className={colors.text} />
+          <span className="text-[10px] font-medium tracking-[0.08em] uppercase tabular-nums">
+            <span className="text-secondary">CPU </span>
+            <span className={cn('inline-block w-[3ch] text-right', colors.text)}>{cpuValue}</span>
           </span>
           {isFetching ? <Loader2 size={10} className="animate-spin text-muted" /> : null}
         </Button>
@@ -325,12 +398,15 @@ function ResourceUsageBadge() {
         className="w-[calc(100vw-24px)] max-w-[560px] rounded-xl bg-primary p-4 shadow-2xl shadow-black/40"
       >
         <div className="mb-3 flex items-start justify-between gap-3">
-          <div>
-            <div className="text-[11px] font-medium text-primary">CPU usage</div>
-            <div className="text-[10px] text-muted">
-              {snapshot.cpuPercent == null
-                ? `${snapshot.cpuCoreCount} cores · warming up`
-                : `${snapshot.cpuCoreCount} cores · ${snapshot.cpuPercent}% host CPU`}
+          <div className="flex items-center gap-4">
+            <CpuGauge percent={snapshot.cpuPercent} />
+            <div>
+              <div className="text-[11px] font-medium text-primary">CPU usage</div>
+              <div className="text-[10px] text-muted">
+                {snapshot.cpuPercent == null
+                  ? `${snapshot.cpuCoreCount} cores · warming up`
+                  : `${snapshot.cpuCoreCount} cores · ${snapshot.cpuPercent}% host CPU`}
+              </div>
             </div>
           </div>
         </div>

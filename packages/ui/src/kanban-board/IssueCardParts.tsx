@@ -13,6 +13,7 @@ import {
   Play,
   RefreshCw,
   Square,
+  XCircle,
 } from 'lucide-react';
 import { memo } from 'react';
 import { IssueHoverCard } from '@/kanban-board/IssueHoverCard';
@@ -804,7 +805,7 @@ function DraggableCardComponent({
                     className="text-danger focus:text-danger"
                     onClick={() => onCancel(issue)}
                   >
-                    <Square size={14} />
+                    <XCircle size={14} />
                     Cancel
                   </DropdownMenuItem>
                 )}
