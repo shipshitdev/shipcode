@@ -4,6 +4,7 @@ import type {
   IntegrationStatus,
   ProjectOpenTarget,
 } from '@shipcode/shared';
+import { SettingsSection } from '@shipcode/ui';
 import {
   Button,
   Input,
@@ -88,14 +89,11 @@ export function IntegrationsSettingsSection({
       error: null,
     };
   const terminalOpenerSection = (
-    <section className="mb-6 rounded-md border border-border bg-secondary/40 p-3">
-      <div className="mb-3">
-        <div className="text-[13px] font-medium text-primary">Terminal opener</div>
-        <div className="text-[11px] text-muted">
-          Choose the terminal ShipCode opens from Terminal and the console drawer.
-        </div>
-      </div>
-
+    <SettingsSection
+      title="Terminal opener"
+      description="Choose the terminal ShipCode opens from Terminal and the console drawer."
+      className="mb-6"
+    >
       <div className="mb-4 flex max-w-[260px] flex-col gap-1.5">
         <label htmlFor="terminal-open-target" className="text-[11px] text-secondary">
           Default terminal
@@ -148,17 +146,14 @@ export function IntegrationsSettingsSection({
           );
         })}
       </div>
-    </section>
+    </SettingsSection>
   );
   const projectOpenerSection = (
-    <section className="mb-6 rounded-md border border-border bg-secondary/40 p-3">
-      <div className="mb-3">
-        <div className="text-[13px] font-medium text-primary">Project opener</div>
-        <div className="text-[11px] text-muted">
-          Choose the default app ShipCode uses when you open a project folder from the sidebar.
-        </div>
-      </div>
-
+    <SettingsSection
+      title="Project opener"
+      description="Choose the default app ShipCode uses when you open a project folder from the sidebar."
+      className="mb-6"
+    >
       <div className="mb-4 flex max-w-[260px] flex-col gap-1.5">
         <label htmlFor="project-open-target" className="text-[11px] text-secondary">
           Default app
@@ -211,7 +206,7 @@ export function IntegrationsSettingsSection({
           );
         })}
       </div>
-    </section>
+    </SettingsSection>
   );
 
   return (
@@ -339,9 +334,8 @@ export function IntegrationsSettingsSection({
             })}
           </TabsContent>
 
-          <TabsContent value="api-keys" className="mt-0 space-y-8">
-            <section>
-              <h4 className="mb-3 text-secondary">API Keys</h4>
+          <TabsContent value="api-keys" className="mt-0">
+            <SettingsSection title="API Keys">
               <div className="rounded-md border border-border bg-secondary/40 p-3 text-[12px] text-secondary">
                 <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
                   <span className="text-[13px] font-medium text-primary">OpenRouter</span>
@@ -377,10 +371,9 @@ export function IntegrationsSettingsSection({
                   ) : null}
                 </div>
               </div>
-            </section>
+            </SettingsSection>
 
-            <section>
-              <h4 className="mb-3 text-secondary">Chat Providers</h4>
+            <SettingsSection title="Chat Providers">
               <div className="space-y-4">
                 <div className="rounded-md border border-border bg-secondary/40 p-3 text-[12px] text-secondary">
                   <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
@@ -502,10 +495,9 @@ export function IntegrationsSettingsSection({
                   </div>
                 </div>
               </div>
-            </section>
+            </SettingsSection>
 
-            <section>
-              <h4 className="mb-3 text-secondary">OpenRouter Models</h4>
+            <SettingsSection title="OpenRouter Models">
               <div className="space-y-2">
                 {integrationStatus.openrouter.modelChecks.map((check) => {
                   const presentation = getOpenRouterModelPresentation(check);
@@ -534,7 +526,7 @@ export function IntegrationsSettingsSection({
                   );
                 })}
               </div>
-            </section>
+            </SettingsSection>
           </TabsContent>
 
           <TabsContent value="ide" className="mt-0">

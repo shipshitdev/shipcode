@@ -1,4 +1,5 @@
 import type { AppSettings } from '@shipcode/shared';
+import { SettingsSection } from '@shipcode/ui';
 import {
   Input,
   Select,
@@ -27,8 +28,7 @@ export function AutoCommitSettingsSection({
     <>
       <h3 className="mb-5">Auto-commit & Cleanup</h3>
 
-      <section className="mb-8">
-        <h4 className="mb-3 text-secondary">Auto-commit</h4>
+      <SettingsSection title="Auto-commit">
         <SettingsRow
           label="Enabled"
           htmlFor="auto-commit-enabled"
@@ -73,10 +73,9 @@ export function AutoCommitSettingsSection({
             </SelectContent>
           </Select>
         </SettingsRow>
-      </section>
+      </SettingsSection>
 
-      <section className="mb-8">
-        <h4 className="mb-3 text-secondary">Cleanup criteria</h4>
+      <SettingsSection title="Cleanup criteria">
         <p className="mb-3 text-sm text-secondary">
           Which categories the Cleanup button surfaces. Confirm modal still required before any
           destructive action.
@@ -149,7 +148,7 @@ export function AutoCommitSettingsSection({
             }
           />
         </SettingsRow>
-      </section>
+      </SettingsSection>
     </>
   );
 }

@@ -1,4 +1,5 @@
 import type { AppSettings } from '@shipcode/shared';
+import { SettingsSection } from '@shipcode/ui';
 import { SettingsRow, Switch } from '@shipshitdev/ui';
 
 export function NotificationsSettingsSection({
@@ -12,7 +13,7 @@ export function NotificationsSettingsSection({
     <>
       <h3 className="mb-5">Notifications</h3>
 
-      <section className="mb-8">
+      <SettingsSection title="Desktop alerts">
         <SettingsRow label="Enable notifications" htmlFor="notifications-enabled">
           <Switch
             id="notifications-enabled"
@@ -117,13 +118,9 @@ export function NotificationsSettingsSection({
             disabled={!settings.notificationsEnabled}
           />
         </SettingsRow>
-      </section>
+      </SettingsSection>
 
-      <section className="mb-8">
-        <p className="mt-4 mb-1 text-xs uppercase tracking-wide text-muted">
-          Chat alerts (Discord / Telegram)
-        </p>
-
+      <SettingsSection title="Chat alerts">
         <SettingsRow label="Chat: needs approval" htmlFor="chat-awaiting-approval">
           <Switch
             id="chat-awaiting-approval"
@@ -202,7 +199,7 @@ export function NotificationsSettingsSection({
             }
           />
         </SettingsRow>
-      </section>
+      </SettingsSection>
     </>
   );
 }

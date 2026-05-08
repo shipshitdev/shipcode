@@ -1,4 +1,5 @@
 import type { AppSettings, DeveloperInfo } from '@shipcode/shared';
+import { SettingsSection } from '@shipcode/ui';
 import {
   Button,
   Select,
@@ -54,8 +55,7 @@ export function DeveloperSettingsSection({
     <>
       <h3 className="mb-5">Developer</h3>
 
-      <section className="mb-8">
-        <h4 className="mb-3 text-secondary">App Info</h4>
+      <SettingsSection title="App Info">
         <SettingsRow label="ShipCode version">
           <code className="text-sm text-secondary">{info?.appVersion ?? '...'}</code>
         </SettingsRow>
@@ -65,10 +65,9 @@ export function DeveloperSettingsSection({
         <SettingsRow label="Node">
           <span className="text-sm text-secondary">{info?.nodeVersion ?? '...'}</span>
         </SettingsRow>
-      </section>
+      </SettingsSection>
 
-      <section className="mb-8">
-        <h4 className="mb-3 text-secondary">Diagnostics</h4>
+      <SettingsSection title="Diagnostics">
         <SettingsRow
           label="Copy diagnostics"
           description="Copies app version, OS, and CLI versions to clipboard for bug reports."
@@ -92,10 +91,9 @@ export function DeveloperSettingsSection({
             )}
           </Button>
         </SettingsRow>
-      </section>
+      </SettingsSection>
 
-      <section className="mb-8">
-        <h4 className="mb-3 text-secondary">DevTools</h4>
+      <SettingsSection title="DevTools">
         <SettingsRow
           label="Chrome DevTools"
           description="Opens the renderer DevTools panel in a detached window."
@@ -109,10 +107,9 @@ export function DeveloperSettingsSection({
             Open DevTools
           </Button>
         </SettingsRow>
-      </section>
+      </SettingsSection>
 
-      <section className="mb-8">
-        <h4 className="mb-3 text-secondary">Logs</h4>
+      <SettingsSection title="Logs">
         <SettingsRow label="Log files" description="Reveals the electron-log directory in Finder.">
           <Button
             variant="secondary"
@@ -140,7 +137,7 @@ export function DeveloperSettingsSection({
             </SelectContent>
           </Select>
         </SettingsRow>
-      </section>
+      </SettingsSection>
     </>
   );
 }

@@ -169,6 +169,12 @@ describe('PipelineSettingsSection', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Format model')).toBeInTheDocument();
     expect(screen.getAllByText(/PRD and automation prompt formatting/i).length).toBeGreaterThan(0);
+    expect(
+      screen.getByText('OpenRouter Defaults').closest('[data-slot="settings-section"]'),
+    ).not.toHaveClass('rounded-md');
+    expect(
+      screen.getByText('Issue triage').closest('[data-slot="settings-section"]'),
+    ).not.toHaveClass('rounded-md');
   });
 
   it('applies a model preset as a single settings patch', () => {

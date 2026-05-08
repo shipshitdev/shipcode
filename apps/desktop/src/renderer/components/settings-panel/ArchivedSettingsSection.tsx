@@ -1,4 +1,5 @@
 import type { GitHubIssueCacheRecord, Project } from '@shipcode/shared';
+import { SettingsSection } from '@shipcode/ui';
 import { Button, Tabs, TabsContent, TabsList, TabsTrigger } from '@shipshitdev/ui';
 
 export function ArchivedSettingsSection({
@@ -26,12 +27,10 @@ export function ArchivedSettingsSection({
         </TabsList>
 
         <TabsContent value="projects">
-          <section className="mb-8">
-            <p className="mb-3 text-xs text-secondary">
-              Archived projects are hidden from the sidebar but remain navigable via Activity and
-              notifications. They re-appear automatically when new work arrives, or you can restore
-              one manually here.
-            </p>
+          <SettingsSection
+            title="Archived projects"
+            description="Archived projects are hidden from the sidebar but remain navigable via Activity and notifications. They re-appear automatically when new work arrives, or you can restore one manually here."
+          >
             {archivedProjects.length === 0 ? (
               <p className="text-[13px] text-muted">No archived projects.</p>
             ) : (
@@ -57,15 +56,14 @@ export function ArchivedSettingsSection({
                 ))}
               </div>
             )}
-          </section>
+          </SettingsSection>
         </TabsContent>
 
         <TabsContent value="issues">
-          <section className="mb-8">
-            <p className="mb-3 text-xs text-secondary">
-              Archived issues are closed on GitHub and hidden from the board. Restoring brings them
-              back locally but does not reopen them on GitHub.
-            </p>
+          <SettingsSection
+            title="Archived issues"
+            description="Archived issues are closed on GitHub and hidden from the board. Restoring brings them back locally but does not reopen them on GitHub."
+          >
             {archivedIssues.length === 0 ? (
               <p className="text-[13px] text-muted">No archived issues.</p>
             ) : (
@@ -92,7 +90,7 @@ export function ArchivedSettingsSection({
                 ))}
               </div>
             )}
-          </section>
+          </SettingsSection>
         </TabsContent>
       </Tabs>
     </>

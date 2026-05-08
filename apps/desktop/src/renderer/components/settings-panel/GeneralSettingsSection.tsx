@@ -1,4 +1,5 @@
 import { type AppSettings, DEFAULT_SETTINGS, type TelemetryStatus } from '@shipcode/shared';
+import { SettingsSection } from '@shipcode/ui';
 import {
   Button,
   Input,
@@ -31,8 +32,7 @@ export function GeneralSettingsSection({
     <>
       <h3 className="mb-5">General</h3>
 
-      <section className="mb-8">
-        <h4 className="mb-3 text-secondary">Appearance</h4>
+      <SettingsSection title="Appearance">
         <SettingsRow
           label="Theme"
           htmlFor="theme"
@@ -93,10 +93,9 @@ export function GeneralSettingsSection({
             </SelectContent>
           </Select>
         </SettingsRow>
-      </section>
+      </SettingsSection>
 
-      <section className="mb-8">
-        <h4 className="mb-3 text-secondary">Privacy</h4>
+      <SettingsSection title="Privacy">
         <SettingsRow
           label="Send anonymous error reports"
           htmlFor="telemetry-enabled"
@@ -126,10 +125,9 @@ export function GeneralSettingsSection({
                 : 'disabled'}
           .
         </p>
-      </section>
+      </SettingsSection>
 
-      <section className="mb-8">
-        <h4 className="mb-3 text-secondary">Worktree Location</h4>
+      <SettingsSection title="Worktree Location">
         <SettingsRow label="Worktree root" htmlFor="worktree-root">
           <Input
             id="worktree-root"
@@ -169,10 +167,9 @@ export function GeneralSettingsSection({
           Tokens: <code>{'{id}'}</code> = issue number, <code>{'{slug}'}</code> = slugified title.
           Default: <code>{DEFAULT_SETTINGS.worktreeBranchFormat}</code>. Leave blank to reset.
         </p>
-      </section>
+      </SettingsSection>
 
-      <section className="mb-8">
-        <h4 className="mb-3 text-secondary">Add Project</h4>
+      <SettingsSection title="Add Project">
         <SettingsRow
           label="Start browsing in"
           htmlFor="add-project-starts-in"
@@ -194,16 +191,15 @@ export function GeneralSettingsSection({
           Default: <code>~/</code> (home directory). Use an absolute path or <code>~/...</code>.
           Leave blank to reset.
         </p>
-      </section>
+      </SettingsSection>
 
-      <section className="mb-8">
-        <h4 className="mb-3 text-secondary">Setup</h4>
+      <SettingsSection title="Setup">
         <SettingsRow label="Re-run the onboarding wizard">
           <Button variant="secondary" onClick={() => onUpdate({ onboardingVersion: 0 })}>
             Re-run Setup
           </Button>
         </SettingsRow>
-      </section>
+      </SettingsSection>
     </>
   );
 }

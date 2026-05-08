@@ -46,7 +46,7 @@ const REASONING_EFFORT_LABELS: Record<ReasoningEffort, string> = {
   low: 'Low',
   medium: 'Medium',
   high: 'High',
-  xhigh: 'Max',
+  xhigh: 'Extra high',
 };
 const CLAUDE_REASONING_SUPPORT_MESSAGE =
   'Claude in ShipCode supports None, Medium, and High thinking budgets.';
@@ -139,7 +139,7 @@ export function resolveProviderReasoningEffort(
         configured,
         effective: 'low',
         exact: false,
-        message: `${normalizedModelId ?? 'Codex'} supports Low, Medium, High, and Max reasoning effort. Using ${formatReasoningEffortLabel('low')}.`,
+        message: `${normalizedModelId ?? 'Codex'} supports Low, Medium, High, and Extra high reasoning effort. Using ${formatReasoningEffortLabel('low')}.`,
       };
     }
     return { configured, effective: configured, exact: true, message: null };

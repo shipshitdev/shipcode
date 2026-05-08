@@ -12,6 +12,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { PipelineStatus } from '@/PipelineStatus';
 import { PlanViewer } from '@/PlanViewer';
 import { ReviewViewer } from '@/ReviewViewer';
+import { SettingsSection } from '@/SettingsSection';
 import { TaskGraphViewer } from '@/TaskGraphViewer';
 import { VerificationViewer } from '@/VerificationViewer';
 
@@ -183,6 +184,22 @@ const taskGraph: TaskGraphWithNodes = {
 };
 
 describe('root UI components', () => {
+  it('renders settings sections without card chrome', () => {
+    const view = renderIntoDom(
+      <SettingsSection title="Models" description="Shared phase defaults.">
+        <button type="button">Apply</button>
+      </SettingsSection>,
+    );
+
+    const section = view.container.querySelector('[data-slot="settings-section"]');
+    expect(section?.textContent).toContain('Models');
+    expect(section?.textContent).toContain('Shared phase defaults.');
+    expect(section?.className).toContain('mb-8');
+    expect(section?.className).not.toContain('rounded');
+    expect(section?.className).not.toContain('border');
+    view.cleanup();
+  });
+
   it('renders active and completed phases and only emits clicks for enabled phases', () => {
     const onPhaseClick = vi.fn();
     const view = renderIntoDom(

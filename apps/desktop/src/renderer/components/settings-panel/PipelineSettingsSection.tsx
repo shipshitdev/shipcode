@@ -10,6 +10,7 @@ import {
   type ModelConfigPresetKey,
   resolveProviderReasoningEffort,
 } from '@shipcode/shared';
+import { SettingsSection } from '@shipcode/ui';
 import {
   Button,
   DropdownMenu,
@@ -102,7 +103,7 @@ export function PipelineSettingsSection({
         </TabsList>
 
         <TabsContent value="runtime" className="mt-0">
-          <section className="mb-8">
+          <SettingsSection>
             <SettingsRow
               label="Require approval before execution"
               htmlFor="require-approval"
@@ -198,46 +199,37 @@ export function PipelineSettingsSection({
                 </SelectContent>
               </Select>
             </SettingsRow>
-          </section>
+          </SettingsSection>
         </TabsContent>
 
         <TabsContent value="models" className="mt-0">
-          <section className="mb-8">
-            <div className="mb-5 rounded-md border border-border bg-secondary/40 p-3">
-              <div className="mb-3">
-                <div className="text-[13px] font-medium text-primary">Model Presets</div>
-                <div className="text-[11px] text-muted">
-                  Apply a full Claude, Codex, or Hybrid phase layout in one shot. OpenRouter
-                  fallback defaults stay unchanged.
-                </div>
-              </div>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="secondary" size="sm">
-                    Apply Preset
-                    <ChevronDown size={14} />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="min-w-[260px]">
-                  {MODEL_CONFIG_PRESETS.map((preset) => (
-                    <DropdownMenuItem
-                      key={preset.key}
-                      onSelect={() => applyPreset(preset.key)}
-                      className="flex flex-col items-start gap-0.5"
-                    >
-                      <span>{preset.label}</span>
-                      <span className="text-[11px] text-muted">{preset.description}</span>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+          <SettingsSection
+            title="Model Presets"
+            description="Apply a full Claude, Codex, or Hybrid phase layout in one shot. OpenRouter fallback defaults stay unchanged."
+          >
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="secondary" size="sm">
+                  Apply Preset
+                  <ChevronDown size={14} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-[260px]">
+                {MODEL_CONFIG_PRESETS.map((preset) => (
+                  <DropdownMenuItem
+                    key={preset.key}
+                    onSelect={() => applyPreset(preset.key)}
+                    className="flex flex-col items-start gap-0.5"
+                  >
+                    <span>{preset.label}</span>
+                    <span className="text-[11px] text-muted">{preset.description}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </SettingsSection>
 
-            <div className="mb-3 text-[11px] text-muted">
-              Workflow order here is Planner → Reviewer → Executor → Verifier. Clarifying and
-              Awaiting Approval are human checkpoints, so they do not have model rows.
-            </div>
-
+          <SettingsSection title="Format Defaults">
             <SettingsRow
               label="Format CLI"
               description="Powers Format in the PRD editor and automation prompt formatter. Automations with an explicit executor override use that provider first; inherited automations use this default."
@@ -361,206 +353,200 @@ export function PipelineSettingsSection({
                 {prdRewriteModelAvailability.message}
               </div>
             )}
+          </SettingsSection>
 
-            <div className="mb-5 rounded-md border border-border bg-secondary/40 p-3">
-              <div className="mb-3">
-                <div className="text-[13px] font-medium text-primary">OpenRouter Defaults</div>
-                <div className="text-[11px] text-muted">
-                  These defaults are used whenever a phase selects OpenRouter without a custom slug.
-                </div>
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-3">
-                <div className="flex flex-col gap-1.5">
-                  <label
-                    htmlFor="openrouter-default-paid-model"
-                    className="text-[11px] text-secondary"
-                  >
-                    Paid default
-                  </label>
-                  <Select
-                    value={settings.openrouterDefaultPaidModel}
-                    onValueChange={(value) => onUpdate({ openrouterDefaultPaidModel: value })}
-                  >
-                    <SelectTrigger id="openrouter-default-paid-model">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {openrouterModelOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label
-                    htmlFor="openrouter-default-free-model"
-                    className="text-[11px] text-secondary"
-                  >
-                    Free default
-                  </label>
-                  <Select
-                    value={settings.openrouterDefaultFreeModel}
-                    onValueChange={(value) => onUpdate({ openrouterDefaultFreeModel: value })}
-                  >
-                    <SelectTrigger id="openrouter-default-free-model">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {openrouterModelOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label
-                    htmlFor="openrouter-explicit-fallback"
-                    className="text-[11px] text-secondary"
-                  >
-                    Explicit fallback
-                  </label>
-                  <Select
-                    value={settings.openrouterExplicitFallback}
-                    onValueChange={(value) => onUpdate({ openrouterExplicitFallback: value })}
-                  >
-                    <SelectTrigger id="openrouter-explicit-fallback">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {openrouterModelOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-
-            <div className="mb-5 rounded-md border border-border bg-secondary/40 p-3">
-              <div className="mb-3">
-                <div className="text-[13px] font-medium text-primary">Issue triage</div>
-                <div className="text-[11px] text-muted">
-                  Board review model for classifying Todo issues and applying high-confidence
-                  labels.
-                </div>
-              </div>
-              <SettingsRow label="Triage provider" htmlFor="triage-provider">
-                <Select
-                  value={settings.triageModel}
-                  onValueChange={(value) =>
-                    onUpdate({
-                      triageModel: value as AppSettings['triageModel'],
-                      triageModelId: null,
-                      triageReasoningEffort: normalizeEffort(
-                        value as ExecutorModel,
-                        settings.triageReasoningEffort,
-                        null,
-                      ),
-                    })
-                  }
+          <SettingsSection
+            title="OpenRouter Defaults"
+            description="These defaults are used whenever a phase selects OpenRouter without a custom slug."
+          >
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor="openrouter-default-paid-model"
+                  className="text-[11px] text-secondary"
                 >
-                  <SelectTrigger id="triage-provider" className="w-[160px]">
+                  Paid default
+                </label>
+                <Select
+                  value={settings.openrouterDefaultPaidModel}
+                  onValueChange={(value) => onUpdate({ openrouterDefaultPaidModel: value })}
+                >
+                  <SelectTrigger id="openrouter-default-paid-model">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="claude">Anthropic</SelectItem>
-                    <SelectItem value="codex">OpenAI</SelectItem>
-                    <SelectItem value="openrouter">OpenRouter</SelectItem>
-                  </SelectContent>
-                </Select>
-              </SettingsRow>
-              <SettingsRow label="Triage model" htmlFor="triage-model">
-                <Select
-                  value={settings.triageModelId ?? '__default__'}
-                  onValueChange={(value) => {
-                    const nextModelId = value === '__default__' ? null : value;
-                    onUpdate({
-                      triageModelId: nextModelId,
-                      triageReasoningEffort: normalizeEffort(
-                        settings.triageModel,
-                        settings.triageReasoningEffort,
-                        nextModelId,
-                      ),
-                    });
-                  }}
-                >
-                  <SelectTrigger id="triage-model" className="w-[220px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__default__">Default small model</SelectItem>
-                    {settings.triageModelId &&
-                    !triageKnownModelValues.has(settings.triageModelId) ? (
-                      <SelectItem value={settings.triageModelId}>
-                        {settings.triageModelId}
-                      </SelectItem>
-                    ) : null}
-                    {triageModelOptions.map((option) => (
+                    {openrouterModelOptions.map((option) => (
                       <SelectItem key={option.value} value={option.value}>
                         {option.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-              </SettingsRow>
-              <SettingsRow
-                label={
-                  settings.triageModel === 'claude'
-                    ? 'Triage thinking budget'
-                    : 'Triage reasoning effort'
-                }
-                htmlFor="triage-reasoning"
-              >
-                <Select
-                  value={triageEffortResolution.effective}
-                  onValueChange={(value) =>
-                    onUpdate({
-                      triageReasoningEffort: value as AppSettings['triageReasoningEffort'],
-                    })
-                  }
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor="openrouter-default-free-model"
+                  className="text-[11px] text-secondary"
                 >
-                  <SelectTrigger id="triage-reasoning" className="w-[140px]">
+                  Free default
+                </label>
+                <Select
+                  value={settings.openrouterDefaultFreeModel}
+                  onValueChange={(value) => onUpdate({ openrouterDefaultFreeModel: value })}
+                >
+                  <SelectTrigger id="openrouter-default-free-model">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {triageSupportedEfforts.map((effort) => (
-                      <SelectItem key={effort} value={effort}>
-                        {formatReasoningEffortLabel(effort as AppSettings['triageReasoningEffort'])}
+                    {openrouterModelOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-              </SettingsRow>
-              <SettingsRow
-                label="Auto-apply threshold"
-                htmlFor="triage-threshold"
-                description="Recommendations below this confidence are reported but not applied."
-              >
-                <Input
-                  id="triage-threshold"
-                  type="number"
-                  className="w-[90px]"
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  value={settings.triageAutoApplyThreshold}
-                  onChange={(event) => {
-                    const value = Number(event.target.value);
-                    if (value >= 0 && value <= 1) onUpdate({ triageAutoApplyThreshold: value });
-                  }}
-                />
-              </SettingsRow>
-            </div>
+              </div>
 
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor="openrouter-explicit-fallback"
+                  className="text-[11px] text-secondary"
+                >
+                  Explicit fallback
+                </label>
+                <Select
+                  value={settings.openrouterExplicitFallback}
+                  onValueChange={(value) => onUpdate({ openrouterExplicitFallback: value })}
+                >
+                  <SelectTrigger id="openrouter-explicit-fallback">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {openrouterModelOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </SettingsSection>
+
+          <SettingsSection
+            title="Issue triage"
+            description="Board review model for classifying Todo issues and applying high-confidence labels."
+          >
+            <SettingsRow label="Triage provider" htmlFor="triage-provider">
+              <Select
+                value={settings.triageModel}
+                onValueChange={(value) =>
+                  onUpdate({
+                    triageModel: value as AppSettings['triageModel'],
+                    triageModelId: null,
+                    triageReasoningEffort: normalizeEffort(
+                      value as ExecutorModel,
+                      settings.triageReasoningEffort,
+                      null,
+                    ),
+                  })
+                }
+              >
+                <SelectTrigger id="triage-provider" className="w-[160px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="claude">Anthropic</SelectItem>
+                  <SelectItem value="codex">OpenAI</SelectItem>
+                  <SelectItem value="openrouter">OpenRouter</SelectItem>
+                </SelectContent>
+              </Select>
+            </SettingsRow>
+            <SettingsRow label="Triage model" htmlFor="triage-model">
+              <Select
+                value={settings.triageModelId ?? '__default__'}
+                onValueChange={(value) => {
+                  const nextModelId = value === '__default__' ? null : value;
+                  onUpdate({
+                    triageModelId: nextModelId,
+                    triageReasoningEffort: normalizeEffort(
+                      settings.triageModel,
+                      settings.triageReasoningEffort,
+                      nextModelId,
+                    ),
+                  });
+                }}
+              >
+                <SelectTrigger id="triage-model" className="w-[220px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__default__">Default small model</SelectItem>
+                  {settings.triageModelId && !triageKnownModelValues.has(settings.triageModelId) ? (
+                    <SelectItem value={settings.triageModelId}>{settings.triageModelId}</SelectItem>
+                  ) : null}
+                  {triageModelOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </SettingsRow>
+            <SettingsRow
+              label={
+                settings.triageModel === 'claude'
+                  ? 'Triage thinking budget'
+                  : 'Triage reasoning effort'
+              }
+              htmlFor="triage-reasoning"
+            >
+              <Select
+                value={triageEffortResolution.effective}
+                onValueChange={(value) =>
+                  onUpdate({
+                    triageReasoningEffort: value as AppSettings['triageReasoningEffort'],
+                  })
+                }
+              >
+                <SelectTrigger id="triage-reasoning" className="w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {triageSupportedEfforts.map((effort) => (
+                    <SelectItem key={effort} value={effort}>
+                      {formatReasoningEffortLabel(effort as AppSettings['triageReasoningEffort'])}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </SettingsRow>
+            <SettingsRow
+              label="Auto-apply threshold"
+              htmlFor="triage-threshold"
+              description="Recommendations below this confidence are reported but not applied."
+            >
+              <Input
+                id="triage-threshold"
+                type="number"
+                className="w-[90px]"
+                min={0}
+                max={1}
+                step={0.05}
+                value={settings.triageAutoApplyThreshold}
+                onChange={(event) => {
+                  const value = Number(event.target.value);
+                  if (value >= 0 && value <= 1) onUpdate({ triageAutoApplyThreshold: value });
+                }}
+              />
+            </SettingsRow>
+          </SettingsSection>
+
+          <SettingsSection
+            title="Pipeline phases"
+            description="Workflow order here is Planner -> Reviewer -> Executor -> Verifier. Clarifying and Awaiting Approval are human checkpoints, so they do not have model rows."
+          >
             <PhaseModelRow
               label="Planner model"
               htmlFor="planner-model"
@@ -753,11 +739,11 @@ export function PipelineSettingsSection({
               }
               integrationStatus={integrationStatus}
             />
-          </section>
+          </SettingsSection>
         </TabsContent>
 
         <TabsContent value="testing" className="mt-0">
-          <section className="mb-8">
+          <SettingsSection>
             <SettingsRow
               label="Test command"
               description="Shell command run after execution in the worktree. Leave blank to skip."
@@ -778,7 +764,7 @@ export function PipelineSettingsSection({
                 onBlur={(e) => onUpdate({ testingContext: e.target.value.trim() || null })}
               />
             </SettingsRow>
-          </section>
+          </SettingsSection>
         </TabsContent>
       </Tabs>
     </>

@@ -238,14 +238,14 @@ describe('buildCodexArgs', () => {
     ]);
   });
 
-  it('keeps none exact for codex', () => {
+  it('maps none to low for codex', () => {
     expect(
       buildCodexArgs(req({ phase: 'review', phaseHints: { reasoningEffort: 'none' } })),
     ).toEqual([
       '-a',
       'never',
       '-c',
-      'model_reasoning_effort=none',
+      'model_reasoning_effort=low',
       'exec',
       '-',
       '--sandbox',

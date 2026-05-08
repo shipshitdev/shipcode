@@ -1,4 +1,5 @@
 import type { AppSettings } from '@shipcode/shared';
+import { SettingsSection } from '@shipcode/ui';
 import { Input, SettingsRow, Switch } from '@shipshitdev/ui';
 
 const PRIORITY_OPTIONS: Array<{ rank: 'p0' | 'p1' | 'p2' | 'p3'; label: string }> = [
@@ -19,8 +20,7 @@ export function GithubSettingsSection({
     <>
       <h3 className="mb-5">GitHub</h3>
 
-      <section className="mb-8">
-        <h4 className="mb-3 text-secondary">GitHub Integration</h4>
+      <SettingsSection title="GitHub Integration">
         <SettingsRow label="Polling enabled" htmlFor="polling-enabled">
           <Switch
             id="polling-enabled"
@@ -42,10 +42,9 @@ export function GithubSettingsSection({
             step={5000}
           />
         </SettingsRow>
-      </section>
+      </SettingsSection>
 
-      <section className="mb-8">
-        <h4 className="mb-3 text-secondary">Auto-Run</h4>
+      <SettingsSection title="Auto-Run">
         <SettingsRow label="Max tasks per run (0 = all)" htmlFor="auto-run-max">
           <Input
             id="auto-run-max"
@@ -83,7 +82,7 @@ export function GithubSettingsSection({
             </SettingsRow>
           );
         })}
-      </section>
+      </SettingsSection>
     </>
   );
 }

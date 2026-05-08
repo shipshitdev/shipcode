@@ -1,3 +1,4 @@
+import { SettingsSection } from '@shipcode/ui';
 import { SHORTCUTS, type ShortcutCategory, type ShortcutDef } from '../../data/shortcuts';
 
 export function ShortcutsSection() {
@@ -19,8 +20,7 @@ export function ShortcutsSection() {
       </p>
       {(Object.entries(byCategory) as [ShortcutCategory, ShortcutDef[]][]).map(
         ([category, items]) => (
-          <section key={category} className="mb-6">
-            <h4 className="mb-2 text-xs uppercase tracking-wide text-muted">{category}</h4>
+          <SettingsSection key={category} title={category} className="mb-6">
             <div className="divide-y divide-border rounded-md border border-border bg-tertiary">
               {items.map((shortcut) => (
                 <div
@@ -37,7 +37,7 @@ export function ShortcutsSection() {
                 </div>
               ))}
             </div>
-          </section>
+          </SettingsSection>
         ),
       )}
     </>

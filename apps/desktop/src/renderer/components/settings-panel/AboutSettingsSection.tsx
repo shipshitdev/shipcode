@@ -1,4 +1,5 @@
 import type { AppSettings, DeveloperInfo, UpdateStatus } from '@shipcode/shared';
+import { SettingsSection } from '@shipcode/ui';
 import {
   Button,
   Select,
@@ -83,11 +84,10 @@ export function AboutSettingsSection({
     <>
       <h3 className="mb-5">About</h3>
 
-      <section className="mb-8 overflow-hidden rounded-md border border-border bg-secondary/30">
+      <SettingsSection title="Updates">
         <SettingsRow
           label="Version"
           description={`Current version of the application. ${updateStatusDescription(updateStatus)}`}
-          className="px-4 py-4"
         >
           <div className="flex items-center gap-3">
             <code className="font-mono text-sm text-secondary">{info?.appVersion ?? '...'}</code>
@@ -107,7 +107,6 @@ export function AboutSettingsSection({
           label="Update track"
           htmlFor="update-track"
           description="Master is the only published update track today. Stable and nightly are reserved for later desktop channels."
-          className="px-4 py-4"
         >
           <Select value={settings.updateTrack} onValueChange={handleUpdateTrackChange}>
             <SelectTrigger id="update-track" className="w-[220px]">
@@ -122,7 +121,7 @@ export function AboutSettingsSection({
             </SelectContent>
           </Select>
         </SettingsRow>
-      </section>
+      </SettingsSection>
     </>
   );
 }

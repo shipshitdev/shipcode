@@ -333,7 +333,7 @@ describe('UI component regression coverage', () => {
     );
     expect((view.container.querySelector('#theme') as HTMLInputElement | null)?.value).toBe('dark');
     expect(
-      view.container.querySelector('button[title="Refresh terminal sessions"]'),
+      view.container.querySelector('button[aria-label="Refresh terminal sessions"]'),
     ).not.toBeNull();
     expect(document.body.textContent).toContain('Settings');
     expect(document.body.textContent).toContain('Close action');
