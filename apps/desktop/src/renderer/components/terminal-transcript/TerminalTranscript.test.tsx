@@ -183,7 +183,7 @@ describe('TerminalTranscript', () => {
       <TerminalTranscript events={[]} pendingLabel="Waiting for Codex" />,
     );
 
-    expect(screen.getByText('Waiting for Codex…')).toBeInTheDocument();
+    expect(screen.getByText(/Waiting for Codex/)).toBeInTheDocument();
 
     rerender(
       <TooltipProvider>
@@ -192,7 +192,7 @@ describe('TerminalTranscript', () => {
     );
 
     expect(screen.getByText('No execution output captured.')).toBeInTheDocument();
-    expect(screen.queryByText('Waiting for Codex…')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Waiting for Codex/)).not.toBeInTheDocument();
   });
 
   it('renders action rows as callbacks when an action handler is provided', () => {
@@ -210,6 +210,33 @@ describe('TerminalTranscript', () => {
 
     expect(screen.getByText('Ready')).toBeInTheDocument();
     expect(onAction).toHaveBeenCalledWith(action);
+  });
+
+  it('renders passive action rows and skips terminal events with no visible summary', () => {
+    renderTranscript(
+      <TerminalTranscript
+        events={[
+          makeTextEvent({
+            id: 'event-passive-action',
+            event: { kind: 'action', label: 'Open issue', action: 'open-issue-detail' },
+          }),
+          makeTextEvent({
+            id: 'event-tool-success',
+            event: { kind: 'tool_end', name: 'Bash', exitCode: 0, durationMs: 2400 },
+          }),
+          makeTextEvent({
+            id: 'event-turn-end-empty',
+            event: { kind: 'turn_end', turn: 4 },
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('Open issue')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open issue' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Completed')).not.toBeInTheDocument();
+    expect(screen.queryByText('2.4s')).not.toBeInTheDocument();
+    expect(screen.queryByText('Turn 4')).not.toBeInTheDocument();
   });
 
   it('renders lifecycle warnings without failure actions when no handlers are present', () => {
@@ -283,13 +310,13 @@ describe('TerminalTranscript', () => {
     expect(screen.getByText('Bash')).toBeInTheDocument();
     expect(screen.getByText('bun test')).toBeInTheDocument();
     expect(screen.getByText('Turn 3')).toBeInTheDocument();
-    expect(screen.getByText('1200+300 tok · $0.0123')).toBeInTheDocument();
+    expect(screen.getByText(/1200\+300 tok/)).toHaveTextContent('$0.0123');
     expect(screen.getByText('checking failure path')).toBeInTheDocument();
     expect(screen.getByText('Need deployment target')).toBeInTheDocument();
     expect(screen.getByText('1 question waiting in the issue detail panel.')).toBeInTheDocument();
     expect(screen.getByText('Clarification answered')).toBeInTheDocument();
     expect(screen.getByText('2 responses')).toBeInTheDocument();
-    expect(screen.getByText('2400+600 tok · $0.0456')).toBeInTheDocument();
+    expect(screen.getByText(/2400\+600 tok/)).toHaveTextContent('$0.0456');
   });
 
   it('renders large transcripts as a capped latest window until expanded', () => {

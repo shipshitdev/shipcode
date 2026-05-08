@@ -90,6 +90,19 @@ function makeThread(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function mockExecFileStdoutOnce(stdout: string) {
+  execFileMock.mockImplementationOnce(
+    (
+      _command: string,
+      _args: string[],
+      _options: Record<string, unknown>,
+      callback: (error: Error | null, stdout: string, stderr: string) => void,
+    ) => {
+      callback(null, { stdout, stderr: '' } as unknown as string, '');
+    },
+  );
+}
+
 describe('registerPipelineHandlers', () => {
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
   const ipcMain = {
@@ -675,6 +688,68 @@ describe('registerPipelineHandlers', () => {
       );
     });
 
+    it('builds resume context from checkpoint, git state, and terminal tail', async () => {
+      const context: { executionResumeContext?: string } = {};
+      queries.threads.getById.mockReturnValue(
+        makeThread({
+          status: 'paused',
+          pausedPhase: 'executing',
+          lastError: 'Paused by user',
+          worktreePath: '/tmp/worktree',
+        }),
+      );
+      queries.terminalEvents.listByThread.mockReturnValue([
+        {
+          id: 'event-1',
+          threadId: 'thread-1',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          event: { kind: 'raw' as const, content: 'agent stopped after editing the renderer' },
+        },
+        {
+          id: 'event-2',
+          threadId: 'thread-1',
+          createdAt: '2026-01-01T00:01:00.000Z',
+          event: {
+            kind: 'tool_end' as const,
+            name: 'vitest',
+            exitCode: 1,
+            outputSummary: '1 failed',
+          },
+        },
+      ]);
+      mockExecFileStdoutOnce(' M apps/desktop/src/renderer/App.tsx\n');
+      mockExecFileStdoutOnce('apps/desktop/src/renderer/App.tsx\n');
+      mockExecFileStdoutOnce(' 1 file changed, 4 insertions(+)\n');
+      mockExecFileStdoutOnce(
+        'diff --git a/apps/desktop/src/renderer/App.tsx b/apps/desktop/src/renderer/App.tsx\n',
+      );
+      pipeline.getContext.mockReturnValue(context);
+
+      const handler = handlers.get('pipeline:resume');
+      if (!handler) throw new Error('pipeline:resume handler not registered');
+
+      await handler(undefined, { threadId: 'thread-1' });
+
+      expect(execFileMock).toHaveBeenCalledWith(
+        'git',
+        ['diff', '--name-only', 'abc123def456', '--'],
+        expect.objectContaining({ cwd: '/tmp/worktree' }),
+        expect.any(Function),
+      );
+      expect(context.executionResumeContext).toContain(
+        'The previous execution was paused by the user',
+      );
+      expect(context.executionResumeContext).toContain(
+        'Checkpoint before execution: Before execute',
+      );
+      expect(context.executionResumeContext).toContain('apps/desktop/src/renderer/App.tsx');
+      expect(context.executionResumeContext).toContain('[tool:end] vitest exit=1 1 failed');
+      expect(pipeline.startExecution).toHaveBeenCalledWith(
+        'thread-1',
+        expect.objectContaining({ objective: 'Test plan' }),
+      );
+    });
+
     it('continues paused testing from the testing phase', async () => {
       queries.threads.getById.mockReturnValue(
         makeThread({
@@ -848,6 +923,31 @@ describe('registerPipelineHandlers', () => {
         expect.objectContaining({ objective: 'Test plan' }),
         'raw reviewer feedback',
       );
+    });
+  });
+
+  describe('pipeline:skip-review', () => {
+    it('moves the latest plan to awaiting approval and emits the phase transition', async () => {
+      queries.threads.getById.mockReturnValue(
+        makeThread({
+          githubIssueNumber: null,
+          autonomous: true,
+          reviewRound: 1,
+        }),
+      );
+
+      const handler = handlers.get('pipeline:skip-review');
+      if (!handler) throw new Error('pipeline:skip-review handler not registered');
+
+      await handler(undefined, { threadId: 'thread-1' });
+
+      expect(queries.plans.updateStatus).toHaveBeenCalledWith('plan-1', 'awaiting_approval');
+      expect(queries.threads.updateStatus).toHaveBeenCalledWith('thread-1', 'awaiting_approval');
+      expect(emitter.emit).toHaveBeenCalledWith({
+        type: 'pipeline:phase',
+        threadId: 'thread-1',
+        phase: 'awaiting_approval',
+      });
     });
   });
 
@@ -1074,6 +1174,61 @@ describe('registerPipelineHandlers', () => {
 
       expect(pipeline.startVerification).toHaveBeenCalledWith('thread-1');
       expect(pipeline.startExecution).not.toHaveBeenCalled();
+    });
+
+    it('attaches interrupted worktree context before retrying execution', async () => {
+      const context: { executionResumeContext?: string } = {};
+      queries.threads.getById.mockReturnValue(
+        makeThread({
+          status: 'failed',
+          failurePhase: 'executing',
+          lastError: 'Agent process stalled after tool output went quiet',
+          worktreePath: '/tmp/worktree',
+        }),
+      );
+      queries.terminalEvents.listByThread.mockReturnValue([
+        {
+          id: 'event-1',
+          threadId: 'thread-1',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          event: { kind: 'error' as const, message: 'vitest timed out' },
+        },
+      ]);
+      queries.verifications.getLatest.mockReturnValue({
+        id: 'verification-1',
+        threadId: 'thread-1',
+        planId: 'plan-1',
+        rawOutput: 'raw',
+        structured: {
+          threadId: 'thread-1',
+          planId: 'plan-1',
+          result: 'failed',
+          summary: 'Needs changes',
+          criteriaResults: [],
+          issues: [],
+        },
+        result: 'failed',
+        retryCount: 0,
+        createdAt: new Date().toISOString(),
+      });
+      pipeline.getContext.mockReturnValue(context);
+
+      const handler = handlers.get('pipeline:retry');
+      if (!handler) throw new Error('pipeline:retry handler not registered');
+
+      await handler(undefined, { threadId: 'thread-1' });
+
+      expect(context.executionResumeContext).toContain('The previous execution was interrupted');
+      expect(context.executionResumeContext).toContain('Agent process stalled');
+      expect(context.executionResumeContext).toContain('[error] vitest timed out');
+      expect(queries.terminalEvents.create).toHaveBeenCalledWith('thread-1', {
+        kind: 'lifecycle',
+        message: 'Retry is resuming from interrupted worktree state.',
+      });
+      expect(pipeline.startExecution).toHaveBeenCalledWith(
+        'thread-1',
+        expect.objectContaining({ objective: 'Test plan' }),
+      );
     });
 
     it('clears doneAt and continues to commit when the latest verification passed', async () => {
