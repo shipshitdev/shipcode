@@ -1,3 +1,4 @@
+import { diffActionVariant, fileActionColor, fileActionIcon } from '@/lib/file-action';
 import type { DiffRecord } from '@/lib/shipcode';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/primitives/badge';
@@ -9,32 +10,6 @@ interface DiffViewerProps {
   activeFile?: string;
   onFileSelect?: (filePath: string) => void;
 }
-
-const actionColor = (action: string) => {
-  switch (action) {
-    case 'create':
-      return 'text-success';
-    case 'delete':
-      return 'text-danger';
-    case 'modify':
-      return 'text-warning';
-    default:
-      return 'text-secondary';
-  }
-};
-
-const actionVariant = (action: string) => {
-  switch (action) {
-    case 'create':
-      return 'success' as const;
-    case 'delete':
-      return 'danger' as const;
-    case 'modify':
-      return 'warning' as const;
-    default:
-      return 'default' as const;
-  }
-};
 
 export function DiffViewer({ diffs, activeFile, onFileSelect }: DiffViewerProps) {
   const activeDiff = diffs.find((d) => d.filePath === activeFile) ?? diffs[0];
@@ -68,9 +43,7 @@ export function DiffViewer({ diffs, activeFile, onFileSelect }: DiffViewerProps)
             )}
             onClick={() => onFileSelect?.(diff.filePath)}
           >
-            <span className={actionColor(diff.action)}>
-              {diff.action === 'create' ? '+' : diff.action === 'delete' ? '-' : '~'}
-            </span>
+            <span className={fileActionColor(diff.action)}>{fileActionIcon(diff.action)}</span>
             {diff.filePath.split('/').pop()}
           </Button>
         ))}
@@ -80,7 +53,7 @@ export function DiffViewer({ diffs, activeFile, onFileSelect }: DiffViewerProps)
         <div className="p-2">
           <div className="flex justify-between px-3 py-1.5 bg-secondary rounded-t-md text-xs">
             <code>{activeDiff.filePath}</code>
-            <Badge variant={actionVariant(activeDiff.action)}>{activeDiff.action}</Badge>
+            <Badge variant={diffActionVariant(activeDiff.action)}>{activeDiff.action}</Badge>
           </div>
           <pre className="font-mono text-xs leading-relaxed overflow-x-auto py-2 bg-secondary rounded-b-md">
             {activeDiff.diffContent

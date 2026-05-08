@@ -1,25 +1,11 @@
 import { Square } from 'lucide-react';
+import { planFileActionVariant } from '@/lib/file-action';
 import type { ShipCodePlan } from '@/lib/shipcode';
 import { Badge } from '@/primitives/badge';
 
 interface PlanViewerProps {
   plan: ShipCodePlan | null;
 }
-
-const fileActionVariant = (action: string) => {
-  switch (action) {
-    case 'create':
-      return 'success' as const;
-    case 'modify':
-      return 'warning' as const;
-    case 'delete':
-      return 'danger' as const;
-    case 'rename':
-      return 'accent' as const;
-    default:
-      return 'default' as const;
-  }
-};
 
 export function PlanViewer({ plan }: PlanViewerProps) {
   if (!plan) {
@@ -90,7 +76,7 @@ export function PlanViewer({ plan }: PlanViewerProps) {
             {plan.files.map((file) => (
               <tr key={file.path}>
                 <td className="px-2 py-1.5 border-b border-border">
-                  <Badge variant={fileActionVariant(file.action)} className="uppercase">
+                  <Badge variant={planFileActionVariant(file.action)} className="uppercase">
                     {file.action}
                   </Badge>
                 </td>
