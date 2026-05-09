@@ -442,7 +442,7 @@ function ProjectCostsSection({
                   </TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className="[&_tr:last-child]:border-0">
                 {data.byProject.map((project) => (
                   <TableRow
                     key={project.projectId}
@@ -521,7 +521,7 @@ function CostTaskTable({
                 <TableHead className="text-right">Cost</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
+            <TableBody className="[&_tr:last-child]:border-0">
               {tasks.map((task) => (
                 <TableRow
                   key={`${keyPrefix}${task.threadId}`}

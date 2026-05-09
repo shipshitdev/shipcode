@@ -509,8 +509,8 @@ function usePipelineTabView({
                   </span>
                   <Button
                     variant="ghost"
-                    size="icon-xs"
-                    className="text-muted-foreground"
+                    size="icon"
+                    className="h-6 w-6 text-muted-foreground"
                     onClick={() =>
                       window.shipcode.invoke('shell:open-external', { url: linkedPrUrl })
                     }

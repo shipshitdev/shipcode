@@ -83,10 +83,10 @@ export function AutomationDetail() {
         <Button
           type="button"
           variant="ghost"
-          size="icon-xs"
+          size="icon"
           onClick={openAutomations}
           aria-label="Back to automations"
-          className="rounded p-0.5 text-muted-foreground transition-colors hover:text-primary"
+          className="h-6 w-6 rounded p-0.5 text-muted-foreground transition-colors hover:text-primary"
         >
           <ArrowLeft className="size-4" />
         </Button>

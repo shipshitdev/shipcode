@@ -74,7 +74,7 @@ function NotificationTable({
     <Card>
       <CardContent className="p-0">
         <Table>
-          <TableBody>{rows.map(renderRow)}</TableBody>
+          <TableBody className="[&_tr:last-child]:border-0">{rows.map(renderRow)}</TableBody>
         </Table>
       </CardContent>
     </Card>
@@ -268,7 +268,8 @@ function useInboxView() {
                 <TooltipTrigger asChild>
                   <Button
                     variant="ghost"
-                    size="icon-xs"
+                    size="icon"
+                    className="h-6 w-6"
                     onClick={() => setQuickViewNotification(n)}
                     aria-label={`Quick view: ${n.title}`}
                   >
@@ -304,7 +305,8 @@ function useInboxView() {
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
-                  size="icon-xs"
+                  size="icon"
+                  className="h-6 w-6"
                   onClick={() => dismiss.mutate(n.id)}
                   disabled={dismiss.isPending && dismiss.variables === n.id}
                   aria-label={`Dismiss notification: ${n.title}`}

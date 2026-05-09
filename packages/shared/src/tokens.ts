@@ -33,11 +33,10 @@ export const fonts = {
 } as const;
 
 export const spacing = {
-  radiusSm: '4px',
+  radiusSm: '2px',
   radiusMd: '6px',
-  radiusLg: '10px',
-  radiusXl: '16px',
-  radius2xl: '20px',
+  radiusLg: '8px',
+  radiusXl: '10px',
   titlebarHeight: '38px',
   titlebarHeightPlus: '42px',
 } as const;

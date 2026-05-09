@@ -2,23 +2,25 @@ import type { IssuePipelineStatus, PipelinePhase } from '@/lib/shipcode';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/primitives/badge';
 
-const PHASE_TEXT_CLASS: Record<string, string> = {
-  planning: 'text-agent',
-  clarifying: 'text-warning',
-  reviewing: 'text-agent',
-  revising: 'text-agent',
-  executing: 'text-agent',
-  testing: 'text-agent',
-  verifying: 'text-agent',
-  shipping: 'text-agent',
-  paused: 'text-warning',
-  approval: 'text-warning',
-  completed: 'text-success',
-  closed: 'text-done',
-  failed: 'text-danger',
-  todo: '',
-  queued: '',
-  idle: '',
+type BadgeVariant = 'default' | 'agent' | 'warning' | 'success' | 'danger' | 'done' | 'info';
+
+const PHASE_VARIANT: Record<string, BadgeVariant> = {
+  planning: 'agent',
+  clarifying: 'warning',
+  reviewing: 'agent',
+  revising: 'agent',
+  executing: 'agent',
+  testing: 'agent',
+  verifying: 'agent',
+  shipping: 'agent',
+  paused: 'warning',
+  approval: 'warning',
+  completed: 'success',
+  closed: 'done',
+  failed: 'danger',
+  todo: 'default',
+  queued: 'default',
+  idle: 'default',
 };
 
 export function PhaseChip({
@@ -31,7 +33,7 @@ export function PhaseChip({
   className?: string;
 }) {
   return (
-    <Badge variant="default" className={cn('uppercase', PHASE_TEXT_CLASS[status], className)}>
+    <Badge variant={PHASE_VARIANT[status] ?? 'default'} className={cn('uppercase', className)}>
       {(label ?? status).replace(/_/g, ' ')}
     </Badge>
   );

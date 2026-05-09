@@ -97,7 +97,7 @@ function FailureActions({
   const copied = copiedEventId === record.id;
   const buttonClass = cn(
     'border-border/70 bg-primary/30 text-secondary hover:text-primary',
-    compact && 'size-5',
+    compact ? 'h-5 w-5' : 'h-6 w-6',
   );
 
   return (
@@ -108,7 +108,7 @@ function FailureActions({
             <Button
               type="button"
               variant="outline"
-              size="icon-xs"
+              size="icon"
               aria-label={copied ? 'Copied failure output' : 'Copy failure output'}
               className={buttonClass}
               onClick={() => onCopy({ record, output })}
@@ -125,11 +125,11 @@ function FailureActions({
             <Button
               type="button"
               variant="outline"
-              size="icon-xs"
+              size="icon"
               aria-label="Send failure to terminal"
               className={cn(
                 'border-agent/35 bg-agent/10 text-agent hover:bg-agent/15 hover:text-agent',
-                compact && 'size-5',
+                compact ? 'h-5 w-5' : 'h-6 w-6',
               )}
               disabled={sending}
               onClick={() => onSendToTerminal({ record, output })}
@@ -146,11 +146,11 @@ function FailureActions({
             <Button
               type="button"
               variant="outline"
-              size="icon-xs"
+              size="icon"
               aria-label="Auto fix failure"
               className={cn(
                 'border-danger/35 bg-danger/10 text-danger hover:bg-danger/15 hover:text-danger',
-                compact && 'size-5',
+                compact ? 'h-5 w-5' : 'h-6 w-6',
               )}
               disabled={autoFixing}
               onClick={() => onAutoFix({ record, output })}
@@ -382,10 +382,10 @@ function transcriptRow({
                   <Button
                     type="button"
                     variant="ghost"
-                    size="icon-xs"
+                    size="icon"
                     aria-label={isTextCopied ? 'Copied' : 'Copy message'}
                     className={cn(
-                      'shrink-0 transition-colors',
+                      'h-6 w-6 shrink-0 transition-colors',
                       isTextCopied
                         ? 'text-foreground'
                         : 'text-muted-foreground opacity-0 group-hover/msg:opacity-100 hover:text-foreground',

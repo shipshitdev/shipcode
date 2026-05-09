@@ -148,7 +148,7 @@ export function ActivityView() {
                 <Card>
                   <CardContent className="p-0">
                     <Table>
-                      <TableBody>
+                      <TableBody className="[&_tr:last-child]:border-0">
                         {group.entries.map((entry) => {
                           const clickable = entry.projectId !== null;
 

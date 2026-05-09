@@ -167,11 +167,10 @@
   --font-sans: var(--app-font-sans);
   --font-mono: "SF Mono", SFMono-Regular, Consolas, Menlo, monospace;
 
-  --radius-sm: 4px;
+  --radius-sm: 2px;
   --radius-md: 6px;
-  --radius-lg: 10px;
-  --radius-xl: 16px;
-  --radius-2xl: 20px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
 
   --spacing-titlebar: 38px;
   --spacing-titlebar-plus: 42px;

@@ -77,6 +77,7 @@ import {
 import { TaskGraphQueries } from '@shipcode/db/source';
 import { createPipeline, createReconciliationLoop } from '@shipcode/pipeline';
 import {
+  CURRENT_ONBOARDING_VERSION,
   HEARTBEAT_TIMEOUT_MS,
   PIPELINE_PHASE,
   type PipelinePhase,
@@ -204,9 +205,21 @@ const DIST = path.join(__dirname, '..');
 loadLocalEnvFiles();
 const RENDERER_URL = process.env.VITE_DEV_SERVER_URL;
 const RENDERER_HTML = path.join(DIST, 'index.html');
+const IS_E2E = process.env.SHIPCODE_E2E === '1';
+
+if (IS_E2E) {
+  app.commandLine.appendSwitch('disable-gpu');
+  app.commandLine.appendSwitch('disable-dev-shm-usage');
+
+  if (process.env.SHIPCODE_USER_DATA_DIR) {
+    app.setPath('userData', process.env.SHIPCODE_USER_DATA_DIR);
+  }
+}
 
 function createWindow() {
-  splashScreen.create();
+  if (!IS_E2E) {
+    splashScreen.create();
+  }
   splashScreen.update('window', 'active', 'Creating the main desktop window.');
 
   mainWindow = new BrowserWindow({
@@ -216,6 +229,7 @@ function createWindow() {
     minHeight: 680,
     backgroundColor: '#050607',
     show: false,
+    ...(IS_E2E ? { skipTaskbar: true, x: -32_000, y: -32_000 } : {}),
     titleBarStyle: 'hiddenInset',
     webPreferences: {
       preload: path.join(DIST, 'preload', 'index.js'),
@@ -226,7 +240,9 @@ function createWindow() {
   });
 
   mainWindow.once('ready-to-show', () => {
-    mainWindow?.show();
+    if (!IS_E2E) {
+      mainWindow?.show();
+    }
     splashScreen.close();
   });
 
@@ -271,6 +287,18 @@ function createWindow() {
     taskGraphs: new TaskGraphQueries(db),
   };
   threadQueries = queries.threads;
+
+  if (IS_E2E) {
+    queries.settings.set({
+      onboardingVersion: CURRENT_ONBOARDING_VERSION,
+      telemetryEnabled: false,
+      githubPollingEnabled: false,
+      notificationsEnabled: false,
+      notificationOsEnabled: false,
+      notificationBadgeEnabled: false,
+      notificationSoundEnabled: false,
+    });
+  }
 
   void configureMainTelemetry(queries.settings.get()).catch((err) => {
     log.warn('[telemetry] init failed:', err);
@@ -361,7 +389,9 @@ function createWindow() {
     automations: queries.automations,
     pipelineScheduler,
   });
-  automationScheduler.start();
+  if (!IS_E2E) {
+    automationScheduler.start();
+  }
 
   // Reconciliation loop: polls running pipelines' GitHub issue state every 30s.
   // Cancels pipelines whose issue was closed or tagged with a terminal label.
@@ -380,7 +410,9 @@ function createWindow() {
     },
     log: (msg) => log.info(msg),
   });
-  reconciliationLoop.start();
+  if (!IS_E2E) {
+    reconciliationLoop.start();
+  }
 
   // Queue promotion: start the next queued issue when a pipeline slot opens.
   onPipelineTerminal = (event) => {
@@ -435,7 +467,9 @@ function createWindow() {
   // Update service: poll GitHub releases for newer ShipCode builds.
   // Notify-only — install via `brew upgrade --cask shipcode`.
   updateService = new UpdateService(mainWindow);
-  updateService.start();
+  if (!IS_E2E) {
+    updateService.start();
+  }
 
   // Register IPC handlers
   splashScreen.completeThrough('pipeline');
@@ -516,7 +550,9 @@ function createWindow() {
   splashScreen.update('renderer', 'active', 'Loading the ShipCode workspace.');
   if (RENDERER_URL) {
     mainWindow.loadURL(RENDERER_URL);
-    mainWindow.webContents.openDevTools({ mode: 'detach' });
+    if (!IS_E2E) {
+      mainWindow.webContents.openDevTools({ mode: 'detach' });
+    }
   } else {
     mainWindow.loadFile(RENDERER_HTML);
   }

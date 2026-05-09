@@ -243,8 +243,8 @@ function ProviderStatusBadge({
           </div>
           <Button
             variant="ghost"
-            size="icon-xs"
-            className="mt-0.5 size-5 shrink-0 text-muted-foreground hover:text-primary"
+            size="icon"
+            className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground hover:text-primary"
             onClick={onRefresh}
             disabled={isRefreshing}
             title="Refresh CLI status"
@@ -425,8 +425,8 @@ function ResourceUsageBadge() {
                     </div>
                     <Button
                       variant="ghost"
-                      size="icon-xs"
-                      className="size-6 shrink-0 text-muted-foreground hover:text-danger"
+                      size="icon"
+                      className="h-6 w-6 shrink-0 text-muted-foreground hover:text-danger"
                       title="Kill process"
                       aria-label={`Kill ${title}`}
                       disabled={killProcess.isPending}
@@ -564,9 +564,9 @@ export function Titlebar() {
         {!settingsVisible && (
           <Button
             variant="ghost"
-            size="icon-sm"
+            size="icon"
             className={cn(
-              'app-region-no-drag hover:bg-elevated',
+              'h-7 w-7 app-region-no-drag hover:bg-elevated',
               terminalVisible && 'bg-elevated text-primary',
             )}
             onClick={toggleTerminal}
@@ -577,9 +577,9 @@ export function Titlebar() {
         )}
         <Button
           variant="ghost"
-          size="icon-sm"
+          size="icon"
           className={cn(
-            'app-region-no-drag hover:bg-elevated',
+            'h-7 w-7 app-region-no-drag hover:bg-elevated',
             settingsVisible && 'bg-elevated text-primary',
           )}
           onClick={toggleSettings}

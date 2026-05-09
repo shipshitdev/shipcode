@@ -471,8 +471,8 @@ function useProjectSidebarView() {
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
-                  size="icon-xs"
-                  className="text-muted-foreground"
+                  size="icon"
+                  className="h-6 w-6 text-muted-foreground"
                   title={`Sort: ${SORT_LABELS[sortOrder]}`}
                   aria-label="Sort projects"
                 >
@@ -492,8 +492,8 @@ function useProjectSidebarView() {
             </DropdownMenu>
             <Button
               variant="ghost"
-              size="icon-xs"
-              className="text-muted-foreground app-region-no-drag"
+              size="icon"
+              className="h-6 w-6 text-muted-foreground app-region-no-drag"
               title="Add repository"
               aria-label="Add repository"
               onClick={() => openAddProjectExplorer()}
@@ -613,9 +613,9 @@ function useProjectSidebarView() {
                           <DropdownMenuTrigger asChild>
                             <Button
                               variant="ghost"
-                              size="icon-xs"
+                              size="icon"
                               className={cn(
-                                'opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100',
+                                'h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 data-[state=open]:opacity-100',
                                 warningBadgeLabel ? 'text-warning' : 'text-muted-foreground',
                               )}
                               aria-label={`More actions for ${project.name}`}

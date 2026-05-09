@@ -1151,8 +1151,8 @@ function useIssueDetailView() {
       <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center">
         <Button
           variant="ghost"
-          size="icon-sm"
-          className="text-muted-foreground"
+          size="icon"
+          className="h-7 w-7 text-muted-foreground"
           onClick={() => selectIssue(null)}
           title="Back to board"
           aria-label="Back to board"

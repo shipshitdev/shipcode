@@ -38,7 +38,7 @@ function SelectContent({
     <SelectPrimitive.Portal>
       <SelectPrimitive.Content
         className={cn(
-          'relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-xl shadow-dialog bg-elevated text-primary',
+          'relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-lg shadow-dialog bg-elevated text-primary',
           position === 'popper' && 'translate-y-1',
           className,
         )}

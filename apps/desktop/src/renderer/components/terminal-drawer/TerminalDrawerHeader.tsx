@@ -33,8 +33,8 @@ function TerminalHeaderIconButton({
         <span className="inline-flex">
           <Button
             variant="ghost"
-            size="icon-xs"
-            className="text-muted-foreground hover:bg-hover/70 hover:text-primary"
+            size="icon"
+            className="h-6 w-6 text-muted-foreground hover:bg-hover/70 hover:text-primary"
             disabled={disabled}
             onClick={onClick}
             aria-label={ariaLabel}

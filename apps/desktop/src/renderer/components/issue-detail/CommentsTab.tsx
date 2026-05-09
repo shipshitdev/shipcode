@@ -75,7 +75,8 @@ export function CommentsTab({
         <h4 className="text-xs font-semibold uppercase tracking-wide text-secondary">Comments</h4>
         <Button
           variant="ghost"
-          size="icon-xs"
+          size="icon"
+          className="h-6 w-6"
           onClick={() => refreshComments.mutate()}
           disabled={isRefetching || refreshComments.isPending}
           title="Refresh comments from GitHub"

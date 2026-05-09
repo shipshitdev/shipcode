@@ -310,13 +310,13 @@ function useOverviewView() {
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <Card>
-                <CardContent className="p-0">
-                  {(analytics?.averagePhaseDurations.length ?? 0) === 0 ? (
-                    <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
-                      No phase timing data yet.
-                    </div>
-                  ) : (
+              {(analytics?.averagePhaseDurations.length ?? 0) === 0 ? (
+                <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
+                  No phase timing data yet.
+                </div>
+              ) : (
+                <Card>
+                  <CardContent className="p-0">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -325,7 +325,7 @@ function useOverviewView() {
                           <TableHead className="text-right">P75</TableHead>
                         </TableRow>
                       </TableHeader>
-                      <TableBody>
+                      <TableBody className="[&_tr:last-child]:border-0">
                         {(analytics?.averagePhaseDurations ?? []).slice(0, 5).map((phase) => (
                           <TableRow key={phase.phase}>
                             <TableCell>
@@ -341,17 +341,17 @@ function useOverviewView() {
                         ))}
                       </TableBody>
                     </Table>
-                  )}
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              )}
 
-              <Card>
-                <CardContent className="p-0">
-                  {(analytics?.slowestRecentRuns.length ?? 0) === 0 ? (
-                    <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
-                      No completed PR runs yet.
-                    </div>
-                  ) : (
+              {(analytics?.slowestRecentRuns.length ?? 0) === 0 ? (
+                <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
+                  No completed PR runs yet.
+                </div>
+              ) : (
+                <Card>
+                  <CardContent className="p-0">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -359,7 +359,7 @@ function useOverviewView() {
                           <TableHead className="text-right">Duration</TableHead>
                         </TableRow>
                       </TableHeader>
-                      <TableBody>
+                      <TableBody className="[&_tr:last-child]:border-0">
                         {(analytics?.slowestRecentRuns ?? []).map((run) => (
                           <TableRow
                             key={run.threadId}
@@ -385,9 +385,9 @@ function useOverviewView() {
                         ))}
                       </TableBody>
                     </Table>
-                  )}
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </div>
 
@@ -405,13 +405,13 @@ function useOverviewView() {
                   View all →
                 </Button>
               </div>
-              <Card>
-                <CardContent className="p-0">
-                  {activity.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
-                      No activity yet.
-                    </div>
-                  ) : (
+              {activity.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
+                  No activity yet.
+                </div>
+              ) : (
+                <Card>
+                  <CardContent className="p-0">
                     <Table>
                       <TableHeader className="sr-only">
                         <TableRow>
@@ -420,7 +420,7 @@ function useOverviewView() {
                           <TableHead>Time</TableHead>
                         </TableRow>
                       </TableHeader>
-                      <TableBody>
+                      <TableBody className="[&_tr:last-child]:border-0">
                         {activitySlice.map((entry) => {
                           const clickable = entry.projectId !== null && entry.threadId !== null;
                           const projectId = entry.projectId;
@@ -457,9 +457,9 @@ function useOverviewView() {
                         })}
                       </TableBody>
                     </Table>
-                  )}
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              )}
               {activityTotalPages > 1 && (
                 <div className="mt-3 px-1">
                   <Pagination
@@ -484,13 +484,13 @@ function useOverviewView() {
                   View all →
                 </Button>
               </div>
-              <Card>
-                <CardContent className="p-0">
-                  {recent.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
-                      No recent tasks.
-                    </div>
-                  ) : (
+              {recent.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
+                  No recent tasks.
+                </div>
+              ) : (
+                <Card>
+                  <CardContent className="p-0">
                     <Table>
                       <TableHeader className="sr-only">
                         <TableRow>
@@ -499,7 +499,7 @@ function useOverviewView() {
                           <TableHead>Time</TableHead>
                         </TableRow>
                       </TableHeader>
-                      <TableBody>
+                      <TableBody className="[&_tr:last-child]:border-0">
                         {tasksSlice.map((task) => (
                           <TableRow
                             key={task.threadId}
@@ -525,9 +525,9 @@ function useOverviewView() {
                         ))}
                       </TableBody>
                     </Table>
-                  )}
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              )}
               {tasksTotalPages > 1 && (
                 <div className="mt-3 px-1">
                   <Pagination

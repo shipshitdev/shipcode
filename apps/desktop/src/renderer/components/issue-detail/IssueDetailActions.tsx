@@ -439,8 +439,8 @@ export function buildIssueDetailActions({
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
-              size="icon-xs"
-              className="text-danger/60 hover:bg-danger/10 hover:text-danger"
+              size="icon"
+              className="h-6 w-6 text-danger/60 hover:bg-danger/10 hover:text-danger"
               onClick={() =>
                 navigator.clipboard.writeText(
                   [thread?.lastError, failingPhaseOutput].filter(Boolean).join('\n\n'),
@@ -453,8 +453,8 @@ export function buildIssueDetailActions({
             {failingPhaseOutput && (
               <Button
                 variant="ghost"
-                size="icon-xs"
-                className="text-danger/60 hover:bg-danger/10 hover:text-danger"
+                size="icon"
+                className="h-6 w-6 text-danger/60 hover:bg-danger/10 hover:text-danger"
                 title={showRawOutput ? 'Hide raw output' : 'Show raw output'}
                 aria-label={showRawOutput ? 'Hide raw output' : 'Show raw output'}
                 onClick={() => onShowRawOutputChange(!showRawOutput)}

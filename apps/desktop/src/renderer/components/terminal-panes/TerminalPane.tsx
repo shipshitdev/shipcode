@@ -88,8 +88,8 @@ export function TerminalPane({
           {!isBareShell && isRunning && (
             <Button
               variant="ghost"
-              size="icon-xs"
-              className="text-danger"
+              size="icon"
+              className="h-6 w-6 text-danger"
               title="Stop"
               onClick={() => onCancel(threadId)}
             >
@@ -98,8 +98,8 @@ export function TerminalPane({
           )}
           <Button
             variant="ghost"
-            size="icon-xs"
-            className="text-muted-foreground"
+            size="icon"
+            className="h-6 w-6 text-muted-foreground"
             title="Close pane"
             onClick={() => onClose(threadId, isRunning)}
           >

@@ -209,11 +209,11 @@ export function AddProjectExplorer() {
         <Button
           type="button"
           variant="ghost"
-          size="icon-xs"
+          size="icon"
           onClick={goUp}
           disabled={isAtRoot}
           className={cn(
-            'rounded p-1 transition-colors',
+            'h-6 w-6 rounded p-1 transition-colors',
             isAtRoot
               ? 'text-muted-foreground cursor-not-allowed'
               : 'text-secondary hover:text-primary hover:bg-hover',

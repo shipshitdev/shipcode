@@ -44,7 +44,7 @@ export function InAppNotification({
   return (
     <div
       className={cn(
-        'group flex min-w-0 items-start gap-2 rounded-xl border border-border/60 px-3 py-2 shadow-lg',
+        'group flex min-w-0 items-start gap-2 rounded-lg border border-border/60 px-3 py-2 shadow-lg',
         'bg-[color-mix(in_srgb,var(--bg-elevated)_88%,transparent)] backdrop-blur-xl',
         className,
       )}
@@ -69,9 +69,9 @@ export function InAppNotification({
       {onDismiss ? (
         <Button
           variant="ghost"
-          size="icon-xs"
+          size="icon"
           onClick={onDismiss}
-          className="shrink-0 text-secondary hover:bg-transparent hover:text-primary"
+          className="h-6 w-6 shrink-0 text-secondary hover:bg-transparent hover:text-primary"
           title={dismissLabel}
           aria-label={dismissLabel}
         >

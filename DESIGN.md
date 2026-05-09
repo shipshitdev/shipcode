@@ -91,11 +91,10 @@ typography:
     letterSpacing: -0.05em
 
 rounded:
-  sm: 4px
+  sm: 2px
   md: 6px
-  lg: 10px
-  xl: 16px
-  2xl: 20px
+  lg: 8px
+  xl: 10px
 
 spacing:
   titlebar: 38px
@@ -126,12 +125,12 @@ components:
   input:
     backgroundColor: "{colors.bg-tertiary}"
     textColor: "{colors.text-primary}"
-    rounded: "{rounded.lg}"
+    rounded: "{rounded.md}"
     height: 32px
   card:
     backgroundColor: "{colors.bg-secondary}"
     textColor: "{colors.text-primary}"
-    rounded: "{rounded.lg}"
+    rounded: "{rounded.md}"
   dialog:
     backgroundColor: "{colors.bg-primary}"
     textColor: "{colors.text-primary}"
@@ -159,7 +158,7 @@ components:
   select:
     backgroundColor: "{colors.bg-tertiary}"
     textColor: "{colors.text-primary}"
-    rounded: "{rounded.lg}"
+    rounded: "{rounded.md}"
   phase-chip:
     backgroundColor: "{colors.bg-secondary}"
     textColor: "{colors.agent}"
@@ -233,12 +232,12 @@ components:
   input-focused:
     backgroundColor: "{colors.bg-tertiary}"
     textColor: "{colors.text-primary}"
-    rounded: "{rounded.lg}"
+    rounded: "{rounded.md}"
     height: 32px
   stat-card:
     backgroundColor: "{colors.bg-secondary}"
     textColor: "{colors.primary}"
-    rounded: "{rounded.lg}"
+    rounded: "{rounded.md}"
 ---
 
 ## Overview
@@ -320,12 +319,15 @@ Font size is user-configurable: 12px, 13px (default), 14px, 15px.
 
 ### Border radius
 
-Five-step scale from subtle to prominent:
-- `sm` (4px) — badges, checkboxes, inline chips
-- `md` (6px) — buttons, alerts, tooltips
-- `lg` (10px) — inputs, selects, textareas, cards
-- `xl` (16px) — dialogs, select content panels, command palette
-- `2xl` (20px) — reserved for large containers
+Four-step scale inspired by Linear's tight, precise rounding:
+- `sm` (2px) — badges, tags, inline chips
+- `md` (6px) — cards, buttons, inputs, tooltips, popovers, dropdowns
+- `lg` (8px) — toasts, overlay panels, select content
+- `xl` (10px) — dialogs, command palette
+
+Do not use generic border-radii; adhere to 6px for key components like cards
+and buttons, and 2px for smaller tags, to preserve the signature balance of
+softness and precision.
 
 ### Spacing
 

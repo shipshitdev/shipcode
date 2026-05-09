@@ -213,7 +213,7 @@ export function App() {
       <Suspense
         fallback={
           <div className="flex h-screen w-screen items-center justify-center bg-primary">
-            <Skeleton className="h-[440px] w-full max-w-md rounded-2xl" />
+            <Skeleton className="h-[440px] w-full max-w-md rounded-xl" />
           </div>
         }
       >
