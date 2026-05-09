@@ -28,7 +28,7 @@
   --accent-hover: #e4e4e7;
 
   --success: #10b981;
-  --warning: #f59e0b;
+  --warning: #eab308;
   --danger: #ef4444;
   --info: #3b82f6;
 
@@ -99,7 +99,7 @@
   --accent-hover: #1f2937;
 
   --success: #0f9f6e;
-  --warning: #d97706;
+  --warning: #ca8a04;
   --danger: #dc2626;
   --info: #2563eb;
   --heatmap-empty: #ebedf0;
@@ -317,6 +317,15 @@
 @utility bg-hover {
   background-color: var(--bg-hover);
 }
+@utility bg-toast-success {
+  background-color: color-mix(in srgb, var(--success) 25%, var(--bg-elevated));
+}
+@utility bg-toast-warning {
+  background-color: color-mix(in srgb, var(--warning, #f59e0b) 25%, var(--bg-elevated));
+}
+@utility bg-toast-danger {
+  background-color: color-mix(in srgb, var(--danger) 25%, var(--bg-elevated));
+}
 
 /* ---------------------------------------------------------------------------
  * Text utilities — text-primary, text-secondary, text-muted.
@@ -383,24 +392,32 @@
   }
 
   ::-webkit-scrollbar {
-    width: 8px;
+    width: 6px;
+    height: 6px;
   }
   ::-webkit-scrollbar-track {
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
     background: var(--bg-hover);
-    border-radius: 4px;
+    border-radius: 3px;
   }
   ::-webkit-scrollbar-thumb:hover {
     background: var(--text-muted);
   }
 
+  .kanban-scroll::-webkit-scrollbar {
+    width: 4px;
+  }
   .kanban-scroll::-webkit-scrollbar-thumb {
     background: color-mix(in srgb, var(--column-scrollbar) 50%, transparent);
   }
   .kanban-scroll::-webkit-scrollbar-thumb:hover {
     background: color-mix(in srgb, var(--column-scrollbar) 75%, transparent);
+  }
+
+  .kanban-board-scroll::-webkit-scrollbar {
+    height: 4px;
   }
 
   button,

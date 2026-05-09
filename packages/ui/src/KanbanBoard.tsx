@@ -775,7 +775,7 @@ function useKanbanBoardView({
           {view !== 'list' && (
             <div
               className={cn(
-                'flex min-h-0 flex-1 gap-0.5 overflow-y-hidden p-3 px-2',
+                'kanban-board-scroll flex min-h-0 flex-1 gap-0.5 overflow-y-hidden p-3 px-2',
                 compact ? 'overflow-x-hidden' : 'overflow-x-auto',
               )}
             >

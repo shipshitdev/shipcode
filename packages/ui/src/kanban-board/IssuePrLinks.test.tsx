@@ -870,7 +870,7 @@ describe('linked PR affordances', () => {
     );
 
     const card = view.container.querySelector('[data-issue-card-id="issue-todo"]');
-    expect(card?.className).toContain('min-h-[104px]');
+    expect(card?.className).toContain('flex-col');
     expect(view.container.textContent).toContain('todo');
     view.cleanup();
   });

@@ -56,7 +56,7 @@ import {
 } from './utils';
 
 const ISSUE_CARD_BASE_CLASS =
-  'group relative flex min-h-[104px] flex-col overflow-hidden rounded-md border bg-elevated p-2.5 text-left transition-colors outline-none';
+  'group relative flex shrink-0 flex-col overflow-hidden rounded-md border bg-elevated p-2.5 text-left transition-colors outline-none';
 
 function issueReferenceLabel(issue: GitHubIssueCacheRecord, isCreating: boolean): string {
   if (isCreating) return 'Creating';
@@ -86,7 +86,7 @@ export function IssueExternalBlockers({ issue }: { issue: GitHubIssueCacheRecord
 }
 
 const ACTION_BADGE_CLASS =
-  'absolute inset-0 inline-flex h-full min-h-5 items-center justify-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium leading-none uppercase tracking-wide opacity-0 transition-opacity group-hover:opacity-100';
+  'absolute inset-0 inline-flex h-full items-center justify-center gap-1 rounded-sm border px-1.5 py-px text-[10px] font-medium leading-none uppercase tracking-wide opacity-0 transition-opacity group-hover:opacity-100';
 const PLAN_ACTION_BADGE_CLASS =
   'border-agent/25 bg-agent/10 text-agent hover:border-agent/35 hover:bg-agent/15 hover:text-agent';
 const DANGER_ACTION_BADGE_CLASS =
@@ -901,7 +901,7 @@ function useDraggableCardView({
           </div>
         </div>
         <div className="relative z-10 mt-1 w-full min-w-0">
-          <span className="line-clamp-2 text-[13px] font-medium leading-snug text-primary">
+          <span className="truncate block text-[13px] font-medium leading-snug text-primary">
             {issue.title}
           </span>
         </div>
@@ -1011,7 +1011,7 @@ export function DragOverlayCard({
     >
       <div className="font-mono text-[11px] text-muted-foreground">{referenceLabel}</div>
       <div className="mt-1 w-full min-w-0">
-        <span className="line-clamp-2 text-[13px] font-medium leading-snug text-primary">
+        <span className="truncate block text-[13px] font-medium leading-snug text-primary">
           {issue.title}
         </span>
       </div>

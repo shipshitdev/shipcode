@@ -5,10 +5,10 @@ import type { ReactNode } from 'react';
 type InAppNotificationTone = 'default' | 'success' | 'warning' | 'danger';
 
 const TONE_CLASS: Record<InAppNotificationTone, string> = {
-  default: 'border-border/90 bg-elevated/95',
-  success: 'border-success/35 bg-success/10',
-  warning: 'border-amber-500/35 bg-amber-500/10',
-  danger: 'border-danger/35 bg-danger/10',
+  default: 'border-border/90 bg-elevated',
+  success: 'border-success/80 bg-toast-success',
+  warning: 'border-amber-500/80 bg-toast-warning',
+  danger: 'border-danger/80 bg-toast-danger',
 };
 
 interface InAppNotificationProps {
@@ -44,7 +44,7 @@ export function InAppNotification({
   return (
     <div
       className={cn(
-        'group flex min-w-0 items-start gap-2 rounded-xl border px-3 py-2 shadow-lg backdrop-blur-sm',
+        'group flex min-w-0 items-start gap-2 rounded-xl border px-3 py-2 shadow-lg backdrop-blur-md',
         TONE_CLASS[tone],
         className,
       )}
@@ -66,7 +66,7 @@ export function InAppNotification({
           variant="ghost"
           size="icon-xs"
           onClick={onDismiss}
-          className="shrink-0 text-muted-foreground hover:bg-transparent hover:text-primary"
+          className="shrink-0 text-secondary hover:bg-transparent hover:text-primary"
           title={dismissLabel}
           aria-label={dismissLabel}
         >

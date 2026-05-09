@@ -6,6 +6,8 @@ import { modelDisplay } from '@/lib/model-display';
 import {
   displayAgentLabel,
   type GitHubIssueCacheRecord,
+  ISSUE_PIPELINE_STATUS,
+  type IssuePipelineStatus,
   isAgentRoutingLabel,
   phaseToProgress,
 } from '@/lib/shipcode';
@@ -17,6 +19,26 @@ import { ACTIVE_STATUSES, PHASE_ELAPSED_STATUSES } from './constants';
 import { issueBodySnippet } from './issue-body-snippet';
 import type { IssuePhaseChip, PlanStepSummary } from './types';
 import { resolveIssuePriorityBadge } from './utils';
+
+function hoverCardToneClass(status: IssuePipelineStatus): string {
+  if (status === ISSUE_PIPELINE_STATUS.todo)
+    return 'border-success/40 bg-[color-mix(in_srgb,var(--success)_6%,var(--bg-elevated))]';
+  if (status === ISSUE_PIPELINE_STATUS.failed)
+    return 'border-danger/40 bg-[color-mix(in_srgb,var(--danger)_6%,var(--bg-elevated))]';
+  if (
+    status === ISSUE_PIPELINE_STATUS.approval ||
+    status === ISSUE_PIPELINE_STATUS.clarifying ||
+    status === ISSUE_PIPELINE_STATUS.paused
+  )
+    return 'border-warning/40 bg-[color-mix(in_srgb,var(--warning)_6%,var(--bg-elevated))]';
+  if (status === ISSUE_PIPELINE_STATUS.completed)
+    return 'border-success/40 bg-[color-mix(in_srgb,var(--success)_6%,var(--bg-elevated))]';
+  if (status === ISSUE_PIPELINE_STATUS.closed)
+    return 'border-done/40 bg-[color-mix(in_srgb,var(--done)_6%,var(--bg-elevated))]';
+  if (ACTIVE_STATUSES.includes(status))
+    return 'border-agent/40 bg-[color-mix(in_srgb,var(--agent)_6%,var(--bg-elevated))]';
+  return 'border-border bg-elevated';
+}
 
 const HOVER_DELAY_MS = 350;
 const MAX_VISIBLE_STEPS = 8;
@@ -184,8 +206,9 @@ export function IssueHoverCard({
           sideOffset={8}
           align="start"
           className={cn(
-            'z-50 w-72 rounded-lg border border-border bg-elevated p-3 shadow-xl',
+            'z-50 w-72 rounded-lg border p-3 shadow-xl',
             'animate-in fade-in-0 zoom-in-95 data-[side=right]:slide-in-from-left-2',
+            hoverCardToneClass(issue.pipelineStatus),
           )}
           onPointerEnter={handlePointerEnter}
           onPointerLeave={handlePointerLeave}

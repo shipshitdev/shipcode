@@ -1,28 +1,35 @@
 import type { IssuePipelineStatus, PipelinePhase } from '@/lib/shipcode';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/primitives/badge';
 
-const AGENT_PHASE_CLASSES = 'bg-agent/10 text-agent border-agent/25';
+type BadgeVariant =
+  | 'default'
+  | 'done'
+  | 'success'
+  | 'warning'
+  | 'danger'
+  | 'info'
+  | 'accent'
+  | 'agent';
 
-const PHASE_COLOR: Record<string, string> = {
-  planning: AGENT_PHASE_CLASSES,
-  clarifying: 'bg-warning/12 text-warning border-warning/25',
-  reviewing: AGENT_PHASE_CLASSES,
-  revising: AGENT_PHASE_CLASSES,
-  executing: AGENT_PHASE_CLASSES,
-  testing: AGENT_PHASE_CLASSES,
-  verifying: AGENT_PHASE_CLASSES,
-  shipping: AGENT_PHASE_CLASSES,
-  paused: 'bg-warning/12 text-warning border-warning/25',
-  approval: 'bg-warning/15 text-warning border-warning/30',
-  completed: 'bg-success/12 text-success border-success/20',
-  closed: 'bg-done/18 text-done border-done/35',
-  failed: 'bg-danger/15 text-danger border-danger/30',
-  todo: 'bg-tertiary text-muted-foreground border-border',
-  queued: 'bg-tertiary text-muted-foreground border-border',
-  idle: 'bg-tertiary text-muted-foreground border-border',
+const PHASE_VARIANT: Record<string, BadgeVariant> = {
+  planning: 'agent',
+  clarifying: 'warning',
+  reviewing: 'agent',
+  revising: 'agent',
+  executing: 'agent',
+  testing: 'agent',
+  verifying: 'agent',
+  shipping: 'agent',
+  paused: 'warning',
+  approval: 'warning',
+  completed: 'success',
+  closed: 'done',
+  failed: 'danger',
+  todo: 'default',
+  queued: 'default',
+  idle: 'default',
 };
-
-const FALLBACK = 'bg-tertiary text-muted-foreground border-border';
 
 export function PhaseChip({
   status,
@@ -34,14 +41,8 @@ export function PhaseChip({
   className?: string;
 }) {
   return (
-    <span
-      className={cn(
-        'inline-flex min-h-5 items-center justify-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium leading-none uppercase tracking-wide',
-        PHASE_COLOR[status] ?? FALLBACK,
-        className,
-      )}
-    >
+    <Badge variant={PHASE_VARIANT[status] ?? 'default'} className={cn('uppercase', className)}>
       {(label ?? status).replace(/_/g, ' ')}
-    </span>
+    </Badge>
   );
 }

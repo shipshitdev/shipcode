@@ -47,67 +47,6 @@ function formatTokens(usage: { prompt: number; completion: number } | undefined,
   return parts.join(' · ');
 }
 
-function formatTranscriptRecord(record: TerminalEventRecord): string | null {
-  const timestamp = formatClockTime(record.createdAt);
-  const event = record.event;
-
-  switch (event.kind) {
-    case 'text':
-      return `${timestamp} Assistant\n${stripAnsi(event.content)}`;
-    case 'thinking':
-      return `${timestamp} Reasoning\n${stripAnsi(event.content)}`;
-    case 'tool_start':
-      return `${timestamp} $ ${event.name}\n${stripAnsi(event.summary)}`;
-    case 'tool_end': {
-      const status =
-        typeof event.exitCode === 'number'
-          ? `exit ${event.exitCode}`
-          : typeof event.durationMs === 'number'
-            ? `${(event.durationMs / 1000).toFixed(1)}s`
-            : 'completed';
-      const summary = event.outputSummary?.trim();
-      return summary
-        ? `${timestamp} ${event.name} ${status}\n${stripAnsi(summary)}`
-        : `${timestamp} ${event.name} ${status}`;
-    }
-    case 'turn_start':
-      return `${timestamp} Turn ${event.turn} started`;
-    case 'turn_end': {
-      const summary = formatTokens(event.tokensUsed, event.costUsd);
-      return `${timestamp} Turn ${event.turn} ended${summary ? ` (${summary})` : ''}`;
-    }
-    case 'lifecycle':
-      return `${timestamp} ${stripAnsi(event.message)}`;
-    case 'raw':
-      return `${timestamp} ${stripAnsi(event.content)}`;
-    case 'error':
-      return `${timestamp} Error\n${stripAnsi(event.message)}`;
-    case 'action':
-      return `${timestamp} Action: ${event.label}`;
-    case 'clarification_requested':
-      return `${timestamp} Clarification requested: ${event.summary} (${event.questionCount} question${
-        event.questionCount === 1 ? '' : 's'
-      })`;
-    case 'clarification_answered':
-      return `${timestamp} Clarification answered (${event.questionCount} response${
-        event.questionCount === 1 ? '' : 's'
-      })`;
-    case 'done': {
-      const summary = formatTokens(event.totalTokens, event.totalCostUsd);
-      return `${timestamp} Done${summary ? ` (${summary})` : ''}`;
-    }
-    default:
-      return null;
-  }
-}
-
-function formatTranscriptForClipboard(events: TerminalEventRecord[]): string {
-  return events
-    .map(formatTranscriptRecord)
-    .filter((line): line is string => Boolean(line?.trim()))
-    .join('\n\n');
-}
-
 function TranscriptMeta({
   createdAt,
   compact = false,
@@ -426,24 +365,53 @@ function transcriptRow({
           </pre>
         </div>
       );
-    case 'text':
+    case 'text': {
+      const textContent = stripAnsi(event.content);
+      const isTextCopied = copiedEventId === record.id;
       return (
-        <div className="mb-3 rounded-lg border border-border/60 bg-elevated px-4 py-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.2)]">
-          <TranscriptMeta createdAt={record.createdAt} compact={compact}>
-            <span className="tracking-normal text-primary/70 normal-case font-medium">
-              Assistant
-            </span>
-          </TranscriptMeta>
+        <div className="group/msg mb-3 rounded-lg border border-border/60 bg-elevated px-4 py-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.2)]">
+          <div className="flex items-start justify-between gap-3">
+            <TranscriptMeta createdAt={record.createdAt} compact={compact}>
+              <span className="tracking-normal text-primary/70 normal-case font-medium">
+                Assistant
+              </span>
+            </TranscriptMeta>
+            {onCopyFailure ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={isTextCopied ? 'Copied' : 'Copy message'}
+                    className={cn(
+                      'shrink-0 transition-colors',
+                      isTextCopied
+                        ? 'text-foreground'
+                        : 'text-muted-foreground opacity-0 group-hover/msg:opacity-100 hover:text-foreground',
+                    )}
+                    onClick={() => onCopyFailure({ record, output: textContent })}
+                  >
+                    {isTextCopied ? <Check size={12} /> : <Copy size={12} />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {isTextCopied ? 'Copied' : 'Copy message'}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
+          </div>
           <pre
             className={cn(
               'mt-2 whitespace-pre-wrap break-words font-sans text-primary',
               compact ? 'text-[12px] leading-[1.6]' : 'text-[13px] leading-[1.65]',
             )}
           >
-            {stripAnsi(event.content)}
+            {textContent}
           </pre>
         </div>
       );
+    }
     case 'raw': {
       const content = stripAnsi(event.content);
       const isRateLimited = ERROR_PATTERNS.some(
@@ -615,11 +583,9 @@ export function TerminalTranscript({
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
   const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const transcriptCopyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [showAllEvents, setShowAllEvents] = useState(false);
   const [copiedEventId, setCopiedEventId] = useState<string | null>(null);
-  const [copiedTranscript, setCopiedTranscript] = useState(false);
   const dedupedEvents = useMemo(() => dedupeTranscriptEvents(events), [events]);
 
   const hasEvents = dedupedEvents.length > 0;
@@ -651,18 +617,6 @@ export function TerminalTranscript({
     },
     [],
   );
-
-  const handleCopyTranscript = useCallback(async () => {
-    if (!hasEvents) return;
-    if (transcriptCopyResetRef.current) clearTimeout(transcriptCopyResetRef.current);
-    try {
-      await navigator.clipboard.writeText(formatTranscriptForClipboard(dedupedEvents));
-      setCopiedTranscript(true);
-      transcriptCopyResetRef.current = setTimeout(() => setCopiedTranscript(false), 1500);
-    } catch {
-      setCopiedTranscript(false);
-    }
-  }, [dedupedEvents, hasEvents]);
 
   const plainRows = useMemo(
     () =>
@@ -697,7 +651,6 @@ export function TerminalTranscript({
   useEffect(() => {
     return () => {
       if (copyResetRef.current) clearTimeout(copyResetRef.current);
-      if (transcriptCopyResetRef.current) clearTimeout(transcriptCopyResetRef.current);
     };
   }, []);
 
@@ -730,32 +683,6 @@ export function TerminalTranscript({
 
   const headerContent = (
     <>
-      <div className="sticky top-0 z-10 -mt-1 flex justify-end bg-gradient-to-b from-primary via-primary/95 to-transparent pb-2 pt-1">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="inline-flex">
-              <Button
-                type="button"
-                variant="outline"
-                size="xs"
-                className="gap-1.5 rounded-full border-border bg-elevated px-2.5 text-[11px] text-secondary shadow-sm"
-                disabled={!hasEvents}
-                aria-label={
-                  copiedTranscript ? 'Copied console transcript' : 'Copy console transcript'
-                }
-                onClick={() => void handleCopyTranscript()}
-              >
-                {copiedTranscript ? <Check size={12} /> : <Copy size={12} />}
-                <span>{copiedTranscript ? 'Copied' : 'Copy'}</span>
-              </Button>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent side="top">
-            {copiedTranscript ? 'Copied console transcript' : 'Copy console transcript'}
-          </TooltipContent>
-        </Tooltip>
-      </div>
-
       {hiddenEventCount > 0 ? (
         <div className="flex justify-center">
           <Button
