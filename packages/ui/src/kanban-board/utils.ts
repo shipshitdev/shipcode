@@ -80,20 +80,28 @@ export function issueMatchesSection(
   return section.statuses.includes(issue.pipelineStatus);
 }
 
-export function dragOverlayBorderClass(
+export function statusDotColorClass(
   status: IssuePipelineStatus,
   approvedAwaitingExecution = false,
 ): string {
-  const strip = 'border-l-[3px]';
-  if (approvedAwaitingExecution) return `${strip} border-l-agent/60`;
-  if (status === ISSUE_PIPELINE_STATUS.failed) return `${strip} border-l-danger/60`;
+  if (approvedAwaitingExecution) return 'bg-agent';
+  if (status === ISSUE_PIPELINE_STATUS.failed) return 'bg-danger';
   if (
     status === ISSUE_PIPELINE_STATUS.approval ||
     status === ISSUE_PIPELINE_STATUS.clarifying ||
     status === ISSUE_PIPELINE_STATUS.paused
-  ) {
-    return `${strip} border-l-warning/60`;
-  }
+  )
+    return 'bg-warning';
+  if (status === ISSUE_PIPELINE_STATUS.completed) return 'bg-success';
+  if (status === ISSUE_PIPELINE_STATUS.closed) return 'bg-done';
+  if (ACTIVE_STATUSES.includes(status)) return 'bg-agent';
+  return 'bg-muted-foreground/40';
+}
+
+export function dragOverlayBorderClass(
+  _status: IssuePipelineStatus,
+  _approvedAwaitingExecution = false,
+): string {
   return '';
 }
 

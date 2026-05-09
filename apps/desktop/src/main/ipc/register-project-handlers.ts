@@ -19,16 +19,25 @@ import {
 import { GitService, WorktreeManager } from '@shipcode/git';
 import type {
   AppSettings,
+  ChatIntegrationHealth,
+  CliHealth,
+  CliProviderUsageMap,
+  CliProviderUsageProvider,
+  CliProviderUsageStatus,
   CodeFileContent,
   CodeTreeEntry,
   DesktopAppHealthMap,
   DiffRecord,
+  GhAuthStatus,
   GitVisualizerData,
   GitWorktreeSummary,
+  IntegrationStatus,
   OnboardingRepo,
+  OpenRouterHealth,
   Project,
   ProjectOpenTarget,
   ShipCodePlan,
+  SystemHealth,
   TerminalOpenTarget,
 } from '@shipcode/shared';
 import {
@@ -62,6 +71,7 @@ const PROJECT_OPEN_TARGET_ORDER: ProjectOpenTarget[] = [
   't3code',
 ];
 const TERMINAL_OPEN_TARGET_ORDER: TerminalOpenTarget[] = ['terminal', 'ghostty'];
+const IS_E2E = process.env.SHIPCODE_E2E === '1';
 
 const PROJECT_OPEN_APP_NAMES: Record<ProjectOpenTarget, string> = {
   cursor: 'Cursor',
@@ -71,6 +81,117 @@ const PROJECT_OPEN_APP_NAMES: Record<ProjectOpenTarget, string> = {
   vscode: 'Visual Studio Code',
   t3code: 'T3 Code',
 };
+
+function e2eCliHealth(): CliHealth {
+  return {
+    available: true,
+    authenticated: true,
+    error: null,
+    path: '/usr/bin/true',
+    version: 'e2e',
+  };
+}
+
+function e2eSystemHealth(): SystemHealth {
+  const health = e2eCliHealth();
+  return {
+    claude: health,
+    codex: health,
+    gemini: health,
+    git: health,
+    gh: health,
+  };
+}
+
+function e2eProviderUsageStatus(provider: CliProviderUsageProvider): CliProviderUsageStatus {
+  return {
+    provider,
+    available: true,
+    stale: false,
+    state: 'ready',
+    source: 'e2e',
+    version: 'e2e',
+    accountEmail: null,
+    loginMethod: 'e2e',
+    updatedAt: null,
+    checkedAt: new Date(0).toISOString(),
+    message: 'E2E stub: external CLI auth checks are disabled.',
+    creditsRemaining: null,
+    windows: [],
+  };
+}
+
+function e2eProviderUsage(): CliProviderUsageMap {
+  return {
+    claude: e2eProviderUsageStatus('claude'),
+    codex: e2eProviderUsageStatus('codex'),
+  };
+}
+
+function e2eDesktopApps(): DesktopAppHealthMap {
+  return {
+    cursor: e2eDesktopApp('cursor'),
+    finder: e2eDesktopApp('finder'),
+    terminal: e2eDesktopApp('terminal'),
+    ghostty: e2eDesktopApp('ghostty'),
+    vscode: e2eDesktopApp('vscode'),
+    t3code: e2eDesktopApp('t3code'),
+  };
+}
+
+function e2eDesktopApp(key: ProjectOpenTarget): DesktopAppHealthMap[ProjectOpenTarget] {
+  return {
+    key,
+    label: PROJECT_OPEN_APP_NAMES[key],
+    available: true,
+    path: '/usr/bin/true',
+    error: null,
+  };
+}
+
+function e2eGhAuth(): GhAuthStatus {
+  return {
+    installed: true,
+    authenticated: true,
+    username: 'shipcode-e2e',
+    version: 'e2e',
+    error: null,
+    hasProjectScope: true,
+  };
+}
+
+function e2eOpenRouterHealth(): OpenRouterHealth {
+  return {
+    enabled: false,
+    keyPresent: false,
+    authStatus: 'missing_key',
+    message: 'E2E stub: OpenRouter auth is not checked.',
+    label: null,
+    modelChecks: [],
+  };
+}
+
+function e2eChatIntegrationHealth(): ChatIntegrationHealth {
+  return {
+    enabled: false,
+    configured: false,
+    destinationConfigured: false,
+    validationStatus: 'missing',
+    message: 'E2E stub: chat integrations are not checked.',
+    lastDeliveryStatus: null,
+  };
+}
+
+function e2eIntegrationStatus(): IntegrationStatus {
+  return {
+    system: e2eSystemHealth(),
+    ghAuth: e2eGhAuth(),
+    openrouter: e2eOpenRouterHealth(),
+    discord: e2eChatIntegrationHealth(),
+    telegram: e2eChatIntegrationHealth(),
+    desktopApps: e2eDesktopApps(),
+  };
+}
 
 const STARTER_ISSUE_TITLE = 'Ship your first change with ShipCode';
 
@@ -828,12 +949,14 @@ export function registerProjectHandlers({
   });
 
   ipcMain.handle('health:check', async (_event, { force = false }: { force?: boolean } = {}) => {
+    if (IS_E2E) return e2eSystemHealth();
     return checkSystemHealthWithAuth({ force });
   });
 
   ipcMain.handle(
     'provider-usage:check',
     async (_event, { force = false }: { force?: boolean } = {}) => {
+      if (IS_E2E) return e2eProviderUsage();
       return checkCliProviderUsage({ force });
     },
   );
@@ -841,6 +964,7 @@ export function registerProjectHandlers({
   ipcMain.handle(
     'integrations:check',
     async (_event, { force = false }: { force?: boolean } = {}) => {
+      if (IS_E2E) return e2eIntegrationStatus();
       return checkIntegrationStatus(queries.settings.get(), { force });
     },
   );

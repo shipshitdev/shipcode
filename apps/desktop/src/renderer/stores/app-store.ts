@@ -75,6 +75,7 @@ type ViewMode = 'overview' | 'project' | 'activity' | 'inbox' | 'costs' | 'skill
 
 export type ProjectTab = 'issues' | 'git' | 'code' | 'pull-requests' | 'terminal' | 'insights';
 export type TerminalPaneMode = 'replay' | 'live';
+export type AssistantCli = 'claude' | 'codex';
 export type SettingsSection =
   | 'about'
   | 'general'
@@ -102,6 +103,11 @@ interface AppState {
   terminalMaximized: boolean;
   settingsVisible: boolean;
   settingsSection: SettingsSection;
+  assistantVisible: boolean;
+  assistantDraft: string;
+  assistantQueuedPrompt: string | null;
+  assistantThreadId: string | null;
+  assistantCli: AssistantCli;
   commentComposerRequest: { issueId: string; requestId: number } | null;
 
   // Live data
@@ -188,6 +194,13 @@ interface AppState {
   setTerminalMaximized: (maximized: boolean) => void;
   toggleSettings: () => void;
   setSettingsSection: (section: SettingsSection) => void;
+  openAssistant: () => void;
+  closeAssistant: () => void;
+  setAssistantDraft: (draft: string) => void;
+  queueAssistantPrompt: (prompt: string) => void;
+  clearAssistantQueuedPrompt: () => void;
+  setAssistantThread: (threadId: string | null) => void;
+  setAssistantCli: (cli: AssistantCli) => void;
   setPlan: (plan: ShipCodePlan | null) => void;
   setReview: (review: PlanReview | null) => void;
   setPipelinePhase: (phase: PipelinePhase) => void;
@@ -264,6 +277,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   terminalMaximized: false,
   settingsVisible: false,
   settingsSection: 'general' as SettingsSection,
+  assistantVisible: false,
+  assistantDraft: '',
+  assistantQueuedPrompt: null,
+  assistantThreadId: null,
+  assistantCli: 'claude',
   commentComposerRequest: null,
   currentPlan: null,
   currentReview: null,
@@ -452,6 +470,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       };
     }),
   setSettingsSection: (section) => set({ settingsSection: section }),
+  openAssistant: () => set({ assistantVisible: true }),
+  closeAssistant: () => set({ assistantVisible: false }),
+  setAssistantDraft: (draft) => set({ assistantDraft: draft }),
+  queueAssistantPrompt: (prompt) =>
+    set({ assistantVisible: true, assistantDraft: prompt, assistantQueuedPrompt: prompt }),
+  clearAssistantQueuedPrompt: () => set({ assistantQueuedPrompt: null }),
+  setAssistantThread: (threadId) => set({ assistantThreadId: threadId }),
+  setAssistantCli: (cli) => set({ assistantCli: cli }),
   setPlan: (plan) => set({ currentPlan: plan }),
   setReview: (review) => set({ currentReview: review }),
   setPipelinePhase: (phase) =>

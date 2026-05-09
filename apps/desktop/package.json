@@ -61,6 +61,7 @@
     "clean": "rm -rf dist out",
     "coverage": "vitest run --coverage",
     "dev": "vite",
+    "e2e": "vite build && playwright test --config e2e/playwright.config.ts",
     "start": "electron .",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"

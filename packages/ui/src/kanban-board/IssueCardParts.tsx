@@ -49,14 +49,14 @@ import type {
   IssueRevisionBadge,
 } from './types';
 import {
-  dragOverlayBorderClass,
   isAutomationIssue,
   isIssueCreating,
   resolveIssuePriorityBadge,
+  statusDotColorClass,
 } from './utils';
 
 const ISSUE_CARD_BASE_CLASS =
-  'group relative flex shrink-0 flex-col overflow-hidden rounded-md border border-white/[0.04] bg-tertiary p-2.5 text-left transition-colors outline-none';
+  'group relative flex shrink-0 flex-col overflow-hidden rounded-md border border-white/[0.04] bg-tertiary p-3 text-left transition-colors outline-none';
 
 function issueReferenceLabel(issue: GitHubIssueCacheRecord, isCreating: boolean): string {
   if (isCreating) return 'Creating';
@@ -99,12 +99,6 @@ function issueCardToneClass({
   isSelected,
   isCompleted,
   isClosed,
-  isFailed,
-  isPaused,
-  isAwaiting,
-  isActive,
-  isTodo,
-  approvedAwaitingExecution,
 }: {
   isCreating: boolean;
   isSelected?: boolean;
@@ -117,39 +111,15 @@ function issueCardToneClass({
   isTodo: boolean;
   approvedAwaitingExecution: boolean;
 }) {
-  const strip = 'border-l-[3px]';
-  if (isCreating) return `${strip} border-l-agent/40 opacity-80`;
+  if (isCreating) return 'opacity-80';
   if (isCompleted) {
-    return isSelected
-      ? `${strip} border-l-success/70`
-      : `${strip} border-l-success/45 opacity-85 hover:opacity-90`;
+    return isSelected ? 'ring-1 ring-border-strong' : 'opacity-85 hover:opacity-90';
   }
   if (isClosed) {
-    return isSelected
-      ? `${strip} border-l-done/60`
-      : `${strip} border-l-done/35 opacity-70 hover:opacity-80`;
+    return isSelected ? 'ring-1 ring-border-strong' : 'opacity-70 hover:opacity-80';
   }
-  if (isFailed) {
-    return isSelected
-      ? `${strip} border-l-danger/70`
-      : `${strip} border-l-danger/50 hover:border-l-danger/65`;
-  }
-  if (isPaused) {
-    return isSelected ? `${strip} border-l-warning/70` : `${strip} border-l-warning/45`;
-  }
-  if (approvedAwaitingExecution) {
-    return isSelected ? `${strip} border-l-agent/70` : `${strip} border-l-agent/45`;
-  }
-  if (isAwaiting) {
-    return isSelected ? `${strip} border-l-warning/70` : `${strip} border-l-warning/45`;
-  }
-  if (isActive) {
-    return isSelected ? `${strip} border-l-agent/80` : `${strip} border-l-agent/55`;
-  }
-  if (isTodo) {
-    return isSelected ? `${strip} border-l-success/60` : `${strip} border-l-success/35`;
-  }
-  return isSelected ? 'border-border-strong' : 'hover:border-border-strong';
+  if (isSelected) return 'ring-1 ring-border-strong';
+  return 'hover:border-white/[0.08]';
 }
 
 function IssueProgressBar({
@@ -851,7 +821,7 @@ function useDraggableCardView({
               <Button
                 variant="ghost"
                 size="xs"
-                className="h-auto shrink-0 p-0 font-mono text-[11px] text-secondary hover:bg-transparent hover:text-primary hover:underline"
+                className="h-auto shrink-0 p-0 font-mono text-[11px] text-muted-foreground hover:bg-transparent hover:text-primary hover:underline"
                 title="Open issue on GitHub"
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={(event) => {
@@ -862,7 +832,7 @@ function useDraggableCardView({
                 {referenceLabel}
               </Button>
             ) : (
-              <span className="shrink-0 font-mono text-[11px] text-secondary">
+              <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
                 {referenceLabel}
               </span>
             )}
@@ -887,13 +857,20 @@ function useDraggableCardView({
                 </Badge>
               ))}
           </div>
+          <span
+            className={cn(
+              'size-2 shrink-0 rounded-full transition-opacity group-hover:opacity-0',
+              statusDotColorClass(presentationStatus, approvedAwaitingExecution),
+            )}
+            aria-hidden="true"
+          />
         </div>
-        <div className="relative z-10 mt-1 w-full min-w-0">
-          <span className="truncate block text-[13px] font-medium leading-snug text-primary">
+        <div className="relative z-10 mt-1.5 w-full min-w-0">
+          <span className="line-clamp-2 text-[13px] font-medium leading-snug text-primary">
             {issue.title}
           </span>
         </div>
-        <div className="relative z-10 mt-1.5 flex flex-wrap items-center gap-1.5">
+        <div className="relative z-10 mt-2 flex flex-wrap items-center gap-1.5">
           {priorityBadge ? (
             <Badge
               variant={priorityBadge.variant}
@@ -991,19 +968,23 @@ export function DragOverlayCard({
   const presentationStatus = issue.pipelineStatus;
   const referenceLabel = issueReferenceLabel(issue, isCreating);
   return (
-    <div
-      className={cn(
-        'cursor-grabbing rounded-md border border-white/[0.04] bg-secondary p-3 opacity-80 shadow-lg',
-        dragOverlayBorderClass(presentationStatus, approvedAwaitingExecution),
-      )}
-    >
-      <div className="font-mono text-[11px] text-muted-foreground">{referenceLabel}</div>
-      <div className="mt-1 w-full min-w-0">
-        <span className="truncate block text-[13px] font-medium leading-snug text-primary">
+    <div className="cursor-grabbing rounded-md border border-white/[0.04] bg-secondary p-3 opacity-80 shadow-lg">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-mono text-[11px] text-muted-foreground">{referenceLabel}</span>
+        <span
+          className={cn(
+            'size-2 shrink-0 rounded-full',
+            statusDotColorClass(presentationStatus, approvedAwaitingExecution),
+          )}
+          aria-hidden="true"
+        />
+      </div>
+      <div className="mt-1.5 w-full min-w-0">
+        <span className="line-clamp-2 text-[13px] font-medium leading-snug text-primary">
           {issue.title}
         </span>
       </div>
-      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
         {priorityBadge ? (
           <Badge
             variant={priorityBadge.variant}

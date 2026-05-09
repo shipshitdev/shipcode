@@ -4,6 +4,7 @@ import { StartupProgress, type StartupProgressStep, TooltipProvider } from '@shi
 import { Button, Skeleton } from '@shipshitdev/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { lazy, Suspense, useEffect } from 'react';
+import { AssistantPanel } from './components/AssistantPanel';
 import { AutomationRunDetail } from './components/AutomationRunDetail';
 import { CommandPalette } from './components/CommandPalette';
 import { GenericToaster } from './components/GenericToaster';
@@ -149,6 +150,7 @@ export function App() {
   const terminalVisible = useAppStore((state) => state.terminalVisible);
   const terminalMaximized = useAppStore((state) => state.terminalMaximized);
   const settingsVisible = useAppStore((state) => state.settingsVisible);
+  const assistantVisible = useAppStore((state) => state.assistantVisible);
   const activeProjectId = useAppStore((state) => state.activeProjectId);
   const viewMode = useAppStore((state) => state.viewMode);
   const hasActiveIssue = useAppStore((state) => state.activeIssue !== null);
@@ -381,6 +383,7 @@ export function App() {
             )}
             {terminalVisible && <TerminalDrawer />}
           </div>
+          {assistantVisible && <AssistantPanel />}
         </div>
         <CommandPalette />
         <Suspense fallback={null}>

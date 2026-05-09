@@ -6,8 +6,6 @@ import { modelDisplay } from '@/lib/model-display';
 import {
   displayAgentLabel,
   type GitHubIssueCacheRecord,
-  ISSUE_PIPELINE_STATUS,
-  type IssuePipelineStatus,
   isAgentRoutingLabel,
   phaseToProgress,
 } from '@/lib/shipcode';
@@ -18,21 +16,7 @@ import { Badge } from '@/primitives/badge';
 import { ACTIVE_STATUSES, PHASE_ELAPSED_STATUSES } from './constants';
 import { issueBodySnippet } from './issue-body-snippet';
 import type { IssuePhaseChip, PlanStepSummary } from './types';
-import { resolveIssuePriorityBadge } from './utils';
-
-function statusDotClass(status: IssuePipelineStatus): string {
-  if (status === ISSUE_PIPELINE_STATUS.failed) return 'bg-danger';
-  if (
-    status === ISSUE_PIPELINE_STATUS.approval ||
-    status === ISSUE_PIPELINE_STATUS.clarifying ||
-    status === ISSUE_PIPELINE_STATUS.paused
-  )
-    return 'bg-warning';
-  if (status === ISSUE_PIPELINE_STATUS.completed) return 'bg-success';
-  if (status === ISSUE_PIPELINE_STATUS.closed) return 'bg-done';
-  if (ACTIVE_STATUSES.includes(status)) return 'bg-agent';
-  return 'bg-muted-foreground/50';
-}
+import { resolveIssuePriorityBadge, statusDotColorClass } from './utils';
 
 const HOVER_DELAY_MS = 350;
 const MAX_VISIBLE_STEPS = 8;
@@ -215,7 +199,7 @@ export function IssueHoverCard({
               <span
                 className={cn(
                   'inline-block size-2 rounded-full',
-                  statusDotClass(issue.pipelineStatus),
+                  statusDotColorClass(issue.pipelineStatus),
                 )}
               />
               #{issue.issueNumber}
