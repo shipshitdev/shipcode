@@ -32,7 +32,6 @@
       "!**/.env.*",
       "!.agents",
       "!.worktrees",
-      "!.shipcode",
       "!apps/web/public/docs"
     ]
   },

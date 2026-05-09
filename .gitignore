@@ -9,7 +9,8 @@ apps/web/public/docs/
 .env
 .env.local
 .env.*.local
-.shipcode/
+.shipcode/*
+!.shipcode/setup.json
 .DS_Store
 .worktrees/
 bun.lock
