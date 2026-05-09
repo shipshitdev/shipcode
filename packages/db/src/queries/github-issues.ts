@@ -61,6 +61,8 @@ interface GitHubIssueCacheRow {
   priority_rank: string | null;
   priority_raw: string | null;
   priority_fetched_at: string | null;
+  rules_applied_at: string | null;
+  triage_failure_reason: string | null;
   is_quick_mode: number | null;
 }
 
@@ -280,6 +282,28 @@ export class GitHubIssueQueries {
         `UPDATE github_issue_cache SET pipeline_status = ?, last_phase_update = ${ISO_NOW_SQL} WHERE id = ?`,
       )
       .run(status, id);
+  }
+
+  markTriageRulesApplied(id: string): void {
+    this.db
+      .prepare(
+        `UPDATE github_issue_cache
+            SET rules_applied_at = ${ISO_NOW_SQL},
+                triage_failure_reason = NULL
+          WHERE id = ?`,
+      )
+      .run(id);
+  }
+
+  recordTriageRulesFailure(id: string, reason: string): void {
+    this.db
+      .prepare(
+        `UPDATE github_issue_cache
+            SET rules_applied_at = ${ISO_NOW_SQL},
+                triage_failure_reason = ?
+          WHERE id = ?`,
+      )
+      .run(reason, id);
   }
 
   updateState(id: string, state: 'open' | 'closed'): void {
@@ -809,6 +833,8 @@ export class GitHubIssueQueries {
           : null,
       priorityRaw: row.priority_raw ?? null,
       priorityFetchedAt: toIsoUtc(row.priority_fetched_at),
+      rulesAppliedAt: toIsoUtc(row.rules_applied_at),
+      triageFailureReason: row.triage_failure_reason ?? null,
       isQuickMode: !!row.is_quick_mode,
     };
   }

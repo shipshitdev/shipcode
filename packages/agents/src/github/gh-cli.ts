@@ -48,6 +48,18 @@ function formatMetadataOption(value: string): string {
     .join('-');
 }
 
+function uniqueLabels(labels: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const label of labels) {
+    const trimmed = label.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    result.push(trimmed);
+  }
+  return result;
+}
+
 function getGraphqlErrors(response: { errors?: Array<{ message?: string }> }): string | null {
   if (!response.errors || response.errors.length === 0) return null;
   return response.errors.map((err) => err.message ?? '<unknown>').join('; ');
@@ -72,6 +84,17 @@ export interface IssueProjectMetadata {
   priority?: string;
   complexity?: string;
   blastRadius?: string;
+}
+
+export interface IssueLabelActions {
+  addLabels?: string[];
+  removeLabels?: string[];
+}
+
+export interface IssueLabelActionResult {
+  added: string[];
+  removed: string[];
+  skipped: string[];
 }
 
 interface ProjectMetadataQueryResponse {
@@ -279,6 +302,43 @@ export class GhCli {
         // Addition is best-effort.
       }
     }
+  }
+
+  async applyIssueLabelActions(
+    issueNumber: number,
+    actions: IssueLabelActions,
+  ): Promise<IssueLabelActionResult> {
+    const addLabels = uniqueLabels(actions.addLabels ?? []);
+    const removeLabels = uniqueLabels(actions.removeLabels ?? []);
+    const availableAdds = await this.filterExistingLabels(addLabels);
+    const availableAddSet = new Set(availableAdds);
+    const skipped = addLabels.filter((label) => !availableAddSet.has(label));
+    const issue = await this.getIssue(issueNumber);
+    const current = new Set(issue.labels);
+    const added: string[] = [];
+    const removed: string[] = [];
+
+    for (const label of availableAdds) {
+      if (current.has(label)) continue;
+      await execFileAsync('gh', ['issue', 'edit', String(issueNumber), '--add-label', label], {
+        cwd: this.cwd,
+        env: this.env,
+      });
+      current.add(label);
+      added.push(label);
+    }
+
+    for (const label of removeLabels) {
+      if (!current.has(label)) continue;
+      await execFileAsync('gh', ['issue', 'edit', String(issueNumber), '--remove-label', label], {
+        cwd: this.cwd,
+        env: this.env,
+      });
+      current.delete(label);
+      removed.push(label);
+    }
+
+    return { added, removed, skipped };
   }
 
   async listIssues(label: string): Promise<GitHubIssue[]> {

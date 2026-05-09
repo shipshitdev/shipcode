@@ -1,5 +1,6 @@
 import type { PrdBlastRadius, PrdEstimatedComplexity } from './prd-issue-metadata';
 import type { TaskGraphWithNodes } from './task-graph';
+import type { TriageRule, TriageRuleDraft } from './triage-rules';
 import type {
   ActivePipelineSummary,
   ActivityEntry,
@@ -168,6 +169,11 @@ export interface IpcInvokeChannels {
   'project:set-notify-github-user': {
     args: { projectId: string; handle: string | null };
     result: Project;
+  };
+  'project:list-triage-rules': { args: { projectId: string }; result: TriageRule[] };
+  'project:replace-triage-rules': {
+    args: { projectId: string; rules: TriageRuleDraft[] };
+    result: TriageRule[];
   };
 
   'thread:list': { args: { projectId: string }; result: Thread[] };
