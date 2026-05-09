@@ -135,7 +135,7 @@ export function TriageRulesTab({ projectId, isActive }: { projectId: string; isA
 
   const saveMutation = useMutation({
     mutationFn: () =>
-      window.shipcode.invoke<TriageRule[]>('project:set-triage-rules', {
+      window.shipcode.invoke('project:replace-triage-rules', {
         projectId,
         rules: rules.map(toDraft),
       }),

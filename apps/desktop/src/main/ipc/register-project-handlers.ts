@@ -925,7 +925,7 @@ export function registerProjectHandlers({
   });
 
   ipcMain.handle(
-    'project:set-triage-rules',
+    'project:replace-triage-rules',
     (_event, { projectId, rules }: { projectId: string; rules: TriageRuleDraft[] }) => {
       const project = queries.projects.getById(projectId);
       if (!project) throw new Error(`Project ${projectId} not found`);
@@ -940,7 +940,7 @@ export function registerProjectHandlers({
       try {
         return triageRules.replaceForProject(projectId, rules);
       } catch (err) {
-        log.warn('[project:set-triage-rules] failed:', err);
+        log.warn('[project:replace-triage-rules] failed:', err);
         throw new Error(clampError(err));
       }
     },
